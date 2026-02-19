@@ -1,4 +1,3 @@
-import * as fs from "node:fs";
 import { type MessageInitShape } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
 import {
@@ -14,10 +13,9 @@ import {
   type ExecutorTriggerConfigSchema,
   ExecutorTriggerType,
 } from "@tailor-proto/tailor/v1/executor_resource_pb";
-import * as path from "pathe";
-import { getDistDir } from "@/cli/utils/dist-dir";
 import { stringifyFunction } from "@/parser/service/tailordb";
 import { fetchAll, type OperatorClient } from "../../client";
+import { executorFunctionName } from "./function-registry";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { createChangeSet } from ".";
 import type { ApplyPhase, PlanContext } from "..";
@@ -389,15 +387,12 @@ function protoExecutor(
         targetType = ExecutorTargetType.JOB_FUNCTION;
       }
 
-      const scriptPath = path.join(getDistDir(), "executors", `${executor.name}.js`);
-      const script = fs.readFileSync(scriptPath, "utf-8");
-
       targetConfig = {
         config: {
           case: "function",
           value: {
-            name: `${executor.name}__target`,
-            script,
+            name: "operation",
+            scriptRef: executorFunctionName(executor.name),
             variables: {
               expr: argsExpr,
             },

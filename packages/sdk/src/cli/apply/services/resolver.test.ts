@@ -8,17 +8,6 @@ import type { ResolverService } from "@/cli/application/resolver/service";
 import type { OperatorClient } from "@/cli/client";
 import type { LoadedConfig } from "@/cli/config-loader";
 
-// Mock node:fs
-vi.mock("node:fs", () => ({
-  readFileSync: vi.fn().mockReturnValue("// mock script"),
-  existsSync: vi.fn().mockReturnValue(true),
-}));
-
-// Mock dist-dir
-vi.mock("@/cli/utils/dist-dir", () => ({
-  getDistDir: vi.fn().mockReturnValue(".tailor-sdk"),
-}));
-
 // Mock config values for tests
 const mockConfig = { path: "/test/tailor.config.ts" } as LoadedConfig;
 

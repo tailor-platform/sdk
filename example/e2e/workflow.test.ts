@@ -68,7 +68,7 @@ describe("controlplane", async () => {
       expect(ownedJobNames).toContain("process-payment");
     });
 
-    test("job function script is bundled", async () => {
+    test("job function scripts are stored in function registry", async () => {
       const { jobFunctions } = await client.listWorkflowJobFunctions({
         workspaceId,
       });
@@ -77,43 +77,30 @@ describe("controlplane", async () => {
       const jobNames = jobFunctions.map((j) => j.name);
       const ownedJobNames = await filterUniqueNamesByMetadata(client, jobNames, jobFunctionTrn);
 
-      // Get one job function per owned name (for script verification)
-      const ownedJobFunctions = ownedJobNames.map((name) =>
-        jobFunctions.find((j) => j.name === name),
-      );
-
-      // Verify each owned job function has a non-empty script
-      for (const jobFunction of ownedJobFunctions) {
-        expect(jobFunction?.script).toBeTruthy();
-        expect(jobFunction?.script?.length).toBeGreaterThan(0);
+      // Verify each owned job function has a corresponding function registry entry
+      const { functions } = await client.listFunctionRegistries({ workspaceId });
+      for (const jobName of ownedJobNames) {
+        const registryEntry = functions.find((f) => f.name === `workflow--${jobName}`);
+        expect(registryEntry, `Function registry entry for ${jobName}`).toBeDefined();
+        expect(registryEntry?.contentHash).toBeTruthy();
       }
-
-      // Verify specific job function content
-      const fetchCustomer = ownedJobFunctions.find((j) => j?.name === "fetch-customer");
-      expect(fetchCustomer).toBeDefined();
-      expect(fetchCustomer?.script).toBeTruthy();
-
-      const sendNotification = ownedJobFunctions.find((j) => j?.name === "send-notification");
-      expect(sendNotification).toBeDefined();
-      expect(sendNotification?.script).toBeTruthy();
     });
 
-    test("job function script contains env variables", async () => {
-      // Get the job function by name (returns the latest version)
-      const { jobFunction } = await client.getWorkflowJobFunctionByName({
+    test("job function scripts are registered in function registry", async () => {
+      // Verify function registry contains the workflow job scripts
+      const { functions } = await client.listFunctionRegistries({
         workspaceId,
-        jobFunctionName: "process-order",
       });
 
-      expect(jobFunction).toBeDefined();
-      expect(jobFunction?.script).toBeTruthy();
+      const workflowJobFunctions = functions.filter((f) => f.name.startsWith("workflow--"));
 
-      // Verify that env variables from tailor.config.ts are embedded in the script
-      // The config has: env: { foo: 1, bar: "hello", baz: true }
-      // After minification, the format may vary (e.g., foo:1 or "foo":1)
-      expect(jobFunction?.script).toMatch(/foo[`"']?:1/);
-      expect(jobFunction?.script).toMatch(/bar[`"']?:[`"']?hello[`"']?/);
-      expect(jobFunction?.script).toMatch(/baz[`"']?:!0|baz[`"']?:true/);
+      // There are 6 workflow job functions
+      expect(workflowJobFunctions).toHaveLength(6);
+
+      // Verify specific job functions exist with non-empty content hashes
+      const processOrder = workflowJobFunctions.find((f) => f.name === "workflow--process-order");
+      expect(processOrder).toBeDefined();
+      expect(processOrder?.contentHash).toBeTruthy();
     });
   });
 });

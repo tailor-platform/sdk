@@ -1,5 +1,65 @@
 # @tailor-platform/sdk
 
+## 1.15.2
+
+### Patch Changes
+
+- [#597](https://github.com/tailor-platform/sdk/pull/597) [`8d4f911`](https://github.com/tailor-platform/sdk/commit/8d4f9111645df049d91808c7083a054bb0ad656a) Thanks [@riku99](https://github.com/riku99)! - Show clear error when record/oldRecord/newRecord operand is used in gqlPermission
+
+- [#609](https://github.com/tailor-platform/sdk/pull/609) [`50f0aee`](https://github.com/tailor-platform/sdk/commit/50f0aee0f17a05afde5bbce2a9f1b42f03cee0e5) Thanks [@riku99](https://github.com/riku99)! - Add `function logs` CLI command to list and view function execution logs
+
+## 1.15.1
+
+### Patch Changes
+
+- [#608](https://github.com/tailor-platform/sdk/pull/608) [`17fbd24`](https://github.com/tailor-platform/sdk/commit/17fbd243bd2925d3c4b6fe0d61f0a3ab24c3bece) Thanks [@k1LoW](https://github.com/k1LoW)! - Add validation to require allowedEmailDomains when allowGoogleOauth is enabled
+
+## 1.15.0
+
+### Minor Changes
+
+- [#605](https://github.com/tailor-platform/sdk/pull/605) [`634699c`](https://github.com/tailor-platform/sdk/commit/634699c0519157a18b992df4e98718940fc6d013) Thanks [@toiroakr](https://github.com/toiroakr)! - Add TypeConfig/PluginConfig type parameters to Plugin interface and remove TailorField schema requirements
+
+  - Add `Plugin<TypeConfig, PluginConfig>` type parameters for type-safe arbitrary config
+  - Remove `configSchema`, `pluginConfigSchema`, and `configTypeTemplate` properties from Plugin interface
+  - Merge `PluginWithConfig`/`PluginNamespaceOnly` into a single `Plugin` interface
+  - Wire TypeConfig/PluginConfig through `processType`/`processNamespace` contexts
+  - Remove TailorField-based runtime validation from plugin config processing
+  - Introduce `TypePluginOutput` for processType (extends `PluginOutput` with `extends` field)
+  - Make `PluginOutput` the base type without `extends` (used by processNamespace)
+  - Use `TailorAnyDBField` for `PluginExtends.fields` type
+
+- [#595](https://github.com/tailor-platform/sdk/pull/595) [`4e6e3e6`](https://github.com/tailor-platform/sdk/commit/4e6e3e62e3071060373571e7d9765938c37a9013) Thanks [@toiroakr](https://github.com/toiroakr)! - Use Function Registry service for script storage instead of embedding bundled scripts directly in pipeline/executor/workflow requests. Scripts are now registered in the Function Registry during apply, and services reference them by name via operationSourceRef/scriptRef fields.
+
+### Patch Changes
+
+- [#599](https://github.com/tailor-platform/sdk/pull/599) [`e73e8fe`](https://github.com/tailor-platform/sdk/commit/e73e8fef5daf056a00a3bb402d0c8ab0a58f96ee) Thanks [@dqn](https://github.com/dqn)! - Add typed programmatic CLI APIs for workflow and executor operations while preserving legacy option shapes for backward compatibility.
+
+- [#601](https://github.com/tailor-platform/sdk/pull/601) [`151102b`](https://github.com/tailor-platform/sdk/commit/151102bedca42457f02f6e503025908a40d5d1a4) Thanks [@riku99](https://github.com/riku99)! - Fixes an issue where nested field hooks/validate were dropped when generating TailorDB proto manifests
+
+- [#606](https://github.com/tailor-platform/sdk/pull/606) [`4761d2b`](https://github.com/tailor-platform/sdk/commit/4761d2bab2d8d8fa7c5ce249db28e0a8f28dfc5a) Thanks [@toiroakr](https://github.com/toiroakr)! - Add lefthook post-commit hook to verify commit signatures and update CLAUDE.md with signing rules
+
+## 1.14.2
+
+### Patch Changes
+
+- [#603](https://github.com/tailor-platform/sdk/pull/603) [`b093524`](https://github.com/tailor-platform/sdk/commit/b093524b2535dea2937b63ee62b300a6f0654cf0) Thanks [@k1LoW](https://github.com/k1LoW)! - feat: support allowGoogleOauth field for IdP userAuthPolicy
+
+- [#598](https://github.com/tailor-platform/sdk/pull/598) [`b32223a`](https://github.com/tailor-platform/sdk/commit/b32223ac5735959e39c934bee3b30562c7c2b990) Thanks [@toiroakr](https://github.com/toiroakr)! - Prevent e2e-ws- workspace accumulation by separating SDK e2e tests into a dedicated CI workflow
+
+- [#596](https://github.com/tailor-platform/sdk/pull/596) [`aecbfb7`](https://github.com/tailor-platform/sdk/commit/aecbfb73c184a9e36dfecd12580729783425a10e) Thanks [@dqn](https://github.com/dqn)! - Add `tailor-sdk` agent skill support and the `tailor-sdk-skills` shortcut installer command.
+
+- [#592](https://github.com/tailor-platform/sdk/pull/592) [`ca758ed`](https://github.com/tailor-platform/sdk/commit/ca758ed7870dbb32364840d4b0eca465808bee13) Thanks [@toiroakr](https://github.com/toiroakr)! - Add getGeneratedType helper function for plugin-generated types
+
+  - Add async `getGeneratedType(configPath, pluginId, sourceType, kind)` function to retrieve plugin-generated types
+  - Auto-resolve namespace and pluginConfig from tailor.config.ts
+  - Support both type-attached plugins (with sourceType) and namespace plugins (sourceType is null)
+  - Rename `process` to `processType` and `config` to `typeConfig` in plugin context
+  - Simplify `PluginNamespaceProcessContext` by removing `types` and `generatedTypes` parameters
+  - Results are cached per config path, plugin, namespace, and pluginConfig
+
+- [#578](https://github.com/tailor-platform/sdk/pull/578) [`a2f28c8`](https://github.com/tailor-platform/sdk/commit/a2f28c8b1ec72859271d096ddf1b0299ed83d0ca) Thanks [@riku99](https://github.com/riku99)! - Replace z.unknown() with typed Zod schemas in TailorDB schema
+
 ## 1.14.1
 
 ### Patch Changes

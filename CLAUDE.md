@@ -401,10 +401,12 @@ export default createWorkflow({
 - Package manager: pnpm 10.17.1 (configured in packageManager field)
 - TypeScript is configured in strict mode
 - Lefthook runs pre-commit checks automatically (lint, format, typecheck)
+- Lefthook runs post-commit signature verification (ensures commits are signed)
 - The SDK uses Rolldown for bundling and Turbo for task orchestration
 - Test framework: Vitest
 - Build tool: tsdown for creating ESM bundles
 - **DO NOT use dynamic imports** (`await import()` or `require()`). Always use static imports at the top of files
+- Always use `git commit -S` to explicitly request signing. Never use `--no-gpg-sign` flag
 
 ### Testing
 

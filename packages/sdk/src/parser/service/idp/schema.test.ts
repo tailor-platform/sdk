@@ -105,6 +105,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     expect(result.passwordMinLength).toBeUndefined();
     expect(result.passwordMaxLength).toBeUndefined();
     expect(result.allowedEmailDomains).toBeUndefined();
+    expect(result.allowGoogleOauth).toBeUndefined();
   });
 
   it("accepts allowedEmailDomains with empty array", () => {
@@ -162,6 +163,77 @@ describe("IdPUserAuthPolicySchema validation", () => {
 
     const result = IdPUserAuthPolicySchema.parse(policy);
     expect(result.allowedEmailDomains).toEqual(["example.com"]);
+  });
+
+  it("accepts allowGoogleOauth as true with allowedEmailDomains", () => {
+    const policy = {
+      allowGoogleOauth: true,
+      allowedEmailDomains: ["example.com"],
+    };
+
+    const result = IdPUserAuthPolicySchema.parse(policy);
+    expect(result.allowGoogleOauth).toBe(true);
+  });
+
+  it("accepts allowGoogleOauth as false", () => {
+    const policy = {
+      allowGoogleOauth: false,
+    };
+
+    const result = IdPUserAuthPolicySchema.parse(policy);
+    expect(result.allowGoogleOauth).toBe(false);
+  });
+
+  it("rejects allowGoogleOauth when useNonEmailIdentifier is true", () => {
+    const policy = {
+      useNonEmailIdentifier: true,
+      allowGoogleOauth: true,
+    };
+
+    expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow(
+      "allowGoogleOauth cannot be set when useNonEmailIdentifier is true",
+    );
+  });
+
+  it("accepts allowGoogleOauth false when useNonEmailIdentifier is true", () => {
+    const policy = {
+      useNonEmailIdentifier: true,
+      allowGoogleOauth: false,
+    };
+
+    expect(() => IdPUserAuthPolicySchema.parse(policy)).not.toThrow();
+  });
+
+  it("accepts allowGoogleOauth when useNonEmailIdentifier is false", () => {
+    const policy = {
+      useNonEmailIdentifier: false,
+      allowGoogleOauth: true,
+      allowedEmailDomains: ["example.com"],
+    };
+
+    const result = IdPUserAuthPolicySchema.parse(policy);
+    expect(result.allowGoogleOauth).toBe(true);
+  });
+
+  it("rejects allowGoogleOauth when allowedEmailDomains is not set", () => {
+    const policy = {
+      allowGoogleOauth: true,
+    };
+
+    expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow(
+      "allowGoogleOauth requires allowedEmailDomains to be set",
+    );
+  });
+
+  it("rejects allowGoogleOauth when allowedEmailDomains is empty", () => {
+    const policy = {
+      allowGoogleOauth: true,
+      allowedEmailDomains: [],
+    };
+
+    expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow(
+      "allowGoogleOauth requires allowedEmailDomains to be set",
+    );
   });
 
   it("accepts partial password policy configuration", () => {

@@ -1,8 +1,6 @@
-import * as fs from "node:fs";
-import * as path from "pathe";
-import { getDistDir } from "@/cli/utils/dist-dir";
 import { type ApplyPhase } from "..";
 import { type OperatorClient, fetchAll } from "../../client";
+import { workflowJobFunctionName } from "./function-registry";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { createChangeSet, type ChangeSet } from ".";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
@@ -106,13 +104,13 @@ async function registerJobFunctions(
 ): Promise<{ [key: string]: bigint }> {
   const jobFunctionVersions: { [key: string]: bigint } = {};
 
-  // Get scripts from the first workflow (all workflows share the same scripts)
+  // Get workspaceId from the first workflow
   const firstWorkflow = changeSet.creates[0] || changeSet.updates[0];
   if (!firstWorkflow) {
     return jobFunctionVersions;
   }
 
-  const { workspaceId, scripts } = firstWorkflow;
+  const { workspaceId } = firstWorkflow;
 
   // Collect all job names used by any workflow
   const allUsedJobNames = new Set<string>();
@@ -136,25 +134,17 @@ async function registerJobFunctions(
   // Use create for new jobs, update for existing jobs
   const results = await Promise.all(
     Array.from(allUsedJobNames).map(async (jobName) => {
-      const script = scripts.get(jobName);
-      if (!script) {
-        throw new Error(
-          `No bundled script found for job "${jobName}". ` +
-            `Please run "generate" command before "apply".`,
-        );
-      }
-
       const isExisting = existingJobNamesSet.has(jobName);
       const response = isExisting
         ? await client.updateWorkflowJobFunction({
             workspaceId,
             jobFunctionName: jobName,
-            script,
+            scriptRef: workflowJobFunctionName(jobName),
           })
         : await client.createWorkflowJobFunction({
             workspaceId,
             jobFunctionName: jobName,
-            script,
+            scriptRef: workflowJobFunctionName(jobName),
           });
 
       // Set metadata to mark this JobFunction as owned by this app
@@ -200,7 +190,6 @@ type CreateWorkflow = {
   name: string;
   workspaceId: string;
   workflow: Workflow;
-  scripts: Map<string, string>;
   usedJobNames: string[];
   metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
@@ -209,7 +198,6 @@ type UpdateWorkflow = {
   name: string;
   workspaceId: string;
   workflow: Workflow;
-  scripts: Map<string, string>;
   usedJobNames: string[];
   metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
@@ -270,9 +258,6 @@ export async function planWorkflow(
     }),
   );
 
-  // Load all available scripts
-  const allScripts = await loadWorkflowScripts();
-
   for (const workflow of Object.values(workflows)) {
     const existing = existingWorkflows[workflow.name];
     const metaRequest = await buildMetaRequest(workflowTrn(workspaceId, workflow.name), appName);
@@ -307,7 +292,6 @@ export async function planWorkflow(
         name: workflow.name,
         workspaceId,
         workflow,
-        scripts: allScripts,
         usedJobNames,
         metaRequest,
       });
@@ -317,7 +301,6 @@ export async function planWorkflow(
         name: workflow.name,
         workspaceId,
         workflow,
-        scripts: allScripts,
         usedJobNames,
         metaRequest,
       });
@@ -341,27 +324,4 @@ export async function planWorkflow(
 
   changeSet.print();
   return { changeSet, conflicts, unmanaged, resourceOwners, appName };
-}
-
-async function loadWorkflowScripts(): Promise<Map<string, string>> {
-  const scripts = new Map<string, string>();
-
-  // Load all job scripts from workflow-jobs directory
-  const jobsDir = path.join(getDistDir(), "workflow-jobs");
-  if (!fs.existsSync(jobsDir)) {
-    return scripts;
-  }
-
-  const files = fs.readdirSync(jobsDir);
-  for (const file of files) {
-    // Only load final bundled .js files (e.g., "job-name.js", not "job-name.base.js")
-    if (/^[^.]+\.js$/.test(file)) {
-      const jobName = file.replace(/\.js$/, "");
-      const scriptPath = path.join(jobsDir, file);
-      const script = fs.readFileSync(scriptPath, "utf-8");
-      scripts.set(jobName, script);
-    }
-  }
-
-  return scripts;
 }

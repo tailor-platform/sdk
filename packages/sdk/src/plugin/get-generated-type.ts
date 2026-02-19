@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
-import type { NamespacePluginOutput, Plugin, PluginOutput } from "@/parser/plugin-config/types";
+import type { Plugin, PluginOutput, TypePluginOutput } from "@/parser/plugin-config/types";
 import type { TailorAnyDBType } from "@/parser/service/tailordb/types";
 
 // ========================================
@@ -152,7 +152,7 @@ async function resolveNamespaceForNamespacePlugin(
   plugin: Plugin,
   kind: string,
   pluginConfig: unknown,
-): Promise<{ namespace: string; output: NamespacePluginOutput }> {
+): Promise<{ namespace: string; output: PluginOutput }> {
   if (!config.db) {
     throw new Error(`No db configuration found in config`);
   }
@@ -185,11 +185,11 @@ async function resolveNamespaceForNamespacePlugin(
 // Process caching
 // ========================================
 
-// Cache: plugin -> cacheKey -> PluginOutput
-const processCache = new WeakMap<Plugin, Map<string, PluginOutput>>();
+// Cache: plugin -> cacheKey -> TypePluginOutput
+const processCache = new WeakMap<Plugin, Map<string, TypePluginOutput>>();
 
-// Cache for namespace plugins: plugin -> cacheKey -> NamespacePluginOutput
-const namespaceProcessCache = new WeakMap<Plugin, Map<string, NamespacePluginOutput>>();
+// Cache for namespace plugins: plugin -> cacheKey -> PluginOutput
+const namespaceProcessCache = new WeakMap<Plugin, Map<string, PluginOutput>>();
 
 /**
  * Generate a cache key that includes pluginConfig.

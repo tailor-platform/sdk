@@ -11,6 +11,7 @@ import { applyPipeline, planPipeline } from "@/cli/apply/services/resolver";
 import { applyStaticWebsite, planStaticWebsite } from "@/cli/apply/services/staticwebsite";
 import { applyTailorDB, planTailorDB } from "@/cli/apply/services/tailordb";
 import { loadConfig, type LoadedConfig } from "@/cli/config-loader";
+import { applyFunctionRegistry, planFunctionRegistry } from "./apply/services/function-registry";
 import { applyWorkflow, planWorkflow } from "./apply/services/workflow";
 import { commonArgs, confirmationArgs, deploymentArgs, withCommonArgs } from "./args";
 import { initOperatorClient, type OperatorClient } from "./client";
@@ -66,6 +67,7 @@ async function execRemove(
   const app = await planApplication(ctx);
   const executor = await planExecutor(ctx);
   const workflow = await planWorkflow(client, workspaceId, application.name, {}, {});
+  const functionRegistry = await planFunctionRegistry(client, workspaceId, application.name, []);
 
   if (
     tailorDB.changeSet.service.deletes.length === 0 &&
@@ -75,7 +77,8 @@ async function execRemove(
     pipeline.changeSet.service.deletes.length === 0 &&
     app.deletes.length === 0 &&
     executor.changeSet.deletes.length === 0 &&
-    workflow.changeSet.deletes.length === 0
+    workflow.changeSet.deletes.length === 0 &&
+    functionRegistry.changeSet.deletes.length === 0
   ) {
     return;
   }
@@ -98,6 +101,7 @@ async function execRemove(
   await applyIdP(client, idp, "delete-services");
   await applyTailorDB(client, tailorDB, "delete-resources");
   await applyTailorDB(client, tailorDB, "delete-services");
+  await applyFunctionRegistry(client, workspaceId, functionRegistry, "delete");
 }
 
 /**

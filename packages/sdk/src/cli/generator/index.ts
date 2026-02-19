@@ -645,7 +645,7 @@ export async function generate(options?: GenerateOptions) {
   const watch = options?.watch ?? false;
 
   // Generate user types from loaded config
-  await generateUserTypes({ config, configPath: config.path, plugins });
+  await generateUserTypes({ config, configPath: config.path });
   const manager = createGenerationManager(config, generators, plugins, config.path);
   await manager.generate(watch);
   if (watch) {

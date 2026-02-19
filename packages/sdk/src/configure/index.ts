@@ -32,6 +32,7 @@ export type {
   Plugin,
   PluginConfigs,
   PluginOutput,
+  TypePluginOutput,
   NamespacePluginOutput,
   PluginProcessContext,
   PluginNamespaceProcessContext,
