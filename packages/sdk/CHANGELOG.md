@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 1.15.1
+
+### Patch Changes
+
+- [#608](https://github.com/tailor-platform/sdk/pull/608) [`17fbd24`](https://github.com/tailor-platform/sdk/commit/17fbd243bd2925d3c4b6fe0d61f0a3ab24c3bece) Thanks [@k1LoW](https://github.com/k1LoW)! - Add validation to require allowedEmailDomains when allowGoogleOauth is enabled
+
 ## 1.15.0
 
 ### Minor Changes

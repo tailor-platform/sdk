@@ -1,5 +1,7 @@
 # @tailor-platform/create-sdk
 
+## 1.15.1
+
 ## 1.15.0
 
 ## 1.14.2
