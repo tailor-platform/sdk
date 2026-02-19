@@ -56,6 +56,14 @@ export const IdPUserAuthPolicySchema = z
       message: "allowGoogleOauth cannot be set when useNonEmailIdentifier is true",
       path: ["allowGoogleOauth"],
     },
+  )
+  .refine(
+    (data) =>
+      !data.allowGoogleOauth || (data.allowedEmailDomains && data.allowedEmailDomains.length > 0),
+    {
+      message: "allowGoogleOauth requires allowedEmailDomains to be set",
+      path: ["allowGoogleOauth"],
+    },
   );
 
 export const IdPSchema = z
