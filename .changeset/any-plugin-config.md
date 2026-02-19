@@ -9,3 +9,6 @@ Add TypeConfig/PluginConfig type parameters to Plugin interface and remove Tailo
 - Merge `PluginWithConfig`/`PluginNamespaceOnly` into a single `Plugin` interface
 - Wire TypeConfig/PluginConfig through `processType`/`processNamespace` contexts
 - Remove TailorField-based runtime validation from plugin config processing
+- Introduce `TypePluginOutput` for processType (extends `PluginOutput` with `extends` field)
+- Make `PluginOutput` the base type without `extends` (used by processNamespace)
+- Use `TailorAnyDBField` for `PluginExtends.fields` type
