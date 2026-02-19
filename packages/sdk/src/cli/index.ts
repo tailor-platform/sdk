@@ -6,6 +6,7 @@ import { withCompletionCommand } from "politty/completion";
 import { apiCommand } from "./api";
 import { applyCommand } from "./apply";
 import { executorCommand } from "./executor";
+import { functionCommand } from "./function";
 import { generateCommand } from "./generator";
 import { initCommand } from "./init";
 import { loginCommand } from "./login";
@@ -38,6 +39,7 @@ export const mainCommand = withCompletionCommand(
       api: apiCommand,
       apply: applyCommand,
       executor: executorCommand,
+      function: functionCommand,
       generate: generateCommand,
       init: initCommand,
       login: loginCommand,
