@@ -1,5 +1,4 @@
 import type { TailorAnyDBType } from "@/configure/services/tailordb";
-import type { TailorAnyField } from "@/configure/types";
 
 export type TypeConfigRequired<PluginConfig = unknown> =
   | boolean
@@ -344,9 +343,11 @@ export interface PluginOutput {
 export type NamespacePluginOutput = Omit<PluginOutput, "extends"> & { extends?: never };
 
 /**
- * Base plugin interface that all plugins must implement
+ * Plugin interface that all plugins must implement.
+ * @template TypeConfig - Type for per-type configuration passed via .plugin() method
+ * @template PluginConfig - Type for plugin-level configuration passed via definePlugins()
  */
-interface PluginCommon<PluginConfig = unknown> {
+export interface Plugin<TypeConfig = unknown, PluginConfig = unknown> {
   /** Unique identifier for the plugin */
   readonly id: string;
   /** Human-readable description of the plugin */
@@ -357,19 +358,6 @@ interface PluginCommon<PluginConfig = unknown> {
    * (e.g., plugin executors and seed schema generation).
    */
   readonly importPath: string;
-  /**
-   * Schema defining the expected plugin-level configuration.
-   * Used to validate the `pluginConfig` property on the plugin object.
-   * If not provided, pluginConfig validation is skipped.
-   * @example
-   * ```typescript
-   * pluginConfigSchema: t.object({
-   *   archiveTablePrefix: t.string({ optional: true }),
-   *   defaultRetentionDays: t.int({ optional: true }),
-   * })
-   * ```
-   */
-  readonly pluginConfigSchema?: TailorAnyField;
 
   /**
    * Controls whether per-type plugin config is required when attaching via .plugin().
@@ -386,24 +374,14 @@ interface PluginCommon<PluginConfig = unknown> {
   readonly pluginConfig?: PluginConfig;
 
   /**
-   * TypeScript type template for generating type-safe plugin configuration.
-   * Use `Fields` to reference the field names of the type being configured.
-   * If not provided, the type is generated from configSchema.
-   * @example
-   * ```typescript
-   * // For field-aware configs:
-   * configTypeTemplate: "{ labels: Partial<Record<Fields, FieldLabel>>; typeLabel?: FieldLabel }"
-   * ```
-   */
-  readonly configTypeTemplate?: string;
-
-  /**
    * Process a single TailorDB type and generate outputs.
    * This method is called for each type that has this plugin attached via .plugin().
    * @param context - Context containing the type, config, pluginConfig, and namespace
    * @returns Plugin output with generated types, resolvers, and executors
    */
-  processType?(context: PluginProcessContext): PluginOutput | Promise<PluginOutput>;
+  processType?(
+    context: PluginProcessContext<TypeConfig, PluginConfig>,
+  ): PluginOutput | Promise<PluginOutput>;
 
   /**
    * Process plugin for a namespace without requiring a source type.
@@ -413,35 +391,6 @@ interface PluginCommon<PluginConfig = unknown> {
    * @returns Plugin output with generated types, resolvers, and executors
    */
   processNamespace?(
-    context: PluginNamespaceProcessContext,
+    context: PluginNamespaceProcessContext<PluginConfig>,
   ): NamespacePluginOutput | Promise<NamespacePluginOutput>;
 }
-
-export interface PluginWithConfig<PluginConfig = unknown> extends PluginCommon<PluginConfig> {
-  /**
-   * Schema defining the expected per-type configuration for this plugin.
-   * Used to validate config passed via `.plugin({ pluginId: config })`.
-   * Uses the same field types as createResolver's input (t.string(), t.number(), etc.).
-   * @example
-   * ```typescript
-   * configSchema: t.object({
-   *   archiveReason: t.bool({ optional: true }),
-   * })
-   * ```
-   */
-  readonly configSchema: TailorAnyField;
-}
-
-export interface PluginNamespaceOnly<PluginConfig = unknown> extends PluginCommon<PluginConfig> {
-  /** Namespace-only plugins do not accept per-type config. */
-  readonly configSchema?: undefined;
-  /** Namespace-only plugins cannot define processType(). */
-  processType?: never;
-}
-
-/**
- * Plugin interface that all plugins must implement
- */
-export type Plugin<PluginConfig = unknown> =
-  | PluginWithConfig<PluginConfig>
-  | PluginNamespaceOnly<PluginConfig>;

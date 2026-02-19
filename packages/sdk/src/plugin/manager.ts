@@ -12,24 +12,6 @@ import type {
   TailorTypeGqlPermission,
 } from "@/parser/service/tailordb/types";
 
-type PluginConfigSchemaField = NonNullable<Plugin["configSchema"]>;
-
-type UnauthenticatedTailorUser = {
-  id: string;
-  type: "" | "machine_user" | "user";
-  workspaceId: string;
-  attributes: null | Record<string, string | string[] | boolean | boolean[] | undefined>;
-  attributeList: [];
-};
-
-const unauthenticatedTailorUser: UnauthenticatedTailorUser = {
-  id: "00000000-0000-0000-0000-000000000000",
-  type: "",
-  workspaceId: "00000000-0000-0000-0000-000000000000",
-  attributes: null,
-  attributeList: [],
-};
-
 /**
  * Context for processing a single plugin attachment on a raw TailorDBType
  */
@@ -90,40 +72,6 @@ export interface PluginExecutorInfo {
 }
 
 /**
- * Validation error for plugin config
- */
-interface ConfigValidationError {
-  field: string;
-  message: string;
-}
-
-/**
- * Validate plugin config against its schema
- * @param config - The config object to validate
- * @param schema - The schema defining expected fields
- * @returns Array of validation errors (empty if valid)
- */
-function validatePluginConfig(
-  config: unknown,
-  schema: PluginConfigSchemaField,
-): ConfigValidationError[] {
-  const result = schema.parse({
-    value: config,
-    data: config,
-    user: unauthenticatedTailorUser,
-  });
-
-  if ("issues" in result && result.issues) {
-    return result.issues.map((issue) => ({
-      field: Array.isArray(issue.path) ? issue.path.join(".") : "",
-      message: issue.message,
-    }));
-  }
-
-  return [];
-}
-
-/**
  * Manages plugin registration and processing
  */
 export class PluginManager {
@@ -169,20 +117,6 @@ export class PluginManager {
         success: false,
         error: `Plugin "${plugin.id}" requires typeConfig, but none was provided for type "${context.type.name}".`,
       };
-    }
-
-    // Validate typeConfig against schema if provided
-    if (plugin.configSchema) {
-      const validationErrors = validatePluginConfig(context.typeConfig, plugin.configSchema);
-      if (validationErrors.length > 0) {
-        const errorDetails = validationErrors
-          .map((e) => (e.field ? `${e.field}: ${e.message}` : e.message))
-          .join("; ");
-        return {
-          success: false,
-          error: `Invalid typeConfig for plugin "${plugin.id}" on type "${context.type.name}": ${errorDetails}`,
-        };
-      }
     }
 
     // Check if plugin supports type-attached processing
@@ -261,25 +195,6 @@ export class PluginManager {
 
       // Use stored plugin config (from definePlugins)
       const config = plugin.pluginConfig;
-
-      // Validate plugin config against pluginConfigSchema if provided
-      if (plugin.pluginConfigSchema && config !== undefined) {
-        const validationErrors = validatePluginConfig(config, plugin.pluginConfigSchema);
-        if (validationErrors.length > 0) {
-          const errorDetails = validationErrors
-            .map((e) => (e.field ? `${e.field}: ${e.message}` : e.message))
-            .join("; ");
-          results.push({
-            pluginId,
-            config,
-            result: {
-              success: false,
-              error: `Invalid pluginConfig for plugin "${plugin.id}": ${errorDetails}`,
-            },
-          });
-          continue;
-        }
-      }
 
       // Execute plugin processNamespace
       const context: PluginNamespaceProcessContext = {
