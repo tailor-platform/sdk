@@ -5,30 +5,13 @@ import type {
   PluginGeneratedType,
   PluginNamespaceProcessContext,
   PluginOutput,
+  TypePluginOutput,
 } from "@/parser/plugin-config/types";
 import type {
   TailorAnyDBType,
   TailorTypePermission,
   TailorTypeGqlPermission,
 } from "@/parser/service/tailordb/types";
-
-type PluginConfigSchemaField = NonNullable<Plugin["configSchema"]>;
-
-type UnauthenticatedTailorUser = {
-  id: string;
-  type: "" | "machine_user" | "user";
-  workspaceId: string;
-  attributes: null | Record<string, string | string[] | boolean | boolean[] | undefined>;
-  attributeList: [];
-};
-
-const unauthenticatedTailorUser: UnauthenticatedTailorUser = {
-  id: "00000000-0000-0000-0000-000000000000",
-  type: "",
-  workspaceId: "00000000-0000-0000-0000-000000000000",
-  attributes: null,
-  attributeList: [],
-};
 
 /**
  * Context for processing a single plugin attachment on a raw TailorDBType
@@ -69,9 +52,16 @@ export interface PluginExecutorInfoExtended extends PluginExecutorInfo {
 }
 
 /**
- * Result of processing a plugin attachment
+ * Result of processing a type-attached plugin
  */
 export type ProcessAttachmentResult =
+  | { success: true; output: TypePluginOutput }
+  | { success: false; error: string };
+
+/**
+ * Result of processing a namespace plugin
+ */
+export type ProcessNamespaceResult =
   | { success: true; output: PluginOutput }
   | { success: false; error: string };
 
@@ -87,40 +77,6 @@ export interface PluginExecutorInfo {
   namespace: string;
   /** Source type name (for type-attached executors, undefined for namespace) */
   sourceTypeName?: string;
-}
-
-/**
- * Validation error for plugin config
- */
-interface ConfigValidationError {
-  field: string;
-  message: string;
-}
-
-/**
- * Validate plugin config against its schema
- * @param config - The config object to validate
- * @param schema - The schema defining expected fields
- * @returns Array of validation errors (empty if valid)
- */
-function validatePluginConfig(
-  config: unknown,
-  schema: PluginConfigSchemaField,
-): ConfigValidationError[] {
-  const result = schema.parse({
-    value: config,
-    data: config,
-    user: unauthenticatedTailorUser,
-  });
-
-  if ("issues" in result && result.issues) {
-    return result.issues.map((issue) => ({
-      field: Array.isArray(issue.path) ? issue.path.join(".") : "",
-      message: issue.message,
-    }));
-  }
-
-  return [];
 }
 
 /**
@@ -171,20 +127,6 @@ export class PluginManager {
       };
     }
 
-    // Validate typeConfig against schema if provided
-    if (plugin.configSchema) {
-      const validationErrors = validatePluginConfig(context.typeConfig, plugin.configSchema);
-      if (validationErrors.length > 0) {
-        const errorDetails = validationErrors
-          .map((e) => (e.field ? `${e.field}: ${e.message}` : e.message))
-          .join("; ");
-        return {
-          success: false,
-          error: `Invalid typeConfig for plugin "${plugin.id}" on type "${context.type.name}": ${errorDetails}`,
-        };
-      }
-    }
-
     // Check if plugin supports type-attached processing
     if (!plugin.processType) {
       return {
@@ -194,7 +136,7 @@ export class PluginManager {
     }
 
     // Execute plugin processType with raw TailorDBType
-    let output: PluginOutput;
+    let output: TypePluginOutput;
     try {
       output = await plugin.processType({
         type: context.type,
@@ -249,8 +191,8 @@ export class PluginManager {
    */
   async processNamespacePlugins(
     namespace: string,
-  ): Promise<Array<{ pluginId: string; config: unknown; result: ProcessAttachmentResult }>> {
-    const results: Array<{ pluginId: string; config: unknown; result: ProcessAttachmentResult }> =
+  ): Promise<Array<{ pluginId: string; config: unknown; result: ProcessNamespaceResult }>> {
+    const results: Array<{ pluginId: string; config: unknown; result: ProcessNamespaceResult }> =
       [];
 
     for (const [pluginId, plugin] of this.plugins) {
@@ -261,25 +203,6 @@ export class PluginManager {
 
       // Use stored plugin config (from definePlugins)
       const config = plugin.pluginConfig;
-
-      // Validate plugin config against pluginConfigSchema if provided
-      if (plugin.pluginConfigSchema && config !== undefined) {
-        const validationErrors = validatePluginConfig(config, plugin.pluginConfigSchema);
-        if (validationErrors.length > 0) {
-          const errorDetails = validationErrors
-            .map((e) => (e.field ? `${e.field}: ${e.message}` : e.message))
-            .join("; ");
-          results.push({
-            pluginId,
-            config,
-            result: {
-              success: false,
-              error: `Invalid pluginConfig for plugin "${plugin.id}": ${errorDetails}`,
-            },
-          });
-          continue;
-        }
-      }
 
       // Execute plugin processNamespace
       const context: PluginNamespaceProcessContext = {

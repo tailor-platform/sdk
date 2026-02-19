@@ -100,7 +100,7 @@ export async function apply(options?: ApplyOptions) {
   }
 
   // Generate user types from loaded config
-  await generateUserTypes({ config, configPath: config.path, plugins });
+  await generateUserTypes({ config, configPath: config.path });
   const application = defineApplication({ config, pluginManager });
 
   // Load files first (before building)

@@ -23,7 +23,7 @@ This is required so that generators can use plugin-generated TailorDB types via 
 ## Plugin Interface
 
 ```typescript
-interface Plugin<PluginConfig = unknown> {
+interface Plugin<TypeConfig = unknown, PluginConfig = unknown> {
   /** Unique identifier for the plugin (e.g., "@my-company/soft-delete") */
   readonly id: string;
 
@@ -33,40 +33,34 @@ interface Plugin<PluginConfig = unknown> {
   /** Import path for generated code to reference */
   readonly importPath: string;
 
-  /** Schema for per-type configuration via .plugin() (required when using processType) */
-  readonly configSchema?: TailorAnyField;
-
-  /** Schema for plugin-level configuration via definePlugins() (optional) */
-  readonly pluginConfigSchema?: TailorAnyField;
-
   /** Controls whether per-type config is required when attaching via .plugin() */
   readonly typeConfigRequired?: boolean | ((pluginConfig?: PluginConfig) => boolean);
 
   /** Plugin-level config passed via definePlugins() */
   readonly pluginConfig?: PluginConfig;
 
-  /** Optional template for generating PluginConfigs typing */
-  readonly configTypeTemplate?: string;
-
   /** Process a type with this plugin attached */
-  processType?(context: PluginProcessContext): PluginOutput | Promise<PluginOutput>;
+  processType?(
+    context: PluginProcessContext<TypeConfig, PluginConfig>,
+  ): TypePluginOutput | Promise<TypePluginOutput>;
 
   /** Process a namespace (plugins without a source type) */
   processNamespace?(
-    context: PluginNamespaceProcessContext,
-  ): NamespacePluginOutput | Promise<NamespacePluginOutput>;
+    context: PluginNamespaceProcessContext<PluginConfig>,
+  ): PluginOutput | Promise<PluginOutput>;
 }
 ```
 
 Notes:
 
 - `importPath` should be resolvable from the directory containing `tailor.config.ts`. Code generators use it to import plugin APIs such as `getGeneratedType` and executor modules.
-- If you want to attach a plugin via `.plugin()`, you must provide `configSchema` and `processType`.
-- Namespace-only plugins can omit `configSchema` and implement `processNamespace` instead.
+- If you want to attach a plugin via `.plugin()`, implement the `processType` method.
+- Namespace-only plugins implement `processNamespace` instead.
 - `pluginConfig` stores the plugin-level config so it can be read later during processing. Set it on the plugin object (e.g., via a factory function) before passing to `definePlugins()`.
 - `resolve` should return a dynamic import; relative specifiers are resolved from the plugin module.
 - Per-type config is optional by default. Use `typeConfigRequired: true` to make it mandatory.
 - To toggle optional/required based on plugin config, provide a function for `typeConfigRequired`.
+- Use TypeScript type parameters (`TypeConfig`, `PluginConfig`) to get type-safe config in your `processType` and `processNamespace` methods.
 
 ## PluginProcessContext
 
@@ -102,9 +96,11 @@ interface PluginNamespaceProcessContext<PluginConfig = unknown> {
 }
 ```
 
-## PluginOutput
+## Output Types
 
-Return value from `processType`:
+### PluginOutput (base)
+
+Base output used by both `processType` and `processNamespace`:
 
 ```typescript
 interface PluginOutput {
@@ -116,20 +112,24 @@ interface PluginOutput {
 
   /** Additional executors to generate */
   executors?: PluginGeneratedExecutor[];
+}
+```
 
+### TypePluginOutput
+
+Return value from `processType`. Extends `PluginOutput` with the ability to add fields to the source type:
+
+```typescript
+interface TypePluginOutput extends PluginOutput {
   /** Extensions to apply to the source type */
   extends?: {
     /** Fields to add to the source type */
-    fields?: Record<string, TailorAnyField>;
+    fields?: Record<string, TailorAnyDBField>;
   };
 }
 ```
 
-`processNamespace` returns `NamespacePluginOutput` (same shape as `PluginOutput` but without `extends`):
-
-```typescript
-type NamespacePluginOutput = Omit<PluginOutput, "extends">;
-```
+`processNamespace` returns `PluginOutput` directly (namespace plugins cannot extend a source type).
 
 ## getGeneratedType Helper
 
@@ -196,8 +196,8 @@ A complete example of a plugin that adds soft delete functionality:
 
 ```typescript
 // plugins/soft-delete/plugin.ts
-import { db, t } from "@tailor-platform/sdk";
-import type { Plugin, PluginProcessContext, PluginOutput } from "@tailor-platform/sdk";
+import { db } from "@tailor-platform/sdk";
+import type { Plugin, PluginProcessContext, TypePluginOutput } from "@tailor-platform/sdk";
 
 interface SoftDeleteConfig {
   archiveReason?: boolean;
@@ -210,22 +210,9 @@ interface SoftDeletePluginConfig {
   requireTypeConfig?: boolean;
 }
 
-const configSchema = t.object({
-  archiveReason: t.bool({ optional: true }),
-  retentionDays: t.int({ optional: true }),
-  // Use { required: true } to mark fields as required in plugin configs.
-  // By default, plugin config fields are optional.
-  // token: t.string({ required: true }),
-});
-
-const pluginConfigSchema = t.object({
-  archiveTablePrefix: t.string({ optional: true }),
-  defaultRetentionDays: t.int({ optional: true }),
-});
-
 function processSoftDelete(
   context: PluginProcessContext<SoftDeleteConfig, SoftDeletePluginConfig>,
-): PluginOutput {
+): TypePluginOutput {
   const { type, typeConfig, pluginConfig, namespace } = context;
   const prefix = pluginConfig?.archiveTablePrefix ?? "Deleted_";
 
@@ -266,13 +253,13 @@ function processSoftDelete(
 }
 
 // Factory function for plugins with plugin-level config
-function createSoftDeletePlugin(pluginConfig?: SoftDeletePluginConfig): Plugin {
+function createSoftDeletePlugin(
+  pluginConfig?: SoftDeletePluginConfig,
+): Plugin<SoftDeleteConfig, SoftDeletePluginConfig> {
   return {
     id: "@example/soft-delete",
     description: "Adds soft delete with archive functionality",
     importPath: "./plugins/soft-delete",
-    configSchema,
-    pluginConfigSchema,
     pluginConfig,
     typeConfigRequired: (config) => config?.requireTypeConfig === true,
     processType: processSoftDelete,
@@ -287,8 +274,9 @@ export default createSoftDeletePlugin();
 
 ```typescript
 // plugins/soft-delete/executors/on-delete.ts
-import { createExecutor, recordDeletedTrigger, withPluginContext } from "@tailor-platform/sdk";
+import { createExecutor, recordDeletedTrigger } from "@tailor-platform/sdk";
 import type { TailorAnyDBType } from "@tailor-platform/sdk";
+import { withPluginContext } from "@tailor-platform/sdk/plugin";
 import { getDB } from "generated/tailordb";
 
 interface SoftDeleteContext {
@@ -365,10 +353,39 @@ export const plugins = definePlugins(
 
 ## Adding Type Safety
 
-To enable type checking for your plugin's configuration, add a declaration merge:
+Plugin type safety is provided at two levels:
+
+### Plugin-level type safety (TypeConfig / PluginConfig)
+
+Use TypeScript type parameters on `Plugin<TypeConfig, PluginConfig>` to get type-safe config
+in `processType` and `processNamespace` methods:
 
 ```typescript
-// user-defined.d.ts or your plugin's types.ts
+interface MyTypeConfig {
+  archiveReason?: boolean;
+}
+
+interface MyPluginConfig {
+  prefix?: string;
+}
+
+const plugin: Plugin<MyTypeConfig, MyPluginConfig> = {
+  id: "@example/my-plugin",
+  // ...
+  processType(context) {
+    // context.typeConfig is MyTypeConfig
+    // context.pluginConfig is MyPluginConfig
+  },
+};
+```
+
+### Per-type `.plugin()` type safety (declaration merging)
+
+To enable type checking when users attach plugins via `.plugin()`, provide a declaration merge
+for the `PluginConfigs` interface. Plugin authors should ship this in their package's type definitions:
+
+```typescript
+// your-plugin/types.d.ts (shipped with your plugin package)
 declare module "@tailor-platform/sdk" {
   interface PluginConfigs<Fields extends string> {
     "@example/soft-delete": {

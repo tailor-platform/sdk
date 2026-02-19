@@ -1341,7 +1341,7 @@ function compareFiles(
  * Compare type-level relationships
  * @param {DiffContext} ctx - Diff context
  * @param {string} typeName - Type name
- * @param relationshipType
+ * @param {"forward" | "backward"} relationshipType - Relationship direction to compare
  * @param {Record<string, SnapshotRelationship> | undefined} oldRelationships - Previous relationships
  * @param {Record<string, SnapshotRelationship> | undefined} newRelationships - Current relationships
  * @returns {void}
