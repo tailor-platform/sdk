@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GQL_PERMISSION_INVALID_OPERAND, TailorDBTypeSchema } from "./schema";
+import { GQL_PERMISSION_INVALID_OPERAND_MESSAGE, TailorDBTypeSchema } from "./schema";
 
 const makeType = (gql: unknown) => ({
   name: "Test",
@@ -25,8 +25,8 @@ describe("TailorDBTypeSchema gqlPermission validation", () => {
     const result = TailorDBTypeSchema.safeParse(input);
     expect(result.success).toBe(false);
     if (!result.success) {
-      const issue = result.error.issues.find(
-        (i) => i.code === "custom" && i.params?.code === GQL_PERMISSION_INVALID_OPERAND,
+      const issue = result.error.issues.find((i) =>
+        i.message.includes(GQL_PERMISSION_INVALID_OPERAND_MESSAGE),
       );
       expect(issue).toBeDefined();
       expect(issue?.message).toContain('"record" operand is not supported in gqlPermission');
@@ -44,8 +44,8 @@ describe("TailorDBTypeSchema gqlPermission validation", () => {
     const result = TailorDBTypeSchema.safeParse(input);
     expect(result.success).toBe(false);
     if (!result.success) {
-      const issue = result.error.issues.find(
-        (i) => i.code === "custom" && i.params?.code === GQL_PERMISSION_INVALID_OPERAND,
+      const issue = result.error.issues.find((i) =>
+        i.message.includes(GQL_PERMISSION_INVALID_OPERAND_MESSAGE),
       );
       expect(issue).toBeDefined();
       expect(issue?.message).toContain('"oldRecord" operand is not supported in gqlPermission');
@@ -63,8 +63,8 @@ describe("TailorDBTypeSchema gqlPermission validation", () => {
     const result = TailorDBTypeSchema.safeParse(input);
     expect(result.success).toBe(false);
     if (!result.success) {
-      const issue = result.error.issues.find(
-        (i) => i.code === "custom" && i.params?.code === GQL_PERMISSION_INVALID_OPERAND,
+      const issue = result.error.issues.find((i) =>
+        i.message.includes(GQL_PERMISSION_INVALID_OPERAND_MESSAGE),
       );
       expect(issue).toBeDefined();
       expect(issue?.message).toContain('"newRecord" operand is not supported in gqlPermission');
