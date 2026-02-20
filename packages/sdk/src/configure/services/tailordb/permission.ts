@@ -1,5 +1,21 @@
 import type { InferredAttributeMap } from "../../types";
 
+/**
+ * Record-level permission configuration for a TailorDB type.
+ * Defines create, read, update, and delete permissions.
+ *
+ * Prefer object format with explicit `conditions` and `permit` for readability.
+ * Shorthand array format is supported for compatibility, but less readable.
+ *
+ * For update operations, use `newRecord`/`oldRecord` operands instead of `record`.
+ * @example
+ * const permission: TailorTypePermission = {
+ *   create: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+ *   read: [{ conditions: [[{ record: "isPublic" }, "=", true]], permit: true }],
+ *   update: [{ conditions: [[{ newRecord: "ownerId" }, "=", { user: "id" }]], permit: true }],
+ *   delete: [{ conditions: [[{ record: "ownerId" }, "=", { user: "id" }]], permit: true }],
+ * };
+ */
 export type TailorTypePermission<
   User extends object = InferredAttributeMap,
   Type extends object = object,

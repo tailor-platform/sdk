@@ -42,10 +42,36 @@ type ResolverReturn<
 
 /**
  * Create a resolver definition for the Tailor SDK.
+ *
+ * The `body` function receives a context with `input` (typed from `config.input`),
+ * `user` (TailorUser with id, type, workspaceId, attributes, attributeList), and `env` (TailorEnv).
+ * The return value of `body` must match the `output` type.
+ *
+ * `output` accepts either a single TailorField (e.g. `t.string()`) or a
+ * Record of fields (e.g. `{ name: t.string(), age: t.int() }`).
  * @template Input
  * @template Output
  * @param config - Resolver configuration
  * @returns Normalized resolver configuration
+ * @example
+ * import { createResolver, t } from "@tailor-platform/sdk";
+ *
+ * export default createResolver({
+ *   name: "getUser",
+ *   operation: "query",
+ *   input: {
+ *     id: t.string(),
+ *   },
+ *   body: async ({ input, user }) => {
+ *     const db = getDB("tailordb");
+ *     const result = await db.selectFrom("User").selectAll().where("id", "=", input.id).executeTakeFirst();
+ *     return { name: result?.name ?? "", email: result?.email ?? "" };
+ *   },
+ *   output: t.object({
+ *     name: t.string(),
+ *     email: t.string(),
+ *   }),
+ * });
  */
 export function createResolver<
   Input extends Record<string, TailorAnyField> | undefined = undefined,

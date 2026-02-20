@@ -123,7 +123,11 @@ export interface TailorDBField<Defined extends DefinedDBFieldMetadata, Output> e
   ): TailorDBField<Prettify<CurrentDefined & { description: true }>, Output>;
 
   /**
-   * Define a relation to another type
+   * Define a relation to another type.
+   * Relation types: "n-1" (many-to-one), "1-1" (one-to-one), "keyOnly" (key only).
+   * Aliases "manyToOne", "oneToOne", and "N-1" are also accepted.
+   * @example db.uuid().relation({ type: "n-1", toward: { type: otherModel } })
+   * @example db.uuid().relation({ type: "1-1", toward: { type: profile } })
    */
   relation<S extends RelationType, T extends TailorAnyDBType, CurrentDefined extends Defined>(
     this: CurrentDefined extends { relation: unknown }
@@ -186,7 +190,10 @@ export interface TailorDBField<Defined extends DefinedDBFieldMetadata, Output> e
   ): TailorDBField<Prettify<CurrentDefined & { vector: true }>, Output>;
 
   /**
-   * Add hooks for create/update operations
+   * Add hooks for create/update operations on this field.
+   * The hook function receives `{ value, data, user }` and returns the computed value.
+   * @example db.string().hooks({ create: ({ data }) => data.firstName + " " + data.lastName })
+   * @example db.datetime().hooks({ create: () => new Date(), update: () => new Date() })
    */
   hooks<CurrentDefined extends Defined, const H extends Hook<unknown, Output>>(
     this: CurrentDefined extends { hooks: unknown }
@@ -209,7 +216,15 @@ export interface TailorDBField<Defined extends DefinedDBFieldMetadata, Output> e
   >;
 
   /**
-   * Add validation functions to the field
+   * Add validation functions to the field.
+   * Accepts a function or a tuple of [function, errorMessage].
+   * Prefer the tuple form for diagnosable errors.
+   * @example
+   * // Function form (default error message):
+   * db.int().validate(({ value }) => value >= 0)
+   * @example
+   * // Tuple form with custom error message (recommended):
+   * db.string().validate([({ value }) => value.length >= 8, "Must be at least 8 characters"])
    */
   validate<CurrentDefined extends Defined>(
     this: CurrentDefined extends { validate: unknown }
@@ -653,38 +668,103 @@ function createTailorDBField<
 
 const createField = createTailorDBField;
 
+/**
+ * Create a UUID field.
+ * @param options - Field configuration options
+ * @returns A UUID field
+ * @example db.uuid()
+ * @example db.uuid({ optional: true })
+ */
 function uuid<const Opt extends FieldOptions>(options?: Opt) {
   return createField("uuid", options);
 }
 
+/**
+ * Create a string field.
+ * @param options - Field configuration options
+ * @returns A string field
+ * @example db.string()
+ * @example db.string({ optional: true })
+ */
 function string<const Opt extends FieldOptions>(options?: Opt) {
   return createField("string", options);
 }
 
+/**
+ * Create a boolean field.
+ * Note: The method name is `bool` but creates a `boolean` type field.
+ * @param options - Field configuration options
+ * @returns A boolean field
+ * @example db.bool()
+ * @example db.bool({ optional: true })
+ */
 function bool<const Opt extends FieldOptions>(options?: Opt) {
   return createField("boolean", options);
 }
 
+/**
+ * Create an integer field.
+ * @param options - Field configuration options
+ * @returns An integer field
+ * @example db.int()
+ * @example db.int({ optional: true })
+ */
 function int<const Opt extends FieldOptions>(options?: Opt) {
   return createField("integer", options);
 }
 
+/**
+ * Create a float (decimal number) field.
+ * @param options - Field configuration options
+ * @returns A float field
+ * @example db.float()
+ * @example db.float({ optional: true })
+ */
 function float<const Opt extends FieldOptions>(options?: Opt) {
   return createField("float", options);
 }
 
+/**
+ * Create a date field (date only, no time component).
+ * Format: "yyyy-MM-dd"
+ * @param options - Field configuration options
+ * @returns A date field
+ * @example db.date()
+ */
 function date<const Opt extends FieldOptions>(options?: Opt) {
   return createField("date", options);
 }
 
+/**
+ * Create a datetime field (date and time).
+ * Format: ISO 8601 "yyyy-MM-ddTHH:mm:ssZ"
+ * @param options - Field configuration options
+ * @returns A datetime field
+ * @example db.datetime()
+ */
 function datetime<const Opt extends FieldOptions>(options?: Opt) {
   return createField("datetime", options);
 }
 
+/**
+ * Create a time field (time only, no date component).
+ * Format: "HH:mm"
+ * @param options - Field configuration options
+ * @returns A time field
+ * @example db.time()
+ */
 function time<const Opt extends FieldOptions>(options?: Opt) {
   return createField("time", options);
 }
 
+/**
+ * Create an enum field with a fixed set of allowed string values.
+ * @param values - Array of allowed string values, or array of `{ value, description }` objects
+ * @param options - Field configuration options
+ * @returns An enum field
+ * @example db.enum(["active", "inactive", "suspended"])
+ * @example db.enum(["small", "medium", "large"], { optional: true })
+ */
 function _enum<const V extends AllowedValues, const Opt extends FieldOptions>(
   values: V,
   options?: Opt,
@@ -695,6 +775,14 @@ function _enum<const V extends AllowedValues, const Opt extends FieldOptions>(
   return createField<"enum", Opt, AllowedValuesOutput<V>>("enum", options, undefined, values);
 }
 
+/**
+ * Create a nested object field with sub-fields.
+ * @param fields - Record of nested field definitions
+ * @param options - Field configuration options
+ * @returns A nested object field
+ * @example db.object({ street: db.string(), city: db.string(), zip: db.string() })
+ * @example db.object({ name: db.string() }, { optional: true })
+ */
 function object<
   const F extends Record<string, TailorAnyDBField> & ExcludeNestedDBFields<F>,
   const Opt extends FieldOptions,
@@ -723,12 +811,27 @@ export interface TailorDBType<
   readonly metadata: TailorDBTypeMetadata;
 
   /**
-   * Add hooks for fields
+   * Add hooks for fields at the type level.
+   * Each key is a field name, and the value defines create/update hooks.
+   * @example
+   * db.type("Order", {
+   *   total: db.float(),
+   *   tax: db.float(),
+   *   ...db.fields.timestamps(),
+   * }).hooks({
+   *   tax: { create: ({ data }) => data.total * 0.1, update: ({ data }) => data.total * 0.1 },
+   * })
    */
   hooks(hooks: Hooks<Fields>): TailorDBType<Fields, User>;
 
   /**
-   * Add validators for fields
+   * Add validators for fields at the type level.
+   * Each key is a field name, and the value is a validator or array of validators.
+   * Prefer the tuple form [function, message] for diagnosable errors.
+   * @example
+   * db.type("User", { email: db.string() }).validate({
+   *   email: [({ value }) => value.includes("@"), "Email must contain @"],
+   * })
    */
   validate(validators: Validators<Fields>): TailorDBType<Fields, User>;
 
@@ -750,7 +853,16 @@ export interface TailorDBType<
   ): TailorDBType<Fields, User>;
 
   /**
-   * Set record-level permissions
+   * Set record-level permissions for create, read, update, and delete operations.
+   * Prefer object format with explicit `conditions` and `permit` for readability.
+   * For update operations, use `newRecord` and `oldRecord` operands.
+   * @example
+   * .permission({
+   *   create: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+   *   read: [{ conditions: [[{ record: "isPublic" }, "=", true]], permit: true }],
+   *   update: [{ conditions: [[{ newRecord: "ownerId" }, "=", { user: "id" }]], permit: true }],
+   *   delete: [{ conditions: [[{ record: "ownerId" }, "=", { user: "id" }]], permit: true }],
+   * })
    */
   permission<
     U extends object = User,
@@ -763,7 +875,15 @@ export interface TailorDBType<
   ): TailorDBType<Fields, U>;
 
   /**
-   * Set GraphQL-level permissions
+   * Set GraphQL-level permissions controlling access to GraphQL operations.
+   * @example
+   * .gqlPermission([
+   *   {
+   *     conditions: [[{ user: "_loggedIn" }, "=", true]],
+   *     actions: "all",
+   *     permit: true,
+   *   },
+   * ])
    */
   gqlPermission<
     U extends object = User,
@@ -1023,17 +1143,29 @@ type DBType<F extends { id?: never } & Record<string, TailorAnyDBField>> = Tailo
 >;
 
 /**
- * Creates a new database type with the specified fields
+ * Creates a new database type with the specified fields.
+ * An `id` field (UUID) is automatically added to every type.
  * @param name - The name of the type, or a tuple of [name, pluralForm]
  * @param fields - The field definitions for the type
  * @returns A new TailorDBType instance
+ * @example
+ * export const user = db.type("User", {
+ *   name: db.string(),
+ *   email: db.string(),
+ *   age: db.int({ optional: true }),
+ *   role: db.enum(["admin", "member"]),
+ *   ...db.fields.timestamps(),
+ * });
+ * // Always export both the value and type:
+ * export type user = typeof user;
  */
 function dbType<const F extends { id?: never } & Record<string, TailorAnyDBField>>(
   name: string | [string, string],
   fields: F,
 ): DBType<F>;
 /**
- * Creates a new database type with the specified fields and description
+ * Creates a new database type with the specified fields and description.
+ * An `id` field (UUID) is automatically added to every type.
  * @param name - The name of the type, or a tuple of [name, pluralForm]
  * @param description - A description of the type
  * @param fields - The field definitions for the type
@@ -1083,6 +1215,16 @@ export const db = {
   enum: _enum,
   object,
   fields: {
+    /**
+     * Creates standard timestamp fields (createdAt, updatedAt) with auto-hooks.
+     * createdAt is set on create, updatedAt is set on update.
+     * @returns An object with createdAt and updatedAt fields
+     * @example
+     * const model = db.type("Model", {
+     *   name: db.string(),
+     *   ...db.fields.timestamps(),
+     * });
+     */
     timestamps: () => ({
       createdAt: datetime()
         .hooks({ create: () => new Date() })
