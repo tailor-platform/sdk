@@ -201,7 +201,7 @@ describe.skipIf(!workDirReady)("004-db-resolvers-with-workflow", () => {
 
     test("body returns an object with triggered: true", async () => {
       const { default: resolver } = await importPath(resolverPath);
-      const result = resolver.body({
+      const result = await resolver.body({
         input: { dataId: "data-1", priority: "high" },
         user: {},
         env: {},
@@ -212,7 +212,7 @@ describe.skipIf(!workDirReady)("004-db-resolvers-with-workflow", () => {
 
     test("body captures result from trigger call", async () => {
       const { default: resolver } = await importPath(resolverPath);
-      const result = resolver.body({
+      const result = await resolver.body({
         input: { dataId: "data-1", priority: "high" },
         user: {},
         env: {},

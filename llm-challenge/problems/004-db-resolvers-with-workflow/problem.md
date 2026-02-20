@@ -40,7 +40,7 @@ A **mutation** resolver named `"processOrder"` that processes an order with disc
 A **mutation** resolver named `"startProcessing"` that triggers a workflow job.
 
 - **Input**: `dataId` (string), `priority` (enum: `"low"`, `"medium"`, `"high"`)
-- **Body**: Import `processDataJob` from the provided workflow file and call `.trigger()` with the input values. Do NOT use `await` — `.trigger()` is synchronous on server. Return `{ triggered: true, result }`.
+- **Body**: Import `processDataJob` from the provided workflow file and call `.trigger()` with the input values. Return `{ triggered: true, result }`.
 - **Output**: object with `triggered` (boolean) and `result` (optional object)
 
 Import `processDataJob` from `"../../workflows/dataProcessing"`.
