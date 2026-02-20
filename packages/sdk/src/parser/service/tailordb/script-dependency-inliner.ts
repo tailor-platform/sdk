@@ -86,10 +86,7 @@ function stripRanges(source: string, ranges: Array<{ start: number; end: number 
   return result;
 }
 
-function collectTypeSyntaxRanges(
-  node: unknown,
-  ranges: Array<{ start: number; end: number }>,
-): void {
+function collectTypeSyntaxRanges(node: unknown, ranges: Array<{ start: number; end: number }>) {
   if (!node || typeof node !== "object") return;
 
   if (Array.isArray(node)) {
@@ -213,7 +210,7 @@ function resolveDependencies(
   const visiting = new Set<string>();
   const added = new Set<string>();
 
-  const resolveName = (name: string): void => {
+  const resolveName = (name: string) => {
     if (added.has(name) || visiting.has(name)) return;
     const declaration = declarationMap.declarations.get(name);
     if (!declaration) {
@@ -279,6 +276,11 @@ export function buildScriptExprWithInlineDependencies(
   if (dependencies.unresolved.length > 0) {
     return invocation;
   }
+
+  console.log("👍expr is ");
+  console.log(
+    `(() => {\n${dependencies.declarations.map((d) => `  ${d}`).join("\n")}\n  return ${invocation};\n})()`,
+  );
 
   return `(() => {\n${dependencies.declarations.map((d) => `  ${d}`).join("\n")}\n  return ${invocation};\n})()`;
 }
