@@ -3,11 +3,7 @@ import { createAuthService, type AuthService } from "@/cli/application/auth/serv
 import { createExecutorService, type ExecutorService } from "@/cli/application/executor/service";
 import { createResolverService, type ResolverService } from "@/cli/application/resolver/service";
 import { createTailorDBService, type TailorDBService } from "@/cli/application/tailordb/service";
-import {
-  loadAndCollectJobs,
-  printLoadedWorkflows,
-  type WorkflowLoadResult,
-} from "@/cli/application/workflow/service";
+import { createWorkflowService, type WorkflowService } from "@/cli/application/workflow/service";
 import { bundleExecutors } from "@/cli/bundler/executor/executor-bundler";
 import { bundleResolvers } from "@/cli/bundler/resolver/resolver-bundler";
 import { buildTriggerContext } from "@/cli/bundler/trigger-context";
@@ -46,7 +42,7 @@ export type Application = {
   readonly idpServices: ReadonlyArray<IdP>;
   readonly authService: Readonly<AuthService> | undefined;
   readonly executorService: Readonly<ExecutorService> | undefined;
-  readonly workflowConfig: WorkflowServiceConfig | undefined;
+  readonly workflowService: Readonly<WorkflowService> | undefined;
   readonly staticWebsiteServices: ReadonlyArray<StaticWebsite>;
   readonly env: Readonly<Record<string, string | number | boolean>>;
   readonly applications: ReadonlyArray<Application>;
@@ -58,8 +54,6 @@ export type Application = {
 export interface LoadApplicationResult {
   /** Fully initialized application */
   application: Application;
-  /** Workflow loading result (if workflows are configured) */
-  workflowResult?: WorkflowLoadResult;
   /** Workflow bundling result (if workflows were bundled) */
   workflowBuildResult?: BundleWorkflowJobsResult;
 }
@@ -186,6 +180,13 @@ function defineExecutor(
   return createExecutorService({ config: config ?? { files: [] } });
 }
 
+function defineWorkflow(config: WorkflowServiceConfig | undefined): WorkflowService | undefined {
+  if (!config) {
+    return undefined;
+  }
+  return createWorkflowService({ config });
+}
+
 function defineStaticWebsites(
   websites: readonly StaticWebsiteInput[] | undefined,
 ): StaticWebsite[] {
@@ -232,7 +233,7 @@ function buildApplication(params: {
   idpResult: DefineIdpResult;
   authResult: DefineAuthResult;
   executorService: ExecutorService | undefined;
-  workflowConfig: WorkflowServiceConfig | undefined;
+  workflowService: WorkflowService | undefined;
   staticWebsiteServices: StaticWebsite[];
   env: Record<string, string | number | boolean>;
 }): Application {
@@ -251,7 +252,7 @@ function buildApplication(params: {
     idpServices: params.idpResult.idpServices,
     authService: params.authResult.authService,
     executorService: params.executorService,
-    workflowConfig: params.workflowConfig,
+    workflowService: params.workflowService,
     staticWebsiteServices: params.staticWebsiteServices,
     env: params.env,
     get applications() {
@@ -283,12 +284,13 @@ export function defineApplication(params: DefineApplicationParams): Application 
   const services = defineServices(config, pluginManager);
   // Plugin executors are not known at define-time; generate/apply flows handle them after type loading.
   const executorService = defineExecutor(config.executor, false);
+  const workflowService = defineWorkflow(config.workflow);
 
   return buildApplication({
     config,
     ...services,
     executorService,
-    workflowConfig: config.workflow,
+    workflowService,
     env: config.env ?? {},
   });
 }
@@ -363,11 +365,13 @@ export async function loadApplication(
   const executorService = defineExecutor(config.executor, pluginExecutorFiles.length > 0);
 
   // 5. Load and collect workflows
-  const workflowConfig = config.workflow;
-  const workflowResult = workflowConfig ? await loadAndCollectJobs(workflowConfig) : undefined;
+  const workflowService = defineWorkflow(config.workflow);
+  if (workflowService) {
+    await workflowService.loadWorkflows();
+  }
 
   // 6. Build trigger context for workflow/job trigger transformation
-  const triggerContext = await buildTriggerContext(workflowConfig);
+  const triggerContext = await buildTriggerContext(config.workflow);
 
   // 7. Bundle resolvers
   for (const pipeline of resolverResult.resolverServices) {
@@ -385,10 +389,10 @@ export async function loadApplication(
 
   // 9. Bundle workflows
   let workflowBuildResult: BundleWorkflowJobsResult | undefined;
-  if (workflowResult && workflowResult.jobs.length > 0) {
-    const mainJobNames = workflowResult.workflowSources.map((ws) => ws.workflow.mainJob.name);
+  if (workflowService && workflowService.getJobs().length > 0) {
+    const mainJobNames = workflowService.getWorkflowSources().map((ws) => ws.workflow.mainJob.name);
     workflowBuildResult = await bundleWorkflowJobs(
-      workflowResult.jobs,
+      workflowService.getJobs(),
       mainJobNames,
       config.env ?? {},
       triggerContext,
@@ -405,8 +409,8 @@ export async function loadApplication(
       await executorService.loadPluginExecutorFiles([...pluginExecutorFiles]);
     }
   }
-  if (workflowResult) {
-    printLoadedWorkflows(workflowResult);
+  if (workflowService) {
+    workflowService.printLoadedWorkflows();
   }
   logger.newline();
 
@@ -418,10 +422,10 @@ export async function loadApplication(
     idpResult,
     authResult,
     executorService,
-    workflowConfig,
+    workflowService,
     staticWebsiteServices,
     env: config.env ?? {},
   });
 
-  return { application, workflowResult, workflowBuildResult };
+  return { application, workflowBuildResult };
 }

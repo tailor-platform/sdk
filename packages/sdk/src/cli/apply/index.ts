@@ -79,7 +79,7 @@ export async function apply(options?: ApplyOptions) {
 
   // Load and initialize all application resources
   // This includes: types, plugins, workflows, bundling, and validation
-  const { application, workflowResult, workflowBuildResult } = await loadApplication({
+  const { application, workflowBuildResult } = await loadApplication({
     config,
     pluginManager,
   });
@@ -97,7 +97,8 @@ export async function apply(options?: ApplyOptions) {
   });
 
   // Collect function entries from bundled scripts (after build, before plan)
-  const functionEntries = collectFunctionEntries(application, workflowResult?.jobs ?? []);
+  const workflowService = application.workflowService;
+  const functionEntries = collectFunctionEntries(application, workflowService?.getJobs() ?? []);
 
   // Phase 1: Plan
   const ctx: PlanContext = {
@@ -125,7 +126,7 @@ export async function apply(options?: ApplyOptions) {
     client,
     workspaceId,
     application.name,
-    workflowResult?.workflows ?? {},
+    workflowService?.getWorkflows() ?? {},
     workflowBuildResult?.mainJobDeps ?? {},
   );
 
