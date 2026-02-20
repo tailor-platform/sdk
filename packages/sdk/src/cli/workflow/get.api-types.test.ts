@@ -39,6 +39,15 @@ describe("getWorkflow API types", () => {
     });
   });
 
+  it("rejects legacy options shape in typed overload", () => {
+    const acceptsTypedOptions = (_options: GetWorkflowTypedOptions): void => {};
+
+    acceptsTypedOptions({
+      // @ts-expect-error - typed overload requires workflow, not name
+      name: "legacy-workflow",
+    });
+  });
+
   it("keeps deprecated GetWorkflowOptions shape available", () => {
     const acceptsDeprecatedOptions = (_options: GetWorkflowOptions): void => {};
 

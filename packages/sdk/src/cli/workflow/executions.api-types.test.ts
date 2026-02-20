@@ -59,6 +59,15 @@ describe("listWorkflowExecutions API types", () => {
     acceptsDefaultOptions({});
   });
 
+  it("rejects legacy options shape in typed overload", () => {
+    const acceptsTypedOptions = (_options: ListWorkflowExecutionsTypedOptions): void => {};
+
+    acceptsTypedOptions({
+      // @ts-expect-error - typed overload requires workflow, not workflowName
+      workflowName: "legacy-workflow",
+    });
+  });
+
   it("keeps deprecated ListWorkflowExecutionsOptions shape available", () => {
     const acceptsDeprecatedOptions = (_options: ListWorkflowExecutionsOptions): void => {};
 

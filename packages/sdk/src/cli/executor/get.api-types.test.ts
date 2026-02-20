@@ -39,6 +39,15 @@ describe("getExecutor API types", () => {
     });
   });
 
+  it("rejects legacy options shape in typed overload", () => {
+    const acceptsTypedOptions = (_options: GetExecutorTypedOptions): void => {};
+
+    acceptsTypedOptions({
+      // @ts-expect-error - typed overload requires executor, not name
+      name: "legacy-executor",
+    });
+  });
+
   it("keeps deprecated GetExecutorOptions shape available", () => {
     const acceptsDeprecatedOptions = (_options: GetExecutorOptions): void => {};
 

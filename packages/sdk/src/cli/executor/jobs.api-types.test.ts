@@ -48,6 +48,15 @@ describe("listExecutorJobs API types", () => {
     });
   });
 
+  it("rejects legacy options shape in typed overload", () => {
+    const acceptsTypedOptions = (_options: ListExecutorJobsTypedOptions): void => {};
+
+    acceptsTypedOptions({
+      // @ts-expect-error - typed overload requires executor, not executorName
+      executorName: "legacy-executor",
+    });
+  });
+
   it("keeps deprecated ListExecutorJobsOptions shape available", () => {
     const acceptsDeprecatedOptions = (_options: ListExecutorJobsOptions): void => {};
 
@@ -90,6 +99,16 @@ describe("getExecutorJob API types", () => {
 
     acceptsDefaultOptions({
       executor: { name: "any-executor" },
+      jobId: "job-1",
+    });
+  });
+
+  it("rejects legacy options shape in typed overload", () => {
+    const acceptsTypedOptions = (_options: GetExecutorJobTypedOptions): void => {};
+
+    acceptsTypedOptions({
+      // @ts-expect-error - typed overload requires executor, not executorName
+      executorName: "legacy-executor",
       jobId: "job-1",
     });
   });
@@ -139,6 +158,16 @@ describe("watchExecutorJob API types", () => {
 
     acceptsDefaultOptions({
       executor: { name: "any-executor" },
+      jobId: "job-1",
+    });
+  });
+
+  it("rejects legacy options shape in typed overload", () => {
+    const acceptsTypedOptions = (_options: WatchExecutorJobTypedOptions): void => {};
+
+    acceptsTypedOptions({
+      // @ts-expect-error - typed overload requires executor, not executorName
+      executorName: "legacy-executor",
       jobId: "job-1",
     });
   });
