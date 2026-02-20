@@ -21,5 +21,5 @@ const CustomPluginSchema = z
  * @returns Plugin config schema that validates and transforms Plugin instances
  */
 export function createPluginConfigSchema() {
-  return CustomPluginSchema.transform((plugin) => plugin as Plugin).brand("Plugin");
+  return CustomPluginSchema.transform((plugin) => plugin as Plugin);
 }
