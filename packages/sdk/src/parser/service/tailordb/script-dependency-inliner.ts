@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { Linter } from "eslint";
 import * as globals from "globals";
 import { parseSync } from "oxc-parser";
@@ -20,6 +21,8 @@ interface ParsedDeclaration {
 
 interface SourceDeclarationMap {
   declarations: Map<string, ParsedDeclaration>;
+  imports: Map<string, { importedName: string; source: string }>;
+  exports: Map<string, string>;
 }
 
 interface DependencyResolution {
@@ -171,6 +174,132 @@ function parseTopLevelDeclaration(source: string, statement: Statement): ParsedD
   return [];
 }
 
+function getIdentifierName(node: unknown): string | undefined {
+  if (!node || typeof node !== "object") return undefined;
+  const typedNode = node as { type?: string; name?: string; value?: unknown };
+  if (typedNode.type === "Identifier" && typeof typedNode.name === "string") {
+    return typedNode.name;
+  }
+  if (typedNode.type === "Literal" && typeof typedNode.value === "string") {
+    return typedNode.value;
+  }
+  return undefined;
+}
+
+function parseImportDeclarations(statement: Statement, imports: SourceDeclarationMap["imports"]) {
+  if (statement.type !== "ImportDeclaration") return;
+
+  const importDecl = statement as Statement & {
+    source: { value?: unknown };
+    specifiers?: Array<{
+      type: string;
+      importKind?: string;
+      imported?: unknown;
+      local?: unknown;
+    }>;
+  };
+
+  if (typeof importDecl.source?.value !== "string") return;
+  const source = importDecl.source.value;
+  if (!source.startsWith("./") && !source.startsWith("../")) return;
+
+  for (const specifier of importDecl.specifiers ?? []) {
+    if (specifier.type !== "ImportSpecifier") continue;
+    if (specifier.importKind && specifier.importKind !== "value") continue;
+    const importedName = getIdentifierName(specifier.imported);
+    const localName = getIdentifierName(specifier.local);
+    if (!importedName || !localName) continue;
+    imports.set(localName, { importedName, source });
+  }
+}
+
+function parseExportDeclarations(
+  sourceCode: string,
+  statement: Statement,
+  declarations: SourceDeclarationMap["declarations"],
+  exportsMap: SourceDeclarationMap["exports"],
+) {
+  if (statement.type !== "ExportNamedDeclaration") return;
+
+  const exportDecl = statement as Statement & {
+    declaration?: Statement | null;
+    source?: { value?: unknown } | null;
+    specifiers?: Array<{ local?: unknown; exported?: unknown; exportKind?: string }>;
+  };
+
+  if (exportDecl.declaration) {
+    for (const declaration of parseTopLevelDeclaration(sourceCode, exportDecl.declaration)) {
+      declarations.set(declaration.name, declaration);
+      exportsMap.set(declaration.name, declaration.name);
+    }
+    return;
+  }
+
+  // Skip re-export statements: export { x } from "./module"
+  if (typeof exportDecl.source?.value === "string") return;
+
+  for (const specifier of exportDecl.specifiers ?? []) {
+    if (specifier.exportKind && specifier.exportKind !== "value") continue;
+    const localName = getIdentifierName(specifier.local);
+    const exportedName = getIdentifierName(specifier.exported);
+    if (!localName || !exportedName) continue;
+    exportsMap.set(exportedName, localName);
+  }
+}
+
+function resolveRelativeImportPath(fromFilePath: string, importSource: string): string | undefined {
+  if (!importSource.startsWith("./") && !importSource.startsWith("../")) return undefined;
+
+  const basePath = resolve(dirname(fromFilePath), importSource);
+  const candidates = [
+    basePath,
+    `${basePath}.ts`,
+    `${basePath}.tsx`,
+    `${basePath}.js`,
+    `${basePath}.mjs`,
+    `${basePath}.cjs`,
+    join(basePath, "index.ts"),
+    join(basePath, "index.tsx"),
+    join(basePath, "index.js"),
+    join(basePath, "index.mjs"),
+    join(basePath, "index.cjs"),
+  ];
+
+  return candidates.find((candidate) => existsSync(candidate));
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function isTranspiledImportBinding(name: string): boolean {
+  return name.startsWith("__vite_ssr_import_") || /^__\w*import\w*__$/i.test(name);
+}
+
+function extractMemberDependencies(functionSource: string, objectName: string): string[] {
+  const propertyNames = new Set<string>();
+  const dotPattern = new RegExp(
+    String.raw`\b${escapeRegExp(objectName)}\.([A-Za-z_$][A-Za-z0-9_$]*)`,
+    "g",
+  );
+  const bracketPattern = new RegExp(
+    String.raw`\b${escapeRegExp(objectName)}\[['"]([A-Za-z_$][A-Za-z0-9_$]*)['"]\]`,
+    "g",
+  );
+
+  for (const match of functionSource.matchAll(dotPattern)) {
+    if (match[1]) {
+      propertyNames.add(match[1]);
+    }
+  }
+  for (const match of functionSource.matchAll(bracketPattern)) {
+    if (match[1]) {
+      propertyNames.add(match[1]);
+    }
+  }
+  return [...propertyNames];
+}
+
 function getSourceDeclarationMap(filePath: string): SourceDeclarationMap | undefined {
   const cached = declarationCache.get(filePath);
   if (cached) return cached;
@@ -190,47 +319,116 @@ function getSourceDeclarationMap(filePath: string): SourceDeclarationMap | undef
   }
 
   const declarations = new Map<string, ParsedDeclaration>();
+  const imports = new Map<string, { importedName: string; source: string }>();
+  const exportsMap = new Map<string, string>();
+
   for (const statement of program.body) {
+    parseImportDeclarations(statement, imports);
+    parseExportDeclarations(source, statement, declarations, exportsMap);
+
     for (const declaration of parseTopLevelDeclaration(source, statement)) {
       declarations.set(declaration.name, declaration);
     }
   }
 
-  const result: SourceDeclarationMap = { declarations };
+  // Allow direct lookup by local declaration name when imported file omits explicit export mapping.
+  for (const name of declarations.keys()) {
+    if (!exportsMap.has(name)) {
+      exportsMap.set(name, name);
+    }
+  }
+
+  const result: SourceDeclarationMap = { declarations, imports, exports: exportsMap };
   declarationCache.set(filePath, result);
   return result;
 }
 
-function resolveDependencies(
-  functionSource: string,
-  declarationMap: SourceDeclarationMap,
-): DependencyResolution {
+function resolveDependencies(functionSource: string, rootFilePath: string): DependencyResolution {
   const orderedDeclarationSource: string[] = [];
   const unresolved = new Set<string>();
   const visiting = new Set<string>();
   const added = new Set<string>();
 
-  const resolveName = (name: string) => {
-    if (added.has(name) || visiting.has(name)) return;
-    const declaration = declarationMap.declarations.get(name);
+  const findImportBinding = (
+    sourceMap: SourceDeclarationMap,
+    name: string,
+  ): { importedName: string; source: string } | undefined => {
+    const direct = sourceMap.imports.get(name);
+    if (direct) return direct;
+
+    for (const imported of sourceMap.imports.values()) {
+      if (imported.importedName === name) {
+        return imported;
+      }
+    }
+    return undefined;
+  };
+
+  const resolveName = (filePath: string, name: string) => {
+    const sourceMap = getSourceDeclarationMap(filePath);
+    if (!sourceMap) {
+      unresolved.add(name);
+      return;
+    }
+
+    let targetFilePath = filePath;
+    let targetName = name;
+    let targetSourceMap = sourceMap;
+
+    if (!targetSourceMap.declarations.has(targetName)) {
+      const imported = findImportBinding(targetSourceMap, targetName);
+      if (!imported) {
+        unresolved.add(name);
+        return;
+      }
+      const importedFilePath = resolveRelativeImportPath(filePath, imported.source);
+      if (!importedFilePath) {
+        unresolved.add(name);
+        return;
+      }
+      const importedSourceMap = getSourceDeclarationMap(importedFilePath);
+      if (!importedSourceMap) {
+        unresolved.add(name);
+        return;
+      }
+      const exportedLocalName =
+        importedSourceMap.exports.get(imported.importedName) ?? imported.importedName;
+      targetFilePath = importedFilePath;
+      targetName = exportedLocalName;
+      targetSourceMap = importedSourceMap;
+    }
+
+    const key = `${targetFilePath}::${targetName}`;
+    if (added.has(key) || visiting.has(key)) return;
+
+    const declaration = targetSourceMap.declarations.get(targetName);
     if (!declaration) {
       unresolved.add(name);
       return;
     }
 
-    visiting.add(name);
+    visiting.add(key);
     const dependencies = collectUndefinedIdentifiers(declaration.analysisExpr);
     for (const dependency of dependencies) {
-      resolveName(dependency);
+      resolveName(targetFilePath, dependency);
     }
-    visiting.delete(name);
-    added.add(name);
+    visiting.delete(key);
+    added.add(key);
     orderedDeclarationSource.push(declaration.source);
   };
 
   const functionDependencies = collectUndefinedIdentifiers(`(${functionSource})`);
   for (const dependency of functionDependencies) {
-    resolveName(dependency);
+    if (isTranspiledImportBinding(dependency)) {
+      const memberDependencies = extractMemberDependencies(functionSource, dependency);
+      if (memberDependencies.length > 0) {
+        for (const memberDependency of memberDependencies) {
+          resolveName(rootFilePath, memberDependency);
+        }
+        continue;
+      }
+    }
+    resolveName(rootFilePath, dependency);
   }
 
   return {
@@ -244,11 +442,10 @@ function buildScriptInvocation(functionSource: string): string {
 }
 
 function inlineByFileSource(functionSource: string, filePath: string): DependencyResolution {
-  const declarationMap = getSourceDeclarationMap(filePath);
-  if (!declarationMap) {
+  if (!getSourceDeclarationMap(filePath)) {
     return { declarations: [], unresolved: [] };
   }
-  return resolveDependencies(functionSource, declarationMap);
+  return resolveDependencies(functionSource, filePath);
 }
 
 /**

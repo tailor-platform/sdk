@@ -3,6 +3,11 @@ import { describe, expect, it } from "vitest";
 import { db } from "@/configure/services/tailordb/schema";
 import { toSchemaOutputs } from "@/utils/test/internal";
 import { parseFieldConfig } from "./field";
+import { buildScriptExprWithInlineDependencies } from "./script-dependency-inliner";
+import {
+  IMPORTED_EMAIL_SUFFIX as ALIASED_IMPORTED_SUFFIX,
+  normalizeImportedEmail,
+} from "./test-fixtures/inliner-helper";
 import { parseTypes } from "./type-parser";
 
 const EMAIL_SUFFIX = "@example.com";
@@ -67,5 +72,17 @@ describe("script dependency inliner", () => {
     expect(result.User.fields.email.config.validate?.[0]?.script.expr).toContain(
       "function normalizeEmail(",
     );
+  });
+
+  it("inlines dependencies imported via relative named import", () => {
+    expect(typeof normalizeImportedEmail).toBe("function");
+    expect(ALIASED_IMPORTED_SUFFIX).toBe("@imported.example.com");
+
+    const functionSource = `({ value }) => normalizeImportedEmail(value).endsWith(ALIASED_IMPORTED_SUFFIX)`;
+    const expr = buildScriptExprWithInlineDependencies(functionSource, "validate", currentFilePath);
+
+    expect(expr).toContain("function normalizeImportedEmail(");
+    expect(expr).toContain('const IMPORTED_EMAIL_SUFFIX = "@imported.example.com";');
+    expect(expr).toContain("return (");
   });
 });
