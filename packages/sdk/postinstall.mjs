@@ -44,10 +44,10 @@ async function install() {
       register("tsx", import.meta.url, { data: {} });
 
       const { generateUserTypes, loadConfig } = await import(
-        pathToFileURL(resolve(__dirname, "dist", "cli", "api.mjs")).href
+        pathToFileURL(resolve(__dirname, "dist", "cli", "lib.mjs")).href
       );
       const { config } = await loadConfig(configPath);
-      await generateUserTypes(config, configPath);
+      await generateUserTypes({ config, configPath });
       return;
     } catch (error) {
       console.warn("⚠️  Failed to generate types from config:", error.message);
