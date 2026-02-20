@@ -6,7 +6,7 @@ import {
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import { arg, defineCommand } from "politty";
 import { z } from "zod";
-import { commonArgs, deploymentArgs, withCommonArgs } from "../args";
+import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "../args";
 import { bundleQueryScript } from "../bundler/query/query-bundler";
 import { fetchMachineUserToken, initOperatorClient } from "../client";
 import { loadConfig } from "../config-loader";
@@ -259,6 +259,7 @@ export const queryCommand = defineCommand({
   description: "Run SQL/GraphQL query.",
   args: z.object({
     ...commonArgs,
+    ...jsonArgs,
     ...deploymentArgs,
     engine: arg(queryEngineSchema, {
       description: "Query engine (sql or gql)",
