@@ -12,8 +12,10 @@ import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { Application } from "@/cli/application";
 import type { CollectedJob } from "@/cli/application/workflow/service";
 import type { MessageInitShape } from "@bufbuild/protobuf";
-import type { UpdateFunctionRegistryRequestSchema } from "@tailor-proto/tailor/v1/function_registry_pb";
-import type { CreateFunctionRegistryRequestSchema } from "@tailor-proto/tailor/v1/function_registry_pb";
+import type {
+  CreateFunctionRegistryRequestSchema,
+  UpdateFunctionRegistryRequestSchema,
+} from "@tailor-proto/tailor/v1/function_registry_pb";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
 const CHUNK_SIZE = 64 * 1024; // 64KB
@@ -301,6 +303,7 @@ async function uploadFunctionScript(
   };
 
   if (isCreate) {
+    /** @yields {MessageInitShape<typeof CreateFunctionRegistryRequestSchema>} Create request messages (info header followed by content chunks) */
     async function* createStream(): AsyncIterable<
       MessageInitShape<typeof CreateFunctionRegistryRequestSchema>
     > {
@@ -316,6 +319,7 @@ async function uploadFunctionScript(
     }
     await client.createFunctionRegistry(createStream());
   } else {
+    /** @yields {MessageInitShape<typeof UpdateFunctionRegistryRequestSchema>} Update request messages (info header followed by content chunks) */
     async function* updateStream(): AsyncIterable<
       MessageInitShape<typeof UpdateFunctionRegistryRequestSchema>
     > {
@@ -336,7 +340,7 @@ async function uploadFunctionScript(
 /**
  * Apply function registry changes for the given phase.
  * @param client - Operator client instance
- * @param workspaceId
+ * @param workspaceId - Workspace ID
  * @param result - Planned function registry changes
  * @param phase - Apply phase
  */
