@@ -313,7 +313,7 @@ export const queryCommand = defineCommand({
       machineUser: args.machineuser,
     });
 
-    printQueryResult(result);
+    printQueryResult(result, { json: args.json });
   }),
 });
 
@@ -326,20 +326,38 @@ function isSQLExecutionResult(value: unknown): value is SQLExecutionResult {
   return Array.isArray(candidate.rows) && typeof candidate.rowCount === "number";
 }
 
-function printQueryResult(result: QueryDispatchResult): void {
+function printQueryResult(result: QueryDispatchResult, options: { json?: boolean } = {}): void {
   if (result.engine === "sql" && isSQLExecutionResult(result.result)) {
     if (result.result.rows.length === 0) {
+      if (options.json) {
+        logger.out({
+          results: [],
+          rowCount: 0,
+        });
+      }
       logger.info("No rows returned.");
       return;
     }
 
+    if (options.json) {
+      logger.out({
+        results: result.result.rows,
+        rowCount: result.result.rowCount,
+      });
+      return;
+    }
     logger.out(result.result.rows, { showNull: true });
     logger.out(`rows: ${result.result.rowCount}`);
-
     return;
   }
 
   if (result.engine === "gql") {
+    if (options.json) {
+      logger.out({
+        result: result.result,
+      });
+      return;
+    }
     logger.out(JSON.stringify(result.result, null, 2));
     return;
   }
