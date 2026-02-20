@@ -22,8 +22,11 @@ import {
   toWorkflowExecutionInfo,
   toWorkflowJobExecutionInfo,
 } from "./transform";
-import type { WorkflowLike } from "./workflow-like";
 import type { FunctionExecution } from "@tailor-proto/tailor/v1/function_resource_pb";
+
+type WorkflowLike = {
+  name: string;
+};
 
 export type ListWorkflowExecutionsTypedOptions<W extends WorkflowLike = WorkflowLike> = {
   workflow?: W;

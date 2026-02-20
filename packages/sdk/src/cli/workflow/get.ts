@@ -7,7 +7,10 @@ import { loadAccessToken, loadWorkspaceId } from "../context";
 import { logger } from "../utils/logger";
 import { nameArgs } from "./args";
 import { type WorkflowInfo, toWorkflowInfo } from "./transform";
-import type { WorkflowLike } from "./workflow-like";
+
+type WorkflowLike = {
+  name: string;
+};
 
 export type GetWorkflowTypedOptions<W extends WorkflowLike = WorkflowLike> = {
   workflow: W;

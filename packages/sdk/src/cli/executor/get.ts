@@ -6,7 +6,10 @@ import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { logger } from "../utils/logger";
 import { type ExecutorInfo, toExecutorInfo } from "./transform";
-import type { ExecutorLike } from "./executor-like";
+
+type ExecutorLike = {
+  name: string;
+};
 
 const nameArgs = {
   name: arg(z.string(), {

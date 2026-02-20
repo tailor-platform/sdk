@@ -17,11 +17,11 @@ import { nameArgs, waitArgs } from "./args";
 import { getWorkflowExecution, printExecutionWithLogs } from "./executions";
 import { resolveWorkflow } from "./get";
 import { type WorkflowExecutionInfo, toWorkflowExecutionInfo } from "./transform";
-import type { WorkflowLike as WorkflowLikeBase } from "./workflow-like";
 import type { WorkflowExecution } from "@tailor-proto/tailor/v1/workflow_resource_pb";
 import type { Jsonifiable } from "type-fest";
 
-type WorkflowLike = WorkflowLikeBase & {
+type WorkflowLike = {
+  name: string;
   mainJob: {
     body: unknown;
   };
