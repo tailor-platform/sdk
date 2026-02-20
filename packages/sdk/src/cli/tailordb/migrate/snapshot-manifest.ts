@@ -425,6 +425,12 @@ function convertConditionToProto(
     case "nin":
       op = TailorDBType_Permission_Operator.NIN;
       break;
+    case "hasAny":
+      op = TailorDBType_Permission_Operator.HAS_ANY;
+      break;
+    case "nhasAny":
+      op = TailorDBType_Permission_Operator.NHAS_ANY;
+      break;
     default:
       throw new Error(`Unknown operator: ${operator satisfies never}`);
   }

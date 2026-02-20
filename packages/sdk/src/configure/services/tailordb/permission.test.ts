@@ -60,6 +60,38 @@ describe("tailordb permission types", () => {
     });
   });
 
+  describe("hasAny operator", () => {
+    test("string array operands", () => {
+      const _arrOk = [["a", "b"], "hasAny", ["c", "d"]] satisfies PermissionCondition;
+      const _notHasAnyOk = [["a"], "not hasAny", ["b"]] satisfies PermissionCondition;
+      // @ts-expect-error Type mismatch: scalar string vs string[] expected
+      const _scalarErr = ["a", "hasAny", ["b"]] satisfies PermissionCondition;
+      // @ts-expect-error Type mismatch: scalar string vs string[] expected
+      const _scalarErr2 = [["a"], "hasAny", "b"] satisfies PermissionCondition;
+    });
+
+    test("user string array operand", () => {
+      const _ok = [{ user: "roles" }, "hasAny", ["admin", "manager"]] satisfies PermissionCondition<
+        "record",
+        User
+      >;
+      const _okReverse = [["admin"], "hasAny", { user: "roles" }] satisfies PermissionCondition<
+        "record",
+        User
+      >;
+      // @ts-expect-error Type mismatch: string field vs string[] expected
+      const _err = [{ user: "id" }, "hasAny", ["admin"]] satisfies PermissionCondition<
+        "record",
+        User
+      >;
+      // @ts-expect-error Type mismatch: string field vs string[] expected
+      const _errReverse = [["admin"], "hasAny", { user: "id" }] satisfies PermissionCondition<
+        "record",
+        User
+      >;
+    });
+  });
+
   describe("common pitfalls", () => {
     test("array field must be on RHS, not LHS when using 'in' operator", () => {
       const _ok = ["MANAGER", "in", { user: "roles" }] satisfies PermissionCondition<
