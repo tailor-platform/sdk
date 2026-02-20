@@ -14,28 +14,20 @@ import { loadAccessToken, loadWorkspaceId } from "../context";
 import { extractAllNamespaces } from "../utils/config";
 import { logger } from "../utils/logger";
 import { executeScript } from "../utils/script-executor";
+import { resolveTypeNamespaces } from "../utils/tailordb-namespace";
 import { mapQueryExecutionError } from "./errors";
+import { extractTypeNamesFromSql } from "./sql-type-extractor";
 import type { Application } from "@tailor-proto/tailor/v1/application_resource_pb";
 
 const queryEngineSchema = z.enum(["sql", "gql"]);
-const queryOptionsBaseSchema = z.object({
+const queryOptionsSchema = z.object({
   workspaceId: z.string().optional(),
   profile: z.string().optional(),
   configPath: z.string().optional(),
+  engine: queryEngineSchema,
   query: z.string(),
   machineUser: z.string(),
 });
-const queryOptionsSqlSchema = queryOptionsBaseSchema.extend({
-  engine: z.literal("sql"),
-  namespace: z.string().optional(),
-});
-const queryOptionsGqlSchema = queryOptionsBaseSchema.extend({
-  engine: z.literal("gql"),
-});
-const queryOptionsSchema = z.discriminatedUnion("engine", [
-  queryOptionsSqlSchema,
-  queryOptionsGqlSchema,
-]);
 
 export type QueryEngine = z.infer<typeof queryEngineSchema>;
 type QueryOptions = z.input<typeof queryOptionsSchema>;
@@ -52,6 +44,51 @@ type SQLExecutionResult = {
   rows: SQLResultRow[];
   rowCount: number;
 };
+
+async function getNamespaceFromSqlQuery(
+  workspaceId: string,
+  query: string,
+  client: Client,
+  namespaces: string[],
+): Promise<string> {
+  if (namespaces.length === 0) {
+    throw new Error("No namespaces found in configuration.");
+  }
+
+  const typeNames = extractTypeNamesFromSql(query);
+  if (typeNames.length === 0) {
+    if (namespaces.length === 1) {
+      return namespaces[0];
+    }
+
+    throw new Error(
+      `Could not infer namespace from query. Please specify one using --namespace option. Namespaces: ${namespaces.join(", ")}`,
+    );
+  }
+
+  const typeNamespaceMap = await resolveTypeNamespaces({
+    workspaceId,
+    namespaces,
+    typeNames,
+    client,
+  });
+
+  const notFoundTypes = typeNames.filter((typeName) => !typeNamespaceMap.has(typeName));
+  if (notFoundTypes.length > 0) {
+    throw new Error(
+      `Could not find namespace for types in query: ${notFoundTypes.join(", ")}. Please specify --namespace explicitly.`,
+    );
+  }
+
+  const namespacesFromTypes = new Set(typeNamespaceMap.values());
+  if (namespacesFromTypes.size === 1) {
+    return [...namespacesFromTypes][0];
+  }
+
+  throw new Error(
+    `Query references types from multiple namespaces (${[...namespacesFromTypes].join(", ")}). Please specify --namespace explicitly.`,
+  );
+}
 
 async function loadOptions(options: QueryOptions) {
   const result = queryOptionsSchema.safeParse(options);
@@ -70,6 +107,7 @@ async function loadOptions(options: QueryOptions) {
     profile: result.data.profile,
   });
   const { config } = await loadConfig(options.configPath);
+  const namespaces = extractAllNamespaces(config);
   const { application } = await client.getApplication({
     workspaceId,
     applicationName: config.name,
@@ -100,21 +138,12 @@ async function loadOptions(options: QueryOptions) {
     };
   }
 
-  let namespace: string | undefined;
-  if ("namespace" in result.data && result.data.namespace) {
-    namespace = result.data.namespace;
-  } else {
-    const allNamespaces = extractAllNamespaces(config);
-    if (allNamespaces.length === 0) {
-      throw new Error("No namespaces found in configuration.");
-    } else if (allNamespaces.length === 1) {
-      namespace = allNamespaces[0];
-    } else {
-      throw new Error(
-        `Multiple namespaces found in configuration. Please specify one using --namespace option. Namespaces: ${allNamespaces.join(", ")}`,
-      );
-    }
-  }
+  const namespace = await getNamespaceFromSqlQuery(
+    workspaceId,
+    result.data.query,
+    client,
+    namespaces,
+  );
 
   return {
     engine: options.engine,
@@ -267,10 +296,6 @@ export const queryCommand = defineCommand({
     engine: arg(queryEngineSchema, {
       description: "Query engine (sql or gql)",
     }),
-    namespace: arg(z.string().optional(), {
-      alias: "n",
-      description: "Namespace name",
-    }),
     query: arg(z.string(), {
       alias: "q",
       description: "Query string to execute directly",
@@ -285,7 +310,6 @@ export const queryCommand = defineCommand({
       workspaceId: args["workspace-id"],
       profile: args.profile,
       configPath: args.config,
-      namespace: args.namespace,
       engine: args.engine,
       query: args.query,
       machineUser: args.machineuser,

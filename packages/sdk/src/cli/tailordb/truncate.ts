@@ -6,6 +6,7 @@ import { loadConfig } from "../config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { extractAllNamespaces } from "../utils/config";
 import { logger } from "../utils/logger";
+import { resolveTypeNamespaces } from "../utils/tailordb-namespace";
 
 export interface TruncateOptions {
   workspaceId?: string;
@@ -55,34 +56,6 @@ async function truncateNamespace(
 async function getAllNamespaces(configPath?: string): Promise<string[]> {
   const { config } = await loadConfig(configPath);
   return extractAllNamespaces(config);
-}
-
-async function getTypeNamespace(
-  workspaceId: string,
-  typeName: string,
-  client: Awaited<ReturnType<typeof initOperatorClient>>,
-  configPath?: string,
-): Promise<string | null> {
-  const namespaces = await getAllNamespaces(configPath);
-
-  // Try to find the type in each namespace
-  for (const namespace of namespaces) {
-    try {
-      const { tailordbTypes } = await client.listTailorDBTypes({
-        workspaceId,
-        namespaceName: namespace,
-      });
-
-      if (tailordbTypes.some((type) => type.name === typeName)) {
-        return namespace;
-      }
-    } catch {
-      // Continue to next namespace if error occurs
-      continue;
-    }
-  }
-
-  return null;
 }
 
 /**
@@ -188,18 +161,13 @@ async function $truncate(options?: InternalTruncateOptions): Promise<void> {
     const typeNames = options.types;
 
     // Validate all types exist and get their namespaces before confirmation
-    const typeNamespaceMap = new Map<string, string>();
-    const notFoundTypes: string[] = [];
-
-    for (const typeName of typeNames) {
-      const namespace = await getTypeNamespace(workspaceId, typeName, client, options.configPath);
-
-      if (namespace) {
-        typeNamespaceMap.set(typeName, namespace);
-      } else {
-        notFoundTypes.push(typeName);
-      }
-    }
+    const typeNamespaceMap = await resolveTypeNamespaces({
+      workspaceId,
+      namespaces,
+      typeNames,
+      client,
+    });
+    const notFoundTypes = typeNames.filter((typeName) => !typeNamespaceMap.has(typeName));
 
     if (notFoundTypes.length > 0) {
       throw new Error(
