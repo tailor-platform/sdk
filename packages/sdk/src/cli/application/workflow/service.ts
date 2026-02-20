@@ -71,7 +71,17 @@ export function createWorkflowService(params: CreateWorkflowServiceParams): Work
       loaded = true;
     },
     printLoadedWorkflows: () => {
-      printLoadedWorkflows({ workflows, workflowSources, jobs, fileCount });
+      if (fileCount === 0) {
+        return;
+      }
+      logger.newline();
+      logger.log(`Found ${styles.highlight(fileCount.toString())} workflow files`);
+      for (const { workflow, sourceFile } of workflowSources) {
+        const relativePath = path.relative(process.cwd(), sourceFile);
+        logger.log(
+          `Workflow: ${styles.successBright(`"${workflow.name}"`)} loaded from ${styles.path(relativePath)}`,
+        );
+      }
     },
   };
 }
@@ -137,26 +147,6 @@ async function loadAndCollectJobs(config: WorkflowServiceConfig): Promise<Workfl
     jobs: collectedJobs,
     fileCount,
   };
-}
-
-/**
- * Print workflow loading logs.
- * @param result - Workflow load result to print
- */
-function printLoadedWorkflows(result: WorkflowLoadResult): void {
-  if (result.fileCount === 0) {
-    return;
-  }
-
-  logger.newline();
-  logger.log(`Found ${styles.highlight(result.fileCount.toString())} workflow files`);
-
-  for (const { workflow, sourceFile } of result.workflowSources) {
-    const relativePath = path.relative(process.cwd(), sourceFile);
-    logger.log(
-      `Workflow: ${styles.successBright(`"${workflow.name}"`)} loaded from ${styles.path(relativePath)}`,
-    );
-  }
 }
 
 /**
