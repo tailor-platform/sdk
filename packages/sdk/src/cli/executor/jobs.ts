@@ -147,6 +147,7 @@ export async function listExecutorJobs(
 export async function listExecutorJobs<E extends ExecutorLike>(
   options: ListExecutorJobsOptions | ListExecutorJobsTypedOptions<E>,
 ): Promise<ExecutorJobListInfo[]> {
+  // Discriminant: legacy options have top-level 'executorName', typed options use 'executor'.
   const executorName = "executorName" in options ? options.executorName : options.executor.name;
   const accessToken = await loadAccessToken({
     useProfile: true,
@@ -207,6 +208,7 @@ export async function getExecutorJob(
 export async function getExecutorJob<E extends ExecutorLike>(
   options: GetExecutorJobOptions | GetExecutorJobTypedOptions<E>,
 ): Promise<ExecutorJobDetailInfo> {
+  // Discriminant: legacy options have top-level 'executorName', typed options use 'executor'.
   const executorName = "executorName" in options ? options.executorName : options.executor.name;
   const accessToken = await loadAccessToken({
     useProfile: true,
@@ -271,6 +273,7 @@ export async function watchExecutorJob(
 export async function watchExecutorJob<E extends ExecutorLike>(
   options: WatchExecutorJobOptions | WatchExecutorJobTypedOptions<E>,
 ): Promise<WatchExecutorJobResult> {
+  // Discriminant: legacy options have top-level 'executorName', typed options use 'executor'.
   const executorName = "executorName" in options ? options.executorName : options.executor.name;
   const accessToken = await loadAccessToken({
     useProfile: true,

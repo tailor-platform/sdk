@@ -122,6 +122,10 @@ export async function listWorkflowExecutions(
 export async function listWorkflowExecutions<W extends WorkflowLike>(
   options?: ListWorkflowExecutionsOptions | ListWorkflowExecutionsTypedOptions<W>,
 ): Promise<WorkflowExecutionInfo[]> {
+  // Discriminant: legacy options have 'workflowName', typed options use 'workflow'.
+  // Note: since ListWorkflowExecutionsTypedOptions has all optional fields, TypeScript may
+  // resolve a legacy-typed variable to the typed overload (skipping excess property checks).
+  // Runtime behavior is correct regardless because the discriminant handles both shapes.
   const workflowName =
     options && "workflowName" in options
       ? options.workflowName
