@@ -22,11 +22,8 @@ import {
   toWorkflowExecutionInfo,
   toWorkflowJobExecutionInfo,
 } from "./transform";
+import type { WorkflowLike } from "./workflow-like";
 import type { FunctionExecution } from "@tailor-proto/tailor/v1/function_resource_pb";
-
-type WorkflowLike = {
-  name: string;
-};
 
 export type ListWorkflowExecutionsTypedOptions<W extends WorkflowLike = WorkflowLike> = {
   workflow?: W;
@@ -128,7 +125,9 @@ export async function listWorkflowExecutions<W extends WorkflowLike>(
   const workflowName =
     options && "workflowName" in options
       ? options.workflowName
-      : (options as ListWorkflowExecutionsTypedOptions | undefined)?.workflow?.name;
+      : options && "workflow" in options
+        ? options.workflow?.name
+        : undefined;
   const accessToken = await loadAccessToken({
     useProfile: true,
     profile: options?.profile,

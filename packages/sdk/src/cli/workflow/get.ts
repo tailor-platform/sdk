@@ -7,10 +7,7 @@ import { loadAccessToken, loadWorkspaceId } from "../context";
 import { logger } from "../utils/logger";
 import { nameArgs } from "./args";
 import { type WorkflowInfo, toWorkflowInfo } from "./transform";
-
-type WorkflowLike = {
-  name: string;
-};
+import type { WorkflowLike } from "./workflow-like";
 
 export type GetWorkflowTypedOptions<W extends WorkflowLike = WorkflowLike> = {
   workflow: W;
@@ -61,6 +58,9 @@ export async function getWorkflow(options: GetWorkflowOptions): Promise<Workflow
 export async function getWorkflow<W extends WorkflowLike>(
   options: GetWorkflowOptions | GetWorkflowTypedOptions<W>,
 ): Promise<WorkflowInfo> {
+  // Discriminant: legacy options have top-level 'name', typed options use 'workflow'.
+  // Note: passing a workflow object directly (e.g., getWorkflow(myWorkflow)) would match
+  // the legacy branch due to structural typing, but still works correctly since it reads .name.
   const name = "name" in options ? options.name : options.workflow.name;
   const accessToken = await loadAccessToken({
     useProfile: true,

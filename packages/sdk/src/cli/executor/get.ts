@@ -6,16 +6,13 @@ import { initOperatorClient } from "../client";
 import { loadAccessToken, loadWorkspaceId } from "../context";
 import { logger } from "../utils/logger";
 import { type ExecutorInfo, toExecutorInfo } from "./transform";
+import type { ExecutorLike } from "./executor-like";
 
 const nameArgs = {
   name: arg(z.string(), {
     positional: true,
     description: "Executor name",
   }),
-};
-
-type ExecutorLike = {
-  name: string;
 };
 
 export type GetExecutorTypedOptions<E extends ExecutorLike = ExecutorLike> = {
@@ -67,6 +64,7 @@ export async function getExecutor(options: GetExecutorOptions): Promise<Executor
 export async function getExecutor<E extends ExecutorLike>(
   options: GetExecutorOptions | GetExecutorTypedOptions<E>,
 ): Promise<ExecutorInfo> {
+  // Discriminant: legacy options have top-level 'name', typed options use 'executor'.
   const name = "name" in options ? options.name : options.executor.name;
   const accessToken = await loadAccessToken({
     useProfile: true,

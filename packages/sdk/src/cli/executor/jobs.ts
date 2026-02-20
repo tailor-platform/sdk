@@ -47,10 +47,7 @@ import {
   toExecutorJobInfo,
   toExecutorJobAttemptInfo,
 } from "./transform";
-
-type ExecutorLike = {
-  name: string;
-};
+import type { ExecutorLike } from "./executor-like";
 
 export type ListExecutorJobsTypedOptions<E extends ExecutorLike = ExecutorLike> = {
   executor: E;
