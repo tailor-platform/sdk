@@ -41,7 +41,8 @@ export function parseTypes(
   const allTypeNames = new Set(Object.keys(rawTypes));
 
   for (const [typeName, type] of Object.entries(rawTypes)) {
-    types[typeName] = parseTailorDBType(type, allTypeNames, rawTypes);
+    const sourceInfo = typeSourceInfo?.[typeName];
+    types[typeName] = parseTailorDBType(type, allTypeNames, rawTypes, sourceInfo);
   }
 
   buildBackwardRelationships(types, namespace, typeSourceInfo);
@@ -55,12 +56,14 @@ export function parseTypes(
  * @param type - TailorDB type to parse
  * @param allTypeNames - Set of all TailorDB type names
  * @param rawTypes - All raw TailorDB types keyed by name
+ * @param typeSourceInfo - Optional source metadata for this type.
  * @returns Parsed TailorDB type
  */
 function parseTailorDBType(
   type: TailorDBTypeSchemaOutput,
   allTypeNames: Set<string>,
   rawTypes: Record<string, TailorDBTypeSchemaOutput>,
+  typeSourceInfo?: TypeSourceInfoEntry,
 ): TailorDBType {
   const metadata = type.metadata;
   const pluralForm = metadata.settings?.pluralForm || inflection.pluralize(type.name);
@@ -73,7 +76,7 @@ function parseTailorDBType(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- TailorDBField requires generic type parameters
     TailorDBField<any, any>,
   ][]) {
-    let fieldConfig = parseFieldConfig(fieldDef);
+    let fieldConfig = parseFieldConfig(fieldDef, typeSourceInfo);
     const rawRelation = fieldConfig.rawRelation;
     const context = { typeName: type.name, fieldName, allTypeNames };
 
