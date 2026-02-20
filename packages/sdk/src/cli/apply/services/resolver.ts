@@ -314,7 +314,7 @@ async function planResolvers(
     existingResolvers.forEach((resolver) => {
       existingNameSet.add(resolver.name);
     });
-    for (const resolver of Object.values(pipeline.getResolvers())) {
+    for (const resolver of Object.values(pipeline.resolvers)) {
       if (existingNameSet.has(resolver.name)) {
         changeSet.updates.push({
           name: resolver.name,

@@ -161,7 +161,7 @@ export async function generate(options: GenerateOptions): Promise<void> {
     await tailordbService.loadTypes();
     await tailordbService.processNamespacePlugins();
 
-    const localTypesObj = tailordbService.getTypes();
+    const localTypesObj = tailordbService.types;
 
     // Create snapshot from current local types
     const currentSnapshot = createSnapshotFromLocalTypes(localTypesObj, namespace);

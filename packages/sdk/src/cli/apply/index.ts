@@ -98,7 +98,7 @@ export async function apply(options?: ApplyOptions) {
 
   // Collect function entries from bundled scripts (after build, before plan)
   const workflowService = application.workflowService;
-  const functionEntries = collectFunctionEntries(application, workflowService?.getJobs() ?? []);
+  const functionEntries = collectFunctionEntries(application, workflowService?.jobs ?? []);
 
   // Phase 1: Plan
   const ctx: PlanContext = {
@@ -126,7 +126,7 @@ export async function apply(options?: ApplyOptions) {
     client,
     workspaceId,
     application.name,
-    workflowService?.getWorkflows() ?? {},
+    workflowService?.workflows ?? {},
     workflowBuildResult?.mainJobDeps ?? {},
   );
 

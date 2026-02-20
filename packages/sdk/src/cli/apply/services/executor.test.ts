@@ -117,7 +117,7 @@ describe("planExecutor", () => {
     const executorMap = Object.fromEntries(executors.map((e) => [e.name, e]));
     return {
       config: {},
-      getExecutors: vi.fn().mockReturnValue(executorMap),
+      executors: executorMap,
       loadExecutors: vi.fn().mockResolvedValue(executorMap),
     } as unknown as ExecutorService;
   }

@@ -312,7 +312,7 @@ export function generatePluginFilesIfNeeded(
 
   const sourceTypeInfoMap = new Map<string, { filePath: string; exportName: string }>();
   for (const db of tailorDBServices) {
-    const typeSourceInfo = db.getTypeSourceInfo();
+    const typeSourceInfo = db.typeSourceInfo;
     for (const [typeName, sourceInfo] of Object.entries(typeSourceInfo)) {
       if (sourceInfo.filePath) {
         sourceTypeInfoMap.set(typeName, {
@@ -389,10 +389,10 @@ export async function loadApplication(
 
   // 9. Bundle workflows
   let workflowBuildResult: BundleWorkflowJobsResult | undefined;
-  if (workflowService && workflowService.getJobs().length > 0) {
-    const mainJobNames = workflowService.getWorkflowSources().map((ws) => ws.workflow.mainJob.name);
+  if (workflowService && workflowService.jobs.length > 0) {
+    const mainJobNames = workflowService.workflowSources.map((ws) => ws.workflow.mainJob.name);
     workflowBuildResult = await bundleWorkflowJobs(
-      workflowService.getJobs(),
+      workflowService.jobs,
       mainJobNames,
       config.env ?? {},
       triggerContext,

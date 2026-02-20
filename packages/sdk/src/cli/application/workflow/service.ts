@@ -24,10 +24,10 @@ interface WorkflowLoadResult {
 
 export type WorkflowService = {
   readonly config: WorkflowServiceConfig;
-  getWorkflows: () => Record<string, Workflow>;
-  getWorkflowSources: () => ReadonlyArray<{ workflow: Workflow; sourceFile: string }>;
-  getJobs: () => CollectedJob[];
-  getFileCount: () => number;
+  readonly workflows: Record<string, Workflow>;
+  readonly workflowSources: ReadonlyArray<{ workflow: Workflow; sourceFile: string }>;
+  readonly jobs: CollectedJob[];
+  readonly fileCount: number;
   loadWorkflows: () => Promise<void>;
   printLoadedWorkflows: () => void;
 };
@@ -55,10 +55,18 @@ export function createWorkflowService(params: CreateWorkflowServiceParams): Work
 
   return {
     config,
-    getWorkflows: () => workflows,
-    getWorkflowSources: () => workflowSources,
-    getJobs: () => jobs,
-    getFileCount: () => fileCount,
+    get workflows() {
+      return workflows;
+    },
+    get workflowSources() {
+      return workflowSources;
+    },
+    get jobs() {
+      return jobs;
+    },
+    get fileCount() {
+      return fileCount;
+    },
     loadWorkflows: async () => {
       if (loaded) {
         return;

@@ -18,9 +18,9 @@ import type { PluginManager } from "@/plugin/manager";
 export type TailorDBService = {
   readonly namespace: string;
   readonly config: TailorDBServiceConfig;
-  getTypes: () => Readonly<Record<string, TailorDBType>>;
-  getTypeSourceInfo: () => Readonly<TypeSourceInfo>;
-  getPluginAttachments: () => ReadonlyMap<string, readonly PluginAttachment[]>;
+  readonly types: Readonly<Record<string, TailorDBType>>;
+  readonly typeSourceInfo: Readonly<TypeSourceInfo>;
+  readonly pluginAttachments: ReadonlyMap<string, readonly PluginAttachment[]>;
   loadTypes: () => Promise<Record<string, TailorDBType> | undefined>;
   processNamespacePlugins: () => Promise<void>;
 };
@@ -188,9 +188,15 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
   return {
     namespace,
     config,
-    getTypes: () => types,
-    getTypeSourceInfo: () => typeSourceInfo,
-    getPluginAttachments: () => pluginAttachments,
+    get types() {
+      return types;
+    },
+    get typeSourceInfo() {
+      return typeSourceInfo;
+    },
+    get pluginAttachments() {
+      return pluginAttachments as ReadonlyMap<string, readonly PluginAttachment[]>;
+    },
     loadTypes: async () => {
       if (Object.keys(rawTypes).length > 0) {
         return types;

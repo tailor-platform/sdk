@@ -479,9 +479,9 @@ export function createGenerationManager(params: {
           await db.processNamespacePlugins();
 
           services.tailordb[namespace] = {
-            types: db.getTypes(),
-            sourceInfo: db.getTypeSourceInfo(),
-            pluginAttachments: db.getPluginAttachments(),
+            types: db.types,
+            sourceInfo: db.typeSourceInfo,
+            pluginAttachments: db.pluginAttachments,
           };
         } catch (error) {
           logger.error(`Error loading types for TailorDB service ${styles.bold(namespace)}`);
@@ -528,7 +528,7 @@ export function createGenerationManager(params: {
         try {
           await resolverService.loadResolvers();
           services.resolver[namespace] = {};
-          Object.entries(resolverService.getResolvers()).forEach(([_, resolver]) => {
+          Object.entries(resolverService.resolvers).forEach(([_, resolver]) => {
             services.resolver[namespace][resolver.name] = resolver;
           });
         } catch (error) {
@@ -558,7 +558,7 @@ export function createGenerationManager(params: {
         }
       }
       // Get all executors (file-based and plugin-generated)
-      const allExecutors = executorService?.getExecutors() ?? {};
+      const allExecutors = executorService?.executors ?? {};
       Object.entries(allExecutors).forEach(([key, executor]) => {
         services.executor[key] = executor as Executor;
       });

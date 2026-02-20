@@ -99,7 +99,7 @@ export function collectFunctionEntries(
   // Resolvers
   for (const app of application.applications) {
     for (const pipeline of app.resolverServices) {
-      for (const resolver of Object.values(pipeline.getResolvers())) {
+      for (const resolver of Object.values(pipeline.resolvers)) {
         const scriptPath = path.join(distDir, "resolvers", `${resolver.name}.js`);
         try {
           const content = fs.readFileSync(scriptPath, "utf-8");
@@ -118,7 +118,7 @@ export function collectFunctionEntries(
 
   // Executors
   if (application.executorService) {
-    const executors = application.executorService.getExecutors();
+    const executors = application.executorService.executors;
     for (const executor of Object.values(executors)) {
       if (executor.operation.kind === "function" || executor.operation.kind === "jobFunction") {
         const scriptPath = path.join(distDir, "executors", `${executor.name}.js`);
