@@ -20,6 +20,7 @@ export function defineConfig<
 
 /**
  * Define generators to be used with the Tailor SDK.
+ * @deprecated Use definePlugins() with generation hooks (onTypeLoaded, generate, etc.) instead.
  * @param configs - Generator configurations
  * @returns Generator configurations as given
  */

@@ -31,6 +31,12 @@ export type { TailorDBType } from "@/parser/service/tailordb/types";
 export type { Resolver } from "@/parser/service/resolver";
 export type { Executor } from "@/parser/service/executor";
 
+// Builtin plugin wrappers (generator → plugin migration)
+export { kyselyTypePlugin } from "./generator/builtin/kysely-type/plugin";
+export { enumConstantsPlugin } from "./generator/builtin/enum-constants/plugin";
+export { fileUtilsPlugin } from "./generator/builtin/file-utils/plugin";
+export { seedPlugin } from "./generator/builtin/seed/plugin";
+
 export { show, type ShowOptions, type ApplicationInfo } from "./show";
 export { remove, type RemoveOptions } from "./remove";
 export { createWorkspace, type CreateWorkspaceOptions } from "./workspace/create";

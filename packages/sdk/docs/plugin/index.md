@@ -100,12 +100,22 @@ Plugins can generate:
 - **Types**: Additional TailorDB types (e.g., `CustomerHistory`, `Deleted_Customer`)
 - **Executors**: Event handlers triggered by record changes
 - **Field Extensions**: Additional fields added to the source type
+- **Output Files**: TypeScript code and other files via generation-time hooks
 
 Generated files are placed under `.tailor-sdk/<plugin-id>/` (the plugin ID is sanitized,
 e.g. `@example/soft-delete` → `example-soft-delete`), such as:
 
 - `.tailor-sdk/example-soft-delete/types`
 - `.tailor-sdk/example-soft-delete/executors`
+
+## Plugin Lifecycle
+
+Plugins support two phases of hooks:
+
+1. **Definition-time hooks** (`onTypeDefine`, `onNamespaceDefine`): Called during type loading to generate additional TailorDB types, resolvers, and executors.
+2. **Generation-time hooks** (`onTypeLoaded`, `onResolverLoaded`, `onExecutorLoaded`, `generate`, etc.): Called after all artifacts are loaded to produce output files (TypeScript code, etc.). These hooks replace the previous standalone `defineGenerators()` approach.
+
+A plugin can implement hooks from either or both phases.
 
 ## Creating Custom Plugins
 

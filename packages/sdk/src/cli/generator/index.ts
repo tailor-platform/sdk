@@ -19,6 +19,7 @@ import { getDistDir } from "@/cli/utils/dist-dir";
 import { logger, styles } from "@/cli/utils/logger";
 import { type AppConfig } from "@/parser/app-config";
 import { type Generator } from "@/parser/generator-config";
+import { getPluginGenerationDependencies } from "@/parser/plugin-config/generation-types";
 import { type Executor } from "@/parser/service/executor";
 import { type Resolver } from "@/parser/service/resolver";
 import { PluginManager } from "@/plugin/manager";
@@ -112,6 +113,21 @@ export function createGenerationManager(
   let watcher: DependencyWatcher | null = null;
   const generatorResults: GeneratorResults = {};
 
+  // Track results for plugins with generation hooks
+  const pluginGenerationResults: Record<
+    /* plugin id */ string,
+    {
+      tailordbResults: Record</* namespace */ string, Record</* type */ string, unknown>>;
+      resolverResults: Record</* namespace */ string, Record</* resolver */ string, unknown>>;
+      tailordbNamespaceResults: Record</* namespace */ string, unknown>;
+      resolverNamespaceResults: Record</* namespace */ string, unknown>;
+      executorResults: Record</* executor */ string, unknown>;
+    }
+  > = {};
+
+  // Get plugins that have generation hooks
+  const generationPlugins = pluginManager?.getPluginsWithGenerationHooks() ?? [];
+
   // Helper functions for dependency checking
   function getDeps(gen: AnyCodeGenerator): Set<DependencyKind> {
     return new Set(gen.dependencies);
@@ -128,6 +144,23 @@ export function createGenerationManager(
 
   function hasNone(gen: AnyCodeGenerator, ...excluded: DependencyKind[]): boolean {
     return excluded.every((e) => !getDeps(gen).has(e));
+  }
+
+  function getPluginDeps(plugin: Plugin): Set<DependencyKind> {
+    return getPluginGenerationDependencies(plugin);
+  }
+
+  function pluginOnlyHas(plugin: Plugin, ...required: DependencyKind[]): boolean {
+    const deps = getPluginDeps(plugin);
+    return required.every((r) => deps.has(r)) && deps.size === required.length;
+  }
+
+  function pluginHasAll(plugin: Plugin, ...required: DependencyKind[]): boolean {
+    return required.every((r) => getPluginDeps(plugin).has(r));
+  }
+
+  function pluginHasNone(plugin: Plugin, ...excluded: DependencyKind[]): boolean {
+    return excluded.every((e) => !getPluginDeps(plugin).has(e));
   }
 
   function getAuthInput(): GeneratorAuthInput | undefined {
@@ -362,6 +395,243 @@ export function createGenerationManager(
     );
   }
 
+  async function processPluginTailorDBNamespace(
+    plugin: Plugin,
+    namespace: string,
+    typeInfo: TypeInfo,
+  ): Promise<void> {
+    const results = pluginGenerationResults[plugin.id];
+    results.tailordbResults[namespace] = {};
+
+    if (plugin.onTypeLoaded) {
+      const onTypeLoaded = plugin.onTypeLoaded;
+      await Promise.allSettled(
+        Object.entries(typeInfo.types).map(async ([typeName, type]) => {
+          try {
+            results.tailordbResults[namespace][typeName] = await onTypeLoaded({
+              type,
+              namespace,
+              source: typeInfo.sourceInfo[typeName],
+              plugins: typeInfo.pluginAttachments.get(typeName) ?? [],
+              pluginConfig: plugin.pluginConfig,
+            });
+          } catch (error) {
+            logger.error(
+              `Error processing type ${styles.bold(typeName)} in ${namespace} with plugin ${plugin.id}`,
+            );
+            logger.error(String(error));
+          }
+        }),
+      );
+    }
+
+    if (plugin.onTailorDBNamespaceLoaded) {
+      try {
+        results.tailordbNamespaceResults[namespace] = await plugin.onTailorDBNamespaceLoaded({
+          namespace,
+          types: results.tailordbResults[namespace],
+          pluginConfig: plugin.pluginConfig,
+        });
+      } catch (error) {
+        logger.error(
+          `Error processing TailorDB namespace ${styles.bold(namespace)} with plugin ${plugin.id}`,
+        );
+        logger.error(String(error));
+      }
+    } else {
+      results.tailordbNamespaceResults[namespace] = results.tailordbResults[namespace];
+    }
+  }
+
+  async function processPluginResolverNamespace(
+    plugin: Plugin,
+    namespace: string,
+    resolvers: Record<string, Resolver>,
+  ): Promise<void> {
+    const results = pluginGenerationResults[plugin.id];
+    results.resolverResults[namespace] = {};
+
+    if (plugin.onResolverLoaded) {
+      const onResolverLoaded = plugin.onResolverLoaded;
+      await Promise.allSettled(
+        Object.entries(resolvers).map(async ([resolverName, resolver]) => {
+          try {
+            results.resolverResults[namespace][resolverName] = await onResolverLoaded({
+              resolver,
+              namespace,
+              pluginConfig: plugin.pluginConfig,
+            });
+          } catch (error) {
+            logger.error(
+              `Error processing resolver ${styles.bold(resolverName)} in ${namespace} with plugin ${plugin.id}`,
+            );
+            logger.error(String(error));
+          }
+        }),
+      );
+    }
+
+    if (plugin.onResolverNamespaceLoaded) {
+      try {
+        results.resolverNamespaceResults[namespace] = await plugin.onResolverNamespaceLoaded({
+          namespace,
+          resolvers: results.resolverResults[namespace],
+          pluginConfig: plugin.pluginConfig,
+        });
+      } catch (error) {
+        logger.error(
+          `Error processing Resolver namespace ${styles.bold(namespace)} with plugin ${plugin.id}`,
+        );
+        logger.error(String(error));
+      }
+    } else {
+      results.resolverNamespaceResults[namespace] = results.resolverResults[namespace];
+    }
+  }
+
+  async function processPluginExecutors(plugin: Plugin): Promise<void> {
+    const results = pluginGenerationResults[plugin.id];
+
+    if (!plugin.onExecutorLoaded) return;
+
+    const onExecutorLoaded = plugin.onExecutorLoaded;
+    await Promise.allSettled(
+      Object.entries(services.executor).map(async ([executorId, executor]) => {
+        try {
+          results.executorResults[executorId] = await onExecutorLoaded({
+            executor,
+            pluginConfig: plugin.pluginConfig,
+          });
+        } catch (error) {
+          logger.error(
+            `Error processing executor ${styles.bold(executor.name)} with plugin ${plugin.id}`,
+          );
+          logger.error(String(error));
+        }
+      }),
+    );
+  }
+
+  async function aggregatePlugin(plugin: Plugin): Promise<void> {
+    if (!plugin.generate) return;
+
+    const results = pluginGenerationResults[plugin.id];
+    const deps = getPluginDeps(plugin);
+
+    const tailordbResults: TailorDBNamespaceResult<unknown>[] = [];
+    const resolverResults: ResolverNamespaceResult<unknown>[] = [];
+
+    if (deps.has("tailordb")) {
+      for (const [namespace, types] of Object.entries(results.tailordbNamespaceResults)) {
+        tailordbResults.push({ namespace, types });
+      }
+    }
+
+    if (deps.has("resolver")) {
+      for (const [namespace, resolvers] of Object.entries(results.resolverNamespaceResults)) {
+        resolverResults.push({ namespace, resolvers });
+      }
+    }
+
+    const result = await plugin.generate({
+      tailordb: deps.has("tailordb") ? tailordbResults : undefined,
+      resolver: deps.has("resolver") ? resolverResults : undefined,
+      executor: deps.has("executor") ? Object.values(results.executorResults) : undefined,
+      auth: getAuthInput(),
+      baseDir: path.join(baseDir, plugin.id),
+      configPath: configPath ?? "tailor.config.ts",
+      pluginConfig: plugin.pluginConfig,
+    });
+
+    // Write generated files (same logic as generator aggregate)
+    await Promise.all(
+      result.files.map(async (file) => {
+        fs.mkdirSync(path.dirname(file.path), { recursive: true });
+        return new Promise<void>((resolve, reject) => {
+          if (file.skipIfExists && fs.existsSync(file.path)) {
+            const relativePath = path.relative(process.cwd(), file.path);
+            logger.debug(`${plugin.id} | skip existing: ${relativePath}`);
+            return resolve();
+          }
+
+          fs.writeFile(file.path, file.content, (err) => {
+            if (err) {
+              const relativePath = path.relative(process.cwd(), file.path);
+              logger.error(`Error writing file ${styles.bold(relativePath)}`);
+              logger.error(String(err));
+              reject(err);
+            } else {
+              const relativePath = path.relative(process.cwd(), file.path);
+              logger.log(`${plugin.id} | generate: ${styles.success(relativePath)}`);
+              if (file.executable) {
+                fs.chmod(file.path, 0o755, (chmodErr) => {
+                  if (chmodErr) {
+                    const relativePath = path.relative(process.cwd(), file.path);
+                    logger.error(
+                      `Error setting executable permission on ${styles.bold(relativePath)}`,
+                    );
+                    logger.error(String(chmodErr));
+                    reject(chmodErr);
+                  } else {
+                    resolve();
+                  }
+                });
+              } else {
+                resolve();
+              }
+            }
+          });
+        });
+      }),
+    );
+  }
+
+  async function processPluginGeneration(plugin: Plugin): Promise<void> {
+    pluginGenerationResults[plugin.id] = {
+      tailordbResults: {},
+      resolverResults: {},
+      tailordbNamespaceResults: {},
+      resolverNamespaceResults: {},
+      executorResults: {},
+    };
+
+    const deps = getPluginDeps(plugin);
+
+    if (deps.has("tailordb")) {
+      for (const [namespace, types] of Object.entries(services.tailordb)) {
+        await processPluginTailorDBNamespace(plugin, namespace, types);
+      }
+    }
+
+    if (deps.has("resolver")) {
+      for (const [namespace, resolvers] of Object.entries(services.resolver)) {
+        await processPluginResolverNamespace(plugin, namespace, resolvers);
+      }
+    }
+
+    if (deps.has("executor")) {
+      await processPluginExecutors(plugin);
+    }
+
+    await aggregatePlugin(plugin);
+  }
+
+  async function runPluginGenerations(plugins: Plugin[], watch: boolean): Promise<void> {
+    await Promise.allSettled(
+      plugins.map(async (plugin) => {
+        try {
+          await processPluginGeneration(plugin);
+        } catch (error) {
+          logger.error(`Error processing plugin generation ${styles.bold(plugin.id)}`);
+          logger.error(String(error));
+          if (!watch) {
+            throw error;
+          }
+        }
+      }),
+    );
+  }
+
   async function processGenerator(gen: AnyCodeGenerator): Promise<void> {
     generatorResults[gen.id] = {
       tailordbResults: {},
@@ -543,10 +813,16 @@ export function createGenerationManager(
         logger.newline();
       }
 
-      // Phase 3: Run TailorDB-only generators
+      // Phase 3: Run TailorDB-only generators and plugins
       const tailordbOnlyGens = generators.filter((g) => onlyHas(g as AnyCodeGenerator, "tailordb"));
-      if (tailordbOnlyGens.length > 0) {
-        await runGenerators(tailordbOnlyGens, watch);
+      const tailordbOnlyPlugins = generationPlugins.filter((p) => pluginOnlyHas(p, "tailordb"));
+      if (tailordbOnlyGens.length > 0 || tailordbOnlyPlugins.length > 0) {
+        await Promise.all([
+          runGenerators(tailordbOnlyGens, watch),
+          ...(tailordbOnlyPlugins.length > 0
+            ? [runPluginGenerations(tailordbOnlyPlugins, watch)]
+            : []),
+        ]);
         logger.newline();
       }
 
@@ -568,12 +844,20 @@ export function createGenerationManager(
         }
       }
 
-      // Phase 5: Run non-executor generators (resolver-dependent but not executor-dependent)
+      // Phase 5: Run non-executor generators and plugins (resolver-dependent but not executor-dependent)
       const nonExecutorGens = generators.filter(
         (g) => !tailordbOnlyGens.includes(g) && hasNone(g as AnyCodeGenerator, "executor"),
       );
-      if (nonExecutorGens.length > 0) {
-        await runGenerators(nonExecutorGens, watch);
+      const nonExecutorPlugins = generationPlugins.filter(
+        (p) => !tailordbOnlyPlugins.includes(p) && pluginHasNone(p, "executor"),
+      );
+      if (nonExecutorGens.length > 0 || nonExecutorPlugins.length > 0) {
+        await Promise.all([
+          runGenerators(nonExecutorGens, watch),
+          ...(nonExecutorPlugins.length > 0
+            ? [runPluginGenerations(nonExecutorPlugins, watch)]
+            : []),
+        ]);
         logger.newline();
       }
 
@@ -589,10 +873,14 @@ export function createGenerationManager(
         services.executor[key] = executor as Executor;
       });
 
-      // Phase 7: Run executor-dependent generators
+      // Phase 7: Run executor-dependent generators and plugins
       const executorGens = generators.filter((g) => hasAll(g as AnyCodeGenerator, "executor"));
-      if (executorGens.length > 0) {
-        await runGenerators(executorGens, watch);
+      const executorPlugins = generationPlugins.filter((p) => pluginHasAll(p, "executor"));
+      if (executorGens.length > 0 || executorPlugins.length > 0) {
+        await Promise.all([
+          runGenerators(executorGens, watch),
+          ...(executorPlugins.length > 0 ? [runPluginGenerations(executorPlugins, watch)] : []),
+        ]);
         logger.newline();
       }
     },

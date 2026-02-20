@@ -9,7 +9,7 @@ describe("PluginManager", () => {
       id: "namespace-plugin",
       description: "namespace generator",
       importPath: "@example/namespace",
-      processNamespace: () => ({
+      onNamespaceDefine: () => ({
         types: {
           auditLog: db.type("AuditLog", {
             message: db.string(),
@@ -38,7 +38,7 @@ describe("PluginManager", () => {
       id: "namespace-plugin",
       description: "namespace generator",
       importPath: "@example/namespace",
-      processNamespace: () => ({
+      onNamespaceDefine: () => ({
         types: {
           auditLog: db.type("AuditLog", {
             message: db.string(),
@@ -89,7 +89,7 @@ describe("PluginManager", () => {
       description: "requires per-type config",
       importPath: "@example/require-config",
       typeConfigRequired: true,
-      processType: () => ({}),
+      onTypeDefine: () => ({}),
     };
 
     const manager = new PluginManager([plugin]);
@@ -113,7 +113,7 @@ describe("PluginManager", () => {
       id: "schema-less-plugin",
       description: "plugin without configSchema",
       importPath: "@example/schema-less",
-      processType: (_context) => ({
+      onTypeDefine: (_context: Parameters<NonNullable<Plugin["onTypeDefine"]>>[0]) => ({
         types: {
           derived: db.type("Derived", {
             sourceId: db.uuid(),

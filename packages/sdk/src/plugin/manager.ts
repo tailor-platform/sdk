@@ -1,4 +1,9 @@
+import {
+  hasGenerationHooks,
+  getPluginGenerationDependencies,
+} from "@/parser/plugin-config/generation-types";
 import { db } from "@/parser/service/tailordb/runtime";
+import type { DependencyKind } from "@/cli/generator/types";
 import type {
   Plugin,
   PluginGeneratedExecutor,
@@ -128,17 +133,17 @@ export class PluginManager {
     }
 
     // Check if plugin supports type-attached processing
-    if (!plugin.processType) {
+    if (!plugin.onTypeDefine) {
       return {
         success: false,
-        error: `Plugin "${plugin.id}" does not support type-attached processing (missing processType method). Use processNamespace via definePlugins() instead.`,
+        error: `Plugin "${plugin.id}" does not support type-attached processing (missing onTypeDefine method). Use onNamespaceDefine via definePlugins() instead.`,
       };
     }
 
-    // Execute plugin processType with raw TailorDBType
+    // Execute plugin onTypeDefine with raw TailorDBType
     let output: TypePluginOutput;
     try {
-      output = await plugin.processType({
+      output = await plugin.onTypeDefine({
         type: context.type,
         typeConfig: context.typeConfig,
         pluginConfig: plugin.pluginConfig,
@@ -154,7 +159,8 @@ export class PluginManager {
 
     // Collect generated types
     if (output.types && Object.keys(output.types).length > 0) {
-      const importPath = plugin.importPath;
+      // importPath is guaranteed by schema validation for plugins with definition-time hooks
+      const importPath = plugin.importPath!;
       for (const [kind, type] of Object.entries(output.types)) {
         this.generatedTypes.push({
           pluginId: context.pluginId,
@@ -185,7 +191,7 @@ export class PluginManager {
 
   /**
    * Process namespace plugins that don't require a source type.
-   * This method is called once per namespace for plugins with processNamespace method.
+   * This method is called once per namespace for plugins with onNamespaceDefine method.
    * @param namespace - The target namespace for generated types
    * @returns Array of results with plugin outputs and configs
    */
@@ -196,23 +202,23 @@ export class PluginManager {
       [];
 
     for (const [pluginId, plugin] of this.plugins) {
-      // Skip plugins without processNamespace method
-      if (!plugin.processNamespace) {
+      // Skip plugins without onNamespaceDefine method
+      if (!plugin.onNamespaceDefine) {
         continue;
       }
 
       // Use stored plugin config (from definePlugins)
       const config = plugin.pluginConfig;
 
-      // Execute plugin processNamespace
+      // Execute plugin onNamespaceDefine
       const context: PluginNamespaceProcessContext = {
         pluginConfig: config,
         namespace,
       };
 
-      let output: Awaited<ReturnType<NonNullable<Plugin["processNamespace"]>>>;
+      let output: Awaited<ReturnType<NonNullable<Plugin["onNamespaceDefine"]>>>;
       try {
-        output = await plugin.processNamespace(context);
+        output = await plugin.onNamespaceDefine(context);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         results.push({
@@ -244,7 +250,8 @@ export class PluginManager {
 
       // Collect generated types (namespace - no source type)
       if (output.types && Object.keys(output.types).length > 0) {
-        const importPath = plugin.importPath;
+        // importPath is guaranteed by schema validation for plugins with definition-time hooks
+        const importPath = plugin.importPath!;
         for (const [kind, type] of Object.entries(output.types)) {
           const typeKey = `${pluginId}:${kind}:${type.name}`;
           if (this.namespaceGeneratedTypeKeys.has(typeKey)) {
@@ -274,12 +281,12 @@ export class PluginManager {
   }
 
   /**
-   * Get plugins that have processNamespace method
+   * Get plugins that have onNamespaceDefine method
    * @returns Array of plugin IDs that support namespace processing
    */
   getNamespacePluginIds(): string[] {
     return Array.from(this.plugins.entries())
-      .filter(([, plugin]) => plugin.processNamespace !== undefined)
+      .filter(([, plugin]) => plugin.onNamespaceDefine !== undefined)
       .map(([id]) => id);
   }
 
@@ -343,6 +350,25 @@ export class PluginManager {
    */
   getPluginGeneratedExecutorsForNamespace(namespace: string): ReadonlyArray<PluginExecutorInfo> {
     return this.generatedExecutors.filter((info) => info.namespace === namespace);
+  }
+
+  /**
+   * Get plugins that have any generation-time hooks.
+   * @returns Array of plugins with generation hooks
+   */
+  getPluginsWithGenerationHooks(): Plugin[] {
+    return Array.from(this.plugins.values()).filter((plugin) => hasGenerationHooks(plugin));
+  }
+
+  /**
+   * Get the generation-time dependencies for a specific plugin.
+   * @param pluginId - The plugin ID to look up
+   * @returns Set of dependency kinds, or empty set if plugin not found
+   */
+  getPluginGenerationDependencies(pluginId: string): Set<DependencyKind> {
+    const plugin = this.plugins.get(pluginId);
+    if (!plugin) return new Set();
+    return getPluginGenerationDependencies(plugin);
   }
 
   /**

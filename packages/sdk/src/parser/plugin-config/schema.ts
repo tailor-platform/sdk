@@ -8,18 +8,37 @@ const CustomPluginSchema = z
   .object({
     id: z.string(),
     description: z.string(),
-    importPath: z.string(),
+    importPath: z.string().optional(),
     pluginConfig: z.unknown().optional(),
-    processType: functionSchema.optional(),
-    processNamespace: functionSchema.optional(),
     typeConfigRequired: z.union([z.boolean(), functionSchema]).optional(),
+    // Definition-time hooks
+    onTypeDefine: functionSchema.optional(),
+    onNamespaceDefine: functionSchema.optional(),
+    // Generation-time hooks
+    onTypeLoaded: functionSchema.optional(),
+    onTailorDBNamespaceLoaded: functionSchema.optional(),
+    onResolverLoaded: functionSchema.optional(),
+    onResolverNamespaceLoaded: functionSchema.optional(),
+    onExecutorLoaded: functionSchema.optional(),
+    generate: functionSchema.optional(),
   })
-  .passthrough();
+  .passthrough()
+  .refine(
+    (p) => {
+      // importPath is required when plugin has definition-time hooks
+      const hasDefineHooks = p.onTypeDefine || p.onNamespaceDefine;
+      return !hasDefineHooks || !!p.importPath;
+    },
+    {
+      message:
+        "importPath is required when plugin has definition-time hooks (onTypeDefine/onNamespaceDefine)",
+    },
+  );
 
 /**
  * Creates a PluginConfigSchema for custom plugins
  * @returns Plugin config schema that validates and transforms Plugin instances
  */
 export function createPluginConfigSchema() {
-  return CustomPluginSchema.transform((plugin) => plugin as Plugin).brand("Plugin");
+  return CustomPluginSchema.transform((plugin) => plugin as unknown as Plugin).brand("Plugin");
 }
