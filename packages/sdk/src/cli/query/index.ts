@@ -334,6 +334,7 @@ function printQueryResult(result: QueryDispatchResult, options: { json?: boolean
           results: [],
           rowCount: 0,
         });
+        return;
       }
       logger.info("No rows returned.");
       return;
