@@ -474,10 +474,5 @@ export function buildScriptExprWithInlineDependencies(
     return invocation;
   }
 
-  console.log("👍expr is ");
-  console.log(
-    `(() => {\n${dependencies.declarations.map((d) => `  ${d}`).join("\n")}\n  return ${invocation};\n})()`,
-  );
-
   return `(() => {\n${dependencies.declarations.map((d) => `  ${d}`).join("\n")}\n  return ${invocation};\n})()`;
 }
