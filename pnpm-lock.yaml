@@ -414,7 +414,7 @@ importers:
         specifier: 4.0.1
         version: 4.0.1
       node-sql-parser:
-        specifier: ^5.4.0
+        specifier: 5.4.0
         version: 5.4.0
       open:
         specifier: 11.0.0
