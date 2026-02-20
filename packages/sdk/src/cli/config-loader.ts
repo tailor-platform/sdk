@@ -1,10 +1,14 @@
 import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
+import { z } from "zod";
 import {
-  createGeneratorConfigSchema,
+  KyselyTypeConfigSchema,
+  SeedConfigSchema,
+  EnumConstantsConfigSchema,
+  FileUtilsConfigSchema,
+  CodeGeneratorSchema,
   type CodeGeneratorBase,
-  type Generator,
 } from "@/parser/generator-config";
 import { createPluginConfigSchema, type Plugin } from "@/parser/plugin-config";
 import { loadConfigPath } from "./context";
@@ -23,19 +27,37 @@ import "./mock";
  */
 export type LoadedConfig = AppConfig & { path: string };
 
-// Register built-in generators with their constructor functions
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const builtinGenerators = new Map<string, (options: any) => CodeGeneratorBase>([
-  [KyselyGeneratorID, (options: { distPath: string }) => createKyselyGenerator(options)],
-  [SeedGeneratorID, (options: { distPath: string }) => createSeedGenerator(options)],
-  [
-    EnumConstantsGeneratorID,
-    (options: { distPath: string }) => createEnumConstantsGenerator(options),
-  ],
-  [FileUtilsGeneratorID, (options: { distPath: string }) => createFileUtilsGenerator(options)],
-]);
+export const GeneratorConfigSchema = z
+  .union([
+    KyselyTypeConfigSchema,
+    SeedConfigSchema,
+    EnumConstantsConfigSchema,
+    FileUtilsConfigSchema,
+    CodeGeneratorSchema,
+  ])
+  .transform((gen): CodeGeneratorBase => {
+    if (!Array.isArray(gen)) {
+      return gen as CodeGeneratorBase;
+    }
+    const [id, options] = gen;
+    switch (id) {
+      case KyselyGeneratorID:
+        return createKyselyGenerator(options);
+      case SeedGeneratorID:
+        return createSeedGenerator(options);
+      case EnumConstantsGeneratorID:
+        return createEnumConstantsGenerator(options);
+      case FileUtilsGeneratorID:
+        return createFileUtilsGenerator(options);
+      default: {
+        const _exhaustive: never = id;
+        throw new Error(`Unknown generator ID: ${_exhaustive}`);
+      }
+    }
+  })
+  .brand("CodeGenerator");
 
-export const GeneratorConfigSchema = createGeneratorConfigSchema(builtinGenerators);
+export type Generator = z.output<typeof GeneratorConfigSchema>;
 
 const PluginConfigSchema = createPluginConfigSchema();
 
