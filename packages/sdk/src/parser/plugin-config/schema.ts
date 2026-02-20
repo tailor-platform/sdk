@@ -12,8 +12,8 @@ const CustomPluginSchema = z
     pluginConfig: z.unknown().optional(),
     typeConfigRequired: z.union([z.boolean(), functionSchema]).optional(),
     // Definition-time hooks
-    onTypeDefine: functionSchema.optional(),
-    onNamespaceDefine: functionSchema.optional(),
+    onTypeDefined: functionSchema.optional(),
+    onNamespaceDefined: functionSchema.optional(),
     // Generation-time hooks
     onTypeLoaded: functionSchema.optional(),
     onTailorDBNamespaceLoaded: functionSchema.optional(),
@@ -26,12 +26,12 @@ const CustomPluginSchema = z
   .refine(
     (p) => {
       // importPath is required when plugin has definition-time hooks
-      const hasDefineHooks = p.onTypeDefine || p.onNamespaceDefine;
+      const hasDefineHooks = p.onTypeDefined || p.onNamespaceDefined;
       return !hasDefineHooks || !!p.importPath;
     },
     {
       message:
-        "importPath is required when plugin has definition-time hooks (onTypeDefine/onNamespaceDefine)",
+        "importPath is required when plugin has definition-time hooks (onTypeDefined/onNamespaceDefined)",
     },
   );
 

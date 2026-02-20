@@ -1,27 +1,8 @@
-import * as fs from "node:fs";
-import * as path from "pathe";
 import { defineCommand, arg } from "politty";
 import { z } from "zod";
-import { defineApplication } from "@/cli/application";
-import { createExecutorService } from "@/cli/application/executor/service";
-import {
-  loadAndCollectJobs,
-  printLoadedWorkflows,
-  type CollectedJob,
-  type WorkflowLoadResult,
-} from "@/cli/application/workflow/service";
-import { bundleExecutors } from "@/cli/bundler/executor/executor-bundler";
-import { bundleResolvers } from "@/cli/bundler/resolver/resolver-bundler";
-import { buildTriggerContext, type TriggerContext } from "@/cli/bundler/trigger-context";
-import {
-  bundleWorkflowJobs,
-  type BundleWorkflowJobsResult,
-} from "@/cli/bundler/workflow/workflow-bundler";
+import { loadApplication, type Application } from "@/cli/application";
 import { loadConfig } from "@/cli/config-loader";
-import { generatePluginExecutorFiles } from "@/cli/generator/plugin-executor-generator";
-import { generatePluginTypeFiles } from "@/cli/generator/plugin-type-generator";
 import { generateUserTypes } from "@/cli/type-generator";
-import { getDistDir } from "@/cli/utils/dist-dir";
 import { PluginManager } from "@/plugin/manager";
 import { commonArgs, confirmationArgs, deploymentArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
@@ -48,8 +29,6 @@ import { applyPipeline, planPipeline } from "./services/resolver";
 import { applyStaticWebsite, planStaticWebsite } from "./services/staticwebsite";
 import { applyTailorDB, planTailorDB } from "./services/tailordb";
 import { applyWorkflow, planWorkflow } from "./services/workflow";
-import type { Application } from "@/cli/application";
-import type { FileLoadConfig } from "@/cli/application/file-loader";
 import type { OperatorClient } from "@/cli/client";
 import type { LoadedConfig } from "@/cli/config-loader";
 import type { Plugin } from "@/parser/plugin-config/types";
@@ -77,10 +56,6 @@ export interface PlanContext {
 
 export type ApplyPhase = "create-update" | "delete" | "delete-resources" | "delete-services";
 
-type MutableApplication = Omit<Application, "executorService"> & {
-  executorService: Application["executorService"];
-};
-
 /**
  * Apply the configured application to the Tailor platform.
  * @param options - Options for apply execution
@@ -101,100 +76,13 @@ export async function apply(options?: ApplyOptions) {
 
   // Generate user types from loaded config
   await generateUserTypes({ config, configPath: config.path });
-  const application = defineApplication({ config, pluginManager });
 
-  // Load files first (before building)
-  // Load workflows first and collect jobs for bundling
-  let workflowResult: WorkflowLoadResult | undefined;
-  if (application.workflowConfig) {
-    workflowResult = await loadAndCollectJobs(application.workflowConfig);
-  }
-
-  // Build trigger context for workflow/job trigger transformation
-  const triggerContext = await buildTriggerContext(application.workflowConfig);
-
-  let tailordbTypesLoaded = false;
-  let pluginExecutorFiles: string[] = [];
-
-  // Load TailorDB types early to generate plugin type/executor files before bundling
-  if (application.tailorDBServices.length > 0) {
-    for (const tailordb of application.tailorDBServices) {
-      await tailordb.loadTypes();
-      // Process namespace plugins (generates types without requiring a source type)
-      await tailordb.processNamespacePlugins();
-    }
-    tailordbTypesLoaded = true;
-  }
-
-  // Generate plugin type/executor files (matches `generate` flow ordering)
-  const pluginOutputDir = path.join(getDistDir(), "plugin");
-  const pluginTypes = pluginManager?.getPluginGeneratedTypes() ?? [];
-  const typeGenerationResult = generatePluginTypeFiles(pluginTypes, pluginOutputDir);
-
-  const sourceTypeInfoMap = new Map<string, { filePath: string; exportName: string }>();
-  for (const db of application.tailorDBServices) {
-    const typeSourceInfo = db.getTypeSourceInfo();
-    for (const [typeName, sourceInfo] of Object.entries(typeSourceInfo)) {
-      if (sourceInfo.filePath) {
-        sourceTypeInfoMap.set(typeName, {
-          filePath: sourceInfo.filePath,
-          exportName: sourceInfo.exportName,
-        });
-      }
-    }
-  }
-
-  const pluginExecutors = pluginManager?.getPluginGeneratedExecutorsWithImportPath() ?? [];
-  const generatedExecutorFiles = generatePluginExecutorFiles(
-    pluginExecutors,
-    pluginOutputDir,
-    typeGenerationResult,
-    sourceTypeInfoMap,
-    config.path,
-  );
-
-  // Discover plugin executor files after generation
-  const pluginExecutorFileSet = new Set<string>(generatedExecutorFiles);
-  // Also check legacy path for backwards compatibility
-  const legacyPluginExecutorDir = path.join(getDistDir(), "plugin-executors");
-  if (fs.existsSync(legacyPluginExecutorDir)) {
-    const legacyFiles = fs
-      .readdirSync(legacyPluginExecutorDir)
-      .filter((f) => f.endsWith(".ts"))
-      .map((f) => path.join(legacyPluginExecutorDir, f));
-    for (const file of legacyFiles) {
-      pluginExecutorFileSet.add(file);
-    }
-  }
-  pluginExecutorFiles = Array.from(pluginExecutorFileSet);
-  const executorService =
-    application.executorService ??
-    (pluginExecutorFiles.length > 0
-      ? createExecutorService({ config: { files: [] }, pluginManager })
-      : undefined);
-  const mutableApplication = application as MutableApplication;
-  mutableApplication.executorService = executorService;
-
-  // Build functions (using already loaded data)
-  for (const app of application.applications) {
-    for (const pipeline of app.resolverServices) {
-      await buildPipeline(pipeline.namespace, pipeline.config, triggerContext);
-    }
-  }
-
-  if (executorService) {
-    await buildExecutor(executorService.config, triggerContext, pluginExecutorFiles);
-  }
-  let workflowBuildResult: BundleWorkflowJobsResult | undefined;
-  if (workflowResult && workflowResult.jobs.length > 0) {
-    const mainJobNames = workflowResult.workflowSources.map((ws) => ws.workflow.mainJob.name);
-    workflowBuildResult = await buildWorkflow(
-      workflowResult.jobs,
-      mainJobNames,
-      application.env,
-      triggerContext,
-    );
-  }
+  // Load and initialize all application resources
+  // This includes: types, plugins, workflows, bundling, and validation
+  const { application, workflowResult, workflowBuildResult } = await loadApplication({
+    config,
+    pluginManager,
+  });
   if (buildOnly) return;
 
   // Initialize client
@@ -207,32 +95,6 @@ export async function apply(options?: ApplyOptions) {
     workspaceId: options?.workspaceId,
     profile: options?.profile,
   });
-
-  // Load remaining files and print logs
-  // Order: TailorDB → Resolver → Executor → Workflow
-  if (!tailordbTypesLoaded) {
-    for (const tailordb of application.tailorDBServices) {
-      await tailordb.loadTypes();
-      // Process namespace plugins (generates types without requiring a source type)
-      await tailordb.processNamespacePlugins();
-    }
-  }
-
-  for (const pipeline of application.resolverServices) {
-    await pipeline.loadResolvers();
-  }
-  if (executorService) {
-    await executorService.loadExecutors();
-    // Load plugin-generated executors from generated TypeScript files
-    if (pluginExecutorFiles.length > 0) {
-      await executorService.loadPluginExecutorFiles(pluginExecutorFiles);
-    }
-  }
-  // Print workflow loading logs last (workflows were already loaded for bundling)
-  if (workflowResult) {
-    printLoadedWorkflows(workflowResult);
-  }
-  logger.newline();
 
   // Collect function entries from bundled scripts (after build, before plan)
   const functionEntries = collectFunctionEntries(application, workflowResult?.jobs ?? []);
@@ -399,32 +261,6 @@ export async function apply(options?: ApplyOptions) {
   await applyFunctionRegistry(client, workspaceId, functionRegistry, "delete");
 
   logger.success("Successfully applied changes.");
-}
-
-async function buildPipeline(
-  namespace: string,
-  config: FileLoadConfig,
-  triggerContext?: TriggerContext,
-) {
-  await bundleResolvers(namespace, config, triggerContext);
-}
-
-async function buildExecutor(
-  config: FileLoadConfig,
-  triggerContext?: TriggerContext,
-  additionalFiles?: string[],
-) {
-  await bundleExecutors({ config, triggerContext, additionalFiles });
-}
-
-async function buildWorkflow(
-  collectedJobs: CollectedJob[],
-  mainJobNames: string[],
-  env: Record<string, string | number | boolean>,
-  triggerContext?: TriggerContext,
-): Promise<BundleWorkflowJobsResult> {
-  // Use the workflow bundler with already collected jobs
-  return bundleWorkflowJobs(collectedJobs, mainJobNames, env, triggerContext);
 }
 
 export const applyCommand = defineCommand({

@@ -24,7 +24,7 @@ This is required so that generators can use plugin-generated TailorDB types via 
 
 Plugins can hook into two lifecycle phases:
 
-- **Definition-time hooks** (`onTypeDefine`, `onNamespaceDefine`): Generate TailorDB types, resolvers, and executors
+- **Definition-time hooks** (`onTypeDefined`, `onNamespaceDefined`): Generate TailorDB types, resolvers, and executors
 - **Generation-time hooks** (`onTypeLoaded`, `onResolverLoaded`, etc.): Process loaded artifacts and produce output files
 
 ```typescript
@@ -37,7 +37,7 @@ interface Plugin<TypeConfig = unknown, PluginConfig = unknown> {
 
   /**
    * Import path for generated code to reference.
-   * Required when plugin has definition-time hooks (onTypeDefine/onNamespaceDefine).
+   * Required when plugin has definition-time hooks (onTypeDefined/onNamespaceDefined).
    * Optional for generation-only plugins.
    */
   readonly importPath?: string;
@@ -51,12 +51,12 @@ interface Plugin<TypeConfig = unknown, PluginConfig = unknown> {
   // === Definition-time hooks ===
 
   /** Process a type with this plugin attached */
-  onTypeDefine?(
+  onTypeDefined?(
     context: PluginProcessContext<TypeConfig, PluginConfig>,
   ): TypePluginOutput | Promise<TypePluginOutput>;
 
   /** Process a namespace (plugins without a source type) */
-  onNamespaceDefine?(
+  onNamespaceDefined?(
     context: PluginNamespaceProcessContext<PluginConfig>,
   ): PluginOutput | Promise<PluginOutput>;
 
@@ -91,8 +91,8 @@ interface Plugin<TypeConfig = unknown, PluginConfig = unknown> {
 Notes:
 
 - `importPath` should be resolvable from the directory containing `tailor.config.ts`. Code generators use it to import plugin APIs such as `getGeneratedType` and executor modules.
-- If you want to attach a plugin via `.plugin()`, implement the `onTypeDefine` method.
-- Namespace-only plugins implement `onNamespaceDefine` instead.
+- If you want to attach a plugin via `.plugin()`, implement the `onTypeDefined` method.
+- Namespace-only plugins implement `onNamespaceDefined` instead.
 - `pluginConfig` stores the plugin-level config so it can be read later during processing. Set it on the plugin object (e.g., via a factory function) before passing to `definePlugins()`.
 - `resolve` should return a dynamic import; relative specifiers are resolved from the plugin module.
 - Per-type config is optional by default. Use `typeConfigRequired: true` to make it mandatory.
@@ -103,7 +103,7 @@ Notes:
 
 ### PluginProcessContext
 
-Context passed to the `onTypeDefine` hook:
+Context passed to the `onTypeDefined` hook:
 
 ```typescript
 interface PluginProcessContext<TypeConfig = unknown, PluginConfig = unknown> {
@@ -123,7 +123,7 @@ interface PluginProcessContext<TypeConfig = unknown, PluginConfig = unknown> {
 
 ### PluginNamespaceProcessContext
 
-Context passed to the `onNamespaceDefine` hook:
+Context passed to the `onNamespaceDefined` hook:
 
 ```typescript
 interface PluginNamespaceProcessContext<PluginConfig = unknown> {
@@ -179,7 +179,7 @@ import type {
 
 ### PluginOutput (base)
 
-Base output used by both `onTypeDefine` and `onNamespaceDefine`:
+Base output used by both `onTypeDefined` and `onNamespaceDefined`:
 
 ```typescript
 interface PluginOutput {
@@ -196,7 +196,7 @@ interface PluginOutput {
 
 ### TypePluginOutput
 
-Return value from `onTypeDefine`. Extends `PluginOutput` with the ability to add fields to the source type:
+Return value from `onTypeDefined`. Extends `PluginOutput` with the ability to add fields to the source type:
 
 ```typescript
 interface TypePluginOutput extends PluginOutput {
@@ -208,7 +208,7 @@ interface TypePluginOutput extends PluginOutput {
 }
 ```
 
-`onNamespaceDefine` returns `PluginOutput` directly (namespace plugins cannot extend a source type).
+`onNamespaceDefined` returns `PluginOutput` directly (namespace plugins cannot extend a source type).
 
 ### GeneratorResult
 
@@ -258,7 +258,7 @@ const DeletedCustomer = await getGeneratedType(
 1. Loads and caches the config from the given path
 2. Finds the plugin by ID from `definePlugins()` exports
 3. Auto-resolves the namespace from config
-4. Calls the plugin's `onTypeDefine()` or `onNamespaceDefine()` method
+4. Calls the plugin's `onTypeDefined()` or `onNamespaceDefined()` method
 5. Caches the result to avoid redundant processing
 6. Returns the generated type matching the specified kind
 
@@ -357,7 +357,7 @@ function createSoftDeletePlugin(
     importPath: "./plugins/soft-delete",
     pluginConfig,
     typeConfigRequired: (config) => config?.requireTypeConfig === true,
-    onTypeDefine: processSoftDelete,
+    onTypeDefined: processSoftDelete,
   };
 }
 
@@ -490,7 +490,7 @@ Plugin type safety is provided at two levels:
 ### Plugin-level type safety (TypeConfig / PluginConfig)
 
 Use TypeScript type parameters on `Plugin<TypeConfig, PluginConfig>` to get type-safe config
-in `onTypeDefine` and `onNamespaceDefine` methods:
+in `onTypeDefined` and `onNamespaceDefined` methods:
 
 ```typescript
 interface MyTypeConfig {
@@ -504,7 +504,7 @@ interface MyPluginConfig {
 const plugin: Plugin<MyTypeConfig, MyPluginConfig> = {
   id: "@example/my-plugin",
   // ...
-  onTypeDefine(context) {
+  onTypeDefined(context) {
     // context.typeConfig is MyTypeConfig
     // context.pluginConfig is MyPluginConfig
   },
@@ -544,13 +544,13 @@ declare module "@tailor-platform/sdk" {
 
 ### Type-Attached Plugins
 
-Implement `onTypeDefine` to handle types with the plugin attached:
+Implement `onTypeDefined` to handle types with the plugin attached:
 
 ```typescript
 const plugin: Plugin = {
   id: "@example/my-plugin",
   // ...
-  onTypeDefine(context) {
+  onTypeDefined(context) {
     // Called for each type with .plugin({ "@example/my-plugin": config })
     return {
       types: {
@@ -563,13 +563,13 @@ const plugin: Plugin = {
 
 ### Namespace Plugins
 
-Implement `onNamespaceDefine` for plugins that generate types independently:
+Implement `onNamespaceDefined` for plugins that generate types independently:
 
 ```typescript
 const plugin: Plugin = {
   id: "@example/audit-log",
   // ...
-  onNamespaceDefine(context) {
+  onNamespaceDefined(context) {
     // Called once per namespace, with namespace-level types available
     return { types: { auditLog: /* generated type */ } };
   },
@@ -585,7 +585,7 @@ const plugin: Plugin = {
   id: "@example/hybrid",
   importPath: "./plugins/hybrid",
   // Definition-time: generate types/executors
-  onTypeDefine(context) {
+  onTypeDefined(context) {
     return { types: { derived: createDerivedType(context.type) } };
   },
   // Generation-time: produce output files

@@ -10,17 +10,7 @@ import ml from "multiline-ts";
 import * as path from "pathe";
 import { logger, styles } from "@/cli/utils/logger";
 import type { PluginGeneratedType } from "@/parser/plugin-config/types";
-import type { PluginGeneratedTypeInfo } from "@/plugin/manager";
-
-/**
- * Result of generating plugin type files.
- */
-export interface PluginTypeGenerationResult {
-  /** Map of type name to generated file path (relative to outputDir) */
-  typeFilePaths: Map<string, string>;
-  /** List of all generated file paths (absolute) */
-  generatedFiles: string[];
-}
+import type { PluginGeneratedTypeInfo, PluginTypeGenerationResult } from "@/plugin/manager";
 
 /**
  * Generate TypeScript files for plugin-generated types.

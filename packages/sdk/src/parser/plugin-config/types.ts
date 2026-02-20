@@ -61,7 +61,7 @@ export interface PluginProcessContext<TypeConfig = unknown, PluginConfig = unkno
 }
 
 /**
- * Context passed to plugin's onNamespaceDefine hook.
+ * Context passed to plugin's onNamespaceDefined hook.
  * Used for plugins that operate on a namespace without requiring a source type.
  */
 export interface PluginNamespaceProcessContext<PluginConfig = unknown> {
@@ -329,7 +329,7 @@ export interface PluginExtends {
 
 /**
  * Base output returned by a plugin's definition-time hooks.
- * Used by both onTypeDefine and onNamespaceDefine.
+ * Used by both onTypeDefined and onNamespaceDefined.
  */
 export interface PluginOutput {
   /**
@@ -345,7 +345,7 @@ export interface PluginOutput {
 }
 
 /**
- * Output returned by a plugin's onTypeDefine hook.
+ * Output returned by a plugin's onTypeDefined hook.
  * Extends PluginOutput with the ability to add fields to the source type.
  */
 export interface TypePluginOutput extends PluginOutput {
@@ -354,7 +354,7 @@ export interface TypePluginOutput extends PluginOutput {
 }
 
 /**
- * Output returned by a plugin's onNamespaceDefine hook.
+ * Output returned by a plugin's onNamespaceDefined hook.
  * Alias for PluginOutput (namespace plugins cannot extend a source type).
  */
 export type NamespacePluginOutput = PluginOutput;
@@ -362,7 +362,7 @@ export type NamespacePluginOutput = PluginOutput;
 /**
  * Plugin interface that all plugins must implement.
  * Plugins can hook into two lifecycle phases:
- * - **Definition-time hooks** (`onTypeDefine`, `onNamespaceDefine`): Generate TailorDB types, resolvers, and executors
+ * - **Definition-time hooks** (`onTypeDefined`, `onNamespaceDefined`): Generate TailorDB types, resolvers, and executors
  * - **Generation-time hooks** (`onTypeLoaded`, `onResolverLoaded`, etc.): Process loaded artifacts and produce output files
  * @template TypeConfig - Type for per-type configuration passed via .plugin() method
  * @template PluginConfig - Type for plugin-level configuration passed via definePlugins()
@@ -376,7 +376,7 @@ export interface Plugin<TypeConfig = unknown, PluginConfig = unknown> {
    * Import path for this plugin's public API.
    * Used by code generators to create correct import statements
    * (e.g., plugin executors and seed schema generation).
-   * Required when plugin has definition-time hooks (onTypeDefine/onNamespaceDefine).
+   * Required when plugin has definition-time hooks (onTypeDefined/onNamespaceDefined).
    * Optional for generation-only plugins.
    */
   readonly importPath?: string;
@@ -405,7 +405,7 @@ export interface Plugin<TypeConfig = unknown, PluginConfig = unknown> {
    * @param context - Context containing the type, config, pluginConfig, and namespace
    * @returns Plugin output with generated types, resolvers, and executors
    */
-  onTypeDefine?(
+  onTypeDefined?(
     context: PluginProcessContext<TypeConfig, PluginConfig>,
   ): TypePluginOutput | Promise<TypePluginOutput>;
 
@@ -416,7 +416,7 @@ export interface Plugin<TypeConfig = unknown, PluginConfig = unknown> {
    * @param context - Context containing the plugin config and namespace
    * @returns Plugin output with generated types, resolvers, and executors
    */
-  onNamespaceDefine?(
+  onNamespaceDefined?(
     context: PluginNamespaceProcessContext<PluginConfig>,
   ): NamespacePluginOutput | Promise<NamespacePluginOutput>;
 

@@ -139,7 +139,7 @@ async function resolveNamespaceForType(
 
 /**
  * Resolve the namespace for a namespace plugin by trying each namespace.
- * Calls onNamespaceDefine() for each and returns the first whose output contains the requested kind.
+ * Calls onNamespaceDefined() for each and returns the first whose output contains the requested kind.
  * @param config - App config with db namespace definitions
  * @param config.db - DB namespace definitions
  * @param plugin - Plugin instance
@@ -157,15 +157,15 @@ async function resolveNamespaceForNamespacePlugin(
     throw new Error(`No db configuration found in config`);
   }
 
-  if (!plugin.onNamespaceDefine) {
-    throw new Error(`Plugin "${plugin.id}" does not have a onNamespaceDefine() method`);
+  if (!plugin.onNamespaceDefined) {
+    throw new Error(`Plugin "${plugin.id}" does not have a onNamespaceDefined() method`);
   }
 
   for (const namespace of Object.keys(config.db)) {
     const dbConfig = config.db[namespace] as DbNamespaceConfig;
     if (dbConfig.external) continue;
 
-    const output = await plugin.onNamespaceDefine({
+    const output = await plugin.onNamespaceDefined({
       pluginConfig,
       namespace,
     });
@@ -216,8 +216,8 @@ function getCacheKey(baseKey: string, pluginConfig: unknown): string {
 
 /**
  * Get a generated type from a plugin by loading the config and resolving everything automatically.
- * For type-attached plugins, calls onTypeDefine() with the sourceType.
- * For namespace plugins, calls onNamespaceDefine() with auto-resolved namespace.
+ * For type-attached plugins, calls onTypeDefined() with the sourceType.
+ * For namespace plugins, calls onNamespaceDefined() with auto-resolved namespace.
  * Results are cached per config path, plugin, namespace, and pluginConfig to avoid redundant processing.
  * @param configPath - Path to tailor.config.ts (absolute or relative to cwd)
  * @param pluginId - The plugin's unique identifier
@@ -261,7 +261,7 @@ export async function getGeneratedType(
 
 /**
  * Get a generated type from a type-attached plugin.
- * @param plugin - The plugin instance (must have onTypeDefine() method)
+ * @param plugin - The plugin instance (must have onTypeDefined() method)
  * @param sourceType - The source TailorDB type
  * @param kind - The generated type kind
  * @param pluginConfig - Plugin-level configuration
@@ -275,8 +275,8 @@ async function getGeneratedTypeForTypeAttachedPlugin(
   pluginConfig: unknown,
   namespace: string,
 ): Promise<TailorAnyDBType> {
-  if (!plugin.onTypeDefine) {
-    throw new Error(`Plugin "${plugin.id}" does not have a onTypeDefine() method`);
+  if (!plugin.onTypeDefined) {
+    throw new Error(`Plugin "${plugin.id}" does not have a onTypeDefined() method`);
   }
 
   // Check cache first
@@ -291,7 +291,7 @@ async function getGeneratedTypeForTypeAttachedPlugin(
 
   if (!output) {
     const typeConfig = sourceType.plugins?.find((p) => p.pluginId === plugin.id)?.config;
-    output = await plugin.onTypeDefine({
+    output = await plugin.onTypeDefined({
       type: sourceType,
       typeConfig: typeConfig ?? {},
       pluginConfig,
@@ -315,7 +315,7 @@ async function getGeneratedTypeForTypeAttachedPlugin(
  * Auto-resolves the namespace by trying each one.
  * @param config - App config with db namespace definitions
  * @param config.db - DB namespace definitions
- * @param plugin - The plugin instance (must have onNamespaceDefine() method)
+ * @param plugin - The plugin instance (must have onNamespaceDefined() method)
  * @param kind - The generated type kind
  * @param pluginConfig - Plugin-level configuration
  * @returns The generated TailorDB type
@@ -326,8 +326,8 @@ async function getGeneratedTypeForNamespacePlugin(
   kind: string,
   pluginConfig: unknown,
 ): Promise<TailorAnyDBType> {
-  if (!plugin.onNamespaceDefine) {
-    throw new Error(`Plugin "${plugin.id}" does not have a onNamespaceDefine() method`);
+  if (!plugin.onNamespaceDefined) {
+    throw new Error(`Plugin "${plugin.id}" does not have a onNamespaceDefined() method`);
   }
 
   // Check cache first - try all namespaces

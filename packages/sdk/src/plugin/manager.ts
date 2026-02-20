@@ -94,6 +94,9 @@ export class PluginManager {
   private namespaceGeneratedTypeKeys: Set<string> = new Set();
   private namespaceGeneratedExecutorKeys: Set<string> = new Set();
 
+  /** Generated plugin executor file paths */
+  private pluginExecutorFiles: string[] = [];
+
   constructor(plugins: Plugin[] = []) {
     for (const plugin of plugins) {
       if (this.plugins.has(plugin.id)) {
@@ -133,17 +136,17 @@ export class PluginManager {
     }
 
     // Check if plugin supports type-attached processing
-    if (!plugin.onTypeDefine) {
+    if (!plugin.onTypeDefined) {
       return {
         success: false,
-        error: `Plugin "${plugin.id}" does not support type-attached processing (missing onTypeDefine method). Use onNamespaceDefine via definePlugins() instead.`,
+        error: `Plugin "${plugin.id}" does not support type-attached processing (missing onTypeDefined method). Use onNamespaceDefined via definePlugins() instead.`,
       };
     }
 
-    // Execute plugin onTypeDefine with raw TailorDBType
+    // Execute plugin onTypeDefined with raw TailorDBType
     let output: TypePluginOutput;
     try {
-      output = await plugin.onTypeDefine({
+      output = await plugin.onTypeDefined({
         type: context.type,
         typeConfig: context.typeConfig,
         pluginConfig: plugin.pluginConfig,
@@ -191,7 +194,7 @@ export class PluginManager {
 
   /**
    * Process namespace plugins that don't require a source type.
-   * This method is called once per namespace for plugins with onNamespaceDefine method.
+   * This method is called once per namespace for plugins with onNamespaceDefined method.
    * @param namespace - The target namespace for generated types
    * @returns Array of results with plugin outputs and configs
    */
@@ -202,23 +205,23 @@ export class PluginManager {
       [];
 
     for (const [pluginId, plugin] of this.plugins) {
-      // Skip plugins without onNamespaceDefine method
-      if (!plugin.onNamespaceDefine) {
+      // Skip plugins without onNamespaceDefined method
+      if (!plugin.onNamespaceDefined) {
         continue;
       }
 
       // Use stored plugin config (from definePlugins)
       const config = plugin.pluginConfig;
 
-      // Execute plugin onNamespaceDefine
+      // Execute plugin onNamespaceDefined
       const context: PluginNamespaceProcessContext = {
         pluginConfig: config,
         namespace,
       };
 
-      let output: Awaited<ReturnType<NonNullable<Plugin["onNamespaceDefine"]>>>;
+      let output: Awaited<ReturnType<NonNullable<Plugin["onNamespaceDefined"]>>>;
       try {
-        output = await plugin.onNamespaceDefine(context);
+        output = await plugin.onNamespaceDefined(context);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         results.push({
@@ -281,12 +284,12 @@ export class PluginManager {
   }
 
   /**
-   * Get plugins that have onNamespaceDefine method
+   * Get plugins that have onNamespaceDefined method
    * @returns Array of plugin IDs that support namespace processing
    */
   getNamespacePluginIds(): string[] {
     return Array.from(this.plugins.entries())
-      .filter(([, plugin]) => plugin.onNamespaceDefine !== undefined)
+      .filter(([, plugin]) => plugin.onNamespaceDefined !== undefined)
       .map(([id]) => id);
   }
 
@@ -372,6 +375,30 @@ export class PluginManager {
   }
 
   /**
+   * Generate plugin files (types and executors) and store the executor file paths.
+   * @param params - Parameters for file generation
+   * @returns Generated executor file paths
+   */
+  generatePluginFiles(params: GeneratePluginFilesParams): string[] {
+    const { outputDir, sourceTypeInfoMap, configPath, typeGenerator, executorGenerator } = params;
+
+    // Generate type files
+    const typeGenerationResult = typeGenerator(this.generatedTypes, outputDir);
+
+    // Generate executor files
+    const pluginExecutors = this.getPluginGeneratedExecutorsWithImportPath();
+    this.pluginExecutorFiles = executorGenerator(
+      pluginExecutors,
+      outputDir,
+      typeGenerationResult,
+      sourceTypeInfoMap,
+      configPath,
+    );
+
+    return this.pluginExecutorFiles;
+  }
+
+  /**
    * Extend a TailorDB type with new fields.
    * This method handles the `db.type()` call and metadata copying internally.
    * @param params - Parameters for type extension
@@ -403,6 +430,49 @@ export class PluginManager {
     const extendedType = db.type(typeName, fieldsWithoutId);
     return copyMetadataToExtendedType(originalType, extendedType);
   }
+}
+
+/**
+ * Source info for user-defined types
+ */
+export type SourceTypeInfo = {
+  filePath: string;
+  exportName: string;
+};
+
+/**
+ * Result of generating plugin type files
+ */
+export interface PluginTypeGenerationResult {
+  /** Map of type name to generated file path (relative to outputDir) */
+  typeFilePaths: Map<string, string>;
+  /** List of all generated file paths (absolute) */
+  generatedFiles: string[];
+}
+
+/**
+ * Parameters for generating plugin files
+ */
+export interface GeneratePluginFilesParams {
+  /** Base output directory (e.g., .tailor-sdk/plugin) */
+  outputDir: string;
+  /** Map of source type names to their source info */
+  sourceTypeInfoMap: Map<string, SourceTypeInfo>;
+  /** Path to tailor.config.ts (used for resolving plugin import paths) */
+  configPath: string;
+  /** Function to generate type files */
+  typeGenerator: (
+    types: ReadonlyArray<PluginGeneratedTypeInfo>,
+    outputDir: string,
+  ) => PluginTypeGenerationResult;
+  /** Function to generate executor files */
+  executorGenerator: (
+    executors: ReadonlyArray<PluginExecutorInfoExtended>,
+    outputDir: string,
+    typeGenerationResult: PluginTypeGenerationResult,
+    sourceTypeInfoMap: Map<string, SourceTypeInfo>,
+    configPath: string,
+  ) => string[];
 }
 
 /**
