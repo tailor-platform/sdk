@@ -7,7 +7,6 @@ import {
   type Executor,
   type ExecutorServiceConfig,
 } from "@/parser/service/executor";
-import type { PluginManager } from "@/plugin/manager";
 
 /**
  * Information about a plugin-generated executor converted to Executor format
@@ -35,8 +34,6 @@ export type ExecutorService = {
 export interface CreateExecutorServiceParams {
   /** The executor service configuration */
   config: ExecutorServiceConfig;
-  /** Plugin manager for processing plugin-generated executors */
-  pluginManager?: PluginManager;
 }
 
 /**
@@ -102,7 +99,7 @@ export function createExecutorService(params: CreateExecutorServiceParams): Exec
         const executor = await loadExecutorForFile(filePath);
         if (executor) {
           // Track as plugin executor (plugin ID is extracted from file path)
-          // File path format: .tailor-sdk/plugin-executors/{executor-name}.ts
+          // File path format: .tailor-sdk/plugin/{executor-name}.ts
           pluginExecutors.push({
             executor,
             pluginId: "plugin-generated",

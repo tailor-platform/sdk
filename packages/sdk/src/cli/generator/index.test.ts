@@ -2,7 +2,8 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { describe, it, expect, beforeEach, afterEach, vi, afterAll } from "vitest";
-import { GeneratorConfigSchema } from "@/cli/config-loader";
+import { defineApplication } from "@/cli/application";
+import { GeneratorConfigSchema, type LoadedConfig } from "@/cli/config-loader";
 import { KyselyGeneratorID } from "@/cli/generator/builtin/kysely-type";
 import { createResolver } from "@/configure/services/resolver/resolver";
 import { db } from "@/configure/services/tailordb/schema";
@@ -12,7 +13,6 @@ import { parseTypes } from "@/parser/service/tailordb";
 import { toSchemaOutputs } from "@/utils/test/internal";
 import { createGenerationManager } from "./index";
 import type { TailorDBType } from "@/configure/services/tailordb/schema";
-import type { AppConfig } from "@/parser/app-config";
 
 // ESM-safe explicit mock for Node's fs
 vi.mock("node:fs", () => {
@@ -96,7 +96,7 @@ describe("GenerationManager", () => {
   // For test-only access to private members
   // oxlint-disable-next-line no-explicit-any
   let manager: any;
-  let mockConfig: AppConfig;
+  let mockConfig: LoadedConfig;
 
   afterAll(() => {
     vi.clearAllMocks();
@@ -107,13 +107,19 @@ describe("GenerationManager", () => {
 
     mockConfig = {
       name: "testApp",
+      path: "tailor.config.ts",
       db: { main: { files: ["src/types/*.ts"] } },
       resolver: { main: { files: ["src/resolvers/*.ts"] } },
     };
 
     // for minimal mock
-    // oxlint-disable-next-line no-explicit-any
-    manager = createGenerationManager(mockConfig, [new TestGenerator()] as any);
+    const application = defineApplication({ config: mockConfig });
+    manager = createGenerationManager({
+      application,
+      config: mockConfig,
+      // oxlint-disable-next-line no-explicit-any
+      generators: [new TestGenerator()] as any,
+    });
   });
 
   afterEach(() => {
@@ -145,7 +151,12 @@ describe("GenerationManager", () => {
         "@tailor-platform/kysely-type",
         { distPath: "types/db.ts" },
       ]);
-      const managerWithKysely = createGenerationManager(mockConfig, [kyselyGen]);
+      const kyselyApp = defineApplication({ config: mockConfig });
+      const managerWithKysely = createGenerationManager({
+        application: kyselyApp,
+        config: mockConfig,
+        generators: [kyselyGen],
+      });
       expect(
         // For test-only access to private members
         // oxlint-disable-next-line no-explicit-any
@@ -172,8 +183,12 @@ describe("GenerationManager", () => {
         name: "single-app",
       };
       // For test-only access to private members
+      const singleApp = defineApplication({ config: singleAppConfig });
       // oxlint-disable-next-line no-explicit-any
-      const singleAppManager: any = createGenerationManager(singleAppConfig, []);
+      const singleAppManager: any = createGenerationManager({
+        application: singleApp,
+        config: singleAppConfig,
+      });
 
       await singleAppManager.generate(false);
       expect(singleAppManager.services).toBeDefined();
@@ -619,16 +634,18 @@ describe("GenerationManager", () => {
 });
 
 describe("generate function", () => {
-  let mockConfig: AppConfig;
+  let mockConfig: LoadedConfig;
 
   beforeEach(() => {
     mockConfig = {
       name: "test-workspace",
+      path: "tailor.config.ts",
     };
   });
 
   it("generate does not automatically call watch", async () => {
-    const manager = createGenerationManager(mockConfig, []);
+    const app = defineApplication({ config: mockConfig });
+    const manager = createGenerationManager({ application: app, config: mockConfig });
     await expect(manager.generate(false)).resolves.not.toThrow();
     expect(manager.application).toBeDefined();
   });
@@ -636,13 +653,14 @@ describe("generate function", () => {
 
 describe("Integration Tests", () => {
   let tempDir: string;
-  let fullConfig: AppConfig;
+  let fullConfig: LoadedConfig;
 
   beforeEach(async () => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "integration-test-"));
 
     fullConfig = {
       name: "testApp",
+      path: "tailor.config.ts",
       db: {
         main: {
           files: [path.join(tempDir, "types/*.ts")],
@@ -670,8 +688,13 @@ describe("Integration Tests", () => {
     // For test-only access to private members
     // oxlint-disable-next-line no-explicit-any
     const generators: any[] = [new TestGenerator(), kyselyGen];
+    const integrationApp = defineApplication({ config: fullConfig });
     // oxlint-disable-next-line no-explicit-any
-    const manager: any = createGenerationManager(fullConfig, generators);
+    const manager: any = createGenerationManager({
+      application: integrationApp,
+      config: fullConfig,
+      generators,
+    });
 
     await expect(manager.generate(false)).resolves.not.toThrow();
 
@@ -681,7 +704,8 @@ describe("Integration Tests", () => {
   });
 
   it("integration test for error recovery and performance", async () => {
-    const manager = createGenerationManager(fullConfig, []);
+    const errorApp = defineApplication({ config: fullConfig });
+    const manager = createGenerationManager({ application: errorApp, config: fullConfig });
 
     const start = Date.now();
     await manager.generate(false);
@@ -699,8 +723,13 @@ describe("Integration Tests", () => {
         .map(() => new TestGenerator());
 
       // For test-only access to private members
+      const memApp = defineApplication({ config: fullConfig });
       // oxlint-disable-next-line no-explicit-any
-      const manager: any = createGenerationManager(fullConfig, largeGenerators);
+      const manager: any = createGenerationManager({
+        application: memApp,
+        config: fullConfig,
+        generators: largeGenerators,
+      });
 
       // Create large application data structure
       manager.services = {

@@ -23,8 +23,11 @@ import {
   type PluginInjectMap,
   type PluginExecutorContext,
 } from "@/parser/plugin-config/types";
-import type { PluginTypeGenerationResult } from "./plugin-type-generator";
-import type { PluginExecutorInfoExtended } from "@/plugin/manager";
+import type {
+  PluginExecutorInfoExtended,
+  PluginTypeGenerationResult,
+  SourceTypeInfo,
+} from "@/plugin/manager";
 
 /**
  * Information needed for type import resolution.
@@ -37,14 +40,6 @@ interface TypeImportInfo {
   /** Whether this is a generated type (vs user-defined) */
   isGeneratedType: boolean;
 }
-
-/**
- * Source info for user-defined types.
- */
-type SourceTypeInfo = {
-  filePath: string;
-  exportName: string;
-};
 
 /**
  * Generate TypeScript files for plugin-generated executors.

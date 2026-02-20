@@ -89,6 +89,9 @@ export class PluginManager {
   private namespaceGeneratedTypeKeys: Set<string> = new Set();
   private namespaceGeneratedExecutorKeys: Set<string> = new Set();
 
+  /** Generated plugin executor file paths */
+  private pluginExecutorFiles: string[] = [];
+
   constructor(plugins: Plugin[] = []) {
     for (const plugin of plugins) {
       if (this.plugins.has(plugin.id)) {
@@ -346,6 +349,30 @@ export class PluginManager {
   }
 
   /**
+   * Generate plugin files (types and executors) and store the executor file paths.
+   * @param params - Parameters for file generation
+   * @returns Generated executor file paths
+   */
+  generatePluginFiles(params: GeneratePluginFilesParams): string[] {
+    const { outputDir, sourceTypeInfoMap, configPath, typeGenerator, executorGenerator } = params;
+
+    // Generate type files
+    const typeGenerationResult = typeGenerator(this.generatedTypes, outputDir);
+
+    // Generate executor files
+    const pluginExecutors = this.getPluginGeneratedExecutorsWithImportPath();
+    this.pluginExecutorFiles = executorGenerator(
+      pluginExecutors,
+      outputDir,
+      typeGenerationResult,
+      sourceTypeInfoMap,
+      configPath,
+    );
+
+    return this.pluginExecutorFiles;
+  }
+
+  /**
    * Extend a TailorDB type with new fields.
    * This method handles the `db.type()` call and metadata copying internally.
    * @param params - Parameters for type extension
@@ -377,6 +404,49 @@ export class PluginManager {
     const extendedType = db.type(typeName, fieldsWithoutId);
     return copyMetadataToExtendedType(originalType, extendedType);
   }
+}
+
+/**
+ * Source info for user-defined types
+ */
+export type SourceTypeInfo = {
+  filePath: string;
+  exportName: string;
+};
+
+/**
+ * Result of generating plugin type files
+ */
+export interface PluginTypeGenerationResult {
+  /** Map of type name to generated file path (relative to outputDir) */
+  typeFilePaths: Map<string, string>;
+  /** List of all generated file paths (absolute) */
+  generatedFiles: string[];
+}
+
+/**
+ * Parameters for generating plugin files
+ */
+export interface GeneratePluginFilesParams {
+  /** Base output directory (e.g., .tailor-sdk/plugin) */
+  outputDir: string;
+  /** Map of source type names to their source info */
+  sourceTypeInfoMap: Map<string, SourceTypeInfo>;
+  /** Path to tailor.config.ts (used for resolving plugin import paths) */
+  configPath: string;
+  /** Function to generate type files */
+  typeGenerator: (
+    types: ReadonlyArray<PluginGeneratedTypeInfo>,
+    outputDir: string,
+  ) => PluginTypeGenerationResult;
+  /** Function to generate executor files */
+  executorGenerator: (
+    executors: ReadonlyArray<PluginExecutorInfoExtended>,
+    outputDir: string,
+    typeGenerationResult: PluginTypeGenerationResult,
+    sourceTypeInfoMap: Map<string, SourceTypeInfo>,
+    configPath: string,
+  ) => string[];
 }
 
 /**
