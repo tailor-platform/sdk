@@ -48,6 +48,38 @@ import {
   toExecutorJobAttemptInfo,
 } from "./transform";
 
+type ExecutorLike = {
+  name: string;
+};
+
+export type ListExecutorJobsTypedOptions<E extends ExecutorLike = ExecutorLike> = {
+  executor: E;
+  status?: string;
+  limit?: number;
+  workspaceId?: string;
+  profile?: string;
+};
+
+export type GetExecutorJobTypedOptions<E extends ExecutorLike = ExecutorLike> = {
+  executor: E;
+  jobId: string;
+  attempts?: boolean;
+  workspaceId?: string;
+  profile?: string;
+};
+
+export type WatchExecutorJobTypedOptions<E extends ExecutorLike = ExecutorLike> = {
+  executor: E;
+  jobId: string;
+  workspaceId?: string;
+  profile?: string;
+  interval?: number;
+  logs?: boolean;
+};
+
+/**
+ * @deprecated Use ListExecutorJobsTypedOptions instead.
+ */
 export interface ListExecutorJobsOptions {
   executorName: string;
   status?: string;
@@ -56,6 +88,9 @@ export interface ListExecutorJobsOptions {
   profile?: string;
 }
 
+/**
+ * @deprecated Use GetExecutorJobTypedOptions instead.
+ */
 export interface GetExecutorJobOptions {
   executorName: string;
   jobId: string;
@@ -64,6 +99,9 @@ export interface GetExecutorJobOptions {
   profile?: string;
 }
 
+/**
+ * @deprecated Use WatchExecutorJobTypedOptions instead.
+ */
 export interface WatchExecutorJobOptions {
   executorName: string;
   jobId: string;
@@ -103,9 +141,16 @@ function formatTime(date: Date): string {
  * @param options - Options for listing executor jobs
  * @returns List of executor job information
  */
+export async function listExecutorJobs<E extends ExecutorLike>(
+  options: ListExecutorJobsTypedOptions<E>,
+): Promise<ExecutorJobListInfo[]>;
 export async function listExecutorJobs(
   options: ListExecutorJobsOptions,
+): Promise<ExecutorJobListInfo[]>;
+export async function listExecutorJobs<E extends ExecutorLike>(
+  options: ListExecutorJobsOptions | ListExecutorJobsTypedOptions<E>,
 ): Promise<ExecutorJobListInfo[]> {
+  const executorName = "executorName" in options ? options.executorName : options.executor.name;
   const accessToken = await loadAccessToken({
     useProfile: true,
     profile: options.profile,
@@ -136,7 +181,7 @@ export async function listExecutorJobs(
   try {
     const { jobs } = await client.listExecutorJobs({
       workspaceId,
-      executorName: options.executorName,
+      executorName,
       pageSize: options.limit,
       pageDirection: PageDirection.DESC,
       filter,
@@ -145,7 +190,7 @@ export async function listExecutorJobs(
     return jobs.map(toExecutorJobListInfo);
   } catch (error) {
     if (error instanceof ConnectError && error.code === Code.NotFound) {
-      throw new Error(`Executor '${options.executorName}' not found.`);
+      throw new Error(`Executor '${executorName}' not found.`);
     }
     throw error;
   }
@@ -156,9 +201,16 @@ export async function listExecutorJobs(
  * @param options - Options for getting executor job details
  * @returns Executor job detail information
  */
+export async function getExecutorJob<E extends ExecutorLike>(
+  options: GetExecutorJobTypedOptions<E>,
+): Promise<ExecutorJobDetailInfo>;
 export async function getExecutorJob(
   options: GetExecutorJobOptions,
+): Promise<ExecutorJobDetailInfo>;
+export async function getExecutorJob<E extends ExecutorLike>(
+  options: GetExecutorJobOptions | GetExecutorJobTypedOptions<E>,
 ): Promise<ExecutorJobDetailInfo> {
+  const executorName = "executorName" in options ? options.executorName : options.executor.name;
   const accessToken = await loadAccessToken({
     useProfile: true,
     profile: options.profile,
@@ -172,7 +224,7 @@ export async function getExecutorJob(
   try {
     const { job } = await client.getExecutorJob({
       workspaceId,
-      executorName: options.executorName,
+      executorName,
       jobId: options.jobId,
     });
 
@@ -202,7 +254,7 @@ export async function getExecutorJob(
     return jobInfo;
   } catch (error) {
     if (error instanceof ConnectError && error.code === Code.NotFound) {
-      throw new Error(`Job '${options.jobId}' not found for executor '${options.executorName}'.`);
+      throw new Error(`Job '${options.jobId}' not found for executor '${executorName}'.`);
     }
     throw error;
   }
@@ -213,9 +265,16 @@ export async function getExecutorJob(
  * @param options - Options for watching executor job
  * @returns Result including job details and downstream execution info
  */
+export async function watchExecutorJob<E extends ExecutorLike>(
+  options: WatchExecutorJobTypedOptions<E>,
+): Promise<WatchExecutorJobResult>;
 export async function watchExecutorJob(
   options: WatchExecutorJobOptions,
+): Promise<WatchExecutorJobResult>;
+export async function watchExecutorJob<E extends ExecutorLike>(
+  options: WatchExecutorJobOptions | WatchExecutorJobTypedOptions<E>,
 ): Promise<WatchExecutorJobResult> {
+  const executorName = "executorName" in options ? options.executorName : options.executor.name;
   const accessToken = await loadAccessToken({
     useProfile: true,
     profile: options.profile,
@@ -233,11 +292,11 @@ export async function watchExecutorJob(
     // Get executor details to determine target type
     const { executor } = await client.getExecutorExecutor({
       workspaceId,
-      name: options.executorName,
+      name: executorName,
     });
 
     if (!executor) {
-      throw new Error(`Executor '${options.executorName}' not found.`);
+      throw new Error(`Executor '${executorName}' not found.`);
     }
 
     const targetType = executor.targetType;
@@ -248,7 +307,7 @@ export async function watchExecutorJob(
     while (true) {
       const response = await client.getExecutorJob({
         workspaceId,
-        executorName: options.executorName,
+        executorName,
         jobId: options.jobId,
       });
 

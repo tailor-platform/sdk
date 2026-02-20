@@ -61,7 +61,7 @@ export { getOAuth2Client, type GetOAuth2ClientOptions } from "./oauth2client/get
 export { listOAuth2Clients, type ListOAuth2ClientsOptions } from "./oauth2client/list";
 export type { OAuth2ClientInfo, OAuth2ClientCredentials } from "./oauth2client/transform";
 export { listWorkflows, type ListWorkflowsOptions } from "./workflow/list";
-export { getWorkflow, type GetWorkflowOptions } from "./workflow/get";
+export { getWorkflow, type GetWorkflowOptions, type GetWorkflowTypedOptions } from "./workflow/get";
 export {
   startWorkflow,
   type StartWorkflowOptions,
@@ -73,6 +73,7 @@ export {
   listWorkflowExecutions,
   getWorkflowExecution,
   type ListWorkflowExecutionsOptions,
+  type ListWorkflowExecutionsTypedOptions,
   type GetWorkflowExecutionOptions,
   type GetWorkflowExecutionResult,
 } from "./workflow/executions";
@@ -98,13 +99,16 @@ export {
   getExecutorJob,
   watchExecutorJob,
   type ListExecutorJobsOptions,
+  type ListExecutorJobsTypedOptions,
   type GetExecutorJobOptions,
+  type GetExecutorJobTypedOptions,
   type WatchExecutorJobOptions,
+  type WatchExecutorJobTypedOptions,
   type ExecutorJobDetailInfo,
   type WatchExecutorJobResult,
 } from "./executor/jobs";
 export { listExecutors, type ListExecutorsOptions } from "./executor/list";
-export { getExecutor, type GetExecutorOptions } from "./executor/get";
+export { getExecutor, type GetExecutorOptions, type GetExecutorTypedOptions } from "./executor/get";
 export {
   listWebhookExecutors,
   type ListWebhookExecutorsOptions,
