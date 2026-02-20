@@ -90,7 +90,7 @@ export class PluginManager {
   private namespaceGeneratedExecutorKeys: Set<string> = new Set();
 
   /** Generated plugin executor file paths */
-  pluginExecutorFiles: string[] = [];
+  private pluginExecutorFiles: string[] = [];
 
   constructor(plugins: Plugin[] = []) {
     for (const plugin of plugins) {

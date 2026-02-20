@@ -204,6 +204,27 @@ function defineStaticWebsites(
   return staticWebsiteServices;
 }
 
+type DefineServicesResult = {
+  tailordbResult: DefineTailorDBResult;
+  resolverResult: DefineResolverResult;
+  idpResult: DefineIdpResult;
+  authResult: DefineAuthResult;
+  staticWebsiteServices: StaticWebsite[];
+};
+
+function defineServices(config: AppConfig, pluginManager?: PluginManager): DefineServicesResult {
+  const tailordbResult = defineTailorDB(config.db, pluginManager);
+  const resolverResult = defineResolver(config.resolver);
+  const idpResult = defineIdp(config.idp);
+  const authResult = defineAuth(
+    config.auth,
+    tailordbResult.tailorDBServices,
+    tailordbResult.externalTailorDBNamespaces,
+  );
+  const staticWebsiteServices = defineStaticWebsites(config.staticWebsites);
+  return { tailordbResult, resolverResult, idpResult, authResult, staticWebsiteServices };
+}
+
 function buildApplication(params: {
   config: AppConfig;
   tailordbResult: DefineTailorDBResult;
@@ -259,26 +280,15 @@ export interface DefineApplicationParams {
  */
 export function defineApplication(params: DefineApplicationParams): Application {
   const { config, pluginManager } = params;
-  const tailordbResult = defineTailorDB(config.db, pluginManager);
-  const resolverResult = defineResolver(config.resolver);
-  const idpResult = defineIdp(config.idp);
-  const authResult = defineAuth(
-    config.auth,
-    tailordbResult.tailorDBServices,
-    tailordbResult.externalTailorDBNamespaces,
-  );
+  const services = defineServices(config, pluginManager);
+  // Plugin executors are not known at define-time; generate/apply flows handle them after type loading.
   const executorService = defineExecutor(config.executor, false);
-  const staticWebsiteServices = defineStaticWebsites(config.staticWebsites);
 
   return buildApplication({
     config,
-    tailordbResult,
-    resolverResult,
-    idpResult,
-    authResult,
+    ...services,
     executorService,
     workflowConfig: config.workflow,
-    staticWebsiteServices,
     env: config.env ?? {},
   });
 }
@@ -333,15 +343,8 @@ export async function loadApplication(
   const { config, pluginManager } = params;
 
   // 1. Define services (synchronous)
-  const tailordbResult = defineTailorDB(config.db, pluginManager);
-  const resolverResult = defineResolver(config.resolver);
-  const idpResult = defineIdp(config.idp);
-  const authResult = defineAuth(
-    config.auth,
-    tailordbResult.tailorDBServices,
-    tailordbResult.externalTailorDBNamespaces,
-  );
-  const staticWebsiteServices = defineStaticWebsites(config.staticWebsites);
+  const { tailordbResult, resolverResult, idpResult, authResult, staticWebsiteServices } =
+    defineServices(config, pluginManager);
 
   // 2. Load TailorDB types and process namespace plugins
   for (const tailordb of tailordbResult.tailorDBServices) {

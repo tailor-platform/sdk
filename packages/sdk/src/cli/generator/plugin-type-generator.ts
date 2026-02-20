@@ -12,8 +12,6 @@ import { logger, styles } from "@/cli/utils/logger";
 import type { PluginGeneratedType } from "@/parser/plugin-config/types";
 import type { PluginGeneratedTypeInfo, PluginTypeGenerationResult } from "@/plugin/manager";
 
-export type { PluginTypeGenerationResult };
-
 /**
  * Generate TypeScript files for plugin-generated types.
  * These files export the type definition and can be imported by executor files.
