@@ -136,17 +136,17 @@ export class PluginManager {
     }
 
     // Check if plugin supports type-attached processing
-    if (!plugin.onTypeDefined) {
+    if (!plugin.onTypeLoaded) {
       return {
         success: false,
-        error: `Plugin "${plugin.id}" does not support type-attached processing (missing onTypeDefined method). Use onNamespaceDefined via definePlugins() instead.`,
+        error: `Plugin "${plugin.id}" does not support type-attached processing (missing onTypeLoaded method). Use onNamespaceLoaded via definePlugins() instead.`,
       };
     }
 
-    // Execute plugin onTypeDefined with raw TailorDBType
+    // Execute plugin onTypeLoaded with raw TailorDBType
     let output: TypePluginOutput;
     try {
-      output = await plugin.onTypeDefined({
+      output = await plugin.onTypeLoaded({
         type: context.type,
         typeConfig: context.typeConfig,
         pluginConfig: plugin.pluginConfig,
@@ -194,7 +194,7 @@ export class PluginManager {
 
   /**
    * Process namespace plugins that don't require a source type.
-   * This method is called once per namespace for plugins with onNamespaceDefined method.
+   * This method is called once per namespace for plugins with onNamespaceLoaded method.
    * @param namespace - The target namespace for generated types
    * @returns Array of results with plugin outputs and configs
    */
@@ -205,23 +205,23 @@ export class PluginManager {
       [];
 
     for (const [pluginId, plugin] of this.plugins) {
-      // Skip plugins without onNamespaceDefined method
-      if (!plugin.onNamespaceDefined) {
+      // Skip plugins without onNamespaceLoaded method
+      if (!plugin.onNamespaceLoaded) {
         continue;
       }
 
       // Use stored plugin config (from definePlugins)
       const config = plugin.pluginConfig;
 
-      // Execute plugin onNamespaceDefined
+      // Execute plugin onNamespaceLoaded
       const context: PluginNamespaceProcessContext = {
         pluginConfig: config,
         namespace,
       };
 
-      let output: Awaited<ReturnType<NonNullable<Plugin["onNamespaceDefined"]>>>;
+      let output: Awaited<ReturnType<NonNullable<Plugin["onNamespaceLoaded"]>>>;
       try {
-        output = await plugin.onNamespaceDefined(context);
+        output = await plugin.onNamespaceLoaded(context);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         results.push({
@@ -284,12 +284,12 @@ export class PluginManager {
   }
 
   /**
-   * Get plugins that have onNamespaceDefined method
+   * Get plugins that have onNamespaceLoaded method
    * @returns Array of plugin IDs that support namespace processing
    */
   getNamespacePluginIds(): string[] {
     return Array.from(this.plugins.entries())
-      .filter(([, plugin]) => plugin.onNamespaceDefined !== undefined)
+      .filter(([, plugin]) => plugin.onNamespaceLoaded !== undefined)
       .map(([id]) => id);
   }
 

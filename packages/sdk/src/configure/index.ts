@@ -48,11 +48,10 @@ export type {
 
 // Generation-time hook context types for plugin development
 export type {
-  TypeLoadedContext,
-  TailorDBNamespaceLoadedContext,
-  ResolverLoadedContext,
-  ResolverNamespaceLoadedContext,
-  ExecutorLoadedContext,
-  PluginGenerateContext,
+  TailorDBReadyContext,
+  ResolverReadyContext,
+  ExecutorReadyContext,
+  TailorDBNamespaceData,
+  ResolverNamespaceData,
   GeneratorResult,
 } from "@/parser/plugin-config/generation-types";

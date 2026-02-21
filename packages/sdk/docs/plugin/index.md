@@ -112,8 +112,8 @@ e.g. `@example/soft-delete` → `example-soft-delete`), such as:
 
 Plugins support two phases of hooks:
 
-1. **Definition-time hooks** (`onTypeDefined`, `onNamespaceDefined`): Called during type loading to generate additional TailorDB types, resolvers, and executors.
-2. **Generation-time hooks** (`onTypeLoaded`, `onResolverLoaded`, `onExecutorLoaded`, `generate`, etc.): Called after all artifacts are loaded to produce output files (TypeScript code, etc.). These hooks replace the previous standalone `defineGenerators()` approach.
+1. **Definition-time hooks** (`onTypeLoaded`, `onNamespaceLoaded`): Called during type loading to generate additional TailorDB types, resolvers, and executors.
+2. **Generation-time hooks** (`onTailorDBReady`, `onResolverReady`, `onExecutorReady`): Called after all artifacts are loaded and finalized to produce output files (TypeScript code, etc.). These hooks replace the previous standalone `defineGenerators()` approach.
 
 A plugin can implement hooks from either or both phases.
 

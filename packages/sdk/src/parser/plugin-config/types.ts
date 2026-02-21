@@ -1,10 +1,7 @@
 import type {
-  TypeLoadedContext,
-  TailorDBNamespaceLoadedContext,
-  ResolverLoadedContext,
-  ResolverNamespaceLoadedContext,
-  ExecutorLoadedContext,
-  PluginGenerateContext,
+  TailorDBReadyContext,
+  ResolverReadyContext,
+  ExecutorReadyContext,
   GeneratorResult,
 } from "./generation-types";
 import type { TailorAnyDBField, TailorAnyDBType } from "@/configure/services/tailordb";
@@ -61,7 +58,7 @@ export interface PluginProcessContext<TypeConfig = unknown, PluginConfig = unkno
 }
 
 /**
- * Context passed to plugin's onNamespaceDefined hook.
+ * Context passed to plugin's onNamespaceLoaded hook.
  * Used for plugins that operate on a namespace without requiring a source type.
  */
 export interface PluginNamespaceProcessContext<PluginConfig = unknown> {
@@ -329,7 +326,7 @@ export interface PluginExtends {
 
 /**
  * Base output returned by a plugin's definition-time hooks.
- * Used by both onTypeDefined and onNamespaceDefined.
+ * Used by both onTypeLoaded and onNamespaceLoaded.
  */
 export interface PluginOutput {
   /**
@@ -345,7 +342,7 @@ export interface PluginOutput {
 }
 
 /**
- * Output returned by a plugin's onTypeDefined hook.
+ * Output returned by a plugin's onTypeLoaded hook.
  * Extends PluginOutput with the ability to add fields to the source type.
  */
 export interface TypePluginOutput extends PluginOutput {
@@ -354,7 +351,7 @@ export interface TypePluginOutput extends PluginOutput {
 }
 
 /**
- * Output returned by a plugin's onNamespaceDefined hook.
+ * Output returned by a plugin's onNamespaceLoaded hook.
  * Alias for PluginOutput (namespace plugins cannot extend a source type).
  */
 export type NamespacePluginOutput = PluginOutput;
@@ -362,8 +359,8 @@ export type NamespacePluginOutput = PluginOutput;
 /**
  * Plugin interface that all plugins must implement.
  * Plugins can hook into two lifecycle phases:
- * - **Definition-time hooks** (`onTypeDefined`, `onNamespaceDefined`): Generate TailorDB types, resolvers, and executors
- * - **Generation-time hooks** (`onTypeLoaded`, `onResolverLoaded`, etc.): Process loaded artifacts and produce output files
+ * - **Definition-time hooks** (`onTypeLoaded`, `onNamespaceLoaded`): Generate TailorDB types, resolvers, and executors
+ * - **Generation-time hooks** (`onTailorDBReady`, `onResolverReady`, `onExecutorReady`): Process finalized artifacts and produce output files
  * @template TypeConfig - Type for per-type configuration passed via .plugin() method
  * @template PluginConfig - Type for plugin-level configuration passed via definePlugins()
  */
@@ -376,7 +373,7 @@ export interface Plugin<TypeConfig = unknown, PluginConfig = unknown> {
    * Import path for this plugin's public API.
    * Used by code generators to create correct import statements
    * (e.g., plugin executors and seed schema generation).
-   * Required when plugin has definition-time hooks (onTypeDefined/onNamespaceDefined).
+   * Required when plugin has definition-time hooks (onTypeLoaded/onNamespaceLoaded).
    * Optional for generation-only plugins.
    */
   readonly importPath?: string;
@@ -405,7 +402,7 @@ export interface Plugin<TypeConfig = unknown, PluginConfig = unknown> {
    * @param context - Context containing the type, config, pluginConfig, and namespace
    * @returns Plugin output with generated types, resolvers, and executors
    */
-  onTypeDefined?(
+  onTypeLoaded?(
     context: PluginProcessContext<TypeConfig, PluginConfig>,
   ): TypePluginOutput | Promise<TypePluginOutput>;
 
@@ -416,66 +413,41 @@ export interface Plugin<TypeConfig = unknown, PluginConfig = unknown> {
    * @param context - Context containing the plugin config and namespace
    * @returns Plugin output with generated types, resolvers, and executors
    */
-  onNamespaceDefined?(
+  onNamespaceLoaded?(
     context: PluginNamespaceProcessContext<PluginConfig>,
   ): NamespacePluginOutput | Promise<NamespacePluginOutput>;
 
   // =========================================================================
-  // Generation-time hooks (process loaded artifacts, produce output files)
+  // Generation-time hooks (process finalized artifacts, produce output files)
   // =========================================================================
 
   /**
-   * Process a single loaded TailorDB type.
-   * Called for each TailorDB type after all types are loaded and parsed.
-   * @param context - Context containing the parsed type, namespace, source info, and plugins
-   * @returns Metadata to be aggregated per namespace
-   */
-  onTypeLoaded?(context: TypeLoadedContext<PluginConfig>): unknown | Promise<unknown>;
-
-  /**
-   * Aggregate type processing results per namespace.
-   * Called once per namespace after all types are processed by onTypeLoaded.
-   * @param context - Context containing the namespace and accumulated type results
-   * @returns Aggregated namespace result
-   */
-  onTailorDBNamespaceLoaded?(
-    context: TailorDBNamespaceLoadedContext<PluginConfig>,
-  ): unknown | Promise<unknown>;
-
-  /**
-   * Process a single loaded resolver.
-   * Called for each resolver after all resolvers are loaded.
-   * @param context - Context containing the resolver and namespace
-   * @returns Metadata to be aggregated per namespace
-   */
-  onResolverLoaded?(context: ResolverLoadedContext<PluginConfig>): unknown | Promise<unknown>;
-
-  /**
-   * Aggregate resolver processing results per namespace.
-   * Called once per namespace after all resolvers are processed by onResolverLoaded.
-   * @param context - Context containing the namespace and accumulated resolver results
-   * @returns Aggregated namespace result
-   */
-  onResolverNamespaceLoaded?(
-    context: ResolverNamespaceLoadedContext<PluginConfig>,
-  ): unknown | Promise<unknown>;
-
-  /**
-   * Process a single loaded executor.
-   * Called for each executor after all executors are loaded.
-   * @param context - Context containing the executor
-   * @returns Metadata for executor processing
-   */
-  onExecutorLoaded?(context: ExecutorLoadedContext<PluginConfig>): unknown | Promise<unknown>;
-
-  /**
-   * Final generation hook that produces output files.
-   * Called after all generation-time hooks complete.
-   * If not provided, the plugin produces no generated files.
-   * @param context - Context containing all accumulated results, auth info, and output paths
+   * Called after all TailorDB types are loaded and finalized.
+   * Receives all TailorDB namespaces and their types.
+   * @param context - Context containing all TailorDB data, auth, and output paths
    * @returns Generated files and optional errors
    */
-  generate?(
-    context: PluginGenerateContext<PluginConfig>,
+  onTailorDBReady?(
+    context: TailorDBReadyContext<PluginConfig>,
+  ): GeneratorResult | Promise<GeneratorResult>;
+
+  /**
+   * Called after all resolvers are loaded and finalized.
+   * Receives all TailorDB data plus resolver data.
+   * @param context - Context containing TailorDB data, resolvers, auth, and output paths
+   * @returns Generated files and optional errors
+   */
+  onResolverReady?(
+    context: ResolverReadyContext<PluginConfig>,
+  ): GeneratorResult | Promise<GeneratorResult>;
+
+  /**
+   * Called after all executors are loaded and finalized.
+   * Receives all TailorDB data, resolver data, plus executor data.
+   * @param context - Context containing all service data, auth, and output paths
+   * @returns Generated files and optional errors
+   */
+  onExecutorReady?(
+    context: ExecutorReadyContext<PluginConfig>,
   ): GeneratorResult | Promise<GeneratorResult>;
 }
