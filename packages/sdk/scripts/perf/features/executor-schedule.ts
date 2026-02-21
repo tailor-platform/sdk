@@ -5,6 +5,7 @@
  */
 import { createExecutor, scheduleTrigger } from "../../../src/configure";
 
+// Explicit `: string` prevents literal type inference, exercising the permissive (non-literal) code path
 const query: string = `mutation { log(message: "executed") }`;
 
 export const executor0 = createExecutor({

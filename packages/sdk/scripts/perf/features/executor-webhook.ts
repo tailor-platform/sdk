@@ -5,6 +5,7 @@
  */
 import { createExecutor, incomingWebhookTrigger } from "../../../src/configure";
 
+// Explicit `: string` prevents literal type inference, exercising the permissive (non-literal) code path
 const query: string = `mutation { process(data: $data) }`;
 
 export const executor0 = createExecutor({

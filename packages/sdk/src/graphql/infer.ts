@@ -323,6 +323,9 @@ type _ExtractVarNames<S extends string> =
  * Merge parsed variable names with schema-based types.
  * Uses variable names from query parsing and types from GeneratedGqlSchema.
  * Keys present in the query but absent in the schema resolve to `never` (type error).
+ *
+ * When declared names are a proper subset of schema keys, returns the full schema
+ * so that missing required variables still produce type errors at the call site.
  */
 type _MergeVarNamesWithSchema<Names extends string, Schema> = Schema extends {
   readonly __error: string;

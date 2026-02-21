@@ -14,6 +14,7 @@ const dummyResolver = createResolver({
   output: t.object({ id: t.string(), name: t.string() }),
 });
 
+// Explicit `: string` prevents literal type inference, exercising the permissive (non-literal) code path
 const query: string = `mutation { log(message: "executed") }`;
 
 export const executor0 = createExecutor({
