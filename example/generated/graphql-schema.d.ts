@@ -246,4 +246,30 @@ declare module "@tailor-platform/sdk/graphql" {
       result: { deleteEvent: { id: string } };
     };
   }
+  interface GeneratedGqlTypeNames {
+    CustomerCreateInput: true;
+    CustomerUpdateInput: true;
+    EventCreateInput: true;
+    EventUpdateInput: true;
+    InvoiceCreateInput: true;
+    InvoiceUpdateInput: true;
+    NestedProfileCreateInput: true;
+    NestedProfileUpdateInput: true;
+    PurchaseOrderCreateInput: true;
+    PurchaseOrderUpdateInput: true;
+    SalesOrderCreateInput: true;
+    SalesOrderCreatedCreateInput: true;
+    SalesOrderCreatedUpdateInput: true;
+    SalesOrderUpdateInput: true;
+    SelfieCreateInput: true;
+    SelfieUpdateInput: true;
+    SupplierCreateInput: true;
+    SupplierUpdateInput: true;
+    UserCreateInput: true;
+    UserLogCreateInput: true;
+    UserLogUpdateInput: true;
+    UserSettingCreateInput: true;
+    UserSettingUpdateInput: true;
+    UserUpdateInput: true;
+  }
 }

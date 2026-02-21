@@ -11,6 +11,7 @@ export type {
   GqlVariables,
   GqlResult,
   GeneratedGqlSchema,
+  GeneratedGqlTypeNames,
   InferCreateInput,
   InferUpdateInput,
   InferGqlResult,

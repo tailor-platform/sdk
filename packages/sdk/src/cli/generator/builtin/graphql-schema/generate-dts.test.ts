@@ -44,6 +44,8 @@ describe("generateGqlSchemaDts", () => {
     expect(result).toContain("      variables: { id: string };");
     expect(result).toContain("    users: {");
     expect(result).toContain("    createUser: {");
+    expect(result).toContain("  interface GeneratedGqlTypeNames {");
+    expect(result).toContain("    UserCreateInput: true;");
     expect(result).toContain("  }");
     expect(result).toContain("}");
   });
@@ -86,5 +88,53 @@ describe("generateGqlSchemaDts", () => {
     const result = generateGqlSchemaDts(types);
     expect(result).toContain("    createUser: {");
     expect(result).toContain("    createPost: {");
+  });
+
+  it("generates GeneratedGqlTypeNames with create and update input types", () => {
+    const types: GqlSchemaTypeMetadata[] = [
+      {
+        name: "User",
+        entries: [
+          {
+            operationName: "createUser",
+            variablesExpr: "{ input: InferCreateInput<TypeRef> }",
+            resultExpr: "{ createUser: InferGqlResult<TypeRef> }",
+          },
+          {
+            operationName: "updateUser",
+            variablesExpr: "{ id: string; input: InferUpdateInput<TypeRef> }",
+            resultExpr: "{ updateUser: InferGqlResult<TypeRef> }",
+          },
+        ],
+      },
+    ];
+
+    const result = generateGqlSchemaDts(types);
+    expect(result).toContain("  interface GeneratedGqlTypeNames {");
+    expect(result).toContain("    UserCreateInput: true;");
+    expect(result).toContain("    UserUpdateInput: true;");
+  });
+
+  it("does not generate GeneratedGqlTypeNames when only read/delete entries", () => {
+    const types: GqlSchemaTypeMetadata[] = [
+      {
+        name: "User",
+        entries: [
+          {
+            operationName: "user",
+            variablesExpr: "{ id: string }",
+            resultExpr: "{ user: InferGqlResult<TypeRef> | null }",
+          },
+          {
+            operationName: "deleteUser",
+            variablesExpr: "{ id: string }",
+            resultExpr: "{ deleteUser: { id: string } }",
+          },
+        ],
+      },
+    ];
+
+    const result = generateGqlSchemaDts(types);
+    expect(result).not.toContain("GeneratedGqlTypeNames");
   });
 });

@@ -10,6 +10,8 @@ import type {
   StrictKeys,
   ResolvedGqlVariables,
   ValidateGqlQuery,
+  _StripGqlModifiers,
+  _ParsedVarTypeNames,
 } from "./infer";
 
 // === ExtractRootField ===
@@ -350,6 +352,10 @@ declare module "./infer" {
       result: { testProducts: { collection: InferGqlResult<typeof testProduct>[] } };
     };
   }
+  interface GeneratedGqlTypeNames {
+    TestProductCreateInput: true;
+    TestProductUpdateInput: true;
+  }
 }
 
 describe("GqlVariables with augmented GeneratedGqlSchema", () => {
@@ -603,5 +609,78 @@ describe("ValidateGqlQuery", () => {
     `;
     type V = ValidateGqlQuery<Q>;
     expectTypeOf<V>().toEqualTypeOf<Q>();
+  });
+
+  it("returns error for unknown variable type name", () => {
+    type V =
+      ValidateGqlQuery<"mutation($input: FakeInput!) { createTestProduct(input: $input) { id } }">;
+    expectTypeOf<V>().toEqualTypeOf<'Error: Unknown GraphQL type "FakeInput" in variable declaration. Run type generation to register it in GeneratedGqlTypeNames.'>();
+  });
+
+  it("passes for registered variable type name", () => {
+    type Q =
+      "mutation($input: TestProductCreateInput!) { createTestProduct(input: $input) { id } }";
+    type V = ValidateGqlQuery<Q>;
+    expectTypeOf<V>().toEqualTypeOf<Q>();
+  });
+
+  it("passes for built-in scalar type in variable declaration", () => {
+    type Q = "query($id: ID!) { testProducts { collection { id } } }";
+    type V = ValidateGqlQuery<Q>;
+    expectTypeOf<V>().toEqualTypeOf<Q>();
+  });
+
+  it("returns error for unknown type among multiple variable declarations", () => {
+    type V =
+      ValidateGqlQuery<"mutation($id: ID!, $input: NonExistentInput!) { updateTestProduct(id: $id, input: $input) { id } }">;
+    expectTypeOf<V>().toEqualTypeOf<'Error: Unknown GraphQL type "NonExistentInput" in variable declaration. Run type generation to register it in GeneratedGqlTypeNames.'>();
+  });
+
+  it("passes for mixed built-in and registered types", () => {
+    type Q =
+      "mutation($id: ID!, $input: TestProductUpdateInput!) { updateTestProduct(id: $id, input: $input) { id } }";
+    type V = ValidateGqlQuery<Q>;
+    expectTypeOf<V>().toEqualTypeOf<Q>();
+  });
+});
+
+// === _StripGqlModifiers ===
+
+describe("_StripGqlModifiers", () => {
+  it("strips trailing !", () => {
+    expectTypeOf<_StripGqlModifiers<"UserCreateInput!">>().toEqualTypeOf<"UserCreateInput">();
+  });
+
+  it("strips surrounding brackets", () => {
+    expectTypeOf<_StripGqlModifiers<"[UserCreateInput]">>().toEqualTypeOf<"UserCreateInput">();
+  });
+
+  it("strips combined [!]!", () => {
+    expectTypeOf<_StripGqlModifiers<"[UserCreateInput!]!">>().toEqualTypeOf<"UserCreateInput">();
+  });
+
+  it("returns bare type name unchanged", () => {
+    expectTypeOf<_StripGqlModifiers<"ID">>().toEqualTypeOf<"ID">();
+  });
+});
+
+// === _ParsedVarTypeNames ===
+
+describe("_ParsedVarTypeNames", () => {
+  it("extracts single type name from variable declaration", () => {
+    type R =
+      _ParsedVarTypeNames<"mutation($input: UserCreateInput!) { createTestProduct(input: $input) { id } }">;
+    expectTypeOf<R>().toEqualTypeOf<"UserCreateInput">();
+  });
+
+  it("extracts multiple type names as a union", () => {
+    type R =
+      _ParsedVarTypeNames<"mutation($id: ID!, $input: TestProductCreateInput!) { updateTestProduct(id: $id, input: $input) { id } }">;
+    expectTypeOf<R>().toEqualTypeOf<"ID" | "TestProductCreateInput">();
+  });
+
+  it("resolves to never when no variable block", () => {
+    type R = _ParsedVarTypeNames<"mutation { createTestProduct(input: $input) { id } }">;
+    expectTypeOf<R>().toEqualTypeOf<never>();
   });
 });

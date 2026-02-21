@@ -258,11 +258,11 @@ export type InferGqlResult<T extends TailorAnyDBType> = {
 
 /**
  * Module augmentation interface for GraphQL schema types.
- * Augmented by `tailor-env.d.ts` via `declare module` to provide
+ * Augmented by `graphql-schema.d.ts` via `declare module` to provide
  * type-safe GraphQL operations.
  * @example
  * ```ts
- * // In tailor-env.d.ts (auto-generated):
+ * // In graphql-schema.d.ts (auto-generated):
  * declare module "@tailor-platform/sdk/graphql" {
  *   interface GeneratedGqlSchema {
  *     createUser: {
@@ -276,13 +276,28 @@ export type InferGqlResult<T extends TailorAnyDBType> = {
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- Interface required for declaration merging via `declare module`
 export interface GeneratedGqlSchema {}
 
+/**
+ * Module augmentation interface for known GraphQL type names.
+ * Augmented by `graphql-schema.d.ts` via `declare module` to register
+ * input type names (e.g., `UserCreateInput`, `UserUpdateInput`) used
+ * in variable declarations like `$input: UserCreateInput!`.
+ */
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- Interface required for declaration merging via `declare module`
+export interface GeneratedGqlTypeNames {}
+
 // === Schema lookup helpers ===
 
 /**
  * Check if GeneratedGqlSchema has been augmented with at least one operation.
- * When empty (no tailor-env.d.ts), fall back to permissive mode.
+ * When empty (no graphql-schema.d.ts), fall back to permissive mode.
  */
 type IsSchemaPopulated = keyof GeneratedGqlSchema extends never ? false : true;
+
+/**
+ * Check if GeneratedGqlTypeNames has been augmented with at least one type.
+ * When empty, variable type name validation is skipped (permissive).
+ */
+type _IsTypeNamesPopulated = keyof GeneratedGqlTypeNames extends never ? false : true;
 
 /** Error type for unregistered GraphQL operations. Shows a descriptive message in IDE. */
 type UnknownGqlOperation<OpName extends string> = {
@@ -292,7 +307,7 @@ type UnknownGqlOperation<OpName extends string> = {
 /**
  * Look up the variables type for a GraphQL operation by name.
  * - Non-literal `string`: permissive fallback (`Record<string, unknown>`)
- * - Empty schema (no tailor-env.d.ts): permissive fallback
+ * - Empty schema (no graphql-schema.d.ts): permissive fallback
  * - Literal + registered: strict type from schema
  * - Literal + NOT registered: `UnknownGqlOperation` error type
  */
@@ -309,7 +324,7 @@ export type GqlVariables<OpName extends string> = string extends OpName
 /**
  * Look up the result type for a GraphQL operation by name.
  * - Non-literal `string`: `unknown` fallback
- * - Empty schema (no tailor-env.d.ts): `unknown` fallback
+ * - Empty schema (no graphql-schema.d.ts): `unknown` fallback
  * - Literal + registered: strict type from schema
  * - Literal + NOT registered: `UnknownGqlOperation` error type
  */
@@ -370,6 +385,80 @@ type _ExtractVarNames<S extends string> =
 type _ParsedVarNames<Q extends string> = [_ExtractVarBlock<Q>] extends [never]
   ? never
   : _ExtractVarNames<_ExtractVarBlock<Q>>;
+
+// === Variable type name parser ===
+
+/** Built-in GraphQL scalar types (always valid, never need registration) */
+type _BuiltInGqlScalar = "ID" | "String" | "Int" | "Float" | "Boolean";
+
+/**
+ * Strip GraphQL type modifiers: `!` (non-null), `[`/`]` (list), trailing `,`.
+ * Recursively removes wrapping until the bare type name remains.
+ * @example
+ * ```ts
+ * type T1 = _StripGqlModifiers<"UserCreateInput!">; // "UserCreateInput"
+ * type T2 = _StripGqlModifiers<"[UserCreateInput!]!">; // "UserCreateInput"
+ * type T3 = _StripGqlModifiers<"ID">; // "ID"
+ * ```
+ */
+export type _StripGqlModifiers<S extends string> = S extends `${infer R}!`
+  ? _StripGqlModifiers<R>
+  : S extends `[${infer R}]`
+    ? _StripGqlModifiers<R>
+    : S extends `${infer R},`
+      ? _StripGqlModifiers<Trim<R>>
+      : S;
+
+/**
+ * Extract type names from a variable declaration block as a union type.
+ * Parses the part after `:` in each `$name: Type` declaration.
+ * @example
+ * ```ts
+ * type T = _ExtractVarTypeNames<"$input: UserCreateInput!, $id: ID!">; // "UserCreateInput" | "ID"
+ * ```
+ */
+type _ExtractVarTypeNames<S extends string> =
+  Trim<S> extends `$${infer Rest}`
+    ? Rest extends `${string}:${infer AfterColon}`
+      ? _SplitAtNextVar<Trim<AfterColon>> extends [
+          infer TypePart extends string,
+          infer Remaining extends string,
+        ]
+        ? Remaining extends ""
+          ? _StripGqlModifiers<Trim<TypePart>>
+          : _StripGqlModifiers<Trim<TypePart>> | _ExtractVarTypeNames<Remaining>
+        : never
+      : never
+    : never;
+
+/**
+ * End-to-end extraction: parse variable type names from a query string.
+ * Resolves to `never` when no variable block or no valid type names are found.
+ */
+export type _ParsedVarTypeNames<Q extends string> = [_ExtractVarBlock<Q>] extends [never]
+  ? never
+  : _ExtractVarTypeNames<_ExtractVarBlock<Q>>;
+
+/** Type names that are neither built-in scalars nor registered in GeneratedGqlTypeNames */
+type _UnknownVarTypeNames<Q extends string> = Exclude<
+  _ParsedVarTypeNames<Q>,
+  _BuiltInGqlScalar | keyof GeneratedGqlTypeNames
+>;
+
+/**
+ * Check if all variable type names in the query are known.
+ * - Empty GeneratedGqlTypeNames → permissive (skip validation)
+ * - No variable declarations → pass
+ * - All type names are built-in scalars or registered → pass
+ * - Otherwise → fail
+ */
+type _HasValidVarTypes<Q extends string> = _IsTypeNamesPopulated extends false
+  ? true
+  : [_ParsedVarTypeNames<Q>] extends [never]
+    ? true
+    : [_UnknownVarTypeNames<Q>] extends [never]
+      ? true
+      : false;
 
 // === Unified variable resolution ===
 
@@ -513,6 +602,7 @@ type _InvalidFieldArgs<Q extends string> = Exclude<
  * 6. Balance: `(`/`)` counts must match
  * 7. Schema: root field must exist in GeneratedGqlSchema
  * 8. Field args: argument names must match schema variable keys
+ * 9. Variable types: type names in variable declarations must be built-in scalars or registered in GeneratedGqlTypeNames
  */
 export type ValidateGqlQuery<Q extends string> = string extends Q
   ? Q // non-literal: permissive
@@ -530,7 +620,9 @@ export type ValidateGqlQuery<Q extends string> = string extends Q
               ? `Error: Unknown GraphQL operation: "${ExtractRootField<Q>}". Run type generation to register it in GeneratedGqlSchema.`
               : _HasValidFieldArgs<Q> extends false
                 ? `Error: Unknown field argument "${_InvalidFieldArgs<Q>}" for operation "${ExtractRootField<Q>}".`
-                : Q; // all checks passed
+                : _HasValidVarTypes<Q> extends false
+                  ? `Error: Unknown GraphQL type "${_UnknownVarTypeNames<Q>}" in variable declaration. Run type generation to register it in GeneratedGqlTypeNames.`
+                  : Q; // all checks passed
 
 // === Strict object checking ===
 

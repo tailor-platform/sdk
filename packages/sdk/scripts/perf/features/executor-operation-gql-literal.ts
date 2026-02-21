@@ -30,6 +30,9 @@ declare module "../../../src/graphql/infer" {
       result: { createPerfDummy: InferGqlResult<typeof dummyType> };
     };
   }
+  interface GeneratedGqlTypeNames {
+    PerfDummyCreateInput: true;
+  }
 }
 
 // Literal queries — exercises template literal type parsing

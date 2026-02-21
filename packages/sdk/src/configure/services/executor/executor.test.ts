@@ -1167,6 +1167,9 @@ declare module "@/graphql/infer" {
       };
     };
   }
+  interface GeneratedGqlTypeNames {
+    TestOrderCreateInput: true;
+  }
 }
 
 describe("gqlTarget type inference with augmented GeneratedGqlSchema", () => {

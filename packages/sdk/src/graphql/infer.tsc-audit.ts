@@ -32,6 +32,8 @@ import type {
   StrictKeys,
   ResolvedGqlVariables,
   ValidateGqlQuery,
+  _StripGqlModifiers,
+  _ParsedVarTypeNames,
 } from "@/graphql/infer";
 
 // === Assertion utilities ===
@@ -337,6 +339,10 @@ declare module "@/graphql/infer" {
       };
     };
   }
+  interface GeneratedGqlTypeNames {
+    TestProductCreateInput: true;
+    TestProductUpdateInput: true;
+  }
 }
 
 // === GqlVariables fallback ===
@@ -635,6 +641,77 @@ type VGQ_21_Q = `
 type VGQ_21 = ValidateGqlQuery<VGQ_21_Q>;
 type _vgq21 = Assert<IsEqual<VGQ_21, VGQ_21_Q>>;
 
+// unknown variable type name returns error
+type VGQ_22 =
+  ValidateGqlQuery<"mutation($input: FakeInput!) { createTestProduct(input: $input) { id } }">;
+type _vgq22 = Assert<
+  IsEqual<
+    VGQ_22,
+    'Error: Unknown GraphQL type "FakeInput" in variable declaration. Run type generation to register it in GeneratedGqlTypeNames.'
+  >
+>;
+
+// registered variable type name passes
+type VGQ_23_Q =
+  "mutation($input: TestProductCreateInput!) { createTestProduct(input: $input) { id } }";
+type VGQ_23 = ValidateGqlQuery<VGQ_23_Q>;
+type _vgq23 = Assert<IsEqual<VGQ_23, VGQ_23_Q>>;
+
+// built-in scalar type in variable declaration passes
+type VGQ_24_Q = "query($id: ID!) { testProducts { collection { id } } }";
+type VGQ_24 = ValidateGqlQuery<VGQ_24_Q>;
+type _vgq24 = Assert<IsEqual<VGQ_24, VGQ_24_Q>>;
+
+// unknown type among multiple variable declarations
+type VGQ_25 =
+  ValidateGqlQuery<"mutation($id: ID!, $input: NonExistentInput!) { updateTestProduct(id: $id, input: $input) { id } }">;
+type _vgq25 = Assert<
+  IsEqual<
+    VGQ_25,
+    'Error: Unknown GraphQL type "NonExistentInput" in variable declaration. Run type generation to register it in GeneratedGqlTypeNames.'
+  >
+>;
+
+// mixed built-in and registered types pass
+type VGQ_26_Q =
+  "mutation($id: ID!, $input: TestProductUpdateInput!) { updateTestProduct(id: $id, input: $input) { id } }";
+type VGQ_26 = ValidateGqlQuery<VGQ_26_Q>;
+type _vgq26 = Assert<IsEqual<VGQ_26, VGQ_26_Q>>;
+
+// === _StripGqlModifiers ===
+
+// strips trailing !
+type SGM_1 = _StripGqlModifiers<"UserCreateInput!">;
+type _sgm1 = Assert<IsEqual<SGM_1, "UserCreateInput">>;
+
+// strips surrounding brackets
+type SGM_2 = _StripGqlModifiers<"[UserCreateInput]">;
+type _sgm2 = Assert<IsEqual<SGM_2, "UserCreateInput">>;
+
+// strips combined [!]!
+type SGM_3 = _StripGqlModifiers<"[UserCreateInput!]!">;
+type _sgm3 = Assert<IsEqual<SGM_3, "UserCreateInput">>;
+
+// returns bare type name unchanged
+type SGM_4 = _StripGqlModifiers<"ID">;
+type _sgm4 = Assert<IsEqual<SGM_4, "ID">>;
+
+// === _ParsedVarTypeNames ===
+
+// extracts single type name from variable declaration
+type PVT_1 =
+  _ParsedVarTypeNames<"mutation($input: UserCreateInput!) { createTestProduct(input: $input) { id } }">;
+type _pvt1 = Assert<IsEqual<PVT_1, "UserCreateInput">>;
+
+// extracts multiple type names as a union
+type PVT_2 =
+  _ParsedVarTypeNames<"mutation($id: ID!, $input: TestProductCreateInput!) { updateTestProduct(id: $id, input: $input) { id } }">;
+type _pvt2 = Assert<IsEqual<PVT_2, "ID" | "TestProductCreateInput">>;
+
+// resolves to never when no variable block
+type PVT_3 = _ParsedVarTypeNames<"mutation { createTestProduct(input: $input) { id } }">;
+type _pvt3 = Assert<IsEqual<PVT_3, never>>;
+
 // Negative: different ValidateGqlQuery error messages must be distinguishable
 // @ts-expect-error -- "no selection set" error !== "invalid keyword" error
 type _vgq_neg_errors = Assert<IsEqual<VGQ_4, VGQ_5>>;
@@ -646,3 +723,5 @@ type _vgq_neg_valid_vs_error = Assert<IsEqual<VGQ_1, VGQ_4>>;
 type _vgq_neg_brace_vs_paren = Assert<IsEqual<VGQ_11, VGQ_13>>;
 // @ts-expect-error -- field arg error !== unregistered op error
 type _vgq_neg_fieldarg_vs_op = Assert<IsEqual<VGQ_16, VGQ_6>>;
+// @ts-expect-error -- var type error !== field arg error
+type _vgq_neg_vartype_vs_fieldarg = Assert<IsEqual<VGQ_22, VGQ_16>>;
