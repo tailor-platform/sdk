@@ -30,6 +30,7 @@ FEATURES=(
   "executor-resolver"
   "executor-operation-function"
   "executor-operation-gql"
+  "executor-operation-gql-literal"
   "executor-operation-webhook"
   "executor-operation-workflow"
 )
