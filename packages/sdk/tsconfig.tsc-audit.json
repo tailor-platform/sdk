@@ -1,0 +1,6 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "incremental": false },
+  "include": ["./src/graphql/infer.tsc-audit.ts", "./src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "e2e", "src/**/*.test.ts", "src/**/__test*__/**", "scripts"]
+}

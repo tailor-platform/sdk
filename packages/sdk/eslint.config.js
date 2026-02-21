@@ -7,7 +7,13 @@ import jsdocPlugin from "eslint-plugin-jsdoc";
 import oxlint from "eslint-plugin-oxlint";
 
 export default defineConfig([
-  globalIgnores(["dist/", "e2e/fixtures/", "user-defined.d.ts", "plugin-defined.d.ts"]),
+  globalIgnores([
+    "dist/",
+    "e2e/fixtures/",
+    "user-defined.d.ts",
+    "plugin-defined.d.ts",
+    "src/graphql/infer.tsc-audit.ts",
+  ]),
   eslint.configs.recommended,
   tseslint.configs.recommended,
   importPlugin.flatConfigs.recommended,
