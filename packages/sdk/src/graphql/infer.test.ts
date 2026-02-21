@@ -9,6 +9,7 @@ import type {
   GqlResult,
   StrictKeys,
   ResolvedGqlVariables,
+  ValidateGqlQuery,
 } from "./infer";
 
 // === ExtractRootField ===
@@ -466,5 +467,59 @@ describe("ResolvedGqlVariables with variable declarations", () => {
     type V =
       ResolvedGqlVariables<"mutation createTestProduct($input2: TestProductCreateInput!) { createTestProduct(input: $input2) { id } }">;
     expectTypeOf<V>().toEqualTypeOf<{ input2: never }>();
+  });
+});
+
+// === ValidateGqlQuery ===
+
+describe("ValidateGqlQuery", () => {
+  it("returns the query type for a valid registered mutation", () => {
+    type Q = "mutation { createTestProduct(input: $input) { id } }";
+    type V = ValidateGqlQuery<Q>;
+    expectTypeOf<V>().toEqualTypeOf<Q>();
+  });
+
+  it("returns the query type for a valid registered query", () => {
+    type Q = "query { testProducts { collection { id } } }";
+    type V = ValidateGqlQuery<Q>;
+    expectTypeOf<V>().toEqualTypeOf<Q>();
+  });
+
+  it("returns the query type for shorthand syntax", () => {
+    type Q = "{ testProducts { collection { id } } }";
+    type V = ValidateGqlQuery<Q>;
+    expectTypeOf<V>().toEqualTypeOf<Q>();
+  });
+
+  it("returns error for query without selection set", () => {
+    type V = ValidateGqlQuery<"hello world">;
+    expectTypeOf<V>().toEqualTypeOf<'Error: Invalid GraphQL query. Must contain a selection set "{ ... }".'>();
+  });
+
+  it("returns error for query with invalid keyword", () => {
+    type V = ValidateGqlQuery<"select { foo { id } }">;
+    expectTypeOf<V>().toEqualTypeOf<'Error: Invalid GraphQL query. Must start with "query", "mutation", "subscription", or "{".'>();
+  });
+
+  it("returns error for unregistered operation", () => {
+    type V = ValidateGqlQuery<"mutation { unknownOp(input: $input) { id } }">;
+    expectTypeOf<V>().toEqualTypeOf<'Error: Unknown GraphQL operation "unknownOp". Run type generation to register it in GeneratedGqlSchema.'>();
+  });
+
+  it("is permissive for non-literal string type", () => {
+    type V = ValidateGqlQuery<string>;
+    expectTypeOf<V>().toEqualTypeOf<string>();
+  });
+
+  it("returns the query type for multiline registered mutation", () => {
+    type Q = `
+      mutation createTestProduct($input: TestProductCreateInput!) {
+        createTestProduct(input: $input) {
+          id
+        }
+      }
+    `;
+    type V = ValidateGqlQuery<Q>;
+    expectTypeOf<V>().toEqualTypeOf<Q>();
   });
 });

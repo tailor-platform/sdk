@@ -16,4 +16,5 @@ export type {
   InferGqlResult,
   ResolvedGqlVariables,
   StrictKeys,
+  ValidateGqlQuery,
 } from "./infer";

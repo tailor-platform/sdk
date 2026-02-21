@@ -803,11 +803,7 @@ describe("gqlTarget", () => {
       operation: {
         kind: "graphql",
         appName: "test-app",
-        query: `
-          query TestQuery {
-            testField
-          }
-        `,
+        query: `mutation { createTestOrder(input: $input) { id } }`,
       },
     });
   });
@@ -1083,15 +1079,16 @@ describe("workflowTarget", () => {
 });
 
 describe("gqlTarget type inference", () => {
-  test("rejects variables for unregistered operations when schema is populated", () => {
+  test("rejects unregistered operations when schema is populated", () => {
     createExecutor({
       name: "test",
       trigger: incomingWebhookTrigger(),
       operation: {
         kind: "graphql",
         appName: "test-app",
-        query: `mutation { createUnknown(input: $input) { id } }`,
         // @ts-expect-error - createUnknown is not registered in GeneratedGqlSchema
+        query: `mutation { createUnknown(input: $input) { id } }`,
+        // @ts-expect-error - variables type is unresolvable for unregistered operations
         variables: () => {
           return { input: { name: "test" } };
         },
@@ -1361,8 +1358,9 @@ describe("gqlTarget type inference with augmented GeneratedGqlSchema", () => {
       trigger: scheduleTrigger({ cron: "0 * * * *" }),
       operation: {
         kind: "graphql",
-        query: `mutation { createNonExistent(input: $input) { id } }`,
         // @ts-expect-error - createNonExistent is not registered in GeneratedGqlSchema
+        query: `mutation { createNonExistent(input: $input) { id } }`,
+        // @ts-expect-error - variables type is unresolvable for unregistered operations
         variables: () => ({
           input: { name: "test" },
         }),

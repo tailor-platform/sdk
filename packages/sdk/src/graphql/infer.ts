@@ -398,6 +398,44 @@ export type GqlResult<OpName extends string> = string extends OpName
         : unknown
       : UnknownGqlOperation<OpName>;
 
+// === Query validation ===
+
+/** Check if the query contains a selection set `{ ... }` */
+type _HasSelectionSet<Q extends string> = Q extends `${string}{${string}}${string}` ? true : false;
+
+/** Check if the query starts with a valid GraphQL keyword */
+type _HasValidKeyword<Q extends string> =
+  Trim<Q> extends `query${string}` | `mutation${string}` | `subscription${string}` | `{${string}`
+    ? true
+    : false;
+
+/** Check if the root field is registered in GeneratedGqlSchema */
+type _IsKnownRootField<Q extends string> =
+  ExtractRootField<Q> extends keyof GeneratedGqlSchema ? true : false;
+
+/**
+ * Validate a GraphQL query string at the type level.
+ * Returns `Q` if valid, or an error message string literal if invalid.
+ *
+ * Validation layers (broad → strict):
+ * 1. Non-literal `string` → permissive (returns Q)
+ * 2. Empty GeneratedGqlSchema → permissive (returns Q)
+ * 3. Syntax: must contain `{ ... }`
+ * 4. Keyword: must start with `query`, `mutation`, `subscription`, or `{`
+ * 5. Schema: root field must exist in GeneratedGqlSchema
+ */
+export type ValidateGqlQuery<Q extends string> = string extends Q
+  ? Q // non-literal: permissive
+  : IsSchemaPopulated extends false
+    ? Q // no schema: permissive
+    : _HasSelectionSet<Q> extends false
+      ? `Error: Invalid GraphQL query. Must contain a selection set "{ ... }".`
+      : _HasValidKeyword<Q> extends false
+        ? `Error: Invalid GraphQL query. Must start with "query", "mutation", "subscription", or "{".`
+        : _IsKnownRootField<Q> extends false
+          ? `Error: Unknown GraphQL operation "${ExtractRootField<Q>}". Run type generation to register it in GeneratedGqlSchema.`
+          : Q; // all checks passed
+
 // === Strict object checking ===
 
 /**

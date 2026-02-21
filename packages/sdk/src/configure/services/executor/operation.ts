@@ -1,6 +1,6 @@
 import type { AuthInvoker } from "@/configure/services/auth";
 import type { Workflow } from "@/configure/services/workflow/workflow";
-import type { ResolvedGqlVariables, StrictKeys } from "@/graphql/infer";
+import type { ResolvedGqlVariables, StrictKeys, ValidateGqlQuery } from "@/graphql/infer";
 import type {
   FunctionOperation as ParserFunctionOperation,
   GqlOperation as ParserGqlOperation,
@@ -17,7 +17,7 @@ export type GqlOperation<
   Query extends string = string,
   V = ResolvedGqlVariables<Query>,
 > = Omit<ParserGqlOperation, "query" | "variables"> & {
-  query: Query;
+  query: ValidateGqlQuery<Query>;
   variables?: (args: Args) => V & StrictKeys<V, ResolvedGqlVariables<Query>>;
 };
 
