@@ -432,6 +432,29 @@ type _HasValidKeyword<Q extends string> =
     ? true
     : false;
 
+/** Count occurrences of character C in string S */
+type _CountChar<
+  S extends string,
+  C extends string,
+  Acc extends unknown[] = [],
+> = S extends `${infer _}${C}${infer Rest}` ? _CountChar<Rest, C, [...Acc, 0]> : Acc;
+
+/** Check if `{` and `}` counts match */
+type _AreBracesBalanced<Q extends string> = _CountChar<Q, "{">["length"] extends _CountChar<
+  Q,
+  "}"
+>["length"]
+  ? true
+  : false;
+
+/** Check if `(` and `)` counts match */
+type _AreParensBalanced<Q extends string> = _CountChar<Q, "(">["length"] extends _CountChar<
+  Q,
+  ")"
+>["length"]
+  ? true
+  : false;
+
 /** Check if the root field is registered in GeneratedGqlSchema */
 type _IsKnownRootField<Q extends string> =
   ExtractRootField<Q> extends keyof GeneratedGqlSchema ? true : false;
@@ -445,7 +468,9 @@ type _IsKnownRootField<Q extends string> =
  * 2. Empty GeneratedGqlSchema → permissive (returns Q)
  * 3. Syntax: must contain `{ ... }`
  * 4. Keyword: must start with `query`, `mutation`, `subscription`, or `{`
- * 5. Schema: root field must exist in GeneratedGqlSchema
+ * 5. Balance: `{`/`}` counts must match
+ * 6. Balance: `(`/`)` counts must match
+ * 7. Schema: root field must exist in GeneratedGqlSchema
  */
 export type ValidateGqlQuery<Q extends string> = string extends Q
   ? Q // non-literal: permissive
@@ -455,9 +480,13 @@ export type ValidateGqlQuery<Q extends string> = string extends Q
       ? `Error: Invalid GraphQL query. Must contain a selection set "{ ... }".`
       : _HasValidKeyword<Q> extends false
         ? `Error: Invalid GraphQL query. Must start with "query", "mutation", "subscription", or "{".`
-        : _IsKnownRootField<Q> extends false
-          ? `Error: Unknown GraphQL operation: "${ExtractRootField<Q>}". Run type generation to register it in GeneratedGqlSchema.`
-          : Q; // all checks passed
+        : _AreBracesBalanced<Q> extends false
+          ? 'Error: Invalid GraphQL query. Mismatched curly braces "{" and "}".'
+          : _AreParensBalanced<Q> extends false
+            ? 'Error: Invalid GraphQL query. Mismatched parentheses "(" and ")".'
+            : _IsKnownRootField<Q> extends false
+              ? `Error: Unknown GraphQL operation: "${ExtractRootField<Q>}". Run type generation to register it in GeneratedGqlSchema.`
+              : Q; // all checks passed
 
 // === Strict object checking ===
 

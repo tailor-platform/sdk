@@ -568,6 +568,30 @@ type VGQ_10_Q = `
 type VGQ_10 = ValidateGqlQuery<VGQ_10_Q>;
 type _vgq10 = Assert<IsEqual<VGQ_10, VGQ_10_Q>>;
 
+// returns error for unmatched opening brace
+type VGQ_11 = ValidateGqlQuery<"query { testProducts { id }">;
+type _vgq11 = Assert<
+  IsEqual<VGQ_11, 'Error: Invalid GraphQL query. Mismatched curly braces "{" and "}".'>
+>;
+
+// returns error for unmatched closing brace
+type VGQ_12 = ValidateGqlQuery<"query { testProducts { id } } }">;
+type _vgq12 = Assert<
+  IsEqual<VGQ_12, 'Error: Invalid GraphQL query. Mismatched curly braces "{" and "}".'>
+>;
+
+// returns error for unmatched opening paren
+type VGQ_13 = ValidateGqlQuery<"query($id: ID! { testProducts { id } }">;
+type _vgq13 = Assert<
+  IsEqual<VGQ_13, 'Error: Invalid GraphQL query. Mismatched parentheses "(" and ")".'>
+>;
+
+// balanced braces and parens pass validation
+type VGQ_14_Q =
+  "mutation($input: TestProductCreateInput!) { createTestProduct(input: $input) { id } }";
+type VGQ_14 = ValidateGqlQuery<VGQ_14_Q>;
+type _vgq14 = Assert<IsEqual<VGQ_14, VGQ_14_Q>>;
+
 // Negative: different ValidateGqlQuery error messages must be distinguishable
 // @ts-expect-error -- "no selection set" error !== "invalid keyword" error
 type _vgq_neg_errors = Assert<IsEqual<VGQ_4, VGQ_5>>;
@@ -575,3 +599,5 @@ type _vgq_neg_errors = Assert<IsEqual<VGQ_4, VGQ_5>>;
 type _vgq_neg_errors2 = Assert<IsEqual<VGQ_5, VGQ_6>>;
 // @ts-expect-error -- valid query string !== error string
 type _vgq_neg_valid_vs_error = Assert<IsEqual<VGQ_1, VGQ_4>>;
+// @ts-expect-error -- brace error !== paren error
+type _vgq_neg_brace_vs_paren = Assert<IsEqual<VGQ_11, VGQ_13>>;

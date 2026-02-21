@@ -535,4 +535,26 @@ describe("ValidateGqlQuery", () => {
     type V = ValidateGqlQuery<Q>;
     expectTypeOf<V>().toEqualTypeOf<Q>();
   });
+
+  it("returns error for unmatched opening brace", () => {
+    type V = ValidateGqlQuery<"query { testProducts { id }">;
+    expectTypeOf<V>().toEqualTypeOf<'Error: Invalid GraphQL query. Mismatched curly braces "{" and "}".'>();
+  });
+
+  it("returns error for unmatched closing brace", () => {
+    type V = ValidateGqlQuery<"query { testProducts { id } } }">;
+    expectTypeOf<V>().toEqualTypeOf<'Error: Invalid GraphQL query. Mismatched curly braces "{" and "}".'>();
+  });
+
+  it("returns error for unmatched opening paren", () => {
+    type V = ValidateGqlQuery<"query($id: ID! { testProducts { id } }">;
+    expectTypeOf<V>().toEqualTypeOf<'Error: Invalid GraphQL query. Mismatched parentheses "(" and ")".'>();
+  });
+
+  it("returns the query type for balanced braces and parens", () => {
+    type Q =
+      "mutation($input: TestProductCreateInput!) { createTestProduct(input: $input) { id } }";
+    type V = ValidateGqlQuery<Q>;
+    expectTypeOf<V>().toEqualTypeOf<Q>();
+  });
 });
