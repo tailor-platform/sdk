@@ -344,9 +344,6 @@ type _SplitAtNextVar<S extends string> = S extends `${infer Before}$${infer Afte
   ? [TrimEnd<Before> extends `${infer R},` ? Trim<R> : Trim<Before>, `$${After}`]
   : [S, ""];
 
-/** Empty record type for recursive parser base case */
-type _EmptyVars = Record<string, never>;
-
 /** Recursively parse variable declarations like `$input: FooInput!, $id: ID!` */
 type _ParseVarDecls<S extends string> =
   Trim<S> extends `$${infer Rest}`
@@ -355,10 +352,27 @@ type _ParseVarDecls<S extends string> =
           infer TypePart extends string,
           infer Remaining extends string,
         ]
-        ? Record<Trim<Name>, _ResolveTypeExpr<TypePart>> & _ParseVarDecls<Remaining>
+        ? Remaining extends ""
+          ? Record<Trim<Name>, _ResolveTypeExpr<TypePart>>
+          : Record<Trim<Name>, _ResolveTypeExpr<TypePart>> & _ParseVarDecls<Remaining>
         : Record<Trim<Name>, _ResolveTypeExpr<Trim<AfterColon>>>
-      : _EmptyVars
-    : _EmptyVars;
+      : unknown
+    : unknown;
+
+/**
+ * Extract variable names as a union type from a variable declaration block.
+ * Only parses names — does not resolve GraphQL type names.
+ */
+type _ExtractVarNames<S extends string> =
+  Trim<S> extends `$${infer Rest}`
+    ? Rest extends `${infer Name}:${infer AfterColon}`
+      ? _SplitAtNextVar<Trim<AfterColon>> extends [string, infer Remaining extends string]
+        ? Remaining extends ""
+          ? Trim<Name>
+          : Trim<Name> | _ExtractVarNames<Remaining>
+        : Trim<Name>
+      : never
+    : never;
 
 /**
  * Parse GraphQL variable declarations from a query string.
@@ -375,27 +389,39 @@ export type ParsedGqlVariables<Q extends string> = [_ExtractVarBlock<Q>] extends
 
 // === Unified variable resolution ===
 
-/** Check if GeneratedGqlTypes has been augmented with at least one type. */
-type IsGqlTypesPopulated = keyof GeneratedGqlTypes extends never ? false : true;
+/**
+ * Merge parsed variable names with schema-based types.
+ * Uses variable names from query parsing and types from GeneratedGqlSchema.
+ * Keys present in the query but absent in the schema resolve to `never` (type error).
+ */
+type _MergeVarNamesWithSchema<Names extends string, Schema> = Schema extends {
+  readonly __error: string;
+}
+  ? Schema // Unknown operation → pass through error type
+  : Prettify<{ [K in Names]: K extends keyof Schema ? Schema[K] : never }>;
 
 /**
  * Resolve GraphQL variables from a query string.
- * Tries variable declaration parsing first; falls back to schema lookup.
+ * Parses variable names from the query and looks up types from the schema.
+ * No code generation required — works with any populated GeneratedGqlSchema.
+ *
  * - Non-literal `string`: permissive fallback (`Record<string, unknown>`)
  * - Empty schema: permissive fallback
- * - GeneratedGqlTypes not populated: schema lookup (parsed types would be unknown)
- * - Variable declarations present + types populated: parse result
+ * - Variable declarations present: parsed names merged with schema types
  * - No variable declarations: schema lookup via `GqlVariables`
  */
 export type ResolvedGqlVariables<Q extends string> = string extends Q
   ? Record<string, unknown>
   : IsSchemaPopulated extends false
     ? Record<string, unknown>
-    : IsGqlTypesPopulated extends false
+    : [_ExtractVarBlock<Q>] extends [never]
       ? GqlVariables<ExtractRootField<Q>>
-      : [ParsedGqlVariables<Q>] extends [never]
+      : [_ExtractVarNames<_ExtractVarBlock<Q>>] extends [never]
         ? GqlVariables<ExtractRootField<Q>>
-        : ParsedGqlVariables<Q>;
+        : _MergeVarNamesWithSchema<
+            _ExtractVarNames<_ExtractVarBlock<Q>>,
+            GqlVariables<ExtractRootField<Q>>
+          >;
 
 /** Error type for unregistered GraphQL operations. Shows a descriptive message in IDE. */
 type UnknownGqlOperation<OpName extends string> = {

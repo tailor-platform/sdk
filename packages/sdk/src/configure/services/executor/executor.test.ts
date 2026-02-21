@@ -1161,9 +1161,12 @@ declare module "@/graphql/infer" {
         input: InferCreateInput<typeof testOrder>;
       };
     };
-  }
-  interface GeneratedGqlTypes {
-    TestOrderCreateInput: InferCreateInput<typeof testOrder>;
+    updateTestOrder: {
+      variables: {
+        id: string;
+        input: InferCreateInput<typeof testOrder>;
+      };
+    };
   }
 }
 
