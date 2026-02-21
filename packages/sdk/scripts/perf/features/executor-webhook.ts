@@ -12,7 +12,7 @@ export const executor0 = createExecutor({
   operation: {
     kind: "graphql",
     appName: "my-app",
-    query: `mutation { process(data: $data) }`,
+    query: `mutation { process(data: $data) }` as string,
     variables: () => ({ data: "webhook-data" }),
   },
 });
@@ -24,7 +24,7 @@ export const executor1 = createExecutor({
   operation: {
     kind: "graphql",
     appName: "my-app",
-    query: `mutation { process(data: $data) }`,
+    query: `mutation { process(data: $data) }` as string,
     variables: () => ({ data: "webhook-data" }),
   },
 });
@@ -36,7 +36,7 @@ export const executor2 = createExecutor({
   operation: {
     kind: "graphql",
     appName: "my-app",
-    query: `mutation { process(data: $data) }`,
+    query: `mutation { process(data: $data) }` as string,
     variables: () => ({ data: "webhook-data" }),
   },
 });
@@ -48,7 +48,7 @@ export const executor3 = createExecutor({
   operation: {
     kind: "graphql",
     appName: "my-app",
-    query: `mutation { process(data: $data) }`,
+    query: `mutation { process(data: $data) }` as string,
     variables: () => ({ data: "webhook-data" }),
   },
 });
@@ -60,7 +60,7 @@ export const executor4 = createExecutor({
   operation: {
     kind: "graphql",
     appName: "my-app",
-    query: `mutation { process(data: $data) }`,
+    query: `mutation { process(data: $data) }` as string,
     variables: () => ({ data: "webhook-data" }),
   },
 });
@@ -72,7 +72,7 @@ export const executor5 = createExecutor({
   operation: {
     kind: "graphql",
     appName: "my-app",
-    query: `mutation { process(data: $data) }`,
+    query: `mutation { process(data: $data) }` as string,
     variables: () => ({ data: "webhook-data" }),
   },
 });
@@ -84,7 +84,7 @@ export const executor6 = createExecutor({
   operation: {
     kind: "graphql",
     appName: "my-app",
-    query: `mutation { process(data: $data) }`,
+    query: `mutation { process(data: $data) }` as string,
     variables: () => ({ data: "webhook-data" }),
   },
 });
@@ -96,7 +96,7 @@ export const executor7 = createExecutor({
   operation: {
     kind: "graphql",
     appName: "my-app",
-    query: `mutation { process(data: $data) }`,
+    query: `mutation { process(data: $data) }` as string,
     variables: () => ({ data: "webhook-data" }),
   },
 });
@@ -108,7 +108,7 @@ export const executor8 = createExecutor({
   operation: {
     kind: "graphql",
     appName: "my-app",
-    query: `mutation { process(data: $data) }`,
+    query: `mutation { process(data: $data) }` as string,
     variables: () => ({ data: "webhook-data" }),
   },
 });
@@ -120,7 +120,7 @@ export const executor9 = createExecutor({
   operation: {
     kind: "graphql",
     appName: "my-app",
-    query: `mutation { process(data: $data) }`,
+    query: `mutation { process(data: $data) }` as string,
     variables: () => ({ data: "webhook-data" }),
   },
 });

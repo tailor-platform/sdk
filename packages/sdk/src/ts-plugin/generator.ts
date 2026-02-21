@@ -131,7 +131,29 @@ function generateGqlEntriesForType(entry: ManifestTypeEntry, importPath: string)
 }
 
 /**
- * Generate the GraphQL GeneratedGqlSchema block.
+ * Generate GraphQL type name → TS type mapping entries for a single type.
+ * Produces `{TypeName}CreateInput` and `{TypeName}UpdateInput` entries.
+ * @param entry - The manifest type entry
+ * @param importPath - The import path for the type
+ * @returns Lines for the GeneratedGqlTypes entries
+ */
+function generateGqlTypesForType(entry: ManifestTypeEntry, importPath: string): string[] {
+  const lines: string[] = [];
+  const typeRef = `(typeof import("${importPath}"))["${entry.exportName}"]`;
+
+  if (isOperationEnabled(entry, "create")) {
+    lines.push(`    ${entry.typeName}CreateInput: InferCreateInput<${typeRef}>;`);
+  }
+
+  if (isOperationEnabled(entry, "update")) {
+    lines.push(`    ${entry.typeName}UpdateInput: InferUpdateInput<${typeRef}>;`);
+  }
+
+  return lines;
+}
+
+/**
+ * Generate the GraphQL GeneratedGqlSchema and GeneratedGqlTypes blocks.
  * @param manifest - The manifest describing namespaces and types
  * @param outputDir - Absolute path to the output directory
  * @returns Lines for the GraphQL module augmentation, or empty if no types
@@ -158,6 +180,19 @@ function generateGqlBlock(manifest: Manifest, outputDir: string): string[] {
   }
 
   lines.push("  }");
+
+  // GeneratedGqlTypes: maps GraphQL type names to TS types for variable parsing
+  const gqlTypesLines: string[] = [];
+  for (const { entry, importPath } of allEntries) {
+    gqlTypesLines.push(...generateGqlTypesForType(entry, importPath));
+  }
+
+  if (gqlTypesLines.length > 0) {
+    lines.push("  interface GeneratedGqlTypes {");
+    lines.push(...gqlTypesLines);
+    lines.push("  }");
+  }
+
   lines.push("}");
   return lines;
 }

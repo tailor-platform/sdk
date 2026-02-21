@@ -6,7 +6,7 @@ import type {
 } from "./operation";
 import type { Trigger } from "./trigger";
 import type { Workflow } from "@/configure/services/workflow/workflow";
-import type { ExtractRootField, GqlVariables } from "@/graphql/infer";
+import type { ResolvedGqlVariables } from "@/graphql/infer";
 import type { ExecutorInput } from "@/parser/service/executor/types";
 
 type TriggerArgs<T extends Trigger<unknown>> = T extends { __args: infer Args } ? Args : never;
@@ -25,7 +25,7 @@ type ExecutorBase<T extends Trigger<unknown>> = Omit<ExecutorInput, "trigger" | 
 type ExecutorConfig<
   T extends Trigger<unknown>,
   Q extends string = string,
-  V = GqlVariables<ExtractRootField<Q>>,
+  V = ResolvedGqlVariables<Q>,
   W extends Workflow = Workflow,
 > = ExecutorBase<T> & {
   operation:
@@ -49,14 +49,14 @@ type ExecutorConfig<
 export function createExecutor<
   T extends Trigger<unknown>,
   const Q extends string = string,
-  V extends GqlVariables<ExtractRootField<Q>> = GqlVariables<ExtractRootField<Q>>,
+  V extends ResolvedGqlVariables<Q> = ResolvedGqlVariables<Q>,
   W extends Workflow = Workflow,
 >(config: ExecutorConfig<T, Q, V, W>): ExecutorConfig<T, Q, V, W>;
 
 export function createExecutor<
   T extends Trigger<unknown>,
   Q extends string = string,
-  V = GqlVariables<ExtractRootField<Q>>,
+  V = ResolvedGqlVariables<Q>,
   W extends Workflow = Workflow,
 >(config: ExecutorConfig<T, Q, V, W>) {
   return config;

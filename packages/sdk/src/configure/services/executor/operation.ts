@@ -1,6 +1,6 @@
 import type { AuthInvoker } from "@/configure/services/auth";
 import type { Workflow } from "@/configure/services/workflow/workflow";
-import type { ExtractRootField, GqlVariables, StrictKeys } from "@/graphql/infer";
+import type { ResolvedGqlVariables, StrictKeys } from "@/graphql/infer";
 import type {
   FunctionOperation as ParserFunctionOperation,
   GqlOperation as ParserGqlOperation,
@@ -15,10 +15,10 @@ export type FunctionOperation<Args> = Omit<ParserFunctionOperation, "body"> & {
 export type GqlOperation<
   Args,
   Query extends string = string,
-  V = GqlVariables<ExtractRootField<Query>>,
+  V = ResolvedGqlVariables<Query>,
 > = Omit<ParserGqlOperation, "query" | "variables"> & {
   query: Query;
-  variables?: (args: Args) => V & StrictKeys<V, GqlVariables<ExtractRootField<Query>>>;
+  variables?: (args: Args) => V & StrictKeys<V, ResolvedGqlVariables<Query>>;
 };
 
 type RequestHeader =
@@ -292,11 +292,7 @@ export type WorkflowOperation<Args, W extends Workflow = Workflow> = Omit<
   authInvoker?: AuthInvoker<string>;
 };
 
-export type Operation<
-  Args,
-  Query extends string = string,
-  V = GqlVariables<ExtractRootField<Query>>,
-> =
+export type Operation<Args, Query extends string = string, V = ResolvedGqlVariables<Query>> =
   | FunctionOperation<Args>
   | GqlOperation<Args, Query, V>
   | WebhookOperation<Args>

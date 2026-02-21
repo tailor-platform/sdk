@@ -640,7 +640,7 @@ describe("resolverExecutedTrigger", () => {
       operation: {
         kind: "graphql",
         appName: "test-app",
-        query: "query { test }",
+        query: "query { test }" as string,
         variables: (args) => {
           // success tag should be available in graphql variables function
           expectTypeOf(args.success).toEqualTypeOf<boolean>();
@@ -825,7 +825,7 @@ describe("gqlTarget", () => {
           query TestQuery($id: ID!) {
             testField(id: $id)
           }
-        `,
+        ` as string,
         variables: () => ({
           id: "test-id",
         }),
@@ -847,7 +847,7 @@ describe("gqlTarget", () => {
           query TestQuery($id: ID!) {
             testField(id: $id)
           }
-        `,
+        ` as string,
         variables: (args) => {
           expectTypeOf(args).toExtend<{
             body: { id: string };
@@ -1087,7 +1087,7 @@ describe("workflowTarget", () => {
 });
 
 describe("gqlTarget type inference", () => {
-  test("variables return type defaults to Record<string, unknown> for unregistered operations", () => {
+  test("rejects variables for unregistered operations when schema is populated", () => {
     createExecutor({
       name: "test",
       trigger: incomingWebhookTrigger(),
@@ -1095,8 +1095,8 @@ describe("gqlTarget type inference", () => {
         kind: "graphql",
         appName: "test-app",
         query: `mutation { createUnknown(input: $input) { id } }`,
+        // @ts-expect-error - createUnknown is not registered in GeneratedGqlSchema
         variables: () => {
-          // Should accept any record since "createUnknown" is not in GeneratedGqlSchema
           return { input: { name: "test" } };
         },
       },
@@ -1120,7 +1120,7 @@ describe("gqlTarget type inference", () => {
     });
   });
 
-  test("backward compat: existing gql operations continue to work", () => {
+  test("backward compat: existing gql operations continue to work with non-literal query", () => {
     const executor = createExecutor({
       name: "test",
       trigger: recordCreatedTrigger({
@@ -1134,7 +1134,7 @@ describe("gqlTarget type inference", () => {
               id
             }
           }
-        `,
+        ` as string,
         variables: ({ newRecord }) => ({
           input: {
             name: newRecord.name,
@@ -1161,6 +1161,9 @@ declare module "@/graphql/infer" {
         input: InferCreateInput<typeof testOrder>;
       };
     };
+  }
+  interface GeneratedGqlTypes {
+    TestOrderCreateInput: InferCreateInput<typeof testOrder>;
   }
 }
 
@@ -1348,6 +1351,111 @@ describe("gqlTarget type inference with augmented GeneratedGqlSchema", () => {
             quantity: 1,
           },
           extra: true,
+        }),
+      },
+    });
+  });
+
+  test("rejects unknown operation names when schema is populated", () => {
+    createExecutor({
+      name: "test-unknown-op",
+      trigger: scheduleTrigger({ cron: "0 * * * *" }),
+      operation: {
+        kind: "graphql",
+        query: `mutation { createNonExistent(input: $input) { id } }`,
+        // @ts-expect-error - createNonExistent is not registered in GeneratedGqlSchema
+        variables: () => ({
+          input: { name: "test" },
+        }),
+      },
+    });
+  });
+});
+
+describe("gqlTarget variable declaration parsing", () => {
+  test("infers variables from variable declarations in query", () => {
+    createExecutor({
+      name: "test-var-decl",
+      trigger: scheduleTrigger({ cron: "0 * * * *" }),
+      operation: {
+        kind: "graphql",
+        query: `mutation createTestOrder($input: TestOrderCreateInput!) { createTestOrder(input: $input) { id } }`,
+        variables: () => ({
+          input: {
+            productId: "uuid-123",
+            quantity: 10,
+          },
+        }),
+      },
+    });
+  });
+
+  test("rejects typo in variable name ($input2 instead of $input)", () => {
+    createExecutor({
+      name: "test-var-typo",
+      trigger: scheduleTrigger({ cron: "0 * * * *" }),
+      operation: {
+        kind: "graphql",
+        query: `mutation createTestOrder($input2: TestOrderCreateInput!) { createTestOrder(input: $input2) { id } }`,
+        // @ts-expect-error - variable name is input2 but returning input
+        variables: () => ({
+          input: {
+            productId: "uuid-123",
+            quantity: 10,
+          },
+        }),
+      },
+    });
+  });
+
+  test("rejects wrong type for variable declared in query", () => {
+    createExecutor({
+      name: "test-var-wrong-type",
+      trigger: scheduleTrigger({ cron: "0 * * * *" }),
+      operation: {
+        kind: "graphql",
+        query: `mutation createTestOrder($input: TestOrderCreateInput!) { createTestOrder(input: $input) { id } }`,
+        // @ts-expect-error - quantity should be number, not string
+        variables: () => ({
+          input: {
+            productId: "uuid-123",
+            quantity: "not-a-number",
+          },
+        }),
+      },
+    });
+  });
+
+  test("parses multiple variable declarations", () => {
+    createExecutor({
+      name: "test-multi-vars",
+      trigger: scheduleTrigger({ cron: "0 * * * *" }),
+      operation: {
+        kind: "graphql",
+        query: `mutation updateTestOrder($id: ID!, $input: TestOrderCreateInput!) { updateTestOrder(id: $id, input: $input) { id } }`,
+        variables: () => ({
+          id: "order-123",
+          input: {
+            productId: "uuid-456",
+            quantity: 5,
+          },
+        }),
+      },
+    });
+  });
+
+  test("falls back to schema lookup when no variable declarations", () => {
+    createExecutor({
+      name: "test-no-var-decl",
+      trigger: scheduleTrigger({ cron: "0 * * * *" }),
+      operation: {
+        kind: "graphql",
+        query: `mutation { createTestOrder(input: $input) { id } }`,
+        variables: () => ({
+          input: {
+            productId: "uuid-789",
+            quantity: 1,
+          },
         }),
       },
     });

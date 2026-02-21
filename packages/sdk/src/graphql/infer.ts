@@ -159,6 +159,20 @@ type TrimStart<S extends string> = S extends ` ${infer R}`
         ? TrimStart<R>
         : S;
 
+/** Trim trailing whitespace from a template literal type */
+type TrimEnd<S extends string> = S extends `${infer R} `
+  ? TrimEnd<R>
+  : S extends `${infer R}\n`
+    ? TrimEnd<R>
+    : S extends `${infer R}\t`
+      ? TrimEnd<R>
+      : S extends `${infer R}\r`
+        ? TrimEnd<R>
+        : S;
+
+/** Trim both leading and trailing whitespace */
+type Trim<S extends string> = TrimStart<TrimEnd<S>>;
+
 /** Extract leading identifier (before `(`, ` `, `{`, `}`, or newline) */
 type ExtractIdentifier<S extends string> = S extends `${infer Name}(${string}`
   ? Name
@@ -262,25 +276,171 @@ export type InferGqlResult<T extends TailorAnyDBType> = {
 export interface GeneratedGqlSchema {}
 
 /**
- * Look up the variables type for a GraphQL operation by name.
- * Falls back to `Record<string, unknown>` when the operation is not
- * registered in GeneratedGqlSchema.
+ * Module augmentation interface for GraphQL type name to TS type mapping.
+ * Augmented by `tailor-env.d.ts` to provide type resolution for variable declarations.
+ * @example
+ * ```ts
+ * // In tailor-env.d.ts (auto-generated):
+ * declare module "@tailor-platform/sdk/graphql" {
+ *   interface GeneratedGqlTypes {
+ *     SalesOrderCreateInput: InferCreateInput<typeof salesOrder>;
+ *     SalesOrderUpdateInput: InferUpdateInput<typeof salesOrder>;
+ *   }
+ * }
+ * ```
  */
-export type GqlVariables<OpName extends string> = OpName extends keyof GeneratedGqlSchema
-  ? GeneratedGqlSchema[OpName] extends { variables: infer V }
-    ? V
-    : Record<string, unknown>
-  : Record<string, unknown>;
+// Using interface for declaration merging via `declare module`
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface GeneratedGqlTypes {}
+
+// === GraphQL type resolution ===
+
+type BuiltinGqlScalars = {
+  ID: string;
+  String: string;
+  Int: number;
+  Float: number;
+  Boolean: boolean;
+  DateTime: string;
+  Date: string;
+  Time: string;
+};
+
+type ResolveGqlTypeName<Name extends string> = Name extends keyof BuiltinGqlScalars
+  ? BuiltinGqlScalars[Name]
+  : Name extends keyof GeneratedGqlTypes
+    ? GeneratedGqlTypes[Name]
+    : unknown;
+
+// === Variable declaration parser ===
+
+/**
+ * Extract the variable block from a GraphQL operation.
+ * Finds the first `(...)` that precedes `{` and whose content starts with `$`.
+ * This correctly skips field arguments like `createFoo(input: $input)`.
+ */
+type _ExtractVarBlock<Q extends string> = Q extends `${string}(${infer VarsAndRest}`
+  ? VarsAndRest extends `${infer Block})${string}{${string}`
+    ? TrimStart<Block> extends `$${string}`
+      ? Block
+      : never
+    : never
+  : never;
+
+/** Strip trailing `!` from a GraphQL type expression */
+type _StripBang<S extends string> = S extends `${infer T}!` ? T : S;
+
+/** Resolve a GraphQL type expression to its TypeScript type */
+type _ResolveTypeExpr<S extends string> =
+  Trim<S> extends `[${infer Inner}]${string}`
+    ? ResolveGqlTypeName<_StripBang<Trim<Inner>>>[]
+    : ResolveGqlTypeName<_StripBang<Trim<S>>>;
+
+/**
+ * Split a string at the next `$` variable declaration boundary.
+ * Returns [typePartBeforeSplit, remaining] where remaining starts with `$`.
+ */
+type _SplitAtNextVar<S extends string> = S extends `${infer Before}$${infer After}`
+  ? [TrimEnd<Before> extends `${infer R},` ? Trim<R> : Trim<Before>, `$${After}`]
+  : [S, ""];
+
+/** Empty record type for recursive parser base case */
+type _EmptyVars = Record<string, never>;
+
+/** Recursively parse variable declarations like `$input: FooInput!, $id: ID!` */
+type _ParseVarDecls<S extends string> =
+  Trim<S> extends `$${infer Rest}`
+    ? Rest extends `${infer Name}:${infer AfterColon}`
+      ? _SplitAtNextVar<Trim<AfterColon>> extends [
+          infer TypePart extends string,
+          infer Remaining extends string,
+        ]
+        ? Record<Trim<Name>, _ResolveTypeExpr<TypePart>> & _ParseVarDecls<Remaining>
+        : Record<Trim<Name>, _ResolveTypeExpr<Trim<AfterColon>>>
+      : _EmptyVars
+    : _EmptyVars;
+
+/**
+ * Parse GraphQL variable declarations from a query string.
+ * Extracts the variable block and resolves each variable to its TypeScript type.
+ * @example
+ * ```ts
+ * type V = ParsedGqlVariables<"mutation createFoo($input: FooInput!, $id: ID!) { ... }">;
+ * //   ^? { input: FooInput; id: string }
+ * ```
+ */
+export type ParsedGqlVariables<Q extends string> = [_ExtractVarBlock<Q>] extends [never]
+  ? never
+  : Prettify<_ParseVarDecls<_ExtractVarBlock<Q>>>;
+
+// === Unified variable resolution ===
+
+/** Check if GeneratedGqlTypes has been augmented with at least one type. */
+type IsGqlTypesPopulated = keyof GeneratedGqlTypes extends never ? false : true;
+
+/**
+ * Resolve GraphQL variables from a query string.
+ * Tries variable declaration parsing first; falls back to schema lookup.
+ * - Non-literal `string`: permissive fallback (`Record<string, unknown>`)
+ * - Empty schema: permissive fallback
+ * - GeneratedGqlTypes not populated: schema lookup (parsed types would be unknown)
+ * - Variable declarations present + types populated: parse result
+ * - No variable declarations: schema lookup via `GqlVariables`
+ */
+export type ResolvedGqlVariables<Q extends string> = string extends Q
+  ? Record<string, unknown>
+  : IsSchemaPopulated extends false
+    ? Record<string, unknown>
+    : IsGqlTypesPopulated extends false
+      ? GqlVariables<ExtractRootField<Q>>
+      : [ParsedGqlVariables<Q>] extends [never]
+        ? GqlVariables<ExtractRootField<Q>>
+        : ParsedGqlVariables<Q>;
+
+/** Error type for unregistered GraphQL operations. Shows a descriptive message in IDE. */
+type UnknownGqlOperation<OpName extends string> = {
+  readonly __error: `Unknown GraphQL operation: "${OpName}". Run type generation to register it in GeneratedGqlSchema.`;
+};
+
+/**
+ * Check if GeneratedGqlSchema has been augmented with at least one operation.
+ * When empty (no tailor-env.d.ts), fall back to permissive mode.
+ */
+type IsSchemaPopulated = keyof GeneratedGqlSchema extends never ? false : true;
+
+/**
+ * Look up the variables type for a GraphQL operation by name.
+ * - Non-literal `string`: permissive fallback (`Record<string, unknown>`)
+ * - Empty schema (no tailor-env.d.ts): permissive fallback
+ * - Literal + registered: strict type from schema
+ * - Literal + NOT registered: `UnknownGqlOperation` error type
+ */
+export type GqlVariables<OpName extends string> = string extends OpName
+  ? Record<string, unknown>
+  : IsSchemaPopulated extends false
+    ? Record<string, unknown>
+    : OpName extends keyof GeneratedGqlSchema
+      ? GeneratedGqlSchema[OpName] extends { variables: infer V }
+        ? V
+        : Record<string, unknown>
+      : UnknownGqlOperation<OpName>;
 
 /**
  * Look up the result type for a GraphQL operation by name.
- * Falls back to `unknown` when the operation is not registered.
+ * - Non-literal `string`: `unknown` fallback
+ * - Empty schema (no tailor-env.d.ts): `unknown` fallback
+ * - Literal + registered: strict type from schema
+ * - Literal + NOT registered: `UnknownGqlOperation` error type
  */
-export type GqlResult<OpName extends string> = OpName extends keyof GeneratedGqlSchema
-  ? GeneratedGqlSchema[OpName] extends { result: infer R }
-    ? R
-    : unknown
-  : unknown;
+export type GqlResult<OpName extends string> = string extends OpName
+  ? unknown
+  : IsSchemaPopulated extends false
+    ? unknown
+    : OpName extends keyof GeneratedGqlSchema
+      ? GeneratedGqlSchema[OpName] extends { result: infer R }
+        ? R
+        : unknown
+      : UnknownGqlOperation<OpName>;
 
 // === Strict object checking ===
 

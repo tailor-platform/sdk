@@ -7,6 +7,7 @@ import type {
   InferGqlResult,
   GqlVariables,
   GqlResult,
+  ParsedGqlVariables,
 } from "./infer";
 
 // === ExtractRootField ===
@@ -293,26 +294,32 @@ describe("InferGqlResult", () => {
 });
 
 // === GqlVariables / GqlResult fallback ===
+// Note: GeneratedGqlSchema is augmented later in this file, so the schema
+// is populated. Unregistered literal operations produce the error type.
 
 describe("GqlVariables fallback", () => {
-  it("returns Record<string, unknown> for unregistered operations", () => {
+  it("returns error type for unregistered operations when schema is populated", () => {
     type V = GqlVariables<"unknownOperation">;
-    expectTypeOf<V>().toEqualTypeOf<Record<string, unknown>>();
+    expectTypeOf<V>().toEqualTypeOf<{
+      readonly __error: 'Unknown GraphQL operation: "unknownOperation". Run type generation to register it in GeneratedGqlSchema.';
+    }>();
   });
 
-  it("returns Record<string, unknown> for string type", () => {
+  it("returns Record<string, unknown> for non-literal string type", () => {
     type V = GqlVariables<string>;
     expectTypeOf<V>().toEqualTypeOf<Record<string, unknown>>();
   });
 });
 
 describe("GqlResult fallback", () => {
-  it("returns unknown for unregistered operations", () => {
+  it("returns error type for unregistered operations when schema is populated", () => {
     type R = GqlResult<"unknownOperation">;
-    expectTypeOf<R>().toEqualTypeOf<unknown>();
+    expectTypeOf<R>().toEqualTypeOf<{
+      readonly __error: 'Unknown GraphQL operation: "unknownOperation". Run type generation to register it in GeneratedGqlSchema.';
+    }>();
   });
 
-  it("returns unknown for string type", () => {
+  it("returns unknown for non-literal string type", () => {
     type R = GqlResult<string>;
     expectTypeOf<R>().toEqualTypeOf<unknown>();
   });
@@ -341,6 +348,10 @@ declare module "./infer" {
       result: { testProducts: { collection: InferGqlResult<typeof testProduct>[] } };
     };
   }
+  interface GeneratedGqlTypes {
+    TestProductCreateInput: InferCreateInput<typeof testProduct>;
+    TestProductUpdateInput: InferUpdateInput<typeof testProduct>;
+  }
 }
 
 describe("GqlVariables with augmented GeneratedGqlSchema", () => {
@@ -359,9 +370,11 @@ describe("GqlVariables with augmented GeneratedGqlSchema", () => {
     }>();
   });
 
-  it("still returns Record<string, unknown> for unregistered operations", () => {
+  it("returns error type for unregistered operations", () => {
     type V = GqlVariables<"unregisteredOp">;
-    expectTypeOf<V>().toEqualTypeOf<Record<string, unknown>>();
+    expectTypeOf<V>().toEqualTypeOf<{
+      readonly __error: 'Unknown GraphQL operation: "unregisteredOp". Run type generation to register it in GeneratedGqlSchema.';
+    }>();
   });
 });
 
@@ -382,8 +395,81 @@ describe("GqlResult with augmented GeneratedGqlSchema", () => {
     }>();
   });
 
-  it("still returns unknown for unregistered operations", () => {
+  it("returns error type for unregistered operations", () => {
     type R = GqlResult<"unregisteredOp">;
-    expectTypeOf<R>().toEqualTypeOf<unknown>();
+    expectTypeOf<R>().toEqualTypeOf<{
+      readonly __error: 'Unknown GraphQL operation: "unregisteredOp". Run type generation to register it in GeneratedGqlSchema.';
+    }>();
+  });
+});
+
+// === ParsedGqlVariables ===
+
+describe("ParsedGqlVariables", () => {
+  it("parses single variable with builtin scalar", () => {
+    type V = ParsedGqlVariables<"mutation deleteUser($id: ID!) { deleteUser(id: $id) { id } }">;
+    expectTypeOf<V>().toEqualTypeOf<{ id: string }>();
+  });
+
+  it("parses multiple variables", () => {
+    type V =
+      ParsedGqlVariables<"mutation updateUser($id: ID!, $input: TestProductCreateInput!) { updateUser(id: $id, input: $input) { id } }">;
+    expectTypeOf<V>().toEqualTypeOf<{
+      id: string;
+      input: InferCreateInput<typeof testProduct>;
+    }>();
+  });
+
+  it("parses list type variable", () => {
+    type V = ParsedGqlVariables<"mutation test($ids: [ID!]!) { test(ids: $ids) { id } }">;
+    expectTypeOf<V>().toEqualTypeOf<{ ids: string[] }>();
+  });
+
+  it("parses various builtin scalars", () => {
+    type V =
+      ParsedGqlVariables<"query test($s: String!, $i: Int!, $f: Float!, $b: Boolean!) { test { id } }">;
+    expectTypeOf<V>().toEqualTypeOf<{
+      s: string;
+      i: number;
+      f: number;
+      b: boolean;
+    }>();
+  });
+
+  it("parses DateTime/Date/Time scalars", () => {
+    type V = ParsedGqlVariables<"query test($dt: DateTime!, $d: Date!, $t: Time!) { test { id } }">;
+    expectTypeOf<V>().toEqualTypeOf<{
+      dt: string;
+      d: string;
+      t: string;
+    }>();
+  });
+
+  it("returns never when no variable declarations present", () => {
+    type V = ParsedGqlVariables<"mutation { createFoo(input: $input) { id } }">;
+    expectTypeOf<V>().toBeNever();
+  });
+
+  it("parses variables from multiline query", () => {
+    type V = ParsedGqlVariables<`
+      mutation createProduct($input: TestProductCreateInput!) {
+        createProduct(input: $input) {
+          id
+        }
+      }
+    `>;
+    expectTypeOf<V>().toEqualTypeOf<{
+      input: InferCreateInput<typeof testProduct>;
+    }>();
+  });
+
+  it("resolves unknown type names to unknown", () => {
+    type V = ParsedGqlVariables<"mutation test($x: UnknownType!) { test(x: $x) { id } }">;
+    expectTypeOf<V>().toEqualTypeOf<{ x: unknown }>();
+  });
+
+  it("parses nullable (non-bang) variables", () => {
+    type V = ParsedGqlVariables<"query test($id: ID) { test(id: $id) { id } }">;
+    expectTypeOf<V>().toEqualTypeOf<{ id: string }>();
   });
 });

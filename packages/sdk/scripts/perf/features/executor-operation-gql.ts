@@ -6,7 +6,7 @@
  */
 import { createExecutor, incomingWebhookTrigger } from "../../../src/configure";
 
-const query = `
+const query: string = `
   query GetUser($id: ID!) {
     user(id: $id) {
       id
