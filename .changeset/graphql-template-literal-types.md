@@ -4,7 +4,7 @@
 
 Add type-safe GraphQL variable inference for executor operations
 
-- Add GraphQL type inference module (`@tailor-platform/sdk/graphql`) with `ExtractRootField`, `InferCreateInput`, `InferUpdateInput`, `InferGqlResult`, and `GeneratedGqlSchema` module augmentation
-- Executor `query` field now preserves template literal types via `const Q` generic, enabling automatic variable type resolution from `GeneratedGqlSchema`
-- Add `StrictKeys` for excess property checking on `variables` callback return values
-- Remove `@urql/core` dependency in favor of plain string-based GraphQL queries
+- GraphQL queries written as template literals in `createExecutor` now infer variable types from the generated schema at compile time
+- Add `@tailor-platform/graphql-schema` builtin generator for schema type declarations
+- Add `@tailor-platform/sdk/graphql` export with type utilities (`ValidateGqlQuery`, `GqlVariables`, `GqlResult`, etc.)
+- Remove `@urql/core` dependency in favor of plain string queries

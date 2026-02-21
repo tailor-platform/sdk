@@ -6,6 +6,7 @@
  */
 import { createExecutor, incomingWebhookTrigger } from "../../../src/configure";
 
+// Explicit `: string` prevents literal type inference, exercising the permissive (non-literal) code path
 const query: string = `
   query GetUser($id: ID!) {
     user(id: $id) {
