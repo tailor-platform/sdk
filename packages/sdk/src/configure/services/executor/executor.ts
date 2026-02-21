@@ -57,6 +57,8 @@ export function createExecutor<
       | WorkflowOperation<TriggerArgs<T>, W>
       | GqlOperation<TriggerArgs<T>, Q, V>
       | (Omit<GqlOperation<TriggerArgs<T>, Q, V>, "query"> & {
+          // Escape hatch for DocumentNode-like objects (toString() produces the query string).
+          // Does not participate in type-safe variable inference.
           query: object & { toString(): string };
         })
       | FunctionOperation<TriggerArgs<T>>

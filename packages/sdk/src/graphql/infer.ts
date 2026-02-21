@@ -242,7 +242,9 @@ export type InferUpdateInput<T extends TailorAnyDBType> = {
 
 /**
  * Infer the GraphQL result type from a TailorDB type definition.
- * Includes all fields (including id) mapped to their output types.
+ * Includes all scalar fields (including id) mapped to their output types.
+ * Does not include forward-relationship (relation()) fields; those require
+ * query-level selection and are out of scope for this base type mapping.
  * @example
  * ```ts
  * const user = db.type("User", { name: db.string(), age: db.int() });
@@ -281,6 +283,8 @@ export interface GeneratedGqlSchema {}
  * Extract the variable block from a GraphQL operation.
  * Finds the first `(...)` that precedes `{` and whose content starts with `$`.
  * This correctly skips field arguments like `createFoo(input: $input)`.
+ * Assumes no nested parentheses in variable declarations, which holds for
+ * standard GraphQL (e.g., `($x: Int = (1))` is not supported).
  */
 type _ExtractVarBlock<Q extends string> = Q extends `${string}(${infer VarsAndRest}`
   ? VarsAndRest extends `${infer Block})${string}{${string}`
