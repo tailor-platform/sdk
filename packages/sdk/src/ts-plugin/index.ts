@@ -92,7 +92,7 @@ function init() {
       }
 
       try {
-        const result = execSync(`"${sdkBin}" manifest --config "${configPath}"`, {
+        const result = execSync(`"${sdkBin}" manifest --json --config "${configPath}"`, {
           cwd: projectDir,
           encoding: "utf-8",
           timeout: 30_000,

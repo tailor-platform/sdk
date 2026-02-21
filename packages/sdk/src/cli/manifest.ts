@@ -12,13 +12,14 @@ import { defineApplication } from "@/cli/application";
 import { loadConfig } from "@/cli/config-loader";
 import { extractManifest } from "@/cli/generator/manifest";
 import { logger } from "@/cli/utils/logger";
-import { commonArgs, withCommonArgs } from "./args";
+import { commonArgs, jsonArgs, withCommonArgs } from "./args";
 
 export const manifestCommand = defineCommand({
   name: "manifest",
   description: "Extract type manifest for the TS Language Service Plugin.",
   args: z.object({
     ...commonArgs,
+    ...jsonArgs,
     config: arg(z.string().default("tailor.config.ts"), {
       alias: "c",
       description: "Path to SDK config file",

@@ -64,6 +64,7 @@ tailor-sdk manifest [options]
 
 | Option              | Alias | Description             | Required | Default              |
 | ------------------- | ----- | ----------------------- | -------- | -------------------- |
+| `--json`            | `-j`  | Output as JSON          | No       | `false`              |
 | `--config <CONFIG>` | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` |
 
 <!-- politty:command:manifest:end -->
