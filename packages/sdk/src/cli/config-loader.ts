@@ -13,6 +13,7 @@ import {
   EnumConstantsGeneratorID,
 } from "./generator/builtin/enum-constants";
 import { createFileUtilsGenerator, FileUtilsGeneratorID } from "./generator/builtin/file-utils";
+import { createGqlSchemaGenerator, GqlSchemaGeneratorID } from "./generator/builtin/graphql-schema";
 import { createKyselyGenerator, KyselyGeneratorID } from "./generator/builtin/kysely-type";
 import { createSeedGenerator, SeedGeneratorID } from "./generator/builtin/seed";
 import type { AppConfig } from "@/parser/app-config";
@@ -33,6 +34,7 @@ const builtinGenerators = new Map<string, (options: any) => CodeGeneratorBase>([
     (options: { distPath: string }) => createEnumConstantsGenerator(options),
   ],
   [FileUtilsGeneratorID, (options: { distPath: string }) => createFileUtilsGenerator(options)],
+  [GqlSchemaGeneratorID, (options: { distPath: string }) => createGqlSchemaGenerator(options)],
 ]);
 
 export const GeneratorConfigSchema = createGeneratorConfigSchema(builtinGenerators);

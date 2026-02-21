@@ -26,6 +26,11 @@ const FileUtilsConfigSchema = z.tuple([
   z.object({ distPath: z.string() }),
 ]);
 
+const GqlSchemaConfigSchema = z.tuple([
+  z.literal("@tailor-platform/graphql-schema"),
+  z.object({ distPath: z.string() }),
+]);
+
 // Custom generator schema with dependencies
 export const CodeGeneratorSchema = z.object({
   id: z.string(),
@@ -45,6 +50,7 @@ export const BaseGeneratorConfigSchema = z.union([
   SeedConfigSchema,
   EnumConstantsConfigSchema,
   FileUtilsConfigSchema,
+  GqlSchemaConfigSchema,
   CodeGeneratorSchema,
 ]);
 
@@ -68,6 +74,7 @@ export function createGeneratorConfigSchema(
       SeedConfigSchema,
       EnumConstantsConfigSchema,
       FileUtilsConfigSchema,
+      GqlSchemaConfigSchema,
       CodeGeneratorSchema,
     ])
     .transform((gen) => {

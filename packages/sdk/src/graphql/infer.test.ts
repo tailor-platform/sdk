@@ -7,6 +7,8 @@ import type {
   InferGqlResult,
   GqlVariables,
   GqlResult,
+  StrictKeys,
+  ResolvedGqlVariables,
 } from "./infer";
 
 // === ExtractRootField ===
@@ -395,5 +397,74 @@ describe("GqlResult with augmented GeneratedGqlSchema", () => {
     expectTypeOf<R>().toEqualTypeOf<{
       readonly __error: 'Unknown GraphQL operation: "unregisteredOp". Run type generation to register it in GeneratedGqlSchema.';
     }>();
+  });
+});
+
+// === StrictKeys ===
+
+describe("StrictKeys", () => {
+  it("does not recurse into arrays", () => {
+    type Shape = { items: string[] };
+    type T = { items: string[] };
+    type Result = StrictKeys<T, Shape>;
+    // Array should pass through without recursion
+    expectTypeOf<Result["items"]>().toEqualTypeOf<string[]>();
+  });
+
+  it("does not recurse into functions", () => {
+    type Shape = { fn: () => void };
+    type T = { fn: () => void };
+    type Result = StrictKeys<T, Shape>;
+    // Function should pass through without recursion
+    expectTypeOf<Result["fn"]>().toEqualTypeOf<() => void>();
+  });
+
+  it("recurses into nested objects", () => {
+    type Shape = { nested: { a: string } };
+    type T = { nested: { a: string; b: number } };
+    type Result = StrictKeys<T, Shape>;
+    // a should be preserved, b should be mapped to never since it's not in Shape
+    expectTypeOf<Result["nested"]["a"]>().toEqualTypeOf<string>();
+    expectTypeOf<Result["nested"]["b"]>().toEqualTypeOf<never>();
+  });
+
+  it("maps excess top-level keys to never", () => {
+    type Shape = { a: string };
+    type T = { a: string; extra: number };
+    type Result = StrictKeys<T, Shape>;
+    expectTypeOf<Result["extra"]>().toEqualTypeOf<never>();
+  });
+});
+
+// === _MergeVarNamesWithSchema (via ResolvedGqlVariables) ===
+
+describe("ResolvedGqlVariables with variable declarations", () => {
+  it("picks variables when declaration exactly matches schema keys", () => {
+    // createTestProduct has variables: { input: ... }
+    // Declaration has $input → exact match → pick
+    type V =
+      ResolvedGqlVariables<"mutation createTestProduct($input: TestProductCreateInput!) { createTestProduct(input: $input) { id } }">;
+    expectTypeOf<V>().toEqualTypeOf<{
+      input: { name: string; price: number; sku?: string | null };
+    }>();
+  });
+
+  it("falls back to full schema when declaration is a proper subset", () => {
+    // updateTestProduct has variables: { id: string; input: ... }
+    // Declaration only has $id → proper subset → full schema
+    type V =
+      ResolvedGqlVariables<"mutation updateTestProduct($id: ID!) { updateTestProduct(id: $id, input: $input) { id } }">;
+    expectTypeOf<V>().toEqualTypeOf<{
+      id: string;
+      input: { name?: string | null; price?: number | null; sku?: string | null };
+    }>();
+  });
+
+  it("maps unknown variable names to never (type error)", () => {
+    // createTestProduct has variables: { input: ... }
+    // Declaration has $input2 → not in schema → pick → input2 becomes never
+    type V =
+      ResolvedGqlVariables<"mutation createTestProduct($input2: TestProductCreateInput!) { createTestProduct(input: $input2) { id } }">;
+    expectTypeOf<V>().toEqualTypeOf<{ input2: never }>();
   });
 });

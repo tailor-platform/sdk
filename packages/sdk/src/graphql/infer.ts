@@ -324,7 +324,11 @@ type _MergeVarNamesWithSchema<Names extends string, Schema> = Schema extends {
   readonly __error: string;
 }
   ? Schema // Unknown operation → pass through error type
-  : Prettify<{ [K in Names]: K extends keyof Schema ? Schema[K] : never }>;
+  : [Exclude<Names, keyof Schema & string>] extends [never] // All declared vars exist in schema
+    ? [Exclude<keyof Schema & string, Names>] extends [never]
+      ? Prettify<{ [K in Names]: K extends keyof Schema ? Schema[K] : never }> // Exact match → pick
+      : Schema // Proper subset → full schema (require missing vars too)
+    : Prettify<{ [K in Names]: K extends keyof Schema ? Schema[K] : never }>; // Unknown vars → pick (unknowns become never = type error)
 
 /**
  * Resolve GraphQL variables from a query string.
@@ -406,10 +410,14 @@ export type GqlResult<OpName extends string> = string extends OpName
  */
 export type StrictKeys<T, Shape> = {
   [K in keyof T]: K extends keyof Shape
-    ? T[K] extends object
-      ? Shape[K] extends object
-        ? StrictKeys<T[K], Shape[K]>
-        : T[K]
-      : T[K]
+    ? T[K] extends readonly unknown[]
+      ? T[K] // Array: do not recurse
+      : T[K] extends (...args: never[]) => unknown
+        ? T[K] // Function: do not recurse
+        : T[K] extends object
+          ? Shape[K] extends object
+            ? StrictKeys<T[K], Shape[K]>
+            : T[K]
+          : T[K]
     : never;
 } & Record<Exclude<keyof T, keyof Shape>, never>;
