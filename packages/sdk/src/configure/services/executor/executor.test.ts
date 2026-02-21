@@ -1297,4 +1297,26 @@ describe("gqlTarget type inference with augmented GeneratedGqlSchema", () => {
       },
     });
   });
+
+  // NOTE: TypeScript does not enforce excess property checking on callback
+  // return values. This is a known language limitation. The tests below verify
+  // that type MISMATCHES (wrong types, missing required fields, wrong shape)
+  // are caught, which is the enforceable contract.
+
+  test("rejects missing required fields in variables", () => {
+    createExecutor({
+      name: "test-missing-required",
+      trigger: scheduleTrigger({ cron: "0 * * * *" }),
+      operation: {
+        kind: "graphql",
+        query: `mutation { createTestOrder(input: $input) { id } }`,
+        // @ts-expect-error - quantity (required) is missing
+        variables: () => ({
+          input: {
+            productId: "uuid-123",
+          },
+        }),
+      },
+    });
+  });
 });
