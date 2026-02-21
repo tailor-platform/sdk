@@ -66,10 +66,10 @@ tailor-sdk secret vault create [options] <name>
 
 **Options**
 
-| Option                          | Alias | Description       | Default |
-| ------------------------------- | ----- | ----------------- | ------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | -       |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile | -       |
+| Option                          | Alias | Description       | Required | Default |
+| ------------------------------- | ----- | ----------------- | -------- | ------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
 
 <!-- politty:command:secret vault create:end -->
 <!-- politty:command:secret vault delete:start -->
@@ -92,11 +92,11 @@ tailor-sdk secret vault delete [options] <name>
 
 **Options**
 
-| Option                          | Alias | Description               | Default |
-| ------------------------------- | ----- | ------------------------- | ------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID              | -       |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile         | -       |
-| `--yes`                         | `-y`  | Skip confirmation prompts | `false` |
+| Option                          | Alias | Description               | Required | Default |
+| ------------------------------- | ----- | ------------------------- | -------- | ------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID              | No       | -       |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile         | No       | -       |
+| `--yes`                         | `-y`  | Skip confirmation prompts | No       | `false` |
 
 <!-- politty:command:secret vault delete:end -->
 <!-- politty:command:secret vault list:start -->
@@ -113,11 +113,11 @@ tailor-sdk secret vault list [options]
 
 **Options**
 
-| Option                          | Alias | Description       | Default |
-| ------------------------------- | ----- | ----------------- | ------- |
-| `--json`                        | `-j`  | Output as JSON    | `false` |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | -       |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile | -       |
+| Option                          | Alias | Description       | Required | Default |
+| ------------------------------- | ----- | ----------------- | -------- | ------- |
+| `--json`                        | `-j`  | Output as JSON    | No       | `false` |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
 
 <!-- politty:command:secret vault list:end -->
 <!-- politty:command:secret create:start -->
@@ -134,13 +134,13 @@ tailor-sdk secret create [options]
 
 **Options**
 
-| Option                          | Alias | Description       | Default |
-| ------------------------------- | ----- | ----------------- | ------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | -       |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile | -       |
-| `--vault-name <VAULT_NAME>`     | `-V`  | Vault name        | -       |
-| `--name <NAME>`                 | `-n`  | Secret name       | -       |
-| `--value <VALUE>`               | `-v`  | Secret value      | -       |
+| Option                          | Alias | Description       | Required | Default |
+| ------------------------------- | ----- | ----------------- | -------- | ------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
+| `--vault-name <VAULT_NAME>`     | `-V`  | Vault name        | Yes      | -       |
+| `--name <NAME>`                 | `-n`  | Secret name       | Yes      | -       |
+| `--value <VALUE>`               | `-v`  | Secret value      | Yes      | -       |
 
 <!-- politty:command:secret create:end -->
 <!-- politty:command:secret update:start -->
@@ -157,13 +157,13 @@ tailor-sdk secret update [options]
 
 **Options**
 
-| Option                          | Alias | Description       | Default |
-| ------------------------------- | ----- | ----------------- | ------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | -       |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile | -       |
-| `--vault-name <VAULT_NAME>`     | `-V`  | Vault name        | -       |
-| `--name <NAME>`                 | `-n`  | Secret name       | -       |
-| `--value <VALUE>`               | `-v`  | Secret value      | -       |
+| Option                          | Alias | Description       | Required | Default |
+| ------------------------------- | ----- | ----------------- | -------- | ------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
+| `--vault-name <VAULT_NAME>`     | `-V`  | Vault name        | Yes      | -       |
+| `--name <NAME>`                 | `-n`  | Secret name       | Yes      | -       |
+| `--value <VALUE>`               | `-v`  | Secret value      | Yes      | -       |
 
 <!-- politty:command:secret update:end -->
 <!-- politty:command:secret list:start -->
@@ -180,12 +180,12 @@ tailor-sdk secret list [options]
 
 **Options**
 
-| Option                          | Alias | Description       | Default |
-| ------------------------------- | ----- | ----------------- | ------- |
-| `--json`                        | `-j`  | Output as JSON    | `false` |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | -       |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile | -       |
-| `--vault-name <VAULT_NAME>`     | `-V`  | Vault name        | -       |
+| Option                          | Alias | Description       | Required | Default |
+| ------------------------------- | ----- | ----------------- | -------- | ------- |
+| `--json`                        | `-j`  | Output as JSON    | No       | `false` |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
+| `--vault-name <VAULT_NAME>`     | `-V`  | Vault name        | Yes      | -       |
 
 <!-- politty:command:secret list:end -->
 <!-- politty:command:secret delete:start -->
@@ -202,12 +202,12 @@ tailor-sdk secret delete [options]
 
 **Options**
 
-| Option                          | Alias | Description               | Default |
-| ------------------------------- | ----- | ------------------------- | ------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID              | -       |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile         | -       |
-| `--vault-name <VAULT_NAME>`     | `-V`  | Vault name                | -       |
-| `--name <NAME>`                 | `-n`  | Secret name               | -       |
-| `--yes`                         | `-y`  | Skip confirmation prompts | `false` |
+| Option                          | Alias | Description               | Required | Default |
+| ------------------------------- | ----- | ------------------------- | -------- | ------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID              | No       | -       |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile         | No       | -       |
+| `--vault-name <VAULT_NAME>`     | `-V`  | Vault name                | Yes      | -       |
+| `--name <NAME>`                 | `-n`  | Secret name               | Yes      | -       |
+| `--yes`                         | `-y`  | Skip confirmation prompts | No       | `false` |
 
 <!-- politty:command:secret delete:end -->

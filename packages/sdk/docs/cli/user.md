@@ -79,9 +79,9 @@ tailor-sdk user list [options]
 
 **Options**
 
-| Option   | Alias | Description    | Default |
-| -------- | ----- | -------------- | ------- |
-| `--json` | `-j`  | Output as JSON | `false` |
+| Option   | Alias | Description    | Required | Default |
+| -------- | ----- | -------------- | -------- | ------- |
+| `--json` | `-j`  | Output as JSON | No       | `false` |
 
 <!-- politty:command:user list:end -->
 <!-- politty:command:user switch:start -->
@@ -117,9 +117,9 @@ tailor-sdk user pat [options] [command]
 
 **Options**
 
-| Option   | Alias | Description    | Default |
-| -------- | ----- | -------------- | ------- |
-| `--json` | `-j`  | Output as JSON | `false` |
+| Option   | Alias | Description    | Required | Default |
+| -------- | ----- | -------------- | -------- | ------- |
+| `--json` | `-j`  | Output as JSON | No       | `false` |
 
 **Commands**
 
@@ -145,9 +145,9 @@ tailor-sdk user pat list [options]
 
 **Options**
 
-| Option   | Alias | Description    | Default |
-| -------- | ----- | -------------- | ------- |
-| `--json` | `-j`  | Output as JSON | `false` |
+| Option   | Alias | Description    | Required | Default |
+| -------- | ----- | -------------- | -------- | ------- |
+| `--json` | `-j`  | Output as JSON | No       | `false` |
 
 <!-- politty:command:user pat list:end -->
 <!-- politty:command:user pat create:start -->
@@ -170,10 +170,10 @@ tailor-sdk user pat create [options] <name>
 
 **Options**
 
-| Option    | Alias | Description                                 | Default |
-| --------- | ----- | ------------------------------------------- | ------- |
-| `--json`  | `-j`  | Output as JSON                              | `false` |
-| `--write` | `-W`  | Grant write permission (default: read-only) | `false` |
+| Option    | Alias | Description                                 | Required | Default |
+| --------- | ----- | ------------------------------------------- | -------- | ------- |
+| `--json`  | `-j`  | Output as JSON                              | No       | `false` |
+| `--write` | `-W`  | Grant write permission (default: read-only) | No       | `false` |
 
 <!-- politty:command:user pat create:end -->
 <!-- politty:command:user pat delete:start -->
@@ -215,10 +215,10 @@ tailor-sdk user pat update [options] <name>
 
 **Options**
 
-| Option    | Alias | Description                                                | Default |
-| --------- | ----- | ---------------------------------------------------------- | ------- |
-| `--json`  | `-j`  | Output as JSON                                             | `false` |
-| `--write` | `-W`  | Grant write permission (if not specified, keeps read-only) | `false` |
+| Option    | Alias | Description                                                | Required | Default |
+| --------- | ----- | ---------------------------------------------------------- | -------- | ------- |
+| `--json`  | `-j`  | Output as JSON                                             | No       | `false` |
+| `--write` | `-W`  | Grant write permission (if not specified, keeps read-only) | No       | `false` |
 
 <!-- politty:command:user pat update:end -->
 
