@@ -1298,11 +1298,6 @@ describe("gqlTarget type inference with augmented GeneratedGqlSchema", () => {
     });
   });
 
-  // NOTE: TypeScript does not enforce excess property checking on callback
-  // return values. This is a known language limitation. The tests below verify
-  // that type MISMATCHES (wrong types, missing required fields, wrong shape)
-  // are caught, which is the enforceable contract.
-
   test("rejects missing required fields in variables", () => {
     createExecutor({
       name: "test-missing-required",
@@ -1315,6 +1310,44 @@ describe("gqlTarget type inference with augmented GeneratedGqlSchema", () => {
           input: {
             productId: "uuid-123",
           },
+        }),
+      },
+    });
+  });
+
+  test("rejects excess properties in nested input", () => {
+    createExecutor({
+      name: "test-excess-nested",
+      trigger: scheduleTrigger({ cron: "0 * * * *" }),
+      operation: {
+        kind: "graphql",
+        query: `mutation { createTestOrder(input: $input) { id } }`,
+        // @ts-expect-error - extra is not a field in the input type
+        variables: () => ({
+          input: {
+            productId: "uuid-789",
+            quantity: 1,
+            extra: true,
+          },
+        }),
+      },
+    });
+  });
+
+  test("rejects excess properties at top level", () => {
+    createExecutor({
+      name: "test-excess-top-level",
+      trigger: scheduleTrigger({ cron: "0 * * * *" }),
+      operation: {
+        kind: "graphql",
+        query: `mutation { createTestOrder(input: $input) { id } }`,
+        // @ts-expect-error - extra is not a valid top-level key
+        variables: () => ({
+          input: {
+            productId: "uuid-789",
+            quantity: 1,
+          },
+          extra: true,
         }),
       },
     });

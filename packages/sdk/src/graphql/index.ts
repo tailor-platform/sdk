@@ -14,4 +14,5 @@ export type {
   InferCreateInput,
   InferUpdateInput,
   InferGqlResult,
+  StrictKeys,
 } from "./infer";

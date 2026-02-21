@@ -281,3 +281,23 @@ export type GqlResult<OpName extends string> = OpName extends keyof GeneratedGql
     ? R
     : unknown
   : unknown;
+
+// === Strict object checking ===
+
+/**
+ * Enforce exact object shape by mapping excess keys to `never`.
+ * Used as an intersection `V & StrictKeys<V, Shape>` to reject
+ * excess properties in callback return values, where TypeScript's
+ * built-in excess property checking does not apply.
+ *
+ * Recurses into nested objects to catch deep excess properties.
+ */
+export type StrictKeys<T, Shape> = {
+  [K in keyof T]: K extends keyof Shape
+    ? T[K] extends object
+      ? Shape[K] extends object
+        ? StrictKeys<T[K], Shape[K]>
+        : T[K]
+      : T[K]
+    : never;
+} & Record<Exclude<keyof T, keyof Shape>, never>;
