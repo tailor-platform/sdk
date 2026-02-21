@@ -33,8 +33,12 @@ type GqlSchemaGeneratorOptions = {
  */
 function computeImportPath(baseDir: string, outputDir: string, filePath: string): string {
   const absolutePath = path.resolve(baseDir, filePath);
-  const relativePath = path.relative(outputDir, absolutePath);
-  return `./${relativePath.replace(/\\/g, "/").replace(/\.ts$/, "")}`;
+  let relativePath = path
+    .relative(outputDir, absolutePath)
+    .replace(/\\/g, "/")
+    .replace(/\.ts$/, "");
+  if (!relativePath.startsWith(".")) relativePath = `./${relativePath}`;
+  return relativePath;
 }
 
 /**
@@ -72,8 +76,9 @@ export function processType(args: {
   const getQueryName = inflection.camelize(type.name, true);
   const listQueryName = inflection.camelize(type.pluralForm, true);
 
-  // Placeholder for typeRef — actual import path is resolved in aggregate
-  const typeRefKey = `__typeRef:${source.filePath}:${source.exportName}__`;
+  // Placeholder for typeRef — actual import path is resolved in aggregate.
+  // Uses `|` as separator since `:` can appear in file paths (e.g., Windows drive letters).
+  const typeRefKey = `__typeRef|${source.filePath}|${source.exportName}__`;
 
   // Read operations (get + list)
   if (isOperationEnabled(type, "read")) {
@@ -194,13 +199,13 @@ export function createGqlSchemaGenerator(options: GqlSchemaGeneratorOptions) {
 
 /**
  * Replace typeRef placeholders with actual typeof import expressions.
- * @param expr - Expression string with __typeRef:filePath:exportName__ placeholders
+ * @param expr - Expression string with __typeRef|filePath|exportName__ placeholders
  * @param baseDir - Base directory of the project
  * @param outputDir - Output directory for the .d.ts file
  * @returns Expression with resolved import paths
  */
 function resolveTypeRefs(expr: string, baseDir: string, outputDir: string): string {
-  return expr.replace(/__typeRef:([^:]+):(.+?)__/g, (_match, filePath, exportName) => {
+  return expr.replace(/__typeRef\|([^|]+)\|(.+?)__/g, (_match, filePath, exportName) => {
     const importPath = computeImportPath(baseDir, outputDir, filePath as string);
     return `(typeof import("${importPath}"))["${exportName as string}"]`;
   });

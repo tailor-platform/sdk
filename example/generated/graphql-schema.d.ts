@@ -7,19 +7,19 @@ declare module "@tailor-platform/sdk/graphql" {
   interface GeneratedGqlSchema {
     customer: {
       variables: { id: string };
-      result: { customer: InferGqlResult<(typeof import("./../tailordb/customer"))["customer"]> | null };
+      result: { customer: InferGqlResult<(typeof import("../tailordb/customer"))["customer"]> | null };
     };
     customers: {
       variables: Record<string, unknown>;
-      result: { customers: { collection: InferGqlResult<(typeof import("./../tailordb/customer"))["customer"]>[] } };
+      result: { customers: { collection: InferGqlResult<(typeof import("../tailordb/customer"))["customer"]>[] } };
     };
     createCustomer: {
-      variables: { input: InferCreateInput<(typeof import("./../tailordb/customer"))["customer"]> };
-      result: { createCustomer: InferGqlResult<(typeof import("./../tailordb/customer"))["customer"]> };
+      variables: { input: InferCreateInput<(typeof import("../tailordb/customer"))["customer"]> };
+      result: { createCustomer: InferGqlResult<(typeof import("../tailordb/customer"))["customer"]> };
     };
     updateCustomer: {
-      variables: { id: string; input: InferUpdateInput<(typeof import("./../tailordb/customer"))["customer"]> };
-      result: { updateCustomer: InferGqlResult<(typeof import("./../tailordb/customer"))["customer"]> };
+      variables: { id: string; input: InferUpdateInput<(typeof import("../tailordb/customer"))["customer"]> };
+      result: { updateCustomer: InferGqlResult<(typeof import("../tailordb/customer"))["customer"]> };
     };
     deleteCustomer: {
       variables: { id: string };
@@ -27,19 +27,19 @@ declare module "@tailor-platform/sdk/graphql" {
     };
     invoice: {
       variables: { id: string };
-      result: { invoice: InferGqlResult<(typeof import("./../tailordb/invoice"))["invoice"]> | null };
+      result: { invoice: InferGqlResult<(typeof import("../tailordb/invoice"))["invoice"]> | null };
     };
     invoices: {
       variables: Record<string, unknown>;
-      result: { invoices: { collection: InferGqlResult<(typeof import("./../tailordb/invoice"))["invoice"]>[] } };
+      result: { invoices: { collection: InferGqlResult<(typeof import("../tailordb/invoice"))["invoice"]>[] } };
     };
     createInvoice: {
-      variables: { input: InferCreateInput<(typeof import("./../tailordb/invoice"))["invoice"]> };
-      result: { createInvoice: InferGqlResult<(typeof import("./../tailordb/invoice"))["invoice"]> };
+      variables: { input: InferCreateInput<(typeof import("../tailordb/invoice"))["invoice"]> };
+      result: { createInvoice: InferGqlResult<(typeof import("../tailordb/invoice"))["invoice"]> };
     };
     updateInvoice: {
-      variables: { id: string; input: InferUpdateInput<(typeof import("./../tailordb/invoice"))["invoice"]> };
-      result: { updateInvoice: InferGqlResult<(typeof import("./../tailordb/invoice"))["invoice"]> };
+      variables: { id: string; input: InferUpdateInput<(typeof import("../tailordb/invoice"))["invoice"]> };
+      result: { updateInvoice: InferGqlResult<(typeof import("../tailordb/invoice"))["invoice"]> };
     };
     deleteInvoice: {
       variables: { id: string };
@@ -47,19 +47,19 @@ declare module "@tailor-platform/sdk/graphql" {
     };
     nestedProfile: {
       variables: { id: string };
-      result: { nestedProfile: InferGqlResult<(typeof import("./../tailordb/nested"))["nestedProfile"]> | null };
+      result: { nestedProfile: InferGqlResult<(typeof import("../tailordb/nested"))["nestedProfile"]> | null };
     };
     nestedProfiles: {
       variables: Record<string, unknown>;
-      result: { nestedProfiles: { collection: InferGqlResult<(typeof import("./../tailordb/nested"))["nestedProfile"]>[] } };
+      result: { nestedProfiles: { collection: InferGqlResult<(typeof import("../tailordb/nested"))["nestedProfile"]>[] } };
     };
     createNestedProfile: {
-      variables: { input: InferCreateInput<(typeof import("./../tailordb/nested"))["nestedProfile"]> };
-      result: { createNestedProfile: InferGqlResult<(typeof import("./../tailordb/nested"))["nestedProfile"]> };
+      variables: { input: InferCreateInput<(typeof import("../tailordb/nested"))["nestedProfile"]> };
+      result: { createNestedProfile: InferGqlResult<(typeof import("../tailordb/nested"))["nestedProfile"]> };
     };
     updateNestedProfile: {
-      variables: { id: string; input: InferUpdateInput<(typeof import("./../tailordb/nested"))["nestedProfile"]> };
-      result: { updateNestedProfile: InferGqlResult<(typeof import("./../tailordb/nested"))["nestedProfile"]> };
+      variables: { id: string; input: InferUpdateInput<(typeof import("../tailordb/nested"))["nestedProfile"]> };
+      result: { updateNestedProfile: InferGqlResult<(typeof import("../tailordb/nested"))["nestedProfile"]> };
     };
     deleteNestedProfile: {
       variables: { id: string };
@@ -67,19 +67,19 @@ declare module "@tailor-platform/sdk/graphql" {
     };
     purchaseOrder: {
       variables: { id: string };
-      result: { purchaseOrder: InferGqlResult<(typeof import("./../tailordb/purchaseOrder"))["purchaseOrder"]> | null };
+      result: { purchaseOrder: InferGqlResult<(typeof import("../tailordb/purchaseOrder"))["purchaseOrder"]> | null };
     };
     purchaseOrderList: {
       variables: Record<string, unknown>;
-      result: { purchaseOrderList: { collection: InferGqlResult<(typeof import("./../tailordb/purchaseOrder"))["purchaseOrder"]>[] } };
+      result: { purchaseOrderList: { collection: InferGqlResult<(typeof import("../tailordb/purchaseOrder"))["purchaseOrder"]>[] } };
     };
     createPurchaseOrder: {
-      variables: { input: InferCreateInput<(typeof import("./../tailordb/purchaseOrder"))["purchaseOrder"]> };
-      result: { createPurchaseOrder: InferGqlResult<(typeof import("./../tailordb/purchaseOrder"))["purchaseOrder"]> };
+      variables: { input: InferCreateInput<(typeof import("../tailordb/purchaseOrder"))["purchaseOrder"]> };
+      result: { createPurchaseOrder: InferGqlResult<(typeof import("../tailordb/purchaseOrder"))["purchaseOrder"]> };
     };
     updatePurchaseOrder: {
-      variables: { id: string; input: InferUpdateInput<(typeof import("./../tailordb/purchaseOrder"))["purchaseOrder"]> };
-      result: { updatePurchaseOrder: InferGqlResult<(typeof import("./../tailordb/purchaseOrder"))["purchaseOrder"]> };
+      variables: { id: string; input: InferUpdateInput<(typeof import("../tailordb/purchaseOrder"))["purchaseOrder"]> };
+      result: { updatePurchaseOrder: InferGqlResult<(typeof import("../tailordb/purchaseOrder"))["purchaseOrder"]> };
     };
     deletePurchaseOrder: {
       variables: { id: string };
@@ -87,19 +87,19 @@ declare module "@tailor-platform/sdk/graphql" {
     };
     salesOrder: {
       variables: { id: string };
-      result: { salesOrder: InferGqlResult<(typeof import("./../tailordb/salesOrder"))["salesOrder"]> | null };
+      result: { salesOrder: InferGqlResult<(typeof import("../tailordb/salesOrder"))["salesOrder"]> | null };
     };
     salesOrderList: {
       variables: Record<string, unknown>;
-      result: { salesOrderList: { collection: InferGqlResult<(typeof import("./../tailordb/salesOrder"))["salesOrder"]>[] } };
+      result: { salesOrderList: { collection: InferGqlResult<(typeof import("../tailordb/salesOrder"))["salesOrder"]>[] } };
     };
     createSalesOrder: {
-      variables: { input: InferCreateInput<(typeof import("./../tailordb/salesOrder"))["salesOrder"]> };
-      result: { createSalesOrder: InferGqlResult<(typeof import("./../tailordb/salesOrder"))["salesOrder"]> };
+      variables: { input: InferCreateInput<(typeof import("../tailordb/salesOrder"))["salesOrder"]> };
+      result: { createSalesOrder: InferGqlResult<(typeof import("../tailordb/salesOrder"))["salesOrder"]> };
     };
     updateSalesOrder: {
-      variables: { id: string; input: InferUpdateInput<(typeof import("./../tailordb/salesOrder"))["salesOrder"]> };
-      result: { updateSalesOrder: InferGqlResult<(typeof import("./../tailordb/salesOrder"))["salesOrder"]> };
+      variables: { id: string; input: InferUpdateInput<(typeof import("../tailordb/salesOrder"))["salesOrder"]> };
+      result: { updateSalesOrder: InferGqlResult<(typeof import("../tailordb/salesOrder"))["salesOrder"]> };
     };
     deleteSalesOrder: {
       variables: { id: string };
@@ -107,19 +107,19 @@ declare module "@tailor-platform/sdk/graphql" {
     };
     salesOrderCreated: {
       variables: { id: string };
-      result: { salesOrderCreated: InferGqlResult<(typeof import("./../tailordb/salesOrder"))["salesOrderCreated"]> | null };
+      result: { salesOrderCreated: InferGqlResult<(typeof import("../tailordb/salesOrder"))["salesOrderCreated"]> | null };
     };
     salesOrderCreatedList: {
       variables: Record<string, unknown>;
-      result: { salesOrderCreatedList: { collection: InferGqlResult<(typeof import("./../tailordb/salesOrder"))["salesOrderCreated"]>[] } };
+      result: { salesOrderCreatedList: { collection: InferGqlResult<(typeof import("../tailordb/salesOrder"))["salesOrderCreated"]>[] } };
     };
     createSalesOrderCreated: {
-      variables: { input: InferCreateInput<(typeof import("./../tailordb/salesOrder"))["salesOrderCreated"]> };
-      result: { createSalesOrderCreated: InferGqlResult<(typeof import("./../tailordb/salesOrder"))["salesOrderCreated"]> };
+      variables: { input: InferCreateInput<(typeof import("../tailordb/salesOrder"))["salesOrderCreated"]> };
+      result: { createSalesOrderCreated: InferGqlResult<(typeof import("../tailordb/salesOrder"))["salesOrderCreated"]> };
     };
     updateSalesOrderCreated: {
-      variables: { id: string; input: InferUpdateInput<(typeof import("./../tailordb/salesOrder"))["salesOrderCreated"]> };
-      result: { updateSalesOrderCreated: InferGqlResult<(typeof import("./../tailordb/salesOrder"))["salesOrderCreated"]> };
+      variables: { id: string; input: InferUpdateInput<(typeof import("../tailordb/salesOrder"))["salesOrderCreated"]> };
+      result: { updateSalesOrderCreated: InferGqlResult<(typeof import("../tailordb/salesOrder"))["salesOrderCreated"]> };
     };
     deleteSalesOrderCreated: {
       variables: { id: string };
@@ -127,19 +127,19 @@ declare module "@tailor-platform/sdk/graphql" {
     };
     selfie: {
       variables: { id: string };
-      result: { selfie: InferGqlResult<(typeof import("./../tailordb/selfie"))["selfie"]> | null };
+      result: { selfie: InferGqlResult<(typeof import("../tailordb/selfie"))["selfie"]> | null };
     };
     selfies: {
       variables: Record<string, unknown>;
-      result: { selfies: { collection: InferGqlResult<(typeof import("./../tailordb/selfie"))["selfie"]>[] } };
+      result: { selfies: { collection: InferGqlResult<(typeof import("../tailordb/selfie"))["selfie"]>[] } };
     };
     createSelfie: {
-      variables: { input: InferCreateInput<(typeof import("./../tailordb/selfie"))["selfie"]> };
-      result: { createSelfie: InferGqlResult<(typeof import("./../tailordb/selfie"))["selfie"]> };
+      variables: { input: InferCreateInput<(typeof import("../tailordb/selfie"))["selfie"]> };
+      result: { createSelfie: InferGqlResult<(typeof import("../tailordb/selfie"))["selfie"]> };
     };
     updateSelfie: {
-      variables: { id: string; input: InferUpdateInput<(typeof import("./../tailordb/selfie"))["selfie"]> };
-      result: { updateSelfie: InferGqlResult<(typeof import("./../tailordb/selfie"))["selfie"]> };
+      variables: { id: string; input: InferUpdateInput<(typeof import("../tailordb/selfie"))["selfie"]> };
+      result: { updateSelfie: InferGqlResult<(typeof import("../tailordb/selfie"))["selfie"]> };
     };
     deleteSelfie: {
       variables: { id: string };
@@ -147,19 +147,19 @@ declare module "@tailor-platform/sdk/graphql" {
     };
     supplier: {
       variables: { id: string };
-      result: { supplier: InferGqlResult<(typeof import("./../tailordb/supplier"))["supplier"]> | null };
+      result: { supplier: InferGqlResult<(typeof import("../tailordb/supplier"))["supplier"]> | null };
     };
     suppliers: {
       variables: Record<string, unknown>;
-      result: { suppliers: { collection: InferGqlResult<(typeof import("./../tailordb/supplier"))["supplier"]>[] } };
+      result: { suppliers: { collection: InferGqlResult<(typeof import("../tailordb/supplier"))["supplier"]>[] } };
     };
     createSupplier: {
-      variables: { input: InferCreateInput<(typeof import("./../tailordb/supplier"))["supplier"]> };
-      result: { createSupplier: InferGqlResult<(typeof import("./../tailordb/supplier"))["supplier"]> };
+      variables: { input: InferCreateInput<(typeof import("../tailordb/supplier"))["supplier"]> };
+      result: { createSupplier: InferGqlResult<(typeof import("../tailordb/supplier"))["supplier"]> };
     };
     updateSupplier: {
-      variables: { id: string; input: InferUpdateInput<(typeof import("./../tailordb/supplier"))["supplier"]> };
-      result: { updateSupplier: InferGqlResult<(typeof import("./../tailordb/supplier"))["supplier"]> };
+      variables: { id: string; input: InferUpdateInput<(typeof import("../tailordb/supplier"))["supplier"]> };
+      result: { updateSupplier: InferGqlResult<(typeof import("../tailordb/supplier"))["supplier"]> };
     };
     deleteSupplier: {
       variables: { id: string };
@@ -167,19 +167,19 @@ declare module "@tailor-platform/sdk/graphql" {
     };
     user: {
       variables: { id: string };
-      result: { user: InferGqlResult<(typeof import("./../tailordb/user"))["user"]> | null };
+      result: { user: InferGqlResult<(typeof import("../tailordb/user"))["user"]> | null };
     };
     users: {
       variables: Record<string, unknown>;
-      result: { users: { collection: InferGqlResult<(typeof import("./../tailordb/user"))["user"]>[] } };
+      result: { users: { collection: InferGqlResult<(typeof import("../tailordb/user"))["user"]>[] } };
     };
     createUser: {
-      variables: { input: InferCreateInput<(typeof import("./../tailordb/user"))["user"]> };
-      result: { createUser: InferGqlResult<(typeof import("./../tailordb/user"))["user"]> };
+      variables: { input: InferCreateInput<(typeof import("../tailordb/user"))["user"]> };
+      result: { createUser: InferGqlResult<(typeof import("../tailordb/user"))["user"]> };
     };
     updateUser: {
-      variables: { id: string; input: InferUpdateInput<(typeof import("./../tailordb/user"))["user"]> };
-      result: { updateUser: InferGqlResult<(typeof import("./../tailordb/user"))["user"]> };
+      variables: { id: string; input: InferUpdateInput<(typeof import("../tailordb/user"))["user"]> };
+      result: { updateUser: InferGqlResult<(typeof import("../tailordb/user"))["user"]> };
     };
     deleteUser: {
       variables: { id: string };
@@ -187,19 +187,19 @@ declare module "@tailor-platform/sdk/graphql" {
     };
     userLog: {
       variables: { id: string };
-      result: { userLog: InferGqlResult<(typeof import("./../tailordb/userLog"))["userLog"]> | null };
+      result: { userLog: InferGqlResult<(typeof import("../tailordb/userLog"))["userLog"]> | null };
     };
     userLogs: {
       variables: Record<string, unknown>;
-      result: { userLogs: { collection: InferGqlResult<(typeof import("./../tailordb/userLog"))["userLog"]>[] } };
+      result: { userLogs: { collection: InferGqlResult<(typeof import("../tailordb/userLog"))["userLog"]>[] } };
     };
     createUserLog: {
-      variables: { input: InferCreateInput<(typeof import("./../tailordb/userLog"))["userLog"]> };
-      result: { createUserLog: InferGqlResult<(typeof import("./../tailordb/userLog"))["userLog"]> };
+      variables: { input: InferCreateInput<(typeof import("../tailordb/userLog"))["userLog"]> };
+      result: { createUserLog: InferGqlResult<(typeof import("../tailordb/userLog"))["userLog"]> };
     };
     updateUserLog: {
-      variables: { id: string; input: InferUpdateInput<(typeof import("./../tailordb/userLog"))["userLog"]> };
-      result: { updateUserLog: InferGqlResult<(typeof import("./../tailordb/userLog"))["userLog"]> };
+      variables: { id: string; input: InferUpdateInput<(typeof import("../tailordb/userLog"))["userLog"]> };
+      result: { updateUserLog: InferGqlResult<(typeof import("../tailordb/userLog"))["userLog"]> };
     };
     deleteUserLog: {
       variables: { id: string };
@@ -207,19 +207,19 @@ declare module "@tailor-platform/sdk/graphql" {
     };
     userSetting: {
       variables: { id: string };
-      result: { userSetting: InferGqlResult<(typeof import("./../tailordb/userSetting"))["userSetting"]> | null };
+      result: { userSetting: InferGqlResult<(typeof import("../tailordb/userSetting"))["userSetting"]> | null };
     };
     userSettings: {
       variables: Record<string, unknown>;
-      result: { userSettings: { collection: InferGqlResult<(typeof import("./../tailordb/userSetting"))["userSetting"]>[] } };
+      result: { userSettings: { collection: InferGqlResult<(typeof import("../tailordb/userSetting"))["userSetting"]>[] } };
     };
     createUserSetting: {
-      variables: { input: InferCreateInput<(typeof import("./../tailordb/userSetting"))["userSetting"]> };
-      result: { createUserSetting: InferGqlResult<(typeof import("./../tailordb/userSetting"))["userSetting"]> };
+      variables: { input: InferCreateInput<(typeof import("../tailordb/userSetting"))["userSetting"]> };
+      result: { createUserSetting: InferGqlResult<(typeof import("../tailordb/userSetting"))["userSetting"]> };
     };
     updateUserSetting: {
-      variables: { id: string; input: InferUpdateInput<(typeof import("./../tailordb/userSetting"))["userSetting"]> };
-      result: { updateUserSetting: InferGqlResult<(typeof import("./../tailordb/userSetting"))["userSetting"]> };
+      variables: { id: string; input: InferUpdateInput<(typeof import("../tailordb/userSetting"))["userSetting"]> };
+      result: { updateUserSetting: InferGqlResult<(typeof import("../tailordb/userSetting"))["userSetting"]> };
     };
     deleteUserSetting: {
       variables: { id: string };
@@ -227,19 +227,19 @@ declare module "@tailor-platform/sdk/graphql" {
     };
     event: {
       variables: { id: string };
-      result: { event: InferGqlResult<(typeof import("./../analyticsdb/event"))["event"]> | null };
+      result: { event: InferGqlResult<(typeof import("../analyticsdb/event"))["event"]> | null };
     };
     events: {
       variables: Record<string, unknown>;
-      result: { events: { collection: InferGqlResult<(typeof import("./../analyticsdb/event"))["event"]>[] } };
+      result: { events: { collection: InferGqlResult<(typeof import("../analyticsdb/event"))["event"]>[] } };
     };
     createEvent: {
-      variables: { input: InferCreateInput<(typeof import("./../analyticsdb/event"))["event"]> };
-      result: { createEvent: InferGqlResult<(typeof import("./../analyticsdb/event"))["event"]> };
+      variables: { input: InferCreateInput<(typeof import("../analyticsdb/event"))["event"]> };
+      result: { createEvent: InferGqlResult<(typeof import("../analyticsdb/event"))["event"]> };
     };
     updateEvent: {
-      variables: { id: string; input: InferUpdateInput<(typeof import("./../analyticsdb/event"))["event"]> };
-      result: { updateEvent: InferGqlResult<(typeof import("./../analyticsdb/event"))["event"]> };
+      variables: { id: string; input: InferUpdateInput<(typeof import("../analyticsdb/event"))["event"]> };
+      result: { updateEvent: InferGqlResult<(typeof import("../analyticsdb/event"))["event"]> };
     };
     deleteEvent: {
       variables: { id: string };
