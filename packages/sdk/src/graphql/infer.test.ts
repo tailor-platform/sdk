@@ -503,7 +503,7 @@ describe("ValidateGqlQuery", () => {
 
   it("returns error for unregistered operation", () => {
     type V = ValidateGqlQuery<"mutation { unknownOp(input: $input) { id } }">;
-    expectTypeOf<V>().toEqualTypeOf<'Error: Unknown GraphQL operation "unknownOp". Run type generation to register it in GeneratedGqlSchema.'>();
+    expectTypeOf<V>().toEqualTypeOf<'Error: Unknown GraphQL operation: "unknownOp". Run type generation to register it in GeneratedGqlSchema.'>();
   });
 
   it("is permissive for non-literal string type", () => {

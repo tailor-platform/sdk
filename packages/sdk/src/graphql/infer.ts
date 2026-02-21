@@ -403,9 +403,16 @@ export type GqlResult<OpName extends string> = string extends OpName
 /** Check if the query contains a selection set `{ ... }` */
 type _HasSelectionSet<Q extends string> = Q extends `${string}{${string}}${string}` ? true : false;
 
-/** Check if the query starts with a valid GraphQL keyword */
+/** Whitespace or `{` that can follow a GraphQL keyword */
+type _KeywordBoundary = " " | "\n" | "\t" | "\r" | "{";
+
+/** Check if the query starts with a valid GraphQL keyword followed by a boundary */
 type _HasValidKeyword<Q extends string> =
-  Trim<Q> extends `query${string}` | `mutation${string}` | `subscription${string}` | `{${string}`
+  Trim<Q> extends
+    | `query${_KeywordBoundary}${string}`
+    | `mutation${_KeywordBoundary}${string}`
+    | `subscription${_KeywordBoundary}${string}`
+    | `{${string}`
     ? true
     : false;
 
@@ -433,7 +440,7 @@ export type ValidateGqlQuery<Q extends string> = string extends Q
       : _HasValidKeyword<Q> extends false
         ? `Error: Invalid GraphQL query. Must start with "query", "mutation", "subscription", or "{".`
         : _IsKnownRootField<Q> extends false
-          ? `Error: Unknown GraphQL operation "${ExtractRootField<Q>}". Run type generation to register it in GeneratedGqlSchema.`
+          ? `Error: Unknown GraphQL operation: "${ExtractRootField<Q>}". Run type generation to register it in GeneratedGqlSchema.`
           : Q; // all checks passed
 
 // === Strict object checking ===
