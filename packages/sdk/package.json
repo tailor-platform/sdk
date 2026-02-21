@@ -53,11 +53,6 @@
       "types": "./dist/graphql/index.d.mts",
       "import": "./dist/graphql/index.mjs",
       "default": "./dist/graphql/index.mjs"
-    },
-    "./ts-plugin": {
-      "types": "./dist/ts-plugin/index.d.cts",
-      "require": "./dist/ts-plugin/index.cjs",
-      "default": "./dist/ts-plugin/index.cjs"
     }
   },
   "scripts": {

@@ -22,59 +22,41 @@ function addDtsBanner(dir: string, baseDir: string = dir): void {
   }
 }
 
-const sharedConfig = {
-  target: "node18" as const,
-  platform: "node" as const,
+export default defineConfig({
+  entry: [
+    "src/configure/index.ts",
+    "src/cli/index.ts",
+    "src/cli/lib.ts",
+    "src/cli/skills.ts",
+    "src/utils/test/index.ts",
+    "src/kysely/index.ts",
+    "src/graphql/index.ts",
+    "src/plugin/index.ts",
+  ],
+  format: ["esm"],
+  target: "node18",
+  platform: "node",
+  clean: true,
   dts: true,
   outDir: "dist",
+  hooks: {
+    "build:done": () => {
+      addDtsBanner("dist");
+    },
+  },
   tsconfig: "./tsconfig.json",
   minify: false,
+  outExtensions: () => ({
+    js: ".mjs",
+    dts: ".d.mts",
+  }),
   sourcemap: true,
-};
-
-export default defineConfig([
-  // Main ESM build
-  {
-    ...sharedConfig,
-    entry: [
-      "src/configure/index.ts",
-      "src/cli/index.ts",
-      "src/cli/lib.ts",
-      "src/cli/skills.ts",
-      "src/utils/test/index.ts",
-      "src/kysely/index.ts",
-      "src/graphql/index.ts",
-      "src/plugin/index.ts",
-    ],
-    format: ["esm"],
-    clean: true,
-    hooks: {
-      "build:done": () => {
-        addDtsBanner("dist");
-      },
-    },
-    outExtensions: () => ({
-      js: ".mjs",
-      dts: ".d.mts",
+  plugins: [
+    Sonda({
+      open: false,
+      format: "json",
+      filename: "bundle-analysis.json",
+      deep: true,
     }),
-    plugins: [
-      Sonda({
-        open: false,
-        format: "json",
-        filename: "bundle-analysis.json",
-        deep: true,
-      }),
-    ],
-  },
-  // TS Language Service Plugin (CJS for TypeScript server require())
-  {
-    ...sharedConfig,
-    entry: ["src/ts-plugin/index.ts"],
-    format: ["cjs"],
-    outDir: "dist/ts-plugin",
-    outExtensions: () => ({
-      js: ".cjs",
-      dts: ".d.cts",
-    }),
-  },
-]);
+  ],
+});

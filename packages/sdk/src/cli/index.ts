@@ -12,7 +12,6 @@ import { initCommand } from "./init";
 import { loginCommand } from "./login";
 import { logoutCommand } from "./logout";
 import { machineuserCommand } from "./machineuser";
-import { manifestCommand } from "./manifest";
 import { oauth2clientCommand } from "./oauth2client";
 import { openCommand } from "./open";
 import { profileCommand } from "./profile";
@@ -43,7 +42,6 @@ export const mainCommand = withCompletionCommand(
       function: functionCommand,
       generate: generateCommand,
       init: initCommand,
-      manifest: manifestCommand,
       login: loginCommand,
       logout: logoutCommand,
       machineuser: machineuserCommand,
