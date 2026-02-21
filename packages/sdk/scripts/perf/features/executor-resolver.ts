@@ -14,6 +14,8 @@ const dummyResolver = createResolver({
   output: t.object({ id: t.string(), name: t.string() }),
 });
 
+const query: string = `mutation { log(message: "executed") }`;
+
 export const executor0 = createExecutor({
   name: "executor0",
   description: "Resolver executed trigger executor 0",
@@ -21,7 +23,7 @@ export const executor0 = createExecutor({
   operation: {
     kind: "graphql",
     appName: "my-app",
-    query: `mutation { log(message: "executed") }` as string,
+    query,
     variables: () => ({}),
   },
 });
@@ -33,7 +35,7 @@ export const executor1 = createExecutor({
   operation: {
     kind: "graphql",
     appName: "my-app",
-    query: `mutation { log(message: "executed") }` as string,
+    query,
     variables: () => ({}),
   },
 });
@@ -45,7 +47,7 @@ export const executor2 = createExecutor({
   operation: {
     kind: "graphql",
     appName: "my-app",
-    query: `mutation { log(message: "executed") }` as string,
+    query,
     variables: () => ({}),
   },
 });
@@ -57,7 +59,7 @@ export const executor3 = createExecutor({
   operation: {
     kind: "graphql",
     appName: "my-app",
-    query: `mutation { log(message: "executed") }` as string,
+    query,
     variables: () => ({}),
   },
 });
@@ -69,7 +71,7 @@ export const executor4 = createExecutor({
   operation: {
     kind: "graphql",
     appName: "my-app",
-    query: `mutation { log(message: "executed") }` as string,
+    query,
     variables: () => ({}),
   },
 });
@@ -81,7 +83,7 @@ export const executor5 = createExecutor({
   operation: {
     kind: "graphql",
     appName: "my-app",
-    query: `mutation { log(message: "executed") }` as string,
+    query,
     variables: () => ({}),
   },
 });
@@ -93,7 +95,7 @@ export const executor6 = createExecutor({
   operation: {
     kind: "graphql",
     appName: "my-app",
-    query: `mutation { log(message: "executed") }` as string,
+    query,
     variables: () => ({}),
   },
 });
@@ -105,7 +107,7 @@ export const executor7 = createExecutor({
   operation: {
     kind: "graphql",
     appName: "my-app",
-    query: `mutation { log(message: "executed") }` as string,
+    query,
     variables: () => ({}),
   },
 });
@@ -117,7 +119,7 @@ export const executor8 = createExecutor({
   operation: {
     kind: "graphql",
     appName: "my-app",
-    query: `mutation { log(message: "executed") }` as string,
+    query,
     variables: () => ({}),
   },
 });
@@ -129,7 +131,7 @@ export const executor9 = createExecutor({
   operation: {
     kind: "graphql",
     appName: "my-app",
-    query: `mutation { log(message: "executed") }` as string,
+    query,
     variables: () => ({}),
   },
 });

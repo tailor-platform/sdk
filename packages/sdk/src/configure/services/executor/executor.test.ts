@@ -13,6 +13,9 @@ import {
 import { scheduleTrigger } from "./trigger/schedule";
 import { incomingWebhookTrigger } from "./trigger/webhook";
 import type { InferCreateInput } from "@/graphql/infer";
+
+const nonLiteralQuery: string = "query { test }";
+
 describe("createExecutor", () => {
   test("can disable executor", () => {
     const disabled = createExecutor({
@@ -640,7 +643,7 @@ describe("resolverExecutedTrigger", () => {
       operation: {
         kind: "graphql",
         appName: "test-app",
-        query: "query { test }" as string,
+        query: nonLiteralQuery,
         variables: (args) => {
           // success tag should be available in graphql variables function
           expectTypeOf(args.success).toEqualTypeOf<boolean>();
@@ -809,17 +812,18 @@ describe("gqlTarget", () => {
   });
 
   test("can specify variables", () => {
+    const testQuery: string = `
+          query TestQuery($id: ID!) {
+            testField(id: $id)
+          }
+        `;
     createExecutor({
       name: "test",
       trigger: incomingWebhookTrigger(),
       operation: {
         kind: "graphql",
         appName: "test-app",
-        query: `
-          query TestQuery($id: ID!) {
-            testField(id: $id)
-          }
-        ` as string,
+        query: testQuery,
         variables: () => ({
           id: "test-id",
         }),
@@ -828,6 +832,11 @@ describe("gqlTarget", () => {
   });
 
   test("variables receive args", () => {
+    const testQuery: string = `
+          query TestQuery($id: ID!) {
+            testField(id: $id)
+          }
+        `;
     createExecutor({
       name: "test",
       trigger: incomingWebhookTrigger<{
@@ -837,11 +846,7 @@ describe("gqlTarget", () => {
       operation: {
         kind: "graphql",
         appName: "test-app",
-        query: `
-          query TestQuery($id: ID!) {
-            testField(id: $id)
-          }
-        ` as string,
+        query: testQuery,
         variables: (args) => {
           expectTypeOf(args).toExtend<{
             body: { id: string };
@@ -1097,7 +1102,7 @@ describe("gqlTarget type inference", () => {
   });
 
   test("variables return type defaults to Record<string, unknown> for non-literal query", () => {
-    const dynamicQuery = "query { test }" as string;
+    const dynamicQuery: string = "query { test }";
     createExecutor({
       name: "test",
       trigger: incomingWebhookTrigger(),
@@ -1114,6 +1119,13 @@ describe("gqlTarget type inference", () => {
   });
 
   test("backward compat: existing gql operations continue to work with non-literal query", () => {
+    const backwardCompatQuery: string = /* gql */ `
+          mutation createSalesOrderCreated($input: SalesOrderCreatedCreateInput!) {
+            createSalesOrderCreated(input: $input) {
+              id
+            }
+          }
+        `;
     const executor = createExecutor({
       name: "test",
       trigger: recordCreatedTrigger({
@@ -1121,13 +1133,7 @@ describe("gqlTarget type inference", () => {
       }),
       operation: {
         kind: "graphql",
-        query: /* gql */ `
-          mutation createSalesOrderCreated($input: SalesOrderCreatedCreateInput!) {
-            createSalesOrderCreated(input: $input) {
-              id
-            }
-          }
-        ` as string,
+        query: backwardCompatQuery,
         variables: ({ newRecord }) => ({
           input: {
             name: newRecord.name,
