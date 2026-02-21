@@ -713,10 +713,13 @@ export interface TailorDBType<
   // oxlint-disable-next-line no-explicit-any
   Fields extends Record<string, TailorAnyDBField> = any,
   User extends object = InferredAttributeMap,
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- Empty default represents "no hook metadata"
+  HooksMeta = {},
 > {
   readonly name: string;
   readonly fields: Fields;
   readonly _output: InferFieldsOutput<Fields>;
+  readonly _hooksMeta: HooksMeta;
   _description?: string;
 
   /** Returns metadata for the type */
@@ -725,29 +728,42 @@ export interface TailorDBType<
   /**
    * Add hooks for fields
    */
-  hooks(hooks: Hooks<Fields>): TailorDBType<Fields, User>;
+  hooks<const H extends Hooks<Fields>>(
+    hooks: H,
+  ): TailorDBType<
+    Fields,
+    User,
+    {
+      [K in keyof H & string]: {
+        create: H[K] extends { create: unknown } ? true : false;
+        update: H[K] extends { update: unknown } ? true : false;
+      };
+    }
+  >;
 
   /**
    * Add validators for fields
    */
-  validate(validators: Validators<Fields>): TailorDBType<Fields, User>;
+  validate(validators: Validators<Fields>): TailorDBType<Fields, User, HooksMeta>;
 
   /**
    * Configure type features
    */
-  features(features: Omit<TypeFeatures, "pluralForm">): TailorDBType<Fields, User>;
+  features(features: Omit<TypeFeatures, "pluralForm">): TailorDBType<Fields, User, HooksMeta>;
 
   /**
    * Define composite indexes
    */
-  indexes(...indexes: IndexDef<TailorDBType<Fields, User>>[]): TailorDBType<Fields, User>;
+  indexes(
+    ...indexes: IndexDef<TailorDBType<Fields, User>>[]
+  ): TailorDBType<Fields, User, HooksMeta>;
 
   /**
    * Define file fields
    */
   files<const F extends string>(
     files: Record<F, string> & Partial<Record<keyof output<TailorDBType<Fields, User>>, never>>,
-  ): TailorDBType<Fields, User>;
+  ): TailorDBType<Fields, User, HooksMeta>;
 
   /**
    * Set record-level permissions
@@ -760,7 +776,7 @@ export interface TailorDBType<
     >,
   >(
     permission: P,
-  ): TailorDBType<Fields, U>;
+  ): TailorDBType<Fields, U, HooksMeta>;
 
   /**
    * Set GraphQL-level permissions
@@ -770,12 +786,12 @@ export interface TailorDBType<
     P extends TailorTypeGqlPermission<U> = TailorTypeGqlPermission<U>,
   >(
     permission: P,
-  ): TailorDBType<Fields, U>;
+  ): TailorDBType<Fields, U, HooksMeta>;
 
   /**
    * Set type description
    */
-  description(description: string): TailorDBType<Fields, User>;
+  description(description: string): TailorDBType<Fields, User, HooksMeta>;
 
   /**
    * Pick specific fields from the type
@@ -811,7 +827,7 @@ export interface TailorDBType<
    */
   plugin<P extends keyof PluginConfigs<keyof Fields & string>>(config: {
     [K in P]: PluginConfigs<keyof Fields & string>[K];
-  }): TailorDBType<Fields, User>;
+  }): TailorDBType<Fields, User, HooksMeta>;
 }
 
 /**
@@ -850,6 +866,8 @@ function createTailorDBType<
     name,
     fields: { ...fields },
     _output: null as unknown as InferFieldsOutput<Fields>,
+    // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- Phantom property for type-level hook metadata
+    _hooksMeta: null as unknown as {},
     _description,
 
     get metadata(): TailorDBTypeMetadata {
@@ -883,7 +901,9 @@ function createTailorDBType<
         (this.fields as Record<string, TailorAnyDBField>)[fieldName] =
           this.fields[fieldName].hooks(fieldHooks);
       });
-      return this;
+      // Runtime fields are mutated correctly; type-level _hooksMeta tracks the change.
+      // oxlint-disable-next-line no-explicit-any
+      return this as any;
     },
 
     validate(validators: Validators<Fields>) {

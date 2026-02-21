@@ -80,3 +80,43 @@ export type NamespaceSelectable<NS, T extends NamespaceTableName<NS>> = Selectab
 export type NamespaceUpdateable<NS, T extends NamespaceTableName<NS>> = Updateable<
   NamespaceTable<NS, T>
 >;
+
+// === Module augmentation interface for TS Plugin / tailor-env.d.ts ===
+
+/**
+ * Empty interface augmented by `tailor-env.d.ts` via `declare module`.
+ * When augmented, `getDB` becomes callable with type-safe namespace keys.
+ * @example
+ * ```ts
+ * // In tailor-env.d.ts (auto-generated):
+ * declare module "@tailor-platform/sdk/kysely" {
+ *   interface GeneratedNamespace {
+ *     tailordb: { User: InferTable<typeof user>; ... };
+ *   }
+ * }
+ * ```
+ */
+// Using interface for declaration merging via `declare module`
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface GeneratedNamespace {}
+
+/**
+ * Get a Kysely instance for a namespace defined in `tailor-env.d.ts`.
+ * Requires `GeneratedNamespace` to be augmented via `declare module`.
+ * @param namespace - The namespace name
+ * @param config - Optional Kysely configuration overrides
+ * @returns A Kysely instance typed for the given namespace
+ */
+export function getDB<const N extends keyof GeneratedNamespace & string>(
+  namespace: N,
+  config?: Omit<KyselyConfig, "dialect">,
+): TailordbKysely<GeneratedNamespace[N]> {
+  const client = new tailordb.Client({ namespace });
+  return new Kysely<GeneratedNamespace[N]>({
+    dialect: new TailordbDialect(client),
+    ...config,
+  });
+}
+
+// Re-export inference utilities
+export type { InferTable, InferNamespace, EnumRecord } from "./infer";
