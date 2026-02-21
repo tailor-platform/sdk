@@ -11,7 +11,7 @@ export default createResolver({
   description: "Pass Through - Nested Profile Type(Create)",
   input: {
     id: t.uuid({ optional: true }),
-    input: t.object(inputFields).typeName("PassThroughInput"),
+    input: t.object(inputFields).typeName("NestedProfileInput"),
   },
   body: ({ input }) => ({
     ...input.input,
