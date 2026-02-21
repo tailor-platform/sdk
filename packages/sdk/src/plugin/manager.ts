@@ -3,7 +3,7 @@ import {
   getPluginGenerationDependencies,
 } from "@/parser/plugin-config/generation-types";
 import { db } from "@/parser/service/tailordb/runtime";
-import type { DependencyKind } from "@/cli/generator/types";
+import type { DependencyKind } from "@/parser/generator-config";
 import type {
   Plugin,
   PluginGeneratedExecutor,
