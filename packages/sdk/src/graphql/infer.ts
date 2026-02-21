@@ -275,43 +275,6 @@ export type InferGqlResult<T extends TailorAnyDBType> = {
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface GeneratedGqlSchema {}
 
-/**
- * Module augmentation interface for GraphQL type name to TS type mapping.
- * Augmented by `tailor-env.d.ts` to provide type resolution for variable declarations.
- * @example
- * ```ts
- * // In tailor-env.d.ts (auto-generated):
- * declare module "@tailor-platform/sdk/graphql" {
- *   interface GeneratedGqlTypes {
- *     SalesOrderCreateInput: InferCreateInput<typeof salesOrder>;
- *     SalesOrderUpdateInput: InferUpdateInput<typeof salesOrder>;
- *   }
- * }
- * ```
- */
-// Using interface for declaration merging via `declare module`
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface GeneratedGqlTypes {}
-
-// === GraphQL type resolution ===
-
-type BuiltinGqlScalars = {
-  ID: string;
-  String: string;
-  Int: number;
-  Float: number;
-  Boolean: boolean;
-  DateTime: string;
-  Date: string;
-  Time: string;
-};
-
-type ResolveGqlTypeName<Name extends string> = Name extends keyof BuiltinGqlScalars
-  ? BuiltinGqlScalars[Name]
-  : Name extends keyof GeneratedGqlTypes
-    ? GeneratedGqlTypes[Name]
-    : unknown;
-
 // === Variable declaration parser ===
 
 /**
@@ -327,15 +290,6 @@ type _ExtractVarBlock<Q extends string> = Q extends `${string}(${infer VarsAndRe
     : never
   : never;
 
-/** Strip trailing `!` from a GraphQL type expression */
-type _StripBang<S extends string> = S extends `${infer T}!` ? T : S;
-
-/** Resolve a GraphQL type expression to its TypeScript type */
-type _ResolveTypeExpr<S extends string> =
-  Trim<S> extends `[${infer Inner}]${string}`
-    ? ResolveGqlTypeName<_StripBang<Trim<Inner>>>[]
-    : ResolveGqlTypeName<_StripBang<Trim<S>>>;
-
 /**
  * Split a string at the next `$` variable declaration boundary.
  * Returns [typePartBeforeSplit, remaining] where remaining starts with `$`.
@@ -343,21 +297,6 @@ type _ResolveTypeExpr<S extends string> =
 type _SplitAtNextVar<S extends string> = S extends `${infer Before}$${infer After}`
   ? [TrimEnd<Before> extends `${infer R},` ? Trim<R> : Trim<Before>, `$${After}`]
   : [S, ""];
-
-/** Recursively parse variable declarations like `$input: FooInput!, $id: ID!` */
-type _ParseVarDecls<S extends string> =
-  Trim<S> extends `$${infer Rest}`
-    ? Rest extends `${infer Name}:${infer AfterColon}`
-      ? _SplitAtNextVar<Trim<AfterColon>> extends [
-          infer TypePart extends string,
-          infer Remaining extends string,
-        ]
-        ? Remaining extends ""
-          ? Record<Trim<Name>, _ResolveTypeExpr<TypePart>>
-          : Record<Trim<Name>, _ResolveTypeExpr<TypePart>> & _ParseVarDecls<Remaining>
-        : Record<Trim<Name>, _ResolveTypeExpr<Trim<AfterColon>>>
-      : unknown
-    : unknown;
 
 /**
  * Extract variable names as a union type from a variable declaration block.
@@ -373,19 +312,6 @@ type _ExtractVarNames<S extends string> =
         : Trim<Name>
       : never
     : never;
-
-/**
- * Parse GraphQL variable declarations from a query string.
- * Extracts the variable block and resolves each variable to its TypeScript type.
- * @example
- * ```ts
- * type V = ParsedGqlVariables<"mutation createFoo($input: FooInput!, $id: ID!) { ... }">;
- * //   ^? { input: FooInput; id: string }
- * ```
- */
-export type ParsedGqlVariables<Q extends string> = [_ExtractVarBlock<Q>] extends [never]
-  ? never
-  : Prettify<_ParseVarDecls<_ExtractVarBlock<Q>>>;
 
 // === Unified variable resolution ===
 

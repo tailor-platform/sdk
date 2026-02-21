@@ -7,7 +7,6 @@ import type {
   InferGqlResult,
   GqlVariables,
   GqlResult,
-  ParsedGqlVariables,
 } from "./infer";
 
 // === ExtractRootField ===
@@ -348,10 +347,6 @@ declare module "./infer" {
       result: { testProducts: { collection: InferGqlResult<typeof testProduct>[] } };
     };
   }
-  interface GeneratedGqlTypes {
-    TestProductCreateInput: InferCreateInput<typeof testProduct>;
-    TestProductUpdateInput: InferUpdateInput<typeof testProduct>;
-  }
 }
 
 describe("GqlVariables with augmented GeneratedGqlSchema", () => {
@@ -400,76 +395,5 @@ describe("GqlResult with augmented GeneratedGqlSchema", () => {
     expectTypeOf<R>().toEqualTypeOf<{
       readonly __error: 'Unknown GraphQL operation: "unregisteredOp". Run type generation to register it in GeneratedGqlSchema.';
     }>();
-  });
-});
-
-// === ParsedGqlVariables ===
-
-describe("ParsedGqlVariables", () => {
-  it("parses single variable with builtin scalar", () => {
-    type V = ParsedGqlVariables<"mutation deleteUser($id: ID!) { deleteUser(id: $id) { id } }">;
-    expectTypeOf<V>().toEqualTypeOf<{ id: string }>();
-  });
-
-  it("parses multiple variables", () => {
-    type V =
-      ParsedGqlVariables<"mutation updateUser($id: ID!, $input: TestProductCreateInput!) { updateUser(id: $id, input: $input) { id } }">;
-    expectTypeOf<V>().toEqualTypeOf<{
-      id: string;
-      input: InferCreateInput<typeof testProduct>;
-    }>();
-  });
-
-  it("parses list type variable", () => {
-    type V = ParsedGqlVariables<"mutation test($ids: [ID!]!) { test(ids: $ids) { id } }">;
-    expectTypeOf<V>().toEqualTypeOf<{ ids: string[] }>();
-  });
-
-  it("parses various builtin scalars", () => {
-    type V =
-      ParsedGqlVariables<"query test($s: String!, $i: Int!, $f: Float!, $b: Boolean!) { test { id } }">;
-    expectTypeOf<V>().toEqualTypeOf<{
-      s: string;
-      i: number;
-      f: number;
-      b: boolean;
-    }>();
-  });
-
-  it("parses DateTime/Date/Time scalars", () => {
-    type V = ParsedGqlVariables<"query test($dt: DateTime!, $d: Date!, $t: Time!) { test { id } }">;
-    expectTypeOf<V>().toEqualTypeOf<{
-      dt: string;
-      d: string;
-      t: string;
-    }>();
-  });
-
-  it("returns never when no variable declarations present", () => {
-    type V = ParsedGqlVariables<"mutation { createFoo(input: $input) { id } }">;
-    expectTypeOf<V>().toBeNever();
-  });
-
-  it("parses variables from multiline query", () => {
-    type V = ParsedGqlVariables<`
-      mutation createProduct($input: TestProductCreateInput!) {
-        createProduct(input: $input) {
-          id
-        }
-      }
-    `>;
-    expectTypeOf<V>().toEqualTypeOf<{
-      input: InferCreateInput<typeof testProduct>;
-    }>();
-  });
-
-  it("resolves unknown type names to unknown", () => {
-    type V = ParsedGqlVariables<"mutation test($x: UnknownType!) { test(x: $x) { id } }">;
-    expectTypeOf<V>().toEqualTypeOf<{ x: unknown }>();
-  });
-
-  it("parses nullable (non-bang) variables", () => {
-    type V = ParsedGqlVariables<"query test($id: ID) { test(id: $id) { id } }">;
-    expectTypeOf<V>().toEqualTypeOf<{ id: string }>();
   });
 });

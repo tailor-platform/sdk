@@ -11,11 +11,9 @@ export type {
   GqlVariables,
   GqlResult,
   GeneratedGqlSchema,
-  GeneratedGqlTypes,
   InferCreateInput,
   InferUpdateInput,
   InferGqlResult,
-  ParsedGqlVariables,
   ResolvedGqlVariables,
   StrictKeys,
 } from "./infer";
