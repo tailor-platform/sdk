@@ -12,8 +12,6 @@ import {
 } from "./trigger/event";
 import { scheduleTrigger } from "./trigger/schedule";
 import { incomingWebhookTrigger } from "./trigger/webhook";
-import type { Operation } from "./operation";
-
 describe("createExecutor", () => {
   test("can disable executor", () => {
     const disabled = createExecutor({
@@ -65,16 +63,9 @@ describe("createExecutor", () => {
     expect(enabledWithoutDescription.disabled).toBeUndefined();
   });
 
-  test("preserves compatibility for explicit legacy generic args", () => {
-    type Args = {
-      body: { id: string };
-      headers: { "x-custom-header": string };
-      method: "POST" | "GET" | "PUT" | "DELETE";
-      rawBody: string;
-    };
-
-    createExecutor<Args, Operation<Args>>({
-      name: "legacy-generic-executor",
+  test("infers trigger args correctly without explicit generic args", () => {
+    createExecutor({
+      name: "inferred-generic-executor",
       trigger: incomingWebhookTrigger<{
         body: { id: string };
         headers: { "x-custom-header": string };
@@ -82,7 +73,12 @@ describe("createExecutor", () => {
       operation: {
         kind: "function",
         body: (args) => {
-          expectTypeOf(args).toEqualTypeOf<Args>();
+          expectTypeOf(args).toExtend<{
+            body: { id: string };
+            headers: { "x-custom-header": string };
+            method: "POST" | "GET" | "PUT" | "DELETE";
+            rawBody: string;
+          }>();
         },
       },
     });
@@ -785,16 +781,18 @@ describe("functionTarget", () => {
       },
     });
 
-    expectTypeOf(executor.operation.body).parameters.toExtend<
-      [
-        {
-          body: { id: string };
-          headers: { "x-custom-header": string };
-          method: "POST" | "GET" | "PUT" | "DELETE";
-          rawBody: string;
-        },
-      ]
-    >();
+    if (executor.operation.kind === "function") {
+      expectTypeOf(executor.operation.body).parameters.toExtend<
+        [
+          {
+            body: { id: string };
+            headers: { "x-custom-header": string };
+            method: "POST" | "GET" | "PUT" | "DELETE";
+            rawBody: string;
+          },
+        ]
+      >();
+    }
   });
 });
 
@@ -980,7 +978,9 @@ describe("workflowTarget", () => {
       },
     });
     expect(executor.operation.kind).toBe("workflow");
-    expect(executor.operation.workflow.name).toBe("test-workflow");
+    if (executor.operation.kind === "workflow") {
+      expect(executor.operation.workflow.name).toBe("test-workflow");
+    }
   });
 
   test("args can be a function", () => {

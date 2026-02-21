@@ -1,13 +1,12 @@
-import type { Operation } from "./operation";
+import type {
+  FunctionOperation,
+  GqlOperation,
+  WebhookOperation,
+  WorkflowOperation,
+} from "./operation";
 import type { Trigger } from "./trigger";
-import type { AuthInvoker } from "@/configure/services/auth";
 import type { Workflow } from "@/configure/services/workflow/workflow";
 import type { ExecutorInput } from "@/parser/service/executor/types";
-
-/**
- * Extract mainJob's Input type from Workflow.
- */
-type WorkflowInput<W extends Workflow> = Parameters<W["trigger"]>[0];
 
 type TriggerArgs<T extends Trigger<unknown>> = T extends { __args: infer Args } ? Args : never;
 
@@ -16,68 +15,43 @@ type ExecutorBase<T extends Trigger<unknown>> = Omit<ExecutorInput, "trigger" | 
 };
 
 /**
- * Executor type with conditional inference for workflow operations.
- * When operation.kind is "workflow", infers W from the workflow property
- * to ensure args type matches the workflow's mainJob input type.
+ * Executor configuration with type-safe operation inference.
+ * Uses union discrimination by `kind` to enable:
+ * - `const Q`: preserves GraphQL query literal type for variable inference
+ * - `W`: infers workflow type for args type safety
  */
-type Executor<T extends Trigger<unknown>, O> = O extends {
-  kind: "workflow";
-  workflow: infer W extends Workflow;
-}
-  ? ExecutorBase<T> & {
-      operation: {
-        kind: "workflow";
-        workflow: W;
-        args?: WorkflowInput<W> | ((args: TriggerArgs<T>) => WorkflowInput<W>);
-        authInvoker?: AuthInvoker<string>;
-      };
-    }
-  : ExecutorBase<T> & {
-      operation: O;
-    };
+type ExecutorConfig<
+  T extends Trigger<unknown>,
+  Q extends string = string,
+  W extends Workflow = Workflow,
+> = ExecutorBase<T> & {
+  operation:
+    | WorkflowOperation<TriggerArgs<T>, W>
+    | GqlOperation<TriggerArgs<T>, Q>
+    | FunctionOperation<TriggerArgs<T>>
+    | WebhookOperation<TriggerArgs<T>>;
+};
 
 /**
  * Create an executor configuration for the Tailor SDK.
+ * Uses `const Q` to preserve the literal type of GraphQL query strings,
+ * enabling type-safe variable inference via `GeneratedGqlSchema`.
  * @template T - Trigger type
- * @template Q - Query string literal type (inferred from operation.query)
- * @template O - Operation type
+ * @template Q - GraphQL query literal type (narrowed with `const`)
+ * @template W - Workflow type for args inference
  * @param config - Executor configuration
  * @returns The same executor configuration
  */
 export function createExecutor<
   T extends Trigger<unknown>,
-  Q extends string = string,
-  O extends Operation<TriggerArgs<T>, Q> | { kind: "workflow"; workflow: Workflow } =
-    | Operation<TriggerArgs<T>, Q>
-    | {
-        kind: "workflow";
-        workflow: Workflow;
-      },
->(config: Executor<T, O>): Executor<T, O>;
-
-/**
- * Create an executor configuration for the Tailor SDK.
- * This overload preserves source compatibility for legacy explicit generic calls,
- * where the first generic argument represents trigger args.
- * @template Args
- * @template O
- * @param config - Executor configuration
- * @returns The same executor configuration
- */
-export function createExecutor<
-  Args,
-  O extends Operation<Args> | { kind: "workflow"; workflow: Workflow },
->(config: Executor<Trigger<Args>, O>): Executor<Trigger<Args>, O>;
+  const Q extends string = string,
+  W extends Workflow = Workflow,
+>(config: ExecutorConfig<T, Q, W>): ExecutorConfig<T, Q, W>;
 
 export function createExecutor<
   T extends Trigger<unknown>,
   Q extends string = string,
-  O extends Operation<TriggerArgs<T>, Q> | { kind: "workflow"; workflow: Workflow } =
-    | Operation<TriggerArgs<T>, Q>
-    | {
-        kind: "workflow";
-        workflow: Workflow;
-      },
->(config: Executor<T, O>) {
+  W extends Workflow = Workflow,
+>(config: ExecutorConfig<T, Q, W>) {
   return config;
 }
