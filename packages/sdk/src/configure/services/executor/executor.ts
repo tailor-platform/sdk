@@ -1,6 +1,7 @@
 import type {
   FunctionOperation,
   GqlOperation,
+  Operation,
   WebhookOperation,
   WorkflowOperation,
 } from "./operation";
@@ -16,48 +17,54 @@ type ExecutorBase<T extends Trigger<unknown>> = Omit<ExecutorInput, "trigger" | 
 };
 
 /**
- * Executor configuration with type-safe operation inference.
- * Uses union discrimination by `kind` to enable:
- * - `const Q`: preserves GraphQL query literal type for variable inference
- * - `V`: infers variables return type for strict excess property checking
- * - `W`: infers workflow type for args type safety
+ * Narrow the return type of `createExecutor` based on the operation `kind`.
+ * Uses `[Kind] extends [...]` (tuple wrapping) to prevent distributive behavior.
  */
-type ExecutorConfig<
+type ExecutorReturn<
   T extends Trigger<unknown>,
-  Q extends string = string,
-  V = ResolvedGqlVariables<Q>,
-  W extends Workflow = Workflow,
-> = ExecutorBase<T> & {
-  operation:
-    | WorkflowOperation<TriggerArgs<T>, W>
-    | GqlOperation<TriggerArgs<T>, Q, V>
-    | FunctionOperation<TriggerArgs<T>>
-    | WebhookOperation<TriggerArgs<T>>;
-};
+  Kind extends string,
+  Q extends string,
+  V,
+  W extends Workflow,
+> = [Kind] extends ["workflow"]
+  ? ExecutorBase<T> & { operation: WorkflowOperation<TriggerArgs<T>, W> }
+  : [Kind] extends ["graphql"]
+    ? ExecutorBase<T> & { operation: GqlOperation<TriggerArgs<T>, Q, V> }
+    : [Kind] extends ["function" | "jobFunction"]
+      ? ExecutorBase<T> & { operation: FunctionOperation<TriggerArgs<T>> }
+      : [Kind] extends ["webhook"]
+        ? ExecutorBase<T> & { operation: WebhookOperation<TriggerArgs<T>> }
+        : ExecutorBase<T> & { operation: Operation<TriggerArgs<T>, Q, V> };
 
 /**
  * Create an executor configuration for the Tailor SDK.
+ *
  * Uses `const Q` to preserve the literal type of GraphQL query strings,
  * enabling type-safe variable inference via `GeneratedGqlSchema`.
- * @template T - Trigger type
- * @template Q - GraphQL query literal type (narrowed with `const`)
- * @template V - Variables return type (inferred for strict excess checking)
- * @template W - Workflow type for args inference
+ * The return type is narrowed based on the operation `kind` discriminant.
  * @param config - Executor configuration
- * @returns The same executor configuration
+ * @returns The same executor configuration with narrowed operation type
  */
 export function createExecutor<
   T extends Trigger<unknown>,
   const Q extends string = string,
   V extends ResolvedGqlVariables<Q> = ResolvedGqlVariables<Q>,
   W extends Workflow = Workflow,
->(config: ExecutorConfig<T, Q, V, W>): ExecutorConfig<T, Q, V, W>;
+  const Kind extends string = string,
+>(
+  config: ExecutorBase<T> & {
+    operation: { kind: Kind } & (
+      | WorkflowOperation<TriggerArgs<T>, W>
+      | GqlOperation<TriggerArgs<T>, Q, V>
+      | (Omit<GqlOperation<TriggerArgs<T>, Q, V>, "query"> & {
+          query: object & { toString(): string };
+        })
+      | FunctionOperation<TriggerArgs<T>>
+      | WebhookOperation<TriggerArgs<T>>
+    );
+  },
+): ExecutorReturn<T, Kind, Q, V, W>;
 
-export function createExecutor<
-  T extends Trigger<unknown>,
-  Q extends string = string,
-  V = ResolvedGqlVariables<Q>,
-  W extends Workflow = Workflow,
->(config: ExecutorConfig<T, Q, V, W>) {
+export function createExecutor(config: unknown) {
   return config;
 }

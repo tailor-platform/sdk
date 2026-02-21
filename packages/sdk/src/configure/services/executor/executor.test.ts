@@ -782,18 +782,16 @@ describe("functionTarget", () => {
       },
     });
 
-    if (executor.operation.kind === "function") {
-      expectTypeOf(executor.operation.body).parameters.toExtend<
-        [
-          {
-            body: { id: string };
-            headers: { "x-custom-header": string };
-            method: "POST" | "GET" | "PUT" | "DELETE";
-            rawBody: string;
-          },
-        ]
-      >();
-    }
+    expectTypeOf(executor.operation.body).parameters.toExtend<
+      [
+        {
+          body: { id: string };
+          headers: { "x-custom-header": string };
+          method: "POST" | "GET" | "PUT" | "DELETE";
+          rawBody: string;
+        },
+      ]
+    >();
   });
 });
 
@@ -979,9 +977,7 @@ describe("workflowTarget", () => {
       },
     });
     expect(executor.operation.kind).toBe("workflow");
-    if (executor.operation.kind === "workflow") {
-      expect(executor.operation.workflow.name).toBe("test-workflow");
-    }
+    expect(executor.operation.workflow.name).toBe("test-workflow");
   });
 
   test("args can be a function", () => {
