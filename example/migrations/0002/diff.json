@@ -1,0 +1,394 @@
+{
+  "version": 1,
+  "namespace": "tailordb",
+  "createdAt": "2026-02-21T12:31:41.542Z",
+  "changes": [
+    {
+      "kind": "relationship_added",
+      "typeName": "NestedProfile",
+      "relationshipName": "owner",
+      "relationshipType": "forward",
+      "after": {
+        "targetType": "User",
+        "targetField": "ownerID",
+        "sourceField": "id",
+        "isArray": false,
+        "description": ""
+      }
+    },
+    {
+      "kind": "relationship_added",
+      "typeName": "NestedProfile",
+      "relationshipName": "comments",
+      "relationshipType": "backward",
+      "after": {
+        "targetType": "ProfileComment",
+        "targetField": "profileID",
+        "sourceField": "id",
+        "isArray": true,
+        "description": "Comment on a profile"
+      }
+    },
+    {
+      "kind": "relationship_added",
+      "typeName": "NestedProfile",
+      "relationshipName": "detail",
+      "relationshipType": "backward",
+      "after": {
+        "targetType": "ProfileDetail",
+        "targetField": "profileID",
+        "sourceField": "id",
+        "isArray": false,
+        "description": "Additional detail for a profile"
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "ProfileComment",
+      "fieldName": "content",
+      "before": {
+        "type": "string",
+        "required": true
+      },
+      "after": {
+        "type": "string",
+        "required": true,
+        "description": "Comment content"
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "ProfileComment",
+      "fieldName": "profileID",
+      "before": {
+        "type": "uuid",
+        "required": true,
+        "index": true,
+        "foreignKey": true,
+        "foreignKeyType": "NestedProfile",
+        "foreignKeyField": "id"
+      },
+      "after": {
+        "type": "uuid",
+        "required": true,
+        "index": true,
+        "foreignKey": true,
+        "foreignKeyType": "NestedProfile",
+        "foreignKeyField": "id",
+        "description": "Referenced profile"
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "ProfileComment",
+      "fieldName": "createdAt",
+      "before": {
+        "type": "datetime",
+        "required": true
+      },
+      "after": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp",
+        "hooks": {
+          "create": {
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+          }
+        }
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "ProfileComment",
+      "fieldName": "updatedAt",
+      "before": {
+        "type": "datetime",
+        "required": false
+      },
+      "after": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp",
+        "hooks": {
+          "update": {
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+          }
+        }
+      }
+    },
+    {
+      "kind": "relationship_added",
+      "typeName": "ProfileComment",
+      "relationshipName": "profile",
+      "relationshipType": "forward",
+      "after": {
+        "targetType": "NestedProfile",
+        "targetField": "profileID",
+        "sourceField": "id",
+        "isArray": false,
+        "description": "Nested Profile Type"
+      }
+    },
+    {
+      "kind": "permission_modified",
+      "typeName": "ProfileComment",
+      "reason": "record permission changed",
+      "before": {},
+      "after": {
+        "recordPermission": {
+          "create": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "read": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            },
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "_loggedIn"
+                  },
+                  "eq",
+                  true
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "update": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "delete": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "ProfileDetail",
+      "fieldName": "bio",
+      "before": {
+        "type": "string",
+        "required": false
+      },
+      "after": {
+        "type": "string",
+        "required": false,
+        "description": "Extended biography"
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "ProfileDetail",
+      "fieldName": "profileID",
+      "before": {
+        "type": "uuid",
+        "required": true,
+        "index": true,
+        "unique": true,
+        "foreignKey": true,
+        "foreignKeyType": "NestedProfile",
+        "foreignKeyField": "id"
+      },
+      "after": {
+        "type": "uuid",
+        "required": true,
+        "index": true,
+        "unique": true,
+        "foreignKey": true,
+        "foreignKeyType": "NestedProfile",
+        "foreignKeyField": "id",
+        "description": "Referenced profile"
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "ProfileDetail",
+      "fieldName": "createdAt",
+      "before": {
+        "type": "datetime",
+        "required": true
+      },
+      "after": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp",
+        "hooks": {
+          "create": {
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+          }
+        }
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "ProfileDetail",
+      "fieldName": "updatedAt",
+      "before": {
+        "type": "datetime",
+        "required": false
+      },
+      "after": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp",
+        "hooks": {
+          "update": {
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+          }
+        }
+      }
+    },
+    {
+      "kind": "relationship_added",
+      "typeName": "ProfileDetail",
+      "relationshipName": "profile",
+      "relationshipType": "forward",
+      "after": {
+        "targetType": "NestedProfile",
+        "targetField": "profileID",
+        "sourceField": "id",
+        "isArray": false,
+        "description": "Nested Profile Type"
+      }
+    },
+    {
+      "kind": "permission_modified",
+      "typeName": "ProfileDetail",
+      "reason": "record permission changed",
+      "before": {},
+      "after": {
+        "recordPermission": {
+          "create": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "read": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            },
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "_loggedIn"
+                  },
+                  "eq",
+                  true
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "update": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ],
+          "delete": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "permit": "allow"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "kind": "relationship_added",
+      "typeName": "User",
+      "relationshipName": "nestedProfiles",
+      "relationshipType": "backward",
+      "after": {
+        "targetType": "NestedProfile",
+        "targetField": "ownerID",
+        "sourceField": "id",
+        "isArray": true,
+        "description": "Nested Profile Type"
+      }
+    }
+  ],
+  "hasBreakingChanges": false,
+  "breakingChanges": [],
+  "requiresMigrationScript": false
+}
