@@ -205,8 +205,10 @@ export function createGqlSchemaGenerator(options: GqlSchemaGeneratorOptions) {
  * @returns Expression with resolved import paths
  */
 function resolveTypeRefs(expr: string, baseDir: string, outputDir: string): string {
-  return expr.replace(/__typeRef\|([^|]+)\|(.+?)__/g, (_match, filePath, exportName) => {
-    const importPath = computeImportPath(baseDir, outputDir, filePath as string);
-    return `(typeof import("${importPath}"))["${exportName as string}"]`;
+  return expr.replace(/__typeRef\|([^|]+)\|(.+?)__/g, (_match, rawFilePath, rawExportName) => {
+    const fp: string = rawFilePath;
+    const en: string = rawExportName;
+    const importPath = computeImportPath(baseDir, outputDir, fp);
+    return `(typeof import("${importPath}"))["${en}"]`;
   });
 }

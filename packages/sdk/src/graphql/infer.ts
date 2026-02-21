@@ -327,15 +327,19 @@ type _ExtractVarNames<S extends string> =
  * When declared names are a proper subset of schema keys, returns the full schema
  * so that missing required variables still produce type errors at the call site.
  */
-type _MergeVarNamesWithSchema<Names extends string, Schema> = Schema extends {
-  readonly __error: string;
-}
-  ? Schema // Unknown operation → pass through error type
-  : [Exclude<Names, keyof Schema & string>] extends [never] // All declared vars exist in schema
-    ? [Exclude<keyof Schema & string, Names>] extends [never]
-      ? Prettify<{ [K in Names]: K extends keyof Schema ? Schema[K] : never }> // Exact match → pick
-      : Schema // Proper subset → full schema (require missing vars too)
-    : Prettify<{ [K in Names]: K extends keyof Schema ? Schema[K] : never }>; // Unknown vars → pick (unknowns become never = type error)
+type _MergeVarNamesWithSchema<Names extends string, Schema> =
+  // Unknown operation → pass through error type
+  Schema extends { readonly __error: string }
+    ? Schema
+    : // All declared vars exist in schema
+      [Exclude<Names, keyof Schema & string>] extends [never]
+      ? // Exact match → pick declared names from schema
+        [Exclude<keyof Schema & string, Names>] extends [never]
+        ? Prettify<{ [K in Names]: K extends keyof Schema ? Schema[K] : never }>
+        : // Proper subset → return full schema (require missing vars too)
+          Schema
+      : // Unknown vars → pick (unknowns become never = type error)
+        Prettify<{ [K in Names]: K extends keyof Schema ? Schema[K] : never }>;
 
 /**
  * Resolve GraphQL variables from a query string.
