@@ -36,12 +36,12 @@ tailor-sdk machineuser list [options]
 
 **Options**
 
-| Option                          | Alias | Description             | Required | Default              |
-| ------------------------------- | ----- | ----------------------- | -------- | -------------------- |
-| `--json`                        | `-j`  | Output as JSON          | No       | `false`              |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | No       | -                    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile       | No       | -                    |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` |
+| Option                          | Alias | Description             | Default              |
+| ------------------------------- | ----- | ----------------------- | -------------------- |
+| `--json`                        | `-j`  | Output as JSON          | `false`              |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | -                    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile       | -                    |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file | `"tailor.config.ts"` |
 
 <!-- politty:command:machineuser list:end -->
 <!-- politty:command:machineuser token:start -->
@@ -64,12 +64,12 @@ tailor-sdk machineuser token [options] <name>
 
 **Options**
 
-| Option                          | Alias | Description             | Required | Default              |
-| ------------------------------- | ----- | ----------------------- | -------- | -------------------- |
-| `--json`                        | `-j`  | Output as JSON          | No       | `false`              |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | No       | -                    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile       | No       | -                    |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` |
+| Option                          | Alias | Description             | Default              |
+| ------------------------------- | ----- | ----------------------- | -------------------- |
+| `--json`                        | `-j`  | Output as JSON          | `false`              |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | -                    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile       | -                    |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file | `"tailor.config.ts"` |
 
 <!-- politty:command:machineuser token:end -->
 <!-- politty:command:oauth2client:start -->
@@ -106,12 +106,12 @@ tailor-sdk oauth2client list [options]
 
 **Options**
 
-| Option                          | Alias | Description             | Required | Default              |
-| ------------------------------- | ----- | ----------------------- | -------- | -------------------- |
-| `--json`                        | `-j`  | Output as JSON          | No       | `false`              |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | No       | -                    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile       | No       | -                    |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` |
+| Option                          | Alias | Description             | Default              |
+| ------------------------------- | ----- | ----------------------- | -------------------- |
+| `--json`                        | `-j`  | Output as JSON          | `false`              |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | -                    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile       | -                    |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file | `"tailor.config.ts"` |
 
 <!-- politty:command:oauth2client list:end -->
 <!-- politty:command:oauth2client get:start -->
@@ -134,12 +134,12 @@ tailor-sdk oauth2client get [options] <name>
 
 **Options**
 
-| Option                          | Alias | Description             | Required | Default              |
-| ------------------------------- | ----- | ----------------------- | -------- | -------------------- |
-| `--json`                        | `-j`  | Output as JSON          | No       | `false`              |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | No       | -                    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile       | No       | -                    |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` |
+| Option                          | Alias | Description             | Default              |
+| ------------------------------- | ----- | ----------------------- | -------------------- |
+| `--json`                        | `-j`  | Output as JSON          | `false`              |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | -                    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile       | -                    |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file | `"tailor.config.ts"` |
 
 <!-- politty:command:oauth2client get:end -->
 

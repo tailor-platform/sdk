@@ -20,8 +20,8 @@ tailor-sdk completion [options] [shell]
 
 **Options**
 
-| Option           | Alias | Description                    | Required | Default |
-| ---------------- | ----- | ------------------------------ | -------- | ------- |
-| `--instructions` | `-i`  | Show installation instructions | No       | `false` |
+| Option           | Alias | Description                    | Default |
+| ---------------- | ----- | ------------------------------ | ------- |
+| `--instructions` | `-i`  | Show installation instructions | `false` |
 
 <!-- politty:command:completion:end -->
