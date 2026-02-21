@@ -1375,6 +1375,80 @@ describe("gqlTarget type inference with augmented GeneratedGqlSchema", () => {
   });
 });
 
+describe("gqlTarget field argument validation", () => {
+  test("rejects wrong field argument name for registered operation", () => {
+    createExecutor({
+      name: "test-wrong-field-arg",
+      trigger: scheduleTrigger({ cron: "0 * * * *" }),
+      operation: {
+        kind: "graphql",
+        // @ts-expect-error - wrongArg is not a valid field argument for createTestOrder
+        query: `mutation { createTestOrder(wrongArg: $input) { id } }`,
+        variables: () => ({
+          input: {
+            productId: "uuid-123",
+            quantity: 10,
+          },
+        }),
+      },
+    });
+  });
+
+  test("accepts correct field argument name for registered operation", () => {
+    createExecutor({
+      name: "test-correct-field-arg",
+      trigger: scheduleTrigger({ cron: "0 * * * *" }),
+      operation: {
+        kind: "graphql",
+        query: `mutation { createTestOrder(input: $input) { id } }`,
+        variables: () => ({
+          input: {
+            productId: "uuid-123",
+            quantity: 10,
+          },
+        }),
+      },
+    });
+  });
+
+  test("accepts multiple correct field argument names", () => {
+    createExecutor({
+      name: "test-multi-field-args",
+      trigger: scheduleTrigger({ cron: "0 * * * *" }),
+      operation: {
+        kind: "graphql",
+        query: `mutation { updateTestOrder(id: $id, input: $input) { id } }`,
+        variables: () => ({
+          id: "order-123",
+          input: {
+            productId: "uuid-456",
+            quantity: 5,
+          },
+        }),
+      },
+    });
+  });
+
+  test("rejects one wrong field argument among multiple", () => {
+    createExecutor({
+      name: "test-partial-wrong-field-arg",
+      trigger: scheduleTrigger({ cron: "0 * * * *" }),
+      operation: {
+        kind: "graphql",
+        // @ts-expect-error - wrongArg is not a valid field argument for updateTestOrder
+        query: `mutation { updateTestOrder(id: $id, wrongArg: $input) { id } }`,
+        variables: () => ({
+          id: "order-123",
+          input: {
+            productId: "uuid-456",
+            quantity: 5,
+          },
+        }),
+      },
+    });
+  });
+});
+
 describe("gqlTarget variable declaration parsing", () => {
   test("infers variables from variable declarations in query", () => {
     createExecutor({

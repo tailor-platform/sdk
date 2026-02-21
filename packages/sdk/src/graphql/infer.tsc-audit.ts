@@ -592,6 +592,49 @@ type VGQ_14_Q =
 type VGQ_14 = ValidateGqlQuery<VGQ_14_Q>;
 type _vgq14 = Assert<IsEqual<VGQ_14, VGQ_14_Q>>;
 
+// correct field argument name passes
+type VGQ_15_Q = "mutation { createTestProduct(input: $input) { id } }";
+type VGQ_15 = ValidateGqlQuery<VGQ_15_Q>;
+type _vgq15 = Assert<IsEqual<VGQ_15, VGQ_15_Q>>;
+
+// wrong field argument name returns error
+type VGQ_16 = ValidateGqlQuery<"mutation { createTestProduct(wrongArg: $input) { id } }">;
+type _vgq16 = Assert<
+  IsEqual<VGQ_16, 'Error: Unknown field argument "wrongArg" for operation "createTestProduct".'>
+>;
+
+// no field arguments passes
+type VGQ_17_Q = "query { testProducts { collection { id } } }";
+type VGQ_17 = ValidateGqlQuery<VGQ_17_Q>;
+type _vgq17 = Assert<IsEqual<VGQ_17, VGQ_17_Q>>;
+
+// permissive variables (Record<string, unknown>) passes
+type VGQ_18_Q = "query { testProducts(anyArg: $val) { collection { id } } }";
+type VGQ_18 = ValidateGqlQuery<VGQ_18_Q>;
+type _vgq18 = Assert<IsEqual<VGQ_18, VGQ_18_Q>>;
+
+// multiple correct field arguments pass
+type VGQ_19_Q = "mutation { updateTestProduct(id: $id, input: $input) { id } }";
+type VGQ_19 = ValidateGqlQuery<VGQ_19_Q>;
+type _vgq19 = Assert<IsEqual<VGQ_19, VGQ_19_Q>>;
+
+// one wrong among multiple field arguments returns error
+type VGQ_20 = ValidateGqlQuery<"mutation { updateTestProduct(id: $id, wrongArg: $input) { id } }">;
+type _vgq20 = Assert<
+  IsEqual<VGQ_20, 'Error: Unknown field argument "wrongArg" for operation "updateTestProduct".'>
+>;
+
+// multiline query with correct field arguments passes
+type VGQ_21_Q = `
+      mutation {
+        createTestProduct(input: $input) {
+          id
+        }
+      }
+    `;
+type VGQ_21 = ValidateGqlQuery<VGQ_21_Q>;
+type _vgq21 = Assert<IsEqual<VGQ_21, VGQ_21_Q>>;
+
 // Negative: different ValidateGqlQuery error messages must be distinguishable
 // @ts-expect-error -- "no selection set" error !== "invalid keyword" error
 type _vgq_neg_errors = Assert<IsEqual<VGQ_4, VGQ_5>>;
@@ -601,3 +644,5 @@ type _vgq_neg_errors2 = Assert<IsEqual<VGQ_5, VGQ_6>>;
 type _vgq_neg_valid_vs_error = Assert<IsEqual<VGQ_1, VGQ_4>>;
 // @ts-expect-error -- brace error !== paren error
 type _vgq_neg_brace_vs_paren = Assert<IsEqual<VGQ_11, VGQ_13>>;
+// @ts-expect-error -- field arg error !== unregistered op error
+type _vgq_neg_fieldarg_vs_op = Assert<IsEqual<VGQ_16, VGQ_6>>;

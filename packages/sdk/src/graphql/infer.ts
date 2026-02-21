@@ -459,6 +459,47 @@ type _AreParensBalanced<Q extends string> = _CountChar<Q, "(">["length"] extends
 type _IsKnownRootField<Q extends string> =
   ExtractRootField<Q> extends keyof GeneratedGqlSchema ? true : false;
 
+// --- Field argument parser ---
+
+/** Extract field argument block: "mutation { createFoo(input: $input) { id } }" → "input: $input" */
+type _ExtractFieldArgBlock<Q extends string> = Q extends `${string}{${infer Body}`
+  ? TrimStart<Body> extends `${string}(${infer ArgsAndRest}`
+    ? ArgsAndRest extends `${infer Args})${string}`
+      ? Args
+      : never
+    : never
+  : never;
+
+/** Parse arg names: "input: $input, id: $id" → "input" | "id" */
+type _ExtractFieldArgNames<S extends string> =
+  Trim<S> extends `${infer Name}:${infer Rest}`
+    ? Rest extends `${string},${infer Remaining}`
+      ? Trim<Name> | _ExtractFieldArgNames<Remaining>
+      : Trim<Name>
+    : never;
+
+/** End-to-end: query → field arg names union (or never) */
+type _ParsedFieldArgNames<Q extends string> = [_ExtractFieldArgBlock<Q>] extends [never]
+  ? never
+  : _ExtractFieldArgNames<_ExtractFieldArgBlock<Q>>;
+
+/** All field arg names are valid variable keys? */
+type _HasValidFieldArgs<Q extends string> = [_ParsedFieldArgNames<Q>] extends [never]
+  ? true // no field args
+  : GqlVariables<ExtractRootField<Q>> extends { readonly __error: string }
+    ? true // unknown op (caught elsewhere)
+    : string extends keyof GqlVariables<ExtractRootField<Q>>
+      ? true // permissive (Record<string, unknown>)
+      : [Exclude<_ParsedFieldArgNames<Q>, keyof GqlVariables<ExtractRootField<Q>>>] extends [never]
+        ? true
+        : false;
+
+/** Invalid arg names for error messages */
+type _InvalidFieldArgs<Q extends string> = Exclude<
+  _ParsedFieldArgNames<Q>,
+  keyof GqlVariables<ExtractRootField<Q>>
+>;
+
 /**
  * Validate a GraphQL query string at the type level.
  * Returns `Q` if valid, or an error message string literal if invalid.
@@ -471,6 +512,7 @@ type _IsKnownRootField<Q extends string> =
  * 5. Balance: `{`/`}` counts must match
  * 6. Balance: `(`/`)` counts must match
  * 7. Schema: root field must exist in GeneratedGqlSchema
+ * 8. Field args: argument names must match schema variable keys
  */
 export type ValidateGqlQuery<Q extends string> = string extends Q
   ? Q // non-literal: permissive
@@ -486,7 +528,9 @@ export type ValidateGqlQuery<Q extends string> = string extends Q
             ? 'Error: Invalid GraphQL query. Mismatched parentheses "(" and ")".'
             : _IsKnownRootField<Q> extends false
               ? `Error: Unknown GraphQL operation: "${ExtractRootField<Q>}". Run type generation to register it in GeneratedGqlSchema.`
-              : Q; // all checks passed
+              : _HasValidFieldArgs<Q> extends false
+                ? `Error: Unknown field argument "${_InvalidFieldArgs<Q>}" for operation "${ExtractRootField<Q>}".`
+                : Q; // all checks passed
 
 // === Strict object checking ===
 

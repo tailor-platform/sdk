@@ -557,4 +557,51 @@ describe("ValidateGqlQuery", () => {
     type V = ValidateGqlQuery<Q>;
     expectTypeOf<V>().toEqualTypeOf<Q>();
   });
+
+  it("returns the query type for correct field argument name", () => {
+    type Q = "mutation { createTestProduct(input: $input) { id } }";
+    type V = ValidateGqlQuery<Q>;
+    expectTypeOf<V>().toEqualTypeOf<Q>();
+  });
+
+  it("returns error for wrong field argument name", () => {
+    type V = ValidateGqlQuery<"mutation { createTestProduct(wrongArg: $input) { id } }">;
+    expectTypeOf<V>().toEqualTypeOf<'Error: Unknown field argument "wrongArg" for operation "createTestProduct".'>();
+  });
+
+  it("passes for query without field arguments", () => {
+    type Q = "query { testProducts { collection { id } } }";
+    type V = ValidateGqlQuery<Q>;
+    expectTypeOf<V>().toEqualTypeOf<Q>();
+  });
+
+  it("passes for permissive variables (Record<string, unknown>)", () => {
+    // testProducts has variables: Record<string, unknown>
+    type Q = "query { testProducts(anyArg: $val) { collection { id } } }";
+    type V = ValidateGqlQuery<Q>;
+    expectTypeOf<V>().toEqualTypeOf<Q>();
+  });
+
+  it("passes for multiple correct field arguments", () => {
+    type Q = "mutation { updateTestProduct(id: $id, input: $input) { id } }";
+    type V = ValidateGqlQuery<Q>;
+    expectTypeOf<V>().toEqualTypeOf<Q>();
+  });
+
+  it("returns error when one of multiple field arguments is wrong", () => {
+    type V = ValidateGqlQuery<"mutation { updateTestProduct(id: $id, wrongArg: $input) { id } }">;
+    expectTypeOf<V>().toEqualTypeOf<'Error: Unknown field argument "wrongArg" for operation "updateTestProduct".'>();
+  });
+
+  it("parses field arguments correctly in multiline query", () => {
+    type Q = `
+      mutation {
+        createTestProduct(input: $input) {
+          id
+        }
+      }
+    `;
+    type V = ValidateGqlQuery<Q>;
+    expectTypeOf<V>().toEqualTypeOf<Q>();
+  });
 });
