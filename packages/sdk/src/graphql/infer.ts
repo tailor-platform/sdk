@@ -273,8 +273,7 @@ export type InferGqlResult<T extends TailorAnyDBType> = {
  * }
  * ```
  */
-// Using interface for declaration merging via `declare module`
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- Interface required for declaration merging via `declare module`
 export interface GeneratedGqlSchema {}
 
 // === Schema lookup helpers ===
