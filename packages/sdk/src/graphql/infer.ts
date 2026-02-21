@@ -277,6 +277,53 @@ export type InferGqlResult<T extends TailorAnyDBType> = {
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface GeneratedGqlSchema {}
 
+// === Schema lookup helpers ===
+
+/**
+ * Check if GeneratedGqlSchema has been augmented with at least one operation.
+ * When empty (no tailor-env.d.ts), fall back to permissive mode.
+ */
+type IsSchemaPopulated = keyof GeneratedGqlSchema extends never ? false : true;
+
+/** Error type for unregistered GraphQL operations. Shows a descriptive message in IDE. */
+type UnknownGqlOperation<OpName extends string> = {
+  readonly __error: `Unknown GraphQL operation: "${OpName}". Run type generation to register it in GeneratedGqlSchema.`;
+};
+
+/**
+ * Look up the variables type for a GraphQL operation by name.
+ * - Non-literal `string`: permissive fallback (`Record<string, unknown>`)
+ * - Empty schema (no tailor-env.d.ts): permissive fallback
+ * - Literal + registered: strict type from schema
+ * - Literal + NOT registered: `UnknownGqlOperation` error type
+ */
+export type GqlVariables<OpName extends string> = string extends OpName
+  ? Record<string, unknown>
+  : IsSchemaPopulated extends false
+    ? Record<string, unknown>
+    : OpName extends keyof GeneratedGqlSchema
+      ? GeneratedGqlSchema[OpName] extends { variables: infer V }
+        ? V
+        : Record<string, unknown>
+      : UnknownGqlOperation<OpName>;
+
+/**
+ * Look up the result type for a GraphQL operation by name.
+ * - Non-literal `string`: `unknown` fallback
+ * - Empty schema (no tailor-env.d.ts): `unknown` fallback
+ * - Literal + registered: strict type from schema
+ * - Literal + NOT registered: `UnknownGqlOperation` error type
+ */
+export type GqlResult<OpName extends string> = string extends OpName
+  ? unknown
+  : IsSchemaPopulated extends false
+    ? unknown
+    : OpName extends keyof GeneratedGqlSchema
+      ? GeneratedGqlSchema[OpName] extends { result: infer R }
+        ? R
+        : unknown
+      : UnknownGqlOperation<OpName>;
+
 // === Variable declaration parser ===
 
 /**
@@ -317,7 +364,20 @@ type _ExtractVarNames<S extends string> =
       : never
     : never;
 
+/**
+ * End-to-end extraction: parse variable names from a query string.
+ * Resolves to `never` when no variable block or no valid names are found.
+ */
+type _ParsedVarNames<Q extends string> = [_ExtractVarBlock<Q>] extends [never]
+  ? never
+  : _ExtractVarNames<_ExtractVarBlock<Q>>;
+
 // === Unified variable resolution ===
+
+/** Pick Names from Schema, mapping unknown keys to `never`. */
+type _PickFromSchema<Names extends string, Schema> = Prettify<{
+  [K in Names]: K extends keyof Schema ? Schema[K] : never;
+}>;
 
 /**
  * Merge parsed variable names with schema-based types.
@@ -327,19 +387,15 @@ type _ExtractVarNames<S extends string> =
  * When declared names are a proper subset of schema keys, returns the full schema
  * so that missing required variables still produce type errors at the call site.
  */
-type _MergeVarNamesWithSchema<Names extends string, Schema> =
-  // Unknown operation → pass through error type
-  Schema extends { readonly __error: string }
-    ? Schema
-    : // All declared vars exist in schema
-      [Exclude<Names, keyof Schema & string>] extends [never]
-      ? // Exact match → pick declared names from schema
-        [Exclude<keyof Schema & string, Names>] extends [never]
-        ? Prettify<{ [K in Names]: K extends keyof Schema ? Schema[K] : never }>
-        : // Proper subset → return full schema (require missing vars too)
-          Schema
-      : // Unknown vars → pick (unknowns become never = type error)
-        Prettify<{ [K in Names]: K extends keyof Schema ? Schema[K] : never }>;
+type _MergeVarNamesWithSchema<Names extends string, Schema> = Schema extends {
+  readonly __error: string;
+}
+  ? Schema
+  : [Exclude<Names, keyof Schema & string>] extends [never]
+    ? [Exclude<keyof Schema & string, Names>] extends [never]
+      ? _PickFromSchema<Names, Schema>
+      : Schema
+    : _PickFromSchema<Names, Schema>;
 
 /**
  * Resolve GraphQL variables from a query string.
@@ -355,59 +411,9 @@ export type ResolvedGqlVariables<Q extends string> = string extends Q
   ? Record<string, unknown>
   : IsSchemaPopulated extends false
     ? Record<string, unknown>
-    : [_ExtractVarBlock<Q>] extends [never]
+    : [_ParsedVarNames<Q>] extends [never]
       ? GqlVariables<ExtractRootField<Q>>
-      : [_ExtractVarNames<_ExtractVarBlock<Q>>] extends [never]
-        ? GqlVariables<ExtractRootField<Q>>
-        : _MergeVarNamesWithSchema<
-            _ExtractVarNames<_ExtractVarBlock<Q>>,
-            GqlVariables<ExtractRootField<Q>>
-          >;
-
-/** Error type for unregistered GraphQL operations. Shows a descriptive message in IDE. */
-type UnknownGqlOperation<OpName extends string> = {
-  readonly __error: `Unknown GraphQL operation: "${OpName}". Run type generation to register it in GeneratedGqlSchema.`;
-};
-
-/**
- * Check if GeneratedGqlSchema has been augmented with at least one operation.
- * When empty (no tailor-env.d.ts), fall back to permissive mode.
- */
-type IsSchemaPopulated = keyof GeneratedGqlSchema extends never ? false : true;
-
-/**
- * Look up the variables type for a GraphQL operation by name.
- * - Non-literal `string`: permissive fallback (`Record<string, unknown>`)
- * - Empty schema (no tailor-env.d.ts): permissive fallback
- * - Literal + registered: strict type from schema
- * - Literal + NOT registered: `UnknownGqlOperation` error type
- */
-export type GqlVariables<OpName extends string> = string extends OpName
-  ? Record<string, unknown>
-  : IsSchemaPopulated extends false
-    ? Record<string, unknown>
-    : OpName extends keyof GeneratedGqlSchema
-      ? GeneratedGqlSchema[OpName] extends { variables: infer V }
-        ? V
-        : Record<string, unknown>
-      : UnknownGqlOperation<OpName>;
-
-/**
- * Look up the result type for a GraphQL operation by name.
- * - Non-literal `string`: `unknown` fallback
- * - Empty schema (no tailor-env.d.ts): `unknown` fallback
- * - Literal + registered: strict type from schema
- * - Literal + NOT registered: `UnknownGqlOperation` error type
- */
-export type GqlResult<OpName extends string> = string extends OpName
-  ? unknown
-  : IsSchemaPopulated extends false
-    ? unknown
-    : OpName extends keyof GeneratedGqlSchema
-      ? GeneratedGqlSchema[OpName] extends { result: infer R }
-        ? R
-        : unknown
-      : UnknownGqlOperation<OpName>;
+      : _MergeVarNamesWithSchema<_ParsedVarNames<Q>, GqlVariables<ExtractRootField<Q>>>;
 
 // === Query validation ===
 
