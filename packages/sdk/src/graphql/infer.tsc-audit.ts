@@ -82,28 +82,28 @@ type _self_neg_never_str = Assert<IsEqual<never, string>>;
 
 // === ExtractRootField ===
 
-// 1. mutation with variables declaration
+// mutation with variables declaration
 type ERF_1 =
   ExtractRootField<"mutation createFoo($input: FooInput!) { createFoo(input: $input) { id } }">;
 type _erf1 = Assert<IsEqual<ERF_1, "createFoo">>;
 
-// 2. shorthand mutation
+// shorthand mutation
 type ERF_2 = ExtractRootField<"mutation { createFoo(input: $input) { id } }">;
 type _erf2 = Assert<IsEqual<ERF_2, "createFoo">>;
 
-// 3. query with variables declaration
+// query with variables declaration
 type ERF_3 = ExtractRootField<"query GetSalesOrder($id: ID!) { salesOrder(id: $id) { id } }">;
 type _erf3 = Assert<IsEqual<ERF_3, "salesOrder">>;
 
-// 4. shorthand query
+// shorthand query
 type ERF_4 = ExtractRootField<"{ salesOrder(id: $id) { id } }">;
 type _erf4 = Assert<IsEqual<ERF_4, "salesOrder">>;
 
-// 5. query without parentheses
+// query without parentheses
 type ERF_5 = ExtractRootField<"query { users { id } }">;
 type _erf5 = Assert<IsEqual<ERF_5, "users">>;
 
-// 6. multiline query
+// multiline query
 type ERF_6 = ExtractRootField<`
   mutation createUser($input: UserInput!) {
     createUser(input: $input) {
@@ -113,30 +113,30 @@ type ERF_6 = ExtractRootField<`
 `>;
 type _erf6 = Assert<IsEqual<ERF_6, "createUser">>;
 
-// 7. delete mutation
+// delete mutation
 type ERF_7 = ExtractRootField<"mutation { deleteUser(id: $id) { id } }">;
 type _erf7 = Assert<IsEqual<ERF_7, "deleteUser">>;
 
-// 8. update mutation
+// update mutation
 type ERF_8 = ExtractRootField<"mutation { updateUser(id: $id, input: $input) { id } }">;
 type _erf8 = Assert<IsEqual<ERF_8, "updateUser">>;
 
-// 9. non-literal string fallback
+// non-literal string fallback
 type ERF_9 = ExtractRootField<string>;
 type _erf9 = Assert<IsEqual<ERF_9, string>>;
 
-// 10. no braces fallback
+// no braces fallback
 type ERF_10 = ExtractRootField<"no braces here">;
 type _erf10 = Assert<IsEqual<ERF_10, string>>;
 
 // === InferCreateInput ===
 
-// 11. excludes id field
+// excludes id field
 const ici_t1 = db.type("T1", { name: db.string() });
 type ICI_1 = InferCreateInput<typeof ici_t1>;
 type _ici1 = Assert<IsEqual<ICI_1, { name: string }>>;
 
-// 12. maps required fields as required
+// maps required fields as required
 const ici_t2 = db.type("T2", {
   name: db.string(),
   age: db.int(),
@@ -144,7 +144,7 @@ const ici_t2 = db.type("T2", {
 type ICI_2 = InferCreateInput<typeof ici_t2>;
 type _ici2 = Assert<IsEqual<ICI_2, { name: string; age: number }>>;
 
-// 13. maps optional fields — toHaveProperty("name"), toHaveProperty("bio"), name is string
+// maps optional fields — toHaveProperty("name"), toHaveProperty("bio"), name is string
 const ici_t3 = db.type("T3", {
   name: db.string(),
   bio: db.string({ optional: true }),
@@ -157,7 +157,7 @@ type _ici3_name = Assert<IsEqual<ICI_3_Name, string>>;
 // bio should be optional (object extends Pick<ICI_3, "bio">)
 type _ici3_bio_optional = Assert<IsEqual<object extends Pick<ICI_3, "bio"> ? true : false, true>>;
 
-// 14. excludes fields with create hooks (field-level)
+// excludes fields with create hooks (field-level)
 const ici_t4 = db.type("T4", {
   name: db.string(),
   createdAt: db.datetime().hooks({ create: () => new Date() }),
@@ -165,7 +165,7 @@ const ici_t4 = db.type("T4", {
 type ICI_4 = InferCreateInput<typeof ici_t4>;
 type _ici4 = Assert<IsEqual<ICI_4, { name: string }>>;
 
-// 15. excludes fields with create hooks (type-level)
+// excludes fields with create hooks (type-level)
 const ici_t5 = db
   .type("T5", {
     name: db.string(),
@@ -177,7 +177,7 @@ const ici_t5 = db
 type ICI_5 = InferCreateInput<typeof ici_t5>;
 type _ici5 = Assert<IsEqual<ICI_5, { name: string }>>;
 
-// 16. excludes serial fields
+// excludes serial fields
 const ici_t6 = db.type("T6", {
   name: db.string(),
   seq: db.int().serial({ start: 1 }),
@@ -185,19 +185,19 @@ const ici_t6 = db.type("T6", {
 type ICI_6 = InferCreateInput<typeof ici_t6>;
 type _ici6 = Assert<IsEqual<ICI_6, { name: string }>>;
 
-// 17. maps enum fields to literal union
+// maps enum fields to literal union
 const ici_t7 = db.type("T7", {
   status: db.enum(["ACTIVE", "INACTIVE"]),
 });
 type ICI_7 = InferCreateInput<typeof ici_t7>;
 type _ici7 = Assert<IsEqual<ICI_7, { status: "ACTIVE" | "INACTIVE" }>>;
 
-// 18. maps boolean fields
+// maps boolean fields
 const ici_t8 = db.type("T8", { active: db.bool() });
 type ICI_8 = InferCreateInput<typeof ici_t8>;
 type _ici8 = Assert<IsEqual<ICI_8, { active: boolean }>>;
 
-// 19. maps date/datetime/time to string
+// maps date/datetime/time to string
 const ici_t9 = db.type("T9", {
   birth: db.date(),
   ts: db.datetime(),
@@ -206,19 +206,19 @@ const ici_t9 = db.type("T9", {
 type ICI_9 = InferCreateInput<typeof ici_t9>;
 type _ici9 = Assert<IsEqual<ICI_9, { birth: string; ts: string; open: string }>>;
 
-// 20. maps uuid fields to string
+// maps uuid fields to string
 const ici_t10 = db.type("T10", { ref: db.uuid() });
 type ICI_10 = InferCreateInput<typeof ici_t10>;
 type _ici10 = Assert<IsEqual<ICI_10, { ref: string }>>;
 
-// 21. maps array fields
+// maps array fields
 const ici_t11 = db.type("T11", {
   tags: db.string({ array: true }),
 });
 type ICI_11 = InferCreateInput<typeof ici_t11>;
 type _ici11 = Assert<IsEqual<ICI_11, { tags: string[] }>>;
 
-// 22. maps nested object fields
+// maps nested object fields
 const ici_t12 = db.type("T12", {
   address: db.object({
     city: db.string(),
@@ -230,7 +230,7 @@ type _ici12 = Assert<IsEqual<ICI_12, { address: { city: string; zip: string } }>
 
 // === InferUpdateInput ===
 
-// 23. makes all fields optional — empty object extends
+// makes all fields optional — empty object extends
 const iui_t1 = db.type("UT1", {
   name: db.string(),
   age: db.int(),
@@ -241,7 +241,7 @@ type _iui1_name = Assert<{ name: string } extends IUI_1 ? true : false>;
 type _iui1_age = Assert<{ age: number } extends IUI_1 ? true : false>;
 type _iui1_both = Assert<{ name: string; age: number } extends IUI_1 ? true : false>;
 
-// 24. excludes id and auto-generated fields — only name present
+// excludes id and auto-generated fields — only name present
 const iui_t2 = db.type("UT2", {
   name: db.string(),
   seq: db.int().serial({ start: 1 }),
@@ -254,12 +254,12 @@ type _iui2_keys = Assert<IsEqual<IUI_2_Keys, "name">>;
 
 // === InferGqlResult ===
 
-// 25. includes id as string
+// includes id as string
 const igr_t1 = db.type("GR1", { name: db.string() });
 type IGR_1 = InferGqlResult<typeof igr_t1>;
 type _igr1 = Assert<IsEqual<IGR_1, { id: string; name: string }>>;
 
-// 26. includes all field types
+// includes all field types
 const igr_t2 = db.type("GR2", {
   name: db.string(),
   count: db.int(),
@@ -286,14 +286,14 @@ type _igr2 = Assert<
   >
 >;
 
-// 27. includes optional fields with null
+// includes optional fields with null
 const igr_t3 = db.type("GR3", {
   bio: db.string({ optional: true }),
 });
 type IGR_3 = InferGqlResult<typeof igr_t3>;
 type _igr3 = Assert<IsEqual<IGR_3, { id: string; bio: string | null }>>;
 
-// 28. includes hooked/serial fields in output — check property existence
+// includes hooked/serial fields in output — check property existence
 const igr_t4 = db.type("GR4", {
   name: db.string(),
   seq: db.int().serial({ start: 1 }),
@@ -305,7 +305,7 @@ type _igr4_name = Assert<"name" extends keyof IGR_4 ? true : false>;
 type _igr4_seq = Assert<"seq" extends keyof IGR_4 ? true : false>;
 type _igr4_createdAt = Assert<"createdAt" extends keyof IGR_4 ? true : false>;
 
-// 29. maps enum fields to literal union
+// maps enum fields to literal union
 const igr_t5 = db.type("GR5", {
   status: db.enum(["ACTIVE", "INACTIVE"]),
 });
@@ -341,7 +341,7 @@ declare module "@/graphql/infer" {
 
 // === GqlVariables fallback ===
 
-// 30. returns error type for unregistered operations when schema is populated
+// returns error type for unregistered operations when schema is populated
 type GV_1 = GqlVariables<"unknownOperation">;
 type _gv1 = Assert<
   IsEqual<
@@ -352,13 +352,13 @@ type _gv1 = Assert<
   >
 >;
 
-// 31. returns Record<string, unknown> for non-literal string type
+// returns Record<string, unknown> for non-literal string type
 type GV_2 = GqlVariables<string>;
 type _gv2 = Assert<IsEqual<GV_2, Record<string, unknown>>>;
 
 // === GqlResult fallback ===
 
-// 32. returns error type for unregistered operations when schema is populated
+// returns error type for unregistered operations when schema is populated
 type GR_1 = GqlResult<"unknownOperation">;
 type _gr1 = Assert<
   IsEqual<
@@ -369,7 +369,7 @@ type _gr1 = Assert<
   >
 >;
 
-// 33. returns unknown for non-literal string type
+// returns unknown for non-literal string type
 type GR_2 = GqlResult<string>;
 type _gr2 = Assert<IsEqual<GR_2, unknown>>;
 
@@ -379,13 +379,13 @@ type _gv_neg = Assert<IsEqual<GV_1, Record<string, unknown>>>;
 
 // === GqlVariables with augmented GeneratedGqlSchema ===
 
-// 34. resolves variables type for registered create operation
+// resolves variables type for registered create operation
 type GVA_1 = GqlVariables<"createTestProduct">;
 type _gva1 = Assert<
   IsEqual<GVA_1, { input: { name: string; price: number; sku?: string | null } }>
 >;
 
-// 35. resolves variables type for registered update operation
+// resolves variables type for registered update operation
 type GVA_2 = GqlVariables<"updateTestProduct">;
 type _gva2 = Assert<
   IsEqual<
@@ -397,7 +397,7 @@ type _gva2 = Assert<
   >
 >;
 
-// 36. returns error type for unregistered operations
+// returns error type for unregistered operations
 type GVA_3 = GqlVariables<"unregisteredOp">;
 type _gva3 = Assert<
   IsEqual<
@@ -410,7 +410,7 @@ type _gva3 = Assert<
 
 // === GqlResult with augmented GeneratedGqlSchema ===
 
-// 37. resolves result type for registered create operation
+// resolves result type for registered create operation
 type GRA_1 = GqlResult<"createTestProduct">;
 type _gra1 = Assert<
   IsEqual<
@@ -426,7 +426,7 @@ type _gra1 = Assert<
   >
 >;
 
-// 38. resolves result type for registered list operation
+// resolves result type for registered list operation
 type GRA_2 = GqlResult<"testProducts">;
 type _gra2 = Assert<
   IsEqual<
@@ -444,7 +444,7 @@ type _gra2 = Assert<
   >
 >;
 
-// 39. returns error type for unregistered operations
+// returns error type for unregistered operations
 type GRA_3 = GqlResult<"unregisteredOp">;
 type _gra3 = Assert<
   IsEqual<
@@ -457,33 +457,33 @@ type _gra3 = Assert<
 
 // === StrictKeys ===
 
-// 40. does not recurse into arrays
+// does not recurse into arrays
 type SK_1 = StrictKeys<{ items: string[] }, { items: string[] }>;
 type _sk1 = Assert<IsEqual<SK_1["items"], string[]>>;
 
-// 41. does not recurse into functions
+// does not recurse into functions
 type SK_2 = StrictKeys<{ fn: () => void }, { fn: () => void }>;
 type _sk2 = Assert<IsEqual<SK_2["fn"], () => void>>;
 
-// 42. recurses into nested objects
+// recurses into nested objects
 type SK_3 = StrictKeys<{ nested: { a: string; b: number } }, { nested: { a: string } }>;
 type _sk3a = Assert<IsEqual<SK_3["nested"]["a"], string>>;
 type _sk3b = Assert<IsEqual<SK_3["nested"]["b"], never>>;
 
-// 43. maps excess top-level keys to never
+// maps excess top-level keys to never
 type SK_4 = StrictKeys<{ a: string; extra: number }, { a: string }>;
 type _sk4 = Assert<IsEqual<SK_4["extra"], never>>;
 
 // === ResolvedGqlVariables with variable declarations ===
 
-// 44. picks variables when declaration exactly matches schema keys
+// picks variables when declaration exactly matches schema keys
 type RGV_1 =
   ResolvedGqlVariables<"mutation createTestProduct($input: TestProductCreateInput!) { createTestProduct(input: $input) { id } }">;
 type _rgv1 = Assert<
   IsEqual<RGV_1, { input: { name: string; price: number; sku?: string | null } }>
 >;
 
-// 45. falls back to full schema when declaration is a proper subset
+// falls back to full schema when declaration is a proper subset
 type RGV_2 =
   ResolvedGqlVariables<"mutation updateTestProduct($id: ID!) { updateTestProduct(id: $id, input: $input) { id } }">;
 type _rgv2 = Assert<
@@ -496,35 +496,35 @@ type _rgv2 = Assert<
   >
 >;
 
-// 46. maps unknown variable names to never (type error)
+// maps unknown variable names to never (type error)
 type RGV_3 =
   ResolvedGqlVariables<"mutation createTestProduct($input2: TestProductCreateInput!) { createTestProduct(input: $input2) { id } }">;
 type _rgv3 = Assert<IsEqual<RGV_3, { input2: never }>>;
 
 // === ValidateGqlQuery ===
 
-// 47. returns the query type for a valid registered mutation
+// returns the query type for a valid registered mutation
 type VGQ_1_Q = "mutation { createTestProduct(input: $input) { id } }";
 type VGQ_1 = ValidateGqlQuery<VGQ_1_Q>;
 type _vgq1 = Assert<IsEqual<VGQ_1, VGQ_1_Q>>;
 
-// 48. returns the query type for a valid registered query
+// returns the query type for a valid registered query
 type VGQ_2_Q = "query { testProducts { collection { id } } }";
 type VGQ_2 = ValidateGqlQuery<VGQ_2_Q>;
 type _vgq2 = Assert<IsEqual<VGQ_2, VGQ_2_Q>>;
 
-// 49. returns the query type for shorthand syntax
+// returns the query type for shorthand syntax
 type VGQ_3_Q = "{ testProducts { collection { id } } }";
 type VGQ_3 = ValidateGqlQuery<VGQ_3_Q>;
 type _vgq3 = Assert<IsEqual<VGQ_3, VGQ_3_Q>>;
 
-// 50. returns error for query without selection set
+// returns error for query without selection set
 type VGQ_4 = ValidateGqlQuery<"hello world">;
 type _vgq4 = Assert<
   IsEqual<VGQ_4, 'Error: Invalid GraphQL query. Must contain a selection set "{ ... }".'>
 >;
 
-// 51. returns error for query with invalid keyword
+// returns error for query with invalid keyword
 type VGQ_5 = ValidateGqlQuery<"select { foo { id } }">;
 type _vgq5 = Assert<
   IsEqual<
@@ -533,7 +533,7 @@ type _vgq5 = Assert<
   >
 >;
 
-// 52. returns error for unregistered operation
+// returns error for unregistered operation
 type VGQ_6 = ValidateGqlQuery<"mutation { unknownOp(input: $input) { id } }">;
 type _vgq6 = Assert<
   IsEqual<
@@ -542,22 +542,22 @@ type _vgq6 = Assert<
   >
 >;
 
-// 53. is permissive for non-literal string type
+// is permissive for non-literal string type
 type VGQ_7 = ValidateGqlQuery<string>;
 type _vgq7 = Assert<IsEqual<VGQ_7, string>>;
 
-// 54. returns the query type for query with parenthesized variables
+// returns the query type for query with parenthesized variables
 type VGQ_8_Q = "query($id: ID!) { testProducts { collection { id } } }";
 type VGQ_8 = ValidateGqlQuery<VGQ_8_Q>;
 type _vgq8 = Assert<IsEqual<VGQ_8, VGQ_8_Q>>;
 
-// 55. returns the query type for mutation with parenthesized variables
+// returns the query type for mutation with parenthesized variables
 type VGQ_9_Q =
   "mutation($input: TestProductCreateInput!) { createTestProduct(input: $input) { id } }";
 type VGQ_9 = ValidateGqlQuery<VGQ_9_Q>;
 type _vgq9 = Assert<IsEqual<VGQ_9, VGQ_9_Q>>;
 
-// 56. returns the query type for multiline registered mutation
+// returns the query type for multiline registered mutation
 type VGQ_10_Q = `
       mutation createTestProduct($input: TestProductCreateInput!) {
         createTestProduct(input: $input) {
