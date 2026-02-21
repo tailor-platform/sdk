@@ -2,7 +2,7 @@
 
 > **Beta Feature**: The plugin system is currently in beta. APIs may change in future releases.
 
-Plugins extend TailorDB types by automatically generating additional types and executors based on your type definitions.
+Plugins extend TailorDB types by automatically generating additional types, executors, and output files based on your type definitions.
 
 ## Overview
 
@@ -110,13 +110,49 @@ e.g. `@example/soft-delete` → `example-soft-delete`), such as:
 
 ## Plugin Lifecycle
 
-Plugins support two phases of hooks:
+Plugins have 5 hooks across two lifecycle phases. Each hook fires at a specific point in the `tailor-sdk generate` pipeline:
 
-1. **Definition-time hooks** (`onTypeLoaded`, `onNamespaceLoaded`): Called during type loading to generate additional TailorDB types, resolvers, and executors.
-2. **Generation-time hooks** (`onTailorDBReady`, `onResolverReady`, `onExecutorReady`): Called after all artifacts are loaded and finalized to produce output files (TypeScript code, etc.). These hooks replace the previous standalone `defineGenerators()` approach.
+```
+tailor-sdk generate
+│
+├─ Phase 1: Load TailorDB types
+│   ├─ onTypeLoaded        ← per type with .plugin() attached
+│   └─ onNamespaceLoaded   ← once per namespace (namespace plugins)
+│
+├─ Phase 2: Resolve Auth
+│
+├─ Phase 3: onTailorDBReady  ← all types finalized
+│
+├─ Phase 4: Load Resolvers
+│
+├─ Phase 5: onResolverReady  ← all resolvers finalized
+│
+├─ Phase 6: Load Executors
+│
+└─ Phase 7: onExecutorReady  ← all executors finalized
+```
+
+### Definition-time hooks (Phase 1)
+
+| Hook                | Trigger                             | Can do                                                          |
+| ------------------- | ----------------------------------- | --------------------------------------------------------------- |
+| `onTypeLoaded`      | Each type with `.plugin()` attached | Generate types, resolvers, executors; extend source type fields |
+| `onNamespaceLoaded` | Once per namespace                  | Generate types, resolvers, executors                            |
+
+These hooks produce TailorDB types, resolvers, and executors that become part of the application. Requires `importPath` on the plugin.
+
+### Generation-time hooks (Phases 3/5/7)
+
+| Hook              | Phase | Available data                             | Can do             |
+| ----------------- | ----- | ------------------------------------------ | ------------------ |
+| `onTailorDBReady` | 3     | TailorDB types, Auth                       | Write output files |
+| `onResolverReady` | 5     | TailorDB types, Resolvers, Auth            | Write output files |
+| `onExecutorReady` | 7     | TailorDB types, Resolvers, Executors, Auth | Write output files |
+
+These hooks receive all finalized data and produce output files (TypeScript code, etc.). They replace the previous standalone `defineGenerators()` approach. No `importPath` required.
 
 A plugin can implement hooks from either or both phases.
 
 ## Creating Custom Plugins
 
-See [Custom Plugins](./custom.md) for how to create your own plugins.
+See [Custom Plugins](./custom.md) for the full hook reference and examples.
