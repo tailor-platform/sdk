@@ -43,6 +43,7 @@ export default defineConfig([
       "src/cli/skills.ts",
       "src/utils/test/index.ts",
       "src/kysely/index.ts",
+      "src/graphql/index.ts",
       "src/plugin/index.ts",
     ],
     format: ["esm"],

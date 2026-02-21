@@ -1,0 +1,283 @@
+/**
+ * Type-level inference utilities for mapping TailorDB type definitions
+ * to GraphQL input/output types without code generation.
+ *
+ * These types enable `InferCreateInput<typeof myType>` to produce
+ * the expected GraphQL input type for create mutations, and
+ * `ExtractRootField<Q>` to extract the operation name from a query string.
+ */
+
+import type { TailorAnyDBField, TailorAnyDBType } from "@/configure/services/tailordb/schema";
+import type { Prettify } from "@/configure/types/helpers";
+
+// === Nested output transformation ===
+
+/**
+ * Check if K is an optional key in T.
+ * `{} extends Pick<T, K>` is true when K is optional, false when required.
+ */
+type IsOptionalKey<T, K extends keyof T> = object extends Pick<T, K> ? true : false;
+
+/**
+ * Transform InferFieldsOutput to GraphQL format.
+ * Unlike Kysely, dates stay as `string` since GraphQL serializes them.
+ */
+type OutputToGql<T> = {
+  [K in keyof T]-?: IsOptionalKey<T, K> extends true
+    ? GqlTransformFieldValue<NonNullable<T[K]>> | null
+    : GqlTransformFieldValue<T[K]>;
+};
+
+/**
+ * Convert field values to GraphQL types:
+ * - `string | Date` (datetime) -> string (GraphQL ISO strings)
+ * - Arrays -> recurse into element type
+ * - Nested objects -> recurse
+ * - Everything else -> pass through
+ */
+type GqlTransformFieldValue<T> = Date extends T
+  ? string
+  : T extends (infer E)[]
+    ? GqlTransformFieldValue<E>[]
+    : T extends Record<string, unknown>
+      ? OutputToGql<T>
+      : T;
+
+// === Base type mapping ===
+
+/** Strip null and array wrappers to get the base output type */
+type StripNullAndArray<T> = T extends (infer E)[] ? Exclude<E, null> : Exclude<T, null>;
+
+/**
+ * Map TailorDBField's `_defined.type` to the corresponding GraphQL base type.
+ *
+ * | _defined.type     | GraphQL TS type            |
+ * |-------------------|----------------------------|
+ * | string, uuid      | string                     |
+ * | integer, float    | number                     |
+ * | boolean           | boolean                    |
+ * | date, datetime    | string                     |
+ * | time              | string                     |
+ * | enum              | literal union from _output |
+ * | nested            | recursive object           |
+ */
+type MapGqlFieldBaseType<F extends TailorAnyDBField> = F["_defined"]["type"] extends
+  | "string"
+  | "uuid"
+  ? string
+  : F["_defined"]["type"] extends "integer" | "float"
+    ? number
+    : F["_defined"]["type"] extends "boolean"
+      ? boolean
+      : F["_defined"]["type"] extends "date" | "datetime" | "time"
+        ? string
+        : F["_defined"]["type"] extends "enum"
+          ? StripNullAndArray<F["_output"]>
+          : F["_defined"]["type"] extends "nested"
+            ? OutputToGql<StripNullAndArray<F["_output"]>>
+            : string;
+
+// === Modifier application ===
+
+type WithGqlArray<Base, F extends TailorAnyDBField> = F["_defined"]["array"] extends true
+  ? Base[]
+  : Base;
+
+type WithGqlNull<T, F extends TailorAnyDBField> = null extends F["_output"] ? T | null : T;
+
+/** Infer a single GraphQL column type from a TailorDBField */
+type InferGqlColumn<F extends TailorAnyDBField> = WithGqlNull<
+  WithGqlArray<MapGqlFieldBaseType<F>, F>,
+  F
+>;
+
+// === Field filtering for inputs ===
+
+/** Check if a field has a create hook via the type-level _hooksMeta */
+type HasCreateHookMeta<
+  T extends TailorAnyDBType,
+  K extends string,
+> = K extends keyof T["_hooksMeta"]
+  ? T["_hooksMeta"][K] extends { create: true }
+    ? true
+    : false
+  : false;
+
+/** Check if a field has serial from _defined */
+type IsSerial<F extends TailorAnyDBField> = F["_defined"] extends { serial: true } ? true : false;
+
+/**
+ * Check if a field has hooks.create from _defined.
+ * Uses indexed access with NonNullable to handle optional hooks property
+ * (`hooks?:` in TailorDBField._defined is optional after intersection with Prettify).
+ */
+type HasDefinedCreateHook<F extends TailorAnyDBField> = "hooks" extends keyof F["_defined"]
+  ? NonNullable<F["_defined"]["hooks"]> extends { create: true }
+    ? true
+    : false
+  : false;
+
+/** Check if a field should be excluded from create/update input */
+type IsExcludedFromInput<T extends TailorAnyDBType, K extends string> = K extends "id"
+  ? true
+  : K extends keyof T["fields"]
+    ? IsSerial<T["fields"][K]> extends true
+      ? true
+      : HasDefinedCreateHook<T["fields"][K]> extends true
+        ? true
+        : HasCreateHookMeta<T, K> extends true
+          ? true
+          : false
+    : false;
+
+/** Keys that are included in CreateInput (not excluded) */
+type CreateInputKeys<T extends TailorAnyDBType> = {
+  [K in keyof T["fields"] & string]: IsExcludedFromInput<T, K> extends true ? never : K;
+}[keyof T["fields"] & string];
+
+/** Keys that are required in CreateInput (not nullable/optional) */
+type RequiredCreateInputKeys<T extends TailorAnyDBType> = {
+  [K in CreateInputKeys<T>]: null extends T["fields"][K]["_output"] ? never : K;
+}[CreateInputKeys<T>];
+
+/** Keys that are optional in CreateInput */
+type OptionalCreateInputKeys<T extends TailorAnyDBType> = Exclude<
+  CreateInputKeys<T>,
+  RequiredCreateInputKeys<T>
+>;
+
+// === String utilities ===
+
+/** Trim leading whitespace from a template literal type */
+type TrimStart<S extends string> = S extends ` ${infer R}`
+  ? TrimStart<R>
+  : S extends `\n${infer R}`
+    ? TrimStart<R>
+    : S extends `\t${infer R}`
+      ? TrimStart<R>
+      : S extends `\r${infer R}`
+        ? TrimStart<R>
+        : S;
+
+/** Extract leading identifier (before `(`, ` `, `{`, `}`, or newline) */
+type ExtractIdentifier<S extends string> = S extends `${infer Name}(${string}`
+  ? Name
+  : S extends `${infer Name} ${string}`
+    ? Name
+    : S extends `${infer Name}\n${string}`
+      ? Name
+      : S extends `${infer Name}\t${string}`
+        ? Name
+        : S extends `${infer Name}{${string}`
+          ? Name
+          : S extends `${infer Name}}${string}`
+            ? Name
+            : S;
+
+// === Public API ===
+
+/**
+ * Extract the root field name from a GraphQL query/mutation string.
+ * Finds the first identifier after the opening `{` of the selection set.
+ * @example
+ * ```ts
+ * type T1 = ExtractRootField<"mutation { createFoo(input: $input) { id } }">;
+ * //   ^? "createFoo"
+ * type T2 = ExtractRootField<"query { salesOrder(id: $id) { id } }">;
+ * //   ^? "salesOrder"
+ * ```
+ */
+export type ExtractRootField<Q extends string> = string extends Q // Q is `string` (not a literal) -> fallback
+  ? string
+  : Q extends `${string}{${infer Rest}`
+    ? ExtractIdentifier<TrimStart<Rest>>
+    : string;
+
+/**
+ * Infer the GraphQL CreateInput type from a TailorDB type definition.
+ * Excludes id, serial, and hooked fields. Required fields stay required,
+ * optional fields become `T | null | undefined`.
+ * @example
+ * ```ts
+ * const user = db.type("User", { name: db.string(), age: db.int({ optional: true }) });
+ * type Input = InferCreateInput<typeof user>;
+ * // { name: string; age?: number | null }
+ * ```
+ */
+export type InferCreateInput<T extends TailorAnyDBType> = Prettify<
+  {
+    [K in RequiredCreateInputKeys<T>]: InferGqlColumn<T["fields"][K]>;
+  } & {
+    [K in OptionalCreateInputKeys<T>]?: InferGqlColumn<T["fields"][K]> | null;
+  }
+>;
+
+/**
+ * Infer the GraphQL UpdateInput type from a TailorDB type definition.
+ * Same fields as CreateInput but all optional.
+ * @example
+ * ```ts
+ * const user = db.type("User", { name: db.string(), age: db.int() });
+ * type Input = InferUpdateInput<typeof user>;
+ * // { name?: string | null; age?: number | null }
+ * ```
+ */
+export type InferUpdateInput<T extends TailorAnyDBType> = {
+  [K in CreateInputKeys<T>]?: InferGqlColumn<T["fields"][K]> | null;
+};
+
+/**
+ * Infer the GraphQL result type from a TailorDB type definition.
+ * Includes all fields (including id) mapped to their output types.
+ * @example
+ * ```ts
+ * const user = db.type("User", { name: db.string(), age: db.int() });
+ * type Result = InferGqlResult<typeof user>;
+ * // { id: string; name: string; age: number }
+ * ```
+ */
+export type InferGqlResult<T extends TailorAnyDBType> = {
+  [K in keyof T["fields"] & string]: K extends "id" ? string : InferGqlColumn<T["fields"][K]>;
+};
+
+/**
+ * Module augmentation interface for GraphQL schema types.
+ * Augmented by `tailor-env.d.ts` via `declare module` to provide
+ * type-safe GraphQL operations.
+ * @example
+ * ```ts
+ * // In tailor-env.d.ts (auto-generated):
+ * declare module "@tailor-platform/sdk/graphql" {
+ *   interface GeneratedGqlSchema {
+ *     createUser: {
+ *       variables: { input: InferCreateInput<typeof user> };
+ *       result: { createUser: InferGqlResult<typeof user> };
+ *     };
+ *   }
+ * }
+ * ```
+ */
+// Using interface for declaration merging via `declare module`
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface GeneratedGqlSchema {}
+
+/**
+ * Look up the variables type for a GraphQL operation by name.
+ * Falls back to `Record<string, unknown>` when the operation is not
+ * registered in GeneratedGqlSchema.
+ */
+export type GqlVariables<OpName extends string> = OpName extends keyof GeneratedGqlSchema
+  ? GeneratedGqlSchema[OpName] extends { variables: infer V }
+    ? V
+    : Record<string, unknown>
+  : Record<string, unknown>;
+
+/**
+ * Look up the result type for a GraphQL operation by name.
+ * Falls back to `unknown` when the operation is not registered.
+ */
+export type GqlResult<OpName extends string> = OpName extends keyof GeneratedGqlSchema
+  ? GeneratedGqlSchema[OpName] extends { result: infer R }
+    ? R
+    : unknown
+  : unknown;

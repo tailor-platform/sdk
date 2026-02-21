@@ -1084,3 +1084,63 @@ describe("workflowTarget", () => {
     });
   });
 });
+
+describe("gqlTarget type inference", () => {
+  test("variables return type defaults to Record<string, unknown> for unregistered operations", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "graphql",
+        appName: "test-app",
+        query: `mutation { createUnknown(input: $input) { id } }`,
+        variables: () => {
+          // Should accept any record since "createUnknown" is not in GeneratedGqlSchema
+          return { input: { name: "test" } };
+        },
+      },
+    });
+  });
+
+  test("variables return type defaults to Record<string, unknown> for non-literal query", () => {
+    const dynamicQuery = "query { test }" as string;
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "graphql",
+        appName: "test-app",
+        query: dynamicQuery,
+        variables: () => {
+          // Should accept any record since query is not a literal type
+          return { foo: "bar" };
+        },
+      },
+    });
+  });
+
+  test("backward compat: existing gql operations continue to work", () => {
+    const executor = createExecutor({
+      name: "test",
+      trigger: recordCreatedTrigger({
+        type: db.type("User", { name: db.string(), age: db.int() }),
+      }),
+      operation: {
+        kind: "graphql",
+        query: /* gql */ `
+          mutation createSalesOrderCreated($input: SalesOrderCreatedCreateInput!) {
+            createSalesOrderCreated(input: $input) {
+              id
+            }
+          }
+        `,
+        variables: ({ newRecord }) => ({
+          input: {
+            name: newRecord.name,
+          },
+        }),
+      },
+    });
+    expect(executor.operation.kind).toBe("graphql");
+  });
+});

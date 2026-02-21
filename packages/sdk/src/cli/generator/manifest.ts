@@ -8,12 +8,16 @@
 
 import * as path from "pathe";
 import { type Application } from "@/cli/application";
-import { isPluginGeneratedType } from "@/parser/service/tailordb/types";
+import { isPluginGeneratedType, type GqlOperations } from "@/parser/service/tailordb/types";
 
 export type ManifestTypeEntry = {
   typeName: string;
   filePath: string;
   exportName: string;
+  pluralForm: string;
+  gqlOperations?: GqlOperations;
+  aggregation?: boolean;
+  bulkUpsert?: boolean;
 };
 
 export type ManifestNamespace = {
@@ -50,15 +54,26 @@ export async function extractManifest(
     const sourceInfo = db.getTypeSourceInfo();
     const entries: ManifestTypeEntry[] = [];
 
-    for (const [typeName, _type] of Object.entries(types)) {
+    for (const [typeName, parsedType] of Object.entries(types)) {
       const source = sourceInfo[typeName];
       if (!source || isPluginGeneratedType(source)) continue;
 
-      entries.push({
+      const entry: ManifestTypeEntry = {
         typeName,
         filePath: path.relative(configDir, source.filePath),
         exportName: source.exportName,
-      });
+        pluralForm: parsedType.pluralForm,
+      };
+      if (parsedType.settings.gqlOperations) {
+        entry.gqlOperations = parsedType.settings.gqlOperations;
+      }
+      if (parsedType.settings.aggregation) {
+        entry.aggregation = parsedType.settings.aggregation;
+      }
+      if (parsedType.settings.bulkUpsert) {
+        entry.bulkUpsert = parsedType.settings.bulkUpsert;
+      }
+      entries.push(entry);
     }
 
     manifest.namespaces[namespace] = { types: entries };

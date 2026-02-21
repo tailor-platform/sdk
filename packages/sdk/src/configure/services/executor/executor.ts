@@ -38,14 +38,21 @@ type Executor<T extends Trigger<unknown>, O> = O extends {
 
 /**
  * Create an executor configuration for the Tailor SDK.
- * @template T
- * @template O
+ * @template T - Trigger type
+ * @template Q - Query string literal type (inferred from operation.query)
+ * @template O - Operation type
  * @param config - Executor configuration
  * @returns The same executor configuration
  */
 export function createExecutor<
   T extends Trigger<unknown>,
-  O extends Operation<TriggerArgs<T>> | { kind: "workflow"; workflow: Workflow },
+  Q extends string = string,
+  O extends Operation<TriggerArgs<T>, Q> | { kind: "workflow"; workflow: Workflow } =
+    | Operation<TriggerArgs<T>, Q>
+    | {
+        kind: "workflow";
+        workflow: Workflow;
+      },
 >(config: Executor<T, O>): Executor<T, O>;
 
 /**
@@ -64,7 +71,13 @@ export function createExecutor<
 
 export function createExecutor<
   T extends Trigger<unknown>,
-  O extends Operation<TriggerArgs<T>> | { kind: "workflow"; workflow: Workflow },
+  Q extends string = string,
+  O extends Operation<TriggerArgs<T>, Q> | { kind: "workflow"; workflow: Workflow } =
+    | Operation<TriggerArgs<T>, Q>
+    | {
+        kind: "workflow";
+        workflow: Workflow;
+      },
 >(config: Executor<T, O>) {
   return config;
 }
