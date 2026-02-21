@@ -60,7 +60,7 @@ const defaultRender = createRenderer(1);
 // File configurations - subcommands are auto-expanded from parent command names
 const files: Record<string, FileConfig> = {
   "docs/cli/application.md": {
-    commands: ["init", "generate", "apply", "remove", "show", "open", "api"],
+    commands: ["init", "generate", "manifest", "apply", "remove", "show", "open", "api"],
     render: defaultRender,
   },
   "docs/cli/tailordb.md": {

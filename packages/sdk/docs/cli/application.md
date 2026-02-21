@@ -48,7 +48,25 @@ tailor-sdk generate [options]
 | `--watch`           | `-W`  | Watch for type/resolver changes and regenerate | No       | `false`              |
 
 <!-- politty:command:generate:end -->
+<!-- politty:command:manifest:start -->
 
+## manifest
+
+Extract type manifest for the TS Language Service Plugin.
+
+**Usage**
+
+```
+tailor-sdk manifest [options]
+```
+
+**Options**
+
+| Option              | Alias | Description             | Required | Default              |
+| ------------------- | ----- | ----------------------- | -------- | -------------------- |
+| `--config <CONFIG>` | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` |
+
+<!-- politty:command:manifest:end -->
 <!-- politty:command:apply:start -->
 
 ## apply

@@ -48,6 +48,11 @@
       "types": "./dist/plugin/index.d.mts",
       "import": "./dist/plugin/index.mjs",
       "default": "./dist/plugin/index.mjs"
+    },
+    "./ts-plugin": {
+      "types": "./dist/ts-plugin/index.d.cts",
+      "require": "./dist/ts-plugin/index.cjs",
+      "default": "./dist/ts-plugin/index.cjs"
     }
   },
   "scripts": {
