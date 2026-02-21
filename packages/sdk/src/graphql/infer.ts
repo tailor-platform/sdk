@@ -414,8 +414,8 @@ export type GqlResult<OpName extends string> = string extends OpName
 /** Check if the query contains a selection set `{ ... }` */
 type _HasSelectionSet<Q extends string> = Q extends `${string}{${string}}${string}` ? true : false;
 
-/** Whitespace or `{` that can follow a GraphQL keyword */
-type _KeywordBoundary = " " | "\n" | "\t" | "\r" | "{";
+/** Whitespace, `{`, or `(` that can follow a GraphQL keyword */
+type _KeywordBoundary = " " | "\n" | "\t" | "\r" | "{" | "(";
 
 /** Check if the query starts with a valid GraphQL keyword followed by a boundary */
 type _HasValidKeyword<Q extends string> =

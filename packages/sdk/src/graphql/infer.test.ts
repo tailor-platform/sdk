@@ -511,6 +511,19 @@ describe("ValidateGqlQuery", () => {
     expectTypeOf<V>().toEqualTypeOf<string>();
   });
 
+  it("returns the query type for query with parenthesized variables", () => {
+    type Q = "query($id: ID!) { testProducts { collection { id } } }";
+    type V = ValidateGqlQuery<Q>;
+    expectTypeOf<V>().toEqualTypeOf<Q>();
+  });
+
+  it("returns the query type for mutation with parenthesized variables", () => {
+    type Q =
+      "mutation($input: TestProductCreateInput!) { createTestProduct(input: $input) { id } }";
+    type V = ValidateGqlQuery<Q>;
+    expectTypeOf<V>().toEqualTypeOf<Q>();
+  });
+
   it("returns the query type for multiline registered mutation", () => {
     type Q = `
       mutation createTestProduct($input: TestProductCreateInput!) {
