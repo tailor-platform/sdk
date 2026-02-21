@@ -1,8 +1,42 @@
 import type { PluginAttachment } from "./types";
-import type { DependencyKind, GeneratorAuthInput, GeneratorResult } from "@/cli/generator/types";
+import type { DependencyKind } from "@/parser/generator-config";
+import type { IdProviderConfig, OAuth2ClientInput } from "@/parser/service/auth/types";
 import type { Executor } from "@/parser/service/executor";
 import type { Resolver } from "@/parser/service/resolver";
 import type { TailorDBType, TypeSourceInfoEntry } from "@/parser/service/tailordb/types";
+
+/**
+ * A single generated file to write to disk.
+ */
+export interface GeneratedFile {
+  path: string;
+  content: string;
+  skipIfExists?: boolean;
+  executable?: boolean;
+}
+
+/**
+ * Result returned by generation-time hooks.
+ */
+export interface GeneratorResult {
+  files: GeneratedFile[];
+  errors?: string[];
+}
+
+/**
+ * Auth configuration available to generation-time hooks.
+ */
+export interface GeneratorAuthInput {
+  name: string;
+  userProfile?: {
+    typeName: string;
+    namespace: string;
+    usernameField: string;
+  };
+  machineUsers?: Record<string, { attributes: Record<string, unknown> }>;
+  oauth2Clients?: Record<string, OAuth2ClientInput>;
+  idProvider?: IdProviderConfig;
+}
 
 /**
  * Namespace-level TailorDB data available to generation-time hooks.
@@ -129,6 +163,3 @@ export function hasGenerationHooks(plugin: {
 }): boolean {
   return !!(plugin.onTailorDBReady || plugin.onResolverReady || plugin.onExecutorReady);
 }
-
-// Re-export GeneratorResult for plugin authors
-export type { GeneratorResult } from "@/cli/generator/types";

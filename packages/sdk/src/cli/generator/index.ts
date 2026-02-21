@@ -15,6 +15,7 @@ import {
   type TailorDBNamespaceResult,
   type ResolverNamespaceResult,
   type GeneratorAuthInput,
+  type GeneratorResult,
   type DependencyKind,
   hasDependency,
 } from "@/cli/generator/types";
@@ -33,7 +34,6 @@ import { PluginManager } from "@/plugin/manager";
 import { commonArgs, withCommonArgs } from "../args";
 import { createDependencyWatcher, type DependencyWatcher } from "./watch";
 import type { GenerateOptions } from "./options";
-import type { GeneratorResult } from "@/cli/generator/types";
 import type { Plugin, PluginAttachment } from "@/parser/plugin-config/types";
 import type { TailorDBType, TypeSourceInfo } from "@/parser/service/tailordb/types";
 
@@ -354,6 +354,7 @@ export function createGenerationManager(params: {
 
   /**
    * Build TailorDB namespace data array from loaded services.
+   * @returns Array of TailorDB namespace data
    */
   function buildTailorDBData(): TailorDBNamespaceData[] {
     return Object.entries(services.tailordb).map(([namespace, info]) => ({
@@ -366,6 +367,7 @@ export function createGenerationManager(params: {
 
   /**
    * Build resolver namespace data array from loaded services.
+   * @returns Array of resolver namespace data
    */
   function buildResolverData(): ResolverNamespaceData[] {
     return Object.entries(services.resolver).map(([namespace, resolvers]) => ({
@@ -431,9 +433,9 @@ export function createGenerationManager(params: {
 
   /**
    * Run phase-complete hooks for a set of plugins.
-   * @param plugins
-   * @param hookName
-   * @param watch
+   * @param plugins - Plugins to run hooks on
+   * @param hookName - Name of the phase-complete hook to call
+   * @param watch - Whether running in watch mode (suppresses throws)
    */
   async function runPluginPhaseHooks(
     plugins: Plugin[],
