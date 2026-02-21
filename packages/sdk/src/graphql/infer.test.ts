@@ -317,3 +317,73 @@ describe("GqlResult fallback", () => {
     expectTypeOf<R>().toEqualTypeOf<unknown>();
   });
 });
+
+// === Module augmentation tests ===
+
+const testProduct = db.type("TestProduct", {
+  name: db.string(),
+  price: db.float(),
+  sku: db.string({ optional: true }),
+});
+
+declare module "./infer" {
+  interface GeneratedGqlSchema {
+    createTestProduct: {
+      variables: { input: InferCreateInput<typeof testProduct> };
+      result: { createTestProduct: InferGqlResult<typeof testProduct> };
+    };
+    updateTestProduct: {
+      variables: { id: string; input: InferUpdateInput<typeof testProduct> };
+      result: { updateTestProduct: InferGqlResult<typeof testProduct> };
+    };
+    testProducts: {
+      variables: Record<string, unknown>;
+      result: { testProducts: { collection: InferGqlResult<typeof testProduct>[] } };
+    };
+  }
+}
+
+describe("GqlVariables with augmented GeneratedGqlSchema", () => {
+  it("resolves variables type for registered create operation", () => {
+    type V = GqlVariables<"createTestProduct">;
+    expectTypeOf<V>().toEqualTypeOf<{
+      input: { name: string; price: number; sku?: string | null };
+    }>();
+  });
+
+  it("resolves variables type for registered update operation", () => {
+    type V = GqlVariables<"updateTestProduct">;
+    expectTypeOf<V>().toEqualTypeOf<{
+      id: string;
+      input: { name?: string | null; price?: number | null; sku?: string | null };
+    }>();
+  });
+
+  it("still returns Record<string, unknown> for unregistered operations", () => {
+    type V = GqlVariables<"unregisteredOp">;
+    expectTypeOf<V>().toEqualTypeOf<Record<string, unknown>>();
+  });
+});
+
+describe("GqlResult with augmented GeneratedGqlSchema", () => {
+  it("resolves result type for registered create operation", () => {
+    type R = GqlResult<"createTestProduct">;
+    expectTypeOf<R>().toEqualTypeOf<{
+      createTestProduct: { id: string; name: string; price: number; sku: string | null };
+    }>();
+  });
+
+  it("resolves result type for registered list operation", () => {
+    type R = GqlResult<"testProducts">;
+    expectTypeOf<R>().toEqualTypeOf<{
+      testProducts: {
+        collection: { id: string; name: string; price: number; sku: string | null }[];
+      };
+    }>();
+  });
+
+  it("still returns unknown for unregistered operations", () => {
+    type R = GqlResult<"unregisteredOp">;
+    expectTypeOf<R>().toEqualTypeOf<unknown>();
+  });
+});

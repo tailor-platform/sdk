@@ -12,6 +12,7 @@ import {
 } from "./trigger/event";
 import { scheduleTrigger } from "./trigger/schedule";
 import { incomingWebhookTrigger } from "./trigger/webhook";
+import type { InferCreateInput } from "@/graphql/infer";
 describe("createExecutor", () => {
   test("can disable executor", () => {
     const disabled = createExecutor({
@@ -1142,5 +1143,158 @@ describe("gqlTarget type inference", () => {
       },
     });
     expect(executor.operation.kind).toBe("graphql");
+  });
+});
+
+// === Module augmentation for type inference tests ===
+
+const testOrder = db.type("TestOrder", {
+  productId: db.uuid(),
+  quantity: db.int(),
+  note: db.string({ optional: true }),
+});
+
+declare module "@/graphql/infer" {
+  interface GeneratedGqlSchema {
+    createTestOrder: {
+      variables: {
+        input: InferCreateInput<typeof testOrder>;
+      };
+    };
+  }
+}
+
+describe("gqlTarget type inference with augmented GeneratedGqlSchema", () => {
+  test("infers correct variable types from inline template literal query", () => {
+    createExecutor({
+      name: "test-inferred",
+      trigger: scheduleTrigger({ cron: "0 * * * *" }),
+      operation: {
+        kind: "graphql",
+        query: `mutation { createTestOrder(input: $input) { id } }`,
+        variables: () => ({
+          input: {
+            productId: "uuid-123",
+            quantity: 10,
+          },
+        }),
+      },
+    });
+  });
+
+  test("infers correct variable types from multiline template literal query", () => {
+    createExecutor({
+      name: "test-multiline",
+      trigger: scheduleTrigger({ cron: "0 * * * *" }),
+      operation: {
+        kind: "graphql",
+        query: /* gql */ `
+          mutation createTestOrder($input: TestOrderCreateInput!) {
+            createTestOrder(input: $input) {
+              id
+            }
+          }
+        `,
+        variables: () => ({
+          input: {
+            productId: "uuid-456",
+            quantity: 5,
+            note: "rush order",
+          },
+        }),
+      },
+    });
+  });
+
+  test("rejects wrong variable types for registered operations", () => {
+    createExecutor({
+      name: "test-wrong-types",
+      trigger: scheduleTrigger({ cron: "0 * * * *" }),
+      operation: {
+        kind: "graphql",
+        query: `mutation { createTestOrder(input: $input) { id } }`,
+        // @ts-expect-error - productId should be string (uuid), not number
+        variables: () => ({
+          input: {
+            productId: 12345,
+            quantity: 10,
+          },
+        }),
+      },
+    });
+  });
+
+  test("rejects wrong return shape for registered operations", () => {
+    createExecutor({
+      name: "test-wrong-shape",
+      trigger: scheduleTrigger({ cron: "0 * * * *" }),
+      operation: {
+        kind: "graphql",
+        query: `mutation { createTestOrder(input: $input) { id } }`,
+        // @ts-expect-error - must return { input: ... }, not { wrongKey: ... }
+        variables: () => ({
+          wrongKey: { productId: "uuid", quantity: 1 },
+        }),
+      },
+    });
+  });
+
+  test("passes trigger args to variables function", () => {
+    createExecutor({
+      name: "test-trigger-args",
+      trigger: recordCreatedTrigger({
+        type: testOrder,
+      }),
+      operation: {
+        kind: "graphql",
+        query: `mutation { createTestOrder(input: $input) { id } }`,
+        variables: ({ newRecord }) => {
+          expectTypeOf(newRecord.productId).toEqualTypeOf<string>();
+          expectTypeOf(newRecord.quantity).toEqualTypeOf<number>();
+          return {
+            input: {
+              productId: newRecord.productId,
+              quantity: newRecord.quantity,
+            },
+          };
+        },
+      },
+    });
+  });
+
+  test("allows optional fields to be omitted", () => {
+    createExecutor({
+      name: "test-optional-omitted",
+      trigger: scheduleTrigger({ cron: "0 * * * *" }),
+      operation: {
+        kind: "graphql",
+        query: `mutation { createTestOrder(input: $input) { id } }`,
+        variables: () => ({
+          input: {
+            productId: "uuid-789",
+            quantity: 1,
+            // note is optional — can be omitted
+          },
+        }),
+      },
+    });
+  });
+
+  test("allows optional fields to be null", () => {
+    createExecutor({
+      name: "test-optional-null",
+      trigger: scheduleTrigger({ cron: "0 * * * *" }),
+      operation: {
+        kind: "graphql",
+        query: `mutation { createTestOrder(input: $input) { id } }`,
+        variables: () => ({
+          input: {
+            productId: "uuid-789",
+            quantity: 1,
+            note: null,
+          },
+        }),
+      },
+    });
   });
 });
