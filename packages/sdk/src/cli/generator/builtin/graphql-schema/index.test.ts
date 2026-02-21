@@ -138,7 +138,7 @@ describe("processType", () => {
 
 describe("createGqlSchemaGenerator", () => {
   let generator: ReturnType<typeof createGqlSchemaGenerator>;
-  const testDistPath = "./tailor-env.d.ts";
+  const testDistPath = "./graphql-schema.d.ts";
 
   beforeEach(() => {
     generator = createGqlSchemaGenerator({ distPath: testDistPath });
@@ -232,7 +232,7 @@ describe("createGqlSchemaGenerator", () => {
     });
 
     const content = result.files[0].content;
-    // distPath is "./tailor-env.d.ts" → outputDir is /project
+    // distPath is "./graphql-schema.d.ts" → outputDir is /project
     // filePath is "tailordb/user.ts" → absolute is /project/tailordb/user.ts
     // relative from /project to /project/tailordb/user = ./tailordb/user
     expect(content).toContain('(typeof import("./tailordb/user"))["user"]');
