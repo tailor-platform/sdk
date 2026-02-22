@@ -12,6 +12,24 @@ import { logger, styles } from "@/cli/utils/logger";
 import type { PluginGeneratedType } from "@/parser/plugin-config/types";
 import type { PluginGeneratedTypeInfo, PluginTypeGenerationResult } from "@/plugin/manager";
 
+type FieldMetadata = {
+  required?: boolean;
+  index?: boolean;
+  unique?: boolean;
+  description?: string;
+  allowedValues?: ReadonlyArray<{ value: string }>;
+};
+
+type FieldDefinition = {
+  type?: string;
+  _metadata?: FieldMetadata;
+  metadata?: FieldMetadata;
+};
+
+function isFieldDefinition(value: unknown): value is FieldDefinition {
+  return typeof value === "object" && value !== null;
+}
+
 /**
  * Generate TypeScript files for plugin-generated types.
  * These files export the type definition and can be imported by executor files.
@@ -104,9 +122,8 @@ function generateFieldsCode(type: PluginGeneratedType): string {
   const fieldEntries: string[] = [];
 
   for (const [fieldName, field] of Object.entries(type.fields)) {
-    // oxlint-disable-next-line no-explicit-any
-    const fieldDef = field as any;
-    const fieldCode = generateSingleFieldCode(fieldDef);
+    if (!isFieldDefinition(field)) continue;
+    const fieldCode = generateSingleFieldCode(field);
     if (fieldCode) {
       fieldEntries.push(`  ${fieldName}: ${fieldCode}`);
     }
@@ -136,19 +153,14 @@ const typeToMethodMap: Record<string, string> = {
  * @param field - Field definition object
  * @returns TypeScript code for the field
  */
-// oxlint-disable-next-line no-explicit-any
-function generateSingleFieldCode(field: any): string | null {
-  if (!field || typeof field !== "object") {
-    return null;
-  }
-
+function generateSingleFieldCode(field: FieldDefinition): string | null {
   const fieldType = field.type;
   if (!fieldType) {
     return null;
   }
 
-  const method = typeToMethodMap[fieldType] || fieldType;
-  const metadata = field._metadata || field.metadata || {};
+  const method = typeToMethodMap[fieldType] ?? fieldType;
+  const metadata: FieldMetadata = field._metadata ?? field.metadata ?? {};
 
   // Build options object
   const optionParts: string[] = [];

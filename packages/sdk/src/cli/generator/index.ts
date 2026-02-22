@@ -9,7 +9,7 @@ import {
   type Application,
 } from "@/cli/application";
 import { createExecutorService } from "@/cli/application/executor/service";
-import { loadConfig, type LoadedConfig } from "@/cli/config-loader";
+import { loadConfig, type LoadedConfig, type Generator } from "@/cli/config-loader";
 import {
   type AnyCodeGenerator,
   type TailorDBNamespaceResult,
@@ -21,7 +21,6 @@ import {
 import { generateUserTypes } from "@/cli/type-generator";
 import { getDistDir } from "@/cli/utils/dist-dir";
 import { logger, styles } from "@/cli/utils/logger";
-import { type Generator } from "@/parser/generator-config";
 import { type Executor } from "@/parser/service/executor";
 import { type Resolver } from "@/parser/service/resolver";
 import { PluginManager } from "@/plugin/manager";
