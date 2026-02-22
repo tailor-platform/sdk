@@ -79,80 +79,14 @@ An executor that processes incoming payment webhook notifications.
 - **name:** `"payment-received"`
 - **description:** Non-empty string describing the executor
 
-## API Reference
+## Hints
 
-```typescript
-import {
-  createExecutor,
-  recordCreatedTrigger,
-  recordUpdatedTrigger,
-  resolverExecutedTrigger,
-  scheduleTrigger,
-  incomingWebhookTrigger,
-} from "@tailor-platform/sdk";
-
-// Record created trigger
-trigger: recordCreatedTrigger({
-  type: modelExport,
-  condition: ({ newRecord }) => newRecord.totalAmount > 100,
-}),
-
-// Record updated trigger
-trigger: recordUpdatedTrigger({
-  type: modelExport,
-  condition: ({ newRecord, oldRecord }) => newRecord.status !== oldRecord.status,
-}),
-
-// Resolver executed trigger
-trigger: resolverExecutedTrigger({
-  resolver: resolverDefaultExport,
-  condition: ({ success, result, error }) => success === true,
-}),
-
-// Schedule trigger
-trigger: scheduleTrigger({ cron: "0 0 * * *", timezone: "UTC" }),
-
-// Incoming webhook trigger
-trigger: incomingWebhookTrigger<{
-  body: { paymentId: string; amount: number };
-  headers: Record<string, string>;
-}>(),
-
-// Function operation
-operation: {
-  kind: "function",
-  body: async (args) => { /* args shape depends on trigger */ },
-},
-
-// Webhook operation with vault secret
-operation: {
-  kind: "webhook",
-  url: ({ newRecord }) => `https://api.example.com/notify/${newRecord.id}`,
-  headers: {
-    "Content-Type": "application/json",
-    Authorization: { vault: "my-vault", key: "api-key" },
-  },
-  requestBody: ({ newRecord }) => ({
-    orderId: newRecord.id,
-    amount: newRecord.totalAmount,
-  }),
-},
-
-// GraphQL operation
-operation: {
-  kind: "graphql",
-  query: `mutation sync($input: SyncInput!) { sync(input: $input) { id } }`,
-  variables: ({ newRecord }) => ({ input: { id: newRecord.id } }),
-},
-
-// Workflow operation with auth invoker
-operation: {
-  kind: "workflow",
-  workflow: workflowDefaultExport,
-  args: () => ({ date: new Date().toISOString() }),
-  authInvoker: { namespace: "my-auth", machineUserName: "system-user" },
-},
-```
+- All trigger functions and `createExecutor` are imported from `@tailor-platform/sdk`
+- Available triggers: `recordCreatedTrigger`, `recordUpdatedTrigger`, `resolverExecutedTrigger`, `scheduleTrigger`, `incomingWebhookTrigger`
+- Available operation kinds: `"function"`, `"webhook"`, `"graphql"`, `"workflow"`
+- Vault secrets in headers use `{ vault: "vault-name", key: "key-name" }` syntax
+- Refer to `example/executors/` in the SDK repository for working patterns
+- Each executor must be a **default export** from `createExecutor()`
 
 ## Scoring
 

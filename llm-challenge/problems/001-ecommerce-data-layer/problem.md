@@ -39,7 +39,7 @@ Define a `Product` model with a plural form `"ProductCatalog"`:
 | `contactEmail` | string | No       |                                                                       |
 
 - Include timestamps
-- Add a **type-level hook** on `contactEmail`: the `create` hook should lowercase the value. Use: `({ data }) => data.contactEmail ? data.contactEmail.toLowerCase() : ""`
+- Add a **type-level hook** on `contactEmail`: the `create` hook should return the lowercased value of `data.contactEmail` (or empty string if falsy)
 - Named export: `product`
 - Type export: `type product = typeof product`
 - Type name tuple: `["Product", "ProductCatalog"]`
@@ -74,7 +74,7 @@ Define an `OrderItem` model:
 | `lineTotal` | float | Yes      |                                                            |
 
 - Include timestamps
-- Add a **type-level hook** on `lineTotal`: the `create` hook should compute `quantity * unitPrice`: `({ data }) => (data.quantity ?? 0) * (data.unitPrice ?? 0)`
+- Add a **type-level hook** on `lineTotal`: the `create` hook should compute `quantity * unitPrice` from the record data (default to 0 if either is missing)
 - Named export: `orderItem`
 - Type export: `type orderItem = typeof orderItem`
 - Type name: `"OrderItem"`
@@ -83,44 +83,10 @@ Define an `OrderItem` model:
 
 A `tailor.config.ts` and a partial `tailordb/customer.ts` are provided as starting points.
 
-## API Reference
+## Hints
 
-```typescript
-import { db } from "@tailor-platform/sdk";
-
-// Basic type
-export const myType = db.type("TypeName", {
-  field: db.string(),
-  ...db.fields.timestamps(),
-});
-
-// Plural form
-db.type(["TypeName", "PluralForm"], { ... })
-
-// Nested object
-address: db.object({
-  street: db.string(),
-  city: db.string(),
-})
-
-// Enum
-status: db.enum(["value1", "value2", "value3"])
-
-// Serial
-orderNumber: db.string().serial({ start: 1000, format: "ORD-%05d" })
-
-// Relation
-customerId: db.uuid().relation({ type: "n-1", toward: { type: customer } })
-
-// Validation (tuple form)
-db.string().validate(
-  [({ value }) => value.includes("@"), "Must contain @"],
-)
-
-// Type-level hooks
-db.type("Name", { ... }).hooks({
-  fieldName: {
-    create: ({ data }) => computedValue,
-  },
-})
-```
+- All field types, validation, serial, relation, nested object, and hook APIs are available from `db` (imported from `@tailor-platform/sdk`)
+- Refer to `example/tailordb/` in the SDK repository for working patterns
+- Validation uses a tuple form: `[predicate, errorMessage]`
+- Type-level hooks are defined via `.hooks()` on the type builder (not on individual fields)
+- Relations require importing the target type and specifying `type` and `toward`

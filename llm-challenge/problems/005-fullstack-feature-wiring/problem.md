@@ -73,9 +73,9 @@ A resolver that checks for duplicate emails using `getDB` and triggers an onboar
 **Body (async):**
 
 1. Get a database connection with `getDB("tailordb")` (import from `"../generated/tailordb"`)
-2. Query the `"Registration"` table to check if the email already exists: `selectFrom("Registration").select(["id"]).where("email", "=", input.email).executeTakeFirst()`
+2. Query the `"Registration"` table to check if the email already exists (use Kysely's `selectFrom`, `select`, `where`, `executeTakeFirst`)
 3. If the email exists, return `{ success: false, message: "Email <email> is already registered" }`
-4. Otherwise, trigger the `onboardUser` workflow job (import from `"../workflows/onboardingJobs"`) with `{ email, name, plan, referralCode: input.referralCode ?? "" }`
+4. Otherwise, trigger the `onboardUser` workflow job (import from `"../workflows/onboardingJobs"`) with the registration data
 5. Return `{ success: true, message: "Registration initiated for <email>", workflowRunId: String(workflowRunId) }`
 
 **Output:** `{ success: bool, message: string, workflowRunId?: string }`
@@ -180,14 +180,7 @@ Build a complete application configuration that wires everything together.
 - `workflow: { files: ["./workflows/**/*.ts"] }`
 - `auth`, `idp: [idp]`, `staticWebsites: [website]`
 
-**Generators (named export `generators`):**
-
-```typescript
-export const generators = defineGenerators([
-  "@tailor-platform/kysely-type",
-  { distPath: "./generated/tailordb.ts" },
-]);
-```
+**Generators (named export `generators`):** Use `defineGenerators()` with the `@tailor-platform/kysely-type` generator (distPath: `"./generated/tailordb.ts"`)
 
 ## Key Requirements
 
@@ -203,82 +196,14 @@ export const generators = defineGenerators([
 - Import dependencies between files must be correct (resolver imports from workflows, executor imports from tailordb, config imports from tailordb)
 - Machine user attribute values must match the model's enum values
 
-## API Reference
+## Hints
 
-```typescript
-import { db } from "@tailor-platform/sdk";
-import type { TailorTypePermission, TailorTypeGqlPermission, PermissionCondition } from "@tailor-platform/sdk";
-
-// Permission conditions
-const loggedIn = [{ user: "_loggedIn" }, "=", true] as const satisfies PermissionCondition;
-const isAdmin = [{ user: "role" }, "=", "admin"] as const satisfies PermissionCondition;
-
-// Model with indexes, features, permissions
-export const myModel = db
-  .type("MyModel", { email: db.string().unique(), ...fields, ...db.fields.timestamps() })
-  .indexes({ fields: ["email", "status"], unique: true }, { fields: ["field2"], unique: false })
-  .features({ aggregation: true })
-  .permission(permission)
-  .gqlPermission(gqlPermission);
-
-// Resolver
-import { createResolver, t } from "@tailor-platform/sdk";
-import { getDB } from "../generated/tailordb";
-
-export default createResolver({
-  name: "myResolver",
-  operation: "mutation",
-  input: { field: t.string(), optField: t.string({ optional: true }) },
-  body: async ({ input }) => { ... },
-  output: t.object({ success: t.bool(), message: t.string() }),
-});
-
-// Executor with webhook
-import { createExecutor, recordCreatedTrigger } from "@tailor-platform/sdk";
-
-export default createExecutor({
-  name: "my-executor",
-  description: "Description",
-  trigger: recordCreatedTrigger({
-    type: myModel,
-    condition: ({ newRecord }) => newRecord.field !== "excluded",
-  }),
-  operation: {
-    kind: "webhook",
-    url: ({ newRecord }) => `https://api.example.com/${newRecord.id}`,
-    headers: { Authorization: { vault: "my-vault", key: "api-key" } },
-    requestBody: ({ newRecord }) => ({ id: newRecord.id }),
-  },
-});
-
-// Workflow jobs
-import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
-
-export const myJob = createWorkflowJob({
-  name: "my-job",
-  body: async (input: InputType) => {
-    const result = await otherJob.trigger(args);
-    return output;
-  },
-});
-
-export default createWorkflow({ name: "my-workflow", mainJob: myJob });
-
-// Config
-import { defineConfig, defineAuth, defineIdp, defineStaticWebSite, defineGenerators } from "@tailor-platform/sdk";
-
-const website = defineStaticWebSite("name", { description: "..." });
-const idp = defineIdp("name", { authorization: "loggedIn", clients: ["default-idp-client"], userAuthPolicy: { ... } });
-const auth = defineAuth("name", {
-  userProfile: { type: model, usernameField: "email", attributes: { role: true } },
-  machineUsers: { "user": { attributes: { role: "admin" } } },
-  oauth2Clients: { "client": { redirectURIs: [`${website.url}/callback`], grantTypes: ["authorization_code", "refresh_token"] } },
-  idProvider: idp.provider("provider-name", "default-idp-client"),
-});
-
-export default defineConfig({ name: "app", cors: [website.url], db: { ... }, resolver: { ... }, executor: { ... }, workflow: { ... }, auth, idp: [idp], staticWebsites: [website] });
-export const generators = defineGenerators(["@tailor-platform/kysely-type", { distPath: "./generated/tailordb.ts" }]);
-```
+- Model builder chain: `.type()` → `.indexes()` → `.features()` → `.permission()` → `.gqlPermission()`
+- Permission types (`TailorTypePermission`, `TailorTypeGqlPermission`, `PermissionCondition`) are imported from `@tailor-platform/sdk`
+- Resolver types (`createResolver`, `t`) and executor/workflow functions are all from `@tailor-platform/sdk`
+- `getDB` is imported from the generated file (`"../generated/tailordb"`)
+- Config functions: `defineConfig`, `defineAuth`, `defineIdp`, `defineStaticWebSite`, `defineGenerators`
+- Refer to `example/` in the SDK repository for working patterns of all components
 
 ## Scoring
 

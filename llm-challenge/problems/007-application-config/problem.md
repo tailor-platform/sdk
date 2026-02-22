@@ -83,75 +83,11 @@ Two TailorDB model files are provided:
 - `tailordb/user.ts` - User model with name, email, role fields
 - `tailordb/tenant.ts` - Tenant model with name, slug, plan fields
 
-## API Reference
+## Hints
 
-```typescript
-import {
-  defineAuth,
-  defineConfig,
-  defineGenerators,
-  defineIdp,
-  defineStaticWebSite,
-} from "@tailor-platform/sdk";
-import { user } from "./tailordb/user";
-
-// Static websites - .url returns a placeholder resolved at deploy time
-const website = defineStaticWebSite("my-site", {
-  description: "My site",
-});
-
-// IDP
-const idp = defineIdp("my-idp", {
-  authorization: "loggedIn",
-  clients: ["default-idp-client"],
-  userAuthPolicy: {
-    useNonEmailIdentifier: false,
-    allowSelfPasswordReset: true,
-    passwordRequireUppercase: true,
-    passwordRequireLowercase: true,
-    passwordRequireNonAlphanumeric: true,
-    passwordRequireNumeric: true,
-    passwordMinLength: 8,
-    passwordMaxLength: 128,
-  },
-});
-
-// Auth
-const auth = defineAuth("my-auth", {
-  userProfile: {
-    type: user,
-    usernameField: "email",
-    attributes: { role: true },
-  },
-  machineUsers: {
-    "my-machine-user": { attributes: { role: "ADMIN" } },
-  },
-  oauth2Clients: {
-    "my-client": {
-      redirectURIs: [`${website.url}/callback`],
-      description: "My client",
-      grantTypes: ["authorization_code", "refresh_token"],
-    },
-  },
-  idProvider: idp.provider("my-provider", "default-idp-client"),
-});
-
-// Config
-export default defineConfig({
-  name: "my-app",
-  cors: [website.url],
-  db: { tailordb: { files: ["./tailordb/*.ts"] } },
-  resolver: { "my-resolver": { files: ["./resolvers/*.ts"] } },
-  executor: { files: ["./executors/*.ts"] },
-  workflow: { files: ["./workflows/**/*.ts"] },
-  auth,
-  idp: [idp],
-  staticWebsites: [website],
-});
-
-// Generators
-export const generators = defineGenerators(
-  ["@tailor-platform/kysely-type", { distPath: "./generated/tailordb.ts" }],
-  ["@tailor-platform/seed", { distPath: "./seed", machineUserName: "my-machine-user" }],
-);
-```
+- All config functions (`defineConfig`, `defineAuth`, `defineIdp`, `defineStaticWebSite`, `defineGenerators`) are imported from `@tailor-platform/sdk`
+- `defineStaticWebSite` returns an object with a `.url` property (resolved at deploy time) — use this for CORS and redirect URIs
+- `defineIdp` returns an object with a `.provider()` method for creating auth providers
+- `defineGenerators` takes tuples as rest arguments: `defineGenerators(["package-name", { options }], ...)`
+- Machine user attribute values must match the model's enum field values
+- Refer to `example/tailor.config.ts` in the SDK repository for a working configuration
