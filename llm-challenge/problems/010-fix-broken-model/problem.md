@@ -10,13 +10,13 @@ The file `tailordb/employee.ts` is provided but contains several bugs. Find and 
 
 The correct Employee model should have:
 
-| Field      | Type     | Required | Notes                                             |
-| ---------- | -------- | -------- | ------------------------------------------------- |
-| name       | string   | yes      |                                                   |
-| department | enum     | yes      | Values: `engineering`, `sales`, `marketing`, `hr` |
-| salary     | integer  | yes      | Must have validation: value >= 0                  |
-| hireDate   | datetime | yes      |                                                   |
-| isActive   | boolean  | no       | Optional                                          |
+| Field      | Type     | Required | Notes                                                                             |
+| ---------- | -------- | -------- | --------------------------------------------------------------------------------- |
+| name       | string   | yes      |                                                                                   |
+| department | enum     | yes      | Values: `engineering`, `sales`, `marketing`, `hr`                                 |
+| salary     | integer  | yes      | Must have validation: value >= 0 with error message "Salary must be non-negative" |
+| hireDate   | datetime | yes      |                                                                                   |
+| isActive   | boolean  | no       | Optional                                                                          |
 
 The model must also include automatic timestamp fields.
 

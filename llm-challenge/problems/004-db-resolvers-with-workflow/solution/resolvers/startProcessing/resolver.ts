@@ -8,8 +8,8 @@ export default createResolver({
     dataId: t.string(),
     priority: t.enum(["low", "medium", "high"]),
   },
-  body: ({ input }) => {
-    const result = processDataJob.trigger({
+  body: async ({ input }) => {
+    const result = await processDataJob.trigger({
       dataId: input.dataId,
       priority: input.priority,
     });
@@ -17,6 +17,12 @@ export default createResolver({
   },
   output: t.object({
     triggered: t.bool(),
-    result: t.object({}, { optional: true }),
+    result: t.object(
+      {
+        processed: t.bool(),
+        dataId: t.string(),
+      },
+      { optional: true },
+    ),
   }),
 });

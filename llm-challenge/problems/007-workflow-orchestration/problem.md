@@ -62,7 +62,7 @@ This file must:
 - Each job file must use `createWorkflowJob` from the SDK
 - The workflow file must use `createWorkflow` from the SDK
 - All job names must be unique
-- Use `.trigger()` to invoke other jobs from the main job (do NOT use `await` with `.trigger()`)
+- Use `.trigger()` to invoke other jobs from the main job
 
 ## Reference
 

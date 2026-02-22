@@ -125,7 +125,7 @@ describe.skipIf(!workDirReady)("007-workflow-orchestration", () => {
 
   test("fulfillOrder body returns object with inventory, payment, shipping keys", async () => {
     const mod = await importPath(fulfillOrderPath);
-    const result = mod.fulfillOrder.body({ orderId: "o1", amount: 100 }, { env: {} });
+    const result = await mod.fulfillOrder.body({ orderId: "o1", amount: 100 }, { env: {} });
     expect(result).toHaveProperty("inventory");
     expect(result).toHaveProperty("payment");
     expect(result).toHaveProperty("shipping");
@@ -133,7 +133,7 @@ describe.skipIf(!workDirReady)("007-workflow-orchestration", () => {
 
   test("fulfillOrder body triggers produce correct results when resolved", async () => {
     const mod = await importPath(fulfillOrderPath);
-    const result = mod.fulfillOrder.body({ orderId: "o-final", amount: 200 }, { env: {} });
+    const result = await mod.fulfillOrder.body({ orderId: "o-final", amount: 200 }, { env: {} });
     const inventory = await result.inventory;
     const payment = await result.payment;
     const shipping = await result.shipping;

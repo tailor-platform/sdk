@@ -34,6 +34,22 @@ export interface RecordDeletedArgs<T extends TailorDBType> extends RecordArgs {
   oldRecord: output<T>;
 }
 
+/**
+ * Args for resolverExecutedTrigger. This is a discriminated union on `success`.
+ *
+ * When `success` is true, `result` contains the resolver output and `error` is never.
+ * When `success` is false, `error` contains the error message and `result` is never.
+ *
+ * Narrow on `success` to safely access either `result` or `error`.
+ * @example
+ * body: async (args) => {
+ *   if (args.success) {
+ *     console.log(args.result);
+ *   } else {
+ *     console.error(args.error);
+ *   }
+ * }
+ */
 export type ResolverExecutedArgs<R extends ResolverConfig> = EventArgs & {
   resolverName: string;
 } & (
