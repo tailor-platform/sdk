@@ -28,7 +28,7 @@ import { PluginManager } from "@/plugin/manager";
 import { commonArgs, withCommonArgs } from "../args";
 import { createDependencyWatcher, type DependencyWatcher } from "./watch";
 import type { GenerateOptions } from "./options";
-import type { Plugin, PluginAttachment } from "@/parser/plugin-config/types";
+import type { PluginAttachment } from "@/parser/plugin-config/types";
 import type { TailorDBType, TypeSourceInfo } from "@/parser/service/tailordb/types";
 
 export type { CodeGenerator } from "@/cli/generator/types";
@@ -622,7 +622,7 @@ export async function generate(options?: GenerateOptions) {
   // Initialize plugin manager if plugins are provided
   let pluginManager: PluginManager | undefined;
   if (plugins.length > 0) {
-    pluginManager = new PluginManager(plugins as unknown as Plugin[]);
+    pluginManager = new PluginManager(plugins);
   }
 
   // Create a lightweight application (types not yet loaded)
