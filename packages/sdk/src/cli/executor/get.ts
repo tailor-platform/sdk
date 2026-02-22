@@ -7,6 +7,10 @@ import { loadAccessToken, loadWorkspaceId } from "../context";
 import { logger } from "../utils/logger";
 import { type ExecutorInfo, toExecutorInfo } from "./transform";
 
+type ExecutorLike = {
+  name: string;
+};
+
 const nameArgs = {
   name: arg(z.string(), {
     positional: true,
@@ -14,6 +18,15 @@ const nameArgs = {
   }),
 };
 
+export type GetExecutorTypedOptions<E extends ExecutorLike = ExecutorLike> = {
+  executor: E;
+  workspaceId?: string;
+  profile?: string;
+};
+
+/**
+ * @deprecated Use GetExecutorTypedOptions instead.
+ */
 export interface GetExecutorOptions {
   name: string;
   workspaceId?: string;
@@ -47,7 +60,15 @@ async function resolveExecutor(
  * @param options - Executor lookup options
  * @returns Executor information
  */
-export async function getExecutor(options: GetExecutorOptions): Promise<ExecutorInfo> {
+export async function getExecutor<E extends ExecutorLike>(
+  options: GetExecutorTypedOptions<E>,
+): Promise<ExecutorInfo>;
+export async function getExecutor(options: GetExecutorOptions): Promise<ExecutorInfo>;
+export async function getExecutor<E extends ExecutorLike>(
+  options: GetExecutorOptions | GetExecutorTypedOptions<E>,
+): Promise<ExecutorInfo> {
+  // Discriminant: legacy options have top-level 'name', typed options use 'executor'.
+  const name = "name" in options ? options.name : options.executor.name;
   const accessToken = await loadAccessToken({
     useProfile: true,
     profile: options.profile,
@@ -59,11 +80,11 @@ export async function getExecutor(options: GetExecutorOptions): Promise<Executor
   });
 
   try {
-    const executor = await resolveExecutor(client, workspaceId, options.name);
+    const executor = await resolveExecutor(client, workspaceId, name);
     return toExecutorInfo(executor);
   } catch (error) {
     if (error instanceof ConnectError && error.code === Code.NotFound) {
-      throw new Error(`Executor '${options.name}' not found.`);
+      throw new Error(`Executor '${name}' not found.`);
     }
     throw error;
   }

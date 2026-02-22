@@ -24,6 +24,20 @@ import {
 } from "./transform";
 import type { FunctionExecution } from "@tailor-proto/tailor/v1/function_resource_pb";
 
+type WorkflowLike = {
+  name: string;
+};
+
+export type ListWorkflowExecutionsTypedOptions<W extends WorkflowLike = WorkflowLike> = {
+  workflow?: W;
+  status?: string;
+  workspaceId?: string;
+  profile?: string;
+};
+
+/**
+ * @deprecated Use ListWorkflowExecutionsTypedOptions instead.
+ */
 export interface ListWorkflowExecutionsOptions {
   workspaceId?: string;
   profile?: string;
@@ -102,9 +116,25 @@ function parseStatus(status: string): WorkflowExecution_Status {
  * @param options - Workflow execution listing options
  * @returns List of workflow executions
  */
+export async function listWorkflowExecutions<W extends WorkflowLike>(
+  options?: ListWorkflowExecutionsTypedOptions<W>,
+): Promise<WorkflowExecutionInfo[]>;
 export async function listWorkflowExecutions(
   options?: ListWorkflowExecutionsOptions,
+): Promise<WorkflowExecutionInfo[]>;
+export async function listWorkflowExecutions<W extends WorkflowLike>(
+  options?: ListWorkflowExecutionsOptions | ListWorkflowExecutionsTypedOptions<W>,
 ): Promise<WorkflowExecutionInfo[]> {
+  // Discriminant: legacy options have 'workflowName', typed options use 'workflow'.
+  // Note: since ListWorkflowExecutionsTypedOptions has all optional fields, TypeScript may
+  // resolve a legacy-typed variable to the typed overload (skipping excess property checks).
+  // Runtime behavior is correct regardless because the discriminant handles both shapes.
+  const workflowName =
+    options && "workflowName" in options
+      ? options.workflowName
+      : options && "workflow" in options
+        ? options.workflow?.name
+        : undefined;
   const accessToken = await loadAccessToken({
     useProfile: true,
     profile: options?.profile,
@@ -117,13 +147,13 @@ export async function listWorkflowExecutions(
 
   const filters: ReturnType<typeof create<typeof FilterSchema>>[] = [];
 
-  if (options?.workflowName) {
+  if (workflowName) {
     filters.push(
       create(FilterSchema, {
         condition: create(ConditionSchema, {
           field: "workflow_name",
           operator: Condition_Operator.EQ,
-          value: { kind: { case: "stringValue", value: options.workflowName } },
+          value: { kind: { case: "stringValue", value: workflowName } },
         }),
       }),
     );
