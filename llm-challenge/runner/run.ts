@@ -1,4 +1,4 @@
-import { exec } from "node:child_process";
+import { exec, execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -22,8 +22,13 @@ import {
   isInfraFailure,
 } from "./score";
 import type { ChallengeReport, ProblemResult, StageResult } from "./score";
+import {
+  formatSolveModelLabel,
+  normalizeModelForAgent,
+  resolveRerunSolveConfig,
+} from "./solve-model";
 import { checkAuthStatus, retrySolveProblem, solveProblem } from "./solve";
-import type { SolveResult } from "./solve";
+import type { SolveAgent, SolveResult } from "./solve";
 import { verifyProblem } from "./verify";
 
 const execAsync = promisify(exec);
@@ -36,7 +41,9 @@ function parseArgs(): {
   implDir?: string;
   useSolution: boolean;
   solve: boolean;
-  model: string;
+  agent: SolveAgent;
+  agentExplicit: boolean;
+  model?: string;
   modelExplicit: boolean;
   maxBudget: number;
   clean: boolean;
@@ -51,7 +58,9 @@ function parseArgs(): {
   let implDir: string | undefined;
   let useSolution = false;
   let solve = false;
-  let model = "sonnet";
+  let agent: SolveAgent = "claude";
+  let agentExplicit = false;
+  let model: string | undefined;
   let modelExplicit = false;
   let maxBudget = 2.0;
   let clean = false;
@@ -85,6 +94,17 @@ function parseArgs(): {
         modelExplicit = true;
         i++;
         break;
+      case "--agent": {
+        const value = requireArg(args, i, "--agent");
+        if (value !== "claude" && value !== "codex") {
+          console.error(`Error: --agent must be either "claude" or "codex" (received: ${value})`);
+          process.exit(1);
+        }
+        agent = value;
+        agentExplicit = true;
+        i++;
+        break;
+      }
       case "--max-budget":
         maxBudget = Number(requireArg(args, i, "--max-budget"));
         i++;
@@ -129,7 +149,9 @@ function parseArgs(): {
     implDir,
     useSolution,
     solve,
-    model,
+    agent,
+    agentExplicit,
+    model: model ?? (agent === "claude" ? "sonnet" : "default"),
     modelExplicit,
     maxBudget,
     clean,
@@ -175,8 +197,7 @@ function setupWorkDir(problemDir: string, implDir?: string, useTmpDir?: boolean)
 
   let workDir: string;
   if (useTmpDir) {
-    const problemName = path.basename(problemDir);
-    workDir = fs.mkdtempSync(path.join(os.tmpdir(), `llm-challenge-${problemName}-`));
+    workDir = fs.mkdtempSync(path.join(os.tmpdir(), "sdk-ws-"));
   } else {
     workDir = path.join(problemDir, "work");
   }
@@ -196,31 +217,72 @@ function setupWorkDir(problemDir: string, implDir?: string, useTmpDir?: boolean)
     copyDir(implDir, workDir);
   }
 
+  // 4. Place AGENTS.md in solve mode to guide agent behavior
+  if (useTmpDir) {
+    fs.writeFileSync(
+      path.join(workDir, "AGENTS.md"),
+      [
+        "You are solving an SDK implementation task.",
+        "Work ONLY within the current workspace directory.",
+        "Do NOT search for or read files outside this directory.",
+        "Do NOT attempt to find test files, solution files, or any benchmark artifacts.",
+        "",
+      ].join("\n"),
+    );
+  }
+
   return workDir;
 }
 
-function rewriteWorkspaceRefs(workDir: string): void {
+function packSdkTarball(): string {
+  const sdkDir = path.resolve(challengeRoot, "..", "packages", "sdk");
+  const packDir = fs.mkdtempSync(path.join(os.tmpdir(), "sdk-pack-"));
+  // Use execFileSync (no shell) to avoid command injection via TMPDIR.
+  execFileSync("pnpm", ["pack", "--pack-destination", packDir], {
+    cwd: sdkDir,
+    stdio: "pipe",
+    timeout: 60_000,
+  });
+  const files = fs.readdirSync(packDir).filter((f) => f.endsWith(".tgz"));
+  if (files.length === 0) {
+    throw new Error("pnpm pack produced no tarball");
+  }
+  return path.join(packDir, files[0]!);
+}
+
+function rewriteWorkspaceRefs(workDir: string, tarballPath?: string): void {
   const pkgPath = path.join(workDir, "package.json");
   const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8")) as Record<string, unknown>;
-  const sdkPath = path.resolve(challengeRoot, "..", "packages", "sdk");
-  const linkRef = `link:${sdkPath.replace(/\\/g, "/")}`;
+
+  let ref: string;
+  if (tarballPath) {
+    ref = `file:${tarballPath.replace(/\\/g, "/")}`;
+  } else {
+    const sdkPath = path.resolve(challengeRoot, "..", "packages", "sdk");
+    ref = `link:${sdkPath.replace(/\\/g, "/")}`;
+  }
+
   for (const section of ["dependencies", "devDependencies"] as const) {
     const deps = pkg[section] as Record<string, string> | undefined;
     if (!deps) continue;
     for (const [key, value] of Object.entries(deps)) {
       if (value === "workspace:^") {
-        deps[key] = linkRef;
+        deps[key] = ref;
       }
     }
   }
   fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + "\n");
 }
 
-async function installDependencies(workDir: string, verbose: boolean): Promise<void> {
+async function installDependencies(
+  workDir: string,
+  verbose: boolean,
+  tarballPath?: string,
+): Promise<void> {
   if (verbose) {
     console.log("  Installing dependencies...");
   }
-  rewriteWorkspaceRefs(workDir);
+  rewriteWorkspaceRefs(workDir, tarballPath);
   await execAsync("pnpm install --no-lockfile --ignore-workspace", {
     cwd: workDir,
     encoding: "utf-8",
@@ -278,9 +340,10 @@ async function runProblem(
   problemName: string,
   options: {
     implDir?: string;
-    solve?: { model: string; maxBudget: number; retry: number };
+    solve?: { agent: SolveAgent; model?: string; maxBudget: number; retry: number };
     clean: boolean;
     verbose: boolean;
+    tarballPath?: string;
   },
 ): Promise<ProblemResult> {
   const problemStartTime = Date.now();
@@ -294,7 +357,7 @@ async function runProblem(
   const isSolveMode = !!options.solve;
   const workDir = setupWorkDir(problemDir, options.implDir, isSolveMode);
   try {
-    await installLimiter(() => installDependencies(workDir, options.verbose));
+    await installLimiter(() => installDependencies(workDir, options.verbose, options.tarballPath));
   } catch (err) {
     // Clean up temporary solve directory on setup/install failure
     if (isSolveMode) {
@@ -308,15 +371,20 @@ async function runProblem(
 
   let solveResult: SolveResult | undefined;
   const retrySolveResults: SolveResult[] = [];
+  const normalizedModel = options.solve
+    ? normalizeModelForAgent(options.solve.agent, options.solve.model)
+    : undefined;
   if (options.solve) {
     if (options.verbose) {
-      console.log(`  Solving with Claude Code (model: ${options.solve.model})...`);
+      const agentLabel = options.solve.agent === "claude" ? "Claude Code" : "Codex";
+      console.log(`  Solving with ${agentLabel} (model: ${options.solve.model ?? "default"})...`);
     }
     solveResult = await solveProblem({
       workDir,
       problemDir,
       meta,
-      model: options.solve.model,
+      agent: options.solve.agent,
+      model: normalizedModel,
       maxBudget: options.solve.maxBudget,
     });
     if (options.verbose) {
@@ -425,7 +493,8 @@ async function runProblem(
         workDir,
         problemDir,
         meta,
-        model: options.solve.model,
+        agent: options.solve.agent,
+        model: normalizedModel,
         maxBudget: remainingBudget,
         errorOutput,
       });
@@ -627,17 +696,19 @@ const authErrorPatterns = [
   /API key/i,
   /authentication.*failed/i,
   /unauthorized/i,
+  /codex login/i,
 ];
 
-async function ensureAuthenticated(targetModel: string): Promise<void> {
+async function ensureAuthenticated(agent: SolveAgent, targetModel?: string): Promise<void> {
   console.log("Checking authentication status...");
-  const authCheck = await checkAuthStatus(targetModel);
+  const authCheck = await checkAuthStatus({ agent, model: targetModel });
   if (!authCheck.ok) {
     console.error(`Authentication check failed: ${authCheck.error}`);
+    const tool = agent === "claude" ? "Claude Code" : "Codex";
     if (authErrorPatterns.some((p) => p.test(authCheck.error ?? ""))) {
-      console.error("Please log in to Claude Code before running solve mode.");
+      console.error(`Please log in to ${tool} before running solve mode.`);
     } else {
-      console.error("Please check your Claude Code setup and try again.");
+      console.error(`Please check your ${tool} setup and try again.`);
     }
     process.exit(1);
   }
@@ -668,6 +739,8 @@ async function main(): Promise<void> {
     implDir,
     useSolution,
     solve,
+    agent,
+    agentExplicit,
     model,
     modelExplicit,
     maxBudget,
@@ -682,14 +755,18 @@ async function main(): Promise<void> {
     console.error("Usage:");
     console.error("  tsx runner/run.ts --problem 001 --impl ./path/to/impl");
     console.error("  tsx runner/run.ts --problem 001 --use-solution");
-    console.error("  tsx runner/run.ts --problem 001 --solve [--model sonnet] [--max-budget 2.00]");
+    console.error(
+      "  tsx runner/run.ts --problem 001 --solve [--agent claude|codex] [--model sonnet] [--max-budget 2.00]",
+    );
     console.error("  tsx runner/run.ts --all --use-solution [--clean] [--concurrency <n>]");
     console.error(
-      "  tsx runner/run.ts --all --solve [--model sonnet] [--max-budget 2.00] [--retry 2] [--clean] [--concurrency <n>]",
+      "  tsx runner/run.ts --all --solve [--agent claude|codex] [--model sonnet] [--max-budget 2.00] [--retry 2] [--clean] [--concurrency <n>]",
     );
     console.error("  tsx runner/run.ts --all --impl-dir ./path/to/all-outputs");
     console.error("  tsx runner/run.ts --all --solve --resume [--clean]");
-    console.error("  tsx runner/run.ts --rerun-infra --solve [--model sonnet] [--clean]");
+    console.error(
+      "  tsx runner/run.ts --rerun-infra --solve [--agent claude|codex] [--model sonnet] [--clean]",
+    );
     process.exit(1);
   }
 
@@ -706,10 +783,20 @@ async function main(): Promise<void> {
 
   const resultsDir = path.join(challengeRoot, "results");
   const verbose = concurrency === 1;
+  const solveModelLabel = solve ? formatSolveModelLabel(agent, model) : undefined;
 
   // Auth pre-check for solve mode (skip when rerun-infra -- deferred until targets are known)
   if (solve && !rerunInfra) {
-    await ensureAuthenticated(model);
+    await ensureAuthenticated(agent, normalizeModelForAgent(agent, model));
+  }
+
+  // Pack SDK tarball once for all solve-mode problems (eliminates link: path leaks).
+  // Skip when --rerun-infra: packing is deferred until rerun targets are confirmed.
+  let tarballPath: string | undefined;
+  if (solve && !rerunInfra) {
+    console.log("Packing SDK tarball...");
+    tarballPath = packSdkTarball();
+    console.log(`SDK tarball: ${tarballPath}`);
   }
 
   // --rerun-infra mode: extract infra failure problems from latest report
@@ -726,18 +813,26 @@ async function main(): Promise<void> {
       process.exit(0);
     }
 
-    // Honor explicit --model flag; fall back to the original report's model to avoid misattribution.
-    // Composite labels like "sonnet+opus" (from mixed-model reruns) are not valid model IDs;
-    // extract the primary model (before "+") for the fallback.
-    const reportModelRaw = latestReport.model;
-    const primaryReportModel = reportModelRaw?.split("+")[0];
-    const rerunModel = modelExplicit ? model : (primaryReportModel ?? model);
+    // Honor explicit flags; otherwise reuse the model/agent from the latest report.
+    // Composite labels like "claude:sonnet+codex:default" are reduced to primary label.
+    const { agent: rerunAgent, model: rerunModel } = resolveRerunSolveConfig({
+      reportModelRaw: latestReport.model,
+      agent,
+      model,
+      agentExplicit,
+      modelExplicit,
+    });
 
-    // Auth pre-check (deferred until rerunModel is derived so the correct model is validated)
-    await ensureAuthenticated(rerunModel);
+    // Auth pre-check (deferred until rerun options are derived)
+    await ensureAuthenticated(rerunAgent, normalizeModelForAgent(rerunAgent, rerunModel));
+
+    // Pack SDK tarball for rerun (deferred until rerun targets are confirmed)
+    console.log("Packing SDK tarball...");
+    tarballPath = packSdkTarball();
+    console.log(`SDK tarball: ${tarballPath}`);
 
     console.log(
-      `Rerunning ${infraProblems.length} infrastructure failure problem(s) (model: ${rerunModel}, concurrency: ${concurrency})...`,
+      `Rerunning ${infraProblems.length} infrastructure failure problem(s) (agent: ${rerunAgent}, model: ${rerunModel ?? "default"}, concurrency: ${concurrency})...`,
     );
 
     const rerunStartTime = Date.now();
@@ -750,9 +845,10 @@ async function main(): Promise<void> {
           const problemId = problemKey(infraResult.problemId, infraResult.problemName);
           try {
             const result = await runProblem(problemId, {
-              solve: { model: rerunModel, maxBudget, retry },
+              solve: { agent: rerunAgent, model: rerunModel, maxBudget, retry },
               clean,
               verbose,
+              tarballPath,
             });
             completed++;
             if (!verbose) {
@@ -783,16 +879,17 @@ async function main(): Promise<void> {
 
     const sdkVersion = latestReport.sdkVersion;
     const originalModel = latestReport.model;
+    const rerunModelLabel = formatSolveModelLabel(rerunAgent, rerunModel);
     // When --model is explicit and differs from the original, create a composite label.
     // When --model is not explicit, preserve the original report's model label as-is
     // (it may already be composite from prior reruns).
     let reportModel: string;
-    if (modelExplicit && originalModel && rerunModel !== originalModel) {
-      reportModel = `${originalModel}+${rerunModel}`;
-    } else if (modelExplicit) {
-      reportModel = rerunModel;
+    if ((modelExplicit || agentExplicit) && originalModel && rerunModelLabel !== originalModel) {
+      reportModel = `${originalModel}+${rerunModelLabel}`;
+    } else if (modelExplicit || agentExplicit) {
+      reportModel = rerunModelLabel;
     } else {
-      reportModel = originalModel ?? rerunModel;
+      reportModel = originalModel ?? rerunModelLabel;
     }
     const report = createReport(mergedResults, {
       model: reportModel,
@@ -825,12 +922,7 @@ async function main(): Promise<void> {
   let completedIds = new Set<string>();
   const problemSet = new Set(problems);
   if (resume) {
-    const partialResults = loadPartialResults(
-      resultsDir,
-      solve ? model : undefined,
-      !!solve,
-      implSource,
-    );
+    const partialResults = loadPartialResults(resultsDir, solveModelLabel, !!solve, implSource);
     // Filter to only include results for problems in the current target set
     const relevantResults = partialResults.filter((r) =>
       problemSet.has(problemKey(r.problemId, r.problemName)),
@@ -885,9 +977,10 @@ async function main(): Promise<void> {
         try {
           const result = await runProblem(task.problemName, {
             implDir: task.implDir,
-            solve: solve ? { model, maxBudget, retry } : undefined,
+            solve: solve ? { agent, model, maxBudget, retry } : undefined,
             clean,
             verbose,
+            tarballPath,
           });
 
           // Push result (safe: Node.js single-threaded)
@@ -903,7 +996,7 @@ async function main(): Promise<void> {
 
           // Save partial results after each problem
           if (all) {
-            savePartialResults(resultsDir, results, solve ? model : undefined, !!solve, implSource);
+            savePartialResults(resultsDir, results, solveModelLabel, !!solve, implSource);
           }
         } catch (err) {
           const errorMsg = err instanceof Error ? err.message : String(err);
@@ -943,14 +1036,14 @@ async function main(): Promise<void> {
   const sdkVersion = getSdkVersion(challengeRoot);
 
   const report = createReport(results, {
-    model: solve ? model : undefined,
+    model: solveModelLabel,
     sdkVersion,
     elapsedMs: Date.now() - runStartTime,
   });
 
   let modelLabelRaw: string;
   if (solve) {
-    modelLabelRaw = model;
+    modelLabelRaw = solveModelLabel ?? "solve";
   } else if (useSolution) {
     modelLabelRaw = "solution";
   } else {
