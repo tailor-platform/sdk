@@ -1,14 +1,10 @@
 import {
   defineAuth,
   defineConfig,
+  defineGenerators,
   defineIdp,
-  definePlugins,
   defineStaticWebSite,
 } from "@tailor-platform/sdk";
-import { enumConstantsPlugin } from "@tailor-platform/sdk/plugin/enum-constants";
-import { fileUtilsPlugin } from "@tailor-platform/sdk/plugin/file-utils";
-import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
-import { seedPlugin } from "@tailor-platform/sdk/plugin/seed";
 import { user } from "./tailordb/user";
 
 const website = defineStaticWebSite("my-frontend", {
@@ -91,9 +87,9 @@ export default defineConfig({
   staticWebsites: [website, erdSite],
 });
 
-export const plugins = definePlugins(
-  kyselyTypePlugin({ distPath: "./generated/tailordb.ts" }),
-  enumConstantsPlugin({ distPath: "./generated/enums.ts" }),
-  fileUtilsPlugin({ distPath: "./generated/files.ts" }),
-  seedPlugin({ distPath: "./seed", machineUserName: "manager-machine-user" }),
+export const generators = defineGenerators(
+  ["@tailor-platform/kysely-type", { distPath: "./generated/tailordb.ts" }],
+  ["@tailor-platform/enum-constants", { distPath: "./generated/enums.ts" }],
+  ["@tailor-platform/file-utils", { distPath: "./generated/files.ts" }],
+  ["@tailor-platform/seed", { distPath: "./seed", machineUserName: "manager-machine-user" }],
 );
