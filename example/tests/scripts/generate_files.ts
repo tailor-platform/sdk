@@ -106,12 +106,26 @@ export async function generateActualFiles(): Promise<void> {
   replaceAbsolutePaths(actualDir);
 }
 
+const generatorsCompatDir = "tests/fixtures/generators";
+const pluginsCompatDir = "tests/fixtures/plugins";
+
+export async function generateCompatFiles(): Promise<void> {
+  for (const dir of [generatorsCompatDir, pluginsCompatDir]) {
+    if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true });
+  }
+  await generate({ configPath: "./tests/tailor.config.generators-compat.ts" });
+  await generate({ configPath: "./tests/tailor.config.plugins-compat.ts" });
+}
+
 if (process.argv[1] === __filename) {
   try {
     process.env.TAILOR_PLATFORM_WORKSPACE_ID ??= randomUUID();
     if (process.argv[2] === "actual") {
       console.log("Generating actual files...");
       await generateActualFiles();
+    } else if (process.argv[2] === "compat") {
+      console.log("Generating compat files...");
+      await generateCompatFiles();
     } else {
       console.log("Generating expected files...");
       await generateExpectedFiles();

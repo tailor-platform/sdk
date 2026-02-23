@@ -11,7 +11,7 @@
     "test": "pnpm test:generator",
     "test:all": "pnpm test:generator:prepare && vitest",
     "test:generator": "pnpm test:generator:prepare && vitest --project generator",
-    "test:generator:prepare": "tsx tests/scripts/generate_files.ts actual",
+    "test:generator:prepare": "tsx tests/scripts/generate_files.ts actual && tsx tests/scripts/generate_files.ts compat",
     "test:generator:update-expects": "tsx tests/scripts/generate_files.ts",
     "test:e2e": "vitest --project e2e",
     "migration:e2e": "tsx tests/scripts/migration_e2e.ts",

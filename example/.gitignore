@@ -11,6 +11,8 @@ build/
 
 # Test files
 tests/fixtures/actual/
+tests/fixtures/generators/
+tests/fixtures/plugins/
 
 # Cache
 .eslintcache
