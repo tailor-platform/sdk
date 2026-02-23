@@ -115,24 +115,24 @@ Plugins have 5 hooks across two lifecycle phases. Each hook fires at a specific 
 ```
 tailor-sdk generate
 │
-├─ Phase 1: Load TailorDB types
+├─ Load TailorDB types
 │   ├─ onTypeLoaded        ← per type with .plugin() attached
 │   └─ onNamespaceLoaded   ← once per namespace (namespace plugins)
 │
-├─ Phase 2: Resolve Auth
+├─ Resolve Auth
 │
-├─ Phase 3: onTailorDBReady  ← all types finalized
+├─ onTailorDBReady           ← all types finalized
 │
-├─ Phase 4: Load Resolvers
+├─ Load Resolvers
 │
-├─ Phase 5: onResolverReady  ← all resolvers finalized
+├─ onResolverReady           ← all resolvers finalized
 │
-├─ Phase 6: Load Executors
+├─ Load Executors
 │
-└─ Phase 7: onExecutorReady  ← all executors finalized
+└─ onExecutorReady           ← all executors finalized
 ```
 
-### Definition-time hooks (Phase 1)
+### Definition-time hooks
 
 | Hook                | Trigger                             | Can do                                                          |
 | ------------------- | ----------------------------------- | --------------------------------------------------------------- |
@@ -141,13 +141,13 @@ tailor-sdk generate
 
 These hooks produce TailorDB types, resolvers, and executors that become part of the application. Requires `importPath` on the plugin.
 
-### Generation-time hooks (Phases 3/5/7)
+### Generation-time hooks
 
-| Hook              | Phase | Available data                             | Can do             |
-| ----------------- | ----- | ------------------------------------------ | ------------------ |
-| `onTailorDBReady` | 3     | TailorDB types, Auth                       | Write output files |
-| `onResolverReady` | 5     | TailorDB types, Resolvers, Auth            | Write output files |
-| `onExecutorReady` | 7     | TailorDB types, Resolvers, Executors, Auth | Write output files |
+| Hook              | Available data                             | Can do             |
+| ----------------- | ------------------------------------------ | ------------------ |
+| `onTailorDBReady` | TailorDB types, Auth                       | Write output files |
+| `onResolverReady` | TailorDB types, Resolvers, Auth            | Write output files |
+| `onExecutorReady` | TailorDB types, Resolvers, Executors, Auth | Write output files |
 
 These hooks receive all finalized data and produce output files (TypeScript code, etc.). They replace the previous standalone `defineGenerators()` approach. No `importPath` required.
 

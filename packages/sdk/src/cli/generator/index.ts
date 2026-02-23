@@ -623,7 +623,7 @@ export function createGenerationManager(params: {
 
       const app = application;
 
-      // Phase 1: Load TailorDB types (includes plugin-generated types)
+      // Load TailorDB types (includes plugin-generated types)
       for (const db of app.tailorDBServices) {
         const namespace = db.namespace;
 
@@ -648,7 +648,7 @@ export function createGenerationManager(params: {
         }
       }
 
-      // Phase 1.5: Generate plugin type and executor files
+      // Generate plugin type and executor files
       // This must happen after TailorDB types are loaded since plugins process during type loading
       const pluginExecutorFiles = generatePluginFilesIfNeeded(
         pluginManager,
@@ -661,7 +661,7 @@ export function createGenerationManager(params: {
           ? createExecutorService({ config: { files: [] } })
           : undefined);
 
-      // Phase 2: Auth resolveNamespaces (depends on TailorDB)
+      // Resolve Auth namespaces (depends on TailorDB)
       if (app.authService) {
         await app.authService.resolveNamespaces();
       }
@@ -671,7 +671,7 @@ export function createGenerationManager(params: {
         logger.newline();
       }
 
-      // Phase 3: Run TailorDB-only generators and plugins (onTailorDBReady)
+      // Run TailorDB-only generators and plugins (onTailorDBReady)
       const tailordbOnlyGens = generators.filter((g) => onlyHas(g as AnyCodeGenerator, "tailordb"));
       const tailordbOnlyPlugins = generationPlugins.filter((p) => pluginOnlyHas(p, "tailordb"));
       if (tailordbOnlyGens.length > 0 || tailordbOnlyPlugins.length > 0) {
@@ -684,7 +684,7 @@ export function createGenerationManager(params: {
         logger.newline();
       }
 
-      // Phase 4: Load Resolvers (can now import generated files)
+      // Load Resolvers (can now import generated files)
       for (const resolverService of app.resolverServices) {
         const namespace = resolverService.namespace;
         try {
@@ -702,7 +702,7 @@ export function createGenerationManager(params: {
         }
       }
 
-      // Phase 5: Run non-executor generators and plugins (onResolverReady)
+      // Run non-executor generators and plugins (onResolverReady)
       const nonExecutorGens = generators.filter(
         (g) => !tailordbOnlyGens.includes(g) && hasNone(g as AnyCodeGenerator, "executor"),
       );
@@ -719,7 +719,7 @@ export function createGenerationManager(params: {
         logger.newline();
       }
 
-      // Phase 6: Load Executors (can now import generated files)
+      // Load Executors (can now import generated files)
       if (executorService) {
         await executorService.loadExecutors();
         // Load plugin-generated executors from generated TypeScript files
@@ -733,7 +733,7 @@ export function createGenerationManager(params: {
         services.executor[key] = executor as Executor;
       });
 
-      // Phase 7: Run executor-dependent generators and plugins (onExecutorReady)
+      // Run executor-dependent generators and plugins (onExecutorReady)
       const executorGens = generators.filter((g) => hasAll(g as AnyCodeGenerator, "executor"));
       const executorPlugins = generationPlugins.filter((p) => pluginHasAll(p, "executor"));
       if (executorGens.length > 0 || executorPlugins.length > 0) {

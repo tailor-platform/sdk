@@ -63,7 +63,6 @@ interface Plugin<TypeConfig = unknown, PluginConfig = unknown> {
 
 ### onTypeLoaded
 
-**Phase**: 1 (TailorDB type loading)
 **Trigger**: Called once for each TailorDB type that has `.plugin({ pluginId: config })` attached.
 
 **Context** (`PluginProcessContext`):
@@ -103,7 +102,6 @@ onTypeLoaded(context) {
 
 ### onNamespaceLoaded
 
-**Phase**: 1 (TailorDB type loading)
 **Trigger**: Called once per namespace for plugins that do not require a source type.
 
 **Context** (`PluginNamespaceProcessContext`):
@@ -131,8 +129,7 @@ onNamespaceLoaded(context) {
 
 ### onTailorDBReady
 
-**Phase**: 3 (after all TailorDB types loaded and auth resolved)
-**Trigger**: Called once per plugin that implements this hook.
+**Trigger**: Called once after all TailorDB types are loaded and auth is resolved.
 
 **Context** (`TailorDBReadyContext`):
 
@@ -179,8 +176,7 @@ onTailorDBReady(ctx) {
 
 ### onResolverReady
 
-**Phase**: 5 (after all resolvers loaded)
-**Trigger**: Called once per plugin that implements this hook and does not have `onExecutorReady`.
+**Trigger**: Called once after all resolvers are loaded, for plugins that do not implement `onExecutorReady`.
 
 **Context** (`ResolverReadyContext`):
 
@@ -217,8 +213,7 @@ onResolverReady(ctx) {
 
 ### onExecutorReady
 
-**Phase**: 7 (after all executors loaded)
-**Trigger**: Called once per plugin that implements this hook.
+**Trigger**: Called once after all executors are loaded.
 
 **Context** (`ExecutorReadyContext`):
 
@@ -250,21 +245,21 @@ onExecutorReady(ctx) {
 
 ## Hook Scheduling Rules
 
-Which generation-time hook runs at which phase is determined automatically by hook presence:
+Which generation-time hook runs when is determined automatically by hook presence:
 
-| Plugin implements                     | Runs at | Rationale                                       |
-| ------------------------------------- | ------- | ----------------------------------------------- |
-| `onTailorDBReady` only                | Phase 3 | Only needs TailorDB data                        |
-| `onTailorDBReady` + `onResolverReady` | Phase 5 | Needs resolver data too, so waits until Phase 5 |
-| `onTailorDBReady` + `onExecutorReady` | Phase 7 | Needs executor data, waits until Phase 7        |
-| `onResolverReady` only                | Phase 5 | Needs resolver data                             |
-| `onExecutorReady` only                | Phase 7 | Needs executor data                             |
+| Plugin implements                     | Runs after       | Rationale                                |
+| ------------------------------------- | ---------------- | ---------------------------------------- |
+| `onTailorDBReady` only                | TailorDB loaded  | Only needs TailorDB data                 |
+| `onTailorDBReady` + `onResolverReady` | Resolvers loaded | Needs resolver data too, so waits for it |
+| `onTailorDBReady` + `onExecutorReady` | Executors loaded | Needs executor data, waits for it        |
+| `onResolverReady` only                | Resolvers loaded | Needs resolver data                      |
+| `onExecutorReady` only                | Executors loaded | Needs executor data                      |
 
-Each hook is called exactly once at its scheduled phase. The data provided is cumulative:
+Each hook is called exactly once at its scheduled point. The data provided is cumulative:
 
-- Phase 3: `tailordb` + `auth`
-- Phase 5: `tailordb` + `resolvers` + `auth`
-- Phase 7: `tailordb` + `resolvers` + `executors` + `auth`
+- `onTailorDBReady`: `tailordb` + `auth`
+- `onResolverReady`: `tailordb` + `resolvers` + `auth`
+- `onExecutorReady`: `tailordb` + `resolvers` + `executors` + `auth`
 
 ## Import Types
 
@@ -509,12 +504,12 @@ const plugin: Plugin = {
   description: "Generates derived types and produces output files",
   importPath: "./plugins/hybrid",
 
-  // Phase 1: Generate additional types from attached source types
+  // Definition-time: Generate additional types from attached source types
   onTypeLoaded(context) {
     return { types: { derived: createDerivedType(context.type) } };
   },
 
-  // Phase 3: Generate output files from all finalized types
+  // Generation-time: Generate output files from all finalized types
   onTailorDBReady(ctx) {
     const allTypes = ctx.tailordb.flatMap((ns) => Object.values(ns.types).map((t) => t.name));
     return {
