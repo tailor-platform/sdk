@@ -372,7 +372,6 @@ async function getGeneratedTypeForNamespacePlugin(
 
 /**
  * Clear all internal caches. For testing only.
- * @lintignore
  */
 export function _clearCacheForTesting(): void {
   configCacheMap.clear();

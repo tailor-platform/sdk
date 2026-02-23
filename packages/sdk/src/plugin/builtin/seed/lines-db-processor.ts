@@ -3,7 +3,7 @@ import {
   isPluginGeneratedType,
   type PluginGeneratedTypeSource,
   type TypeSourceInfoEntry,
-} from "@/cli/generator/types";
+} from "@/parser/service/tailordb/types";
 import type { LinesDbMetadata } from "./types";
 import type { TailorDBType } from "@/parser/service/tailordb/types";
 import type { ForeignKeyDefinition, IndexDefinition } from "@toiroakr/lines-db";

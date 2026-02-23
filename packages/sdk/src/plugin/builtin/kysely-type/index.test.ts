@@ -1,8 +1,10 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import { db } from "@/configure/services/tailordb/schema";
 import { parseTypes } from "@/parser/service/tailordb";
 import { toSchemaOutput } from "@/utils/test/internal";
-import { createKyselyGenerator } from "./index";
+import { processKyselyType } from "./type-processor";
+import { kyselyTypePlugin, KyselyGeneratorID } from "./index";
+import type { TailorDBReadyContext } from "@/parser/plugin-config/generation-types";
 import type { TailorDBType, TailorDBTypeSchemaOutput } from "@/parser/service/tailordb/types";
 
 function parseTailorDBType(type: TailorDBTypeSchemaOutput): TailorDBType {
@@ -42,20 +44,29 @@ const mockNestedType = db.type("ComplexUser", {
   ...db.fields.timestamps(),
 });
 
-describe("KyselyGenerator integration tests", () => {
-  let kyselyGenerator: ReturnType<typeof createKyselyGenerator>;
+describe("KyselyTypePlugin integration tests", () => {
   const testDistPath = "/test/dist/kysely-types.ts";
 
-  beforeEach(() => {
-    kyselyGenerator = createKyselyGenerator({ distPath: testDistPath });
-  });
+  function createCtx(
+    namespaces: { namespace: string; types: Record<string, TailorDBType> }[],
+  ): TailorDBReadyContext<{ distPath: string }> {
+    return {
+      tailordb: namespaces.map((ns) => ({
+        namespace: ns.namespace,
+        types: ns.types,
+        sourceInfo: new Map(),
+        pluginAttachments: new Map(),
+      })),
+      auth: undefined,
+      baseDir: "/test",
+      configPath: "tailor.config.ts",
+      pluginConfig: { distPath: testDistPath },
+    };
+  }
 
   describe("basic functionality tests", () => {
-    it("processType method correctly processes basic TailorDBType", async () => {
-      const result = await kyselyGenerator.processType({
-        type: parseTailorDBType(toSchemaOutput(mockBasicType)),
-        namespace: "test-namespace",
-      });
+    it("processKyselyType correctly processes basic TailorDBType", async () => {
+      const result = await processKyselyType(parseTailorDBType(toSchemaOutput(mockBasicType)));
 
       expect(result.name).toBe("User");
       expect(result.typeDef).toContain("User: {");
@@ -72,27 +83,23 @@ describe("KyselyGenerator integration tests", () => {
       expect(result.typeDef).toContain("updatedAt: Timestamp | null;");
     });
 
-    it("should have correct dependencies", () => {
-      expect(kyselyGenerator.dependencies).toEqual(["tailordb"]);
+    it("should have correct id and description", () => {
+      const plugin = kyselyTypePlugin({ distPath: testDistPath });
+      expect(plugin.id).toBe(KyselyGeneratorID);
+      expect(plugin.description).toBe("Generates Kysely type definitions for TailorDB types");
     });
   });
 
   describe("type mapping tests", () => {
     it("correctly maps enum type to Kysely type", async () => {
-      const result = await kyselyGenerator.processType({
-        type: parseTailorDBType(toSchemaOutput(mockEnumType)),
-        namespace: "test-namespace",
-      });
+      const result = await processKyselyType(parseTailorDBType(toSchemaOutput(mockEnumType)));
 
       expect(result.typeDef).toContain('status: "active" | "inactive" | "pending";');
       expect(result.typeDef).toContain('priority: "high" | "medium" | "low" | null;');
     });
 
     it("correctly processes nested object type", async () => {
-      const result = await kyselyGenerator.processType({
-        type: parseTailorDBType(toSchemaOutput(mockNestedType)),
-        namespace: "test-namespace",
-      });
+      const result = await processKyselyType(parseTailorDBType(toSchemaOutput(mockNestedType)));
 
       expect(result.typeDef).toContain("ComplexUser: {");
       expect(result.typeDef).toContain("profile: {");
@@ -112,10 +119,7 @@ describe("KyselyGenerator integration tests", () => {
         undefinedRequiredField: db.string({ optional: true }),
       });
 
-      const result = await kyselyGenerator.processType({
-        type: parseTailorDBType(toSchemaOutput(testType)),
-        namespace: "test-namespace",
-      });
+      const result = await processKyselyType(parseTailorDBType(toSchemaOutput(testType)));
 
       expect(result.typeDef).toContain("requiredField: string;");
       expect(result.typeDef).toContain("optionalField: string | null;");
@@ -128,108 +132,25 @@ describe("KyselyGenerator integration tests", () => {
         optionalIntArray: db.int({ optional: true, array: true }),
       });
 
-      const result = await kyselyGenerator.processType({
-        type: parseTailorDBType(toSchemaOutput(arrayType)),
-        namespace: "test-namespace",
-      });
+      const result = await processKyselyType(parseTailorDBType(toSchemaOutput(arrayType)));
 
       expect(result.typeDef).toContain("stringArray: string[];");
       expect(result.typeDef).toContain("optionalIntArray: number[] | null;");
     });
   });
 
-  describe("processTailorDBNamespace method tests", () => {
-    it("returns JSON metadata for namespace", async () => {
-      const typeMetadata = {
-        User: {
-          name: "User",
-          typeDef: `User: {
-  id: Generated<string>;
-  name: string;
-  email: string;
-}`,
-          usedUtilityTypes: {
-            Timestamp: false,
-            Serial: false,
-          },
-        },
-        Post: {
-          name: "Post",
-          typeDef: `Post: {
-  id: Generated<string>;
-  title: string;
-  content: string;
-}`,
-          usedUtilityTypes: {
-            Timestamp: false,
-            Serial: false,
-          },
-        },
-      };
-
-      const result = await kyselyGenerator.processTailorDBNamespace({
-        namespace: "test-namespace",
-        types: typeMetadata,
-      });
-
-      // Result should be object
-      expect(result.namespace).toBe("test-namespace");
-      expect(result.types).toHaveLength(2);
-      expect(result.types[0].name).toBe("User");
-      expect(result.types[1].name).toBe("Post");
-      expect(result.usedUtilityTypes).toEqual({
-        Timestamp: false,
-        Serial: false,
-      });
-    });
-
-    it("returns metadata with empty types array for empty type definitions", async () => {
-      const result = await kyselyGenerator.processTailorDBNamespace({
-        namespace: "test-namespace",
-        types: {},
-      });
-
-      expect(result.namespace).toBe("test-namespace");
-      expect(result.types).toEqual([]);
-      expect(result.usedUtilityTypes).toEqual({
-        Timestamp: false,
-        Serial: false,
-      });
-    });
-  });
-
-  describe("aggregate function tests", () => {
+  describe("onTailorDBReady tests", () => {
     it("integrates type definitions and returns file generation result", async () => {
-      // Metadata object from processTailorDBNamespace
-      const processedTypes = {
-        namespace: "test-namespace",
-        types: [
-          {
-            name: "User",
-            typeDef: `User: {
-              id: Generated<string>;
-              name: string;
-              email: string;
-            }`,
-            usedUtilityTypes: { Timestamp: false, Serial: false },
-          },
-        ],
-        usedUtilityTypes: { Timestamp: false, Serial: false },
-      };
+      const parsedType = parseTailorDBType(toSchemaOutput(mockBasicType));
+      const ctx = createCtx([
+        {
+          namespace: "test-namespace",
+          types: { User: parsedType },
+        },
+      ]);
 
-      const input = {
-        tailordb: [
-          {
-            namespace: "test-namespace",
-            types: processedTypes,
-          },
-        ],
-      };
-      const result = await kyselyGenerator.aggregate({
-        input: input,
-        baseDir: "/test",
-        configPath: "tailor.config.ts",
-      });
+      const plugin = kyselyTypePlugin({ distPath: testDistPath });
+      const result = await plugin.onTailorDBReady!(ctx);
 
       expect(result.files).toHaveLength(1);
       expect(result.files[0].path).toBe(testDistPath);
@@ -252,34 +173,17 @@ describe("KyselyGenerator integration tests", () => {
     });
 
     it("complete integration test with multiple types", async () => {
-      const types = {
-        User: await kyselyGenerator.processType({
-          type: parseTailorDBType(toSchemaOutput(mockBasicType)),
+      const parsedBasicType = parseTailorDBType(toSchemaOutput(mockBasicType));
+      const parsedEnumType = parseTailorDBType(toSchemaOutput(mockEnumType));
+      const ctx = createCtx([
+        {
           namespace: "test-namespace",
-        }),
-        Status: await kyselyGenerator.processType({
-          type: parseTailorDBType(toSchemaOutput(mockEnumType)),
-          namespace: "test-namespace",
-        }),
-      };
+          types: { User: parsedBasicType, Status: parsedEnumType },
+        },
+      ]);
 
-      const processedTypes = await kyselyGenerator.processTailorDBNamespace({
-        namespace: "test-namespace",
-        types: types,
-      });
-      const input = {
-        tailordb: [
-          {
-            namespace: "test-namespace",
-            types: processedTypes,
-          },
-        ],
-      };
-      const result = await kyselyGenerator.aggregate({
-        input: input,
-        baseDir: "/test",
-        configPath: "tailor.config.ts",
-      });
+      const plugin = kyselyTypePlugin({ distPath: testDistPath });
+      const result = await plugin.onTailorDBReady!(ctx);
 
       expect(result.files).toHaveLength(1);
       expect(result.files[0].path).toBe(testDistPath);
@@ -302,12 +206,7 @@ describe("KyselyGenerator integration tests", () => {
         fields: null,
       };
 
-      await expect(
-        kyselyGenerator.processType({
-          type: invalidType,
-          namespace: "test-namespace",
-        }),
-      ).rejects.toThrow();
+      await expect(processKyselyType(invalidType)).rejects.toThrow();
     });
 
     it("processes unknown type definitions as string type", async () => {
@@ -315,10 +214,7 @@ describe("KyselyGenerator integration tests", () => {
         unknownField: db.string(),
       });
 
-      const result = await kyselyGenerator.processType({
-        type: parseTailorDBType(toSchemaOutput(unknownType)),
-        namespace: "test-namespace",
-      });
+      const result = await processKyselyType(parseTailorDBType(toSchemaOutput(unknownType)));
 
       expect(result.typeDef).toContain("unknownField: string;");
     });
@@ -326,48 +222,26 @@ describe("KyselyGenerator integration tests", () => {
 
   describe("multiple namespace support", () => {
     it("aggregates types from multiple namespaces", async () => {
-      const tailordbTypes = {
-        namespace: "tailordb",
-        types: [
-          {
-            name: "User",
-            typeDef: `User: {
-              id: Generated<string>;
-              name: string;
-            }`,
-            usedUtilityTypes: { Timestamp: false, Serial: false },
-          },
-        ],
-        usedUtilityTypes: { Timestamp: false, Serial: false },
-      };
-
-      const analyticsTypes = {
-        namespace: "analytics",
-        types: [
-          {
-            name: "Event",
-            typeDef: `Event: {
-              id: Generated<string>;
-              timestamp: Timestamp;
-            }`,
-            usedUtilityTypes: { Timestamp: true, Serial: false },
-          },
-        ],
-        usedUtilityTypes: { Timestamp: true, Serial: false },
-      };
-
-      const input = {
-        tailordb: [
-          { namespace: "tailordb", types: tailordbTypes },
-          { namespace: "analytics", types: analyticsTypes },
-        ],
-      };
-
-      const result = await kyselyGenerator.aggregate({
-        input,
-        baseDir: "/test",
-        configPath: "tailor.config.ts",
+      const userType = db.type("User", {
+        name: db.string(),
       });
+      const eventType = db.type("Event", {
+        timestamp: db.datetime(),
+      });
+
+      const ctx = createCtx([
+        {
+          namespace: "tailordb",
+          types: { User: parseTailorDBType(toSchemaOutput(userType)) },
+        },
+        {
+          namespace: "analytics",
+          types: { Event: parseTailorDBType(toSchemaOutput(eventType)) },
+        },
+      ]);
+
+      const plugin = kyselyTypePlugin({ distPath: testDistPath });
+      const result = await plugin.onTailorDBReady!(ctx);
 
       expect(result.files).toHaveLength(1);
       const content = result.files[0].content;
@@ -384,30 +258,19 @@ describe("KyselyGenerator integration tests", () => {
     });
 
     it("includes only necessary utility types", async () => {
-      const types = {
-        namespace: "test",
-        types: [
-          {
-            name: "Simple",
-            typeDef: `Simple: {
-              id: Generated<string>;
-              name: string;
-            }`,
-            usedUtilityTypes: { Timestamp: false, Serial: false },
-          },
-        ],
-        usedUtilityTypes: { Timestamp: false, Serial: false },
-      };
-
-      const input = {
-        tailordb: [{ namespace: "test", types }],
-      };
-
-      const result = await kyselyGenerator.aggregate({
-        input,
-        baseDir: "/test",
-        configPath: "tailor.config.ts",
+      const simpleType = db.type("Simple", {
+        name: db.string(),
       });
+
+      const ctx = createCtx([
+        {
+          namespace: "test",
+          types: { Simple: parseTailorDBType(toSchemaOutput(simpleType)) },
+        },
+      ]);
+
+      const plugin = kyselyTypePlugin({ distPath: testDistPath });
+      const result = await plugin.onTailorDBReady!(ctx);
 
       const content = result.files[0].content;
 

@@ -31,11 +31,14 @@ export type { TailorDBType } from "@/parser/service/tailordb/types";
 export type { Resolver } from "@/parser/service/resolver";
 export type { Executor } from "@/parser/service/executor";
 
-// Builtin plugin wrappers (generator → plugin migration)
-export { kyselyTypePlugin } from "./generator/builtin/kysely-type/plugin";
-export { enumConstantsPlugin } from "./generator/builtin/enum-constants/plugin";
-export { fileUtilsPlugin } from "./generator/builtin/file-utils/plugin";
-export { seedPlugin } from "./generator/builtin/seed/plugin";
+/** @deprecated Import from '@tailor-platform/sdk/plugin/kysely-type' instead */
+export { kyselyTypePlugin } from "@/plugin/builtin/kysely-type";
+/** @deprecated Import from '@tailor-platform/sdk/plugin/enum-constants' instead */
+export { enumConstantsPlugin } from "@/plugin/builtin/enum-constants";
+/** @deprecated Import from '@tailor-platform/sdk/plugin/file-utils' instead */
+export { fileUtilsPlugin } from "@/plugin/builtin/file-utils";
+/** @deprecated Import from '@tailor-platform/sdk/plugin/seed' instead */
+export { seedPlugin } from "@/plugin/builtin/seed";
 
 export { show, type ShowOptions, type ApplicationInfo } from "./show";
 export { remove, type RemoveOptions } from "./remove";
