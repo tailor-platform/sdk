@@ -48,14 +48,12 @@ export async function initTelemetry(): Promise<void> {
     { OTLPTraceExporter },
     { resourceFromAttributes },
     { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION },
-    { trace },
     { readPackageJson },
   ] = await Promise.all([
     import("@opentelemetry/sdk-trace-node"),
     import("@opentelemetry/exporter-trace-otlp-proto"),
     import("@opentelemetry/resources"),
     import("@opentelemetry/semantic-conventions"),
-    import("@opentelemetry/api"),
     import("../utils/package-json"),
   ]);
 

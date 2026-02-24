@@ -66,7 +66,7 @@ export async function apply(options?: ApplyOptions) {
     rootSpan.setAttribute("apply.dry_run", options?.dryRun ?? false);
 
     // Phase 0: Build
-    const { config, plugins, application, workflowBuildResult, buildOnly } = await withSpan(
+    const { config, application, workflowBuildResult, buildOnly } = await withSpan(
       "build",
       async () => {
         const { config, plugins } = await withSpan("build.loadConfig", () =>
