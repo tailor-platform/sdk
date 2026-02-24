@@ -1,11 +1,11 @@
 import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
+import { z } from "zod";
 import {
   createGeneratorConfigSchema,
   BaseGeneratorConfigSchema,
   type CodeGeneratorBase,
-  type Generator,
 } from "@/parser/generator-config";
 import { createPluginConfigSchema, type Plugin } from "@/parser/plugin-config";
 import { enumConstantsPlugin, EnumConstantsGeneratorID } from "@/plugin/builtin/enum-constants";
@@ -31,8 +31,11 @@ const builtinPlugins = new Map<string, (options: any) => Plugin<unknown, any>>([
 ]);
 
 // Legacy generator schema (kept for custom CodeGenerator objects)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const builtinGenerators = new Map<string, (options: any) => CodeGeneratorBase>();
 const GeneratorConfigSchema = createGeneratorConfigSchema(builtinGenerators);
+
+export type Generator = z.output<typeof GeneratorConfigSchema>;
 
 const PluginConfigSchema = createPluginConfigSchema();
 

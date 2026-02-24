@@ -1,5 +1,35 @@
 # @tailor-platform/sdk
 
+## 1.17.0
+
+### Minor Changes
+
+- [#624](https://github.com/tailor-platform/sdk/pull/624) [`9b07d90`](https://github.com/tailor-platform/sdk/commit/9b07d909b4fa1a882ade656132c1179f02f4027b) Thanks [@dqn](https://github.com/dqn)! - Add typed API overloads to get/list/executions/jobs CLI commands
+
+  - Add definition-object-based overloads to `getWorkflow`, `getExecutor`, `listExecutorJobs`, `getExecutorJob`, `watchExecutorJob`, and `listWorkflowExecutions`
+  - Export new typed options: `GetWorkflowTypedOptions`, `GetExecutorTypedOptions`, `ListExecutorJobsTypedOptions`, `GetExecutorJobTypedOptions`, `WatchExecutorJobTypedOptions`, `ListWorkflowExecutionsTypedOptions`
+  - Deprecate existing string-based options in favor of typed alternatives (backward compatible)
+
+### Patch Changes
+
+- [#586](https://github.com/tailor-platform/sdk/pull/586) [`7915b80`](https://github.com/tailor-platform/sdk/commit/7915b8037c23ac777df087d9bc678af44b044d5f) Thanks [@toiroakr](https://github.com/toiroakr)! - Refactor application initialization and fix generate command ordering
+
+  - Split `defineApplication` (sync, lightweight) and `loadApplication` (async, full initialization)
+  - Remove `MutableApplication` type cast and mutable closure state
+  - Move plugin file generation logic into `PluginManager.generatePluginFiles()`
+  - Extract `buildApplication`, `defineServices`, and `generatePluginFilesIfNeeded` helper functions
+  - Fix `generate` command to restore interleaved type loading/generation flow instead of using `loadApplication()` which bundled before generators ran
+  - Clean up: make `pluginExecutorFiles` private, remove unused re-export, fix stale comments
+
+- [#612](https://github.com/tailor-platform/sdk/pull/612) [`62045eb`](https://github.com/tailor-platform/sdk/commit/62045eba4cb0a90632cc6f884d989a15671f138f) Thanks [@toiroakr](https://github.com/toiroakr)! - fix(postinstall): correct import path and call signature for generateUserTypes
+
+  - Fix import path from non-existent `dist/cli/api.mjs` to `dist/cli/lib.mjs`
+  - Fix function call to use options object `{ config, configPath }` instead of positional arguments
+
+- [#620](https://github.com/tailor-platform/sdk/pull/620) [`e1b7d79`](https://github.com/tailor-platform/sdk/commit/e1b7d7944a909a5e9a2e5915186dda64a60d4414) Thanks [@dqn](https://github.com/dqn)! - Add JSDoc comments to SDK configure APIs for improved LLM discoverability
+
+- [#615](https://github.com/tailor-platform/sdk/pull/615) [`9e51758`](https://github.com/tailor-platform/sdk/commit/9e517586a95cdad724b9d63565124c35e268d6e8) Thanks [@toiroakr](https://github.com/toiroakr)! - Review and slim down CLAUDE.md based on Anthropic's best practices: remove duplicate patterns, fix inaccuracies, delete volatile/redundant info, and reduce from ~400 lines to ~70 lines by pointing to example/ instead of embedding code
+
 ## 1.16.0
 
 ### Minor Changes

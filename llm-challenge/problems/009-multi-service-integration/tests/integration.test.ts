@@ -220,7 +220,7 @@ describe.skipIf(!workDirReady)("009-multi-service-integration", () => {
 
   test("taskCleanupMain body triggers other jobs and returns results", async () => {
     const mod = await importPath(workflowPath);
-    const result = mod.taskCleanupMain.body({ olderThanDays: 7 }, { env: {} });
+    const result = await mod.taskCleanupMain.body({ olderThanDays: 7 }, { env: {} });
     expect(result).toHaveProperty("archived");
     expect(result).toHaveProperty("cleaned");
   });

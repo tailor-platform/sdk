@@ -43,6 +43,8 @@ user-defined.d.ts
 .claude/*
 !.claude/rules
 !.claude/rules/**
+!.claude/skills
+!.claude/skills/**
 CLAUDE.local.md
 
 # LLM Challenge

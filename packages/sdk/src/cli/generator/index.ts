@@ -9,7 +9,7 @@ import {
   type Application,
 } from "@/cli/application";
 import { createExecutorService } from "@/cli/application/executor/service";
-import { loadConfig, type LoadedConfig } from "@/cli/config-loader";
+import { loadConfig, type LoadedConfig, type Generator } from "@/cli/config-loader";
 import {
   type AnyCodeGenerator,
   type TailorDBNamespaceResult,
@@ -22,7 +22,6 @@ import {
 import { generateUserTypes } from "@/cli/type-generator";
 import { getDistDir } from "@/cli/utils/dist-dir";
 import { logger, styles } from "@/cli/utils/logger";
-import { type Generator } from "@/parser/generator-config";
 import {
   getPluginGenerationDependencies,
   type TailorDBNamespaceData,
@@ -798,7 +797,7 @@ export async function generate(options?: GenerateOptions) {
   // Initialize plugin manager if plugins are provided
   let pluginManager: PluginManager | undefined;
   if (plugins.length > 0) {
-    pluginManager = new PluginManager(plugins as unknown as Plugin[]);
+    pluginManager = new PluginManager(plugins);
   }
 
   // Create a lightweight application (types not yet loaded)

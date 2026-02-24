@@ -31,7 +31,6 @@ import { applyTailorDB, planTailorDB } from "./services/tailordb";
 import { applyWorkflow, planWorkflow } from "./services/workflow";
 import type { OperatorClient } from "@/cli/client";
 import type { LoadedConfig } from "@/cli/config-loader";
-import type { Plugin } from "@/parser/plugin-config/types";
 
 export interface ApplyOptions {
   workspaceId?: string;
@@ -71,7 +70,7 @@ export async function apply(options?: ApplyOptions) {
   // Initialize plugin manager if plugins are provided
   let pluginManager: PluginManager | undefined;
   if (plugins.length > 0) {
-    pluginManager = new PluginManager(plugins as unknown as Plugin[]);
+    pluginManager = new PluginManager(plugins);
   }
 
   // Generate user types from loaded config

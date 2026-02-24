@@ -1,46 +1,14 @@
-import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { getSdkVersion } from "../shared/helpers";
 import type { ProblemMeta } from "../shared/helpers";
+import { createClaudeAdapter } from "./solver/claude";
+import { createCodexAdapter } from "./solver/codex";
+import type { AuthCheckResult, SolveAdapter, SolveAgent, SolveResult } from "./solver/types";
 
 const challengeRoot = path.resolve(import.meta.dirname, "..");
 
-export type SolveResult = {
-  success: boolean;
-  costUsd: number;
-  durationMs: number;
-  output: string;
-  error?: string;
-  infraFailure?: boolean;
-};
-
-type ClaudeCodeOutput = {
-  result: string;
-  is_error: boolean;
-  total_cost_usd: number;
-  duration_ms: number;
-};
-
-const infraFailurePatterns = [
-  /Not logged in/i,
-  /API key/i,
-  /rate limit/i,
-  /ETIMEDOUT/,
-  /ECONNREFUSED/,
-  /ECONNRESET/,
-  /socket hang up/i,
-  /authentication.*failed/i,
-  /unauthorized/i,
-  /403 Forbidden/i,
-  // Note: EPERM, EACCES, error_during_execution, and "permission denied" are intentionally
-  // excluded because they can match claude-settings.json tool denials (anti-cheat), which
-  // are expected model failures, not infrastructure issues.
-];
-
-function detectInfraFailure(output: string): boolean {
-  return infraFailurePatterns.some((pattern) => pattern.test(output));
-}
+export type { SolveAgent, SolveResult };
 
 function listFilesRecursive(dir: string, base: string = dir): string[] {
   const files: string[] = [];
@@ -188,7 +156,7 @@ function truncateErrorOutput(output: string, maxLength = 5000): string {
 
   const priorityIndices = new Set<number>();
   for (let i = 0; i < lines.length; i++) {
-    if (/TS\d{4}/.test(lines[i]!) || /FAIL|AssertionError|Expected|Received|✗|×/.test(lines[i]!)) {
+    if (/TS\d{4}|FAIL|AssertionError|Expected|Received|✗|×/.test(lines[i]!)) {
       for (
         let j = Math.max(0, i - contextRadius);
         j <= Math.min(lines.length - 1, i + contextRadius);
@@ -221,230 +189,56 @@ function truncateErrorOutput(output: string, maxLength = 5000): string {
 
 const claudeSettingsPath = path.join(import.meta.dirname, "claude-settings.json");
 
-function cleanEnv(): NodeJS.ProcessEnv {
-  const env = { ...process.env };
-  // Only strip Claude Code session/process vars to prevent nested session interference.
-  // Preserve other CLAUDE_* vars (e.g. auth, provider config) that users may set.
-  for (const key of Object.keys(env)) {
-    if (key.startsWith("CLAUDE_CODE_")) {
-      delete env[key];
-    }
-  }
-  // Also strip CLAUDECODE to prevent nested-session guard from blocking spawned CLI
-  delete env.CLAUDECODE;
-  delete env.OLDPWD;
-  return env;
+const solveAdapters: Record<SolveAgent, SolveAdapter> = {
+  claude: createClaudeAdapter(claudeSettingsPath),
+  codex: createCodexAdapter(),
+};
+
+function runSolver(options: {
+  agent: SolveAgent;
+  prompt: string;
+  workDir: string;
+  model?: string;
+  maxBudget: number;
+}): Promise<SolveResult> {
+  const { agent, ...runOptions } = options;
+  return solveAdapters[agent].run(runOptions);
 }
 
-export async function retrySolveProblem(options: {
+export function retrySolveProblem(options: {
   workDir: string;
   problemDir: string;
   meta: ProblemMeta;
-  model: string;
+  agent: SolveAgent;
+  model?: string;
   maxBudget: number;
   errorOutput: string;
 }): Promise<SolveResult> {
-  const { workDir, problemDir, meta, model, maxBudget, errorOutput } = options;
+  const { workDir, problemDir, meta, agent, model, maxBudget, errorOutput } = options;
   const prompt = buildRetryPrompt(problemDir, meta, workDir, errorOutput);
-  return runClaude({ prompt, workDir, model, maxBudget });
+  return runSolver({ agent, prompt, workDir, model, maxBudget });
 }
 
-function runClaude(options: {
-  prompt: string;
-  workDir: string;
-  model: string;
-  maxBudget: number;
-}): Promise<SolveResult> {
-  const { prompt, workDir, model, maxBudget } = options;
-
-  const args = [
-    "-p",
-    prompt,
-    "--setting-sources",
-    "",
-    "--settings",
-    claudeSettingsPath,
-    "--permission-mode",
-    "bypassPermissions",
-    "--output-format",
-    "json",
-    "--model",
-    model,
-    "--max-budget-usd",
-    String(maxBudget),
-    "--tools",
-    "Read,Write,Glob,Grep,Bash",
-    "--no-session-persistence",
-  ];
-
-  const env = cleanEnv();
-  const startTime = Date.now();
-  const timeout = 300_000; // 5 minutes
-
-  return new Promise<SolveResult>((resolve) => {
-    const proc = spawn("claude", args, {
-      cwd: workDir,
-      stdio: ["ignore", "pipe", "pipe"],
-      env,
-    });
-
-    const stdoutChunks: Buffer[] = [];
-    const stderrChunks: Buffer[] = [];
-    let timedOut = false;
-
-    proc.stdout.on("data", (chunk: Buffer) => stdoutChunks.push(chunk));
-    proc.stderr.on("data", (chunk: Buffer) => stderrChunks.push(chunk));
-
-    const timer = setTimeout(() => {
-      timedOut = true;
-      proc.kill("SIGTERM");
-    }, timeout);
-
-    proc.on("error", (err) => {
-      clearTimeout(timer);
-      const durationMs = Date.now() - startTime;
-      const stderr = Buffer.concat(stderrChunks).toString("utf-8");
-      const errorOutput = stderr || err.message;
-      resolve({
-        success: false,
-        costUsd: 0,
-        durationMs,
-        output: errorOutput,
-        error: errorOutput,
-        infraFailure: detectInfraFailure(errorOutput),
-      });
-    });
-
-    proc.on("close", (code) => {
-      clearTimeout(timer);
-      const durationMs = Date.now() - startTime;
-      const stdout = Buffer.concat(stdoutChunks).toString("utf-8");
-      const stderr = Buffer.concat(stderrChunks).toString("utf-8");
-      const output = stdout || stderr;
-
-      // Timeout is always an infrastructure failure
-      if (timedOut) {
-        resolve({
-          success: false,
-          costUsd: 0,
-          durationMs,
-          output: output || "Process timed out",
-          error: "Process timed out",
-          infraFailure: true,
-        });
-        return;
-      }
-
-      // Try to parse JSON output (Claude Code outputs JSON with --output-format json)
-      try {
-        const parsed = JSON.parse(output) as ClaudeCodeOutput;
-        const costUsd = parsed.total_cost_usd ?? 0;
-        const parsedDuration = parsed.duration_ms ?? durationMs;
-        const parsedOutput = parsed.result ?? output;
-        const success = code === 0 && !parsed.is_error;
-        resolve({
-          success,
-          costUsd,
-          durationMs: parsedDuration,
-          output: parsedOutput,
-          error: !success ? parsedOutput : undefined,
-          infraFailure: !success
-            ? detectInfraFailure(parsedOutput) || detectInfraFailure(stderr)
-            : false,
-        });
-      } catch {
-        resolve({
-          success: false,
-          costUsd: 0,
-          durationMs,
-          output,
-          error: output || "Failed to parse Claude Code JSON output",
-          infraFailure: detectInfraFailure(output),
-        });
-      }
-    });
-  });
-}
-
-export async function solveProblem(options: {
+export function solveProblem(options: {
   workDir: string;
   problemDir: string;
   meta: ProblemMeta;
-  model: string;
+  agent: SolveAgent;
+  model?: string;
   maxBudget: number;
 }): Promise<SolveResult> {
-  const { workDir, problemDir, meta, model, maxBudget } = options;
+  const { workDir, problemDir, meta, agent, model, maxBudget } = options;
   const prompt = buildPrompt(problemDir, meta, workDir);
-  return runClaude({ prompt, workDir, model, maxBudget });
+  return runSolver({ agent, prompt, workDir, model, maxBudget });
 }
 
 /**
- * Check if Claude Code can authenticate successfully.
+ * Check if solve agent can authenticate successfully.
  * Runs a lightweight prompt to verify auth status before starting a full solve run.
  */
-export function checkAuthStatus(model?: string): Promise<{ ok: boolean; error?: string }> {
-  const args = [
-    "-p",
-    "Reply with exactly: ok",
-    "--setting-sources",
-    "",
-    "--settings",
-    claudeSettingsPath,
-    "--output-format",
-    "json",
-    "--max-budget-usd",
-    "0.01",
-    "--no-session-persistence",
-    ...(model ? ["--model", model] : []),
-  ];
-
-  const env = cleanEnv();
-  const timeout = 30_000;
-
-  return new Promise((resolve) => {
-    const proc = spawn("claude", args, {
-      stdio: ["ignore", "pipe", "pipe"],
-      env,
-      detached: true,
-    });
-
-    const stdoutChunks: Buffer[] = [];
-    const stderrChunks: Buffer[] = [];
-
-    proc.stdout.on("data", (chunk: Buffer) => stdoutChunks.push(chunk));
-    proc.stderr.on("data", (chunk: Buffer) => stderrChunks.push(chunk));
-
-    const timer = setTimeout(() => {
-      proc.kill("SIGTERM");
-    }, timeout);
-
-    proc.on("error", (err) => {
-      clearTimeout(timer);
-      const stderr = Buffer.concat(stderrChunks).toString("utf-8");
-      resolve({ ok: false, error: stderr || err.message });
-    });
-
-    proc.on("close", (code) => {
-      clearTimeout(timer);
-      const stdout = Buffer.concat(stdoutChunks).toString("utf-8");
-      const stderr = Buffer.concat(stderrChunks).toString("utf-8");
-
-      try {
-        const parsed = JSON.parse(stdout || stderr) as ClaudeCodeOutput;
-        if (parsed.is_error) {
-          resolve({ ok: false, error: parsed.result || stdout || stderr });
-          return;
-        }
-        resolve({ ok: true });
-      } catch {
-        const output = stdout || stderr;
-        if (infraFailurePatterns.some((p) => p.test(output))) {
-          resolve({ ok: false, error: output });
-          return;
-        }
-        // Preserve output for diagnostics even when not matching infra patterns
-        resolve({ ok: code === 0, error: code !== 0 ? output || `Exit code ${code}` : undefined });
-      }
-    });
-  });
+export function checkAuthStatus(options: {
+  agent: SolveAgent;
+  model?: string;
+}): Promise<AuthCheckResult> {
+  return solveAdapters[options.agent].checkAuth(options.model);
 }

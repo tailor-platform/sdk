@@ -26,9 +26,27 @@ interface WorkflowDefinition<Job extends WorkflowJob<any, any, any>> {
 /**
  * Create a workflow definition that can be triggered via the Tailor SDK.
  * In production, bundler transforms .trigger() calls to tailor.workflow.triggerWorkflow().
+ *
+ * The workflow MUST be the default export of the file.
+ * All jobs referenced by the workflow MUST be named exports.
  * @template Job
  * @param config - Workflow configuration
  * @returns Defined workflow
+ * @example
+ * export const fetchData = createWorkflowJob({ name: "fetch-data", body: async (input: { id: string }) => ({ id: input.id }) });
+ * export const processData = createWorkflowJob({
+ *   name: "process-data",
+ *   body: async (input: { id: string }) => {
+ *     const data = await fetchData.trigger({ id: input.id }); // await is optional — stripped by bundler
+ *     return { data };
+ *   },
+ * });
+ *
+ * // Workflow must be default export; mainJob is the entry point
+ * export default createWorkflow({
+ *   name: "data-processing",
+ *   mainJob: processData,
+ * });
  */
 export function createWorkflow<Job extends WorkflowJob<any, any, any>>(
   config: WorkflowDefinition<Job>,

@@ -8,6 +8,19 @@ import { logger } from "../utils/logger";
 import { nameArgs } from "./args";
 import { type WorkflowInfo, toWorkflowInfo } from "./transform";
 
+type WorkflowLike = {
+  name: string;
+};
+
+export type GetWorkflowTypedOptions<W extends WorkflowLike = WorkflowLike> = {
+  workflow: W;
+  workspaceId?: string;
+  profile?: string;
+};
+
+/**
+ * @deprecated Use GetWorkflowTypedOptions instead.
+ */
 export interface GetWorkflowOptions {
   name: string;
   workspaceId?: string;
@@ -41,7 +54,17 @@ export async function resolveWorkflow(
  * @param options - Workflow lookup options
  * @returns Workflow information
  */
-export async function getWorkflow(options: GetWorkflowOptions): Promise<WorkflowInfo> {
+export async function getWorkflow<W extends WorkflowLike>(
+  options: GetWorkflowTypedOptions<W>,
+): Promise<WorkflowInfo>;
+export async function getWorkflow(options: GetWorkflowOptions): Promise<WorkflowInfo>;
+export async function getWorkflow<W extends WorkflowLike>(
+  options: GetWorkflowOptions | GetWorkflowTypedOptions<W>,
+): Promise<WorkflowInfo> {
+  // Discriminant: legacy options have top-level 'name', typed options use 'workflow'.
+  // Note: passing a workflow object directly (e.g., getWorkflow(myWorkflow)) would match
+  // the legacy branch due to structural typing, but still works correctly since it reads .name.
+  const name = "name" in options ? options.name : options.workflow.name;
   const accessToken = await loadAccessToken({
     useProfile: true,
     profile: options.profile,
@@ -53,11 +76,11 @@ export async function getWorkflow(options: GetWorkflowOptions): Promise<Workflow
   });
 
   try {
-    const workflow = await resolveWorkflow(client, workspaceId, options.name);
+    const workflow = await resolveWorkflow(client, workspaceId, name);
     return toWorkflowInfo(workflow);
   } catch (error) {
     if (error instanceof ConnectError && error.code === Code.NotFound) {
-      throw new Error(`Workflow '${options.name}' not found.`);
+      throw new Error(`Workflow '${name}' not found.`);
     }
     throw error;
   }

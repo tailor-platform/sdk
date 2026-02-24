@@ -73,20 +73,31 @@ describe.skipIf(!workDirReady)("010-fix-broken-model", () => {
 
   test("salary validator rejects negative values", async () => {
     const { employee } = await importPath(employeePath);
-    const [validatorFn] = employee.fields.salary.metadata.validate[0];
+    const entry = employee.fields.salary.metadata.validate[0];
+    const validatorFn = typeof entry === "function" ? entry : entry[0];
     expect(validatorFn({ value: -1 })).toBe(false);
   });
 
   test("salary validator accepts zero", async () => {
     const { employee } = await importPath(employeePath);
-    const [validatorFn] = employee.fields.salary.metadata.validate[0];
+    const entry = employee.fields.salary.metadata.validate[0];
+    const validatorFn = typeof entry === "function" ? entry : entry[0];
     expect(validatorFn({ value: 0 })).toBe(true);
   });
 
   test("salary validator accepts positive values", async () => {
     const { employee } = await importPath(employeePath);
-    const [validatorFn] = employee.fields.salary.metadata.validate[0];
+    const entry = employee.fields.salary.metadata.validate[0];
+    const validatorFn = typeof entry === "function" ? entry : entry[0];
     expect(validatorFn({ value: 50000 })).toBe(true);
+  });
+
+  test("salary validator uses tuple form with custom error message", async () => {
+    const { employee } = await importPath(employeePath);
+    const entry = employee.fields.salary.metadata.validate[0];
+    expect(Array.isArray(entry)).toBe(true);
+    const [, errorMessage] = entry;
+    expect(errorMessage).toBe("Salary must be non-negative");
   });
 
   test("hireDate is a required datetime field", async () => {
