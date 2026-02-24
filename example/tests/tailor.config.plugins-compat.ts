@@ -7,7 +7,7 @@ import config, { auth } from "../tailor.config";
 export default config;
 export { auth };
 export const plugins = definePlugins(
-  kyselyTypePlugin({ distPath: "./tests/fixtures/plugins/tailordb.ts" }),
+  kyselyTypePlugin({ distPath: "./tests/fixtures/plugins/db.ts" }),
   enumConstantsPlugin({ distPath: "./tests/fixtures/plugins/enums.ts" }),
   fileUtilsPlugin({ distPath: "./tests/fixtures/plugins/files.ts" }),
   seedPlugin({

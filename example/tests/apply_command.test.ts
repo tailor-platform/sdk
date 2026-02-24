@@ -4,15 +4,18 @@ import { pathToFileURL } from "node:url";
 import { format as formatDate } from "date-fns";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 
-const tempDistDir = "tests/fixtures/actual";
+const tempDistDir = "tests/fixtures/plugins";
 
 describe("pnpm apply command integration tests", () => {
   const expectedDir = path.join(__dirname, "fixtures/expected");
-  const actualDir = path.join(__dirname, "fixtures/actual");
+  const actualDir = path.join(__dirname, "fixtures/plugins");
 
-  const expectedGeneratedFilesWithContent = ["db.ts"] as const;
+  const expectedGeneratedFilesWithContent = ["db.ts", "enums.ts", "files.ts"] as const;
   const expectedGeneratedFiles = [
+    // Plugin-generated files
     "db.ts",
+    "enums.ts",
+    "files.ts",
     // Executor bundler creates entry files (.entry.js) in same directory as output files
     "executors/test-webhook.entry.js",
     "executors/test-webhook.js",
@@ -39,6 +42,34 @@ describe("pnpm apply command integration tests", () => {
     "resolvers/triggerOrderProcessing.entry.js",
     "resolvers/triggerOrderProcessing.js",
     "resolvers/triggerOrderProcessing.js.map",
+    // Seed plugin output
+    "seed/data/Customer.jsonl",
+    "seed/data/Customer.schema.ts",
+    "seed/data/Event.jsonl",
+    "seed/data/Event.schema.ts",
+    "seed/data/Invoice.jsonl",
+    "seed/data/Invoice.schema.ts",
+    "seed/data/NestedProfile.jsonl",
+    "seed/data/NestedProfile.schema.ts",
+    "seed/data/PurchaseOrder.jsonl",
+    "seed/data/PurchaseOrder.schema.ts",
+    "seed/data/SalesOrder.jsonl",
+    "seed/data/SalesOrder.schema.ts",
+    "seed/data/SalesOrderCreated.jsonl",
+    "seed/data/SalesOrderCreated.schema.ts",
+    "seed/data/Selfie.jsonl",
+    "seed/data/Selfie.schema.ts",
+    "seed/data/Supplier.jsonl",
+    "seed/data/Supplier.schema.ts",
+    "seed/data/User.jsonl",
+    "seed/data/User.schema.ts",
+    "seed/data/UserLog.jsonl",
+    "seed/data/UserLog.schema.ts",
+    "seed/data/UserSetting.jsonl",
+    "seed/data/UserSetting.schema.ts",
+    "seed/data/_User.jsonl",
+    "seed/data/_User.schema.ts",
+    "seed/exec.mjs",
     // Workflow bundler creates entry files (.entry.js) in same directory as output files
     "workflow-jobs/check-inventory.entry.js",
     "workflow-jobs/check-inventory.js",
