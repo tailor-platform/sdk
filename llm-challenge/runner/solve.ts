@@ -29,7 +29,6 @@ function listFilesRecursive(dir: string, base: string = dir): string[] {
 
 const commonSystemLines = [
   'Use the SDK\'s TypeScript API (import from "@tailor-platform/sdk").',
-  "You can read the installed SDK package in node_modules/@tailor-platform/sdk/ for API reference.",
   "Do NOT read any files outside of the current working directory.",
 ];
 
