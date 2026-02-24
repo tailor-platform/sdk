@@ -1,5 +1,13 @@
 # @tailor-platform/sdk
 
+## 1.17.1
+
+### Patch Changes
+
+- [#626](https://github.com/tailor-platform/sdk/pull/626) [`e37cbb9`](https://github.com/tailor-platform/sdk/commit/e37cbb9fb9f4ab94be684c33c50e048b1968d5d7) Thanks [@k1LoW](https://github.com/k1LoW)! - feat: support disablePasswordAuth field for IdP userAuthPolicy
+
+- [#618](https://github.com/tailor-platform/sdk/pull/618) [`0e56dfc`](https://github.com/tailor-platform/sdk/commit/0e56dfc9636896be72487be404b6b04536eeb6ea) Thanks [@toiroakr](https://github.com/toiroakr)! - Introduce `WorkflowService` type and `createWorkflowService` factory to align workflow handling with the service pattern used by `ExecutorService`, `ResolverService`, and other services. Replace `Application.workflowConfig` with `Application.workflowService` that encapsulates workflow loading, data access, and log printing. Replace `getXXX()` methods with getter properties across all service types (`TailorDBService`, `ResolverService`, `ExecutorService`, `WorkflowService`).
+
 ## 1.17.0
 
 ### Minor Changes
