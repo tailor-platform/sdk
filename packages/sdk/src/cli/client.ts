@@ -39,6 +39,9 @@ export type OperatorClient = Client<typeof OperatorService>;
  * @returns Configured Operator client
  */
 export async function initOperatorClient(accessToken: string) {
+  const { createTracingInterceptor } = await import("./telemetry/interceptor");
+  const tracingInterceptor = createTracingInterceptor();
+
   const transport = createConnectTransport({
     httpVersion: "2",
     baseUrl: platformBaseUrl,
@@ -47,6 +50,7 @@ export async function initOperatorClient(accessToken: string) {
       await bearerTokenInterceptor(accessToken),
       retryInterceptor(),
       errorHandlingInterceptor(),
+      ...(tracingInterceptor ? [tracingInterceptor] : []),
     ],
   });
   return createClient(OperatorService, transport);
