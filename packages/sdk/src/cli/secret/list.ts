@@ -34,7 +34,7 @@ function secretInfo(secret: SecretManagerSecret): SecretInfo {
  * @param options - Secret listing options
  * @returns List of secrets
  */
-async function secretList(options: SecretListOptions): Promise<SecretInfo[]> {
+export async function secretList(options: SecretListOptions): Promise<SecretInfo[]> {
   const accessToken = await loadAccessToken({
     useProfile: true,
     profile: options.profile,

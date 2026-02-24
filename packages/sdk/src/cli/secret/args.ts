@@ -32,3 +32,13 @@ export const secretValueArgs = {
     description: "Secret value",
   }),
 };
+
+/**
+ * Arguments for specifying an input file
+ */
+export const fileArgs = {
+  file: arg(z.string(), {
+    alias: "f",
+    description: "Path to the .env file (use '-' for stdin)",
+  }),
+};

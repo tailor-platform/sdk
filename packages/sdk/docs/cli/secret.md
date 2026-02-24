@@ -16,13 +16,14 @@ tailor-sdk secret [command]
 
 **Commands**
 
-| Command                           | Description                   |
-| --------------------------------- | ----------------------------- |
-| [`secret create`](#secret-create) | Create a secret in a vault.   |
-| [`secret delete`](#secret-delete) | Delete a secret in a vault.   |
-| [`secret list`](#secret-list)     | List all secrets in a vault.  |
-| [`secret update`](#secret-update) | Update a secret in a vault.   |
-| [`secret vault`](#secret-vault)   | Manage Secret Manager vaults. |
+| Command                           | Description                                   |
+| --------------------------------- | --------------------------------------------- |
+| [`secret create`](#secret-create) | Create a secret in a vault.                   |
+| [`secret delete`](#secret-delete) | Delete a secret in a vault.                   |
+| [`secret import`](#secret-import) | Import secrets from a .env file into a vault. |
+| [`secret list`](#secret-list)     | List all secrets in a vault.                  |
+| [`secret update`](#secret-update) | Update a secret in a vault.                   |
+| [`secret vault`](#secret-vault)   | Manage Secret Manager vaults.                 |
 
 <!-- politty:command:secret:end -->
 <!-- politty:command:secret vault:start -->
@@ -211,3 +212,27 @@ tailor-sdk secret delete [options]
 | `--yes`                         | `-y`  | Skip confirmation prompts | No       | `false` |
 
 <!-- politty:command:secret delete:end -->
+
+<!-- politty:command:secret import:start -->
+
+### secret import
+
+Import secrets from a .env file into a vault.
+
+**Usage**
+
+```
+tailor-sdk secret import [options]
+```
+
+**Options**
+
+| Option                          | Alias | Description                               | Required | Default |
+| ------------------------------- | ----- | ----------------------------------------- | -------- | ------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                              | No       | -       |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                         | No       | -       |
+| `--vault-name <VAULT_NAME>`     | `-V`  | Vault name                                | Yes      | -       |
+| `--file <FILE>`                 | `-f`  | Path to the .env file (use '-' for stdin) | Yes      | -       |
+| `--dry-run`                     | `-d`  | Preview changes without applying them     | No       | `false` |
+
+<!-- politty:command:secret import:end -->
