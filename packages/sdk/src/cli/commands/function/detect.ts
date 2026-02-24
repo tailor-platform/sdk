@@ -1,0 +1,191 @@
+/**
+ * Function type detection for test-run command
+ *
+ * Detects the function type (resolver, executor, workflow job, or plain function)
+ * by dynamically importing the module and checking against known schemas.
+ */
+
+import { pathToFileURL } from "node:url";
+import * as path from "pathe";
+import { ExecutorSchema } from "@/parser/service/executor";
+import { ResolverSchema } from "@/parser/service/resolver";
+import { WorkflowJobSchema } from "@/parser/service/workflow";
+
+export type FunctionType = "resolver" | "executor" | "workflow-job" | "plain";
+
+export interface DetectedFunction {
+  /** Detected function type */
+  type: FunctionType;
+  /** Function name (resolver name, executor name, job name, or filename-derived) */
+  name: string;
+  /** For workflow jobs: the TypeScript export name needed for bundling */
+  exportName?: string;
+}
+
+interface DetectFunctionOptions {
+  /** Absolute path to the function file */
+  filePath: string;
+  /** Workflow job name to select (matches the `name` field of createWorkflowJob) */
+  jobName?: string;
+  /** Explicit type override */
+  typeOverride?: FunctionType;
+}
+
+/**
+ * Detect the function type from a file by importing it and checking against schemas.
+ * @param options - Detection options
+ * @returns Detected function information
+ */
+export async function detectFunctionType(
+  options: DetectFunctionOptions,
+): Promise<DetectedFunction> {
+  const { filePath, jobName, typeOverride } = options;
+
+  const module = await import(pathToFileURL(filePath).href);
+
+  if (typeOverride) {
+    return detectWithTypeOverride(module, filePath, typeOverride, jobName);
+  }
+
+  // Priority: resolver → executor → workflow job → plain function
+
+  // 1. Check resolver
+  const resolverResult = ResolverSchema.safeParse(module.default);
+  if (resolverResult.success) {
+    return { type: "resolver", name: resolverResult.data.name };
+  }
+
+  // 2. Check executor (only function/jobFunction kinds)
+  const executorResult = ExecutorSchema.safeParse(module.default);
+  if (executorResult.success) {
+    const { operation } = executorResult.data;
+    if (operation.kind === "function" || operation.kind === "jobFunction") {
+      return { type: "executor", name: executorResult.data.name };
+    }
+  }
+
+  // 3. Check workflow jobs (scan all named exports)
+  const workflowJobResult = detectWorkflowJob(module, jobName);
+  if (workflowJobResult) {
+    return workflowJobResult;
+  }
+
+  // 4. Check plain function (default export is a function)
+  if (typeof module.default === "function") {
+    const name = deriveNameFromPath(filePath);
+    return { type: "plain", name };
+  }
+
+  throw new Error(
+    `Could not detect function type from ${filePath}.\n` +
+      "The file must have one of:\n" +
+      "  - A default-exported resolver (createResolver)\n" +
+      "  - A default-exported executor (createExecutor) with function/jobFunction operation\n" +
+      "  - A named-exported workflow job (createWorkflowJob)\n" +
+      "  - A default-exported function",
+  );
+}
+
+/**
+ * Detect function type when --type is explicitly specified.
+ * @param module
+ * @param filePath
+ * @param typeOverride
+ * @param jobName
+ */
+function detectWithTypeOverride(
+  module: Record<string, unknown>,
+  filePath: string,
+  typeOverride: FunctionType,
+  jobName?: string,
+): DetectedFunction {
+  switch (typeOverride) {
+    case "resolver": {
+      const result = ResolverSchema.safeParse(module.default);
+      if (!result.success) {
+        throw new Error(`File does not contain a valid resolver (default export): ${filePath}`);
+      }
+      return { type: "resolver", name: result.data.name };
+    }
+    case "executor": {
+      const result = ExecutorSchema.safeParse(module.default);
+      if (!result.success) {
+        throw new Error(`File does not contain a valid executor (default export): ${filePath}`);
+      }
+      if (
+        result.data.operation.kind !== "function" &&
+        result.data.operation.kind !== "jobFunction"
+      ) {
+        throw new Error(
+          `Executor "${result.data.name}" has operation kind "${result.data.operation.kind}". ` +
+            "Only 'function' and 'jobFunction' executors can be test-run.",
+        );
+      }
+      return { type: "executor", name: result.data.name };
+    }
+    case "workflow-job": {
+      const detected = detectWorkflowJob(module, jobName);
+      if (!detected) {
+        throw new Error(`File does not contain any valid workflow jobs: ${filePath}`);
+      }
+      return detected;
+    }
+    case "plain": {
+      if (typeof module.default !== "function") {
+        throw new Error(`File does not have a default-exported function: ${filePath}`);
+      }
+      return { type: "plain", name: deriveNameFromPath(filePath) };
+    }
+  }
+}
+
+/**
+ * Scan all named exports for workflow jobs.
+ * If jobName is specified, find the job whose `.name` matches.
+ * If not specified and exactly one job exists, use it.
+ * If multiple jobs exist, throw an error with the list.
+ * @param module
+ * @param jobName
+ */
+function detectWorkflowJob(
+  module: Record<string, unknown>,
+  jobName?: string,
+): DetectedFunction | null {
+  const jobs: Array<{ name: string; exportName: string }> = [];
+
+  for (const [exportName, exportValue] of Object.entries(module)) {
+    if (exportName === "default") continue;
+    const result = WorkflowJobSchema.safeParse(exportValue);
+    if (result.success) {
+      jobs.push({ name: result.data.name, exportName });
+    }
+  }
+
+  if (jobs.length === 0) {
+    return null;
+  }
+
+  if (jobName) {
+    const match = jobs.find((j) => j.name === jobName);
+    if (!match) {
+      const available = jobs.map((j) => `  - "${j.name}" (export: ${j.exportName})`).join("\n");
+      throw new Error(`Workflow job "${jobName}" not found. Available jobs:\n${available}`);
+    }
+    return { type: "workflow-job", name: match.name, exportName: match.exportName };
+  }
+
+  if (jobs.length === 1) {
+    return { type: "workflow-job", name: jobs[0].name, exportName: jobs[0].exportName };
+  }
+
+  const available = jobs.map((j) => `  - "${j.name}" (export: ${j.exportName})`).join("\n");
+  throw new Error(`Multiple workflow jobs found. Specify one with --name:\n${available}`);
+}
+
+/**
+ * Derive a script name from a file path (filename without extension).
+ * @param filePath
+ */
+function deriveNameFromPath(filePath: string): string {
+  return path.basename(filePath, path.extname(filePath));
+}
