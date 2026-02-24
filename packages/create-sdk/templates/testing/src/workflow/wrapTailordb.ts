@@ -1,5 +1,5 @@
 import { createWorkflowJob, createWorkflow } from "@tailor-platform/sdk";
-import type { Selectable } from "kysely";
+import type { Selectable } from "@tailor-platform/sdk/kysely";
 import { getDB, type DB, type Namespace } from "../generated/db";
 
 type User = Selectable<Namespace["main-db"]["User"]>;
