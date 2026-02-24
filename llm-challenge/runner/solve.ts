@@ -32,7 +32,7 @@ const commonSystemLines = [
   "Do NOT read any files outside of the current working directory.",
 ];
 
-function buildSystemPrompt(mode: "implement" | "fix"): string {
+function buildSystemPrompt(mode: "implement" | "fix" | "hybrid"): string {
   const sdkVersion = getSdkVersion(challengeRoot);
   const versionLine = sdkVersion ? `SDK version: ${sdkVersion}` : "";
 
@@ -43,11 +43,19 @@ function buildSystemPrompt(mode: "implement" | "fix"): string {
           versionLine,
           "Fix the issues in the listed files. Read the existing files first, then modify them.",
         ]
-      : [
-          "You are implementing a @tailor-platform/sdk project.",
-          versionLine,
-          "Create ONLY the files listed in the task. Do NOT modify existing files.",
-        ];
+      : mode === "hybrid"
+        ? [
+            "You are implementing a @tailor-platform/sdk project.",
+            versionLine,
+            "Some files already exist and need to be fixed; other files must be created from scratch.",
+            'For "Files to Fix": read and modify existing files.',
+            'For "Files to Create": create new files.',
+          ]
+        : [
+            "You are implementing a @tailor-platform/sdk project.",
+            versionLine,
+            "Create ONLY the files listed in the task. Do NOT modify existing files.",
+          ];
 
   return [...modeLines, ...commonSystemLines].filter(Boolean).join("\n");
 }
@@ -60,29 +68,60 @@ function buildPromptSections(
   problemMd: string;
   existingFilesList: string;
   filesList: string;
-  isFixBroken: boolean;
+  filesToFix: string[];
+  filesToCreate: string[];
+  mode: "implement" | "fix" | "hybrid";
 } {
   const problemMd = fs.readFileSync(path.join(problemDir, "problem.md"), "utf-8");
   const existingFiles = listFilesRecursive(workDir);
   const scaffoldSet = new Set(meta.files.scaffold);
-  const isFixBroken = meta.files.implement.some((f) => scaffoldSet.has(f));
+  const filesToFix = meta.files.implement.filter((f) => scaffoldSet.has(f));
+  const filesToCreate = meta.files.implement.filter((f) => !scaffoldSet.has(f));
+
+  let mode: "implement" | "fix" | "hybrid";
+  if (filesToCreate.length === 0) {
+    mode = "fix";
+  } else if (filesToFix.length === 0) {
+    mode = "implement";
+  } else {
+    mode = "hybrid";
+  }
+
   return {
     problemMd,
     existingFilesList: existingFiles.map((f) => `- ${f}`).join("\n"),
     filesList: meta.files.implement.map((f) => `- ${f}`).join("\n"),
-    isFixBroken,
+    filesToFix,
+    filesToCreate,
+    mode,
   };
 }
 
 function buildPrompt(problemDir: string, meta: ProblemMeta, workDir: string): string {
-  const { problemMd, existingFilesList, filesList, isFixBroken } = buildPromptSections(
+  const { problemMd, existingFilesList, filesToFix, filesToCreate, mode } = buildPromptSections(
     problemDir,
     meta,
     workDir,
   );
 
-  const systemPrompt = buildSystemPrompt(isFixBroken ? "fix" : "implement");
-  const filesLabel = isFixBroken ? "## Files to Fix" : "## Files to Create";
+  const systemPrompt = buildSystemPrompt(mode);
+
+  const filesSection =
+    mode === "hybrid"
+      ? [
+          "## Files to Fix",
+          "",
+          filesToFix.map((f) => `- ${f}`).join("\n"),
+          "",
+          "## Files to Create",
+          "",
+          filesToCreate.map((f) => `- ${f}`).join("\n"),
+        ]
+      : [
+          mode === "fix" ? "## Files to Fix" : "## Files to Create",
+          "",
+          [...filesToFix, ...filesToCreate].map((f) => `- ${f}`).join("\n"),
+        ];
 
   const userPrompt = [
     "## Existing Files",
@@ -94,9 +133,7 @@ function buildPrompt(problemDir: string, meta: ProblemMeta, workDir: string): st
     "",
     problemMd,
     "",
-    filesLabel,
-    "",
-    filesList,
+    ...filesSection,
   ].join("\n");
 
   return `${systemPrompt}\n\n${userPrompt}`;
