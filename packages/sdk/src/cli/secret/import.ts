@@ -57,23 +57,43 @@ export const importSecretCommand = defineCommand({
     ...workspaceArgs,
     ...vaultArgs,
     ...fileArgs,
+    prefix: arg(z.string().optional(), {
+      description: "Only import keys matching this prefix, stripping it from the secret name",
+    }),
     "dry-run": arg(z.boolean().default(false), {
       alias: "d",
       description: "Preview changes without applying them",
     }),
   }),
   run: withCommonArgs(async (args) => {
-    const entries = await readEnvContent(args.file);
+    const rawEntries = await readEnvContent(args.file);
+    const prefix = args.prefix;
+
+    // Apply prefix filter and strip prefix from key names
+    const entries: Record<string, string> = {};
+    for (const [key, value] of Object.entries(rawEntries)) {
+      if (prefix) {
+        if (!key.startsWith(prefix)) continue;
+        entries[key.slice(prefix.length)] = value;
+      } else {
+        entries[key] = value;
+      }
+    }
+
     const entryNames = Object.keys(entries);
 
     if (entryNames.length === 0) {
-      logger.warn("No entries found in the file.");
+      if (prefix) {
+        logger.warn(`No entries matching prefix "${prefix}" found in the file.`);
+      } else {
+        logger.warn("No entries found in the file.");
+      }
       return;
     }
 
-    logger.info(
-      `Found ${entryNames.length} secret(s) in ${args.file === "-" ? "stdin" : args.file}`,
-    );
+    const source = args.file === "-" ? "stdin" : args.file;
+    const prefixInfo = prefix ? ` (prefix: "${prefix}")` : "";
+    logger.info(`Found ${entryNames.length} secret(s) in ${source}${prefixInfo}`);
 
     const accessToken = await loadAccessToken({
       useProfile: true,

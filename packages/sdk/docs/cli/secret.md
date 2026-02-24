@@ -227,12 +227,13 @@ tailor-sdk secret import [options]
 
 **Options**
 
-| Option                          | Alias | Description                               | Required | Default |
-| ------------------------------- | ----- | ----------------------------------------- | -------- | ------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                              | No       | -       |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                         | No       | -       |
-| `--vault-name <VAULT_NAME>`     | `-V`  | Vault name                                | Yes      | -       |
-| `--file <FILE>`                 | `-f`  | Path to the .env file (use '-' for stdin) | Yes      | -       |
-| `--dry-run`                     | `-d`  | Preview changes without applying them     | No       | `false` |
+| Option                          | Alias | Description                                                              | Required | Default |
+| ------------------------------- | ----- | ------------------------------------------------------------------------ | -------- | ------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                             | No       | -       |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                        | No       | -       |
+| `--vault-name <VAULT_NAME>`     | `-V`  | Vault name                                                               | Yes      | -       |
+| `--file <FILE>`                 | `-f`  | Path to the .env file (use '-' for stdin)                                | Yes      | -       |
+| `--prefix <PREFIX>`             | -     | Only import keys matching this prefix, stripping it from the secret name | No       | -       |
+| `--dry-run`                     | `-d`  | Preview changes without applying them                                    | No       | `false` |
 
 <!-- politty:command:secret import:end -->
