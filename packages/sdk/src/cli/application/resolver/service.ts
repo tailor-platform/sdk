@@ -11,7 +11,7 @@ import {
 export type ResolverService = {
   readonly namespace: string;
   readonly config: ResolverServiceConfig;
-  getResolvers: () => Record<string, Resolver>;
+  readonly resolvers: Record<string, Resolver>;
   loadResolvers: () => Promise<void>;
 };
 
@@ -51,7 +51,9 @@ export function createResolverService(
   return {
     namespace,
     config,
-    getResolvers: () => resolvers,
+    get resolvers() {
+      return resolvers;
+    },
     loadResolvers: async () => {
       if (Object.keys(resolvers).length > 0) {
         return;

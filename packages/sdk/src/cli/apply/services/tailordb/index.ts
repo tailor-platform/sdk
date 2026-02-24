@@ -389,7 +389,7 @@ export async function applyTailorDB(
     // Build types by namespace map
     const typesByNamespace = new Map<string, Record<string, TailorDBType>>();
     for (const tailordb of migrationContext.application.tailorDBServices) {
-      const types = tailordb.getTypes();
+      const types = tailordb.types;
       if (types) {
         typesByNamespace.set(tailordb.namespace, types);
       }
@@ -1200,7 +1200,7 @@ async function planTypes(
     existingTypes.forEach((type) => existingNameSet.add(type.name));
 
     // Use filtered types if provided, otherwise use local types
-    const types = filteredTypesByNamespace?.get(tailordb.namespace) ?? tailordb.getTypes();
+    const types = filteredTypesByNamespace?.get(tailordb.namespace) ?? tailordb.types;
 
     for (const typeName of Object.keys(types)) {
       const tailordbType = generateTailorDBTypeManifest(
@@ -1678,7 +1678,7 @@ async function planGqlPermissions(
       existingNameSet.add(gqlPermission.typeName);
     });
 
-    const types = tailordb.getTypes();
+    const types = tailordb.types;
     for (const typeName of Object.keys(types)) {
       const gqlPermission = types[typeName].permissions.gql;
       if (!gqlPermission) {
