@@ -1,9 +1,8 @@
-import { buildScriptExprWithInlineDependencies } from "./script-dependency-inliner";
+import { getPrecompiledScriptExpr } from "./script-precompiled-expr";
 import type {
   TailorAnyDBField,
   DBFieldMetadata,
   Hook,
-  TypeSourceInfoEntry,
   OperatorFieldConfig,
   RawRelationConfig,
   TailorDBTypeSchemaOutput,
@@ -39,29 +38,27 @@ export const stringifyFunction = (fn: Function): string => {
 /**
  * Convert a hook function to a script expression.
  * @param fn - Hook function
- * @param sourceFilePath - Source file path for dependency inlining.
- * @param kind - Hook kind.
  * @returns JavaScript expression calling the hook
  */
 const convertHookToExpr = (
   fn: NonNullable<Hook<unknown, unknown>["create"] | Hook<unknown, unknown>["update"]>,
-  sourceFilePath?: string,
-  kind: "hook.create" | "hook.update" = "hook.create",
 ): string => {
+  const precompiledExpr = getPrecompiledScriptExpr(fn);
+  if (precompiledExpr) {
+    return precompiledExpr;
+  }
   const normalized = stringifyFunction(fn);
-  return buildScriptExprWithInlineDependencies(normalized, kind, sourceFilePath);
+  return `(${normalized})({ value: _value, data: _data, user: ${tailorUserMap} })`;
 };
 
 /**
  * Parse TailorDBField into OperatorFieldConfig.
  * This transforms user-defined functions into script expressions.
  * @param field - TailorDB field definition
- * @param typeSourceInfo - Optional source metadata for the current type.
  * @returns Parsed operator field configuration
  */
 export function parseFieldConfig(
   field: TailorDBTypeSchemaOutput["fields"][string],
-  typeSourceInfo?: TypeSourceInfoEntry,
 ): OperatorFieldConfig {
   const metadata = field.metadata as DBFieldMetadata;
   const fieldType = field.type;
@@ -69,7 +66,6 @@ export function parseFieldConfig(
   const rawRelation = (field as unknown as { rawRelation?: RawRelationConfig }).rawRelation;
 
   const nestedFields = field.fields as Record<string, TailorAnyDBField> | undefined;
-  const sourceFilePath = typeSourceInfo?.filePath;
   return {
     type: fieldType,
     ...metadata,
@@ -78,7 +74,7 @@ export function parseFieldConfig(
       ? {
           fields: Object.entries(nestedFields).reduce(
             (acc, [key, nestedField]) => {
-              acc[key] = parseFieldConfig(nestedField, typeSourceInfo);
+              acc[key] = parseFieldConfig(nestedField);
               return acc;
             },
             {} as Record<string, OperatorFieldConfig>,
@@ -93,11 +89,9 @@ export function parseFieldConfig(
 
       return {
         script: {
-          expr: buildScriptExprWithInlineDependencies(
-            stringifyFunction(fn),
-            "validate",
-            sourceFilePath,
-          ),
+          expr:
+            getPrecompiledScriptExpr(fn) ??
+            `(${stringifyFunction(fn)})({ value: _value, data: _data, user: ${tailorUserMap} })`,
         },
         errorMessage: message,
       };
@@ -106,12 +100,12 @@ export function parseFieldConfig(
       ? {
           create: metadata.hooks.create
             ? {
-                expr: convertHookToExpr(metadata.hooks.create, sourceFilePath, "hook.create"),
+                expr: convertHookToExpr(metadata.hooks.create),
               }
             : undefined,
           update: metadata.hooks.update
             ? {
-                expr: convertHookToExpr(metadata.hooks.update, sourceFilePath, "hook.update"),
+                expr: convertHookToExpr(metadata.hooks.update),
               }
             : undefined,
         }

@@ -12,6 +12,7 @@ import {
   type TailorDBType,
   type TailorAnyDBType,
 } from "@/parser/service/tailordb";
+import { precompileTailorDBTypeScripts } from "./script-precompiler";
 import type { PluginAttachment } from "@/parser/plugin-config/types";
 import type { PluginManager } from "@/plugin/manager";
 
@@ -154,6 +155,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
         logger.log(
           `Type: ${styles.successBright(`"${result.data.name}"`)} loaded from ${styles.path(relativePath)}`,
         );
+        await precompileTailorDBTypeScripts(result.data, typeFile);
         rawTypes[typeFile][result.data.name] = result.data;
         loadedTypes[result.data.name] = result.data;
         // Store source info mapping
