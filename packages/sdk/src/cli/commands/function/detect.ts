@@ -88,10 +88,11 @@ export async function detectFunctionType(
 
 /**
  * Detect function type when --type is explicitly specified.
- * @param module
- * @param filePath
- * @param typeOverride
- * @param jobName
+ * @param module - The imported module
+ * @param filePath - Absolute path to the function file
+ * @param typeOverride - Explicit type override
+ * @param jobName - Workflow job name to select
+ * @returns Detected function information
  */
 function detectWithTypeOverride(
   module: Record<string, unknown>,
@@ -144,8 +145,9 @@ function detectWithTypeOverride(
  * If jobName is specified, find the job whose `.name` matches.
  * If not specified and exactly one job exists, use it.
  * If multiple jobs exist, throw an error with the list.
- * @param module
- * @param jobName
+ * @param module - The imported module
+ * @param jobName - Workflow job name to select
+ * @returns Detected function or null if no workflow jobs found
  */
 function detectWorkflowJob(
   module: Record<string, unknown>,
@@ -184,7 +186,8 @@ function detectWorkflowJob(
 
 /**
  * Derive a script name from a file path (filename without extension).
- * @param filePath
+ * @param filePath - Absolute path to the function file
+ * @returns Filename without extension
  */
 function deriveNameFromPath(filePath: string): string {
   return path.basename(filePath, path.extname(filePath));

@@ -91,9 +91,10 @@ export async function bundleForTestRun(
 
 /**
  * Generate entry file content based on the detected function type.
- * @param detected
- * @param sourceFile
- * @param env
+ * @param detected - Detected function info
+ * @param sourceFile - Absolute path to the source file
+ * @param env - Environment variables for workflow job bundles
+ * @returns Entry file content string
  */
 function generateEntry(
   detected: DetectedFunction,

@@ -175,10 +175,10 @@ export const testRunCommand = defineCommand({
 });
 
 /**
- * Resolve auth namespace from CLI args or config.
- * Priority: --auth-namespace > config.auth.name
- * @param cliAuthNamespace
- * @param authConfig
+ * Resolve auth namespace from CLI args or config. Priority: --auth-namespace > config.auth.name
+ * @param cliAuthNamespace - CLI --auth-namespace value
+ * @param authConfig - Auth configuration from tailor.config.ts
+ * @returns Resolved auth namespace
  */
 function resolveAuthNamespace(
   cliAuthNamespace: string | undefined,
@@ -196,10 +196,10 @@ function resolveAuthNamespace(
 }
 
 /**
- * Resolve machine user name from CLI args or config.
- * Priority: --machine-user > first key of config.auth.machineUsers
- * @param cliMachineUser
- * @param authConfig
+ * Resolve machine user name from CLI args or config. Priority: --machine-user > first key of config.auth.machineUsers
+ * @param cliMachineUser - CLI --machine-user value
+ * @param authConfig - Auth configuration from tailor.config.ts
+ * @returns Resolved machine user name
  */
 function resolveMachineUser(
   cliMachineUser: string | undefined,
