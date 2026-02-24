@@ -1,7 +1,6 @@
 import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
-import { z } from "zod";
 import { CodeGeneratorSchema, BaseGeneratorConfigSchema } from "@/parser/generator-config";
 import { createPluginConfigSchema, type Plugin } from "@/parser/plugin-config";
 import { enumConstantsPlugin, EnumConstantsGeneratorID } from "@/plugin/builtin/enum-constants";
@@ -10,6 +9,7 @@ import { kyselyTypePlugin, KyselyGeneratorID } from "@/plugin/builtin/kysely-typ
 import { seedPlugin, SeedGeneratorID } from "@/plugin/builtin/seed";
 import { loadConfigPath } from "./context";
 import type { AppConfig } from "@/parser/app-config";
+import type { z } from "zod";
 import "./mock";
 
 /**

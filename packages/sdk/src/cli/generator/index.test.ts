@@ -10,7 +10,7 @@ import { type Resolver } from "@/parser/service/resolver";
 import { parseTypes } from "@/parser/service/tailordb";
 import { toSchemaOutputs } from "@/utils/test/internal";
 import { createGenerationManager } from "./index";
-import type { LoadedConfig } from "@/cli/config-loader";
+import type { LoadedConfig, Generator } from "@/cli/config-loader";
 import type { TailorDBType } from "@/configure/services/tailordb/schema";
 
 // ESM-safe explicit mock for Node's fs
@@ -152,7 +152,7 @@ describe("GenerationManager", () => {
       const managerWithCustom: any = createGenerationManager({
         application: customApp,
         config: mockConfig,
-        generators: [new TestGenerator()] as any,
+        generators: [new TestGenerator()] as unknown as Generator[],
       });
       expect(
         managerWithCustom.generators.some((gen: { id: string }) => gen.id === "test-generator"),
