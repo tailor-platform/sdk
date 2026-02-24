@@ -136,25 +136,37 @@ export async function apply(options?: ApplyOptions) {
         config,
         noSchemaCheck: options?.noSchemaCheck,
       };
-      const functionRegistry = await withSpan("plan.functionRegistry", () =>
-        planFunctionRegistry(client, workspaceId, application.name, functionEntries),
-      );
-      const tailorDB = await withSpan("plan.tailorDB", () => planTailorDB(ctx));
-      const staticWebsite = await withSpan("plan.staticWebsite", () => planStaticWebsite(ctx));
-      const idp = await withSpan("plan.idp", () => planIdP(ctx));
-      const auth = await withSpan("plan.auth", () => planAuth(ctx));
-      const pipeline = await withSpan("plan.pipeline", () => planPipeline(ctx));
-      const app = await withSpan("plan.application", () => planApplication(ctx));
-      const executor = await withSpan("plan.executor", () => planExecutor(ctx));
-      const workflow = await withSpan("plan.workflow", () =>
-        planWorkflow(
-          client,
-          workspaceId,
-          application.name,
-          workflowService?.workflows ?? {},
-          workflowBuildResult?.mainJobDeps ?? {},
+      const [
+        functionRegistry,
+        tailorDB,
+        staticWebsite,
+        idp,
+        auth,
+        pipeline,
+        app,
+        executor,
+        workflow,
+      ] = await Promise.all([
+        withSpan("plan.functionRegistry", () =>
+          planFunctionRegistry(client, workspaceId, application.name, functionEntries),
         ),
-      );
+        withSpan("plan.tailorDB", () => planTailorDB(ctx)),
+        withSpan("plan.staticWebsite", () => planStaticWebsite(ctx)),
+        withSpan("plan.idp", () => planIdP(ctx)),
+        withSpan("plan.auth", () => planAuth(ctx)),
+        withSpan("plan.pipeline", () => planPipeline(ctx)),
+        withSpan("plan.application", () => planApplication(ctx)),
+        withSpan("plan.executor", () => planExecutor(ctx)),
+        withSpan("plan.workflow", () =>
+          planWorkflow(
+            client,
+            workspaceId,
+            application.name,
+            workflowService?.workflows ?? {},
+            workflowBuildResult?.mainJobDeps ?? {},
+          ),
+        ),
+      ]);
       return {
         functionRegistry,
         tailorDB,

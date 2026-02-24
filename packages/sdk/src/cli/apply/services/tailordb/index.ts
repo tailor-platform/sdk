@@ -987,13 +987,10 @@ export async function planTailorDB(context: PlanContext) {
     resourceOwners,
   } = await planServices(client, workspaceId, application.name, tailordbs);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
-  const typeChangeSet = await planTypes(client, workspaceId, tailordbs, executors, deletedServices);
-  const gqlPermissionChangeSet = await planGqlPermissions(
-    client,
-    workspaceId,
-    tailordbs,
-    deletedServices,
-  );
+  const [typeChangeSet, gqlPermissionChangeSet] = await Promise.all([
+    planTypes(client, workspaceId, tailordbs, executors, deletedServices),
+    planGqlPermissions(client, workspaceId, tailordbs, deletedServices),
+  ]);
 
   serviceChangeSet.print();
   typeChangeSet.print();
