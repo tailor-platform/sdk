@@ -146,10 +146,21 @@ export declare type IdPUserAuthPolicy = Message<"tailor.v1.IdPUserAuthPolicy"> &
    * allow_google_oauth enables "Sign in with Google" for this namespace.
    * When enabled, users can authenticate using their Google account.
    * Cannot be enabled when use_non_email_identifier is true.
+   * Requires allowed_email_domains to be set.
    *
    * @generated from field: bool allow_google_oauth = 10;
    */
   allowGoogleOauth: boolean;
+
+  /**
+   * disable_password_auth disables password-based authentication for this namespace.
+   * When enabled, users cannot sign in or reset their password using email/password.
+   * Requires allow_google_oauth to be enabled.
+   * Cannot be used with allow_self_password_reset.
+   *
+   * @generated from field: bool disable_password_auth = 11;
+   */
+  disablePasswordAuth: boolean;
 };
 
 /**

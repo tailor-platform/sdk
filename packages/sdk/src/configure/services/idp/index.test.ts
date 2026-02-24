@@ -187,6 +187,35 @@ describe("defineIdp", () => {
     expect(idpNoAllowGoogleOauth.userAuthPolicy?.allowGoogleOauth).toBeUndefined();
   });
 
+  it("should preserve userAuthPolicy disablePasswordAuth", () => {
+    const idpWithDisablePasswordAuth = defineIdp("idp-with-disable-password-auth", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      userAuthPolicy: {
+        disablePasswordAuth: true,
+        allowGoogleOauth: true,
+        allowedEmailDomains: ["example.com"],
+      },
+    });
+    expect(idpWithDisablePasswordAuth.userAuthPolicy?.disablePasswordAuth).toBe(true);
+
+    const idpWithDisablePasswordAuthFalse = defineIdp("idp-with-disable-password-auth-false", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      userAuthPolicy: {
+        disablePasswordAuth: false,
+      },
+    });
+    expect(idpWithDisablePasswordAuthFalse.userAuthPolicy?.disablePasswordAuth).toBe(false);
+
+    const idpNoDisablePasswordAuth = defineIdp("idp-no-disable-password-auth", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      userAuthPolicy: {},
+    });
+    expect(idpNoDisablePasswordAuth.userAuthPolicy?.disablePasswordAuth).toBeUndefined();
+  });
+
   it("should validate password length ranges", () => {
     // Valid ranges
     expect(() =>

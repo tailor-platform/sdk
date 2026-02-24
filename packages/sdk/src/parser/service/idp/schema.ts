@@ -26,6 +26,7 @@ export const IdPUserAuthPolicySchema = z
       .optional(),
     allowedEmailDomains: z.array(z.string()).optional(),
     allowGoogleOauth: z.boolean().optional(),
+    disablePasswordAuth: z.boolean().optional(),
   })
   .refine(
     (data) =>
@@ -64,7 +65,15 @@ export const IdPUserAuthPolicySchema = z
       message: "allowGoogleOauth requires allowedEmailDomains to be set",
       path: ["allowGoogleOauth"],
     },
-  );
+  )
+  .refine((data) => !data.disablePasswordAuth || data.allowGoogleOauth === true, {
+    message: "disablePasswordAuth requires allowGoogleOauth to be enabled",
+    path: ["disablePasswordAuth"],
+  })
+  .refine((data) => !data.disablePasswordAuth || !data.allowSelfPasswordReset, {
+    message: "disablePasswordAuth cannot be used with allowSelfPasswordReset",
+    path: ["disablePasswordAuth"],
+  });
 
 export const IdPSchema = z
   .object({
