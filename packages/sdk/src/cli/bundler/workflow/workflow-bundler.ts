@@ -7,6 +7,7 @@ import * as rolldown from "rolldown";
 import { enableInlineSourcemap } from "@/cli/bundler/inline-sourcemap";
 import { getDistDir } from "@/cli/utils/dist-dir";
 import { logger, styles } from "@/cli/utils/logger";
+import { tailorUserMap } from "@/parser/service/tailordb";
 import { detectTriggerCalls, findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
 import { transformFunctionTriggers } from "./trigger-transformer";
@@ -239,9 +240,10 @@ async function bundleSingleJob(
     import { ${job.exportName} } from "${absoluteSourcePath}";
 
     const env = ${JSON.stringify(env)};
+    const _user = ${tailorUserMap};
 
     export async function main(input) {
-      return await ${job.exportName}.body(input, { env });
+      return await ${job.exportName}.body(input, { env, user: _user });
     }
   `;
   fs.writeFileSync(entryPath, entryContent);

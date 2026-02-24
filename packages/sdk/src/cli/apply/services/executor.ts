@@ -15,6 +15,7 @@ import {
 } from "@tailor-proto/tailor/v1/executor_resource_pb";
 import { stringifyFunction } from "@/parser/service/tailordb";
 import { fetchAll, type OperatorClient } from "../../client";
+import { buildExecutorArgsExpr } from "./executor-args-expr";
 import { executorFunctionName } from "./function-registry";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { createChangeSet } from ".";
@@ -175,31 +176,6 @@ export async function planExecutor(context: PlanContext) {
   return { changeSet, conflicts, unmanaged, resourceOwners };
 }
 
-// Transform actor fields from server format to SDK format
-const actorTransformExpr = `actor: args.actor ? (({ attributeMap, attributes: attrList, ...rest }) => ({ ...rest, attributes: attributeMap, attributeList: attrList }))(args.actor) : null`;
-
-/**
- * Build args expression for resolverExecuted trigger.
- * Transforms server's succeeded/failed fields to success/result/error fields.
- * @param additionalFields - Additional fields to include in the args expression
- * @returns JavaScript expression for resolverExecuted trigger args
- */
-function buildResolverExecutedArgsExpr(additionalFields?: string): string {
-  const baseFields = `...args, appNamespace: args.namespaceName, ${actorTransformExpr}, success: !!args.succeeded, result: args.succeeded?.result.resolver, error: args.failed?.error`;
-  return additionalFields ? `({ ${baseFields}, ${additionalFields} })` : `({ ${baseFields} })`;
-}
-
-/**
- * Build args expression for incomingWebhook trigger.
- * Transforms server's raw_body field to rawBody field.
- * @param additionalFields - Additional fields to include in the args expression
- * @returns JavaScript expression for incomingWebhook trigger args
- */
-function buildIncomingWebhookArgsExpr(additionalFields?: string): string {
-  const baseFields = `...args, appNamespace: args.namespaceName, rawBody: args.raw_body`;
-  return additionalFields ? `({ ${baseFields}, ${additionalFields} })` : `({ ${baseFields} })`;
-}
-
 function protoExecutor(
   appName: string,
   executor: Executor,
@@ -209,9 +185,7 @@ function protoExecutor(
   let triggerType: ExecutorTriggerType;
   let triggerConfig: MessageInitShape<typeof ExecutorTriggerConfigSchema>;
 
-  // Common args expressions with env and actor transformation
-  const envField = `env: ${JSON.stringify(env)}`;
-  const baseArgsExpr = `({ ...args, appNamespace: args.namespaceName, ${actorTransformExpr}, ${envField} })`;
+  const argsExpr = buildExecutorArgsExpr(trigger.kind, env);
 
   const eventType: { [key in Trigger["kind"]]?: string } = {
     recordCreated: "tailordb.type_record.created",
@@ -251,7 +225,7 @@ function protoExecutor(
               expr: [
                 /* js */ `args.typeName === "${trigger.typeName}"`,
                 ...(trigger.condition
-                  ? [/* js */ `(${stringifyFunction(trigger.condition)})(${baseArgsExpr})`]
+                  ? [/* js */ `(${stringifyFunction(trigger.condition)})(${argsExpr})`]
                   : []),
               ].join(" && "),
             },
@@ -270,9 +244,7 @@ function protoExecutor(
               expr: [
                 /* js */ `args.resolverName === "${trigger.resolverName}"`,
                 ...(trigger.condition
-                  ? [
-                      /* js */ `(${stringifyFunction(trigger.condition)})(${buildResolverExecutedArgsExpr(envField)})`,
-                    ]
+                  ? [/* js */ `(${stringifyFunction(trigger.condition)})(${argsExpr})`]
                   : []),
               ].join(" && "),
             },
@@ -312,14 +284,6 @@ function protoExecutor(
   const target = executor.operation;
   let targetType: ExecutorTargetType;
   let targetConfig: MessageInitShape<typeof ExecutorTargetConfigSchema>;
-
-  // Build args expression for target operations
-  const argsExpr =
-    trigger.kind === "resolverExecuted"
-      ? buildResolverExecutedArgsExpr(envField)
-      : trigger.kind === "incomingWebhook"
-        ? buildIncomingWebhookArgsExpr(envField)
-        : baseArgsExpr;
 
   switch (target.kind) {
     case "webhook": {
