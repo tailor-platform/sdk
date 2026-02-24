@@ -440,7 +440,7 @@ export function createGenerationManager(params: {
    * @param watch - Whether running in watch mode (suppresses throws)
    */
   async function runPluginPhaseHooks(plugins: Plugin[], watch: boolean): Promise<void> {
-    await Promise.allSettled(
+    const results = await Promise.allSettled(
       plugins.map(async (plugin) => {
         for (const hookName of allGenerationHooks) {
           try {
@@ -455,6 +455,12 @@ export function createGenerationManager(params: {
         }
       }),
     );
+    if (!watch) {
+      const failures = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+      if (failures.length > 0) {
+        throw new AggregateError(failures.map((f) => f.reason));
+      }
+    }
   }
 
   // =========================================================================
@@ -547,7 +553,7 @@ export function createGenerationManager(params: {
   }
 
   async function runGenerators(gens: Generator[], watch: boolean): Promise<void> {
-    await Promise.allSettled(
+    const results = await Promise.allSettled(
       gens.map(async (gen) => {
         try {
           await processGenerator(gen as AnyCodeGenerator);
@@ -560,6 +566,12 @@ export function createGenerationManager(params: {
         }
       }),
     );
+    if (!watch) {
+      const failures = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+      if (failures.length > 0) {
+        throw new AggregateError(failures.map((f) => f.reason));
+      }
+    }
   }
 
   async function restartWatchProcess(): Promise<void> {
