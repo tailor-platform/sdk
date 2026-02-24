@@ -430,21 +430,19 @@ export function createGenerationManager(params: {
     await writeGeneratedFiles(plugin.id, result);
   }
 
+  /** All generation-time hooks in pipeline order */
+  const allGenerationHooks = ["onTailorDBReady", "onResolverReady", "onExecutorReady"] as const;
+
   /**
-   * Run phase-complete hooks for a set of plugins.
-   * Each plugin gets ALL specified hooks called in order (earlier phases first).
+   * Run all generation-time hooks that a plugin implements, in pipeline order.
+   * Hooks the plugin doesn't have are automatically skipped.
    * @param plugins - Plugins to run hooks on
-   * @param hookNames - Hook names to call for each plugin (in execution order)
    * @param watch - Whether running in watch mode (suppresses throws)
    */
-  async function runPluginPhaseHooks(
-    plugins: Plugin[],
-    hookNames: readonly ("onTailorDBReady" | "onResolverReady" | "onExecutorReady")[],
-    watch: boolean,
-  ): Promise<void> {
+  async function runPluginPhaseHooks(plugins: Plugin[], watch: boolean): Promise<void> {
     await Promise.allSettled(
       plugins.map(async (plugin) => {
-        for (const hookName of hookNames) {
+        for (const hookName of allGenerationHooks) {
           try {
             await runPluginPhaseHook(plugin, hookName);
           } catch (error) {
@@ -680,7 +678,7 @@ export function createGenerationManager(params: {
         await Promise.all([
           runGenerators(tailordbOnlyGens, watch),
           ...(tailordbOnlyPlugins.length > 0
-            ? [runPluginPhaseHooks(tailordbOnlyPlugins, ["onTailorDBReady"], watch)]
+            ? [runPluginPhaseHooks(tailordbOnlyPlugins, watch)]
             : []),
         ]);
         logger.newline();
@@ -715,13 +713,7 @@ export function createGenerationManager(params: {
         await Promise.all([
           runGenerators(nonExecutorGens, watch),
           ...(nonExecutorPlugins.length > 0
-            ? [
-                runPluginPhaseHooks(
-                  nonExecutorPlugins,
-                  ["onTailorDBReady", "onResolverReady"],
-                  watch,
-                ),
-              ]
+            ? [runPluginPhaseHooks(nonExecutorPlugins, watch)]
             : []),
         ]);
         logger.newline();
@@ -747,15 +739,7 @@ export function createGenerationManager(params: {
       if (executorGens.length > 0 || executorPlugins.length > 0) {
         await Promise.all([
           runGenerators(executorGens, watch),
-          ...(executorPlugins.length > 0
-            ? [
-                runPluginPhaseHooks(
-                  executorPlugins,
-                  ["onTailorDBReady", "onResolverReady", "onExecutorReady"],
-                  watch,
-                ),
-              ]
-            : []),
+          ...(executorPlugins.length > 0 ? [runPluginPhaseHooks(executorPlugins, watch)] : []),
         ]);
         logger.newline();
       }
