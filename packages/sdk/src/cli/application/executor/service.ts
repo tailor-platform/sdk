@@ -22,8 +22,8 @@ export interface PluginExecutor {
 
 export type ExecutorService = {
   readonly config: ExecutorServiceConfig;
-  getExecutors: () => Record<string, Executor>;
-  getPluginExecutors: () => ReadonlyArray<PluginExecutor>;
+  readonly executors: Record<string, Executor>;
+  readonly pluginExecutors: ReadonlyArray<PluginExecutor>;
   loadExecutors: () => Promise<Record<string, Executor> | undefined>;
   loadPluginExecutorFiles: (filePaths: string[]) => Promise<void>;
 };
@@ -69,8 +69,12 @@ export function createExecutorService(params: CreateExecutorServiceParams): Exec
 
   return {
     config,
-    getExecutors: () => executors,
-    getPluginExecutors: () => pluginExecutors,
+    get executors() {
+      return executors;
+    },
+    get pluginExecutors() {
+      return pluginExecutors;
+    },
     loadExecutors: async () => {
       if (Object.keys(executors).length > 0) {
         return executors;

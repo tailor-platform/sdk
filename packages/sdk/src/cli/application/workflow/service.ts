@@ -15,11 +15,83 @@ export interface CollectedJob {
   sourceFile: string;
 }
 
-export interface WorkflowLoadResult {
+interface WorkflowLoadResult {
   workflows: Record<string, Workflow>;
   workflowSources: Array<{ workflow: Workflow; sourceFile: string }>;
   jobs: CollectedJob[];
   fileCount: number;
+}
+
+export type WorkflowService = {
+  readonly config: WorkflowServiceConfig;
+  readonly workflows: Record<string, Workflow>;
+  readonly workflowSources: ReadonlyArray<{ workflow: Workflow; sourceFile: string }>;
+  readonly jobs: CollectedJob[];
+  readonly fileCount: number;
+  loadWorkflows: () => Promise<void>;
+  printLoadedWorkflows: () => void;
+};
+
+/**
+ * Parameters for creating a WorkflowService
+ */
+export interface CreateWorkflowServiceParams {
+  /** The workflow service configuration */
+  config: WorkflowServiceConfig;
+}
+
+/**
+ * Creates a new WorkflowService instance.
+ * @param params - Parameters for creating the service
+ * @returns A new WorkflowService instance
+ */
+export function createWorkflowService(params: CreateWorkflowServiceParams): WorkflowService {
+  const { config } = params;
+  let workflows: Record<string, Workflow> = {};
+  let workflowSources: Array<{ workflow: Workflow; sourceFile: string }> = [];
+  let jobs: CollectedJob[] = [];
+  let fileCount = 0;
+  let loaded = false;
+
+  return {
+    config,
+    get workflows() {
+      return workflows;
+    },
+    get workflowSources() {
+      return workflowSources;
+    },
+    get jobs() {
+      return jobs;
+    },
+    get fileCount() {
+      return fileCount;
+    },
+    loadWorkflows: async () => {
+      if (loaded) {
+        return;
+      }
+      const result = await loadAndCollectJobs(config);
+      workflows = result.workflows;
+      workflowSources = result.workflowSources;
+      jobs = result.jobs;
+      fileCount = result.fileCount;
+      loaded = true;
+    },
+    printLoadedWorkflows: () => {
+      if (fileCount === 0) {
+        return;
+      }
+      logger.newline();
+      logger.log(`Found ${styles.highlight(fileCount.toString())} workflow files`);
+      for (const { workflow, sourceFile } of workflowSources) {
+        const relativePath = path.relative(process.cwd(), sourceFile);
+        logger.log(
+          `Workflow: ${styles.successBright(`"${workflow.name}"`)} loaded from ${styles.path(relativePath)}`,
+        );
+      }
+    },
+  };
 }
 
 /**
@@ -28,9 +100,7 @@ export interface WorkflowLoadResult {
  * @param config - Workflow service configuration
  * @returns Loaded workflows and collected jobs
  */
-export async function loadAndCollectJobs(
-  config: WorkflowServiceConfig,
-): Promise<WorkflowLoadResult> {
+async function loadAndCollectJobs(config: WorkflowServiceConfig): Promise<WorkflowLoadResult> {
   const workflows: Record<string, Workflow> = {};
   const workflowSources: Array<{ workflow: Workflow; sourceFile: string }> = [];
   const collectedJobs: CollectedJob[] = [];
@@ -85,26 +155,6 @@ export async function loadAndCollectJobs(
     jobs: collectedJobs,
     fileCount,
   };
-}
-
-/**
- * Print workflow loading logs.
- * @param result - Workflow load result to print
- */
-export function printLoadedWorkflows(result: WorkflowLoadResult): void {
-  if (result.fileCount === 0) {
-    return;
-  }
-
-  logger.newline();
-  logger.log(`Found ${styles.highlight(result.fileCount.toString())} workflow files`);
-
-  for (const { workflow, sourceFile } of result.workflowSources) {
-    const relativePath = path.relative(process.cwd(), sourceFile);
-    logger.log(
-      `Workflow: ${styles.successBright(`"${workflow.name}"`)} loaded from ${styles.path(relativePath)}`,
-    );
-  }
 }
 
 /**

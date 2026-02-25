@@ -106,6 +106,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     expect(result.passwordMaxLength).toBeUndefined();
     expect(result.allowedEmailDomains).toBeUndefined();
     expect(result.allowGoogleOauth).toBeUndefined();
+    expect(result.disablePasswordAuth).toBeUndefined();
   });
 
   it("accepts allowedEmailDomains with empty array", () => {
@@ -234,6 +235,81 @@ describe("IdPUserAuthPolicySchema validation", () => {
     expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow(
       "allowGoogleOauth requires allowedEmailDomains to be set",
     );
+  });
+
+  it("accepts disablePasswordAuth as true when allowGoogleOauth is true", () => {
+    const policy = {
+      disablePasswordAuth: true,
+      allowGoogleOauth: true,
+      allowedEmailDomains: ["example.com"],
+    };
+
+    const result = IdPUserAuthPolicySchema.parse(policy);
+    expect(result.disablePasswordAuth).toBe(true);
+  });
+
+  it("accepts disablePasswordAuth as false", () => {
+    const policy = {
+      disablePasswordAuth: false,
+    };
+
+    const result = IdPUserAuthPolicySchema.parse(policy);
+    expect(result.disablePasswordAuth).toBe(false);
+  });
+
+  it("rejects disablePasswordAuth when allowGoogleOauth is not set", () => {
+    const policy = {
+      disablePasswordAuth: true,
+    };
+
+    expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow(
+      "disablePasswordAuth requires allowGoogleOauth to be enabled",
+    );
+  });
+
+  it("rejects disablePasswordAuth when allowGoogleOauth is false", () => {
+    const policy = {
+      disablePasswordAuth: true,
+      allowGoogleOauth: false,
+    };
+
+    expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow(
+      "disablePasswordAuth requires allowGoogleOauth to be enabled",
+    );
+  });
+
+  it("accepts disablePasswordAuth as false when allowGoogleOauth is false", () => {
+    const policy = {
+      disablePasswordAuth: false,
+      allowGoogleOauth: false,
+    };
+
+    expect(() => IdPUserAuthPolicySchema.parse(policy)).not.toThrow();
+  });
+
+  it("rejects disablePasswordAuth when allowSelfPasswordReset is true", () => {
+    const policy = {
+      disablePasswordAuth: true,
+      allowGoogleOauth: true,
+      allowedEmailDomains: ["example.com"],
+      allowSelfPasswordReset: true,
+    };
+
+    expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow(
+      "disablePasswordAuth cannot be used with allowSelfPasswordReset",
+    );
+  });
+
+  it("accepts disablePasswordAuth when allowSelfPasswordReset is false", () => {
+    const policy = {
+      disablePasswordAuth: true,
+      allowGoogleOauth: true,
+      allowedEmailDomains: ["example.com"],
+      allowSelfPasswordReset: false,
+    };
+
+    const result = IdPUserAuthPolicySchema.parse(policy);
+    expect(result.disablePasswordAuth).toBe(true);
   });
 
   it("accepts partial password policy configuration", () => {

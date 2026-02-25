@@ -49,7 +49,7 @@ describe("planPipeline (resolver service level)", () => {
     return {
       namespace,
       config: {},
-      getResolvers: vi.fn().mockReturnValue({}),
+      resolvers: {},
       loadResolvers: vi.fn().mockResolvedValue(undefined),
     } as unknown as ResolverService;
   }
@@ -58,7 +58,7 @@ describe("planPipeline (resolver service level)", () => {
   function createMockExecutorService(): ExecutorService {
     return {
       config: {},
-      getExecutors: vi.fn().mockReturnValue({}),
+      executors: {},
       loadExecutors: vi.fn().mockResolvedValue({}),
     } as unknown as ExecutorService;
   }

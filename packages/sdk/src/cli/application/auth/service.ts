@@ -74,7 +74,7 @@ export function createAuthService(
 
         if (userProfileTypeName) {
           for (const service of tailorDBServices) {
-            const types = service.getTypes();
+            const types = service.types;
             if (Object.prototype.hasOwnProperty.call(types, userProfileTypeName)) {
               userProfileNamespace = service.namespace;
               break;

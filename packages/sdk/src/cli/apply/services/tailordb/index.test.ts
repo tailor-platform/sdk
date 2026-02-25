@@ -50,8 +50,8 @@ describe("planTailorDB (service level)", () => {
     return {
       namespace,
       config: {},
-      getTypes: vi.fn().mockReturnValue({}),
-      getTypeSourceInfo: vi.fn().mockReturnValue({}),
+      types: {},
+      typeSourceInfo: {},
       loadTypes: vi.fn().mockResolvedValue({}),
     } as unknown as TailorDBService;
   }
@@ -60,7 +60,7 @@ describe("planTailorDB (service level)", () => {
   function createMockExecutorService(): ExecutorService {
     return {
       config: {},
-      getExecutors: vi.fn().mockReturnValue({}),
+      executors: {},
       loadExecutors: vi.fn().mockResolvedValue({}),
     } as unknown as ExecutorService;
   }
@@ -318,8 +318,8 @@ describe("planTailorDB (service level)", () => {
         files: {},
       };
 
-      vi.mocked(tailorDBService.getTypes).mockReturnValue({
-        [testType.name]: testType,
+      Object.defineProperty(tailorDBService, "types", {
+        value: { [testType.name]: testType },
       });
 
       const application = createMockApplication([tailorDBService]);
@@ -379,7 +379,7 @@ describe("applyTailorDB phase separation", () => {
     const mockTailorDBService = {
       namespace: "test-tailordb",
       loadTypes: vi.fn().mockResolvedValue({}),
-      getTypes: vi.fn().mockReturnValue({}),
+      types: {},
     } as unknown as TailorDBService;
 
     return {
