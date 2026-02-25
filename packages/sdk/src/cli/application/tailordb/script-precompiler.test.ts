@@ -6,7 +6,7 @@ import {
   extractFreeVariables,
   collectSourceBindings,
   resolveNeededBindings,
-  buildMinimalEntry,
+  buildMinimalEntryFromResolved,
   type SourceBinding,
 } from "./script-precompiler";
 
@@ -172,7 +172,8 @@ describe("resolveNeededBindings", () => {
       ],
     ]);
 
-    const result = resolveNeededBindings(`({ data }) => formatAddress(data)`, sourceBindings);
+    const freeVars = extractFreeVariables(`({ data }) => formatAddress(data)`);
+    const result = resolveNeededBindings(freeVars, sourceBindings);
 
     expect(result.imports).toHaveLength(1);
     expect(result.imports[0]).toContain("formatAddress");
@@ -192,10 +193,8 @@ describe("resolveNeededBindings", () => {
       ],
     ]);
 
-    const result = resolveNeededBindings(
-      `({ value }) => value.length < MAX_LENGTH`,
-      sourceBindings,
-    );
+    const freeVars = extractFreeVariables(`({ value }) => value.length < MAX_LENGTH`);
+    const result = resolveNeededBindings(freeVars, sourceBindings);
 
     expect(result.imports).toHaveLength(0);
     expect(result.declarations).toHaveLength(1);
@@ -222,10 +221,8 @@ describe("resolveNeededBindings", () => {
       ],
     ]);
 
-    const result = resolveNeededBindings(
-      `({ value }) => value.length < MAX_LENGTH`,
-      sourceBindings,
-    );
+    const freeVars = extractFreeVariables(`({ value }) => value.length < MAX_LENGTH`);
+    const result = resolveNeededBindings(freeVars, sourceBindings);
 
     expect(result.declarations).toHaveLength(2);
     expect(result.declarations).toContain("const MAX_LENGTH = config.max;");
@@ -260,7 +257,8 @@ describe("resolveNeededBindings", () => {
       ],
     ]);
 
-    const result = resolveNeededBindings(`({ data }) => formatAddress(data)`, sourceBindings);
+    const freeVars = extractFreeVariables(`({ data }) => formatAddress(data)`);
+    const result = resolveNeededBindings(freeVars, sourceBindings);
 
     // Should include: formatAddress (direct), PREFIX (via formatAddress), format import (via formatAddress)
     expect(result.imports).toHaveLength(1);
@@ -273,7 +271,8 @@ describe("resolveNeededBindings", () => {
 
   it("returns empty when no free variables", () => {
     const sourceBindings = new Map<string, SourceBinding>();
-    const result = resolveNeededBindings(`({ value }) => value > 5`, sourceBindings);
+    const freeVars = extractFreeVariables(`({ value }) => value > 5`);
+    const result = resolveNeededBindings(freeVars, sourceBindings);
 
     expect(result.imports).toHaveLength(0);
     expect(result.declarations).toHaveLength(0);
@@ -292,89 +291,61 @@ describe("resolveNeededBindings", () => {
       ],
     ]);
 
-    const result = resolveNeededBindings(
+    const freeVars = extractFreeVariables(
       `({ value }) => externalFn(value) && value.length < MAX_LENGTH`,
-      sourceBindings,
     );
+    const result = resolveNeededBindings(freeVars, sourceBindings);
 
     expect(result.declarations).toHaveLength(1);
     expect(result.unresolved).toEqual(["externalFn"]);
   });
 });
 
-describe("buildMinimalEntry", () => {
-  it("builds entry with import and function", () => {
-    const sourceBindings = new Map<string, SourceBinding>([
-      [
-        "formatAddress",
-        {
-          name: "formatAddress",
-          sourceText: `import { formatAddress } from "./helpers";`,
-          kind: "import",
-        },
-      ],
-    ]);
-
-    const { entry, unresolved } = buildMinimalEntry(
+describe("buildMinimalEntryFromResolved", () => {
+  it("resolves relative import paths to absolute", () => {
+    const entry = buildMinimalEntryFromResolved(
+      [`import { formatAddress } from "./helpers";`],
+      [],
       `({ data }) => formatAddress(data)`,
       "/project/src/customer.ts",
-      sourceBindings,
     );
 
-    // Should contain the import (with resolved path) and export
     expect(entry).toContain("formatAddress");
     expect(entry).toContain("/project/src/helpers");
     expect(entry).toContain("export function main(input)");
-    expect(unresolved).toHaveLength(0);
   });
 
-  it("builds entry with declaration and function", () => {
-    const sourceBindings = new Map<string, SourceBinding>([
-      [
-        "MAX_LENGTH",
-        {
-          name: "MAX_LENGTH",
-          sourceText: `const MAX_LENGTH = 100;`,
-          kind: "declaration",
-        },
-      ],
-    ]);
-
-    const { entry, unresolved } = buildMinimalEntry(
+  it("includes declarations in entry", () => {
+    const entry = buildMinimalEntryFromResolved(
+      [],
+      [`const MAX_LENGTH = 100;`],
       `({ value }) => value.length < MAX_LENGTH`,
       "/project/src/customer.ts",
-      sourceBindings,
     );
 
     expect(entry).toContain("const MAX_LENGTH = 100;");
     expect(entry).toContain("export function main(input)");
-    // Should NOT contain any SDK imports
-    expect(entry).not.toContain("@tailor-platform/sdk");
-    expect(unresolved).toHaveLength(0);
   });
 
-  it("builds entry for function with no free variables", () => {
-    const sourceBindings = new Map<string, SourceBinding>();
-
-    const { entry, unresolved } = buildMinimalEntry(
+  it("builds entry with no imports or declarations", () => {
+    const entry = buildMinimalEntryFromResolved(
+      [],
+      [],
       `({ value }) => value > 5`,
       "/project/src/customer.ts",
-      sourceBindings,
     );
 
     expect(entry).toBe(`export function main(input) { return (({ value }) => value > 5)(input); }`);
-    expect(unresolved).toHaveLength(0);
   });
 
-  it("reports unresolved free variables", () => {
-    const sourceBindings = new Map<string, SourceBinding>();
-
-    const { unresolved } = buildMinimalEntry(
-      `({ data }) => unknownFn(data)`,
+  it("does not rewrite non-relative import paths", () => {
+    const entry = buildMinimalEntryFromResolved(
+      [`import { db } from "@tailor-platform/sdk";`],
+      [],
+      `({ data }) => data`,
       "/project/src/customer.ts",
-      sourceBindings,
     );
 
-    expect(unresolved).toEqual(["unknownFn"]);
+    expect(entry).toContain(`from "@tailor-platform/sdk"`);
   });
 });

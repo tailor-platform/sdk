@@ -1,10 +1,10 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { Linter } from "eslint";
 import { parseSync } from "oxc-parser";
 import { join, resolve } from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
+import { getDistDir } from "@/cli/utils/dist-dir";
 import { logger } from "@/cli/utils/logger";
 import { stringifyFunction, tailorUserMap } from "@/parser/service/tailordb/field";
 import { setPrecompiledScriptExpr } from "@/parser/service/tailordb/script-precompiled-expr";
@@ -28,8 +28,6 @@ export type SourceBinding = {
   sourceText: string;
   kind: "import" | "declaration";
 };
-
-const precompiledExprCache = new WeakMap<ScriptFunction, string>();
 
 const linter = new Linter();
 
@@ -204,12 +202,12 @@ export function collectSourceBindings(sourceFilePath: string): Map<string, Sourc
 /**
  * Resolve all bindings needed by a function, recursively including
  * dependencies of top-level declarations.
- * @param fnSource - The function source code.
+ * @param freeVars - Set of free variable names extracted from the function.
  * @param sourceBindings - Available bindings from the source file.
  * @returns Object with needed import statements and declaration texts.
  */
 export function resolveNeededBindings(
-  fnSource: string,
+  freeVars: Set<string>,
   sourceBindings: Map<string, SourceBinding>,
 ): { imports: string[]; declarations: string[]; unresolved: string[] } {
   const neededImports = new Set<string>();
@@ -217,8 +215,8 @@ export function resolveNeededBindings(
   const unresolved: string[] = [];
   const resolved = new Set<string>();
 
-  const resolveVars = (freeVars: Set<string>): void => {
-    for (const varName of freeVars) {
+  const resolveVars = (vars: Set<string>): void => {
+    for (const varName of vars) {
       if (resolved.has(varName)) continue;
       resolved.add(varName);
 
@@ -239,7 +237,7 @@ export function resolveNeededBindings(
     }
   };
 
-  resolveVars(extractFreeVariables(fnSource));
+  resolveVars(freeVars);
 
   return {
     imports: [...neededImports],
@@ -267,7 +265,7 @@ function buildPrecompiledExpr(bundleCode: string): string {
  * @param sourceFilePath - Path to the source file for resolving relative imports.
  * @returns Entry file content string.
  */
-function buildMinimalEntryFromResolved(
+export function buildMinimalEntryFromResolved(
   imports: string[],
   declarations: string[],
   fnSource: string,
@@ -291,24 +289,6 @@ function buildMinimalEntryFromResolved(
   return lines.join("\n");
 }
 
-/**
- * Build a minimal entry file for a script function, including only
- * the bindings (imports/declarations) that the function actually references.
- * @param fnSource - The function source code.
- * @param sourceFilePath - Path to the source file for resolving relative imports.
- * @param sourceBindings - Available bindings from the source file.
- * @returns Entry file content string, or null if there are unresolved free variables.
- */
-export function buildMinimalEntry(
-  fnSource: string,
-  sourceFilePath: string,
-  sourceBindings: Map<string, SourceBinding>,
-): { entry: string; unresolved: string[] } {
-  const { imports, declarations, unresolved } = resolveNeededBindings(fnSource, sourceBindings);
-  const entry = buildMinimalEntryFromResolved(imports, declarations, fnSource, sourceFilePath);
-  return { entry, unresolved };
-}
-
 async function bundleScriptTarget(args: {
   fn: ScriptFunction;
   sourceFilePath: string;
@@ -328,7 +308,7 @@ async function bundleScriptTarget(args: {
     return inlineExpr;
   }
 
-  const { imports, declarations, unresolved } = resolveNeededBindings(fnSource, sourceBindings);
+  const { imports, declarations, unresolved } = resolveNeededBindings(freeVars, sourceBindings);
   if (unresolved.length > 0) {
     // Some free variables could not be resolved from the source file
     // (e.g. function imported from another file with its own closure variables).
@@ -399,17 +379,13 @@ export async function precompileTailorDBTypeScripts(
   // Collect source bindings once for all targets in this file
   const sourceBindings = collectSourceBindings(sourceFilePath);
 
-  const tempDir = mkdtempSync(join(tmpdir(), "tailordb-script-bundle-"));
+  // Use type name in temp dir to avoid race conditions when multiple type files
+  // are precompiled concurrently via Promise.all in service.ts
+  const tempDir = resolve(getDistDir(), "tailordb-scripts", type.name);
   mkdirSync(tempDir, { recursive: true });
 
   try {
     for (const [index, target] of targets.entries()) {
-      const cached = precompiledExprCache.get(target.fn);
-      if (cached) {
-        setPrecompiledScriptExpr(target.fn, cached);
-        continue;
-      }
-
       const expr = await bundleScriptTarget({
         fn: target.fn,
         sourceFilePath,
@@ -418,10 +394,10 @@ export async function precompileTailorDBTypeScripts(
         targetIndex: index,
         tsconfig,
       });
-      precompiledExprCache.set(target.fn, expr);
       setPrecompiledScriptExpr(target.fn, expr);
     }
   } finally {
+    // TODO: restore cleanup after debugging
     rmSync(tempDir, { recursive: true, force: true });
   }
 }
