@@ -229,6 +229,34 @@ describe("resolveNeededBindings", () => {
     expect(result.declarations).toContain("const config = { max: 100 };");
   });
 
+  it("recursively resolves dependencies through TypeScript-typed declarations", () => {
+    const sourceBindings = new Map<string, SourceBinding>([
+      [
+        "LOCAL_PREFIX",
+        {
+          name: "LOCAL_PREFIX",
+          sourceText: `const LOCAL_PREFIX = "item-";`,
+          kind: "declaration",
+        },
+      ],
+      [
+        "addPrefix",
+        {
+          name: "addPrefix",
+          sourceText: `function addPrefix(value: string | null): string { return value ? \`\${LOCAL_PREFIX}\${value}\` : LOCAL_PREFIX + "unknown"; }`,
+          kind: "declaration",
+        },
+      ],
+    ]);
+
+    const freeVars = extractFreeVariables(`({ value }) => addPrefix(value)`);
+    const result = resolveNeededBindings(freeVars, sourceBindings);
+
+    expect(result.declarations).toHaveLength(2);
+    expect(result.declarations).toContain(`const LOCAL_PREFIX = "item-";`);
+    expect(result.unresolved).toHaveLength(0);
+  });
+
   it("resolves mixed imports and declarations", () => {
     const sourceBindings = new Map<string, SourceBinding>([
       [

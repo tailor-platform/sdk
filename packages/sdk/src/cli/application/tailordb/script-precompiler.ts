@@ -111,15 +111,6 @@ export function extractFreeVariables(fnSource: string): Set<string> {
 }
 
 /**
- * Extract free variables from a declaration or arbitrary code statement.
- * @param code - A JavaScript statement (e.g. "const x = foo + bar;").
- * @returns Set of free variable names.
- */
-function extractFreeVariablesFromStatement(code: string): Set<string> {
-  return findUndefinedReferences(code);
-}
-
-/**
  * Collect top-level bindings (imports and declarations) from a TypeScript source file.
  * @param sourceFilePath - Absolute path to the source file.
  * @returns Map of binding name to SourceBinding.
@@ -230,9 +221,15 @@ export function resolveNeededBindings(
         neededImports.add(binding.sourceText);
       } else {
         neededDeclarations.push(binding.sourceText);
-        // Recursively resolve dependencies of this declaration
-        const declFreeVars = extractFreeVariablesFromStatement(binding.sourceText);
-        resolveVars(declFreeVars);
+        // Find other bindings referenced in this declaration by word-boundary matching.
+        // This works with both JS and TypeScript without needing type stripping.
+        const referencedVars = new Set<string>();
+        for (const otherName of sourceBindings.keys()) {
+          if (otherName !== varName && new RegExp(`\\b${otherName}\\b`).test(binding.sourceText)) {
+            referencedVars.add(otherName);
+          }
+        }
+        resolveVars(referencedVars);
       }
     }
   };
