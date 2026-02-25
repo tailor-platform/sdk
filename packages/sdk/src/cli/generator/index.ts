@@ -23,7 +23,6 @@ import { generateUserTypes } from "@/cli/type-generator";
 import { getDistDir } from "@/cli/utils/dist-dir";
 import { logger, styles } from "@/cli/utils/logger";
 import {
-  getPluginGenerationDependencies,
   type TailorDBNamespaceData,
   type ResolverNamespaceData,
 } from "@/parser/plugin-config/generation-types";
@@ -132,23 +131,6 @@ export function createGenerationManager(params: {
 
   function hasNone(gen: AnyCodeGenerator, ...excluded: DependencyKind[]): boolean {
     return excluded.every((e) => !getDeps(gen).has(e));
-  }
-
-  function getPluginDeps(plugin: Plugin): Set<DependencyKind> {
-    return getPluginGenerationDependencies(plugin);
-  }
-
-  function pluginOnlyHas(plugin: Plugin, ...required: DependencyKind[]): boolean {
-    const deps = getPluginDeps(plugin);
-    return required.every((r) => deps.has(r)) && deps.size === required.length;
-  }
-
-  function pluginHasAll(plugin: Plugin, ...required: DependencyKind[]): boolean {
-    return required.every((r) => getPluginDeps(plugin).has(r));
-  }
-
-  function pluginHasNone(plugin: Plugin, ...excluded: DependencyKind[]): boolean {
-    return excluded.every((e) => !getPluginDeps(plugin).has(e));
   }
 
   function getAuthInput(): GeneratorAuthInput | undefined {
@@ -430,27 +412,28 @@ export function createGenerationManager(params: {
     await writeGeneratedFiles(plugin.id, result);
   }
 
-  /** All generation-time hooks in pipeline order */
-  const allGenerationHooks = ["onTailorDBReady", "onResolverReady", "onExecutorReady"] as const;
-
   /**
-   * Run all generation-time hooks that a plugin implements, in pipeline order.
-   * Hooks the plugin doesn't have are automatically skipped.
-   * @param plugins - Plugins to run hooks on
+   * Run a specific generation-time hook for all plugins that implement it.
+   * Each hook runs at its natural pipeline phase, ensuring outputs from earlier
+   * phases are available when later phases load resolvers/executors.
+   * @param hookName - Name of the hook to call
    * @param watch - Whether running in watch mode (suppresses throws)
    */
-  async function runPluginPhaseHooks(plugins: Plugin[], watch: boolean): Promise<void> {
+  async function runPluginHook(
+    hookName: "onTailorDBReady" | "onResolverReady" | "onExecutorReady",
+    watch: boolean,
+  ): Promise<void> {
+    const plugins = generationPlugins.filter((p) => p[hookName] != null);
+    if (plugins.length === 0) return;
     const results = await Promise.allSettled(
       plugins.map(async (plugin) => {
-        for (const hookName of allGenerationHooks) {
-          try {
-            await runPluginPhaseHook(plugin, hookName);
-          } catch (error) {
-            logger.error(`Error processing plugin ${styles.bold(plugin.id)} (${hookName})`);
-            logger.error(String(error));
-            if (!watch) {
-              throw error;
-            }
+        try {
+          await runPluginPhaseHook(plugin, hookName);
+        } catch (error) {
+          logger.error(`Error processing plugin ${styles.bold(plugin.id)} (${hookName})`);
+          logger.error(String(error));
+          if (!watch) {
+            throw error;
           }
         }
       }),
@@ -683,15 +666,13 @@ export function createGenerationManager(params: {
         logger.newline();
       }
 
-      // Run TailorDB-only generators and plugins (onTailorDBReady)
+      // Run TailorDB-only generators and onTailorDBReady for all plugins
       const tailordbOnlyGens = generators.filter((g) => onlyHas(g as AnyCodeGenerator, "tailordb"));
-      const tailordbOnlyPlugins = generationPlugins.filter((p) => pluginOnlyHas(p, "tailordb"));
-      if (tailordbOnlyGens.length > 0 || tailordbOnlyPlugins.length > 0) {
+      const hasOnTailorDBReady = generationPlugins.some((p) => p.onTailorDBReady != null);
+      if (tailordbOnlyGens.length > 0 || hasOnTailorDBReady) {
         await Promise.all([
           runGenerators(tailordbOnlyGens, watch),
-          ...(tailordbOnlyPlugins.length > 0
-            ? [runPluginPhaseHooks(tailordbOnlyPlugins, watch)]
-            : []),
+          runPluginHook("onTailorDBReady", watch),
         ]);
         logger.newline();
       }
@@ -714,19 +695,15 @@ export function createGenerationManager(params: {
         }
       }
 
-      // Run non-executor generators and plugins (onResolverReady)
+      // Run non-executor generators and onResolverReady for all plugins
       const nonExecutorGens = generators.filter(
         (g) => !tailordbOnlyGens.includes(g) && hasNone(g as AnyCodeGenerator, "executor"),
       );
-      const nonExecutorPlugins = generationPlugins.filter(
-        (p) => !tailordbOnlyPlugins.includes(p) && pluginHasNone(p, "executor"),
-      );
-      if (nonExecutorGens.length > 0 || nonExecutorPlugins.length > 0) {
+      const hasOnResolverReady = generationPlugins.some((p) => p.onResolverReady != null);
+      if (nonExecutorGens.length > 0 || hasOnResolverReady) {
         await Promise.all([
           runGenerators(nonExecutorGens, watch),
-          ...(nonExecutorPlugins.length > 0
-            ? [runPluginPhaseHooks(nonExecutorPlugins, watch)]
-            : []),
+          runPluginHook("onResolverReady", watch),
         ]);
         logger.newline();
       }
@@ -745,13 +722,13 @@ export function createGenerationManager(params: {
         services.executor[key] = executor as Executor;
       });
 
-      // Run executor-dependent generators and plugins (onExecutorReady)
+      // Run executor-dependent generators and onExecutorReady for all plugins
       const executorGens = generators.filter((g) => hasAll(g as AnyCodeGenerator, "executor"));
-      const executorPlugins = generationPlugins.filter((p) => pluginHasAll(p, "executor"));
-      if (executorGens.length > 0 || executorPlugins.length > 0) {
+      const hasOnExecutorReady = generationPlugins.some((p) => p.onExecutorReady != null);
+      if (executorGens.length > 0 || hasOnExecutorReady) {
         await Promise.all([
           runGenerators(executorGens, watch),
-          ...(executorPlugins.length > 0 ? [runPluginPhaseHooks(executorPlugins, watch)] : []),
+          runPluginHook("onExecutorReady", watch),
         ]);
         logger.newline();
       }
