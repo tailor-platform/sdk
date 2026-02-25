@@ -152,8 +152,8 @@ importers:
         specifier: 2.3.0
         version: 2.3.0
       politty:
-        specifier: ^0.4.0
-        version: 0.4.0(zod@4.3.5)
+        specifier: ^0.1.1
+        version: 0.1.2(zod@4.3.5)
       zod:
         specifier: 4.3.5
         version: 4.3.5
@@ -4137,6 +4137,12 @@ packages:
   pluralize@8.0.0:
     resolution: {integrity: sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA==}
     engines: {node: '>=4'}
+
+  politty@0.1.2:
+    resolution: {integrity: sha512-nzYEVubc7mzXEyiiv4OGiyP9ejRySfLc0BLpumgiL3qvlVWeYBrcSVBUEByx2ew2PmsnG10eslr0Y3PGT+4WGQ==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^4.2.1
 
   politty@0.4.0:
     resolution: {integrity: sha512-5j89gXI0ql0MZSzwcYwfj3obaIk93dVEtWPbJKAIgkE6SJTgqwNhzv0S77I+kIRI6YFIMepxqVcmrXcIROga2Q==}
@@ -8639,6 +8645,10 @@ snapshots:
       pathe: 2.0.3
 
   pluralize@8.0.0: {}
+
+  politty@0.1.2(zod@4.3.5):
+    dependencies:
+      zod: 4.3.5
 
   politty@0.4.0(zod@4.3.5):
     dependencies:
