@@ -102,6 +102,7 @@ export interface SnapshotFieldConfig {
   };
   validate?: SnapshotValidation[];
   serial?: SnapshotSerial;
+  scale?: number;
   /** Nested fields (recursive) */
   fields?: Record<string, SnapshotFieldConfig>;
 }
@@ -397,6 +398,8 @@ function createSnapshotFieldConfig(field: ParsedField): SnapshotFieldConfig {
     };
   }
 
+  if (field.config.scale !== undefined) config.scale = field.config.scale;
+
   if (field.config.fields && Object.keys(field.config.fields).length > 0) {
     config.fields = {};
     for (const [nestedName, nestedConfig] of Object.entries(field.config.fields)) {
@@ -464,6 +467,8 @@ function createSnapshotFieldConfigFromOperatorConfig(
       ...(fieldConfig.serial.format && { format: fieldConfig.serial.format }),
     };
   }
+
+  if (fieldConfig.scale !== undefined) config.scale = fieldConfig.scale;
 
   // Recursive for nested fields
   if (fieldConfig.fields && Object.keys(fieldConfig.fields).length > 0) {
@@ -1009,6 +1014,8 @@ function areFieldsDifferent(oldField: SnapshotFieldConfig, newField: SnapshotFie
     if (oldSerial.maxValue !== newSerial.maxValue) return true;
     if ((oldSerial.format ?? "") !== (newSerial.format ?? "")) return true;
   }
+
+  if (oldField.scale !== newField.scale) return true;
 
   const oldFields = oldField.fields ?? {};
   const newFields = newField.fields ?? {};
@@ -1792,6 +1799,8 @@ function convertRemoteFieldsToSnapshot(
         ...(remoteField.serial.format && { format: remoteField.serial.format }),
       };
     }
+
+    if (remoteField.scale) config.scale = remoteField.scale;
 
     // TODO: Add nested field conversion when remote API supports it
 

@@ -1342,6 +1342,7 @@ function generateTailorDBTypeManifest(
             }),
           },
         }),
+        ...(fieldConfig.scale !== undefined && { scale: fieldConfig.scale }),
       };
 
       // Handle nested fields
@@ -1483,6 +1484,7 @@ function processNestedFields(
         vector: false,
         ...toProtoFieldHooks(nestedFieldConfig),
         fields: deepNestedFields,
+        ...(nestedFieldConfig.scale !== undefined && { scale: nestedFieldConfig.scale }),
       };
     } else {
       nestedFields[nestedFieldName] = {
@@ -1508,6 +1510,7 @@ function processNestedFields(
             }),
           },
         }),
+        ...(nestedFieldConfig.scale !== undefined && { scale: nestedFieldConfig.scale }),
       };
     }
   });

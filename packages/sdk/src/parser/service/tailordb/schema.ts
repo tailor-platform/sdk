@@ -10,6 +10,7 @@ const TailorFieldTypeSchema = z.enum([
   "boolean",
   "integer",
   "float",
+  "decimal",
   "enum",
   "date",
   "datetime",
@@ -48,6 +49,7 @@ export const DBFieldMetadataSchema = z.object({
       format: z.string().optional(),
     })
     .optional(),
+  scale: z.number().int().min(0).max(12).optional(),
 });
 
 const RelationTypeSchema = z.enum(relationTypesKeys);
