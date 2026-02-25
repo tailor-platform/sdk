@@ -424,6 +424,10 @@ function runCodex(options: SolveRunOptions): Promise<SolveResult> {
     "--skip-git-repo-check",
     "-c",
     `model_max_output_tokens=${String(modelMaxOutputTokens)}`,
+    // Override reasoning effort to prevent config.toml's value (e.g. "xhigh")
+    // from conflicting with models that only support low/medium/high.
+    "-c",
+    "model_reasoning_effort=high",
     ...(model ? ["--model", model] : []),
     "-",
   ];
@@ -517,6 +521,8 @@ function checkCodexAuthStatus(model?: string): Promise<AuthCheckResult> {
     "--cd",
     authDir,
     "--skip-git-repo-check",
+    "-c",
+    "model_reasoning_effort=high",
     ...(model ? ["--model", model] : []),
     "Reply with exactly: ok",
   ];
