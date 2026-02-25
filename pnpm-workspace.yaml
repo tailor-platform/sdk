@@ -1,4 +1,6 @@
 minimumReleaseAge: 4320 # 3 days
+minimumReleaseAgeExclude:
+  - politty # temporary exception for migrating to newly released section markers
 
 packages:
   - packages/*
