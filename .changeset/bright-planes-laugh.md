@@ -2,4 +2,4 @@
 "@tailor-platform/sdk": minor
 ---
 
-Extract runtime args transformation logic into dedicated modules for executor and resolver services, and expose user context in WorkflowJobContext
+Consolidate runtime args transformation into cli/bundler/runtime-args module, expose user context in WorkflowJobContext, and add WORKFLOW_TEST_USER_KEY for mocking user in workflow trigger tests
