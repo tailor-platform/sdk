@@ -11,8 +11,6 @@ All CLI commands instrumented with `withSpan()` emit trace data that can be visu
 | Variable                      | Description                                                                                | Default                      |
 | ----------------------------- | ------------------------------------------------------------------------------------------ | ---------------------------- |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP collector endpoint (e.g., `http://localhost:4318`). **Setting this enables tracing.** | _(unset — tracing disabled)_ |
-| `OTEL_SERVICE_NAME`           | Service name reported in traces                                                            | `tailor-sdk`                 |
-| `OTEL_EXPORTER_OTLP_HEADERS`  | Additional headers for the exporter (`key=value,key=value`)                                | _(none)_                     |
 
 ## Quick Start
 
@@ -117,7 +115,7 @@ curl -s "http://localhost:16686/api/traces?service=tailor-sdk&limit=2" | jq '
 
 | File                                            | Role                                                       |
 | ----------------------------------------------- | ---------------------------------------------------------- |
-| `packages/sdk/src/cli/telemetry/config.ts`      | Parse OTEL environment variables                           |
+| `packages/sdk/src/cli/telemetry/config.ts`      | Parse `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable   |
 | `packages/sdk/src/cli/telemetry/index.ts`       | `initTelemetry()`, `shutdownTelemetry()`, `withSpan()`     |
 | `packages/sdk/src/cli/telemetry/interceptor.ts` | Connect-RPC interceptor for automatic RPC tracing          |
 | `packages/sdk/src/cli/args.ts`                  | Telemetry lifecycle (init in handler, shutdown in finally) |

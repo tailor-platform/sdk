@@ -61,13 +61,12 @@ export async function initTelemetry(): Promise<void> {
   const version = packageJson.version ?? "unknown";
 
   const resource = resourceFromAttributes({
-    [ATTR_SERVICE_NAME]: _config.serviceName,
+    [ATTR_SERVICE_NAME]: "tailor-sdk",
     [ATTR_SERVICE_VERSION]: version,
   });
 
   const exporter = new OTLPTraceExporter({
     url: `${_config.endpoint}/v1/traces`,
-    headers: _config.headers,
   });
 
   _provider = new NodeTracerProvider({
