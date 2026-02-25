@@ -18,12 +18,12 @@ describe("workflow trigger tests", () => {
 
   describe("unit tests with .body()", () => {
     test("addNumbers.body() adds two numbers", () => {
-      const result = addNumbers.body({ a: 2, b: 3 }, { env: {} });
+      const result = addNumbers.body({ a: 2, b: 3 }, { env: {}, user: { id: "", type: "", workspaceId: "", attributes: null, attributeList: [] } });
       expect(result).toBe(5);
     });
 
     test("multiplyNumbers.body() multiplies two numbers", () => {
-      const result = multiplyNumbers.body({ x: 4, y: 5 }, { env: {} });
+      const result = multiplyNumbers.body({ x: 4, y: 5 }, { env: {}, user: { id: "", type: "", workspaceId: "", attributes: null, attributeList: [] } });
       expect(result).toBe(20);
     });
 
@@ -32,7 +32,7 @@ describe("workflow trigger tests", () => {
       vi.spyOn(addNumbers, "trigger").mockResolvedValue(5);
       vi.spyOn(multiplyNumbers, "trigger").mockResolvedValue(10);
 
-      const result = await calculate.body({ a: 2, b: 3 }, { env: {} });
+      const result = await calculate.body({ a: 2, b: 3 }, { env: {}, user: { id: "", type: "", workspaceId: "", attributes: null, attributeList: [] } });
 
       expect(addNumbers.trigger).toHaveBeenCalledWith({ a: 2, b: 3 });
       expect(multiplyNumbers.trigger).toHaveBeenCalledWith({ x: 5, y: 2 });
@@ -46,7 +46,7 @@ describe("workflow trigger tests", () => {
       vi.spyOn(addNumbers, "trigger").mockResolvedValue(7);
       vi.spyOn(multiplyNumbers, "trigger").mockResolvedValue(21);
 
-      const result = await workflow.mainJob.body({ a: 3, b: 4 }, { env: {} });
+      const result = await workflow.mainJob.body({ a: 3, b: 4 }, { env: {}, user: { id: "", type: "", workspaceId: "", attributes: null, attributeList: [] } });
 
       expect(addNumbers.trigger).toHaveBeenCalledWith({ a: 3, b: 4 });
       expect(multiplyNumbers.trigger).toHaveBeenCalledWith({ x: 7, y: 3 });

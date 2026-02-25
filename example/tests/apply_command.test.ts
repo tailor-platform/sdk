@@ -94,10 +94,20 @@ describe("pnpm apply command integration tests", () => {
     vi.useFakeTimers();
     vi.setSystemTime(fixedSystemTime);
     setupTailordbMock();
+    // Workflow entry files reference `user` global (injected by platform runtime)
+    GlobalThis.user = {
+      id: "00000000-0000-0000-0000-000000000000",
+      type: "",
+      workspace_id: "00000000-0000-0000-0000-000000000000",
+      attribute_map: null,
+      attributes: [],
+      tenant_id: "00000000-0000-0000-0000-000000000000",
+    };
   });
 
   afterAll(() => {
     vi.useRealTimers();
+    delete GlobalThis.user;
   });
 
   type MainFunction = (args: Record<string, unknown>) => unknown | Promise<unknown>;
@@ -119,6 +129,14 @@ describe("pnpm apply command integration tests", () => {
         // triggerJobFunction is synchronous on the server side
         triggerJobFunction: (jobName: string, args: unknown) => unknown;
       };
+    };
+    user?: {
+      id: string;
+      type: string;
+      workspace_id: string;
+      attribute_map: Record<string, unknown> | null;
+      attributes: string[];
+      tenant_id: string;
     };
   };
 
@@ -600,8 +618,8 @@ describe("pnpm apply command integration tests", () => {
           // Check that env is defined with correct values
           expect(content).toContain('const env = {"foo":1,"bar":"hello","baz":true}');
 
-          // Check that body is called with { jobs, env } object
-          expect(content).toMatch(/\.body\(input, \{ env \}\)/);
+          // Check that body is called with { env, user: _user } context
+          expect(content).toMatch(/\.body\(input, \{ env, user: _user \}\)/);
         }
       });
 
