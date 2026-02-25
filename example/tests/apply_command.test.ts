@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
 import { format as formatDate } from "date-fns";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 
@@ -94,14 +95,16 @@ describe("pnpm apply command integration tests", () => {
     vi.useFakeTimers();
     vi.setSystemTime(fixedSystemTime);
     setupTailordbMock();
-    // Workflow entry files reference `user` global (injected by platform runtime)
+    // Workflow entry files reference `user` global in server format (injected by platform runtime)
+    // and convert to SDK format via tailorUserMap. This is an integration test of the bundled
+    // output, so we set up server format derived from the SDK constant.
     GlobalThis.user = {
-      id: "00000000-0000-0000-0000-000000000000",
-      type: "",
-      workspace_id: "00000000-0000-0000-0000-000000000000",
-      attribute_map: null,
-      attributes: [],
-      tenant_id: "00000000-0000-0000-0000-000000000000",
+      id: unauthenticatedTailorUser.id,
+      type: unauthenticatedTailorUser.type,
+      workspace_id: unauthenticatedTailorUser.workspaceId,
+      attribute_map: unauthenticatedTailorUser.attributes,
+      attributes: unauthenticatedTailorUser.attributeList,
+      tenant_id: unauthenticatedTailorUser.id,
     };
   });
 
@@ -134,8 +137,8 @@ describe("pnpm apply command integration tests", () => {
       id: string;
       type: string;
       workspace_id: string;
-      attribute_map: Record<string, unknown> | null;
-      attributes: string[];
+      attribute_map: unknown;
+      attributes: unknown[];
       tenant_id: string;
     };
   };

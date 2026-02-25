@@ -2,13 +2,17 @@
  * This test file demonstrates how to test workflows using the .trigger() method.
  *
  * Key features:
- * - Use vi.stubEnv() with WORKFLOW_TEST_ENV_KEY to set environment variables
+ * - Use vi.stubEnv() with WORKFLOW_TEST_ENV_KEY / WORKFLOW_TEST_USER_KEY to set environment variables
  * - Use vi.spyOn() to mock dependent jobs
  * - Call .trigger() on jobs/workflows directly
  */
-import { WORKFLOW_TEST_ENV_KEY } from "@tailor-platform/sdk/test";
+import {
+  WORKFLOW_TEST_ENV_KEY,
+  WORKFLOW_TEST_USER_KEY,
+  unauthenticatedTailorUser,
+} from "@tailor-platform/sdk/test";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import workflow, { addNumbers, calculate, multiplyNumbers } from "./simple";
+import workflow, { addNumbers, calculate, getUserInfo, multiplyNumbers } from "./simple";
 
 describe("workflow trigger tests", () => {
   afterEach(() => {
@@ -22,7 +26,7 @@ describe("workflow trigger tests", () => {
         { a: 2, b: 3 },
         {
           env: {},
-          user: { id: "", type: "", workspaceId: "", attributes: null, attributeList: [] },
+          user: unauthenticatedTailorUser,
         },
       );
       expect(result).toBe(5);
@@ -33,7 +37,7 @@ describe("workflow trigger tests", () => {
         { x: 4, y: 5 },
         {
           env: {},
-          user: { id: "", type: "", workspaceId: "", attributes: null, attributeList: [] },
+          user: unauthenticatedTailorUser,
         },
       );
       expect(result).toBe(20);
@@ -48,7 +52,7 @@ describe("workflow trigger tests", () => {
         { a: 2, b: 3 },
         {
           env: {},
-          user: { id: "", type: "", workspaceId: "", attributes: null, attributeList: [] },
+          user: unauthenticatedTailorUser,
         },
       );
 
@@ -68,7 +72,7 @@ describe("workflow trigger tests", () => {
         { a: 3, b: 4 },
         {
           env: {},
-          user: { id: "", type: "", workspaceId: "", attributes: null, attributeList: [] },
+          user: unauthenticatedTailorUser,
         },
       );
 
@@ -86,6 +90,15 @@ describe("workflow trigger tests", () => {
 
       // (3 + 4) * 3 = 21
       expect(result).toBe(21);
+    });
+
+    test("getUserInfo.trigger() uses mocked user", async () => {
+      // stubEnv with WORKFLOW_TEST_USER_KEY to inject a custom user into .trigger() calls
+      const customUser = { ...unauthenticatedTailorUser, id: "user-abc", workspaceId: "ws-xyz" };
+      vi.stubEnv(WORKFLOW_TEST_USER_KEY, JSON.stringify(customUser));
+
+      const result = await getUserInfo.trigger();
+      expect(result).toEqual({ userId: "user-abc", workspaceId: "ws-xyz" });
     });
   });
 });

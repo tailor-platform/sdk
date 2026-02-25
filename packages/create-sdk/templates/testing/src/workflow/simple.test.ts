@@ -1,5 +1,6 @@
+import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
 import { describe, expect, test, vi } from "vitest";
-import { addNumbers, multiplyNumbers, calculate } from "./simple";
+import { addNumbers, multiplyNumbers, calculate, getUserInfo } from "./simple";
 
 describe("workflow jobs", () => {
   describe("addNumbers job", () => {
@@ -8,7 +9,7 @@ describe("workflow jobs", () => {
         { a: 2, b: 3 },
         {
           env: {},
-          user: { id: "", type: "", workspaceId: "", attributes: null, attributeList: [] },
+          user: unauthenticatedTailorUser,
         },
       );
       expect(result).toBe(5);
@@ -19,7 +20,7 @@ describe("workflow jobs", () => {
         { a: -5, b: 3 },
         {
           env: {},
-          user: { id: "", type: "", workspaceId: "", attributes: null, attributeList: [] },
+          user: unauthenticatedTailorUser,
         },
       );
       expect(result).toBe(-2);
@@ -32,7 +33,7 @@ describe("workflow jobs", () => {
         { x: 4, y: 5 },
         {
           env: {},
-          user: { id: "", type: "", workspaceId: "", attributes: null, attributeList: [] },
+          user: unauthenticatedTailorUser,
         },
       );
       expect(result).toBe(20);
@@ -49,13 +50,39 @@ describe("workflow jobs", () => {
         { a: 2, b: 3 },
         {
           env: {},
-          user: { id: "", type: "", workspaceId: "", attributes: null, attributeList: [] },
+          user: unauthenticatedTailorUser,
         },
       );
 
       expect(addNumbers.trigger).toHaveBeenCalledWith({ a: 2, b: 3 });
       expect(multiplyNumbers.trigger).toHaveBeenCalledWith({ x: 5, y: 2 });
       expect(result).toBe(10);
+    });
+  });
+
+  describe("getUserInfo job", () => {
+    test("returns user info from context", () => {
+      const result = getUserInfo.body(undefined, {
+        env: {},
+        user: unauthenticatedTailorUser,
+      });
+      expect(result).toEqual({
+        userId: unauthenticatedTailorUser.id,
+        workspaceId: unauthenticatedTailorUser.workspaceId,
+      });
+    });
+
+    test("returns custom user info", () => {
+      const customUser = {
+        ...unauthenticatedTailorUser,
+        id: "user-123",
+        workspaceId: "ws-456",
+      };
+      const result = getUserInfo.body(undefined, {
+        env: {},
+        user: customUser,
+      });
+      expect(result).toEqual({ userId: "user-123", workspaceId: "ws-456" });
     });
   });
 });
