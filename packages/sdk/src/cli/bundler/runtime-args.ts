@@ -1,4 +1,22 @@
+/**
+ * Runtime args transformation for all services.
+ *
+ * Each service transforms server-side args/context into SDK-friendly format:
+ * - Executor: server-side expression evaluated by platform before calling function
+ * - Resolver: operationHook expression evaluated by platform before calling function
+ * - Workflow: JS code embedded in bundled entry file (uses tailorUserMap directly)
+ *
+ * The user field mapping (server → SDK) shared across services is defined in
+ * `@/parser/service/tailordb` as `tailorUserMap`.
+ */
+import { tailorUserMap } from "@/parser/service/tailordb";
 import type { Trigger } from "@/parser/service/executor";
+
+export { tailorUserMap };
+
+// ---------------------------------------------------------------------------
+// Executor
+// ---------------------------------------------------------------------------
 
 /**
  * Actor field transformation expression.
@@ -56,4 +74,25 @@ export function buildExecutorArgsExpr(
     default:
       throw new Error(`Unknown trigger kind for args expression: ${triggerKind satisfies never}`);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Resolver
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the operationHook expression for resolver pipelines.
+ *
+ * Transforms server context to SDK resolver context:
+ *   context.args        → input
+ *   context.pipeline     → spread into result
+ *   user (global var)    → TailorUser (via tailorUserMap: workspace_id→workspaceId, attribute_map→attributes, attributes→attributeList)
+ *   env                 → injected as JSON
+ * @param env - Application env record to embed in the expression
+ * @returns A JavaScript expression string for the operationHook
+ */
+export function buildResolverOperationHookExpr(
+  env: Record<string, string | number | boolean>,
+): string {
+  return `({ ...context.pipeline, input: context.args, user: ${tailorUserMap}, env: ${JSON.stringify(env)} });`;
 }

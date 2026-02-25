@@ -17,11 +17,11 @@ import {
 } from "@tailor-proto/tailor/v1/pipeline_resource_pb";
 import * as inflection from "inflection";
 import { type ResolverService } from "@/cli/application/resolver/service";
+import { buildResolverOperationHookExpr } from "@/cli/bundler/runtime-args";
 import { type Resolver, type TailorField } from "@/parser/service/resolver";
 import { fetchAll, type OperatorClient } from "../../client";
 import { resolverFunctionName } from "./function-registry";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
-import { buildResolverOperationHookExpr } from "./resolver-args-expr";
 import { createChangeSet } from ".";
 import type { ApplyPhase, PlanContext } from "..";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";

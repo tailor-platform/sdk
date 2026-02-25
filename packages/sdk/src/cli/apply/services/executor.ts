@@ -13,9 +13,9 @@ import {
   type ExecutorTriggerConfigSchema,
   ExecutorTriggerType,
 } from "@tailor-proto/tailor/v1/executor_resource_pb";
+import { buildExecutorArgsExpr } from "@/cli/bundler/runtime-args";
 import { stringifyFunction } from "@/parser/service/tailordb";
 import { fetchAll, type OperatorClient } from "../../client";
-import { buildExecutorArgsExpr } from "./executor-args-expr";
 import { executorFunctionName } from "./function-registry";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { createChangeSet } from ".";
