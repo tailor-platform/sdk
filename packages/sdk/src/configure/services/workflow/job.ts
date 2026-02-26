@@ -1,3 +1,4 @@
+import { brandValue } from "@/utils/brand";
 import type { TailorEnv } from "@/configure/types/env";
 import type { JsonCompatible } from "@/configure/types/helpers";
 import type { Jsonifiable, Jsonify, JsonPrimitive } from "type-fest";
@@ -186,7 +187,7 @@ export const createWorkflowJob = <const Name extends string, I = undefined, O = 
   readonly name: Name;
   readonly body: WorkflowJobBody<I, O>;
 }): WorkflowJob<Name, I, Awaited<O>> => {
-  return {
+  return brandValue({
     name: config.name,
     // JSON.parse(JSON.stringify(...)) ensures the return value matches Jsonify<Output> type.
     // This converts Date objects to strings, matching actual runtime behavior.
@@ -197,5 +198,5 @@ export const createWorkflowJob = <const Name extends string, I = undefined, O = 
       return result ? JSON.parse(JSON.stringify(result)) : result;
     },
     body: config.body,
-  } as WorkflowJob<Name, I, Awaited<O>>;
+  } as WorkflowJob<Name, I, Awaited<O>>);
 };
