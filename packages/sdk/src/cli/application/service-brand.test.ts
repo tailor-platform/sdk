@@ -6,8 +6,10 @@ import { ResolverSchema } from "@/parser/service/resolver";
 import { TailorDBTypeSchema } from "@/parser/service/tailordb";
 import { WorkflowSchema, WorkflowJobSchema } from "@/parser/service/workflow";
 
+type SafeParseResult<T> = { success: true; data: T } | { success: false; error: ZodError };
+
 type SafeParseSchema<T> = {
-  safeParse: (value: unknown) => { success: boolean; data?: T; error?: ZodError };
+  safeParse: (value: unknown) => SafeParseResult<T>;
 };
 
 /**
@@ -28,8 +30,7 @@ function simulateServiceLoad<T>(schema: SafeParseSchema<T>, value: unknown): T |
     }
     return "skipped";
   }
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- data is always present on success
-  return result.data!;
+  return result.data;
 }
 
 describe("service brand-based error categorization", () => {

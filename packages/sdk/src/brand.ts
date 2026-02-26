@@ -1,3 +1,5 @@
+// Symbol.for ensures the same symbol is returned across different ESM module instances,
+// avoiding identity mismatches when multiple copies of the SDK are loaded.
 export const SDK_BRAND: unique symbol = Symbol.for("tailor-platform/sdk");
 
 /**
