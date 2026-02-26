@@ -19,7 +19,7 @@ import { fileURLToPath } from "node:url";
 import { describe, test, expect, beforeAll } from "vitest";
 import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
-import { apply } from "../src/cli/services/apply/apply";
+import { apply } from "../src/cli/commands/apply/apply";
 import { trackWorkspace, trackTempDir } from "./globalSetup";
 
 const __filename = fileURLToPath(import.meta.url);

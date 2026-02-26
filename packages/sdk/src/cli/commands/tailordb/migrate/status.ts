@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { defineCommand, arg } from "politty";
 import { z } from "zod";
-import { trnPrefix } from "@/cli/services/apply/label";
+import { trnPrefix } from "@/cli/commands/apply/label";
 import { commonArgs, deploymentArgs, withCommonArgs } from "@/cli/shared/args";
 import { logBetaWarning } from "@/cli/shared/beta";
 import { initOperatorClient } from "@/cli/shared/client";

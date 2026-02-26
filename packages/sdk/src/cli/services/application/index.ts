@@ -1,4 +1,6 @@
 import * as path from "pathe";
+import { generatePluginExecutorFiles } from "@/cli/commands/generate/plugin-executor-generator";
+import { generatePluginTypeFiles } from "@/cli/commands/generate/plugin-type-generator";
 import { createAuthService, type AuthService } from "@/cli/services/application/auth/service";
 import {
   createExecutorService,
@@ -23,8 +25,6 @@ import {
   bundleWorkflowJobs,
   type BundleWorkflowJobsResult,
 } from "@/cli/services/bundler/workflow/workflow-bundler";
-import { generatePluginExecutorFiles } from "@/cli/services/generator/plugin-executor-generator";
-import { generatePluginTypeFiles } from "@/cli/services/generator/plugin-type-generator";
 import { type LoadedConfig } from "@/cli/shared/config-loader";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { logger } from "@/cli/shared/logger";

@@ -4,10 +4,10 @@ import { register } from "node:module";
 // Register tsx to handle TypeScript files when using CLI API programmatically
 register("tsx", import.meta.url, { data: {} });
 
-export { apply } from "./services/apply/apply";
-export type { ApplyOptions } from "./services/apply/apply";
-export { generate } from "./services/generator/index";
-export type { GenerateOptions } from "./services/generator/options";
+export { apply } from "./commands/apply/apply";
+export type { ApplyOptions } from "./commands/apply/apply";
+export { generate } from "./commands/generate/service";
+export type { GenerateOptions } from "./commands/generate/options";
 export { loadConfig, type LoadedConfig } from "./shared/config-loader";
 export { generateUserTypes } from "./shared/type-generator";
 export type {
@@ -26,7 +26,7 @@ export type {
   DependencyKind,
   PluginAttachment,
   TypeSourceInfoEntry,
-} from "./services/generator/types";
+} from "./commands/generate/types";
 export type { TailorDBType } from "@/parser/service/tailordb/types";
 export type { Resolver } from "@/parser/service/resolver";
 export type { Executor } from "@/parser/service/executor";

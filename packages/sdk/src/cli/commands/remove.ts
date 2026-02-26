@@ -1,20 +1,20 @@
 import ml from "multiline-ts";
 import { defineCommand } from "politty";
 import { z } from "zod";
-import { type Application, defineApplication } from "@/cli/services/application";
-import { applyApplication, planApplication } from "@/cli/services/apply/application";
-import { type PlanContext } from "@/cli/services/apply/apply";
-import { applyAuth, planAuth } from "@/cli/services/apply/auth";
-import { applyExecutor, planExecutor } from "@/cli/services/apply/executor";
+import { applyApplication, planApplication } from "@/cli/commands/apply/application";
+import { type PlanContext } from "@/cli/commands/apply/apply";
+import { applyAuth, planAuth } from "@/cli/commands/apply/auth";
+import { applyExecutor, planExecutor } from "@/cli/commands/apply/executor";
 import {
   applyFunctionRegistry,
   planFunctionRegistry,
-} from "@/cli/services/apply/function-registry";
-import { applyIdP, planIdP } from "@/cli/services/apply/idp";
-import { applyPipeline, planPipeline } from "@/cli/services/apply/resolver";
-import { applyStaticWebsite, planStaticWebsite } from "@/cli/services/apply/staticwebsite";
-import { applyTailorDB, planTailorDB } from "@/cli/services/apply/tailordb";
-import { applyWorkflow, planWorkflow } from "@/cli/services/apply/workflow";
+} from "@/cli/commands/apply/function-registry";
+import { applyIdP, planIdP } from "@/cli/commands/apply/idp";
+import { applyPipeline, planPipeline } from "@/cli/commands/apply/resolver";
+import { applyStaticWebsite, planStaticWebsite } from "@/cli/commands/apply/staticwebsite";
+import { applyTailorDB, planTailorDB } from "@/cli/commands/apply/tailordb";
+import { applyWorkflow, planWorkflow } from "@/cli/commands/apply/workflow";
+import { type Application, defineApplication } from "@/cli/services/application";
 import { commonArgs, confirmationArgs, deploymentArgs, withCommonArgs } from "@/cli/shared/args";
 import { initOperatorClient, type OperatorClient } from "@/cli/shared/client";
 import { loadConfig, type LoadedConfig } from "@/cli/shared/config-loader";

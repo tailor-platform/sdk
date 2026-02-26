@@ -5,16 +5,16 @@ import { z } from "zod";
 import {
   createEnumConstantsGenerator,
   EnumConstantsGeneratorID,
-} from "@/cli/services/generator/builtin/enum-constants";
+} from "@/cli/commands/generate/builtin/enum-constants";
 import {
   createFileUtilsGenerator,
   FileUtilsGeneratorID,
-} from "@/cli/services/generator/builtin/file-utils";
+} from "@/cli/commands/generate/builtin/file-utils";
 import {
   createKyselyGenerator,
   KyselyGeneratorID,
-} from "@/cli/services/generator/builtin/kysely-type";
-import { createSeedGenerator, SeedGeneratorID } from "@/cli/services/generator/builtin/seed";
+} from "@/cli/commands/generate/builtin/kysely-type";
+import { createSeedGenerator, SeedGeneratorID } from "@/cli/commands/generate/builtin/seed";
 import {
   KyselyTypeConfigSchema,
   SeedConfigSchema,
