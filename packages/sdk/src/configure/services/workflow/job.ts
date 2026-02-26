@@ -1,5 +1,5 @@
-import { brandValue } from "@/utils/brand";
 import { unauthenticatedTailorUser } from "@/configure/types/user";
+import { brandValue } from "@/utils/brand";
 import type { TailorEnv } from "@/configure/types/env";
 import type { JsonCompatible } from "@/configure/types/helpers";
 import type { TailorUser } from "@/configure/types/user";
