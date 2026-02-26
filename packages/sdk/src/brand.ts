@@ -3,7 +3,7 @@
 export const SDK_BRAND: unique symbol = Symbol.for("tailor-platform/sdk");
 
 /**
- * Adds a non-enumerable SDK brand symbol to the given object.
+ * Adds a non-enumerable SDK brand symbol to the given object (in-place).
  * @param value - The object to brand
  * @returns The same object with the brand applied
  */

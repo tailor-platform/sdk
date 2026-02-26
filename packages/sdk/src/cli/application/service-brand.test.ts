@@ -6,10 +6,8 @@ import { ResolverSchema } from "@/parser/service/resolver";
 import { TailorDBTypeSchema } from "@/parser/service/tailordb";
 import { WorkflowSchema, WorkflowJobSchema } from "@/parser/service/workflow";
 
-type SafeParseResult<T> = { success: true; data: T } | { success: false; error: ZodError };
-
 type SafeParseSchema<T> = {
-  safeParse: (value: unknown) => SafeParseResult<T>;
+  safeParse: (value: unknown) => { success: true; data: T } | { success: false; error: ZodError };
 };
 
 /**
