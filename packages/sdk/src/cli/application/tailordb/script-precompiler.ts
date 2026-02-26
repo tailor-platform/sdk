@@ -88,7 +88,7 @@ const linterConfig = {
  * @param code - Valid JavaScript code to analyze.
  * @returns Set of undefined variable names.
  */
-function findUndefinedReferences(code: string): Set<string> {
+export function findUndefinedReferences(code: string): Set<string> {
   const messages = linter.verify(code, linterConfig);
   const vars = new Set<string>();
   for (const msg of messages) {
@@ -102,12 +102,32 @@ function findUndefinedReferences(code: string): Set<string> {
 }
 
 /**
- * Extract free variables from a JavaScript function source using ESLint's no-undef rule.
- * @param fnSource - The function source code (from fn.toString()).
- * @returns Set of free variable names.
+ * Collect all Identifier names from a TypeScript/JavaScript code string using oxc-parser.
+ * @param code - Code string to analyze.
+ * @returns Set of identifier names found in the code.
  */
-export function extractFreeVariables(fnSource: string): Set<string> {
-  return findUndefinedReferences(`const __fn = ${fnSource};`);
+function collectIdentifierNames(code: string): Set<string> {
+  const { program } = parseSync("_.ts", code);
+  const names = new Set<string>();
+  const walk = (node: unknown): void => {
+    if (!node || typeof node !== "object") return;
+    const record = node as Record<string, unknown>;
+    if (record.type === "Identifier" && typeof record.name === "string") {
+      names.add(record.name);
+    }
+    for (const [key, value] of Object.entries(record)) {
+      // Skip non-computed MemberExpression property (e.g. `length` in `value.length`)
+      // but keep computed properties (e.g. `foo` in `obj[foo]`) as they are real references
+      if (key === "property" && record.type === "MemberExpression" && !record.computed) continue;
+      if (Array.isArray(value)) {
+        for (const item of value) walk(item);
+      } else if (value && typeof value === "object" && "type" in value) {
+        walk(value);
+      }
+    }
+  };
+  walk(program);
+  return names;
 }
 
 /**
@@ -221,12 +241,13 @@ export function resolveNeededBindings(
         neededImports.add(binding.sourceText);
       } else {
         neededDeclarations.push(binding.sourceText);
-        // Find other bindings referenced in this declaration by word-boundary matching.
-        // This works with both JS and TypeScript without needing type stripping.
+        // Parse the declaration with oxc-parser (handles TypeScript) and collect
+        // all Identifier names, then resolve those that match other source bindings.
+        const identifiers = collectIdentifierNames(binding.sourceText);
         const referencedVars = new Set<string>();
-        for (const otherName of sourceBindings.keys()) {
-          if (otherName !== varName && new RegExp(`\\b${otherName}\\b`).test(binding.sourceText)) {
-            referencedVars.add(otherName);
+        for (const id of identifiers) {
+          if (id !== varName && sourceBindings.has(id)) {
+            referencedVars.add(id);
           }
         }
         resolveVars(referencedVars);
@@ -299,7 +320,7 @@ async function bundleScriptTarget(args: {
   const inlineExpr = `(${fnSource})({ value: _value, data: _data, user: ${tailorUserMap} })`;
 
   // Check if the function has free variables that need bundling
-  const freeVars = extractFreeVariables(fnSource);
+  const freeVars = findUndefinedReferences(`const __fn = ${fnSource};`);
   if (freeVars.size === 0) {
     // No external dependencies - use inline expression without bundling
     return inlineExpr;
@@ -394,7 +415,6 @@ export async function precompileTailorDBTypeScripts(
       setPrecompiledScriptExpr(target.fn, expr);
     }
   } finally {
-    // TODO: restore cleanup after debugging
     rmSync(tempDir, { recursive: true, force: true });
   }
 }

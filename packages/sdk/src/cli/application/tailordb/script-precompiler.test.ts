@@ -3,14 +3,22 @@ import { tmpdir } from "node:os";
 import { join } from "pathe";
 import { describe, expect, it, beforeAll, afterAll } from "vitest";
 import {
-  extractFreeVariables,
+  findUndefinedReferences,
   collectSourceBindings,
   resolveNeededBindings,
   buildMinimalEntryFromResolved,
   type SourceBinding,
 } from "./script-precompiler";
 
-describe("extractFreeVariables", () => {
+/**
+ * Extract free variables from a function source for testing.
+ * @param fnSource - The function source code.
+ * @returns Set of free variable names.
+ */
+const extractFreeVariables = (fnSource: string) =>
+  findUndefinedReferences(`const __fn = ${fnSource};`);
+
+describe("findUndefinedReferences", () => {
   it("returns empty set for self-contained function", () => {
     const vars = extractFreeVariables("({ value }) => value.length > 5");
     expect(vars.size).toBe(0);
