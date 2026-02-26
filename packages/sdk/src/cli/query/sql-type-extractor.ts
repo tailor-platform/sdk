@@ -1,37 +1,24 @@
-import * as nodeSqlParser from "node-sql-parser";
-import type { AST } from "node-sql-parser";
+import { astVisitor, parse, type Statement } from "pgsql-ast-parser";
 
-const parserModule = (nodeSqlParser as { default?: unknown }).default ?? nodeSqlParser;
-const { Parser } = parserModule as {
-  Parser: new () => {
-    astify(sql: string, opt?: { database?: string }): AST | AST[];
-    tableList(sql: string, opt?: { database?: string }): string[];
-  };
-};
-
-const sqlParser = new Parser();
-const parserOption = { database: "postgresql" } as const;
-
-function parseTypeNameFromTableListEntry(entry: string): string | null {
-  const tableName = entry.split("::").at(-1);
-  return tableName || null;
-}
-
-function collectCteNames(ast: AST | AST[]): Set<string> {
-  const statements = Array.isArray(ast) ? ast : [ast];
+function collectCteNames(statements: Statement[]): Set<string> {
   const cteNames = new Set<string>();
+  const visitor = astVisitor((mapper) => ({
+    with: (statement) => {
+      for (const binding of statement.bind) {
+        cteNames.add(binding.alias.name);
+      }
+      mapper.super().with(statement);
+      return statement;
+    },
+    withRecursive: (statement) => {
+      cteNames.add(statement.alias.name);
+      mapper.super().withRecursive(statement);
+      return statement;
+    },
+  }));
 
   for (const statement of statements) {
-    if (!("with" in statement) || !Array.isArray(statement.with)) {
-      continue;
-    }
-
-    for (const withStatement of statement.with) {
-      const cteName = withStatement?.name?.value;
-      if (cteName) {
-        cteNames.add(cteName);
-      }
-    }
+    visitor.statement(statement);
   }
 
   return cteNames;
@@ -39,27 +26,28 @@ function collectCteNames(ast: AST | AST[]): Set<string> {
 
 /**
  * Extract TailorDB type names from SQL query.
- * Returns empty list when query cannot be parsed.
  * @param query - SQL query
  * @returns Type names referenced by query
  */
 export function extractTypeNamesFromSql(query: string): string[] {
-  try {
-    const ast = sqlParser.astify(query, parserOption);
-    const cteNames = collectCteNames(ast);
-    const typeNames = new Set<string>();
+  const statements = parse(query);
+  const typeNames = new Set<string>();
 
-    for (const entry of sqlParser.tableList(query, parserOption)) {
-      const typeName = parseTypeNameFromTableListEntry(entry);
-      if (!typeName || cteNames.has(typeName)) {
-        continue;
+  const cteNames = collectCteNames(statements);
+  const visitor = astVisitor((mapper) => ({
+    tableRef: (tableRef) => {
+      if (!cteNames.has(tableRef.name)) {
+        typeNames.add(tableRef.name);
       }
 
-      typeNames.add(typeName);
-    }
+      mapper.super().tableRef(tableRef);
+      return tableRef;
+    },
+  }));
 
-    return [...typeNames];
-  } catch {
-    return [];
+  for (const statement of statements) {
+    visitor.statement(statement);
   }
+
+  return [...typeNames];
 }

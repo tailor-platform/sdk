@@ -14,9 +14,15 @@ describe("extractTypeNamesFromSql", () => {
     expect(extractTypeNamesFromSql(sql)).toEqual(["User", "Order"]);
   });
 
-  test("returns empty array when parser cannot parse query", () => {
-    const sql = "select * from User u join Order o on u.id = o.userId";
+  test("throws when parser cannot parse query", () => {
+    const sql = "select from";
 
-    expect(extractTypeNamesFromSql(sql)).toEqual([]);
+    expect(() => extractTypeNamesFromSql(sql)).toThrowError();
+  });
+
+  test("does not throw for parseable non-DML statements", () => {
+    const sql = "create table t (id integer)";
+
+    expect(() => extractTypeNamesFromSql(sql)).not.toThrow();
   });
 });
