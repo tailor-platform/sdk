@@ -5,7 +5,7 @@ import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { getDistDir } from "@/cli/utils/dist-dir";
-import { logger } from "@/cli/utils/logger";
+import { CLIError } from "@/cli/utils/errors";
 import type { QueryEngine } from "@/cli/query";
 
 const REQUIRED_SQL_PACKAGES = ["kysely", "@tailor-platform/function-kysely-tailordb"] as const;
@@ -30,10 +30,12 @@ function checkSqlDependencies(): void {
   }
 
   if (missing.length > 0) {
-    logger.warn(
-      `Missing optional dependencies for SQL query execution: ${missing.join(", ")}. ` +
-        `Install them in your project: pnpm add -D ${missing.join(" ")}`,
-    );
+    throw CLIError({
+      code: "missing_dependency",
+      message: "Missing required dependencies for SQL query execution.",
+      details: missing.join(", "),
+      suggestion: `Run: pnpm add -D ${missing.join(" ")}`,
+    });
   }
 }
 
