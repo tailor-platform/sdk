@@ -398,16 +398,26 @@ export async function precompileTailorDBTypeScripts(
   mkdirSync(tempDir, { recursive: true });
 
   try {
-    for (const [index, target] of targets.entries()) {
-      const expr = await bundleScriptTarget({
-        fn: target.fn,
-        sourceFilePath,
-        sourceBindings,
-        tempDir,
-        targetIndex: index,
-        tsconfig,
-      });
-      setPrecompiledScriptExpr(target.fn, expr);
+    const results = await Promise.allSettled(
+      targets.map((target, index) =>
+        bundleScriptTarget({
+          fn: target.fn,
+          sourceFilePath,
+          sourceBindings,
+          tempDir,
+          targetIndex: index,
+          tsconfig,
+        }),
+      ),
+    );
+    const firstError = results.find((r) => r.status === "rejected");
+    if (firstError && firstError.status === "rejected") {
+      throw firstError.reason;
+    }
+    for (const [index, result] of results.entries()) {
+      if (result.status === "fulfilled") {
+        setPrecompiledScriptExpr(targets[index].fn, result.value);
+      }
     }
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
