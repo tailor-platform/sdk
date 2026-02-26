@@ -239,10 +239,9 @@ async function bundleSingleJob(
   const entryContent = ml /* js */ `
     import { ${job.exportName} } from "${absoluteSourcePath}";
 
-    const env = ${JSON.stringify(env)};
-    const _user = ${tailorUserMap};
-
     export async function main(input) {
+      const env = ${JSON.stringify(env)};
+      const _user = ${tailorUserMap};
       return await ${job.exportName}.body(input, { env, user: _user });
     }
   `;
