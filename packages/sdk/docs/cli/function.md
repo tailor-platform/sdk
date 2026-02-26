@@ -2,11 +2,19 @@
 
 Commands for viewing function execution logs.
 
-<!-- politty:command:function:start -->
+<!-- politty:command:function:heading:start -->
 
 ## function
 
+<!-- politty:command:function:heading:end -->
+
+<!-- politty:command:function:description:start -->
+
 Manage functions
+
+<!-- politty:command:function:description:end -->
+
+<!-- politty:command:function:usage:start -->
 
 **Usage**
 
@@ -14,18 +22,30 @@ Manage functions
 tailor-sdk function [command]
 ```
 
+<!-- politty:command:function:usage:end -->
+
+<!-- politty:command:function:subcommands:start -->
+
 **Commands**
 
 | Command                           | Description                          |
 | --------------------------------- | ------------------------------------ |
 | [`function logs`](#function-logs) | List or get function execution logs. |
 
-<!-- politty:command:function:end -->
-<!-- politty:command:function logs:start -->
+<!-- politty:command:function:subcommands:end -->
+<!-- politty:command:function logs:heading:start -->
 
 ### function logs
 
+<!-- politty:command:function logs:heading:end -->
+
+<!-- politty:command:function logs:description:start -->
+
 List or get function execution logs.
+
+<!-- politty:command:function logs:description:end -->
+
+<!-- politty:command:function logs:usage:start -->
 
 **Usage**
 
@@ -33,11 +53,19 @@ List or get function execution logs.
 tailor-sdk function logs [options] [executionId]
 ```
 
+<!-- politty:command:function logs:usage:end -->
+
+<!-- politty:command:function logs:arguments:start -->
+
 **Arguments**
 
 | Argument      | Description                                         | Required |
 | ------------- | --------------------------------------------------- | -------- |
 | `executionId` | Execution ID (if provided, shows details with logs) | No       |
+
+<!-- politty:command:function logs:arguments:end -->
+
+<!-- politty:command:function logs:options:start -->
 
 **Options**
 
@@ -47,7 +75,7 @@ tailor-sdk function logs [options] [executionId]
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
 
-<!-- politty:command:function logs:end -->
+<!-- politty:command:function logs:options:end -->
 
 **Usage Examples:**
 
