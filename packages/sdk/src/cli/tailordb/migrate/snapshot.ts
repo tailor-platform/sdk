@@ -1800,7 +1800,7 @@ function convertRemoteFieldsToSnapshot(
       };
     }
 
-    if (remoteField.scale) config.scale = remoteField.scale;
+    if (remoteField.scale !== undefined) config.scale = remoteField.scale;
 
     // TODO: Add nested field conversion when remote API supports it
 
