@@ -1,4 +1,5 @@
 import { cloneDeep } from "es-toolkit";
+import { brandValue } from "@/brand";
 import {
   type AllowedValues,
   type AllowedValuesOutput,
@@ -1126,7 +1127,7 @@ function createTailorDBType<
     },
   };
 
-  return dbType;
+  return brandValue(dbType);
 }
 
 export type TailorDBInstance<

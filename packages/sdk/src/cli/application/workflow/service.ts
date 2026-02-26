@@ -1,5 +1,6 @@
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
+import { isSdkBranded } from "@/brand";
 import { loadFilesWithIgnores } from "@/cli/application/file-loader";
 import { logger, styles } from "@/cli/utils/logger";
 import {
@@ -182,6 +183,8 @@ async function loadFileContent(filePath: string): Promise<{
         const workflowResult = WorkflowSchema.safeParse(exportValue);
         if (workflowResult.success) {
           workflow = workflowResult.data;
+        } else if (isSdkBranded(exportValue)) {
+          throw workflowResult.error;
         }
         continue;
       }
@@ -193,6 +196,8 @@ async function loadFileContent(filePath: string): Promise<{
           exportName,
           sourceFile: filePath,
         });
+      } else if (isSdkBranded(exportValue)) {
+        throw jobResult.error;
       }
     }
   } catch (error) {

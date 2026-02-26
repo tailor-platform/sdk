@@ -1,9 +1,9 @@
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
+import { isSdkBranded } from "@/brand";
 import { loadFilesWithIgnores } from "@/cli/application/file-loader";
 import { logger, styles } from "@/cli/utils/logger";
 import {
-  GQL_PERMISSION_INVALID_OPERAND_MESSAGE,
   parseTypes,
   TailorDBTypeSchema,
   type TypeSourceInfo,
@@ -141,11 +141,8 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
 
         const result = TailorDBTypeSchema.safeParse(exportedValue);
         if (!result.success) {
-          const gqlPermissionIssue = result.error.issues.find((i) =>
-            i.message.includes(GQL_PERMISSION_INVALID_OPERAND_MESSAGE),
-          );
-          if (gqlPermissionIssue) {
-            throw new Error(gqlPermissionIssue.message);
+          if (isSdkBranded(exportedValue)) {
+            throw result.error;
           }
           continue;
         }

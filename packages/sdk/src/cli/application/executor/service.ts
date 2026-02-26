@@ -1,5 +1,6 @@
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
+import { isSdkBranded } from "@/brand";
 import { loadFilesWithIgnores } from "@/cli/application/file-loader";
 import { logger, styles } from "@/cli/utils/logger";
 import {
@@ -57,6 +58,9 @@ export function createExecutorService(params: CreateExecutorServiceParams): Exec
         );
         executors[executorFile] = result.data;
         return result.data;
+      }
+      if (isSdkBranded(executorModule.default)) {
+        throw result.error;
       }
     } catch (error) {
       const relativePath = path.relative(process.cwd(), executorFile);
