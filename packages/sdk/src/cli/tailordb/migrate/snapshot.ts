@@ -1895,6 +1895,10 @@ function compareFields(
     differences.push(`vector: remote=${remoteVector}, expected=${snapshotVector}`);
   }
 
+  if (remoteField.scale !== snapshotField.scale) {
+    differences.push(`scale: remote=${remoteField.scale}, expected=${snapshotField.scale}`);
+  }
+
   if (differences.length > 0) {
     return {
       typeName,
