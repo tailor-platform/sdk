@@ -1,0 +1,148 @@
+import * as fs from "node:fs";
+import { pathToFileURL } from "node:url";
+import * as path from "pathe";
+import { z } from "zod";
+import {
+  createEnumConstantsGenerator,
+  EnumConstantsGeneratorID,
+} from "@/cli/services/generator/builtin/enum-constants";
+import {
+  createFileUtilsGenerator,
+  FileUtilsGeneratorID,
+} from "@/cli/services/generator/builtin/file-utils";
+import {
+  createKyselyGenerator,
+  KyselyGeneratorID,
+} from "@/cli/services/generator/builtin/kysely-type";
+import { createSeedGenerator, SeedGeneratorID } from "@/cli/services/generator/builtin/seed";
+import {
+  KyselyTypeConfigSchema,
+  SeedConfigSchema,
+  EnumConstantsConfigSchema,
+  FileUtilsConfigSchema,
+  CodeGeneratorSchema,
+  type CodeGeneratorBase,
+} from "@/parser/generator-config";
+import { createPluginConfigSchema, type Plugin } from "@/parser/plugin-config";
+import { loadConfigPath } from "./context";
+import type { AppConfig } from "@/parser/app-config";
+import "./mock";
+
+/**
+ * Loaded configuration with resolved path
+ */
+export type LoadedConfig = AppConfig & { path: string };
+
+export const GeneratorConfigSchema = z
+  .union([
+    KyselyTypeConfigSchema,
+    SeedConfigSchema,
+    EnumConstantsConfigSchema,
+    FileUtilsConfigSchema,
+    CodeGeneratorSchema,
+  ])
+  .transform((gen): CodeGeneratorBase => {
+    if (!Array.isArray(gen)) {
+      return gen as CodeGeneratorBase;
+    }
+    const [id, options] = gen;
+    switch (id) {
+      case KyselyGeneratorID:
+        return createKyselyGenerator(options);
+      case SeedGeneratorID:
+        return createSeedGenerator(options);
+      case EnumConstantsGeneratorID:
+        return createEnumConstantsGenerator(options);
+      case FileUtilsGeneratorID:
+        return createFileUtilsGenerator(options);
+      default: {
+        const _exhaustive: never = id;
+        throw new Error(`Unknown generator ID: ${_exhaustive}`);
+      }
+    }
+  })
+  .brand("CodeGenerator");
+
+export type Generator = z.output<typeof GeneratorConfigSchema>;
+
+const PluginConfigSchema = createPluginConfigSchema();
+
+/**
+ * Load Tailor configuration file and associated generators and plugins.
+ * @param configPath - Optional explicit config path
+ * @returns Loaded config, generators, plugins, and config path
+ */
+export async function loadConfig(
+  configPath?: string,
+): Promise<{ config: LoadedConfig; generators: Generator[]; plugins: Plugin[] }> {
+  const foundPath = loadConfigPath(configPath);
+  if (!foundPath) {
+    throw new Error(
+      "Configuration file not found: tailor.config.ts not found in current or parent directories",
+    );
+  }
+  const resolvedPath = path.resolve(process.cwd(), foundPath);
+
+  if (!fs.existsSync(resolvedPath)) {
+    throw new Error(`Configuration file not found: ${configPath}`);
+  }
+
+  const configModule = await import(pathToFileURL(resolvedPath).href);
+  if (!configModule || !configModule.default) {
+    throw new Error("Invalid Tailor config module: default export not found");
+  }
+
+  // Collect all generator exports (generators, generators2, etc.)
+  const allGenerators: Generator[] = [];
+  // Collect all plugin exports (plugins, plugins2, etc.)
+  const allPlugins: Plugin[] = [];
+
+  for (const value of Object.values(configModule)) {
+    if (Array.isArray(value)) {
+      // Try to parse as generators
+      const generatorParsed = value.reduce(
+        (acc, item) => {
+          if (!acc.success) return acc;
+
+          const result = GeneratorConfigSchema.safeParse(item);
+          if (result.success) {
+            acc.items.push(result.data);
+          } else {
+            acc.success = false;
+          }
+          return acc;
+        },
+        { success: true, items: [] as Generator[] },
+      );
+      if (generatorParsed.success && generatorParsed.items.length > 0) {
+        allGenerators.push(...generatorParsed.items);
+        continue;
+      }
+
+      // Try to parse as plugins
+      const pluginParsed = value.reduce(
+        (acc, item) => {
+          if (!acc.success) return acc;
+
+          const result = PluginConfigSchema.safeParse(item);
+          if (result.success) {
+            acc.items.push(result.data);
+          } else {
+            acc.success = false;
+          }
+          return acc;
+        },
+        { success: true, items: [] as Plugin[] },
+      );
+      if (pluginParsed.success && pluginParsed.items.length > 0) {
+        allPlugins.push(...pluginParsed.items);
+      }
+    }
+  }
+
+  return {
+    config: { ...configModule.default, path: resolvedPath } as LoadedConfig,
+    generators: allGenerators,
+    plugins: allPlugins,
+  };
+}

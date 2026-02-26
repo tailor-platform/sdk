@@ -1,7 +1,7 @@
 import { execSync } from "node:child_process";
 import { assertDocMatch, createCommandRenderer } from "politty/docs";
 import { describe, it, vi } from "vitest";
-import { commonArgs } from "./args";
+import { commonArgs } from "./shared/args";
 import { mainCommand } from "./index";
 import type { FileConfig, OptionsRenderContext } from "politty/docs";
 
