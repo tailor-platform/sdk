@@ -1,4 +1,4 @@
-import { getPrecompiledScriptExpr } from "./script-precompiled-expr";
+import { getPrecompiledScriptExpr } from "./hooks-validate-precompiled-expr";
 import type {
   TailorAnyDBField,
   DBFieldMetadata,

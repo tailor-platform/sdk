@@ -7,7 +7,7 @@ import * as rolldown from "rolldown";
 import { getDistDir } from "@/cli/utils/dist-dir";
 import { logger } from "@/cli/utils/logger";
 import { stringifyFunction, tailorUserMap } from "@/parser/service/tailordb/field";
-import { setPrecompiledScriptExpr } from "@/parser/service/tailordb/script-precompiled-expr";
+import { setPrecompiledScriptExpr } from "@/parser/service/tailordb/hooks-validate-precompiled-expr";
 import type { TailorDBTypeSchemaOutput } from "@/parser/service/tailordb/types";
 import type {
   ImportDeclaration,
@@ -394,7 +394,7 @@ export async function precompileTailorDBTypeScripts(
 
   // Use type name in temp dir to avoid race conditions when multiple type files
   // are precompiled concurrently via Promise.all in service.ts
-  const tempDir = resolve(getDistDir(), "tailordb-scripts", type.name);
+  const tempDir = resolve(getDistDir(), "hooks-validate-scripts", type.name);
   mkdirSync(tempDir, { recursive: true });
 
   try {

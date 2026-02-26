@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { db } from "@/configure/services/tailordb/schema";
 import { toSchemaOutputs } from "@/utils/test/internal";
 import { parseFieldConfig } from "./field";
-import { setPrecompiledScriptExpr } from "./script-precompiled-expr";
+import { setPrecompiledScriptExpr } from "./hooks-validate-precompiled-expr";
 
 describe("parseFieldConfig precompiled expressions", () => {
   it("uses precompiled hook expression when attached", () => {
