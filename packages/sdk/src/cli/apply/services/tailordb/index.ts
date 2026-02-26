@@ -104,12 +104,13 @@ async function fetchRemoteTypes(
   workspaceId: string,
   namespace: string,
 ): Promise<ProtoTailorDBType[]> {
-  return fetchAll(async (pageToken) => {
+  return fetchAll(async (pageToken, maxPageSize) => {
     try {
       const { tailordbTypes, nextPageToken } = await client.listTailorDBTypes({
         workspaceId,
         namespaceName: namespace,
         pageToken,
+        pageSize: maxPageSize,
       });
       return [tailordbTypes, nextPageToken];
     } catch (error) {
@@ -1050,11 +1051,12 @@ async function planServices(
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
 
-  const withoutLabel = await fetchAll(async (pageToken) => {
+  const withoutLabel = await fetchAll(async (pageToken, maxPageSize) => {
     try {
       const { tailordbServices, nextPageToken } = await client.listTailorDBServices({
         workspaceId,
         pageToken,
+        pageSize: maxPageSize,
       });
       return [tailordbServices, nextPageToken];
     } catch (error) {
@@ -1166,12 +1168,13 @@ async function planTypes(
   const changeSet = createChangeSet<CreateType, UpdateType, DeleteType>("TailorDB types");
 
   const fetchTypes = (namespaceName: string) => {
-    return fetchAll(async (pageToken) => {
+    return fetchAll(async (pageToken, maxPageSize) => {
       try {
         const { tailordbTypes, nextPageToken } = await client.listTailorDBTypes({
           workspaceId,
           namespaceName,
           pageToken,
+          pageSize: maxPageSize,
         });
         return [tailordbTypes, nextPageToken];
       } catch (error) {
@@ -1654,12 +1657,13 @@ async function planGqlPermissions(
   );
 
   const fetchGqlPermissions = (namespaceName: string) => {
-    return fetchAll(async (pageToken) => {
+    return fetchAll(async (pageToken, maxPageSize) => {
       try {
         const { permissions, nextPageToken } = await client.listTailorDBGQLPermissions({
           workspaceId,
           namespaceName,
           pageToken,
+          pageSize: maxPageSize,
         });
         return [permissions, nextPageToken];
       } catch (error) {

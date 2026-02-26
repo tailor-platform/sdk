@@ -40,10 +40,11 @@ export async function listOAuth2Clients(
     throw new Error(`Application ${config.name} does not have an auth configuration.`);
   }
 
-  const oauth2Clients = await fetchAll(async (pageToken) => {
+  const oauth2Clients = await fetchAll(async (pageToken, maxPageSize) => {
     const { oauth2Clients, nextPageToken } = await client.listAuthOAuth2Clients({
       workspaceId,
       pageToken,
+      pageSize: maxPageSize,
       namespaceName: application.authNamespace,
     });
     return [oauth2Clients, nextPageToken];

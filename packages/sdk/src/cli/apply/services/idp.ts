@@ -197,11 +197,12 @@ async function planServices(
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
 
-  const withoutLabel = await fetchAll(async (pageToken) => {
+  const withoutLabel = await fetchAll(async (pageToken, maxPageSize) => {
     try {
       const { idpServices, nextPageToken } = await client.listIdPServices({
         workspaceId,
         pageToken,
+        pageSize: maxPageSize,
       });
       return [idpServices, nextPageToken];
     } catch (error) {
@@ -335,12 +336,13 @@ async function planClients(
   const changeSet = createChangeSet<CreateClient, UpdateClient, DeleteClient>("IdP clients");
 
   const fetchClients = (namespaceName: string) => {
-    return fetchAll(async (pageToken) => {
+    return fetchAll(async (pageToken, maxPageSize) => {
       try {
         const { clients, nextPageToken } = await client.listIdPClients({
           workspaceId,
           namespaceName,
           pageToken,
+          pageSize: maxPageSize,
         });
         return [clients, nextPageToken];
       } catch (error) {

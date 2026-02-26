@@ -169,11 +169,12 @@ async function planServices(
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
 
-  const withoutLabel = await fetchAll(async (pageToken) => {
+  const withoutLabel = await fetchAll(async (pageToken, maxPageSize) => {
     try {
       const { pipelineServices, nextPageToken } = await client.listPipelineServices({
         workspaceId,
         pageToken,
+        pageSize: maxPageSize,
       });
       return [pipelineServices, nextPageToken];
     } catch (error) {
@@ -284,12 +285,13 @@ async function planResolvers(
   );
 
   const fetchResolvers = (namespaceName: string) => {
-    return fetchAll(async (pageToken) => {
+    return fetchAll(async (pageToken, maxPageSize) => {
       try {
         const { pipelineResolvers, nextPageToken } = await client.listPipelineResolvers({
           workspaceId,
           namespaceName,
           pageToken,
+          pageSize: maxPageSize,
         });
         return [pipelineResolvers, nextPageToken];
       } catch (error) {

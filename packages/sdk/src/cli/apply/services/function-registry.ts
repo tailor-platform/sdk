@@ -185,11 +185,12 @@ export async function planFunctionRegistry(
   const resourceOwners = new Set<string>();
 
   // Fetch existing function registry entries
-  const existingFunctions = await fetchAll(async (pageToken) => {
+  const existingFunctions = await fetchAll(async (pageToken, maxPageSize) => {
     try {
       const response = await client.listFunctionRegistries({
         workspaceId,
         pageToken,
+        pageSize: maxPageSize,
       });
       return [
         response.functions.map(

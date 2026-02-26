@@ -341,11 +341,12 @@ async function planServices(
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
 
-  const withoutLabel = await fetchAll(async (pageToken) => {
+  const withoutLabel = await fetchAll(async (pageToken, maxPageSize) => {
     try {
       const { authServices, nextPageToken } = await client.listAuthServices({
         workspaceId,
         pageToken,
+        pageSize: maxPageSize,
       });
       return [authServices, nextPageToken];
     } catch (error) {
@@ -459,12 +460,13 @@ async function planIdPConfigs(
   );
 
   const fetchIdPConfigs = (namespaceName: string) => {
-    return fetchAll(async (pageToken) => {
+    return fetchAll(async (pageToken, maxPageSize) => {
       try {
         const { idpConfigs, nextPageToken } = await client.listAuthIDPConfigs({
           workspaceId,
           namespaceName,
           pageToken,
+          pageSize: maxPageSize,
         });
         return [idpConfigs, nextPageToken];
       } catch (error) {
@@ -903,12 +905,13 @@ async function planMachineUsers(
   );
 
   const fetchMachineUsers = (authNamespace: string) => {
-    return fetchAll(async (pageToken) => {
+    return fetchAll(async (pageToken, maxPageSize) => {
       try {
         const { machineUsers, nextPageToken } = await client.listAuthMachineUsers({
           workspaceId,
           authNamespace,
           pageToken,
+          pageSize: maxPageSize,
         });
         return [machineUsers, nextPageToken];
       } catch (error) {
@@ -1034,12 +1037,13 @@ async function planOAuth2Clients(
   >("Auth oauth2Clients");
 
   const fetchOAuth2Clients = (namespaceName: string) => {
-    return fetchAll(async (pageToken) => {
+    return fetchAll(async (pageToken, maxPageSize) => {
       try {
         const { oauth2Clients, nextPageToken } = await client.listAuthOAuth2Clients({
           workspaceId,
           namespaceName,
           pageToken,
+          pageSize: maxPageSize,
         });
         return [oauth2Clients, nextPageToken];
       } catch (error) {

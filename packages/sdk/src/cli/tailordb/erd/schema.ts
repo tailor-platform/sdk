@@ -182,12 +182,13 @@ export function buildTblsSchema(types: TailorDBProtoType[], namespace: string): 
 async function exportTailorDBSchema(options: TailorDBSchemaOptions): Promise<TblsSchema> {
   const { client, workspaceId, namespace } = options;
 
-  const types = await fetchAll(async (pageToken) => {
+  const types = await fetchAll(async (pageToken, maxPageSize) => {
     try {
       const { tailordbTypes, nextPageToken } = await client.listTailorDBTypes({
         workspaceId,
         namespaceName: namespace,
         pageToken,
+        pageSize: maxPageSize,
       });
       return [tailordbTypes, nextPageToken];
     } catch (error) {

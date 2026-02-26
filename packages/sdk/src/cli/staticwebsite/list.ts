@@ -36,10 +36,11 @@ async function listStaticWebsites(
     profile: options?.profile,
   });
 
-  const websites = await fetchAll(async (pageToken) => {
+  const websites = await fetchAll(async (pageToken, maxPageSize) => {
     const { staticwebsites, nextPageToken } = await client.listStaticWebsites({
       workspaceId,
       pageToken,
+      pageSize: maxPageSize,
     });
     return [staticwebsites, nextPageToken];
   });

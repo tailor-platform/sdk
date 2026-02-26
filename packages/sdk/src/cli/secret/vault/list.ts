@@ -42,10 +42,11 @@ async function vaultList(options?: VaultListOptions): Promise<VaultInfo[]> {
     profile: options?.profile,
   });
 
-  const vaults = await fetchAll(async (pageToken) => {
+  const vaults = await fetchAll(async (pageToken, maxPageSize) => {
     const { vaults, nextPageToken } = await client.listSecretManagerVaults({
       workspaceId,
       pageToken,
+      pageSize: maxPageSize,
     });
     return [vaults, nextPageToken];
   });

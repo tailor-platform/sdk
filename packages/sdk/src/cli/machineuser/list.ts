@@ -72,10 +72,11 @@ export async function listMachineUsers(
   }
 
   // Fetch all machine users
-  const machineUsers = await fetchAll(async (pageToken) => {
+  const machineUsers = await fetchAll(async (pageToken, maxPageSize) => {
     const { machineUsers, nextPageToken } = await client.listAuthMachineUsers({
       workspaceId,
       pageToken,
+      pageSize: maxPageSize,
       authNamespace: application.authNamespace,
     });
     return [machineUsers, nextPageToken];

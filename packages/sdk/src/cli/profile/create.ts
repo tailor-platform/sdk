@@ -38,9 +38,10 @@ export const createCommand = defineCommand({
 
     // Check if workspace exists
     const client = await initOperatorClient(token);
-    const workspaces = await fetchAll(async (pageToken) => {
+    const workspaces = await fetchAll(async (pageToken, maxPageSize) => {
       const { workspaces, nextPageToken } = await client.listWorkspaces({
         pageToken,
+        pageSize: maxPageSize,
       });
       return [workspaces, nextPageToken];
     });
