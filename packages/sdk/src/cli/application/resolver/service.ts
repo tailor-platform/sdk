@@ -1,6 +1,5 @@
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
-import { isSdkBranded } from "@/brand";
 import { loadFilesWithIgnores } from "@/cli/application/file-loader";
 import { logger, styles } from "@/cli/utils/logger";
 import {
@@ -8,6 +7,7 @@ import {
   type ResolverServiceConfig,
   ResolverSchema,
 } from "@/parser/service/resolver";
+import { isSdkBranded } from "@/utils/brand";
 
 export type ResolverService = {
   readonly namespace: string;

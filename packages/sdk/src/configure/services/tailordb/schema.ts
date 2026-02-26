@@ -1,5 +1,4 @@
 import { cloneDeep } from "es-toolkit";
-import { brandValue } from "@/brand";
 import {
   type AllowedValues,
   type AllowedValuesOutput,
@@ -18,6 +17,7 @@ import {
   type RawRelationConfig,
   type RelationType,
 } from "@/parser/service/tailordb/types";
+import { brandValue } from "@/utils/brand";
 import { type TailorTypeGqlPermission, type TailorTypePermission } from "./permission";
 import {
   type DBFieldMetadata,

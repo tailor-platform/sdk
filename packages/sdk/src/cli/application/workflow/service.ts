@@ -1,6 +1,5 @@
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
-import { isSdkBranded } from "@/brand";
 import { loadFilesWithIgnores } from "@/cli/application/file-loader";
 import { logger, styles } from "@/cli/utils/logger";
 import {
@@ -9,6 +8,7 @@ import {
   WorkflowJobSchema,
   WorkflowSchema,
 } from "@/parser/service/workflow";
+import { isSdkBranded } from "@/utils/brand";
 
 export interface CollectedJob {
   name: string;

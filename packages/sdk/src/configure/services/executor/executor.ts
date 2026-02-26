@@ -1,4 +1,4 @@
-import { brandValue } from "@/brand";
+import { brandValue } from "@/utils/brand";
 import type { Operation } from "./operation";
 import type { Trigger } from "./trigger";
 import type { AuthInvoker } from "@/configure/services/auth";

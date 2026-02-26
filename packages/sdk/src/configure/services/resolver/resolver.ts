@@ -1,5 +1,5 @@
-import { brandValue } from "@/brand";
 import { t } from "@/configure/types/type";
+import { brandValue } from "@/utils/brand";
 import type { TailorAnyField, TailorUser } from "@/configure/types";
 import type { TailorEnv } from "@/configure/types/env";
 import type { InferFieldsOutput, output } from "@/configure/types/helpers";

@@ -1,6 +1,5 @@
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
-import { isSdkBranded } from "@/brand";
 import { loadFilesWithIgnores } from "@/cli/application/file-loader";
 import { logger, styles } from "@/cli/utils/logger";
 import {
@@ -12,6 +11,7 @@ import {
   type TailorDBType,
   type TailorAnyDBType,
 } from "@/parser/service/tailordb";
+import { isSdkBranded } from "@/utils/brand";
 import type { PluginAttachment } from "@/parser/plugin-config/types";
 import type { PluginManager } from "@/plugin/manager";
 

@@ -1,10 +1,10 @@
 import { describe, expect, test } from "vitest";
 import { ZodError } from "zod";
-import { brandValue, isSdkBranded } from "@/brand";
 import { ExecutorSchema } from "@/parser/service/executor";
 import { ResolverSchema } from "@/parser/service/resolver";
 import { TailorDBTypeSchema } from "@/parser/service/tailordb";
 import { WorkflowSchema, WorkflowJobSchema } from "@/parser/service/workflow";
+import { brandValue, isSdkBranded } from "@/utils/brand";
 
 type SafeParseSchema<T> = {
   safeParse: (value: unknown) => { success: true; data: T } | { success: false; error: ZodError };
