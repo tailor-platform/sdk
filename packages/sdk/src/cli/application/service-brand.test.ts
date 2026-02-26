@@ -6,20 +6,21 @@ import { ResolverSchema } from "@/parser/service/resolver";
 import { TailorDBTypeSchema } from "@/parser/service/tailordb";
 import { WorkflowSchema, WorkflowJobSchema } from "@/parser/service/workflow";
 
+type SafeParseSchema<T> = {
+  safeParse: (value: unknown) => { success: boolean; data?: T; error?: ZodError };
+};
+
 /**
  * Simulates the brand-based error categorization pattern used by all service loaders.
  * - Branded value + invalid schema -> throws (user's SDK code has a bug)
  * - Non-branded value + invalid schema -> skipped (unrelated export)
  * - Branded value + valid schema -> returns parsed data
  * @param schema - Zod schema with safeParse method
- * @param schema.safeParse
+ * @param schema.safeParse - Safely parses a value and returns a discriminated union result
  * @param value - The value to parse and categorize
  * @returns Parsed data or "skipped" if non-branded and invalid
  */
-function simulateServiceLoad<T>(
-  schema: { safeParse: (value: unknown) => { success: boolean; data?: T; error?: ZodError } },
-  value: unknown,
-): T | "skipped" {
+function simulateServiceLoad<T>(schema: SafeParseSchema<T>, value: unknown): T | "skipped" {
   const result = schema.safeParse(value);
   if (!result.success) {
     if (isSdkBranded(value)) {
