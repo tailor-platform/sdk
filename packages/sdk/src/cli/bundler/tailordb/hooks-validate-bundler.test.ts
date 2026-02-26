@@ -8,7 +8,7 @@ import {
   resolveNeededBindings,
   buildMinimalEntryFromResolved,
   type SourceBinding,
-} from "./script-precompiler";
+} from "./hooks-validate-bundler";
 
 /**
  * Extract free variables from a function source for testing.

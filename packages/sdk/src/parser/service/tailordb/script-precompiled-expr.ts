@@ -1,18 +1,14 @@
-const PRECOMPILED_SCRIPT_EXPR_SYMBOL = Symbol.for("tailordb.precompiled.script.expr");
+const PRECOMPILED_EXPR_KEY = "__precompiledScriptExpr";
+
+type AnyFunction = (...args: never[]) => unknown;
 
 /**
  * Attach a precompiled script expression to a function object.
  * @param fn - Function metadata object.
  * @param expr - Precompiled script expression.
  */
-// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
-export function setPrecompiledScriptExpr(fn: Function, expr: string) {
-  Object.defineProperty(fn, PRECOMPILED_SCRIPT_EXPR_SYMBOL, {
-    value: expr,
-    writable: true,
-    configurable: true,
-    enumerable: false,
-  });
+export function setPrecompiledScriptExpr(fn: AnyFunction, expr: string) {
+  (fn as unknown as Record<string, unknown>)[PRECOMPILED_EXPR_KEY] = expr;
 }
 
 /**
@@ -20,8 +16,7 @@ export function setPrecompiledScriptExpr(fn: Function, expr: string) {
  * @param fn - Function metadata object.
  * @returns Precompiled script expression if attached.
  */
-// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
-export function getPrecompiledScriptExpr(fn: Function): string | undefined {
-  const value = (fn as unknown as Record<symbol, unknown>)[PRECOMPILED_SCRIPT_EXPR_SYMBOL];
+export function getPrecompiledScriptExpr(fn: AnyFunction): string | undefined {
+  const value = (fn as unknown as Record<string, unknown>)[PRECOMPILED_EXPR_KEY];
   return typeof value === "string" ? value : undefined;
 }

@@ -1,6 +1,7 @@
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "@/cli/application/file-loader";
+import { precompileTailorDBTypeScripts } from "@/cli/bundler/tailordb/hooks-validate-bundler";
 import { logger, styles } from "@/cli/utils/logger";
 import {
   GQL_PERMISSION_INVALID_OPERAND_MESSAGE,
@@ -12,7 +13,6 @@ import {
   type TailorDBType,
   type TailorAnyDBType,
 } from "@/parser/service/tailordb";
-import { precompileTailorDBTypeScripts } from "./script-precompiler";
 import type { PluginAttachment } from "@/parser/plugin-config/types";
 import type { PluginManager } from "@/plugin/manager";
 

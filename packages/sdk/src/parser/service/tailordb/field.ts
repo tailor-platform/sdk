@@ -91,7 +91,7 @@ export function parseFieldConfig(
         script: {
           expr:
             getPrecompiledScriptExpr(fn) ??
-            `(${stringifyFunction(fn)})({ value: _value, data: _data, user: ${tailorUserMap} })`,
+            `(${fn.toString().trim()})({ value: _value, data: _data, user: ${tailorUserMap} })`,
         },
         errorMessage: message,
       };

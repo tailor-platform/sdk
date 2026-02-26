@@ -13,6 +13,7 @@ import type {
   ImportDeclaration,
   VariableDeclaration,
   ExportNamedDeclaration,
+  Function as OxcFunction,
 } from "@oxc-project/types";
 
 type ScriptFunction = (...args: unknown[]) => unknown;
@@ -75,21 +76,19 @@ function collectScriptTargets(type: TailorDBTypeSchemaOutput): ScriptTarget[] {
   return targets;
 }
 
-const linterConfig = {
-  languageOptions: {
-    ecmaVersion: "latest" as const,
-    sourceType: "module" as const,
-  },
-  rules: { "no-undef": "error" as const },
-};
-
 /**
  * Run ESLint's no-undef rule on a code string and return the set of undefined identifiers.
  * @param code - Valid JavaScript code to analyze.
  * @returns Set of undefined variable names.
  */
 export function findUndefinedReferences(code: string): Set<string> {
-  const messages = linter.verify(code, linterConfig);
+  const messages = linter.verify(code, {
+    languageOptions: {
+      ecmaVersion: "latest",
+      sourceType: "module",
+    },
+    rules: { "no-undef": "error" },
+  });
   const vars = new Set<string>();
   for (const msg of messages) {
     if (msg.ruleId !== "no-undef") continue;
@@ -142,7 +141,7 @@ export function collectSourceBindings(sourceFilePath: string): Map<string, Sourc
 
   for (const stmt of program.body) {
     if (stmt.type === "ImportDeclaration") {
-      const importDecl = stmt as unknown as ImportDeclaration;
+      const importDecl = stmt as ImportDeclaration;
       const text = source.slice(importDecl.start, importDecl.end);
       if (importDecl.specifiers) {
         for (const spec of importDecl.specifiers) {
@@ -154,7 +153,7 @@ export function collectSourceBindings(sourceFilePath: string): Map<string, Sourc
         }
       }
     } else if (stmt.type === "VariableDeclaration") {
-      const varDecl = stmt as unknown as VariableDeclaration;
+      const varDecl = stmt as VariableDeclaration;
       const text = source.slice(varDecl.start, varDecl.end);
       for (const decl of varDecl.declarations) {
         if (decl.id.type === "Identifier") {
@@ -162,7 +161,7 @@ export function collectSourceBindings(sourceFilePath: string): Map<string, Sourc
         }
       }
     } else if (stmt.type === "FunctionDeclaration") {
-      const funcDecl = stmt as unknown as { id?: { name: string }; start: number; end: number };
+      const funcDecl = stmt as OxcFunction;
       if (funcDecl.id) {
         const text = source.slice(funcDecl.start, funcDecl.end);
         bindings.set(funcDecl.id.name, {
@@ -172,12 +171,12 @@ export function collectSourceBindings(sourceFilePath: string): Map<string, Sourc
         });
       }
     } else if (stmt.type === "ExportNamedDeclaration") {
-      const exportDecl = stmt as unknown as ExportNamedDeclaration;
+      const exportDecl = stmt as ExportNamedDeclaration;
       const innerDecl = exportDecl.declaration;
       if (!innerDecl) continue;
 
       if (innerDecl.type === "VariableDeclaration") {
-        const varDecl = innerDecl as unknown as VariableDeclaration;
+        const varDecl = innerDecl as VariableDeclaration;
         // Use the full export statement text so the declaration is valid standalone
         const text = source.slice(varDecl.start, varDecl.end);
         for (const decl of varDecl.declarations) {
@@ -190,11 +189,7 @@ export function collectSourceBindings(sourceFilePath: string): Map<string, Sourc
           }
         }
       } else if (innerDecl.type === "FunctionDeclaration") {
-        const funcDecl = innerDecl as unknown as {
-          id?: { name: string };
-          start: number;
-          end: number;
-        };
+        const funcDecl = innerDecl as OxcFunction;
         if (funcDecl.id) {
           const text = source.slice(funcDecl.start, funcDecl.end);
           bindings.set(funcDecl.id.name, {
