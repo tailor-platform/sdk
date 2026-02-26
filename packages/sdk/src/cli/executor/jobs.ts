@@ -237,11 +237,12 @@ export async function getExecutorJob<E extends ExecutorLike>(
     const jobInfo = toExecutorJobInfo(job);
 
     if (options.attempts) {
-      const attempts = await fetchAll(async (pageToken) => {
+      const attempts = await fetchAll(async (pageToken, maxPageSize) => {
         const { attempts, nextPageToken } = await client.listExecutorJobAttempts({
           workspaceId,
           jobId: options.jobId,
           pageToken,
+          pageSize: maxPageSize,
           pageDirection: PageDirection.DESC,
         });
         return [attempts, nextPageToken];
@@ -337,11 +338,12 @@ export async function watchExecutorJob<E extends ExecutorLike>(
     }
 
     // Get attempts to find operationReference
-    const attempts = await fetchAll(async (pageToken) => {
+    const attempts = await fetchAll(async (pageToken, maxPageSize) => {
       const { attempts, nextPageToken } = await client.listExecutorJobAttempts({
         workspaceId,
         jobId: options.jobId,
         pageToken,
+        pageSize: maxPageSize,
         pageDirection: PageDirection.DESC,
       });
       return [attempts, nextPageToken];

@@ -27,10 +27,11 @@ export async function listWorkflows(options?: ListWorkflowsOptions): Promise<Wor
     profile: options?.profile,
   });
 
-  const workflows = await fetchAll(async (pageToken) => {
+  const workflows = await fetchAll(async (pageToken, maxPageSize) => {
     const { workflows, nextPageToken } = await client.listWorkflows({
       workspaceId,
       pageToken,
+      pageSize: maxPageSize,
     });
     return [workflows, nextPageToken];
   });

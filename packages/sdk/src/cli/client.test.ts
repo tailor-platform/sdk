@@ -1,5 +1,15 @@
-import { describe, test, expect } from "vitest";
-import { formatRequestParams, parseMethodName } from "./client";
+import { describe, test, expect, vi } from "vitest";
+import { fetchAll, formatRequestParams, MAX_PAGE_SIZE, parseMethodName } from "./client";
+
+describe("fetchAll", () => {
+  test("passes MAX_PAGE_SIZE to callback", async () => {
+    const fn = vi.fn().mockResolvedValue([["item1"], ""]);
+
+    await fetchAll(fn);
+
+    expect(fn).toHaveBeenCalledWith("", MAX_PAGE_SIZE);
+  });
+});
 
 describe("parseMethodName", () => {
   test("parses Create methods", () => {

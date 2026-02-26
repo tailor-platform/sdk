@@ -80,11 +80,12 @@ export async function planStaticWebsite(context: PlanContext) {
   const resourceOwners = new Set<string>();
 
   // Fetch existing static websites
-  const withoutLabel = await fetchAll(async (pageToken) => {
+  const withoutLabel = await fetchAll(async (pageToken, maxPageSize) => {
     try {
       const { staticwebsites, nextPageToken } = await client.listStaticWebsites({
         workspaceId,
         pageToken,
+        pageSize: maxPageSize,
       });
       return [staticwebsites, nextPageToken];
     } catch (error) {

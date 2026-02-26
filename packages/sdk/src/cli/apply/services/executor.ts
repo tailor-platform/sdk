@@ -88,11 +88,12 @@ export async function planExecutor(context: PlanContext) {
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
 
-  const withoutLabel = await fetchAll(async (pageToken) => {
+  const withoutLabel = await fetchAll(async (pageToken, maxPageSize) => {
     try {
       const { executors, nextPageToken } = await client.listExecutorExecutors({
         workspaceId,
         pageToken,
+        pageSize: maxPageSize,
       });
       return [executors, nextPageToken];
     } catch (error) {

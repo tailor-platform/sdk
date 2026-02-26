@@ -121,10 +121,11 @@ async function registerJobFunctions(
   }
 
   // Fetch existing job functions with their names
-  const existingJobFunctions = await fetchAll(async (pageToken) => {
+  const existingJobFunctions = await fetchAll(async (pageToken, maxPageSize) => {
     const response = await client.listWorkflowJobFunctions({
       workspaceId,
       pageToken,
+      pageSize: maxPageSize,
     });
     return [response.jobFunctions.map((j) => j.name), response.nextPageToken];
   });
@@ -238,10 +239,11 @@ export async function planWorkflow(
   const resourceOwners = new Set<string>();
 
   // Fetch existing workflows from API
-  const withoutLabel = await fetchAll(async (pageToken) => {
+  const withoutLabel = await fetchAll(async (pageToken, maxPageSize) => {
     const response = await client.listWorkflows({
       workspaceId,
       pageToken,
+      pageSize: maxPageSize,
     });
     return [response.workflows.map((w) => ({ id: w.id, name: w.name })), response.nextPageToken];
   });

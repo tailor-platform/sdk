@@ -225,18 +225,22 @@ export function formatRequestParams(message: unknown): string {
   }
 }
 
+export const MAX_PAGE_SIZE = 1000;
+
 /**
  * Fetch all paginated resources by repeatedly calling the given function.
  * @template T
  * @param fn - Page fetcher returning items and next page token
  * @returns All fetched items
  */
-export async function fetchAll<T>(fn: (pageToken: string) => Promise<[T[], string]>) {
+export async function fetchAll<T>(
+  fn: (pageToken: string, maxPageSize: number) => Promise<[T[], string]>,
+) {
   const items: T[] = [];
   let pageToken = "";
 
   while (true) {
-    const [batch, nextPageToken] = await fn(pageToken);
+    const [batch, nextPageToken] = await fn(pageToken, MAX_PAGE_SIZE);
     items.push(...batch);
     if (!nextPageToken) break;
     pageToken = nextPageToken;

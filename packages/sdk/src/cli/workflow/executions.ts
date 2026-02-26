@@ -179,10 +179,11 @@ export async function listWorkflowExecutions<W extends WorkflowLike>(
         })
       : undefined;
 
-  const executions = await fetchAll(async (pageToken) => {
+  const executions = await fetchAll(async (pageToken, maxPageSize) => {
     const { executions, nextPageToken } = await client.listWorkflowExecutions({
       workspaceId,
       pageToken,
+      pageSize: maxPageSize,
       pageDirection: PageDirection.DESC,
       filter,
     });
