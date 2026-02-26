@@ -47,14 +47,9 @@ describe("resolveTypeNamespaces", () => {
 
   test("stops querying when all types are resolved", async () => {
     const client = {
-      listTailorDBTypes: vi
-        .fn()
-        .mockResolvedValueOnce({
-          tailordbTypes: [{ name: "User" }],
-        })
-        .mockResolvedValueOnce({
-          tailordbTypes: [{ name: "User" }],
-        }),
+      listTailorDBTypes: vi.fn().mockResolvedValueOnce({
+        tailordbTypes: [{ name: "User" }],
+      }),
     };
 
     await resolveTypeNamespaces({
