@@ -5,10 +5,12 @@ import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { loadFilesWithIgnores, type FileLoadConfig } from "@/cli/application/file-loader";
 import { enableInlineSourcemap } from "@/cli/bundler/inline-sourcemap";
+import { createDepCollectorPlugin } from "@/cli/cache/dep-collector-plugin";
 import { getDistDir } from "@/cli/utils/dist-dir";
 import { logger, styles } from "@/cli/utils/logger";
 import { createTriggerTransformPlugin, type TriggerContext } from "../trigger-context";
 import { loadResolver } from "./loader";
+import type { BundleCache } from "@/cli/cache/bundle-cache";
 
 interface ResolverInfo {
   name: string;
@@ -25,12 +27,14 @@ interface ResolverInfo {
  * @param namespace - Resolver namespace name
  * @param config - Resolver file loading configuration
  * @param triggerContext - Trigger context for workflow/job transformations
+ * @param cache
  * @returns Promise that resolves when bundling completes
  */
 export async function bundleResolvers(
   namespace: string,
   config: FileLoadConfig,
   triggerContext?: TriggerContext,
+  cache?: BundleCache,
 ): Promise<void> {
   const files = loadFilesWithIgnores(config);
   if (files.length === 0) {
@@ -71,7 +75,7 @@ export async function bundleResolvers(
   // Process each resolver
   await Promise.all(
     resolvers.map((resolver) =>
-      bundleSingleResolver(resolver, outputDir, tsconfig, triggerContext),
+      bundleSingleResolver(resolver, outputDir, tsconfig, triggerContext, cache),
     ),
   );
 
@@ -83,7 +87,23 @@ async function bundleSingleResolver(
   outputDir: string,
   tsconfig: string | undefined,
   triggerContext?: TriggerContext,
+  cache?: BundleCache,
 ): Promise<void> {
+  const outputPath = path.join(outputDir, `${resolver.name}.js`);
+
+  // Try to restore from cache before bundling
+  if (
+    cache?.tryRestore({
+      kind: "resolver",
+      name: resolver.name,
+      sourceFile: resolver.sourceFile,
+      outputPath,
+    })
+  ) {
+    logger.debug(`  ${styles.dim("cached")}: ${resolver.name}`);
+    return;
+  }
+
   // Step 1: Create entry file that imports from the original source
   const entryPath = path.join(outputDir, `${resolver.name}.entry.js`);
   const absoluteSourcePath = path.resolve(resolver.sourceFile);
@@ -119,10 +139,14 @@ async function bundleSingleResolver(
   fs.writeFileSync(entryPath, entryContent);
 
   // Step 2: Bundle with tree-shaking
-  const outputPath = path.join(outputDir, `${resolver.name}.js`);
-
   const triggerPlugin = createTriggerTransformPlugin(triggerContext);
   const plugins: rolldown.Plugin[] = triggerPlugin ? [triggerPlugin] : [];
+
+  // Add dep-collector plugin for cache dependency tracking
+  const depCollector = cache ? createDepCollectorPlugin() : undefined;
+  if (depCollector) {
+    plugins.push(depCollector.plugin);
+  }
 
   await rolldown.build(
     rolldown.defineConfig({
@@ -150,4 +174,15 @@ async function bundleSingleResolver(
       logLevel: "silent",
     }) as rolldown.BuildOptions,
   );
+
+  // Save to cache after successful build
+  if (cache && depCollector) {
+    cache.save({
+      kind: "resolver",
+      name: resolver.name,
+      sourceFile: resolver.sourceFile,
+      outputPath,
+      dependencyPaths: depCollector.getResult(),
+    });
+  }
 }

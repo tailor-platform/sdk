@@ -5,12 +5,14 @@ import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { enableInlineSourcemap } from "@/cli/bundler/inline-sourcemap";
+import { createDepCollectorPlugin } from "@/cli/cache/dep-collector-plugin";
 import { getDistDir } from "@/cli/utils/dist-dir";
 import { logger, styles } from "@/cli/utils/logger";
 import { detectTriggerCalls, findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
 import { transformFunctionTriggers } from "./trigger-transformer";
 import type { TriggerContext } from "../trigger-context";
+import type { BundleCache } from "@/cli/cache/bundle-cache";
 
 interface JobInfo {
   name: string;
@@ -36,6 +38,7 @@ export interface BundleWorkflowJobsResult {
  * @param mainJobNames - Names of main jobs
  * @param env - Environment variables to inject
  * @param triggerContext - Trigger context for transformations
+ * @param cache
  * @returns Workflow job bundling result
  */
 export async function bundleWorkflowJobs(
@@ -43,6 +46,7 @@ export async function bundleWorkflowJobs(
   mainJobNames: string[],
   env: Record<string, string | number | boolean> = {},
   triggerContext?: TriggerContext,
+  cache?: BundleCache,
 ): Promise<BundleWorkflowJobsResult> {
   if (allJobs.length === 0) {
     logger.warn("No workflow jobs to bundle");
@@ -59,11 +63,17 @@ export async function bundleWorkflowJobs(
 
   const outputDir = path.resolve(getDistDir(), "workflow-jobs");
 
-  // Clean up output directory before bundling to remove stale files
-  if (fs.existsSync(outputDir)) {
-    fs.rmSync(outputDir, { recursive: true });
-  }
+  // Remove stale output files (those not in the current build set)
   fs.mkdirSync(outputDir, { recursive: true });
+  const currentJobNames = new Set(usedJobs.map((j) => j.name));
+  const existingFiles = fs.readdirSync(outputDir);
+  for (const file of existingFiles) {
+    // Keep .js files for current jobs, remove everything else (entry files, stale outputs)
+    const baseName = path.basename(file, ".js");
+    if (file.endsWith(".entry.js") || (!currentJobNames.has(baseName) && file.endsWith(".js"))) {
+      fs.rmSync(path.join(outputDir, file), { force: true });
+    }
+  }
 
   let tsconfig: string | undefined;
   try {
@@ -74,7 +84,9 @@ export async function bundleWorkflowJobs(
 
   // Process each job
   await Promise.all(
-    usedJobs.map((job) => bundleSingleJob(job, usedJobs, outputDir, tsconfig, env, triggerContext)),
+    usedJobs.map((job) =>
+      bundleSingleJob(job, usedJobs, outputDir, tsconfig, env, triggerContext, cache),
+    ),
   );
 
   logger.log(`${styles.success("Bundled")} ${styles.info('"workflow-job"')}`);
@@ -230,7 +242,23 @@ async function bundleSingleJob(
   tsconfig: string | undefined,
   env: Record<string, string | number | boolean>,
   triggerContext?: TriggerContext,
+  cache?: BundleCache,
 ): Promise<void> {
+  const outputPath = path.join(outputDir, `${job.name}.js`);
+
+  // Try to restore from cache before bundling
+  if (
+    cache?.tryRestore({
+      kind: "workflow-job",
+      name: job.name,
+      sourceFile: job.sourceFile,
+      outputPath,
+    })
+  ) {
+    logger.debug(`  ${styles.dim("cached")}: ${job.name}`);
+    return;
+  }
+
   // Step 1: Create entry file that imports job by named export
   const entryPath = path.join(outputDir, `${job.name}.entry.js`);
   const absoluteSourcePath = path.resolve(job.sourceFile);
@@ -247,8 +275,6 @@ async function bundleSingleJob(
   fs.writeFileSync(entryPath, entryContent);
 
   // Step 2: Bundle with a transform plugin that transforms trigger calls
-  const outputPath = path.join(outputDir, `${job.name}.js`);
-
   // Collect export names for enhanced AST removal (catches jobs missed by AST detection)
   const otherJobExportNames = allJobs.filter((j) => j.name !== job.name).map((j) => j.exportName);
 
@@ -302,6 +328,13 @@ async function bundleSingleJob(
     },
   };
 
+  // Add dep-collector plugin for cache dependency tracking
+  const depCollector = cache ? createDepCollectorPlugin() : undefined;
+  const plugins: rolldown.Plugin[] = [transformPlugin];
+  if (depCollector) {
+    plugins.push(depCollector.plugin);
+  }
+
   await rolldown.build(
     rolldown.defineConfig({
       input: entryPath,
@@ -319,7 +352,7 @@ async function bundleSingleJob(
         inlineDynamicImports: true,
       },
       tsconfig,
-      plugins: [transformPlugin],
+      plugins,
       treeshake: {
         moduleSideEffects: false,
         annotations: true,
@@ -328,4 +361,15 @@ async function bundleSingleJob(
       logLevel: "silent",
     }) as rolldown.BuildOptions,
   );
+
+  // Save to cache after successful build
+  if (cache && depCollector) {
+    cache.save({
+      kind: "workflow-job",
+      name: job.name,
+      sourceFile: job.sourceFile,
+      outputPath,
+      dependencyPaths: depCollector.getResult(),
+    });
+  }
 }

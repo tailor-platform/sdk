@@ -5,10 +5,12 @@ import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { loadFilesWithIgnores, type FileLoadConfig } from "@/cli/application/file-loader";
 import { enableInlineSourcemap } from "@/cli/bundler/inline-sourcemap";
+import { createDepCollectorPlugin } from "@/cli/cache/dep-collector-plugin";
 import { getDistDir } from "@/cli/utils/dist-dir";
 import { logger, styles } from "@/cli/utils/logger";
 import { createTriggerTransformPlugin, type TriggerContext } from "../trigger-context";
 import { loadExecutor } from "./loader";
+import type { BundleCache } from "@/cli/cache/bundle-cache";
 
 interface ExecutorInfo {
   name: string;
@@ -25,6 +27,8 @@ export interface BundleExecutorsOptions {
   triggerContext?: TriggerContext;
   /** Additional files to bundle (e.g., plugin-generated executors) */
   additionalFiles?: string[];
+  /** Optional bundle cache for skipping unchanged builds */
+  cache?: BundleCache;
 }
 
 /**
@@ -37,7 +41,7 @@ export interface BundleExecutorsOptions {
  * @returns Promise that resolves when bundling completes
  */
 export async function bundleExecutors(options: BundleExecutorsOptions): Promise<void> {
-  const { config, triggerContext, additionalFiles = [] } = options;
+  const { config, triggerContext, additionalFiles = [], cache } = options;
   const configFiles = loadFilesWithIgnores(config);
   const files = [...configFiles, ...additionalFiles];
   if (files.length === 0) {
@@ -90,7 +94,7 @@ export async function bundleExecutors(options: BundleExecutorsOptions): Promise<
   // Process each executor
   await Promise.all(
     executors.map((executor) =>
-      bundleSingleExecutor(executor, outputDir, tsconfig, triggerContext),
+      bundleSingleExecutor(executor, outputDir, tsconfig, triggerContext, cache),
     ),
   );
 
@@ -102,7 +106,23 @@ async function bundleSingleExecutor(
   outputDir: string,
   tsconfig: string | undefined,
   triggerContext?: TriggerContext,
+  cache?: BundleCache,
 ): Promise<void> {
+  const outputPath = path.join(outputDir, `${executor.name}.js`);
+
+  // Try to restore from cache before bundling
+  if (
+    cache?.tryRestore({
+      kind: "executor",
+      name: executor.name,
+      sourceFile: executor.sourceFile,
+      outputPath,
+    })
+  ) {
+    logger.debug(`  ${styles.dim("cached")}: ${executor.name}`);
+    return;
+  }
+
   // Step 1: Create entry file that imports and extracts operation.body
   const entryPath = path.join(outputDir, `${executor.name}.entry.js`);
   const absoluteSourcePath = path.resolve(executor.sourceFile);
@@ -117,10 +137,13 @@ async function bundleSingleExecutor(
   fs.writeFileSync(entryPath, entryContent);
 
   // Step 2: Bundle with tree-shaking
-  const outputPath = path.join(outputDir, `${executor.name}.js`);
-
   const triggerPlugin = createTriggerTransformPlugin(triggerContext);
   const plugins: rolldown.Plugin[] = triggerPlugin ? [triggerPlugin] : [];
+
+  const depCollector = cache ? createDepCollectorPlugin() : undefined;
+  if (depCollector) {
+    plugins.push(depCollector.plugin);
+  }
 
   await rolldown.build(
     rolldown.defineConfig({
@@ -148,4 +171,15 @@ async function bundleSingleExecutor(
       logLevel: "silent",
     }) as rolldown.BuildOptions,
   );
+
+  // Save to cache after build
+  if (cache && depCollector) {
+    cache.save({
+      kind: "executor",
+      name: executor.name,
+      sourceFile: executor.sourceFile,
+      outputPath,
+      dependencyPaths: depCollector.getResult(),
+    });
+  }
 }
