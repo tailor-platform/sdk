@@ -82,12 +82,3 @@ Two TailorDB model files are provided:
 
 - `tailordb/user.ts` - User model with name, email, role fields
 - `tailordb/tenant.ts` - Tenant model with name, slug, plan fields
-
-## Hints
-
-- All config functions (`defineConfig`, `defineAuth`, `defineIdp`, `defineStaticWebSite`, `defineGenerators`) are imported from `@tailor-platform/sdk`
-- `defineStaticWebSite` returns an object with a `.url` property (resolved at deploy time) — use this for CORS and redirect URIs
-- `defineIdp` returns an object with a `.provider()` method for creating auth providers
-- `defineGenerators` takes tuples as rest arguments: `defineGenerators(["package-name", { options }], ...)`
-- Machine user attribute values must match the model's enum field values
-- Refer to `example/tailor.config.ts` in the SDK repository for a working configuration

@@ -82,11 +82,3 @@ Define an `OrderItem` model:
 ## Scaffold
 
 A `tailor.config.ts` and a partial `tailordb/customer.ts` are provided as starting points.
-
-## Hints
-
-- All field types, validation, serial, relation, nested object, and hook APIs are available from `db` (imported from `@tailor-platform/sdk`)
-- Refer to `example/tailordb/` in the SDK repository for working patterns
-- Validation uses a tuple form: `[predicate, errorMessage]`
-- Type-level hooks are defined via `.hooks()` on the type builder (not on individual fields)
-- Relations require importing the target type and specifying `type` and `toward`

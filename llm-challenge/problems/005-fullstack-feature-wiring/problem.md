@@ -196,15 +196,6 @@ Build a complete application configuration that wires everything together.
 - Import dependencies between files must be correct (resolver imports from workflows, executor imports from tailordb, config imports from tailordb)
 - Machine user attribute values must match the model's enum values
 
-## Hints
-
-- Model builder chain: `.type()` → `.indexes()` → `.features()` → `.permission()` → `.gqlPermission()`
-- Permission types (`TailorTypePermission`, `TailorTypeGqlPermission`, `PermissionCondition`) are imported from `@tailor-platform/sdk`
-- Resolver types (`createResolver`, `t`) and executor/workflow functions are all from `@tailor-platform/sdk`
-- `getDB` is imported from the generated file (`"../generated/tailordb"`)
-- Config functions: `defineConfig`, `defineAuth`, `defineIdp`, `defineStaticWebSite`, `defineGenerators`
-- Refer to `example/` in the SDK repository for working patterns of all components
-
 ## Scoring
 
 | Stage     | Points  |

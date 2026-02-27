@@ -79,15 +79,6 @@ An executor that processes incoming payment webhook notifications.
 - **name:** `"payment-received"`
 - **description:** Non-empty string describing the executor
 
-## Hints
-
-- All trigger functions and `createExecutor` are imported from `@tailor-platform/sdk`
-- Available triggers: `recordCreatedTrigger`, `recordUpdatedTrigger`, `resolverExecutedTrigger`, `scheduleTrigger`, `incomingWebhookTrigger`
-- Available operation kinds: `"function"`, `"webhook"`, `"graphql"`, `"workflow"`
-- Vault secrets in headers use `{ vault: "vault-name", key: "key-name" }` syntax
-- Refer to `example/executors/` in the SDK repository for working patterns
-- Each executor must be a **default export** from `createExecutor()`
-
 ## Scoring
 
 | Stage     | Points  |
