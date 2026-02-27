@@ -434,7 +434,7 @@ describe("createType parse tests", () => {
     const parseResult = result.fields.name.parse({
       value: undefined,
       data: {},
-      user: { id: "", type: "", workspaceId: "", attributes: null, attributeList: [] },
+      user: unauthenticatedTailorUser,
     });
     expect(parseResult.issues).toBeDefined();
     expect(parseResult.issues![0].message).toBe("Required field is missing");
@@ -447,7 +447,7 @@ describe("createType parse tests", () => {
     const parseResult = result.fields.name.parse({
       value: "hello",
       data: {},
-      user: { id: "", type: "", workspaceId: "", attributes: null, attributeList: [] },
+      user: unauthenticatedTailorUser,
     });
     expect(parseResult.issues).toBeUndefined();
     expect((parseResult as { value: string }).value).toBe("hello");
@@ -716,5 +716,59 @@ describe("createType indexes option", () => {
     const indexEntry = result.metadata.indexes![indexKeys[0]];
     expect(indexEntry.fields).toEqual(["firstName", "lastName"]);
     expect(indexEntry.unique).toBe(true);
+  });
+});
+
+describe("createType typeName option", () => {
+  it("typeName sets metadata on enum fields", () => {
+    const result = createType("Test", {
+      status: { kind: "enum", values: ["active", "inactive"], typeName: "StatusEnum" },
+    });
+    expect(result.fields.status.metadata.typeName).toBe("StatusEnum");
+  });
+
+  it("typeName sets metadata on object fields", () => {
+    const result = createType("Test", {
+      address: {
+        kind: "object",
+        typeName: "AddressInput",
+        fields: {
+          street: { kind: "string" },
+          city: { kind: "string" },
+        },
+      },
+    });
+    expect(result.fields.address.metadata.typeName).toBe("AddressInput");
+  });
+});
+
+describe("createType files option", () => {
+  it("files are set on metadata", () => {
+    const result = createType(
+      "Test",
+      { name: { kind: "string" } },
+      { files: { avatar: "image/png" } },
+    );
+    expect(result.metadata.files).toBeDefined();
+    expect(result.metadata.files!.avatar).toBe("image/png");
+  });
+});
+
+describe("createType keyOnly relation", () => {
+  it("keyOnly relation sets rawRelation and index", () => {
+    const Target = createType("Target", { name: { kind: "string" } });
+    const result = createType("Test", {
+      targetId: {
+        kind: "uuid",
+        relation: {
+          type: "keyOnly",
+          toward: { type: Target },
+        },
+      },
+    });
+    expect(result.fields.targetId.rawRelation).toBeDefined();
+    expect(result.fields.targetId.rawRelation!.type).toBe("keyOnly");
+    expect(result.fields.targetId.metadata.index).toBe(true);
+    expect(result.fields.targetId.metadata.unique).toBeUndefined();
   });
 });
