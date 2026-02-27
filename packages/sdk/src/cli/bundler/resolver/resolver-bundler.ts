@@ -4,7 +4,8 @@ import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { loadFilesWithIgnores, type FileLoadConfig } from "@/cli/application/file-loader";
-import { enableInlineSourcemap } from "@/cli/bundler/inline-sourcemap";
+import { createBundlerConfig } from "@/cli/bundler/rolldown-config";
+import { removeStaleEntryFiles } from "@/cli/bundler/stale-cleanup";
 import { computeBundlerContextHash, withCache, type BundleCache } from "@/cli/cache/bundle-cache";
 import { getDistDir } from "@/cli/utils/dist-dir";
 import { logger, styles } from "@/cli/utils/logger";
@@ -71,11 +72,7 @@ export async function bundleResolvers(
   // Clean stale entry files from previous builds.
   // Must complete before Promise.all below; parallel namespace processing
   // would require separate output directories per namespace.
-  for (const file of fs.readdirSync(outputDir)) {
-    if (file.endsWith(".entry.js")) {
-      fs.rmSync(path.join(outputDir, file), { force: true });
-    }
-  }
+  await removeStaleEntryFiles(outputDir);
 
   let tsconfig: string | undefined;
   try {
@@ -104,13 +101,11 @@ async function bundleSingleResolver(
   const outputPath = path.join(outputDir, `${resolver.name}.js`);
   const serializedTriggerContext = serializeTriggerContext(triggerContext);
 
-  const contextHash = cache
-    ? computeBundlerContextHash({
-        sourceFile: resolver.sourceFile,
-        serializedTriggerContext,
-        tsconfig,
-      })
-    : undefined;
+  const contextHash = computeBundlerContextHash({
+    sourceFile: resolver.sourceFile,
+    serializedTriggerContext,
+    tsconfig,
+  });
 
   await withCache({
     cache,
@@ -160,30 +155,7 @@ async function bundleSingleResolver(
       plugins.push(...cachePlugins);
 
       await rolldown.build(
-        rolldown.defineConfig({
-          input: entryPath,
-          output: {
-            file: outputPath,
-            format: "esm",
-            sourcemap: enableInlineSourcemap ? "inline" : true,
-            minify: enableInlineSourcemap
-              ? {
-                  mangle: {
-                    keepNames: true,
-                  },
-                }
-              : true,
-            inlineDynamicImports: true,
-          },
-          tsconfig,
-          plugins,
-          treeshake: {
-            moduleSideEffects: false,
-            annotations: true,
-            unknownGlobalSideEffects: false,
-          },
-          logLevel: "silent",
-        }) as rolldown.BuildOptions,
+        createBundlerConfig({ input: entryPath, outputPath, tsconfig, plugins }),
       );
     },
   });
