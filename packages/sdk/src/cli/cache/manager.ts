@@ -28,21 +28,6 @@ type CacheManager = {
 };
 
 /**
- * Create a no-op BundleCache for use when caching is disabled.
- * @returns A BundleCache where tryRestore always returns false and save is a no-op
- */
-function createNoopBundleCache(): BundleCache {
-  return {
-    tryRestore() {
-      return false;
-    },
-    save() {
-      // no-op
-    },
-  };
-}
-
-/**
  * Create a CacheManager that orchestrates cache operations.
  * @param options - Configuration for the cache manager
  * @returns A CacheManager instance
@@ -53,7 +38,14 @@ function createCacheManager(options: CacheManagerOptions): CacheManager {
   if (!enabled) {
     return {
       enabled: false,
-      bundleCache: createNoopBundleCache(),
+      bundleCache: {
+        tryRestore() {
+          return false;
+        },
+        save() {
+          // no-op
+        },
+      },
       finalize() {
         // no-op
       },

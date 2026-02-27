@@ -15,7 +15,7 @@ type DepCollectorResult = {
  * @returns An object containing the plugin and a getResult function that returns sorted, deduplicated paths
  */
 export function createDepCollectorPlugin(): DepCollectorResult {
-  const collectedPaths: Set<string> = new Set();
+  const collectedPaths = new Set<string>();
 
   const plugin: Plugin = {
     name: "cache-dep-collector",

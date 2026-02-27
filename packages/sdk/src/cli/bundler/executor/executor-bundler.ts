@@ -20,10 +20,10 @@ import {
 import { loadExecutor } from "./loader";
 import type { BundleCache } from "@/cli/cache/bundle-cache";
 
-interface ExecutorInfo {
+type ExecutorInfo = {
   name: string;
   sourceFile: string;
-}
+};
 
 /**
  * Options for bundling executors

@@ -96,7 +96,6 @@ function computeBundlerContextHash(params: {
  * Result of setting up a dep-collector plugin for cache tracking.
  */
 type DepCollectorSetup = {
-  plugin: Plugin;
   getDependencyPaths: () => string[];
 };
 
@@ -113,7 +112,7 @@ function setupDepCollector(
   if (!cache) return undefined;
   const { plugin, getResult } = createDepCollectorPlugin();
   plugins.push(plugin);
-  return { plugin, getDependencyPaths: getResult };
+  return { getDependencyPaths: getResult };
 }
 
 /**
@@ -136,14 +135,11 @@ function saveBundleToCache(params: {
   outputPath: string;
   contextHash?: string;
 }): void {
-  if (!params.cache || !params.depCollector) return;
-  params.cache.save({
-    kind: params.kind,
-    name: params.name,
-    sourceFile: params.sourceFile,
-    outputPath: params.outputPath,
-    dependencyPaths: params.depCollector.getDependencyPaths(),
-    contextHash: params.contextHash,
+  const { cache, depCollector, ...rest } = params;
+  if (!cache || !depCollector) return;
+  cache.save({
+    ...rest,
+    dependencyPaths: depCollector.getDependencyPaths(),
   });
 }
 

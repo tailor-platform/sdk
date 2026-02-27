@@ -20,10 +20,10 @@ import {
 import { loadResolver } from "./loader";
 import type { BundleCache } from "@/cli/cache/bundle-cache";
 
-interface ResolverInfo {
+type ResolverInfo = {
   name: string;
   sourceFile: string;
-}
+};
 
 /**
  * Bundle resolvers for the specified namespace

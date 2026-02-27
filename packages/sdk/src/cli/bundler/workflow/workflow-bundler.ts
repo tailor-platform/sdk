@@ -18,11 +18,11 @@ import { transformWorkflowSource } from "./source-transformer";
 import { transformFunctionTriggers } from "./trigger-transformer";
 import type { BundleCache } from "@/cli/cache/bundle-cache";
 
-interface JobInfo {
+type JobInfo = {
   name: string;
   exportName: string;
   sourceFile: string;
-}
+};
 
 export interface BundleWorkflowJobsResult {
   /** Maps mainJobName -> list of all job names it depends on (including itself) */
@@ -98,10 +98,10 @@ export async function bundleWorkflowJobs(
   return { mainJobDeps };
 }
 
-interface FilterUsedJobsResult {
+type FilterUsedJobsResult = {
   usedJobs: JobInfo[];
   mainJobDeps: Record<string, string[]>;
-}
+};
 
 /**
  * Filter jobs to only include those that are actually used.

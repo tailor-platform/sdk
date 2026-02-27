@@ -1,8 +1,4 @@
 /**
- * Type definitions for the bundle caching mechanism.
- */
-
-/**
  * Top-level cache state persisted to disk.
  * The version field enables schema evolution across SDK releases.
  */

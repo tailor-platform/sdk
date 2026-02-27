@@ -55,7 +55,6 @@ function createCacheStore(config: CacheConfig): CacheStore {
       const raw = fs.readFileSync(manifestPath(), "utf-8");
       const parsed: unknown = JSON.parse(raw);
 
-      // Validate structure
       if (
         typeof parsed !== "object" ||
         parsed === null ||

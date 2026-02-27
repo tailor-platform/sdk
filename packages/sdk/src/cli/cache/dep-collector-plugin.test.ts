@@ -5,7 +5,7 @@ import type { Plugin } from "rolldown";
 /**
  * Extract the load handler function from a rolldown plugin's load hook.
  * Handles both direct function and object-with-handler forms.
- * @param plugin
+ * @param plugin - Rolldown plugin to extract the load handler from
  * @returns A callable function wrapping the load handler
  */
 function extractLoadHandler(plugin: Plugin): (id: string) => unknown {
