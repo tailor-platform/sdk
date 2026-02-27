@@ -1,8 +1,13 @@
+import * as fs from "node:fs";
+import * as path from "pathe";
 import { defineCommand, arg } from "politty";
 import { z } from "zod";
 import { loadApplication, type Application } from "@/cli/application";
+import { createCacheManager } from "@/cli/cache/manager";
 import { loadConfig } from "@/cli/config-loader";
 import { generateUserTypes } from "@/cli/type-generator";
+import { getDistDir } from "@/cli/utils/dist-dir";
+import { readPackageJson } from "@/cli/utils/package-json";
 import { PluginManager } from "@/plugin/manager";
 import { commonArgs, confirmationArgs, deploymentArgs, withCommonArgs } from "../args";
 import { initOperatorClient } from "../client";
@@ -39,6 +44,8 @@ export interface ApplyOptions {
   dryRun?: boolean;
   yes?: boolean;
   noSchemaCheck?: boolean;
+  noCache?: boolean;
+  cleanCache?: boolean;
   // NOTE(remiposo): Provide an option to run build-only for testing purposes.
   // This could potentially be exposed as a CLI option.
   buildOnly?: boolean;
@@ -66,6 +73,19 @@ export async function apply(options?: ApplyOptions) {
   const dryRun = options?.dryRun ?? false;
   const yes = options?.yes ?? false;
   const buildOnly = options?.buildOnly ?? process.env.TAILOR_PLATFORM_SDK_BUILD_ONLY === "true";
+  const noCache = options?.noCache ?? false;
+
+  // Initialize cache manager
+  const packageJson = await readPackageJson();
+  if (options?.cleanCache && !noCache) {
+    const cacheDir = path.resolve(getDistDir(), "cache");
+    fs.rmSync(cacheDir, { recursive: true, force: true });
+    logger.info("Bundle cache cleaned");
+  }
+  const cacheManager = createCacheManager({
+    enabled: !noCache,
+    sdkVersion: packageJson.version ?? "unknown",
+  });
 
   // Initialize plugin manager if plugins are provided
   let pluginManager: PluginManager | undefined;
@@ -81,7 +101,9 @@ export async function apply(options?: ApplyOptions) {
   const { application, workflowBuildResult } = await loadApplication({
     config,
     pluginManager,
+    bundleCache: cacheManager.bundleCache,
   });
+  cacheManager.finalize();
   if (buildOnly) return;
 
   // Initialize client
@@ -277,6 +299,12 @@ export const applyCommand = defineCommand({
     "no-schema-check": arg(z.boolean().optional(), {
       description: "Skip schema diff check against migration snapshots",
     }),
+    "no-cache": arg(z.boolean().optional(), {
+      description: "Disable bundle caching",
+    }),
+    "clean-cache": arg(z.boolean().optional(), {
+      description: "Clean the bundle cache before building",
+    }),
   }),
   run: withCommonArgs(async (args) => {
     await apply({
@@ -286,6 +314,8 @@ export const applyCommand = defineCommand({
       dryRun: args["dry-run"],
       yes: args.yes,
       noSchemaCheck: args["no-schema-check"],
+      noCache: args["no-cache"],
+      cleanCache: args["clean-cache"],
     });
   }),
 });
