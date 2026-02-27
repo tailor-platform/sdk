@@ -6,7 +6,7 @@ import * as rolldown from "rolldown";
 import { loadFilesWithIgnores, type FileLoadConfig } from "@/cli/application/file-loader";
 import { enableInlineSourcemap } from "@/cli/bundler/inline-sourcemap";
 import { createDepCollectorPlugin } from "@/cli/cache/dep-collector-plugin";
-import { hashContent } from "@/cli/cache/hasher";
+import { hashContent, hashFile } from "@/cli/cache/hasher";
 import { getDistDir } from "@/cli/utils/dist-dir";
 import { logger, styles } from "@/cli/utils/logger";
 import {
@@ -124,11 +124,15 @@ async function bundleSingleExecutor(
 ): Promise<void> {
   const outputPath = path.join(outputDir, `${executor.name}.js`);
 
-  // Include source file path and trigger context in context hash so that
-  // renaming/moving the source file or changing workflow configuration
-  // invalidates the cache.
+  // Include source file path, trigger context, and tsconfig in context hash
+  // so that file relocation, workflow config changes, or tsconfig edits
+  // (e.g., paths/baseUrl) invalidate the cache.
   const sourceContext = cache
-    ? hashContent(path.resolve(executor.sourceFile) + serializeTriggerContext(triggerContext))
+    ? hashContent(
+        path.resolve(executor.sourceFile) +
+          serializeTriggerContext(triggerContext) +
+          (tsconfig ? hashFile(tsconfig) : ""),
+      )
     : undefined;
 
   // Try to restore from cache before bundling

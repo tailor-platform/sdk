@@ -6,7 +6,7 @@ import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { enableInlineSourcemap } from "@/cli/bundler/inline-sourcemap";
 import { createDepCollectorPlugin } from "@/cli/cache/dep-collector-plugin";
-import { hashContent } from "@/cli/cache/hasher";
+import { hashContent, hashFile } from "@/cli/cache/hasher";
 import { getDistDir } from "@/cli/utils/dist-dir";
 import { logger, styles } from "@/cli/utils/logger";
 import { serializeTriggerContext, type TriggerContext } from "../trigger-context";
@@ -247,16 +247,17 @@ async function bundleSingleJob(
 ): Promise<void> {
   const outputPath = path.join(outputDir, `${job.name}.js`);
 
-  // Compute context hash combining env variables, source file path, and trigger
-  // context so that env changes, file relocation, or workflow config changes
-  // invalidate the cache.
+  // Compute context hash combining env variables, source file path, trigger
+  // context, and tsconfig so that env changes, file relocation, workflow
+  // config changes, or tsconfig edits invalidate the cache.
   const contextHash = cache
     ? hashContent(
         JSON.stringify(
           Object.fromEntries(Object.entries(env).sort(([a], [b]) => a.localeCompare(b))),
         ) +
           path.resolve(job.sourceFile) +
-          serializeTriggerContext(triggerContext),
+          serializeTriggerContext(triggerContext) +
+          (tsconfig ? hashFile(tsconfig) : ""),
       )
     : undefined;
 
