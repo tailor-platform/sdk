@@ -9,7 +9,8 @@ import {
 } from "./schema";
 import type { TailorTypeGqlPermission, TailorTypePermission } from "./permission";
 import type { Hook, SerialConfig, IndexDef, TypeFeatures } from "./types";
-import type { InferFieldsOutput } from "@/configure/types/helpers";
+import type { InferredAttributeMap } from "@/configure/types";
+import type { InferFieldsOutput, output } from "@/configure/types/helpers";
 import type { TailorFieldType, TailorToTs } from "@/configure/types/types";
 import type { FieldValidateInput, ValidateConfig } from "@/configure/types/validation";
 import type { RelationType } from "@/parser/service/tailordb/types";
@@ -59,6 +60,11 @@ type UuidDescriptor = CommonFieldOptions &
       toward: {
         type: TailorAnyDBType | "self";
         as?: string;
+        // Accepted trade-off: `key` is typed as plain `string` rather than
+        // `keyof T["fields"]` (as in the fluent API's RelationConfig<S, T>).
+        // Constraining it would require making the entire FieldDescriptor union
+        // generic on the relation target type, which conflicts with the
+        // object-literal API's simplicity goal.
         key?: string;
       };
       backward?: string;
@@ -152,13 +158,19 @@ type ResolvedFieldMap<M extends Record<string, FieldEntry>> = {
   [K in keyof M]: ResolvedField<M[K]>;
 };
 
-type CreateTypeOptions = {
+type AllFields<D extends Record<string, FieldEntry>> = { id: IdField } & ResolvedFieldMap<D>;
+
+type CreateTypeOptions<
+  FieldNames extends string = string,
+  // oxlint-disable-next-line no-explicit-any
+  Fields extends Record<string, TailorAnyDBField> = any,
+> = {
   description?: string;
   pluralForm?: string;
   features?: Omit<TypeFeatures, "pluralForm">;
-  indexes?: IndexDef<{ fields: Record<string, unknown> }>[];
-  files?: Record<string, string>;
-  permission?: TailorTypePermission;
+  indexes?: IndexDef<{ fields: Record<FieldNames, unknown> }>[];
+  files?: Record<string, string> & Partial<Record<FieldNames, never>>;
+  permission?: TailorTypePermission<InferredAttributeMap, output<TailorDBType<Fields>>>;
   gqlPermission?: TailorTypeGqlPermission;
 };
 
@@ -280,12 +292,12 @@ type IdField = typeof idField;
 export function createType<const D extends Record<string, FieldEntry> & { id?: never }>(
   name: string | [string, string],
   descriptors: D,
-  options?: CreateTypeOptions,
-): TailorDBType<{ id: IdField } & ResolvedFieldMap<D>> {
+  options?: CreateTypeOptions<keyof AllFields<D> & string, AllFields<D>>,
+): TailorDBType<AllFields<D>> {
   const typeName = Array.isArray(name) ? name[0] : name;
   const pluralForm = Array.isArray(name) ? name[1] : options?.pluralForm;
   const fields = resolveFieldMap(descriptors);
-  const allFields = { id: idField.clone(), ...fields } as { id: IdField } & ResolvedFieldMap<D>;
+  const allFields = { id: idField.clone(), ...fields } as AllFields<D>;
 
   const dbType = createTailorDBType(typeName, allFields, {
     pluralForm,
@@ -296,11 +308,11 @@ export function createType<const D extends Record<string, FieldEntry> & { id?: n
     dbType.features(options.features);
   }
   if (options?.indexes) {
-    // oxlint-disable-next-line no-explicit-any
+    // oxlint-disable-next-line no-explicit-any -- IndexDef generic param differs structurally from TailorDBType
     dbType.indexes(...(options.indexes as any));
   }
   if (options?.files) {
-    // oxlint-disable-next-line no-explicit-any
+    // oxlint-disable-next-line no-explicit-any -- files() infers literal key type; pre-validated by CreateTypeOptions constraint
     dbType.files(options.files as any);
   }
   if (options?.permission) {

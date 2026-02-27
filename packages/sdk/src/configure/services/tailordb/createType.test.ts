@@ -748,3 +748,47 @@ describe("createType keyOnly relation", () => {
     expect(result.fields.targetId.metadata.unique).toBeUndefined();
   });
 });
+
+describe("createType type-safe options", () => {
+  it("permission accepts record operands typed to the type's fields", () => {
+    const result = createType(
+      "Employee",
+      {
+        name: { kind: "string" },
+        ownerId: { kind: "uuid" },
+      },
+      {
+        permission: {
+          create: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+          read: [{ conditions: [[{ record: "name" }, "=", "admin"]], permit: true }],
+          update: [{ conditions: [[{ newRecord: "ownerId" }, "=", { user: "id" }]], permit: true }],
+          delete: [{ conditions: [[{ record: "ownerId" }, "=", { user: "id" }]], permit: true }],
+        },
+      },
+    );
+    expect(result.metadata.permissions).toBeDefined();
+  });
+
+  it("indexes validates field names against the type's fields", () => {
+    const result = createType(
+      "Employee",
+      {
+        name: { kind: "string" },
+        department: { kind: "string" },
+      },
+      {
+        indexes: [{ fields: ["name", "department"], unique: true }],
+      },
+    );
+    expect(result.metadata.indexes).toBeDefined();
+  });
+
+  it("files accepts keys that do not collide with field names", () => {
+    const result = createType(
+      "Employee",
+      { name: { kind: "string" } },
+      { files: { avatar: "image/png" } },
+    );
+    expect(result.metadata.files).toBeDefined();
+  });
+});
