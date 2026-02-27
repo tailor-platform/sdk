@@ -14,10 +14,6 @@ import type { TailorFieldType, TailorToTs } from "@/configure/types/types";
 import type { FieldValidateInput, ValidateConfig } from "@/configure/types/validation";
 import type { RelationType } from "@/parser/service/tailordb/types";
 
-// ============================================================================
-// Field Descriptor Types
-// ============================================================================
-
 type CommonFieldOptions = {
   optional?: boolean;
   array?: boolean;
@@ -45,30 +41,16 @@ type IntDescriptor = CommonFieldOptions &
     serial?: SerialConfig<"integer">;
   };
 
-type FloatDescriptor = CommonFieldOptions &
+type SimpleDescriptor<K extends string> = CommonFieldOptions &
   IndexableOptions & {
-    kind: "float";
+    kind: K;
   };
 
-type BoolDescriptor = CommonFieldOptions &
-  IndexableOptions & {
-    kind: "bool";
-  };
-
-type DateDescriptor = CommonFieldOptions &
-  IndexableOptions & {
-    kind: "date";
-  };
-
-type DatetimeDescriptor = CommonFieldOptions &
-  IndexableOptions & {
-    kind: "datetime";
-  };
-
-type TimeDescriptor = CommonFieldOptions &
-  IndexableOptions & {
-    kind: "time";
-  };
+type FloatDescriptor = SimpleDescriptor<"float">;
+type BoolDescriptor = SimpleDescriptor<"bool">;
+type DateDescriptor = SimpleDescriptor<"date">;
+type DatetimeDescriptor = SimpleDescriptor<"datetime">;
+type TimeDescriptor = SimpleDescriptor<"time">;
 
 type UuidDescriptor = CommonFieldOptions &
   IndexableOptions & {
@@ -107,12 +89,7 @@ type FieldDescriptor =
   | EnumDescriptor
   | ObjectDescriptor;
 
-// A field entry is either a descriptor or a passthrough TailorAnyDBField
 type FieldEntry = FieldDescriptor | TailorAnyDBField;
-
-// ============================================================================
-// Kind -> TailorFieldType mapping
-// ============================================================================
 
 const kindToFieldType = {
   string: "string",
@@ -128,10 +105,6 @@ const kindToFieldType = {
 } as const satisfies Record<string, TailorFieldType>;
 
 type KindToFieldType = typeof kindToFieldType;
-
-// ============================================================================
-// Type-Level Output Inference
-// ============================================================================
 
 type KindToTsType = {
   [K in keyof KindToFieldType as K extends "enum" | "object"
@@ -178,10 +151,6 @@ type ResolvedFieldMap<M extends Record<string, FieldEntry>> = {
   [K in keyof M]: ResolvedField<M[K]>;
 };
 
-// ============================================================================
-// CreateType Options
-// ============================================================================
-
 type CreateTypeOptions = {
   description?: string;
   pluralForm?: string;
@@ -192,10 +161,6 @@ type CreateTypeOptions = {
   gqlPermission?: TailorTypeGqlPermission;
 };
 
-// ============================================================================
-// Detect passthrough TailorAnyDBField
-// ============================================================================
-
 function isPassthroughField(entry: FieldEntry): entry is TailorAnyDBField {
   return (
     "_metadata" in entry &&
@@ -204,14 +169,25 @@ function isPassthroughField(entry: FieldEntry): entry is TailorAnyDBField {
   );
 }
 
-// ============================================================================
-// buildField: Construct a field from a descriptor using createTailorDBField
-// ============================================================================
+function resolveField(entry: FieldEntry): TailorAnyDBField {
+  if (isPassthroughField(entry)) {
+    return entry;
+  }
+  return buildField(entry as FieldDescriptor);
+}
+
+function resolveFieldMap(entries: Record<string, FieldEntry>): Record<string, TailorAnyDBField> {
+  return Object.fromEntries(
+    Object.entries(entries).map(([key, entry]) => [key, resolveField(entry)]),
+  );
+}
+
+function isValidateConfig(v: unknown): v is ValidateConfig<unknown> {
+  return Array.isArray(v) && v.length === 2 && typeof v[1] === "string";
+}
 
 function buildField(descriptor: FieldDescriptor): TailorAnyDBField {
   const fieldType = kindToFieldType[descriptor.kind];
-
-  // Build options for createTailorDBField
   const options: { optional?: boolean; array?: boolean } = {};
   if (descriptor.optional === true) {
     options.optional = true;
@@ -220,40 +196,24 @@ function buildField(descriptor: FieldDescriptor): TailorAnyDBField {
     options.array = true;
   }
 
-  // Enum values
   const values = descriptor.kind === "enum" ? descriptor.values : undefined;
+  const nestedFields =
+    descriptor.kind === "object" ? resolveFieldMap(descriptor.fields) : undefined;
 
-  // Build nested fields for object descriptors
-  let nestedFields: Record<string, TailorAnyDBField> | undefined;
-  if (descriptor.kind === "object") {
-    nestedFields = {};
-    for (const [key, entry] of Object.entries(descriptor.fields)) {
-      if (isPassthroughField(entry)) {
-        nestedFields[key] = entry;
-      } else {
-        nestedFields[key] = buildField(entry as FieldDescriptor);
-      }
-    }
-  }
-
-  // Create the field via schema.ts
   let field: TailorAnyDBField = createTailorDBField(fieldType, options, nestedFields, values);
 
-  // Apply descriptor metadata via chainable methods
   if (descriptor.description !== undefined) {
     field = field.description(descriptor.description);
   }
 
-  // typeName is only supported on enum and object (nested) fields
   if (
     descriptor.typeName !== undefined &&
     (descriptor.kind === "enum" || descriptor.kind === "object")
   ) {
-    // oxlint-disable-next-line no-explicit-any
+    // oxlint-disable-next-line no-explicit-any -- typeName() is only present on enum/nested field interfaces
     field = (field as any).typeName(descriptor.typeName);
   }
 
-  // Indexable options (not available on object fields)
   if (descriptor.kind !== "object") {
     const d = descriptor as FieldDescriptor & IndexableOptions;
 
@@ -268,20 +228,14 @@ function buildField(descriptor: FieldDescriptor): TailorAnyDBField {
     }
 
     if (d.validate !== undefined) {
-      const isValidateConfig = (v: unknown): v is ValidateConfig<unknown> =>
-        Array.isArray(v) && v.length === 2 && typeof v[1] === "string";
-
       if (Array.isArray(d.validate) && !isValidateConfig(d.validate)) {
-        // Array of validators: spread them
         field = field.validate(...d.validate);
       } else {
-        // Single function or single tuple
         field = field.validate(d.validate);
       }
     }
   }
 
-  // Kind-specific options
   if (descriptor.kind === "string" && descriptor.vector === true) {
     field = field.vector();
   }
@@ -293,11 +247,9 @@ function buildField(descriptor: FieldDescriptor): TailorAnyDBField {
     field = field.serial(descriptor.serial);
   }
 
-  // Relation (uuid only)
   if (descriptor.kind === "uuid" && descriptor.relation !== undefined) {
-    // oxlint-disable-next-line no-explicit-any
+    // oxlint-disable-next-line no-explicit-any -- relation() is only present on uuid field interface
     field = (field as any).relation(descriptor.relation);
-    // relation() in schema.ts only sets rawRelation; apply index/unique metadata explicitly
     const relType = descriptor.relation.type;
     if (relType === "oneToOne" || relType === "1-1") {
       field = field.unique();
@@ -309,11 +261,7 @@ function buildField(descriptor: FieldDescriptor): TailorAnyDBField {
   return field;
 }
 
-// ============================================================================
-// createType: Main public API
-// ============================================================================
-
-// Build the id field used for all types.
+// The id field is shared across all types created by createType.
 const idField = createTailorDBField("uuid");
 type IdField = typeof idField;
 
@@ -341,27 +289,14 @@ export function createType<const D extends Record<string, FieldEntry> & { id?: n
 ): TailorDBType<{ id: IdField } & ResolvedFieldMap<D>> {
   const typeName = Array.isArray(name) ? name[0] : name;
   const pluralForm = Array.isArray(name) ? name[1] : options?.pluralForm;
-
-  // Convert descriptors to fields
-  const fields: Record<string, TailorAnyDBField> = {};
-  for (const [key, entry] of Object.entries(descriptors)) {
-    if (isPassthroughField(entry)) {
-      fields[key] = entry;
-    } else {
-      fields[key] = buildField(entry as FieldDescriptor);
-    }
-  }
-
-  // Add id field
+  const fields = resolveFieldMap(descriptors);
   const allFields = { id: idField, ...fields } as { id: IdField } & ResolvedFieldMap<D>;
 
-  // Build the type
   const dbType = createTailorDBType(typeName, allFields, {
     pluralForm,
     description: options?.description,
   });
 
-  // Apply type-level options
   if (options?.features) {
     dbType.features(options.features);
   }
@@ -382,10 +317,6 @@ export function createType<const D extends Record<string, FieldEntry> & { id?: n
 
   return dbType;
 }
-
-// ============================================================================
-// timestampFields: Convenience helper
-// ============================================================================
 
 /**
  * Returns standard timestamp fields (createdAt, updatedAt) with auto-hooks.
