@@ -10,7 +10,7 @@ import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase } from "@/cli/commands/apply/apply";
 import type { Application } from "@/cli/services/application";
-import type { CollectedJob } from "@/cli/services/application/workflow/service";
+import type { CollectedJob } from "@/cli/services/workflow/service";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type {
   CreateFunctionRegistryRequestSchema,

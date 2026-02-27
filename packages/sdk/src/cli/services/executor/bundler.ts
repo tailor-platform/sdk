@@ -3,11 +3,11 @@ import ml from "multiline-ts";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
-import { loadFilesWithIgnores, type FileLoadConfig } from "@/cli/services/application/file-loader";
-import { enableInlineSourcemap } from "@/cli/services/bundler/inline-sourcemap";
+import { loadFilesWithIgnores, type FileLoadConfig } from "@/cli/services/file-loader";
 import { getDistDir } from "@/cli/shared/dist-dir";
+import { enableInlineSourcemap } from "@/cli/shared/inline-sourcemap";
 import { logger, styles } from "@/cli/shared/logger";
-import { createTriggerTransformPlugin, type TriggerContext } from "../trigger-context";
+import { createTriggerTransformPlugin, type TriggerContext } from "@/cli/shared/trigger-context";
 import { loadExecutor } from "./loader";
 
 interface ExecutorInfo {

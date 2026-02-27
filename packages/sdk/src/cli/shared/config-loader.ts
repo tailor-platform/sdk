@@ -3,10 +3,7 @@ import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { CodeGeneratorSchema, BaseGeneratorConfigSchema } from "@/parser/generator-config";
 import { createPluginConfigSchema, type Plugin } from "@/parser/plugin-config";
-import { enumConstantsPlugin, EnumConstantsGeneratorID } from "@/plugin/builtin/enum-constants";
-import { fileUtilsPlugin, FileUtilsGeneratorID } from "@/plugin/builtin/file-utils";
-import { kyselyTypePlugin, KyselyGeneratorID } from "@/plugin/builtin/kysely-type";
-import { seedPlugin, SeedGeneratorID } from "@/plugin/builtin/seed";
+import { builtinPlugins } from "@/plugin/builtin/registry";
 import { loadConfigPath } from "./context";
 import type { AppConfig } from "@/parser/app-config";
 import type { z } from "zod";
@@ -16,15 +13,6 @@ import "./mock";
  * Loaded configuration with resolved path
  */
 export type LoadedConfig = AppConfig & { path: string };
-
-// Map of builtin generator IDs to plugin factory functions
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const builtinPlugins = new Map<string, (options: any) => Plugin<unknown, any>>([
-  [KyselyGeneratorID, (options) => kyselyTypePlugin(options)],
-  [SeedGeneratorID, (options) => seedPlugin(options)],
-  [EnumConstantsGeneratorID, (options) => enumConstantsPlugin(options)],
-  [FileUtilsGeneratorID, (options) => fileUtilsPlugin(options)],
-]);
 
 // Generator schema for custom CodeGenerator objects (builtin generators are handled as plugins)
 const GeneratorConfigSchema = CodeGeneratorSchema.brand("CodeGenerator");

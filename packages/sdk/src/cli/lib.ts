@@ -187,11 +187,11 @@ export { MIGRATION_LABEL_KEY } from "./commands/tailordb/migrate/types";
 
 // Seed exports
 export { chunkSeedData, type SeedChunk, type ChunkSeedDataOptions } from "./shared/seed-chunker";
-export { bundleSeedScript, type SeedBundleResult } from "./services/bundler/seed/seed-bundler";
+export { bundleSeedScript, type SeedBundleResult } from "./commands/generate/seed/bundler";
 export {
   bundleMigrationScript,
   type MigrationBundleResult,
-} from "./services/bundler/migration/migration-bundler";
+} from "./commands/tailordb/migrate/bundler";
 export {
   executeScript,
   waitForExecution,

@@ -1,33 +1,18 @@
 import * as path from "pathe";
 import { generatePluginExecutorFiles } from "@/cli/commands/generate/plugin-executor-generator";
 import { generatePluginTypeFiles } from "@/cli/commands/generate/plugin-type-generator";
-import { createAuthService, type AuthService } from "@/cli/services/application/auth/service";
-import {
-  createExecutorService,
-  type ExecutorService,
-} from "@/cli/services/application/executor/service";
-import {
-  createResolverService,
-  type ResolverService,
-} from "@/cli/services/application/resolver/service";
-import {
-  createTailorDBService,
-  type TailorDBService,
-} from "@/cli/services/application/tailordb/service";
-import {
-  createWorkflowService,
-  type WorkflowService,
-} from "@/cli/services/application/workflow/service";
-import { bundleExecutors } from "@/cli/services/bundler/executor/executor-bundler";
-import { bundleResolvers } from "@/cli/services/bundler/resolver/resolver-bundler";
-import { buildTriggerContext } from "@/cli/services/bundler/trigger-context";
-import {
-  bundleWorkflowJobs,
-  type BundleWorkflowJobsResult,
-} from "@/cli/services/bundler/workflow/workflow-bundler";
+import { createAuthService, type AuthService } from "@/cli/services/auth/service";
+import { bundleExecutors } from "@/cli/services/executor/bundler";
+import { createExecutorService, type ExecutorService } from "@/cli/services/executor/service";
+import { bundleResolvers } from "@/cli/services/resolver/bundler";
+import { createResolverService, type ResolverService } from "@/cli/services/resolver/service";
+import { createTailorDBService, type TailorDBService } from "@/cli/services/tailordb/service";
+import { bundleWorkflowJobs, type BundleWorkflowJobsResult } from "@/cli/services/workflow/bundler";
+import { createWorkflowService, type WorkflowService } from "@/cli/services/workflow/service";
 import { type LoadedConfig } from "@/cli/shared/config-loader";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { logger } from "@/cli/shared/logger";
+import { buildTriggerContext } from "@/cli/shared/trigger-context";
 import { type AppConfig } from "@/parser/app-config";
 import { type AuthConfig } from "@/parser/service/auth";
 import { type ExecutorServiceInput } from "@/parser/service/executor";

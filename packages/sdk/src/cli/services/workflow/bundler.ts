@@ -4,14 +4,14 @@ import { parseSync } from "oxc-parser";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
-import { enableInlineSourcemap } from "@/cli/services/bundler/inline-sourcemap";
-import { tailorUserMap } from "@/cli/services/bundler/runtime-args";
 import { getDistDir } from "@/cli/shared/dist-dir";
+import { enableInlineSourcemap } from "@/cli/shared/inline-sourcemap";
 import { logger, styles } from "@/cli/shared/logger";
+import { tailorUserMap } from "@/cli/shared/runtime-args";
 import { detectTriggerCalls, findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
 import { transformFunctionTriggers } from "./trigger-transformer";
-import type { TriggerContext } from "../trigger-context";
+import type { TriggerContext } from "@/cli/shared/trigger-context";
 
 interface JobInfo {
   name: string;

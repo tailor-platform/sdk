@@ -12,7 +12,7 @@ import {
   TenantProviderConfig_TenantProviderType,
   UserProfileProviderConfig_UserProfileProviderType,
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
-import { type AuthService } from "@/cli/services/application/auth/service";
+import { type AuthService } from "@/cli/services/auth/service";
 import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "@/cli/shared/client";
 import {
   OAuth2ClientSchema,

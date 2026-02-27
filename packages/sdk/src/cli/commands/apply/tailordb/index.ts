@@ -54,7 +54,7 @@ import {
   compareRemoteWithSnapshot,
   formatSchemaDrifts,
 } from "@/cli/commands/tailordb/migrate/snapshot";
-import { type TailorDBService } from "@/cli/services/application/tailordb/service";
+import { type TailorDBService } from "@/cli/services/tailordb/service";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { logger } from "@/cli/shared/logger";
 import { createChangeSet } from "../change-set";

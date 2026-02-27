@@ -13,8 +13,8 @@ import {
   type ExecutorTriggerConfigSchema,
   ExecutorTriggerType,
 } from "@tailor-proto/tailor/v1/executor_resource_pb";
-import { buildExecutorArgsExpr } from "@/cli/services/bundler/runtime-args";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
+import { buildExecutorArgsExpr } from "@/cli/shared/runtime-args";
 import { stringifyFunction } from "@/parser/service/tailordb";
 import { createChangeSet } from "./change-set";
 import { executorFunctionName } from "./function-registry";

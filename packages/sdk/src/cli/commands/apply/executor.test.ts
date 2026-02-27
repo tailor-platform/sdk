@@ -3,7 +3,7 @@ import { planExecutor } from "./executor";
 import { sdkNameLabelKey } from "./label";
 import type { PlanContext } from "./apply";
 import type { Application } from "@/cli/services/application";
-import type { ExecutorService } from "@/cli/services/application/executor/service";
+import type { ExecutorService } from "@/cli/services/executor/service";
 import type { OperatorClient } from "@/cli/shared/client";
 import type { LoadedConfig } from "@/cli/shared/config-loader";
 import type { Executor } from "@/parser/service/executor";

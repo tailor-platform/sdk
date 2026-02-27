@@ -3,8 +3,8 @@ import { sdkNameLabelKey } from "./label";
 import { applyPipeline, planPipeline } from "./resolver";
 import type { PlanContext } from "./apply";
 import type { Application } from "@/cli/services/application";
-import type { ExecutorService } from "@/cli/services/application/executor/service";
-import type { ResolverService } from "@/cli/services/application/resolver/service";
+import type { ExecutorService } from "@/cli/services/executor/service";
+import type { ResolverService } from "@/cli/services/resolver/service";
 import type { OperatorClient } from "@/cli/shared/client";
 import type { LoadedConfig } from "@/cli/shared/config-loader";
 

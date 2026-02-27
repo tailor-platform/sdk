@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bundleWorkflowJobs } from "./workflow-bundler";
+import { bundleWorkflowJobs } from "./bundler";
 
 describe("bundleWorkflowJobs", () => {
   it("does not throw when no workflow jobs are provided", async () => {

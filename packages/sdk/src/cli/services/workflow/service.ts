@@ -1,6 +1,6 @@
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
-import { loadFilesWithIgnores } from "@/cli/services/application/file-loader";
+import { loadFilesWithIgnores } from "@/cli/services/file-loader";
 import { logger, styles } from "@/cli/shared/logger";
 import {
   type Workflow,

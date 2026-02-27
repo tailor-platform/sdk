@@ -16,9 +16,9 @@ import {
   type PipelineResolverSchema,
 } from "@tailor-proto/tailor/v1/pipeline_resource_pb";
 import * as inflection from "inflection";
-import { type ResolverService } from "@/cli/services/application/resolver/service";
-import { buildResolverOperationHookExpr } from "@/cli/services/bundler/runtime-args";
+import { type ResolverService } from "@/cli/services/resolver/service";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
+import { buildResolverOperationHookExpr } from "@/cli/shared/runtime-args";
 import { type Resolver, type TailorField } from "@/parser/service/resolver";
 import { createChangeSet } from "./change-set";
 import { resolverFunctionName } from "./function-registry";

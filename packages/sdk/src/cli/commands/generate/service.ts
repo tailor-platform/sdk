@@ -15,7 +15,7 @@ import {
   generatePluginFilesIfNeeded,
   type Application,
 } from "@/cli/services/application";
-import { createExecutorService } from "@/cli/services/application/executor/service";
+import { createExecutorService } from "@/cli/services/executor/service";
 import { loadConfig, type LoadedConfig, type Generator } from "@/cli/shared/config-loader";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { logger, styles } from "@/cli/shared/logger";

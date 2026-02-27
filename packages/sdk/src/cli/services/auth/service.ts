@@ -1,4 +1,4 @@
-import { type TailorDBService } from "@/cli/services/application/tailordb/service";
+import { type TailorDBService } from "@/cli/services/tailordb/service";
 import { IdProviderSchema } from "@/parser/service/auth";
 import type { AuthOwnConfig, IdProviderConfig } from "@/parser/service/auth";
 
