@@ -20,10 +20,10 @@ import {
 } from "../trigger-context";
 import { loadExecutor } from "./loader";
 
-type ExecutorInfo = {
+interface ExecutorInfo {
   name: string;
   sourceFile: string;
-};
+}
 
 /**
  * Options for bundling executors

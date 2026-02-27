@@ -20,10 +20,10 @@ import {
 } from "../trigger-context";
 import { loadResolver } from "./loader";
 
-type ResolverInfo = {
+interface ResolverInfo {
   name: string;
   sourceFile: string;
-};
+}
 
 /**
  * Bundle resolvers for the specified namespace

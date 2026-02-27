@@ -18,11 +18,11 @@ import { detectTriggerCalls, findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
 import { transformFunctionTriggers } from "./trigger-transformer";
 
-type JobInfo = {
+interface JobInfo {
   name: string;
   exportName: string;
   sourceFile: string;
-};
+}
 
 export interface BundleWorkflowJobsResult {
   /** Maps mainJobName -> list of all job names it depends on (including itself) */
@@ -98,10 +98,10 @@ export async function bundleWorkflowJobs(
   return { mainJobDeps };
 }
 
-type FilterUsedJobsResult = {
+interface FilterUsedJobsResult {
   usedJobs: JobInfo[];
   mainJobDeps: Record<string, string[]>;
-};
+}
 
 /**
  * Filter jobs to only include those that are actually used.
