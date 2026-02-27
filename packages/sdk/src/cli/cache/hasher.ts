@@ -16,8 +16,8 @@ function hashContent(content: string): string {
  * @returns Hex-encoded SHA-256 hash of the file content
  */
 function hashFile(filePath: string): string {
-  const content = fs.readFileSync(filePath, "utf-8");
-  return hashContent(content);
+  const content = fs.readFileSync(filePath);
+  return crypto.createHash("sha256").update(content).digest("hex");
 }
 
 /**

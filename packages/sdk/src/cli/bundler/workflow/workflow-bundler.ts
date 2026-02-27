@@ -250,7 +250,11 @@ async function bundleSingleJob(
   // Compute env context hash so different env values invalidate the cache.
   // Sort keys for deterministic hashing regardless of property insertion order.
   const envContextHash = cache
-    ? hashContent(JSON.stringify(env, Object.keys(env).sort()))
+    ? hashContent(
+        JSON.stringify(
+          Object.fromEntries(Object.entries(env).sort(([a], [b]) => a.localeCompare(b))),
+        ),
+      )
     : undefined;
 
   // Try to restore from cache before bundling

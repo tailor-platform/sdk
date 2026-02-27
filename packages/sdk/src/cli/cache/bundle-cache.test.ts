@@ -155,6 +155,83 @@ describe("createBundleCache", () => {
 
       expect(result).toBe(false);
     });
+
+    test("returns false when contextHash changes", () => {
+      const store = createCacheStore({ cacheDir });
+      const cache = createBundleCache(store, "1.0.0");
+      const sourceFile = writeFile("src/workflow.ts", "export default {}");
+      const outputPath = writeFile("dist/workflow.js", "bundled output");
+
+      cache.save({
+        kind: "workflow-job",
+        name: "myJob",
+        sourceFile,
+        outputPath,
+        dependencyPaths: [sourceFile],
+        contextHash: "env-hash-a",
+      });
+
+      const result = cache.tryRestore({
+        kind: "workflow-job",
+        name: "myJob",
+        outputPath,
+        contextHash: "env-hash-b",
+      });
+
+      expect(result).toBe(false);
+    });
+
+    test("returns false when contextHash is added after save without one", () => {
+      const store = createCacheStore({ cacheDir });
+      const cache = createBundleCache(store, "1.0.0");
+      const sourceFile = writeFile("src/workflow.ts", "export default {}");
+      const outputPath = writeFile("dist/workflow.js", "bundled output");
+
+      cache.save({
+        kind: "workflow-job",
+        name: "myJob",
+        sourceFile,
+        outputPath,
+        dependencyPaths: [sourceFile],
+      });
+
+      const result = cache.tryRestore({
+        kind: "workflow-job",
+        name: "myJob",
+        outputPath,
+        contextHash: "env-hash-a",
+      });
+
+      expect(result).toBe(false);
+    });
+
+    test("returns true when contextHash matches", () => {
+      const store = createCacheStore({ cacheDir });
+      const cache = createBundleCache(store, "1.0.0");
+      const sourceFile = writeFile("src/workflow.ts", "export default {}");
+      const outputPath = writeFile("dist/workflow.js", "bundled output");
+
+      cache.save({
+        kind: "workflow-job",
+        name: "myJob",
+        sourceFile,
+        outputPath,
+        dependencyPaths: [sourceFile],
+        contextHash: "env-hash-a",
+      });
+
+      fs.unlinkSync(outputPath);
+
+      const result = cache.tryRestore({
+        kind: "workflow-job",
+        name: "myJob",
+        outputPath,
+        contextHash: "env-hash-a",
+      });
+
+      expect(result).toBe(true);
+      expect(fs.existsSync(outputPath)).toBe(true);
+    });
   });
 
   describe("save", () => {

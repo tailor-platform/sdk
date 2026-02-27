@@ -8,7 +8,7 @@ import type { CacheConfig, CacheEntry, CacheManifest } from "./types";
 type CacheStore = {
   /** Read manifest from disk, returning undefined if missing or invalid. */
   loadManifest(): CacheManifest | undefined;
-  /** Return the current in-memory manifest without re-reading from disk. */
+  /** Return the current in-memory manifest, loading from disk on first access if not yet loaded. */
   getCurrentManifest(): CacheManifest | undefined;
   /** Persist manifest to disk using atomic write (temp file + rename). */
   saveManifest(manifest: CacheManifest): void;

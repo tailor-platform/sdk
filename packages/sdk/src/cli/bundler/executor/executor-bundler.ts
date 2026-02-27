@@ -84,7 +84,9 @@ export async function bundleExecutors(options: BundleExecutorsOptions): Promise<
 
   fs.mkdirSync(outputDir, { recursive: true });
 
-  // Clean stale entry files from previous builds
+  // Clean stale entry files from previous builds.
+  // Must complete before Promise.all below; parallel processing
+  // would require separate output directories.
   for (const file of fs.readdirSync(outputDir)) {
     if (file.endsWith(".entry.js")) {
       fs.rmSync(path.join(outputDir, file), { force: true });

@@ -110,6 +110,8 @@ export async function apply(options?: ApplyOptions) {
     application = result.application;
     workflowBuildResult = result.workflowBuildResult;
   } finally {
+    // Intentionally persist even on partial failure: successfully built bundles
+    // are cached so the next run only rebuilds what failed.
     cacheManager.finalize();
   }
   if (buildOnly) return;
