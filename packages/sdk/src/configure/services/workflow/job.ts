@@ -1,6 +1,8 @@
+import { unauthenticatedTailorUser } from "@/configure/types/user";
 import { brandValue } from "@/utils/brand";
 import type { TailorEnv } from "@/configure/types/env";
 import type { JsonCompatible } from "@/configure/types/helpers";
+import type { TailorUser } from "@/configure/types/user";
 import type { Jsonifiable, Jsonify, JsonPrimitive } from "type-fest";
 
 /**
@@ -8,6 +10,7 @@ import type { Jsonifiable, Jsonify, JsonPrimitive } from "type-fest";
  */
 export type WorkflowJobContext = {
   env: TailorEnv;
+  user: TailorUser;
 };
 
 /**
@@ -154,6 +157,12 @@ type WorkflowJobBody<I, O> =
 export const WORKFLOW_TEST_ENV_KEY = "TAILOR_TEST_WORKFLOW_ENV";
 
 /**
+ * Environment variable key for workflow user testing.
+ * Contains JSON-serialized TailorUser object.
+ */
+export const WORKFLOW_TEST_USER_KEY = "TAILOR_TEST_WORKFLOW_USER";
+
+/**
  * Create a workflow job definition.
  *
  * All jobs must be named exports from the workflow file.
@@ -194,7 +203,10 @@ export const createWorkflowJob = <const Name extends string, I = undefined, O = 
     // In production, bundler transforms .trigger() calls to tailor.workflow.triggerJobFunction().
     trigger: async (args?: unknown) => {
       const env: TailorEnv = JSON.parse(process.env[WORKFLOW_TEST_ENV_KEY] || "{}");
-      const result = await config.body(args as I, { env });
+      const user: TailorUser = process.env[WORKFLOW_TEST_USER_KEY]
+        ? JSON.parse(process.env[WORKFLOW_TEST_USER_KEY])
+        : unauthenticatedTailorUser;
+      const result = await config.body(args as I, { env, user });
       return result ? JSON.parse(JSON.stringify(result)) : result;
     },
     body: config.body,
