@@ -4,7 +4,6 @@ import { logger, styles } from "@/cli/utils/logger";
 import { createDepCollectorPlugin } from "./dep-collector-plugin";
 import { hashContent, hashFile, hashFiles } from "./hasher";
 import type { CacheStore } from "./store";
-import type { CacheEntry } from "./types";
 import type { Plugin } from "rolldown";
 
 type BundleKind = "resolver" | "executor" | "workflow-job";
@@ -64,11 +63,12 @@ type ComputeBundlerContextHashParams = {
  * @returns SHA-256 hex digest of the combined context
  */
 function computeBundlerContextHash(params: ComputeBundlerContextHashParams): string {
+  const { sourceFile, serializedTriggerContext, tsconfig, prefix } = params;
   return hashContent(
-    (params.prefix ?? "") +
-      path.resolve(params.sourceFile) +
-      params.serializedTriggerContext +
-      (params.tsconfig ? hashFile(params.tsconfig) : "") +
+    (prefix ?? "") +
+      path.resolve(sourceFile) +
+      serializedTriggerContext +
+      (tsconfig ? hashFile(tsconfig) : "") +
       String(enableInlineSourcemap),
   );
 }
@@ -90,33 +90,23 @@ type WithCacheParams = {
  * @param params - Cache and build parameters
  */
 async function withCache(params: WithCacheParams): Promise<void> {
-  if (!params.cache) {
-    await params.build([]);
+  const { cache, kind, name, sourceFile, outputPath, contextHash, build } = params;
+
+  if (!cache) {
+    await build([]);
     return;
   }
 
-  const restored = params.cache.tryRestore({
-    kind: params.kind,
-    name: params.name,
-    outputPath: params.outputPath,
-    contextHash: params.contextHash,
-  });
+  const restored = cache.tryRestore({ kind, name, outputPath, contextHash });
   if (restored) {
-    logger.debug(`  ${styles.dim("cached")}: ${params.name}`);
+    logger.debug(`  ${styles.dim("cached")}: ${name}`);
     return;
   }
 
   const { plugin, getResult } = createDepCollectorPlugin();
-  await params.build([plugin]);
+  await build([plugin]);
 
-  params.cache.save({
-    kind: params.kind,
-    name: params.name,
-    sourceFile: params.sourceFile,
-    outputPath: params.outputPath,
-    dependencyPaths: getResult(),
-    contextHash: params.contextHash,
-  });
+  cache.save({ kind, name, sourceFile, outputPath, dependencyPaths: getResult(), contextHash });
 }
 
 /**
@@ -150,33 +140,27 @@ function createBundleCache(store: CacheStore): BundleCache {
   }
 
   function save(params: BundleCacheSaveParams): void {
-    const cacheKey = buildCacheKey(params.kind, params.name);
+    const { kind, name, sourceFile, outputPath, dependencyPaths, contextHash } = params;
+    const cacheKey = buildCacheKey(kind, name);
     // Always include sourceFile in dependency paths so that changes to the
     // source file itself are detected even when dep-collector only finds
     // node_modules imports (which are filtered out).
-    const allDeps = params.dependencyPaths.includes(params.sourceFile)
-      ? params.dependencyPaths
-      : [params.sourceFile, ...params.dependencyPaths];
-    const inputHash = combineHash(hashFiles(allDeps), params.contextHash);
+    const allDeps = dependencyPaths.includes(sourceFile)
+      ? dependencyPaths
+      : [sourceFile, ...dependencyPaths];
+    const inputHash = combineHash(hashFiles(allDeps), contextHash);
     // Stored for future integrity verification (detect corrupted cache files)
-    const contentHash = hashFile(params.outputPath);
+    const contentHash = hashFile(outputPath);
 
-    store.storeBundleOutput(cacheKey, params.outputPath);
+    store.storeBundleOutput(cacheKey, outputPath);
 
-    const entry: CacheEntry = {
+    store.setEntry(cacheKey, {
       kind: "bundle",
       inputHash,
       dependencyPaths: allDeps,
-      outputFiles: [
-        {
-          outputPath: params.outputPath,
-          contentHash,
-        },
-      ],
+      outputFiles: [{ outputPath, contentHash }],
       createdAt: new Date().toISOString(),
-    };
-
-    store.setEntry(cacheKey, entry);
+    });
   }
 
   return { tryRestore, save };
