@@ -8,7 +8,10 @@ type DepCollectorResult = {
 /**
  * Create a rolldown plugin that collects all resolved module paths during a build.
  * The plugin is purely observational and does not modify any code or behavior.
- * Collected paths exclude node_modules (SDK version handles those separately).
+ * Collected paths exclude node_modules and generated entry files.
+ * node_modules changes (package upgrades) are not tracked per-bundle;
+ * SDK version changes invalidate the entire cache, and users can run
+ * `--clean-cache` after other dependency upgrades.
  * @returns An object containing the plugin and a getResult function that returns sorted, deduplicated paths
  */
 export function createDepCollectorPlugin(): DepCollectorResult {

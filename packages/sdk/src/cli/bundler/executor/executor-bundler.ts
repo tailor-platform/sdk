@@ -6,6 +6,7 @@ import * as rolldown from "rolldown";
 import { loadFilesWithIgnores, type FileLoadConfig } from "@/cli/application/file-loader";
 import { enableInlineSourcemap } from "@/cli/bundler/inline-sourcemap";
 import { createDepCollectorPlugin } from "@/cli/cache/dep-collector-plugin";
+import { hashContent } from "@/cli/cache/hasher";
 import { getDistDir } from "@/cli/utils/dist-dir";
 import { logger, styles } from "@/cli/utils/logger";
 import { createTriggerTransformPlugin, type TriggerContext } from "../trigger-context";
@@ -119,12 +120,17 @@ async function bundleSingleExecutor(
 ): Promise<void> {
   const outputPath = path.join(outputDir, `${executor.name}.js`);
 
+  // Include source file path in context hash so that renaming/moving
+  // the source file invalidates the cache even when the old file persists.
+  const sourceContext = cache ? hashContent(path.resolve(executor.sourceFile)) : undefined;
+
   // Try to restore from cache before bundling
   if (
     cache?.tryRestore({
       kind: "executor",
       name: executor.name,
       outputPath,
+      contextHash: sourceContext,
     })
   ) {
     logger.debug(`  ${styles.dim("cached")}: ${executor.name}`);
@@ -188,6 +194,7 @@ async function bundleSingleExecutor(
       sourceFile: executor.sourceFile,
       outputPath,
       dependencyPaths: depCollector.getResult(),
+      contextHash: sourceContext,
     });
   }
 }
