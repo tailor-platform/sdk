@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { createBundleCache, withCache } from "./bundle-cache";
+import { computeBundlerContextHash, createBundleCache, withCache } from "./bundle-cache";
 import { createCacheStore } from "./store";
 
 describe("createBundleCache", () => {
@@ -473,5 +473,88 @@ describe("withCache", () => {
       build,
     });
     expect(build).toHaveBeenCalledOnce();
+  });
+});
+
+vi.mock("@/cli/bundler/inline-sourcemap", () => ({
+  enableInlineSourcemap: false,
+}));
+
+describe("computeBundlerContextHash", () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ctx-hash-test-"));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  function writeTsconfig(content: string): string {
+    const filePath = path.join(tmpDir, "tsconfig.json");
+    fs.writeFileSync(filePath, content);
+    return filePath;
+  }
+
+  const baseParams = {
+    sourceFile: "/tmp/src/resolver.ts",
+    serializedTriggerContext: "ctx",
+  };
+
+  test("returns the same hash for identical inputs", () => {
+    const a = computeBundlerContextHash(baseParams);
+    const b = computeBundlerContextHash(baseParams);
+
+    expect(a).toBe(b);
+    expect(a).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  test("returns different hash when sourceFile differs", () => {
+    const a = computeBundlerContextHash(baseParams);
+    const b = computeBundlerContextHash({ ...baseParams, sourceFile: "/tmp/src/executor.ts" });
+
+    expect(a).not.toBe(b);
+  });
+
+  test("returns different hash when serializedTriggerContext differs", () => {
+    const a = computeBundlerContextHash(baseParams);
+    const b = computeBundlerContextHash({ ...baseParams, serializedTriggerContext: "other" });
+
+    expect(a).not.toBe(b);
+  });
+
+  test("returns different hash when tsconfig content differs", () => {
+    const tsconfig1 = writeTsconfig('{"compilerOptions": {"strict": true}}');
+    const tsconfig2Path = path.join(tmpDir, "tsconfig2.json");
+    fs.writeFileSync(tsconfig2Path, '{"compilerOptions": {"strict": false}}');
+
+    const a = computeBundlerContextHash({ ...baseParams, tsconfig: tsconfig1 });
+    const b = computeBundlerContextHash({ ...baseParams, tsconfig: tsconfig2Path });
+
+    expect(a).not.toBe(b);
+  });
+
+  test("returns different hash when tsconfig is undefined vs specified", () => {
+    const tsconfig = writeTsconfig('{"compilerOptions": {}}');
+
+    const a = computeBundlerContextHash(baseParams);
+    const b = computeBundlerContextHash({ ...baseParams, tsconfig });
+
+    expect(a).not.toBe(b);
+  });
+
+  test("returns different hash when prefix differs", () => {
+    const a = computeBundlerContextHash({ ...baseParams, prefix: "ENV_A=1" });
+    const b = computeBundlerContextHash({ ...baseParams, prefix: "ENV_B=2" });
+
+    expect(a).not.toBe(b);
+  });
+
+  test("returns same hash when prefix is undefined vs empty string", () => {
+    const a = computeBundlerContextHash({ ...baseParams, prefix: undefined });
+    const b = computeBundlerContextHash({ ...baseParams, prefix: "" });
+
+    expect(a).toBe(b);
   });
 });
