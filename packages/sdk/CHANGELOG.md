@@ -1,5 +1,21 @@
 # @tailor-platform/sdk
 
+## 1.18.0
+
+### Minor Changes
+
+- [#617](https://github.com/tailor-platform/sdk/pull/617) [`a6a2fc3`](https://github.com/tailor-platform/sdk/commit/a6a2fc30e9b7ef475819c53a43de96bee4962afd) Thanks [@toiroakr](https://github.com/toiroakr)! - Unify Plugin and Generator systems with a simplified hook architecture. Definition-time hooks (`onTypeLoaded`, `onNamespaceLoaded`) generate TailorDB types, resolvers, and executors. Generation-time hooks (`onTailorDBReady`, `onResolverReady`, `onExecutorReady`) receive all finalized data at each pipeline phase and directly produce output files. Each hook runs at its natural pipeline phase regardless of what other hooks the same plugin implements, ensuring outputs from earlier phases are available to later phases. `defineGenerators()` is deprecated in favor of `definePlugins()` with generation hooks. Builtin plugins are moved to dedicated entry points (`@tailor-platform/sdk/plugin/kysely-type`, `@tailor-platform/sdk/plugin/enum-constants`, `@tailor-platform/sdk/plugin/file-utils`, `@tailor-platform/sdk/plugin/seed`) to avoid bundling the CLI layer when importing plugins in `tailor.config.ts`. Deprecated re-exports remain in `@tailor-platform/sdk/cli` for backward compatibility.
+
+- [#632](https://github.com/tailor-platform/sdk/pull/632) [`6cc53d8`](https://github.com/tailor-platform/sdk/commit/6cc53d8ef372d62e3242eb764c91ea2a1d397550) Thanks [@toiroakr](https://github.com/toiroakr)! - Consolidate runtime args transformation into cli/bundler/runtime-args module, expose user context in WorkflowJobContext, and add WORKFLOW_TEST_USER_KEY for mocking user in workflow trigger tests
+
+### Patch Changes
+
+- [#636](https://github.com/tailor-platform/sdk/pull/636) [`43aaa26`](https://github.com/tailor-platform/sdk/commit/43aaa26681edc51f8459abe353f4f0c0ad1e803e) Thanks [@toiroakr](https://github.com/toiroakr)! - Set default maxPageSize (1000) for all paginated List API calls via fetchAll to work around server-side pagination bug in ListFunctionRegistries
+
+- [#637](https://github.com/tailor-platform/sdk/pull/637) [`a74df5f`](https://github.com/tailor-platform/sdk/commit/a74df5f58fa4480439dfffe1b66213cb29820309) Thanks [@dqn](https://github.com/dqn)! - Categorize Zod validation errors using SDK brand symbols: branded values that fail schema validation now throw (indicating a user configuration bug), while non-branded values are silently skipped (unrelated files picked up by glob).
+
+- [#635](https://github.com/tailor-platform/sdk/pull/635) [`329690b`](https://github.com/tailor-platform/sdk/commit/329690be4d38d348776560b0b3781717ca03c913) Thanks [@dqn](https://github.com/dqn)! - Migrate politty to v0.4 section-level documentation markers and update CLI docs generation.
+
 ## 1.17.1
 
 ### Patch Changes
