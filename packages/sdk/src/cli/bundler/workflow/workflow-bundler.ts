@@ -9,6 +9,7 @@ import {
   computeBundlerContextHash,
   saveBundleToCache,
   setupDepCollector,
+  type BundleCache,
 } from "@/cli/cache/bundle-cache";
 import { getDistDir } from "@/cli/utils/dist-dir";
 import { logger, styles } from "@/cli/utils/logger";
@@ -16,7 +17,6 @@ import { serializeTriggerContext, type TriggerContext } from "../trigger-context
 import { detectTriggerCalls, findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
 import { transformFunctionTriggers } from "./trigger-transformer";
-import type { BundleCache } from "@/cli/cache/bundle-cache";
 
 type JobInfo = {
   name: string;

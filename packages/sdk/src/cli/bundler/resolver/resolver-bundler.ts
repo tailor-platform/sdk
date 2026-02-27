@@ -9,6 +9,7 @@ import {
   computeBundlerContextHash,
   saveBundleToCache,
   setupDepCollector,
+  type BundleCache,
 } from "@/cli/cache/bundle-cache";
 import { getDistDir } from "@/cli/utils/dist-dir";
 import { logger, styles } from "@/cli/utils/logger";
@@ -18,7 +19,6 @@ import {
   type TriggerContext,
 } from "../trigger-context";
 import { loadResolver } from "./loader";
-import type { BundleCache } from "@/cli/cache/bundle-cache";
 
 type ResolverInfo = {
   name: string;
