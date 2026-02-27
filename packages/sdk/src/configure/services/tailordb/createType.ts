@@ -10,7 +10,7 @@ import {
 import type { TailorTypeGqlPermission, TailorTypePermission } from "./permission";
 import type { Hook, SerialConfig, IndexDef, TypeFeatures } from "./types";
 import type { InferFieldsOutput } from "@/configure/types/helpers";
-import type { TailorFieldType } from "@/configure/types/types";
+import type { TailorFieldType, TailorToTs } from "@/configure/types/types";
 import type { FieldValidateInput, ValidateConfig } from "@/configure/types/validation";
 import type { RelationType } from "@/parser/service/tailordb/types";
 
@@ -134,14 +134,9 @@ type KindToFieldType = typeof kindToFieldType;
 // ============================================================================
 
 type KindToTsType = {
-  string: string;
-  int: number;
-  float: number;
-  bool: boolean;
-  uuid: string;
-  date: string;
-  datetime: string | Date;
-  time: string;
+  [K in keyof KindToFieldType as K extends "enum" | "object"
+    ? never
+    : K]: TailorToTs[KindToFieldType[K]];
 };
 
 type DescriptorBaseOutput<D extends FieldDescriptor> = D extends { kind: "enum"; values: infer V }

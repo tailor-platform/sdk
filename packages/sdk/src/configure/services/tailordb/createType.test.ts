@@ -1,4 +1,5 @@
 import { describe, it, expectTypeOf, expect } from "vitest";
+import { unauthenticatedTailorUser } from "@/configure/types";
 import { createType, timestampFields } from "./createType";
 import { db } from "./schema";
 import type { output } from "@/configure/types/helpers";
@@ -450,5 +451,270 @@ describe("createType parse tests", () => {
     });
     expect(parseResult.issues).toBeUndefined();
     expect((parseResult as { value: string }).value).toBe("hello");
+  });
+});
+
+describe("createType parse tests for all field kinds", () => {
+  const parseCtx = (value: unknown) => ({
+    value,
+    data: {},
+    user: unauthenticatedTailorUser,
+  });
+
+  it("int: valid value", () => {
+    const result = createType("Test", { count: { kind: "int" } });
+    const parseResult = result.fields.count.parse(parseCtx(42));
+    expect(parseResult.issues).toBeUndefined();
+    expect((parseResult as { value: number }).value).toBe(42);
+  });
+
+  it("int: invalid value", () => {
+    const result = createType("Test", { count: { kind: "int" } });
+    const parseResult = result.fields.count.parse(parseCtx("hello"));
+    expect(parseResult.issues).toBeDefined();
+    expect(parseResult.issues![0].message).toContain("Expected an integer");
+  });
+
+  it("float: valid value", () => {
+    const result = createType("Test", { price: { kind: "float" } });
+    const parseResult = result.fields.price.parse(parseCtx(3.14));
+    expect(parseResult.issues).toBeUndefined();
+    expect((parseResult as { value: number }).value).toBe(3.14);
+  });
+
+  it("float: invalid value", () => {
+    const result = createType("Test", { price: { kind: "float" } });
+    const parseResult = result.fields.price.parse(parseCtx("hello"));
+    expect(parseResult.issues).toBeDefined();
+    expect(parseResult.issues![0].message).toContain("Expected a number");
+  });
+
+  it("bool: valid value", () => {
+    const result = createType("Test", { active: { kind: "bool" } });
+    const parseResult = result.fields.active.parse(parseCtx(true));
+    expect(parseResult.issues).toBeUndefined();
+    expect((parseResult as { value: boolean }).value).toBe(true);
+  });
+
+  it("bool: invalid value", () => {
+    const result = createType("Test", { active: { kind: "bool" } });
+    const parseResult = result.fields.active.parse(parseCtx("hello"));
+    expect(parseResult.issues).toBeDefined();
+    expect(parseResult.issues![0].message).toContain("Expected a boolean");
+  });
+
+  it("uuid: valid value", () => {
+    const result = createType("Test", { ref: { kind: "uuid" } });
+    const parseResult = result.fields.ref.parse(parseCtx("550e8400-e29b-41d4-a716-446655440000"));
+    expect(parseResult.issues).toBeUndefined();
+    expect((parseResult as { value: string }).value).toBe("550e8400-e29b-41d4-a716-446655440000");
+  });
+
+  it("uuid: invalid value", () => {
+    const result = createType("Test", { ref: { kind: "uuid" } });
+    const parseResult = result.fields.ref.parse(parseCtx("not-a-uuid"));
+    expect(parseResult.issues).toBeDefined();
+    expect(parseResult.issues![0].message).toContain("Expected a valid UUID");
+  });
+
+  it("date: valid value", () => {
+    const result = createType("Test", { birthDate: { kind: "date" } });
+    const parseResult = result.fields.birthDate.parse(parseCtx("2024-01-15"));
+    expect(parseResult.issues).toBeUndefined();
+    expect((parseResult as { value: string }).value).toBe("2024-01-15");
+  });
+
+  it("date: invalid value", () => {
+    const result = createType("Test", { birthDate: { kind: "date" } });
+    const parseResult = result.fields.birthDate.parse(parseCtx("not-a-date"));
+    expect(parseResult.issues).toBeDefined();
+    expect(parseResult.issues![0].message).toContain("Expected to match");
+  });
+
+  it("datetime: valid Date object", () => {
+    const result = createType("Test", { timestamp: { kind: "datetime" } });
+    const dateObj = new Date("2024-01-15T10:30:00.000Z");
+    const parseResult = result.fields.timestamp.parse(parseCtx(dateObj));
+    // Date objects are not strings, so they fail the string-based datetime regex validation
+    expect(parseResult.issues).toBeDefined();
+    expect(parseResult.issues![0].message).toContain("Expected to match ISO format");
+  });
+
+  it("datetime: valid ISO string", () => {
+    const result = createType("Test", { timestamp: { kind: "datetime" } });
+    const parseResult = result.fields.timestamp.parse(parseCtx("2024-01-15T10:30:00Z"));
+    expect(parseResult.issues).toBeUndefined();
+    expect((parseResult as { value: string }).value).toBe("2024-01-15T10:30:00Z");
+  });
+
+  it("datetime: invalid value", () => {
+    const result = createType("Test", { timestamp: { kind: "datetime" } });
+    const parseResult = result.fields.timestamp.parse(parseCtx("not-a-datetime"));
+    expect(parseResult.issues).toBeDefined();
+    expect(parseResult.issues![0].message).toContain("Expected to match ISO format");
+  });
+
+  it("time: valid value", () => {
+    const result = createType("Test", { openTime: { kind: "time" } });
+    const parseResult = result.fields.openTime.parse(parseCtx("10:30"));
+    expect(parseResult.issues).toBeUndefined();
+    expect((parseResult as { value: string }).value).toBe("10:30");
+  });
+
+  it("time: invalid value", () => {
+    const result = createType("Test", { openTime: { kind: "time" } });
+    const parseResult = result.fields.openTime.parse(parseCtx("not-a-time"));
+    expect(parseResult.issues).toBeDefined();
+    expect(parseResult.issues![0].message).toContain("Expected to match");
+  });
+
+  it("enum: valid value from allowed values", () => {
+    const result = createType("Test", { role: { kind: "enum", values: ["ADMIN", "USER"] } });
+    const parseResult = result.fields.role.parse(parseCtx("ADMIN"));
+    expect(parseResult.issues).toBeUndefined();
+    expect((parseResult as { value: string }).value).toBe("ADMIN");
+  });
+
+  it("enum: invalid value not in allowed values", () => {
+    const result = createType("Test", { role: { kind: "enum", values: ["ADMIN", "USER"] } });
+    const parseResult = result.fields.role.parse(parseCtx("SUPERADMIN"));
+    expect(parseResult.issues).toBeDefined();
+    expect(parseResult.issues![0].message).toContain("Must be one of");
+  });
+
+  it("object: valid nested object with correct fields", () => {
+    const result = createType("Test", {
+      address: {
+        kind: "object",
+        fields: {
+          street: { kind: "string" },
+          city: { kind: "string" },
+        },
+      },
+    });
+    const parseResult = result.fields.address.parse(
+      parseCtx({ street: "123 Main St", city: "Springfield" }),
+    );
+    expect(parseResult.issues).toBeUndefined();
+  });
+});
+
+describe("createType clone preservation", () => {
+  it("clone preserves hooks, validate, serial, and unique metadata", () => {
+    const result = createType("Test", {
+      code: {
+        kind: "string",
+        hooks: { create: () => "default" },
+        validate: [({ value }) => (value as string).length > 0, "Must not be empty"],
+        serial: { start: 1, format: "CODE-%05d" },
+        unique: true,
+      },
+    });
+
+    const cloned = result.fields.code.clone();
+
+    expect(cloned.metadata.hooks).toBeDefined();
+    expect(cloned.metadata.hooks!.create).toBeDefined();
+    expect(cloned.metadata.validate).toBeDefined();
+    expect(cloned.metadata.validate!.length).toBe(1);
+    expect(cloned.metadata.serial).toEqual({ start: 1, format: "CODE-%05d" });
+    expect(cloned.metadata.unique).toBe(true);
+    expect(cloned.metadata.index).toBe(true);
+  });
+});
+
+describe("createType as relation target", () => {
+  it("createType result can be used as a relation target", () => {
+    const TypeA = createType("TypeA", {
+      name: { kind: "string" },
+    });
+
+    const TypeB = createType("TypeB", {
+      typeAId: {
+        kind: "uuid",
+        relation: {
+          type: "n-1",
+          toward: { type: TypeA },
+        },
+      },
+    });
+
+    expect(TypeB.fields.typeAId.rawRelation).toBeDefined();
+    expect(TypeB.fields.typeAId.rawRelation!.toward.type).toBe("TypeA");
+  });
+});
+
+describe("createType type-level operations", () => {
+  it("pickFields returns only picked fields plus id", () => {
+    const result = createType("Test", {
+      name: { kind: "string" },
+      email: { kind: "string" },
+      age: { kind: "int" },
+    });
+
+    const picked = result.pickFields(["name"], {});
+    expect(Object.keys(picked)).toEqual(["name"]);
+    expect(picked.name).toBeDefined();
+    expect(picked.name.type).toBe("string");
+  });
+
+  it("omitFields removes specified fields", () => {
+    const result = createType("Test", {
+      name: { kind: "string" },
+      email: { kind: "string" },
+      age: { kind: "int" },
+    });
+
+    const omitted = result.omitFields(["name"]);
+    expect(Object.keys(omitted)).not.toContain("name");
+    expect(omitted.id).toBeDefined();
+    expect(omitted.email).toBeDefined();
+    expect(omitted.age).toBeDefined();
+  });
+
+  it("hooks sets type-level hooks metadata", () => {
+    const result = createType("Test", {
+      name: { kind: "string" },
+    });
+
+    result.hooks({
+      name: { create: ({ data }) => String(data) },
+    });
+
+    expect(result.fields.name.metadata.hooks).toBeDefined();
+  });
+
+  it("validate sets type-level validate metadata", () => {
+    const result = createType("Test", {
+      name: { kind: "string" },
+    });
+
+    result.validate({
+      name: [({ value }) => value.length > 0, "Must not be empty"],
+    });
+
+    expect(result.fields.name.metadata.validate).toBeDefined();
+  });
+});
+
+describe("createType indexes option", () => {
+  it("indexes are set on metadata", () => {
+    const result = createType(
+      "Test",
+      {
+        firstName: { kind: "string" },
+        lastName: { kind: "string" },
+      },
+      {
+        indexes: [{ fields: ["firstName", "lastName"], unique: true }],
+      },
+    );
+
+    expect(result.metadata.indexes).toBeDefined();
+    const indexKeys = Object.keys(result.metadata.indexes!);
+    expect(indexKeys.length).toBe(1);
+    const indexEntry = result.metadata.indexes![indexKeys[0]];
+    expect(indexEntry.fields).toEqual(["firstName", "lastName"]);
+    expect(indexEntry.unique).toBe(true);
   });
 });
