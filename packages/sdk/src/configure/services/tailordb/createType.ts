@@ -18,7 +18,6 @@ type CommonFieldOptions = {
   optional?: boolean;
   array?: boolean;
   description?: string;
-  typeName?: string;
 };
 
 type IndexableOptions = {
@@ -70,11 +69,13 @@ type EnumDescriptor<V extends AllowedValues = AllowedValues> = CommonFieldOption
   IndexableOptions & {
     kind: "enum";
     values: V;
+    typeName?: string;
   };
 
 type ObjectDescriptor = CommonFieldOptions & {
   kind: "object";
   fields: Record<string, FieldEntry>;
+  typeName?: string;
 };
 
 type FieldDescriptor =
@@ -203,8 +204,8 @@ function buildField(descriptor: FieldDescriptor): TailorAnyDBField {
   }
 
   if (
-    descriptor.typeName !== undefined &&
-    (descriptor.kind === "enum" || descriptor.kind === "object")
+    (descriptor.kind === "enum" || descriptor.kind === "object") &&
+    descriptor.typeName !== undefined
   ) {
     // oxlint-disable-next-line no-explicit-any -- typeName() is only present on enum/nested field interfaces
     field = (field as any).typeName(descriptor.typeName);
@@ -284,7 +285,7 @@ export function createType<const D extends Record<string, FieldEntry> & { id?: n
   const typeName = Array.isArray(name) ? name[0] : name;
   const pluralForm = Array.isArray(name) ? name[1] : options?.pluralForm;
   const fields = resolveFieldMap(descriptors);
-  const allFields = { id: idField, ...fields } as { id: IdField } & ResolvedFieldMap<D>;
+  const allFields = { id: idField.clone(), ...fields } as { id: IdField } & ResolvedFieldMap<D>;
 
   const dbType = createTailorDBType(typeName, allFields, {
     pluralForm,
