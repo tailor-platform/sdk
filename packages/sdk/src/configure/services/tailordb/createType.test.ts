@@ -792,3 +792,14 @@ describe("createType type-safe options", () => {
     expect(result.metadata.files).toBeDefined();
   });
 });
+
+describe("createType array field guards", () => {
+  it("array fields do not get index or unique metadata", () => {
+    // Runtime guard: buildField skips index/unique for array fields
+    const result = createType("Test", {
+      tags: { kind: "string", array: true },
+    });
+    expect(result.fields.tags.metadata.index).toBeUndefined();
+    expect(result.fields.tags.metadata.unique).toBeUndefined();
+  });
+});

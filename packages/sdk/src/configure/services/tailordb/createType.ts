@@ -173,6 +173,15 @@ type ResolvedFieldMap<M extends Record<string, FieldEntry>> = {
 
 type AllFields<D extends Record<string, FieldEntry>> = { id: IdField } & ResolvedFieldMap<D>;
 
+// Rejects descriptors that combine array: true with index/unique (unsupported by the platform).
+type RejectArrayIndexed<D extends Record<string, FieldEntry>> = {
+  [K in keyof D]: D[K] extends { array: true; unique: true }
+    ? never
+    : D[K] extends { array: true; index: true }
+      ? never
+      : D[K];
+};
+
 type CreateTypeOptions<
   FieldNames extends string = string,
   // oxlint-disable-next-line no-explicit-any
@@ -237,10 +246,12 @@ function buildField(descriptor: FieldDescriptor): TailorAnyDBField {
   }
 
   if (descriptor.kind !== "object") {
-    if (descriptor.unique === true) {
-      field = field.unique();
-    } else if (descriptor.index === true) {
-      field = field.index();
+    if (descriptor.array !== true) {
+      if (descriptor.unique === true) {
+        field = field.unique();
+      } else if (descriptor.index === true) {
+        field = field.index();
+      }
     }
 
     if (descriptor.hooks !== undefined) {
@@ -304,7 +315,7 @@ type IdField = typeof idField;
  */
 export function createType<const D extends Record<string, FieldEntry> & { id?: never }>(
   name: string | [string, string],
-  descriptors: D,
+  descriptors: D & RejectArrayIndexed<D>,
   options?: CreateTypeOptions<keyof AllFields<D> & string, AllFields<D>>,
 ): TailorDBType<AllFields<D>> {
   const typeName = Array.isArray(name) ? name[0] : name;
