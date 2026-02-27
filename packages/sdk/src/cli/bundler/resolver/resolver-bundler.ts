@@ -4,7 +4,7 @@ import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { loadFilesWithIgnores, type FileLoadConfig } from "@/cli/application/file-loader";
-import { createBundlerConfig } from "@/cli/bundler/rolldown-config";
+import { enableInlineSourcemap } from "@/cli/bundler/inline-sourcemap";
 import { removeStaleEntryFiles } from "@/cli/bundler/stale-cleanup";
 import { computeBundlerContextHash, withCache, type BundleCache } from "@/cli/cache/bundle-cache";
 import { getDistDir } from "@/cli/utils/dist-dir";
@@ -155,7 +155,30 @@ async function bundleSingleResolver(
       plugins.push(...cachePlugins);
 
       await rolldown.build(
-        createBundlerConfig({ input: entryPath, outputPath, tsconfig, plugins }),
+        rolldown.defineConfig({
+          input: entryPath,
+          output: {
+            file: outputPath,
+            format: "esm",
+            sourcemap: enableInlineSourcemap ? "inline" : true,
+            minify: enableInlineSourcemap
+              ? {
+                  mangle: {
+                    keepNames: true,
+                  },
+                }
+              : true,
+            inlineDynamicImports: true,
+          },
+          tsconfig,
+          plugins,
+          treeshake: {
+            moduleSideEffects: false,
+            annotations: true,
+            unknownGlobalSideEffects: false,
+          },
+          logLevel: "silent",
+        }) as rolldown.BuildOptions,
       );
     },
   });

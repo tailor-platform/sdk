@@ -4,7 +4,7 @@ import { parseSync } from "oxc-parser";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
-import { createBundlerConfig } from "@/cli/bundler/rolldown-config";
+import { enableInlineSourcemap } from "@/cli/bundler/inline-sourcemap";
 import { computeBundlerContextHash, withCache, type BundleCache } from "@/cli/cache/bundle-cache";
 import { getDistDir } from "@/cli/utils/dist-dir";
 import { logger, styles } from "@/cli/utils/logger";
@@ -338,7 +338,30 @@ async function bundleSingleJob(
       const plugins: rolldown.Plugin[] = [transformPlugin, ...cachePlugins];
 
       await rolldown.build(
-        createBundlerConfig({ input: entryPath, outputPath, tsconfig, plugins }),
+        rolldown.defineConfig({
+          input: entryPath,
+          output: {
+            file: outputPath,
+            format: "esm",
+            sourcemap: enableInlineSourcemap ? "inline" : true,
+            minify: enableInlineSourcemap
+              ? {
+                  mangle: {
+                    keepNames: true,
+                  },
+                }
+              : true,
+            inlineDynamicImports: true,
+          },
+          tsconfig,
+          plugins,
+          treeshake: {
+            moduleSideEffects: false,
+            annotations: true,
+            unknownGlobalSideEffects: false,
+          },
+          logLevel: "silent",
+        }) as rolldown.BuildOptions,
       );
     },
   });
