@@ -36,7 +36,6 @@ describe("createCacheManager", () => {
       const result = manager.bundleCache.tryRestore({
         kind: "resolver",
         name: "test",
-        sourceFile: "/tmp/src.ts",
         outputPath: "/tmp/out.js",
       });
 

@@ -8,7 +8,6 @@ import type { CacheEntry } from "./types";
 type BundleCacheRestoreParams = {
   kind: "resolver" | "executor" | "workflow-job";
   name: string;
-  sourceFile: string;
   outputPath: string;
 };
 
@@ -36,8 +35,8 @@ type BundleCache = {
 
 /**
  * Build a cache key from the bundle kind and name.
- * @param kind
- * @param name
+ * @param kind - The bundle kind (resolver, executor, workflow-job)
+ * @param name - The bundle name
  * @returns The cache key in the format `kind:name`
  */
 function buildCacheKey(kind: string, name: string): string {
@@ -79,6 +78,7 @@ function createBundleCache(store: CacheStore, _sdkVersion: string): BundleCache 
   function save(params: BundleCacheSaveParams): void {
     const cacheKey = buildCacheKey(params.kind, params.name);
     const inputHash = hashFiles(params.dependencyPaths);
+    // Stored for future integrity verification (detect corrupted cache files)
     const contentHash = hashFile(params.outputPath);
 
     store.storeBundleOutput(cacheKey, params.outputPath);

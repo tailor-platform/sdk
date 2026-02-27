@@ -39,7 +39,7 @@ export interface BundleWorkflowJobsResult {
  * @param mainJobNames - Names of main jobs
  * @param env - Environment variables to inject
  * @param triggerContext - Trigger context for transformations
- * @param cache
+ * @param cache - Optional bundle cache for skipping unchanged builds
  * @returns Workflow job bundling result
  */
 export async function bundleWorkflowJobs(
@@ -247,8 +247,11 @@ async function bundleSingleJob(
 ): Promise<void> {
   const outputPath = path.join(outputDir, `${job.name}.js`);
 
-  // Include env hash in cache name so different env values produce different cache keys
-  const envSuffix = cache ? `-${hashContent(JSON.stringify(env)).slice(0, 12)}` : "";
+  // Include env hash in cache name so different env values produce different cache keys.
+  // Sort keys for deterministic hashing regardless of property insertion order.
+  const envSuffix = cache
+    ? `-${hashContent(JSON.stringify(env, Object.keys(env).sort())).slice(0, 12)}`
+    : "";
   const cacheName = `${job.name}${envSuffix}`;
 
   // Try to restore from cache before bundling
@@ -256,7 +259,6 @@ async function bundleSingleJob(
     cache?.tryRestore({
       kind: "workflow-job",
       name: cacheName,
-      sourceFile: job.sourceFile,
       outputPath,
     })
   ) {

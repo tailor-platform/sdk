@@ -29,13 +29,11 @@ describe("createBundleCache", () => {
     test("returns false when no cache entry exists", () => {
       const store = createCacheStore({ cacheDir });
       const cache = createBundleCache(store, "1.0.0");
-      const sourceFile = writeFile("src/resolver.ts", "export default {}");
       const outputPath = path.join(tmpDir, "dist", "resolver.js");
 
       const result = cache.tryRestore({
         kind: "resolver",
         name: "myResolver",
-        sourceFile,
         outputPath,
       });
 
@@ -64,7 +62,6 @@ describe("createBundleCache", () => {
       const result = cache.tryRestore({
         kind: "resolver",
         name: "myResolver",
-        sourceFile,
         outputPath,
       });
 
@@ -94,7 +91,6 @@ describe("createBundleCache", () => {
       const result = cache.tryRestore({
         kind: "resolver",
         name: "myResolver",
-        sourceFile,
         outputPath,
       });
 
@@ -126,7 +122,6 @@ describe("createBundleCache", () => {
       const result = cache.tryRestore({
         kind: "resolver",
         name: "myResolver",
-        sourceFile,
         outputPath,
       });
 
@@ -155,7 +150,6 @@ describe("createBundleCache", () => {
       const result = cache.tryRestore({
         kind: "resolver",
         name: "myResolver",
-        sourceFile,
         outputPath,
       });
 

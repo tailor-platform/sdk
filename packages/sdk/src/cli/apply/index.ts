@@ -98,12 +98,19 @@ export async function apply(options?: ApplyOptions) {
 
   // Load and initialize all application resources
   // This includes: types, plugins, workflows, bundling, and validation
-  const { application, workflowBuildResult } = await loadApplication({
-    config,
-    pluginManager,
-    bundleCache: cacheManager.bundleCache,
-  });
-  cacheManager.finalize();
+  let application: Application;
+  let workflowBuildResult: Awaited<ReturnType<typeof loadApplication>>["workflowBuildResult"];
+  try {
+    const result = await loadApplication({
+      config,
+      pluginManager,
+      bundleCache: cacheManager.bundleCache,
+    });
+    application = result.application;
+    workflowBuildResult = result.workflowBuildResult;
+  } finally {
+    cacheManager.finalize();
+  }
   if (buildOnly) return;
 
   // Initialize client

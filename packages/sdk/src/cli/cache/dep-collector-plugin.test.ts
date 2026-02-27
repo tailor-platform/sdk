@@ -102,6 +102,27 @@ describe("createDepCollectorPlugin", () => {
     expect(result).toEqual(["/src/app/bar.ts", "/src/app/foo.ts"]);
   });
 
+  test("excludes entry files (.entry.js)", () => {
+    const { plugin, getResult } = createDepCollectorPlugin();
+
+    const loadHook = plugin.load;
+    const handler =
+      typeof loadHook === "function"
+        ? loadHook
+        : typeof loadHook === "object" && loadHook !== null && "handler" in loadHook
+          ? loadHook.handler
+          : undefined;
+    expect(handler).toBeDefined();
+
+    handler!.call(undefined as never, "/src/app/index.ts");
+    handler!.call(undefined as never, "/dist/resolvers/myResolver.entry.js");
+    handler!.call(undefined as never, "/dist/executors/myExecutor.entry.js");
+    handler!.call(undefined as never, "/src/utils/helper.ts");
+
+    const result = getResult();
+    expect(result).toEqual(["/src/app/index.ts", "/src/utils/helper.ts"]);
+  });
+
   test("handler returns null (does not modify code)", () => {
     const { plugin } = createDepCollectorPlugin();
 

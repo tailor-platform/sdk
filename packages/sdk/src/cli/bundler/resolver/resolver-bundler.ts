@@ -27,7 +27,7 @@ interface ResolverInfo {
  * @param namespace - Resolver namespace name
  * @param config - Resolver file loading configuration
  * @param triggerContext - Trigger context for workflow/job transformations
- * @param cache
+ * @param cache - Optional bundle cache for skipping unchanged builds
  * @returns Promise that resolves when bundling completes
  */
 export async function bundleResolvers(
@@ -103,7 +103,6 @@ async function bundleSingleResolver(
     cache?.tryRestore({
       kind: "resolver",
       name: resolver.name,
-      sourceFile: resolver.sourceFile,
       outputPath,
     })
   ) {

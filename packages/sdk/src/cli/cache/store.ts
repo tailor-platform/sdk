@@ -103,8 +103,17 @@ function createCacheStore(config: CacheConfig): CacheStore {
     const tmpFile = path.join(config.cacheDir, `.manifest.${process.pid}.tmp`);
 
     // Atomic write: write to temp file, then rename
-    fs.writeFileSync(tmpFile, JSON.stringify(manifest, null, 2), "utf-8");
-    fs.renameSync(tmpFile, target);
+    try {
+      fs.writeFileSync(tmpFile, JSON.stringify(manifest, null, 2), "utf-8");
+      fs.renameSync(tmpFile, target);
+    } catch (e) {
+      try {
+        fs.rmSync(tmpFile, { force: true });
+      } catch {
+        // Ignore cleanup errors
+      }
+      throw e;
+    }
 
     cachedManifest = manifest;
   }

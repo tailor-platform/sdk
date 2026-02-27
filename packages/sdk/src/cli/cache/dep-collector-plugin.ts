@@ -23,7 +23,7 @@ export function createDepCollectorPlugin(): DepCollectorResult {
         },
       },
       handler(id) {
-        if (!id.includes("node_modules")) {
+        if (!id.includes("node_modules") && !id.endsWith(".entry.js")) {
           collectedPaths.add(id);
         }
         return null;

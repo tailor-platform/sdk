@@ -122,7 +122,6 @@ async function bundleSingleExecutor(
     cache?.tryRestore({
       kind: "executor",
       name: executor.name,
-      sourceFile: executor.sourceFile,
       outputPath,
     })
   ) {
