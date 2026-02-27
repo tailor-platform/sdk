@@ -172,6 +172,30 @@ describe("createCacheStore", () => {
 
       expect(fs.existsSync(path.join(cacheDir, "bundles"))).toBe(true);
     });
+
+    test("copies companion .map file when present", () => {
+      const store = createCacheStore({ cacheDir });
+      const sourceFile = path.join(tmpDir, "output.js");
+      fs.writeFileSync(sourceFile, "console.log('hello');");
+      fs.writeFileSync(`${sourceFile}.map`, '{"mappings":"AAAA"}');
+
+      store.storeBundleOutput("myBundle", sourceFile);
+
+      const cachedMapPath = path.join(cacheDir, "bundles", "myBundle.js.map");
+      expect(fs.existsSync(cachedMapPath)).toBe(true);
+      expect(fs.readFileSync(cachedMapPath, "utf-8")).toBe('{"mappings":"AAAA"}');
+    });
+
+    test("succeeds without .map file", () => {
+      const store = createCacheStore({ cacheDir });
+      const sourceFile = path.join(tmpDir, "output.js");
+      fs.writeFileSync(sourceFile, "code");
+
+      store.storeBundleOutput("myBundle", sourceFile);
+
+      const cachedMapPath = path.join(cacheDir, "bundles", "myBundle.js.map");
+      expect(fs.existsSync(cachedMapPath)).toBe(false);
+    });
   });
 
   describe("restoreBundleOutput", () => {
@@ -211,6 +235,33 @@ describe("createCacheStore", () => {
 
       expect(result).toBe(false);
       expect(fs.existsSync(targetFile)).toBe(false);
+    });
+
+    test("restores companion .map file when it was cached", () => {
+      const store = createCacheStore({ cacheDir });
+      const sourceFile = path.join(tmpDir, "output.js");
+      fs.writeFileSync(sourceFile, "console.log('hello');");
+      fs.writeFileSync(`${sourceFile}.map`, '{"mappings":"AAAA"}');
+      store.storeBundleOutput("myBundle", sourceFile);
+
+      const targetFile = path.join(tmpDir, "restored", "output.js");
+      const result = store.restoreBundleOutput("myBundle", targetFile);
+
+      expect(result).toBe(true);
+      expect(fs.readFileSync(`${targetFile}.map`, "utf-8")).toBe('{"mappings":"AAAA"}');
+    });
+
+    test("succeeds without cached .map file", () => {
+      const store = createCacheStore({ cacheDir });
+      const sourceFile = path.join(tmpDir, "output.js");
+      fs.writeFileSync(sourceFile, "code");
+      store.storeBundleOutput("myBundle", sourceFile);
+
+      const targetFile = path.join(tmpDir, "restored", "output.js");
+      const result = store.restoreBundleOutput("myBundle", targetFile);
+
+      expect(result).toBe(true);
+      expect(fs.existsSync(`${targetFile}.map`)).toBe(false);
     });
   });
 

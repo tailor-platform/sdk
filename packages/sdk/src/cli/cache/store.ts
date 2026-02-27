@@ -133,6 +133,11 @@ function createCacheStore(config: CacheConfig): CacheStore {
     const dir = bundlesDir();
     fs.mkdirSync(dir, { recursive: true });
     fs.copyFileSync(sourcePath, bundlePath(cacheKey));
+
+    const mapSource = `${sourcePath}.map`;
+    if (fs.existsSync(mapSource)) {
+      fs.copyFileSync(mapSource, `${bundlePath(cacheKey)}.map`);
+    }
   }
 
   function restoreBundleOutput(cacheKey: string, targetPath: string): boolean {
@@ -141,11 +146,17 @@ function createCacheStore(config: CacheConfig): CacheStore {
     fs.mkdirSync(targetDir, { recursive: true });
     try {
       fs.copyFileSync(cached, targetPath);
-      return true;
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code === "ENOENT") return false;
       throw e;
     }
+
+    const cachedMap = `${cached}.map`;
+    if (fs.existsSync(cachedMap)) {
+      fs.copyFileSync(cachedMap, `${targetPath}.map`);
+    }
+
+    return true;
   }
 
   function clean(): void {

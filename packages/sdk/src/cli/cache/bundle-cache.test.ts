@@ -232,6 +232,36 @@ describe("createBundleCache", () => {
       expect(result).toBe(true);
       expect(fs.existsSync(outputPath)).toBe(true);
     });
+
+    test("restores companion .map file on cache hit", () => {
+      const store = createCacheStore({ cacheDir });
+      const cache = createBundleCache(store);
+      const sourceFile = writeFile("src/resolver.ts", "export default {}");
+      const outputPath = writeFile("dist/resolver.js", "bundled output");
+      writeFile("dist/resolver.js.map", '{"mappings":"AAAA"}');
+
+      cache.save({
+        kind: "resolver",
+        name: "myResolver",
+        sourceFile,
+        outputPath,
+        dependencyPaths: [sourceFile],
+      });
+
+      // Remove both output files to simulate clean build directory
+      fs.unlinkSync(outputPath);
+      fs.unlinkSync(`${outputPath}.map`);
+
+      const result = cache.tryRestore({
+        kind: "resolver",
+        name: "myResolver",
+        outputPath,
+      });
+
+      expect(result).toBe(true);
+      expect(fs.readFileSync(outputPath, "utf-8")).toBe("bundled output");
+      expect(fs.readFileSync(`${outputPath}.map`, "utf-8")).toBe('{"mappings":"AAAA"}');
+    });
   });
 
   describe("save", () => {

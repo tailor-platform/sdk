@@ -1,3 +1,4 @@
+import * as fs from "node:fs";
 import * as path from "pathe";
 import { enableInlineSourcemap } from "@/cli/bundler/inline-sourcemap";
 import { logger, styles } from "@/cli/utils/logger";
@@ -154,11 +155,17 @@ function createBundleCache(store: CacheStore): BundleCache {
 
     store.storeBundleOutput(cacheKey, outputPath);
 
+    const outputFiles = [{ outputPath, contentHash }];
+    const mapPath = `${outputPath}.map`;
+    if (fs.existsSync(mapPath)) {
+      outputFiles.push({ outputPath: mapPath, contentHash: hashFile(mapPath) });
+    }
+
     store.setEntry(cacheKey, {
       kind: "bundle",
       inputHash,
       dependencyPaths: allDeps,
-      outputFiles: [{ outputPath, contentHash }],
+      outputFiles,
       createdAt: new Date().toISOString(),
     });
   }
