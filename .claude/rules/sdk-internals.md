@@ -21,7 +21,7 @@ The SDK enforces strict module boundaries to maintain a clean architecture:
 2. **Parser Module** (`src/parser/**/*.ts`):
    - Validates and parses definitions created in configure module
    - Acts as intermediary between configure and cli modules
-   - **Note**: Parse operations for TailorDB (inflection, relationship building) are performed automatically in `TailorDBService.loadTypes()` (located in `src/cli/application/tailordb/service.ts`)
+   - **Note**: Parse operations for TailorDB (inflection, relationship building) are performed automatically in `TailorDBService.loadTypes()` (located in `src/cli/services/tailordb/service.ts`)
 
 3. **CLI Module** (`src/cli/**/*.ts`):
    - Implements CLI commands
