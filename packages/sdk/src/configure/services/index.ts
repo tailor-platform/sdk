@@ -1,6 +1,8 @@
 export * from "./auth";
 export {
   db,
+  createType,
+  timestampFields,
   type TailorDBType,
   type TailorAnyDBType,
   type TailorDBField,
