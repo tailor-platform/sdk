@@ -147,7 +147,20 @@ type DescriptorOutput<D extends FieldDescriptor> = ApplyArrayAndOptional<
 type DescriptorDefined<D extends FieldDescriptor> = {
   type: D["kind"] extends keyof KindToFieldType ? KindToFieldType[D["kind"]] : TailorFieldType;
   array: D extends { array: true } ? true : false;
-};
+} & (D extends { hooks: object } ? { hooks: { create: boolean; update: boolean } } : unknown) &
+  (D extends { validate: object } ? { validate: true } : unknown) &
+  (D extends { unique: true }
+    ? { unique: true; index: true }
+    : D extends { index: true }
+      ? { index: true }
+      : unknown) &
+  (D extends { serial: object } ? { serial: true } : unknown) &
+  (D extends { vector: true } ? { vector: true } : unknown) &
+  (D extends { kind: "uuid"; relation: object }
+    ? D extends { relation: { type: "oneToOne" | "1-1" } }
+      ? { relation: true; unique: true; index: true }
+      : { relation: true; index: true }
+    : unknown);
 
 type ResolvedField<E extends FieldEntry> = E extends FieldDescriptor
   ? TailorDBField<DescriptorDefined<E>, DescriptorOutput<E>>
