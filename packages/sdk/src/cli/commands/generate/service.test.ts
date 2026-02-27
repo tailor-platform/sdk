@@ -2,9 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { describe, it, expect, beforeEach, afterEach, vi, afterAll } from "vitest";
-import { KyselyGeneratorID } from "@/cli/commands/generate/builtin/kysely-type";
 import { defineApplication } from "@/cli/services/application";
-import { GeneratorConfigSchema, type LoadedConfig } from "@/cli/shared/config-loader";
 import { createResolver } from "@/configure/services/resolver/resolver";
 import { db } from "@/configure/services/tailordb/schema";
 import { t } from "@/configure/types";
@@ -12,6 +10,7 @@ import { type Resolver } from "@/parser/service/resolver";
 import { parseTypes } from "@/parser/service/tailordb";
 import { toSchemaOutputs } from "@/utils/test/internal";
 import { createGenerationManager } from "./service";
+import type { LoadedConfig, Generator } from "@/cli/shared/config-loader";
 import type { TailorDBType } from "@/configure/services/tailordb/schema";
 
 // ESM-safe explicit mock for Node's fs
@@ -146,23 +145,17 @@ describe("GenerationManager", () => {
       expect(manager.generators.length).toBeGreaterThan(0);
     });
 
-    it("receives Kysely generator", () => {
-      const kyselyGen = GeneratorConfigSchema.parse([
-        "@tailor-platform/kysely-type",
-        { distPath: "types/db.ts" },
-      ]);
-      const kyselyApp = defineApplication({ config: mockConfig });
-      const managerWithKysely = createGenerationManager({
-        application: kyselyApp,
+    it("receives custom generator", () => {
+      const customApp = defineApplication({ config: mockConfig });
+      // For test-only - TestGenerator doesn't have brand symbol
+      // oxlint-disable-next-line no-explicit-any
+      const managerWithCustom: any = createGenerationManager({
+        application: customApp,
         config: mockConfig,
-        generators: [kyselyGen],
+        generators: [new TestGenerator()] as unknown as Generator[],
       });
       expect(
-        // For test-only access to private members
-        // oxlint-disable-next-line no-explicit-any
-        (managerWithKysely as any).generators.some(
-          (gen: { id: string }) => gen.id === KyselyGeneratorID,
-        ),
+        managerWithCustom.generators.some((gen: { id: string }) => gen.id === "test-generator"),
       ).toBe(true);
     });
   });
@@ -681,13 +674,11 @@ describe("Integration Tests", () => {
   });
 
   it("complete integration test with multiple generators", async () => {
-    const kyselyGen = GeneratorConfigSchema.parse([
-      "@tailor-platform/kysely-type",
-      { distPath: "db.ts" },
-    ]);
+    const gen1 = new TestGenerator();
+    const gen2 = new TestGenerator();
     // For test-only access to private members
     // oxlint-disable-next-line no-explicit-any
-    const generators: any[] = [new TestGenerator(), kyselyGen];
+    const generators: any[] = [gen1, gen2];
     const integrationApp = defineApplication({ config: fullConfig });
     // oxlint-disable-next-line no-explicit-any
     const manager: any = createGenerationManager({
@@ -699,8 +690,7 @@ describe("Integration Tests", () => {
     await expect(manager.generate(false)).resolves.not.toThrow();
 
     expect(manager.generators.length).toBe(2);
-    expect(manager.generators.some((g: unknown) => g instanceof TestGenerator)).toBe(true);
-    expect(manager.generators.some((g: { id: string }) => g.id === KyselyGeneratorID)).toBe(true);
+    expect(manager.generators.every((g: unknown) => g instanceof TestGenerator)).toBe(true);
   });
 
   it("integration test for error recovery and performance", async () => {

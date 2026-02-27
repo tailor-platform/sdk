@@ -1,3 +1,4 @@
+import { brandValue } from "@/utils/brand";
 import type { Operation } from "./operation";
 import type { Trigger } from "./trigger";
 import type { AuthInvoker } from "@/configure/services/auth";
@@ -86,5 +87,5 @@ export function createExecutor<
   T extends Trigger<unknown>,
   O extends Operation<TriggerArgs<T>> | { kind: "workflow"; workflow: Workflow },
 >(config: Executor<T, O>) {
-  return config;
+  return brandValue(config);
 }

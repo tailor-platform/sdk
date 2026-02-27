@@ -6,9 +6,10 @@ import { sendNotification } from "./jobs/send-notification";
 
 export const processOrder = createWorkflowJob({
   name: "process-order",
-  body: async (input: { orderId: string; customerId: string }, { env }) => {
-    // Log env for demonstration (env is embedded at bundle time)
+  body: async (input: { orderId: string; customerId: string }, { env, user }) => {
+    // Log env and user for demonstration
     console.log("Environment:", env);
+    console.log("User:", user.id);
 
     // Fetch customer information using trigger
     const customer = await fetchCustomer.trigger({

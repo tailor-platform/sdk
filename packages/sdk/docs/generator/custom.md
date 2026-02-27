@@ -1,6 +1,6 @@
-# Custom Generators (Preview)
+# Custom Generators (Deprecated)
 
-> **Preview Feature**: The custom generator API is in preview and may change in future releases.
+> **Deprecated**: Use `definePlugins()` with generation-time hooks (`onTypeLoaded`, `generate`, etc.) instead. See [Custom Plugins](../plugin/custom.md) for the recommended approach.
 
 Create your own generators by implementing the `CodeGenerator` interface.
 

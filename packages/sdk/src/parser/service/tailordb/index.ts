@@ -1,8 +1,4 @@
 export { stringifyFunction, tailorUserMap } from "./field";
 export { parseTypes } from "./type-parser";
-export {
-  GQL_PERMISSION_INVALID_OPERAND_MESSAGE,
-  TailorDBServiceConfigSchema,
-  TailorDBTypeSchema,
-} from "./schema";
+export { TailorDBServiceConfigSchema, TailorDBTypeSchema } from "./schema";
 export type * from "./types";

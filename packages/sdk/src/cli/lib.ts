@@ -31,6 +31,15 @@ export type { TailorDBType } from "@/parser/service/tailordb/types";
 export type { Resolver } from "@/parser/service/resolver";
 export type { Executor } from "@/parser/service/executor";
 
+/** @deprecated Import from '@tailor-platform/sdk/plugin/kysely-type' instead */
+export { kyselyTypePlugin } from "@/plugin/builtin/kysely-type";
+/** @deprecated Import from '@tailor-platform/sdk/plugin/enum-constants' instead */
+export { enumConstantsPlugin } from "@/plugin/builtin/enum-constants";
+/** @deprecated Import from '@tailor-platform/sdk/plugin/file-utils' instead */
+export { fileUtilsPlugin } from "@/plugin/builtin/file-utils";
+/** @deprecated Import from '@tailor-platform/sdk/plugin/seed' instead */
+export { seedPlugin } from "@/plugin/builtin/seed";
+
 export { show, type ShowOptions, type ApplicationInfo } from "./commands/show";
 export { remove, type RemoveOptions } from "./commands/remove";
 export { createWorkspace, type CreateWorkspaceOptions } from "./commands/workspace/create";

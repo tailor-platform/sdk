@@ -3,7 +3,6 @@ import * as path from "pathe";
 import { loadFilesWithIgnores } from "@/cli/services/application/file-loader";
 import { logger, styles } from "@/cli/shared/logger";
 import {
-  GQL_PERMISSION_INVALID_OPERAND_MESSAGE,
   parseTypes,
   TailorDBTypeSchema,
   type TypeSourceInfo,
@@ -12,6 +11,7 @@ import {
   type TailorDBType,
   type TailorAnyDBType,
 } from "@/parser/service/tailordb";
+import { isSdkBranded } from "@/utils/brand";
 import type { PluginAttachment } from "@/parser/plugin-config/types";
 import type { PluginManager } from "@/plugin/manager";
 
@@ -141,11 +141,8 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
 
         const result = TailorDBTypeSchema.safeParse(exportedValue);
         if (!result.success) {
-          const gqlPermissionIssue = result.error.issues.find((i) =>
-            i.message.includes(GQL_PERMISSION_INVALID_OPERAND_MESSAGE),
-          );
-          if (gqlPermissionIssue) {
-            throw new Error(gqlPermissionIssue.message);
+          if (isSdkBranded(exportedValue)) {
+            throw result.error;
           }
           continue;
         }

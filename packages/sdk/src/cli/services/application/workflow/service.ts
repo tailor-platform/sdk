@@ -8,6 +8,7 @@ import {
   WorkflowJobSchema,
   WorkflowSchema,
 } from "@/parser/service/workflow";
+import { isSdkBranded } from "@/utils/brand";
 
 export interface CollectedJob {
   name: string;
@@ -182,6 +183,8 @@ async function loadFileContent(filePath: string): Promise<{
         const workflowResult = WorkflowSchema.safeParse(exportValue);
         if (workflowResult.success) {
           workflow = workflowResult.data;
+        } else if (isSdkBranded(exportValue)) {
+          throw workflowResult.error;
         }
         continue;
       }
@@ -193,6 +196,8 @@ async function loadFileContent(filePath: string): Promise<{
           exportName,
           sourceFile: filePath,
         });
+      } else if (isSdkBranded(exportValue)) {
+        throw jobResult.error;
       }
     }
   } catch (error) {

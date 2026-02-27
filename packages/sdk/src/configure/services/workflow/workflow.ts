@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { brandValue } from "@/utils/brand";
 import type { WorkflowJob } from "./job";
 import type { AuthInvoker } from "../auth";
 
@@ -51,7 +52,7 @@ interface WorkflowDefinition<Job extends WorkflowJob<any, any, any>> {
 export function createWorkflow<Job extends WorkflowJob<any, any, any>>(
   config: WorkflowDefinition<Job>,
 ): Workflow<Job> {
-  return {
+  return brandValue({
     ...config,
     // For local execution, directly call mainJob.trigger()
     // In production, bundler transforms this to tailor.workflow.triggerWorkflow()
@@ -59,5 +60,5 @@ export function createWorkflow<Job extends WorkflowJob<any, any, any>>(
       await config.mainJob.trigger(...([args] as unknown as []));
       return "00000000-0000-0000-0000-000000000000";
     },
-  };
+  });
 }

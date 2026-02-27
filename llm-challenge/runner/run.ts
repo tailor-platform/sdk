@@ -151,7 +151,7 @@ function parseArgs(): {
     solve,
     agent,
     agentExplicit,
-    model: model ?? (agent === "claude" ? "sonnet" : "default"),
+    model: model ?? (agent === "claude" ? "sonnet" : "gpt-5.1-codex-mini"),
     modelExplicit,
     maxBudget,
     clean,
