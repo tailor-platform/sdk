@@ -53,14 +53,9 @@ function createCacheStore(config: CacheConfig): CacheStore {
   function loadManifest(): CacheManifest | undefined {
     try {
       const raw = fs.readFileSync(manifestPath(), "utf-8");
-      const parsed: unknown = JSON.parse(raw);
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
 
-      if (
-        typeof parsed !== "object" ||
-        parsed === null ||
-        !("version" in parsed) ||
-        (parsed as { version: unknown }).version !== CURRENT_CACHE_VERSION
-      ) {
+      if (parsed.version !== CURRENT_CACHE_VERSION) {
         cachedManifest = undefined;
         return undefined;
       }

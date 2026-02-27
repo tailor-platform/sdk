@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { defineCommand, arg } from "politty";
 import { z } from "zod";
-import { loadApplication, type Application } from "@/cli/application";
+import { loadApplication, type Application, type LoadApplicationResult } from "@/cli/application";
 import { createCacheManager } from "@/cli/cache/manager";
 import { loadConfig } from "@/cli/config-loader";
 import { generateUserTypes } from "@/cli/type-generator";
@@ -100,7 +100,7 @@ export async function apply(options?: ApplyOptions) {
   // Load and initialize all application resources
   // This includes: types, plugins, workflows, bundling, and validation
   let application: Application;
-  let workflowBuildResult: Awaited<ReturnType<typeof loadApplication>>["workflowBuildResult"];
+  let workflowBuildResult: LoadApplicationResult["workflowBuildResult"];
   try {
     const result = await loadApplication({
       config,
