@@ -1,12 +1,6 @@
 import ml from "multiline-ts";
 import * as path from "pathe";
 import {
-  type TailorDBGenerator,
-  type TailorDBInput,
-  type AggregateArgs,
-  type GeneratorResult,
-} from "@/cli/generator/types";
-import {
   processIdpUser,
   generateIdpUserSchemaFile,
   generateIdpSeedScriptCode,
@@ -19,11 +13,15 @@ import {
   type PluginSchemaParams,
 } from "./lines-db-processor";
 import { processSeedTypeInfo } from "./seed-type-processor";
-import type { SeedTypeMetadata } from "./types";
+import type {
+  GeneratorResult,
+  TailorDBReadyContext,
+} from "@/parser/plugin-config/generation-types";
+import type { Plugin } from "@/parser/plugin-config/types";
 
 export const SeedGeneratorID = "@tailor-platform/seed";
 
-type SeedGeneratorOptions = {
+type SeedPluginOptions = {
   distPath: string;
   machineUserName?: string;
 };
@@ -665,57 +663,43 @@ ${namespaceDepsEntries}
 }
 
 /**
- * Factory function to create a Seed generator.
- * Combines Kysely batch insert and lines-db schema generation.
- * @param options - Seed generator options
- * @returns Seed generator
+ * Plugin that generates seed data files with Kysely batch insert and tailor.idp.Client for _User.
+ * @param options - Plugin options
+ * @param options.distPath - Output directory path for generated seed files
+ * @param options.machineUserName - Default machine user name for authentication
+ * @returns Plugin instance with onTailorDBReady hook
  */
-export function createSeedGenerator(
-  options: SeedGeneratorOptions,
-): TailorDBGenerator<SeedTypeMetadata, Record<string, SeedTypeMetadata>> {
+export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPluginOptions> {
   return {
     id: SeedGeneratorID,
     description: "Generates seed data files (Kysely batch insert + tailor.idp.Client for _User)",
-    dependencies: ["tailordb"] as const,
+    pluginConfig: options,
 
-    processType: ({ type, source, namespace }) => {
-      const typeInfo = processSeedTypeInfo(type, namespace);
-      const linesDb = processLinesDb(type, source);
-      return { typeInfo, linesDb };
-    },
-
-    processTailorDBNamespace: ({ types }) => types,
-
-    aggregate: ({
-      input,
-      configPath,
-    }: AggregateArgs<TailorDBInput<Record<string, SeedTypeMetadata>>>) => {
+    async onTailorDBReady(ctx: TailorDBReadyContext<SeedPluginOptions>): Promise<GeneratorResult> {
       const files: GeneratorResult["files"] = [];
-
-      // Collect namespace configurations
       const namespaceConfigs: NamespaceConfig[] = [];
-      for (const nsResult of input.tailordb) {
-        if (!nsResult.types) continue;
 
-        const outputBaseDir = options.distPath;
+      for (const ns of ctx.tailordb) {
         const types: string[] = [];
         const dependencies: Record<string, string[]> = {};
 
-        for (const [_typeName, metadata] of Object.entries(nsResult.types)) {
-          const { typeInfo, linesDb } = metadata;
+        for (const [typeName, type] of Object.entries(ns.types)) {
+          const source = ns.sourceInfo.get(typeName)!;
+          const typeInfo = processSeedTypeInfo(type, ns.namespace);
+          const linesDb = processLinesDb(type, source);
 
           types.push(typeInfo.name);
           dependencies[typeInfo.name] = typeInfo.dependencies;
 
           // Generate empty JSONL data file
           files.push({
-            path: path.join(outputBaseDir, typeInfo.dataFile),
+            path: path.join(ctx.pluginConfig.distPath, typeInfo.dataFile),
             content: "",
             skipIfExists: true,
           });
 
           const schemaOutputPath = path.join(
-            outputBaseDir,
+            ctx.pluginConfig.distPath,
             "data",
             `${linesDb.typeName}.schema.ts`,
           );
@@ -735,7 +719,7 @@ export function createSeedGenerator(
             }
 
             // Compute relative path from schema output to config file
-            const configImportPath = path.relative(path.dirname(schemaOutputPath), configPath);
+            const configImportPath = path.relative(path.dirname(schemaOutputPath), ctx.configPath);
 
             const params: PluginSchemaParams = {
               configImportPath,
@@ -764,29 +748,27 @@ export function createSeedGenerator(
         }
 
         namespaceConfigs.push({
-          namespace: nsResult.namespace,
+          namespace: ns.namespace,
           types,
           dependencies,
         });
       }
 
       // Process IdP user if configured
-      const idpUser = input.auth ? processIdpUser(input.auth) : null;
+      const idpUser = ctx.auth ? processIdpUser(ctx.auth) : null;
       const hasIdpUser = idpUser !== null;
 
       if (idpUser) {
-        const outputBaseDir = options.distPath;
-
         // Generate empty JSONL data file
         files.push({
-          path: path.join(outputBaseDir, idpUser.dataFile),
+          path: path.join(ctx.pluginConfig.distPath, idpUser.dataFile),
           content: "",
           skipIfExists: true,
         });
 
         // Generate schema file with foreign key
         files.push({
-          path: path.join(outputBaseDir, "data", `${idpUser.name}.schema.ts`),
+          path: path.join(ctx.pluginConfig.distPath, "data", `${idpUser.name}.schema.ts`),
           content: generateIdpUserSchemaFile(
             idpUser.schema.usernameField,
             idpUser.schema.userTypeName,
@@ -795,11 +777,11 @@ export function createSeedGenerator(
       }
 
       // Generate exec.mjs (machineUserName can be provided at runtime if not configured)
-      const relativeConfigPath = path.relative(options.distPath, configPath);
+      const relativeConfigPath = path.relative(ctx.pluginConfig.distPath, ctx.configPath);
       files.push({
-        path: path.join(options.distPath, "exec.mjs"),
+        path: path.join(ctx.pluginConfig.distPath, "exec.mjs"),
         content: generateExecScript(
-          options.machineUserName,
+          ctx.pluginConfig.machineUserName,
           relativeConfigPath,
           namespaceConfigs,
           hasIdpUser,

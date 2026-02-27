@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import { db } from "@/configure/services/tailordb";
 import { parseTypes } from "@/parser/service/tailordb";
 import { toSchemaOutput } from "@/utils/test/internal";
 import { generateUnifiedEnumConstants } from "./generate-enum-constants";
 import { processEnumType } from "./process-enum-type";
-import { createEnumConstantsGenerator } from "./index";
+import { enumConstantsPlugin, EnumConstantsGeneratorID } from "./index";
 import type { EnumDefinition } from "./types";
 import type { TailorDBType, TailorDBTypeSchemaOutput } from "@/parser/service/tailordb/types";
 
@@ -13,22 +13,14 @@ function parseTailorDBType(type: TailorDBTypeSchemaOutput): TailorDBType {
   return types[type.name];
 }
 
-describe("EnumConstantsGenerator", () => {
-  let generator: ReturnType<typeof createEnumConstantsGenerator>;
+describe("EnumConstantsPlugin", () => {
   const testDistPath = "/test/dist/enums.ts";
-
-  beforeEach(() => {
-    generator = createEnumConstantsGenerator({ distPath: testDistPath });
-  });
 
   describe("basic properties", () => {
     it("should have correct id and description", () => {
-      expect(generator.id).toBe("@tailor-platform/enum-constants");
-      expect(generator.description).toBe("Generates enum constants from TailorDB type definitions");
-    });
-
-    it("should have correct dependencies", () => {
-      expect(generator.dependencies).toEqual(["tailordb"]);
+      const plugin = enumConstantsPlugin({ distPath: testDistPath });
+      expect(plugin.id).toBe(EnumConstantsGeneratorID);
+      expect(plugin.description).toBe("Generates enum constants from TailorDB type definitions");
     });
   });
 

@@ -1,10 +1,11 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import { db } from "@/configure/services/tailordb";
 import { parseTypes } from "@/parser/service/tailordb";
 import { toSchemaOutput } from "@/utils/test/internal";
 import { generateUnifiedFileUtils } from "./generate-file-utils";
 import { processFileType } from "./process-file-type";
-import { createFileUtilsGenerator } from "./index";
+import { fileUtilsPlugin, FileUtilsGeneratorID } from "./index";
+import type { TailorDBReadyContext } from "@/parser/plugin-config/generation-types";
 import type { TailorDBType, TailorDBTypeSchemaOutput } from "@/parser/service/tailordb/types";
 
 function parseTailorDBType(type: TailorDBTypeSchemaOutput): TailorDBType {
@@ -12,24 +13,33 @@ function parseTailorDBType(type: TailorDBTypeSchemaOutput): TailorDBType {
   return types[type.name];
 }
 
-describe("FileUtilsGenerator", () => {
-  let generator: ReturnType<typeof createFileUtilsGenerator>;
+describe("FileUtilsPlugin", () => {
   const testDistPath = "/test/dist/files.ts";
 
-  beforeEach(() => {
-    generator = createFileUtilsGenerator({ distPath: testDistPath });
-  });
+  function createCtx(
+    namespaces: { namespace: string; types: Record<string, TailorDBType> }[],
+  ): TailorDBReadyContext<{ distPath: string }> {
+    return {
+      tailordb: namespaces.map((ns) => ({
+        namespace: ns.namespace,
+        types: ns.types,
+        sourceInfo: new Map(),
+        pluginAttachments: new Map(),
+      })),
+      auth: undefined,
+      baseDir: "/test",
+      configPath: "tailor.config.ts",
+      pluginConfig: { distPath: testDistPath },
+    };
+  }
 
   describe("basic properties", () => {
     it("should have correct id and description", () => {
-      expect(generator.id).toBe("@tailor-platform/file-utils");
-      expect(generator.description).toBe(
+      const plugin = fileUtilsPlugin({ distPath: testDistPath });
+      expect(plugin.id).toBe(FileUtilsGeneratorID);
+      expect(plugin.description).toBe(
         "Generates TypeWithFiles interface from TailorDB type definitions",
       );
-    });
-
-    it("should have correct dependencies", () => {
-      expect(generator.dependencies).toEqual(["tailordb"]);
     });
   });
 
@@ -143,6 +153,107 @@ describe("FileUtilsGenerator", () => {
       const result = generateUnifiedFileUtils(namespaceData);
 
       expect(result).toBe("");
+    });
+  });
+
+  describe("onTailorDBReady integration", () => {
+    it("should generate file utils for types with file fields", async () => {
+      const userType = db
+        .type("User", {
+          name: db.string(),
+        })
+        .files({
+          avatar: "profile image",
+        });
+
+      const salesOrderType = db
+        .type("SalesOrder", {
+          name: db.string(),
+        })
+        .files({
+          receipt: "receipt file",
+          form: "order form",
+        });
+
+      const ctx = createCtx([
+        {
+          namespace: "tailordb",
+          types: {
+            User: parseTailorDBType(toSchemaOutput(userType)),
+            SalesOrder: parseTailorDBType(toSchemaOutput(salesOrderType)),
+          },
+        },
+      ]);
+
+      const plugin = fileUtilsPlugin({ distPath: testDistPath });
+      const result = await plugin.onTailorDBReady!(ctx);
+
+      expect(result.files).toHaveLength(1);
+      expect(result.files[0].path).toBe(testDistPath);
+
+      const content = result.files[0].content;
+      expect(content).toContain("export interface TypeWithFiles");
+      expect(content).toContain("User: {");
+      expect(content).toContain("SalesOrder: {");
+    });
+
+    it("should return empty files when no types have file fields", async () => {
+      const userType = db.type("User", {
+        name: db.string(),
+      });
+
+      const ctx = createCtx([
+        {
+          namespace: "tailordb",
+          types: {
+            User: parseTailorDBType(toSchemaOutput(userType)),
+          },
+        },
+      ]);
+
+      const plugin = fileUtilsPlugin({ distPath: testDistPath });
+      const result = await plugin.onTailorDBReady!(ctx);
+
+      expect(result.files).toHaveLength(0);
+    });
+
+    it("should handle multiple namespaces", async () => {
+      const userType = db
+        .type("User", {
+          name: db.string(),
+        })
+        .files({
+          avatar: "profile image",
+        });
+
+      const customerType = db
+        .type("Customer", {
+          name: db.string(),
+        })
+        .files({
+          document: "customer document",
+        });
+
+      const ctx = createCtx([
+        {
+          namespace: "tailordb",
+          types: { User: parseTailorDBType(toSchemaOutput(userType)) },
+        },
+        {
+          namespace: "someNamespace",
+          types: { Customer: parseTailorDBType(toSchemaOutput(customerType)) },
+        },
+      ]);
+
+      const plugin = fileUtilsPlugin({ distPath: testDistPath });
+      const result = await plugin.onTailorDBReady!(ctx);
+
+      expect(result.files).toHaveLength(1);
+      const content = result.files[0].content;
+      expect(content).toContain("User: {");
+      expect(content).toContain("Customer: {");
+      expect(content).toContain('User: "tailordb"');
+      expect(content).toContain('Customer: "someNamespace"');
     });
   });
 });

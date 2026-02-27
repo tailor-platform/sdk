@@ -1,25 +1,15 @@
 import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
-import { z } from "zod";
-import {
-  KyselyTypeConfigSchema,
-  SeedConfigSchema,
-  EnumConstantsConfigSchema,
-  FileUtilsConfigSchema,
-  CodeGeneratorSchema,
-  type CodeGeneratorBase,
-} from "@/parser/generator-config";
+import { CodeGeneratorSchema, BaseGeneratorConfigSchema } from "@/parser/generator-config";
 import { createPluginConfigSchema, type Plugin } from "@/parser/plugin-config";
+import { enumConstantsPlugin, EnumConstantsGeneratorID } from "@/plugin/builtin/enum-constants";
+import { fileUtilsPlugin, FileUtilsGeneratorID } from "@/plugin/builtin/file-utils";
+import { kyselyTypePlugin, KyselyGeneratorID } from "@/plugin/builtin/kysely-type";
+import { seedPlugin, SeedGeneratorID } from "@/plugin/builtin/seed";
 import { loadConfigPath } from "./context";
-import {
-  createEnumConstantsGenerator,
-  EnumConstantsGeneratorID,
-} from "./generator/builtin/enum-constants";
-import { createFileUtilsGenerator, FileUtilsGeneratorID } from "./generator/builtin/file-utils";
-import { createKyselyGenerator, KyselyGeneratorID } from "./generator/builtin/kysely-type";
-import { createSeedGenerator, SeedGeneratorID } from "./generator/builtin/seed";
 import type { AppConfig } from "@/parser/app-config";
+import type { z } from "zod";
 import "./mock";
 
 /**
@@ -27,35 +17,17 @@ import "./mock";
  */
 export type LoadedConfig = AppConfig & { path: string };
 
-export const GeneratorConfigSchema = z
-  .union([
-    KyselyTypeConfigSchema,
-    SeedConfigSchema,
-    EnumConstantsConfigSchema,
-    FileUtilsConfigSchema,
-    CodeGeneratorSchema,
-  ])
-  .transform((gen): CodeGeneratorBase => {
-    if (!Array.isArray(gen)) {
-      return gen as CodeGeneratorBase;
-    }
-    const [id, options] = gen;
-    switch (id) {
-      case KyselyGeneratorID:
-        return createKyselyGenerator(options);
-      case SeedGeneratorID:
-        return createSeedGenerator(options);
-      case EnumConstantsGeneratorID:
-        return createEnumConstantsGenerator(options);
-      case FileUtilsGeneratorID:
-        return createFileUtilsGenerator(options);
-      default: {
-        const _exhaustive: never = id;
-        throw new Error(`Unknown generator ID: ${_exhaustive}`);
-      }
-    }
-  })
-  .brand("CodeGenerator");
+// Map of builtin generator IDs to plugin factory functions
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const builtinPlugins = new Map<string, (options: any) => Plugin<unknown, any>>([
+  [KyselyGeneratorID, (options) => kyselyTypePlugin(options)],
+  [SeedGeneratorID, (options) => seedPlugin(options)],
+  [EnumConstantsGeneratorID, (options) => enumConstantsPlugin(options)],
+  [FileUtilsGeneratorID, (options) => fileUtilsPlugin(options)],
+]);
+
+// Generator schema for custom CodeGenerator objects (builtin generators are handled as plugins)
+const GeneratorConfigSchema = CodeGeneratorSchema.brand("CodeGenerator");
 
 export type Generator = z.output<typeof GeneratorConfigSchema>;
 
@@ -93,11 +65,23 @@ export async function loadConfig(
 
   for (const value of Object.values(configModule)) {
     if (Array.isArray(value)) {
-      // Try to parse as generators
+      // Try to parse as generators (converting builtin tuples to plugins)
       const generatorParsed = value.reduce(
         (acc, item) => {
           if (!acc.success) return acc;
 
+          // Check if this is a builtin generator tuple that should be converted to a plugin
+          const baseResult = BaseGeneratorConfigSchema.safeParse(item);
+          if (baseResult.success && Array.isArray(baseResult.data)) {
+            const [id, options] = baseResult.data as [string, Record<string, unknown>];
+            const pluginFactory = builtinPlugins.get(id);
+            if (pluginFactory) {
+              acc.convertedPlugins.push(pluginFactory(options));
+              return acc;
+            }
+          }
+
+          // Try to parse as a custom CodeGenerator object
           const result = GeneratorConfigSchema.safeParse(item);
           if (result.success) {
             acc.items.push(result.data);
@@ -106,10 +90,14 @@ export async function loadConfig(
           }
           return acc;
         },
-        { success: true, items: [] as Generator[] },
+        { success: true, items: [] as Generator[], convertedPlugins: [] as Plugin[] },
       );
-      if (generatorParsed.success && generatorParsed.items.length > 0) {
+      if (
+        generatorParsed.success &&
+        (generatorParsed.items.length > 0 || generatorParsed.convertedPlugins.length > 0)
+      ) {
         allGenerators.push(...generatorParsed.items);
+        allPlugins.push(...generatorParsed.convertedPlugins);
         continue;
       }
 

@@ -8,11 +8,9 @@
   "ignore": ["scripts/**", "e2e/fixtures/**"],
   "ignoreDependencies": [
     "@liam-hq/cli",
-    "@tailor-platform/function-kysely-tailordb",
     "@typescript/native-preview",
     "cross-env",
     "eslint-plugin-import",
-    "kysely",
     "oxlint",
     "oxlint-tsgolint",
     "serve",
