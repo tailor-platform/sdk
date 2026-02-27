@@ -5,6 +5,7 @@ import { createResolverService, type ResolverService } from "@/cli/application/r
 import { createTailorDBService, type TailorDBService } from "@/cli/application/tailordb/service";
 import { createWorkflowService, type WorkflowService } from "@/cli/application/workflow/service";
 import { bundleExecutors } from "@/cli/bundler/executor/executor-bundler";
+import { resolveInlineSourcemap } from "@/cli/bundler/inline-sourcemap";
 import { bundleResolvers } from "@/cli/bundler/resolver/resolver-bundler";
 import { buildTriggerContext } from "@/cli/bundler/trigger-context";
 import {
@@ -373,9 +374,12 @@ export async function loadApplication(
   // 6. Build trigger context for workflow/job trigger transformation
   const triggerContext = await buildTriggerContext(config.workflow);
 
+  // 6.5. Resolve inline sourcemap setting
+  const inlineSourcemap = resolveInlineSourcemap(config.inlineSourcemap);
+
   // 7. Bundle resolvers
   for (const pipeline of resolverResult.resolverServices) {
-    await bundleResolvers(pipeline.namespace, pipeline.config, triggerContext);
+    await bundleResolvers(pipeline.namespace, pipeline.config, triggerContext, inlineSourcemap);
   }
 
   // 8. Bundle executors
@@ -384,6 +388,7 @@ export async function loadApplication(
       config: executorService.config,
       triggerContext,
       additionalFiles: [...pluginExecutorFiles],
+      inlineSourcemap,
     });
   }
 
@@ -396,6 +401,7 @@ export async function loadApplication(
       mainJobNames,
       config.env ?? {},
       triggerContext,
+      inlineSourcemap,
     );
   }
 

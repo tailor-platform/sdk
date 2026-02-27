@@ -4,7 +4,6 @@ import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { loadFilesWithIgnores, type FileLoadConfig } from "@/cli/application/file-loader";
-import { enableInlineSourcemap } from "@/cli/bundler/inline-sourcemap";
 import { getDistDir } from "@/cli/utils/dist-dir";
 import { logger, styles } from "@/cli/utils/logger";
 import { createTriggerTransformPlugin, type TriggerContext } from "../trigger-context";
@@ -25,6 +24,8 @@ export interface BundleExecutorsOptions {
   triggerContext?: TriggerContext;
   /** Additional files to bundle (e.g., plugin-generated executors) */
   additionalFiles?: string[];
+  /** Whether to enable inline sourcemaps */
+  inlineSourcemap?: boolean;
 }
 
 /**
@@ -37,7 +38,7 @@ export interface BundleExecutorsOptions {
  * @returns Promise that resolves when bundling completes
  */
 export async function bundleExecutors(options: BundleExecutorsOptions): Promise<void> {
-  const { config, triggerContext, additionalFiles = [] } = options;
+  const { config, triggerContext, additionalFiles = [], inlineSourcemap } = options;
   const configFiles = loadFilesWithIgnores(config);
   const files = [...configFiles, ...additionalFiles];
   if (files.length === 0) {
@@ -90,7 +91,7 @@ export async function bundleExecutors(options: BundleExecutorsOptions): Promise<
   // Process each executor
   await Promise.all(
     executors.map((executor) =>
-      bundleSingleExecutor(executor, outputDir, tsconfig, triggerContext),
+      bundleSingleExecutor(executor, outputDir, tsconfig, triggerContext, inlineSourcemap),
     ),
   );
 
@@ -102,6 +103,7 @@ async function bundleSingleExecutor(
   outputDir: string,
   tsconfig: string | undefined,
   triggerContext?: TriggerContext,
+  inlineSourcemap?: boolean,
 ): Promise<void> {
   // Step 1: Create entry file that imports and extracts operation.body
   const entryPath = path.join(outputDir, `${executor.name}.entry.js`);
@@ -128,8 +130,8 @@ async function bundleSingleExecutor(
       output: {
         file: outputPath,
         format: "esm",
-        sourcemap: enableInlineSourcemap ? "inline" : true,
-        minify: enableInlineSourcemap
+        sourcemap: inlineSourcemap ? "inline" : true,
+        minify: inlineSourcemap
           ? {
               mangle: {
                 keepNames: true,

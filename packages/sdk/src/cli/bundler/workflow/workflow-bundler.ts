@@ -4,7 +4,6 @@ import { parseSync } from "oxc-parser";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
-import { enableInlineSourcemap } from "@/cli/bundler/inline-sourcemap";
 import { getDistDir } from "@/cli/utils/dist-dir";
 import { logger, styles } from "@/cli/utils/logger";
 import { detectTriggerCalls, findAllJobs } from "./job-detector";
@@ -36,6 +35,7 @@ export interface BundleWorkflowJobsResult {
  * @param mainJobNames - Names of main jobs
  * @param env - Environment variables to inject
  * @param triggerContext - Trigger context for transformations
+ * @param inlineSourcemap - Whether to enable inline sourcemaps
  * @returns Workflow job bundling result
  */
 export async function bundleWorkflowJobs(
@@ -43,6 +43,7 @@ export async function bundleWorkflowJobs(
   mainJobNames: string[],
   env: Record<string, string | number | boolean> = {},
   triggerContext?: TriggerContext,
+  inlineSourcemap?: boolean,
 ): Promise<BundleWorkflowJobsResult> {
   if (allJobs.length === 0) {
     logger.warn("No workflow jobs to bundle");
@@ -74,7 +75,9 @@ export async function bundleWorkflowJobs(
 
   // Process each job
   await Promise.all(
-    usedJobs.map((job) => bundleSingleJob(job, usedJobs, outputDir, tsconfig, env, triggerContext)),
+    usedJobs.map((job) =>
+      bundleSingleJob(job, usedJobs, outputDir, tsconfig, env, triggerContext, inlineSourcemap),
+    ),
   );
 
   logger.log(`${styles.success("Bundled")} ${styles.info('"workflow-job"')}`);
@@ -230,6 +233,7 @@ async function bundleSingleJob(
   tsconfig: string | undefined,
   env: Record<string, string | number | boolean>,
   triggerContext?: TriggerContext,
+  inlineSourcemap?: boolean,
 ): Promise<void> {
   // Step 1: Create entry file that imports job by named export
   const entryPath = path.join(outputDir, `${job.name}.entry.js`);
@@ -308,8 +312,8 @@ async function bundleSingleJob(
       output: {
         file: outputPath,
         format: "esm",
-        sourcemap: enableInlineSourcemap ? "inline" : true,
-        minify: enableInlineSourcemap
+        sourcemap: inlineSourcemap ? "inline" : true,
+        minify: inlineSourcemap
           ? {
               mangle: {
                 keepNames: true,
