@@ -245,25 +245,23 @@ function buildField(descriptor: FieldDescriptor): TailorAnyDBField {
     field = (field as any).typeName(descriptor.typeName);
   }
 
-  if (descriptor.kind !== "object") {
-    if (descriptor.array !== true) {
-      if (descriptor.unique === true) {
-        field = field.unique();
-      } else if (descriptor.index === true) {
-        field = field.index();
-      }
+  if (descriptor.kind !== "object" && descriptor.array !== true) {
+    if (descriptor.unique === true) {
+      field = field.unique();
+    } else if (descriptor.index === true) {
+      field = field.index();
     }
+  }
 
-    if (descriptor.hooks !== undefined) {
-      field = field.hooks(descriptor.hooks);
-    }
+  if (descriptor.kind !== "object" && descriptor.hooks !== undefined) {
+    field = field.hooks(descriptor.hooks);
+  }
 
-    if (descriptor.validate !== undefined) {
-      if (Array.isArray(descriptor.validate) && !isValidateConfig(descriptor.validate)) {
-        field = field.validate(...descriptor.validate);
-      } else {
-        field = field.validate(descriptor.validate);
-      }
+  if (descriptor.kind !== "object" && descriptor.validate !== undefined) {
+    if (Array.isArray(descriptor.validate) && !isValidateConfig(descriptor.validate)) {
+      field = field.validate(...descriptor.validate);
+    } else {
+      field = field.validate(descriptor.validate);
     }
   }
 
