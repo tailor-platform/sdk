@@ -123,6 +123,30 @@ describe("createDepCollectorPlugin", () => {
     expect(result).toEqual(["/src/app/index.ts", "/src/utils/helper.ts"]);
   });
 
+  test("collects non-JS files (JSON, CJS, etc.)", () => {
+    const { plugin, getResult } = createDepCollectorPlugin();
+
+    const loadHook = plugin.load;
+    const handler =
+      typeof loadHook === "function"
+        ? loadHook
+        : typeof loadHook === "object" && loadHook !== null && "handler" in loadHook
+          ? loadHook.handler
+          : undefined;
+    expect(handler).toBeDefined();
+
+    handler!.call(undefined as never, "/src/app/index.ts");
+    handler!.call(undefined as never, "/src/config/settings.json");
+    handler!.call(undefined as never, "/src/utils/legacy.cjs");
+
+    const result = getResult();
+    expect(result).toEqual([
+      "/src/app/index.ts",
+      "/src/config/settings.json",
+      "/src/utils/legacy.cjs",
+    ]);
+  });
+
   test("handler returns null (does not modify code)", () => {
     const { plugin } = createDepCollectorPlugin();
 

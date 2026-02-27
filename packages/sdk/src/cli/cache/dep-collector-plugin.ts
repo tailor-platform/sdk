@@ -22,7 +22,9 @@ export function createDepCollectorPlugin(): DepCollectorResult {
     load: {
       filter: {
         id: {
-          include: [/\.(ts|js|tsx|jsx|mts|mjs)$/],
+          // Match all file types (not just JS/TS) so that JSON, CJS,
+          // and other imported files are tracked for cache invalidation.
+          include: [/\.[^/]+$/],
         },
       },
       handler(id) {
