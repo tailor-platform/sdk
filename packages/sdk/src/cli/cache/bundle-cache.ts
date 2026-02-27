@@ -8,9 +8,6 @@ import type { Plugin } from "rolldown";
 
 type BundleKind = "resolver" | "executor" | "workflow-job";
 
-/**
- * Parameters for attempting to restore a cached bundle output.
- */
 type BundleCacheRestoreParams = {
   kind: BundleKind;
   name: string;
@@ -19,9 +16,6 @@ type BundleCacheRestoreParams = {
   contextHash?: string;
 };
 
-/**
- * Parameters for saving a bundle output to cache.
- */
 type BundleCacheSaveParams = {
   kind: BundleKind;
   name: string;
@@ -43,30 +37,15 @@ type BundleCache = {
   save(params: BundleCacheSaveParams): void;
 };
 
-/**
- * Build a cache key from the bundle kind and name.
- * @param kind - The bundle kind (resolver, executor, workflow-job)
- * @param name - The bundle name
- * @returns The cache key in the format `kind:name`
- */
 function buildCacheKey(kind: string, name: string): string {
   return `${kind}:${name}`;
 }
 
-/**
- * Combine file dependency hash with optional context hash.
- * @param fileHash - Hash of dependency file contents
- * @param contextHash - Optional additional context hash
- * @returns Combined hash
- */
 function combineHash(fileHash: string, contextHash?: string): string {
   if (!contextHash) return fileHash;
   return hashContent(fileHash + contextHash);
 }
 
-/**
- * Parameters for computing a bundler context hash.
- */
 type ComputeBundlerContextHashParams = {
   sourceFile: string;
   serializedTriggerContext: string;
@@ -94,34 +73,24 @@ function computeBundlerContextHash(params: ComputeBundlerContextHashParams): str
 }
 
 /**
- * Result of setting up a dep-collector plugin for cache tracking.
- */
-type DepCollectorSetup = {
-  getDependencyPaths: () => string[];
-};
-
-/**
  * Create and append a dep-collector plugin to the given plugin array when caching is active.
  * @param cache - Bundle cache instance (undefined when caching is disabled)
  * @param plugins - Rolldown plugin array to append to
- * @returns Setup result for retrieving collected paths, or undefined when caching is disabled
+ * @returns Function that returns collected dependency paths, or undefined when caching is disabled
  */
 function setupDepCollector(
   cache: BundleCache | undefined,
   plugins: Plugin[],
-): DepCollectorSetup | undefined {
+): (() => string[]) | undefined {
   if (!cache) return undefined;
   const { plugin, getResult } = createDepCollectorPlugin();
   plugins.push(plugin);
-  return { getDependencyPaths: getResult };
+  return getResult;
 }
 
-/**
- * Parameters for saving a bundle build result to cache.
- */
 type SaveBundleToCacheParams = {
   cache?: BundleCache;
-  depCollector?: DepCollectorSetup;
+  getDependencyPaths?: () => string[];
   kind: BundleKind;
   name: string;
   sourceFile: string;
@@ -131,14 +100,14 @@ type SaveBundleToCacheParams = {
 
 /**
  * Save a bundle build result to cache if caching is active.
- * @param params - Save parameters including cache, depCollector, and bundle metadata
+ * @param params - Save parameters including cache, getDependencyPaths, and bundle metadata
  */
 function saveBundleToCache(params: SaveBundleToCacheParams): void {
-  const { cache, depCollector, ...rest } = params;
-  if (!cache || !depCollector) return;
+  const { cache, getDependencyPaths, ...rest } = params;
+  if (!cache || !getDependencyPaths) return;
   cache.save({
     ...rest,
-    dependencyPaths: depCollector.getDependencyPaths(),
+    dependencyPaths: getDependencyPaths(),
   });
 }
 

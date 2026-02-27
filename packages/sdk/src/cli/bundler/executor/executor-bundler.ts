@@ -164,7 +164,7 @@ async function bundleSingleExecutor(
   // Step 2: Bundle with tree-shaking
   const triggerPlugin = createTriggerTransformPlugin(triggerContext);
   const plugins: rolldown.Plugin[] = triggerPlugin ? [triggerPlugin] : [];
-  const depCollector = setupDepCollector(cache, plugins);
+  const getDependencyPaths = setupDepCollector(cache, plugins);
 
   await rolldown.build(
     rolldown.defineConfig({
@@ -195,7 +195,7 @@ async function bundleSingleExecutor(
 
   saveBundleToCache({
     cache,
-    depCollector,
+    getDependencyPaths,
     kind: "executor",
     name: executor.name,
     sourceFile: executor.sourceFile,

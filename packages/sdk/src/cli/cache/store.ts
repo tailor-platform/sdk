@@ -36,6 +36,7 @@ const CURRENT_CACHE_VERSION = 1;
  * @returns A CacheStore instance
  */
 function createCacheStore(config: CacheConfig): CacheStore {
+  // Tri-state: null = not yet loaded, undefined = loaded but missing/invalid, CacheManifest = loaded
   let cachedManifest: CacheManifest | undefined | null = null;
 
   function manifestPath(): string {

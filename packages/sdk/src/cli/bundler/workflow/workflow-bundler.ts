@@ -346,7 +346,7 @@ async function bundleSingleJob(
   };
 
   const plugins: rolldown.Plugin[] = [transformPlugin];
-  const depCollector = setupDepCollector(cache, plugins);
+  const getDependencyPaths = setupDepCollector(cache, plugins);
 
   await rolldown.build(
     rolldown.defineConfig({
@@ -377,7 +377,7 @@ async function bundleSingleJob(
 
   saveBundleToCache({
     cache,
-    depCollector,
+    getDependencyPaths,
     kind: "workflow-job",
     name: job.name,
     sourceFile: job.sourceFile,
