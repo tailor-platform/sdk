@@ -88,6 +88,19 @@ export async function buildTriggerContext(
 }
 
 /**
+ * Serialize trigger context to a deterministic string for cache hashing.
+ * Returns an empty string if no context is provided.
+ * @param ctx - Trigger context to serialize
+ * @returns Deterministic string representation
+ */
+export function serializeTriggerContext(ctx: TriggerContext | undefined): string {
+  if (!ctx) return "";
+  const sortMap = (m: Map<string, string>) =>
+    JSON.stringify([...m.entries()].sort(([a], [b]) => a.localeCompare(b)));
+  return sortMap(ctx.workflowNameMap) + sortMap(ctx.jobNameMap) + sortMap(ctx.workflowFileMap);
+}
+
+/**
  * Create a rolldown plugin for transforming trigger calls
  * Returns undefined if no trigger context is provided
  * @param triggerContext - Trigger context to use for transformations

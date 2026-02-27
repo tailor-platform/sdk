@@ -9,10 +9,10 @@ import { createDepCollectorPlugin } from "@/cli/cache/dep-collector-plugin";
 import { hashContent } from "@/cli/cache/hasher";
 import { getDistDir } from "@/cli/utils/dist-dir";
 import { logger, styles } from "@/cli/utils/logger";
+import { serializeTriggerContext, type TriggerContext } from "../trigger-context";
 import { detectTriggerCalls, findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
 import { transformFunctionTriggers } from "./trigger-transformer";
-import type { TriggerContext } from "../trigger-context";
 import type { BundleCache } from "@/cli/cache/bundle-cache";
 
 interface JobInfo {
@@ -247,14 +247,16 @@ async function bundleSingleJob(
 ): Promise<void> {
   const outputPath = path.join(outputDir, `${job.name}.js`);
 
-  // Compute context hash combining env variables and source file path so that
-  // different env values or source file relocation invalidate the cache.
-  // Sort env keys for deterministic hashing regardless of property insertion order.
+  // Compute context hash combining env variables, source file path, and trigger
+  // context so that env changes, file relocation, or workflow config changes
+  // invalidate the cache.
   const contextHash = cache
     ? hashContent(
         JSON.stringify(
           Object.fromEntries(Object.entries(env).sort(([a], [b]) => a.localeCompare(b))),
-        ) + path.resolve(job.sourceFile),
+        ) +
+          path.resolve(job.sourceFile) +
+          serializeTriggerContext(triggerContext),
       )
     : undefined;
 

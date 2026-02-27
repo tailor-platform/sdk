@@ -9,7 +9,11 @@ import { createDepCollectorPlugin } from "@/cli/cache/dep-collector-plugin";
 import { hashContent } from "@/cli/cache/hasher";
 import { getDistDir } from "@/cli/utils/dist-dir";
 import { logger, styles } from "@/cli/utils/logger";
-import { createTriggerTransformPlugin, type TriggerContext } from "../trigger-context";
+import {
+  createTriggerTransformPlugin,
+  serializeTriggerContext,
+  type TriggerContext,
+} from "../trigger-context";
 import { loadExecutor } from "./loader";
 import type { BundleCache } from "@/cli/cache/bundle-cache";
 
@@ -120,9 +124,12 @@ async function bundleSingleExecutor(
 ): Promise<void> {
   const outputPath = path.join(outputDir, `${executor.name}.js`);
 
-  // Include source file path in context hash so that renaming/moving
-  // the source file invalidates the cache even when the old file persists.
-  const sourceContext = cache ? hashContent(path.resolve(executor.sourceFile)) : undefined;
+  // Include source file path and trigger context in context hash so that
+  // renaming/moving the source file or changing workflow configuration
+  // invalidates the cache.
+  const sourceContext = cache
+    ? hashContent(path.resolve(executor.sourceFile) + serializeTriggerContext(triggerContext))
+    : undefined;
 
   // Try to restore from cache before bundling
   if (
