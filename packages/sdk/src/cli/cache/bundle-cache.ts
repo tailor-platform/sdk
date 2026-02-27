@@ -1,4 +1,4 @@
-import { hashFile, hashFiles } from "./hasher";
+import { hashContent, hashFile, hashFiles } from "./hasher";
 import type { CacheStore } from "./store";
 import type { CacheEntry } from "./types";
 
@@ -9,6 +9,8 @@ type BundleCacheRestoreParams = {
   kind: "resolver" | "executor" | "workflow-job";
   name: string;
   outputPath: string;
+  /** Optional hash of non-file context (e.g., env variables) to include in cache validation. */
+  contextHash?: string;
 };
 
 /**
@@ -20,6 +22,8 @@ type BundleCacheSaveParams = {
   sourceFile: string;
   outputPath: string;
   dependencyPaths: string[];
+  /** Optional hash of non-file context (e.g., env variables) to include in cache key computation. */
+  contextHash?: string;
 };
 
 /**
@@ -44,6 +48,17 @@ function buildCacheKey(kind: string, name: string): string {
 }
 
 /**
+ * Combine file dependency hash with optional context hash.
+ * @param fileHash - Hash of dependency file contents
+ * @param contextHash - Optional additional context hash
+ * @returns Combined hash
+ */
+function combineHash(fileHash: string, contextHash?: string): string {
+  if (!contextHash) return fileHash;
+  return hashContent(fileHash + contextHash);
+}
+
+/**
  * Create a bundle cache backed by the given store.
  * @param store - The cache store for persistence
  * @param _sdkVersion - Current SDK version for cache metadata (reserved for future use)
@@ -62,7 +77,7 @@ function createBundleCache(store: CacheStore, _sdkVersion: string): BundleCache 
     // If any file is missing or unreadable, treat as cache miss.
     let currentHash: string;
     try {
-      currentHash = hashFiles(entry.dependencyPaths);
+      currentHash = combineHash(hashFiles(entry.dependencyPaths), params.contextHash);
     } catch {
       return false;
     }
@@ -77,7 +92,7 @@ function createBundleCache(store: CacheStore, _sdkVersion: string): BundleCache 
 
   function save(params: BundleCacheSaveParams): void {
     const cacheKey = buildCacheKey(params.kind, params.name);
-    const inputHash = hashFiles(params.dependencyPaths);
+    const inputHash = combineHash(hashFiles(params.dependencyPaths), params.contextHash);
     // Stored for future integrity verification (detect corrupted cache files)
     const contentHash = hashFile(params.outputPath);
 
@@ -89,7 +104,7 @@ function createBundleCache(store: CacheStore, _sdkVersion: string): BundleCache 
       dependencyPaths: params.dependencyPaths,
       outputFiles: [
         {
-          relativePath: params.outputPath,
+          outputPath: params.outputPath,
           contentHash,
         },
       ],

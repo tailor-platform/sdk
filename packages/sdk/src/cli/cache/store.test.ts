@@ -23,7 +23,7 @@ describe("createCacheStore", () => {
       kind: "bundle",
       inputHash: "abc123",
       dependencyPaths: ["/src/index.ts"],
-      outputFiles: [{ relativePath: "dist/index.js", contentHash: "def456" }],
+      outputFiles: [{ outputPath: "dist/index.js", contentHash: "def456" }],
       createdAt: "2025-01-01T00:00:00.000Z",
       ...overrides,
     };

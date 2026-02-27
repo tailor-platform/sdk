@@ -35,8 +35,8 @@ export type CacheEntry = {
  * Metadata for a single output file within a cache entry.
  */
 export type CacheOutputFile = {
-  /** Path relative to the project root. */
-  relativePath: string;
+  /** Absolute path of the output file. */
+  outputPath: string;
   /** Content hash of the output file for integrity verification. */
   contentHash: string;
 };

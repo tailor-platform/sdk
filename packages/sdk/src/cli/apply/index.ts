@@ -77,13 +77,14 @@ export async function apply(options?: ApplyOptions) {
 
   // Initialize cache manager
   const packageJson = await readPackageJson();
+  const cacheDir = path.resolve(getDistDir(), "cache");
   if (options?.cleanCache) {
-    const cacheDir = path.resolve(getDistDir(), "cache");
     fs.rmSync(cacheDir, { recursive: true, force: true });
     logger.info("Bundle cache cleaned");
   }
   const cacheManager = createCacheManager({
     enabled: !noCache,
+    cacheDir,
     sdkVersion: packageJson.version ?? "unknown",
   });
 

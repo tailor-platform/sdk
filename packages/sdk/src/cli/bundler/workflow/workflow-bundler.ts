@@ -247,19 +247,19 @@ async function bundleSingleJob(
 ): Promise<void> {
   const outputPath = path.join(outputDir, `${job.name}.js`);
 
-  // Include env hash in cache name so different env values produce different cache keys.
+  // Compute env context hash so different env values invalidate the cache.
   // Sort keys for deterministic hashing regardless of property insertion order.
-  const envSuffix = cache
-    ? `-${hashContent(JSON.stringify(env, Object.keys(env).sort())).slice(0, 12)}`
-    : "";
-  const cacheName = `${job.name}${envSuffix}`;
+  const envContextHash = cache
+    ? hashContent(JSON.stringify(env, Object.keys(env).sort()))
+    : undefined;
 
   // Try to restore from cache before bundling
   if (
     cache?.tryRestore({
       kind: "workflow-job",
-      name: cacheName,
+      name: job.name,
       outputPath,
+      contextHash: envContextHash,
     })
   ) {
     logger.debug(`  ${styles.dim("cached")}: ${job.name}`);
@@ -373,10 +373,11 @@ async function bundleSingleJob(
   if (cache && depCollector) {
     cache.save({
       kind: "workflow-job",
-      name: cacheName,
+      name: job.name,
       sourceFile: job.sourceFile,
       outputPath,
       dependencyPaths: depCollector.getResult(),
+      contextHash: envContextHash,
     });
   }
 }
