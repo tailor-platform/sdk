@@ -7,7 +7,6 @@ import { generate, apply } from "@tailor-platform/sdk/cli";
 const __filename = url.fileURLToPath(import.meta.url);
 
 const expectedDir = "tests/fixtures/expected";
-const actualDir = "tests/fixtures/actual";
 
 function replaceAbsolutePaths(dirPath: string) {
   const items = fs.readdirSync(dirPath);
@@ -89,35 +88,37 @@ async function listGeneratedFiles(dirPath: string, depth = 0, maxDepth = 3): Pro
   }
 }
 
-export async function generateActualFiles(): Promise<void> {
-  if (fs.existsSync(actualDir)) {
-    fs.rmSync(actualDir, { recursive: true });
-    console.log("Removed existing actual directory");
-  }
+const generatorsCompatDir = "tests/fixtures/generators";
+const pluginsCompatDir = "tests/fixtures/plugins";
 
-  process.env.TAILOR_SDK_OUTPUT_DIR = actualDir;
-  await generate({
-    configPath: "./tests/tailor.config.actual.ts",
-  });
+export async function generateCompatFiles(): Promise<void> {
+  for (const dir of [generatorsCompatDir, pluginsCompatDir]) {
+    if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true });
+  }
+  await generate({ configPath: "./tests/tailor.config.generators-compat.ts" });
+  await generate({ configPath: "./tests/tailor.config.plugins-compat.ts" });
+
+  // Also run apply --buildOnly for plugins-compat (used by apply_command tests)
+  process.env.TAILOR_SDK_OUTPUT_DIR = pluginsCompatDir;
   await apply({
-    configPath: "./tests/tailor.config.actual.ts",
+    configPath: "./tests/tailor.config.plugins-compat.ts",
     buildOnly: true,
   });
-  replaceAbsolutePaths(actualDir);
+  replaceAbsolutePaths(pluginsCompatDir);
 }
 
 if (process.argv[1] === __filename) {
   try {
     process.env.TAILOR_PLATFORM_WORKSPACE_ID ??= randomUUID();
-    if (process.argv[2] === "actual") {
-      console.log("Generating actual files...");
-      await generateActualFiles();
-    } else {
+    if (process.argv[2] === "expected") {
       console.log("Generating expected files...");
       await generateExpectedFiles();
+    } else {
+      console.log("Generating compat files...");
+      await generateCompatFiles();
     }
   } catch (error) {
-    console.error("\n❌ Failed to generate expected files:", error);
+    console.error("\n❌ Failed to generate files:", error);
     process.exit(1);
   }
 }

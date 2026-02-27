@@ -17,8 +17,8 @@ import {
 } from "@tailor-proto/tailor/v1/pipeline_resource_pb";
 import * as inflection from "inflection";
 import { type ResolverService } from "@/cli/application/resolver/service";
+import { buildResolverOperationHookExpr } from "@/cli/bundler/runtime-args";
 import { type Resolver, type TailorField } from "@/parser/service/resolver";
-import { tailorUserMap } from "@/parser/service/tailordb";
 import { fetchAll, type OperatorClient } from "../../client";
 import { resolverFunctionName } from "./function-registry";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
@@ -390,7 +390,7 @@ function processResolver(
       operationType: PipelineResolver_OperationType.FUNCTION,
       operationSourceRef: resolverFunctionName(namespace, resolver.name),
       operationHook: {
-        expr: `({ ...context.pipeline, input: context.args, user: ${tailorUserMap}, env: ${JSON.stringify(env)} });`,
+        expr: buildResolverOperationHookExpr(env),
       },
       postScript: `args.body`,
     },

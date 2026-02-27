@@ -48,6 +48,26 @@
       "types": "./dist/plugin/index.d.mts",
       "import": "./dist/plugin/index.mjs",
       "default": "./dist/plugin/index.mjs"
+    },
+    "./plugin/kysely-type": {
+      "types": "./dist/plugin/builtin/kysely-type/index.d.mts",
+      "import": "./dist/plugin/builtin/kysely-type/index.mjs",
+      "default": "./dist/plugin/builtin/kysely-type/index.mjs"
+    },
+    "./plugin/enum-constants": {
+      "types": "./dist/plugin/builtin/enum-constants/index.d.mts",
+      "import": "./dist/plugin/builtin/enum-constants/index.mjs",
+      "default": "./dist/plugin/builtin/enum-constants/index.mjs"
+    },
+    "./plugin/file-utils": {
+      "types": "./dist/plugin/builtin/file-utils/index.d.mts",
+      "import": "./dist/plugin/builtin/file-utils/index.mjs",
+      "default": "./dist/plugin/builtin/file-utils/index.mjs"
+    },
+    "./plugin/seed": {
+      "types": "./dist/plugin/builtin/seed/index.d.mts",
+      "import": "./dist/plugin/builtin/seed/index.mjs",
+      "default": "./dist/plugin/builtin/seed/index.mjs"
     }
   },
   "scripts": {
@@ -97,7 +117,7 @@
     "p-limit": "7.2.0",
     "pathe": "2.0.3",
     "pkg-types": "2.3.0",
-    "politty": "^0.3.0",
+    "politty": "^0.4.0",
     "rolldown": "1.0.0-beta.60",
     "serve": "14.2.5",
     "std-env": "3.10.0",

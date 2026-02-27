@@ -7,6 +7,7 @@ import {
   type Executor,
   type ExecutorServiceConfig,
 } from "@/parser/service/executor";
+import { isSdkBranded } from "@/utils/brand";
 
 /**
  * Information about a plugin-generated executor converted to Executor format
@@ -57,6 +58,9 @@ export function createExecutorService(params: CreateExecutorServiceParams): Exec
         );
         executors[executorFile] = result.data;
         return result.data;
+      }
+      if (isSdkBranded(executorModule.default)) {
+        throw result.error;
       }
     } catch (error) {
       const relativePath = path.relative(process.cwd(), executorFile);

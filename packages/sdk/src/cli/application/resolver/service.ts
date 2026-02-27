@@ -7,6 +7,7 @@ import {
   type ResolverServiceConfig,
   ResolverSchema,
 } from "@/parser/service/resolver";
+import { isSdkBranded } from "@/utils/brand";
 
 export type ResolverService = {
   readonly namespace: string;
@@ -38,6 +39,9 @@ export function createResolverService(
         );
         resolvers[resolverFile] = result.data;
         return result.data;
+      }
+      if (isSdkBranded(resolverModule.default)) {
+        throw result.error;
       }
     } catch (error) {
       const relativePath = path.relative(process.cwd(), resolverFile);

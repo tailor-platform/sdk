@@ -23,6 +23,13 @@ export const calculate = createWorkflowJob({
   },
 });
 
+export const getUserInfo = createWorkflowJob({
+  name: "get-user-info",
+  body: (_input: undefined, { user }) => {
+    return { userId: user.id, workspaceId: user.workspaceId };
+  },
+});
+
 export default createWorkflow({
   name: "simple-calculation",
   mainJob: calculate,

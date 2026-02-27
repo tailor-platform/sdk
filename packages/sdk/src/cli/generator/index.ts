@@ -15,19 +15,24 @@ import {
   type TailorDBNamespaceResult,
   type ResolverNamespaceResult,
   type GeneratorAuthInput,
+  type GeneratorResult,
   type DependencyKind,
   hasDependency,
 } from "@/cli/generator/types";
 import { generateUserTypes } from "@/cli/type-generator";
 import { getDistDir } from "@/cli/utils/dist-dir";
 import { logger, styles } from "@/cli/utils/logger";
+import {
+  type TailorDBNamespaceData,
+  type ResolverNamespaceData,
+} from "@/parser/plugin-config/generation-types";
 import { type Executor } from "@/parser/service/executor";
 import { type Resolver } from "@/parser/service/resolver";
 import { PluginManager } from "@/plugin/manager";
 import { commonArgs, withCommonArgs } from "../args";
 import { createDependencyWatcher, type DependencyWatcher } from "./watch";
 import type { GenerateOptions } from "./options";
-import type { PluginAttachment } from "@/parser/plugin-config/types";
+import type { Plugin, PluginAttachment } from "@/parser/plugin-config/types";
 import type { TailorDBType, TypeSourceInfo } from "@/parser/service/tailordb/types";
 
 export type { CodeGenerator } from "@/cli/generator/types";
@@ -107,6 +112,9 @@ export function createGenerationManager(params: {
   let watcher: DependencyWatcher | null = null;
   const generatorResults: GeneratorResults = {};
 
+  // Get plugins that have generation hooks
+  const generationPlugins = pluginManager?.getPluginsWithGenerationHooks() ?? [];
+
   // Helper functions for dependency checking
   function getDeps(gen: AnyCodeGenerator): Set<DependencyKind> {
     return new Set(gen.dependencies);
@@ -145,6 +153,10 @@ export function createGenerationManager(params: {
       idProvider: authConfig.idProvider,
     };
   }
+
+  // =========================================================================
+  // Generator processing (unchanged - per-type/perNS/aggregate pipeline)
+  // =========================================================================
 
   async function processTailorDBNamespace(
     gen: AnyCodeGenerator,
@@ -314,13 +326,143 @@ export function createGenerationManager(params: {
     });
 
     // Write generated files
+    await writeGeneratedFiles(gen.id, result);
+  }
+
+  // =========================================================================
+  // Plugin phase-complete hook runner
+  // =========================================================================
+
+  /**
+   * Build TailorDB namespace data array from loaded services.
+   * @returns Array of TailorDB namespace data
+   */
+  function buildTailorDBData(): TailorDBNamespaceData[] {
+    return Object.entries(services.tailordb).map(([namespace, info]) => ({
+      namespace,
+      types: info.types,
+      sourceInfo: new Map(Object.entries(info.sourceInfo)),
+      pluginAttachments: info.pluginAttachments,
+    }));
+  }
+
+  /**
+   * Build resolver namespace data array from loaded services.
+   * @returns Array of resolver namespace data
+   */
+  function buildResolverData(): ResolverNamespaceData[] {
+    return Object.entries(services.resolver).map(([namespace, resolvers]) => ({
+      namespace,
+      resolvers,
+    }));
+  }
+
+  /**
+   * Run a plugin's phase-complete hook and write any generated files.
+   * @param plugin - Plugin to run the hook on
+   * @param hookName - Name of the hook to call
+   * @returns Promise that resolves when hook completes
+   */
+  async function runPluginPhaseHook(
+    plugin: Plugin,
+    hookName: "onTailorDBReady" | "onResolverReady" | "onExecutorReady",
+  ): Promise<void> {
+    const hook = plugin[hookName];
+    if (!hook) return;
+
+    const pluginBaseDir = path.join(baseDir, plugin.id);
+    const auth = getAuthInput();
+    const tailordb = buildTailorDBData();
+
+    let result: GeneratorResult;
+
+    switch (hookName) {
+      case "onTailorDBReady":
+        result = await plugin.onTailorDBReady!({
+          tailordb,
+          auth,
+          baseDir: pluginBaseDir,
+          configPath: config.path,
+          pluginConfig: plugin.pluginConfig,
+        });
+        break;
+      case "onResolverReady":
+        result = await plugin.onResolverReady!({
+          tailordb,
+          resolvers: buildResolverData(),
+          auth,
+          baseDir: pluginBaseDir,
+          configPath: config.path,
+          pluginConfig: plugin.pluginConfig,
+        });
+        break;
+      case "onExecutorReady":
+        result = await plugin.onExecutorReady!({
+          tailordb,
+          resolvers: buildResolverData(),
+          executors: { ...services.executor },
+          auth,
+          baseDir: pluginBaseDir,
+          configPath: config.path,
+          pluginConfig: plugin.pluginConfig,
+        });
+        break;
+    }
+
+    await writeGeneratedFiles(plugin.id, result);
+  }
+
+  /**
+   * Run a specific generation-time hook for all plugins that implement it.
+   * Each hook runs at its natural pipeline phase, ensuring outputs from earlier
+   * phases are available when later phases load resolvers/executors.
+   * @param hookName - Name of the hook to call
+   * @param watch - Whether running in watch mode (suppresses throws)
+   */
+  async function runPluginHook(
+    hookName: "onTailorDBReady" | "onResolverReady" | "onExecutorReady",
+    watch: boolean,
+  ): Promise<void> {
+    const plugins = generationPlugins.filter((p) => p[hookName] != null);
+    if (plugins.length === 0) return;
+    const results = await Promise.allSettled(
+      plugins.map(async (plugin) => {
+        try {
+          await runPluginPhaseHook(plugin, hookName);
+        } catch (error) {
+          logger.error(`Error processing plugin ${styles.bold(plugin.id)} (${hookName})`);
+          logger.error(String(error));
+          if (!watch) {
+            throw error;
+          }
+        }
+      }),
+    );
+    if (!watch) {
+      const failures = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+      if (failures.length > 0) {
+        throw new AggregateError(failures.map((f) => f.reason));
+      }
+    }
+  }
+
+  // =========================================================================
+  // Shared file writing
+  // =========================================================================
+
+  /**
+   * Write generated files to disk.
+   * @param sourceId - Generator or plugin ID for logging
+   * @param result - Generator result containing files to write
+   */
+  async function writeGeneratedFiles(sourceId: string, result: GeneratorResult): Promise<void> {
     await Promise.all(
       result.files.map(async (file) => {
         fs.mkdirSync(path.dirname(file.path), { recursive: true });
         return new Promise<void>((resolve, reject) => {
           if (file.skipIfExists && fs.existsSync(file.path)) {
             const relativePath = path.relative(process.cwd(), file.path);
-            logger.debug(`${gen.id} | skip existing: ${relativePath}`);
+            logger.debug(`${sourceId} | skip existing: ${relativePath}`);
             return resolve();
           }
 
@@ -332,7 +474,7 @@ export function createGenerationManager(params: {
               reject(err);
             } else {
               const relativePath = path.relative(process.cwd(), file.path);
-              logger.log(`${gen.id} | generate: ${styles.success(relativePath)}`);
+              logger.log(`${sourceId} | generate: ${styles.success(relativePath)}`);
               // Set executable permission if requested
               if (file.executable) {
                 fs.chmod(file.path, 0o755, (chmodErr) => {
@@ -356,6 +498,10 @@ export function createGenerationManager(params: {
       }),
     );
   }
+
+  // =========================================================================
+  // Generator orchestration
+  // =========================================================================
 
   async function processGenerator(gen: AnyCodeGenerator): Promise<void> {
     generatorResults[gen.id] = {
@@ -390,7 +536,7 @@ export function createGenerationManager(params: {
   }
 
   async function runGenerators(gens: Generator[], watch: boolean): Promise<void> {
-    await Promise.allSettled(
+    const results = await Promise.allSettled(
       gens.map(async (gen) => {
         try {
           await processGenerator(gen as AnyCodeGenerator);
@@ -403,6 +549,12 @@ export function createGenerationManager(params: {
         }
       }),
     );
+    if (!watch) {
+      const failures = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+      if (failures.length > 0) {
+        throw new AggregateError(failures.map((f) => f.reason));
+      }
+    }
   }
 
   async function restartWatchProcess(): Promise<void> {
@@ -466,7 +618,7 @@ export function createGenerationManager(params: {
 
       const app = application;
 
-      // Phase 1: Load TailorDB types (includes plugin-generated types)
+      // Load TailorDB types (includes plugin-generated types)
       for (const db of app.tailorDBServices) {
         const namespace = db.namespace;
 
@@ -491,7 +643,7 @@ export function createGenerationManager(params: {
         }
       }
 
-      // Phase 1.5: Generate plugin type and executor files
+      // Generate plugin type and executor files
       // This must happen after TailorDB types are loaded since plugins process during type loading
       const pluginExecutorFiles = generatePluginFilesIfNeeded(
         pluginManager,
@@ -504,7 +656,7 @@ export function createGenerationManager(params: {
           ? createExecutorService({ config: { files: [] } })
           : undefined);
 
-      // Phase 2: Auth resolveNamespaces (depends on TailorDB)
+      // Resolve Auth namespaces (depends on TailorDB)
       if (app.authService) {
         await app.authService.resolveNamespaces();
       }
@@ -514,14 +666,18 @@ export function createGenerationManager(params: {
         logger.newline();
       }
 
-      // Phase 3: Run TailorDB-only generators
+      // Run TailorDB-only generators and onTailorDBReady for all plugins
       const tailordbOnlyGens = generators.filter((g) => onlyHas(g as AnyCodeGenerator, "tailordb"));
-      if (tailordbOnlyGens.length > 0) {
-        await runGenerators(tailordbOnlyGens, watch);
+      const hasOnTailorDBReady = generationPlugins.some((p) => p.onTailorDBReady != null);
+      if (tailordbOnlyGens.length > 0 || hasOnTailorDBReady) {
+        await Promise.all([
+          runGenerators(tailordbOnlyGens, watch),
+          runPluginHook("onTailorDBReady", watch),
+        ]);
         logger.newline();
       }
 
-      // Phase 4: Load Resolvers (can now import generated files)
+      // Load Resolvers (can now import generated files)
       for (const resolverService of app.resolverServices) {
         const namespace = resolverService.namespace;
         try {
@@ -539,16 +695,20 @@ export function createGenerationManager(params: {
         }
       }
 
-      // Phase 5: Run non-executor generators (resolver-dependent but not executor-dependent)
+      // Run non-executor generators and onResolverReady for all plugins
       const nonExecutorGens = generators.filter(
         (g) => !tailordbOnlyGens.includes(g) && hasNone(g as AnyCodeGenerator, "executor"),
       );
-      if (nonExecutorGens.length > 0) {
-        await runGenerators(nonExecutorGens, watch);
+      const hasOnResolverReady = generationPlugins.some((p) => p.onResolverReady != null);
+      if (nonExecutorGens.length > 0 || hasOnResolverReady) {
+        await Promise.all([
+          runGenerators(nonExecutorGens, watch),
+          runPluginHook("onResolverReady", watch),
+        ]);
         logger.newline();
       }
 
-      // Phase 6: Load Executors (can now import generated files)
+      // Load Executors (can now import generated files)
       if (executorService) {
         await executorService.loadExecutors();
         // Load plugin-generated executors from generated TypeScript files
@@ -562,10 +722,14 @@ export function createGenerationManager(params: {
         services.executor[key] = executor as Executor;
       });
 
-      // Phase 7: Run executor-dependent generators
+      // Run executor-dependent generators and onExecutorReady for all plugins
       const executorGens = generators.filter((g) => hasAll(g as AnyCodeGenerator, "executor"));
-      if (executorGens.length > 0) {
-        await runGenerators(executorGens, watch);
+      const hasOnExecutorReady = generationPlugins.some((p) => p.onExecutorReady != null);
+      if (executorGens.length > 0 || hasOnExecutorReady) {
+        await Promise.all([
+          runGenerators(executorGens, watch),
+          runPluginHook("onExecutorReady", watch),
+        ]);
         logger.newline();
       }
     },

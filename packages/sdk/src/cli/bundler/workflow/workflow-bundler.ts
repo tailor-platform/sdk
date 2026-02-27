@@ -4,6 +4,7 @@ import { parseSync } from "oxc-parser";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
+import { tailorUserMap } from "@/cli/bundler/runtime-args";
 import { getDistDir } from "@/cli/utils/dist-dir";
 import { logger, styles } from "@/cli/utils/logger";
 import { detectTriggerCalls, findAllJobs } from "./job-detector";
@@ -242,10 +243,10 @@ async function bundleSingleJob(
   const entryContent = ml /* js */ `
     import { ${job.exportName} } from "${absoluteSourcePath}";
 
-    const env = ${JSON.stringify(env)};
-
     export async function main(input) {
-      return await ${job.exportName}.body(input, { env });
+      const env = ${JSON.stringify(env)};
+      const _user = ${tailorUserMap};
+      return await ${job.exportName}.body(input, { env, user: _user });
     }
   `;
   fs.writeFileSync(entryPath, entryContent);
