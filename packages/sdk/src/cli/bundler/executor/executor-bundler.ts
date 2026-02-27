@@ -5,12 +5,7 @@ import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { loadFilesWithIgnores, type FileLoadConfig } from "@/cli/application/file-loader";
 import { enableInlineSourcemap } from "@/cli/bundler/inline-sourcemap";
-import {
-  computeBundlerContextHash,
-  saveBundleToCache,
-  setupDepCollector,
-  type BundleCache,
-} from "@/cli/cache/bundle-cache";
+import { computeBundlerContextHash, withCache, type BundleCache } from "@/cli/cache/bundle-cache";
 import { getDistDir } from "@/cli/utils/dist-dir";
 import { logger, styles } from "@/cli/utils/logger";
 import {
@@ -136,70 +131,58 @@ async function bundleSingleExecutor(
       })
     : undefined;
 
-  if (
-    cache?.tryRestore({
-      kind: "executor",
-      name: executor.name,
-      outputPath,
-      contextHash,
-    })
-  ) {
-    logger.debug(`  ${styles.dim("cached")}: ${executor.name}`);
-    return;
-  }
-
-  // Step 1: Create entry file that imports and extracts operation.body
-  const entryPath = path.join(outputDir, `${executor.name}.entry.js`);
-  const absoluteSourcePath = path.resolve(executor.sourceFile);
-
-  const entryContent = ml /* js */ `
-    import _internalExecutor from "${absoluteSourcePath}";
-
-    const __executor_function = _internalExecutor.operation.body;
-
-    export { __executor_function as main };
-  `;
-  fs.writeFileSync(entryPath, entryContent);
-
-  // Step 2: Bundle with tree-shaking
-  const triggerPlugin = createTriggerTransformPlugin(triggerContext);
-  const plugins: rolldown.Plugin[] = triggerPlugin ? [triggerPlugin] : [];
-  const getDependencyPaths = setupDepCollector(cache, plugins);
-
-  await rolldown.build(
-    rolldown.defineConfig({
-      input: entryPath,
-      output: {
-        file: outputPath,
-        format: "esm",
-        sourcemap: enableInlineSourcemap ? "inline" : true,
-        minify: enableInlineSourcemap
-          ? {
-              mangle: {
-                keepNames: true,
-              },
-            }
-          : true,
-        inlineDynamicImports: true,
-      },
-      tsconfig,
-      plugins,
-      treeshake: {
-        moduleSideEffects: false,
-        annotations: true,
-        unknownGlobalSideEffects: false,
-      },
-      logLevel: "silent",
-    }) as rolldown.BuildOptions,
-  );
-
-  saveBundleToCache({
+  await withCache({
     cache,
-    getDependencyPaths,
     kind: "executor",
     name: executor.name,
     sourceFile: executor.sourceFile,
     outputPath,
     contextHash,
+    async build(cachePlugins) {
+      // Step 1: Create entry file that imports and extracts operation.body
+      const entryPath = path.join(outputDir, `${executor.name}.entry.js`);
+      const absoluteSourcePath = path.resolve(executor.sourceFile);
+
+      const entryContent = ml /* js */ `
+        import _internalExecutor from "${absoluteSourcePath}";
+
+        const __executor_function = _internalExecutor.operation.body;
+
+        export { __executor_function as main };
+      `;
+      fs.writeFileSync(entryPath, entryContent);
+
+      // Step 2: Bundle with tree-shaking
+      const triggerPlugin = createTriggerTransformPlugin(triggerContext);
+      const plugins: rolldown.Plugin[] = triggerPlugin ? [triggerPlugin] : [];
+      plugins.push(...cachePlugins);
+
+      await rolldown.build(
+        rolldown.defineConfig({
+          input: entryPath,
+          output: {
+            file: outputPath,
+            format: "esm",
+            sourcemap: enableInlineSourcemap ? "inline" : true,
+            minify: enableInlineSourcemap
+              ? {
+                  mangle: {
+                    keepNames: true,
+                  },
+                }
+              : true,
+            inlineDynamicImports: true,
+          },
+          tsconfig,
+          plugins,
+          treeshake: {
+            moduleSideEffects: false,
+            annotations: true,
+            unknownGlobalSideEffects: false,
+          },
+          logLevel: "silent",
+        }) as rolldown.BuildOptions,
+      );
+    },
   });
 }

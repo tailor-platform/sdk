@@ -1,5 +1,6 @@
 import * as path from "pathe";
 import { enableInlineSourcemap } from "@/cli/bundler/inline-sourcemap";
+import { logger, styles } from "@/cli/utils/logger";
 import { createDepCollectorPlugin } from "./dep-collector-plugin";
 import { hashContent, hashFile, hashFiles } from "./hasher";
 import type { CacheStore } from "./store";
@@ -72,42 +73,49 @@ function computeBundlerContextHash(params: ComputeBundlerContextHashParams): str
   );
 }
 
-/**
- * Create and append a dep-collector plugin to the given plugin array when caching is active.
- * @param cache - Bundle cache instance (undefined when caching is disabled)
- * @param plugins - Rolldown plugin array to append to
- * @returns Function that returns collected dependency paths, or undefined when caching is disabled
- */
-function setupDepCollector(
-  cache: BundleCache | undefined,
-  plugins: Plugin[],
-): (() => string[]) | undefined {
-  if (!cache) return undefined;
-  const { plugin, getResult } = createDepCollectorPlugin();
-  plugins.push(plugin);
-  return getResult;
-}
-
-type SaveBundleToCacheParams = {
-  cache?: BundleCache;
-  getDependencyPaths?: () => string[];
+type WithCacheParams = {
+  cache: BundleCache | undefined;
   kind: BundleKind;
   name: string;
   sourceFile: string;
   outputPath: string;
-  contextHash?: string;
+  contextHash: string | undefined;
+  build: (plugins: Plugin[]) => Promise<void>;
 };
 
 /**
- * Save a bundle build result to cache if caching is active.
- * @param params - Save parameters including cache, getDependencyPaths, and bundle metadata
+ * Run a build with optional cache restore/save around it.
+ * When caching is active, attempts to restore from cache first,
+ * and saves the build result (with collected dependencies) on a cache miss.
+ * @param params - Cache and build parameters
  */
-function saveBundleToCache(params: SaveBundleToCacheParams): void {
-  const { cache, getDependencyPaths, ...rest } = params;
-  if (!cache || !getDependencyPaths) return;
-  cache.save({
-    ...rest,
-    dependencyPaths: getDependencyPaths(),
+async function withCache(params: WithCacheParams): Promise<void> {
+  if (!params.cache) {
+    await params.build([]);
+    return;
+  }
+
+  const restored = params.cache.tryRestore({
+    kind: params.kind,
+    name: params.name,
+    outputPath: params.outputPath,
+    contextHash: params.contextHash,
+  });
+  if (restored) {
+    logger.debug(`  ${styles.dim("cached")}: ${params.name}`);
+    return;
+  }
+
+  const { plugin, getResult } = createDepCollectorPlugin();
+  await params.build([plugin]);
+
+  params.cache.save({
+    kind: params.kind,
+    name: params.name,
+    sourceFile: params.sourceFile,
+    outputPath: params.outputPath,
+    dependencyPaths: getResult(),
+    contextHash: params.contextHash,
   });
 }
 
@@ -174,5 +182,5 @@ function createBundleCache(store: CacheStore): BundleCache {
   return { tryRestore, save };
 }
 
-export { computeBundlerContextHash, createBundleCache, saveBundleToCache, setupDepCollector };
+export { computeBundlerContextHash, createBundleCache, withCache };
 export type { BundleCache, BundleCacheRestoreParams, BundleCacheSaveParams };

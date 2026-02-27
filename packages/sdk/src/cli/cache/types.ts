@@ -1,46 +1,34 @@
-/**
- * Top-level cache state persisted to disk.
- * The version field enables schema evolution across SDK releases.
- */
-export type CacheManifest = {
-  /** Schema version for cache format evolution. */
-  version: 1;
-  /** SDK version that produced this cache; used for upgrade invalidation. */
-  sdkVersion: string;
-  /** Map of cache keys to their entries. */
-  entries: Record<string, CacheEntry>;
-};
+import { z } from "zod";
 
-/**
- * Per-bundle cache entry representing a single cached build output.
- */
-export type CacheEntry = {
-  /** Discriminant for future entry kinds. */
-  kind: "bundle";
-  /** Hash of the bundle input sources. */
-  inputHash: string;
-  /** File paths this bundle depends on, used for staleness checks. */
-  dependencyPaths: string[];
-  /** Output files produced by this bundle. */
-  outputFiles: CacheOutputFile[];
-  /** ISO 8601 timestamp of when this entry was created. */
-  createdAt: string;
-};
+const cacheOutputFileSchema = z.object({
+  outputPath: z.string(),
+  contentHash: z.string(),
+});
 
-/**
- * Metadata for a single output file within a cache entry.
- */
-export type CacheOutputFile = {
-  /** Absolute path of the output file. */
-  outputPath: string;
-  /** Content hash of the output file for integrity verification. */
-  contentHash: string;
-};
+const cacheEntrySchema = z.object({
+  kind: z.literal("bundle"),
+  inputHash: z.string(),
+  dependencyPaths: z.array(z.string()),
+  outputFiles: z.array(cacheOutputFileSchema),
+  createdAt: z.string(),
+});
+
+const cacheManifestSchema = z.object({
+  version: z.literal(1),
+  sdkVersion: z.string(),
+  entries: z.record(z.string(), cacheEntrySchema),
+});
+
+type CacheEntry = z.infer<typeof cacheEntrySchema>;
+type CacheManifest = z.infer<typeof cacheManifestSchema>;
 
 /**
  * Runtime configuration for the caching subsystem.
  */
-export type CacheConfig = {
+type CacheConfig = {
   /** Directory where cache artifacts are stored. */
   cacheDir: string;
 };
+
+export { cacheManifestSchema };
+export type { CacheConfig, CacheEntry, CacheManifest };

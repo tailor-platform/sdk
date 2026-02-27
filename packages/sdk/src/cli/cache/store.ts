@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
+import { cacheManifestSchema } from "./types";
 import type { CacheConfig, CacheEntry, CacheManifest } from "./types";
 
 /**
@@ -28,7 +29,6 @@ type CacheStore = {
 
 const MANIFEST_FILENAME = "manifest.json";
 const BUNDLES_DIR = "bundles";
-const CURRENT_CACHE_VERSION = 1;
 
 /**
  * Create a cache store for manifest persistence and bundle output storage.
@@ -54,14 +54,14 @@ function createCacheStore(config: CacheConfig): CacheStore {
   function loadManifest(): CacheManifest | undefined {
     try {
       const raw = fs.readFileSync(manifestPath(), "utf-8");
-      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const result = cacheManifestSchema.safeParse(JSON.parse(raw));
 
-      if (parsed.version !== CURRENT_CACHE_VERSION) {
+      if (!result.success) {
         cachedManifest = undefined;
         return undefined;
       }
 
-      cachedManifest = parsed as CacheManifest;
+      cachedManifest = result.data;
       return cachedManifest;
     } catch {
       // Missing file, parse error, etc.

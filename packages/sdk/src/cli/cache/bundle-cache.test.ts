@@ -1,8 +1,8 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { createBundleCache } from "./bundle-cache";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { createBundleCache, withCache } from "./bundle-cache";
 import { createCacheStore } from "./store";
 
 describe("createBundleCache", () => {
@@ -324,5 +324,154 @@ describe("createBundleCache", () => {
       expect(store.getEntry("getUser")).toBeUndefined();
       expect(store.getEntry("resolver")).toBeUndefined();
     });
+  });
+});
+
+describe("withCache", () => {
+  let tmpDir: string;
+  let cacheDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "with-cache-test-"));
+    cacheDir = path.join(tmpDir, "cache");
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  function writeFile(name: string, content: string): string {
+    const filePath = path.join(tmpDir, name);
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, content);
+    return filePath;
+  }
+
+  test("calls build directly when cache is undefined", async () => {
+    const build = vi.fn();
+    await withCache({
+      cache: undefined,
+      kind: "resolver",
+      name: "myResolver",
+      sourceFile: "/tmp/src.ts",
+      outputPath: "/tmp/out.js",
+      contextHash: undefined,
+      build,
+    });
+
+    expect(build).toHaveBeenCalledOnce();
+    expect(build).toHaveBeenCalledWith([]);
+  });
+
+  test("skips build when cache restores successfully", async () => {
+    const store = createCacheStore({ cacheDir });
+    const cache = createBundleCache(store);
+    const sourceFile = writeFile("src/resolver.ts", "export default {}");
+    const outputPath = writeFile("dist/resolver.js", "bundled output");
+
+    // Pre-populate cache
+    cache.save({
+      kind: "resolver",
+      name: "myResolver",
+      sourceFile,
+      outputPath,
+      dependencyPaths: [sourceFile],
+    });
+
+    const build = vi.fn();
+    await withCache({
+      cache,
+      kind: "resolver",
+      name: "myResolver",
+      sourceFile,
+      outputPath,
+      contextHash: undefined,
+      build,
+    });
+
+    expect(build).not.toHaveBeenCalled();
+  });
+
+  test("calls build and saves to cache on cache miss", async () => {
+    const store = createCacheStore({ cacheDir });
+    const cache = createBundleCache(store);
+    const sourceFile = writeFile("src/resolver.ts", "export default {}");
+    const outputPath = path.join(tmpDir, "dist", "resolver.js");
+
+    const build = vi.fn(async () => {
+      // Simulate build producing an output file
+      fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+      fs.writeFileSync(outputPath, "built output");
+    });
+
+    await withCache({
+      cache,
+      kind: "resolver",
+      name: "myResolver",
+      sourceFile,
+      outputPath,
+      contextHash: undefined,
+      build,
+    });
+
+    expect(build).toHaveBeenCalledOnce();
+    // build receives an array containing the dep-collector plugin
+    const firstCallArgs = build.mock.calls[0] as unknown[];
+    expect(firstCallArgs?.[0]).toHaveLength(1);
+    // Cache entry should exist after save
+    expect(store.getEntry("resolver:myResolver")).toBeDefined();
+  });
+
+  test("passes contextHash through to tryRestore and save", async () => {
+    const store = createCacheStore({ cacheDir });
+    const cache = createBundleCache(store);
+    const sourceFile = writeFile("src/job.ts", "export default {}");
+    const outputPath = path.join(tmpDir, "dist", "job.js");
+
+    const build = vi.fn(async () => {
+      fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+      fs.writeFileSync(outputPath, "built output");
+    });
+
+    // First call: cache miss, should build and save with contextHash
+    await withCache({
+      cache,
+      kind: "workflow-job",
+      name: "myJob",
+      sourceFile,
+      outputPath,
+      contextHash: "hash-a",
+      build,
+    });
+    expect(build).toHaveBeenCalledOnce();
+
+    // Second call with same contextHash: should hit cache
+    build.mockClear();
+    await withCache({
+      cache,
+      kind: "workflow-job",
+      name: "myJob",
+      sourceFile,
+      outputPath,
+      contextHash: "hash-a",
+      build,
+    });
+    expect(build).not.toHaveBeenCalled();
+
+    // Third call with different contextHash: should miss cache
+    build.mockClear();
+    build.mockImplementation(async () => {
+      fs.writeFileSync(outputPath, "rebuilt output");
+    });
+    await withCache({
+      cache,
+      kind: "workflow-job",
+      name: "myJob",
+      sourceFile,
+      outputPath,
+      contextHash: "hash-b",
+      build,
+    });
+    expect(build).toHaveBeenCalledOnce();
   });
 });
