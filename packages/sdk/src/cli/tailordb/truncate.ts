@@ -53,11 +53,6 @@ async function truncateNamespace(
   logger.success(`Truncated all types in namespace "${namespaceName}"`);
 }
 
-async function getAllNamespaces(configPath?: string): Promise<string[]> {
-  const { config } = await loadConfig(configPath);
-  return extractAllNamespaces(config);
-}
-
 /**
  * Truncate TailorDB data based on the given options.
  * @param options - Truncate options (all, namespace, or types)
@@ -96,7 +91,8 @@ async function $truncate(options?: InternalTruncateOptions): Promise<void> {
   }
 
   // Validate config and get namespaces before confirmation
-  const namespaces = await getAllNamespaces(options?.configPath);
+  const { config } = await loadConfig(options?.configPath);
+  const namespaces = extractAllNamespaces(config);
 
   // Handle --all flag
   if (hasAll) {
