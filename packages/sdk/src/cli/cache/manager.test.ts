@@ -135,6 +135,40 @@ describe("createCacheManager", () => {
       expect(manifest.version).toBe(1);
     });
 
+    test("finalize preserves entries added during the session", () => {
+      const manager = createCacheManager({
+        enabled: true,
+        cacheDir,
+        sdkVersion: "2.5.0",
+      });
+
+      // Create real files so hashing works
+      const sourceFile = path.join(tmpDir, "src.ts");
+      const outputFile = path.join(tmpDir, "out.js");
+      fs.writeFileSync(sourceFile, "export const x = 1;");
+      fs.writeFileSync(outputFile, "var x = 1;");
+
+      // Add an entry via bundleCache.save()
+      manager.bundleCache.save({
+        kind: "resolver",
+        name: "myResolver",
+        sourceFile,
+        outputPath: outputFile,
+        dependencyPaths: [sourceFile],
+      });
+
+      // Finalize should persist the in-memory manifest (including the entry above)
+      manager.finalize();
+
+      // Read the manifest from disk and verify the entry is present
+      const manifestPath = path.join(cacheDir, "manifest.json");
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
+      expect(manifest.sdkVersion).toBe("2.5.0");
+      expect(manifest.entries["resolver:myResolver"]).toBeDefined();
+      expect(manifest.entries["resolver:myResolver"].kind).toBe("bundle");
+      expect(manifest.entries["resolver:myResolver"].dependencyPaths).toEqual([sourceFile]);
+    });
+
     test("cache is preserved when sdkVersion matches", () => {
       // Pre-populate cache with a manifest and a bundle file
       fs.mkdirSync(path.join(cacheDir, "bundles"), { recursive: true });

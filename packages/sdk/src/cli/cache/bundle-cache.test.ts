@@ -27,7 +27,7 @@ describe("createBundleCache", () => {
 
   describe("tryRestore", () => {
     test("returns false when no cache entry exists", () => {
-      const store = createCacheStore({ enabled: true, cacheDir });
+      const store = createCacheStore({ cacheDir });
       const cache = createBundleCache(store, "1.0.0");
       const sourceFile = writeFile("src/resolver.ts", "export default {}");
       const outputPath = path.join(tmpDir, "dist", "resolver.js");
@@ -43,7 +43,7 @@ describe("createBundleCache", () => {
     });
 
     test("returns false when input hash does not match (dependency changed)", () => {
-      const store = createCacheStore({ enabled: true, cacheDir });
+      const store = createCacheStore({ cacheDir });
       const cache = createBundleCache(store, "1.0.0");
       const sourceFile = writeFile("src/resolver.ts", "export default {}");
       const depFile = writeFile("src/utils.ts", "export const x = 1;");
@@ -72,7 +72,7 @@ describe("createBundleCache", () => {
     });
 
     test("returns true and restores output when cache is valid", () => {
-      const store = createCacheStore({ enabled: true, cacheDir });
+      const store = createCacheStore({ cacheDir });
       const cache = createBundleCache(store, "1.0.0");
       const sourceFile = writeFile("src/resolver.ts", "export default {}");
       const depFile = writeFile("src/utils.ts", "export const x = 1;");
@@ -105,7 +105,7 @@ describe("createBundleCache", () => {
     });
 
     test("returns false when restoreBundleOutput fails", () => {
-      const store = createCacheStore({ enabled: true, cacheDir });
+      const store = createCacheStore({ cacheDir });
       const cache = createBundleCache(store, "1.0.0");
       const sourceFile = writeFile("src/resolver.ts", "export default {}");
       const outputPath = writeFile("dist/resolver.js", "bundled output");
@@ -134,7 +134,7 @@ describe("createBundleCache", () => {
     });
 
     test("returns false when a dependency file no longer exists", () => {
-      const store = createCacheStore({ enabled: true, cacheDir });
+      const store = createCacheStore({ cacheDir });
       const cache = createBundleCache(store, "1.0.0");
       const sourceFile = writeFile("src/resolver.ts", "export default {}");
       const depFile = writeFile("src/utils.ts", "export const x = 1;");
@@ -165,7 +165,7 @@ describe("createBundleCache", () => {
 
   describe("save", () => {
     test("stores bundle output and creates cache entry", () => {
-      const store = createCacheStore({ enabled: true, cacheDir });
+      const store = createCacheStore({ cacheDir });
       const cache = createBundleCache(store, "1.0.0");
       const sourceFile = writeFile("src/executor.ts", "export default {}");
       const depFile = writeFile("src/helper.ts", "export function help() {}");
@@ -188,14 +188,14 @@ describe("createBundleCache", () => {
       expect(entry?.outputFiles).toHaveLength(1);
       expect(entry?.outputFiles[0]?.contentHash).toMatch(/^[0-9a-f]{64}$/);
 
-      // Verify bundle output is stored in cache
-      const cachedBundlePath = path.join(cacheDir, "bundles", "executor:myExecutor.js");
+      // Verify bundle output is stored in cache (colon replaced with underscore in filename)
+      const cachedBundlePath = path.join(cacheDir, "bundles", "executor_myExecutor.js");
       expect(fs.existsSync(cachedBundlePath)).toBe(true);
       expect(fs.readFileSync(cachedBundlePath, "utf-8")).toBe("bundled executor");
     });
 
     test("updates existing cache entry on re-save", () => {
-      const store = createCacheStore({ enabled: true, cacheDir });
+      const store = createCacheStore({ cacheDir });
       const cache = createBundleCache(store, "1.0.0");
       const sourceFile = writeFile("src/workflow.ts", "export default {}");
       const outputPath = writeFile("dist/workflow.js", "bundled v1");
@@ -235,7 +235,7 @@ describe("createBundleCache", () => {
 
   describe("cache key format", () => {
     test("cache key is kind:name", () => {
-      const store = createCacheStore({ enabled: true, cacheDir });
+      const store = createCacheStore({ cacheDir });
       const cache = createBundleCache(store, "1.0.0");
       const sourceFile = writeFile("src/resolver.ts", "export default {}");
       const outputPath = writeFile("dist/resolver.js", "bundled");

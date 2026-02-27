@@ -77,7 +77,7 @@ export async function apply(options?: ApplyOptions) {
 
   // Initialize cache manager
   const packageJson = await readPackageJson();
-  if (options?.cleanCache && !noCache) {
+  if (options?.cleanCache) {
     const cacheDir = path.resolve(getDistDir(), "cache");
     fs.rmSync(cacheDir, { recursive: true, force: true });
     logger.info("Bundle cache cleaned");

@@ -84,6 +84,13 @@ export async function bundleExecutors(options: BundleExecutorsOptions): Promise<
 
   fs.mkdirSync(outputDir, { recursive: true });
 
+  // Clean stale entry files from previous builds
+  for (const file of fs.readdirSync(outputDir)) {
+    if (file.endsWith(".entry.js")) {
+      fs.rmSync(path.join(outputDir, file), { force: true });
+    }
+  }
+
   let tsconfig: string | undefined;
   try {
     tsconfig = await resolveTSConfig();

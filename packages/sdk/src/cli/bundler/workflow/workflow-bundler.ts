@@ -6,6 +6,7 @@ import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { enableInlineSourcemap } from "@/cli/bundler/inline-sourcemap";
 import { createDepCollectorPlugin } from "@/cli/cache/dep-collector-plugin";
+import { hashContent } from "@/cli/cache/hasher";
 import { getDistDir } from "@/cli/utils/dist-dir";
 import { logger, styles } from "@/cli/utils/logger";
 import { detectTriggerCalls, findAllJobs } from "./job-detector";
@@ -246,11 +247,15 @@ async function bundleSingleJob(
 ): Promise<void> {
   const outputPath = path.join(outputDir, `${job.name}.js`);
 
+  // Include env hash in cache name so different env values produce different cache keys
+  const envSuffix = cache ? `-${hashContent(JSON.stringify(env)).slice(0, 12)}` : "";
+  const cacheName = `${job.name}${envSuffix}`;
+
   // Try to restore from cache before bundling
   if (
     cache?.tryRestore({
       kind: "workflow-job",
-      name: job.name,
+      name: cacheName,
       sourceFile: job.sourceFile,
       outputPath,
     })
@@ -366,7 +371,7 @@ async function bundleSingleJob(
   if (cache && depCollector) {
     cache.save({
       kind: "workflow-job",
-      name: job.name,
+      name: cacheName,
       sourceFile: job.sourceFile,
       outputPath,
       dependencyPaths: depCollector.getResult(),

@@ -45,8 +45,6 @@ export type CacheOutputFile = {
  * Runtime configuration for the caching subsystem.
  */
 export type CacheConfig = {
-  /** Whether caching is enabled. */
-  enabled: boolean;
   /** Directory where cache artifacts are stored. */
   cacheDir: string;
 };

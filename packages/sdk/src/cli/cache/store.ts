@@ -8,6 +8,8 @@ import type { CacheConfig, CacheEntry, CacheManifest } from "./types";
 type CacheStore = {
   /** Read manifest from disk, returning undefined if missing or invalid. */
   loadManifest(): CacheManifest | undefined;
+  /** Return the current in-memory manifest without re-reading from disk. */
+  getCurrentManifest(): CacheManifest | undefined;
   /** Persist manifest to disk using atomic write (temp file + rename). */
   saveManifest(manifest: CacheManifest): void;
   /** Retrieve a cache entry by key from the in-memory manifest. */
@@ -45,7 +47,7 @@ function createCacheStore(config: CacheConfig): CacheStore {
   }
 
   function bundlePath(cacheKey: string): string {
-    return path.join(bundlesDir(), `${cacheKey}.js`);
+    return path.join(bundlesDir(), `${cacheKey.replaceAll(":", "_")}.js`);
   }
 
   function loadManifest(): CacheManifest | undefined {
@@ -71,6 +73,13 @@ function createCacheStore(config: CacheConfig): CacheStore {
       cachedManifest = undefined;
       return undefined;
     }
+  }
+
+  function getCurrentManifest(): CacheManifest | undefined {
+    if (cachedManifest === null) {
+      loadManifest();
+    }
+    return cachedManifest ?? undefined;
   }
 
   function ensureManifestLoaded(): CacheManifest {
@@ -141,6 +150,7 @@ function createCacheStore(config: CacheConfig): CacheStore {
 
   return {
     loadManifest,
+    getCurrentManifest,
     saveManifest,
     getEntry,
     setEntry,

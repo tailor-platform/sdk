@@ -62,7 +62,7 @@ function createCacheManager(options: CacheManagerOptions): CacheManager {
 
   const cacheDir = options.cacheDir ?? path.resolve(getDistDir(), "cache");
 
-  const store = createCacheStore({ enabled: true, cacheDir });
+  const store = createCacheStore({ cacheDir });
 
   // Load existing manifest and check SDK version for cache invalidation
   const existingManifest = store.loadManifest();
@@ -79,8 +79,8 @@ function createCacheManager(options: CacheManagerOptions): CacheManager {
     enabled: true,
     bundleCache,
     finalize() {
-      // Build manifest from the current store state, then persist
-      const manifest = store.loadManifest() ?? {
+      // Use in-memory manifest to preserve entries added during the session
+      const manifest = store.getCurrentManifest() ?? {
         version: 1 as const,
         sdkVersion: options.sdkVersion,
         entries: {},

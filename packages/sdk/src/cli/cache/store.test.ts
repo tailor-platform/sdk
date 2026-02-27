@@ -39,7 +39,7 @@ describe("createCacheStore", () => {
 
   describe("loadManifest", () => {
     test("returns undefined when no manifest exists", () => {
-      const store = createCacheStore({ enabled: true, cacheDir });
+      const store = createCacheStore({ cacheDir });
       expect(store.loadManifest()).toBeUndefined();
     });
 
@@ -47,7 +47,7 @@ describe("createCacheStore", () => {
       fs.mkdirSync(cacheDir, { recursive: true });
       fs.writeFileSync(path.join(cacheDir, "manifest.json"), "not valid json{{{");
 
-      const store = createCacheStore({ enabled: true, cacheDir });
+      const store = createCacheStore({ cacheDir });
       expect(store.loadManifest()).toBeUndefined();
     });
 
@@ -56,7 +56,7 @@ describe("createCacheStore", () => {
       const badManifest = { version: 999, sdkVersion: "1.0.0", entries: {} };
       fs.writeFileSync(path.join(cacheDir, "manifest.json"), JSON.stringify(badManifest));
 
-      const store = createCacheStore({ enabled: true, cacheDir });
+      const store = createCacheStore({ cacheDir });
       expect(store.loadManifest()).toBeUndefined();
     });
 
@@ -65,25 +65,25 @@ describe("createCacheStore", () => {
       const manifest = makeManifest({ myKey: makeEntry() });
       fs.writeFileSync(path.join(cacheDir, "manifest.json"), JSON.stringify(manifest));
 
-      const store = createCacheStore({ enabled: true, cacheDir });
+      const store = createCacheStore({ cacheDir });
       expect(store.loadManifest()).toEqual(manifest);
     });
   });
 
   describe("saveManifest", () => {
     test("writes valid JSON that loadManifest can read back", () => {
-      const store = createCacheStore({ enabled: true, cacheDir });
+      const store = createCacheStore({ cacheDir });
       const manifest = makeManifest({ key1: makeEntry() });
 
       store.saveManifest(manifest);
 
       // Create a new store to avoid in-memory cache
-      const store2 = createCacheStore({ enabled: true, cacheDir });
+      const store2 = createCacheStore({ cacheDir });
       expect(store2.loadManifest()).toEqual(manifest);
     });
 
     test("creates cache directory if it does not exist", () => {
-      const store = createCacheStore({ enabled: true, cacheDir });
+      const store = createCacheStore({ cacheDir });
       const manifest = makeManifest();
 
       store.saveManifest(manifest);
@@ -92,7 +92,7 @@ describe("createCacheStore", () => {
     });
 
     test("atomic write produces always-valid JSON on disk", () => {
-      const store = createCacheStore({ enabled: true, cacheDir });
+      const store = createCacheStore({ cacheDir });
       const manifest = makeManifest({ key1: makeEntry() });
 
       store.saveManifest(manifest);
@@ -106,12 +106,12 @@ describe("createCacheStore", () => {
 
   describe("getEntry / setEntry / deleteEntry", () => {
     test("getEntry returns undefined for non-existent key", () => {
-      const store = createCacheStore({ enabled: true, cacheDir });
+      const store = createCacheStore({ cacheDir });
       expect(store.getEntry("nonexistent")).toBeUndefined();
     });
 
     test("setEntry stores and getEntry retrieves an entry", () => {
-      const store = createCacheStore({ enabled: true, cacheDir });
+      const store = createCacheStore({ cacheDir });
       const entry = makeEntry();
 
       store.setEntry("myKey", entry);
@@ -120,7 +120,7 @@ describe("createCacheStore", () => {
     });
 
     test("deleteEntry removes an entry", () => {
-      const store = createCacheStore({ enabled: true, cacheDir });
+      const store = createCacheStore({ cacheDir });
       const entry = makeEntry();
 
       store.setEntry("myKey", entry);
@@ -130,21 +130,21 @@ describe("createCacheStore", () => {
     });
 
     test("deleteEntry is a no-op for non-existent key", () => {
-      const store = createCacheStore({ enabled: true, cacheDir });
+      const store = createCacheStore({ cacheDir });
 
       // Should not throw
       store.deleteEntry("nonexistent");
     });
 
     test("entries persist through saveManifest and loadManifest cycle", () => {
-      const store = createCacheStore({ enabled: true, cacheDir });
+      const store = createCacheStore({ cacheDir });
       const entry = makeEntry();
       const manifest = makeManifest({ myKey: entry });
 
       store.saveManifest(manifest);
 
       // New store reads persisted data
-      const store2 = createCacheStore({ enabled: true, cacheDir });
+      const store2 = createCacheStore({ cacheDir });
       expect(store2.loadManifest()).toEqual(manifest);
       expect(store2.getEntry("myKey")).toEqual(entry);
     });
@@ -152,7 +152,7 @@ describe("createCacheStore", () => {
 
   describe("storeBundleOutput", () => {
     test("copies file to cache/bundles/ directory", () => {
-      const store = createCacheStore({ enabled: true, cacheDir });
+      const store = createCacheStore({ cacheDir });
       const sourceFile = path.join(tmpDir, "output.js");
       fs.writeFileSync(sourceFile, "console.log('hello');");
 
@@ -164,7 +164,7 @@ describe("createCacheStore", () => {
     });
 
     test("creates bundles directory if it does not exist", () => {
-      const store = createCacheStore({ enabled: true, cacheDir });
+      const store = createCacheStore({ cacheDir });
       const sourceFile = path.join(tmpDir, "output.js");
       fs.writeFileSync(sourceFile, "code");
 
@@ -176,7 +176,7 @@ describe("createCacheStore", () => {
 
   describe("restoreBundleOutput", () => {
     test("copies file from cache/bundles/ to target path", () => {
-      const store = createCacheStore({ enabled: true, cacheDir });
+      const store = createCacheStore({ cacheDir });
 
       // First store a bundle
       const sourceFile = path.join(tmpDir, "output.js");
@@ -192,7 +192,7 @@ describe("createCacheStore", () => {
     });
 
     test("creates target directory if it does not exist", () => {
-      const store = createCacheStore({ enabled: true, cacheDir });
+      const store = createCacheStore({ cacheDir });
       const sourceFile = path.join(tmpDir, "output.js");
       fs.writeFileSync(sourceFile, "code");
       store.storeBundleOutput("myBundle", sourceFile);
@@ -204,7 +204,7 @@ describe("createCacheStore", () => {
     });
 
     test("returns false when cache file does not exist", () => {
-      const store = createCacheStore({ enabled: true, cacheDir });
+      const store = createCacheStore({ cacheDir });
       const targetFile = path.join(tmpDir, "target.js");
 
       const result = store.restoreBundleOutput("nonexistent", targetFile);
@@ -216,7 +216,7 @@ describe("createCacheStore", () => {
 
   describe("clean", () => {
     test("removes entire cache directory", () => {
-      const store = createCacheStore({ enabled: true, cacheDir });
+      const store = createCacheStore({ cacheDir });
       const manifest = makeManifest({ key1: makeEntry() });
       store.saveManifest(manifest);
 
@@ -233,7 +233,7 @@ describe("createCacheStore", () => {
     });
 
     test("is a no-op when cache directory does not exist", () => {
-      const store = createCacheStore({ enabled: true, cacheDir });
+      const store = createCacheStore({ cacheDir });
 
       // Should not throw
       store.clean();
