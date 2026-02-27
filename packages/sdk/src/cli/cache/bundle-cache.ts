@@ -1,12 +1,18 @@
+import * as path from "pathe";
+import { enableInlineSourcemap } from "@/cli/bundler/inline-sourcemap";
+import { createDepCollectorPlugin } from "./dep-collector-plugin";
 import { hashContent, hashFile, hashFiles } from "./hasher";
 import type { CacheStore } from "./store";
 import type { CacheEntry } from "./types";
+import type { Plugin } from "rolldown";
+
+type BundleKind = "resolver" | "executor" | "workflow-job";
 
 /**
  * Parameters for attempting to restore a cached bundle output.
  */
 type BundleCacheRestoreParams = {
-  kind: "resolver" | "executor" | "workflow-job";
+  kind: BundleKind;
   name: string;
   outputPath: string;
   /** Optional hash of non-file context (e.g., env variables) to include in cache validation. */
@@ -17,7 +23,7 @@ type BundleCacheRestoreParams = {
  * Parameters for saving a bundle output to cache.
  */
 type BundleCacheSaveParams = {
-  kind: "resolver" | "executor" | "workflow-job";
+  kind: BundleKind;
   name: string;
   sourceFile: string;
   outputPath: string;
@@ -59,12 +65,94 @@ function combineHash(fileHash: string, contextHash?: string): string {
 }
 
 /**
+ * Compute a context hash for cache invalidation across bundlers.
+ *
+ * Combines the source file path, serialized trigger context, tsconfig hash,
+ * sourcemap mode, and an optional prefix (e.g., serialized env variables)
+ * into a single SHA-256 hash.
+ * @param params - Context hash computation parameters
+ * @param params.sourceFile
+ * @param params.serializedTriggerContext
+ * @param params.tsconfig
+ * @param params.prefix
+ * @returns SHA-256 hex digest of the combined context
+ */
+function computeBundlerContextHash(params: {
+  sourceFile: string;
+  serializedTriggerContext: string;
+  tsconfig?: string;
+  prefix?: string;
+}): string {
+  return hashContent(
+    (params.prefix ?? "") +
+      path.resolve(params.sourceFile) +
+      params.serializedTriggerContext +
+      (params.tsconfig ? hashFile(params.tsconfig) : "") +
+      String(enableInlineSourcemap),
+  );
+}
+
+/**
+ * Result of setting up a dep-collector plugin for cache tracking.
+ */
+type DepCollectorSetup = {
+  plugin: Plugin;
+  getDependencyPaths: () => string[];
+};
+
+/**
+ * Create and append a dep-collector plugin to the given plugin array when caching is active.
+ * @param cache - Bundle cache instance (undefined when caching is disabled)
+ * @param plugins - Rolldown plugin array to append to
+ * @returns Setup result for retrieving collected paths, or undefined when caching is disabled
+ */
+function setupDepCollector(
+  cache: BundleCache | undefined,
+  plugins: Plugin[],
+): DepCollectorSetup | undefined {
+  if (!cache) return undefined;
+  const { plugin, getResult } = createDepCollectorPlugin();
+  plugins.push(plugin);
+  return { plugin, getDependencyPaths: getResult };
+}
+
+/**
+ * Save a bundle build result to cache if caching is active.
+ * @param params - Save parameters including cache, depCollector, and bundle metadata
+ * @param params.cache
+ * @param params.depCollector
+ * @param params.kind
+ * @param params.name
+ * @param params.sourceFile
+ * @param params.outputPath
+ * @param params.contextHash
+ */
+function saveBundleToCache(params: {
+  cache?: BundleCache;
+  depCollector?: DepCollectorSetup;
+  kind: BundleKind;
+  name: string;
+  sourceFile: string;
+  outputPath: string;
+  contextHash?: string;
+}): void {
+  if (!params.cache || !params.depCollector) return;
+  params.cache.save({
+    kind: params.kind,
+    name: params.name,
+    sourceFile: params.sourceFile,
+    outputPath: params.outputPath,
+    dependencyPaths: params.depCollector.getDependencyPaths(),
+    contextHash: params.contextHash,
+  });
+}
+
+/**
  * Create a bundle cache backed by the given store.
  * @param store - The cache store for persistence
- * @param _sdkVersion - Current SDK version for cache metadata (reserved for future use)
  * @returns A BundleCache instance
  */
-function createBundleCache(store: CacheStore, _sdkVersion: string): BundleCache {
+function createBundleCache(store: CacheStore): BundleCache {
   function tryRestore(params: BundleCacheRestoreParams): boolean {
     const cacheKey = buildCacheKey(params.kind, params.name);
     const entry = store.getEntry(cacheKey);
@@ -86,7 +174,6 @@ function createBundleCache(store: CacheStore, _sdkVersion: string): BundleCache 
       return false;
     }
 
-    // Attempt to restore the cached output file
     return store.restoreBundleOutput(cacheKey, params.outputPath);
   }
 
@@ -117,5 +204,5 @@ function createBundleCache(store: CacheStore, _sdkVersion: string): BundleCache 
   return { tryRestore, save };
 }
 
-export { createBundleCache };
+export { computeBundlerContextHash, createBundleCache, saveBundleToCache, setupDepCollector };
 export type { BundleCache, BundleCacheRestoreParams, BundleCacheSaveParams };

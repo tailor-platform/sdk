@@ -5,8 +5,11 @@ import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { loadFilesWithIgnores, type FileLoadConfig } from "@/cli/application/file-loader";
 import { enableInlineSourcemap } from "@/cli/bundler/inline-sourcemap";
-import { createDepCollectorPlugin } from "@/cli/cache/dep-collector-plugin";
-import { hashContent, hashFile } from "@/cli/cache/hasher";
+import {
+  computeBundlerContextHash,
+  saveBundleToCache,
+  setupDepCollector,
+} from "@/cli/cache/bundle-cache";
 import { getDistDir } from "@/cli/utils/dist-dir";
 import { logger, styles } from "@/cli/utils/logger";
 import {
@@ -104,26 +107,22 @@ async function bundleSingleResolver(
   cache?: BundleCache,
 ): Promise<void> {
   const outputPath = path.join(outputDir, `${resolver.name}.js`);
+  const serializedTriggerContext = serializeTriggerContext(triggerContext);
 
-  // Include source file path, trigger context, tsconfig, and sourcemap mode
-  // in context hash so that file relocation, workflow config changes, tsconfig
-  // edits, or sourcemap mode toggle invalidate the cache.
-  const sourceContext = cache
-    ? hashContent(
-        path.resolve(resolver.sourceFile) +
-          serializeTriggerContext(triggerContext) +
-          (tsconfig ? hashFile(tsconfig) : "") +
-          String(enableInlineSourcemap),
-      )
+  const contextHash = cache
+    ? computeBundlerContextHash({
+        sourceFile: resolver.sourceFile,
+        serializedTriggerContext,
+        tsconfig,
+      })
     : undefined;
 
-  // Try to restore from cache before bundling
   if (
     cache?.tryRestore({
       kind: "resolver",
       name: resolver.name,
       outputPath,
-      contextHash: sourceContext,
+      contextHash,
     })
   ) {
     logger.debug(`  ${styles.dim("cached")}: ${resolver.name}`);
@@ -167,12 +166,7 @@ async function bundleSingleResolver(
   // Step 2: Bundle with tree-shaking
   const triggerPlugin = createTriggerTransformPlugin(triggerContext);
   const plugins: rolldown.Plugin[] = triggerPlugin ? [triggerPlugin] : [];
-
-  // Add dep-collector plugin for cache dependency tracking
-  const depCollector = cache ? createDepCollectorPlugin() : undefined;
-  if (depCollector) {
-    plugins.push(depCollector.plugin);
-  }
+  const depCollector = setupDepCollector(cache, plugins);
 
   await rolldown.build(
     rolldown.defineConfig({
@@ -201,15 +195,13 @@ async function bundleSingleResolver(
     }) as rolldown.BuildOptions,
   );
 
-  // Save to cache after successful build
-  if (cache && depCollector) {
-    cache.save({
-      kind: "resolver",
-      name: resolver.name,
-      sourceFile: resolver.sourceFile,
-      outputPath,
-      dependencyPaths: depCollector.getResult(),
-      contextHash: sourceContext,
-    });
-  }
+  saveBundleToCache({
+    cache,
+    depCollector,
+    kind: "resolver",
+    name: resolver.name,
+    sourceFile: resolver.sourceFile,
+    outputPath,
+    contextHash,
+  });
 }

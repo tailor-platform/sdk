@@ -1,5 +1,24 @@
 import { describe, expect, test } from "vitest";
 import { createDepCollectorPlugin } from "./dep-collector-plugin";
+import type { Plugin } from "rolldown";
+
+/**
+ * Extract the load handler function from a rolldown plugin's load hook.
+ * Handles both direct function and object-with-handler forms.
+ * @param plugin
+ * @returns A callable function wrapping the load handler
+ */
+function extractLoadHandler(plugin: Plugin): (id: string) => unknown {
+  const loadHook = plugin.load;
+  const handler =
+    typeof loadHook === "function"
+      ? loadHook
+      : typeof loadHook === "object" && loadHook !== null && "handler" in loadHook
+        ? loadHook.handler
+        : undefined;
+  if (!handler) throw new Error("No load handler found on plugin");
+  return (id: string) => handler.call(undefined as never, id);
+}
 
 describe("createDepCollectorPlugin", () => {
   test("returns an object with plugin and getResult", () => {
@@ -20,22 +39,10 @@ describe("createDepCollectorPlugin", () => {
 
   test("collects module IDs passed to the load handler", () => {
     const { plugin, getResult } = createDepCollectorPlugin();
+    const load = extractLoadHandler(plugin);
 
-    // Extract the load handler from the plugin
-    const loadHook = plugin.load;
-    expect(loadHook).toBeDefined();
-
-    const handler =
-      typeof loadHook === "function"
-        ? loadHook
-        : typeof loadHook === "object" && loadHook !== null && "handler" in loadHook
-          ? loadHook.handler
-          : undefined;
-    expect(handler).toBeDefined();
-
-    // Simulate calling the handler with module IDs
-    handler!.call(undefined as never, "/src/app/foo.ts");
-    handler!.call(undefined as never, "/src/app/bar.ts");
+    load("/src/app/foo.ts");
+    load("/src/app/bar.ts");
 
     const result = getResult();
     expect(result).toContain("/src/app/foo.ts");
@@ -44,19 +51,11 @@ describe("createDepCollectorPlugin", () => {
 
   test("excludes paths containing node_modules", () => {
     const { plugin, getResult } = createDepCollectorPlugin();
+    const load = extractLoadHandler(plugin);
 
-    const loadHook = plugin.load;
-    const handler =
-      typeof loadHook === "function"
-        ? loadHook
-        : typeof loadHook === "object" && loadHook !== null && "handler" in loadHook
-          ? loadHook.handler
-          : undefined;
-    expect(handler).toBeDefined();
-
-    handler!.call(undefined as never, "/src/app/index.ts");
-    handler!.call(undefined as never, "/project/node_modules/@tailor-platform/sdk/dist/index.js");
-    handler!.call(undefined as never, "/src/utils/helper.ts");
+    load("/src/app/index.ts");
+    load("/project/node_modules/@tailor-platform/sdk/dist/index.js");
+    load("/src/utils/helper.ts");
 
     const result = getResult();
     expect(result).toEqual(["/src/app/index.ts", "/src/utils/helper.ts"]);
@@ -64,19 +63,11 @@ describe("createDepCollectorPlugin", () => {
 
   test("returns sorted paths", () => {
     const { plugin, getResult } = createDepCollectorPlugin();
+    const load = extractLoadHandler(plugin);
 
-    const loadHook = plugin.load;
-    const handler =
-      typeof loadHook === "function"
-        ? loadHook
-        : typeof loadHook === "object" && loadHook !== null && "handler" in loadHook
-          ? loadHook.handler
-          : undefined;
-    expect(handler).toBeDefined();
-
-    handler!.call(undefined as never, "/src/z/last.ts");
-    handler!.call(undefined as never, "/src/a/first.ts");
-    handler!.call(undefined as never, "/src/m/middle.ts");
+    load("/src/z/last.ts");
+    load("/src/a/first.ts");
+    load("/src/m/middle.ts");
 
     const result = getResult();
     expect(result).toEqual(["/src/a/first.ts", "/src/m/middle.ts", "/src/z/last.ts"]);
@@ -84,19 +75,11 @@ describe("createDepCollectorPlugin", () => {
 
   test("deduplicates paths", () => {
     const { plugin, getResult } = createDepCollectorPlugin();
+    const load = extractLoadHandler(plugin);
 
-    const loadHook = plugin.load;
-    const handler =
-      typeof loadHook === "function"
-        ? loadHook
-        : typeof loadHook === "object" && loadHook !== null && "handler" in loadHook
-          ? loadHook.handler
-          : undefined;
-    expect(handler).toBeDefined();
-
-    handler!.call(undefined as never, "/src/app/foo.ts");
-    handler!.call(undefined as never, "/src/app/foo.ts");
-    handler!.call(undefined as never, "/src/app/bar.ts");
+    load("/src/app/foo.ts");
+    load("/src/app/foo.ts");
+    load("/src/app/bar.ts");
 
     const result = getResult();
     expect(result).toEqual(["/src/app/bar.ts", "/src/app/foo.ts"]);
@@ -104,20 +87,12 @@ describe("createDepCollectorPlugin", () => {
 
   test("excludes entry files (.entry.js)", () => {
     const { plugin, getResult } = createDepCollectorPlugin();
+    const load = extractLoadHandler(plugin);
 
-    const loadHook = plugin.load;
-    const handler =
-      typeof loadHook === "function"
-        ? loadHook
-        : typeof loadHook === "object" && loadHook !== null && "handler" in loadHook
-          ? loadHook.handler
-          : undefined;
-    expect(handler).toBeDefined();
-
-    handler!.call(undefined as never, "/src/app/index.ts");
-    handler!.call(undefined as never, "/dist/resolvers/myResolver.entry.js");
-    handler!.call(undefined as never, "/dist/executors/myExecutor.entry.js");
-    handler!.call(undefined as never, "/src/utils/helper.ts");
+    load("/src/app/index.ts");
+    load("/dist/resolvers/myResolver.entry.js");
+    load("/dist/executors/myExecutor.entry.js");
+    load("/src/utils/helper.ts");
 
     const result = getResult();
     expect(result).toEqual(["/src/app/index.ts", "/src/utils/helper.ts"]);
@@ -125,19 +100,11 @@ describe("createDepCollectorPlugin", () => {
 
   test("collects non-JS files (JSON, CJS, etc.)", () => {
     const { plugin, getResult } = createDepCollectorPlugin();
+    const load = extractLoadHandler(plugin);
 
-    const loadHook = plugin.load;
-    const handler =
-      typeof loadHook === "function"
-        ? loadHook
-        : typeof loadHook === "object" && loadHook !== null && "handler" in loadHook
-          ? loadHook.handler
-          : undefined;
-    expect(handler).toBeDefined();
-
-    handler!.call(undefined as never, "/src/app/index.ts");
-    handler!.call(undefined as never, "/src/config/settings.json");
-    handler!.call(undefined as never, "/src/utils/legacy.cjs");
+    load("/src/app/index.ts");
+    load("/src/config/settings.json");
+    load("/src/utils/legacy.cjs");
 
     const result = getResult();
     expect(result).toEqual([
@@ -149,17 +116,9 @@ describe("createDepCollectorPlugin", () => {
 
   test("handler returns null (does not modify code)", () => {
     const { plugin } = createDepCollectorPlugin();
+    const load = extractLoadHandler(plugin);
 
-    const loadHook = plugin.load;
-    const handler =
-      typeof loadHook === "function"
-        ? loadHook
-        : typeof loadHook === "object" && loadHook !== null && "handler" in loadHook
-          ? loadHook.handler
-          : undefined;
-    expect(handler).toBeDefined();
-
-    const result = handler!.call(undefined as never, "/src/app/foo.ts");
+    const result = load("/src/app/foo.ts");
     expect(result).toBeNull();
   });
 });

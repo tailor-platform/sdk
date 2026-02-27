@@ -5,8 +5,11 @@ import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { enableInlineSourcemap } from "@/cli/bundler/inline-sourcemap";
-import { createDepCollectorPlugin } from "@/cli/cache/dep-collector-plugin";
-import { hashContent, hashFile } from "@/cli/cache/hasher";
+import {
+  computeBundlerContextHash,
+  saveBundleToCache,
+  setupDepCollector,
+} from "@/cli/cache/bundle-cache";
 import { getDistDir } from "@/cli/utils/dist-dir";
 import { logger, styles } from "@/cli/utils/logger";
 import { serializeTriggerContext, type TriggerContext } from "../trigger-context";
@@ -246,24 +249,21 @@ async function bundleSingleJob(
   cache?: BundleCache,
 ): Promise<void> {
   const outputPath = path.join(outputDir, `${job.name}.js`);
+  const serializedTriggerContext = serializeTriggerContext(triggerContext);
 
-  // Compute context hash combining env variables, source file path, trigger
-  // context, tsconfig, and sourcemap mode so that env changes, file relocation,
-  // workflow config changes, tsconfig edits, or sourcemap mode toggle
-  // invalidate the cache.
+  // Include sorted env variables as a prefix so that env changes invalidate the cache
+  const sortedEnvPrefix = JSON.stringify(
+    Object.fromEntries(Object.entries(env).sort(([a], [b]) => a.localeCompare(b))),
+  );
   const contextHash = cache
-    ? hashContent(
-        JSON.stringify(
-          Object.fromEntries(Object.entries(env).sort(([a], [b]) => a.localeCompare(b))),
-        ) +
-          path.resolve(job.sourceFile) +
-          serializeTriggerContext(triggerContext) +
-          (tsconfig ? hashFile(tsconfig) : "") +
-          String(enableInlineSourcemap),
-      )
+    ? computeBundlerContextHash({
+        sourceFile: job.sourceFile,
+        serializedTriggerContext,
+        tsconfig,
+        prefix: sortedEnvPrefix,
+      })
     : undefined;
 
-  // Try to restore from cache before bundling
   if (
     cache?.tryRestore({
       kind: "workflow-job",
@@ -345,12 +345,8 @@ async function bundleSingleJob(
     },
   };
 
-  // Add dep-collector plugin for cache dependency tracking
-  const depCollector = cache ? createDepCollectorPlugin() : undefined;
   const plugins: rolldown.Plugin[] = [transformPlugin];
-  if (depCollector) {
-    plugins.push(depCollector.plugin);
-  }
+  const depCollector = setupDepCollector(cache, plugins);
 
   await rolldown.build(
     rolldown.defineConfig({
@@ -379,15 +375,13 @@ async function bundleSingleJob(
     }) as rolldown.BuildOptions,
   );
 
-  // Save to cache after successful build
-  if (cache && depCollector) {
-    cache.save({
-      kind: "workflow-job",
-      name: job.name,
-      sourceFile: job.sourceFile,
-      outputPath,
-      dependencyPaths: depCollector.getResult(),
-      contextHash,
-    });
-  }
+  saveBundleToCache({
+    cache,
+    depCollector,
+    kind: "workflow-job",
+    name: job.name,
+    sourceFile: job.sourceFile,
+    outputPath,
+    contextHash,
+  });
 }

@@ -73,7 +73,7 @@ function createCacheManager(options: CacheManagerOptions): CacheManager {
     store.clean();
   }
 
-  const bundleCache = createBundleCache(store, options.sdkVersion);
+  const bundleCache = createBundleCache(store);
 
   return {
     enabled: true,
