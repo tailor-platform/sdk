@@ -124,14 +124,15 @@ async function bundleSingleExecutor(
 ): Promise<void> {
   const outputPath = path.join(outputDir, `${executor.name}.js`);
 
-  // Include source file path, trigger context, and tsconfig in context hash
-  // so that file relocation, workflow config changes, or tsconfig edits
-  // (e.g., paths/baseUrl) invalidate the cache.
+  // Include source file path, trigger context, tsconfig, and sourcemap mode
+  // in context hash so that file relocation, workflow config changes, tsconfig
+  // edits, or sourcemap mode toggle invalidate the cache.
   const sourceContext = cache
     ? hashContent(
         path.resolve(executor.sourceFile) +
           serializeTriggerContext(triggerContext) +
-          (tsconfig ? hashFile(tsconfig) : ""),
+          (tsconfig ? hashFile(tsconfig) : "") +
+          String(enableInlineSourcemap),
       )
     : undefined;
 

@@ -248,8 +248,9 @@ async function bundleSingleJob(
   const outputPath = path.join(outputDir, `${job.name}.js`);
 
   // Compute context hash combining env variables, source file path, trigger
-  // context, and tsconfig so that env changes, file relocation, workflow
-  // config changes, or tsconfig edits invalidate the cache.
+  // context, tsconfig, and sourcemap mode so that env changes, file relocation,
+  // workflow config changes, tsconfig edits, or sourcemap mode toggle
+  // invalidate the cache.
   const contextHash = cache
     ? hashContent(
         JSON.stringify(
@@ -257,7 +258,8 @@ async function bundleSingleJob(
         ) +
           path.resolve(job.sourceFile) +
           serializeTriggerContext(triggerContext) +
-          (tsconfig ? hashFile(tsconfig) : ""),
+          (tsconfig ? hashFile(tsconfig) : "") +
+          String(enableInlineSourcemap),
       )
     : undefined;
 
