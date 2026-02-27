@@ -65,24 +65,25 @@ function combineHash(fileHash: string, contextHash?: string): string {
 }
 
 /**
+ * Parameters for computing a bundler context hash.
+ */
+type ComputeBundlerContextHashParams = {
+  sourceFile: string;
+  serializedTriggerContext: string;
+  tsconfig?: string;
+  prefix?: string;
+};
+
+/**
  * Compute a context hash for cache invalidation across bundlers.
  *
  * Combines the source file path, serialized trigger context, tsconfig hash,
  * sourcemap mode, and an optional prefix (e.g., serialized env variables)
  * into a single SHA-256 hash.
  * @param params - Context hash computation parameters
- * @param params.sourceFile
- * @param params.serializedTriggerContext
- * @param params.tsconfig
- * @param params.prefix
  * @returns SHA-256 hex digest of the combined context
  */
-function computeBundlerContextHash(params: {
-  sourceFile: string;
-  serializedTriggerContext: string;
-  tsconfig?: string;
-  prefix?: string;
-}): string {
+function computeBundlerContextHash(params: ComputeBundlerContextHashParams): string {
   return hashContent(
     (params.prefix ?? "") +
       path.resolve(params.sourceFile) +
@@ -116,17 +117,9 @@ function setupDepCollector(
 }
 
 /**
- * Save a bundle build result to cache if caching is active.
- * @param params - Save parameters including cache, depCollector, and bundle metadata
- * @param params.cache
- * @param params.depCollector
- * @param params.kind
- * @param params.name
- * @param params.sourceFile
- * @param params.outputPath
- * @param params.contextHash
+ * Parameters for saving a bundle build result to cache.
  */
-function saveBundleToCache(params: {
+type SaveBundleToCacheParams = {
   cache?: BundleCache;
   depCollector?: DepCollectorSetup;
   kind: BundleKind;
@@ -134,7 +127,13 @@ function saveBundleToCache(params: {
   sourceFile: string;
   outputPath: string;
   contextHash?: string;
-}): void {
+};
+
+/**
+ * Save a bundle build result to cache if caching is active.
+ * @param params - Save parameters including cache, depCollector, and bundle metadata
+ */
+function saveBundleToCache(params: SaveBundleToCacheParams): void {
   const { cache, depCollector, ...rest } = params;
   if (!cache || !depCollector) return;
   cache.save({
@@ -175,7 +174,13 @@ function createBundleCache(store: CacheStore): BundleCache {
 
   function save(params: BundleCacheSaveParams): void {
     const cacheKey = buildCacheKey(params.kind, params.name);
-    const inputHash = combineHash(hashFiles(params.dependencyPaths), params.contextHash);
+    // Always include sourceFile in dependency paths so that changes to the
+    // source file itself are detected even when dep-collector only finds
+    // node_modules imports (which are filtered out).
+    const allDeps = params.dependencyPaths.includes(params.sourceFile)
+      ? params.dependencyPaths
+      : [params.sourceFile, ...params.dependencyPaths];
+    const inputHash = combineHash(hashFiles(allDeps), params.contextHash);
     // Stored for future integrity verification (detect corrupted cache files)
     const contentHash = hashFile(params.outputPath);
 
@@ -184,7 +189,7 @@ function createBundleCache(store: CacheStore): BundleCache {
     const entry: CacheEntry = {
       kind: "bundle",
       inputHash,
-      dependencyPaths: params.dependencyPaths,
+      dependencyPaths: allDeps,
       outputFiles: [
         {
           outputPath: params.outputPath,

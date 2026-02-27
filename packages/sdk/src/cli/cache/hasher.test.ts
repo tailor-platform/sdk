@@ -55,6 +55,12 @@ describe("hasher", () => {
       expect(hash1).toBe(hash2);
     });
 
+    test("returns consistent hash for empty array", () => {
+      const hash = hashFiles([]);
+      expect(hash).toMatch(/^[0-9a-f]{64}$/);
+      expect(hashFiles([])).toBe(hash);
+    });
+
     test("returns different hash when file content changes", () => {
       const fileA = path.join(tmpDir, "a.txt");
       const fileB = path.join(tmpDir, "b.txt");
