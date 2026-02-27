@@ -10,14 +10,15 @@ import type { Plugin } from "rolldown";
  */
 function extractLoadHandler(plugin: Plugin): (id: string) => unknown {
   const loadHook = plugin.load;
-  const handler =
-    typeof loadHook === "function"
-      ? loadHook
-      : typeof loadHook === "object" && loadHook !== null && "handler" in loadHook
-        ? loadHook.handler
-        : undefined;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Rolldown handler signature varies
+  let handler: ((...args: any[]) => unknown) | undefined;
+  if (typeof loadHook === "function") {
+    handler = loadHook;
+  } else if (typeof loadHook === "object" && loadHook !== null && "handler" in loadHook) {
+    handler = loadHook.handler;
+  }
   if (!handler) throw new Error("No load handler found on plugin");
-  return (id: string) => handler.call(undefined as never, id);
+  return (id: string) => handler(id);
 }
 
 describe("createDepCollectorPlugin", () => {

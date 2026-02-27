@@ -72,9 +72,8 @@ export async function bundleWorkflowJobs(
   const currentJobNames = new Set(usedJobs.map((j) => j.name));
   const existingFiles = fs.readdirSync(outputDir);
   for (const file of existingFiles) {
-    // Keep .js files for current jobs, remove everything else (entry files, stale outputs)
-    const baseName = path.basename(file, ".js");
-    if (file.endsWith(".entry.js") || (!currentJobNames.has(baseName) && file.endsWith(".js"))) {
+    // Remove .js files not belonging to current jobs (covers entry files and stale outputs)
+    if (file.endsWith(".js") && !currentJobNames.has(path.basename(file, ".js"))) {
       fs.rmSync(path.join(outputDir, file), { force: true });
     }
   }
