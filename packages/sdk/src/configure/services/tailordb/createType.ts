@@ -173,7 +173,7 @@ function resolveField(entry: FieldEntry): TailorAnyDBField {
   if (isPassthroughField(entry)) {
     return entry;
   }
-  return buildField(entry as FieldDescriptor);
+  return buildField(entry);
 }
 
 function resolveFieldMap(entries: Record<string, FieldEntry>): Record<string, TailorAnyDBField> {
@@ -188,14 +188,10 @@ function isValidateConfig(v: unknown): v is ValidateConfig<unknown> {
 
 function buildField(descriptor: FieldDescriptor): TailorAnyDBField {
   const fieldType = kindToFieldType[descriptor.kind];
-  const options: { optional?: boolean; array?: boolean } = {};
-  if (descriptor.optional === true) {
-    options.optional = true;
-  }
-  if (descriptor.array === true) {
-    options.array = true;
-  }
-
+  const options = {
+    ...(descriptor.optional === true && { optional: true as const }),
+    ...(descriptor.array === true && { array: true as const }),
+  };
   const values = descriptor.kind === "enum" ? descriptor.values : undefined;
   const nestedFields =
     descriptor.kind === "object" ? resolveFieldMap(descriptor.fields) : undefined;
@@ -215,23 +211,21 @@ function buildField(descriptor: FieldDescriptor): TailorAnyDBField {
   }
 
   if (descriptor.kind !== "object") {
-    const d = descriptor as FieldDescriptor & IndexableOptions;
-
-    if (d.unique === true) {
+    if (descriptor.unique === true) {
       field = field.unique();
-    } else if (d.index === true) {
+    } else if (descriptor.index === true) {
       field = field.index();
     }
 
-    if (d.hooks !== undefined) {
-      field = field.hooks(d.hooks);
+    if (descriptor.hooks !== undefined) {
+      field = field.hooks(descriptor.hooks);
     }
 
-    if (d.validate !== undefined) {
-      if (Array.isArray(d.validate) && !isValidateConfig(d.validate)) {
-        field = field.validate(...d.validate);
+    if (descriptor.validate !== undefined) {
+      if (Array.isArray(descriptor.validate) && !isValidateConfig(descriptor.validate)) {
+        field = field.validate(...descriptor.validate);
       } else {
-        field = field.validate(d.validate);
+        field = field.validate(descriptor.validate);
       }
     }
   }
