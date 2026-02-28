@@ -187,20 +187,16 @@ type ResolvedFieldMap<M extends Record<string, FieldEntry>> = {
 
 // Rejects descriptors that combine array: true with index/unique (unsupported by the platform).
 type RejectArrayIndexed<D extends Record<string, FieldEntry>> = {
-  [K in keyof D]: D[K] extends { array: true; unique: true }
+  [K in keyof D]: D[K] extends { array: true; unique: true } | { array: true; index: true }
     ? never
-    : D[K] extends { array: true; index: true }
-      ? never
-      : D[K];
+    : D[K];
 };
 
 // Rejects descriptors that combine array: true with vector or serial (unsupported by the platform).
 type RejectArrayVectorOrSerial<D extends Record<string, FieldEntry>> = {
-  [K in keyof D]: D[K] extends { array: true; vector: true }
+  [K in keyof D]: D[K] extends { array: true; vector: true } | { array: true; serial: object }
     ? never
-    : D[K] extends { array: true; serial: object }
-      ? never
-      : D[K];
+    : D[K];
 };
 
 // Rejects descriptors that combine hooks and serial (mutually exclusive in fluent API).
