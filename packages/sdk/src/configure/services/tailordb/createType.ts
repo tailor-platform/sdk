@@ -181,8 +181,6 @@ type ResolvedFieldMap<M extends Record<string, FieldEntry>> = {
   [K in keyof M]: ResolvedField<M[K]>;
 };
 
-type AllFields<D extends Record<string, FieldEntry>> = { id: IdField } & ResolvedFieldMap<D>;
-
 // Rejects descriptors that combine array: true with index/unique (unsupported by the platform).
 type RejectArrayIndexed<D extends Record<string, FieldEntry>> = {
   [K in keyof D]: D[K] extends { array: true; unique: true }
@@ -228,7 +226,7 @@ type ValidateRelationKeys<D extends Record<string, FieldEntry>> = {
           ? D[K]
           : never
         : T extends "self"
-          ? Key extends (keyof D & string) | "id"
+          ? Key extends keyof D & string
             ? D[K]
             : never
           : D[K]
@@ -345,19 +343,15 @@ function buildField(descriptor: FieldDescriptor): TailorAnyDBField {
   return field;
 }
 
-// The id field is shared across all types created by createType.
-const idField = createTailorDBField("uuid");
-type IdField = typeof idField;
-
 /**
  * Create a TailorDB type using an object-literal API.
- * An `id` field (UUID) is automatically added to every type.
  * @param name - The name of the type, or a tuple of [name, pluralForm]
  * @param descriptors - Field descriptors as an object literal
  * @param options - Optional type-level options (permission, gqlPermission, features, etc.)
  * @returns A new TailorDBType instance
  * @example
  * export const user = createType("User", {
+ *   id: { kind: "uuid" },
  *   name: { kind: "string" },
  *   email: { kind: "string", unique: true },
  *   status: { kind: "string", optional: true },
@@ -366,19 +360,19 @@ type IdField = typeof idField;
  * });
  * export type user = typeof user;
  */
-export function createType<const D extends Record<string, FieldEntry> & { id?: never }>(
+export function createType<const D extends Record<string, FieldEntry>>(
   name: string | [string, string],
   descriptors: D &
     RejectArrayIndexed<D> &
     RejectHooksWithSerial<D> &
     RejectNestedInObject<D> &
     ValidateRelationKeys<D>,
-  options?: CreateTypeOptions<keyof AllFields<D> & string, AllFields<D>>,
-): TailorDBType<AllFields<D>> {
+  options?: CreateTypeOptions<keyof ResolvedFieldMap<D> & string, ResolvedFieldMap<D>>,
+): TailorDBType<ResolvedFieldMap<D>> {
   const typeName = Array.isArray(name) ? name[0] : name;
   const pluralForm = Array.isArray(name) ? name[1] : options?.pluralForm;
   const fields = resolveFieldMap(descriptors);
-  const allFields = { id: idField.clone(), ...fields } as AllFields<D>;
+  const allFields = fields as ResolvedFieldMap<D>;
 
   const dbType = createTailorDBType(typeName, allFields, {
     pluralForm,
