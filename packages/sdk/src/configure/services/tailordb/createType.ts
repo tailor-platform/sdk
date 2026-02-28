@@ -171,9 +171,11 @@ type DescriptorDefined<D extends FieldDescriptor> = {
     : unknown) &
   (D extends { vector: true } ? { vector: true } : unknown) &
   (D extends { kind: "uuid"; relation: object }
-    ? D extends { relation: { type: "oneToOne" | "1-1" } }
-      ? { relation: true; unique: true; index: true }
-      : { relation: true; index: true }
+    ? D extends { array: true }
+      ? { relation: true }
+      : D extends { relation: { type: "oneToOne" | "1-1" } }
+        ? { relation: true; unique: true; index: true }
+        : { relation: true; index: true }
     : unknown);
 
 type ResolvedField<E extends FieldEntry> = E extends FieldDescriptor
@@ -201,6 +203,19 @@ type RejectArrayCombinations<D extends Record<string, FieldEntry>> = {
 // The `kind: string` guard excludes TailorDBField instances whose hooks()/serial() methods extend `object`.
 type RejectHooksWithSerial<D extends Record<string, FieldEntry>> = {
   [K in keyof D]: D[K] extends { kind: string; hooks: object; serial: object } ? never : D[K];
+};
+
+// Rejects unique: true on non-oneToOne uuid relations (platform rejects unique on n-1 relations).
+type RejectUniqueOnManyRelation<D extends Record<string, FieldEntry>> = {
+  [K in keyof D]: D[K] extends {
+    kind: "uuid";
+    unique: true;
+    relation: { type: infer T };
+  }
+    ? T extends "oneToOne" | "1-1"
+      ? D[K]
+      : never
+    : D[K];
 };
 
 // Rejects nested objects inside object descriptors (matching ExcludeNestedDBFields in fluent API).
@@ -320,7 +335,11 @@ function buildField(descriptor: FieldDescriptor): TailorAnyDBField {
     return field;
   }
 
-  if (descriptor.array !== true) {
+  // When a relation is present, the relation handler dictates index/unique flags.
+  if (
+    descriptor.array !== true &&
+    !(descriptor.kind === "uuid" && descriptor.relation !== undefined)
+  ) {
     if (descriptor.unique === true) {
       field = field.unique();
     } else if (descriptor.index === true) {
@@ -355,11 +374,13 @@ function buildField(descriptor: FieldDescriptor): TailorAnyDBField {
   if (descriptor.kind === "uuid" && descriptor.relation !== undefined) {
     // oxlint-disable-next-line no-explicit-any -- relation() is only present on uuid field interface
     field = (field as any).relation(descriptor.relation);
-    const relType = descriptor.relation.type;
-    if (relType === "oneToOne" || relType === "1-1") {
-      field = field.unique();
-    } else {
-      field = field.index();
+    if (descriptor.array !== true) {
+      const relType = descriptor.relation.type;
+      if (relType === "oneToOne" || relType === "1-1") {
+        field = field.unique();
+      } else {
+        field = field.index();
+      }
     }
   }
 
@@ -392,6 +413,7 @@ export function createType<const D extends { id?: never } & Record<string, Field
   descriptors: D &
     RejectArrayCombinations<D> &
     RejectHooksWithSerial<D> &
+    RejectUniqueOnManyRelation<D> &
     RejectNestedInObject<D> &
     ValidateHookTypes<D> &
     ValidateRelationKeys<D>,

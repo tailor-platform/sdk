@@ -1092,6 +1092,105 @@ describe("createType hook type validation", () => {
   });
 });
 
+describe("createType unique on many-to-one relation guard", () => {
+  it("unique: true on n-1 relation causes type error", () => {
+    const Target = createType("Target", { name: { kind: "string" } });
+    createType("Test", {
+      // @ts-expect-error unique is not allowed on n-1 relations
+      targetId: {
+        kind: "uuid",
+        unique: true,
+        relation: {
+          type: "n-1",
+          toward: { type: Target },
+        },
+      },
+    });
+  });
+
+  it("unique: true on manyToOne relation causes type error", () => {
+    const Target = createType("Target", { name: { kind: "string" } });
+    createType("Test", {
+      // @ts-expect-error unique is not allowed on manyToOne relations
+      targetId: {
+        kind: "uuid",
+        unique: true,
+        relation: {
+          type: "manyToOne",
+          toward: { type: Target },
+        },
+      },
+    });
+  });
+
+  it("unique: true on oneToOne relation is accepted", () => {
+    const Target = createType("Target", { name: { kind: "string" } });
+    const result = createType("Test", {
+      targetId: {
+        kind: "uuid",
+        unique: true,
+        relation: {
+          type: "oneToOne",
+          toward: { type: Target },
+        },
+      },
+    });
+    expect(result.fields.targetId.metadata.unique).toBe(true);
+    expect(result.fields.targetId.metadata.index).toBe(true);
+  });
+
+  it("n-1 relation without unique sets index only", () => {
+    const Target = createType("Target", { name: { kind: "string" } });
+    const result = createType("Test", {
+      targetId: {
+        kind: "uuid",
+        relation: {
+          type: "n-1",
+          toward: { type: Target },
+        },
+      },
+    });
+    expect(result.fields.targetId.metadata.index).toBe(true);
+    expect(result.fields.targetId.metadata.unique).toBeUndefined();
+  });
+});
+
+describe("createType array relation index guard", () => {
+  it("array relation does not set index or unique metadata", () => {
+    const Target = createType("Target", { name: { kind: "string" } });
+    const result = createType("Test", {
+      targetIds: {
+        kind: "uuid",
+        array: true,
+        relation: {
+          type: "n-1",
+          toward: { type: Target },
+        },
+      },
+    });
+    expect(result.fields.targetIds.rawRelation).toBeDefined();
+    expect(result.fields.targetIds.metadata.index).toBeUndefined();
+    expect(result.fields.targetIds.metadata.unique).toBeUndefined();
+  });
+
+  it("array oneToOne relation does not set index or unique metadata", () => {
+    const Target = createType("Target", { name: { kind: "string" } });
+    const result = createType("Test", {
+      targetIds: {
+        kind: "uuid",
+        array: true,
+        relation: {
+          type: "oneToOne",
+          toward: { type: Target },
+        },
+      },
+    });
+    expect(result.fields.targetIds.rawRelation).toBeDefined();
+    expect(result.fields.targetIds.metadata.index).toBeUndefined();
+    expect(result.fields.targetIds.metadata.unique).toBeUndefined();
+  });
+});
+
 describe("createType id field guard", () => {
   it("defining id field causes type error", () => {
     createType("Test", {
