@@ -190,6 +190,15 @@ type RejectArrayIndexed<D extends Record<string, FieldEntry>> = {
       : D[K];
 };
 
+// Rejects descriptors that combine array: true with vector or serial (unsupported by the platform).
+type RejectArrayVectorOrSerial<D extends Record<string, FieldEntry>> = {
+  [K in keyof D]: D[K] extends { array: true; vector: true }
+    ? never
+    : D[K] extends { array: true; serial: object }
+      ? never
+      : D[K];
+};
+
 // Rejects descriptors that combine hooks and serial (mutually exclusive in fluent API).
 // The `kind: string` guard excludes TailorDBField instances whose hooks()/serial() methods extend `object`.
 type RejectHooksWithSerial<D extends Record<string, FieldEntry>> = {
@@ -214,7 +223,17 @@ type RejectNestedInObject<D extends Record<string, FieldEntry>> = {
     : D[K];
 };
 
+// Validates hook return types against the descriptor's output type at the call site.
+type ValidateHookTypes<D extends Record<string, FieldEntry>> = {
+  [K in keyof D]: D[K] extends FieldDescriptor & { hooks: infer H }
+    ? H extends Hook<unknown, DescriptorOutput<D[K] & FieldDescriptor>>
+      ? D[K]
+      : never
+    : D[K];
+};
+
 // Validates relation key against the target type's fields at the createType call site.
+// Every type implicitly has an `id` field, so `"id"` is always a valid key.
 type ValidateRelationKeys<D extends Record<string, FieldEntry>> = {
   [K in keyof D]: D[K] extends {
     kind: "uuid";
@@ -222,11 +241,11 @@ type ValidateRelationKeys<D extends Record<string, FieldEntry>> = {
   }
     ? Key extends string
       ? T extends TailorAnyDBType
-        ? Key extends keyof T["fields"] & string
+        ? Key extends (keyof T["fields"] & string) | "id"
           ? D[K]
           : never
         : T extends "self"
-          ? Key extends keyof D & string
+          ? Key extends (keyof D & string) | "id"
             ? D[K]
             : never
           : D[K]
@@ -323,13 +342,14 @@ function buildField(descriptor: FieldDescriptor): TailorAnyDBField {
     }
   }
 
-  if (descriptor.kind === "string" && descriptor.vector === true) {
+  if (descriptor.kind === "string" && descriptor.vector === true && descriptor.array !== true) {
     field = field.vector();
   }
 
   if (
     (descriptor.kind === "string" || descriptor.kind === "int") &&
-    descriptor.serial !== undefined
+    descriptor.serial !== undefined &&
+    descriptor.array !== true
   ) {
     field = field.serial(descriptor.serial);
   }
@@ -369,8 +389,10 @@ export function createType<const D extends Record<string, FieldEntry>>(
   name: string | [string, string],
   descriptors: D &
     RejectArrayIndexed<D> &
+    RejectArrayVectorOrSerial<D> &
     RejectHooksWithSerial<D> &
     RejectNestedInObject<D> &
+    ValidateHookTypes<D> &
     ValidateRelationKeys<D>,
   options?: CreateTypeOptions<keyof ResolvedFieldMap<D> & string, ResolvedFieldMap<D>>,
 ): TailorDBType<ResolvedFieldMap<D>> {

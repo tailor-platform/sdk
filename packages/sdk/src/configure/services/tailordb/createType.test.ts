@@ -955,6 +955,34 @@ describe("createType relation key validation", () => {
     expect(result.fields.targetId.rawRelation).toBeDefined();
   });
 
+  it("explicit 'id' relation key is always accepted for target types", () => {
+    const Target = createType("Target", { name: { kind: "string" } });
+    const result = createType("Test", {
+      targetId: {
+        kind: "uuid",
+        relation: {
+          type: "n-1",
+          toward: { type: Target, key: "id" },
+        },
+      },
+    });
+    expect(result.fields.targetId.rawRelation!.toward.key).toBe("id");
+  });
+
+  it("explicit 'id' relation key is always accepted for self-references", () => {
+    const result = createType("Test", {
+      parentId: {
+        kind: "uuid",
+        optional: true,
+        relation: {
+          type: "n-1",
+          toward: { type: "self" as const, key: "id" },
+        },
+      },
+    });
+    expect(result.fields.parentId.rawRelation!.toward.key).toBe("id");
+  });
+
   it("invalid self-referencing relation key causes type error", () => {
     createType("Test", {
       // @ts-expect-error 'nonExistent' does not exist on own fields
@@ -996,5 +1024,58 @@ describe("createType relation key validation", () => {
       },
     });
     expect(result.fields.targetId.rawRelation).toBeDefined();
+  });
+});
+
+describe("createType array+vector/serial guards", () => {
+  it("array + vector causes type error", () => {
+    createType("Test", {
+      // @ts-expect-error array and vector are incompatible
+      tags: { kind: "string", array: true, vector: true },
+    });
+  });
+
+  it("array + serial causes type error", () => {
+    createType("Test", {
+      // @ts-expect-error array and serial are incompatible
+      codes: { kind: "string", array: true, serial: { start: 1 } },
+    });
+  });
+
+  it("non-array vector is accepted", () => {
+    const result = createType("Test", {
+      embedding: { kind: "string", vector: true },
+    });
+    expect(result.fields.embedding.metadata.vector).toBe(true);
+  });
+
+  it("non-array serial is accepted", () => {
+    const result = createType("Test", {
+      code: { kind: "string", serial: { start: 1 } },
+    });
+    expect(result.fields.code.metadata.serial).toEqual({ start: 1 });
+  });
+});
+
+describe("createType hook type validation", () => {
+  it("hook returning correct type is accepted", () => {
+    const result = createType("Test", {
+      name: { kind: "string", hooks: { create: () => "default" } },
+    });
+    expect(result.fields.name.metadata.hooks).toBeDefined();
+  });
+
+  it("hook returning wrong type causes type error", () => {
+    createType("Test", {
+      // @ts-expect-error hook returns number but field expects string
+      name: { kind: "string", hooks: { create: () => 42 } },
+    });
+  });
+
+  it("datetime hook returning Date is accepted", () => {
+    const result = createType("Test", {
+      createdAt: { kind: "datetime", hooks: { create: () => new Date() } },
+    });
+    expect(result.fields.createdAt.metadata.hooks).toBeDefined();
   });
 });
