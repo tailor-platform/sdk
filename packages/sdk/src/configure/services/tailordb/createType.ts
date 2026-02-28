@@ -380,7 +380,6 @@ function buildField(descriptor: FieldDescriptor): TailorAnyDBField {
  * @returns A new TailorDBType instance
  * @example
  * export const user = createType("User", {
- *   id: { kind: "uuid" },
  *   name: { kind: "string" },
  *   email: { kind: "string", unique: true },
  *   status: { kind: "string", optional: true },
