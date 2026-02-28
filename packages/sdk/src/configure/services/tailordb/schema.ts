@@ -75,7 +75,7 @@ const regex = {
   time: /^(?<hour>\d{2}):(?<minute>\d{2})$/,
   datetime:
     /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(.(?<millisec>\d{3}))?Z$/,
-  decimal: /^-?\d+(\.\d+)?$/,
+  decimal: /^-?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/,
 } as const;
 
 type FieldParseArgs = {

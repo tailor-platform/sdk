@@ -1939,6 +1939,12 @@ describe("TailorDBField decimal type tests", () => {
     expect(field.parse({ value: "0", data: {}, user })).toEqual({ value: "0" });
     expect(field.parse({ value: "-99.99", data: {}, user })).toEqual({ value: "-99.99" });
     expect(field.parse({ value: "1000", data: {}, user })).toEqual({ value: "1000" });
+    expect(field.parse({ value: ".5", data: {}, user })).toEqual({ value: ".5" });
+    expect(field.parse({ value: "5.", data: {}, user })).toEqual({ value: "5." });
+    expect(field.parse({ value: "4.321e+4", data: {}, user })).toEqual({ value: "4.321e+4" });
+    expect(field.parse({ value: "1E-5", data: {}, user })).toEqual({ value: "1E-5" });
+    expect(field.parse({ value: "2.41E-3", data: {}, user })).toEqual({ value: "2.41E-3" });
+    expect(field.parse({ value: "-1.5e10", data: {}, user })).toEqual({ value: "-1.5e10" });
   });
 
   it("decimal parse rejects invalid decimal strings", () => {
@@ -1952,5 +1958,20 @@ describe("TailorDBField decimal type tests", () => {
 
     const result3 = field.parse({ value: "", data: {}, user });
     expect(result3).toHaveProperty("issues");
+
+    const result4 = field.parse({ value: "1_000_000", data: {}, user });
+    expect(result4).toHaveProperty("issues");
+
+    const result5 = field.parse({ value: "0b1.1p-5", data: {}, user });
+    expect(result5).toHaveProperty("issues");
+
+    const result6 = field.parse({ value: "1e", data: {}, user });
+    expect(result6).toHaveProperty("issues");
+
+    const result7 = field.parse({ value: "e5", data: {}, user });
+    expect(result7).toHaveProperty("issues");
+
+    const result8 = field.parse({ value: ".", data: {}, user });
+    expect(result8).toHaveProperty("issues");
   });
 });
