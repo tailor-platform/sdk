@@ -76,7 +76,7 @@ type EnumDescriptor<V extends AllowedValues = AllowedValues> = CommonFieldOption
     typeName?: string;
   };
 
-// Nested object sub-fields bypass top-level constraint types (RejectArray*, ValidateHookTypes, etc.)
+// Nested object sub-fields bypass top-level constraint types (RejectArrayCombinations, ValidateHookTypes, etc.)
 // because recursive mapped-type constraints would add significant complexity. This is a shared gap
 // with the fluent API (db.object() sub-fields are also unconstrained). Invalid nested combinations
 // are caught at deployment time by the platform.
@@ -185,16 +185,14 @@ type ResolvedFieldMap<M extends Record<string, FieldEntry>> = {
   [K in keyof M]: ResolvedField<M[K]>;
 };
 
-// Rejects descriptors that combine array: true with index/unique (unsupported by the platform).
-type RejectArrayIndexed<D extends Record<string, FieldEntry>> = {
-  [K in keyof D]: D[K] extends { array: true; unique: true } | { array: true; index: true }
-    ? never
-    : D[K];
-};
-
-// Rejects descriptors that combine array: true with vector or serial (unsupported by the platform).
-type RejectArrayVectorOrSerial<D extends Record<string, FieldEntry>> = {
-  [K in keyof D]: D[K] extends { array: true; vector: true } | { array: true; serial: object }
+// Rejects descriptors that combine array: true with index, unique, vector, or serial
+// (all unsupported by the platform).
+type RejectArrayCombinations<D extends Record<string, FieldEntry>> = {
+  [K in keyof D]: D[K] extends
+    | { array: true; unique: true }
+    | { array: true; index: true }
+    | { array: true; vector: true }
+    | { array: true; serial: object }
     ? never
     : D[K];
 };
@@ -392,8 +390,7 @@ type AllFields<D extends Record<string, FieldEntry>> = { id: IdField } & Resolve
 export function createType<const D extends { id?: never } & Record<string, FieldEntry>>(
   name: string | [string, string],
   descriptors: D &
-    RejectArrayIndexed<D> &
-    RejectArrayVectorOrSerial<D> &
+    RejectArrayCombinations<D> &
     RejectHooksWithSerial<D> &
     RejectNestedInObject<D> &
     ValidateHookTypes<D> &
