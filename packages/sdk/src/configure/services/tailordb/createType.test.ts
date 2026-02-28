@@ -10,6 +10,7 @@ describe("createType basic field type tests", () => {
       name: { kind: "string" },
     });
     expectTypeOf<output<typeof result>>().toEqualTypeOf<{
+      id: string;
       name: string;
     }>();
   });
@@ -19,6 +20,7 @@ describe("createType basic field type tests", () => {
       age: { kind: "int" },
     });
     expectTypeOf<output<typeof result>>().toEqualTypeOf<{
+      id: string;
       age: number;
     }>();
   });
@@ -28,6 +30,7 @@ describe("createType basic field type tests", () => {
       active: { kind: "bool" },
     });
     expectTypeOf<output<typeof result>>().toEqualTypeOf<{
+      id: string;
       active: boolean;
     }>();
   });
@@ -37,6 +40,7 @@ describe("createType basic field type tests", () => {
       price: { kind: "float" },
     });
     expectTypeOf<output<typeof result>>().toEqualTypeOf<{
+      id: string;
       price: number;
     }>();
   });
@@ -46,6 +50,7 @@ describe("createType basic field type tests", () => {
       ref: { kind: "uuid" },
     });
     expectTypeOf<output<typeof result>>().toEqualTypeOf<{
+      id: string;
       ref: string;
     }>();
   });
@@ -55,6 +60,7 @@ describe("createType basic field type tests", () => {
       birthDate: { kind: "date" },
     });
     expectTypeOf<output<typeof result>>().toEqualTypeOf<{
+      id: string;
       birthDate: string;
     }>();
   });
@@ -73,6 +79,7 @@ describe("createType basic field type tests", () => {
       openingTime: { kind: "time" },
     });
     expectTypeOf<output<typeof result>>().toEqualTypeOf<{
+      id: string;
       openingTime: string;
     }>();
   });
@@ -84,6 +91,7 @@ describe("createType optional and array tests", () => {
       description: { kind: "string", optional: true },
     });
     expectTypeOf<output<typeof result>>().toEqualTypeOf<{
+      id: string;
       description?: string | null;
     }>();
   });
@@ -93,6 +101,7 @@ describe("createType optional and array tests", () => {
       tags: { kind: "string", array: true },
     });
     expectTypeOf<output<typeof result>>().toEqualTypeOf<{
+      id: string;
       tags: string[];
     }>();
   });
@@ -102,6 +111,7 @@ describe("createType optional and array tests", () => {
       items: { kind: "string", optional: true, array: true },
     });
     expectTypeOf<output<typeof result>>().toEqualTypeOf<{
+      id: string;
       items?: string[] | null;
     }>();
   });
@@ -113,6 +123,7 @@ describe("createType enum tests", () => {
       role: { kind: "enum", values: ["MANAGER", "STAFF"] },
     });
     expectTypeOf<output<typeof result>>().toEqualTypeOf<{
+      id: string;
       role: "MANAGER" | "STAFF";
     }>();
   });
@@ -122,6 +133,7 @@ describe("createType enum tests", () => {
       priority: { kind: "enum", values: ["high", "medium", "low"], optional: true },
     });
     expectTypeOf<output<typeof result>>().toEqualTypeOf<{
+      id: string;
       priority?: "high" | "medium" | "low" | null;
     }>();
   });

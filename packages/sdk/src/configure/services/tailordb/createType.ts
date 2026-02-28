@@ -372,6 +372,11 @@ function buildField(descriptor: FieldDescriptor): TailorAnyDBField {
   return field;
 }
 
+const idField = createTailorDBField("uuid");
+type IdField = typeof idField;
+
+type AllFields<D extends Record<string, FieldEntry>> = { id: IdField } & ResolvedFieldMap<D>;
+
 /**
  * Create a TailorDB type using an object-literal API.
  * @param name - The name of the type, or a tuple of [name, pluralForm]
@@ -397,11 +402,14 @@ export function createType<const D extends { id?: never } & Record<string, Field
     RejectNestedInObject<D> &
     ValidateHookTypes<D> &
     ValidateRelationKeys<D>,
-  options?: CreateTypeOptions<keyof ResolvedFieldMap<D> & string, ResolvedFieldMap<D>>,
-): TailorDBType<ResolvedFieldMap<D>> {
+  options?: CreateTypeOptions<keyof AllFields<D> & string, AllFields<D>>,
+): TailorDBType<AllFields<D>> {
   const typeName = Array.isArray(name) ? name[0] : name;
   const pluralForm = Array.isArray(name) ? name[1] : options?.pluralForm;
-  const fields = resolveFieldMap(descriptors) as ResolvedFieldMap<D>;
+  const fields = {
+    id: idField.clone(),
+    ...resolveFieldMap(descriptors),
+  } as AllFields<D>;
 
   const dbType = createTailorDBType(typeName, fields, {
     pluralForm,
