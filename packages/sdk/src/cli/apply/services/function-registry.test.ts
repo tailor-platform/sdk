@@ -96,6 +96,19 @@ describe("planFunctionRegistry", () => {
     vi.clearAllMocks();
   });
 
+  describe("pagination", () => {
+    test("passes maxPageSize from fetchAll as pageSize", async () => {
+      const client = createMockClient([]);
+      const entries = [createEntry("resolver/ns/getUser")];
+
+      await planFunctionRegistry(client, workspaceId, appName, entries);
+
+      expect(client.listFunctionRegistries).toHaveBeenCalledWith(
+        expect.objectContaining({ pageSize: expect.any(Number) }),
+      );
+    });
+  });
+
   describe("create scenarios", () => {
     test("new function is created when no existing entries", async () => {
       const client = createMockClient([]);

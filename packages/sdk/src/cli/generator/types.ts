@@ -79,7 +79,6 @@ export type {
   PluginGeneratedTypeSource,
   TypeSourceInfoEntry,
 } from "@/parser/service/tailordb/types";
-export { isPluginGeneratedType } from "@/parser/service/tailordb/types";
 
 // ========================================
 // Method interfaces for each dependency

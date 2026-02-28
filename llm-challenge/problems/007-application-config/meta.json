@@ -1,0 +1,15 @@
+{
+  "id": "007",
+  "name": "application-config",
+  "difficulty": "hard",
+  "category": "config",
+  "scoring": {
+    "generate": 25,
+    "typecheck": 25,
+    "tests": 100
+  },
+  "files": {
+    "implement": ["tailor.config.ts"],
+    "scaffold": ["tailordb/user.ts", "tailordb/tenant.ts"]
+  }
+}

@@ -17,6 +17,7 @@ import {
   type RawRelationConfig,
   type RelationType,
 } from "@/parser/service/tailordb/types";
+import { brandValue } from "@/utils/brand";
 import { type TailorTypeGqlPermission, type TailorTypePermission } from "./permission";
 import {
   type DBFieldMetadata,
@@ -1161,7 +1162,7 @@ function createTailorDBType<
     },
   };
 
-  return dbType;
+  return brandValue(dbType);
 }
 
 export type TailorDBInstance<

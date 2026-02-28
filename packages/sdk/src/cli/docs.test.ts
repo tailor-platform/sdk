@@ -1,6 +1,7 @@
 import { execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { assertDocMatch, createCommandRenderer } from "politty/docs";
-import { describe, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { commonArgs } from "./args";
 import { mainCommand } from "./index";
 import type { FileConfig, OptionsRenderContext } from "politty/docs";
@@ -99,12 +100,27 @@ const files: Record<string, FileConfig> = {
     commands: ["completion"],
     render: defaultRender,
   },
+  "docs/cli/function.md": {
+    commands: ["function"],
+    render: defaultRender,
+  },
 };
 
 // Auto-generate targetCommands from files
 const targetCommands = Object.values(files).flatMap((config) => config.commands);
 
 describe("CLI Documentation", () => {
+  it("uses section-level command markers", () => {
+    const applicationDoc = readFileSync(
+      new URL("../../docs/cli/application.md", import.meta.url),
+      "utf-8",
+    );
+
+    expect(applicationDoc).toContain("<!-- politty:command:init:heading:start -->");
+    expect(applicationDoc).toContain("<!-- politty:command:init:usage:start -->");
+    expect(applicationDoc).not.toContain("<!-- politty:command:init:start -->");
+  });
+
   it("matches golden files", { timeout: 60000 }, async () => {
     await assertDocMatch({
       command: mainCommand,

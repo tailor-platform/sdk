@@ -27,9 +27,10 @@ export const listCommand = defineCommand({
     const token = await fetchLatestToken(config, config.current_user);
     const client = await initOperatorClient(token);
 
-    const pats = await fetchAll(async (pageToken) => {
+    const pats = await fetchAll(async (pageToken, maxPageSize) => {
       const { personalAccessTokens, nextPageToken } = await client.listPersonalAccessTokens({
         pageToken,
+        pageSize: maxPageSize,
       });
       return [personalAccessTokens, nextPageToken];
     });

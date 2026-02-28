@@ -27,10 +27,11 @@ export async function listExecutors(options?: ListExecutorsOptions): Promise<Exe
     profile: options?.profile,
   });
 
-  const executors = await fetchAll(async (pageToken) => {
+  const executors = await fetchAll(async (pageToken, maxPageSize) => {
     const { executors, nextPageToken } = await client.listExecutorExecutors({
       workspaceId,
       pageToken,
+      pageSize: maxPageSize,
     });
     return [executors, nextPageToken];
   });

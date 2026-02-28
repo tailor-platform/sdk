@@ -1,4 +1,5 @@
 import { t } from "@/configure/types/type";
+import { brandValue } from "@/utils/brand";
 import type { TailorAnyField, TailorUser } from "@/configure/types";
 import type { TailorEnv } from "@/configure/types/env";
 import type { InferFieldsOutput, output } from "@/configure/types/helpers";
@@ -95,10 +96,10 @@ export function createResolver<
 
   const normalizedOutput = isTailorField(config.output) ? config.output : t.object(config.output);
 
-  return {
+  return brandValue({
     ...config,
     output: normalizedOutput,
-  } as ResolverReturn<Input, Output>;
+  } as ResolverReturn<Input, Output>);
 }
 
 // A loose config alias for userland use-cases

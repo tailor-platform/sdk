@@ -45,11 +45,12 @@ async function secretList(options: SecretListOptions): Promise<SecretInfo[]> {
     profile: options.profile,
   });
 
-  const secrets = await fetchAll(async (pageToken) => {
+  const secrets = await fetchAll(async (pageToken, maxPageSize) => {
     const { secrets, nextPageToken } = await client.listSecretManagerSecrets({
       workspaceId,
       secretmanagerVaultName: options.vaultName,
       pageToken,
+      pageSize: maxPageSize,
     });
     return [secrets, nextPageToken];
   });

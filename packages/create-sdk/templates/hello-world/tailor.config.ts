@@ -1,4 +1,5 @@
-import { defineConfig, defineGenerators } from "@tailor-platform/sdk";
+import { defineConfig, definePlugins } from "@tailor-platform/sdk";
+import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
 
 export default defineConfig({
   name: "hello-world",
@@ -6,7 +7,6 @@ export default defineConfig({
   resolver: { "main-resolver": { files: [`./src/resolvers/**/*.ts`] } },
 });
 
-export const generators = defineGenerators([
-  "@tailor-platform/kysely-type",
-  { distPath: `./src/generated/kysely-tailordb.ts` },
-]);
+export const plugins = definePlugins(
+  kyselyTypePlugin({ distPath: `./src/generated/kysely-tailordb.ts` }),
+);

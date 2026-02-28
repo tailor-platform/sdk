@@ -1,5 +1,7 @@
 # @tailor-platform/create-sdk
 
+## 1.18.0
+
 ## 1.17.1
 
 ### Patch Changes

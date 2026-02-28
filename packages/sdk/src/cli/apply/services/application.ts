@@ -94,11 +94,12 @@ export async function planApplication(context: PlanContext) {
     "Applications",
   );
 
-  const existingApplications = await fetchAll(async (pageToken) => {
+  const existingApplications = await fetchAll(async (pageToken, maxPageSize) => {
     try {
       const { applications, nextPageToken } = await client.listApplications({
         workspaceId,
         pageToken,
+        pageSize: maxPageSize,
       });
       return [applications, nextPageToken];
     } catch (error) {
@@ -135,12 +136,13 @@ export async function planApplication(context: PlanContext) {
   } else if (application.config.auth) {
     // Retrieve idpConfig from remote when auth references an external namespace
     authNamespace = application.config.auth.name;
-    const idpConfigs = await fetchAll(async (pageToken) => {
+    const idpConfigs = await fetchAll(async (pageToken, maxPageSize) => {
       try {
         const { idpConfigs, nextPageToken } = await client.listAuthIDPConfigs({
           workspaceId,
           namespaceName: authNamespace!,
           pageToken,
+          pageSize: maxPageSize,
         });
         return [idpConfigs, nextPageToken];
       } catch (error) {

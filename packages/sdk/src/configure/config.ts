@@ -20,6 +20,7 @@ export function defineConfig<
 
 /**
  * Define generators to be used with the Tailor SDK.
+ * @deprecated Use definePlugins() with generation hooks (onTypeLoaded, generate, etc.) instead.
  * @param configs - Generator configurations
  * @returns Generator configurations as given
  */
@@ -37,7 +38,7 @@ export function defineGenerators(...configs: GeneratorConfig[]) {
  * @returns Plugin configurations as given
  */
 /* @__NO_SIDE_EFFECTS__ */
-// eslint-disable-next-line jsdoc/require-jsdoc
-export function definePlugins(...configs: Plugin[]) {
+// eslint-disable-next-line jsdoc/require-jsdoc, @typescript-eslint/no-explicit-any
+export function definePlugins(...configs: Plugin<any, any>[]) {
   return configs;
 }

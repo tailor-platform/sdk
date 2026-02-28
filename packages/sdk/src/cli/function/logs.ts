@@ -156,10 +156,11 @@ export const logsCommand = defineCommand({
         printFunctionExecutionDetail(detail);
       }
     } else {
-      const executions = await fetchAll(async (pageToken) => {
+      const executions = await fetchAll(async (pageToken, maxPageSize) => {
         const { executions, nextPageToken } = await client.listFunctionExecutions({
           workspaceId,
           pageToken,
+          pageSize: maxPageSize,
         });
         return [executions, nextPageToken];
       });
