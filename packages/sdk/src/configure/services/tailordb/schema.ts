@@ -734,7 +734,9 @@ function float<const Opt extends FieldOptions>(options?: Opt) {
   return createField("float", options);
 }
 
-type DecimalFieldOptions = FieldOptions & { scale?: number };
+interface DecimalFieldOptions extends FieldOptions {
+  scale?: number;
+}
 
 /**
  * Create a decimal field (stored as string for precision).
