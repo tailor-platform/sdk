@@ -205,12 +205,12 @@ type RejectHooksWithSerial<D extends Record<string, FieldEntry>> = {
 
 // Rejects nested objects inside object descriptors (matching ExcludeNestedDBFields in fluent API).
 type RejectNestedSubFields<F extends Record<string, FieldEntry>> = {
-  [K in keyof F]: F[K] extends { kind: "object" }
+  [K in keyof F]: F[K] extends
+    | { kind: "object" }
+    // oxlint-disable-next-line no-explicit-any -- loose match for nested TailorDBField
+    | TailorDBField<{ type: "nested"; array: boolean }, any>
     ? never
-    : // oxlint-disable-next-line no-explicit-any -- loose match for nested TailorDBField
-      F[K] extends TailorDBField<{ type: "nested"; array: boolean }, any>
-      ? never
-      : F[K];
+    : F[K];
 };
 
 type RejectNestedInObject<D extends Record<string, FieldEntry>> = {
