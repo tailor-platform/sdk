@@ -266,6 +266,15 @@ type ValidateRelationKeys<D extends Record<string, FieldEntry>> = {
     : D[K];
 };
 
+// Combined constraint: all descriptor-level validations applied at the createType call site.
+type ValidatedDescriptors<D extends Record<string, FieldEntry>> = D &
+  RejectArrayCombinations<D> &
+  RejectHooksWithSerial<D> &
+  RejectUniqueOnManyRelation<D> &
+  RejectNestedInObject<D> &
+  ValidateHookTypes<D> &
+  ValidateRelationKeys<D>;
+
 type CreateTypeOptions<
   FieldNames extends string = string,
   // oxlint-disable-next-line no-explicit-any
@@ -282,11 +291,8 @@ type CreateTypeOptions<
 };
 
 function isPassthroughField(entry: FieldEntry): entry is TailorAnyDBField {
-  return (
-    "_metadata" in entry &&
-    "type" in entry &&
-    typeof (entry as TailorAnyDBField).clone === "function"
-  );
+  // All FieldDescriptor variants have `kind`; TailorAnyDBField does not.
+  return !("kind" in entry);
 }
 
 function resolveField(entry: FieldEntry): TailorAnyDBField {
@@ -410,13 +416,7 @@ type AllFields<D extends Record<string, FieldEntry>> = { id: IdField } & Resolve
  */
 export function createType<const D extends { id?: never } & Record<string, FieldEntry>>(
   name: string | [string, string],
-  descriptors: D &
-    RejectArrayCombinations<D> &
-    RejectHooksWithSerial<D> &
-    RejectUniqueOnManyRelation<D> &
-    RejectNestedInObject<D> &
-    ValidateHookTypes<D> &
-    ValidateRelationKeys<D>,
+  descriptors: ValidatedDescriptors<D>,
   options?: CreateTypeOptions<keyof AllFields<D> & string, AllFields<D>>,
 ): TailorDBType<AllFields<D>> {
   const [typeName, pluralForm] = Array.isArray(name) ? name : [name, options?.pluralForm];
