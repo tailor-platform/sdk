@@ -404,8 +404,7 @@ export function createType<const D extends { id?: never } & Record<string, Field
     ValidateRelationKeys<D>,
   options?: CreateTypeOptions<keyof AllFields<D> & string, AllFields<D>>,
 ): TailorDBType<AllFields<D>> {
-  const typeName = Array.isArray(name) ? name[0] : name;
-  const pluralForm = Array.isArray(name) ? name[1] : options?.pluralForm;
+  const [typeName, pluralForm] = Array.isArray(name) ? name : [name, options?.pluralForm];
   const fields = {
     id: idField.clone(),
     ...resolveFieldMap(descriptors),
