@@ -1,0 +1,20 @@
+{
+  "id": "004",
+  "name": "workflow-data-pipeline",
+  "difficulty": "hard",
+  "category": "workflow",
+  "scoring": {
+    "generate": 15,
+    "typecheck": 20,
+    "tests": 140
+  },
+  "files": {
+    "implement": [
+      "workflows/validateInput.ts",
+      "workflows/enrichData.ts",
+      "workflows/processPayment.ts",
+      "workflows/orchestrate.ts"
+    ],
+    "scaffold": ["tailor.config.ts"]
+  }
+}
