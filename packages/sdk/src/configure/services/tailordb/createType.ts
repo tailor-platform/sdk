@@ -13,6 +13,7 @@ import type { InferredAttributeMap } from "@/configure/types";
 import type { InferFieldsOutput, output } from "@/configure/types/helpers";
 import type { TailorFieldType, TailorToTs } from "@/configure/types/types";
 import type { FieldValidateInput, ValidateConfig } from "@/configure/types/validation";
+import type { PluginAttachment } from "@/parser/plugin-config/types";
 import type { RelationType } from "@/parser/service/tailordb/types";
 
 type CommonFieldOptions = {
@@ -60,11 +61,8 @@ type UuidDescriptor = CommonFieldOptions &
       toward: {
         type: TailorAnyDBType | "self";
         as?: string;
-        // Accepted trade-off: `key` is typed as plain `string` rather than
-        // `keyof T["fields"]` (as in the fluent API's RelationConfig<S, T>).
-        // Constraining it would require making the entire FieldDescriptor union
-        // generic on the relation target type, which conflicts with the
-        // object-literal API's simplicity goal.
+        // Typed as plain `string` here (not `keyof T["fields"]`); validated
+        // at the createType call site via `ValidateRelationKeys<D>`.
         key?: string;
       };
       backward?: string;
@@ -147,14 +145,26 @@ type DescriptorOutput<D extends FieldDescriptor> = ApplyArrayAndOptional<
 type DescriptorDefined<D extends FieldDescriptor> = {
   type: D["kind"] extends keyof KindToFieldType ? KindToFieldType[D["kind"]] : TailorFieldType;
   array: D extends { array: true } ? true : false;
-} & (D extends { hooks: object } ? { hooks: { create: boolean; update: boolean } } : unknown) &
+} & (D extends { hooks: infer H }
+  ? H extends object
+    ? {
+        hooks: {
+          create: H extends { create: unknown } ? true : false;
+          update: H extends { update: unknown } ? true : false;
+        };
+        serial: false;
+      }
+    : unknown
+  : unknown) &
   (D extends { validate: object } ? { validate: true } : unknown) &
   (D extends { unique: true }
     ? { unique: true; index: true }
     : D extends { index: true }
       ? { index: true }
       : unknown) &
-  (D extends { serial: object } ? { serial: true } : unknown) &
+  (D extends { serial: object }
+    ? { serial: true; hooks: { create: false; update: false } }
+    : unknown) &
   (D extends { vector: true } ? { vector: true } : unknown) &
   (D extends { kind: "uuid"; relation: object }
     ? D extends { relation: { type: "oneToOne" | "1-1" } }
@@ -182,6 +192,50 @@ type RejectArrayIndexed<D extends Record<string, FieldEntry>> = {
       : D[K];
 };
 
+// Rejects descriptors that combine hooks and serial (mutually exclusive in fluent API).
+// The `kind: string` guard excludes TailorDBField instances whose hooks()/serial() methods extend `object`.
+type RejectHooksWithSerial<D extends Record<string, FieldEntry>> = {
+  [K in keyof D]: D[K] extends { kind: string; hooks: object; serial: object } ? never : D[K];
+};
+
+// Rejects nested objects inside object descriptors (matching ExcludeNestedDBFields in fluent API).
+type RejectNestedSubFields<F extends Record<string, FieldEntry>> = {
+  [K in keyof F]: F[K] extends { kind: "object" }
+    ? never
+    : // oxlint-disable-next-line no-explicit-any -- loose match for nested TailorDBField
+      F[K] extends TailorDBField<{ type: "nested"; array: boolean }, any>
+      ? never
+      : F[K];
+};
+
+type RejectNestedInObject<D extends Record<string, FieldEntry>> = {
+  [K in keyof D]: D[K] extends { kind: "object"; fields: infer F }
+    ? F extends Record<string, FieldEntry>
+      ? D[K] & { fields: RejectNestedSubFields<F> }
+      : D[K]
+    : D[K];
+};
+
+// Validates relation key against the target type's fields at the createType call site.
+type ValidateRelationKeys<D extends Record<string, FieldEntry>> = {
+  [K in keyof D]: D[K] extends {
+    kind: "uuid";
+    relation: { toward: { type: infer T; key: infer Key } };
+  }
+    ? Key extends string
+      ? T extends TailorAnyDBType
+        ? Key extends keyof T["fields"] & string
+          ? D[K]
+          : never
+        : T extends "self"
+          ? Key extends (keyof D & string) | "id"
+            ? D[K]
+            : never
+          : D[K]
+      : D[K]
+    : D[K];
+};
+
 type CreateTypeOptions<
   FieldNames extends string = string,
   // oxlint-disable-next-line no-explicit-any
@@ -194,6 +248,7 @@ type CreateTypeOptions<
   files?: Record<string, string> & Partial<Record<FieldNames, never>>;
   permission?: TailorTypePermission<InferredAttributeMap, output<TailorDBType<Fields>>>;
   gqlPermission?: TailorTypeGqlPermission;
+  plugins?: PluginAttachment[];
 };
 
 function isPassthroughField(entry: FieldEntry): entry is TailorAnyDBField {
@@ -313,7 +368,11 @@ type IdField = typeof idField;
  */
 export function createType<const D extends Record<string, FieldEntry> & { id?: never }>(
   name: string | [string, string],
-  descriptors: D & RejectArrayIndexed<D>,
+  descriptors: D &
+    RejectArrayIndexed<D> &
+    RejectHooksWithSerial<D> &
+    RejectNestedInObject<D> &
+    ValidateRelationKeys<D>,
   options?: CreateTypeOptions<keyof AllFields<D> & string, AllFields<D>>,
 ): TailorDBType<AllFields<D>> {
   const typeName = Array.isArray(name) ? name[0] : name;
@@ -342,6 +401,12 @@ export function createType<const D extends Record<string, FieldEntry> & { id?: n
   }
   if (options?.gqlPermission) {
     dbType.gqlPermission(options.gqlPermission);
+  }
+  if (options?.plugins) {
+    for (const { pluginId, config } of options.plugins) {
+      // oxlint-disable-next-line no-explicit-any -- PluginAttachment.config is unknown; bypass PluginConfigs generic constraint
+      dbType.plugin({ [pluginId]: config } as any);
+    }
   }
 
   return dbType;

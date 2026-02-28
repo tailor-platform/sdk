@@ -576,13 +576,12 @@ describe("createType parse tests", () => {
 });
 
 describe("createType clone preservation", () => {
-  it("clone preserves hooks, validate, serial, and unique metadata", () => {
+  it("clone preserves hooks, validate, and unique metadata", () => {
     const result = createType("Test", {
       code: {
         kind: "string",
         hooks: { create: () => "default" },
         validate: [({ value }) => (value as string).length > 0, "Must not be empty"],
-        serial: { start: 1, format: "CODE-%05d" },
         unique: true,
       },
     });
@@ -593,6 +592,21 @@ describe("createType clone preservation", () => {
     expect(cloned.metadata.hooks!.create).toBeDefined();
     expect(cloned.metadata.validate).toBeDefined();
     expect(cloned.metadata.validate!.length).toBe(1);
+    expect(cloned.metadata.unique).toBe(true);
+    expect(cloned.metadata.index).toBe(true);
+  });
+
+  it("clone preserves serial metadata", () => {
+    const result = createType("Test", {
+      code: {
+        kind: "string",
+        serial: { start: 1, format: "CODE-%05d" },
+        unique: true,
+      },
+    });
+
+    const cloned = result.fields.code.clone();
+
     expect(cloned.metadata.serial).toEqual({ start: 1, format: "CODE-%05d" });
     expect(cloned.metadata.unique).toBe(true);
     expect(cloned.metadata.index).toBe(true);
@@ -670,6 +684,32 @@ describe("createType type-level operations", () => {
     });
 
     expect(result.fields.name.metadata.validate).toBeDefined();
+  });
+});
+
+describe("createType hooks type narrowing", () => {
+  it("create-only hook infers { create: true; update: false }", () => {
+    const result = createType("Test", {
+      name: { kind: "string", hooks: { create: () => "default" } },
+    });
+    type NameDefined = (typeof result.fields.name)["_defined"];
+    expectTypeOf<NameDefined["hooks"]>().toEqualTypeOf<{ create: true; update: false }>();
+  });
+
+  it("both hooks infer { create: true; update: true }", () => {
+    const result = createType("Test", {
+      name: { kind: "string", hooks: { create: () => "default", update: () => "updated" } },
+    });
+    type NameDefined = (typeof result.fields.name)["_defined"];
+    expectTypeOf<NameDefined["hooks"]>().toEqualTypeOf<{ create: true; update: true }>();
+  });
+
+  it("update-only hook infers { create: false; update: true }", () => {
+    const result = createType("Test", {
+      name: { kind: "string", hooks: { update: () => "updated" } },
+    });
+    type NameDefined = (typeof result.fields.name)["_defined"];
+    expectTypeOf<NameDefined["hooks"]>().toEqualTypeOf<{ create: false; update: true }>();
   });
 });
 
@@ -801,5 +841,174 @@ describe("createType array field guards", () => {
     });
     expect(result.fields.tags.metadata.index).toBeUndefined();
     expect(result.fields.tags.metadata.unique).toBeUndefined();
+  });
+});
+
+describe("createType hooks+serial mutual exclusion", () => {
+  it("hooks and serial cannot be combined on the same descriptor", () => {
+    createType("Test", {
+      // @ts-expect-error hooks and serial are mutually exclusive
+      code: { kind: "string", hooks: { create: () => "default" }, serial: { start: 1 } },
+    });
+  });
+
+  it("hooks descriptor sets serial: false in defined", () => {
+    const result = createType("Test", {
+      name: { kind: "string", hooks: { create: () => "default" } },
+    });
+    type NameDefined = (typeof result.fields.name)["_defined"];
+    expectTypeOf<NameDefined["serial"]>().toEqualTypeOf<false>();
+  });
+
+  it("serial descriptor sets hooks: { create: false; update: false } in defined", () => {
+    const result = createType("Test", {
+      code: { kind: "string", serial: { start: 1 } },
+    });
+    type CodeDefined = (typeof result.fields.code)["_defined"];
+    expectTypeOf<CodeDefined["hooks"]>().toEqualTypeOf<{ create: false; update: false }>();
+  });
+});
+
+describe("createType nested object guards", () => {
+  it("nested object descriptor inside object descriptor causes type error", () => {
+    createType("Test", {
+      address: {
+        kind: "object",
+        fields: {
+          street: { kind: "string" },
+          // @ts-expect-error Nested object inside object is not allowed
+          location: { kind: "object", fields: { lat: { kind: "float" }, lng: { kind: "float" } } },
+        },
+      },
+    });
+  });
+
+  it("nested db.object() inside object descriptor causes type error", () => {
+    createType("Test", {
+      address: {
+        kind: "object",
+        fields: {
+          street: { kind: "string" },
+          // @ts-expect-error Nested db.object() inside object descriptor is not allowed
+          location: db.object({ lat: db.float(), lng: db.float() }),
+        },
+      },
+    });
+  });
+
+  it("flat object descriptor is allowed", () => {
+    const result = createType("Test", {
+      address: {
+        kind: "object",
+        fields: {
+          street: { kind: "string" },
+          city: { kind: "string" },
+        },
+      },
+    });
+    expect(result.fields.address.type).toBe("nested");
+  });
+});
+
+describe("createType plugins option", () => {
+  it("plugins are set on the type via options", () => {
+    const result = createType(
+      "Test",
+      { name: { kind: "string" } },
+      {
+        plugins: [{ pluginId: "test-plugin", config: { enabled: true } }],
+      },
+    );
+    expect(result.plugins).toEqual([{ pluginId: "test-plugin", config: { enabled: true } }]);
+  });
+
+  it("multiple plugins are set in order", () => {
+    const result = createType(
+      "Test",
+      { name: { kind: "string" } },
+      {
+        plugins: [
+          { pluginId: "plugin-a", config: { a: 1 } },
+          { pluginId: "plugin-b", config: { b: 2 } },
+        ],
+      },
+    );
+    expect(result.plugins).toEqual([
+      { pluginId: "plugin-a", config: { a: 1 } },
+      { pluginId: "plugin-b", config: { b: 2 } },
+    ]);
+  });
+});
+
+describe("createType relation key validation", () => {
+  it("invalid relation key against target type causes type error", () => {
+    const Target = createType("Target", { name: { kind: "string" } });
+    createType("Test", {
+      // @ts-expect-error 'nonExistent' does not exist on Target fields
+      targetId: {
+        kind: "uuid",
+        relation: {
+          type: "n-1",
+          toward: { type: Target, key: "nonExistent" },
+        },
+      },
+    });
+  });
+
+  it("valid relation key matching target field name is accepted", () => {
+    const Target = createType("Target", { name: { kind: "string" } });
+    const result = createType("Test", {
+      targetId: {
+        kind: "uuid",
+        relation: {
+          type: "n-1",
+          toward: { type: Target, key: "id" },
+        },
+      },
+    });
+    expect(result.fields.targetId.rawRelation).toBeDefined();
+  });
+
+  it("invalid self-referencing relation key causes type error", () => {
+    createType("Test", {
+      // @ts-expect-error 'nonExistent' does not exist on own fields
+      parentId: {
+        kind: "uuid",
+        optional: true,
+        relation: {
+          type: "n-1",
+          toward: { type: "self" as const, key: "nonExistent" },
+        },
+      },
+    });
+  });
+
+  it("valid self-referencing relation key is accepted", () => {
+    const result = createType("Test", {
+      name: { kind: "string" },
+      parentId: {
+        kind: "uuid",
+        optional: true,
+        relation: {
+          type: "n-1",
+          toward: { type: "self" as const, key: "id" },
+        },
+      },
+    });
+    expect(result.fields.parentId.rawRelation).toBeDefined();
+  });
+
+  it("relation without key is accepted", () => {
+    const Target = createType("Target", { name: { kind: "string" } });
+    const result = createType("Test", {
+      targetId: {
+        kind: "uuid",
+        relation: {
+          type: "n-1",
+          toward: { type: Target },
+        },
+      },
+    });
+    expect(result.fields.targetId.rawRelation).toBeDefined();
   });
 });
