@@ -298,7 +298,12 @@ function buildField(descriptor: FieldDescriptor): TailorAnyDBField {
     field = (field as any).typeName(descriptor.typeName);
   }
 
-  if (descriptor.kind !== "object" && descriptor.array !== true) {
+  // Object descriptors only support description and typeName; skip indexable/hookable options.
+  if (descriptor.kind === "object") {
+    return field;
+  }
+
+  if (descriptor.array !== true) {
     if (descriptor.unique === true) {
       field = field.unique();
     } else if (descriptor.index === true) {
@@ -306,11 +311,11 @@ function buildField(descriptor: FieldDescriptor): TailorAnyDBField {
     }
   }
 
-  if (descriptor.kind !== "object" && descriptor.hooks !== undefined) {
+  if (descriptor.hooks !== undefined) {
     field = field.hooks(descriptor.hooks);
   }
 
-  if (descriptor.kind !== "object" && descriptor.validate !== undefined) {
+  if (descriptor.validate !== undefined) {
     if (Array.isArray(descriptor.validate) && !isValidateConfig(descriptor.validate)) {
       field = field.validate(...descriptor.validate);
     } else {
@@ -371,10 +376,9 @@ export function createType<const D extends Record<string, FieldEntry>>(
 ): TailorDBType<ResolvedFieldMap<D>> {
   const typeName = Array.isArray(name) ? name[0] : name;
   const pluralForm = Array.isArray(name) ? name[1] : options?.pluralForm;
-  const fields = resolveFieldMap(descriptors);
-  const allFields = fields as ResolvedFieldMap<D>;
+  const fields = resolveFieldMap(descriptors) as ResolvedFieldMap<D>;
 
-  const dbType = createTailorDBType(typeName, allFields, {
+  const dbType = createTailorDBType(typeName, fields, {
     pluralForm,
     description: options?.description,
   });
