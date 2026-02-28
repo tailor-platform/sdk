@@ -1079,3 +1079,13 @@ describe("createType hook type validation", () => {
     expect(result.fields.createdAt.metadata.hooks).toBeDefined();
   });
 });
+
+describe("createType id field guard", () => {
+  it("defining id field causes type error", () => {
+    createType("Test", {
+      // @ts-expect-error id is a system field and cannot be redefined
+      id: { kind: "uuid" },
+      name: { kind: "string" },
+    });
+  });
+});

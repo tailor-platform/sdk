@@ -76,6 +76,10 @@ type EnumDescriptor<V extends AllowedValues = AllowedValues> = CommonFieldOption
     typeName?: string;
   };
 
+// Nested object sub-fields bypass top-level constraint types (RejectArray*, ValidateHookTypes, etc.)
+// because recursive mapped-type constraints would add significant complexity. This is a shared gap
+// with the fluent API (db.object() sub-fields are also unconstrained). Invalid nested combinations
+// are caught at deployment time by the platform.
 type ObjectDescriptor = CommonFieldOptions & {
   kind: "object";
   fields: Record<string, FieldEntry>;
@@ -385,7 +389,7 @@ function buildField(descriptor: FieldDescriptor): TailorAnyDBField {
  * });
  * export type user = typeof user;
  */
-export function createType<const D extends Record<string, FieldEntry>>(
+export function createType<const D extends { id?: never } & Record<string, FieldEntry>>(
   name: string | [string, string],
   descriptors: D &
     RejectArrayIndexed<D> &
