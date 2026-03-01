@@ -119,9 +119,11 @@ export const commonArgs = {
   "env-file": arg(z.string().optional(), {
     alias: "e",
     description: "Path to the environment file (error if not found)",
+    completion: { type: "file" },
   }),
   "env-file-if-exists": arg(z.string().optional(), {
     description: "Path to the environment file (ignored if not found)",
+    completion: { type: "file" },
   }),
   verbose: arg(z.boolean().default(false), {
     description: "Enable verbose logging",
@@ -135,10 +137,12 @@ export const workspaceArgs = {
   "workspace-id": arg(z.string().optional(), {
     alias: "w",
     description: "Workspace ID",
+    completion: { type: "none" },
   }),
   profile: arg(z.string().optional(), {
     alias: "p",
     description: "Workspace profile",
+    completion: { type: "none" },
   }),
 } satisfies ArgsShape;
 
@@ -150,6 +154,7 @@ export const deploymentArgs = {
   config: arg(z.string().default("tailor.config.ts"), {
     alias: "c",
     description: "Path to SDK config file",
+    completion: { type: "file", extensions: ["ts"] },
   }),
 } satisfies ArgsShape;
 

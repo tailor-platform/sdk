@@ -242,6 +242,7 @@ export const erdExportCommand = defineCommand({
       alias: "o",
       description:
         "Output directory path for tbls-compatible ERD JSON (writes to `<outputDir>/<namespace>/schema.json`)",
+      completion: { type: "directory" },
     }),
   }),
   run: withCommonArgs(async (args) => {

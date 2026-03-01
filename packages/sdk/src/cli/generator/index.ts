@@ -805,6 +805,7 @@ export const generateCommand = defineCommand({
     config: arg(z.string().default("tailor.config.ts"), {
       alias: "c",
       description: "Path to SDK config file",
+      completion: { type: "file", extensions: ["ts"] },
     }),
     watch: arg(z.boolean().default(false), {
       alias: "W",
