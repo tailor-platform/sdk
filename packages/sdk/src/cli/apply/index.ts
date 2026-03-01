@@ -1,8 +1,10 @@
 import * as fs from "node:fs";
+import { findUpSync } from "find-up-simple";
 import * as path from "pathe";
 import { defineCommand, arg } from "politty";
 import { z } from "zod";
 import { loadApplication, type Application, type LoadApplicationResult } from "@/cli/application";
+import { hashFile } from "@/cli/cache/hasher";
 import { createCacheManager } from "@/cli/cache/manager";
 import { loadConfig } from "@/cli/config-loader";
 import { generateUserTypes } from "@/cli/type-generator";
@@ -82,10 +84,17 @@ export async function apply(options?: ApplyOptions) {
     fs.rmSync(cacheDir, { recursive: true, force: true });
     logger.info("Bundle cache cleaned");
   }
+  const configDir = path.dirname(config.path);
+  const lockfilePath =
+    findUpSync("pnpm-lock.yaml", { cwd: configDir }) ??
+    findUpSync("package-lock.json", { cwd: configDir }) ??
+    findUpSync("yarn.lock", { cwd: configDir }) ??
+    findUpSync("bun.lock", { cwd: configDir });
   const cacheManager = createCacheManager({
     enabled: !noCache,
     cacheDir,
     sdkVersion: packageJson.version ?? "unknown",
+    lockfileHash: lockfilePath ? hashFile(lockfilePath) : undefined,
   });
 
   // Initialize plugin manager if plugins are provided

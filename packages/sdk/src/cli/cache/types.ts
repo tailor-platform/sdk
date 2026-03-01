@@ -16,6 +16,7 @@ const cacheEntrySchema = z.object({
 const cacheManifestSchema = z.object({
   version: z.literal(1),
   sdkVersion: z.string(),
+  lockfileHash: z.string().optional(),
   entries: z.record(z.string(), cacheEntrySchema),
 });
 

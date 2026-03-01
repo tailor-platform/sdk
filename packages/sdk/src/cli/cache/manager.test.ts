@@ -233,5 +233,119 @@ describe("createCacheManager", () => {
       // Debug message should have been logged
       expect(logger.debug).toHaveBeenCalled();
     });
+
+    test("cache is cleaned when lockfileHash differs", async () => {
+      const { logger } = await import("@/cli/utils/logger");
+
+      // Pre-populate cache with a manifest that has a lockfileHash
+      fs.mkdirSync(path.join(cacheDir, "bundles"), { recursive: true });
+      const manifest = {
+        version: 1,
+        sdkVersion: "1.0.0",
+        lockfileHash: "oldhash",
+        entries: {
+          "resolver:test": {
+            kind: "bundle",
+            inputHash: "abc",
+            dependencyPaths: [],
+            outputFiles: [],
+            createdAt: "2025-01-01T00:00:00.000Z",
+          },
+        },
+      };
+      fs.writeFileSync(path.join(cacheDir, "manifest.json"), JSON.stringify(manifest));
+      fs.writeFileSync(path.join(cacheDir, "bundles", "resolver:test.js"), "cached output");
+
+      // Create manager with the same sdkVersion but different lockfileHash
+      createCacheManager({
+        enabled: true,
+        cacheDir,
+        sdkVersion: "1.0.0",
+        lockfileHash: "newhash",
+      });
+
+      // Cache should be wiped
+      expect(fs.existsSync(path.join(cacheDir, "bundles", "resolver:test.js"))).toBe(false);
+
+      // Debug message should have been logged
+      expect(logger.debug).toHaveBeenCalledWith("Cache invalidated: lockfile changed");
+    });
+
+    test("cache is preserved when lockfileHash matches", () => {
+      // Pre-populate cache with a manifest that has a lockfileHash
+      fs.mkdirSync(path.join(cacheDir, "bundles"), { recursive: true });
+      const manifest = {
+        version: 1,
+        sdkVersion: "1.0.0",
+        lockfileHash: "samehash",
+        entries: {
+          "resolver:test": {
+            kind: "bundle",
+            inputHash: "abc",
+            dependencyPaths: [],
+            outputFiles: [],
+            createdAt: "2025-01-01T00:00:00.000Z",
+          },
+        },
+      };
+      fs.writeFileSync(path.join(cacheDir, "manifest.json"), JSON.stringify(manifest));
+      fs.writeFileSync(path.join(cacheDir, "bundles", "resolver:test.js"), "cached output");
+
+      // Create manager with matching sdkVersion and lockfileHash
+      createCacheManager({
+        enabled: true,
+        cacheDir,
+        sdkVersion: "1.0.0",
+        lockfileHash: "samehash",
+      });
+
+      // Cache should still exist
+      expect(fs.existsSync(path.join(cacheDir, "bundles", "resolver:test.js"))).toBe(true);
+    });
+
+    test("cache is not invalidated when lockfileHash is not provided", () => {
+      // Pre-populate cache without lockfileHash
+      fs.mkdirSync(path.join(cacheDir, "bundles"), { recursive: true });
+      const manifest = {
+        version: 1,
+        sdkVersion: "1.0.0",
+        entries: {
+          "resolver:test": {
+            kind: "bundle",
+            inputHash: "abc",
+            dependencyPaths: [],
+            outputFiles: [],
+            createdAt: "2025-01-01T00:00:00.000Z",
+          },
+        },
+      };
+      fs.writeFileSync(path.join(cacheDir, "manifest.json"), JSON.stringify(manifest));
+      fs.writeFileSync(path.join(cacheDir, "bundles", "resolver:test.js"), "cached output");
+
+      // Create manager without lockfileHash
+      createCacheManager({
+        enabled: true,
+        cacheDir,
+        sdkVersion: "1.0.0",
+      });
+
+      // Cache should still exist (no lockfileHash provided means skip check)
+      expect(fs.existsSync(path.join(cacheDir, "bundles", "resolver:test.js"))).toBe(true);
+    });
+
+    test("finalize persists lockfileHash in manifest", () => {
+      const manager = createCacheManager({
+        enabled: true,
+        cacheDir,
+        sdkVersion: "2.5.0",
+        lockfileHash: "abc123",
+      });
+
+      manager.finalize();
+
+      const manifestPath = path.join(cacheDir, "manifest.json");
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
+      expect(manifest.lockfileHash).toBe("abc123");
+    });
   });
 });

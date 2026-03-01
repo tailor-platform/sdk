@@ -10,8 +10,7 @@ type DepCollectorResult = {
  * The plugin is purely observational and does not modify any code or behavior.
  * Collected paths exclude node_modules and generated entry files.
  * node_modules changes (package upgrades) are not tracked per-bundle;
- * SDK version changes invalidate the entire cache, and users can run
- * `--clean-cache` after other dependency upgrades.
+ * lockfile hash and SDK version changes invalidate the entire cache.
  * @returns An object containing the plugin and a getResult function that returns sorted, deduplicated paths
  */
 export function createDepCollectorPlugin(): DepCollectorResult {

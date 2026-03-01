@@ -14,6 +14,8 @@ type CacheManagerOptions = {
   cacheDir?: string;
   /** Current SDK version for cache invalidation on upgrade. */
   sdkVersion: string;
+  /** Hash of the lockfile for cache invalidation on dependency changes. */
+  lockfileHash?: string;
 };
 
 /**
@@ -55,13 +57,18 @@ function createCacheManager(options: CacheManagerOptions): CacheManager {
 
   const store = createCacheStore({ cacheDir });
 
-  // Load existing manifest and check SDK version for cache invalidation
+  // Load existing manifest and check SDK version / lockfile hash for cache invalidation
   const existingManifest = store.loadManifest();
-  if (existingManifest && existingManifest.sdkVersion !== options.sdkVersion) {
-    logger.debug(
-      `Cache invalidated: SDK version changed from ${existingManifest.sdkVersion} to ${options.sdkVersion}`,
-    );
-    store.clean();
+  if (existingManifest) {
+    if (existingManifest.sdkVersion !== options.sdkVersion) {
+      logger.debug(
+        `Cache invalidated: SDK version changed from ${existingManifest.sdkVersion} to ${options.sdkVersion}`,
+      );
+      store.clean();
+    } else if (options.lockfileHash && existingManifest.lockfileHash !== options.lockfileHash) {
+      logger.debug("Cache invalidated: lockfile changed");
+      store.clean();
+    }
   }
 
   const bundleCache = createBundleCache(store);
@@ -74,9 +81,11 @@ function createCacheManager(options: CacheManagerOptions): CacheManager {
       const manifest = store.getCurrentManifest() ?? {
         version: 1 as const,
         sdkVersion: options.sdkVersion,
+        lockfileHash: options.lockfileHash,
         entries: {},
       };
       manifest.sdkVersion = options.sdkVersion;
+      manifest.lockfileHash = options.lockfileHash;
       store.saveManifest(manifest);
     },
   };
