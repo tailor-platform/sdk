@@ -1,6 +1,5 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { enableInlineSourcemap } from "@/cli/bundler/inline-sourcemap";
 import { logger, styles } from "@/cli/utils/logger";
 import { createDepCollectorPlugin } from "./dep-collector-plugin";
 import { hashContent, hashFile, hashFiles } from "./hasher";
@@ -51,6 +50,7 @@ type ComputeBundlerContextHashParams = {
   sourceFile: string;
   serializedTriggerContext: string;
   tsconfig?: string;
+  inlineSourcemap?: boolean;
   prefix?: string;
 };
 
@@ -64,13 +64,13 @@ type ComputeBundlerContextHashParams = {
  * @returns SHA-256 hex digest of the combined context
  */
 function computeBundlerContextHash(params: ComputeBundlerContextHashParams): string {
-  const { sourceFile, serializedTriggerContext, tsconfig, prefix } = params;
+  const { sourceFile, serializedTriggerContext, tsconfig, inlineSourcemap, prefix } = params;
   return hashContent(
     (prefix ?? "") +
       path.resolve(sourceFile) +
       serializedTriggerContext +
       (tsconfig ? hashFile(tsconfig) : "") +
-      String(enableInlineSourcemap),
+      String(inlineSourcemap ?? false),
   );
 }
 

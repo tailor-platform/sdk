@@ -506,10 +506,6 @@ describe("withCache", () => {
   });
 });
 
-vi.mock("@/cli/bundler/inline-sourcemap", () => ({
-  enableInlineSourcemap: false,
-}));
-
 describe("computeBundlerContextHash", () => {
   let tmpDir: string;
 

@@ -4,7 +4,6 @@ import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { loadFilesWithIgnores, type FileLoadConfig } from "@/cli/application/file-loader";
-import { enableInlineSourcemap } from "@/cli/bundler/inline-sourcemap";
 import { removeStaleEntryFiles } from "@/cli/bundler/stale-cleanup";
 import { computeBundlerContextHash, withCache, type BundleCache } from "@/cli/cache/bundle-cache";
 import { getDistDir } from "@/cli/utils/dist-dir";
@@ -33,6 +32,8 @@ export interface BundleExecutorsOptions {
   additionalFiles?: string[];
   /** Optional bundle cache for skipping unchanged builds */
   cache?: BundleCache;
+  /** Whether to enable inline sourcemaps */
+  inlineSourcemap?: boolean;
 }
 
 /**
@@ -45,7 +46,7 @@ export interface BundleExecutorsOptions {
  * @returns Promise that resolves when bundling completes
  */
 export async function bundleExecutors(options: BundleExecutorsOptions): Promise<void> {
-  const { config, triggerContext, additionalFiles = [], cache } = options;
+  const { config, triggerContext, additionalFiles = [], cache, inlineSourcemap } = options;
   const configFiles = loadFilesWithIgnores(config);
   const files = [...configFiles, ...additionalFiles];
   if (files.length === 0) {
@@ -103,7 +104,7 @@ export async function bundleExecutors(options: BundleExecutorsOptions): Promise<
   // Process each executor
   await Promise.all(
     executors.map((executor) =>
-      bundleSingleExecutor(executor, outputDir, tsconfig, triggerContext, cache),
+      bundleSingleExecutor(executor, outputDir, tsconfig, triggerContext, cache, inlineSourcemap),
     ),
   );
 
@@ -116,6 +117,7 @@ async function bundleSingleExecutor(
   tsconfig: string | undefined,
   triggerContext?: TriggerContext,
   cache?: BundleCache,
+  inlineSourcemap?: boolean,
 ): Promise<void> {
   const outputPath = path.join(outputDir, `${executor.name}.js`);
   const serializedTriggerContext = serializeTriggerContext(triggerContext);
@@ -124,6 +126,7 @@ async function bundleSingleExecutor(
     sourceFile: executor.sourceFile,
     serializedTriggerContext,
     tsconfig,
+    inlineSourcemap,
   });
 
   await withCache({
@@ -158,8 +161,8 @@ async function bundleSingleExecutor(
           output: {
             file: outputPath,
             format: "esm",
-            sourcemap: enableInlineSourcemap ? "inline" : true,
-            minify: enableInlineSourcemap
+            sourcemap: inlineSourcemap ? "inline" : true,
+            minify: inlineSourcemap
               ? {
                   mangle: {
                     keepNames: true,

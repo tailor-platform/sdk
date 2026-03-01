@@ -4,7 +4,6 @@ import { parseSync } from "oxc-parser";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
-import { enableInlineSourcemap } from "@/cli/bundler/inline-sourcemap";
 import { tailorUserMap } from "@/cli/bundler/runtime-args";
 import { computeBundlerContextHash, withCache, type BundleCache } from "@/cli/cache/bundle-cache";
 import { getDistDir } from "@/cli/utils/dist-dir";
@@ -39,6 +38,7 @@ export interface BundleWorkflowJobsResult {
  * @param env - Environment variables to inject
  * @param triggerContext - Trigger context for transformations
  * @param cache - Optional bundle cache for skipping unchanged builds
+ * @param inlineSourcemap - Whether to enable inline sourcemaps
  * @returns Workflow job bundling result
  */
 export async function bundleWorkflowJobs(
@@ -47,6 +47,7 @@ export async function bundleWorkflowJobs(
   env: Record<string, string | number | boolean> = {},
   triggerContext?: TriggerContext,
   cache?: BundleCache,
+  inlineSourcemap?: boolean,
 ): Promise<BundleWorkflowJobsResult> {
   if (allJobs.length === 0) {
     logger.warn("No workflow jobs to bundle");
@@ -86,7 +87,16 @@ export async function bundleWorkflowJobs(
   // Process each job
   await Promise.all(
     usedJobs.map((job) =>
-      bundleSingleJob(job, usedJobs, outputDir, tsconfig, env, triggerContext, cache),
+      bundleSingleJob(
+        job,
+        usedJobs,
+        outputDir,
+        tsconfig,
+        env,
+        triggerContext,
+        cache,
+        inlineSourcemap,
+      ),
     ),
   );
 
@@ -244,6 +254,7 @@ async function bundleSingleJob(
   env: Record<string, string | number | boolean>,
   triggerContext?: TriggerContext,
   cache?: BundleCache,
+  inlineSourcemap?: boolean,
 ): Promise<void> {
   const outputPath = path.join(outputDir, `${job.name}.js`);
   const serializedTriggerContext = serializeTriggerContext(triggerContext);
@@ -256,6 +267,7 @@ async function bundleSingleJob(
     sourceFile: job.sourceFile,
     serializedTriggerContext,
     tsconfig,
+    inlineSourcemap,
     prefix: sortedEnvPrefix,
   });
 
@@ -346,8 +358,8 @@ async function bundleSingleJob(
           output: {
             file: outputPath,
             format: "esm",
-            sourcemap: enableInlineSourcemap ? "inline" : true,
-            minify: enableInlineSourcemap
+            sourcemap: inlineSourcemap ? "inline" : true,
+            minify: inlineSourcemap
               ? {
                   mangle: {
                     keepNames: true,

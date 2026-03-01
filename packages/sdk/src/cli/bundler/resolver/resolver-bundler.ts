@@ -4,7 +4,6 @@ import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { loadFilesWithIgnores, type FileLoadConfig } from "@/cli/application/file-loader";
-import { enableInlineSourcemap } from "@/cli/bundler/inline-sourcemap";
 import { removeStaleEntryFiles } from "@/cli/bundler/stale-cleanup";
 import { computeBundlerContextHash, withCache, type BundleCache } from "@/cli/cache/bundle-cache";
 import { getDistDir } from "@/cli/utils/dist-dir";
@@ -32,6 +31,7 @@ interface ResolverInfo {
  * @param config - Resolver file loading configuration
  * @param triggerContext - Trigger context for workflow/job transformations
  * @param cache - Optional bundle cache for skipping unchanged builds
+ * @param inlineSourcemap - Whether to enable inline sourcemaps
  * @returns Promise that resolves when bundling completes
  */
 export async function bundleResolvers(
@@ -39,6 +39,7 @@ export async function bundleResolvers(
   config: FileLoadConfig,
   triggerContext?: TriggerContext,
   cache?: BundleCache,
+  inlineSourcemap?: boolean,
 ): Promise<void> {
   const files = loadFilesWithIgnores(config);
   if (files.length === 0) {
@@ -84,7 +85,7 @@ export async function bundleResolvers(
   // Process each resolver
   await Promise.all(
     resolvers.map((resolver) =>
-      bundleSingleResolver(resolver, outputDir, tsconfig, triggerContext, cache),
+      bundleSingleResolver(resolver, outputDir, tsconfig, triggerContext, cache, inlineSourcemap),
     ),
   );
 
@@ -97,6 +98,7 @@ async function bundleSingleResolver(
   tsconfig: string | undefined,
   triggerContext?: TriggerContext,
   cache?: BundleCache,
+  inlineSourcemap?: boolean,
 ): Promise<void> {
   const outputPath = path.join(outputDir, `${resolver.name}.js`);
   const serializedTriggerContext = serializeTriggerContext(triggerContext);
@@ -105,6 +107,7 @@ async function bundleSingleResolver(
     sourceFile: resolver.sourceFile,
     serializedTriggerContext,
     tsconfig,
+    inlineSourcemap,
   });
 
   await withCache({
@@ -160,8 +163,8 @@ async function bundleSingleResolver(
           output: {
             file: outputPath,
             format: "esm",
-            sourcemap: enableInlineSourcemap ? "inline" : true,
-            minify: enableInlineSourcemap
+            sourcemap: inlineSourcemap ? "inline" : true,
+            minify: inlineSourcemap
               ? {
                   mangle: {
                     keepNames: true,
