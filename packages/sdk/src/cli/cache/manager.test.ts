@@ -234,15 +234,17 @@ describe("createCacheManager", () => {
       expect(logger.debug).toHaveBeenCalled();
     });
 
-    test("cache is cleaned when lockfileHash differs", async () => {
-      const { logger } = await import("@/cli/utils/logger");
-
-      // Pre-populate cache with a manifest that has a lockfileHash
+    /**
+     * Write a manifest and a dummy bundle file into the cache directory.
+     * @param overrides - Optional manifest fields to override defaults
+     * @param overrides.lockfileHash - Lockfile hash to include in the manifest
+     */
+    function seedCache(overrides?: { lockfileHash?: string }): void {
       fs.mkdirSync(path.join(cacheDir, "bundles"), { recursive: true });
       const manifest = {
         version: 1,
         sdkVersion: "1.0.0",
-        lockfileHash: "oldhash",
+        ...overrides,
         entries: {
           "resolver:test": {
             kind: "bundle",
@@ -255,8 +257,17 @@ describe("createCacheManager", () => {
       };
       fs.writeFileSync(path.join(cacheDir, "manifest.json"), JSON.stringify(manifest));
       fs.writeFileSync(path.join(cacheDir, "bundles", "resolver:test.js"), "cached output");
+    }
 
-      // Create manager with the same sdkVersion but different lockfileHash
+    function expectBundleExists(exists: boolean): void {
+      expect(fs.existsSync(path.join(cacheDir, "bundles", "resolver:test.js"))).toBe(exists);
+    }
+
+    test("cache is cleaned when lockfileHash differs", async () => {
+      const { logger } = await import("@/cli/utils/logger");
+
+      seedCache({ lockfileHash: "oldhash" });
+
       createCacheManager({
         enabled: true,
         cacheDir,
@@ -264,34 +275,13 @@ describe("createCacheManager", () => {
         lockfileHash: "newhash",
       });
 
-      // Cache should be wiped
-      expect(fs.existsSync(path.join(cacheDir, "bundles", "resolver:test.js"))).toBe(false);
-
-      // Debug message should have been logged
+      expectBundleExists(false);
       expect(logger.debug).toHaveBeenCalledWith("Cache invalidated: lockfile changed");
     });
 
     test("cache is preserved when lockfileHash matches", () => {
-      // Pre-populate cache with a manifest that has a lockfileHash
-      fs.mkdirSync(path.join(cacheDir, "bundles"), { recursive: true });
-      const manifest = {
-        version: 1,
-        sdkVersion: "1.0.0",
-        lockfileHash: "samehash",
-        entries: {
-          "resolver:test": {
-            kind: "bundle",
-            inputHash: "abc",
-            dependencyPaths: [],
-            outputFiles: [],
-            createdAt: "2025-01-01T00:00:00.000Z",
-          },
-        },
-      };
-      fs.writeFileSync(path.join(cacheDir, "manifest.json"), JSON.stringify(manifest));
-      fs.writeFileSync(path.join(cacheDir, "bundles", "resolver:test.js"), "cached output");
+      seedCache({ lockfileHash: "samehash" });
 
-      // Create manager with matching sdkVersion and lockfileHash
       createCacheManager({
         enabled: true,
         cacheDir,
@@ -299,38 +289,19 @@ describe("createCacheManager", () => {
         lockfileHash: "samehash",
       });
 
-      // Cache should still exist
-      expect(fs.existsSync(path.join(cacheDir, "bundles", "resolver:test.js"))).toBe(true);
+      expectBundleExists(true);
     });
 
     test("cache is not invalidated when lockfileHash is not provided", () => {
-      // Pre-populate cache without lockfileHash
-      fs.mkdirSync(path.join(cacheDir, "bundles"), { recursive: true });
-      const manifest = {
-        version: 1,
-        sdkVersion: "1.0.0",
-        entries: {
-          "resolver:test": {
-            kind: "bundle",
-            inputHash: "abc",
-            dependencyPaths: [],
-            outputFiles: [],
-            createdAt: "2025-01-01T00:00:00.000Z",
-          },
-        },
-      };
-      fs.writeFileSync(path.join(cacheDir, "manifest.json"), JSON.stringify(manifest));
-      fs.writeFileSync(path.join(cacheDir, "bundles", "resolver:test.js"), "cached output");
+      seedCache();
 
-      // Create manager without lockfileHash
       createCacheManager({
         enabled: true,
         cacheDir,
         sdkVersion: "1.0.0",
       });
 
-      // Cache should still exist (no lockfileHash provided means skip check)
-      expect(fs.existsSync(path.join(cacheDir, "bundles", "resolver:test.js"))).toBe(true);
+      expectBundleExists(true);
     });
 
     test("finalize persists lockfileHash in manifest", () => {
