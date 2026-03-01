@@ -29,7 +29,7 @@ import {
 import { type Executor } from "@/parser/service/executor";
 import { type Resolver } from "@/parser/service/resolver";
 import { PluginManager } from "@/plugin/manager";
-import { commonArgs, withCommonArgs } from "../args";
+import { commonArgs, configArg, withCommonArgs } from "../args";
 import { createDependencyWatcher, type DependencyWatcher } from "./watch";
 import type { GenerateOptions } from "./options";
 import type { Plugin, PluginAttachment } from "@/parser/plugin-config/types";
@@ -802,11 +802,7 @@ export const generateCommand = defineCommand({
   description: "Generate files using Tailor configuration.",
   args: z.object({
     ...commonArgs,
-    config: arg(z.string().default("tailor.config.ts"), {
-      alias: "c",
-      description: "Path to SDK config file",
-      completion: { type: "file", extensions: ["ts"] },
-    }),
+    ...configArg,
     watch: arg(z.boolean().default(false), {
       alias: "W",
       description: "Watch for type/resolver changes and regenerate",

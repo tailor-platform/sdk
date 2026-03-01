@@ -147,15 +147,22 @@ export const workspaceArgs = {
 } satisfies ArgsShape;
 
 /**
- * Arguments for commands that interact with deployed resources (includes config)
+ * Shared config arg for commands that accept a config file path
  */
-export const deploymentArgs = {
-  ...workspaceArgs,
+export const configArg = {
   config: arg(z.string().default("tailor.config.ts"), {
     alias: "c",
     description: "Path to SDK config file",
     completion: { type: "file", extensions: ["ts"] },
   }),
+} satisfies ArgsShape;
+
+/**
+ * Arguments for commands that interact with deployed resources (includes config)
+ */
+export const deploymentArgs = {
+  ...workspaceArgs,
+  ...configArg,
 } satisfies ArgsShape;
 
 /**

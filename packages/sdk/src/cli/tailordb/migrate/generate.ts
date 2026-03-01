@@ -13,7 +13,7 @@ import * as path from "pathe";
 import { defineCommand, arg } from "politty";
 import { z } from "zod";
 import { PluginManager } from "@/plugin/manager";
-import { commonArgs, confirmationArgs, withCommonArgs } from "../../args";
+import { commonArgs, configArg, confirmationArgs, withCommonArgs } from "../../args";
 import { loadConfig } from "../../config-loader";
 import { logBetaWarning } from "../../utils/beta";
 import { logger, styles } from "../../utils/logger";
@@ -354,11 +354,7 @@ export const generateCommand = defineCommand({
   args: z.object({
     ...commonArgs,
     ...confirmationArgs,
-    config: arg(z.string().default("tailor.config.ts"), {
-      alias: "c",
-      description: "Path to SDK config file",
-      completion: { type: "file", extensions: ["ts"] },
-    }),
+    ...configArg,
     name: arg(z.string().optional(), {
       alias: "n",
       description: "Optional description for the migration",
