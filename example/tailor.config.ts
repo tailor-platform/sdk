@@ -61,6 +61,7 @@ export const auth = defineAuth("my-auth", {
 
 export default defineConfig({
   name: "my-app",
+  inlineSourcemap: false,
   env: {
     foo: 1,
     bar: "hello",

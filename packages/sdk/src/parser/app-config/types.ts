@@ -47,4 +47,11 @@ export interface AppConfig<
   workflow?: WorkflowServiceInput;
   /** Static website configurations. Must be an array, e.g. `[website]`. */
   staticWebsites?: StaticWebsites;
+  /**
+   * Enable inline sourcemaps in bundled functions for better error stack traces.
+   * When enabled, sourcemaps are embedded directly in the bundle file.
+   * Set to `false` to disable (e.g. if bundle size exceeds limits).
+   * @default true
+   */
+  inlineSourcemap?: boolean;
 }
