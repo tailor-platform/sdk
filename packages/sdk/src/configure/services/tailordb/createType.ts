@@ -421,7 +421,7 @@ type AllFields<D extends Record<string, FieldEntry>> = { id: IdField } & Resolve
  */
 export function createType<const D extends { id?: never } & Record<string, FieldEntry>>(
   name: string | [string, string],
-  descriptors: ValidatedDescriptors<D>,
+  descriptors: [D] extends [ValidatedDescriptors<D>] ? D : ValidatedDescriptors<D>,
   options?: CreateTypeOptions<keyof AllFields<D> & string, AllFields<D>>,
 ): TailorDBType<AllFields<D>> {
   const [typeName, pluralForm] = Array.isArray(name) ? name : [name, options?.pluralForm];

@@ -187,7 +187,6 @@ describe("createType runtime metadata tests", () => {
     const result = createType("Test", {
       age: {
         kind: "int",
-        // @ts-ignore tsgo can't contextually type callback params through createType's generic inference (tsc/tsgo compat)
         validate: [({ value }) => value >= 0, "Must be non-negative"],
       },
     });
@@ -583,7 +582,6 @@ describe("createType clone preservation", () => {
       code: {
         kind: "string",
         hooks: { create: () => "default" },
-        // @ts-ignore tsgo can't contextually type callback params through createType's generic inference (tsc/tsgo compat)
         validate: [({ value }) => value.length > 0, "Must not be empty"],
         unique: true,
       },
