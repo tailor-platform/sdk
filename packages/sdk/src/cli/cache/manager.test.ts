@@ -304,6 +304,21 @@ describe("createCacheManager", () => {
       expectBundleExists(true);
     });
 
+    test("cache is cleaned when manifest has lockfileHash but options does not", async () => {
+      const { logger } = await import("@/cli/utils/logger");
+
+      seedCache({ lockfileHash: "existinghash" });
+
+      createCacheManager({
+        enabled: true,
+        cacheDir,
+        sdkVersion: "1.0.0",
+      });
+
+      expectBundleExists(false);
+      expect(logger.debug).toHaveBeenCalledWith("Cache invalidated: lockfile changed");
+    });
+
     test("finalize persists lockfileHash in manifest", () => {
       const manager = createCacheManager({
         enabled: true,

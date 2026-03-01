@@ -65,7 +65,7 @@ function createCacheManager(options: CacheManagerOptions): CacheManager {
         `Cache invalidated: SDK version changed from ${existingManifest.sdkVersion} to ${options.sdkVersion}`,
       );
       store.clean();
-    } else if (options.lockfileHash && existingManifest.lockfileHash !== options.lockfileHash) {
+    } else if (existingManifest.lockfileHash !== options.lockfileHash) {
       logger.debug("Cache invalidated: lockfile changed");
       store.clean();
     }
