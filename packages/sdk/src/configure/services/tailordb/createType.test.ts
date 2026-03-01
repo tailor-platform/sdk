@@ -1200,3 +1200,99 @@ describe("createType id field guard", () => {
     });
   });
 });
+
+describe("createType options hooks and validate", () => {
+  it("type-level hooks can be set via options", () => {
+    const result = createType(
+      "Test",
+      { name: { kind: "string" }, age: { kind: "int" } },
+      {
+        hooks: {
+          name: { create: ({ data }) => data.name ?? "default" },
+        },
+      },
+    );
+    expect(result.fields.name.metadata.hooks).toBeDefined();
+    expect(result.fields.name.metadata.hooks!.create).toBeDefined();
+  });
+
+  it("type-level validate can be set via options", () => {
+    const result = createType(
+      "Test",
+      { name: { kind: "string" }, age: { kind: "int" } },
+      {
+        validate: {
+          name: [({ value }) => value.length > 0, "Must not be empty"],
+        },
+      },
+    );
+    expect(result.fields.name.metadata.validate).toBeDefined();
+  });
+
+  it("type-level hooks in options have typed data parameter", () => {
+    createType(
+      "Test",
+      { name: { kind: "string" }, age: { kind: "int" } },
+      {
+        hooks: {
+          name: {
+            create: ({ data }) => {
+              expectTypeOf(data).toMatchObjectType<{
+                readonly name?: string | null | undefined;
+              }>();
+              return "default";
+            },
+          },
+        },
+      },
+    );
+  });
+
+  it("type-level validate in options has typed value and data", () => {
+    createType(
+      "Test",
+      { name: { kind: "string" }, age: { kind: "int" } },
+      {
+        validate: {
+          name: ({ value, data }) => {
+            expectTypeOf(value).toEqualTypeOf<string>();
+            expectTypeOf(data).toMatchObjectType<{ name: string; age: number }>();
+            return value.length > 0;
+          },
+        },
+      },
+    );
+  });
+
+  it("field with descriptor-level hooks is excluded from type-level hooks in options", () => {
+    createType(
+      "Test",
+      {
+        name: { kind: "string", hooks: { create: () => "default" } },
+        email: { kind: "string" },
+      },
+      {
+        hooks: {
+          // @ts-expect-error name already has hooks at descriptor level
+          name: { create: () => "override" },
+        },
+      },
+    );
+  });
+
+  it("field with descriptor-level validate is excluded from type-level validate in options", () => {
+    createType(
+      "Test",
+      {
+        name: { kind: "string", validate: () => true },
+        email: { kind: "string" },
+      },
+      {
+        validate: {
+          // @ts-expect-error name already has validate at descriptor level
+          name: () => true,
+        },
+      },
+    );
+  });
+});

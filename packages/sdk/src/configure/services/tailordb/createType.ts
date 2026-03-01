@@ -8,11 +8,11 @@ import {
   createTailorDBType,
 } from "./schema";
 import type { TailorTypeGqlPermission, TailorTypePermission } from "./permission";
-import type { Hook, SerialConfig, IndexDef, TypeFeatures } from "./types";
+import type { Hook, Hooks, SerialConfig, IndexDef, TypeFeatures } from "./types";
 import type { InferredAttributeMap } from "@/configure/types";
 import type { InferFieldsOutput, output } from "@/configure/types/helpers";
 import type { TailorFieldType, TailorToTs } from "@/configure/types/types";
-import type { FieldValidateInput, ValidateConfig } from "@/configure/types/validation";
+import type { FieldValidateInput, ValidateConfig, Validators } from "@/configure/types/validation";
 import type { PluginAttachment } from "@/parser/plugin-config/types";
 import type { RelationType } from "@/parser/service/tailordb/types";
 
@@ -20,6 +20,27 @@ type CommonFieldOptions = {
   optional?: boolean;
   array?: boolean;
   description?: string;
+};
+
+const kindToFieldType = {
+  string: "string",
+  int: "integer",
+  float: "float",
+  bool: "boolean",
+  uuid: "uuid",
+  date: "date",
+  datetime: "datetime",
+  time: "time",
+  enum: "enum",
+  object: "nested",
+} as const satisfies Record<string, TailorFieldType>;
+
+type KindToFieldType = typeof kindToFieldType;
+
+type KindToTsType = {
+  [K in keyof KindToFieldType as K extends "enum" | "object"
+    ? never
+    : K]: TailorToTs[KindToFieldType[K]];
 };
 
 type IndexableOptions = {
@@ -42,7 +63,7 @@ type IntDescriptor = CommonFieldOptions &
     serial?: SerialConfig<"integer">;
   };
 
-type SimpleDescriptor<K extends string> = CommonFieldOptions &
+type SimpleDescriptor<K extends keyof KindToTsType> = CommonFieldOptions &
   IndexableOptions & {
     kind: K;
   };
@@ -99,27 +120,6 @@ type FieldDescriptor =
   | ObjectDescriptor;
 
 type FieldEntry = FieldDescriptor | TailorAnyDBField;
-
-const kindToFieldType = {
-  string: "string",
-  int: "integer",
-  float: "float",
-  bool: "boolean",
-  uuid: "uuid",
-  date: "date",
-  datetime: "datetime",
-  time: "time",
-  enum: "enum",
-  object: "nested",
-} as const satisfies Record<string, TailorFieldType>;
-
-type KindToFieldType = typeof kindToFieldType;
-
-type KindToTsType = {
-  [K in keyof KindToFieldType as K extends "enum" | "object"
-    ? never
-    : K]: TailorToTs[KindToFieldType[K]];
-};
 
 type DescriptorBaseOutput<D extends FieldDescriptor> = D extends { kind: "enum"; values: infer V }
   ? V extends AllowedValues
@@ -288,6 +288,8 @@ type CreateTypeOptions<
   permission?: TailorTypePermission<InferredAttributeMap, output<TailorDBType<Fields>>>;
   gqlPermission?: TailorTypeGqlPermission;
   plugins?: PluginAttachment[];
+  hooks?: Hooks<Fields>;
+  validate?: Validators<Fields>;
 };
 
 function isPassthroughField(entry: FieldEntry): entry is TailorAnyDBField {
@@ -452,6 +454,12 @@ export function createType<const D extends { id?: never } & Record<string, Field
       // oxlint-disable-next-line no-explicit-any -- PluginAttachment.config is unknown; bypass PluginConfigs generic constraint
       dbType.plugin({ [pluginId]: config } as any);
     }
+  }
+  if (options?.hooks) {
+    dbType.hooks(options.hooks);
+  }
+  if (options?.validate) {
+    dbType.validate(options.validate);
   }
 
   return dbType;
