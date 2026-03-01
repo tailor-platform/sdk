@@ -43,28 +43,28 @@ type KindToTsType = {
     : K]: TailorToTs[KindToFieldType[K]];
 };
 
-type IndexableOptions = {
+type IndexableOptions<O = unknown> = {
   unique?: boolean;
   index?: boolean;
-  hooks?: Hook<unknown, unknown>;
-  validate?: FieldValidateInput<unknown> | FieldValidateInput<unknown>[];
+  hooks?: Hook<unknown, O>;
+  validate?: FieldValidateInput<O> | FieldValidateInput<O>[];
 };
 
 type StringDescriptor = CommonFieldOptions &
-  IndexableOptions & {
+  IndexableOptions<string> & {
     kind: "string";
     vector?: boolean;
     serial?: SerialConfig<"string">;
   };
 
 type IntDescriptor = CommonFieldOptions &
-  IndexableOptions & {
+  IndexableOptions<number> & {
     kind: "int";
     serial?: SerialConfig<"integer">;
   };
 
 type SimpleDescriptor<K extends keyof KindToTsType> = CommonFieldOptions &
-  IndexableOptions & {
+  IndexableOptions<KindToTsType[K]> & {
     kind: K;
   };
 
@@ -75,7 +75,7 @@ type DatetimeDescriptor = SimpleDescriptor<"datetime">;
 type TimeDescriptor = SimpleDescriptor<"time">;
 
 type UuidDescriptor = CommonFieldOptions &
-  IndexableOptions & {
+  IndexableOptions<string> & {
     kind: "uuid";
     relation?: {
       type: RelationType;
@@ -91,7 +91,7 @@ type UuidDescriptor = CommonFieldOptions &
   };
 
 type EnumDescriptor<V extends AllowedValues = AllowedValues> = CommonFieldOptions &
-  IndexableOptions & {
+  IndexableOptions<AllowedValuesOutput<V>> & {
     kind: "enum";
     values: V;
     typeName?: string;
@@ -356,14 +356,17 @@ function buildField(descriptor: FieldDescriptor): TailorAnyDBField {
   }
 
   if (descriptor.hooks !== undefined) {
-    field = field.hooks(descriptor.hooks);
+    // oxlint-disable-next-line no-explicit-any -- union of typed Hook<unknown, O> variants narrows to specific O; widen to any for TailorAnyDBField
+    field = field.hooks(descriptor.hooks as any);
   }
 
   if (descriptor.validate !== undefined) {
     if (Array.isArray(descriptor.validate) && !isValidateConfig(descriptor.validate)) {
-      field = field.validate(...descriptor.validate);
+      // oxlint-disable-next-line no-explicit-any -- union of typed FieldValidateInput<O> variants; widen to any for TailorAnyDBField
+      field = field.validate(...(descriptor.validate as any));
     } else {
-      field = field.validate(descriptor.validate);
+      // oxlint-disable-next-line no-explicit-any -- union of typed FieldValidateInput<O> variants; widen to any for TailorAnyDBField
+      field = field.validate(descriptor.validate as any);
     }
   }
 

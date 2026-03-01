@@ -2,7 +2,9 @@ import { describe, it, expectTypeOf, expect } from "vitest";
 import { unauthenticatedTailorUser } from "@/configure/types";
 import { createType, timestampFields } from "./createType";
 import { db } from "./schema";
+import type { Hook } from "./types";
 import type { output } from "@/configure/types/helpers";
+import type { FieldValidateInput } from "@/configure/types/validation";
 
 describe("createType basic field type tests", () => {
   it("string field outputs string type correctly", () => {
@@ -185,7 +187,8 @@ describe("createType runtime metadata tests", () => {
     const result = createType("Test", {
       age: {
         kind: "int",
-        validate: [({ value }) => (value as number) >= 0, "Must be non-negative"],
+        // @ts-ignore tsgo can't contextually type callback params through createType's generic inference (tsc/tsgo compat)
+        validate: [({ value }) => value >= 0, "Must be non-negative"],
       },
     });
     expect(result.fields.age.metadata.validate).toBeDefined();
@@ -580,7 +583,8 @@ describe("createType clone preservation", () => {
       code: {
         kind: "string",
         hooks: { create: () => "default" },
-        validate: [({ value }) => (value as string).length > 0, "Must not be empty"],
+        // @ts-ignore tsgo can't contextually type callback params through createType's generic inference (tsc/tsgo compat)
+        validate: [({ value }) => value.length > 0, "Must not be empty"],
         unique: true,
       },
     });
@@ -1198,6 +1202,79 @@ describe("createType id field guard", () => {
       id: { kind: "uuid" },
       name: { kind: "string" },
     });
+  });
+});
+
+// Descriptor-level hooks/validate carry typed value via IndexableOptions<O>.
+// Testing through concrete type annotations (not createType's generic inference)
+// ensures tsc/tsgo compatibility.
+describe("createType descriptor-level hooks value typing", () => {
+  it("string hooks value is typed as string | null", () => {
+    const hooks: Hook<unknown, string> = {
+      create: ({ value }) => {
+        expectTypeOf(value).toEqualTypeOf<string | null>();
+        return value ?? "default";
+      },
+    };
+    createType("Test", { name: { kind: "string", hooks } });
+  });
+
+  it("int hooks value is typed as number | null", () => {
+    const hooks: Hook<unknown, number> = {
+      create: ({ value }) => {
+        expectTypeOf(value).toEqualTypeOf<number | null>();
+        return value ?? 0;
+      },
+    };
+    createType("Test", { count: { kind: "int", hooks } });
+  });
+
+  it("datetime hooks value is typed as string | Date | null", () => {
+    const hooks: Hook<unknown, string | Date> = {
+      create: ({ value }) => {
+        expectTypeOf(value).toEqualTypeOf<string | Date | null>();
+        return value ?? new Date();
+      },
+    };
+    createType("Test", { ts: { kind: "datetime", hooks } });
+  });
+
+  it("enum hooks value is typed as enum union | null", () => {
+    // Enum value typing for Hook is validated via options-level hooks
+    // (descriptor-level Hook<unknown, "ADMIN"|"USER"> conflicts with tsgo's
+    // fallback to Hook<unknown, string> due to generic inference limits).
+    createType(
+      "Test",
+      { role: { kind: "enum", values: ["ADMIN", "USER"] } },
+      {
+        hooks: {
+          role: {
+            create: ({ value }) => {
+              expectTypeOf(value).toEqualTypeOf<"ADMIN" | "USER" | null>();
+              return value ?? "USER";
+            },
+          },
+        },
+      },
+    );
+  });
+});
+
+describe("createType descriptor-level validate value typing", () => {
+  it("string validate value is typed as string", () => {
+    const validate: FieldValidateInput<string> = ({ value }) => {
+      expectTypeOf(value).toEqualTypeOf<string>();
+      return value.length > 0;
+    };
+    createType("Test", { name: { kind: "string", validate } });
+  });
+
+  it("int validate value is typed as number", () => {
+    const validate: FieldValidateInput<number> = ({ value }) => {
+      expectTypeOf(value).toEqualTypeOf<number>();
+      return value >= 0;
+    };
+    createType("Test", { count: { kind: "int", validate } });
   });
 });
 
