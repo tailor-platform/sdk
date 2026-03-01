@@ -6,21 +6,15 @@ import {
 import { describe, expect, it, vi } from "vitest";
 import { mainCommand } from "./index";
 
-vi.mock("node:module", async () => {
-  const actual = await vi.importActual("node:module");
-  return {
-    ...actual,
-    register: vi.fn(),
-  };
-});
+vi.mock("node:module", async (importOriginal) => ({
+  ...(await importOriginal()),
+  register: vi.fn(),
+}));
 
-vi.mock("politty", async () => {
-  const actual = await vi.importActual("politty");
-  return {
-    ...actual,
-    runMain: vi.fn(),
-  };
-});
+vi.mock("politty", async (importOriginal) => ({
+  ...(await importOriginal()),
+  runMain: vi.fn(),
+}));
 
 describe("shell completion", () => {
   describe("subcommand completion", () => {
