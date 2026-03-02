@@ -16,6 +16,7 @@ export type ProblemMeta = {
     implement: string[];
     scaffold: string[];
   };
+  variants?: string[];
 };
 
 export function loadMeta(problemDir: string): ProblemMeta {

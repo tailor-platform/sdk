@@ -51,6 +51,7 @@ function parseArgs(): {
   resume: boolean;
   rerunInfra: boolean;
   concurrency: number;
+  variant?: string;
 } {
   const args = process.argv.slice(2);
   let problem: string | undefined;
@@ -68,6 +69,7 @@ function parseArgs(): {
   let resume = false;
   let rerunInfra = false;
   let concurrency = os.availableParallelism();
+  let variant: string | undefined;
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
@@ -126,6 +128,10 @@ function parseArgs(): {
         concurrency = Number(requireArg(args, i, "--concurrency"));
         i++;
         break;
+      case "--variant":
+        variant = requireArg(args, i, "--variant");
+        i++;
+        break;
     }
   }
 
@@ -159,6 +165,7 @@ function parseArgs(): {
     resume,
     rerunInfra,
     concurrency: Math.trunc(concurrency),
+    variant,
   };
 }
 
@@ -344,14 +351,28 @@ async function runProblem(
     clean: boolean;
     verbose: boolean;
     tarballPath?: string;
+    variant?: string;
   },
 ): Promise<ProblemResult> {
   const problemStartTime = Date.now();
   const problemDir = path.join(challengeRoot, "problems", problemName);
   const meta = loadMeta(problemDir);
 
+  // Validate variant against meta.variants
+  if (options.variant) {
+    if (meta.variants && !meta.variants.includes(options.variant)) {
+      throw new Error(
+        `Variant "${options.variant}" not supported by problem ${problemName}. Available: ${meta.variants.join(", ")}`,
+      );
+    }
+    if (!meta.variants) {
+      console.warn(`  Warning: problem ${problemName} has no variants defined, ignoring --variant`);
+    }
+  }
+
   if (options.verbose) {
-    console.log(`\n--- Running problem: ${problemName} (${meta.difficulty}) ---`);
+    const variantLabel = options.variant ? ` [variant: ${options.variant}]` : "";
+    console.log(`\n--- Running problem: ${problemName} (${meta.difficulty})${variantLabel} ---`);
   }
 
   const isSolveMode = !!options.solve;
@@ -386,6 +407,7 @@ async function runProblem(
       agent: options.solve.agent,
       model: normalizedModel,
       maxBudget: options.solve.maxBudget,
+      variant: options.variant,
     });
     if (options.verbose) {
       let icon = "FAIL";
@@ -497,6 +519,7 @@ async function runProblem(
         model: normalizedModel,
         maxBudget: remainingBudget,
         errorOutput,
+        variant: options.variant,
       });
       retrySolveResults.push(retryResult);
       cumulativeCost += retryResult.costUsd;
@@ -749,6 +772,7 @@ async function main(): Promise<void> {
     resume,
     rerunInfra,
     concurrency,
+    variant,
   } = parseArgs();
 
   if (!problem && !all && !rerunInfra) {
@@ -849,6 +873,7 @@ async function main(): Promise<void> {
               clean,
               verbose,
               tarballPath,
+              variant,
             });
             completed++;
             if (!verbose) {
@@ -949,7 +974,12 @@ async function main(): Promise<void> {
       let impl: string;
 
       if (useSolution) {
-        impl = path.join(problemDir, "solution");
+        const meta = loadMeta(problemDir);
+        if (variant && meta.variants?.includes(variant)) {
+          impl = path.join(problemDir, "variants", variant, "solution");
+        } else {
+          impl = path.join(problemDir, "solution");
+        }
       } else if (implDir) {
         impl = all ? path.join(implDir, p) : implDir;
       } else {
@@ -981,6 +1011,7 @@ async function main(): Promise<void> {
             clean,
             verbose,
             tarballPath,
+            variant,
           });
 
           // Push result (safe: Node.js single-threaded)
@@ -1037,6 +1068,7 @@ async function main(): Promise<void> {
 
   const report = createReport(results, {
     model: solveModelLabel,
+    variant,
     sdkVersion,
     elapsedMs: Date.now() - runStartTime,
   });
@@ -1048,6 +1080,9 @@ async function main(): Promise<void> {
     modelLabelRaw = "solution";
   } else {
     modelLabelRaw = "impl";
+  }
+  if (variant) {
+    modelLabelRaw = `${modelLabelRaw}-${variant}`;
   }
   writeReport(resultsDir, report, modelLabelRaw, sdkVersion);
 }

@@ -69,6 +69,7 @@ type Analytics = {
 export type ChallengeReport = {
   timestamp: string;
   model?: string;
+  variant?: string;
   sdkVersion?: string;
   results: ProblemResult[];
   totalScore: number;
@@ -339,7 +340,7 @@ export function computeAdjustedScore(result: ProblemResult): number {
 
 export function createReport(
   results: ProblemResult[],
-  metadata?: { model?: string; sdkVersion?: string; elapsedMs?: number },
+  metadata?: { model?: string; variant?: string; sdkVersion?: string; elapsedMs?: number },
 ): ChallengeReport {
   const infraFailureCount = results.filter(isInfraFailure).length;
   const validResults = results.filter((r) => !isInfraFailure(r));
@@ -381,6 +382,7 @@ export function createReport(
   return {
     timestamp: new Date().toISOString(),
     model: metadata?.model,
+    variant: metadata?.variant,
     sdkVersion: metadata?.sdkVersion,
     results,
     totalScore,

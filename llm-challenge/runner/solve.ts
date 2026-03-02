@@ -64,6 +64,7 @@ function buildPromptSections(
   problemDir: string,
   meta: ProblemMeta,
   workDir: string,
+  variant?: string,
 ): {
   problemMd: string;
   existingFilesList: string;
@@ -72,7 +73,10 @@ function buildPromptSections(
   filesToCreate: string[];
   mode: "implement" | "fix" | "hybrid";
 } {
-  const problemMd = fs.readFileSync(path.join(problemDir, "problem.md"), "utf-8");
+  const problemMdPath = variant
+    ? path.join(problemDir, "variants", variant, "problem.md")
+    : path.join(problemDir, "problem.md");
+  const problemMd = fs.readFileSync(problemMdPath, "utf-8");
   const existingFiles = listFilesRecursive(workDir);
   const scaffoldSet = new Set(meta.files.scaffold);
   const filesToFix = meta.files.implement.filter((f) => scaffoldSet.has(f));
@@ -97,11 +101,17 @@ function buildPromptSections(
   };
 }
 
-function buildPrompt(problemDir: string, meta: ProblemMeta, workDir: string): string {
+function buildPrompt(
+  problemDir: string,
+  meta: ProblemMeta,
+  workDir: string,
+  variant?: string,
+): string {
   const { problemMd, existingFilesList, filesToFix, filesToCreate, mode } = buildPromptSections(
     problemDir,
     meta,
     workDir,
+    variant,
   );
 
   const systemPrompt = buildSystemPrompt(mode);
@@ -144,11 +154,13 @@ function buildRetryPrompt(
   meta: ProblemMeta,
   workDir: string,
   errorOutput: string,
+  variant?: string,
 ): string {
   const { problemMd, existingFilesList, filesList } = buildPromptSections(
     problemDir,
     meta,
     workDir,
+    variant,
   );
 
   const systemPrompt = buildSystemPrompt("fix");
@@ -249,9 +261,10 @@ export function retrySolveProblem(options: {
   model?: string;
   maxBudget: number;
   errorOutput: string;
+  variant?: string;
 }): Promise<SolveResult> {
-  const { workDir, problemDir, meta, agent, model, maxBudget, errorOutput } = options;
-  const prompt = buildRetryPrompt(problemDir, meta, workDir, errorOutput);
+  const { workDir, problemDir, meta, agent, model, maxBudget, errorOutput, variant } = options;
+  const prompt = buildRetryPrompt(problemDir, meta, workDir, errorOutput, variant);
   return runSolver({ agent, prompt, workDir, model, maxBudget });
 }
 
@@ -262,9 +275,10 @@ export function solveProblem(options: {
   agent: SolveAgent;
   model?: string;
   maxBudget: number;
+  variant?: string;
 }): Promise<SolveResult> {
-  const { workDir, problemDir, meta, agent, model, maxBudget } = options;
-  const prompt = buildPrompt(problemDir, meta, workDir);
+  const { workDir, problemDir, meta, agent, model, maxBudget, variant } = options;
+  const prompt = buildPrompt(problemDir, meta, workDir, variant);
   return runSolver({ agent, prompt, workDir, model, maxBudget });
 }
 

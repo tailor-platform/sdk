@@ -21,7 +21,7 @@ SDK improvement proposals based on benchmark results are tracked in [`.claude/IM
 
 **Scoring column**: Generate / Typecheck / Tests (total 300, max 300)
 
-This single comprehensive problem covers all SDK concepts: TailorDB models (5 types with `createType` API), resolvers, executors, workflows, and full application config. It replaces the previous 12-problem benchmark to reduce token consumption while increasing difficulty.
+This single comprehensive problem covers all SDK concepts: TailorDB models (5 types), resolvers, executors, workflows, and full application config. It supports API variants (`createType` object-literal and `db.type()` fluent) for A/B comparison of SDK API discoverability.
 
 ## Prerequisites
 
@@ -54,6 +54,10 @@ pnpm challenge --problem 001 --use-solution
 pnpm challenge --problem 001 --impl ./path/to/impl
 pnpm challenge --problem 001 --solve [--agent claude|codex]
 
+# Run with a specific API variant
+pnpm challenge --problem 001 --use-solution --variant fluent
+pnpm challenge --problem 001 --solve --variant createType
+
 # Run all problems with external implementations
 pnpm challenge --all --impl-dir ./path/to/outputs
 ```
@@ -64,6 +68,7 @@ pnpm challenge --all --impl-dir ./path/to/outputs
 - `--model <name>` — Model name to use (`claude`: default `sonnet`, `codex`: default CLI model)
 - `--max-budget <usd>` — Spending cap per problem in USD (default: `2.00`, must be positive)
 - `--retry <n>` — Number of retry attempts on failure (default: `0`, must be non-negative). On failure, error output is fed back to the AI for correction.
+- `--variant <name>` — API variant to use (e.g., `createType`, `fluent`). Uses variant-specific problem description and solution. Default: root problem.md
 - `--concurrency <n>` — Number of problems to run in parallel (default: CPU count, must be positive)
 - `--clean` — Remove work directories after execution
 
@@ -137,6 +142,7 @@ Cost from all attempts (initial + retries) is tracked in the report.
 JSON reports include metadata for comparison tracking:
 
 - `model` — Claude model used (when solving)
+- `variant` — API variant used (when specified)
 - `sdkVersion` — SDK package version
 - `timestamp` — When the run was executed
 
@@ -155,10 +161,14 @@ Reports include analytics for identifying SDK improvement areas:
 
 ```
 problems/<id>-<name>/
-├── meta.json      # Metadata (difficulty, scoring, files to implement)
-├── problem.md     # Problem description
+├── meta.json      # Metadata (difficulty, scoring, files to implement, variants)
+├── problem.md     # Default problem description
 ├── scaffold/      # Starter files (tailor.config.ts, etc.)
-├── solution/      # Reference implementation
-├── tests/         # Vitest test suite
+├── solution/      # Default reference implementation
+├── tests/         # Vitest test suite (shared across variants)
+├── variants/      # API variant overrides (optional)
+│   └── <variant>/
+│       ├── problem.md   # Variant-specific problem description
+│       └── solution/    # Variant-specific reference implementation
 └── work/          # Generated at runtime (not committed)
 ```
