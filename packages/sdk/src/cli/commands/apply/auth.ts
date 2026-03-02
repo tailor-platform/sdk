@@ -256,33 +256,23 @@ export async function planAuth(context: PlanContext) {
     resourceOwners,
   } = await planServices(client, workspaceId, application.name, auths);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
-  const idpConfigChangeSet = await planIdPConfigs(client, workspaceId, auths, deletedServices);
-  const userProfileConfigChangeSet = await planUserProfileConfigs(
-    client,
-    workspaceId,
-    auths,
-    deletedServices,
-  );
-  const tenantConfigChangeSet = await planTenantConfigs(
-    client,
-    workspaceId,
-    auths,
-    deletedServices,
-  );
-  const machineUserChangeSet = await planMachineUsers(client, workspaceId, auths, deletedServices);
-  const oauth2ClientChangeSet = await planOAuth2Clients(
-    client,
-    workspaceId,
-    auths,
-    deletedServices,
-  );
-  const scimChangeSet = await planSCIMConfigs(client, workspaceId, auths, deletedServices);
-  const scimResourceChangeSet = await planSCIMResources(
-    client,
-    workspaceId,
-    auths,
-    deletedServices,
-  );
+  const [
+    idpConfigChangeSet,
+    userProfileConfigChangeSet,
+    tenantConfigChangeSet,
+    machineUserChangeSet,
+    oauth2ClientChangeSet,
+    scimChangeSet,
+    scimResourceChangeSet,
+  ] = await Promise.all([
+    planIdPConfigs(client, workspaceId, auths, deletedServices),
+    planUserProfileConfigs(client, workspaceId, auths, deletedServices),
+    planTenantConfigs(client, workspaceId, auths, deletedServices),
+    planMachineUsers(client, workspaceId, auths, deletedServices),
+    planOAuth2Clients(client, workspaceId, auths, deletedServices),
+    planSCIMConfigs(client, workspaceId, auths, deletedServices),
+    planSCIMResources(client, workspaceId, auths, deletedServices),
+  ]);
 
   serviceChangeSet.print();
   idpConfigChangeSet.print();

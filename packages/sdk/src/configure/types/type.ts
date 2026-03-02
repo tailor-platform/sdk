@@ -19,6 +19,7 @@ const regex = {
   time: /^(?<hour>\d{2}):(?<minute>\d{2})$/,
   datetime:
     /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(.(?<millisec>\d{3}))?Z$/,
+  decimal: /^-?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/,
 } as const;
 
 // This helper type intentionally uses `any` as a placeholder for unknown field output.
@@ -252,6 +253,15 @@ function createTailorField<
           });
         }
         break;
+      case "decimal":
+        if (typeof value !== "string" || !regex.decimal.test(value)) {
+          issues.push({
+            message: `Expected a decimal string: received ${String(value)}`,
+            path: pathArray.length > 0 ? pathArray : undefined,
+          });
+        }
+        break;
+
       case "enum":
         if (field._metadata.allowedValues) {
           const allowedValues = field._metadata.allowedValues.map((v) => v.value);
@@ -490,6 +500,17 @@ function float<const Opt extends FieldOptions>(options?: Opt) {
 }
 
 /**
+ * Create a decimal field for resolver input/output (stored as string for precision).
+ * @param options - Field configuration options
+ * @returns A decimal field
+ * @example t.decimal()
+ * @example t.decimal({ optional: true })
+ */
+function decimal<const Opt extends FieldOptions>(options?: Opt) {
+  return createTailorField("decimal", options);
+}
+
+/**
  * Create a date field for resolver input/output.
  * @param options - Field configuration options
  * @returns A date field
@@ -565,6 +586,7 @@ export const t = {
   bool,
   int,
   float,
+  decimal,
   date,
   datetime,
   time,

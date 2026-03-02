@@ -5,7 +5,6 @@ import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { loadFilesWithIgnores, type FileLoadConfig } from "@/cli/services/file-loader";
 import { getDistDir } from "@/cli/shared/dist-dir";
-import { enableInlineSourcemap } from "@/cli/shared/inline-sourcemap";
 import { logger, styles } from "@/cli/shared/logger";
 import { createTriggerTransformPlugin, type TriggerContext } from "@/cli/shared/trigger-context";
 import { loadResolver } from "./loader";
@@ -25,12 +24,14 @@ interface ResolverInfo {
  * @param namespace - Resolver namespace name
  * @param config - Resolver file loading configuration
  * @param triggerContext - Trigger context for workflow/job transformations
+ * @param inlineSourcemap - Whether to enable inline sourcemaps
  * @returns Promise that resolves when bundling completes
  */
 export async function bundleResolvers(
   namespace: string,
   config: FileLoadConfig,
   triggerContext?: TriggerContext,
+  inlineSourcemap?: boolean,
 ): Promise<void> {
   const files = loadFilesWithIgnores(config);
   if (files.length === 0) {
@@ -71,7 +72,7 @@ export async function bundleResolvers(
   // Process each resolver
   await Promise.all(
     resolvers.map((resolver) =>
-      bundleSingleResolver(resolver, outputDir, tsconfig, triggerContext),
+      bundleSingleResolver(resolver, outputDir, tsconfig, triggerContext, inlineSourcemap),
     ),
   );
 
@@ -83,6 +84,7 @@ async function bundleSingleResolver(
   outputDir: string,
   tsconfig: string | undefined,
   triggerContext?: TriggerContext,
+  inlineSourcemap?: boolean,
 ): Promise<void> {
   // Step 1: Create entry file that imports from the original source
   const entryPath = path.join(outputDir, `${resolver.name}.entry.js`);
@@ -130,8 +132,8 @@ async function bundleSingleResolver(
       output: {
         file: outputPath,
         format: "esm",
-        sourcemap: enableInlineSourcemap ? "inline" : true,
-        minify: enableInlineSourcemap
+        sourcemap: inlineSourcemap ? "inline" : true,
+        minify: inlineSourcemap
           ? {
               mangle: {
                 keepNames: true,

@@ -65,6 +65,12 @@ Available triggers beyond record CRUD (`recordCreatedTrigger`, `recordUpdatedTri
 - `definePlugins()` is available for reusable type/resolver/executor generation
 - Static website `.url` property is resolved at deployment time — use it in CORS and redirect URIs
 
+## Developer Guides
+
+See [docs/](docs/README.md) for developer and contributor documentation.
+
+- [Telemetry / Performance Profiling](docs/telemetry.md) - OTLP tracing for CLI performance analysis
+
 ## Environment
 
 - Linting runs oxlint first, then ESLint

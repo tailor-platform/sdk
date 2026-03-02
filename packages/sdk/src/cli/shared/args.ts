@@ -196,6 +196,10 @@ export const withCommonArgs =
       // Load env files
       loadEnvFiles(args["env-file"] as EnvFileArg, args["env-file-if-exists"] as EnvFileArg);
 
+      // Initialize telemetry (no-op if OTEL_EXPORTER_OTLP_ENDPOINT is not set)
+      const { initTelemetry } = await import("@/cli/telemetry");
+      await initTelemetry();
+
       await handler(args);
     } catch (error) {
       if (isCLIError(error)) {
@@ -212,6 +216,10 @@ export const withCommonArgs =
         logger.error(`Unknown error: ${error}`);
       }
       process.exit(1);
+    } finally {
+      // Flush pending traces before process exit
+      const { shutdownTelemetry } = await import("@/cli/telemetry");
+      await shutdownTelemetry();
     }
     process.exit(0);
   };

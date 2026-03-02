@@ -34,6 +34,7 @@ const SCALAR_TYPE_MAP = {
   string: { kind: "ScalarType", name: "String" },
   integer: { kind: "ScalarType", name: "Int" },
   float: { kind: "ScalarType", name: "Float" },
+  decimal: { kind: "CustomScalarType", name: "Decimal" },
   boolean: { kind: "ScalarType", name: "Boolean" },
   date: { kind: "CustomScalarType", name: "Date" },
   datetime: { kind: "CustomScalarType", name: "DateTime" },

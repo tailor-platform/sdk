@@ -205,6 +205,7 @@ function convertFieldConfigToProto(
         }),
       },
     }),
+    ...(config.scale !== undefined && { scale: config.scale }),
   };
 
   // Handle nested fields
@@ -277,6 +278,7 @@ function processNestedFieldsFromSnapshot(
         vector: false,
         ...toProtoSnapshotFieldHooks(fieldConfig),
         fields: deepNestedFields,
+        ...(fieldConfig.scale !== undefined && { scale: fieldConfig.scale }),
       };
     } else {
       nestedFields[fieldName] = {
@@ -305,6 +307,7 @@ function processNestedFieldsFromSnapshot(
             }),
           },
         }),
+        ...(fieldConfig.scale !== undefined && { scale: fieldConfig.scale }),
       };
     }
   }

@@ -11,6 +11,7 @@ import { bundleWorkflowJobs, type BundleWorkflowJobsResult } from "@/cli/service
 import { createWorkflowService, type WorkflowService } from "@/cli/services/workflow/service";
 import { type LoadedConfig } from "@/cli/shared/config-loader";
 import { getDistDir } from "@/cli/shared/dist-dir";
+import { resolveInlineSourcemap } from "@/cli/shared/inline-sourcemap";
 import { logger } from "@/cli/shared/logger";
 import { buildTriggerContext } from "@/cli/shared/trigger-context";
 import { type AppConfig } from "@/parser/app-config";
@@ -370,9 +371,12 @@ export async function loadApplication(
   // 6. Build trigger context for workflow/job trigger transformation
   const triggerContext = await buildTriggerContext(config.workflow);
 
+  // 6.5. Resolve inline sourcemap setting
+  const inlineSourcemap = resolveInlineSourcemap(config.inlineSourcemap);
+
   // 7. Bundle resolvers
   for (const pipeline of resolverResult.resolverServices) {
-    await bundleResolvers(pipeline.namespace, pipeline.config, triggerContext);
+    await bundleResolvers(pipeline.namespace, pipeline.config, triggerContext, inlineSourcemap);
   }
 
   // 8. Bundle executors
@@ -381,6 +385,7 @@ export async function loadApplication(
       config: executorService.config,
       triggerContext,
       additionalFiles: [...pluginExecutorFiles],
+      inlineSourcemap,
     });
   }
 
@@ -393,6 +398,7 @@ export async function loadApplication(
       mainJobNames,
       config.env ?? {},
       triggerContext,
+      inlineSourcemap,
     );
   }
 

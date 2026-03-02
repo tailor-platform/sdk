@@ -76,6 +76,7 @@ const regex = {
   time: /^(?<hour>\d{2}):(?<minute>\d{2})$/,
   datetime:
     /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(.(?<millisec>\d{3}))?Z$/,
+  decimal: /^-?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/,
 } as const;
 
 type FieldParseArgs = {
@@ -394,6 +395,15 @@ function createTailorDBField<
           });
         }
         break;
+      case "decimal":
+        if (typeof value !== "string" || !regex.decimal.test(value)) {
+          issues.push({
+            message: `Expected a decimal string: received ${String(value)}`,
+            path: pathArray.length > 0 ? pathArray : undefined,
+          });
+        }
+        break;
+
       case "enum":
         if (field._metadata.allowedValues) {
           const allowedValues = field._metadata.allowedValues.map((v) => v.value);
@@ -723,6 +733,31 @@ function int<const Opt extends FieldOptions>(options?: Opt) {
  */
 function float<const Opt extends FieldOptions>(options?: Opt) {
   return createField("float", options);
+}
+
+interface DecimalFieldOptions extends FieldOptions {
+  scale?: number;
+}
+
+/**
+ * Create a decimal field (stored as string for precision).
+ * @param options - Field configuration options including optional scale (0-12)
+ * @returns A decimal field
+ * @example db.decimal()
+ * @example db.decimal({ scale: 2 })
+ * @example db.decimal({ scale: 2, optional: true })
+ */
+function decimal<const Opt extends DecimalFieldOptions>(options?: Opt) {
+  if (options?.scale !== undefined) {
+    if (!Number.isInteger(options.scale) || options.scale < 0 || options.scale > 12) {
+      throw new Error("scale must be an integer between 0 and 12");
+    }
+  }
+  const field = createField("decimal", options);
+  if (options?.scale !== undefined) {
+    field._metadata.scale = options.scale;
+  }
+  return field;
 }
 
 /**
@@ -1210,6 +1245,7 @@ export const db = {
   bool,
   int,
   float,
+  decimal,
   date,
   datetime,
   time,

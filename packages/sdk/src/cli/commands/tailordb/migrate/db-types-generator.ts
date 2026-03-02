@@ -265,6 +265,7 @@ function mapToTsType(fieldType: string): {
   switch (fieldType) {
     case "uuid":
     case "string":
+    case "decimal":
       return { type: "string", usedTimestamp: false };
     case "integer":
     case "float":
