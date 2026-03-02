@@ -6,7 +6,7 @@ import orderFulfillmentWorkflow from "../src/workflow/order-fulfillment";
 import userProfileSyncWorkflow from "../src/workflow/sync-profile";
 
 describe.concurrent("workflow", () => {
-  test("order-fulfillment: execute workflow and verify success", { timeout: 180000 }, async () => {
+  test("order-fulfillment: execute multi-job workflow", { timeout: 180000 }, async () => {
     const { executionId, wait } = await startWorkflow({
       workflow: orderFulfillmentWorkflow,
       authInvoker: config.auth.invoker("admin"),
@@ -20,9 +20,10 @@ describe.concurrent("workflow", () => {
       workflowName: "order-fulfillment",
       status: "SUCCESS",
     });
+    expect(result.jobExecutions).toBe(4);
   });
 
-  test("user-profile-sync: execute workflow and verify success", { timeout: 120000 }, async () => {
+  test("user-profile-sync: execute db-backed workflow", { timeout: 120000 }, async () => {
     const uuid = randomUUID();
     const testEmail = `workflow-test-${uuid}@example.com`;
 
@@ -43,5 +44,6 @@ describe.concurrent("workflow", () => {
       workflowName: "user-profile-sync",
       status: "SUCCESS",
     });
+    expect(result.jobExecutions).toBe(1);
   });
 });

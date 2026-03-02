@@ -288,7 +288,7 @@ async function bundleSingleJob(
 
         export async function main(input) {
           const env = ${JSON.stringify(env)};
-          const _user = typeof user !== "undefined" ? ${tailorUserMap} : undefined;
+          const _user = ${tailorUserMap};
           return await ${job.exportName}.body(input, { env, user: _user });
         }
       `;

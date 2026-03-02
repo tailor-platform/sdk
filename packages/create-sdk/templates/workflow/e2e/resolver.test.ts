@@ -16,35 +16,34 @@ function createGraphQLClient(): GraphQLClient {
 describe("resolver", () => {
   const graphQLClient = createGraphQLClient();
 
-  describe("incrementAge", () => {
+  describe.sequential("incrementAge", () => {
     const uuid = randomUUID();
+    const testEmail = `alice-${uuid}@example.com`;
 
-    test("prepare data", async () => {
+    test("create test user", async () => {
       const query = gql`
-        mutation {
-          createUser(input: {
-            name: "alice"
-            email: "alice-${uuid}@example.com"
-            age: 30
-          }) {
+        mutation ($input: UserCreateInput!) {
+          createUser(input: $input) {
             id
           }
         }
       `;
-      const result = await graphQLClient.rawRequest(query);
+      const result = await graphQLClient.rawRequest(query, {
+        input: { name: "alice", email: testEmail, age: 30 },
+      });
       expect(result.errors).toBeUndefined();
     });
 
-    test("basic functionality", async () => {
+    test("increment age returns old and new values", async () => {
       const query = gql`
-        mutation {
-          incrementAge(email: "alice-${uuid}@example.com") {
+        mutation ($email: String!) {
+          incrementAge(email: $email) {
             oldAge
             newAge
           }
         }
       `;
-      const result = await graphQLClient.rawRequest(query);
+      const result = await graphQLClient.rawRequest(query, { email: testEmail });
       expect(result.errors).toBeUndefined();
       expect(result.data).toEqual({
         incrementAge: {
@@ -53,5 +52,39 @@ describe("resolver", () => {
         },
       });
     });
+
+    test("increment is idempotent per call", async () => {
+      const query = gql`
+        mutation ($email: String!) {
+          incrementAge(email: $email) {
+            oldAge
+            newAge
+          }
+        }
+      `;
+      const result = await graphQLClient.rawRequest(query, { email: testEmail });
+      expect(result.errors).toBeUndefined();
+      expect(result.data).toEqual({
+        incrementAge: {
+          oldAge: 31,
+          newAge: 32,
+        },
+      });
+    });
+  });
+
+  test("incrementAge fails for non-existent user", async () => {
+    const query = gql`
+      mutation ($email: String!) {
+        incrementAge(email: $email) {
+          oldAge
+          newAge
+        }
+      }
+    `;
+    const result = await graphQLClient.rawRequest(query, {
+      email: "non-existent@example.com",
+    });
+    expect(result.errors).toBeDefined();
   });
 });
