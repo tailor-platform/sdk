@@ -21,7 +21,7 @@ import {
   formatReportTable,
   isInfraFailure,
 } from "./score";
-import type { ChallengeReport, ProblemResult, StageResult } from "./score";
+import type { ChallengeReport, ProblemResult, ScaffoldChange, StageResult } from "./score";
 import {
   formatSolveModelLabel,
   normalizeModelForAgent,
@@ -390,6 +390,18 @@ async function runProblem(
   // In solve mode, workDir is a tmpdir. We'll create a symlink later for verify.
   const symlinkPath = path.join(problemDir, "work");
 
+  // Snapshot scaffold files after install (before solve) to detect modifications
+  const scaffoldFilenames = ["tsconfig.json", "package.json"];
+  const scaffoldSnapshot = new Map<string, string>();
+  if (isSolveMode) {
+    for (const f of scaffoldFilenames) {
+      const fp = path.join(workDir, f);
+      if (fs.existsSync(fp)) {
+        scaffoldSnapshot.set(f, fs.readFileSync(fp, "utf-8"));
+      }
+    }
+  }
+
   let solveResult: SolveResult | undefined;
   const retrySolveResults: SolveResult[] = [];
   const normalizedModel = options.solve
@@ -447,6 +459,28 @@ async function runProblem(
       solveResult,
       totalDurationMs: Date.now() - problemStartTime,
     };
+  }
+
+  // Detect and restore scaffold file modifications after solve
+  const scaffoldChanges: ScaffoldChange[] = [];
+  if (isSolveMode && scaffoldSnapshot.size > 0) {
+    for (const [f, original] of scaffoldSnapshot) {
+      const fp = path.join(workDir, f);
+      if (!fs.existsSync(fp)) {
+        scaffoldChanges.push({ file: f, original, modified: "(deleted)" });
+        fs.writeFileSync(fp, original);
+      } else {
+        const current = fs.readFileSync(fp, "utf-8");
+        if (current !== original) {
+          scaffoldChanges.push({ file: f, original, modified: current });
+          fs.writeFileSync(fp, original);
+        }
+      }
+    }
+    if (scaffoldChanges.length > 0 && options.verbose) {
+      const files = scaffoldChanges.map((c) => c.file).join(", ");
+      console.log(`  WARNING: Scaffold files modified during solve: ${files} (restored)`);
+    }
   }
 
   // In solve mode, create symlink: problems/<name>/work → tmpdir
@@ -600,6 +634,7 @@ async function runProblem(
     retryCount,
     retrySolveResults: retrySolveResults.length > 0 ? retrySolveResults : undefined,
     totalDurationMs: Date.now() - problemStartTime,
+    scaffoldChanges: scaffoldChanges.length > 0 ? scaffoldChanges : undefined,
   };
   result.adjustedScore = computeAdjustedScore(result);
   return result;
