@@ -1,12 +1,10 @@
 declare const secretsDefinitionBrand: unique symbol;
 type SecretsDefinitionBrand = { readonly [secretsDefinitionBrand]: true };
 
-type SecretsVaultInput = Record<string, string | undefined>;
+type SecretsVaultInput = Record<string, string>;
 type SecretsInput = Record<string, SecretsVaultInput>;
 
 type DefinedSecrets<T extends SecretsInput> = {
-  readonly [K in keyof T]: { readonly [S in keyof T[K]]: T[K][S] };
-} & {
   get<V extends Extract<keyof T, string>, S extends Extract<keyof T[V], string>>(
     vault: V,
     secret: S,

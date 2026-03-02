@@ -211,21 +211,10 @@ function defineStaticWebsites(
 }
 
 function defineSecretsForApplication(
-  config: Record<string, Record<string, string | undefined>> | undefined,
+  config: Record<string, Record<string, string>> | undefined,
 ): SecretVault[] {
   if (!config) {
     return [];
-  }
-
-  // Validate that all values are strings (no undefined) before parsing
-  for (const [vaultName, vaultSecrets] of Object.entries(config)) {
-    for (const [secretName, secretValue] of Object.entries(vaultSecrets)) {
-      if (secretValue === undefined) {
-        throw new Error(
-          `Secret "${secretName}" in vault "${vaultName}" has an undefined value. All secrets must have string values at apply time.`,
-        );
-      }
-    }
   }
 
   const parsed = SecretsSchema.parse(config);
