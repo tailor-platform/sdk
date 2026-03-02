@@ -77,26 +77,26 @@ const machineUserName = values["machine-user"] || defaultMachineUser;
 
 if (!machineUserName) {
   console.error(styleText("red", "Error: Machine user name is required."));
-  console.error(styleText("yellow", "Specify --machine-user <name> or configure machineUserName in generator options."));
+  console.error(
+    styleText(
+      "yellow",
+      "Specify --machine-user <name> or configure machineUserName in generator options.",
+    ),
+  );
   process.exit(1);
 }
 
 // Entity configuration
 const namespaceEntities = {
-  "main-db": [
-    "Category",
-    "Order",
-    "Product",
-    "User",
-  ]
+  "main-db": ["Category", "Order", "Product", "User"],
 };
 const namespaceDeps = {
   "main-db": {
-    "Category": [],
-    "Order": ["Product", "User"],
-    "Product": ["Category"],
-    "User": []
-  }
+    Category: [],
+    Order: ["Product", "User"],
+    Product: ["Category"],
+    User: [],
+  },
 };
 const entities = Object.values(namespaceEntities).flat();
 const hasIdpUser = true;
@@ -111,13 +111,20 @@ const skipIdp = values["skip-idp"];
 // Validate mutually exclusive options
 const optionCount = [hasNamespace, hasTypes].filter(Boolean).length;
 if (optionCount > 1) {
-  console.error(styleText("red", "Error: Options --namespace and type names are mutually exclusive."));
+  console.error(
+    styleText("red", "Error: Options --namespace and type names are mutually exclusive."),
+  );
   process.exit(1);
 }
 
 // --skip-idp and --namespace are redundant (namespace already excludes _User)
 if (skipIdp && hasNamespace) {
-  console.warn(styleText("yellow", "Warning: --skip-idp is redundant with --namespace (namespace filtering already excludes _User)."));
+  console.warn(
+    styleText(
+      "yellow",
+      "Warning: --skip-idp is redundant with --namespace (namespace filtering already excludes _User).",
+    ),
+  );
 }
 
 // Filter by namespace (automatically excludes _User as it has no namespace)
@@ -127,7 +134,9 @@ if (hasNamespace) {
 
   if (!entitiesToProcess || entitiesToProcess.length === 0) {
     console.error(styleText("red", `Error: No entities found in namespace "${namespace}"`));
-    console.error(styleText("yellow", `Available namespaces: ${Object.keys(namespaceEntities).join(", ")}`));
+    console.error(
+      styleText("yellow", `Available namespaces: ${Object.keys(namespaceEntities).join(", ")}`),
+    );
     process.exit(1);
   }
 
@@ -150,7 +159,9 @@ if (hasTypes) {
   });
 
   if (notFoundTypes.length > 0) {
-    console.error(styleText("red", `Error: The following types were not found: ${notFoundTypes.join(", ")}`));
+    console.error(
+      styleText("red", `Error: The following types were not found: ${notFoundTypes.join(", ")}`),
+    );
     console.error(styleText("yellow", `Available types: ${allTypes.join(", ")}`));
     process.exit(1);
   }
@@ -176,11 +187,11 @@ const accessToken = await loadAccessToken({ profile: values.profile, useProfile:
 const workspaceId = await loadWorkspaceId({ profile: values.profile });
 const operatorClient = await initOperatorClient(accessToken);
 
-
-
 // Truncate tables if requested
 if (values.truncate) {
-  const answer = values.yes ? "y" : await promptConfirmation("Are you sure you want to truncate? (y/n): ");
+  const answer = values.yes
+    ? "y"
+    : await promptConfirmation("Are you sure you want to truncate? (y/n): ");
   if (answer !== "y") {
     console.log(styleText("yellow", "Truncate cancelled."));
     process.exit(0);
@@ -219,7 +230,8 @@ if (values.truncate) {
   }
 
   // Truncate _User if applicable
-  const shouldTruncateUser = !skipIdp && !hasNamespace && (!hasTypes || entitiesToProcess.includes("_User"));
+  const shouldTruncateUser =
+    !skipIdp && !hasNamespace && (!hasTypes || entitiesToProcess.includes("_User"));
   if (hasIdpUser && shouldTruncateUser) {
     const truncResult = await truncateIdpUser();
     if (!truncResult.success) {
@@ -295,7 +307,12 @@ const seedViaTestExecScript = async (namespace, typesToSeed, deps) => {
     return { success: true, processed: {} };
   }
 
-  console.log(styleText("cyan", `  [${namespace}] Seeding ${typesWithData.length} types via Kysely batch insert...`));
+  console.log(
+    styleText(
+      "cyan",
+      `  [${namespace}] Seeding ${typesWithData.length} types via Kysely batch insert...`,
+    ),
+  );
 
   // Bundle seed script
   const bundled = await bundleSeedScript(namespace, typesWithData);
@@ -322,7 +339,9 @@ const seedViaTestExecScript = async (namespace, typesToSeed, deps) => {
 
   for (const chunk of chunks) {
     if (chunks.length > 1) {
-      console.log(styleText("dim", `    Chunk ${chunk.index + 1}/${chunk.total}: ${chunk.order.join(", ")}`));
+      console.log(
+        styleText("dim", `    Chunk ${chunk.index + 1}/${chunk.total}: ${chunk.order.join(", ")}`),
+      );
     }
 
     // Execute seed script for this chunk
@@ -385,16 +404,12 @@ const seedViaTestExecScript = async (namespace, typesToSeed, deps) => {
   return { success: true, processed: allProcessed };
 };
 
-
-
 // Main execution
 try {
   let allSuccess = true;
 
   // Determine which namespaces and types to process
-  const namespacesToProcess = hasNamespace
-    ? [values.namespace]
-    : Object.keys(namespaceEntities);
+  const namespacesToProcess = hasNamespace ? [values.namespace] : Object.keys(namespaceEntities);
 
   for (const namespace of namespacesToProcess) {
     const nsTypes = namespaceEntities[namespace] || [];
