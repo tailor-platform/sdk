@@ -4,13 +4,14 @@ import { parseSync } from "oxc-parser";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
+import { computeBundlerContextHash, withCache, type BundleCache } from "@/cli/cache/bundle-cache";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { logger, styles } from "@/cli/shared/logger";
 import { tailorUserMap } from "@/cli/shared/runtime-args";
+import { serializeTriggerContext, type TriggerContext } from "@/cli/shared/trigger-context";
 import { detectTriggerCalls, findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
 import { transformFunctionTriggers } from "./trigger-transformer";
-import type { TriggerContext } from "@/cli/shared/trigger-context";
 
 interface JobInfo {
   name: string;
@@ -36,6 +37,7 @@ export interface BundleWorkflowJobsResult {
  * @param mainJobNames - Names of main jobs
  * @param env - Environment variables to inject
  * @param triggerContext - Trigger context for transformations
+ * @param cache - Optional bundle cache for skipping unchanged builds
  * @param inlineSourcemap - Whether to enable inline sourcemaps
  * @returns Workflow job bundling result
  */
@@ -44,6 +46,7 @@ export async function bundleWorkflowJobs(
   mainJobNames: string[],
   env: Record<string, string | number | boolean> = {},
   triggerContext?: TriggerContext,
+  cache?: BundleCache,
   inlineSourcemap?: boolean,
 ): Promise<BundleWorkflowJobsResult> {
   if (allJobs.length === 0) {
@@ -61,11 +64,18 @@ export async function bundleWorkflowJobs(
 
   const outputDir = path.resolve(getDistDir(), "workflow-jobs");
 
-  // Clean up output directory before bundling to remove stale files
-  if (fs.existsSync(outputDir)) {
-    fs.rmSync(outputDir, { recursive: true });
-  }
+  // Remove stale output files (those not in the current build set)
   fs.mkdirSync(outputDir, { recursive: true });
+  const currentJobNames = new Set(usedJobs.map((j) => j.name));
+  const existingFiles = fs.readdirSync(outputDir);
+  for (const file of existingFiles) {
+    // Remove .js and .js.map files not belonging to current jobs (covers entry files, stale outputs, and sourcemaps)
+    if (file.endsWith(".js") && !currentJobNames.has(path.basename(file, ".js"))) {
+      fs.rmSync(path.join(outputDir, file), { force: true });
+    } else if (file.endsWith(".js.map") && !currentJobNames.has(path.basename(file, ".js.map"))) {
+      fs.rmSync(path.join(outputDir, file), { force: true });
+    }
+  }
 
   let tsconfig: string | undefined;
   try {
@@ -77,7 +87,16 @@ export async function bundleWorkflowJobs(
   // Process each job
   await Promise.all(
     usedJobs.map((job) =>
-      bundleSingleJob(job, usedJobs, outputDir, tsconfig, env, triggerContext, inlineSourcemap),
+      bundleSingleJob(
+        job,
+        usedJobs,
+        outputDir,
+        tsconfig,
+        env,
+        triggerContext,
+        cache,
+        inlineSourcemap,
+      ),
     ),
   );
 
@@ -234,103 +253,131 @@ async function bundleSingleJob(
   tsconfig: string | undefined,
   env: Record<string, string | number | boolean>,
   triggerContext?: TriggerContext,
+  cache?: BundleCache,
   inlineSourcemap?: boolean,
 ): Promise<void> {
-  // Step 1: Create entry file that imports job by named export
-  const entryPath = path.join(outputDir, `${job.name}.entry.js`);
-  const absoluteSourcePath = path.resolve(job.sourceFile);
-
-  const entryContent = ml /* js */ `
-    import { ${job.exportName} } from "${absoluteSourcePath}";
-
-    export async function main(input) {
-      const env = ${JSON.stringify(env)};
-      const _user = ${tailorUserMap};
-      return await ${job.exportName}.body(input, { env, user: _user });
-    }
-  `;
-  fs.writeFileSync(entryPath, entryContent);
-
-  // Step 2: Bundle with a transform plugin that transforms trigger calls
   const outputPath = path.join(outputDir, `${job.name}.js`);
+  const serializedTriggerContext = serializeTriggerContext(triggerContext);
 
-  // Collect export names for enhanced AST removal (catches jobs missed by AST detection)
-  const otherJobExportNames = allJobs.filter((j) => j.name !== job.name).map((j) => j.exportName);
-
-  // Build a map from export name to job name for trigger transformation
-  const allJobsMap = new Map<string, string>();
-  for (const j of allJobs) {
-    allJobsMap.set(j.exportName, j.name);
-  }
-
-  // Create transform plugin to transform trigger calls and remove other job declarations
-  const transformPlugin: rolldown.Plugin = {
-    name: "workflow-transform",
-    transform: {
-      filter: {
-        id: {
-          include: [/\.ts$/, /\.js$/],
-        },
-      },
-      handler(code, id) {
-        // Only transform source files that contain workflow jobs or trigger calls
-        if (
-          !code.includes("createWorkflowJob") &&
-          !code.includes("createWorkflow") &&
-          !code.includes(".trigger(")
-        ) {
-          return null;
-        }
-
-        // First, apply existing workflow source transformation (removes other jobs, transforms job.trigger)
-        let transformed = transformWorkflowSource(
-          code,
-          job.name,
-          job.exportName,
-          otherJobExportNames,
-          allJobsMap,
-        );
-
-        // Then, apply workflow.trigger transformation if context is provided
-        if (triggerContext && transformed.includes(".trigger(")) {
-          transformed = transformFunctionTriggers(
-            transformed,
-            triggerContext.workflowNameMap,
-            triggerContext.jobNameMap,
-            triggerContext.workflowFileMap,
-            id,
-          );
-        }
-
-        return { code: transformed };
-      },
-    },
-  };
-
-  await rolldown.build(
-    rolldown.defineConfig({
-      input: entryPath,
-      output: {
-        file: outputPath,
-        format: "esm",
-        sourcemap: inlineSourcemap ? "inline" : true,
-        minify: inlineSourcemap
-          ? {
-              mangle: {
-                keepNames: true,
-              },
-            }
-          : true,
-        inlineDynamicImports: true,
-      },
-      tsconfig,
-      plugins: [transformPlugin],
-      treeshake: {
-        moduleSideEffects: false,
-        annotations: true,
-        unknownGlobalSideEffects: false,
-      },
-      logLevel: "silent",
-    }) as rolldown.BuildOptions,
+  // Include sorted env variables as a prefix so that env changes invalidate the cache
+  const sortedEnvPrefix = JSON.stringify(
+    Object.fromEntries(Object.entries(env).sort(([a], [b]) => a.localeCompare(b))),
   );
+  const contextHash = computeBundlerContextHash({
+    sourceFile: job.sourceFile,
+    serializedTriggerContext,
+    tsconfig,
+    inlineSourcemap,
+    prefix: sortedEnvPrefix,
+  });
+
+  await withCache({
+    cache,
+    kind: "workflow-job",
+    name: job.name,
+    sourceFile: job.sourceFile,
+    outputPath,
+    contextHash,
+    async build(cachePlugins) {
+      // Step 1: Create entry file that imports job by named export
+      const entryPath = path.join(outputDir, `${job.name}.entry.js`);
+      const absoluteSourcePath = path.resolve(job.sourceFile);
+
+      const entryContent = ml /* js */ `
+        import { ${job.exportName} } from "${absoluteSourcePath}";
+
+        export async function main(input) {
+          const env = ${JSON.stringify(env)};
+          const _user = ${tailorUserMap};
+          return await ${job.exportName}.body(input, { env, user: _user });
+        }
+      `;
+      fs.writeFileSync(entryPath, entryContent);
+
+      // Step 2: Bundle with a transform plugin that transforms trigger calls
+      // Collect export names for enhanced AST removal (catches jobs missed by AST detection)
+      const otherJobExportNames = allJobs
+        .filter((j) => j.name !== job.name)
+        .map((j) => j.exportName);
+
+      // Build a map from export name to job name for trigger transformation
+      const allJobsMap = new Map<string, string>();
+      for (const j of allJobs) {
+        allJobsMap.set(j.exportName, j.name);
+      }
+
+      // Create transform plugin to transform trigger calls and remove other job declarations
+      const transformPlugin: rolldown.Plugin = {
+        name: "workflow-transform",
+        transform: {
+          filter: {
+            id: {
+              include: [/\.ts$/, /\.js$/],
+            },
+          },
+          handler(code, id) {
+            // Only transform source files that contain workflow jobs or trigger calls
+            if (
+              !code.includes("createWorkflowJob") &&
+              !code.includes("createWorkflow") &&
+              !code.includes(".trigger(")
+            ) {
+              return null;
+            }
+
+            // First, apply existing workflow source transformation (removes other jobs, transforms job.trigger)
+            let transformed = transformWorkflowSource(
+              code,
+              job.name,
+              job.exportName,
+              otherJobExportNames,
+              allJobsMap,
+            );
+
+            // Then, apply workflow.trigger transformation if context is provided
+            if (triggerContext && transformed.includes(".trigger(")) {
+              transformed = transformFunctionTriggers(
+                transformed,
+                triggerContext.workflowNameMap,
+                triggerContext.jobNameMap,
+                triggerContext.workflowFileMap,
+                id,
+              );
+            }
+
+            return { code: transformed };
+          },
+        },
+      };
+
+      const plugins: rolldown.Plugin[] = [transformPlugin, ...cachePlugins];
+
+      await rolldown.build(
+        rolldown.defineConfig({
+          input: entryPath,
+          output: {
+            file: outputPath,
+            format: "esm",
+            sourcemap: inlineSourcemap ? "inline" : true,
+            minify: inlineSourcemap
+              ? {
+                  mangle: {
+                    keepNames: true,
+                  },
+                }
+              : true,
+            inlineDynamicImports: true,
+          },
+          tsconfig,
+          plugins,
+          treeshake: {
+            moduleSideEffects: false,
+            annotations: true,
+            unknownGlobalSideEffects: false,
+          },
+          logLevel: "silent",
+        }) as rolldown.BuildOptions,
+      );
+    },
+  });
 }

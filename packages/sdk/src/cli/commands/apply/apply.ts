@@ -1,8 +1,15 @@
+import * as fs from "node:fs";
+import { findUpSync } from "find-up-simple";
+import * as path from "pathe";
+import { hashFile } from "@/cli/cache/hasher";
+import { createCacheManager } from "@/cli/cache/manager";
 import { loadApplication, type Application } from "@/cli/services/application";
 import { initOperatorClient } from "@/cli/shared/client";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
+import { getDistDir } from "@/cli/shared/dist-dir";
 import { logger } from "@/cli/shared/logger";
+import { readPackageJson } from "@/cli/shared/package-json";
 import { generateUserTypes } from "@/cli/shared/type-generator";
 import { withSpan } from "@/cli/telemetry";
 import { PluginManager } from "@/plugin/manager";
@@ -37,6 +44,8 @@ export interface ApplyOptions {
   dryRun?: boolean;
   yes?: boolean;
   noSchemaCheck?: boolean;
+  noCache?: boolean;
+  cleanCache?: boolean;
   // NOTE(remiposo): Provide an option to run build-only for testing purposes.
   // This could potentially be exposed as a CLI option.
   buildOnly?: boolean;
@@ -73,6 +82,27 @@ export async function apply(options?: ApplyOptions) {
         const dryRun = options?.dryRun ?? false;
         const buildOnly =
           options?.buildOnly ?? process.env.TAILOR_PLATFORM_SDK_BUILD_ONLY === "true";
+        const noCache = options?.noCache ?? false;
+
+        // Initialize cache manager
+        const packageJson = await readPackageJson();
+        const cacheDir = path.resolve(getDistDir(), "cache");
+        if (options?.cleanCache) {
+          fs.rmSync(cacheDir, { recursive: true, force: true });
+          logger.info("Bundle cache cleaned");
+        }
+        const configDir = path.dirname(config.path);
+        const lockfilePath =
+          findUpSync("pnpm-lock.yaml", { cwd: configDir }) ??
+          findUpSync("package-lock.json", { cwd: configDir }) ??
+          findUpSync("yarn.lock", { cwd: configDir }) ??
+          findUpSync("bun.lock", { cwd: configDir });
+        const cacheManager = createCacheManager({
+          enabled: !noCache,
+          cacheDir,
+          sdkVersion: packageJson.version ?? "unknown",
+          lockfileHash: lockfilePath ? hashFile(lockfilePath) : undefined,
+        });
 
         let pluginManager: PluginManager | undefined;
         if (plugins.length > 0) {
@@ -83,9 +113,19 @@ export async function apply(options?: ApplyOptions) {
           generateUserTypes({ config, configPath: config.path }),
         );
 
-        const { application, workflowBuildResult } = await withSpan("build.loadApplication", () =>
-          loadApplication({ config, pluginManager }),
-        );
+        let application: Application;
+        let workflowBuildResult: Awaited<ReturnType<typeof loadApplication>>["workflowBuildResult"];
+        try {
+          const result = await withSpan("build.loadApplication", () =>
+            loadApplication({ config, pluginManager, bundleCache: cacheManager.bundleCache }),
+          );
+          application = result.application;
+          workflowBuildResult = result.workflowBuildResult;
+        } finally {
+          // Persist even on partial failure: successfully built bundles
+          // are cached so the next run only rebuilds what failed.
+          cacheManager.finalize();
+        }
 
         return { config, plugins, application, workflowBuildResult, dryRun, buildOnly };
       },

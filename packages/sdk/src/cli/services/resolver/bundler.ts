@@ -3,10 +3,16 @@ import ml from "multiline-ts";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
+import { computeBundlerContextHash, withCache, type BundleCache } from "@/cli/cache/bundle-cache";
 import { loadFilesWithIgnores, type FileLoadConfig } from "@/cli/services/file-loader";
+import { removeStaleEntryFiles } from "@/cli/services/stale-cleanup";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { logger, styles } from "@/cli/shared/logger";
-import { createTriggerTransformPlugin, type TriggerContext } from "@/cli/shared/trigger-context";
+import {
+  createTriggerTransformPlugin,
+  serializeTriggerContext,
+  type TriggerContext,
+} from "@/cli/shared/trigger-context";
 import { loadResolver } from "./loader";
 
 interface ResolverInfo {
@@ -24,6 +30,7 @@ interface ResolverInfo {
  * @param namespace - Resolver namespace name
  * @param config - Resolver file loading configuration
  * @param triggerContext - Trigger context for workflow/job transformations
+ * @param cache - Optional bundle cache for skipping unchanged builds
  * @param inlineSourcemap - Whether to enable inline sourcemaps
  * @returns Promise that resolves when bundling completes
  */
@@ -31,6 +38,7 @@ export async function bundleResolvers(
   namespace: string,
   config: FileLoadConfig,
   triggerContext?: TriggerContext,
+  cache?: BundleCache,
   inlineSourcemap?: boolean,
 ): Promise<void> {
   const files = loadFilesWithIgnores(config);
@@ -62,6 +70,11 @@ export async function bundleResolvers(
 
   fs.mkdirSync(outputDir, { recursive: true });
 
+  // Clean stale entry files from previous builds.
+  // Must complete before Promise.all below; parallel namespace processing
+  // would require separate output directories per namespace.
+  await removeStaleEntryFiles(outputDir);
+
   let tsconfig: string | undefined;
   try {
     tsconfig = await resolveTSConfig();
@@ -72,7 +85,7 @@ export async function bundleResolvers(
   // Process each resolver
   await Promise.all(
     resolvers.map((resolver) =>
-      bundleSingleResolver(resolver, outputDir, tsconfig, triggerContext, inlineSourcemap),
+      bundleSingleResolver(resolver, outputDir, tsconfig, triggerContext, cache, inlineSourcemap),
     ),
   );
 
@@ -84,72 +97,92 @@ async function bundleSingleResolver(
   outputDir: string,
   tsconfig: string | undefined,
   triggerContext?: TriggerContext,
+  cache?: BundleCache,
   inlineSourcemap?: boolean,
 ): Promise<void> {
-  // Step 1: Create entry file that imports from the original source
-  const entryPath = path.join(outputDir, `${resolver.name}.entry.js`);
-  const absoluteSourcePath = path.resolve(resolver.sourceFile);
-
-  const entryContent = ml /* js */ `
-    import _internalResolver from "${absoluteSourcePath}";
-    import { t } from "@tailor-platform/sdk";
-
-    const $tailor_resolver_body = async (context) => {
-      if (_internalResolver.input) {
-        const result = t.object(_internalResolver.input).parse({
-          value: context.input,
-          data: context.input,
-          user: context.user,
-        });
-
-        if (result.issues) {
-          const errorMessages = result.issues
-            .map(issue => {
-              const path = issue.path ? issue.path.join('.') : '';
-              return path ? \`  \${path}: \${issue.message}\` : issue.message;
-            })
-            .join('\\n');
-          throw new Error(\`Failed to input validation:\\n\${errorMessages}\`);
-        }
-      }
-
-      return _internalResolver.body(context);
-    };
-
-    export { $tailor_resolver_body as main };
-  `;
-  fs.writeFileSync(entryPath, entryContent);
-
-  // Step 2: Bundle with tree-shaking
   const outputPath = path.join(outputDir, `${resolver.name}.js`);
+  const serializedTriggerContext = serializeTriggerContext(triggerContext);
 
-  const triggerPlugin = createTriggerTransformPlugin(triggerContext);
-  const plugins: rolldown.Plugin[] = triggerPlugin ? [triggerPlugin] : [];
+  const contextHash = computeBundlerContextHash({
+    sourceFile: resolver.sourceFile,
+    serializedTriggerContext,
+    tsconfig,
+    inlineSourcemap,
+  });
 
-  await rolldown.build(
-    rolldown.defineConfig({
-      input: entryPath,
-      output: {
-        file: outputPath,
-        format: "esm",
-        sourcemap: inlineSourcemap ? "inline" : true,
-        minify: inlineSourcemap
-          ? {
-              mangle: {
-                keepNames: true,
-              },
+  await withCache({
+    cache,
+    kind: "resolver",
+    name: resolver.name,
+    sourceFile: resolver.sourceFile,
+    outputPath,
+    contextHash,
+    async build(cachePlugins) {
+      // Step 1: Create entry file that imports from the original source
+      const entryPath = path.join(outputDir, `${resolver.name}.entry.js`);
+      const absoluteSourcePath = path.resolve(resolver.sourceFile);
+
+      const entryContent = ml /* js */ `
+        import _internalResolver from "${absoluteSourcePath}";
+        import { t } from "@tailor-platform/sdk";
+
+        const $tailor_resolver_body = async (context) => {
+          if (_internalResolver.input) {
+            const result = t.object(_internalResolver.input).parse({
+              value: context.input,
+              data: context.input,
+              user: context.user,
+            });
+
+            if (result.issues) {
+              const errorMessages = result.issues
+                .map(issue => {
+                  const path = issue.path ? issue.path.join('.') : '';
+                  return path ? \`  \${path}: \${issue.message}\` : issue.message;
+                })
+                .join('\\n');
+              throw new Error(\`Failed to input validation:\\n\${errorMessages}\`);
             }
-          : true,
-        inlineDynamicImports: true,
-      },
-      tsconfig,
-      plugins,
-      treeshake: {
-        moduleSideEffects: false,
-        annotations: true,
-        unknownGlobalSideEffects: false,
-      },
-      logLevel: "silent",
-    }) as rolldown.BuildOptions,
-  );
+          }
+
+          return _internalResolver.body(context);
+        };
+
+        export { $tailor_resolver_body as main };
+      `;
+      fs.writeFileSync(entryPath, entryContent);
+
+      // Step 2: Bundle with tree-shaking
+      const triggerPlugin = createTriggerTransformPlugin(triggerContext);
+      const plugins: rolldown.Plugin[] = triggerPlugin ? [triggerPlugin] : [];
+      plugins.push(...cachePlugins);
+
+      await rolldown.build(
+        rolldown.defineConfig({
+          input: entryPath,
+          output: {
+            file: outputPath,
+            format: "esm",
+            sourcemap: inlineSourcemap ? "inline" : true,
+            minify: inlineSourcemap
+              ? {
+                  mangle: {
+                    keepNames: true,
+                  },
+                }
+              : true,
+            inlineDynamicImports: true,
+          },
+          tsconfig,
+          plugins,
+          treeshake: {
+            moduleSideEffects: false,
+            annotations: true,
+            unknownGlobalSideEffects: false,
+          },
+          logLevel: "silent",
+        }) as rolldown.BuildOptions,
+      );
+    },
+  });
 }

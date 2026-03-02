@@ -28,6 +28,7 @@ import {
 import { TailorDBServiceConfigSchema } from "@/parser/service/tailordb";
 import { type TailorDBServiceInput } from "@/parser/service/tailordb/types";
 import { type WorkflowServiceConfig } from "@/parser/service/workflow";
+import type { BundleCache } from "@/cli/cache/bundle-cache";
 import type { PluginManager } from "@/plugin/manager";
 
 export type Application = {
@@ -268,6 +269,8 @@ export interface DefineApplicationParams {
   config: LoadedConfig;
   /** Plugin manager for processing plugins */
   pluginManager?: PluginManager;
+  /** Optional bundle cache for skipping unchanged builds */
+  bundleCache?: BundleCache;
 }
 
 /**
@@ -340,7 +343,7 @@ export function generatePluginFilesIfNeeded(
 export async function loadApplication(
   params: DefineApplicationParams,
 ): Promise<LoadApplicationResult> {
-  const { config, pluginManager } = params;
+  const { config, pluginManager, bundleCache } = params;
 
   // 1. Define services (synchronous)
   const { tailordbResult, resolverResult, idpResult, authResult, staticWebsiteServices } =
@@ -376,7 +379,13 @@ export async function loadApplication(
 
   // 7. Bundle resolvers
   for (const pipeline of resolverResult.resolverServices) {
-    await bundleResolvers(pipeline.namespace, pipeline.config, triggerContext, inlineSourcemap);
+    await bundleResolvers(
+      pipeline.namespace,
+      pipeline.config,
+      triggerContext,
+      bundleCache,
+      inlineSourcemap,
+    );
   }
 
   // 8. Bundle executors
@@ -385,6 +394,7 @@ export async function loadApplication(
       config: executorService.config,
       triggerContext,
       additionalFiles: [...pluginExecutorFiles],
+      cache: bundleCache,
       inlineSourcemap,
     });
   }
@@ -398,6 +408,7 @@ export async function loadApplication(
       mainJobNames,
       config.env ?? {},
       triggerContext,
+      bundleCache,
       inlineSourcemap,
     );
   }

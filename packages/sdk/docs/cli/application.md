@@ -111,6 +111,8 @@ tailor-sdk apply [options]
 | `--yes`                         | `-y`  | Skip confirmation prompts                          | No       | `false`              |
 | `--dry-run`                     | `-d`  | Run the command without making any changes         | No       | -                    |
 | `--no-schema-check`             | -     | Skip schema diff check against migration snapshots | No       | -                    |
+| `--no-cache`                    | -     | Disable bundle caching for this run                | No       | -                    |
+| `--clean-cache`                 | -     | Clean the bundle cache before building             | No       | -                    |
 
 <!-- politty:command:apply:options:end -->
 

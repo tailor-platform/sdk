@@ -99,7 +99,7 @@ describe("pnpm apply command integration tests", () => {
       const entries = fs.readdirSync(currentDir, { withFileTypes: true });
 
       for (const entry of entries) {
-        if (entry.name === ".DS_Store") {
+        if (entry.name === ".DS_Store" || entry.name === "cache") {
           continue;
         }
 

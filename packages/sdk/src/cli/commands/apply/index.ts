@@ -17,6 +17,12 @@ export const applyCommand = defineCommand({
     "no-schema-check": arg(z.boolean().optional(), {
       description: "Skip schema diff check against migration snapshots",
     }),
+    "no-cache": arg(z.boolean().optional(), {
+      description: "Disable bundle caching for this run",
+    }),
+    "clean-cache": arg(z.boolean().optional(), {
+      description: "Clean the bundle cache before building",
+    }),
   }),
   run: withCommonArgs(async (args) => {
     await apply({
@@ -26,6 +32,8 @@ export const applyCommand = defineCommand({
       dryRun: args["dry-run"],
       yes: args.yes,
       noSchemaCheck: args["no-schema-check"],
+      noCache: args["no-cache"],
+      cleanCache: args["clean-cache"],
     });
   }),
 });
