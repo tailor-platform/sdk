@@ -354,9 +354,11 @@ async function planClients(
     });
   };
 
-  for (const idp of idps) {
+  const clientsByIdp = await Promise.all(idps.map((idp) => fetchClients(idp.name)));
+  for (let i = 0; i < idps.length; i++) {
+    const idp = idps[i];
     const namespaceName = idp.name;
-    const existingClients = await fetchClients(namespaceName);
+    const existingClients = clientsByIdp[i];
     const existingNameMap = new Map<string, string>();
     existingClients.forEach((client) => {
       existingNameMap.set(client.name, client.clientSecret);
@@ -395,9 +397,12 @@ async function planClients(
     });
   }
 
-  for (const namespaceName of deletedServices) {
-    const existingClients = await fetchClients(namespaceName);
-    existingClients.forEach((client) => {
+  const deletedClientsByService = await Promise.all(
+    deletedServices.map((namespaceName) => fetchClients(namespaceName)),
+  );
+  for (let i = 0; i < deletedServices.length; i++) {
+    const namespaceName = deletedServices[i];
+    deletedClientsByService[i].forEach((client) => {
       changeSet.deletes.push({
         name: client.name,
         request: {
