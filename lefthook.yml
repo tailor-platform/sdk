@@ -36,7 +36,7 @@ pre-commit:
 
     3-lint:
       glob: "*.{ts,js}"
-      run: pnpm exec turbo run lint --filter=@tailor-platform/sdk --filter=example
+      run: pnpm exec turbo run lint --filter=@tailor-platform/sdk --filter=example --filter='./packages/create-sdk/templates/*'
 
     4-typecheck:
       glob: "*.{ts,js}"
