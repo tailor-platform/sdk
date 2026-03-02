@@ -176,7 +176,81 @@ const accessToken = await loadAccessToken({ profile: values.profile, useProfile:
 const workspaceId = await loadWorkspaceId({ profile: values.profile });
 const operatorClient = await initOperatorClient(accessToken);
 
+// Truncate _User via tailor.idp.Client (server-side)
+const truncateIdpUser = async () => {
+  console.log(styleText("cyan", "Truncating _User via tailor.idp.Client..."));
 
+  const idpTruncateCode = /* js */ `export async function main() {
+  const client = new tailor.idp.Client({ namespace: "my-idp" });
+  const errors = [];
+  let deleted = 0;
+
+  let nextToken = undefined;
+  const allUsers = [];
+  do {
+    const response = await client.users(nextToken ? { nextToken } : undefined);
+    allUsers.push(...(response.users || []));
+    nextToken = response.nextToken;
+  } while (nextToken);
+
+  console.log(\`Found \${allUsers.length} IDP users to delete\`);
+
+  for (const user of allUsers) {
+    try {
+      await client.deleteUser(user.id);
+      deleted++;
+      console.log(\`[_User] Deleted \${deleted}/\${allUsers.length}: \${user.name}\`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push(\`User \${user.id} (\${user.name}): \${message}\`);
+      console.error(\`[_User] Delete failed for \${user.name}: \${message}\`);
+    }
+  }
+
+  return { success: errors.length === 0, deleted, total: allUsers.length, errors };
+}`;
+
+  const result = await executeScript({
+    client: operatorClient,
+    workspaceId,
+    name: "truncate-idp-user.ts",
+    code: idpTruncateCode,
+    arg: JSON.stringify({}),
+    invoker: { namespace: authNamespace, machineUserName },
+  });
+
+  if (result.logs) {
+    for (const line of result.logs.split("\n").filter(Boolean)) {
+      console.log(styleText("dim", `  ${line}`));
+    }
+  }
+
+  if (result.success) {
+    let parsed;
+    try {
+      parsed = JSON.parse(result.result || "{}");
+    } catch (e) {
+      console.error(styleText("red", `  ✗ Failed to parse truncation result: ${e.message}`));
+      return { success: false };
+    }
+
+    if (parsed.deleted !== undefined) {
+      console.log(styleText("green", `  ✓ _User: ${parsed.deleted} users deleted`));
+    }
+
+    if (!parsed.success) {
+      const errors = Array.isArray(parsed.errors) ? parsed.errors : [];
+      for (const err of errors) {
+        console.error(styleText("red", `  ✗ ${err}`));
+      }
+      return { success: false };
+    }
+
+    return { success: true };
+  }
+  console.error(styleText("red", `  ✗ Truncation failed: ${result.error}`));
+  return { success: false };
+};
 
 // Truncate tables if requested
 if (values.truncate) {
@@ -385,7 +459,79 @@ const seedViaTestExecScript = async (namespace, typesToSeed, deps) => {
   return { success: true, processed: allProcessed };
 };
 
+// Seed _User via tailor.idp.Client (server-side)
+const seedIdpUser = async () => {
+  console.log(styleText("cyan", "  Seeding _User via tailor.idp.Client..."));
+  const dataDir = join(configDir, "data");
+  const data = loadSeedData(dataDir, ["_User"]);
+  const rows = data["_User"] || [];
+  if (rows.length === 0) {
+    console.log(styleText("dim", "    No _User data to seed"));
+    return { success: true };
+  }
+  console.log(styleText("dim", `    Processing ${rows.length} _User records...`));
 
+  const idpSeedCode = /* js */ `export async function main(input) {
+  const client = new tailor.idp.Client({ namespace: "my-idp" });
+  const errors = [];
+  let processed = 0;
+
+  for (let i = 0; i < input.users.length; i++) {
+    try {
+      await client.createUser(input.users[i]);
+      processed++;
+      console.log(\`[_User] \${i + 1}/\${input.users.length}: \${input.users[i].name}\`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push(\`Row \${i} (\${input.users[i].name}): \${message}\`);
+      console.error(\`[_User] Row \${i} failed: \${message}\`);
+    }
+  }
+
+  return { success: errors.length === 0, processed, errors };
+}`;
+
+  const result = await executeScript({
+    client: operatorClient,
+    workspaceId,
+    name: "seed-idp-user.ts",
+    code: idpSeedCode,
+    arg: JSON.stringify({ users: rows }),
+    invoker: { namespace: authNamespace, machineUserName },
+  });
+
+  if (result.logs) {
+    for (const line of result.logs.split("\n").filter(Boolean)) {
+      console.log(styleText("dim", `    ${line}`));
+    }
+  }
+
+  if (result.success) {
+    let parsed;
+    try {
+      parsed = JSON.parse(result.result || "{}");
+    } catch (e) {
+      console.error(styleText("red", `    ✗ Failed to parse seed result: ${e.message}`));
+      return { success: false };
+    }
+
+    if (parsed.processed) {
+      console.log(styleText("green", `    ✓ _User: ${parsed.processed} rows processed`));
+    }
+
+    if (!parsed.success) {
+      const errors = Array.isArray(parsed.errors) ? parsed.errors : [];
+      for (const err of errors) {
+        console.error(styleText("red", `    ✗ ${err}`));
+      }
+      return { success: false };
+    }
+
+    return { success: true };
+  }
+  console.error(styleText("red", `    ✗ Seed failed: ${result.error}`));
+  return { success: false };
+};
 
 // Main execution
 try {
