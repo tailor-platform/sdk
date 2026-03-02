@@ -7,6 +7,7 @@ const TailorFieldTypeSchema = z.enum([
   "boolean",
   "integer",
   "float",
+  "decimal",
   "enum",
   "date",
   "datetime",

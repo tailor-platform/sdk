@@ -348,6 +348,11 @@ export declare type TailorDBType_FieldConfig = Message<"tailor.v1.TailorDBType.F
    * @generated from field: tailor.v1.TailorDBType.Serial serial = 17;
    */
   serial?: TailorDBType_Serial;
+
+  /**
+   * @generated from field: optional int32 scale = 18;
+   */
+  scale?: number;
 };
 
 /**

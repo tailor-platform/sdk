@@ -33,6 +33,7 @@ export interface DBFieldMetadata extends FieldMetadata {
   hooks?: Hook<any, any>;
   serial?: SerialConfig;
   relation?: boolean;
+  scale?: number;
 }
 
 export interface DefinedDBFieldMetadata extends DefinedFieldMetadata {
