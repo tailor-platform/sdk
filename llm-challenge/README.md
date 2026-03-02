@@ -15,26 +15,13 @@ SDK improvement proposals based on benchmark results are tracked in [`.claude/IM
 
 ## Problems
 
-| ID  | Name                         | Category | Difficulty | Scoring (G/T/Te) |
-| --- | ---------------------------- | -------- | ---------- | ---------------- |
-| 001 | comprehensive-model          | tailordb | medium     | 20 / 20 / 60     |
-| 002 | advanced-model-features      | tailordb | hard       | 20 / 20 / 60     |
-| 003 | multi-pattern-resolvers      | resolver | medium     | 15 / 15 / 70     |
-| 004 | db-resolvers-with-workflow   | resolver | hard       | 15 / 15 / 70     |
-| 005 | record-lifecycle-executors   | executor | medium     | 15 / 15 / 70     |
-| 006 | advanced-executor-operations | executor | hard       | 15 / 15 / 70     |
-| 007 | workflow-orchestration       | workflow | hard       | 15 / 15 / 70     |
-| 008 | full-application-config      | config   | hard       | 30 / 20 / 50     |
-| 009 | multi-service-integration    | config   | hard       | 15 / 15 / 70     |
-| 010 | fix-broken-model             | tailordb | medium     | 15 / 15 / 70     |
-| 011 | fix-broken-resolver          | resolver | medium     | 15 / 15 / 70     |
-| 012 | fix-broken-workflow          | workflow | hard       | 15 / 15 / 70     |
+| ID  | Name                       | Category    | Difficulty | Scoring (G/T/Te) |
+| --- | -------------------------- | ----------- | ---------- | ---------------- |
+| 001 | saas-subscription-platform | integration | hard       | 30 / 30 / 240    |
 
-**Scoring column**: Generate / Typecheck / Tests (total 100 per problem, 1200 max)
+**Scoring column**: Generate / Typecheck / Tests (total 300, max 300)
 
-**Difficulty distribution**: 0 easy, 4 medium, 8 hard
-
-**Category distribution**: tailordb (3), resolver (3), executor (2), workflow (2), config (2)
+This single comprehensive problem covers all SDK concepts: TailorDB models (5 types with `createType` API), resolvers, executors, workflows, and full application config. It replaces the previous 12-problem benchmark to reduce token consumption while increasing difficulty.
 
 ## Prerequisites
 
@@ -90,14 +77,7 @@ Each problem is verified through a 3-stage pipeline. If a stage fails, subsequen
 | **Typecheck** | varies | Runs TypeScript type checking (`tsc --noEmit`)   |
 | **Tests**     | varies | Runs Vitest unit tests                           |
 
-Each problem is scored out of 100 points. The scoring weights are defined in each problem's `meta.json` and vary by problem type:
-
-- **Resolver problems** (003, 004): Generate 15, Typecheck 15, Tests 70
-- **Executor problems** (005, 006): Generate 15, Typecheck 15, Tests 70
-- **Workflow problems** (007, 012): Generate 15, Typecheck 15, Tests 70
-- **Config problems** (008): Generate 30, Typecheck 20, Tests 50
-- **TailorDB problems** (001, 002): Generate 20, Typecheck 20, Tests 60
-- **Fix-broken problems** (010, 011): Generate 15, Typecheck 15, Tests 70
+Each problem's scoring weights are defined in its `meta.json`. The current problem allocates: Generate 30, Typecheck 30, Tests 240 (300 total).
 
 ### Partial Scoring
 
