@@ -16,9 +16,11 @@ export type WorkDirContext = {
 /**
  * Create a work directory context for a problem test suite.
  * Returns the resolved workDir path and whether it has node_modules installed.
+ * Respects CHALLENGE_WORK_NAME env var for variant-specific work directories.
  */
 export function createWorkDirContext(testDirname: string): WorkDirContext {
-  const workDir = path.resolve(testDirname, "..", "work");
+  const workName = process.env.CHALLENGE_WORK_NAME ?? "work";
+  const workDir = path.resolve(testDirname, "..", workName);
   const workDirReady = fs.existsSync(path.join(workDir, "node_modules"));
   return { workDir, workDirReady };
 }

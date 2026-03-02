@@ -169,11 +169,15 @@ function parseArgs(): {
   };
 }
 
+function workName(variant?: string): string {
+  return variant ? `work-${variant}` : "work";
+}
+
 /**
  * Clean up previous work artifacts (symlink + tmpdir, or regular directory).
  */
-function cleanupWorkArtifacts(problemDir: string): void {
-  const workPath = path.join(problemDir, "work");
+function cleanupWorkArtifacts(problemDir: string, variant?: string): void {
+  const workPath = path.join(problemDir, workName(variant));
   let stat: fs.Stats;
   try {
     stat = fs.lstatSync(workPath);
@@ -198,15 +202,20 @@ function cleanupWorkArtifacts(problemDir: string): void {
   }
 }
 
-function setupWorkDir(problemDir: string, implDir?: string, useTmpDir?: boolean): string {
+function setupWorkDir(
+  problemDir: string,
+  implDir?: string,
+  useTmpDir?: boolean,
+  variant?: string,
+): string {
   // Clean previous work directory or symlink
-  cleanupWorkArtifacts(problemDir);
+  cleanupWorkArtifacts(problemDir, variant);
 
   let workDir: string;
   if (useTmpDir) {
     workDir = fs.mkdtempSync(path.join(os.tmpdir(), "sdk-ws-"));
   } else {
-    workDir = path.join(problemDir, "work");
+    workDir = path.join(problemDir, workName(variant));
   }
 
   // 1. Copy shared scaffold
@@ -376,7 +385,7 @@ async function runProblem(
   }
 
   const isSolveMode = !!options.solve;
-  const workDir = setupWorkDir(problemDir, options.implDir, isSolveMode);
+  const workDir = setupWorkDir(problemDir, options.implDir, isSolveMode, options.variant);
   try {
     await installLimiter(() => installDependencies(workDir, options.verbose, options.tarballPath));
   } catch (err) {
@@ -388,7 +397,7 @@ async function runProblem(
   }
 
   // In solve mode, workDir is a tmpdir. We'll create a symlink later for verify.
-  const symlinkPath = path.join(problemDir, "work");
+  const symlinkPath = path.join(problemDir, workName(options.variant));
 
   // Snapshot scaffold files after install (before solve) to detect modifications
   const scaffoldFilenames = ["tsconfig.json", "package.json"];
@@ -611,7 +620,7 @@ async function runProblem(
   if (options.clean) {
     if (isSolveMode) {
       // Remove symlink and tmpdir
-      cleanupWorkArtifacts(problemDir);
+      cleanupWorkArtifacts(problemDir, options.variant);
     } else {
       fs.rmSync(workDir, { recursive: true });
     }

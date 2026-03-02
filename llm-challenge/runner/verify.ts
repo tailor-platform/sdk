@@ -39,14 +39,17 @@ export type StageInput = {
 async function runCommand(
   command: string,
   cwd: string,
+  env?: Record<string, string>,
 ): Promise<{ success: boolean; output: string; durationMs: number }> {
   const start = performance.now();
+  const execEnv = env ? { ...process.env, ...env } : undefined;
   try {
     const { stdout } = await execAsync(command, {
       cwd,
       encoding: "utf-8",
       timeout: 60_000,
       maxBuffer: 10 * 1024 * 1024,
+      env: execEnv,
     });
     return { success: true, output: stdout, durationMs: Math.round(performance.now() - start) };
   } catch (err) {
@@ -243,9 +246,13 @@ export async function verifyProblem(
   // Stage 3: tests (run even if typecheck failed for partial scoring)
   const problemDir = path.dirname(workDir);
   const testsDir = path.join(problemDir, "tests");
+  // Pass work directory name so test-helpers can resolve the correct variant work dir
+  const workName = path.basename(workDir);
+  const testEnv = workName !== "work" ? { CHALLENGE_WORK_NAME: workName } : undefined;
   const testResult = await runCommand(
     `npx vitest run --reporter=json --config "${path.join(challengeRoot, "vitest.config.ts")}" --root "${challengeRoot}" "${testsDir}"`,
     challengeRoot,
+    testEnv,
   );
 
   const testStage: StageInput = {
