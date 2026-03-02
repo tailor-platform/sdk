@@ -1,0 +1,154 @@
+import {
+  WORKFLOW_TEST_ENV_KEY,
+  WORKFLOW_TEST_USER_KEY,
+  unauthenticatedTailorUser,
+} from "@tailor-platform/sdk/test";
+import { afterEach, describe, expect, test, vi } from "vitest";
+import workflow, {
+  fulfillOrder,
+  processPayment,
+  sendConfirmation,
+  validateOrder,
+} from "./order-fulfillment";
+
+describe("order fulfillment workflow", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  describe("individual job tests with .body()", () => {
+    test("validateOrder accepts valid order", () => {
+      const result = validateOrder.body(
+        { orderId: "order-1", amount: 100 },
+        { env: {}, user: unauthenticatedTailorUser },
+      );
+      expect(result).toEqual({ valid: true, orderId: "order-1" });
+    });
+
+    test("validateOrder rejects zero amount", () => {
+      expect(() =>
+        validateOrder.body(
+          { orderId: "order-1", amount: 0 },
+          { env: {}, user: unauthenticatedTailorUser },
+        ),
+      ).toThrow("Order amount must be positive");
+    });
+
+    test("processPayment returns transaction", () => {
+      const result = processPayment.body(
+        { orderId: "order-1", amount: 100 },
+        { env: {}, user: unauthenticatedTailorUser },
+      );
+      expect(result).toEqual({
+        transactionId: "txn-order-1",
+        amount: 100,
+        status: "completed",
+      });
+    });
+
+    test("sendConfirmation includes user id", () => {
+      const result = sendConfirmation.body(
+        { orderId: "order-1", transactionId: "txn-1" },
+        { env: {}, user: unauthenticatedTailorUser },
+      );
+      expect(result).toEqual({
+        orderId: "order-1",
+        transactionId: "txn-1",
+        confirmedBy: unauthenticatedTailorUser.id,
+      });
+    });
+  });
+
+  describe("orchestration tests with mocked triggers", () => {
+    test("fulfillOrder chains all jobs", async () => {
+      vi.spyOn(validateOrder, "trigger").mockResolvedValue({
+        valid: true,
+        orderId: "order-1",
+      });
+      vi.spyOn(processPayment, "trigger").mockResolvedValue({
+        transactionId: "txn-order-1",
+        amount: 100,
+        status: "completed" as const,
+      });
+      vi.spyOn(sendConfirmation, "trigger").mockResolvedValue({
+        orderId: "order-1",
+        transactionId: "txn-order-1",
+        confirmedBy: "user-1",
+      });
+
+      const result = await fulfillOrder.body(
+        { orderId: "order-1", amount: 100 },
+        { env: {}, user: unauthenticatedTailorUser },
+      );
+
+      expect(validateOrder.trigger).toHaveBeenCalledWith({
+        orderId: "order-1",
+        amount: 100,
+      });
+      expect(processPayment.trigger).toHaveBeenCalledWith({
+        orderId: "order-1",
+        amount: 100,
+      });
+      expect(sendConfirmation.trigger).toHaveBeenCalledWith({
+        orderId: "order-1",
+        transactionId: "txn-order-1",
+      });
+      expect(result).toEqual({
+        orderId: "order-1",
+        transactionId: "txn-order-1",
+        confirmedBy: "user-1",
+        paymentStatus: "completed",
+      });
+    });
+
+    test("workflow.mainJob.body() chains all jobs", async () => {
+      vi.spyOn(validateOrder, "trigger").mockResolvedValue({
+        valid: true,
+        orderId: "order-2",
+      });
+      vi.spyOn(processPayment, "trigger").mockResolvedValue({
+        transactionId: "txn-order-2",
+        amount: 200,
+        status: "completed" as const,
+      });
+      vi.spyOn(sendConfirmation, "trigger").mockResolvedValue({
+        orderId: "order-2",
+        transactionId: "txn-order-2",
+        confirmedBy: "user-2",
+      });
+
+      const result = await workflow.mainJob.body(
+        { orderId: "order-2", amount: 200 },
+        { env: {}, user: unauthenticatedTailorUser },
+      );
+
+      expect(result).toEqual({
+        orderId: "order-2",
+        transactionId: "txn-order-2",
+        confirmedBy: "user-2",
+        paymentStatus: "completed",
+      });
+    });
+  });
+
+  describe("integration tests with .trigger()", () => {
+    test("workflow.mainJob.trigger() executes all jobs", async () => {
+      vi.stubEnv(WORKFLOW_TEST_ENV_KEY, JSON.stringify({}));
+      const customUser = { ...unauthenticatedTailorUser, id: "test-user" };
+      vi.stubEnv(WORKFLOW_TEST_USER_KEY, JSON.stringify(customUser));
+
+      const result = await workflow.mainJob.trigger({
+        orderId: "order-3",
+        amount: 300,
+      });
+
+      expect(result).toEqual({
+        orderId: "order-3",
+        transactionId: "txn-order-3",
+        confirmedBy: "test-user",
+        paymentStatus: "completed",
+      });
+    });
+  });
+});

@@ -183,6 +183,84 @@ importers:
         specifier: 8.53.0
         version: 8.53.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3)
 
+  packages/create-sdk/templates/executor:
+    devDependencies:
+      '@eslint/js':
+        specifier: 9.39.2
+        version: 9.39.2
+      '@tailor-platform/function-types':
+        specifier: 0.8.0
+        version: 0.8.0
+      '@tailor-platform/sdk':
+        specifier: workspace:^
+        version: link:../../../sdk
+      '@types/node':
+        specifier: 24.10.9
+        version: 24.10.9
+      eslint:
+        specifier: 9.39.2
+        version: 9.39.2(jiti@2.6.1)
+      eslint-plugin-oxlint:
+        specifier: 1.39.0
+        version: 1.39.0
+      oxfmt:
+        specifier: 0.24.0
+        version: 0.24.0
+      oxlint:
+        specifier: 1.39.0
+        version: 1.39.0(oxlint-tsgolint@0.11.1)
+      oxlint-tsgolint:
+        specifier: 0.11.1
+        version: 0.11.1
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      typescript-eslint:
+        specifier: 8.53.0
+        version: 8.53.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3)
+      vitest:
+        specifier: 4.0.17
+        version: 4.0.17(@opentelemetry/api@1.9.0)(@types/node@24.10.9)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/create-sdk/templates/generators:
+    devDependencies:
+      '@eslint/js':
+        specifier: 9.39.2
+        version: 9.39.2
+      '@tailor-platform/function-types':
+        specifier: 0.8.0
+        version: 0.8.0
+      '@tailor-platform/sdk':
+        specifier: workspace:^
+        version: link:../../../sdk
+      '@types/node':
+        specifier: 24.10.9
+        version: 24.10.9
+      eslint:
+        specifier: 9.39.2
+        version: 9.39.2(jiti@2.6.1)
+      eslint-plugin-oxlint:
+        specifier: 1.39.0
+        version: 1.39.0
+      oxfmt:
+        specifier: 0.24.0
+        version: 0.24.0
+      oxlint:
+        specifier: 1.39.0
+        version: 1.39.0(oxlint-tsgolint@0.11.1)
+      oxlint-tsgolint:
+        specifier: 0.11.1
+        version: 0.11.1
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      typescript-eslint:
+        specifier: 8.53.0
+        version: 8.53.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3)
+      vitest:
+        specifier: 4.0.17
+        version: 4.0.17(@opentelemetry/api@1.9.0)(@types/node@24.10.9)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
+
   packages/create-sdk/templates/hello-world:
     devDependencies:
       '@eslint/js':
@@ -285,7 +363,7 @@ importers:
         specifier: 8.53.0
         version: 8.53.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3)
 
-  packages/create-sdk/templates/testing:
+  packages/create-sdk/templates/resolver:
     devDependencies:
       '@eslint/js':
         specifier: 9.39.2
@@ -305,9 +383,117 @@ importers:
       eslint-plugin-oxlint:
         specifier: 1.39.0
         version: 1.39.0
-      graphql-request:
-        specifier: 7.4.0
-        version: 7.4.0(graphql@16.12.0)
+      oxfmt:
+        specifier: 0.24.0
+        version: 0.24.0
+      oxlint:
+        specifier: 1.39.0
+        version: 1.39.0(oxlint-tsgolint@0.11.1)
+      oxlint-tsgolint:
+        specifier: 0.11.1
+        version: 0.11.1
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      typescript-eslint:
+        specifier: 8.53.0
+        version: 8.53.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3)
+      vitest:
+        specifier: 4.0.17
+        version: 4.0.17(@opentelemetry/api@1.9.0)(@types/node@24.10.9)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/create-sdk/templates/static-web-site:
+    devDependencies:
+      '@eslint/js':
+        specifier: 9.39.2
+        version: 9.39.2
+      '@tailor-platform/sdk':
+        specifier: workspace:^
+        version: link:../../../sdk
+      '@types/node':
+        specifier: 24.10.9
+        version: 24.10.9
+      eslint:
+        specifier: 9.39.2
+        version: 9.39.2(jiti@2.6.1)
+      eslint-plugin-oxlint:
+        specifier: 1.39.0
+        version: 1.39.0
+      oxfmt:
+        specifier: 0.24.0
+        version: 0.24.0
+      oxlint:
+        specifier: 1.39.0
+        version: 1.39.0(oxlint-tsgolint@0.11.1)
+      oxlint-tsgolint:
+        specifier: 0.11.1
+        version: 0.11.1
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      typescript-eslint:
+        specifier: 8.53.0
+        version: 8.53.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3)
+
+  packages/create-sdk/templates/tailordb:
+    devDependencies:
+      '@eslint/js':
+        specifier: 9.39.2
+        version: 9.39.2
+      '@tailor-platform/function-types':
+        specifier: 0.8.0
+        version: 0.8.0
+      '@tailor-platform/sdk':
+        specifier: workspace:^
+        version: link:../../../sdk
+      '@types/node':
+        specifier: 24.10.9
+        version: 24.10.9
+      eslint:
+        specifier: 9.39.2
+        version: 9.39.2(jiti@2.6.1)
+      eslint-plugin-oxlint:
+        specifier: 1.39.0
+        version: 1.39.0
+      oxfmt:
+        specifier: 0.24.0
+        version: 0.24.0
+      oxlint:
+        specifier: 1.39.0
+        version: 1.39.0(oxlint-tsgolint@0.11.1)
+      oxlint-tsgolint:
+        specifier: 0.11.1
+        version: 0.11.1
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      typescript-eslint:
+        specifier: 8.53.0
+        version: 8.53.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3)
+      vitest:
+        specifier: 4.0.17
+        version: 4.0.17(@opentelemetry/api@1.9.0)(@types/node@24.10.9)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/create-sdk/templates/workflow:
+    devDependencies:
+      '@eslint/js':
+        specifier: 9.39.2
+        version: 9.39.2
+      '@tailor-platform/function-types':
+        specifier: 0.8.0
+        version: 0.8.0
+      '@tailor-platform/sdk':
+        specifier: workspace:^
+        version: link:../../../sdk
+      '@types/node':
+        specifier: 24.10.9
+        version: 24.10.9
+      eslint:
+        specifier: 9.39.2
+        version: 9.39.2(jiti@2.6.1)
+      eslint-plugin-oxlint:
+        specifier: 1.39.0
+        version: 1.39.0
       oxfmt:
         specifier: 0.24.0
         version: 0.24.0
