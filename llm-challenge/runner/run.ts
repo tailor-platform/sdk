@@ -974,9 +974,11 @@ async function main(): Promise<void> {
       let impl: string;
 
       if (useSolution) {
-        const meta = loadMeta(problemDir);
-        if (variant && meta.variants?.includes(variant)) {
-          impl = path.join(problemDir, "variants", variant, "solution");
+        const variantSolution = variant
+          ? path.join(problemDir, "variants", variant, "solution")
+          : "";
+        if (variant && fs.existsSync(variantSolution)) {
+          impl = variantSolution;
         } else {
           impl = path.join(problemDir, "solution");
         }
