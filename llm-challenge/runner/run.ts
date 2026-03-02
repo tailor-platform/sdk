@@ -63,7 +63,7 @@ function parseArgs(): {
   let agentExplicit = false;
   let model: string | undefined;
   let modelExplicit = false;
-  let maxBudget = 2.0;
+  let maxBudget = 5.0;
   let clean = false;
   let retry = 0;
   let resume = false;
