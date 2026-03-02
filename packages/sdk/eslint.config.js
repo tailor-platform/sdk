@@ -225,7 +225,7 @@ export default defineConfig([
   },
   {
     files: ["src/cli/**/*.ts"],
-    ignores: ["src/cli/utils/logger.ts", "src/cli/utils/errors.ts", "src/cli/utils/format.ts"],
+    ignores: ["src/cli/shared/logger.ts", "src/cli/shared/errors.ts", "src/cli/shared/format.ts"],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -235,22 +235,22 @@ export default defineConfig([
               name: "node:util",
               importNames: ["styleText"],
               message:
-                "Use colors/symbols/logger from '@/cli/utils/logger' instead of styleText for consistent styling.",
+                "Use colors/symbols/logger from '@/cli/shared/logger' instead of styleText for consistent styling.",
             },
             {
               name: "chalk",
               message:
-                "Use colors/symbols/logger from '@/cli/utils/logger' instead of chalk for consistent styling.",
+                "Use colors/symbols/logger from '@/cli/shared/logger' instead of chalk for consistent styling.",
             },
             {
               name: "consola",
               message:
-                "Use logger from '@/cli/utils/logger' instead of consola for consistent logging.",
+                "Use logger from '@/cli/shared/logger' instead of consola for consistent logging.",
             },
             {
               name: "table",
               message:
-                "Use formatTable/formatKeyValueTable/formatTableWithHeaders from '@/cli/utils/format' instead of table for consistent table styling.",
+                "Use formatTable/formatKeyValueTable/formatTableWithHeaders from '@/cli/shared/format' instead of table for consistent table styling.",
             },
             {
               name: "path",
@@ -276,7 +276,7 @@ export default defineConfig([
           selector:
             "CallExpression[callee.object.name='console'][callee.property.name=/^(log|error|warn|info|debug)$/]",
           message:
-            "Use logger from '@/cli/utils/logger' instead of console for consistent logging. Use printData for JSON output.",
+            "Use logger from '@/cli/shared/logger' instead of console for consistent logging. Use printData for JSON output.",
         },
       ],
     },

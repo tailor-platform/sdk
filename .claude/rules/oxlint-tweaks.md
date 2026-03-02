@@ -34,4 +34,4 @@ as listed below.
 - `src/parser/**/types.ts`: set `no-restricted-imports` to `off`
 - `src/cli/**/*.ts`: remove restriction for `table`
 - add `no-restricted-imports: off` override for
-  `src/cli/utils/logger.ts` and `src/cli/utils/errors.ts`
+  `src/cli/shared/logger.ts` and `src/cli/shared/errors.ts`
