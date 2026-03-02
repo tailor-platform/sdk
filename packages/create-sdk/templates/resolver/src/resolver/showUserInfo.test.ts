@@ -7,7 +7,7 @@ describe("showUserInfo resolver", () => {
     const result = await resolver.body({
       input: undefined as never,
       user: unauthenticatedTailorUser,
-      env: { appName: "", version: 0 },
+      env: { appName: "Resolver Template", version: 1 },
     });
     expect(result).toEqual({
       userId: unauthenticatedTailorUser.id,
@@ -26,7 +26,7 @@ describe("showUserInfo resolver", () => {
     const result = await resolver.body({
       input: undefined as never,
       user: customUser,
-      env: { appName: "", version: 0 },
+      env: { appName: "Resolver Template", version: 1 },
     });
     expect(result).toEqual({
       userId: "user-123",

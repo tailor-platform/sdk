@@ -10,7 +10,14 @@ const schemaType = t.object({
 
 const hook = createTailorDBHook(category);
 
-export const schema = defineSchema(createStandardSchema(schemaType, hook), {
-  foreignKeys: [{ column: "parentCategoryId", references: { table: "Category", column: "id" } }],
-  indexes: [{ name: "category_slug_unique_idx", columns: ["slug"], unique: true }],
-});
+export const schema = defineSchema(
+  createStandardSchema(schemaType, hook),
+  {
+    foreignKeys: [
+      {"column":"parentCategoryId","references":{"table":"Category","column":"id"}},
+    ],
+    indexes: [
+      {"name":"category_slug_unique_idx","columns":["slug"],"unique":true},
+    ],
+  }
+);

@@ -7,11 +7,11 @@ declare module "@tailor-platform/sdk" {
     role: string;
   }
   interface AttributeList {
-    __tuple: string[];
+    __tuple?: [];
   }
   interface Env {
-    appName: string;
-    version: number;
+    appName: "Resolver Template";
+    version: 1;
   }
 }
 

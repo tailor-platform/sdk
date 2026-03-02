@@ -7,7 +7,7 @@ declare module "@tailor-platform/sdk" {
     role: string;
   }
   interface AttributeList {
-    __tuple: string[];
+    __tuple?: [];
   }
   interface Env {}
 }

@@ -7,7 +7,7 @@ describe("add resolver", () => {
     const result = await resolver.body({
       input: { left: 1, right: 2 },
       user: unauthenticatedTailorUser,
-      env: { appName: "", version: 0 },
+      env: { appName: "Resolver Template", version: 1 },
     });
     expect(result).toBe(3);
   });
@@ -16,7 +16,7 @@ describe("add resolver", () => {
     const result = await resolver.body({
       input: { left: -5, right: 3 },
       user: unauthenticatedTailorUser,
-      env: { appName: "", version: 0 },
+      env: { appName: "Resolver Template", version: 1 },
     });
     expect(result).toBe(-2);
   });

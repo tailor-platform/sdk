@@ -7,8 +7,8 @@ describe("showEnv resolver", () => {
     const result = await resolver.body({
       input: undefined as never,
       user: unauthenticatedTailorUser,
-      env: { appName: "Test App", version: 2 },
+      env: { appName: "Resolver Template", version: 1 },
     });
-    expect(result).toEqual({ appName: "Test App", version: 2 });
+    expect(result).toEqual({ appName: "Resolver Template", version: 1 });
   });
 });
