@@ -16,7 +16,7 @@ describe("telemetry", () => {
     trace.disable();
   });
 
-  test("withSpan executes fn directly when telemetry is disabled", async () => {
+  test("withSpan executes fn with noop span when no provider is registered", async () => {
     const { withSpan } = await import("./index");
     const result = await withSpan("test-span", async () => {
       return "hello";
@@ -24,7 +24,7 @@ describe("telemetry", () => {
     expect(result).toBe("hello");
   });
 
-  test("withSpan propagates errors when telemetry is disabled", async () => {
+  test("withSpan propagates errors when no provider is registered", async () => {
     const { withSpan } = await import("./index");
     await expect(
       withSpan("test-span", async () => {
@@ -50,21 +50,15 @@ describe("telemetry", () => {
     await shutdownTelemetry();
   });
 
-  test("withSpan creates spans when telemetry is enabled", async () => {
-    process.env.OTEL_EXPORTER_OTLP_ENDPOINT = "http://localhost:4318";
-
+  test("withSpan creates spans when provider is registered", async () => {
     const { trace } = await import("@opentelemetry/api");
     const { NodeTracerProvider } = await import("@opentelemetry/sdk-trace-node");
     const { InMemorySpanExporter, SimpleSpanProcessor } =
       await import("@opentelemetry/sdk-trace-base");
 
-    // Call initTelemetry to set _config.enabled = true
-    const { initTelemetry, withSpan } = await import("./index");
-    await initTelemetry();
+    const { withSpan } = await import("./index");
 
-    // Clear OTel global state, then register test provider
-    // (registerGlobal only accepts the first registration; disable() resets it)
-    trace.disable();
+    // Register test provider to capture spans
     const exporter = new InMemorySpanExporter();
     const provider = new NodeTracerProvider({
       spanProcessors: [new SimpleSpanProcessor(exporter)],
@@ -88,20 +82,15 @@ describe("telemetry", () => {
     trace.disable();
   });
 
-  test("withSpan records exceptions on error when telemetry is enabled", async () => {
-    process.env.OTEL_EXPORTER_OTLP_ENDPOINT = "http://localhost:4318";
-
+  test("withSpan records exceptions on error when provider is registered", async () => {
     const { trace, SpanStatusCode } = await import("@opentelemetry/api");
     const { NodeTracerProvider } = await import("@opentelemetry/sdk-trace-node");
     const { InMemorySpanExporter, SimpleSpanProcessor } =
       await import("@opentelemetry/sdk-trace-base");
 
-    // Call initTelemetry to set _config.enabled = true
-    const { initTelemetry, withSpan } = await import("./index");
-    await initTelemetry();
+    const { withSpan } = await import("./index");
 
-    // Clear OTel global state, then register test provider
-    trace.disable();
+    // Register test provider to capture spans
     const exporter = new InMemorySpanExporter();
     const provider = new NodeTracerProvider({
       spanProcessors: [new SimpleSpanProcessor(exporter)],

@@ -1,16 +1,14 @@
-import { isTelemetryEnabled } from "./index";
+import { trace, SpanStatusCode } from "@opentelemetry/api";
 import type { Interceptor } from "@connectrpc/connect";
 
 /**
  * Create a Connect-RPC interceptor that records OTLP spans for each RPC call.
- * When tracing is disabled, returns undefined so it is not added to the chain.
- * @returns Tracing interceptor or undefined
+ * When no TracerProvider is registered, the OTel API automatically provides
+ * noop spans with zero overhead.
+ * @returns Tracing interceptor
  */
-export function createTracingInterceptor(): Interceptor | undefined {
-  if (!isTelemetryEnabled()) return undefined;
-
+export function createTracingInterceptor(): Interceptor {
   return (next) => async (req) => {
-    const { trace, SpanStatusCode } = await import("@opentelemetry/api");
     const tracer = trace.getTracer("tailor-sdk");
 
     return tracer.startActiveSpan(`rpc.${req.method.name}`, async (span) => {

@@ -49,6 +49,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
   let types: Record<string, TailorDBType> = {};
   const typeSourceInfo: TypeSourceInfo = {};
   const pluginAttachments: Map<string, PluginAttachment[]> = new Map();
+  let loadPromise: Promise<Record<string, TailorDBType> | undefined> | undefined;
 
   const doParseTypes = (): void => {
     const allTypes: TailorDBTypesByName = {};
@@ -198,30 +199,31 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
       return pluginAttachments as ReadonlyMap<string, readonly PluginAttachment[]>;
     },
     loadTypes: async () => {
-      if (Object.keys(rawTypes).length > 0) {
-        return types;
+      if (!loadPromise) {
+        loadPromise = (async () => {
+          if (!config.files || config.files.length === 0) {
+            return undefined;
+          }
+
+          const typeFiles = loadFilesWithIgnores(config);
+
+          logger.newline();
+          logger.log(
+            `Found ${styles.highlight(typeFiles.length.toString())} type files for TailorDB service ${styles.highlight(`"${namespace}"`)}`,
+          );
+
+          if (pluginManager) {
+            for (const typeFile of typeFiles) {
+              await loadTypeFile(typeFile);
+            }
+          } else {
+            await Promise.all(typeFiles.map((typeFile) => loadTypeFile(typeFile)));
+          }
+          doParseTypes();
+          return types;
+        })();
       }
-
-      if (!config.files || config.files.length === 0) {
-        return;
-      }
-
-      const typeFiles = loadFilesWithIgnores(config);
-
-      logger.newline();
-      logger.log(
-        `Found ${styles.highlight(typeFiles.length.toString())} type files for TailorDB service ${styles.highlight(`"${namespace}"`)}`,
-      );
-
-      if (pluginManager) {
-        for (const typeFile of typeFiles) {
-          await loadTypeFile(typeFile);
-        }
-      } else {
-        await Promise.all(typeFiles.map((typeFile) => loadTypeFile(typeFile)));
-      }
-      doParseTypes();
-      return types;
+      return loadPromise;
     },
     processNamespacePlugins: async () => {
       if (!pluginManager) return;

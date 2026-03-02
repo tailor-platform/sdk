@@ -45,6 +45,7 @@ export function createExecutorService(params: CreateExecutorServiceParams): Exec
   const { config } = params;
   const executors: Record<string, Executor> = {};
   const pluginExecutors: PluginExecutor[] = [];
+  let loadPromise: Promise<Record<string, Executor> | undefined> | undefined;
 
   const loadExecutorForFile = async (executorFile: string): Promise<Executor | undefined> => {
     try {
@@ -76,20 +77,22 @@ export function createExecutorService(params: CreateExecutorServiceParams): Exec
       return pluginExecutors;
     },
     loadExecutors: async () => {
-      if (Object.keys(executors).length > 0) {
-        return executors;
+      if (!loadPromise) {
+        loadPromise = (async () => {
+          if (!config.files || config.files.length === 0) {
+            return undefined;
+          }
+
+          const executorFiles = loadFilesWithIgnores(config);
+
+          logger.newline();
+          logger.log(`Found ${styles.highlight(executorFiles.length.toString())} executor files`);
+
+          await Promise.all(executorFiles.map((executorFile) => loadExecutorForFile(executorFile)));
+          return executors;
+        })();
       }
-      if (!config.files || config.files.length === 0) {
-        return;
-      }
-
-      const executorFiles = loadFilesWithIgnores(config);
-
-      logger.newline();
-      logger.log(`Found ${styles.highlight(executorFiles.length.toString())} executor files`);
-
-      await Promise.all(executorFiles.map((executorFile) => loadExecutorForFile(executorFile)));
-      return executors;
+      return loadPromise;
     },
     loadPluginExecutorFiles: async (filePaths: string[]) => {
       if (filePaths.length === 0) return;

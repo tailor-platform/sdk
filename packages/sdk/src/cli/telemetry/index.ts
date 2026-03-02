@@ -1,26 +1,9 @@
+import { trace, SpanStatusCode, type Span } from "@opentelemetry/api";
 import { parseTelemetryConfig, type TelemetryConfig } from "./config";
-import type { Span } from "@opentelemetry/api";
 
 let _config: TelemetryConfig | undefined;
 let _initialized = false;
 let _provider: { register: () => void; shutdown: () => Promise<void> } | undefined;
-
-// Minimal no-op span that satisfies the Span interface for the disabled path
-const noopSpan = {
-  end: () => {},
-  setAttribute: () => noopSpan,
-  setAttributes: () => noopSpan,
-  setStatus: () => noopSpan,
-  addEvent: () => noopSpan,
-  recordException: () => {},
-  isRecording: () => false,
-  updateName: () => noopSpan,
-  spanContext: () => ({
-    traceId: "",
-    spanId: "",
-    traceFlags: 0,
-  }),
-} as unknown as Span;
 
 /**
  * Check whether telemetry is currently enabled.
@@ -89,17 +72,13 @@ export async function shutdownTelemetry(): Promise<void> {
 
 /**
  * Execute a function within a new span. Records exceptions and sets span status.
- * When tracing is disabled, this simply calls fn() with zero overhead.
+ * When no TracerProvider is registered, the OTel API automatically provides
+ * noop spans with zero overhead.
  * @param name - Span name
  * @param fn - Function to execute within the span
  * @returns Result of fn
  */
 export async function withSpan<T>(name: string, fn: (span: Span) => Promise<T>): Promise<T> {
-  if (!_config?.enabled) {
-    return fn(noopSpan);
-  }
-
-  const { trace, SpanStatusCode } = await import("@opentelemetry/api");
   const tracer = trace.getTracer("tailor-sdk");
 
   return tracer.startActiveSpan(name, async (span) => {
