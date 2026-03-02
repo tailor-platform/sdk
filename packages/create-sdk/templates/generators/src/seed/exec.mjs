@@ -99,7 +99,7 @@ const namespaceDeps = {
   }
 };
 const entities = Object.values(namespaceEntities).flat();
-const hasIdpUser = true;
+const hasIdpUser = false;
 
 // Determine which entities to process
 let entitiesToProcess = null;
@@ -218,15 +218,7 @@ if (values.truncate) {
     process.exit(1);
   }
 
-  // Truncate _User if applicable
-  const shouldTruncateUser = !skipIdp && !hasNamespace && (!hasTypes || entitiesToProcess.includes("_User"));
-  if (hasIdpUser && shouldTruncateUser) {
-    const truncResult = await truncateIdpUser();
-    if (!truncResult.success) {
-      console.error(styleText("red", "IDP user truncation failed."));
-      process.exit(1);
-    }
-  }
+  
 
   console.log(styleText("green", "Truncate completed."));
 }
@@ -413,14 +405,7 @@ try {
     }
   }
 
-  // Seed _User if included and not skipped
-  const shouldSeedUser = !skipIdp && (!entitiesToProcess || entitiesToProcess.includes("_User"));
-  if (hasIdpUser && shouldSeedUser) {
-    const result = await seedIdpUser();
-    if (!result.success) {
-      allSuccess = false;
-    }
-  }
+  
 
   if (allSuccess) {
     console.log(styleText("green", "\n✓ Seed data generation completed successfully"));

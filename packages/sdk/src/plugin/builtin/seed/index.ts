@@ -755,7 +755,7 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
       }
 
       // Process IdP user if configured
-      const idpUser = ctx.auth ? processIdpUser(ctx.auth) : null;
+      const idpUser = ctx.auth ? processIdpUser(ctx.auth) ?? null : null;
       const hasIdpUser = idpUser !== null;
 
       if (idpUser) {
