@@ -1,0 +1,23 @@
+{
+  "id": "002",
+  "name": "project-management",
+  "difficulty": "medium",
+  "category": "model-definition",
+  "scoring": {
+    "generate": 20,
+    "typecheck": 20,
+    "tests": 160
+  },
+  "files": {
+    "implement": [
+      "tailordb/team.ts",
+      "tailordb/member.ts",
+      "tailordb/project.ts",
+      "tailordb/task.ts",
+      "tailordb/activityLog.ts",
+      "tailor.config.ts"
+    ],
+    "scaffold": ["tailor.config.ts"]
+  },
+  "variants": ["createType", "fluent"]
+}
