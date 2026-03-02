@@ -407,6 +407,9 @@ importers:
       '@eslint/js':
         specifier: 9.39.2
         version: 9.39.2
+      '@tailor-platform/function-types':
+        specifier: 0.8.0
+        version: 0.8.0
       '@tailor-platform/sdk':
         specifier: workspace:^
         version: link:../../../sdk
