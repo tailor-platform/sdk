@@ -11,7 +11,16 @@ export const subscription = createType(
     plan: { kind: "enum", values: ["FREE", "STARTER", "BUSINESS", "ENTERPRISE"] },
     status: { kind: "enum", values: ["TRIAL", "ACTIVE", "PAUSED", "CANCELLED"] },
     startDate: { kind: "date" },
-    endDate: { kind: "date", optional: true },
+    endDate: {
+      kind: "date",
+      optional: true,
+      hooks: {
+        update: ({ value, data }) =>
+          (data as { status: string }).status === "CANCELLED"
+            ? new Date().toISOString()
+            : (value as string),
+      },
+    },
     monthlyRate: {
       kind: "float",
       validate: [({ value }) => value >= 0, "monthlyRate must be non-negative"],

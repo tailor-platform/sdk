@@ -2,43 +2,7 @@
 
 Build a complete subscription management platform using the `@tailor-platform/sdk`.
 
-**Important**: Use the `db.type()` fluent API and `db.fields.timestamps()` for all model definitions (NOT `createType`).
-
-## db.type() Fluent API Reference
-
-```typescript
-import { db } from "@tailor-platform/sdk";
-
-// Field builders:
-//   db.string(), db.int(), db.float(), db.bool(), db.uuid(), db.date(), db.datetime(), db.time()
-//   db.enum(values), db.object(fields)
-//
-// Common field options (passed as argument): optional, array, description
-// Chained methods: .unique(), .serial(), .relation(), .description(), .validate()
-// Type-level chained methods: .hooks(), .validate(), .indexes(), .permission(), .gqlPermission(), .features()
-
-export const myModel = db
-  .type("MyModel", {
-    name: db.string(),
-    email: db.string().unique(),
-    count: db.int({ optional: true }),
-    role: db.enum(["ADMIN", "USER"]),
-    address: db.object({ city: db.string() }),
-    parentId: db.uuid().relation({ type: "n-1", toward: { type: parentModel } }),
-    tags: db.string({ optional: true, array: true }),
-    ...db.fields.timestamps(),
-  })
-  .hooks({
-    count: { create: ({ value }) => value ?? 0 },
-  })
-  .indexes({ fields: ["email", "name"] })
-  .permission({ create: [[{ user: "_loggedIn" }, "=", true]] })
-  .gqlPermission([
-    { conditions: [[{ user: "plan" }, "=", "ENTERPRISE"]], actions: "all", permit: true },
-  ])
-  .description("My model description")
-  .features({ aggregation: true });
-```
+**Important**: Use the `db.type()` fluent API and `db.fields.timestamps()` for all model definitions (NOT `createType`). Refer to the installed `@tailor-platform/sdk` package for API details.
 
 ---
 
@@ -71,16 +35,16 @@ Type-level options:
 
 Export: `subscription` (named)
 
-| Field               | Kind  | Options                                                                                   |
-| ------------------- | ----- | ----------------------------------------------------------------------------------------- |
-| organizationId      | uuid  | relation: n-1 to Organization                                                             |
-| plan                | enum  | values: `["FREE", "STARTER", "BUSINESS", "ENTERPRISE"]`                                   |
-| status              | enum  | values: `["TRIAL", "ACTIVE", "PAUSED", "CANCELLED"]`                                      |
-| startDate           | date  | required                                                                                  |
-| endDate             | date  | optional                                                                                  |
-| monthlyRate         | float | validate: `({ value }) => value >= 0` (with message `"monthlyRate must be non-negative"`) |
-| autoRenew           | bool  | required                                                                                  |
-| createdAt/updatedAt |       | use `...db.fields.timestamps()`                                                           |
+| Field               | Kind  | Options                                                                                               |
+| ------------------- | ----- | ----------------------------------------------------------------------------------------------------- |
+| organizationId      | uuid  | relation: n-1 to Organization                                                                         |
+| plan                | enum  | values: `["FREE", "STARTER", "BUSINESS", "ENTERPRISE"]`                                               |
+| status              | enum  | values: `["TRIAL", "ACTIVE", "PAUSED", "CANCELLED"]`                                                  |
+| startDate           | date  | required                                                                                              |
+| endDate             | date  | optional, hook: update auto-sets to current date when status is CANCELLED (preserves value otherwise) |
+| monthlyRate         | float | validate: `({ value }) => value >= 0` (with message `"monthlyRate must be non-negative"`)             |
+| autoRenew           | bool  | required                                                                                              |
+| createdAt/updatedAt |       | use `...db.fields.timestamps()`                                                                       |
 
 Type-level options:
 
@@ -189,6 +153,18 @@ Default export an executor created with `createExecutor`.
   - query: any non-empty string containing `"mutation"`
   - variables: a function `({ newRecord }) => ({ input: { subscriptionId: newRecord.id, newPlan: newRecord.plan } })`
 
+### upgradeAuditLog (`executors/upgradeAuditLog.ts`)
+
+Default export an executor created with `createExecutor`.
+
+- **name**: `"upgrade-audit-log"`
+- **description**: any non-empty string describing audit logging for subscription upgrades
+- **trigger**: `resolverExecutedTrigger` on the `upgradeSubscription` resolver (import it)
+  - condition: only fire when the resolver execution was successful (`args.success === true`)
+- **operation**: graphql
+  - query: a mutation that creates an AuditEvent record
+  - variables: a function that maps resolver args to audit event input (action, actor from user, target from result)
+
 ### monthlyBillingCycle (`executors/monthlyBillingCycle.ts`)
 
 Default export an executor created with `createExecutor`.
@@ -214,7 +190,7 @@ Create a workflow with 3 jobs all in a single file. Use `createWorkflow` and `cr
 - name: `"collect-usage"`
 - body: takes `{ organizationId: string, billingPeriod: { start: string, end: string } }`
 - returns: `{ usageItems: Array<{ metric: string, totalQuantity: number }>, totalItems: number }`
-- Logic: return mock data - `{ usageItems: [{ metric: "api-calls", totalQuantity: 1500 }, { metric: "storage-gb", totalQuantity: 25 }], totalItems: 2 }`
+- Logic: return mock usage data with at least 2 usage items and a totalItems count
 
 **calculateCharges** job:
 
@@ -223,7 +199,7 @@ Create a workflow with 3 jobs all in a single file. Use `createWorkflow` and `cr
 - returns: `{ baseCharge: number, overageCharge: number, totalCharge: number }`
 - Logic:
   - baseCharge = monthlyRate
-  - Overage thresholds per plan: FREE=100, STARTER=1000, BUSINESS=10000, ENTERPRISE=Infinity (no overage)
+  - Overage thresholds per plan: FREE=100, STARTER=1000, BUSINESS=10000. ENTERPRISE plans have no usage limits
   - overageCharge = sum of each usage item: if totalQuantity > threshold, charge (totalQuantity - threshold) \* 0.01; else 0
   - totalCharge = baseCharge + overageCharge
 

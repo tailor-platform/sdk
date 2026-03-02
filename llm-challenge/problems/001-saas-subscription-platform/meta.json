@@ -19,6 +19,7 @@
       "executors/invoiceCreated.ts",
       "executors/subscriptionPlanChanged.ts",
       "executors/monthlyBillingCycle.ts",
+      "executors/upgradeAuditLog.ts",
       "workflows/billingCycle.ts",
       "tailor.config.ts"
     ],

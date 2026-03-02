@@ -12,6 +12,12 @@ export const subscription = db
     autoRenew: db.bool(),
     ...db.fields.timestamps(),
   })
+  .hooks({
+    endDate: {
+      update: ({ value, data }) =>
+        data.status === "CANCELLED" ? new Date().toISOString() : (value as string),
+    },
+  })
   .validate({
     monthlyRate: [({ value }) => value >= 0, "monthlyRate must be non-negative"],
   })

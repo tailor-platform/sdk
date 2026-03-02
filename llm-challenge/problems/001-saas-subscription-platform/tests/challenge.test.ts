@@ -282,6 +282,37 @@ describe.skipIf(!workDirReady)("001-saas-subscription-platform", () => {
       const mod = await importPath(path.join(workDir, "tailordb/subscription.ts"));
       expectTimestamps(mod.subscription);
     });
+
+    test("endDate has update hook defined", async () => {
+      const mod = await importPath(path.join(workDir, "tailordb/subscription.ts"));
+      const hooks = mod.subscription.fields.endDate.metadata.hooks;
+      expect(hooks).toBeDefined();
+      expect(typeof hooks.update).toBe("function");
+    });
+
+    test("endDate update hook: CANCELLED status sets endDate to date string", async () => {
+      const mod = await importPath(path.join(workDir, "tailordb/subscription.ts"));
+      const updateFn = mod.subscription.fields.endDate.metadata.hooks.update;
+      const result = updateFn({ value: null, data: { status: "CANCELLED" }, user: {} });
+      expect(typeof result).toBe("string");
+      expect(result.length).toBeGreaterThan(0);
+    });
+
+    test("endDate update hook: ACTIVE status preserves original value", async () => {
+      const mod = await importPath(path.join(workDir, "tailordb/subscription.ts"));
+      const updateFn = mod.subscription.fields.endDate.metadata.hooks.update;
+      const result = updateFn({ value: "2026-06-01", data: { status: "ACTIVE" }, user: {} });
+      expect(result).toBe("2026-06-01");
+    });
+
+    test("endDate update hook: non-CANCELLED status does not change value", async () => {
+      const mod = await importPath(path.join(workDir, "tailordb/subscription.ts"));
+      const updateFn = mod.subscription.fields.endDate.metadata.hooks.update;
+      const paused = updateFn({ value: "2026-05-01", data: { status: "PAUSED" }, user: {} });
+      expect(paused).toBe("2026-05-01");
+      const trial = updateFn({ value: "2026-03-01", data: { status: "TRIAL" }, user: {} });
+      expect(trial).toBe("2026-03-01");
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -521,6 +552,9 @@ describe.skipIf(!workDirReady)("001-saas-subscription-platform", () => {
         if (paramStr.includes("sub-paused")) {
           return [{ id: "sub-paused", plan: "BUSINESS", status: "PAUSED" }];
         }
+        if (paramStr.includes("sub-enterprise")) {
+          return [{ id: "sub-enterprise", plan: "ENTERPRISE", status: "ACTIVE" }];
+        }
         return [];
       });
 
@@ -632,6 +666,20 @@ describe.skipIf(!workDirReady)("001-saas-subscription-platform", () => {
       });
       expect(result.success).toBe(false);
       expect(result.error).toContain("higher plan");
+    });
+
+    test("same plan ENTERPRISE->ENTERPRISE fails", async () => {
+      const result = await resolver.body({
+        input: {
+          subscriptionId: "sub-enterprise",
+          targetPlan: "ENTERPRISE",
+          effectiveDate: "2026-04-01",
+        },
+        user: { id: "u1", type: "user", attributes: {} },
+        env: {},
+      });
+      expect(result.success).toBe(false);
+      expect(result.error).toBeDefined();
     });
 
     test("effectiveDate passes through", async () => {
@@ -814,6 +862,56 @@ describe.skipIf(!workDirReady)("001-saas-subscription-platform", () => {
     });
   });
 
+  // ---------------------------------------------------------------------------
+  // upgradeAuditLog
+  // ---------------------------------------------------------------------------
+  describe("upgradeAuditLog executor", () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic module shape from importPath
+    let executor: Record<string, any>;
+
+    beforeAll(async () => {
+      setupTailordbMock(() => []);
+      const mod = await importPath(path.join(workDir, "executors/upgradeAuditLog.ts"));
+      executor = mod.default;
+      cleanupMocks();
+    });
+
+    test("name is upgrade-audit-log", () => {
+      expect(executor.name).toBe("upgrade-audit-log");
+    });
+
+    test("has non-empty description", () => {
+      expectNonEmptyDescription(executor);
+    });
+
+    test("trigger kind is resolverExecuted", () => {
+      expect(executor.trigger.kind).toBe("resolverExecuted");
+    });
+
+    test("trigger references upgradeSubscription resolver", () => {
+      expect(executor.trigger.resolverName).toBe("upgradeSubscription");
+    });
+
+    test("condition returns true when success=true", () => {
+      const { condition } = executor.trigger;
+      expect(condition({ success: true })).toBe(true);
+    });
+
+    test("condition returns false when success=false", () => {
+      const { condition } = executor.trigger;
+      expect(condition({ success: false })).toBe(false);
+    });
+
+    test("operation kind is graphql", () => {
+      expect(executor.operation.kind).toBe("graphql");
+    });
+
+    test("graphql query contains mutation", () => {
+      expect(typeof executor.operation.query).toBe("string");
+      expect(executor.operation.query).toContain("mutation");
+    });
+  });
+
   // ===========================================================================
   // WORKFLOWS
   // ===========================================================================
@@ -894,6 +992,18 @@ describe.skipIf(!workDirReady)("001-saas-subscription-platform", () => {
       // 1500 - 1000 = 500, 500 * 0.01 = 5.0
       expect(result.overageCharge).toBeCloseTo(5.0);
       expect(result.totalCharge).toBeCloseTo(34.99);
+    });
+
+    test("calculateCharges: BUSINESS plan overage threshold is 10000", async () => {
+      const mod = await importPath(path.join(workDir, "workflows/billingCycle.ts"));
+      const result = mod.calculateCharges.body({
+        usageItems: [{ metric: "api-calls", totalQuantity: 10500 }],
+        plan: "BUSINESS",
+        monthlyRate: 99.99,
+      });
+      // 10500 - 10000 = 500, 500 * 0.01 = 5.0
+      expect(result.overageCharge).toBeCloseTo(5.0);
+      expect(result.totalCharge).toBeCloseTo(104.99);
     });
 
     test("calculateCharges: ENTERPRISE plan has no overage", async () => {
