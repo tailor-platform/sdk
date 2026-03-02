@@ -24,6 +24,7 @@ import {
 } from "./function-registry";
 import { applyIdP, planIdP } from "./idp";
 import { applyPipeline, planPipeline } from "./resolver";
+import { applySecrets, planSecrets } from "./secrets";
 import { applyStaticWebsite, planStaticWebsite } from "./staticwebsite";
 import { applyTailorDB, planTailorDB } from "./tailordb";
 import { applyWorkflow, planWorkflow } from "./workflow";
@@ -124,6 +125,7 @@ export async function apply(options?: ApplyOptions) {
       app,
       executor,
       workflow,
+      secrets,
     } = await withSpan("plan", async () => {
       const ctx: PlanContext = {
         client,
@@ -143,6 +145,7 @@ export async function apply(options?: ApplyOptions) {
         app,
         executor,
         workflow,
+        secrets,
       ] = await Promise.all([
         withSpan("plan.functionRegistry", () =>
           planFunctionRegistry(client, workspaceId, application.name, functionEntries),
@@ -163,6 +166,7 @@ export async function apply(options?: ApplyOptions) {
             workflowBuildResult?.mainJobDeps ?? {},
           ),
         ),
+        withSpan("plan.secrets", () => planSecrets(ctx)),
       ]);
       return {
         functionRegistry,
@@ -174,6 +178,7 @@ export async function apply(options?: ApplyOptions) {
         app,
         executor,
         workflow,
+        secrets,
       };
     });
 
@@ -261,6 +266,7 @@ export async function apply(options?: ApplyOptions) {
 
     // Phase 2: Create/Update services that Application depends on
     await withSpan("apply.createUpdateServices", async () => {
+      await applySecrets(client, secrets, "create-update");
       await applyFunctionRegistry(client, workspaceId, functionRegistry, "create-update");
       await applyStaticWebsite(client, staticWebsite, "create-update");
       await applyIdP(client, idp, "create-update");
@@ -292,6 +298,7 @@ export async function apply(options?: ApplyOptions) {
       await applyWorkflow(client, workflow, "delete");
       await applyExecutor(client, executor, "delete");
       await applyStaticWebsite(client, staticWebsite, "delete");
+      await applySecrets(client, secrets, "delete");
     });
 
     // Phase 7: Delete Application

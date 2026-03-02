@@ -47,6 +47,8 @@ export interface AppConfig<
   workflow?: WorkflowServiceInput;
   /** Static website configurations. Must be an array, e.g. `[website]`. */
   staticWebsites?: StaticWebsites;
+  /** Secret Manager vault configurations. Keys are vault names, values are records of secret names to values. */
+  secrets?: Record<string, Record<string, string | undefined>>;
   /**
    * Enable inline sourcemaps in bundled functions for better error stack traces.
    * When enabled, sourcemaps are embedded directly in the bundle file.

@@ -20,6 +20,7 @@ import { type ExecutorServiceInput } from "@/parser/service/executor";
 import { IdPSchema, type IdP } from "@/parser/service/idp";
 import { type IdPConfig } from "@/parser/service/idp/types";
 import { type ResolverServiceInput } from "@/parser/service/resolver/types";
+import { SecretsSchema } from "@/parser/service/secrets";
 import {
   StaticWebsiteSchema,
   type StaticWebsite,
@@ -29,6 +30,11 @@ import { TailorDBServiceConfigSchema } from "@/parser/service/tailordb";
 import { type TailorDBServiceInput } from "@/parser/service/tailordb/types";
 import { type WorkflowServiceConfig } from "@/parser/service/workflow";
 import type { PluginManager } from "@/plugin/manager";
+
+export type SecretVault = {
+  readonly vaultName: string;
+  readonly secrets: ReadonlyArray<{ name: string; value: string }>;
+};
 
 export type Application = {
   readonly name: string;
@@ -42,6 +48,7 @@ export type Application = {
   readonly executorService: Readonly<ExecutorService> | undefined;
   readonly workflowService: Readonly<WorkflowService> | undefined;
   readonly staticWebsiteServices: ReadonlyArray<StaticWebsite>;
+  readonly secrets: ReadonlyArray<SecretVault>;
   readonly env: Readonly<Record<string, string | number | boolean>>;
   readonly applications: ReadonlyArray<Application>;
 };
@@ -203,12 +210,39 @@ function defineStaticWebsites(
   return staticWebsiteServices;
 }
 
+function defineSecretsForApplication(
+  config: Record<string, Record<string, string | undefined>> | undefined,
+): SecretVault[] {
+  if (!config) {
+    return [];
+  }
+
+  // Validate that all values are strings (no undefined) before parsing
+  for (const [vaultName, vaultSecrets] of Object.entries(config)) {
+    for (const [secretName, secretValue] of Object.entries(vaultSecrets)) {
+      if (secretValue === undefined) {
+        throw new Error(
+          `Secret "${secretName}" in vault "${vaultName}" has an undefined value. All secrets must have string values at apply time.`,
+        );
+      }
+    }
+  }
+
+  const parsed = SecretsSchema.parse(config);
+
+  return Object.entries(parsed).map(([vaultName, vaultSecrets]) => ({
+    vaultName,
+    secrets: Object.entries(vaultSecrets).map(([name, value]) => ({ name, value })),
+  }));
+}
+
 type DefineServicesResult = {
   tailordbResult: DefineTailorDBResult;
   resolverResult: DefineResolverResult;
   idpResult: DefineIdpResult;
   authResult: DefineAuthResult;
   staticWebsiteServices: StaticWebsite[];
+  secrets: SecretVault[];
 };
 
 function defineServices(config: AppConfig, pluginManager?: PluginManager): DefineServicesResult {
@@ -221,7 +255,8 @@ function defineServices(config: AppConfig, pluginManager?: PluginManager): Defin
     tailordbResult.externalTailorDBNamespaces,
   );
   const staticWebsiteServices = defineStaticWebsites(config.staticWebsites);
-  return { tailordbResult, resolverResult, idpResult, authResult, staticWebsiteServices };
+  const secrets = defineSecretsForApplication(config.secrets);
+  return { tailordbResult, resolverResult, idpResult, authResult, staticWebsiteServices, secrets };
 }
 
 function buildApplication(params: {
@@ -233,6 +268,7 @@ function buildApplication(params: {
   executorService: ExecutorService | undefined;
   workflowService: WorkflowService | undefined;
   staticWebsiteServices: StaticWebsite[];
+  secrets: SecretVault[];
   env: Record<string, string | number | boolean>;
 }): Application {
   const application: Application = {
@@ -252,6 +288,7 @@ function buildApplication(params: {
     executorService: params.executorService,
     workflowService: params.workflowService,
     staticWebsiteServices: params.staticWebsiteServices,
+    secrets: params.secrets,
     env: params.env,
     get applications() {
       return [application];
@@ -343,7 +380,7 @@ export async function loadApplication(
   const { config, pluginManager } = params;
 
   // 1. Define services (synchronous)
-  const { tailordbResult, resolverResult, idpResult, authResult, staticWebsiteServices } =
+  const { tailordbResult, resolverResult, idpResult, authResult, staticWebsiteServices, secrets } =
     defineServices(config, pluginManager);
 
   // 2. Load TailorDB types and process namespace plugins
@@ -427,6 +464,7 @@ export async function loadApplication(
     executorService,
     workflowService,
     staticWebsiteServices,
+    secrets,
     env: config.env ?? {},
   });
 

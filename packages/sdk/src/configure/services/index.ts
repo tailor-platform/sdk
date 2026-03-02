@@ -17,3 +17,4 @@ export * from "./executor";
 export * from "./workflow";
 export * from "./staticwebsite";
 export * from "./idp";
+export * from "./secrets";
