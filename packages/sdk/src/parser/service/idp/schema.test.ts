@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { IdPUserAuthPolicySchema, IdPSchema, IdPDisableGqlOperationsSchema } from "./schema";
+import { IdPUserAuthPolicySchema, IdPSchema, IdPGqlOperationsSchema } from "./schema";
 
 describe("IdPUserAuthPolicySchema validation", () => {
   it("accepts valid password policy configuration", () => {
@@ -362,12 +362,12 @@ describe("IdPSchema validation", () => {
     expect(result.publishUserEvents).toBeUndefined();
   });
 
-  it("accepts disableGqlOperations with all fields", () => {
+  it("accepts gqlOperations with all fields", () => {
     const config = {
       name: "test-idp",
       authorization: "loggedIn" as const,
       clients: ["client-1"],
-      disableGqlOperations: {
+      gqlOperations: {
         create: true,
         update: true,
         delete: true,
@@ -377,33 +377,33 @@ describe("IdPSchema validation", () => {
     };
 
     const result = IdPSchema.parse(config);
-    expect(result.disableGqlOperations?.create).toBe(true);
-    expect(result.disableGqlOperations?.update).toBe(true);
-    expect(result.disableGqlOperations?.delete).toBe(true);
-    expect(result.disableGqlOperations?.read).toBe(true);
-    expect(result.disableGqlOperations?.sendPasswordResetEmail).toBe(true);
+    expect(result.gqlOperations?.create).toBe(true);
+    expect(result.gqlOperations?.update).toBe(true);
+    expect(result.gqlOperations?.delete).toBe(true);
+    expect(result.gqlOperations?.read).toBe(true);
+    expect(result.gqlOperations?.sendPasswordResetEmail).toBe(true);
   });
 
-  it("accepts disableGqlOperations with partial fields", () => {
+  it("accepts gqlOperations with partial fields", () => {
     const config = {
       name: "test-idp",
       authorization: "loggedIn" as const,
       clients: ["client-1"],
-      disableGqlOperations: {
+      gqlOperations: {
         create: true,
         read: false,
       },
     };
 
     const result = IdPSchema.parse(config);
-    expect(result.disableGqlOperations?.create).toBe(true);
-    expect(result.disableGqlOperations?.read).toBe(false);
-    expect(result.disableGqlOperations?.update).toBeUndefined();
-    expect(result.disableGqlOperations?.delete).toBeUndefined();
-    expect(result.disableGqlOperations?.sendPasswordResetEmail).toBeUndefined();
+    expect(result.gqlOperations?.create).toBe(true);
+    expect(result.gqlOperations?.read).toBe(false);
+    expect(result.gqlOperations?.update).toBeUndefined();
+    expect(result.gqlOperations?.delete).toBeUndefined();
+    expect(result.gqlOperations?.sendPasswordResetEmail).toBeUndefined();
   });
 
-  it("accepts missing disableGqlOperations", () => {
+  it("accepts missing gqlOperations", () => {
     const config = {
       name: "test-idp",
       authorization: "loggedIn" as const,
@@ -411,13 +411,13 @@ describe("IdPSchema validation", () => {
     };
 
     const result = IdPSchema.parse(config);
-    expect(result.disableGqlOperations).toBeUndefined();
+    expect(result.gqlOperations).toBeUndefined();
   });
 });
 
-describe("IdPDisableGqlOperationsSchema validation", () => {
+describe("IdPGqlOperationsSchema validation", () => {
   it("accepts empty object", () => {
-    const result = IdPDisableGqlOperationsSchema.parse({});
+    const result = IdPGqlOperationsSchema.parse({});
     expect(result.create).toBeUndefined();
     expect(result.update).toBeUndefined();
     expect(result.delete).toBeUndefined();
@@ -434,7 +434,7 @@ describe("IdPDisableGqlOperationsSchema validation", () => {
       sendPasswordResetEmail: true,
     };
 
-    const result = IdPDisableGqlOperationsSchema.parse(config);
+    const result = IdPGqlOperationsSchema.parse(config);
     expect(result.create).toBe(true);
     expect(result.update).toBe(true);
     expect(result.delete).toBe(true);
@@ -451,7 +451,7 @@ describe("IdPDisableGqlOperationsSchema validation", () => {
       sendPasswordResetEmail: false,
     };
 
-    const result = IdPDisableGqlOperationsSchema.parse(config);
+    const result = IdPGqlOperationsSchema.parse(config);
     expect(result.create).toBe(false);
     expect(result.update).toBe(false);
     expect(result.delete).toBe(false);
@@ -465,7 +465,7 @@ describe("IdPDisableGqlOperationsSchema validation", () => {
       read: false,
     };
 
-    const result = IdPDisableGqlOperationsSchema.parse(config);
+    const result = IdPGqlOperationsSchema.parse(config);
     expect(result.create).toBe(true);
     expect(result.read).toBe(false);
     expect(result.update).toBeUndefined();

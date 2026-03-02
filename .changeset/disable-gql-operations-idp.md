@@ -2,12 +2,12 @@
 "@tailor-platform/sdk": patch
 ---
 
-Add `disableGqlOperations` option for IdP configuration
+Add `gqlOperations` option for IdP configuration
 
-When set, specific GraphQL operations for IdP users can be disabled:
+Configure which GraphQL operations are enabled for IdP users. All operations are enabled by default (set `false` to disable):
 
-- `create`: Disables the \_createUser mutation
-- `update`: Disables the \_updateUser mutation
-- `delete`: Disables the \_deleteUser mutation
-- `read`: Disables the \_users and \_user queries
-- `sendPasswordResetEmail`: Disables the \_sendPasswordResetEmail mutation
+- `create`: Enable \_createUser mutation (default: true)
+- `update`: Enable \_updateUser mutation (default: true)
+- `delete`: Enable \_deleteUser mutation (default: true)
+- `read`: Enable \_users and \_user queries (default: true)
+- `sendPasswordResetEmail`: Enable \_sendPasswordResetEmail mutation (default: true)

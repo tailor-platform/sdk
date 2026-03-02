@@ -271,7 +271,7 @@ async function planServices(
           lang,
           userAuthPolicy,
           publishUserEvents: idp.publishUserEvents,
-          disableGqlOperations: idp.disableGqlOperations,
+          disableGqlOperations: convertGqlOperationsToDisable(idp.gqlOperations),
         },
         metaRequest,
       });
@@ -286,7 +286,7 @@ async function planServices(
           lang,
           userAuthPolicy,
           publishUserEvents: idp.publishUserEvents,
-          disableGqlOperations: idp.disableGqlOperations,
+          disableGqlOperations: convertGqlOperationsToDisable(idp.gqlOperations),
         },
         metaRequest,
       });
@@ -427,4 +427,19 @@ function convertLang(lang: IdPLangInput | undefined): IdPLang {
     default:
       return IdPLang.UNSPECIFIED;
   }
+}
+
+function convertGqlOperationsToDisable(
+  gqlOperations: IdP["gqlOperations"],
+): IdP["gqlOperations"] | undefined {
+  if (!gqlOperations) {
+    return undefined;
+  }
+  const result: Record<string, boolean> = {};
+  for (const [key, value] of Object.entries(gqlOperations)) {
+    if (value !== undefined) {
+      result[key] = !value;
+    }
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
 }

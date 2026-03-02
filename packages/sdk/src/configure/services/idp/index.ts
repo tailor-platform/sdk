@@ -2,6 +2,23 @@ import type { BuiltinIdP } from "@/parser/service/auth/types";
 import type { IdPInput, IdpDefinitionBrand } from "@/parser/service/idp/types";
 
 /**
+ * Configuration for GraphQL operations on IdP users.
+ * All operations are enabled by default (undefined or true = enabled, false = disabled).
+ */
+export interface IdPGqlOperations {
+  /** Enable _createUser mutation (default: true) */
+  create?: boolean;
+  /** Enable _updateUser mutation (default: true) */
+  update?: boolean;
+  /** Enable _deleteUser mutation (default: true) */
+  delete?: boolean;
+  /** Enable _users and _user queries (default: true) */
+  read?: boolean;
+  /** Enable _sendPasswordResetEmail mutation (default: true) */
+  sendPasswordResetEmail?: boolean;
+}
+
+/**
  * Define an IdP service configuration for the Tailor SDK.
  * @template TClients
  * @param name - IdP service name
