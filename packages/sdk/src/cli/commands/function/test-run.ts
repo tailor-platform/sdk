@@ -55,6 +55,12 @@ export const testRunCommand = defineCommand({
       description: "Path to SDK config file",
     }),
   }),
+  notes: `You can pass either a source file (\`.ts\`) or a pre-bundled file (\`.js\`).
+When a \`.js\` file is provided, detection and bundling are skipped and the file is executed as-is.
+
+> [!WARNING]
+> Workflow job \`.trigger()\` calls do not work in test-run mode.
+> Triggered jobs are not executed; only the target job's \`body\` function runs in isolation.`,
   examples: [
     {
       cmd: 'resolvers/add.ts --arg \'{"input":{"a":1,"b":2}}\'',
@@ -63,6 +69,10 @@ export const testRunCommand = defineCommand({
     {
       cmd: "workflows/sample.ts --name validate-order",
       desc: "Run a specific workflow job by name",
+    },
+    {
+      cmd: '.tailor-sdk/resolvers/add.js --arg \'{"input":{"a":1,"b":2}}\'',
+      desc: "Run a pre-bundled .js file directly",
     },
   ],
   run: withCommonArgs(async (args) => {
@@ -75,26 +85,41 @@ export const testRunCommand = defineCommand({
     // 2. Load config (required)
     const { config } = await loadConfig(args.config);
 
-    // 3. Detect function type
+    // 3. Resolve bundled code and script name
     const relativePath = path.relative(process.cwd(), filePath);
-    logger.info(`Detecting function type from ${styles.path(relativePath)}`);
+    const isPreBundled = filePath.endsWith(".js");
+    let bundledCode: string;
+    let scriptName: string;
+    let functionType: string | undefined;
+    let functionName: string | undefined;
 
-    const detected = await detectFunctionType({
-      filePath,
-      jobName: args.name,
-      typeOverride: args.type as FunctionType | undefined,
-    });
+    if (isPreBundled) {
+      // Pre-bundled .js file (e.g., from .tailor-sdk/resolvers/add.js)
+      scriptName = path.basename(filePath);
+      bundledCode = fs.readFileSync(filePath, "utf-8");
+      logger.info(`Using pre-bundled script ${styles.bold(scriptName)}`);
+    } else {
+      // Source file: detect type and bundle
+      logger.info(`Detecting function type from ${styles.path(relativePath)}`);
 
-    logger.info(`Detected: ${styles.bold(detected.type)} ${styles.info(`"${detected.name}"`)}`);
+      const detected = await detectFunctionType({
+        filePath,
+        jobName: args.name,
+        typeOverride: args.type as FunctionType | undefined,
+      });
 
-    // 4. Bundle
-    logger.info("Bundling...");
-    const { bundledCode, scriptName } = await bundleForTestRun({
-      detected,
-      sourceFile: filePath,
-      env: config.env ?? {},
-    });
-    logger.info(`Bundled as ${styles.bold(scriptName)}`);
+      functionType = detected.type;
+      functionName = detected.name;
+      logger.info(`Detected: ${styles.bold(detected.type)} ${styles.info(`"${detected.name}"`)}`);
+
+      logger.info("Bundling...");
+      ({ bundledCode, scriptName } = await bundleForTestRun({
+        detected,
+        sourceFile: filePath,
+        env: config.env ?? {},
+      }));
+      logger.info(`Bundled as ${styles.bold(scriptName)}`);
+    }
 
     // 5. Resolve auth info
     const authNamespace = resolveAuthNamespace(args["auth-namespace"], config.auth);
@@ -132,8 +157,8 @@ export const testRunCommand = defineCommand({
       logger.out({
         success: result.success,
         scriptName,
-        functionType: detected.type,
-        functionName: detected.name,
+        functionType,
+        functionName,
         logs: result.logs,
         result: result.result,
         error: result.error,

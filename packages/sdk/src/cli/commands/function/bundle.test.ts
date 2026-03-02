@@ -40,7 +40,7 @@ export default function(input: any) {
       const detected: DetectedFunction = { type: "plain", name: "fn" };
       const result = await bundleForTestRun({ detected, sourceFile });
 
-      expect(result.scriptName).toBe("test-run--fn");
+      expect(result.scriptName).toBe("test-run--fn.js");
       expect(result.bundledCode).toContain("main");
       expect(result.bundledCode).toContain("export");
 
@@ -70,7 +70,7 @@ export default {
       const detected: DetectedFunction = { type: "resolver", name: "add" };
       const result = await bundleForTestRun({ detected, sourceFile });
 
-      expect(result.scriptName).toBe("test-run--add");
+      expect(result.scriptName).toBe("test-run--add.js");
       // Check bundled code structure (can't import because it references @tailor-platform/sdk)
       expect(result.bundledCode).toContain("main");
       expect(result.bundledCode).toContain("export");
@@ -99,7 +99,7 @@ export default {
       const detected: DetectedFunction = { type: "executor", name: "test-executor" };
       const result = await bundleForTestRun({ detected, sourceFile });
 
-      expect(result.scriptName).toBe("test-run--test-executor");
+      expect(result.scriptName).toBe("test-run--test-executor.js");
       expect(result.bundledCode).toContain("main");
       expect(result.bundledCode).toContain("export");
 
@@ -137,7 +137,7 @@ export default {
       const env = { APP_URL: "https://example.com", DEBUG: true };
       const result = await bundleForTestRun({ detected, sourceFile, env });
 
-      expect(result.scriptName).toBe("test-run--my-job");
+      expect(result.scriptName).toBe("test-run--my-job.js");
       expect(result.bundledCode).toContain("main");
       expect(result.bundledCode).toContain("https://example.com");
 

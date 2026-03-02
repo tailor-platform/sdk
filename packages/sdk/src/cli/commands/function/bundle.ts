@@ -11,8 +11,8 @@ import ml from "multiline-ts";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
-import { enableInlineSourcemap } from "@/cli/shared/inline-sourcemap";
 import { getDistDir } from "@/cli/shared/dist-dir";
+import { resolveInlineSourcemap } from "@/cli/shared/inline-sourcemap";
 import type { DetectedFunction } from "./detect";
 
 interface BundleForTestRunOptions {
@@ -40,13 +40,15 @@ export async function bundleForTestRun(
   options: BundleForTestRunOptions,
 ): Promise<BundleForTestRunResult> {
   const { detected, sourceFile, env = {} } = options;
+  const inlineSourcemap = resolveInlineSourcemap();
 
   const outputDir = path.resolve(getDistDir(), "test-run");
   fs.mkdirSync(outputDir, { recursive: true });
 
-  const scriptName = `test-run--${detected.name}`;
-  const entryPath = path.join(outputDir, `${scriptName}.entry.js`);
-  const outputPath = path.join(outputDir, `${scriptName}.js`);
+  const baseName = `test-run--${detected.name}`;
+  const scriptName = `${baseName}.js`;
+  const entryPath = path.join(outputDir, `${baseName}.entry.js`);
+  const outputPath = path.join(outputDir, scriptName);
 
   const entryContent = generateEntry(detected, sourceFile, env);
   fs.writeFileSync(entryPath, entryContent);
@@ -64,8 +66,8 @@ export async function bundleForTestRun(
       output: {
         file: outputPath,
         format: "esm",
-        sourcemap: enableInlineSourcemap ? "inline" : true,
-        minify: enableInlineSourcemap
+        sourcemap: inlineSourcemap ? "inline" : true,
+        minify: inlineSourcemap
           ? {
               mangle: {
                 keepNames: true,
