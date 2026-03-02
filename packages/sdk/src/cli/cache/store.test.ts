@@ -196,6 +196,26 @@ describe("createCacheStore", () => {
       const cachedMapPath = path.join(cacheDir, "bundles", "myBundle.js.map");
       expect(fs.existsSync(cachedMapPath)).toBe(false);
     });
+
+    test("removes stale .map file from cache when source no longer has one", () => {
+      const store = createCacheStore({ cacheDir });
+      const sourceFile = path.join(tmpDir, "output.js");
+
+      // First store with .map (external sourcemap mode)
+      fs.writeFileSync(sourceFile, "console.log('v1');");
+      fs.writeFileSync(`${sourceFile}.map`, '{"mappings":"AAAA"}');
+      store.storeBundleOutput("myBundle", sourceFile);
+
+      const cachedMapPath = path.join(cacheDir, "bundles", "myBundle.js.map");
+      expect(fs.existsSync(cachedMapPath)).toBe(true);
+
+      // Store again without .map (switched to inline sourcemap mode)
+      fs.writeFileSync(sourceFile, "console.log('v2');");
+      fs.rmSync(`${sourceFile}.map`, { force: true });
+      store.storeBundleOutput("myBundle", sourceFile);
+
+      expect(fs.existsSync(cachedMapPath)).toBe(false);
+    });
   });
 
   describe("restoreBundleOutput", () => {

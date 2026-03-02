@@ -135,8 +135,11 @@ function createCacheStore(config: CacheConfig): CacheStore {
     fs.copyFileSync(sourcePath, bundlePath(cacheKey));
 
     const mapSource = `${sourcePath}.map`;
+    const cachedMapPath = `${bundlePath(cacheKey)}.map`;
     if (fs.existsSync(mapSource)) {
-      fs.copyFileSync(mapSource, `${bundlePath(cacheKey)}.map`);
+      fs.copyFileSync(mapSource, cachedMapPath);
+    } else {
+      fs.rmSync(cachedMapPath, { force: true });
     }
   }
 
