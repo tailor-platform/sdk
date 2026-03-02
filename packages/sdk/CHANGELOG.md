@@ -1,5 +1,26 @@
 # @tailor-platform/sdk
 
+## 1.19.0
+
+### Minor Changes
+
+- [#633](https://github.com/tailor-platform/sdk/pull/633) [`5f0b84b`](https://github.com/tailor-platform/sdk/commit/5f0b84bea403f9d15a9802e9a1fd7b07e0c2a9d2) Thanks [@ikawaha](https://github.com/ikawaha)! - Add decimal field type support with optional scale parameter (0-12) for fixed-point precision
+
+- [#631](https://github.com/tailor-platform/sdk/pull/631) [`9aded63`](https://github.com/tailor-platform/sdk/commit/9aded634276ad51786b2b1119c89be23d1ed26ff) Thanks [@toiroakr](https://github.com/toiroakr)! - Add OpenTelemetry tracing to CLI apply process for performance profiling
+
+  - Implement opt-in OTLP tracing activated via `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable
+  - Use `@opentelemetry/api` built-in noop spans for zero overhead when tracing is disabled
+  - Instrument all apply phases (build, plan, confirm, create/update, delete) with hierarchical spans
+  - Add Connect-RPC interceptor for automatic RPC call tracing
+  - Parallelize plan phase service calls and internal RPC calls for ~60% faster plan execution
+  - Fix race condition in parallel plan phase with Promise-based memoization for loadTypes/loadExecutors
+
+### Patch Changes
+
+- [#642](https://github.com/tailor-platform/sdk/pull/642) [`7ca52a5`](https://github.com/tailor-platform/sdk/commit/7ca52a56f3dcf4b41cf9c495bfa9ca3f279c00f1) Thanks [@riku99](https://github.com/riku99)! - Remove NPM_TOKEN from .github/workflows/release.yml
+
+- [#641](https://github.com/tailor-platform/sdk/pull/641) [`86d382c`](https://github.com/tailor-platform/sdk/commit/86d382ce261b7abd71c7d27b3d50cc83c9df3430) Thanks [@riku99](https://github.com/riku99)! - Allow configuring inline sourcemaps via `inlineSourcemap` in defineConfig
+
 ## 1.18.0
 
 ### Minor Changes
