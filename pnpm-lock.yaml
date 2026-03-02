@@ -411,8 +411,8 @@ importers:
         specifier: 2.3.0
         version: 2.3.0
       politty:
-        specifier: ^0.4.1
-        version: 0.4.1(zod@4.3.5)
+        specifier: ^0.4.2
+        version: 0.4.2(zod@4.3.5)
       rolldown:
         specifier: 1.0.0-beta.60
         version: 1.0.0-beta.60
@@ -4144,8 +4144,8 @@ packages:
     peerDependencies:
       zod: ^4.2.1
 
-  politty@0.4.1:
-    resolution: {integrity: sha512-oVtwNH+BsNXPVVLCtMSU5rsyeMin8sZtFgLkp+7W1v7+bAXW0Na5h8v9YHfyf5jsUOfFuJdmIIQe67slfVMyrQ==}
+  politty@0.4.2:
+    resolution: {integrity: sha512-xrXfqD7EDWixdKeqJRYRX8nTgL5oN2gQAa48jp8ZrNjDCu8ftReFGWTVQei7MVg/SU9OL8Uce5iKGg2GFmQZXg==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^4.2.1
@@ -4596,6 +4596,10 @@ packages:
 
   strip-ansi@7.1.2:
     resolution: {integrity: sha512-gmBGslpoQJtgnMAvOVqGZpEz9dyoKTCzy2nfz/n8aIFhN/jCE/rCmcxabB6jOOHV+0WNnylOxaxBQPSvcWklhA==}
+    engines: {node: '>=12'}
+
+  strip-ansi@7.2.0:
+    resolution: {integrity: sha512-yDPMNjp4WyfYBkHnjIRLfca1i6KMyGCtsVgoKe/z1+6vukgaENdgGBZt+ZmKPc4gavvEZ5OgHfHdrazhgNyG7w==}
     engines: {node: '>=12'}
 
   strip-bom@3.0.0:
@@ -5742,7 +5746,7 @@ snapshots:
     dependencies:
       string-width: 5.1.2
       string-width-cjs: string-width@4.2.3
-      strip-ansi: 7.1.2
+      strip-ansi: 7.2.0
       strip-ansi-cjs: strip-ansi@6.0.1
       wrap-ansi: 8.1.0
       wrap-ansi-cjs: wrap-ansi@7.0.0
@@ -8650,7 +8654,7 @@ snapshots:
     dependencies:
       zod: 4.3.5
 
-  politty@0.4.1(zod@4.3.5):
+  politty@0.4.2(zod@4.3.5):
     dependencies:
       string-width: 8.2.0
       zod: 4.3.5
@@ -9151,23 +9155,23 @@ snapshots:
     dependencies:
       eastasianwidth: 0.2.0
       emoji-regex: 9.2.2
-      strip-ansi: 7.1.2
+      strip-ansi: 7.2.0
 
   string-width@7.2.0:
     dependencies:
       emoji-regex: 10.6.0
       get-east-asian-width: 1.5.0
-      strip-ansi: 7.1.2
+      strip-ansi: 7.2.0
 
   string-width@8.1.0:
     dependencies:
       get-east-asian-width: 1.5.0
-      strip-ansi: 7.1.2
+      strip-ansi: 7.2.0
 
   string-width@8.2.0:
     dependencies:
       get-east-asian-width: 1.5.0
-      strip-ansi: 7.1.2
+      strip-ansi: 7.2.0
 
   string.prototype.trim@1.2.10:
     dependencies:
@@ -9207,6 +9211,10 @@ snapshots:
       ansi-regex: 5.0.1
 
   strip-ansi@7.1.2:
+    dependencies:
+      ansi-regex: 6.2.2
+
+  strip-ansi@7.2.0:
     dependencies:
       ansi-regex: 6.2.2
 
@@ -9632,13 +9640,13 @@ snapshots:
     dependencies:
       ansi-styles: 6.2.3
       string-width: 5.1.2
-      strip-ansi: 7.1.2
+      strip-ansi: 7.2.0
 
   wrap-ansi@9.0.2:
     dependencies:
       ansi-styles: 6.2.3
       string-width: 7.2.0
-      strip-ansi: 7.1.2
+      strip-ansi: 7.2.0
 
   wrappy@1.0.2: {}
 

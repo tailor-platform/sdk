@@ -73,20 +73,18 @@ describe("shell completion", () => {
       expect(result.fileExtensions).toEqual(["ts"]);
     });
 
-    it("triggers file completion for --env-file without extension filter", () => {
+    it("triggers file matcher completion for --env-file", () => {
       const ctx = parseCompletionContext(["apply", "--env-file", ""], mainCommand);
       const result = generateCandidates(ctx);
 
-      expect(result.directive & CompletionDirective.FileCompletion).toBeTruthy();
-      expect(result.fileExtensions).toBeUndefined();
+      expect(result.fileMatchers).toEqual([".env.*", ".env"]);
     });
 
-    it("triggers file completion for --env-file-if-exists without extension filter", () => {
+    it("triggers file matcher completion for --env-file-if-exists", () => {
       const ctx = parseCompletionContext(["apply", "--env-file-if-exists", ""], mainCommand);
       const result = generateCandidates(ctx);
 
-      expect(result.directive & CompletionDirective.FileCompletion).toBeTruthy();
-      expect(result.fileExtensions).toBeUndefined();
+      expect(result.fileMatchers).toEqual([".env.*", ".env"]);
     });
   });
 

@@ -119,11 +119,11 @@ export const commonArgs = {
   "env-file": arg(z.string().optional(), {
     alias: "e",
     description: "Path to the environment file (error if not found)",
-    completion: { type: "file" },
+    completion: { type: "file", matcher: [".env.*", ".env"] },
   }),
   "env-file-if-exists": arg(z.string().optional(), {
     description: "Path to the environment file (ignored if not found)",
-    completion: { type: "file" },
+    completion: { type: "file", matcher: [".env.*", ".env"] },
   }),
   verbose: arg(z.boolean().default(false), {
     description: "Enable verbose logging",
