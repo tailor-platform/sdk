@@ -35,8 +35,8 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, test, expect, beforeAll } from "vitest";
-import { initOperatorClient, type OperatorClient } from "../src/cli/client";
-import { loadAccessToken } from "../src/cli/context";
+import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
+import { loadAccessToken } from "../src/cli/shared/context";
 import { trackWorkspace, trackTempDir } from "./globalSetup";
 import {
   getMigrationFiles,
@@ -44,7 +44,7 @@ import {
   loadDiff,
   INITIAL_SCHEMA_NUMBER,
   getMigrationFilePath,
-} from "../src/cli/tailordb/migrate/snapshot";
+} from "../src/cli/commands/tailordb/migrate/snapshot";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

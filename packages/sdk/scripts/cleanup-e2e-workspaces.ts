@@ -8,8 +8,8 @@
  *   npx tsx scripts/cleanup-e2e-workspaces.ts --dry-run # List without deleting
  */
 
-import { initOperatorClient, type OperatorClient } from "../src/cli/client";
-import { loadAccessToken } from "../src/cli/context";
+import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
+import { loadAccessToken } from "../src/cli/shared/context";
 
 const E2E_WORKSPACE_PREFIXES = ["e2e-ws-", "mig-ws-"];
 

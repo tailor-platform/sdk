@@ -5,12 +5,12 @@ paths:
 
 # CLI Logging Guidelines
 
-The CLI module uses a unified logging system. Always use `logger` and `styles` from `src/cli/utils/logger.ts`.
+The CLI module uses a unified logging system. Always use `logger` and `styles` from `src/cli/shared/logger.ts`.
 
 **Imports:**
 
 ```typescript
-import { logger, styles } from "../utils/logger";
+import { logger, styles } from "../shared/logger";
 ```
 
 **Logger Methods:**

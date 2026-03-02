@@ -1,0 +1,157 @@
+import ml from "multiline-ts";
+import { defineCommand } from "politty";
+import { z } from "zod";
+import { applyApplication, planApplication } from "@/cli/commands/apply/application";
+import { type PlanContext } from "@/cli/commands/apply/apply";
+import { applyAuth, planAuth } from "@/cli/commands/apply/auth";
+import { applyExecutor, planExecutor } from "@/cli/commands/apply/executor";
+import {
+  applyFunctionRegistry,
+  planFunctionRegistry,
+} from "@/cli/commands/apply/function-registry";
+import { applyIdP, planIdP } from "@/cli/commands/apply/idp";
+import { applyPipeline, planPipeline } from "@/cli/commands/apply/resolver";
+import { applyStaticWebsite, planStaticWebsite } from "@/cli/commands/apply/staticwebsite";
+import { applyTailorDB, planTailorDB } from "@/cli/commands/apply/tailordb";
+import { applyWorkflow, planWorkflow } from "@/cli/commands/apply/workflow";
+import { type Application, defineApplication } from "@/cli/services/application";
+import { commonArgs, confirmationArgs, deploymentArgs, withCommonArgs } from "@/cli/shared/args";
+import { initOperatorClient, type OperatorClient } from "@/cli/shared/client";
+import { loadConfig, type LoadedConfig } from "@/cli/shared/config-loader";
+import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
+import { logger } from "@/cli/shared/logger";
+
+export interface RemoveOptions {
+  workspaceId?: string;
+  profile?: string;
+  configPath?: string;
+}
+
+async function loadOptions(options?: RemoveOptions) {
+  const accessToken = await loadAccessToken({
+    useProfile: true,
+    profile: options?.profile,
+  });
+  const client = await initOperatorClient(accessToken);
+  const workspaceId = loadWorkspaceId({
+    workspaceId: options?.workspaceId,
+    profile: options?.profile,
+  });
+  const { config } = await loadConfig(options?.configPath);
+  const application = defineApplication({ config });
+  return {
+    client,
+    workspaceId,
+    application,
+    config,
+  };
+}
+
+async function execRemove(
+  client: OperatorClient,
+  workspaceId: string,
+  application: Application,
+  config: LoadedConfig,
+  confirm?: () => Promise<void>,
+) {
+  // Plan all resources with forRemoval=true
+  const ctx: PlanContext = {
+    client,
+    workspaceId,
+    application,
+    forRemoval: true,
+    config,
+  };
+  const tailorDB = await planTailorDB(ctx);
+  const staticWebsite = await planStaticWebsite(ctx);
+  const idp = await planIdP(ctx);
+  const auth = await planAuth(ctx);
+  const pipeline = await planPipeline(ctx);
+  const app = await planApplication(ctx);
+  const executor = await planExecutor(ctx);
+  const workflow = await planWorkflow(client, workspaceId, application.name, {}, {});
+  const functionRegistry = await planFunctionRegistry(client, workspaceId, application.name, []);
+
+  if (
+    tailorDB.changeSet.service.deletes.length === 0 &&
+    staticWebsite.changeSet.deletes.length === 0 &&
+    idp.changeSet.service.deletes.length === 0 &&
+    auth.changeSet.service.deletes.length === 0 &&
+    pipeline.changeSet.service.deletes.length === 0 &&
+    app.deletes.length === 0 &&
+    executor.changeSet.deletes.length === 0 &&
+    workflow.changeSet.deletes.length === 0 &&
+    functionRegistry.changeSet.deletes.length === 0
+  ) {
+    return;
+  }
+
+  // Confirm deletion
+  if (confirm) {
+    await confirm();
+  }
+
+  // Apply deletions in reverse order of dependencies
+  await applyWorkflow(client, workflow, "delete");
+  await applyExecutor(client, executor, "delete");
+  await applyStaticWebsite(client, staticWebsite, "delete");
+  await applyApplication(client, app, "delete");
+  await applyPipeline(client, pipeline, "delete-resources");
+  await applyPipeline(client, pipeline, "delete-services");
+  await applyAuth(client, auth, "delete-resources");
+  await applyAuth(client, auth, "delete-services");
+  await applyIdP(client, idp, "delete-resources");
+  await applyIdP(client, idp, "delete-services");
+  await applyTailorDB(client, tailorDB, "delete-resources");
+  await applyTailorDB(client, tailorDB, "delete-services");
+  await applyFunctionRegistry(client, workspaceId, functionRegistry, "delete");
+}
+
+/**
+ * Remove all resources managed by the current application.
+ * @param options - Remove options
+ * @returns Promise that resolves when removal completes
+ */
+export async function remove(options?: RemoveOptions): Promise<void> {
+  const { client, workspaceId, application, config } = await loadOptions(options);
+  await execRemove(client, workspaceId, application, config);
+}
+
+export const removeCommand = defineCommand({
+  name: "remove",
+  description: "Remove all resources managed by the application from the workspace.",
+  args: z.object({
+    ...commonArgs,
+    ...deploymentArgs,
+    ...confirmationArgs,
+  }),
+  run: withCommonArgs(async (args) => {
+    const { client, workspaceId, application, config } = await loadOptions({
+      workspaceId: args["workspace-id"],
+      profile: args.profile,
+      configPath: args.config,
+    });
+
+    logger.info(`Planning removal of resources managed by "${application.name}"...`);
+    logger.newline();
+
+    await execRemove(client, workspaceId, application, config, async () => {
+      if (!args.yes) {
+        const confirmed = await logger.prompt("Are you sure you want to remove all resources?", {
+          type: "confirm",
+          initial: false,
+        });
+        if (!confirmed) {
+          throw new Error(ml`
+        Remove cancelled. No resources were deleted.
+        To override, run again and confirm, or use --yes flag.
+      `);
+        }
+      } else {
+        logger.success("Removing all resources (--yes flag specified)...");
+      }
+    });
+
+    logger.success(`Successfully removed all resources managed by "${application.name}".`);
+  }),
+});
