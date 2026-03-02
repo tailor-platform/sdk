@@ -275,4 +275,48 @@ describe("defineIdp", () => {
     });
     expect(idpNoPublishUserEvents.publishUserEvents).toBeUndefined();
   });
+
+  it("should preserve disableGqlOperations config", () => {
+    const idpWithDisableGqlOperations = defineIdp("idp-with-disable-gql-operations", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      disableGqlOperations: {
+        create: true,
+        update: true,
+        delete: true,
+        read: true,
+        sendPasswordResetEmail: true,
+      },
+    });
+    expect(idpWithDisableGqlOperations.disableGqlOperations?.create).toBe(true);
+    expect(idpWithDisableGqlOperations.disableGqlOperations?.update).toBe(true);
+    expect(idpWithDisableGqlOperations.disableGqlOperations?.delete).toBe(true);
+    expect(idpWithDisableGqlOperations.disableGqlOperations?.read).toBe(true);
+    expect(idpWithDisableGqlOperations.disableGqlOperations?.sendPasswordResetEmail).toBe(true);
+
+    const idpWithPartialDisableGqlOperations = defineIdp(
+      "idp-with-partial-disable-gql-operations",
+      {
+        authorization: "loggedIn",
+        clients: ["client-1"] as const,
+        disableGqlOperations: {
+          create: true,
+          read: false,
+        },
+      },
+    );
+    expect(idpWithPartialDisableGqlOperations.disableGqlOperations?.create).toBe(true);
+    expect(idpWithPartialDisableGqlOperations.disableGqlOperations?.read).toBe(false);
+    expect(idpWithPartialDisableGqlOperations.disableGqlOperations?.update).toBeUndefined();
+    expect(idpWithPartialDisableGqlOperations.disableGqlOperations?.delete).toBeUndefined();
+    expect(
+      idpWithPartialDisableGqlOperations.disableGqlOperations?.sendPasswordResetEmail,
+    ).toBeUndefined();
+
+    const idpNoDisableGqlOperations = defineIdp("idp-no-disable-gql-operations", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+    });
+    expect(idpNoDisableGqlOperations.disableGqlOperations).toBeUndefined();
+  });
 });

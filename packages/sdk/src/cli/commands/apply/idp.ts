@@ -271,6 +271,7 @@ async function planServices(
           lang,
           userAuthPolicy,
           publishUserEvents: idp.publishUserEvents,
+          disableGqlOperations: idp.disableGqlOperations,
         },
         metaRequest,
       });
@@ -285,6 +286,7 @@ async function planServices(
           lang,
           userAuthPolicy,
           publishUserEvents: idp.publishUserEvents,
+          disableGqlOperations: idp.disableGqlOperations,
         },
         metaRequest,
       });

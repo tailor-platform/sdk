@@ -2,6 +2,14 @@ import { z } from "zod";
 
 export const IdPLangSchema = z.enum(["en", "ja"]);
 
+export const IdPDisableGqlOperationsSchema = z.object({
+  create: z.boolean().optional(),
+  update: z.boolean().optional(),
+  delete: z.boolean().optional(),
+  read: z.boolean().optional(),
+  sendPasswordResetEmail: z.boolean().optional(),
+});
+
 export const IdPUserAuthPolicySchema = z
   .object({
     useNonEmailIdentifier: z.boolean().optional(),
@@ -89,5 +97,6 @@ export const IdPSchema = z
       IdPUserAuthPolicySchema.parse(input ?? {}),
     ).optional(),
     publishUserEvents: z.boolean().optional(),
+    disableGqlOperations: IdPDisableGqlOperationsSchema.optional(),
   })
   .brand("IdPConfig");
