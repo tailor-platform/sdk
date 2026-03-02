@@ -6,8 +6,8 @@ const resolver = createResolver({
   operation: "query",
   body: (context) => {
     return {
-      appName: context.env.appName as string,
-      version: context.env.version as number,
+      appName: context.env.appName,
+      version: context.env.version,
     };
   },
   output: t.object({

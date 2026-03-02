@@ -13,14 +13,6 @@ import {
 
 export interface Namespace {
   "main-db": {
-    User: {
-      id: Generated<string>;
-      name: string;
-      email: string;
-      role: "ADMIN" | "MEMBER";
-      createdAt: Generated<Timestamp>;
-      updatedAt: Timestamp | null;
-    };
     AuditLog: {
       id: Generated<string>;
       action: string;
@@ -29,7 +21,8 @@ export interface Namespace {
       message: string;
       createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
-    };
+    }
+
     Notification: {
       id: Generated<string>;
       userId: string;
@@ -38,8 +31,17 @@ export interface Namespace {
       isRead: boolean;
       createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
-    };
-  };
+    }
+
+    User: {
+      id: Generated<string>;
+      name: string;
+      email: string;
+      role: "ADMIN" | "MEMBER";
+      createdAt: Generated<Timestamp>;
+      updatedAt: Timestamp | null;
+    }
+  }
 }
 
 export const getDB = createGetDB<Namespace>();

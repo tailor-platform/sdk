@@ -13,36 +13,13 @@ import {
 
 export interface Namespace {
   "main-db": {
-    User: {
-      id: Generated<string>;
-      name: string;
-      email: string;
-      role: "ADMIN" | "MEMBER" | "VIEWER";
-      bio: string | null;
-      createdAt: Generated<Timestamp>;
-      updatedAt: Timestamp | null;
-    };
     Category: {
       id: Generated<string>;
       name: string;
       description: string | null;
       parentCategoryId: string | null;
-      createdAt: Generated<Timestamp>;
-      updatedAt: Timestamp | null;
-    };
-    Task: {
-      id: Generated<string>;
-      title: string;
-      description: string | null;
-      status: "TODO" | "IN_PROGRESS" | "DONE" | "CANCELLED";
-      priority: number;
-      dueDate: Timestamp | null;
-      assigneeId: string | null;
-      categoryId: string | null;
-      isArchived: boolean;
-      createdAt: Generated<Timestamp>;
-      updatedAt: Timestamp | null;
-    };
+    }
+
     Comment: {
       id: Generated<string>;
       body: string;
@@ -55,8 +32,32 @@ export interface Namespace {
       };
       createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
-    };
-  };
+    }
+
+    Task: {
+      id: Generated<string>;
+      title: string;
+      description: string | null;
+      status: "TODO" | "IN_PROGRESS" | "DONE" | "CANCELLED";
+      priority: number;
+      dueDate: Timestamp | null;
+      assigneeId: string | null;
+      categoryId: string | null;
+      isArchived: Generated<boolean>;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Timestamp | null;
+    }
+
+    User: {
+      id: Generated<string>;
+      name: string;
+      email: string;
+      role: "ADMIN" | "MEMBER" | "VIEWER";
+      bio: string | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Timestamp | null;
+    }
+  }
 }
 
 export const getDB = createGetDB<Namespace>();

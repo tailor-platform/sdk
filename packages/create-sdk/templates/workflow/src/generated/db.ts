@@ -13,14 +13,6 @@ import {
 
 export interface Namespace {
   "main-db": {
-    User: {
-      id: Generated<string>;
-      name: string;
-      email: string;
-      age: number;
-      createdAt: Generated<Timestamp>;
-      updatedAt: Timestamp | null;
-    };
     Order: {
       id: Generated<string>;
       customerName: string;
@@ -28,8 +20,17 @@ export interface Namespace {
       status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
       createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
-    };
-  };
+    }
+
+    User: {
+      id: Generated<string>;
+      name: string;
+      email: string;
+      age: number;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Timestamp | null;
+    }
+  }
 }
 
 export const getDB = createGetDB<Namespace>();

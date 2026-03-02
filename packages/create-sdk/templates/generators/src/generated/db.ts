@@ -13,32 +13,13 @@ import {
 
 export interface Namespace {
   "main-db": {
-    User: {
-      id: Generated<string>;
-      name: string;
-      email: string;
-      role: "ADMIN" | "MEMBER" | "VIEWER";
-      createdAt: Generated<Timestamp>;
-      updatedAt: Timestamp | null;
-    };
     Category: {
       id: Generated<string>;
       name: string;
       slug: string;
       parentCategoryId: string | null;
-      createdAt: Generated<Timestamp>;
-      updatedAt: Timestamp | null;
-    };
-    Product: {
-      id: Generated<string>;
-      name: string;
-      description: string | null;
-      price: number;
-      status: "DRAFT" | "ACTIVE" | "DISCONTINUED";
-      categoryId: string | null;
-      createdAt: Generated<Timestamp>;
-      updatedAt: Timestamp | null;
-    };
+    }
+
     Order: {
       id: Generated<string>;
       productId: string;
@@ -48,8 +29,28 @@ export interface Namespace {
       status: "PENDING" | "CONFIRMED" | "SHIPPED" | "DELIVERED" | "CANCELLED";
       createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
-    };
-  };
+    }
+
+    Product: {
+      id: Generated<string>;
+      name: string;
+      description: string | null;
+      price: number;
+      status: "DRAFT" | "ACTIVE" | "DISCONTINUED";
+      categoryId: string | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Timestamp | null;
+    }
+
+    User: {
+      id: Generated<string>;
+      name: string;
+      email: string;
+      role: "ADMIN" | "MEMBER" | "VIEWER";
+      createdAt: Generated<Timestamp>;
+      updatedAt: Timestamp | null;
+    }
+  }
 }
 
 export const getDB = createGetDB<Namespace>();
