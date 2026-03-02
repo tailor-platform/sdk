@@ -1,8 +1,4 @@
-import {
-  WORKFLOW_TEST_ENV_KEY,
-  WORKFLOW_TEST_USER_KEY,
-  unauthenticatedTailorUser,
-} from "@tailor-platform/sdk/test";
+import { WORKFLOW_TEST_ENV_KEY, unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import workflow, {
   fulfillOrder,
@@ -47,7 +43,7 @@ describe("order fulfillment workflow", () => {
       });
     });
 
-    test("sendConfirmation includes user id", () => {
+    test("sendConfirmation returns confirmation", () => {
       const result = sendConfirmation.body(
         { orderId: "order-1", transactionId: "txn-1" },
         { env: {}, user: unauthenticatedTailorUser },
@@ -55,7 +51,7 @@ describe("order fulfillment workflow", () => {
       expect(result).toEqual({
         orderId: "order-1",
         transactionId: "txn-1",
-        confirmedBy: unauthenticatedTailorUser.id,
+        confirmed: true,
       });
     });
   });
@@ -74,7 +70,7 @@ describe("order fulfillment workflow", () => {
       vi.spyOn(sendConfirmation, "trigger").mockResolvedValue({
         orderId: "order-1",
         transactionId: "txn-order-1",
-        confirmedBy: "user-1",
+        confirmed: true,
       });
 
       const result = await fulfillOrder.body(
@@ -97,7 +93,7 @@ describe("order fulfillment workflow", () => {
       expect(result).toEqual({
         orderId: "order-1",
         transactionId: "txn-order-1",
-        confirmedBy: "user-1",
+        confirmed: true,
         paymentStatus: "completed",
       });
     });
@@ -115,7 +111,7 @@ describe("order fulfillment workflow", () => {
       vi.spyOn(sendConfirmation, "trigger").mockResolvedValue({
         orderId: "order-2",
         transactionId: "txn-order-2",
-        confirmedBy: "user-2",
+        confirmed: true,
       });
 
       const result = await workflow.mainJob.body(
@@ -126,7 +122,7 @@ describe("order fulfillment workflow", () => {
       expect(result).toEqual({
         orderId: "order-2",
         transactionId: "txn-order-2",
-        confirmedBy: "user-2",
+        confirmed: true,
         paymentStatus: "completed",
       });
     });
@@ -135,8 +131,6 @@ describe("order fulfillment workflow", () => {
   describe("integration tests with .trigger()", () => {
     test("workflow.mainJob.trigger() executes all jobs", async () => {
       vi.stubEnv(WORKFLOW_TEST_ENV_KEY, JSON.stringify({}));
-      const customUser = { ...unauthenticatedTailorUser, id: "test-user" };
-      vi.stubEnv(WORKFLOW_TEST_USER_KEY, JSON.stringify(customUser));
 
       const result = await workflow.mainJob.trigger({
         orderId: "order-3",
@@ -146,7 +140,7 @@ describe("order fulfillment workflow", () => {
       expect(result).toEqual({
         orderId: "order-3",
         transactionId: "txn-order-3",
-        confirmedBy: "test-user",
+        confirmed: true,
         paymentStatus: "completed",
       });
     });

@@ -23,11 +23,11 @@ export const processPayment = createWorkflowJob({
 
 export const sendConfirmation = createWorkflowJob({
   name: "send-confirmation",
-  body: (input: { orderId: string; transactionId: string }, { user }) => {
+  body: (input: { orderId: string; transactionId: string }) => {
     return {
       orderId: input.orderId,
       transactionId: input.transactionId,
-      confirmedBy: user.id,
+      confirmed: true,
     };
   },
 });
@@ -57,7 +57,7 @@ export const fulfillOrder = createWorkflowJob({
     return {
       orderId: confirmation.orderId,
       transactionId: confirmation.transactionId,
-      confirmedBy: confirmation.confirmedBy,
+      confirmed: confirmation.confirmed,
       paymentStatus: payment.status,
     };
   },

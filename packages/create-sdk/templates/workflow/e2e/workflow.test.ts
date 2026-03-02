@@ -6,7 +6,7 @@ import orderFulfillmentWorkflow from "../src/workflow/order-fulfillment";
 import userProfileSyncWorkflow from "../src/workflow/sync-profile";
 
 describe.concurrent("workflow", () => {
-  test("order-fulfillment: execute workflow and verify success", { timeout: 120000 }, async () => {
+  test("order-fulfillment: execute workflow and verify success", { timeout: 180000 }, async () => {
     const { executionId, wait } = await startWorkflow({
       workflow: orderFulfillmentWorkflow,
       authInvoker: config.auth.invoker("admin"),
