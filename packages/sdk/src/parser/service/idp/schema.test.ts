@@ -472,4 +472,48 @@ describe("IdPGqlOperationsSchema validation", () => {
     expect(result.delete).toBeUndefined();
     expect(result.sendPasswordResetEmail).toBeUndefined();
   });
+
+  it("accepts 'query' alias and normalizes to read-only mode", () => {
+    const result = IdPGqlOperationsSchema.parse("query");
+    expect(result.create).toBe(false);
+    expect(result.update).toBe(false);
+    expect(result.delete).toBe(false);
+    expect(result.read).toBe(true);
+    expect(result.sendPasswordResetEmail).toBe(false);
+  });
+});
+
+describe("IdPSchema gqlOperations alias tests", () => {
+  it("accepts 'query' alias in IdPSchema", () => {
+    const config = {
+      name: "test-idp",
+      authorization: "loggedIn" as const,
+      clients: ["client-1"],
+      gqlOperations: "query" as const,
+    };
+
+    const result = IdPSchema.parse(config);
+    expect(result.gqlOperations?.create).toBe(false);
+    expect(result.gqlOperations?.update).toBe(false);
+    expect(result.gqlOperations?.delete).toBe(false);
+    expect(result.gqlOperations?.read).toBe(true);
+    expect(result.gqlOperations?.sendPasswordResetEmail).toBe(false);
+  });
+
+  it("'query' alias works with other IdP config options", () => {
+    const config = {
+      name: "test-idp",
+      authorization: "loggedIn" as const,
+      clients: ["client-1"],
+      lang: "en" as const,
+      publishUserEvents: true,
+      gqlOperations: "query" as const,
+    };
+
+    const result = IdPSchema.parse(config);
+    expect(result.lang).toBe("en");
+    expect(result.publishUserEvents).toBe(true);
+    expect(result.gqlOperations?.read).toBe(true);
+    expect(result.gqlOperations?.create).toBe(false);
+  });
 });

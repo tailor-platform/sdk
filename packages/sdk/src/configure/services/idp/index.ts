@@ -19,6 +19,17 @@ export interface IdPGqlOperations {
 }
 
 /**
+ * Alias for common IdPGqlOperations configurations.
+ * - "query": Read-only mode - disables all mutations (create, update, delete, sendPasswordResetEmail)
+ */
+export type IdPGqlOperationsAliasQuery = "query";
+
+/**
+ * Configuration for GraphQL operations - either an alias string or detailed object.
+ */
+export type IdPGqlOperationsConfig = IdPGqlOperationsAliasQuery | IdPGqlOperations;
+
+/**
  * Define an IdP service configuration for the Tailor SDK.
  * @template TClients
  * @param name - IdP service name

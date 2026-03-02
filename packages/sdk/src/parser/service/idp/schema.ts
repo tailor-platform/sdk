@@ -1,14 +1,9 @@
 import { z } from "zod";
+import { IdPGqlOperationsSchema } from "./gql-operations";
+
+export { IdPGqlOperationsSchema } from "./gql-operations";
 
 export const IdPLangSchema = z.enum(["en", "ja"]);
-
-export const IdPGqlOperationsSchema = z.object({
-  create: z.boolean().optional(),
-  update: z.boolean().optional(),
-  delete: z.boolean().optional(),
-  read: z.boolean().optional(),
-  sendPasswordResetEmail: z.boolean().optional(),
-});
 
 export const IdPUserAuthPolicySchema = z
   .object({
