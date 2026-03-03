@@ -107,6 +107,11 @@ function generateEntry(
 
   switch (detected.type) {
     case "plain":
+      if (detected.namedMain) {
+        return ml /* js */ `
+          export { main } from "${absoluteSourcePath}";
+        `;
+      }
       return ml /* js */ `
         import _fn from "${absoluteSourcePath}";
         export { _fn as main };

@@ -20,6 +20,8 @@ export interface DetectedFunction {
   name: string;
   /** For workflow jobs: the TypeScript export name needed for bundling */
   exportName?: string;
+  /** For plain functions: whether main is a named export rather than default export */
+  namedMain?: boolean;
 }
 
 interface DetectFunctionOptions {
@@ -70,10 +72,15 @@ export async function detectFunctionType(
     return workflowJobResult;
   }
 
-  // 4. Check plain function (default export is a function)
+  // 4. Check plain function (default export or named export "main")
   if (typeof module.default === "function") {
     const name = deriveNameFromPath(filePath);
     return { type: "plain", name };
+  }
+
+  if (typeof module.main === "function") {
+    const name = deriveNameFromPath(filePath);
+    return { type: "plain", name, namedMain: true };
   }
 
   throw new Error(
@@ -82,7 +89,8 @@ export async function detectFunctionType(
       "  - A default-exported resolver (createResolver)\n" +
       "  - A default-exported executor (createExecutor) with function/jobFunction operation\n" +
       "  - A named-exported workflow job (createWorkflowJob)\n" +
-      "  - A default-exported function",
+      "  - A default-exported function\n" +
+      '  - A named-exported "main" function',
   );
 }
 
@@ -132,10 +140,15 @@ function detectWithTypeOverride(
       return detected;
     }
     case "plain": {
-      if (typeof module.default !== "function") {
-        throw new Error(`File does not have a default-exported function: ${filePath}`);
+      if (typeof module.default === "function") {
+        return { type: "plain", name: deriveNameFromPath(filePath) };
       }
-      return { type: "plain", name: deriveNameFromPath(filePath) };
+      if (typeof module.main === "function") {
+        return { type: "plain", name: deriveNameFromPath(filePath), namedMain: true };
+      }
+      throw new Error(
+        `File does not have a default-exported function or named "main" export: ${filePath}`,
+      );
     }
   }
 }

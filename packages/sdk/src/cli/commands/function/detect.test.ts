@@ -193,6 +193,59 @@ export default function(input) {
       const result = await detectFunctionType({ filePath });
       expect(result.type).toBe("plain");
       expect(result.name).toBe("my-function");
+      expect(result.namedMain).toBeUndefined();
+    });
+
+    it("detects a named-exported main function", async () => {
+      const filePath = path.join(testDir, "my-main.mjs");
+      fs.writeFileSync(
+        filePath,
+        `
+export function main(input) {
+  return { result: input };
+}
+`,
+      );
+
+      const result = await detectFunctionType({ filePath });
+      expect(result.type).toBe("plain");
+      expect(result.name).toBe("my-main");
+      expect(result.namedMain).toBe(true);
+    });
+
+    it("prefers default export over named main", async () => {
+      const filePath = path.join(testDir, "both.mjs");
+      fs.writeFileSync(
+        filePath,
+        `
+export function main(input) {
+  return { named: true };
+}
+export default function(input) {
+  return { default: true };
+}
+`,
+      );
+
+      const result = await detectFunctionType({ filePath });
+      expect(result.type).toBe("plain");
+      expect(result.namedMain).toBeUndefined();
+    });
+
+    it("detects named main with --type=plain", async () => {
+      const filePath = path.join(testDir, "typed-main.mjs");
+      fs.writeFileSync(
+        filePath,
+        `
+export function main(input) {
+  return { result: input };
+}
+`,
+      );
+
+      const result = await detectFunctionType({ filePath, typeOverride: "plain" });
+      expect(result.type).toBe("plain");
+      expect(result.namedMain).toBe(true);
     });
   });
 

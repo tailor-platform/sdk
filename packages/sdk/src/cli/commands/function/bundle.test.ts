@@ -50,6 +50,30 @@ export default function(input: any) {
       const mod = await import(pathToFileURL(tempFile).href);
       expect(typeof mod.main).toBe("function");
     });
+
+    it("bundles a named-exported main function", async () => {
+      const sourceFile = path.join(testDir, "named-main.ts");
+      fs.writeFileSync(
+        sourceFile,
+        `
+export function main(input: any) {
+  return { hello: input.name };
+}
+`,
+      );
+
+      const detected: DetectedFunction = { type: "plain", name: "named-main", namedMain: true };
+      const result = await bundleForTestRun({ detected, sourceFile });
+
+      expect(result.scriptName).toBe("test-run--named-main.js");
+      expect(result.bundledCode).toContain("main");
+      expect(result.bundledCode).toContain("export");
+
+      const tempFile = path.join(testDir, "verify-named-main.mjs");
+      fs.writeFileSync(tempFile, result.bundledCode);
+      const mod = await import(pathToFileURL(tempFile).href);
+      expect(typeof mod.main).toBe("function");
+    });
   });
 
   describe("resolver", () => {
