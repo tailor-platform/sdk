@@ -765,4 +765,39 @@ describe("TailorField runtime validation tests", () => {
       }
     });
   });
+
+  describe("validates decimal type", () => {
+    it("accepts valid decimal strings", () => {
+      for (const value of [
+        "123.45",
+        "0",
+        "-99.99",
+        "1000",
+        ".5",
+        "5.",
+        "4.321e+4",
+        "1E-5",
+        "2.41E-3",
+        "-1.5e10",
+      ]) {
+        const result = t.decimal().parse({ value, data, user });
+        expect(result.issues).toBeUndefined();
+        if (result.issues) {
+          throw new Error(`Unexpected issues for "${value}"`);
+        }
+        expect(result.value).toBe(value);
+      }
+    });
+
+    it("rejects invalid decimal values", () => {
+      for (const value of ["abc", "", "1_000_000", "0b1.1p-5", "1e", "e5", "."]) {
+        const result = t.decimal().parse({ value, data, user });
+        expect(result.issues).toBeDefined();
+      }
+      {
+        const result = t.decimal().parse({ value: 123, data, user });
+        expect(result.issues).toBeDefined();
+      }
+    });
+  });
 });

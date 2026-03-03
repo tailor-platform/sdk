@@ -170,6 +170,7 @@ export interface OperatorFieldConfig {
     maxValue?: number;
     format?: string;
   };
+  scale?: number;
   fields?: Record<string, OperatorFieldConfig>;
 }
 

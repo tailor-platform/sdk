@@ -7,6 +7,7 @@ export type TailorFieldType =
   | "boolean"
   | "integer"
   | "float"
+  | "decimal"
   | "enum"
   | "date"
   | "datetime"
@@ -17,6 +18,7 @@ export type TailorToTs = {
   string: string;
   integer: number;
   float: number;
+  decimal: string;
   boolean: boolean;
   uuid: string;
   date: string;

@@ -74,6 +74,7 @@ function getBaseType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
   switch (fieldType) {
     case "uuid":
     case "string":
+    case "decimal":
       type = "string";
       break;
     case "integer":
