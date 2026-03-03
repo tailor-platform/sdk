@@ -24,10 +24,13 @@ ALWAYS build SDK before running: `pnpm -C packages/sdk build`
 
 Structure: `problems/<id>-<name>/` with `meta.json`, `problem.md`, `scaffold/`, `solution/`, `tests/`
 
+Variant support: `variants/<name>/solution/` overlays on root `solution/`. Use `vars.json` for template substitution in `problem.md` (placeholders: `{{KEY}}`). Variant-specific `problem.md` is also supported (takes precedence over template).
+
 **meta.json rules**:
 
 - `id`: 3-digit zero-padded, sequential
-- `scoring`: Must sum to 100. Category defaults — tailordb: 20/20/60, resolver/executor/workflow: 15/15/70, config: 30/20/50, fix-broken: 15/15/70
+- `scoring`: Category defaults — tailordb: 20/20/60, resolver/executor/workflow: 15/15/70, config: 30/20/50, fix-broken: 15/15/70
+- `variants`: string array of variant names. When defined, `--variant` is required to run
 - Fix-broken problem: same file appears in both `implement` and `scaffold`
 
 **problem.md rules**:
@@ -35,6 +38,7 @@ Structure: `problems/<id>-<name>/` with `meta.json`, `problem.md`, `scaffold/`, 
 - Sections: Goal → Domain Context/Instructions → What to Build → Requirements → Reference
 - NEVER include SDK code examples — AI must discover API from the SDK package itself
 - Always end with "Refer to the installed SDK package for ..."
+- For variant problems, use `{{PLACEHOLDER}}` in root `problem.md` with `vars.json` per variant
 
 ## Writing Tests
 
