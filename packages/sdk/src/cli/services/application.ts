@@ -20,7 +20,7 @@ import { type ExecutorServiceInput } from "@/parser/service/executor";
 import { IdPSchema, type IdP } from "@/parser/service/idp";
 import { type IdPConfig } from "@/parser/service/idp/types";
 import { type ResolverServiceInput } from "@/parser/service/resolver/types";
-import { SecretsSchema, type SecretsConfig } from "@/parser/service/secrets";
+import { SecretsSchema, type SecretsConfigInput } from "@/parser/service/secrets";
 import {
   StaticWebsiteSchema,
   type StaticWebsite,
@@ -210,7 +210,7 @@ function defineStaticWebsites(
   return staticWebsiteServices;
 }
 
-function defineSecrets(config: SecretsConfig | undefined): SecretVault[] {
+function defineSecrets(config: SecretsConfigInput | undefined): SecretVault[] {
   if (!config) {
     return [];
   }
