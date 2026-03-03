@@ -235,7 +235,6 @@ export function resolveNeededBindings(
       if (binding.kind === "import") {
         neededImports.add(binding.sourceText);
       } else {
-        neededDeclarations.push(binding.sourceText);
         // Parse the declaration with oxc-parser (handles TypeScript) and collect
         // all Identifier names, then resolve those that match other source bindings.
         const identifiers = collectIdentifierNames(binding.sourceText);
@@ -246,6 +245,7 @@ export function resolveNeededBindings(
           }
         }
         resolveVars(referencedVars);
+        neededDeclarations.push(binding.sourceText);
       }
     }
   };

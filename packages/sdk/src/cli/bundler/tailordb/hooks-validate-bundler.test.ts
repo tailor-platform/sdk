@@ -233,8 +233,9 @@ describe("resolveNeededBindings", () => {
     const result = resolveNeededBindings(freeVars, sourceBindings);
 
     expect(result.declarations).toHaveLength(2);
-    expect(result.declarations).toContain("const MAX_LENGTH = config.max;");
-    expect(result.declarations).toContain("const config = { max: 100 };");
+    // Dependencies must appear before dependents (topological order)
+    expect(result.declarations[0]).toBe("const config = { max: 100 };");
+    expect(result.declarations[1]).toBe("const MAX_LENGTH = config.max;");
   });
 
   it("recursively resolves dependencies through TypeScript-typed declarations", () => {
@@ -261,7 +262,11 @@ describe("resolveNeededBindings", () => {
     const result = resolveNeededBindings(freeVars, sourceBindings);
 
     expect(result.declarations).toHaveLength(2);
-    expect(result.declarations).toContain(`const LOCAL_PREFIX = "item-";`);
+    // Dependencies must appear before dependents (topological order)
+    expect(result.declarations[0]).toBe(`const LOCAL_PREFIX = "item-";`);
+    expect(result.declarations[1]).toBe(
+      `function addPrefix(value: string | null): string { return value ? \`\${LOCAL_PREFIX}\${value}\` : LOCAL_PREFIX + "unknown"; }`,
+    );
     expect(result.unresolved).toHaveLength(0);
   });
 
@@ -299,10 +304,11 @@ describe("resolveNeededBindings", () => {
     // Should include: formatAddress (direct), PREFIX (via formatAddress), format import (via formatAddress)
     expect(result.imports).toHaveLength(1);
     expect(result.imports[0]).toContain("format");
-    expect(result.declarations).toContain(
+    // Dependencies must appear before dependents (topological order)
+    expect(result.declarations[0]).toBe(`const PREFIX = "ADDR";`);
+    expect(result.declarations[1]).toBe(
       `function formatAddress(data) { return PREFIX + ": " + format(data); }`,
     );
-    expect(result.declarations).toContain(`const PREFIX = "ADDR";`);
   });
 
   it("returns empty when no free variables", () => {
