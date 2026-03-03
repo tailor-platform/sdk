@@ -15,13 +15,17 @@ SDK improvement proposals based on benchmark results are tracked in [`.claude/IM
 
 ## Problems
 
-| ID  | Name                       | Category    | Difficulty | Scoring (G/T/Te) |
-| --- | -------------------------- | ----------- | ---------- | ---------------- |
-| 001 | saas-subscription-platform | integration | hard       | 30 / 30 / 240    |
+| ID  | Name                       | Category         | Difficulty | Scoring (G/T/Te) | Total |
+| --- | -------------------------- | ---------------- | ---------- | ---------------- | ----- |
+| 001 | saas-subscription-platform | integration      | hard       | 30 / 30 / 240    | 300   |
+| 002 | project-management         | model-definition | medium     | 20 / 20 / 216    | 256   |
 
-**Scoring column**: Generate / Typecheck / Tests (total 300, max 300)
+**Scoring column**: Generate / Typecheck / Tests
 
-This single comprehensive problem covers all SDK concepts: TailorDB models (5 types), resolvers, executors, workflows, and full application config. It supports API variants (`createType` object-literal and `db.type()` fluent) for A/B comparison of SDK API discoverability.
+Both problems support API variants (`createType` object-literal and `db.type()` fluent) for A/B comparison of SDK API discoverability.
+
+- **001**: Full-stack integration covering TailorDB models (5 types), resolvers, executors, workflows, and application config.
+- **002**: Model definition focus with 5 TailorDB types and config. Tests hook edge cases (nullish coalescing), validation semantics (positive vs non-negative), and cross-model negative tests.
 
 ## Prerequisites
 
@@ -82,7 +86,7 @@ Each problem is verified through a 3-stage pipeline. If a stage fails, subsequen
 | **Typecheck** | varies | Runs TypeScript type checking (`tsc --noEmit`)   |
 | **Tests**     | varies | Runs Vitest unit tests                           |
 
-Each problem's scoring weights are defined in its `meta.json`. The current problem allocates: Generate 30, Typecheck 30, Tests 240 (300 total).
+Each problem's scoring weights are defined in its `meta.json`.
 
 ### Partial Scoring
 
