@@ -436,10 +436,12 @@ function convertGqlOperationsToDisable(
     return undefined;
   }
   const result: Record<string, boolean> = {};
+  let hasValue = false;
   for (const [key, value] of Object.entries(gqlOperations)) {
     if (value !== undefined) {
       result[key] = !value;
+      hasValue = true;
     }
   }
-  return Object.keys(result).length > 0 ? result : undefined;
+  return hasValue ? result : undefined;
 }
