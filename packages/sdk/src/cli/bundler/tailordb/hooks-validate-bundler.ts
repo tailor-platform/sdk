@@ -1,5 +1,4 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { Linter } from "eslint";
 import { parseSync } from "oxc-parser";
 import { join, resolve } from "pathe";
 import { resolveTSConfig } from "pkg-types";
@@ -10,10 +9,13 @@ import { stringifyFunction, tailorUserMap } from "@/parser/service/tailordb/fiel
 import { setPrecompiledScriptExpr } from "@/parser/service/tailordb/hooks-validate-precompiled-expr";
 import type { TailorDBTypeSchemaOutput } from "@/parser/service/tailordb/types";
 import type {
-  ImportDeclaration,
-  VariableDeclaration,
+  BindingPattern,
   ExportNamedDeclaration,
   Function as OxcFunction,
+  ImportDeclaration,
+  Node,
+  ParamPattern,
+  VariableDeclaration,
 } from "@oxc-project/types";
 
 type ScriptFunction = (...args: unknown[]) => unknown;
@@ -30,7 +32,116 @@ export type SourceBinding = {
   kind: "import" | "declaration";
 };
 
-const linter = new Linter();
+/** ECMAScript built-in globals (from globals.builtin) */
+const ES_BUILTINS = new Set([
+  "Array",
+  "ArrayBuffer",
+  "Atomics",
+  "BigInt",
+  "BigInt64Array",
+  "BigUint64Array",
+  "Boolean",
+  "DataView",
+  "Date",
+  "Error",
+  "EvalError",
+  "FinalizationRegistry",
+  "Float32Array",
+  "Float64Array",
+  "Function",
+  "Infinity",
+  "Int16Array",
+  "Int32Array",
+  "Int8Array",
+  "Intl",
+  "JSON",
+  "Map",
+  "Math",
+  "NaN",
+  "Number",
+  "Object",
+  "Promise",
+  "Proxy",
+  "RangeError",
+  "ReferenceError",
+  "Reflect",
+  "RegExp",
+  "Set",
+  "SharedArrayBuffer",
+  "String",
+  "Symbol",
+  "SyntaxError",
+  "TypeError",
+  "URIError",
+  "Uint16Array",
+  "Uint32Array",
+  "Uint8Array",
+  "Uint8ClampedArray",
+  "WeakMap",
+  "WeakRef",
+  "WeakSet",
+  "console",
+  "decodeURI",
+  "decodeURIComponent",
+  "encodeURI",
+  "encodeURIComponent",
+  "eval",
+  "globalThis",
+  "isFinite",
+  "isNaN",
+  "parseFloat",
+  "parseInt",
+  "undefined",
+]);
+
+/**
+ * Recursively extract binding names from a destructuring pattern node.
+ * @param pattern - The binding pattern AST node.
+ * @param bindings - Set to collect binding names into.
+ */
+function collectBindingsFromPattern(pattern: BindingPattern, bindings: Set<string>): void {
+  switch (pattern.type) {
+    case "Identifier":
+      bindings.add(pattern.name);
+      break;
+    case "ObjectPattern":
+      for (const prop of pattern.properties) {
+        if (prop.type === "RestElement") {
+          collectBindingsFromPattern(prop.argument, bindings);
+        } else {
+          collectBindingsFromPattern(prop.value, bindings);
+        }
+      }
+      break;
+    case "ArrayPattern":
+      for (const elem of pattern.elements) {
+        if (elem) {
+          if (elem.type === "RestElement") {
+            collectBindingsFromPattern(elem.argument, bindings);
+          } else {
+            collectBindingsFromPattern(elem, bindings);
+          }
+        }
+      }
+      break;
+    case "AssignmentPattern":
+      collectBindingsFromPattern(pattern.left, bindings);
+      break;
+  }
+}
+
+/** Fields that contain TypeScript type annotations (not runtime references). */
+const TS_TYPE_FIELDS = new Set([
+  "typeAnnotation",
+  "typeParameters",
+  "returnType",
+  "superTypeArguments",
+  "typeArguments",
+]);
+
+function isBindingPattern(param: ParamPattern): param is BindingPattern {
+  return param.type !== "TSParameterProperty";
+}
 
 function toScriptFunction(value: unknown): ScriptFunction | undefined {
   if (typeof value !== "function") return undefined;
@@ -77,27 +188,100 @@ function collectScriptTargets(type: TailorDBTypeSchemaOutput): ScriptTarget[] {
 }
 
 /**
- * Run ESLint's no-undef rule on a code string and return the set of undefined identifiers.
+ * Parse a code string with oxc-parser and return identifiers that are referenced
+ * but never bound anywhere in the snippet (free variables), excluding ES builtins.
  * @param code - Valid JavaScript code to analyze.
  * @returns Set of undefined variable names.
  */
 export function findUndefinedReferences(code: string): Set<string> {
-  const messages = linter.verify(code, {
-    languageOptions: {
-      ecmaVersion: "latest",
-      sourceType: "module",
-    },
-    rules: { "no-undef": "error" },
-  });
-  const vars = new Set<string>();
-  for (const msg of messages) {
-    if (msg.ruleId !== "no-undef") continue;
-    const match = msg.message.match(/^'(.+)' is not defined/);
-    if (match) {
-      vars.add(match[1]);
+  const { program } = parseSync("_.js", code);
+  const references = new Set<string>();
+  const bindings = new Set<string>();
+
+  const walk = (node: Node | null | undefined): void => {
+    if (!node) return;
+
+    switch (node.type) {
+      case "VariableDeclarator":
+        collectBindingsFromPattern(node.id, bindings);
+        walk(node.init);
+        return;
+
+      case "FunctionDeclaration":
+      case "FunctionExpression":
+        if (node.id) bindings.add(node.id.name);
+        for (const param of node.params) {
+          if (isBindingPattern(param)) {
+            collectBindingsFromPattern(param, bindings);
+            walk(param);
+          }
+        }
+        walk(node.body);
+        return;
+
+      case "ArrowFunctionExpression":
+        for (const param of node.params) {
+          if (isBindingPattern(param)) {
+            collectBindingsFromPattern(param, bindings);
+            walk(param);
+          }
+        }
+        walk(node.body);
+        return;
+
+      case "ClassDeclaration":
+      case "ClassExpression":
+        if (node.id) bindings.add(node.id.name);
+        walk(node.superClass);
+        walk(node.body);
+        return;
+
+      case "CatchClause":
+        if (node.param) collectBindingsFromPattern(node.param, bindings);
+        walk(node.body);
+        return;
+
+      case "MemberExpression":
+        walk(node.object);
+        if (node.computed) walk(node.property);
+        return;
+
+      case "Property":
+        if (node.computed) walk(node.key);
+        walk(node.value);
+        return;
+
+      case "LabeledStatement":
+        walk(node.body);
+        return;
+
+      case "Identifier":
+        references.add(node.name);
+        return;
+    }
+
+    // Generic child walk for all other node types, skipping TS type-annotation fields
+    const rec = node as unknown as Record<string, unknown>;
+    for (const [key, value] of Object.entries(rec)) {
+      if (key === "type" || TS_TYPE_FIELDS.has(key)) continue;
+      if (Array.isArray(value)) {
+        for (const item of value) walk(item as Node);
+      } else if (value && typeof value === "object" && "type" in value) {
+        walk(value as Node);
+      }
+    }
+  };
+
+  walk(program);
+
+  // Free variables = references - bindings - builtins
+  const freeVars = new Set<string>();
+  for (const ref of references) {
+    if (!bindings.has(ref) && !ES_BUILTINS.has(ref)) {
+      freeVars.add(ref);
     }
   }
-  return vars;
+  return freeVars;
 }
 
 /**
@@ -370,7 +554,7 @@ async function bundleScriptTarget(args: {
 
 /**
  * Precompile TailorDB hooks/validators into self-contained script expressions using rolldown.
- * Uses ESLint's no-undef rule to extract free variables from functions, then builds
+ * Uses oxc-parser AST walking to extract free variables from functions, then builds
  * minimal entry points containing only the needed imports and declarations.
  * @param type - TailorDB type schema output.
  * @param sourceFilePath - Source file where the type is defined.
