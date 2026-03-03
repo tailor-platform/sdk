@@ -349,6 +349,27 @@ function createLimiter(concurrency: number) {
     });
 }
 
+/**
+ * Restore scaffold files to their original content, returning any detected changes.
+ */
+function restoreScaffoldFiles(workDir: string, snapshot: Map<string, string>): ScaffoldChange[] {
+  const changes: ScaffoldChange[] = [];
+  for (const [f, original] of snapshot) {
+    const fp = path.join(workDir, f);
+    if (!fs.existsSync(fp)) {
+      changes.push({ file: f, original, modified: "(deleted)" });
+      fs.writeFileSync(fp, original);
+    } else {
+      const current = fs.readFileSync(fp, "utf-8");
+      if (current !== original) {
+        changes.push({ file: f, original, modified: current });
+        fs.writeFileSync(fp, original);
+      }
+    }
+  }
+  return changes;
+}
+
 // Serialize pnpm install to avoid root node_modules race conditions
 const installLimiter = createLimiter(1);
 
@@ -471,25 +492,11 @@ async function runProblem(
   }
 
   // Detect and restore scaffold file modifications after solve
-  const scaffoldChanges: ScaffoldChange[] = [];
-  if (isSolveMode && scaffoldSnapshot.size > 0) {
-    for (const [f, original] of scaffoldSnapshot) {
-      const fp = path.join(workDir, f);
-      if (!fs.existsSync(fp)) {
-        scaffoldChanges.push({ file: f, original, modified: "(deleted)" });
-        fs.writeFileSync(fp, original);
-      } else {
-        const current = fs.readFileSync(fp, "utf-8");
-        if (current !== original) {
-          scaffoldChanges.push({ file: f, original, modified: current });
-          fs.writeFileSync(fp, original);
-        }
-      }
-    }
-    if (scaffoldChanges.length > 0 && options.verbose) {
-      const files = scaffoldChanges.map((c) => c.file).join(", ");
-      console.log(`  WARNING: Scaffold files modified during solve: ${files} (restored)`);
-    }
+  const scaffoldChanges =
+    isSolveMode && scaffoldSnapshot.size > 0 ? restoreScaffoldFiles(workDir, scaffoldSnapshot) : [];
+  if (scaffoldChanges.length > 0 && options.verbose) {
+    const files = scaffoldChanges.map((c) => c.file).join(", ");
+    console.log(`  WARNING: Scaffold files modified during solve: ${files} (restored)`);
   }
 
   // In solve mode, create symlink: problems/<name>/work → tmpdir
@@ -591,19 +598,10 @@ async function runProblem(
       infraRetries = 0;
 
       // Restore scaffold files before re-verification
-      for (const [f, original] of scaffoldSnapshot) {
-        const fp = path.join(workDir, f);
-        if (!fs.existsSync(fp)) {
-          fs.writeFileSync(fp, original);
-        } else {
-          const current = fs.readFileSync(fp, "utf-8");
-          if (current !== original) {
-            if (options.verbose) {
-              console.log(`  Restored scaffold file modified during retry: ${f}`);
-            }
-            fs.writeFileSync(fp, original);
-          }
-        }
+      const retryChanges = restoreScaffoldFiles(workDir, scaffoldSnapshot);
+      if (retryChanges.length > 0 && options.verbose) {
+        const files = retryChanges.map((c) => c.file).join(", ");
+        console.log(`  Restored scaffold files modified during retry: ${files}`);
       }
 
       // Re-verify using symlink path
