@@ -117,6 +117,7 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
         detected,
         sourceFile: filePath,
         env: config.env ?? {},
+        inlineSourcemap: config.inlineSourcemap,
       }));
       logger.info(`Bundled as ${styles.bold(scriptName)}`);
     }

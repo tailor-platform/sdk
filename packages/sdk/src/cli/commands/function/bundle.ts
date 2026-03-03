@@ -13,6 +13,7 @@ import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { resolveInlineSourcemap } from "@/cli/shared/inline-sourcemap";
+import { tailorUserMap } from "@/parser/service/tailordb";
 import type { DetectedFunction } from "./detect";
 
 interface BundleForTestRunOptions {
@@ -22,6 +23,8 @@ interface BundleForTestRunOptions {
   sourceFile: string;
   /** Environment variables (injected into workflow job bundles) */
   env?: Record<string, string | number | boolean>;
+  /** Inline sourcemap config value from defineConfig */
+  inlineSourcemap?: boolean;
 }
 
 interface BundleForTestRunResult {
@@ -40,7 +43,7 @@ export async function bundleForTestRun(
   options: BundleForTestRunOptions,
 ): Promise<BundleForTestRunResult> {
   const { detected, sourceFile, env = {} } = options;
-  const inlineSourcemap = resolveInlineSourcemap();
+  const inlineSourcemap = resolveInlineSourcemap(options.inlineSourcemap);
 
   const outputDir = path.resolve(getDistDir(), "test-run");
   fs.mkdirSync(outputDir, { recursive: true });
@@ -167,7 +170,8 @@ function generateEntry(
         const env = ${JSON.stringify(env)};
 
         export async function main(input) {
-          return await ${exportName}.body(input, { env });
+          const _user = ${tailorUserMap};
+          return await ${exportName}.body(input, { env, user: _user });
         }
       `;
     }
