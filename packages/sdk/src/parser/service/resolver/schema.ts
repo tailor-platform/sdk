@@ -51,4 +51,5 @@ export const ResolverSchema = z.object({
   input: z.record(z.string(), TailorFieldSchema).optional(),
   body: functionSchema,
   output: TailorFieldSchema,
+  publishEvents: z.boolean().optional(),
 });

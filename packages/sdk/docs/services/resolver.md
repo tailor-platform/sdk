@@ -214,3 +214,64 @@ createResolver({
   // ...
 });
 ```
+
+## Event Publishing
+
+Enable event publishing for a resolver to trigger executors on resolver execution:
+
+```typescript
+createResolver({
+  name: "processOrder",
+  operation: "mutation",
+  publishEvents: true,
+  // ...
+});
+```
+
+**Behavior:**
+
+- When `publishEvents: true`, resolver execution events are published
+- When not specified, it is **automatically set to `true`** if an executor uses this resolver with `resolverExecutedTrigger`
+- When explicitly set to `false` while an executor uses this resolver, an error is thrown during `tailor apply`
+
+**Use cases:**
+
+1. **Auto-detection (recommended)**: Don't set `publishEvents` - the SDK automatically enables it when needed by executors
+
+   ```typescript
+   // publishEvents is automatically enabled because an executor uses this resolver
+   export default createResolver({
+     name: "processPayment",
+     operation: "mutation",
+     // publishEvents not set - auto-detected
+     // ...
+   });
+
+   // In executor file:
+   export default createExecutor({
+     trigger: resolverExecutedTrigger("processPayment"),
+     // ...
+   });
+   ```
+
+2. **Manual enable**: Enable event publishing for external consumers or debugging
+
+   ```typescript
+   createResolver({
+     name: "auditAction",
+     operation: "mutation",
+     publishEvents: true, // Enable even without executor triggers
+     // ...
+   });
+   ```
+
+3. **Explicit disable**: Disable event publishing for a resolver that doesn't need it (error if executor uses it)
+
+   ```typescript
+   createResolver({
+     name: "internalHelper",
+     operation: "query",
+     publishEvents: false, // Explicitly disable
+     // ...
+   });
+   ```

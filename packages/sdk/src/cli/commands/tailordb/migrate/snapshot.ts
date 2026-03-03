@@ -217,6 +217,7 @@ export interface SnapshotType {
       delete?: boolean;
       read?: boolean;
     };
+    publishEvents?: boolean;
   };
   indexes?: Record<string, SnapshotIndexConfig>;
   files?: Record<string, string>;
@@ -525,6 +526,9 @@ function createSnapshotType(type: TailorDBType): SnapshotType {
           read: ops.read,
         }),
       };
+    }
+    if (type.settings.publishEvents !== undefined) {
+      snapshotType.settings.publishEvents = type.settings.publishEvents;
     }
   }
 
