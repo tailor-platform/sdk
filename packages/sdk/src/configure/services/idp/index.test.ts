@@ -275,4 +275,69 @@ describe("defineIdp", () => {
     });
     expect(idpNoPublishUserEvents.publishUserEvents).toBeUndefined();
   });
+
+  it("should preserve gqlOperations config", () => {
+    const idpWithGqlOperations = defineIdp("idp-with-gql-operations", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      gqlOperations: {
+        create: false,
+        update: false,
+        delete: false,
+        read: false,
+        sendPasswordResetEmail: false,
+      },
+    });
+    expect(idpWithGqlOperations.gqlOperations).toEqual({
+      create: false,
+      update: false,
+      delete: false,
+      read: false,
+      sendPasswordResetEmail: false,
+    });
+
+    const idpWithPartialGqlOperations = defineIdp("idp-with-partial-gql-operations", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      gqlOperations: {
+        create: false,
+        read: true,
+      },
+    });
+    expect(idpWithPartialGqlOperations.gqlOperations).toEqual({
+      create: false,
+      read: true,
+    });
+
+    const idpNoGqlOperations = defineIdp("idp-no-gql-operations", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+    });
+    expect(idpNoGqlOperations.gqlOperations).toBeUndefined();
+  });
+
+  it("gqlOperations: 'query' stores alias as raw value", () => {
+    const idpWithQueryAlias = defineIdp("idp-with-query-alias", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      gqlOperations: "query",
+    });
+
+    // Configure layer stores the alias without normalization
+    expect(idpWithQueryAlias.gqlOperations).toBe("query");
+  });
+
+  it("gqlOperations: 'query' works with other config options", () => {
+    const idpWithQueryAndOtherOptions = defineIdp("idp-with-query-and-options", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      lang: "en",
+      publishUserEvents: true,
+      gqlOperations: "query",
+    });
+
+    expect(idpWithQueryAndOtherOptions.lang).toBe("en");
+    expect(idpWithQueryAndOtherOptions.publishUserEvents).toBe(true);
+    expect(idpWithQueryAndOtherOptions.gqlOperations).toBe("query");
+  });
 });

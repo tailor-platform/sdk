@@ -49,6 +49,11 @@ export declare type IdPService = Message<"tailor.v1.IdPService"> & {
    * @generated from field: bool publish_user_events = 6;
    */
   publishUserEvents: boolean;
+
+  /**
+   * @generated from field: tailor.v1.IdPDisableGqlOperations disable_gql_operations = 7;
+   */
+  disableGqlOperations?: IdPDisableGqlOperations;
 };
 
 /**
@@ -56,6 +61,54 @@ export declare type IdPService = Message<"tailor.v1.IdPService"> & {
  * Use `create(IdPServiceSchema)` to create a new message.
  */
 export declare const IdPServiceSchema: GenMessage<IdPService>;
+
+/**
+ * IdPDisableGqlOperations controls which IdP-related GraphQL operations are disabled.
+ *
+ * @generated from message tailor.v1.IdPDisableGqlOperations
+ */
+export declare type IdPDisableGqlOperations = Message<"tailor.v1.IdPDisableGqlOperations"> & {
+  /**
+   * create disables the _createUser GraphQL mutation.
+   *
+   * @generated from field: bool create = 1;
+   */
+  create: boolean;
+
+  /**
+   * update disables the _updateUser GraphQL mutation.
+   *
+   * @generated from field: bool update = 2;
+   */
+  update: boolean;
+
+  /**
+   * delete disables the _deleteUser GraphQL mutation.
+   *
+   * @generated from field: bool delete = 3;
+   */
+  delete: boolean;
+
+  /**
+   * read disables the _users and _user GraphQL queries.
+   *
+   * @generated from field: bool read = 4;
+   */
+  read: boolean;
+
+  /**
+   * send_password_reset_email disables the _sendPasswordResetEmail GraphQL mutation.
+   *
+   * @generated from field: bool send_password_reset_email = 5;
+   */
+  sendPasswordResetEmail: boolean;
+};
+
+/**
+ * Describes the message tailor.v1.IdPDisableGqlOperations.
+ * Use `create(IdPDisableGqlOperationsSchema)` to create a new message.
+ */
+export declare const IdPDisableGqlOperationsSchema: GenMessage<IdPDisableGqlOperations>;
 
 /**
  * @generated from message tailor.v1.IdPClient
