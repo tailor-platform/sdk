@@ -240,6 +240,10 @@ function collectIdentifierNames(code: string): Set<string> {
       // Skip non-computed MemberExpression property (e.g. `length` in `value.length`)
       // but keep computed properties (e.g. `foo` in `obj[foo]`) as they are real references
       if (key === "property" && record.type === "MemberExpression" && !record.computed) continue;
+      // Skip non-computed Property keys (e.g. `format` in `{ format: "x" }` is not a reference)
+      if (key === "key" && record.type === "Property" && !record.computed) continue;
+      // Skip TypeScript type annotation fields (not runtime references)
+      if (TS_TYPE_FIELDS.has(key)) continue;
       if (Array.isArray(value)) {
         for (const item of value) walk(item);
       } else if (value && typeof value === "object" && "type" in value) {
