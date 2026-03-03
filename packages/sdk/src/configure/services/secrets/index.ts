@@ -22,16 +22,22 @@ type DefinedSecrets<T extends SecretsInput> = {
  * @returns Defined secrets with typed runtime access methods
  */
 export function defineSecrets<const T extends SecretsInput>(config: T): DefinedSecrets<T> {
-  const result = {
-    ...config,
-    async get(vault: string, secret: string): Promise<string | undefined> {
+  const result = { ...config };
+
+  // Non-enumerable so Zod's z.record validation ignores them
+  Object.defineProperty(result, "get", {
+    value: async (vault: string, secret: string) => {
       return tailor.secretmanager.getSecret(vault, secret);
     },
-    async getAll(vault: string, secrets: readonly string[]): Promise<(string | undefined)[]> {
+    enumerable: false,
+  });
+  Object.defineProperty(result, "getAll", {
+    value: async (vault: string, secrets: readonly string[]) => {
       const record = await tailor.secretmanager.getSecrets(vault, secrets);
       return secrets.map((s) => record[s]);
     },
-  };
+    enumerable: false,
+  });
 
-  return result as unknown as DefinedSecrets<T>;
+  return result as T & DefinedSecrets<T>;
 }
