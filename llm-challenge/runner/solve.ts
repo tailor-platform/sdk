@@ -73,9 +73,9 @@ function buildPromptSections(
   filesToCreate: string[];
   mode: "implement" | "fix" | "hybrid";
 } {
-  const variantPath = variant ? path.join(problemDir, "variants", variant, "problem.md") : "";
-  const problemMdPath =
-    variant && fs.existsSync(variantPath) ? variantPath : path.join(problemDir, "problem.md");
+  const problemMdPath = variant
+    ? path.join(problemDir, "variants", variant, "problem.md")
+    : path.join(problemDir, "problem.md");
   const problemMd = fs.readFileSync(problemMdPath, "utf-8");
   const existingFiles = listFilesRecursive(workDir);
   const scaffoldSet = new Set(meta.files.scaffold);

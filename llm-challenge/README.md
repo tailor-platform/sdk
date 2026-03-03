@@ -72,7 +72,7 @@ pnpm challenge --all --impl-dir ./path/to/outputs
 - `--model <name>` — Model name to use (`claude`: default `sonnet`, `codex`: default CLI model)
 - `--max-budget <usd>` — Spending cap per problem in USD (default: `2.00`, must be positive)
 - `--retry <n>` — Number of retry attempts on failure (default: `0`, must be non-negative). On failure, error output is fed back to the AI for correction.
-- `--variant <name>` — API variant to use (e.g., `createType`, `fluent`). Uses variant-specific problem description and solution. Default: root problem.md
+- `--variant <name>` — API variant to use (e.g., `createType`, `fluent`). Required for problems that define variants. Uses variant-specific problem.md and overlays variant solution on top of shared solution
 - `--concurrency <n>` — Number of problems to run in parallel (default: CPU count, must be positive)
 - `--clean` — Remove work directories after execution
 
@@ -166,13 +166,17 @@ Reports include analytics for identifying SDK improvement areas:
 ```
 problems/<id>-<name>/
 ├── meta.json      # Metadata (difficulty, scoring, files to implement, variants)
-├── problem.md     # Default problem description
 ├── scaffold/      # Starter files (tailor.config.ts, etc.)
-├── solution/      # Default reference implementation
+├── solution/      # Shared solution files (tailor.config.ts, executors/, resolvers/, etc.)
 ├── tests/         # Vitest test suite (shared across variants)
-├── variants/      # API variant overrides (optional)
-│   └── <variant>/
-│       ├── problem.md   # Variant-specific problem description
-│       └── solution/    # Variant-specific reference implementation
-└── work/          # Generated at runtime (not committed)
+├── variants/      # API variants (symmetric, neither is default)
+│   ├── createType/
+│   │   ├── problem.md   # Variant-specific problem description
+│   │   └── solution/    # Variant-specific files (tailordb/ only)
+│   └── fluent/
+│       ├── problem.md
+│       └── solution/
+└── work-<variant>/ # Generated at runtime (not committed)
 ```
+
+For `--use-solution`, the runner copies shared `solution/` first, then overlays `variants/<variant>/solution/` on top.

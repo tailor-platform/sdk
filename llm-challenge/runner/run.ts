@@ -204,7 +204,7 @@ function cleanupWorkArtifacts(problemDir: string, variant?: string): void {
 
 function setupWorkDir(
   problemDir: string,
-  implDir?: string,
+  implDirs?: string[],
   useTmpDir?: boolean,
   variant?: string,
 ): string {
@@ -229,8 +229,11 @@ function setupWorkDir(
   }
 
   // 3. Copy implementation files (overrides scaffold) - skip for --solve mode
-  if (implDir) {
-    copyDir(implDir, workDir);
+  //    Multiple dirs are overlaid in order (shared solution first, then variant overlay)
+  if (implDirs) {
+    for (const dir of implDirs) {
+      copyDir(dir, workDir);
+    }
   }
 
   // 4. Place AGENTS.md in solve mode to guide agent behavior
@@ -392,7 +395,7 @@ const installLimiter = createLimiter(1);
 async function runProblem(
   problemName: string,
   options: {
-    implDir?: string;
+    implDirs?: string[];
     solve?: { agent: SolveAgent; model?: string; maxBudget: number; retry: number };
     clean: boolean;
     verbose: boolean;
@@ -405,15 +408,19 @@ async function runProblem(
   const meta = loadMeta(problemDir);
 
   // Validate variant against meta.variants
-  if (options.variant) {
-    if (meta.variants && !meta.variants.includes(options.variant)) {
+  if (meta.variants && meta.variants.length > 0) {
+    if (!options.variant) {
+      throw new Error(
+        `Problem ${problemName} requires --variant. Available: ${meta.variants.join(", ")}`,
+      );
+    }
+    if (!meta.variants.includes(options.variant)) {
       throw new Error(
         `Variant "${options.variant}" not supported by problem ${problemName}. Available: ${meta.variants.join(", ")}`,
       );
     }
-    if (!meta.variants) {
-      console.warn(`  Warning: problem ${problemName} has no variants defined, ignoring --variant`);
-    }
+  } else if (options.variant) {
+    console.warn(`  Warning: problem ${problemName} has no variants defined, ignoring --variant`);
   }
 
   if (options.verbose) {
@@ -422,7 +429,7 @@ async function runProblem(
   }
 
   const isSolveMode = !!options.solve;
-  const workDir = setupWorkDir(problemDir, options.implDir, isSolveMode, options.variant);
+  const workDir = setupWorkDir(problemDir, options.implDirs, isSolveMode, options.variant);
   try {
     await installLimiter(() => installDependencies(workDir, options.verbose, options.tarballPath));
   } catch (err) {
@@ -1044,7 +1051,7 @@ async function main(): Promise<void> {
   }
 
   // Build task list
-  type ProblemTask = { problemName: string; implDir?: string };
+  type ProblemTask = { problemName: string; implDirs?: string[] };
   const tasks: ProblemTask[] = [];
   for (const p of problems) {
     if (resume && completedIds.has(p)) {
@@ -1055,30 +1062,35 @@ async function main(): Promise<void> {
       tasks.push({ problemName: p });
     } else {
       const problemDir = path.join(challengeRoot, "problems", p);
-      let impl: string;
+      const dirs: string[] = [];
 
       if (useSolution) {
-        const variantSolution = variant
-          ? path.join(problemDir, "variants", variant, "solution")
-          : "";
-        if (variant && fs.existsSync(variantSolution)) {
-          impl = variantSolution;
-        } else {
-          impl = path.join(problemDir, "solution");
+        const rootSolution = path.join(problemDir, "solution");
+        if (fs.existsSync(rootSolution)) {
+          dirs.push(rootSolution);
+        }
+        if (variant) {
+          const variantSolution = path.join(problemDir, "variants", variant, "solution");
+          if (fs.existsSync(variantSolution)) {
+            dirs.push(variantSolution);
+          }
+        }
+        if (dirs.length === 0) {
+          console.error(`No solution directory found for problem ${p}`);
+          process.exit(1);
         }
       } else if (implDir) {
-        impl = all ? path.join(implDir, p) : implDir;
+        dirs.push(all ? path.join(implDir, p) : implDir);
+        if (!fs.existsSync(dirs[0])) {
+          console.error(`Implementation directory not found: ${dirs[0]}`);
+          process.exit(1);
+        }
       } else {
         console.error(`No implementation specified for problem ${p}`);
         process.exit(1);
       }
 
-      if (!fs.existsSync(impl)) {
-        console.error(`Implementation directory not found: ${impl}`);
-        process.exit(1);
-      }
-
-      tasks.push({ problemName: p, implDir: impl });
+      tasks.push({ problemName: p, implDirs: dirs });
     }
   }
 
@@ -1092,7 +1104,7 @@ async function main(): Promise<void> {
       limit(async () => {
         try {
           const result = await runProblem(task.problemName, {
-            implDir: task.implDir,
+            implDirs: task.implDirs,
             solve: solve ? { agent, model, maxBudget, retry } : undefined,
             clean,
             verbose,
