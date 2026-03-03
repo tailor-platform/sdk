@@ -607,6 +607,7 @@ export function createGenerationManager(params: {
     aggregate,
 
     async generate(watch: boolean): Promise<void> {
+      executedGenerators.clear();
       logger.newline();
       logger.log(`Generation for application: ${styles.highlight(application.config.name)}`);
 
