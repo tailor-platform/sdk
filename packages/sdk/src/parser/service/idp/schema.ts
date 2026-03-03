@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { IdPGqlOperationsSchema } from "./gql-operations";
+
+export { IdPGqlOperationsSchema } from "./gql-operations";
 
 export const IdPLangSchema = z.enum(["en", "ja"]);
 
@@ -89,5 +92,6 @@ export const IdPSchema = z
       IdPUserAuthPolicySchema.parse(input ?? {}),
     ).optional(),
     publishUserEvents: z.boolean().optional(),
+    gqlOperations: IdPGqlOperationsSchema.optional(),
   })
   .brand("IdPConfig");

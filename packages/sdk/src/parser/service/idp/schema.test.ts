@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { IdPUserAuthPolicySchema, IdPSchema } from "./schema";
+import { IdPUserAuthPolicySchema, IdPSchema, IdPGqlOperationsSchema } from "./schema";
 
 describe("IdPUserAuthPolicySchema validation", () => {
   it("accepts valid password policy configuration", () => {
@@ -360,5 +360,160 @@ describe("IdPSchema validation", () => {
 
     const result = IdPSchema.parse(config);
     expect(result.publishUserEvents).toBeUndefined();
+  });
+
+  it("accepts gqlOperations with all fields", () => {
+    const config = {
+      name: "test-idp",
+      authorization: "loggedIn" as const,
+      clients: ["client-1"],
+      gqlOperations: {
+        create: true,
+        update: true,
+        delete: true,
+        read: true,
+        sendPasswordResetEmail: true,
+      },
+    };
+
+    const result = IdPSchema.parse(config);
+    expect(result.gqlOperations?.create).toBe(true);
+    expect(result.gqlOperations?.update).toBe(true);
+    expect(result.gqlOperations?.delete).toBe(true);
+    expect(result.gqlOperations?.read).toBe(true);
+    expect(result.gqlOperations?.sendPasswordResetEmail).toBe(true);
+  });
+
+  it("accepts gqlOperations with partial fields", () => {
+    const config = {
+      name: "test-idp",
+      authorization: "loggedIn" as const,
+      clients: ["client-1"],
+      gqlOperations: {
+        create: true,
+        read: false,
+      },
+    };
+
+    const result = IdPSchema.parse(config);
+    expect(result.gqlOperations?.create).toBe(true);
+    expect(result.gqlOperations?.read).toBe(false);
+    expect(result.gqlOperations?.update).toBeUndefined();
+    expect(result.gqlOperations?.delete).toBeUndefined();
+    expect(result.gqlOperations?.sendPasswordResetEmail).toBeUndefined();
+  });
+
+  it("accepts missing gqlOperations", () => {
+    const config = {
+      name: "test-idp",
+      authorization: "loggedIn" as const,
+      clients: ["client-1"],
+    };
+
+    const result = IdPSchema.parse(config);
+    expect(result.gqlOperations).toBeUndefined();
+  });
+});
+
+describe("IdPGqlOperationsSchema validation", () => {
+  it("accepts empty object", () => {
+    const result = IdPGqlOperationsSchema.parse({});
+    expect(result.create).toBeUndefined();
+    expect(result.update).toBeUndefined();
+    expect(result.delete).toBeUndefined();
+    expect(result.read).toBeUndefined();
+    expect(result.sendPasswordResetEmail).toBeUndefined();
+  });
+
+  it("accepts all fields as true", () => {
+    const config = {
+      create: true,
+      update: true,
+      delete: true,
+      read: true,
+      sendPasswordResetEmail: true,
+    };
+
+    const result = IdPGqlOperationsSchema.parse(config);
+    expect(result.create).toBe(true);
+    expect(result.update).toBe(true);
+    expect(result.delete).toBe(true);
+    expect(result.read).toBe(true);
+    expect(result.sendPasswordResetEmail).toBe(true);
+  });
+
+  it("accepts all fields as false", () => {
+    const config = {
+      create: false,
+      update: false,
+      delete: false,
+      read: false,
+      sendPasswordResetEmail: false,
+    };
+
+    const result = IdPGqlOperationsSchema.parse(config);
+    expect(result.create).toBe(false);
+    expect(result.update).toBe(false);
+    expect(result.delete).toBe(false);
+    expect(result.read).toBe(false);
+    expect(result.sendPasswordResetEmail).toBe(false);
+  });
+
+  it("accepts partial configuration", () => {
+    const config = {
+      create: true,
+      read: false,
+    };
+
+    const result = IdPGqlOperationsSchema.parse(config);
+    expect(result.create).toBe(true);
+    expect(result.read).toBe(false);
+    expect(result.update).toBeUndefined();
+    expect(result.delete).toBeUndefined();
+    expect(result.sendPasswordResetEmail).toBeUndefined();
+  });
+
+  it("accepts 'query' alias and normalizes to read-only mode", () => {
+    const result = IdPGqlOperationsSchema.parse("query");
+    expect(result.create).toBe(false);
+    expect(result.update).toBe(false);
+    expect(result.delete).toBe(false);
+    expect(result.read).toBe(true);
+    expect(result.sendPasswordResetEmail).toBe(false);
+  });
+});
+
+describe("IdPSchema gqlOperations alias tests", () => {
+  it("accepts 'query' alias in IdPSchema", () => {
+    const config = {
+      name: "test-idp",
+      authorization: "loggedIn" as const,
+      clients: ["client-1"],
+      gqlOperations: "query" as const,
+    };
+
+    const result = IdPSchema.parse(config);
+    expect(result.gqlOperations?.create).toBe(false);
+    expect(result.gqlOperations?.update).toBe(false);
+    expect(result.gqlOperations?.delete).toBe(false);
+    expect(result.gqlOperations?.read).toBe(true);
+    expect(result.gqlOperations?.sendPasswordResetEmail).toBe(false);
+  });
+
+  it("'query' alias works with other IdP config options", () => {
+    const config = {
+      name: "test-idp",
+      authorization: "loggedIn" as const,
+      clients: ["client-1"],
+      lang: "en" as const,
+      publishUserEvents: true,
+      gqlOperations: "query" as const,
+    };
+
+    const result = IdPSchema.parse(config);
+    expect(result.lang).toBe("en");
+    expect(result.publishUserEvents).toBe(true);
+    expect(result.gqlOperations?.read).toBe(true);
+    expect(result.gqlOperations?.create).toBe(false);
   });
 });
