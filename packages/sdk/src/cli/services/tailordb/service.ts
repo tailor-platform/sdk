@@ -1,7 +1,6 @@
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
-import { precompileTailorDBTypeScripts } from "@/cli/bundler/tailordb/hooks-validate-bundler";
 import { loadFilesWithIgnores } from "@/cli/services/file-loader";
 import { logger, styles } from "@/cli/shared/logger";
 import {
@@ -14,6 +13,7 @@ import {
   type TailorAnyDBType,
 } from "@/parser/service/tailordb";
 import { isSdkBranded } from "@/utils/brand";
+import { precompileTailorDBTypeScripts } from "./hooks-validate-bundler";
 import type { PluginAttachment } from "@/parser/plugin-config/types";
 import type { PluginManager } from "@/plugin/manager";
 
