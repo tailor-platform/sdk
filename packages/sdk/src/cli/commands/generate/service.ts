@@ -113,16 +113,9 @@ export function createGenerationManager(params: {
   // Get plugins that have generation hooks
   const generationPlugins = pluginManager?.getPluginsWithGenerationHooks() ?? [];
 
-  // Track which generators have already been executed
-  const executedGenerators = new Set<string>();
-
-  // Returns generators whose dependencies are all satisfied and haven't been run yet
-  function getReadyGenerators(loaded: ReadonlySet<DependencyKind>): Generator[] {
-    return generators.filter((g) => {
-      if (executedGenerators.has(g.id)) return false;
-      const gen = g as AnyCodeGenerator;
-      return gen.dependencies.every((dep) => loaded.has(dep));
-    });
+  // Returns generators that subscribe to the given dependency phase
+  function getReadyGenerators(dep: DependencyKind): Generator[] {
+    return generators.filter((g) => (g as AnyCodeGenerator).dependencies.includes(dep));
   }
 
   function getAuthInput(): GeneratorAuthInput | undefined {
@@ -607,7 +600,6 @@ export function createGenerationManager(params: {
     aggregate,
 
     async generate(watch: boolean): Promise<void> {
-      executedGenerators.clear();
       logger.newline();
       logger.log(`Generation for application: ${styles.highlight(application.config.name)}`);
 
@@ -673,13 +665,10 @@ export function createGenerationManager(params: {
         logger.newline();
       }
 
-      const loaded = new Set<DependencyKind>(["tailordb"]);
-
-      // Run generators whose dependencies are now satisfied + onTailorDBReady plugin hooks
-      const readyAfterTailorDB = getReadyGenerators(loaded);
+      // Run generators + plugin hooks for onTailorDBReady
+      const readyAfterTailorDB = getReadyGenerators("tailordb");
       const hasOnTailorDBReady = generationPlugins.some((p) => p.onTailorDBReady != null);
       if (readyAfterTailorDB.length > 0 || hasOnTailorDBReady) {
-        for (const g of readyAfterTailorDB) executedGenerators.add(g.id);
         await withSpan("generate.onTailorDBReady", async () => {
           await Promise.all([
             runGenerators(readyAfterTailorDB, watch),
@@ -713,13 +702,10 @@ export function createGenerationManager(params: {
         }
       });
 
-      loaded.add("resolver");
-
-      // Run generators whose dependencies are now satisfied + onResolverReady plugin hooks
-      const readyAfterResolvers = getReadyGenerators(loaded);
+      // Run generators + plugin hooks for onResolverReady
+      const readyAfterResolvers = getReadyGenerators("resolver");
       const hasOnResolverReady = generationPlugins.some((p) => p.onResolverReady != null);
       if (readyAfterResolvers.length > 0 || hasOnResolverReady) {
-        for (const g of readyAfterResolvers) executedGenerators.add(g.id);
         await withSpan("generate.onResolversReady", async () => {
           await Promise.all([
             runGenerators(readyAfterResolvers, watch),
@@ -745,13 +731,10 @@ export function createGenerationManager(params: {
         });
       });
 
-      loaded.add("executor");
-
-      // Run generators whose dependencies are now satisfied + onExecutorReady plugin hooks
-      const readyAfterExecutors = getReadyGenerators(loaded);
+      // Run generators + plugin hooks for onExecutorReady
+      const readyAfterExecutors = getReadyGenerators("executor");
       const hasOnExecutorReady = generationPlugins.some((p) => p.onExecutorReady != null);
       if (readyAfterExecutors.length > 0 || hasOnExecutorReady) {
-        for (const g of readyAfterExecutors) executedGenerators.add(g.id);
         await withSpan("generate.onExecutorsReady", async () => {
           await Promise.all([
             runGenerators(readyAfterExecutors, watch),
