@@ -20,7 +20,7 @@ import { type ExecutorServiceInput } from "@/parser/service/executor";
 import { IdPSchema, type IdP } from "@/parser/service/idp";
 import { type IdPConfig } from "@/parser/service/idp/types";
 import { type ResolverServiceInput } from "@/parser/service/resolver/types";
-import { SecretsSchema } from "@/parser/service/secrets";
+import { SecretsSchema, type SecretsConfig } from "@/parser/service/secrets";
 import {
   StaticWebsiteSchema,
   type StaticWebsite,
@@ -210,9 +210,7 @@ function defineStaticWebsites(
   return staticWebsiteServices;
 }
 
-function defineSecretsForApplication(
-  config: Record<string, Record<string, string>> | undefined,
-): SecretVault[] {
+function defineSecrets(config: SecretsConfig | undefined): SecretVault[] {
   if (!config) {
     return [];
   }
@@ -244,7 +242,7 @@ function defineServices(config: AppConfig, pluginManager?: PluginManager): Defin
     tailordbResult.externalTailorDBNamespaces,
   );
   const staticWebsiteServices = defineStaticWebsites(config.staticWebsites);
-  const secrets = defineSecretsForApplication(config.secrets);
+  const secrets = defineSecrets(config.secrets);
   return { tailordbResult, resolverResult, idpResult, authResult, staticWebsiteServices, secrets };
 }
 

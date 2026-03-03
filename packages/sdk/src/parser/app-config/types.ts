@@ -4,6 +4,7 @@ import type { WorkflowServiceInput } from "@/configure/services/workflow/types";
 import type { AuthConfig } from "@/parser/service/auth/types";
 import type { IdPConfig } from "@/parser/service/idp/types";
 import type { ResolverServiceInput } from "@/parser/service/resolver/types";
+import type { SecretsConfig } from "@/parser/service/secrets";
 import type { TailorDBServiceInput } from "@/parser/service/tailordb/types";
 
 /**
@@ -48,7 +49,7 @@ export interface AppConfig<
   /** Static website configurations. Must be an array, e.g. `[website]`. */
   staticWebsites?: StaticWebsites;
   /** Secret Manager vault configurations. Keys are vault names, values are records of secret names to values. */
-  secrets?: Record<string, Record<string, string>>;
+  secrets?: SecretsConfig;
   /**
    * Enable inline sourcemaps in bundled functions for better error stack traces.
    * When enabled, sourcemaps are embedded directly in the bundle file.
