@@ -907,6 +907,9 @@ async function main(): Promise<void> {
       modelExplicit,
     });
 
+    // Fall back to the variant used in the source report when not explicitly provided
+    const rerunVariant = variant ?? latestReport.variant;
+
     // Auth pre-check (deferred until rerun options are derived)
     await ensureAuthenticated(rerunAgent, normalizeModelForAgent(rerunAgent, rerunModel));
 
@@ -933,7 +936,7 @@ async function main(): Promise<void> {
               clean,
               verbose,
               tarballPath,
-              variant,
+              variant: rerunVariant,
             });
             completed++;
             if (!verbose) {
@@ -978,6 +981,7 @@ async function main(): Promise<void> {
     }
     const report = createReport(mergedResults, {
       model: reportModel,
+      variant: rerunVariant,
       sdkVersion,
       elapsedMs: Date.now() - rerunStartTime,
     });
