@@ -1,5 +1,37 @@
 # @tailor-platform/sdk
 
+## 1.20.0
+
+### Minor Changes
+
+- [#644](https://github.com/tailor-platform/sdk/pull/644) [`e7ac6ae`](https://github.com/tailor-platform/sdk/commit/e7ac6aeabeb85786fff2e71629377a55c9a45bb3) Thanks [@dqn](https://github.com/dqn)! - Add bundle caching to accelerate apply command
+
+### Patch Changes
+
+- [#648](https://github.com/tailor-platform/sdk/pull/648) [`484cd98`](https://github.com/tailor-platform/sdk/commit/484cd989163b441385dd2794a9580716825de658) Thanks [@k1LoW](https://github.com/k1LoW)! - Add `gqlOperations` option for IdP configuration
+
+  Configure which GraphQL operations are enabled for IdP users. All operations are enabled by default (set `false` to disable):
+
+  - `create`: Enable \_createUser mutation (default: true)
+  - `update`: Enable \_updateUser mutation (default: true)
+  - `delete`: Enable \_deleteUser mutation (default: true)
+  - `read`: Enable \_users and \_user queries (default: true)
+  - `sendPasswordResetEmail`: Enable \_sendPasswordResetEmail mutation (default: true)
+
+  Supports `"query"` alias for read-only mode (disables all mutations):
+
+  ```typescript
+  defineIdp("my-idp", {
+    authorization: "loggedIn",
+    clients: ["my-client"],
+    gqlOperations: "query", // Equivalent to { create: false, update: false, delete: false, read: true, sendPasswordResetEmail: false }
+  });
+  ```
+
+- [#639](https://github.com/tailor-platform/sdk/pull/639) [`2d25e53`](https://github.com/tailor-platform/sdk/commit/2d25e534c34bc0297f95ead6f163e02b1567e93a) Thanks [@dqn](https://github.com/dqn)! - Refactor CLI internal directory layout to align with package-by-feature boundaries, colocating apply/generate command logic under commands and consolidating shared CLI helpers.
+
+- [#650](https://github.com/tailor-platform/sdk/pull/650) [`55fb921`](https://github.com/tailor-platform/sdk/commit/55fb9210e4a0bd45a4d82d3f91df3930b4273d49) Thanks [@toiroakr](https://github.com/toiroakr)! - Add GitHub Actions workflow for automated dependency review on Renovate PRs using Claude
+
 ## 1.19.0
 
 ### Minor Changes
