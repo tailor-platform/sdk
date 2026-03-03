@@ -5,6 +5,7 @@ import * as rolldown from "rolldown";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { stringifyFunction, tailorUserMap } from "@/parser/service/tailordb/field";
 import { setPrecompiledScriptExpr } from "@/parser/service/tailordb/hooks-validate-precompiled-expr";
+import { ES_BUILTINS } from "./es-builtins";
 import type { TailorDBTypeSchemaOutput } from "@/parser/service/tailordb/types";
 import type {
   BindingPattern,
@@ -30,68 +31,6 @@ export type SourceBinding = {
   sourceText: string;
   kind: "import" | "declaration";
 };
-
-/** ECMAScript built-in globals (from globals.builtin) */
-const ES_BUILTINS = new Set([
-  "Array",
-  "ArrayBuffer",
-  "Atomics",
-  "BigInt",
-  "BigInt64Array",
-  "BigUint64Array",
-  "Boolean",
-  "DataView",
-  "Date",
-  "Error",
-  "EvalError",
-  "FinalizationRegistry",
-  "Float32Array",
-  "Float64Array",
-  "Function",
-  "Infinity",
-  "Int16Array",
-  "Int32Array",
-  "Int8Array",
-  "Intl",
-  "JSON",
-  "Map",
-  "Math",
-  "NaN",
-  "Number",
-  "Object",
-  "Promise",
-  "Proxy",
-  "RangeError",
-  "ReferenceError",
-  "Reflect",
-  "RegExp",
-  "Set",
-  "SharedArrayBuffer",
-  "String",
-  "Symbol",
-  "SyntaxError",
-  "TypeError",
-  "URIError",
-  "Uint16Array",
-  "Uint32Array",
-  "Uint8Array",
-  "Uint8ClampedArray",
-  "WeakMap",
-  "WeakRef",
-  "WeakSet",
-  "console",
-  "decodeURI",
-  "decodeURIComponent",
-  "encodeURI",
-  "encodeURIComponent",
-  "eval",
-  "globalThis",
-  "isFinite",
-  "isNaN",
-  "parseFloat",
-  "parseInt",
-  "undefined",
-]);
 
 /**
  * Recursively extract binding names from a destructuring pattern node.

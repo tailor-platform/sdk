@@ -392,6 +392,9 @@ importers:
       find-up-simple:
         specifier: 1.0.1
         version: 1.0.1
+      globals:
+        specifier: 17.0.0
+        version: 17.0.0
       inflection:
         specifier: 3.0.2
         version: 3.0.2
@@ -495,9 +498,6 @@ importers:
       eslint-plugin-oxlint:
         specifier: 1.39.0
         version: 1.39.0
-      globals:
-        specifier: 17.0.0
-        version: 17.0.0
       oxlint:
         specifier: 1.39.0
         version: 1.39.0(oxlint-tsgolint@0.11.1)
