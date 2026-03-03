@@ -2,17 +2,29 @@
 
 Commands for managing and deploying static websites.
 
-<!-- politty:command:staticwebsite:start -->
+<!-- politty:command:staticwebsite:heading:start -->
 
 ## staticwebsite
 
+<!-- politty:command:staticwebsite:heading:end -->
+
+<!-- politty:command:staticwebsite:description:start -->
+
 Manage static websites in your workspace.
+
+<!-- politty:command:staticwebsite:description:end -->
+
+<!-- politty:command:staticwebsite:usage:start -->
 
 **Usage**
 
 ```
 tailor-sdk staticwebsite [command]
 ```
+
+<!-- politty:command:staticwebsite:usage:end -->
+
+<!-- politty:command:staticwebsite:subcommands:start -->
 
 **Commands**
 
@@ -22,18 +34,30 @@ tailor-sdk staticwebsite [command]
 | [`staticwebsite get`](#staticwebsite-get)       | Get details of a specific static website.             |
 | [`staticwebsite list`](#staticwebsite-list)     | List all static websites in a workspace.              |
 
-<!-- politty:command:staticwebsite:end -->
-<!-- politty:command:staticwebsite deploy:start -->
+<!-- politty:command:staticwebsite:subcommands:end -->
+<!-- politty:command:staticwebsite deploy:heading:start -->
 
 ### staticwebsite deploy
 
+<!-- politty:command:staticwebsite deploy:heading:end -->
+
+<!-- politty:command:staticwebsite deploy:description:start -->
+
 Deploy a static website from a local build directory.
+
+<!-- politty:command:staticwebsite deploy:description:end -->
+
+<!-- politty:command:staticwebsite deploy:usage:start -->
 
 **Usage**
 
 ```
 tailor-sdk staticwebsite deploy [options]
 ```
+
+<!-- politty:command:staticwebsite deploy:usage:end -->
+
+<!-- politty:command:staticwebsite deploy:options:start -->
 
 **Options**
 
@@ -45,12 +69,20 @@ tailor-sdk staticwebsite deploy [options]
 | `--name <NAME>`                 | `-n`  | Static website name              | Yes      | -       |
 | `--dir <DIR>`                   | `-d`  | Path to the static website files | Yes      | -       |
 
-<!-- politty:command:staticwebsite deploy:end -->
-<!-- politty:command:staticwebsite list:start -->
+<!-- politty:command:staticwebsite deploy:options:end -->
+<!-- politty:command:staticwebsite list:heading:start -->
 
 ### staticwebsite list
 
+<!-- politty:command:staticwebsite list:heading:end -->
+
+<!-- politty:command:staticwebsite list:description:start -->
+
 List all static websites in a workspace.
+
+<!-- politty:command:staticwebsite list:description:end -->
+
+<!-- politty:command:staticwebsite list:usage:start -->
 
 **Usage**
 
@@ -58,6 +90,10 @@ List all static websites in a workspace.
 tailor-sdk staticwebsite list [options]
 ```
 
+<!-- politty:command:staticwebsite list:usage:end -->
+
+<!-- politty:command:staticwebsite list:options:start -->
+
 **Options**
 
 | Option                          | Alias | Description       | Required | Default |
@@ -66,12 +102,20 @@ tailor-sdk staticwebsite list [options]
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
 
-<!-- politty:command:staticwebsite list:end -->
-<!-- politty:command:staticwebsite get:start -->
+<!-- politty:command:staticwebsite list:options:end -->
+<!-- politty:command:staticwebsite get:heading:start -->
 
 ### staticwebsite get
 
+<!-- politty:command:staticwebsite get:heading:end -->
+
+<!-- politty:command:staticwebsite get:description:start -->
+
 Get details of a specific static website.
+
+<!-- politty:command:staticwebsite get:description:end -->
+
+<!-- politty:command:staticwebsite get:usage:start -->
 
 **Usage**
 
@@ -79,11 +123,19 @@ Get details of a specific static website.
 tailor-sdk staticwebsite get [options] <name>
 ```
 
+<!-- politty:command:staticwebsite get:usage:end -->
+
+<!-- politty:command:staticwebsite get:arguments:start -->
+
 **Arguments**
 
 | Argument | Description         | Required |
 | -------- | ------------------- | -------- |
 | `name`   | Static website name | Yes      |
+
+<!-- politty:command:staticwebsite get:arguments:end -->
+
+<!-- politty:command:staticwebsite get:options:start -->
 
 **Options**
 
@@ -93,7 +145,7 @@ tailor-sdk staticwebsite get [options] <name>
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
 
-<!-- politty:command:staticwebsite get:end -->
+<!-- politty:command:staticwebsite get:options:end -->
 
 **Example:**
 

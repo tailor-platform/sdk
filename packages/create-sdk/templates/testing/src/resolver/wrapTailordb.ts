@@ -1,5 +1,5 @@
 import { createResolver, t } from "@tailor-platform/sdk";
-import { Selectable } from "kysely";
+import type { Selectable } from "@tailor-platform/sdk/kysely";
 import { getDB, type DB, type Namespace } from "../generated/db";
 
 export interface DbOperations {

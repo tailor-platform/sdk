@@ -1,3 +1,4 @@
+import { brandValue } from "@/utils/brand";
 import type { Operation } from "./operation";
 import type { Trigger } from "./trigger";
 import type { AuthInvoker } from "@/configure/services/auth";
@@ -38,10 +39,30 @@ type Executor<T extends Trigger<unknown>, O> = O extends {
 
 /**
  * Create an executor configuration for the Tailor SDK.
+ *
+ * Executors are event-driven handlers that respond to record changes,
+ * resolver executions, or other events.
+ *
+ * Operation kinds: "function", "graphql", "webhook", "workflow".
  * @template T
  * @template O
  * @param config - Executor configuration
  * @returns The same executor configuration
+ * @example
+ * import { createExecutor, recordCreatedTrigger } from "@tailor-platform/sdk";
+ * import { order } from "../tailordb/order";
+ *
+ * export default createExecutor({
+ *   name: "order-created",
+ *   description: "Handles new order creation",
+ *   trigger: recordCreatedTrigger({ type: order }),
+ *   operation: {
+ *     kind: "function",
+ *     body: async ({ newRecord }) => {
+ *       console.log("New order:", newRecord.id);
+ *     },
+ *   },
+ * });
  */
 export function createExecutor<
   T extends Trigger<unknown>,
@@ -66,5 +87,5 @@ export function createExecutor<
   T extends Trigger<unknown>,
   O extends Operation<TriggerArgs<T>> | { kind: "workflow"; workflow: Workflow },
 >(config: Executor<T, O>) {
-  return config;
+  return brandValue(config);
 }

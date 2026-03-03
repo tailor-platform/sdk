@@ -46,4 +46,3 @@ jobs:
           createGithubReleases: true
         env:
           GITHUB_TOKEN: ${{ steps.get_access_token.outputs.token }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

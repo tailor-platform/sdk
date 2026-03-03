@@ -2,6 +2,12 @@ import type { IdPLangSchema, IdPSchema } from "./schema";
 import type { BuiltinIdP } from "@/parser/service/auth/types";
 import type { z } from "zod";
 
+export type {
+  IdPGqlOperations,
+  IdPGqlOperationsAliasQuery,
+  IdPGqlOperationsConfig,
+} from "@/configure/services/idp";
+
 export type IdP = z.output<typeof IdPSchema>;
 export type IdPInput = z.input<typeof IdPSchema>;
 export type IdPLang = z.output<typeof IdPLangSchema>;

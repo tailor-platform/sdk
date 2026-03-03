@@ -1,4 +1,5 @@
-import { defineAuth, defineConfig, defineGenerators, t } from "@tailor-platform/sdk";
+import { defineAuth, defineConfig, definePlugins, t } from "@tailor-platform/sdk";
+import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
 
 export default defineConfig({
   name: "testing",
@@ -19,7 +20,4 @@ export default defineConfig({
   workflow: { files: ["./src/workflow/*.ts"] },
 });
 
-export const generators = defineGenerators([
-  "@tailor-platform/kysely-type",
-  { distPath: "./src/generated/db.ts" },
-]);
+export const plugins = definePlugins(kyselyTypePlugin({ distPath: "./src/generated/db.ts" }));

@@ -1,5 +1,17 @@
 # @tailor-platform/create-sdk
 
+## 1.19.0
+
+## 1.18.0
+
+## 1.17.1
+
+### Patch Changes
+
+- [#627](https://github.com/tailor-platform/sdk/pull/627) [`b75a0cd`](https://github.com/tailor-platform/sdk/commit/b75a0cd124a707befaaf77b5da0dafe8835b7263) Thanks [@toiroakr](https://github.com/toiroakr)! - Remove redundant kysely and @tailor-platform/function-kysely-tailordb dependencies from create-sdk templates, as these are already provided through @tailor-platform/sdk
+
+## 1.17.0
+
 ## 1.16.0
 
 ## 1.15.2

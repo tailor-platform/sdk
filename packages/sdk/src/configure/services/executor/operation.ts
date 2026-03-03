@@ -8,12 +8,14 @@ import type {
 } from "@/parser/service/executor/types";
 import type { Client } from "@urql/core";
 
+/** Function-based executor operation. The body receives the trigger args. */
 export type FunctionOperation<Args> = Omit<ParserFunctionOperation, "body"> & {
   body: (args: Args) => void | Promise<void>;
 };
 
 type UrqlOperationArgs = Parameters<Client["query"] | Client["mutation"]>;
 
+/** GraphQL-based executor operation. Executes a GraphQL query or mutation. */
 export type GqlOperation<Args> = Omit<ParserGqlOperation, "query" | "variables"> & {
   query: UrqlOperationArgs[0];
   variables?: (args: Args) => UrqlOperationArgs[1];
@@ -264,6 +266,7 @@ type RequestHeader =
   | "X-Frame-Options"
   | (string & {});
 
+/** Outbound webhook executor operation. Sends HTTP requests to external URLs. */
 export type WebhookOperation<Args> = Omit<
   ParserWebhookOperation,
   "url" | "requestBody" | "headers"
@@ -281,6 +284,7 @@ export type WebhookOperation<Args> = Omit<
  */
 type WorkflowInput<W extends Workflow> = Parameters<W["trigger"]>[0];
 
+/** Workflow-triggering executor operation. Triggers a workflow in response to an event. */
 export type WorkflowOperation<Args, W extends Workflow = Workflow> = Omit<
   ParserWorkflowOperation,
   "workflowName" | "args" | "authInvoker"

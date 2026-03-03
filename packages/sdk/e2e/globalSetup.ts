@@ -5,8 +5,8 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { initOperatorClient } from "../src/cli/client";
-import { loadAccessToken } from "../src/cli/context";
+import { initOperatorClient } from "../src/cli/shared/client";
+import { loadAccessToken } from "../src/cli/shared/context";
 
 const TRACKING_DIR = path.join(os.tmpdir(), "e2e-workspaces");
 const TEMPDIR_TRACKING_DIR = path.join(os.tmpdir(), "e2e-tempdirs");

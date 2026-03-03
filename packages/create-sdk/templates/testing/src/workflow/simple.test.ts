@@ -1,22 +1,41 @@
+import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
 import { describe, expect, test, vi } from "vitest";
-import { addNumbers, multiplyNumbers, calculate } from "./simple";
+import { addNumbers, multiplyNumbers, calculate, getUserInfo } from "./simple";
 
 describe("workflow jobs", () => {
   describe("addNumbers job", () => {
     test("adds two numbers", () => {
-      const result = addNumbers.body({ a: 2, b: 3 }, { env: {} });
+      const result = addNumbers.body(
+        { a: 2, b: 3 },
+        {
+          env: {},
+          user: unauthenticatedTailorUser,
+        },
+      );
       expect(result).toBe(5);
     });
 
     test("handles negative numbers", () => {
-      const result = addNumbers.body({ a: -5, b: 3 }, { env: {} });
+      const result = addNumbers.body(
+        { a: -5, b: 3 },
+        {
+          env: {},
+          user: unauthenticatedTailorUser,
+        },
+      );
       expect(result).toBe(-2);
     });
   });
 
   describe("multiplyNumbers job", () => {
     test("multiplies two numbers", () => {
-      const result = multiplyNumbers.body({ x: 4, y: 5 }, { env: {} });
+      const result = multiplyNumbers.body(
+        { x: 4, y: 5 },
+        {
+          env: {},
+          user: unauthenticatedTailorUser,
+        },
+      );
       expect(result).toBe(20);
     });
   });
@@ -27,11 +46,43 @@ describe("workflow jobs", () => {
       vi.spyOn(addNumbers, "trigger").mockResolvedValue(5); // 2 + 3 = 5
       vi.spyOn(multiplyNumbers, "trigger").mockResolvedValue(10); // 5 * 2 = 10
 
-      const result = await calculate.body({ a: 2, b: 3 }, { env: {} });
+      const result = await calculate.body(
+        { a: 2, b: 3 },
+        {
+          env: {},
+          user: unauthenticatedTailorUser,
+        },
+      );
 
       expect(addNumbers.trigger).toHaveBeenCalledWith({ a: 2, b: 3 });
       expect(multiplyNumbers.trigger).toHaveBeenCalledWith({ x: 5, y: 2 });
       expect(result).toBe(10);
+    });
+  });
+
+  describe("getUserInfo job", () => {
+    test("returns user info from context", () => {
+      const result = getUserInfo.body(undefined, {
+        env: {},
+        user: unauthenticatedTailorUser,
+      });
+      expect(result).toEqual({
+        userId: unauthenticatedTailorUser.id,
+        workspaceId: unauthenticatedTailorUser.workspaceId,
+      });
+    });
+
+    test("returns custom user info", () => {
+      const customUser = {
+        ...unauthenticatedTailorUser,
+        id: "user-123",
+        workspaceId: "ws-456",
+      };
+      const result = getUserInfo.body(undefined, {
+        env: {},
+        user: customUser,
+      });
+      expect(result).toEqual({ userId: "user-123", workspaceId: "ws-456" });
     });
   });
 });
