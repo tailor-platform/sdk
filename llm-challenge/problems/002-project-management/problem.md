@@ -12,14 +12,14 @@ Build a project management system with 5 TailorDB models using the `@tailor-plat
 
 Export: `team` (named) + `type team = typeof team`
 
-| Field               | Kind   | Options                                                                                                                                                                     |
-| ------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| name                | string | required, unique                                                                                                                                                            |
-| code                | string | auto-generated serial code starting at 1, formatted as TEAM-001, TEAM-002, etc. (3-digit zero-padded)                                                                       |
-| description         | string | optional                                                                                                                                                                    |
-| maxMembers          | int    | optional, validate: must be positive (zero is not a valid member count), hook: create defaults to 10 (use nullish coalescing to preserve explicit 0 and other falsy values) |
-| isActive            | bool   | optional, hook: create defaults to true (use nullish coalescing to preserve explicit false)                                                                                 |
-| createdAt/updatedAt |        | use `...timestampFields()`                                                                                                                                                  |
+| Field               | Kind   | Options                                                                                                                                                                  |
+| ------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| name                | string | required, unique                                                                                                                                                         |
+| code                | string | auto-generated serial code starting at 1, formatted as TEAM-001, TEAM-002, etc. (3-digit zero-padded)                                                                    |
+| description         | string | optional                                                                                                                                                                 |
+| maxMembers          | int    | optional, validate: must be positive (zero is not a valid member count), hook: create defaults to 10 (preserve explicitly set values including 0 and other falsy values) |
+| isActive            | bool   | optional, hook: create defaults to true (preserve explicitly set values including false)                                                                                 |
+| createdAt/updatedAt |        | use `...timestampFields()`                                                                                                                                               |
 
 Type-level options:
 

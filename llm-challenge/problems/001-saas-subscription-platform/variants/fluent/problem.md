@@ -18,9 +18,9 @@ Export: `organization` (named)
 | domain              | string | required, unique                                                                                             |
 | plan                | enum   | values: `["FREE", "STARTER", "BUSINESS", "ENTERPRISE"]`                                                      |
 | billingAddress      | object | fields: street (string), city (string), state (string), postalCode (string), country (string) - all required |
-| orgCode             | string | serial: `{ start: 1, format: "ORG-%04d" }`                                                                   |
-| contactEmail        | string | required, unique, hook: create lowercases value (`({ value }) => value ? value.toLowerCase() : ""`)          |
-| maxSeats            | int    | hook: create defaults to 5 when undefined (`({ value }) => value ?? 5`)                                      |
+| orgCode             | string | serial: start at 1, format as ORG-0001, ORG-0002, etc. (4-digit zero-padded)                                 |
+| contactEmail        | string | required, unique, hook: create normalizes to lowercase (return empty string for falsy input)                 |
+| maxSeats            | int    | hook: create defaults to 5 when value is nullish                                                             |
 | active              | bool   | required                                                                                                     |
 | tags                | string | array: true, optional                                                                                        |
 | createdAt/updatedAt |        | use `...db.fields.timestamps()`                                                                              |
@@ -28,8 +28,8 @@ Export: `organization` (named)
 Type-level options:
 
 - description: any non-empty string
-- permission: `{ create: [[{ user: "_loggedIn" }, "=", true]], read: [[{ user: "_loggedIn" }, "=", true]], update: [[{ user: "plan" }, "=", "ENTERPRISE"]], delete: [[{ user: "plan" }, "=", "ENTERPRISE"]] }`
-- gqlPermission: `[{ conditions: [[{ user: "plan" }, "=", "ENTERPRISE"]], actions: "all", permit: true }, { conditions: [[{ user: "_loggedIn" }, "=", true]], actions: ["read", "create"], permit: true }]`
+- permission: logged-in users can create and read; only ENTERPRISE plan users can update and delete
+- gqlPermission: ENTERPRISE plan has all permissions; logged-in users have read and create permissions
 
 ### Subscription (`tailordb/subscription.ts`)
 
@@ -42,7 +42,7 @@ Export: `subscription` (named)
 | status              | enum  | values: `["TRIAL", "ACTIVE", "PAUSED", "CANCELLED"]`                                                  |
 | startDate           | date  | required                                                                                              |
 | endDate             | date  | optional, hook: update auto-sets to current date when status is CANCELLED (preserves value otherwise) |
-| monthlyRate         | float | validate: `({ value }) => value >= 0` (with message `"monthlyRate must be non-negative"`)             |
+| monthlyRate         | float | validate: must be non-negative (message: "monthlyRate must be non-negative")                          |
 | autoRenew           | bool  | required                                                                                              |
 | createdAt/updatedAt |       | use `...db.fields.timestamps()`                                                                       |
 
@@ -55,36 +55,36 @@ Type-level options:
 
 Export: `invoice` (named)
 
-| Field               | Kind     | Options                                                                    |
-| ------------------- | -------- | -------------------------------------------------------------------------- |
-| subscriptionId      | uuid     | relation: n-1 to Subscription                                              |
-| invoiceNumber       | string   | serial: `{ start: 1, format: "INV-%06d" }`                                 |
-| amount              | float    | required                                                                   |
-| currency            | enum     | values: `["USD", "EUR", "JPY"]`                                            |
-| issuedAt            | datetime | hook: create returns `new Date()`                                          |
-| dueDate             | date     | required                                                                   |
-| paid                | bool     | optional, hook: create defaults to false (`({ value }) => value ?? false`) |
-| notes               | string   | optional                                                                   |
-| createdAt/updatedAt |          | use `...db.fields.timestamps()`                                            |
+| Field               | Kind     | Options                                                                          |
+| ------------------- | -------- | -------------------------------------------------------------------------------- |
+| subscriptionId      | uuid     | relation: n-1 to Subscription                                                    |
+| invoiceNumber       | string   | serial: start at 1, format as INV-000001, INV-000002, etc. (6-digit zero-padded) |
+| amount              | float    | required                                                                         |
+| currency            | enum     | values: `["USD", "EUR", "JPY"]`                                                  |
+| issuedAt            | datetime | hook: create sets to current timestamp                                           |
+| dueDate             | date     | required                                                                         |
+| paid                | bool     | optional, hook: create defaults to false when value is nullish                   |
+| notes               | string   | optional                                                                         |
+| createdAt/updatedAt |          | use `...db.fields.timestamps()`                                                  |
 
 ### UsageRecord (`tailordb/usageRecord.ts`)
 
 Export: `usageRecord` (named)
 
-| Field               | Kind     | Options                                                                                                           |
-| ------------------- | -------- | ----------------------------------------------------------------------------------------------------------------- |
-| subscriptionId      | uuid     | relation: n-1 to Subscription                                                                                     |
-| metric              | string   | required                                                                                                          |
-| quantity            | float    | validate: `({ value }) => value > 0` (with message `"quantity must be positive"`) - note: strictly greater than 0 |
-| recordedAt          | datetime | hook: create returns `new Date()`                                                                                 |
-| description         | string   | optional                                                                                                          |
-| createdAt/updatedAt |          | use `...db.fields.timestamps()`                                                                                   |
+| Field               | Kind     | Options                                                                    |
+| ------------------- | -------- | -------------------------------------------------------------------------- |
+| subscriptionId      | uuid     | relation: n-1 to Subscription                                              |
+| metric              | string   | required                                                                   |
+| quantity            | float    | validate: must be strictly positive (message: "quantity must be positive") |
+| recordedAt          | datetime | hook: create sets to current timestamp                                     |
+| description         | string   | optional                                                                   |
+| createdAt/updatedAt |          | use `...db.fields.timestamps()`                                            |
 
 ### AuditEvent (`tailordb/auditEvent.ts`)
 
 Export: `auditEvent` (named)
 
-**Note**: This model only has `createdAt` (no `updatedAt`). Do NOT use `db.fields.timestamps()` - define `createdAt` manually as a datetime field with a create hook returning `new Date()`.
+**Note**: This model only has `createdAt` (no `updatedAt`). Do NOT use `db.fields.timestamps()` - define `createdAt` manually as a datetime field with a create hook setting it to the current timestamp.
 
 | Field          | Kind     | Options                                                                                 |
 | -------------- | -------- | --------------------------------------------------------------------------------------- |
@@ -93,9 +93,9 @@ Export: `auditEvent` (named)
 | actor          | string   | required                                                                                |
 | target         | string   | optional                                                                                |
 | metadata       | object   | fields: ip (string, required), userAgent (string, optional), requestId (uuid, required) |
-| occurredAt     | datetime | hook: create returns `new Date()`                                                       |
+| occurredAt     | datetime | hook: create sets to current timestamp                                                  |
 | tags           | string   | array: true, optional                                                                   |
-| createdAt      | datetime | hook: create returns `new Date()`                                                       |
+| createdAt      | datetime | hook: create sets to current timestamp                                                  |
 
 ---
 
@@ -112,14 +112,12 @@ Default export a resolver created with `createResolver`.
 
 **Business logic** (in body, uses `getDB`):
 
-1. Query the subscription by ID using `getDB("tailordb")` from `"../generated/tailordb"`. Use Kysely query builder: `db.selectFrom("Subscription").where("id", "=", input.subscriptionId).selectAll().executeTakeFirst()`.
+1. Query the subscription by ID using `getDB("tailordb")` from `"../generated/tailordb"`.
 2. If no subscription found, return `{ success: false, error: "Subscription not found" }`
 3. If subscription status is not `"ACTIVE"`, return `{ success: false, error: "Subscription is not active" }`
 4. Enforce strict plan hierarchy: FREE < STARTER < BUSINESS < ENTERPRISE. If targetPlan is not strictly higher than the current plan, return `{ success: false, error: "Can only upgrade to a higher plan" }`
 5. Look up the new monthly rate: FREE=0, STARTER=29.99, BUSINESS=99.99, ENTERPRISE=299.99
 6. Return `{ success: true, previousPlan: current plan, newPlan: targetPlan, proratedAmount: new rate, effectiveDate: input.effectiveDate }`
-
-Plan hierarchy index: `{ FREE: 0, STARTER: 1, BUSINESS: 2, ENTERPRISE: 3 }`
 
 ### usageSummary (`resolvers/usageSummary.ts`)
 
@@ -136,7 +134,7 @@ Default export an executor created with `createExecutor`.
 - **name**: `"invoice-created"`
 - **description**: any non-empty string
 - **trigger**: `recordCreatedTrigger` on `invoice` type
-  - condition: `({ newRecord }) => newRecord.amount > 0` (strictly greater than 0)
+  - condition: fires only when the new record's amount is strictly greater than 0
 - **operation**: webhook
   - url: `() => "https://billing.example.com/webhooks/invoice"`
   - headers: `{ "Content-Type": "application/json", Authorization: { vault: "billing-service", key: "BILLING_API_KEY" } }`
@@ -148,10 +146,10 @@ Default export an executor created with `createExecutor`.
 - **name**: `"subscription-plan-changed"`
 - **description**: any non-empty string
 - **trigger**: `recordUpdatedTrigger` on `subscription` type
-  - condition: `({ newRecord, oldRecord }) => oldRecord.plan !== newRecord.plan`
+  - condition: fires only when the plan field value has changed
 - **operation**: graphql
   - query: any non-empty string containing `"mutation"`
-  - variables: a function `({ newRecord }) => ({ input: { subscriptionId: newRecord.id, newPlan: newRecord.plan } })`
+  - variables: a function that receives the new record and returns `{ input: { subscriptionId: newRecord.id, newPlan: newRecord.plan } }`
 
 ### upgradeAuditLog (`executors/upgradeAuditLog.ts`)
 
@@ -160,7 +158,7 @@ Default export an executor created with `createExecutor`.
 - **name**: `"upgrade-audit-log"`
 - **description**: any non-empty string describing audit logging for subscription upgrades
 - **trigger**: `resolverExecutedTrigger` on the `upgradeSubscription` resolver (import it)
-  - condition: only fire when the resolver execution was successful (`args.success === true`)
+  - condition: fires only when the resolver execution was successful
 - **operation**: graphql
   - query: a mutation that creates an AuditEvent record
   - variables: a function that maps resolver args to audit event input (action, actor from user, target from result)
@@ -231,18 +229,11 @@ Replace the scaffold with a full configuration.
 - **auth** (via `defineAuth`):
   - userProfile: type = any tailordb model (e.g., organization), usernameField = `"contactEmail"`, attributes: `{ plan: true }`
   - machineUsers: `BILLING_WORKER` (attributes: `{ plan: "STARTER" }`), `ADMIN_SERVICE` (attributes: `{ plan: "ENTERPRISE" }`), `ANALYTICS` (attributes: `{ plan: "FREE" }`)
-  - oauth2Clients: `"dashboard-client"` with redirectURIs using dashboard.url (2 URIs: `${dashboard.url}/callback` and `${dashboard.url}/auth/callback`), and `"api-client"` with redirectURIs `["https://api.example.com/callback"]`
+  - oauth2Clients: `"dashboard-client"` with redirectURIs using dashboard.url (2 URIs: callback and auth/callback paths), and `"api-client"` with redirectURIs `["https://api.example.com/callback"]`
   - idProvider: use idp.provider(...)
 - **idp** (via `defineIdp`):
-  - userAuthPolicy: passwordRequireUppercase=true, passwordRequireLowercase=true, passwordRequireNumeric=true, passwordRequireNonAlphanumeric=true, passwordMinLength=10, passwordMaxLength=256
+  - userAuthPolicy: require uppercase, lowercase, numeric, non-alphanumeric; min length 10, max 256
 - **staticWebsites**: 1 website named `"dashboard"`
 - **idp array**: `[idp]`
 
-**Generators** (named export):
-
-```typescript
-export const generators = defineGenerators(
-  ["@tailor-platform/kysely-type", { distPath: "./generated/tailordb.ts" }],
-  ["@tailor-platform/seed", { distPath: "./seed", machineUserName: "ADMIN_SERVICE" }],
-);
-```
+**Generators** (named export): Use `defineGenerators` with `@tailor-platform/kysely-type` (output to `./generated/tailordb.ts`) and `@tailor-platform/seed` (output to `./seed`, machine user `"ADMIN_SERVICE"`).
