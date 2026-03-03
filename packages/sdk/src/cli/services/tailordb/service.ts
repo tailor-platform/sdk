@@ -1,5 +1,6 @@
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
+import { resolveTSConfig } from "pkg-types";
 import { precompileTailorDBTypeScripts } from "@/cli/bundler/tailordb/hooks-validate-bundler";
 import { loadFilesWithIgnores } from "@/cli/services/file-loader";
 import { logger, styles } from "@/cli/shared/logger";
@@ -132,7 +133,10 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
     }
   };
 
-  const loadTypeFile = async (typeFile: string): Promise<TailorDBTypesByName> => {
+  const loadTypeFile = async (
+    typeFile: string,
+    tsconfig: string | undefined,
+  ): Promise<TailorDBTypesByName> => {
     rawTypes[typeFile] = {};
     const loadedTypes: TailorDBTypesByName = {};
     try {
@@ -153,7 +157,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
         logger.log(
           `Type: ${styles.successBright(`"${result.data.name}"`)} loaded from ${styles.path(relativePath)}`,
         );
-        await precompileTailorDBTypeScripts(result.data, typeFile);
+        await precompileTailorDBTypeScripts(result.data, typeFile, tsconfig);
         rawTypes[typeFile][result.data.name] = result.data;
         loadedTypes[result.data.name] = result.data;
         // Store source info mapping
@@ -206,6 +210,13 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
 
           const typeFiles = loadFilesWithIgnores(config);
 
+          let tsconfig: string | undefined;
+          try {
+            tsconfig = await resolveTSConfig();
+          } catch {
+            tsconfig = undefined;
+          }
+
           logger.newline();
           logger.log(
             `Found ${styles.highlight(typeFiles.length.toString())} type files for TailorDB service ${styles.highlight(`"${namespace}"`)}`,
@@ -213,10 +224,10 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
 
           if (pluginManager) {
             for (const typeFile of typeFiles) {
-              await loadTypeFile(typeFile);
+              await loadTypeFile(typeFile, tsconfig);
             }
           } else {
-            await Promise.all(typeFiles.map((typeFile) => loadTypeFile(typeFile)));
+            await Promise.all(typeFiles.map((typeFile) => loadTypeFile(typeFile, tsconfig)));
           }
           doParseTypes();
           return types;

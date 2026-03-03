@@ -1,7 +1,6 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { parseSync } from "oxc-parser";
 import { join, resolve } from "pathe";
-import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { stringifyFunction, tailorUserMap } from "@/parser/service/tailordb/field";
@@ -556,20 +555,15 @@ async function bundleScriptTarget(args: {
  * minimal entry points containing only the needed imports and declarations.
  * @param type - TailorDB type schema output.
  * @param sourceFilePath - Source file where the type is defined.
+ * @param tsconfig - Resolved tsconfig path, or undefined if not found.
  */
 export async function precompileTailorDBTypeScripts(
   type: TailorDBTypeSchemaOutput,
   sourceFilePath: string,
+  tsconfig: string | undefined,
 ): Promise<void> {
   const targets = collectScriptTargets(type);
   if (targets.length === 0) return;
-
-  let tsconfig: string | undefined;
-  try {
-    tsconfig = await resolveTSConfig();
-  } catch {
-    tsconfig = undefined;
-  }
 
   // Collect source bindings once for all targets in this file
   const sourceBindings = collectSourceBindings(sourceFilePath);
