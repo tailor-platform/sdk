@@ -72,12 +72,6 @@ type SimpleDescriptor<K extends keyof KindToTsType> = CommonFieldOptions &
     kind: K;
   };
 
-type FloatDescriptor = SimpleDescriptor<"float">;
-type BoolDescriptor = SimpleDescriptor<"bool">;
-type DateDescriptor = SimpleDescriptor<"date">;
-type DatetimeDescriptor = SimpleDescriptor<"datetime">;
-type TimeDescriptor = SimpleDescriptor<"time">;
-
 type UuidDescriptor = CommonFieldOptions &
   IndexableOptions<string> & {
     kind: "uuid";
@@ -114,11 +108,11 @@ type ObjectDescriptor = CommonFieldOptions & {
 type FieldDescriptor =
   | StringDescriptor
   | IntDescriptor
-  | FloatDescriptor
-  | BoolDescriptor
-  | DateDescriptor
-  | DatetimeDescriptor
-  | TimeDescriptor
+  | SimpleDescriptor<"float">
+  | SimpleDescriptor<"bool">
+  | SimpleDescriptor<"date">
+  | SimpleDescriptor<"datetime">
+  | SimpleDescriptor<"time">
   | UuidDescriptor
   | EnumDescriptor
   | ObjectDescriptor;

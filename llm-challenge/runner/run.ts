@@ -349,6 +349,22 @@ function createLimiter(concurrency: number) {
     });
 }
 
+const scaffoldFilenames = ["tsconfig.json", "package.json"];
+
+/**
+ * Snapshot scaffold files so we can detect and restore modifications after solve.
+ */
+function snapshotScaffoldFiles(workDir: string): Map<string, string> {
+  const snapshot = new Map<string, string>();
+  for (const f of scaffoldFilenames) {
+    const fp = path.join(workDir, f);
+    if (fs.existsSync(fp)) {
+      snapshot.set(f, fs.readFileSync(fp, "utf-8"));
+    }
+  }
+  return snapshot;
+}
+
 /**
  * Restore scaffold files to their original content, returning any detected changes.
  */
@@ -421,16 +437,7 @@ async function runProblem(
   const symlinkPath = path.join(problemDir, workName(options.variant));
 
   // Snapshot scaffold files after install (before solve) to detect modifications
-  const scaffoldFilenames = ["tsconfig.json", "package.json"];
-  const scaffoldSnapshot = new Map<string, string>();
-  if (isSolveMode) {
-    for (const f of scaffoldFilenames) {
-      const fp = path.join(workDir, f);
-      if (fs.existsSync(fp)) {
-        scaffoldSnapshot.set(f, fs.readFileSync(fp, "utf-8"));
-      }
-    }
-  }
+  const scaffoldSnapshot = isSolveMode ? snapshotScaffoldFiles(workDir) : new Map<string, string>();
 
   let solveResult: SolveResult | undefined;
   const retrySolveResults: SolveResult[] = [];
