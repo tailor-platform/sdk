@@ -411,8 +411,8 @@ importers:
         specifier: 2.3.0
         version: 2.3.0
       politty:
-        specifier: ^0.4.3
-        version: 0.4.3(zod@4.3.5)
+        specifier: ^0.4.4
+        version: 0.4.4(zod@4.3.5)
       rolldown:
         specifier: 1.0.0-beta.60
         version: 1.0.0-beta.60
@@ -4144,8 +4144,8 @@ packages:
     peerDependencies:
       zod: ^4.2.1
 
-  politty@0.4.3:
-    resolution: {integrity: sha512-N32cbEZ9I3e1pMTpAwdZaAFm8Xwv2zwEWxmMKQYElDXDT76l5apdobpKQ3vUI+osiYPdtt4Lb9aF/JIOrxVplw==}
+  politty@0.4.4:
+    resolution: {integrity: sha512-v6Z6gBsDpPPd+o5BmM9Zif9G3fioAZk7/ViCS2bQT3c8/Z1eaQMK+mhzeAMTYE2cb1jQWd8PLhfNW6MmAzG06Q==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^4.2.1
@@ -8654,7 +8654,7 @@ snapshots:
     dependencies:
       zod: 4.3.5
 
-  politty@0.4.3(zod@4.3.5):
+  politty@0.4.4(zod@4.3.5):
     dependencies:
       string-width: 8.2.0
       zod: 4.3.5
