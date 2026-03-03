@@ -6,7 +6,10 @@ export const member = createType("Member", {
   email: {
     kind: "string",
     unique: true,
-    hooks: { create: ({ value }) => (value ? value.toLowerCase() : "") },
+    hooks: {
+      create: ({ value }) => (value ? value.toLowerCase() : ""),
+      update: ({ value }) => (value ? value.toLowerCase() : ""),
+    },
   },
   role: {
     kind: "enum",

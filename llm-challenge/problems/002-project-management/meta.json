@@ -6,7 +6,7 @@
   "scoring": {
     "generate": 20,
     "typecheck": 20,
-    "tests": 160
+    "tests": 216
   },
   "files": {
     "implement": [

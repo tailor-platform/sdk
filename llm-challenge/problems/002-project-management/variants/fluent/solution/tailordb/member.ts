@@ -17,7 +17,10 @@ export const member = db
     ...db.fields.timestamps(),
   })
   .hooks({
-    email: { create: ({ value }) => (value ? value.toLowerCase() : "") },
+    email: {
+      create: ({ value }) => (value ? value.toLowerCase() : ""),
+      update: ({ value }) => (value ? value.toLowerCase() : ""),
+    },
     joinedAt: { create: () => new Date() },
   });
 export type member = typeof member;

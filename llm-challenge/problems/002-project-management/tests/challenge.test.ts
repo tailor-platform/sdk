@@ -125,6 +125,24 @@ describe.skipIf(!workDirReady)("002-project-management", () => {
       expect(hook({ value: false, data: {}, user: {} })).toBe(false);
     });
 
+    test("maxMembers create hook: null defaults to 10", async () => {
+      const mod = await importPath(path.join(workDir, "tailordb/team.ts"));
+      const hook = mod.team.fields.maxMembers.metadata.hooks?.create;
+      expect(hook({ value: null, data: {}, user: {} })).toBe(10);
+    });
+
+    test("maxMembers create hook: explicit 0 is preserved", async () => {
+      const mod = await importPath(path.join(workDir, "tailordb/team.ts"));
+      const hook = mod.team.fields.maxMembers.metadata.hooks?.create;
+      expect(hook({ value: 0, data: {}, user: {} })).toBe(0);
+    });
+
+    test("isActive create hook: null defaults to true", async () => {
+      const mod = await importPath(path.join(workDir, "tailordb/team.ts"));
+      const hook = mod.team.fields.isActive.metadata.hooks?.create;
+      expect(hook({ value: null, data: {}, user: {} })).toBe(true);
+    });
+
     test("has timestamps", async () => {
       const mod = await importPath(path.join(workDir, "tailordb/team.ts"));
       expectTimestamps(mod.team);
@@ -190,6 +208,20 @@ describe.skipIf(!workDirReady)("002-project-management", () => {
     test("email create hook returns falsy for null", async () => {
       const mod = await importPath(path.join(workDir, "tailordb/member.ts"));
       const hook = mod.member.fields.email.metadata.hooks?.create;
+      const result = hook({ value: null, data: {}, user: {} });
+      expect(!result).toBe(true);
+    });
+
+    test("email update hook exists and lowercases value", async () => {
+      const mod = await importPath(path.join(workDir, "tailordb/member.ts"));
+      const hook = mod.member.fields.email.metadata.hooks?.update;
+      expect(hook).toBeDefined();
+      expect(hook({ value: "FOO@BAR.COM", data: {}, user: {} })).toBe("foo@bar.com");
+    });
+
+    test("email update hook returns falsy for null", async () => {
+      const mod = await importPath(path.join(workDir, "tailordb/member.ts"));
+      const hook = mod.member.fields.email.metadata.hooks?.update;
       const result = hook({ value: null, data: {}, user: {} });
       expect(!result).toBe(true);
     });
@@ -529,6 +561,32 @@ describe.skipIf(!workDirReady)("002-project-management", () => {
       expect(result).toBe(existing);
     });
 
+    test("completedAt update hook: TODO status preserves null", async () => {
+      const mod = await importPath(path.join(workDir, "tailordb/task.ts"));
+      const hook = mod.task.fields.completedAt.metadata.hooks?.update;
+      const result = hook({ value: null, data: { status: "TODO" }, user: {} });
+      expect(result).toBeNull();
+    });
+
+    test("completedAt update hook: IN_REVIEW preserves same reference", async () => {
+      const mod = await importPath(path.join(workDir, "tailordb/task.ts"));
+      const hook = mod.task.fields.completedAt.metadata.hooks?.update;
+      const existing = new Date("2025-06-01");
+      const result = hook({ value: existing, data: { status: "IN_REVIEW" }, user: {} });
+      expect(result).toBe(existing);
+    });
+
+    test("completedAt is datetime type (not date)", async () => {
+      const mod = await importPath(path.join(workDir, "tailordb/task.ts"));
+      expect(mod.task.fields.completedAt.type).toBe("datetime");
+    });
+
+    test("estimatedHours validation accepts small positive values", async () => {
+      const mod = await importPath(path.join(workDir, "tailordb/task.ts"));
+      const fn = extractValidateFn(mod.task.fields.estimatedHours.metadata.validate);
+      expect(fn({ value: 0.001, data: {}, user: {} })).toBe(true);
+    });
+
     test("has composite index on projectId and status", async () => {
       const mod = await importPath(path.join(workDir, "tailordb/task.ts"));
       const indexes = mod.task.metadata.indexes;
@@ -623,6 +681,24 @@ describe.skipIf(!workDirReady)("002-project-management", () => {
       const mod = await importPath(path.join(workDir, "tailordb/activityLog.ts"));
       expect(mod.activityLog.fields.updatedAt).toBeUndefined();
     });
+
+    test("createdAt has description 'Record creation timestamp'", async () => {
+      const mod = await importPath(path.join(workDir, "tailordb/activityLog.ts"));
+      expect(mod.activityLog.fields.createdAt.metadata.description).toBe(
+        "Record creation timestamp",
+      );
+    });
+
+    test("has exactly 5 declared fields (plus auto-generated id)", async () => {
+      const mod = await importPath(path.join(workDir, "tailordb/activityLog.ts"));
+      const fieldNames = Object.keys(mod.activityLog.fields).filter((f) => f !== "id");
+      expect(fieldNames).toHaveLength(5);
+    });
+
+    test("does NOT have permission configuration", async () => {
+      const mod = await importPath(path.join(workDir, "tailordb/activityLog.ts"));
+      expect(mod.activityLog.metadata.permissions?.record).toBeUndefined();
+    });
   });
 
   // ===========================================================================
@@ -688,6 +764,68 @@ describe.skipIf(!workDirReady)("002-project-management", () => {
       expect(mod.generators).toBeDefined();
       expect(Array.isArray(mod.generators)).toBe(true);
       expect(mod.generators.length).toBeGreaterThanOrEqual(2);
+    });
+
+    test("SYSTEM_WORKER machine user role is ADMIN", async () => {
+      const mod = await importPath(path.join(workDir, "tailor.config.ts"));
+      const machineUsers = mod.default.auth?.machineUsers;
+      expect(machineUsers.SYSTEM_WORKER.attributes.role).toBe("ADMIN");
+    });
+
+    test("ADMIN_SERVICE machine user role is OWNER", async () => {
+      const mod = await importPath(path.join(workDir, "tailor.config.ts"));
+      const machineUsers = mod.default.auth?.machineUsers;
+      expect(machineUsers.ADMIN_SERVICE.attributes.role).toBe("OWNER");
+    });
+
+    test("password policy requires all character types", async () => {
+      const mod = await importPath(path.join(workDir, "tailor.config.ts"));
+      const policy = mod.default.idp[0]?.userAuthPolicy;
+      expect(policy.passwordRequireUppercase).toBe(true);
+      expect(policy.passwordRequireLowercase).toBe(true);
+      expect(policy.passwordRequireNumeric).toBe(true);
+      expect(policy.passwordRequireNonAlphanumeric).toBe(true);
+    });
+
+    test("oauth2 client grantTypes include authorization_code and refresh_token", async () => {
+      const mod = await importPath(path.join(workDir, "tailor.config.ts"));
+      const clients = mod.default.auth?.oauth2Clients;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test helper
+      const client = Object.values(clients)[0] as any;
+      expect(client.grantTypes).toContain("authorization_code");
+      expect(client.grantTypes).toContain("refresh_token");
+    });
+
+    test("generators have correct distPath values", async () => {
+      const mod = await importPath(path.join(workDir, "tailor.config.ts"));
+      // generators are tuples: [name, { distPath, ... }]
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test helper
+      const gens = mod.generators as [string, any][];
+      const kyselyGen = gens.find((g) => g[0] === "@tailor-platform/kysely-type");
+      const seedGen = gens.find((g) => g[0] === "@tailor-platform/seed");
+      expect(kyselyGen?.[1]?.distPath).toBe("./generated/tailordb.ts");
+      expect(seedGen?.[1]?.distPath).toBe("./seed");
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Cross-model negative tests
+  // ---------------------------------------------------------------------------
+  describe("Cross-model constraints", () => {
+    test("Task does NOT have aggregation feature", async () => {
+      const mod = await importPath(path.join(workDir, "tailordb/task.ts"));
+      expect(mod.task.metadata.settings?.aggregation).toBeUndefined();
+    });
+
+    test("Team does NOT have composite indexes", async () => {
+      const mod = await importPath(path.join(workDir, "tailordb/team.ts"));
+      const indexes = mod.team.metadata.indexes;
+      expect(indexes == null || Object.keys(indexes).length === 0).toBe(true);
+    });
+
+    test("Member does NOT have permission configuration", async () => {
+      const mod = await importPath(path.join(workDir, "tailordb/member.ts"));
+      expect(mod.member.metadata.permissions?.record).toBeUndefined();
     });
   });
 });
