@@ -360,7 +360,7 @@ export function collectSourceBindings(sourceFilePath: string): Map<string, Sourc
 
       if (innerDecl.type === "VariableDeclaration") {
         const varDecl = innerDecl as VariableDeclaration;
-        // Use the full export statement text so the declaration is valid standalone
+        // Slice only the inner declaration (without export keyword) so it is valid standalone
         const text = source.slice(varDecl.start, varDecl.end);
         for (const decl of varDecl.declarations) {
           if (decl.id.type === "Identifier") {
