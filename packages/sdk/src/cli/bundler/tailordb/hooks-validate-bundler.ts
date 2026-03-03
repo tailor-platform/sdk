@@ -4,7 +4,6 @@ import { join, resolve } from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { getDistDir } from "@/cli/shared/dist-dir";
-import { logger } from "@/cli/shared/logger";
 import { stringifyFunction, tailorUserMap } from "@/parser/service/tailordb/field";
 import { setPrecompiledScriptExpr } from "@/parser/service/tailordb/hooks-validate-precompiled-expr";
 import type { TailorDBTypeSchemaOutput } from "@/parser/service/tailordb/types";
@@ -22,6 +21,7 @@ type ScriptFunction = (...args: unknown[]) => unknown;
 
 type ScriptTarget = {
   fn: ScriptFunction;
+  kind: "hooks" | "validate";
 };
 
 /** Binding found in the source file: either an import or a top-level declaration */
@@ -156,20 +156,20 @@ function collectScriptTargets(type: TailorDBTypeSchemaOutput): ScriptTarget[] {
 
     const createHook = toScriptFunction(metadata.hooks?.create);
     if (createHook) {
-      targets.push({ fn: createHook });
+      targets.push({ fn: createHook, kind: "hooks" });
     }
     const updateHook = toScriptFunction(metadata.hooks?.update);
     if (updateHook) {
-      targets.push({ fn: updateHook });
+      targets.push({ fn: updateHook, kind: "hooks" });
     }
 
     for (const validateInput of metadata.validate ?? []) {
       if (typeof validateInput === "function") {
         const validateFn = toScriptFunction(validateInput);
-        if (validateFn) targets.push({ fn: validateFn });
+        if (validateFn) targets.push({ fn: validateFn, kind: "validate" });
       } else {
         const validateFn = toScriptFunction(validateInput[0]);
-        if (validateFn) targets.push({ fn: validateFn });
+        if (validateFn) targets.push({ fn: validateFn, kind: "validate" });
       }
     }
 
@@ -488,13 +488,14 @@ export function buildMinimalEntryFromResolved(
 
 async function bundleScriptTarget(args: {
   fn: ScriptFunction;
+  kind: "hooks" | "validate";
   sourceFilePath: string;
   sourceBindings: Map<string, SourceBinding>;
   tempDir: string;
   targetIndex: number;
   tsconfig: string | undefined;
 }): Promise<string> {
-  const { fn, sourceFilePath, sourceBindings, tempDir, targetIndex, tsconfig } = args;
+  const { fn, kind, sourceFilePath, sourceBindings, tempDir, targetIndex, tsconfig } = args;
   const fnSource = stringifyFunction(fn);
   const inlineExpr = `(${fnSource})({ value: _value, data: _data, user: ${tailorUserMap} })`;
 
@@ -507,14 +508,11 @@ async function bundleScriptTarget(args: {
 
   const { imports, declarations, unresolved } = resolveNeededBindings(freeVars, sourceBindings);
   if (unresolved.length > 0) {
-    // Some free variables could not be resolved from the source file
-    // (e.g. function imported from another file with its own closure variables).
-    // Fall back to the simple toString expression which is the pre-precompiler behaviour.
-    logger.warn(
-      `Could not resolve bindings for [${unresolved.join(", ")}] in ${sourceFilePath}. ` +
-        "Falling back to inline expression.",
+    throw new Error(
+      `${kind} in ${sourceFilePath} captures unresolvable variables (${unresolved.join(", ")}). ` +
+        "Hooks and validators must not reference variables that cannot be resolved from the source file.\n" +
+        `  ${kind}: ${fnSource}`,
     );
-    return inlineExpr;
   }
 
   const entryContent = buildMinimalEntryFromResolved(
@@ -586,6 +584,7 @@ export async function precompileTailorDBTypeScripts(
       targets.map((target, index) =>
         bundleScriptTarget({
           fn: target.fn,
+          kind: target.kind,
           sourceFilePath,
           sourceBindings,
           tempDir,
