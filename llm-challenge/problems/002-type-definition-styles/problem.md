@@ -2,7 +2,7 @@
 
 Build a project management system with 5 TailorDB models using the `@tailor-platform/sdk`.
 
-**Important**: Use the `db.type()` fluent API and `db.fields.timestamps()` for all model definitions (NOT `createType`). Refer to the installed `@tailor-platform/sdk` package for API details.
+{{API_INSTRUCTION}}
 
 ---
 
@@ -19,9 +19,14 @@ Export: `team` (named)
 | description         | string | optional                                                                                                                                                                 |
 | maxMembers          | int    | optional, validate: must be positive (zero is not a valid member count), hook: create defaults to 10 (preserve explicitly set values including 0 and other falsy values) |
 | isActive            | bool   | optional, hook: create defaults to true (preserve explicitly set values including false)                                                                                 |
-| createdAt/updatedAt |        | use `...db.fields.timestamps()`                                                                                                                                          |
+| createdAt/updatedAt |        | use `...{{TIMESTAMPS_FN}}`                                                                                                                                               |
 
-Type-level (chained): description (any non-empty string), permission (logged-in users can create and read; only users with "ADMIN" role can update and delete), hooks for maxMembers and isActive, validation for maxMembers.
+Type-level options:
+
+- description: any non-empty string
+- permission: logged-in users can create and read; only users with "ADMIN" role can update and delete
+- hooks for maxMembers and isActive
+- validation for maxMembers
 
 ### Member (`tailordb/member.ts`)
 
@@ -35,9 +40,11 @@ Export: `member` (named)
 | teamId              | uuid     | relation: n-1 to Team                                                                                                                                           |
 | joinedAt            | datetime | optional, hook: create sets to current timestamp                                                                                                                |
 | skills              | string   | array, optional                                                                                                                                                 |
-| createdAt/updatedAt |          | use `...db.fields.timestamps()`                                                                                                                                 |
+| createdAt/updatedAt |          | use `...{{TIMESTAMPS_FN}}`                                                                                                                                      |
 
-Type-level (chained): hooks for email (create and update) and joinedAt (create).
+Type-level options:
+
+- hooks for email (create and update) and joinedAt (create)
 
 ### Project (`tailordb/project.ts`)
 
@@ -56,9 +63,13 @@ Export: `project` (named)
 | endDate             | date   | optional                                                                                              |
 | settings            | object | fields: isPublic (bool), allowExternalAccess (bool), defaultAssignee (string, optional)               |
 | tags                | string | array, optional                                                                                       |
-| createdAt/updatedAt |        | use `...db.fields.timestamps()`                                                                       |
+| createdAt/updatedAt |        | use `...{{TIMESTAMPS_FN}}`                                                                            |
 
-Type-level (chained): validation for budget, composite index on teamId and status, enable aggregation feature.
+Type-level options:
+
+- validation for budget
+- composite index on teamId and status
+- enable aggregation feature
 
 ### Task (`tailordb/task.ts`)
 
@@ -76,15 +87,19 @@ Export: `task` (named)
 | parentTaskId        | uuid     | optional, self-referencing relation (n-1 to itself)                                                                                                                     |
 | dueDate             | date     | optional                                                                                                                                                                |
 | completedAt         | datetime | optional, hook: update automatically records completion timestamp when task status becomes "DONE"; for any other status, the existing value must be preserved unchanged |
-| createdAt/updatedAt |          | use `...db.fields.timestamps()`                                                                                                                                         |
+| createdAt/updatedAt |          | use `...{{TIMESTAMPS_FN}}`                                                                                                                                              |
 
-Type-level (chained): hooks for completedAt (update), validation for estimatedHours, composite index on projectId and status.
+Type-level options:
+
+- hooks for completedAt (update)
+- validation for estimatedHours
+- composite index on projectId and status
 
 ### ActivityLog (`tailordb/activityLog.ts`)
 
 Export: `activityLog` (named)
 
-**Note**: This is an append-only audit log. Records are created but never updated. Define only `createdAt` as the sole timestamp field (do NOT use `db.fields.timestamps()`).
+**Note**: This is an append-only audit log. Records are created but never updated. Define only `createdAt` as the sole timestamp field (do NOT use `{{TIMESTAMPS_FN}}`).
 
 | Field     | Kind     | Options                                                                                           |
 | --------- | -------- | ------------------------------------------------------------------------------------------------- |

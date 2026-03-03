@@ -73,10 +73,25 @@ function buildPromptSections(
   filesToCreate: string[];
   mode: "implement" | "fix" | "hybrid";
 } {
-  const problemMdPath = variant
+  // Load problem.md: variant-specific file if exists, otherwise root with vars.json substitution
+  let problemMd: string;
+  const variantProblemPath = variant
     ? path.join(problemDir, "variants", variant, "problem.md")
-    : path.join(problemDir, "problem.md");
-  const problemMd = fs.readFileSync(problemMdPath, "utf-8");
+    : "";
+  if (variant && fs.existsSync(variantProblemPath)) {
+    problemMd = fs.readFileSync(variantProblemPath, "utf-8");
+  } else {
+    problemMd = fs.readFileSync(path.join(problemDir, "problem.md"), "utf-8");
+    if (variant) {
+      const varsPath = path.join(problemDir, "variants", variant, "vars.json");
+      if (fs.existsSync(varsPath)) {
+        const vars = JSON.parse(fs.readFileSync(varsPath, "utf-8")) as Record<string, string>;
+        for (const [key, value] of Object.entries(vars)) {
+          problemMd = problemMd.replaceAll(`{{${key}}}`, value);
+        }
+      }
+    }
+  }
   const existingFiles = listFilesRecursive(workDir);
   const scaffoldSet = new Set(meta.files.scaffold);
   const filesToFix = meta.files.implement.filter((f) => scaffoldSet.has(f));

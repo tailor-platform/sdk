@@ -1,0 +1,4 @@
+{
+  "API_INSTRUCTION": "**Important**: Use the `createType` and `timestampFields` APIs for all model definitions (NOT `db.type()`). Refer to the installed `@tailor-platform/sdk` package for API details.",
+  "TIMESTAMPS_FN": "timestampFields()"
+}
