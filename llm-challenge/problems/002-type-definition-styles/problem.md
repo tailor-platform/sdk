@@ -12,62 +12,55 @@ Build a project management system with 5 TailorDB models using the `@tailor-plat
 
 Export: `team` (named)
 
-| Field               | Kind   | Options                                                                                                                                                                  |
-| ------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| name                | string | required, unique                                                                                                                                                         |
-| code                | string | auto-generated serial code starting at 1, formatted as TEAM-001, TEAM-002, etc. (3-digit zero-padded)                                                                    |
-| description         | string | optional                                                                                                                                                                 |
-| maxMembers          | int    | optional, validate: must be positive (zero is not a valid member count), hook: create defaults to 10 (preserve explicitly set values including 0 and other falsy values) |
-| isActive            | bool   | optional, hook: create defaults to true (preserve explicitly set values including false)                                                                                 |
-| createdAt/updatedAt |        | use `...{{TIMESTAMPS_FN}}`                                                                                                                                               |
+| Field               | Kind   | Options                                                                        |
+| ------------------- | ------ | ------------------------------------------------------------------------------ |
+| name                | string | required, unique                                                               |
+| code                | string | serial: start 1, 3-digit zero-padded, prefix `TEAM-`                           |
+| description         | string | optional                                                                       |
+| maxMembers          | int    | optional, validate: must be positive, hook: create defaults to 10 when nullish |
+| isActive            | bool   | optional, hook: create defaults to true when nullish                           |
+| createdAt/updatedAt |        | use `...{{TIMESTAMPS_FN}}`                                                     |
 
 Type-level options:
 
 - description: any non-empty string
-- permission: logged-in users can create and read; only users with "ADMIN" role can update and delete
-- hooks for maxMembers and isActive
-- validation for maxMembers
+- permission: logged-in users can create/read; ADMIN role users can update/delete
 
 ### Member (`tailordb/member.ts`)
 
 Export: `member` (named)
 
-| Field               | Kind     | Options                                                                                                                                                         |
-| ------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| name                | string   | required                                                                                                                                                        |
-| email               | string   | unique, hooks: create and update both normalize the value to lowercase (return empty string for falsy input)                                                    |
-| role                | enum     | 4 values, each with a description: OWNER ("Team owner with full control"), ADMIN ("Administrator"), MEMBER ("Regular team member"), VIEWER ("Read-only access") |
-| teamId              | uuid     | relation: n-1 to Team                                                                                                                                           |
-| joinedAt            | datetime | optional, hook: create sets to current timestamp                                                                                                                |
-| skills              | string   | array, optional                                                                                                                                                 |
-| createdAt/updatedAt |          | use `...{{TIMESTAMPS_FN}}`                                                                                                                                      |
-
-Type-level options:
-
-- hooks for email (create and update) and joinedAt (create)
+| Field               | Kind     | Options                                                                                                                                                  |
+| ------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| name                | string   | required                                                                                                                                                 |
+| email               | string   | unique, hooks: create and update normalize to lowercase (falsy → empty string)                                                                           |
+| role                | enum     | 4 values with descriptions: OWNER ("Team owner with full control"), ADMIN ("Administrator"), MEMBER ("Regular team member"), VIEWER ("Read-only access") |
+| teamId              | uuid     | relation: n-1 to Team                                                                                                                                    |
+| joinedAt            | datetime | optional, hook: create sets to current timestamp                                                                                                         |
+| skills              | string   | array, optional                                                                                                                                          |
+| createdAt/updatedAt |          | use `...{{TIMESTAMPS_FN}}`                                                                                                                               |
 
 ### Project (`tailordb/project.ts`)
 
 Export: `project` (named)
 
-| Field               | Kind   | Options                                                                                               |
-| ------------------- | ------ | ----------------------------------------------------------------------------------------------------- |
-| name                | string | required                                                                                              |
-| code                | string | auto-generated serial code starting at 1, formatted as PRJ-0001, PRJ-0002, etc. (4-digit zero-padded) |
-| description         | string | optional                                                                                              |
-| status              | enum   | values: PLANNING, ACTIVE, ON_HOLD, COMPLETED, ARCHIVED                                                |
-| teamId              | uuid   | relation: n-1 to Team                                                                                 |
-| priority            | enum   | values: LOW, MEDIUM, HIGH, CRITICAL                                                                   |
-| budget              | float  | optional, validate: must be non-negative (zero is a valid budget)                                     |
-| startDate           | date   | required                                                                                              |
-| endDate             | date   | optional                                                                                              |
-| settings            | object | fields: isPublic (bool), allowExternalAccess (bool), defaultAssignee (string, optional)               |
-| tags                | string | array, optional                                                                                       |
-| createdAt/updatedAt |        | use `...{{TIMESTAMPS_FN}}`                                                                            |
+| Field               | Kind   | Options                                                                                 |
+| ------------------- | ------ | --------------------------------------------------------------------------------------- |
+| name                | string | required                                                                                |
+| code                | string | serial: start 1, 4-digit zero-padded, prefix `PRJ-`                                     |
+| description         | string | optional                                                                                |
+| status              | enum   | values: PLANNING, ACTIVE, ON_HOLD, COMPLETED, ARCHIVED                                  |
+| teamId              | uuid   | relation: n-1 to Team                                                                   |
+| priority            | enum   | values: LOW, MEDIUM, HIGH, CRITICAL                                                     |
+| budget              | float  | optional, validate: must be non-negative                                                |
+| startDate           | date   | required                                                                                |
+| endDate             | date   | optional                                                                                |
+| settings            | object | fields: isPublic (bool), allowExternalAccess (bool), defaultAssignee (string, optional) |
+| tags                | string | array, optional                                                                         |
+| createdAt/updatedAt |        | use `...{{TIMESTAMPS_FN}}`                                                              |
 
 Type-level options:
 
-- validation for budget
 - composite index on teamId and status
 - enable aggregation feature
 
@@ -75,31 +68,29 @@ Type-level options:
 
 Export: `task` (named)
 
-| Field               | Kind     | Options                                                                                                                                                                 |
-| ------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| title               | string   | required                                                                                                                                                                |
-| taskNumber          | int      | auto-generated serial number starting at 1 (no format string, just the integer)                                                                                         |
-| projectId           | uuid     | relation: n-1 to Project                                                                                                                                                |
-| assigneeId          | uuid     | optional, field-level index, relation: n-1 to Member                                                                                                                    |
-| status              | enum     | values: TODO, IN_PROGRESS, IN_REVIEW, DONE                                                                                                                              |
-| priority            | enum     | values: LOW, MEDIUM, HIGH, CRITICAL                                                                                                                                     |
-| estimatedHours      | float    | optional, validate: must be positive (zero is not a valid estimate)                                                                                                     |
-| parentTaskId        | uuid     | optional, self-referencing relation (n-1 to itself)                                                                                                                     |
-| dueDate             | date     | optional                                                                                                                                                                |
-| completedAt         | datetime | optional, hook: update automatically records completion timestamp when task status becomes "DONE"; for any other status, the existing value must be preserved unchanged |
-| createdAt/updatedAt |          | use `...{{TIMESTAMPS_FN}}`                                                                                                                                              |
+| Field               | Kind     | Options                                                                                   |
+| ------------------- | -------- | ----------------------------------------------------------------------------------------- |
+| title               | string   | required                                                                                  |
+| taskNumber          | int      | serial: start 1 (no format string)                                                        |
+| projectId           | uuid     | relation: n-1 to Project                                                                  |
+| assigneeId          | uuid     | optional, field-level index, relation: n-1 to Member                                      |
+| status              | enum     | values: TODO, IN_PROGRESS, IN_REVIEW, DONE                                                |
+| priority            | enum     | values: LOW, MEDIUM, HIGH, CRITICAL                                                       |
+| estimatedHours      | float    | optional, validate: must be positive                                                      |
+| parentTaskId        | uuid     | optional, self-referencing relation (n-1)                                                 |
+| dueDate             | date     | optional                                                                                  |
+| completedAt         | datetime | optional, hook: update sets to current timestamp when status is DONE, preserves otherwise |
+| createdAt/updatedAt |          | use `...{{TIMESTAMPS_FN}}`                                                                |
 
 Type-level options:
 
-- hooks for completedAt (update)
-- validation for estimatedHours
 - composite index on projectId and status
 
 ### ActivityLog (`tailordb/activityLog.ts`)
 
 Export: `activityLog` (named)
 
-**Note**: This is an append-only audit log. Records are created but never updated. Define only `createdAt` as the sole timestamp field (do NOT use `{{TIMESTAMPS_FN}}`).
+**Note**: Append-only log. Only `createdAt` (no `updatedAt`). Do NOT use `{{TIMESTAMPS_FN}}`.
 
 | Field     | Kind     | Options                                                                                           |
 | --------- | -------- | ------------------------------------------------------------------------------------------------- |
@@ -116,13 +107,13 @@ Export: `activityLog` (named)
 - **name**: "project-mgmt"
 - **CORS**: dashboard URL
 - **db**: tailordb files from `./tailordb/*.ts`
-- **staticWebsites**: 1 dashboard website named "dashboard" with description "Project management dashboard"
+- **staticWebsites**: 1 website named "dashboard", description "Project management dashboard"
 - **auth**:
-  - userProfile: uses member type, email as username field, role as attribute
-  - machineUsers: two machine users -- SYSTEM_WORKER with administrator privileges, ADMIN_SERVICE with owner-level privileges
+  - userProfile: member type, email as username field, role as attribute
+  - machineUsers: SYSTEM_WORKER (role: ADMIN), ADMIN_SERVICE (role: OWNER)
   - oauth2Clients: "dashboard-client" with redirect URI to dashboard callback path, grant types: authorization_code and refresh_token
-  - idProvider: configured with project-provider name and default-idp-client
+  - idProvider: provider name "project-provider", client "default-idp-client"
 - **idp** (named "project-idp"):
   - authorization: loggedIn, clients: default-idp-client
-  - password policy: min 8, max 128 characters, all character type requirements enabled (uppercase, lowercase, numeric, non-alphanumeric)
-- **generators** (named export): kysely-type generator (output to ./generated/tailordb.ts) and seed generator (output to ./seed, using ADMIN_SERVICE machine user)
+  - password policy: min 8, max 128, all character types required
+- **generators** (named export): kysely-type (output `./generated/tailordb.ts`) and seed (output `./seed`, machine user ADMIN_SERVICE)

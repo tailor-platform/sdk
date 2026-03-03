@@ -18,33 +18,33 @@ Export: `organization` (named)
 | domain              | string | required, unique                                                                                             |
 | plan                | enum   | values: `["FREE", "STARTER", "BUSINESS", "ENTERPRISE"]`                                                      |
 | billingAddress      | object | fields: street (string), city (string), state (string), postalCode (string), country (string) - all required |
-| orgCode             | string | serial: start at 1, format as ORG-0001, ORG-0002, etc. (4-digit zero-padded)                                 |
-| contactEmail        | string | required, unique, hook: create normalizes to lowercase (return empty string for falsy input)                 |
-| maxSeats            | int    | hook: create defaults to 5 when value is nullish                                                             |
+| orgCode             | string | serial: start 1, 4-digit zero-padded, prefix `ORG-`                                                          |
+| contactEmail        | string | required, unique, hook: create normalizes to lowercase (falsy → empty string)                                |
+| maxSeats            | int    | hook: create defaults to 5 when nullish                                                                      |
 | active              | bool   | required                                                                                                     |
-| tags                | string | array: true, optional                                                                                        |
+| tags                | string | array, optional                                                                                              |
 | createdAt/updatedAt |        | standard timestamp fields                                                                                    |
 
 Type-level options:
 
 - description: any non-empty string
-- permission: logged-in users can create and read; only ENTERPRISE plan users can update and delete
-- gqlPermission: ENTERPRISE plan has all permissions; logged-in users have read and create permissions
+- permission: logged-in users can create/read; ENTERPRISE plan users can update/delete
+- gqlPermission: ENTERPRISE has all; logged-in users have read/create
 
 ### Subscription (`tailordb/subscription.ts`)
 
 Export: `subscription` (named)
 
-| Field               | Kind  | Options                                                                                               |
-| ------------------- | ----- | ----------------------------------------------------------------------------------------------------- |
-| organizationId      | uuid  | relation: n-1 to Organization                                                                         |
-| plan                | enum  | values: `["FREE", "STARTER", "BUSINESS", "ENTERPRISE"]`                                               |
-| status              | enum  | values: `["TRIAL", "ACTIVE", "PAUSED", "CANCELLED"]`                                                  |
-| startDate           | date  | required                                                                                              |
-| endDate             | date  | optional, hook: update auto-sets to current date when status is CANCELLED (preserves value otherwise) |
-| monthlyRate         | float | validate: must be non-negative (message: "monthlyRate must be non-negative")                          |
-| autoRenew           | bool  | required                                                                                              |
-| createdAt/updatedAt |       | standard timestamp fields                                                                             |
+| Field               | Kind  | Options                                                                      |
+| ------------------- | ----- | ---------------------------------------------------------------------------- |
+| organizationId      | uuid  | relation: n-1 to Organization                                                |
+| plan                | enum  | values: `["FREE", "STARTER", "BUSINESS", "ENTERPRISE"]`                      |
+| status              | enum  | values: `["TRIAL", "ACTIVE", "PAUSED", "CANCELLED"]`                         |
+| startDate           | date  | required                                                                     |
+| endDate             | date  | optional, hook: update sets to current date when status is CANCELLED         |
+| monthlyRate         | float | validate: must be non-negative (message: "monthlyRate must be non-negative") |
+| autoRenew           | bool  | required                                                                     |
+| createdAt/updatedAt |       | standard timestamp fields                                                    |
 
 Type-level options:
 
@@ -55,17 +55,17 @@ Type-level options:
 
 Export: `invoice` (named)
 
-| Field               | Kind     | Options                                                                          |
-| ------------------- | -------- | -------------------------------------------------------------------------------- |
-| subscriptionId      | uuid     | relation: n-1 to Subscription                                                    |
-| invoiceNumber       | string   | serial: start at 1, format as INV-000001, INV-000002, etc. (6-digit zero-padded) |
-| amount              | float    | required                                                                         |
-| currency            | enum     | values: `["USD", "EUR", "JPY"]`                                                  |
-| issuedAt            | datetime | hook: create sets to current timestamp                                           |
-| dueDate             | date     | required                                                                         |
-| paid                | bool     | optional, hook: create defaults to false when value is nullish                   |
-| notes               | string   | optional                                                                         |
-| createdAt/updatedAt |          | standard timestamp fields                                                        |
+| Field               | Kind     | Options                                               |
+| ------------------- | -------- | ----------------------------------------------------- |
+| subscriptionId      | uuid     | relation: n-1 to Subscription                         |
+| invoiceNumber       | string   | serial: start 1, 6-digit zero-padded, prefix `INV-`   |
+| amount              | float    | required                                              |
+| currency            | enum     | values: `["USD", "EUR", "JPY"]`                       |
+| issuedAt            | datetime | hook: create sets to current timestamp                |
+| dueDate             | date     | required                                              |
+| paid                | bool     | optional, hook: create defaults to false when nullish |
+| notes               | string   | optional                                              |
+| createdAt/updatedAt |          | standard timestamp fields                             |
 
 ### UsageRecord (`tailordb/usageRecord.ts`)
 
@@ -84,7 +84,7 @@ Export: `usageRecord` (named)
 
 Export: `auditEvent` (named)
 
-**Note**: This model only has `createdAt` (no `updatedAt`). Do NOT use standard timestamp fields - define `createdAt` manually as a datetime field with a create hook setting it to the current timestamp.
+**Note**: Only `createdAt` (no `updatedAt`). Define `createdAt` manually as datetime with create hook.
 
 | Field          | Kind     | Options                                                                                 |
 | -------------- | -------- | --------------------------------------------------------------------------------------- |
@@ -94,7 +94,7 @@ Export: `auditEvent` (named)
 | target         | string   | optional                                                                                |
 | metadata       | object   | fields: ip (string, required), userAgent (string, optional), requestId (uuid, required) |
 | occurredAt     | datetime | hook: create sets to current timestamp                                                  |
-| tags           | string   | array: true, optional                                                                   |
+| tags           | string   | array, optional                                                                         |
 | createdAt      | datetime | hook: create sets to current timestamp                                                  |
 
 ---
@@ -108,20 +108,19 @@ Default export a resolver created with `createResolver`.
 - **name**: `"upgradeSubscription"`
 - **operation**: `"mutation"`
 - **input**: `subscriptionId` (uuid), `targetPlan` (enum: FREE/STARTER/BUSINESS/ENTERPRISE), `effectiveDate` (date)
-- **output** (as `t.object`): `success` (bool), `previousPlan` (string, optional), `newPlan` (string, optional), `proratedAmount` (float, optional), `effectiveDate` (date, optional), `error` (string, optional)
+- **output**: `success` (bool), `previousPlan` (string, optional), `newPlan` (string, optional), `proratedAmount` (float, optional), `effectiveDate` (date, optional), `error` (string, optional)
 
-**Business logic** (in body, uses `getDB`):
+**Business logic**:
 
-1. Query the subscription by ID using `getDB("tailordb")` from `"../generated/tailordb"`.
-2. If no subscription found, return `{ success: false, error: "Subscription not found" }`
-3. If subscription status is not `"ACTIVE"`, return `{ success: false, error: "Subscription is not active" }`
-4. Enforce strict plan hierarchy: FREE < STARTER < BUSINESS < ENTERPRISE. If targetPlan is not strictly higher than the current plan, return `{ success: false, error: "Can only upgrade to a higher plan" }`
-5. Look up the new monthly rate: FREE=0, STARTER=29.99, BUSINESS=99.99, ENTERPRISE=299.99
-6. Return `{ success: true, previousPlan: current plan, newPlan: targetPlan, proratedAmount: new rate, effectiveDate: input.effectiveDate }`
+- Query subscription by ID. Not found → `{ success: false, error: "Subscription not found" }`
+- Status not ACTIVE → `{ success: false, error: "Subscription is not active" }`
+- Plan hierarchy: FREE < STARTER < BUSINESS < ENTERPRISE. Not upgrading → `{ success: false, error: "Can only upgrade to a higher plan" }`
+- Rates: FREE=0, STARTER=29.99, BUSINESS=99.99, ENTERPRISE=299.99
+- Success → `{ success: true, previousPlan, newPlan: targetPlan, proratedAmount: newRate, effectiveDate }`
 
 ### usageSummary (`resolvers/usageSummary.ts`)
 
-**This resolver is NOT part of the challenge** - it is provided for context only. Do NOT create this file.
+**NOT part of the challenge** - do NOT create this file.
 
 ---
 
@@ -129,50 +128,41 @@ Default export a resolver created with `createResolver`.
 
 ### invoiceCreated (`executors/invoiceCreated.ts`)
 
-Default export an executor created with `createExecutor`.
+Default export with `createExecutor`.
 
 - **name**: `"invoice-created"`
-- **description**: any non-empty string
-- **trigger**: `recordCreatedTrigger` on `invoice` type
-  - condition: fires only when the new record's amount is strictly greater than 0
+- **trigger**: `recordCreatedTrigger` on `invoice`, condition: amount > 0
 - **operation**: webhook
-  - url: `() => "https://billing.example.com/webhooks/invoice"`
+  - url: `"https://billing.example.com/webhooks/invoice"`
   - headers: `{ "Content-Type": "application/json", Authorization: { vault: "billing-service", key: "BILLING_API_KEY" } }`
 
 ### subscriptionPlanChanged (`executors/subscriptionPlanChanged.ts`)
 
-Default export an executor created with `createExecutor`.
+Default export with `createExecutor`.
 
 - **name**: `"subscription-plan-changed"`
-- **description**: any non-empty string
-- **trigger**: `recordUpdatedTrigger` on `subscription` type
-  - condition: fires only when the plan field value has changed
+- **trigger**: `recordUpdatedTrigger` on `subscription`, condition: plan field changed
 - **operation**: graphql
-  - query: any non-empty string containing `"mutation"`
-  - variables: a function that receives the new record and returns `{ input: { subscriptionId: newRecord.id, newPlan: newRecord.plan } }`
+  - query: any string containing `"mutation"`
+  - variables: maps newRecord to `{ input: { subscriptionId: newRecord.id, newPlan: newRecord.plan } }`
 
 ### upgradeAuditLog (`executors/upgradeAuditLog.ts`)
 
-Default export an executor created with `createExecutor`.
+Default export with `createExecutor`.
 
 - **name**: `"upgrade-audit-log"`
-- **description**: any non-empty string describing audit logging for subscription upgrades
-- **trigger**: `resolverExecutedTrigger` on the `upgradeSubscription` resolver (import it)
-  - condition: fires only when the resolver execution was successful
-- **operation**: graphql
-  - query: a mutation that creates an AuditEvent record
-  - variables: a function that maps resolver args to audit event input (action, actor from user, target from result)
+- **trigger**: `resolverExecutedTrigger` on `upgradeSubscription` resolver (import it), condition: successful
+- **operation**: graphql mutation to create AuditEvent
 
 ### monthlyBillingCycle (`executors/monthlyBillingCycle.ts`)
 
-Default export an executor created with `createExecutor`.
+Default export with `createExecutor`.
 
 - **name**: `"monthly-billing-cycle"`
-- **description**: any non-empty string
-- **trigger**: `scheduleTrigger` with cron `"0 0 1 * *"` and timezone `"UTC"`
+- **trigger**: `scheduleTrigger`, cron `"0 0 1 * *"`, timezone `"UTC"`
 - **operation**: workflow
-  - workflow: import the default export from `"../workflows/billingCycle"`
-  - args: a function returning a valid ProcessBillingInput (the main job's input type)
+  - workflow: import from `"../workflows/billingCycle"`
+  - args: returns valid ProcessBillingInput
   - authInvoker: `{ namespace: "saas-auth", machineUserName: "BILLING_WORKER" }`
 
 ---
@@ -181,59 +171,48 @@ Default export an executor created with `createExecutor`.
 
 ### billingCycle (`workflows/billingCycle.ts`)
 
-Create a workflow with 3 jobs all in a single file. Use `createWorkflow` and `createWorkflowJob`.
+3 jobs in a single file using `createWorkflow` and `createWorkflowJob`.
 
-**collectUsage** job:
+**collectUsage** (`"collect-usage"`):
 
-- name: `"collect-usage"`
-- body: takes `{ organizationId: string, billingPeriod: { start: string, end: string } }`
-- returns: `{ usageItems: Array<{ metric: string, totalQuantity: number }>, totalItems: number }`
-- Logic: return mock usage data with at least 2 usage items and a totalItems count
+- Input: `{ organizationId: string, billingPeriod: { start: string, end: string } }`
+- Output: `{ usageItems: Array<{ metric: string, totalQuantity: number }>, totalItems: number }`
+- Returns mock data with 2+ usage items
 
-**calculateCharges** job:
+**calculateCharges** (`"calculate-charges"`):
 
-- name: `"calculate-charges"`
-- body: takes `{ usageItems: Array<{ metric: string, totalQuantity: number }>, plan: string, monthlyRate: number }`
-- returns: `{ baseCharge: number, overageCharge: number, totalCharge: number }`
-- Logic:
-  - baseCharge = monthlyRate
-  - Overage thresholds per plan: FREE=100, STARTER=1000, BUSINESS=10000. ENTERPRISE plans have no usage limits
-  - overageCharge = sum of each usage item: if totalQuantity > threshold, charge (totalQuantity - threshold) \* 0.01; else 0
-  - totalCharge = baseCharge + overageCharge
+- Input: `{ usageItems: Array<{ metric: string, totalQuantity: number }>, plan: string, monthlyRate: number }`
+- Output: `{ baseCharge: number, overageCharge: number, totalCharge: number }`
+- baseCharge = monthlyRate
+- Overage thresholds: FREE=100, STARTER=1000, BUSINESS=10000, ENTERPRISE=unlimited
+- overageCharge = sum of max(0, totalQuantity - threshold) \* 0.01
+- totalCharge = baseCharge + overageCharge
 
-**processBilling** job (main job):
+**processBilling** (`"process-billing"`, main job):
 
-- name: `"process-billing"`
-- body: async, takes `{ organizationId: string, plan: string, monthlyRate: number, billingPeriod: { start: string, end: string } }`
-- Orchestrates: `await collectUsage.trigger(...)` then `await calculateCharges.trigger(...)`
-- returns: `{ success: true, organizationId, totalCharge, usageSummary: { items: usageResult.usageItems, totalItems: usageResult.totalItems }, billingPeriod }`
+- Input: `{ organizationId: string, plan: string, monthlyRate: number, billingPeriod: { start: string, end: string } }`
+- Orchestrates: collectUsage → calculateCharges
+- Returns `{ success: true, organizationId, totalCharge, usageSummary: { items, totalItems }, billingPeriod }`
 
-**Workflow**:
-
-- `createWorkflow({ name: "billing-cycle", mainJob: processBilling })`
-- Default export: the workflow
-- Named exports: `collectUsage`, `calculateCharges`, `processBilling`
+**Exports**: default = workflow (`"billing-cycle"`), named = all 3 jobs
 
 ---
 
 ## 5. Config (`tailor.config.ts`)
 
-Replace the scaffold with a full configuration.
-
 - **name**: `"saas-platform"`
-- **CORS**: `[dashboard.url]` (using the static website reference)
+- **CORS**: `[dashboard.url]`
 - **db.tailordb**: `{ files: ["./tailordb/*.ts"] }`
 - **resolver**: `{ "saas-resolver": { files: ["./resolvers/*.ts"] } }`
 - **executor**: `{ files: ["./executors/*.ts"] }`
 - **workflow**: `{ files: ["./workflows/**/*.ts"] }`
-- **auth** (via `defineAuth`):
-  - userProfile: type = any tailordb model (e.g., organization), usernameField = `"contactEmail"`, attributes: `{ plan: true }`
-  - machineUsers: `BILLING_WORKER` (attributes: `{ plan: "STARTER" }`), `ADMIN_SERVICE` (attributes: `{ plan: "ENTERPRISE" }`), `ANALYTICS` (attributes: `{ plan: "FREE" }`)
-  - oauth2Clients: `"dashboard-client"` with redirectURIs using dashboard.url (2 URIs: callback and auth/callback paths), and `"api-client"` with redirectURIs `["https://api.example.com/callback"]`
-  - idProvider: use idp.provider(...)
-- **idp** (via `defineIdp`):
-  - userAuthPolicy: require uppercase, lowercase, numeric, non-alphanumeric; min length 10, max 256
+- **auth**:
+  - userProfile: type = any tailordb model, usernameField = `"contactEmail"`, attributes: `{ plan: true }`
+  - machineUsers: `BILLING_WORKER` (plan: STARTER), `ADMIN_SERVICE` (plan: ENTERPRISE), `ANALYTICS` (plan: FREE)
+  - oauth2Clients: `"dashboard-client"` with 2 redirect URIs using dashboard.url (callback paths), `"api-client"` with `["https://api.example.com/callback"]`
+  - idProvider: `idp.provider(...)`
+- **idp**: password policy: uppercase, lowercase, numeric, non-alphanumeric required; min 10, max 256
 - **staticWebsites**: 1 website named `"dashboard"`
 - **idp array**: `[idp]`
 
-**Generators** (named export): Use `defineGenerators` with `@tailor-platform/kysely-type` (output to `./generated/tailordb.ts`) and `@tailor-platform/seed` (output to `./seed`, machine user `"ADMIN_SERVICE"`).
+**Generators** (named export): `defineGenerators` with `@tailor-platform/kysely-type` (output `./generated/tailordb.ts`) and `@tailor-platform/seed` (output `./seed`, machine user `"ADMIN_SERVICE"`).
