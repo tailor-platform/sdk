@@ -2,7 +2,7 @@
 
 Build a complete subscription management platform using the `@tailor-platform/sdk`.
 
-**Important**: Use the `db.type()` fluent API and `db.fields.timestamps()` for all model definitions (NOT `createType`). Refer to the installed `@tailor-platform/sdk` package for API details.
+Refer to the installed `@tailor-platform/sdk` package for API details.
 
 ---
 
@@ -23,7 +23,7 @@ Export: `organization` (named)
 | maxSeats            | int    | hook: create defaults to 5 when value is nullish                                                             |
 | active              | bool   | required                                                                                                     |
 | tags                | string | array: true, optional                                                                                        |
-| createdAt/updatedAt |        | use `...db.fields.timestamps()`                                                                              |
+| createdAt/updatedAt |        | standard timestamp fields                                                                                    |
 
 Type-level options:
 
@@ -44,7 +44,7 @@ Export: `subscription` (named)
 | endDate             | date  | optional, hook: update auto-sets to current date when status is CANCELLED (preserves value otherwise) |
 | monthlyRate         | float | validate: must be non-negative (message: "monthlyRate must be non-negative")                          |
 | autoRenew           | bool  | required                                                                                              |
-| createdAt/updatedAt |       | use `...db.fields.timestamps()`                                                                       |
+| createdAt/updatedAt |       | standard timestamp fields                                                                             |
 
 Type-level options:
 
@@ -65,7 +65,7 @@ Export: `invoice` (named)
 | dueDate             | date     | required                                                                         |
 | paid                | bool     | optional, hook: create defaults to false when value is nullish                   |
 | notes               | string   | optional                                                                         |
-| createdAt/updatedAt |          | use `...db.fields.timestamps()`                                                  |
+| createdAt/updatedAt |          | standard timestamp fields                                                        |
 
 ### UsageRecord (`tailordb/usageRecord.ts`)
 
@@ -78,13 +78,13 @@ Export: `usageRecord` (named)
 | quantity            | float    | validate: must be strictly positive (message: "quantity must be positive") |
 | recordedAt          | datetime | hook: create sets to current timestamp                                     |
 | description         | string   | optional                                                                   |
-| createdAt/updatedAt |          | use `...db.fields.timestamps()`                                            |
+| createdAt/updatedAt |          | standard timestamp fields                                                  |
 
 ### AuditEvent (`tailordb/auditEvent.ts`)
 
 Export: `auditEvent` (named)
 
-**Note**: This model only has `createdAt` (no `updatedAt`). Do NOT use `db.fields.timestamps()` - define `createdAt` manually as a datetime field with a create hook setting it to the current timestamp.
+**Note**: This model only has `createdAt` (no `updatedAt`). Do NOT use standard timestamp fields - define `createdAt` manually as a datetime field with a create hook setting it to the current timestamp.
 
 | Field          | Kind     | Options                                                                                 |
 | -------------- | -------- | --------------------------------------------------------------------------------------- |
