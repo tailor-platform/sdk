@@ -24,6 +24,5 @@
       "tailor.config.ts"
     ],
     "scaffold": ["tailor.config.ts"]
-  },
-  "variants": ["createType", "fluent"]
+  }
 }
