@@ -429,19 +429,20 @@ function convertLang(lang: IdPLangInput | undefined): IdPLang {
   }
 }
 
+// Converts gqlOperations (enabled semantics, default true) to
+// disableGqlOperations (disabled semantics) for the Platform API.
+// Undefined fields are treated as true (enabled), matching TailorDB behavior.
 function convertGqlOperationsToDisable(
   gqlOperations: IdP["gqlOperations"],
-): IdP["gqlOperations"] | undefined {
+): Record<string, boolean> | undefined {
   if (!gqlOperations) {
     return undefined;
   }
-  const result: Record<string, boolean> = {};
-  let hasValue = false;
-  for (const [key, value] of Object.entries(gqlOperations)) {
-    if (value !== undefined) {
-      result[key] = !value;
-      hasValue = true;
-    }
-  }
-  return hasValue ? result : undefined;
+  return {
+    create: gqlOperations.create === false,
+    update: gqlOperations.update === false,
+    delete: gqlOperations.delete === false,
+    read: gqlOperations.read === false,
+    sendPasswordResetEmail: gqlOperations.sendPasswordResetEmail === false,
+  };
 }
