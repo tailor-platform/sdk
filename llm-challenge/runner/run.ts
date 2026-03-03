@@ -590,6 +590,22 @@ async function runProblem(
       }
       infraRetries = 0;
 
+      // Restore scaffold files before re-verification
+      for (const [f, original] of scaffoldSnapshot) {
+        const fp = path.join(workDir, f);
+        if (!fs.existsSync(fp)) {
+          fs.writeFileSync(fp, original);
+        } else {
+          const current = fs.readFileSync(fp, "utf-8");
+          if (current !== original) {
+            if (options.verbose) {
+              console.log(`  Restored scaffold file modified during retry: ${f}`);
+            }
+            fs.writeFileSync(fp, original);
+          }
+        }
+      }
+
       // Re-verify using symlink path
       rawStages = await verifyProblem(verifyWorkDir, meta, challengeRoot);
       stages = calculateScore(meta, rawStages);

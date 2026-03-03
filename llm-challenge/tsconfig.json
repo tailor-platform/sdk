@@ -10,7 +10,10 @@
     "node_modules",
     "dist",
     "problems/*/work",
+    "problems/*/work-*",
     "problems/*/solution",
-    "problems/*/scaffold"
+    "problems/*/scaffold",
+    "problems/*/variants/*/solution",
+    "problems/*/variants/*/scaffold"
   ]
 }
