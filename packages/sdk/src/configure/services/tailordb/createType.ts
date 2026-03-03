@@ -43,6 +43,10 @@ type KindToTsType = {
     : K]: TailorToTs[KindToFieldType[K]];
 };
 
+// Accepted trade-off: hooks/validate are typed to the base kind type (e.g. string)
+// before optional/array modifiers are applied. This means optional fields' hooks
+// won't include null in the type. Fixing requires threading modifiers through
+// descriptor types, which is a significant refactoring left for a follow-up.
 type IndexableOptions<O = unknown> = {
   unique?: boolean;
   index?: boolean;

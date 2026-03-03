@@ -673,6 +673,7 @@ type PartialResultsFile = {
   model?: string;
   solve: boolean;
   implSource?: string;
+  variant?: string;
   results: ProblemResult[];
 };
 
@@ -681,6 +682,7 @@ function loadPartialResults(
   expectedModel?: string,
   expectedSolve?: boolean,
   expectedImplSource?: string,
+  expectedVariant?: string,
 ): ProblemResult[] {
   const partialPath = getPartialResultsPath(resultsDir);
   if (!fs.existsSync(partialPath)) {
@@ -713,6 +715,12 @@ function loadPartialResults(
       console.log(`Partial results implementation source mismatch, starting fresh.`);
       return [];
     }
+    if (expectedVariant !== raw.variant) {
+      console.log(
+        `Partial results variant mismatch (${raw.variant ?? "default"} vs ${expectedVariant ?? "default"}), starting fresh.`,
+      );
+      return [];
+    }
     return raw.results;
   } catch {
     return [];
@@ -725,9 +733,10 @@ function savePartialResults(
   model?: string,
   solve?: boolean,
   implSource?: string,
+  variant?: string,
 ): void {
   fs.mkdirSync(resultsDir, { recursive: true });
-  const data: PartialResultsFile = { model, solve: solve ?? false, implSource, results };
+  const data: PartialResultsFile = { model, solve: solve ?? false, implSource, variant, results };
   fs.writeFileSync(getPartialResultsPath(resultsDir), JSON.stringify(data, null, 2));
 }
 
@@ -1011,7 +1020,13 @@ async function main(): Promise<void> {
   let completedIds = new Set<string>();
   const problemSet = new Set(problems);
   if (resume) {
-    const partialResults = loadPartialResults(resultsDir, solveModelLabel, !!solve, implSource);
+    const partialResults = loadPartialResults(
+      resultsDir,
+      solveModelLabel,
+      !!solve,
+      implSource,
+      variant,
+    );
     // Filter to only include results for problems in the current target set
     const relevantResults = partialResults.filter((r) =>
       problemSet.has(problemKey(r.problemId, r.problemName)),
@@ -1093,7 +1108,7 @@ async function main(): Promise<void> {
 
           // Save partial results after each problem
           if (all) {
-            savePartialResults(resultsDir, results, solveModelLabel, !!solve, implSource);
+            savePartialResults(resultsDir, results, solveModelLabel, !!solve, implSource, variant);
           }
         } catch (err) {
           const errorMsg = err instanceof Error ? err.message : String(err);
