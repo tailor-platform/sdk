@@ -18,7 +18,7 @@ SDK improvement proposals based on benchmark results are tracked in [`.claude/IM
 | ID  | Name                       | Category         | Difficulty | Scoring (G/T/Te) | Total |
 | --- | -------------------------- | ---------------- | ---------- | ---------------- | ----- |
 | 001 | saas-subscription-platform | integration      | hard       | 30 / 30 / 240    | 300   |
-| 002 | project-management         | model-definition | medium     | 20 / 20 / 216    | 256   |
+| 002 | type-definition-styles     | model-definition | medium     | 20 / 20 / 216    | 256   |
 
 **Scoring column**: Generate / Typecheck / Tests
 

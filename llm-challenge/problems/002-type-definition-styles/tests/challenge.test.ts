@@ -24,7 +24,7 @@ function extractValidateFn(validate: any): (input: any) => boolean {
   throw new Error("Could not extract validate function");
 }
 
-describe.skipIf(!workDirReady)("002-project-management", () => {
+describe.skipIf(!workDirReady)("002-type-definition-styles", () => {
   // ===========================================================================
   // MODELS
   // ===========================================================================
