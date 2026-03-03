@@ -339,7 +339,7 @@ export function resolveNeededBindings(
   sourceBindings: Map<string, SourceBinding>,
 ): { imports: string[]; declarations: string[]; unresolved: string[] } {
   const neededImports = new Set<string>();
-  const neededDeclarations: string[] = [];
+  const neededDeclarations = new Set<string>();
   const unresolved: string[] = [];
   const resolved = new Set<string>();
 
@@ -367,7 +367,7 @@ export function resolveNeededBindings(
           }
         }
         resolveVars(referencedVars);
-        neededDeclarations.push(binding.sourceText);
+        neededDeclarations.add(binding.sourceText);
       }
     }
   };
@@ -376,7 +376,7 @@ export function resolveNeededBindings(
 
   return {
     imports: [...neededImports],
-    declarations: neededDeclarations,
+    declarations: [...neededDeclarations],
     unresolved,
   };
 }
