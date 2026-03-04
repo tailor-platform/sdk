@@ -48,6 +48,20 @@ describe("query-bundler", () => {
       expect(bundledCode).toContain("response.ok");
     });
 
+    it("keeps SQL and GraphQL runtime concerns separated", async () => {
+      const sqlBundle = await bundleQueryScript("sql");
+      const gqlBundle = await bundleQueryScript("gql");
+
+      expect(sqlBundle).toContain("tailordb.Client");
+      expect(sqlBundle).toContain("TailordbDialect");
+      expect(sqlBundle).toContain("sql.raw(input.query).execute");
+      expect(sqlBundle).not.toContain("fetch(input.endpoint");
+
+      expect(gqlBundle).toContain("fetch(input.endpoint");
+      expect(gqlBundle).not.toContain("TailordbDialect");
+      expect(gqlBundle).not.toContain("tailordb.Client");
+    });
+
     it("writes bundled files to query output directory", async () => {
       const outputDir = path.join(process.env.TAILOR_SDK_OUTPUT_DIR!, "query");
 
@@ -58,6 +72,14 @@ describe("query-bundler", () => {
       expect(fs.existsSync(path.join(outputDir, "query_sql.js"))).toBe(true);
       expect(fs.existsSync(path.join(outputDir, "query_gql.entry.ts"))).toBe(true);
       expect(fs.existsSync(path.join(outputDir, "query_gql.js"))).toBe(true);
+
+      const sqlEntry = fs.readFileSync(path.join(outputDir, "query_sql.entry.ts"), "utf-8");
+      const gqlEntry = fs.readFileSync(path.join(outputDir, "query_gql.entry.ts"), "utf-8");
+
+      expect(sqlEntry).toContain("sql.raw(input.query).execute");
+      expect(sqlEntry).toContain("new tailordb.Client");
+      expect(gqlEntry).toContain("fetch(input.endpoint");
+      expect(gqlEntry).toContain("GraphQL request failed");
     });
   });
 });
