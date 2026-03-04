@@ -24,14 +24,14 @@ describe("getGeneratedType", () => {
   });
 
   describe("namespace plugin", () => {
-    it("processNamespace is called only once per namespace during resolution", async () => {
+    it("onNamespaceLoaded is called only once per namespace during resolution", async () => {
       fs.writeFileSync(
         configPath,
         `export const plugins = [{
   id: "ns-plugin",
   description: "test",
   importPath: "@test/ns-plugin",
-  processNamespace({ pluginConfig, namespace }) {
+  onNamespaceLoaded({ pluginConfig, namespace }) {
     globalThis.__testProcessNamespaceCalls.push(namespace);
     return {
       types: {
@@ -52,7 +52,7 @@ export default {
 
       await getGeneratedType(configPath, "ns-plugin", null, "auditLog");
 
-      // processNamespace for "main" should be called exactly once.
+      // onNamespaceLoaded for "main" should be called exactly once.
       // Bug: currently called twice - once in resolveNamespaceForNamespacePlugin (result discarded),
       // and once again in getGeneratedTypeForNamespacePlugin.
       expect(globalThis.__testProcessNamespaceCalls).toEqual(["main"]);

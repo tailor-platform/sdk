@@ -1,4 +1,4 @@
-import { CLIError } from "../utils/errors";
+import { CLIError } from "../shared/errors";
 import type { QueryEngine } from ".";
 
 function toErrorMessage(error: unknown): string {

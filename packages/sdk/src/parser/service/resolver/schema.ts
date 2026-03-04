@@ -7,6 +7,7 @@ const TailorFieldTypeSchema = z.enum([
   "boolean",
   "integer",
   "float",
+  "decimal",
   "enum",
   "date",
   "datetime",
@@ -50,4 +51,5 @@ export const ResolverSchema = z.object({
   input: z.record(z.string(), TailorFieldSchema).optional(),
   body: functionSchema,
   output: TailorFieldSchema,
+  publishEvents: z.boolean().optional(),
 });

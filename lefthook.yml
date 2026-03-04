@@ -31,12 +31,11 @@ pre-commit:
         - "example/generated/**"
         - "example/seed/**"
         - "packages/tailor-proto/**"
-        - "packages/create-sdk/templates/**"
       run: pnpm oxfmt --check {staged_files}
 
     3-lint:
       glob: "*.{ts,js}"
-      run: pnpm exec turbo run lint --filter=@tailor-platform/sdk --filter=example
+      run: pnpm exec turbo run lint --filter=@tailor-platform/sdk --filter=example --filter='./packages/create-sdk/templates/*'
 
     4-typecheck:
       glob: "*.{ts,js}"
@@ -45,3 +44,8 @@ pre-commit:
     5-knip:
       glob: "*.{ts,js}"
       run: pnpm run knip
+
+post-commit:
+  commands:
+    verify-signature:
+      run: 'git cat-file -p HEAD | grep -q "gpgsig" || { echo "ERROR: Commit is not signed!" >&2; exit 1; }'

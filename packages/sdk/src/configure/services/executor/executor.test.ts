@@ -12,6 +12,7 @@ import {
 } from "./trigger/event";
 import { scheduleTrigger } from "./trigger/schedule";
 import { incomingWebhookTrigger } from "./trigger/webhook";
+import type { Operation } from "./operation";
 
 describe("createExecutor", () => {
   test("can disable executor", () => {
@@ -62,6 +63,29 @@ describe("createExecutor", () => {
     });
     expect(enabledWithoutDescription.description).toBeUndefined();
     expect(enabledWithoutDescription.disabled).toBeUndefined();
+  });
+
+  test("preserves compatibility for explicit legacy generic args", () => {
+    type Args = {
+      body: { id: string };
+      headers: { "x-custom-header": string };
+      method: "POST" | "GET" | "PUT" | "DELETE";
+      rawBody: string;
+    };
+
+    createExecutor<Args, Operation<Args>>({
+      name: "legacy-generic-executor",
+      trigger: incomingWebhookTrigger<{
+        body: { id: string };
+        headers: { "x-custom-header": string };
+      }>(),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          expectTypeOf(args).toEqualTypeOf<Args>();
+        },
+      },
+    });
   });
 });
 

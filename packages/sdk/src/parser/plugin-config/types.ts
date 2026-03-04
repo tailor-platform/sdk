@@ -1,5 +1,10 @@
-import type { TailorAnyDBType } from "@/configure/services/tailordb";
-import type { TailorAnyField } from "@/configure/types";
+import type {
+  TailorDBReadyContext,
+  ResolverReadyContext,
+  ExecutorReadyContext,
+  GeneratorResult,
+} from "./generation-types";
+import type { TailorAnyDBField, TailorAnyDBType } from "@/configure/services/tailordb";
 
 export type TypeConfigRequired<PluginConfig = unknown> =
   | boolean
@@ -53,7 +58,7 @@ export interface PluginProcessContext<TypeConfig = unknown, PluginConfig = unkno
 }
 
 /**
- * Context passed to plugin's processNamespace method.
+ * Context passed to plugin's onNamespaceLoaded hook.
  * Used for plugins that operate on a namespace without requiring a source type.
  */
 export interface PluginNamespaceProcessContext<PluginConfig = unknown> {
@@ -316,11 +321,12 @@ export interface PluginExtends {
    * These fields will be merged into the original type's fields.
    * Existing fields (from original definition or earlier plugins) take precedence.
    */
-  fields?: Record<string, unknown>;
+  fields?: Record<string, TailorAnyDBField>;
 }
 
 /**
- * Output returned by a plugin's process method
+ * Base output returned by a plugin's definition-time hooks.
+ * Used by both onTypeLoaded and onNamespaceLoaded.
  */
 export interface PluginOutput {
   /**
@@ -333,20 +339,32 @@ export interface PluginOutput {
   resolvers?: PluginGeneratedResolver[];
   /** Additional executors to generate */
   executors?: PluginGeneratedExecutor[];
+}
+
+/**
+ * Output returned by a plugin's onTypeLoaded hook.
+ * Extends PluginOutput with the ability to add fields to the source type.
+ */
+export interface TypePluginOutput extends PluginOutput {
   /** Extensions to apply to the source type */
   extends?: PluginExtends;
 }
 
 /**
- * Output returned by a plugin's processNamespace method.
- * Namespace plugins cannot extend a source type.
+ * Output returned by a plugin's onNamespaceLoaded hook.
+ * Alias for PluginOutput (namespace plugins cannot extend a source type).
  */
-export type NamespacePluginOutput = Omit<PluginOutput, "extends"> & { extends?: never };
+export type NamespacePluginOutput = PluginOutput;
 
 /**
- * Base plugin interface that all plugins must implement
+ * Plugin interface that all plugins must implement.
+ * Plugins can hook into two lifecycle phases:
+ * - **Definition-time hooks** (`onTypeLoaded`, `onNamespaceLoaded`): Generate TailorDB types, resolvers, and executors
+ * - **Generation-time hooks** (`onTailorDBReady`, `onResolverReady`, `onExecutorReady`): Process finalized artifacts and produce output files
+ * @template TypeConfig - Type for per-type configuration passed via .plugin() method
+ * @template PluginConfig - Type for plugin-level configuration passed via definePlugins()
  */
-interface PluginCommon<PluginConfig = unknown> {
+export interface Plugin<TypeConfig = unknown, PluginConfig = unknown> {
   /** Unique identifier for the plugin */
   readonly id: string;
   /** Human-readable description of the plugin */
@@ -355,21 +373,10 @@ interface PluginCommon<PluginConfig = unknown> {
    * Import path for this plugin's public API.
    * Used by code generators to create correct import statements
    * (e.g., plugin executors and seed schema generation).
+   * Required when plugin has definition-time hooks (onTypeLoaded/onNamespaceLoaded).
+   * Optional for generation-only plugins.
    */
-  readonly importPath: string;
-  /**
-   * Schema defining the expected plugin-level configuration.
-   * Used to validate the `pluginConfig` property on the plugin object.
-   * If not provided, pluginConfig validation is skipped.
-   * @example
-   * ```typescript
-   * pluginConfigSchema: t.object({
-   *   archiveTablePrefix: t.string({ optional: true }),
-   *   defaultRetentionDays: t.int({ optional: true }),
-   * })
-   * ```
-   */
-  readonly pluginConfigSchema?: TailorAnyField;
+  readonly importPath?: string;
 
   /**
    * Controls whether per-type plugin config is required when attaching via .plugin().
@@ -381,67 +388,66 @@ interface PluginCommon<PluginConfig = unknown> {
   /**
    * Plugin-level configuration passed via definePlugins().
    * This config is stored when the plugin is registered and made available
-   * to both processType() and processNamespace() methods.
+   * to all hook methods.
    */
   readonly pluginConfig?: PluginConfig;
 
-  /**
-   * TypeScript type template for generating type-safe plugin configuration.
-   * Use `Fields` to reference the field names of the type being configured.
-   * If not provided, the type is generated from configSchema.
-   * @example
-   * ```typescript
-   * // For field-aware configs:
-   * configTypeTemplate: "{ labels: Partial<Record<Fields, FieldLabel>>; typeLabel?: FieldLabel }"
-   * ```
-   */
-  readonly configTypeTemplate?: string;
+  // =========================================================================
+  // Definition-time hooks (produce TailorDB types, resolvers, executors)
+  // =========================================================================
 
   /**
    * Process a single TailorDB type and generate outputs.
-   * This method is called for each type that has this plugin attached via .plugin().
+   * Called for each type that has this plugin attached via .plugin().
    * @param context - Context containing the type, config, pluginConfig, and namespace
    * @returns Plugin output with generated types, resolvers, and executors
    */
-  processType?(context: PluginProcessContext): PluginOutput | Promise<PluginOutput>;
+  onTypeLoaded?(
+    context: PluginProcessContext<TypeConfig, PluginConfig>,
+  ): TypePluginOutput | Promise<TypePluginOutput>;
 
   /**
    * Process plugin for a namespace without requiring a source type.
-   * This method is called once per namespace for plugins configured via definePlugins().
+   * Called once per namespace for plugins configured via definePlugins().
    * Use this for plugins that generate types independently of user-defined types.
-   * @param context - Context containing the plugin config, namespace, and types
+   * @param context - Context containing the plugin config and namespace
    * @returns Plugin output with generated types, resolvers, and executors
    */
-  processNamespace?(
-    context: PluginNamespaceProcessContext,
+  onNamespaceLoaded?(
+    context: PluginNamespaceProcessContext<PluginConfig>,
   ): NamespacePluginOutput | Promise<NamespacePluginOutput>;
-}
 
-export interface PluginWithConfig<PluginConfig = unknown> extends PluginCommon<PluginConfig> {
+  // =========================================================================
+  // Generation-time hooks (process finalized artifacts, produce output files)
+  // =========================================================================
+
   /**
-   * Schema defining the expected per-type configuration for this plugin.
-   * Used to validate config passed via `.plugin({ pluginId: config })`.
-   * Uses the same field types as createResolver's input (t.string(), t.number(), etc.).
-   * @example
-   * ```typescript
-   * configSchema: t.object({
-   *   archiveReason: t.bool({ optional: true }),
-   * })
-   * ```
+   * Called after all TailorDB types are loaded and finalized.
+   * Receives all TailorDB namespaces and their types.
+   * @param context - Context containing all TailorDB data, auth, and output paths
+   * @returns Generated files and optional errors
    */
-  readonly configSchema: TailorAnyField;
-}
+  onTailorDBReady?(
+    context: TailorDBReadyContext<PluginConfig>,
+  ): GeneratorResult | Promise<GeneratorResult>;
 
-export interface PluginNamespaceOnly<PluginConfig = unknown> extends PluginCommon<PluginConfig> {
-  /** Namespace-only plugins do not accept per-type config. */
-  readonly configSchema?: undefined;
-  /** Namespace-only plugins cannot define processType(). */
-  processType?: never;
-}
+  /**
+   * Called after all resolvers are loaded and finalized.
+   * Receives all TailorDB data plus resolver data.
+   * @param context - Context containing TailorDB data, resolvers, auth, and output paths
+   * @returns Generated files and optional errors
+   */
+  onResolverReady?(
+    context: ResolverReadyContext<PluginConfig>,
+  ): GeneratorResult | Promise<GeneratorResult>;
 
-/**
- * Plugin interface that all plugins must implement
- */
-export type Plugin<PluginConfig = unknown> =
-  | PluginWithConfig<PluginConfig>
-  | PluginNamespaceOnly<PluginConfig>;
+  /**
+   * Called after all executors are loaded and finalized.
+   * Receives all TailorDB data, resolver data, plus executor data.
+   * @param context - Context containing all service data, auth, and output paths
+   * @returns Generated files and optional errors
+   */
+  onExecutorReady?(
+    context: ExecutorReadyContext<PluginConfig>,
+  ): GeneratorResult | Promise<GeneratorResult>;
+}

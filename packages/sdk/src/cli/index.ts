@@ -3,27 +3,28 @@
 import { register } from "node:module";
 import { defineCommand, runMain } from "politty";
 import { withCompletionCommand } from "politty/completion";
-import { apiCommand } from "./api";
-import { applyCommand } from "./apply";
-import { executorCommand } from "./executor";
-import { generateCommand } from "./generator";
-import { initCommand } from "./init";
-import { loginCommand } from "./login";
-import { logoutCommand } from "./logout";
-import { machineuserCommand } from "./machineuser";
-import { oauth2clientCommand } from "./oauth2client";
-import { openCommand } from "./open";
-import { profileCommand } from "./profile";
+import { apiCommand } from "./commands/api";
+import { applyCommand } from "./commands/apply";
+import { executorCommand } from "./commands/executor";
+import { functionCommand } from "./commands/function";
+import { generateCommand } from "./commands/generate";
+import { initCommand } from "./commands/init";
+import { loginCommand } from "./commands/login";
+import { logoutCommand } from "./commands/logout";
+import { machineuserCommand } from "./commands/machineuser";
+import { oauth2clientCommand } from "./commands/oauth2client";
+import { openCommand } from "./commands/open";
+import { profileCommand } from "./commands/profile";
+import { removeCommand } from "./commands/remove";
+import { secretCommand } from "./commands/secret";
+import { showCommand } from "./commands/show";
+import { staticwebsiteCommand } from "./commands/staticwebsite";
+import { tailordbCommand } from "./commands/tailordb";
+import { userCommand } from "./commands/user";
+import { workflowCommand } from "./commands/workflow";
+import { workspaceCommand } from "./commands/workspace";
 import { queryCommand } from "./query";
-import { removeCommand } from "./remove";
-import { secretCommand } from "./secret";
-import { showCommand } from "./show";
-import { staticwebsiteCommand } from "./staticwebsite";
-import { tailordbCommand } from "./tailordb";
-import { userCommand } from "./user";
-import { readPackageJson } from "./utils/package-json";
-import { workflowCommand } from "./workflow";
-import { workspaceCommand } from "./workspace";
+import { readPackageJson } from "./shared/package-json";
 
 register("tsx", import.meta.url, { data: {} });
 
@@ -39,6 +40,7 @@ export const mainCommand = withCompletionCommand(
       api: apiCommand,
       apply: applyCommand,
       executor: executorCommand,
+      function: functionCommand,
       generate: generateCommand,
       init: initCommand,
       login: loginCommand,

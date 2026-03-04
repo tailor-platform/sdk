@@ -10,6 +10,7 @@ const TailorFieldTypeSchema = z.enum([
   "boolean",
   "integer",
   "float",
+  "decimal",
   "enum",
   "date",
   "datetime",
@@ -48,6 +49,7 @@ export const DBFieldMetadataSchema = z.object({
       format: z.string().optional(),
     })
     .optional(),
+  scale: z.number().int().min(0).max(12).optional(),
 });
 
 const RelationTypeSchema = z.enum(relationTypesKeys);
@@ -80,15 +82,33 @@ export const TailorDBTypeSettingsSchema = z.object({
   aggregation: z.boolean().optional(),
   bulkUpsert: z.boolean().optional(),
   gqlOperations: GqlOperationsSchema.optional(),
+  publishEvents: z.boolean().optional(),
 });
 
-const GqlPermissionOperandSchema = z.union([
-  z.object({ user: z.string() }),
-  z.string(),
-  z.boolean(),
-  z.array(z.string()),
-  z.array(z.boolean()),
-]);
+export const GQL_PERMISSION_INVALID_OPERAND_MESSAGE =
+  "operand is not supported in gqlPermission. Use permission() for record-level conditions.";
+
+const GqlPermissionOperandSchema = z.union(
+  [
+    z.object({ user: z.string() }).strict(),
+    z.string(),
+    z.boolean(),
+    z.array(z.string()),
+    z.array(z.boolean()),
+  ],
+  {
+    error: (issue) => {
+      if (typeof issue.input === "object" && issue.input !== null) {
+        const keys = Object.keys(issue.input);
+        if (keys.length === 1) {
+          return `"${keys[0]}" ${GQL_PERMISSION_INVALID_OPERAND_MESSAGE}`;
+        }
+        return "Operand object must have exactly 1 key";
+      }
+      return "Invalid operand in gqlPermission";
+    },
+  },
+);
 
 const RecordPermissionOperandSchema = z.union([
   GqlPermissionOperandSchema,
@@ -97,7 +117,7 @@ const RecordPermissionOperandSchema = z.union([
   z.object({ newRecord: z.string() }),
 ]);
 
-const PermissionOperatorSchema = z.enum(["=", "!=", "in", "not in"]);
+const PermissionOperatorSchema = z.enum(["=", "!=", "in", "not in", "hasAny", "not hasAny"]);
 
 const RecordPermissionConditionSchema = z
   .tuple([RecordPermissionOperandSchema, PermissionOperatorSchema, RecordPermissionOperandSchema])

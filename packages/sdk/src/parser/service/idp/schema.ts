@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { IdPGqlOperationsSchema } from "./gql-operations";
+
+export { IdPGqlOperationsSchema } from "./gql-operations";
 
 export const IdPLangSchema = z.enum(["en", "ja"]);
 
@@ -26,6 +29,8 @@ export const IdPUserAuthPolicySchema = z
       .optional(),
     allowedEmailDomains: z.array(z.string()).optional(),
     allowGoogleOauth: z.boolean().optional(),
+    allowMicrosoftOauth: z.boolean().optional(),
+    disablePasswordAuth: z.boolean().optional(),
   })
   .refine(
     (data) =>
@@ -56,7 +61,46 @@ export const IdPUserAuthPolicySchema = z
       message: "allowGoogleOauth cannot be set when useNonEmailIdentifier is true",
       path: ["allowGoogleOauth"],
     },
-  );
+  )
+  .refine(
+    (data) =>
+      !data.allowGoogleOauth || (data.allowedEmailDomains && data.allowedEmailDomains.length > 0),
+    {
+      message: "allowGoogleOauth requires allowedEmailDomains to be set",
+      path: ["allowGoogleOauth"],
+    },
+  )
+  .refine((data) => !data.allowMicrosoftOauth || !data.useNonEmailIdentifier, {
+    message: "allowMicrosoftOauth cannot be set when useNonEmailIdentifier is true",
+    path: ["allowMicrosoftOauth"],
+  })
+  .refine(
+    (data) =>
+      !data.allowMicrosoftOauth ||
+      (data.allowedEmailDomains && data.allowedEmailDomains.length > 0),
+    {
+      message: "allowMicrosoftOauth requires allowedEmailDomains to be set",
+      path: ["allowMicrosoftOauth"],
+    },
+  )
+  .refine((data) => !data.allowMicrosoftOauth || data.disablePasswordAuth === true, {
+    message: "allowMicrosoftOauth requires disablePasswordAuth to be enabled",
+    path: ["allowMicrosoftOauth"],
+  })
+  .refine(
+    (data) =>
+      !data.disablePasswordAuth ||
+      data.allowGoogleOauth === true ||
+      data.allowMicrosoftOauth === true,
+    {
+      message: "disablePasswordAuth requires allowGoogleOauth or allowMicrosoftOauth to be enabled",
+      path: ["disablePasswordAuth"],
+    },
+  )
+  .refine((data) => !data.disablePasswordAuth || !data.allowSelfPasswordReset, {
+    message: "disablePasswordAuth cannot be used with allowSelfPasswordReset",
+    path: ["disablePasswordAuth"],
+  });
 
 export const IdPSchema = z
   .object({
@@ -72,5 +116,6 @@ export const IdPSchema = z
       IdPUserAuthPolicySchema.parse(input ?? {}),
     ).optional(),
     publishUserEvents: z.boolean().optional(),
+    gqlOperations: IdPGqlOperationsSchema.optional(),
   })
   .brand("IdPConfig");

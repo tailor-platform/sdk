@@ -6,17 +6,17 @@ const mockClient = {
   getAuthMachineUser: vi.fn(),
 };
 
-vi.mock("../context", () => ({
+vi.mock("../shared/context", () => ({
   loadAccessToken: vi.fn(),
   loadWorkspaceId: vi.fn(),
 }));
 
-vi.mock("../client", () => ({
+vi.mock("../shared/client", () => ({
   initOperatorClient: vi.fn(),
   fetchMachineUserToken: vi.fn(),
 }));
 
-vi.mock("../config-loader", () => ({
+vi.mock("../shared/config-loader", () => ({
   loadConfig: vi.fn(),
 }));
 
@@ -24,15 +24,15 @@ vi.mock("../bundler/query/query-bundler", () => ({
   bundleQueryScript: vi.fn(),
 }));
 
-vi.mock("../utils/script-executor", () => ({
+vi.mock("../shared/script-executor", () => ({
   executeScript: vi.fn(),
 }));
 
-vi.mock("../utils/config", () => ({
+vi.mock("../shared/config", () => ({
   extractAllNamespaces: vi.fn(),
 }));
 
-vi.mock("../utils/tailordb-namespace", () => ({
+vi.mock("../shared/tailordb-namespace", () => ({
   resolveTypeNamespaces: vi.fn(),
 }));
 
@@ -44,13 +44,13 @@ describe("query", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
 
-    const { loadAccessToken, loadWorkspaceId } = await import("../context");
-    const { initOperatorClient, fetchMachineUserToken } = await import("../client");
-    const { loadConfig } = await import("../config-loader");
-    const { extractAllNamespaces } = await import("../utils/config");
+    const { loadAccessToken, loadWorkspaceId } = await import("../shared/context");
+    const { initOperatorClient, fetchMachineUserToken } = await import("../shared/client");
+    const { loadConfig } = await import("../shared/config-loader");
+    const { extractAllNamespaces } = await import("../shared/config");
     const { bundleQueryScript } = await import("../bundler/query/query-bundler");
-    const { executeScript } = await import("../utils/script-executor");
-    const { resolveTypeNamespaces } = await import("../utils/tailordb-namespace");
+    const { executeScript } = await import("../shared/script-executor");
+    const { resolveTypeNamespaces } = await import("../shared/tailordb-namespace");
     const { extractTypeNamesFromSql } = await import("./sql-type-extractor");
 
     vi.mocked(loadAccessToken).mockResolvedValue("access-token");
@@ -88,9 +88,9 @@ describe("query", () => {
   });
 
   test("executes SQL query with bundled script and inferred namespace", async () => {
-    const { executeScript } = await import("../utils/script-executor");
+    const { executeScript } = await import("../shared/script-executor");
     const { bundleQueryScript } = await import("../bundler/query/query-bundler");
-    const { resolveTypeNamespaces } = await import("../utils/tailordb-namespace");
+    const { resolveTypeNamespaces } = await import("../shared/tailordb-namespace");
 
     const result = await query({
       workspaceId: "workspace-1",
@@ -122,9 +122,9 @@ describe("query", () => {
   });
 
   test("resolves namespace from SQL type names when multiple namespaces exist", async () => {
-    const { extractAllNamespaces } = await import("../utils/config");
-    const { resolveTypeNamespaces } = await import("../utils/tailordb-namespace");
-    const { executeScript } = await import("../utils/script-executor");
+    const { extractAllNamespaces } = await import("../shared/config");
+    const { resolveTypeNamespaces } = await import("../shared/tailordb-namespace");
+    const { executeScript } = await import("../shared/script-executor");
 
     vi.mocked(extractAllNamespaces).mockReturnValue(["crm", "sales"]);
     vi.mocked(resolveTypeNamespaces).mockResolvedValue(new Map([["User", "sales"]]));
@@ -171,7 +171,7 @@ describe("query", () => {
   });
 
   test("throws helpful error when SQL namespace cannot be inferred", async () => {
-    const { extractAllNamespaces } = await import("../utils/config");
+    const { extractAllNamespaces } = await import("../shared/config");
     const { extractTypeNamesFromSql } = await import("./sql-type-extractor");
 
     vi.mocked(extractAllNamespaces).mockReturnValue(["crm", "sales"]);
@@ -189,7 +189,7 @@ describe("query", () => {
   });
 
   test("maps SQL parser errors to CLIError with suggestion", async () => {
-    const { executeScript } = await import("../utils/script-executor");
+    const { executeScript } = await import("../shared/script-executor");
 
     vi.mocked(executeScript).mockResolvedValue({
       success: false,
@@ -216,8 +216,8 @@ describe("query", () => {
   });
 
   test("executes GraphQL query via machine user token flow", async () => {
-    const { executeScript } = await import("../utils/script-executor");
-    const { fetchMachineUserToken } = await import("../client");
+    const { executeScript } = await import("../shared/script-executor");
+    const { fetchMachineUserToken } = await import("../shared/client");
 
     vi.mocked(executeScript).mockResolvedValue({
       success: true,

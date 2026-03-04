@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { t } from "@/configure";
 import { db } from "@/configure/services/tailordb";
 import { PluginManager } from "@/plugin/manager";
 import type { Plugin } from "@/parser/plugin-config/types";
@@ -10,7 +9,7 @@ describe("PluginManager", () => {
       id: "namespace-plugin",
       description: "namespace generator",
       importPath: "@example/namespace",
-      processNamespace: () => ({
+      onNamespaceLoaded: () => ({
         types: {
           auditLog: db.type("AuditLog", {
             message: db.string(),
@@ -39,7 +38,7 @@ describe("PluginManager", () => {
       id: "namespace-plugin",
       description: "namespace generator",
       importPath: "@example/namespace",
-      processNamespace: () => ({
+      onNamespaceLoaded: () => ({
         types: {
           auditLog: db.type("AuditLog", {
             message: db.string(),
@@ -89,9 +88,8 @@ describe("PluginManager", () => {
       id: "requires-config",
       description: "requires per-type config",
       importPath: "@example/require-config",
-      configSchema: t.object({}),
       typeConfigRequired: true,
-      processType: () => ({}),
+      onTypeLoaded: () => ({}),
     };
 
     const manager = new PluginManager([plugin]);
@@ -107,6 +105,36 @@ describe("PluginManager", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error).toContain("requires typeConfig");
+    }
+  });
+
+  it("processes type attachment without configSchema (arbitrary config)", async () => {
+    const plugin: Plugin = {
+      id: "schema-less-plugin",
+      description: "plugin without configSchema",
+      importPath: "@example/schema-less",
+      onTypeLoaded: (_context: Parameters<NonNullable<Plugin["onTypeLoaded"]>>[0]) => ({
+        types: {
+          derived: db.type("Derived", {
+            sourceId: db.uuid(),
+            customValue: db.string(),
+          }),
+        },
+      }),
+    };
+
+    const manager = new PluginManager([plugin]);
+    const result = await manager.processAttachment({
+      type: db.type("Order", { name: db.string() }),
+      typeConfig: { anyArbitraryValue: 42, nested: { deep: true } },
+      namespace: "main",
+      pluginId: "schema-less-plugin",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.output.types).toBeDefined();
+      expect(result.output.types?.derived.name).toBe("Derived");
     }
   });
 });

@@ -1,0 +1,65 @@
+import ml from "multiline-ts";
+import { defineCommand } from "politty";
+import { z } from "zod";
+import { commonArgs, jsonArgs, withCommonArgs } from "@/cli/shared/args";
+import { fetchAll, initOperatorClient } from "@/cli/shared/client";
+import { fetchLatestToken, readPlatformConfig } from "@/cli/shared/context";
+import { logger } from "@/cli/shared/logger";
+import { transformPersonalAccessToken, type PersonalAccessTokenInfo } from "./transform";
+
+export const listCommand = defineCommand({
+  name: "list",
+  description: "List all personal access tokens.",
+  args: z.object({
+    ...commonArgs,
+    ...jsonArgs,
+  }),
+  run: withCommonArgs(async (args) => {
+    const config = readPlatformConfig();
+
+    if (!config.current_user) {
+      throw new Error(ml`
+        No user logged in.
+        Please login first using 'tailor-sdk login' command.
+      `);
+    }
+
+    const token = await fetchLatestToken(config, config.current_user);
+    const client = await initOperatorClient(token);
+
+    const pats = await fetchAll(async (pageToken, maxPageSize) => {
+      const { personalAccessTokens, nextPageToken } = await client.listPersonalAccessTokens({
+        pageToken,
+        pageSize: maxPageSize,
+      });
+      return [personalAccessTokens, nextPageToken];
+    });
+
+    if (pats.length === 0 && !args.json) {
+      logger.info(ml`
+        No personal access tokens found.
+        Please create a token using 'tailor-sdk user pat create' command.
+      `);
+      return;
+    }
+
+    const patInfos: PersonalAccessTokenInfo[] = pats.map(transformPersonalAccessToken);
+    if (args.json) {
+      logger.out(patInfos);
+      return;
+    }
+
+    if (pats.length === 0) {
+      return;
+    }
+
+    // Text format: aligned list "name: scope1/scope2"
+    const maxNameLength = Math.max(...pats.map((pat) => pat.name.length));
+
+    pats.forEach((pat) => {
+      const info = transformPersonalAccessToken(pat);
+      const paddedName = info.name.padStart(maxNameLength);
+      logger.log(`${paddedName}: ${info.scopes.join("/")}`);
+    });
+  }),
+});

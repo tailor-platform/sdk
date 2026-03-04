@@ -1,5 +1,179 @@
 # @tailor-platform/sdk
 
+## 1.21.0
+
+### Minor Changes
+
+- [#649](https://github.com/tailor-platform/sdk/pull/649) [`4fd37bf`](https://github.com/tailor-platform/sdk/commit/4fd37bfa13d7d356c919491da7f5886830dce80a) Thanks [@toiroakr](https://github.com/toiroakr)! - Add OpenTelemetry tracing instrumentation to the generate command. Each phase (loadTypes, loadResolvers, loadExecutors, generators) is measured as a span, opt-in via `OTEL_EXPORTER_OTLP_ENDPOINT` with zero overhead when disabled. Refactor generator scheduling to align with the plugin hook model — generators are now called at each phase they subscribe to via their dependencies array, matching how plugins use onTailorDBReady/onResolverReady/onExecutorReady hooks.
+
+- [#653](https://github.com/tailor-platform/sdk/pull/653) [`6b5f1db`](https://github.com/tailor-platform/sdk/commit/6b5f1dbb84f27559312b0868c9b8e7efbb5580a8) Thanks [@murayama-r](https://github.com/murayama-r)! - Add manual configuration for publishEvents on TailorDB types and resolvers
+
+### Patch Changes
+
+- [#651](https://github.com/tailor-platform/sdk/pull/651) [`3c8068d`](https://github.com/tailor-platform/sdk/commit/3c8068da663b28e73c6adaa0feb2fbd0934c860e) Thanks [@dqn](https://github.com/dqn)! - Guard undefined user global in workflow bundler entry
+
+## 1.20.0
+
+### Minor Changes
+
+- [#644](https://github.com/tailor-platform/sdk/pull/644) [`e7ac6ae`](https://github.com/tailor-platform/sdk/commit/e7ac6aeabeb85786fff2e71629377a55c9a45bb3) Thanks [@dqn](https://github.com/dqn)! - Add bundle caching to accelerate apply command
+
+### Patch Changes
+
+- [#648](https://github.com/tailor-platform/sdk/pull/648) [`484cd98`](https://github.com/tailor-platform/sdk/commit/484cd989163b441385dd2794a9580716825de658) Thanks [@k1LoW](https://github.com/k1LoW)! - Add `gqlOperations` option for IdP configuration
+
+  Configure which GraphQL operations are enabled for IdP users. All operations are enabled by default (set `false` to disable):
+
+  - `create`: Enable \_createUser mutation (default: true)
+  - `update`: Enable \_updateUser mutation (default: true)
+  - `delete`: Enable \_deleteUser mutation (default: true)
+  - `read`: Enable \_users and \_user queries (default: true)
+  - `sendPasswordResetEmail`: Enable \_sendPasswordResetEmail mutation (default: true)
+
+  Supports `"query"` alias for read-only mode (disables all mutations):
+
+  ```typescript
+  defineIdp("my-idp", {
+    authorization: "loggedIn",
+    clients: ["my-client"],
+    gqlOperations: "query", // Equivalent to { create: false, update: false, delete: false, read: true, sendPasswordResetEmail: false }
+  });
+  ```
+
+- [#639](https://github.com/tailor-platform/sdk/pull/639) [`2d25e53`](https://github.com/tailor-platform/sdk/commit/2d25e534c34bc0297f95ead6f163e02b1567e93a) Thanks [@dqn](https://github.com/dqn)! - Refactor CLI internal directory layout to align with package-by-feature boundaries, colocating apply/generate command logic under commands and consolidating shared CLI helpers.
+
+- [#650](https://github.com/tailor-platform/sdk/pull/650) [`55fb921`](https://github.com/tailor-platform/sdk/commit/55fb9210e4a0bd45a4d82d3f91df3930b4273d49) Thanks [@toiroakr](https://github.com/toiroakr)! - Add GitHub Actions workflow for automated dependency review on Renovate PRs using Claude
+
+## 1.19.0
+
+### Minor Changes
+
+- [#633](https://github.com/tailor-platform/sdk/pull/633) [`5f0b84b`](https://github.com/tailor-platform/sdk/commit/5f0b84bea403f9d15a9802e9a1fd7b07e0c2a9d2) Thanks [@ikawaha](https://github.com/ikawaha)! - Add decimal field type support with optional scale parameter (0-12) for fixed-point precision
+
+- [#631](https://github.com/tailor-platform/sdk/pull/631) [`9aded63`](https://github.com/tailor-platform/sdk/commit/9aded634276ad51786b2b1119c89be23d1ed26ff) Thanks [@toiroakr](https://github.com/toiroakr)! - Add OpenTelemetry tracing to CLI apply process for performance profiling
+
+  - Implement opt-in OTLP tracing activated via `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable
+  - Use `@opentelemetry/api` built-in noop spans for zero overhead when tracing is disabled
+  - Instrument all apply phases (build, plan, confirm, create/update, delete) with hierarchical spans
+  - Add Connect-RPC interceptor for automatic RPC call tracing
+  - Parallelize plan phase service calls and internal RPC calls for ~60% faster plan execution
+  - Fix race condition in parallel plan phase with Promise-based memoization for loadTypes/loadExecutors
+
+### Patch Changes
+
+- [#642](https://github.com/tailor-platform/sdk/pull/642) [`7ca52a5`](https://github.com/tailor-platform/sdk/commit/7ca52a56f3dcf4b41cf9c495bfa9ca3f279c00f1) Thanks [@riku99](https://github.com/riku99)! - Remove NPM_TOKEN from .github/workflows/release.yml
+
+- [#641](https://github.com/tailor-platform/sdk/pull/641) [`86d382c`](https://github.com/tailor-platform/sdk/commit/86d382ce261b7abd71c7d27b3d50cc83c9df3430) Thanks [@riku99](https://github.com/riku99)! - Allow configuring inline sourcemaps via `inlineSourcemap` in defineConfig
+
+## 1.18.0
+
+### Minor Changes
+
+- [#617](https://github.com/tailor-platform/sdk/pull/617) [`a6a2fc3`](https://github.com/tailor-platform/sdk/commit/a6a2fc30e9b7ef475819c53a43de96bee4962afd) Thanks [@toiroakr](https://github.com/toiroakr)! - Unify Plugin and Generator systems with a simplified hook architecture. Definition-time hooks (`onTypeLoaded`, `onNamespaceLoaded`) generate TailorDB types, resolvers, and executors. Generation-time hooks (`onTailorDBReady`, `onResolverReady`, `onExecutorReady`) receive all finalized data at each pipeline phase and directly produce output files. Each hook runs at its natural pipeline phase regardless of what other hooks the same plugin implements, ensuring outputs from earlier phases are available to later phases. `defineGenerators()` is deprecated in favor of `definePlugins()` with generation hooks. Builtin plugins are moved to dedicated entry points (`@tailor-platform/sdk/plugin/kysely-type`, `@tailor-platform/sdk/plugin/enum-constants`, `@tailor-platform/sdk/plugin/file-utils`, `@tailor-platform/sdk/plugin/seed`) to avoid bundling the CLI layer when importing plugins in `tailor.config.ts`. Deprecated re-exports remain in `@tailor-platform/sdk/cli` for backward compatibility.
+
+- [#632](https://github.com/tailor-platform/sdk/pull/632) [`6cc53d8`](https://github.com/tailor-platform/sdk/commit/6cc53d8ef372d62e3242eb764c91ea2a1d397550) Thanks [@toiroakr](https://github.com/toiroakr)! - Consolidate runtime args transformation into cli/bundler/runtime-args module, expose user context in WorkflowJobContext, and add WORKFLOW_TEST_USER_KEY for mocking user in workflow trigger tests
+
+### Patch Changes
+
+- [#636](https://github.com/tailor-platform/sdk/pull/636) [`43aaa26`](https://github.com/tailor-platform/sdk/commit/43aaa26681edc51f8459abe353f4f0c0ad1e803e) Thanks [@toiroakr](https://github.com/toiroakr)! - Set default maxPageSize (1000) for all paginated List API calls via fetchAll to work around server-side pagination bug in ListFunctionRegistries
+
+- [#637](https://github.com/tailor-platform/sdk/pull/637) [`a74df5f`](https://github.com/tailor-platform/sdk/commit/a74df5f58fa4480439dfffe1b66213cb29820309) Thanks [@dqn](https://github.com/dqn)! - Categorize Zod validation errors using SDK brand symbols: branded values that fail schema validation now throw (indicating a user configuration bug), while non-branded values are silently skipped (unrelated files picked up by glob).
+
+- [#635](https://github.com/tailor-platform/sdk/pull/635) [`329690b`](https://github.com/tailor-platform/sdk/commit/329690be4d38d348776560b0b3781717ca03c913) Thanks [@dqn](https://github.com/dqn)! - Migrate politty to v0.4 section-level documentation markers and update CLI docs generation.
+
+## 1.17.1
+
+### Patch Changes
+
+- [#626](https://github.com/tailor-platform/sdk/pull/626) [`e37cbb9`](https://github.com/tailor-platform/sdk/commit/e37cbb9fb9f4ab94be684c33c50e048b1968d5d7) Thanks [@k1LoW](https://github.com/k1LoW)! - feat: support disablePasswordAuth field for IdP userAuthPolicy
+
+- [#618](https://github.com/tailor-platform/sdk/pull/618) [`0e56dfc`](https://github.com/tailor-platform/sdk/commit/0e56dfc9636896be72487be404b6b04536eeb6ea) Thanks [@toiroakr](https://github.com/toiroakr)! - Introduce `WorkflowService` type and `createWorkflowService` factory to align workflow handling with the service pattern used by `ExecutorService`, `ResolverService`, and other services. Replace `Application.workflowConfig` with `Application.workflowService` that encapsulates workflow loading, data access, and log printing. Replace `getXXX()` methods with getter properties across all service types (`TailorDBService`, `ResolverService`, `ExecutorService`, `WorkflowService`).
+
+## 1.17.0
+
+### Minor Changes
+
+- [#624](https://github.com/tailor-platform/sdk/pull/624) [`9b07d90`](https://github.com/tailor-platform/sdk/commit/9b07d909b4fa1a882ade656132c1179f02f4027b) Thanks [@dqn](https://github.com/dqn)! - Add typed API overloads to get/list/executions/jobs CLI commands
+
+  - Add definition-object-based overloads to `getWorkflow`, `getExecutor`, `listExecutorJobs`, `getExecutorJob`, `watchExecutorJob`, and `listWorkflowExecutions`
+  - Export new typed options: `GetWorkflowTypedOptions`, `GetExecutorTypedOptions`, `ListExecutorJobsTypedOptions`, `GetExecutorJobTypedOptions`, `WatchExecutorJobTypedOptions`, `ListWorkflowExecutionsTypedOptions`
+  - Deprecate existing string-based options in favor of typed alternatives (backward compatible)
+
+### Patch Changes
+
+- [#586](https://github.com/tailor-platform/sdk/pull/586) [`7915b80`](https://github.com/tailor-platform/sdk/commit/7915b8037c23ac777df087d9bc678af44b044d5f) Thanks [@toiroakr](https://github.com/toiroakr)! - Refactor application initialization and fix generate command ordering
+
+  - Split `defineApplication` (sync, lightweight) and `loadApplication` (async, full initialization)
+  - Remove `MutableApplication` type cast and mutable closure state
+  - Move plugin file generation logic into `PluginManager.generatePluginFiles()`
+  - Extract `buildApplication`, `defineServices`, and `generatePluginFilesIfNeeded` helper functions
+  - Fix `generate` command to restore interleaved type loading/generation flow instead of using `loadApplication()` which bundled before generators ran
+  - Clean up: make `pluginExecutorFiles` private, remove unused re-export, fix stale comments
+
+- [#612](https://github.com/tailor-platform/sdk/pull/612) [`62045eb`](https://github.com/tailor-platform/sdk/commit/62045eba4cb0a90632cc6f884d989a15671f138f) Thanks [@toiroakr](https://github.com/toiroakr)! - fix(postinstall): correct import path and call signature for generateUserTypes
+
+  - Fix import path from non-existent `dist/cli/api.mjs` to `dist/cli/lib.mjs`
+  - Fix function call to use options object `{ config, configPath }` instead of positional arguments
+
+- [#620](https://github.com/tailor-platform/sdk/pull/620) [`e1b7d79`](https://github.com/tailor-platform/sdk/commit/e1b7d7944a909a5e9a2e5915186dda64a60d4414) Thanks [@dqn](https://github.com/dqn)! - Add JSDoc comments to SDK configure APIs for improved LLM discoverability
+
+- [#615](https://github.com/tailor-platform/sdk/pull/615) [`9e51758`](https://github.com/tailor-platform/sdk/commit/9e517586a95cdad724b9d63565124c35e268d6e8) Thanks [@toiroakr](https://github.com/toiroakr)! - Review and slim down CLAUDE.md based on Anthropic's best practices: remove duplicate patterns, fix inaccuracies, delete volatile/redundant info, and reduce from ~400 lines to ~70 lines by pointing to example/ instead of embedding code
+
+## 1.16.0
+
+### Minor Changes
+
+- [#602](https://github.com/tailor-platform/sdk/pull/602) [`4174110`](https://github.com/tailor-platform/sdk/commit/4174110ae1d1410801de98f9df2020c1ee0a4ef8) Thanks [@remiposo](https://github.com/remiposo)! - Add `hasAny` / `not hasAny` permission operators for array-to-array comparison
+
+  New permission operators that check whether two arrays share any common elements.
+
+  Usage examples:
+
+  - `[{ user: "roles" }, "hasAny", { record: "allowedRoles" }]` — allow access when the user's roles overlap with the record's allowed roles
+  - `[{ user: "tags" }, "not hasAny", ["blocked", "suspended"]]` — deny access when the user's tags share any element with the blocked list
+  - `[["admin", "editor"], "hasAny", { user: "roles" }]` — both operands can be string arrays
+
+  Unlike `in` / `not in` (scalar vs array), `hasAny` / `not hasAny` compares two arrays and checks for intersection.
+
+## 1.15.2
+
+### Patch Changes
+
+- [#597](https://github.com/tailor-platform/sdk/pull/597) [`8d4f911`](https://github.com/tailor-platform/sdk/commit/8d4f9111645df049d91808c7083a054bb0ad656a) Thanks [@riku99](https://github.com/riku99)! - Show clear error when record/oldRecord/newRecord operand is used in gqlPermission
+
+- [#609](https://github.com/tailor-platform/sdk/pull/609) [`50f0aee`](https://github.com/tailor-platform/sdk/commit/50f0aee0f17a05afde5bbce2a9f1b42f03cee0e5) Thanks [@riku99](https://github.com/riku99)! - Add `function logs` CLI command to list and view function execution logs
+
+## 1.15.1
+
+### Patch Changes
+
+- [#608](https://github.com/tailor-platform/sdk/pull/608) [`17fbd24`](https://github.com/tailor-platform/sdk/commit/17fbd243bd2925d3c4b6fe0d61f0a3ab24c3bece) Thanks [@k1LoW](https://github.com/k1LoW)! - Add validation to require allowedEmailDomains when allowGoogleOauth is enabled
+
+## 1.15.0
+
+### Minor Changes
+
+- [#605](https://github.com/tailor-platform/sdk/pull/605) [`634699c`](https://github.com/tailor-platform/sdk/commit/634699c0519157a18b992df4e98718940fc6d013) Thanks [@toiroakr](https://github.com/toiroakr)! - Add TypeConfig/PluginConfig type parameters to Plugin interface and remove TailorField schema requirements
+
+  - Add `Plugin<TypeConfig, PluginConfig>` type parameters for type-safe arbitrary config
+  - Remove `configSchema`, `pluginConfigSchema`, and `configTypeTemplate` properties from Plugin interface
+  - Merge `PluginWithConfig`/`PluginNamespaceOnly` into a single `Plugin` interface
+  - Wire TypeConfig/PluginConfig through `processType`/`processNamespace` contexts
+  - Remove TailorField-based runtime validation from plugin config processing
+  - Introduce `TypePluginOutput` for processType (extends `PluginOutput` with `extends` field)
+  - Make `PluginOutput` the base type without `extends` (used by processNamespace)
+  - Use `TailorAnyDBField` for `PluginExtends.fields` type
+
+- [#595](https://github.com/tailor-platform/sdk/pull/595) [`4e6e3e6`](https://github.com/tailor-platform/sdk/commit/4e6e3e62e3071060373571e7d9765938c37a9013) Thanks [@toiroakr](https://github.com/toiroakr)! - Use Function Registry service for script storage instead of embedding bundled scripts directly in pipeline/executor/workflow requests. Scripts are now registered in the Function Registry during apply, and services reference them by name via operationSourceRef/scriptRef fields.
+
+### Patch Changes
+
+- [#599](https://github.com/tailor-platform/sdk/pull/599) [`e73e8fe`](https://github.com/tailor-platform/sdk/commit/e73e8fef5daf056a00a3bb402d0c8ab0a58f96ee) Thanks [@dqn](https://github.com/dqn)! - Add typed programmatic CLI APIs for workflow and executor operations while preserving legacy option shapes for backward compatibility.
+
+- [#601](https://github.com/tailor-platform/sdk/pull/601) [`151102b`](https://github.com/tailor-platform/sdk/commit/151102bedca42457f02f6e503025908a40d5d1a4) Thanks [@riku99](https://github.com/riku99)! - Fixes an issue where nested field hooks/validate were dropped when generating TailorDB proto manifests
+
+- [#606](https://github.com/tailor-platform/sdk/pull/606) [`4761d2b`](https://github.com/tailor-platform/sdk/commit/4761d2bab2d8d8fa7c5ce249db28e0a8f28dfc5a) Thanks [@toiroakr](https://github.com/toiroakr)! - Add lefthook post-commit hook to verify commit signatures and update CLAUDE.md with signing rules
+
 ## 1.14.2
 
 ### Patch Changes

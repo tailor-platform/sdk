@@ -50,16 +50,22 @@ pnpm -C packages/sdk build
 # Verify all problems using reference solutions
 pnpm challenge:verify-solution
 
-# Solve all problems using Claude Code
-pnpm challenge:solve [--model sonnet] [--max-budget 2.00]
+# Run runner unit tests (adapter/parser logic)
+pnpm test:runner
+
+# Solve all problems using Claude Code (default)
+pnpm challenge:solve [--agent claude] [--model sonnet] [--max-budget 2.00]
+
+# Solve all problems using Codex
+pnpm challenge:solve --agent codex [--model gpt-5-codex]
 
 # Solve with retry on failure
-pnpm challenge:solve --retry 2 [--model sonnet] [--max-budget 2.00]
+pnpm challenge:solve --retry 2 [--agent claude|codex] [--model sonnet] [--max-budget 2.00]
 
 # Run a single problem
 pnpm challenge --problem 001 --use-solution
 pnpm challenge --problem 001 --impl ./path/to/impl
-pnpm challenge --problem 001 --solve
+pnpm challenge --problem 001 --solve [--agent claude|codex]
 
 # Run all problems with external implementations
 pnpm challenge --all --impl-dir ./path/to/outputs
@@ -67,7 +73,8 @@ pnpm challenge --all --impl-dir ./path/to/outputs
 
 **Flags:**
 
-- `--model <name>` — Claude model to use (default: `sonnet`)
+- `--agent <claude|codex>` — Solver agent to use (default: `claude`)
+- `--model <name>` — Model name to use (`claude`: default `sonnet`, `codex`: default CLI model)
 - `--max-budget <usd>` — Spending cap per problem in USD (default: `2.00`, must be positive)
 - `--retry <n>` — Number of retry attempts on failure (default: `0`, must be non-negative). On failure, error output is fed back to the AI for correction.
 - `--concurrency <n>` — Number of problems to run in parallel (default: CPU count, must be positive)

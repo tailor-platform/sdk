@@ -348,6 +348,11 @@ export declare type TailorDBType_FieldConfig = Message<"tailor.v1.TailorDBType.F
    * @generated from field: tailor.v1.TailorDBType.Serial serial = 17;
    */
   serial?: TailorDBType_Serial;
+
+  /**
+   * @generated from field: optional int32 scale = 18;
+   */
+  scale?: number;
 };
 
 /**
@@ -762,6 +767,16 @@ export enum TailorDBType_Permission_Operator {
    * @generated from enum value: OPERATOR_NIN = 4;
    */
   NIN = 4,
+
+  /**
+   * @generated from enum value: OPERATOR_HAS_ANY = 5;
+   */
+  HAS_ANY = 5,
+
+  /**
+   * @generated from enum value: OPERATOR_NHAS_ANY = 6;
+   */
+  NHAS_ANY = 6,
 }
 
 /**
@@ -959,6 +974,16 @@ export enum TailorDBGQLPermission_Operator {
    * @generated from enum value: OPERATOR_NIN = 4;
    */
   NIN = 4,
+
+  /**
+   * @generated from enum value: OPERATOR_HAS_ANY = 5;
+   */
+  HAS_ANY = 5,
+
+  /**
+   * @generated from enum value: OPERATOR_NHAS_ANY = 6;
+   */
+  NHAS_ANY = 6,
 }
 
 /**

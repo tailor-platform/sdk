@@ -1,18 +1,22 @@
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
 import { format as formatDate } from "date-fns";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 
-const tempDistDir = "tests/fixtures/actual";
+const tempDistDir = "tests/fixtures/plugins";
 
 describe("pnpm apply command integration tests", () => {
   const expectedDir = path.join(__dirname, "fixtures/expected");
-  const actualDir = path.join(__dirname, "fixtures/actual");
+  const actualDir = path.join(__dirname, "fixtures/plugins");
 
-  const expectedGeneratedFilesWithContent = ["db.ts"] as const;
+  const expectedGeneratedFilesWithContent = ["db.ts", "enums.ts", "files.ts"] as const;
   const expectedGeneratedFiles = [
+    // Plugin-generated files
     "db.ts",
+    "enums.ts",
+    "files.ts",
     // Executor bundler creates entry files (.entry.js) in same directory as output files
     "executors/test-webhook.entry.js",
     "executors/test-webhook.js",
@@ -39,6 +43,34 @@ describe("pnpm apply command integration tests", () => {
     "resolvers/triggerOrderProcessing.entry.js",
     "resolvers/triggerOrderProcessing.js",
     "resolvers/triggerOrderProcessing.js.map",
+    // Seed plugin output
+    "seed/data/Customer.jsonl",
+    "seed/data/Customer.schema.ts",
+    "seed/data/Event.jsonl",
+    "seed/data/Event.schema.ts",
+    "seed/data/Invoice.jsonl",
+    "seed/data/Invoice.schema.ts",
+    "seed/data/NestedProfile.jsonl",
+    "seed/data/NestedProfile.schema.ts",
+    "seed/data/PurchaseOrder.jsonl",
+    "seed/data/PurchaseOrder.schema.ts",
+    "seed/data/SalesOrder.jsonl",
+    "seed/data/SalesOrder.schema.ts",
+    "seed/data/SalesOrderCreated.jsonl",
+    "seed/data/SalesOrderCreated.schema.ts",
+    "seed/data/Selfie.jsonl",
+    "seed/data/Selfie.schema.ts",
+    "seed/data/Supplier.jsonl",
+    "seed/data/Supplier.schema.ts",
+    "seed/data/User.jsonl",
+    "seed/data/User.schema.ts",
+    "seed/data/UserLog.jsonl",
+    "seed/data/UserLog.schema.ts",
+    "seed/data/UserSetting.jsonl",
+    "seed/data/UserSetting.schema.ts",
+    "seed/data/_User.jsonl",
+    "seed/data/_User.schema.ts",
+    "seed/exec.mjs",
     // Workflow bundler creates entry files (.entry.js) in same directory as output files
     "workflow-jobs/check-inventory.entry.js",
     "workflow-jobs/check-inventory.js",
@@ -67,7 +99,7 @@ describe("pnpm apply command integration tests", () => {
       const entries = fs.readdirSync(currentDir, { withFileTypes: true });
 
       for (const entry of entries) {
-        if (entry.name === ".DS_Store") {
+        if (entry.name === ".DS_Store" || entry.name === "cache") {
           continue;
         }
 
@@ -94,10 +126,22 @@ describe("pnpm apply command integration tests", () => {
     vi.useFakeTimers();
     vi.setSystemTime(fixedSystemTime);
     setupTailordbMock();
+    // Workflow entry files reference `user` global in server format (injected by platform runtime)
+    // and convert to SDK format via tailorUserMap. This is an integration test of the bundled
+    // output, so we set up server format derived from the SDK constant.
+    GlobalThis.user = {
+      id: unauthenticatedTailorUser.id,
+      type: unauthenticatedTailorUser.type,
+      workspace_id: unauthenticatedTailorUser.workspaceId,
+      attribute_map: unauthenticatedTailorUser.attributes,
+      attributes: unauthenticatedTailorUser.attributeList,
+      tenant_id: unauthenticatedTailorUser.id,
+    };
   });
 
   afterAll(() => {
     vi.useRealTimers();
+    delete GlobalThis.user;
   });
 
   type MainFunction = (args: Record<string, unknown>) => unknown | Promise<unknown>;
@@ -119,6 +163,14 @@ describe("pnpm apply command integration tests", () => {
         // triggerJobFunction is synchronous on the server side
         triggerJobFunction: (jobName: string, args: unknown) => unknown;
       };
+    };
+    user?: {
+      id: string;
+      type: string;
+      workspace_id: string;
+      attribute_map: unknown;
+      attributes: unknown[];
+      tenant_id: string;
     };
   };
 
@@ -600,8 +652,8 @@ describe("pnpm apply command integration tests", () => {
           // Check that env is defined with correct values
           expect(content).toContain('const env = {"foo":1,"bar":"hello","baz":true}');
 
-          // Check that body is called with { jobs, env } object
-          expect(content).toMatch(/\.body\(input, \{ env \}\)/);
+          // Check that body is called with { env, user: _user } context
+          expect(content).toMatch(/\.body\(input, \{ env, user: _user \}\)/);
         }
       });
 

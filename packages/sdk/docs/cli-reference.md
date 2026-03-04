@@ -152,6 +152,14 @@ Commands for managing workflows and executions.
 | [workflow executions](./cli/workflow.md#workflow-executions) | List or get executions     |
 | [workflow resume](./cli/workflow.md#workflow-resume)         | Resume a failed execution  |
 
+### [Function Commands](./cli/function.md)
+
+Commands for viewing function execution logs.
+
+| Command                                          | Description                         |
+| ------------------------------------------------ | ----------------------------------- |
+| [function logs](./cli/function.md#function-logs) | List or get function execution logs |
+
 ### [Executor Commands](./cli/executor.md)
 
 Commands for managing executors and executor jobs.

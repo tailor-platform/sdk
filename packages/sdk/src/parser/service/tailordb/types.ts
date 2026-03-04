@@ -170,12 +170,13 @@ export interface OperatorFieldConfig {
     maxValue?: number;
     format?: string;
   };
+  scale?: number;
   fields?: Record<string, OperatorFieldConfig>;
 }
 
 type GqlPermissionAction = "read" | "create" | "update" | "delete" | "aggregate" | "bulkUpsert";
 
-type StandardPermissionOperator = "eq" | "ne" | "in" | "nin";
+type StandardPermissionOperator = "eq" | "ne" | "in" | "nin" | "hasAny" | "nhasAny";
 
 type UserOperand = {
   user: string;
@@ -237,6 +238,7 @@ export interface TailorDBTypeMetadata {
     aggregation?: boolean;
     bulkUpsert?: boolean;
     gqlOperations?: GqlOperationsConfig;
+    publishEvents?: boolean;
   };
   permissions: RawPermissions;
   files: Record<string, string>;

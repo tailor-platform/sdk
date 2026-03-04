@@ -1889,3 +1889,89 @@ describe("TailorDBField clone tests", () => {
     expect(cloned.fields.age).not.toBe(original.fields.age);
   });
 });
+
+describe("TailorDBField decimal type tests", () => {
+  it("decimal field outputs string type correctly", () => {
+    const _decimalType = db.type("Test", {
+      price: db.decimal(),
+    });
+    expectTypeOf<output<typeof _decimalType>>().toEqualTypeOf<{
+      id: string;
+      price: string;
+    }>();
+  });
+
+  it("optional decimal field outputs string | null type correctly", () => {
+    const _decimalType = db.type("Test", {
+      discount: db.decimal({ optional: true }),
+    });
+    expectTypeOf<output<typeof _decimalType>>().toEqualTypeOf<{
+      id: string;
+      discount?: string | null;
+    }>();
+  });
+
+  it("decimal with scale stores scale in metadata", () => {
+    const field = db.decimal({ scale: 2 });
+    expect(field.type).toBe("decimal");
+    expect(field._metadata.scale).toBe(2);
+  });
+
+  it("decimal without scale has no scale in metadata", () => {
+    const field = db.decimal();
+    expect(field.type).toBe("decimal");
+    expect(field._metadata.scale).toBeUndefined();
+  });
+
+  it("decimal scale validation rejects out-of-range values", () => {
+    expect(() => db.decimal({ scale: -1 })).toThrow("scale must be an integer between 0 and 12");
+    expect(() => db.decimal({ scale: 13 })).toThrow("scale must be an integer between 0 and 12");
+  });
+
+  it("decimal scale validation rejects non-integer values", () => {
+    expect(() => db.decimal({ scale: 1.5 })).toThrow("scale must be an integer between 0 and 12");
+  });
+
+  it("decimal parse validates valid decimal strings", () => {
+    const field = db.decimal();
+    const user = { id: "test", _loggedIn: true } as unknown as TailorUser;
+    expect(field.parse({ value: "123.45", data: {}, user })).toEqual({ value: "123.45" });
+    expect(field.parse({ value: "0", data: {}, user })).toEqual({ value: "0" });
+    expect(field.parse({ value: "-99.99", data: {}, user })).toEqual({ value: "-99.99" });
+    expect(field.parse({ value: "1000", data: {}, user })).toEqual({ value: "1000" });
+    expect(field.parse({ value: ".5", data: {}, user })).toEqual({ value: ".5" });
+    expect(field.parse({ value: "5.", data: {}, user })).toEqual({ value: "5." });
+    expect(field.parse({ value: "4.321e+4", data: {}, user })).toEqual({ value: "4.321e+4" });
+    expect(field.parse({ value: "1E-5", data: {}, user })).toEqual({ value: "1E-5" });
+    expect(field.parse({ value: "2.41E-3", data: {}, user })).toEqual({ value: "2.41E-3" });
+    expect(field.parse({ value: "-1.5e10", data: {}, user })).toEqual({ value: "-1.5e10" });
+  });
+
+  it("decimal parse rejects invalid decimal strings", () => {
+    const field = db.decimal();
+    const user = { id: "test", _loggedIn: true } as unknown as TailorUser;
+    const result1 = field.parse({ value: "abc", data: {}, user });
+    expect(result1).toHaveProperty("issues");
+
+    const result2 = field.parse({ value: 123, data: {}, user });
+    expect(result2).toHaveProperty("issues");
+
+    const result3 = field.parse({ value: "", data: {}, user });
+    expect(result3).toHaveProperty("issues");
+
+    const result4 = field.parse({ value: "1_000_000", data: {}, user });
+    expect(result4).toHaveProperty("issues");
+
+    const result5 = field.parse({ value: "0b1.1p-5", data: {}, user });
+    expect(result5).toHaveProperty("issues");
+
+    const result6 = field.parse({ value: "1e", data: {}, user });
+    expect(result6).toHaveProperty("issues");
+
+    const result7 = field.parse({ value: "e5", data: {}, user });
+    expect(result7).toHaveProperty("issues");
+
+    const result8 = field.parse({ value: ".", data: {}, user });
+    expect(result8).toHaveProperty("issues");
+  });
+});

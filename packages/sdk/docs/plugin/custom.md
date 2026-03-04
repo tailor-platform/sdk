@@ -23,151 +23,260 @@ This is required so that generators can use plugin-generated TailorDB types via 
 ## Plugin Interface
 
 ```typescript
-interface Plugin<PluginConfig = unknown> {
-  /** Unique identifier for the plugin (e.g., "@my-company/soft-delete") */
+interface Plugin<TypeConfig = unknown, PluginConfig = unknown> {
   readonly id: string;
-
-  /** Human-readable description */
   readonly description: string;
-
-  /** Import path for generated code to reference */
-  readonly importPath: string;
-
-  /** Schema for per-type configuration via .plugin() (required when using processType) */
-  readonly configSchema?: TailorAnyField;
-
-  /** Schema for plugin-level configuration via definePlugins() (optional) */
-  readonly pluginConfigSchema?: TailorAnyField;
-
-  /** Controls whether per-type config is required when attaching via .plugin() */
+  readonly importPath?: string;
   readonly typeConfigRequired?: boolean | ((pluginConfig?: PluginConfig) => boolean);
-
-  /** Plugin-level config passed via definePlugins() */
   readonly pluginConfig?: PluginConfig;
 
-  /** Optional template for generating PluginConfigs typing */
-  readonly configTypeTemplate?: string;
+  // Definition-time hooks
+  onTypeLoaded?(
+    context: PluginProcessContext<TypeConfig, PluginConfig>,
+  ): TypePluginOutput | Promise<TypePluginOutput>;
+  onNamespaceLoaded?(
+    context: PluginNamespaceProcessContext<PluginConfig>,
+  ): PluginOutput | Promise<PluginOutput>;
 
-  /** Process a type with this plugin attached */
-  processType?(context: PluginProcessContext): PluginOutput | Promise<PluginOutput>;
-
-  /** Process a namespace (plugins without a source type) */
-  processNamespace?(
-    context: PluginNamespaceProcessContext,
-  ): NamespacePluginOutput | Promise<NamespacePluginOutput>;
+  // Generation-time hooks
+  onTailorDBReady?(
+    context: TailorDBReadyContext<PluginConfig>,
+  ): GeneratorResult | Promise<GeneratorResult>;
+  onResolverReady?(
+    context: ResolverReadyContext<PluginConfig>,
+  ): GeneratorResult | Promise<GeneratorResult>;
+  onExecutorReady?(
+    context: ExecutorReadyContext<PluginConfig>,
+  ): GeneratorResult | Promise<GeneratorResult>;
 }
 ```
 
-Notes:
+| Property             | Required                         | Description                                                                                      |
+| -------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `id`                 | Yes                              | Unique plugin identifier (e.g., `"@my-company/soft-delete"`)                                     |
+| `description`        | Yes                              | Human-readable description                                                                       |
+| `importPath`         | When using definition-time hooks | Path resolvable from `tailor.config.ts` directory. Used for import statements in generated code. |
+| `typeConfigRequired` | No                               | Whether per-type config is required when attaching via `.plugin()`. Default: optional.           |
+| `pluginConfig`       | No                               | Plugin-level config passed via `definePlugins()`. Set via factory function.                      |
 
-- `importPath` should be resolvable from the directory containing `tailor.config.ts`. Code generators use it to import plugin APIs such as `getGeneratedType` and executor modules.
-- If you want to attach a plugin via `.plugin()`, you must provide `configSchema` and `processType`.
-- Namespace-only plugins can omit `configSchema` and implement `processNamespace` instead.
-- `pluginConfig` stores the plugin-level config so it can be read later during processing. Set it on the plugin object (e.g., via a factory function) before passing to `definePlugins()`.
-- `resolve` should return a dynamic import; relative specifiers are resolved from the plugin module.
-- Per-type config is optional by default. Use `typeConfigRequired: true` to make it mandatory.
-- To toggle optional/required based on plugin config, provide a function for `typeConfigRequired`.
+## Hook Reference
 
-## PluginProcessContext
+### onTypeLoaded
 
-Context passed to the `processType` method:
+**Trigger**: Called once for each TailorDB type that has `.plugin({ pluginId: config })` attached.
 
-```typescript
-interface PluginProcessContext<TypeConfig = unknown, PluginConfig = unknown> {
-  /** The TailorDB type being processed */
-  type: TailorAnyDBType;
+**Context** (`PluginProcessContext`):
 
-  /** Per-type configuration from .plugin({ pluginId: typeConfig }) */
-  typeConfig: TypeConfig;
+| Field          | Type              | Description                                |
+| -------------- | ----------------- | ------------------------------------------ |
+| `type`         | `TailorAnyDBType` | The TailorDB type being processed          |
+| `typeConfig`   | `TypeConfig`      | Per-type config from `.plugin()`           |
+| `pluginConfig` | `PluginConfig`    | Plugin-level config from `definePlugins()` |
+| `namespace`    | `string`          | Namespace of the TailorDB type             |
 
-  /** Plugin-level configuration from definePlugins() */
-  pluginConfig: PluginConfig;
+**Returns** (`TypePluginOutput`):
 
-  /** Namespace of the TailorDB type */
-  namespace: string;
-}
-```
+| Field       | Type                                            | Description                                           |
+| ----------- | ----------------------------------------------- | ----------------------------------------------------- |
+| `types`     | `Record<string, TailorAnyDBType>`               | Additional TailorDB types to generate (keyed by kind) |
+| `resolvers` | `PluginGeneratedResolver[]`                     | Additional resolvers to generate                      |
+| `executors` | `PluginGeneratedExecutor[]`                     | Additional executors to generate                      |
+| `extends`   | `{ fields?: Record<string, TailorAnyDBField> }` | Fields to add to the source type                      |
 
-## PluginNamespaceProcessContext
+**Use cases**:
 
-Context passed to the `processNamespace` method:
-
-```typescript
-interface PluginNamespaceProcessContext<PluginConfig = unknown> {
-  /** Plugin-level configuration from definePlugins() */
-  pluginConfig: PluginConfig;
-
-  /** Target namespace for generated types */
-  namespace: string;
-}
-```
-
-## PluginOutput
-
-Return value from `processType`:
+- Generate derived types (e.g., archive tables, history tables) from user-defined types
+- Add fields to existing types (e.g., `deletedAt` for soft delete)
+- Generate executors triggered by record events on the source type
 
 ```typescript
-interface PluginOutput {
-  /** Additional TailorDB types to generate */
-  types?: Record<string, TailorAnyDBType>;
-
-  /** Additional resolvers to generate */
-  resolvers?: PluginGeneratedResolver[];
-
-  /** Additional executors to generate */
-  executors?: PluginGeneratedExecutor[];
-
-  /** Extensions to apply to the source type */
-  extends?: {
-    /** Fields to add to the source type */
-    fields?: Record<string, TailorAnyField>;
+onTypeLoaded(context) {
+  const { type, typeConfig, namespace } = context;
+  return {
+    types: { archive: db.type(`Deleted_${type.name}`, { ... }) },
+    extends: { fields: { deletedAt: db.datetime({ optional: true }) } },
+    executors: [{ name: `${type.name}-on-delete`, resolve: async () => await import("./on-delete"), context: { sourceType: type, namespace } }],
   };
-}
+},
 ```
 
-`processNamespace` returns `NamespacePluginOutput` (same shape as `PluginOutput` but without `extends`):
+### onNamespaceLoaded
+
+**Trigger**: Called once per namespace for plugins that do not require a source type.
+
+**Context** (`PluginNamespaceProcessContext`):
+
+| Field          | Type           | Description                                |
+| -------------- | -------------- | ------------------------------------------ |
+| `pluginConfig` | `PluginConfig` | Plugin-level config from `definePlugins()` |
+| `namespace`    | `string`       | Target namespace                           |
+
+**Returns** (`PluginOutput`):
+
+Same as `TypePluginOutput` but without `extends` (namespace plugins cannot extend a source type).
+
+**Use cases**:
+
+- Generate types that don't derive from a specific user type (e.g., audit log, settings table)
 
 ```typescript
-type NamespacePluginOutput = Omit<PluginOutput, "extends">;
+onNamespaceLoaded(context) {
+  return {
+    types: { auditLog: db.type("AuditLog", { action: db.string(), ... }) },
+  };
+},
+```
+
+### onTailorDBReady
+
+**Trigger**: Called once after all TailorDB types are loaded and auth is resolved.
+
+**Context** (`TailorDBReadyContext`):
+
+| Field          | Type                      | Description                                                    |
+| -------------- | ------------------------- | -------------------------------------------------------------- |
+| `tailordb`     | `TailorDBNamespaceData[]` | All namespaces with types, source info, and plugin attachments |
+| `auth`         | `GeneratorAuthInput?`     | Auth configuration (machine users, OAuth2 clients, etc.)       |
+| `baseDir`      | `string`                  | Output directory for generated files                           |
+| `configPath`   | `string`                  | Path to `tailor.config.ts`                                     |
+| `pluginConfig` | `PluginConfig`            | Plugin-level config from `definePlugins()`                     |
+
+`TailorDBNamespaceData` contains:
+
+| Field               | Type                                       | Description                          |
+| ------------------- | ------------------------------------------ | ------------------------------------ |
+| `namespace`         | `string`                                   | Namespace name                       |
+| `types`             | `Record<string, TailorDBType>`             | All finalized types in the namespace |
+| `sourceInfo`        | `ReadonlyMap<string, TypeSourceInfoEntry>` | Source file info for each type       |
+| `pluginAttachments` | `ReadonlyMap<string, PluginAttachment[]>`  | Plugin configs attached to each type |
+
+**Returns** (`GeneratorResult`):
+
+| Field    | Type                                                   | Description              |
+| -------- | ------------------------------------------------------ | ------------------------ |
+| `files`  | `Array<{ path, content, skipIfExists?, executable? }>` | Files to write to disk   |
+| `errors` | `string[]?`                                            | Error messages to report |
+
+**Use cases**:
+
+- Generate type definitions (e.g., Kysely types, enum constants)
+- Generate seed data scaffolding from type schemas
+- Generate type lists or metadata files
+
+```typescript
+onTailorDBReady(ctx) {
+  const allTypes = ctx.tailordb.flatMap((ns) =>
+    Object.values(ns.types).map((t) => t.name),
+  );
+  return {
+    files: [{ path: `${ctx.baseDir}/types.ts`, content: `export const types = ${JSON.stringify(allTypes)};\n` }],
+  };
+},
+```
+
+### onResolverReady
+
+**Trigger**: Called once after all resolvers are loaded, for plugins that do not implement `onExecutorReady`.
+
+**Context** (`ResolverReadyContext`):
+
+All fields from `TailorDBReadyContext`, plus:
+
+| Field       | Type                      | Description                         |
+| ----------- | ------------------------- | ----------------------------------- |
+| `resolvers` | `ResolverNamespaceData[]` | All namespaces with their resolvers |
+
+`ResolverNamespaceData` contains:
+
+| Field       | Type                       | Description                    |
+| ----------- | -------------------------- | ------------------------------ |
+| `namespace` | `string`                   | Namespace name                 |
+| `resolvers` | `Record<string, Resolver>` | All resolvers in the namespace |
+
+**Returns**: `GeneratorResult` (same as `onTailorDBReady`)
+
+**Use cases**:
+
+- Generate API client code from resolver definitions
+- Generate documentation that includes resolver endpoints
+
+```typescript
+onResolverReady(ctx) {
+  const resolverNames = ctx.resolvers.flatMap((ns) =>
+    Object.values(ns.resolvers).map((r) => r.name),
+  );
+  return {
+    files: [{ path: `${ctx.baseDir}/api.ts`, content: generateApiClient(resolverNames) }],
+  };
+},
+```
+
+### onExecutorReady
+
+**Trigger**: Called once after all executors are loaded.
+
+**Context** (`ExecutorReadyContext`):
+
+All fields from `ResolverReadyContext`, plus:
+
+| Field       | Type                       | Description                            |
+| ----------- | -------------------------- | -------------------------------------- |
+| `executors` | `Record<string, Executor>` | All executors (keyed by executor name) |
+
+**Returns**: `GeneratorResult` (same as `onTailorDBReady`)
+
+**Use cases**:
+
+- Generate dashboards or reports that need the full application topology
+- Generate configuration files that reference all services
+
+```typescript
+onExecutorReady(ctx) {
+  const summary = {
+    types: ctx.tailordb.flatMap((ns) => Object.keys(ns.types)),
+    resolvers: ctx.resolvers.flatMap((ns) => Object.keys(ns.resolvers)),
+    executors: Object.keys(ctx.executors),
+  };
+  return {
+    files: [{ path: `${ctx.baseDir}/app-summary.json`, content: JSON.stringify(summary, null, 2) }],
+  };
+},
+```
+
+## Hook Scheduling Rules
+
+Each generation-time hook runs at its own pipeline phase, regardless of what other hooks the same plugin implements:
+
+| Hook              | Runs after       | Data provided                                   |
+| ----------------- | ---------------- | ----------------------------------------------- |
+| `onTailorDBReady` | TailorDB loaded  | `tailordb` + `auth`                             |
+| `onResolverReady` | Resolvers loaded | `tailordb` + `resolvers` + `auth`               |
+| `onExecutorReady` | Executors loaded | `tailordb` + `resolvers` + `executors` + `auth` |
+
+A plugin implementing multiple hooks (e.g., both `onTailorDBReady` and `onResolverReady`) will have each hook called at its natural phase. This ensures that files generated by `onTailorDBReady` are available when resolvers are loaded, before `onResolverReady` runs.
+
+## Import Types
+
+All context and result types are exported from `@tailor-platform/sdk`:
+
+```typescript
+import type {
+  Plugin,
+  PluginProcessContext,
+  TypePluginOutput,
+  PluginOutput,
+  TailorDBReadyContext,
+  ResolverReadyContext,
+  ExecutorReadyContext,
+  TailorDBNamespaceData,
+  ResolverNamespaceData,
+  GeneratorResult,
+} from "@tailor-platform/sdk";
 ```
 
 ## getGeneratedType Helper
 
 The SDK provides an async `getGeneratedType()` helper function to retrieve plugin-generated TailorDB types. This enables generators and other tools to work with types generated by plugins.
-
-```typescript
-import { join } from "node:path";
-import { getGeneratedType } from "@tailor-platform/sdk/plugin";
-import { customer } from "./tailordb/customer";
-
-const configPath = join(import.meta.dirname, "./tailor.config.ts");
-
-// Get the generated type by config path, plugin ID, source type, and kind
-const DeletedCustomer = await getGeneratedType(
-  configPath,
-  "@example/soft-delete",
-  customer,
-  "archive",
-);
-```
-
-**Parameters:**
-
-- `configPath`: Path to `tailor.config.ts` (absolute or relative to cwd)
-- `pluginId`: The plugin's unique identifier (e.g., `"@example/soft-delete"`)
-- `sourceType`: The TailorDB type that the plugin is attached to (`null` for namespace plugins)
-- `kind`: The generated type kind (e.g., `"archive"`, `"auditLog"`)
-
-**How it works:**
-
-1. Loads and caches the config from the given path
-2. Finds the plugin by ID from `definePlugins()` exports
-3. Auto-resolves the namespace from config
-4. Calls the plugin's `processType()` or `processNamespace()` method
-5. Caches the result to avoid redundant processing
-6. Returns the generated type matching the specified kind
-
-### Example Usage
 
 ```typescript
 import { join } from "node:path";
@@ -188,16 +297,32 @@ const DeletedCustomer = await getGeneratedType(
 const AuditLog = await getGeneratedType(configPath, "@example/audit-log", null, "auditLog");
 ```
 
-## Example: Soft Delete Plugin
+**Parameters:**
 
-A complete example of a plugin that adds soft delete functionality:
+- `configPath`: Path to `tailor.config.ts` (absolute or relative to cwd)
+- `pluginId`: The plugin's unique identifier (e.g., `"@example/soft-delete"`)
+- `sourceType`: The TailorDB type that the plugin is attached to (`null` for namespace plugins)
+- `kind`: The generated type kind (e.g., `"archive"`, `"auditLog"`)
 
-### Plugin Definition
+**How it works:**
+
+1. Loads and caches the config from the given path
+2. Finds the plugin by ID from `definePlugins()` exports
+3. Auto-resolves the namespace from config
+4. Calls the plugin's `onTypeLoaded()` or `onNamespaceLoaded()` method
+5. Caches the result to avoid redundant processing
+6. Returns the generated type matching the specified kind
+
+## Examples
+
+### Definition-time Plugin (Soft Delete)
+
+A plugin that adds soft delete functionality via `onTypeLoaded`:
 
 ```typescript
 // plugins/soft-delete/plugin.ts
-import { db, t } from "@tailor-platform/sdk";
-import type { Plugin, PluginProcessContext, PluginOutput } from "@tailor-platform/sdk";
+import { db } from "@tailor-platform/sdk";
+import type { Plugin, PluginProcessContext, TypePluginOutput } from "@tailor-platform/sdk";
 
 interface SoftDeleteConfig {
   archiveReason?: boolean;
@@ -210,22 +335,9 @@ interface SoftDeletePluginConfig {
   requireTypeConfig?: boolean;
 }
 
-const configSchema = t.object({
-  archiveReason: t.bool({ optional: true }),
-  retentionDays: t.int({ optional: true }),
-  // Use { required: true } to mark fields as required in plugin configs.
-  // By default, plugin config fields are optional.
-  // token: t.string({ required: true }),
-});
-
-const pluginConfigSchema = t.object({
-  archiveTablePrefix: t.string({ optional: true }),
-  defaultRetentionDays: t.int({ optional: true }),
-});
-
 function processSoftDelete(
   context: PluginProcessContext<SoftDeleteConfig, SoftDeletePluginConfig>,
-): PluginOutput {
+): TypePluginOutput {
   const { type, typeConfig, pluginConfig, namespace } = context;
   const prefix = pluginConfig?.archiveTablePrefix ?? "Deleted_";
 
@@ -265,30 +377,29 @@ function processSoftDelete(
   };
 }
 
-// Factory function for plugins with plugin-level config
-function createSoftDeletePlugin(pluginConfig?: SoftDeletePluginConfig): Plugin {
+function createSoftDeletePlugin(
+  pluginConfig?: SoftDeletePluginConfig,
+): Plugin<SoftDeleteConfig, SoftDeletePluginConfig> {
   return {
     id: "@example/soft-delete",
     description: "Adds soft delete with archive functionality",
     importPath: "./plugins/soft-delete",
-    configSchema,
-    pluginConfigSchema,
     pluginConfig,
     typeConfigRequired: (config) => config?.requireTypeConfig === true,
-    processType: processSoftDelete,
+    onTypeLoaded: processSoftDelete,
   };
 }
 
-// Default export is required for getGeneratedType() to work
 export default createSoftDeletePlugin();
 ```
 
-### Executor with Context
+#### Executor with Context
 
 ```typescript
 // plugins/soft-delete/executors/on-delete.ts
-import { createExecutor, recordDeletedTrigger, withPluginContext } from "@tailor-platform/sdk";
+import { createExecutor, recordDeletedTrigger } from "@tailor-platform/sdk";
 import type { TailorAnyDBType } from "@tailor-platform/sdk";
+import { withPluginContext } from "@tailor-platform/sdk/plugin";
 import { getDB } from "generated/tailordb";
 
 interface SoftDeleteContext {
@@ -323,14 +434,13 @@ export default withPluginContext((ctx: SoftDeleteContext) => {
 });
 ```
 
-### Usage
+#### Usage
 
 ```typescript
 // tailor.config.ts
 import { definePlugins } from "@tailor-platform/sdk";
 import softDeletePlugin from "./plugins/soft-delete";
 
-// Use a factory function to pass plugin-level config
 export const plugins = definePlugins(
   softDeletePlugin({
     archiveTablePrefix: "Deleted_",
@@ -351,24 +461,91 @@ export const customer = db
   });
 ```
 
-If your plugin uses `typeConfigRequired` as a function, you can toggle whether per-type config
-is required via `pluginConfig`:
+### Generation-only Plugin (Type List)
+
+A plugin that only uses `onTailorDBReady` to generate output files:
 
 ```typescript
-export const plugins = definePlugins(
-  softDeletePlugin({
-    archiveTablePrefix: "Deleted_",
-    requireTypeConfig: true,
-  }),
-);
+import type { Plugin, GeneratorResult } from "@tailor-platform/sdk";
+
+const typeListPlugin: Plugin = {
+  id: "@example/type-list",
+  description: "Generates a list of all TailorDB type names",
+
+  onTailorDBReady(ctx): GeneratorResult {
+    const allTypes = ctx.tailordb.flatMap((ns) =>
+      Object.entries(ns.types).map(([_, type]) => ({
+        name: type.name,
+        fieldCount: Object.keys(type.fields).length,
+        namespace: ns.namespace,
+      })),
+    );
+    const content = `// Generated type list\nexport const types = ${JSON.stringify(allTypes, null, 2)} as const;\n`;
+    return {
+      files: [{ path: `${ctx.baseDir}/types.ts`, content }],
+    };
+  },
+};
+```
+
+### Hybrid Plugin (Definition + Generation)
+
+A plugin that uses both definition-time and generation-time hooks:
+
+```typescript
+const plugin: Plugin = {
+  id: "@example/hybrid",
+  description: "Generates derived types and produces output files",
+  importPath: "./plugins/hybrid",
+
+  // Definition-time: Generate additional types from attached source types
+  onTypeLoaded(context) {
+    return { types: { derived: createDerivedType(context.type) } };
+  },
+
+  // Generation-time: Generate output files from all finalized types
+  onTailorDBReady(ctx) {
+    const allTypes = ctx.tailordb.flatMap((ns) => Object.values(ns.types).map((t) => t.name));
+    return {
+      files: [{ path: `${ctx.baseDir}/output.ts`, content: generateCode(allTypes) }],
+    };
+  },
+};
 ```
 
 ## Adding Type Safety
 
-To enable type checking for your plugin's configuration, add a declaration merge:
+### Plugin-level type safety (TypeConfig / PluginConfig)
+
+Use TypeScript type parameters on `Plugin<TypeConfig, PluginConfig>` to get type-safe config
+in `onTypeLoaded` and `onNamespaceLoaded` methods:
 
 ```typescript
-// user-defined.d.ts or your plugin's types.ts
+interface MyTypeConfig {
+  archiveReason?: boolean;
+}
+
+interface MyPluginConfig {
+  prefix?: string;
+}
+
+const plugin: Plugin<MyTypeConfig, MyPluginConfig> = {
+  id: "@example/my-plugin",
+  // ...
+  onTypeLoaded(context) {
+    // context.typeConfig is MyTypeConfig
+    // context.pluginConfig is MyPluginConfig
+  },
+};
+```
+
+### Per-type `.plugin()` type safety (declaration merging)
+
+To enable type checking when users attach plugins via `.plugin()`, provide a declaration merge
+for the `PluginConfigs` interface. Plugin authors should ship this in their package's type definitions:
+
+```typescript
+// your-plugin/types.d.ts (shipped with your plugin package)
 declare module "@tailor-platform/sdk" {
   interface PluginConfigs<Fields extends string> {
     "@example/soft-delete": {
@@ -389,57 +566,4 @@ declare module "@tailor-platform/sdk" {
     };
   }
 }
-```
-
-## Plugin Types
-
-### Type-Attached Plugins
-
-Implement `processType` to handle types with the plugin attached:
-
-```typescript
-const plugin: Plugin = {
-  id: "@example/my-plugin",
-  // ...
-  processType(context) {
-    // Called for each type with .plugin({ "@example/my-plugin": config })
-    return {
-      types: {
-        /* generated types */
-      },
-    };
-  },
-};
-```
-
-### Namespace Plugins
-
-Implement `processNamespace` for plugins that generate types independently:
-
-```typescript
-const plugin: Plugin = {
-  id: "@example/audit-log",
-  // ...
-  processNamespace(context) {
-    // Called once per namespace, with namespace-level types available
-    return { types: { auditLog: /* generated type */ } };
-  },
-};
-```
-
-### Hybrid Plugins
-
-Implement both methods for plugins that support both modes:
-
-```typescript
-const plugin: Plugin = {
-  id: "@example/hybrid",
-  // ...
-  processType(context) {
-    // Handle type attachments
-  },
-  processNamespace(context) {
-    // Handle namespace generation
-  },
-};
 ```
