@@ -16,7 +16,7 @@ type DefinedSecrets<T extends SecretsInput> = {
 } & SecretsDefinitionBrand;
 
 /** Type accepted by `AppConfig.secrets`. Only values returned by `defineSecrets()` satisfy this. */
-export type SecretsConfig = DefinedSecrets<SecretsInput>;
+export type SecretsConfig = Omit<ReturnType<typeof defineSecrets>, "get" | "getAll">;
 
 /**
  * Define secrets configuration for the Tailor SDK.

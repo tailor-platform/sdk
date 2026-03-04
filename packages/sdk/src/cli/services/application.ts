@@ -218,7 +218,7 @@ function defineSecrets(config: AppConfig["secrets"]): SecretVault[] {
   // Create a plain object with only enumerable properties (vault data).
   // Zod v4's z.record() uses Reflect.ownKeys() which sees non-enumerable
   // properties like get/getAll attached by defineSecrets() in the configure layer.
-  const data = Object.fromEntries(Object.entries(config as Record<string, unknown>));
+  const data = Object.fromEntries(Object.entries(config));
   const parsed = SecretsSchema.parse(data);
 
   return Object.entries(parsed).map(([vaultName, vaultSecrets]) => ({
