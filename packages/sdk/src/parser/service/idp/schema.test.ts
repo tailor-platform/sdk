@@ -238,10 +238,11 @@ describe("IdPUserAuthPolicySchema validation", () => {
     );
   });
 
-  it("accepts allowMicrosoftOauth as true with allowedEmailDomains", () => {
+  it("accepts allowMicrosoftOauth as true with allowedEmailDomains and disablePasswordAuth", () => {
     const policy = {
       allowMicrosoftOauth: true,
       allowedEmailDomains: ["example.com"],
+      disablePasswordAuth: true,
     };
 
     const result = IdPUserAuthPolicySchema.parse(policy);
@@ -282,10 +283,34 @@ describe("IdPUserAuthPolicySchema validation", () => {
       useNonEmailIdentifier: false,
       allowMicrosoftOauth: true,
       allowedEmailDomains: ["example.com"],
+      disablePasswordAuth: true,
     };
 
     const result = IdPUserAuthPolicySchema.parse(policy);
     expect(result.allowMicrosoftOauth).toBe(true);
+  });
+
+  it("rejects allowMicrosoftOauth when disablePasswordAuth is not set", () => {
+    const policy = {
+      allowMicrosoftOauth: true,
+      allowedEmailDomains: ["example.com"],
+    };
+
+    expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow(
+      "allowMicrosoftOauth requires disablePasswordAuth to be enabled",
+    );
+  });
+
+  it("rejects allowMicrosoftOauth when disablePasswordAuth is false", () => {
+    const policy = {
+      allowMicrosoftOauth: true,
+      allowedEmailDomains: ["example.com"],
+      disablePasswordAuth: false,
+    };
+
+    expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow(
+      "allowMicrosoftOauth requires disablePasswordAuth to be enabled",
+    );
   });
 
   it("rejects allowMicrosoftOauth when allowedEmailDomains is not set", () => {

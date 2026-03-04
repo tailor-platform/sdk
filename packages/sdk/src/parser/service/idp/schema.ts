@@ -89,6 +89,10 @@ export const IdPUserAuthPolicySchema = z
       path: ["allowMicrosoftOauth"],
     },
   )
+  .refine((data) => !data.allowMicrosoftOauth || data.disablePasswordAuth === true, {
+    message: "allowMicrosoftOauth requires disablePasswordAuth to be enabled",
+    path: ["allowMicrosoftOauth"],
+  })
   .refine(
     (data) =>
       !data.disablePasswordAuth ||
