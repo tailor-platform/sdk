@@ -77,6 +77,21 @@ tailor-sdk function logs [options] [executionId]
 | `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
 
 <!-- politty:command:function logs:options:end -->
+
+**Usage Examples:**
+
+```bash
+# List all function execution logs
+tailor-sdk function logs
+
+# Get execution details with logs
+tailor-sdk function logs <execution-id>
+
+# Output as JSON
+tailor-sdk function logs --json
+tailor-sdk function logs <execution-id> --json
+```
+
 <!-- politty:command:function test-run:heading:start -->
 
 ### function test-run
@@ -157,17 +172,3 @@ When a `.js` file is provided, detection and bundling are skipped and the file i
 > Triggered jobs are not executed; only the target job's `body` function runs in isolation.
 
 <!-- politty:command:function test-run:notes:end -->
-
-**Usage Examples:**
-
-```bash
-# List all function execution logs
-tailor-sdk function logs
-
-# Get execution details with logs
-tailor-sdk function logs <execution-id>
-
-# Output as JSON
-tailor-sdk function logs --json
-tailor-sdk function logs <execution-id> --json
-```

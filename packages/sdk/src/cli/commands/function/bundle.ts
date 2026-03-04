@@ -13,8 +13,11 @@ import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { resolveInlineSourcemap } from "@/cli/shared/inline-sourcemap";
+import { unauthenticatedTailorUser } from "@/configure/types/user";
 import { tailorUserMap } from "@/parser/service/tailordb";
 import type { DetectedFunction } from "./detect";
+
+const unauthenticatedUserExpr = JSON.stringify(unauthenticatedTailorUser);
 
 interface BundleForTestRunOptions {
   /** Detected function info */
@@ -121,17 +124,24 @@ function generateEntry(
       `;
 
     case "resolver":
-      // Same pattern as resolver-bundler.ts:91-117
+      // Same pattern as services/resolver/bundler.ts:125-152
+      // In production, the operationHook injects user/env into context.
+      // For test-run, we inject them here since there's no operationHook.
       return ml /* js */ `
         import _internalResolver from "${absoluteSourcePath}";
         import { t } from "@tailor-platform/sdk";
 
+        const _env = ${JSON.stringify(env)};
+        const _user = typeof user !== "undefined" ? ${tailorUserMap} : ${unauthenticatedUserExpr};
+
         const $tailor_resolver_body = async (context) => {
+          const enrichedContext = { ...context, env: _env, user: _user };
+
           if (_internalResolver.input) {
             const result = t.object(_internalResolver.input).parse({
-              value: context.input,
-              data: context.input,
-              user: context.user,
+              value: enrichedContext.input,
+              data: enrichedContext.input,
+              user: enrichedContext.user,
             });
 
             if (result.issues) {
@@ -145,24 +155,30 @@ function generateEntry(
             }
           }
 
-          return _internalResolver.body(context);
+          return _internalResolver.body(enrichedContext);
         };
 
         export { $tailor_resolver_body as main };
       `;
 
     case "executor":
-      // Same pattern as executor-bundler.ts:110-115
+      // Same pattern as services/executor/bundler.ts:144-150
+      // In production, buildExecutorArgsExpr injects actor/env into args.
+      // For test-run, we inject env here.
       return ml /* js */ `
         import _internalExecutor from "${absoluteSourcePath}";
 
-        const __executor_function = _internalExecutor.operation.body;
+        const _env = ${JSON.stringify(env)};
+
+        const __executor_function = async (args) => {
+          return _internalExecutor.operation.body({ ...args, env: _env });
+        };
 
         export { __executor_function as main };
       `;
 
     case "workflow-job": {
-      // Same pattern as workflow-bundler.ts:238-245
+      // Same pattern as services/workflow/bundler.ts:286-294
       const exportName = detected.exportName!;
       return ml /* js */ `
         import { ${exportName} } from "${absoluteSourcePath}";
@@ -170,7 +186,7 @@ function generateEntry(
         const env = ${JSON.stringify(env)};
 
         export async function main(input) {
-          const _user = ${tailorUserMap};
+          const _user = typeof user !== "undefined" ? ${tailorUserMap} : ${unauthenticatedUserExpr};
           return await ${exportName}.body(input, { env, user: _user });
         }
       `;
