@@ -1,47 +1,14 @@
 import * as fs from "node:fs";
-import { createRequire } from "node:module";
 import ml from "multiline-ts";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { getDistDir } from "@/cli/utils/dist-dir";
-import { CLIError } from "@/cli/utils/errors";
 import type { QueryEngine } from "@/cli/query";
-
-const REQUIRED_SQL_PACKAGES = ["kysely", "@tailor-platform/function-kysely-tailordb"] as const;
-
-let sqlDependencyCheckDone = false;
-
-function checkSqlDependencies(): void {
-  if (sqlDependencyCheckDone) {
-    return;
-  }
-  sqlDependencyCheckDone = true;
-
-  const require = createRequire(path.resolve(process.cwd(), "package.json"));
-  const missing: string[] = [];
-
-  for (const pkg of REQUIRED_SQL_PACKAGES) {
-    try {
-      require.resolve(pkg);
-    } catch {
-      missing.push(pkg);
-    }
-  }
-
-  if (missing.length > 0) {
-    throw CLIError({
-      code: "missing_dependency",
-      message: "Missing required dependencies for SQL query execution.",
-      details: missing.join(", "),
-      suggestion: `Run: pnpm add -D ${missing.join(" ")}`,
-    });
-  }
-}
 
 function createSqlEntry(): string {
   return ml /* ts */ `
-    import { Kysely, sql } from "kysely";
+    import { Kysely, sql } from "@tailor-platform/sdk/kysely";
     import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
 
     type QueryInput = {
@@ -106,10 +73,6 @@ function createGqlEntry(): string {
  * @returns Bundled code
  */
 export async function bundleQueryScript(engine: QueryEngine): Promise<string> {
-  if (engine === "sql") {
-    checkSqlDependencies();
-  }
-
   const outputDir = path.resolve(getDistDir(), "query");
   fs.mkdirSync(outputDir, { recursive: true });
 

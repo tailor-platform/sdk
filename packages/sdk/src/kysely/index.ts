@@ -13,6 +13,7 @@ import {
   type Insertable,
   type KyselyConfig,
   type Selectable,
+  sql,
   type Transaction as KyselyTransaction,
   type Updateable,
 } from "kysely";
@@ -24,6 +25,7 @@ export {
   type Transaction,
   type Insertable,
   type Selectable,
+  sql,
   type Updateable,
 } from "kysely";
 
