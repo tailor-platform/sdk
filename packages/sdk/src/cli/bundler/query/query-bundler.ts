@@ -54,14 +54,20 @@ function createGqlEntry(): string {
           query: input.query,
         }),
       });
-      const json = await response.json();
       if (!response.ok) {
-        const message =
-          json && typeof json === "object" && "message" in json
-            ? String(json.message)
-            : \`HTTP \${response.status}\`;
+        let message = \`HTTP \${response.status}\`;
+        try {
+          const errorJson = await response.json();
+          if (errorJson && typeof errorJson === "object" && "message" in errorJson) {
+            message = String(errorJson.message);
+          }
+        } catch {
+          // Keep default HTTP status message when response body is not JSON.
+        }
         throw new Error(\`GraphQL request failed: \${message}\`);
       }
+
+      const json = await response.json();
       return json;
     }
   `;
