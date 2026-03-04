@@ -19,5 +19,15 @@
     "tsx",
     "zinfer"
   ],
-  "ignoreBinaries": ["vitest", "tsdown", "oxlint", "eslint", "tsc", "tsgo", "knip", "publint"]
+  "ignoreBinaries": [
+    "vitest",
+    "tsdown",
+    "oxlint",
+    "eslint",
+    "tsc",
+    "tsgo",
+    "knip",
+    "publint",
+    "zinfer"
+  ]
 }
