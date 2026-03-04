@@ -208,12 +208,21 @@ export declare type IdPUserAuthPolicy = Message<"tailor.v1.IdPUserAuthPolicy"> &
   /**
    * disable_password_auth disables password-based authentication for this namespace.
    * When enabled, users cannot sign in or reset their password using email/password.
-   * Requires allow_google_oauth to be enabled.
+   * Requires allow_google_oauth or allow_microsoft_oauth to be enabled.
    * Cannot be used with allow_self_password_reset.
    *
    * @generated from field: bool disable_password_auth = 11;
    */
   disablePasswordAuth: boolean;
+
+  /**
+   * allow_microsoft_oauth enables "Sign in with Microsoft" for this namespace.
+   * Requires disable_password_auth to be true.
+   * Cannot be enabled when use_non_email_identifier is true.
+   *
+   * @generated from field: bool allow_microsoft_oauth = 12;
+   */
+  allowMicrosoftOauth: boolean;
 };
 
 /**
