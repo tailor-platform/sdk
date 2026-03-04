@@ -1,71 +1,24 @@
+import * as globals from "globals";
+
+type GlobalsShape = {
+  builtin?: Record<string, boolean>;
+  "shared-node-browser"?: Record<string, boolean>;
+};
+
+const globalsMap: GlobalsShape =
+  (globals as unknown as { default?: GlobalsShape }).default ??
+  (globals as unknown as GlobalsShape);
+
 /**
- * ECMAScript built-in globals.
+ * Runtime globals available in the PF execution environment.
  * Identifiers in this set are excluded from free variable detection
  * since they are always available in the runtime environment.
  *
- * Based on globals.builtin from the `globals` npm package (v17).
+ * Combines globals.builtin (ECMAScript language builtins) and
+ * globals['shared-node-browser'] (shared runtime globals like
+ * console, fetch, setTimeout, etc.) from the `globals` npm package.
  */
 export const ES_BUILTINS = new Set([
-  "AggregateError",
-  "Array",
-  "ArrayBuffer",
-  "Atomics",
-  "BigInt",
-  "BigInt64Array",
-  "BigUint64Array",
-  "Boolean",
-  "DataView",
-  "Date",
-  "decodeURI",
-  "decodeURIComponent",
-  "encodeURI",
-  "encodeURIComponent",
-  "Error",
-  "escape",
-  "eval",
-  "EvalError",
-  "FinalizationRegistry",
-  "Float16Array",
-  "Float32Array",
-  "Float64Array",
-  "Function",
-  "globalThis",
-  "Infinity",
-  "Int16Array",
-  "Int32Array",
-  "Int8Array",
-  "Intl",
-  "isFinite",
-  "isNaN",
-  "Iterator",
-  "JSON",
-  "Map",
-  "Math",
-  "NaN",
-  "Number",
-  "Object",
-  "parseFloat",
-  "parseInt",
-  "Promise",
-  "Proxy",
-  "RangeError",
-  "ReferenceError",
-  "Reflect",
-  "RegExp",
-  "Set",
-  "SharedArrayBuffer",
-  "String",
-  "Symbol",
-  "SyntaxError",
-  "TypeError",
-  "Uint16Array",
-  "Uint32Array",
-  "Uint8Array",
-  "Uint8ClampedArray",
-  "undefined",
-  "unescape",
-  "URIError",
-  "WeakMap",
-  "WeakRef",
-  "WeakSet",
+  ...Object.keys(globalsMap.builtin ?? {}),
+  ...Object.keys(globalsMap["shared-node-browser"] ?? {}),
 ]);
