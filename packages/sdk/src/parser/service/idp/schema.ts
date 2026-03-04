@@ -70,16 +70,10 @@ export const IdPUserAuthPolicySchema = z
       path: ["allowGoogleOauth"],
     },
   )
-  .refine(
-    (data) =>
-      data.allowMicrosoftOauth === undefined ||
-      data.allowMicrosoftOauth === false ||
-      !data.useNonEmailIdentifier,
-    {
-      message: "allowMicrosoftOauth cannot be set when useNonEmailIdentifier is true",
-      path: ["allowMicrosoftOauth"],
-    },
-  )
+  .refine((data) => !data.allowMicrosoftOauth || !data.useNonEmailIdentifier, {
+    message: "allowMicrosoftOauth cannot be set when useNonEmailIdentifier is true",
+    path: ["allowMicrosoftOauth"],
+  })
   .refine(
     (data) =>
       !data.allowMicrosoftOauth ||
