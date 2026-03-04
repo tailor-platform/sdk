@@ -256,7 +256,7 @@ function parseExecutionResult(result: string): unknown {
  * @param options - Query command options
  * @returns Dispatch result
  */
-async function executeQuery(options: QueryOptions): Promise<QueryDispatchResult> {
+export async function query(options: QueryOptions): Promise<QueryDispatchResult> {
   const { client, workspaceId, application, machineUserResource, engine, namespace } =
     await loadOptions(options);
 
@@ -295,21 +295,12 @@ async function executeQuery(options: QueryOptions): Promise<QueryDispatchResult>
 }
 
 /**
- * Execute query with explicit engine selection.
- * @param options - Query command options
- * @returns Query result
- */
-export async function query(options: QueryOptions): Promise<QueryDispatchResult> {
-  return executeQuery(options);
-}
-
-/**
  * Execute SQL query directly.
  * @param options - Shared query options
  * @returns SQL query result
  */
 async function querySql(options: QuerySharedOptions): Promise<SQLQueryDispatchResult> {
-  const result = await executeQuery({
+  const result = await query({
     ...options,
     engine: "sql",
   });
@@ -327,7 +318,7 @@ async function querySql(options: QuerySharedOptions): Promise<SQLQueryDispatchRe
  * @returns GraphQL query result
  */
 async function queryGql(options: QuerySharedOptions): Promise<GQLQueryDispatchResult> {
-  const result = await executeQuery({
+  const result = await query({
     ...options,
     engine: "gql",
   });
