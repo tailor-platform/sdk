@@ -4,15 +4,12 @@
  * Each service transforms server-side args/context into SDK-friendly format:
  * - Executor: server-side expression evaluated by platform before calling function
  * - Resolver: operationHook expression evaluated by platform before calling function
- * - Workflow: JS code embedded in bundled entry file (uses tailorUserMap directly)
  *
  * The user field mapping (server → SDK) shared across services is defined in
  * `@/parser/service/tailordb` as `tailorUserMap`.
  */
 import { tailorUserMap } from "@/parser/service/tailordb";
 import type { Trigger } from "@/parser/service/executor";
-
-export { tailorUserMap };
 
 // ---------------------------------------------------------------------------
 // Executor
