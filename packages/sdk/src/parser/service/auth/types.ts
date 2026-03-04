@@ -22,7 +22,7 @@ export type {
   TenantProvider as TenantProviderConfig,
   AuthConfigInput,
   AuthConfig as AuthConfigOutput,
-} from "@/types/auth";
+} from "@/types/auth.generated";
 
 // Manual types
 export type {
@@ -39,4 +39,4 @@ export type {
   AuthExternalConfig,
   AuthOwnConfig,
   AuthConfig,
-} from "@/types/auth.manual";
+} from "@/types/auth";

@@ -12,7 +12,7 @@ export default defineConfig({
     "src/parser/service/tailordb/schema.ts",
   ],
   outDir: "./src/types",
-  outPattern: "[dir][ext]",
+  outPattern: "[dir].generated[ext]",
   suffix: "Schema",
   inputSuffix: "Input",
   outputSuffix: "",

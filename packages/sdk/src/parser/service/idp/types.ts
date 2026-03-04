@@ -1,5 +1,5 @@
 // Zinfer-generated types
-export type { IdP, IdPInput, IdPLang } from "@/types/idp";
+export type { IdP, IdPInput, IdPLang } from "@/types/idp.generated";
 
 // Manual types
 export type {
@@ -8,7 +8,7 @@ export type {
   IdPExternalConfig,
   IdPOwnConfig,
   IdPConfig,
-} from "@/types/idp.manual";
+} from "@/types/idp";
 
 export type {
   IdPGqlOperations,

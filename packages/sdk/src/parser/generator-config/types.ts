@@ -1,5 +1,1 @@
-export type {
-  DependencyKind,
-  GeneratorConfig,
-  CodeGeneratorBase,
-} from "@/types/generator-config.manual";
+export type { DependencyKind, GeneratorConfig, CodeGeneratorBase } from "@/types/generator-config";

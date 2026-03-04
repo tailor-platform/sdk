@@ -1,4 +1,4 @@
-import type { EnumValue } from "@/types/tailordb.manual";
+import type { EnumValue } from "@/types/tailordb";
 
 export type AllowedValue = EnumValue;
 

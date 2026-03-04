@@ -5,7 +5,7 @@ import type {
   GqlOperation as ParserGqlOperation,
   WebhookOperation as ParserWebhookOperation,
   WorkflowOperation as ParserWorkflowOperation,
-} from "@/types/executor";
+} from "@/types/executor.generated";
 import type { Client } from "@urql/core";
 
 /** Function-based executor operation. The body receives the trigger args. */

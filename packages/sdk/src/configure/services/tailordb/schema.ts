@@ -27,12 +27,8 @@ import type { InferredAttributeMap, TailorUser } from "@/configure/types";
 import type { Prettify, output, InferFieldsOutput } from "@/configure/types/helpers";
 import type { FieldValidateInput, ValidateConfig, Validators } from "@/configure/types/validation";
 import type { PluginAttachment, PluginConfigs } from "@/types/plugin";
-import type { RawPermissions } from "@/types/tailordb";
-import type {
-  TailorDBTypeMetadata,
-  RawRelationConfig,
-  RelationType,
-} from "@/types/tailordb.manual";
+import type { TailorDBTypeMetadata, RawRelationConfig, RelationType } from "@/types/tailordb";
+import type { RawPermissions } from "@/types/tailordb.generated";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 
 interface RelationConfig<S extends RelationType, T extends TailorDBType> {

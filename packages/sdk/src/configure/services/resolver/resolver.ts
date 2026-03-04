@@ -4,7 +4,7 @@ import type { TailorAnyField, TailorUser } from "@/configure/types";
 import type { TailorEnv } from "@/configure/types/env";
 import type { InferFieldsOutput, output } from "@/configure/types/helpers";
 import type { TailorField } from "@/configure/types/type";
-import type { ResolverInput } from "@/types/resolver";
+import type { ResolverInput } from "@/types/resolver.generated";
 
 type Context<Input extends Record<string, TailorAnyField> | undefined> = {
   input: Input extends Record<string, TailorAnyField> ? InferFieldsOutput<Input> : never;

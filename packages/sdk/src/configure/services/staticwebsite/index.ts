@@ -1,4 +1,4 @@
-import type { StaticWebsiteInput } from "@/types/staticwebsite";
+import type { StaticWebsiteInput } from "@/types/staticwebsite.generated";
 
 declare const staticWebsiteDefinitionBrand: unique symbol;
 type StaticWebsiteDefinitionBrand = {

@@ -11,7 +11,7 @@ export type {
   TailorDBTypeRaw as TailorDBTypeSchemaOutput,
   TailorDBServiceConfigInput,
   TailorDBServiceConfig,
-} from "@/types/tailordb";
+} from "@/types/tailordb.generated";
 
 // Re-exports from configure layer
 export type {
@@ -49,17 +49,17 @@ export type {
   ParsedField,
   ParsedRelationship,
   TailorDBType,
-} from "@/types/tailordb.manual";
+} from "@/types/tailordb";
 
-export { isPluginGeneratedType } from "@/types/tailordb.manual";
+export { isPluginGeneratedType } from "@/types/tailordb";
 
 // Legacy aliases - map zinfer names to original names
-export type { DBFieldMetadata as DBFieldMetadataZinfer } from "@/types/tailordb";
+export type { DBFieldMetadata as DBFieldMetadataZinfer } from "@/types/tailordb.generated";
 
 // TailorDBFieldOutput uses zinfer-generated types
 export type TailorDBFieldOutput = {
   type: string;
   fields?: Record<string, TailorDBFieldOutput>;
-  metadata: import("@/types/tailordb").DBFieldMetadata;
-  rawRelation?: import("@/types/tailordb").RawRelationConfig;
+  metadata: import("@/types/tailordb.generated").DBFieldMetadata;
+  rawRelation?: import("@/types/tailordb.generated").RawRelationConfig;
 };

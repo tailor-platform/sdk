@@ -17,7 +17,7 @@ export type {
   WorkflowOperation,
   Executor,
   ExecutorInput,
-} from "@/types/executor";
+} from "@/types/executor.generated";
 
 // Service config types
 export type { ExecutorServiceConfig, ExecutorServiceInput } from "@/types/app-config";

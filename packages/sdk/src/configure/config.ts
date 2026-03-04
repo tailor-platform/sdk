@@ -1,5 +1,5 @@
 import type { AppConfig } from "@/types/app-config";
-import type { GeneratorConfig } from "@/types/generator-config.manual";
+import type { GeneratorConfig } from "@/types/generator-config";
 import type { Plugin } from "@/types/plugin";
 
 /**

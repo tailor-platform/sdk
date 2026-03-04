@@ -1,9 +1,9 @@
-import type { IdProvider as IdProviderConfig, OAuth2ClientInput } from "./auth";
-import type { Executor } from "./executor";
-import type { DependencyKind } from "./generator-config.manual";
+import type { IdProvider as IdProviderConfig, OAuth2ClientInput } from "./auth.generated";
+import type { Executor } from "./executor.generated";
+import type { DependencyKind } from "./generator-config";
 import type { PluginAttachment } from "./plugin";
-import type { Resolver } from "./resolver";
-import type { TailorDBType, TypeSourceInfoEntry } from "./tailordb.manual";
+import type { Resolver } from "./resolver.generated";
+import type { TailorDBType, TypeSourceInfoEntry } from "./tailordb";
 
 /**
  * A single generated file to write to disk.

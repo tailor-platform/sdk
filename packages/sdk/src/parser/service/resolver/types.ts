@@ -5,7 +5,7 @@ export type {
   QueryType,
   ResolverInput,
   Resolver,
-} from "@/types/resolver";
+} from "@/types/resolver.generated";
 
 // Service config types
 export type {

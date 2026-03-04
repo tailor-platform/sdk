@@ -1,6 +1,6 @@
 export { createResolver } from "./resolver";
 
-export type { QueryType, Resolver } from "@/types/resolver";
+export type { QueryType, Resolver } from "@/types/resolver.generated";
 export type {
   ResolverServiceConfig,
   ResolverExternalConfig,
