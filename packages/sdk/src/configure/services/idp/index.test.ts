@@ -187,6 +187,33 @@ describe("defineIdp", () => {
     expect(idpNoAllowGoogleOauth.userAuthPolicy?.allowGoogleOauth).toBeUndefined();
   });
 
+  it("should preserve userAuthPolicy allowMicrosoftOauth", () => {
+    const idpWithAllowMicrosoftOauth = defineIdp("idp-with-allow-microsoft-oauth", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      userAuthPolicy: {
+        allowMicrosoftOauth: true,
+      },
+    });
+    expect(idpWithAllowMicrosoftOauth.userAuthPolicy?.allowMicrosoftOauth).toBe(true);
+
+    const idpWithAllowMicrosoftOauthFalse = defineIdp("idp-with-allow-microsoft-oauth-false", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      userAuthPolicy: {
+        allowMicrosoftOauth: false,
+      },
+    });
+    expect(idpWithAllowMicrosoftOauthFalse.userAuthPolicy?.allowMicrosoftOauth).toBe(false);
+
+    const idpNoAllowMicrosoftOauth = defineIdp("idp-no-allow-microsoft-oauth", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      userAuthPolicy: {},
+    });
+    expect(idpNoAllowMicrosoftOauth.userAuthPolicy?.allowMicrosoftOauth).toBeUndefined();
+  });
+
   it("should preserve userAuthPolicy disablePasswordAuth", () => {
     const idpWithDisablePasswordAuth = defineIdp("idp-with-disable-password-auth", {
       authorization: "loggedIn",

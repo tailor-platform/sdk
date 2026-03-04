@@ -29,6 +29,7 @@ export const IdPUserAuthPolicySchema = z
       .optional(),
     allowedEmailDomains: z.array(z.string()).optional(),
     allowGoogleOauth: z.boolean().optional(),
+    allowMicrosoftOauth: z.boolean().optional(),
     disablePasswordAuth: z.boolean().optional(),
   })
   .refine(
@@ -69,10 +70,35 @@ export const IdPUserAuthPolicySchema = z
       path: ["allowGoogleOauth"],
     },
   )
-  .refine((data) => !data.disablePasswordAuth || data.allowGoogleOauth === true, {
-    message: "disablePasswordAuth requires allowGoogleOauth to be enabled",
-    path: ["disablePasswordAuth"],
-  })
+  .refine(
+    (data) =>
+      data.allowMicrosoftOauth === undefined ||
+      data.allowMicrosoftOauth === false ||
+      !data.useNonEmailIdentifier,
+    {
+      message: "allowMicrosoftOauth cannot be set when useNonEmailIdentifier is true",
+      path: ["allowMicrosoftOauth"],
+    },
+  )
+  .refine(
+    (data) =>
+      !data.allowMicrosoftOauth ||
+      (data.allowedEmailDomains && data.allowedEmailDomains.length > 0),
+    {
+      message: "allowMicrosoftOauth requires allowedEmailDomains to be set",
+      path: ["allowMicrosoftOauth"],
+    },
+  )
+  .refine(
+    (data) =>
+      !data.disablePasswordAuth ||
+      data.allowGoogleOauth === true ||
+      data.allowMicrosoftOauth === true,
+    {
+      message: "disablePasswordAuth requires allowGoogleOauth or allowMicrosoftOauth to be enabled",
+      path: ["disablePasswordAuth"],
+    },
+  )
   .refine((data) => !data.disablePasswordAuth || !data.allowSelfPasswordReset, {
     message: "disablePasswordAuth cannot be used with allowSelfPasswordReset",
     path: ["disablePasswordAuth"],

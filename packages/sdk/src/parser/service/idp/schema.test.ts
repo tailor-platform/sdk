@@ -106,6 +106,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     expect(result.passwordMaxLength).toBeUndefined();
     expect(result.allowedEmailDomains).toBeUndefined();
     expect(result.allowGoogleOauth).toBeUndefined();
+    expect(result.allowMicrosoftOauth).toBeUndefined();
     expect(result.disablePasswordAuth).toBeUndefined();
   });
 
@@ -237,10 +238,92 @@ describe("IdPUserAuthPolicySchema validation", () => {
     );
   });
 
+  it("accepts allowMicrosoftOauth as true with allowedEmailDomains", () => {
+    const policy = {
+      allowMicrosoftOauth: true,
+      allowedEmailDomains: ["example.com"],
+    };
+
+    const result = IdPUserAuthPolicySchema.parse(policy);
+    expect(result.allowMicrosoftOauth).toBe(true);
+  });
+
+  it("accepts allowMicrosoftOauth as false", () => {
+    const policy = {
+      allowMicrosoftOauth: false,
+    };
+
+    const result = IdPUserAuthPolicySchema.parse(policy);
+    expect(result.allowMicrosoftOauth).toBe(false);
+  });
+
+  it("rejects allowMicrosoftOauth when useNonEmailIdentifier is true", () => {
+    const policy = {
+      useNonEmailIdentifier: true,
+      allowMicrosoftOauth: true,
+    };
+
+    expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow(
+      "allowMicrosoftOauth cannot be set when useNonEmailIdentifier is true",
+    );
+  });
+
+  it("accepts allowMicrosoftOauth false when useNonEmailIdentifier is true", () => {
+    const policy = {
+      useNonEmailIdentifier: true,
+      allowMicrosoftOauth: false,
+    };
+
+    expect(() => IdPUserAuthPolicySchema.parse(policy)).not.toThrow();
+  });
+
+  it("accepts allowMicrosoftOauth when useNonEmailIdentifier is false", () => {
+    const policy = {
+      useNonEmailIdentifier: false,
+      allowMicrosoftOauth: true,
+      allowedEmailDomains: ["example.com"],
+    };
+
+    const result = IdPUserAuthPolicySchema.parse(policy);
+    expect(result.allowMicrosoftOauth).toBe(true);
+  });
+
+  it("rejects allowMicrosoftOauth when allowedEmailDomains is not set", () => {
+    const policy = {
+      allowMicrosoftOauth: true,
+    };
+
+    expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow(
+      "allowMicrosoftOauth requires allowedEmailDomains to be set",
+    );
+  });
+
+  it("rejects allowMicrosoftOauth when allowedEmailDomains is empty", () => {
+    const policy = {
+      allowMicrosoftOauth: true,
+      allowedEmailDomains: [],
+    };
+
+    expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow(
+      "allowMicrosoftOauth requires allowedEmailDomains to be set",
+    );
+  });
+
   it("accepts disablePasswordAuth as true when allowGoogleOauth is true", () => {
     const policy = {
       disablePasswordAuth: true,
       allowGoogleOauth: true,
+      allowedEmailDomains: ["example.com"],
+    };
+
+    const result = IdPUserAuthPolicySchema.parse(policy);
+    expect(result.disablePasswordAuth).toBe(true);
+  });
+
+  it("accepts disablePasswordAuth as true when allowMicrosoftOauth is true", () => {
+    const policy = {
+      disablePasswordAuth: true,
+      allowMicrosoftOauth: true,
       allowedEmailDomains: ["example.com"],
     };
 
@@ -263,7 +346,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     };
 
     expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow(
-      "disablePasswordAuth requires allowGoogleOauth to be enabled",
+      "disablePasswordAuth requires allowGoogleOauth or allowMicrosoftOauth to be enabled",
     );
   });
 
@@ -274,7 +357,7 @@ describe("IdPUserAuthPolicySchema validation", () => {
     };
 
     expect(() => IdPUserAuthPolicySchema.parse(policy)).toThrow(
-      "disablePasswordAuth requires allowGoogleOauth to be enabled",
+      "disablePasswordAuth requires allowGoogleOauth or allowMicrosoftOauth to be enabled",
     );
   });
 
