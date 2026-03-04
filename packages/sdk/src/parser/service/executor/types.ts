@@ -19,5 +19,5 @@ export type {
   ExecutorInput,
 } from "@/types/executor";
 
-// Manual types
-export type { ExecutorServiceConfig, ExecutorServiceInput } from "@/types/executor.manual";
+// Service config types
+export type { ExecutorServiceConfig, ExecutorServiceInput } from "@/types/app-config";

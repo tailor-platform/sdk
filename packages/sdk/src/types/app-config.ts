@@ -1,10 +1,24 @@
 import type { AuthConfig } from "./auth.manual";
-import type { ExecutorServiceInput } from "./executor.manual";
 import type { IdPConfig } from "./idp.manual";
-import type { ResolverServiceInput } from "./resolver.manual";
 import type { TailorDBServiceInput } from "./tailordb.manual";
-import type { WorkflowServiceInput } from "./workflow.manual";
 import type { StaticWebsiteConfig } from "@/configure/services/staticwebsite";
+
+export type ExecutorServiceConfig = { files: string[]; ignores?: string[] };
+export type ExecutorServiceInput = ExecutorServiceConfig;
+
+export type ResolverServiceConfig = { files: string[]; ignores?: string[] };
+export type ResolverExternalConfig = { external: true };
+export type ResolverServiceInput = {
+  [namespace: string]: ResolverServiceConfig | ResolverExternalConfig;
+};
+
+export type WorkflowServiceConfig = {
+  files: string[];
+  job_files?: string[];
+  ignores?: string[];
+  job_ignores?: string[];
+};
+export type WorkflowServiceInput = WorkflowServiceConfig;
 
 /**
  * Application configuration for `defineConfig()`.

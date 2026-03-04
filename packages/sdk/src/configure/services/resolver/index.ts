@@ -5,4 +5,4 @@ export type {
   ResolverServiceConfig,
   ResolverExternalConfig,
   ResolverServiceInput,
-} from "@/types/resolver.manual";
+} from "@/types/app-config";

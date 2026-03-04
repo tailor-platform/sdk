@@ -7,9 +7,9 @@ export type {
   Resolver,
 } from "@/types/resolver";
 
-// Manual types
+// Service config types
 export type {
   ResolverServiceConfig,
   ResolverExternalConfig,
   ResolverServiceInput,
-} from "@/types/resolver.manual";
+} from "@/types/app-config";
