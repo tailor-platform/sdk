@@ -1,3 +1,4 @@
+import { createInterface } from "node:readline/promises";
 import { create } from "@bufbuild/protobuf";
 import {
   AuthInvokerSchema,
@@ -20,17 +21,43 @@ import { extractTypeNamesFromSql } from "./sql-type-extractor";
 import type { Application } from "@tailor-proto/tailor/v1/application_resource_pb";
 
 const queryEngineSchema = z.enum(["sql", "gql"]);
-const queryOptionsSchema = z.object({
+const queryBaseOptionsSchema = z.object({
   workspaceId: z.string().optional(),
   profile: z.string().optional(),
   configPath: z.string().optional(),
   engine: queryEngineSchema,
-  query: z.string(),
   machineUser: z.string(),
 });
+const queryOptionsSchema = queryBaseOptionsSchema.extend({
+  query: z.string(),
+});
+const queryCommandInputSchema = z
+  .object({
+    query: z.string().optional(),
+    repl: z.boolean(),
+  })
+  .superRefine((input, context) => {
+    if (input.repl && input.query !== undefined) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["query"],
+        message: "--repl and --query cannot be used together.",
+      });
+      return;
+    }
+
+    if (!input.repl && (input.query === undefined || input.query.trim().length === 0)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["query"],
+        message: "--query is required unless --repl is set.",
+      });
+    }
+  });
 
 export type QueryEngine = z.infer<typeof queryEngineSchema>;
 type QueryOptions = z.input<typeof queryOptionsSchema>;
+type QueryBaseOptions = z.input<typeof queryBaseOptionsSchema>;
 type QuerySharedOptions = Omit<QueryOptions, "engine">;
 type Client = Awaited<ReturnType<typeof initOperatorClient>>;
 
@@ -98,8 +125,8 @@ async function getNamespaceFromSqlQuery(
   );
 }
 
-async function loadOptions(options: QueryOptions) {
-  const result = queryOptionsSchema.safeParse(options);
+async function loadOptions(options: QueryBaseOptions) {
+  const result = queryBaseOptionsSchema.safeParse(options);
 
   if (!result.success) {
     throw new Error(result.error.issues[0].message);
@@ -135,32 +162,14 @@ async function loadOptions(options: QueryOptions) {
     throw new Error(`Machine user ${result.data.machineUser} not found.`);
   }
 
-  if (options.engine === "gql") {
-    return {
-      engine: options.engine,
-      client,
-      workspaceId,
-      config,
-      application,
-      machineUserResource,
-    };
-  }
-
-  const namespace = await getNamespaceFromSqlQuery(
-    workspaceId,
-    result.data.query,
-    client,
-    namespaces,
-  );
-
   return {
-    engine: options.engine,
+    engine: result.data.engine,
     client,
     workspaceId,
     config,
     application,
     machineUserResource,
-    namespace,
+    namespaces,
   };
 }
 
@@ -257,41 +266,172 @@ function parseExecutionResult(result: string): unknown {
  * @returns Dispatch result
  */
 export async function query(options: QueryOptions): Promise<QueryDispatchResult> {
-  const { client, workspaceId, application, machineUserResource, engine, namespace } =
+  const result = queryOptionsSchema.safeParse(options);
+  if (!result.success) {
+    throw new Error(result.error.issues[0].message);
+  }
+
+  const executor = await prepareQueryExecutor(result.data);
+  return await executor(result.data.query);
+}
+
+async function prepareQueryExecutor(
+  options: QueryBaseOptions,
+): Promise<(query: string) => Promise<QueryDispatchResult>> {
+  const { client, workspaceId, application, machineUserResource, engine, namespaces } =
     await loadOptions(options);
+  const bundledCode = await bundleQueryScript(engine);
+  const invoker = create(AuthInvokerSchema, {
+    namespace: application.authNamespace,
+    machineUserName: machineUserResource.name,
+  });
+
+  return async (queryString: string) => {
+    let namespace: string | undefined;
+
+    try {
+      switch (engine) {
+        case "sql":
+          namespace = await getNamespaceFromSqlQuery(workspaceId, queryString, client, namespaces);
+          return await sqlQuery(client, invoker, {
+            workspaceId,
+            namespace,
+            bundledCode,
+            query: queryString,
+          });
+        case "gql":
+          return await gqlQuery(client, invoker, application, machineUserResource, {
+            workspaceId,
+            bundledCode,
+            query: queryString,
+          });
+        default:
+          throw new Error(`Unsupported query engine: ${engine satisfies never}`);
+      }
+    } catch (error) {
+      throw mapQueryExecutionError({
+        error,
+        engine,
+        namespace,
+        machineUser: options.machineUser,
+      });
+    }
+  };
+}
+
+async function runRepl(
+  options: QueryBaseOptions & {
+    json?: boolean;
+  },
+): Promise<void> {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    throw new Error("--repl requires an interactive terminal.");
+  }
+
+  const execute = await prepareQueryExecutor(options);
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  logger.info(`Entering ${options.engine.toUpperCase()} REPL mode.`);
+  logger.info("Type .help for usage, .exit to quit.");
+
+  const lines: string[] = [];
+  let emptyLineCount = 0;
 
   try {
-    const bundledCode = await bundleQueryScript(engine);
-    const invoker = create(AuthInvokerSchema, {
-      namespace: application.authNamespace,
-      machineUserName: machineUserResource.name,
-    });
+    while (true) {
+      const prompt = lines.length === 0 ? `${options.engine}> ` : " ";
+      const line = await rl.question(prompt);
+      const trimmed = line.trim();
 
-    switch (engine) {
-      case "sql":
-        return await sqlQuery(client, invoker, {
-          workspaceId,
-          namespace,
-          bundledCode,
-          query: options.query,
-        });
-      case "gql":
-        return await gqlQuery(client, invoker, application, machineUserResource, {
-          workspaceId,
-          bundledCode,
-          query: options.query,
-        });
-      default:
-        throw new Error(`Unsupported query engine: ${engine satisfies never}`);
+      if (lines.length === 0 && trimmed.startsWith(".")) {
+        if (trimmed === ".exit") {
+          return;
+        }
+        if (trimmed === ".help") {
+          printReplHelp(options.engine);
+          continue;
+        }
+        logger.warn(`Unknown command: ${trimmed}`);
+        continue;
+      }
+
+      lines.push(line);
+
+      if (options.engine === "sql") {
+        if (!trimmed.endsWith(";")) {
+          continue;
+        }
+      } else {
+        if (trimmed === "") {
+          emptyLineCount += 1;
+        } else {
+          emptyLineCount = 0;
+        }
+        if (emptyLineCount < 2) {
+          continue;
+        }
+      }
+
+      const statement = getReplStatement(lines, options.engine);
+      lines.length = 0;
+      emptyLineCount = 0;
+
+      if (statement.length === 0) {
+        continue;
+      }
+
+      try {
+        if (options.engine === "sql") {
+          const result = await execute(statement);
+          if (result.engine !== "sql") {
+            throw new Error(`Expected sql engine result but got: ${result.engine}`);
+          }
+          printSqlResult(result, { json: options.json });
+          continue;
+        }
+
+        const result = await execute(statement);
+        if (result.engine !== "gql") {
+          throw new Error(`Expected gql engine result but got: ${result.engine}`);
+        }
+        printGqlResult(result, { json: options.json });
+      } catch (error) {
+        if (error instanceof Error) {
+          logger.error(error.message);
+          continue;
+        }
+        logger.error(String(error));
+      }
     }
-  } catch (error) {
-    throw mapQueryExecutionError({
-      error,
-      engine,
-      namespace,
-      machineUser: options.machineUser,
-    });
+  } finally {
+    rl.close();
   }
+}
+
+function getReplStatement(lines: string[], engine: QueryEngine): string {
+  if (engine === "sql") {
+    return lines.join("\n").trim();
+  }
+
+  let end = lines.length;
+  while (end > 0 && lines[end - 1].trim() === "") {
+    end -= 1;
+  }
+  return lines.slice(0, end).join("\n").trim();
+}
+
+function printReplHelp(engine: QueryEngine): void {
+  logger.log("REPL commands:");
+  logger.log("  .help  Show this help");
+  logger.log("  .exit  Exit REPL");
+  if (engine === "sql") {
+    logger.log("SQL execution: statement ending with ';' runs immediately.");
+    return;
+  }
+  logger.log("GraphQL execution: submit two consecutive empty lines to run.");
 }
 
 /**
@@ -340,9 +480,12 @@ export const queryCommand = defineCommand({
     engine: arg(queryEngineSchema, {
       description: "Query engine (sql or gql)",
     }),
-    query: arg(z.string(), {
+    query: arg(z.string().optional(), {
       alias: "q",
       description: "Query string to execute directly",
+    }),
+    repl: arg(z.boolean().default(false), {
+      description: "Run query command in interactive REPL mode",
     }),
     machineuser: arg(z.string(), {
       alias: "m",
@@ -350,21 +493,48 @@ export const queryCommand = defineCommand({
     }),
   }),
   run: withCommonArgs(async (args) => {
-    const sharedOptions: QuerySharedOptions = {
+    const mode = queryCommandInputSchema.safeParse({
+      query: args.query,
+      repl: args.repl,
+    });
+    if (!mode.success) {
+      throw new Error(mode.error.issues[0].message);
+    }
+
+    const sharedOptions: QueryBaseOptions = {
       workspaceId: args["workspace-id"],
       profile: args.profile,
       configPath: args.config,
-      query: args.query,
+      engine: args.engine,
       machineUser: args.machineuser,
     };
 
+    if (mode.data.repl) {
+      await runRepl({
+        ...sharedOptions,
+        json: args.json,
+      });
+      return;
+    }
+
+    const directQuery = mode.data.query;
+    if (directQuery === undefined) {
+      throw new Error("--query is required unless --repl is set.");
+    }
+
     if (args.engine === "sql") {
-      const result = await querySql(sharedOptions);
+      const result = await querySql({
+        ...sharedOptions,
+        query: directQuery,
+      });
       printSqlResult(result, { json: args.json });
       return;
     }
 
-    const result = await queryGql(sharedOptions);
+    const result = await queryGql({
+      ...sharedOptions,
+      query: directQuery,
+    });
     printGqlResult(result, { json: args.json });
   }),
 });
