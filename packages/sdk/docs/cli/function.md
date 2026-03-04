@@ -124,17 +124,16 @@ tailor-sdk function test-run [options] <file>
 
 **Options**
 
-| Option                              | Alias | Description                                                              | Required | Default              |
-| ----------------------------------- | ----- | ------------------------------------------------------------------------ | -------- | -------------------- |
-| `--json`                            | `-j`  | Output as JSON                                                           | No       | `false`              |
-| `--workspace-id <WORKSPACE_ID>`     | `-w`  | Workspace ID                                                             | No       | -                    |
-| `--profile <PROFILE>`               | `-p`  | Workspace profile                                                        | No       | -                    |
-| `--name <NAME>`                     | `-n`  | Workflow job name to run (matches the `name` field of createWorkflowJob) | No       | -                    |
-| `--type <TYPE>`                     | `-t`  | Function type (auto-detected if not specified)                           | No       | -                    |
-| `--arg <ARG>`                       | `-a`  | JSON argument to pass to the function                                    | No       | -                    |
-| `--machine-user <MACHINE_USER>`     | `-m`  | Machine user name for authentication                                     | No       | -                    |
-| `--auth-namespace <AUTH_NAMESPACE>` | -     | Auth namespace (defaults to config auth name)                            | No       | -                    |
-| `--config <CONFIG>`                 | `-c`  | Path to SDK config file                                                  | No       | `"tailor.config.ts"` |
+| Option                          | Alias | Description                                                              | Required | Default              |
+| ------------------------------- | ----- | ------------------------------------------------------------------------ | -------- | -------------------- |
+| `--json`                        | `-j`  | Output as JSON                                                           | No       | `false`              |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                             | No       | -                    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                        | No       | -                    |
+| `--name <NAME>`                 | `-n`  | Workflow job name to run (matches the `name` field of createWorkflowJob) | No       | -                    |
+| `--type <TYPE>`                 | `-t`  | Function type (auto-detected if not specified)                           | No       | -                    |
+| `--arg <ARG>`                   | `-a`  | JSON argument to pass to the function                                    | No       | -                    |
+| `--machine-user <MACHINE_USER>` | `-m`  | Machine user name for authentication                                     | No       | -                    |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                  | No       | `"tailor.config.ts"` |
 
 <!-- politty:command:function test-run:options:end -->
 <!-- politty:command:function test-run:examples:start -->

@@ -47,9 +47,6 @@ export const testRunCommand = defineCommand({
       alias: "m",
       description: "Machine user name for authentication",
     }),
-    "auth-namespace": arg(z.string().optional(), {
-      description: "Auth namespace (defaults to config auth name)",
-    }),
     config: arg(z.string().default("tailor.config.ts"), {
       alias: "c",
       description: "Path to SDK config file",
@@ -123,7 +120,7 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
     }
 
     // 5. Resolve auth info
-    const authNamespace = resolveAuthNamespace(args["auth-namespace"], config.auth);
+    const authNamespace = resolveAuthNamespace(config.auth);
     const machineUserName = resolveMachineUser(args["machine-user"], config.auth);
 
     // 6. Execute via TestExecScript
@@ -201,24 +198,17 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
 });
 
 /**
- * Resolve auth namespace from CLI args or config. Priority: --auth-namespace > config.auth.name
- * @param cliAuthNamespace - CLI --auth-namespace value
+ * Resolve auth namespace from config.
  * @param authConfig - Auth configuration from tailor.config.ts
  * @returns Resolved auth namespace
  */
 function resolveAuthNamespace(
-  cliAuthNamespace: string | undefined,
   authConfig: { name: string; external?: boolean } | undefined,
 ): string {
-  if (cliAuthNamespace) {
-    return cliAuthNamespace;
-  }
   if (authConfig?.name) {
     return authConfig.name;
   }
-  throw new Error(
-    "Auth namespace is required. Provide --auth-namespace or ensure tailor.config.ts has an auth config.",
-  );
+  throw new Error("Auth namespace is required. Ensure tailor.config.ts has an auth config.");
 }
 
 /**
