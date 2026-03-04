@@ -13,11 +13,17 @@ import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { resolveInlineSourcemap } from "@/cli/shared/inline-sourcemap";
-import { unauthenticatedTailorUser } from "@/configure/types/user";
 import { tailorUserMap } from "@/parser/service/tailordb";
 import type { DetectedFunction } from "./detect";
 
-const unauthenticatedUserExpr = JSON.stringify(unauthenticatedTailorUser);
+// Inline unauthenticated user fallback (matches unauthenticatedTailorUser from @/configure/types/user)
+const unauthenticatedUserExpr = JSON.stringify({
+  id: "00000000-0000-0000-0000-000000000000",
+  type: "",
+  workspaceId: "00000000-0000-0000-0000-000000000000",
+  attributes: null,
+  attributeList: [],
+});
 
 interface BundleForTestRunOptions {
   /** Detected function info */
