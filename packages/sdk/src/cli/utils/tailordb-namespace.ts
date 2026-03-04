@@ -19,7 +19,17 @@ type ResolveTypeNamespacesArgs = {
 export async function resolveTypeNamespaces(
   args: ResolveTypeNamespacesArgs,
 ): Promise<Map<string, string>> {
-  const targetTypeSet = new Set(args.typeNames);
+  const requestedTypesByLowercase = new Map<string, string[]>();
+  for (const typeName of args.typeNames) {
+    const key = typeName.toLowerCase();
+    const existing = requestedTypesByLowercase.get(key);
+    if (existing) {
+      existing.push(typeName);
+      continue;
+    }
+    requestedTypesByLowercase.set(key, [typeName]);
+  }
+
   const unresolvedTypes = new Set(args.typeNames);
   const typeNamespaceMap = new Map<string, string>();
 
@@ -35,12 +45,18 @@ export async function resolveTypeNamespaces(
       });
 
       for (const type of tailordbTypes) {
-        if (!targetTypeSet.has(type.name) || typeNamespaceMap.has(type.name)) {
+        const matchedRequestedTypes = requestedTypesByLowercase.get(type.name.toLowerCase());
+        if (!matchedRequestedTypes) {
           continue;
         }
 
-        typeNamespaceMap.set(type.name, namespace);
-        unresolvedTypes.delete(type.name);
+        for (const requestedTypeName of matchedRequestedTypes) {
+          if (typeNamespaceMap.has(requestedTypeName)) {
+            continue;
+          }
+          typeNamespaceMap.set(requestedTypeName, namespace);
+          unresolvedTypes.delete(requestedTypeName);
+        }
       }
     } catch {
       continue;

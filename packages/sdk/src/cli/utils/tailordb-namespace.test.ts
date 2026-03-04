@@ -61,6 +61,23 @@ describe("resolveTypeNamespaces", () => {
 
     expect(client.listTailorDBTypes).toHaveBeenCalledTimes(1);
   });
+
+  test("matches requested type names case-insensitively", async () => {
+    const client = {
+      listTailorDBTypes: vi.fn().mockResolvedValueOnce({
+        tailordbTypes: [{ name: "Project" }],
+      }),
+    };
+
+    const result = await resolveTypeNamespaces({
+      workspaceId: "workspace-id",
+      namespaces: ["main"],
+      typeNames: ["project"],
+      client,
+    });
+
+    expect(result.get("project")).toBe("main");
+  });
 });
 
 describe("resolveTypeNamespace", () => {
