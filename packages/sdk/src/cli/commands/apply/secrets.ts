@@ -1,7 +1,9 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { createChangeSet } from "./change-set";
+import { hashValue, loadSecretsState, saveSecretsState } from "./secrets-state";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
+import type { Application } from "@/cli/services/application";
 
 type CreateVault = {
   name: string;
@@ -48,6 +50,8 @@ export async function planSecrets(context: PlanContext) {
   if (secretVaults.length === 0) {
     return { vaultChangeSet, secretChangeSet };
   }
+
+  const state = loadSecretsState();
 
   for (const vault of secretVaults) {
     const vaultName = vault.vaultName;
@@ -102,14 +106,17 @@ export async function planSecrets(context: PlanContext) {
     // Diff secrets
     for (const secret of vault.secrets) {
       if (existingSet.has(secret.name)) {
-        // Always update (we can't compare values)
-        secretChangeSet.updates.push({
-          name: `${vaultName}/${secret.name}`,
-          secretName: secret.name,
-          workspaceId,
-          vaultName,
-          value: secret.value,
-        });
+        const currentHash = hashValue(secret.value);
+        const storedHash = state.vaults[vaultName]?.[secret.name];
+        if (currentHash !== storedHash) {
+          secretChangeSet.updates.push({
+            name: `${vaultName}/${secret.name}`,
+            secretName: secret.name,
+            workspaceId,
+            vaultName,
+            value: secret.value,
+          });
+        }
         existingSet.delete(secret.name);
       } else {
         secretChangeSet.creates.push({
@@ -143,14 +150,17 @@ export async function planSecrets(context: PlanContext) {
  * @param client - Operator client instance
  * @param result - Planned secret changes
  * @param phase - Apply phase
+ * @param application - Application to read secrets from for hash state persistence
  * @returns Promise that resolves when secret changes are applied
  */
 export async function applySecrets(
   client: OperatorClient,
   result: Awaited<ReturnType<typeof planSecrets>>,
   phase: Extract<ApplyPhase, "create-update" | "delete"> = "create-update",
+  application?: Readonly<Application>,
 ) {
   const { vaultChangeSet, secretChangeSet } = result;
+
   if (phase === "create-update") {
     // Create vaults first
     for (const create of vaultChangeSet.creates) {
@@ -183,6 +193,20 @@ export async function applySecrets(
         }),
       ),
     );
+
+    // Persist hash state for all secrets after successful apply
+    if (application) {
+      const state = loadSecretsState();
+      for (const vault of application.secrets) {
+        if (!state.vaults[vault.vaultName]) {
+          state.vaults[vault.vaultName] = {};
+        }
+        for (const secret of vault.secrets) {
+          state.vaults[vault.vaultName][secret.name] = hashValue(secret.value);
+        }
+      }
+      saveSecretsState(state);
+    }
   } else if (phase === "delete") {
     // Delete orphan secrets
     await Promise.all(
@@ -194,5 +218,19 @@ export async function applySecrets(
         }),
       ),
     );
+
+    // Remove deleted secrets from hash state
+    if (secretChangeSet.deletes.length > 0) {
+      const state = loadSecretsState();
+      for (const del of secretChangeSet.deletes) {
+        if (state.vaults[del.vaultName]) {
+          delete state.vaults[del.vaultName][del.secretName];
+          if (Object.keys(state.vaults[del.vaultName]).length === 0) {
+            delete state.vaults[del.vaultName];
+          }
+        }
+      }
+      saveSecretsState(state);
+    }
   }
 }

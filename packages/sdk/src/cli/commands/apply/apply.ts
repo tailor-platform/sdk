@@ -266,7 +266,7 @@ export async function apply(options?: ApplyOptions) {
 
     // Phase 2: Create/Update services that Application depends on
     await withSpan("apply.createUpdateServices", async () => {
-      await applySecrets(client, secrets, "create-update");
+      await applySecrets(client, secrets, "create-update", application);
       await applyFunctionRegistry(client, workspaceId, functionRegistry, "create-update");
       await applyStaticWebsite(client, staticWebsite, "create-update");
       await applyIdP(client, idp, "create-update");
