@@ -1,5 +1,17 @@
 # @tailor-platform/sdk
 
+## 1.21.0
+
+### Minor Changes
+
+- [#649](https://github.com/tailor-platform/sdk/pull/649) [`4fd37bf`](https://github.com/tailor-platform/sdk/commit/4fd37bfa13d7d356c919491da7f5886830dce80a) Thanks [@toiroakr](https://github.com/toiroakr)! - Add OpenTelemetry tracing instrumentation to the generate command. Each phase (loadTypes, loadResolvers, loadExecutors, generators) is measured as a span, opt-in via `OTEL_EXPORTER_OTLP_ENDPOINT` with zero overhead when disabled. Refactor generator scheduling to align with the plugin hook model — generators are now called at each phase they subscribe to via their dependencies array, matching how plugins use onTailorDBReady/onResolverReady/onExecutorReady hooks.
+
+- [#653](https://github.com/tailor-platform/sdk/pull/653) [`6b5f1db`](https://github.com/tailor-platform/sdk/commit/6b5f1dbb84f27559312b0868c9b8e7efbb5580a8) Thanks [@murayama-r](https://github.com/murayama-r)! - Add manual configuration for publishEvents on TailorDB types and resolvers
+
+### Patch Changes
+
+- [#651](https://github.com/tailor-platform/sdk/pull/651) [`3c8068d`](https://github.com/tailor-platform/sdk/commit/3c8068da663b28e73c6adaa0feb2fbd0934c860e) Thanks [@dqn](https://github.com/dqn)! - Guard undefined user global in workflow bundler entry
+
 ## 1.20.0
 
 ### Minor Changes
