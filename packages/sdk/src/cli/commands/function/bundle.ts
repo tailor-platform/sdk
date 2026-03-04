@@ -138,7 +138,9 @@ function generateEntry(
         import { t } from "@tailor-platform/sdk";
 
         const _env = ${JSON.stringify(env)};
-        const _user = typeof user !== "undefined" ? ${tailorUserMap} : ${unauthenticatedUserExpr};
+        const _user = typeof user !== "undefined"
+          ? ${tailorUserMap}
+          : (console.warn("[test-run] user global not available, using unauthenticated user fallback"), ${unauthenticatedUserExpr});
 
         const $tailor_resolver_body = async (context) => {
           const enrichedContext = { ...context, env: _env, user: _user };
@@ -185,6 +187,8 @@ function generateEntry(
 
     case "workflow-job": {
       // Same pattern as services/workflow/bundler.ts:286-294
+      // Note: user context is not available in TestExecScript for workflow jobs.
+      // The production workflow bundler's user mapping is being fixed in fix/workflow-user.
       const exportName = detected.exportName!;
       return ml /* js */ `
         import { ${exportName} } from "${absoluteSourcePath}";
@@ -192,8 +196,7 @@ function generateEntry(
         const env = ${JSON.stringify(env)};
 
         export async function main(input) {
-          const _user = typeof user !== "undefined" ? ${tailorUserMap} : ${unauthenticatedUserExpr};
-          return await ${exportName}.body(input, { env, user: _user });
+          return await ${exportName}.body(input, { env });
         }
       `;
     }
