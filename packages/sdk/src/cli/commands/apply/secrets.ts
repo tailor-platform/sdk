@@ -10,6 +10,7 @@ type CreateVault = {
 
 type CreateSecret = {
   name: string;
+  secretName: string;
   workspaceId: string;
   vaultName: string;
   value: string;
@@ -17,6 +18,7 @@ type CreateSecret = {
 
 type UpdateSecret = {
   name: string;
+  secretName: string;
   workspaceId: string;
   vaultName: string;
   value: string;
@@ -24,6 +26,7 @@ type UpdateSecret = {
 
 type DeleteSecret = {
   name: string;
+  secretName: string;
   workspaceId: string;
   vaultName: string;
 };
@@ -102,6 +105,7 @@ export async function planSecrets(context: PlanContext) {
         // Always update (we can't compare values)
         secretChangeSet.updates.push({
           name: `${vaultName}/${secret.name}`,
+          secretName: secret.name,
           workspaceId,
           vaultName,
           value: secret.value,
@@ -110,6 +114,7 @@ export async function planSecrets(context: PlanContext) {
       } else {
         secretChangeSet.creates.push({
           name: `${vaultName}/${secret.name}`,
+          secretName: secret.name,
           workspaceId,
           vaultName,
           value: secret.value,
@@ -121,8 +126,9 @@ export async function planSecrets(context: PlanContext) {
     for (const orphanName of existingSet) {
       secretChangeSet.deletes.push({
         name: `${vaultName}/${orphanName}`,
+        secretName: orphanName,
         workspaceId,
-        vaultName: vaultName,
+        vaultName,
       });
     }
   }
@@ -160,7 +166,7 @@ export async function applySecrets(
         client.createSecretManagerSecret({
           workspaceId: create.workspaceId,
           secretmanagerVaultName: create.vaultName,
-          secretmanagerSecretName: create.value ? create.name.split("/").pop()! : "",
+          secretmanagerSecretName: create.secretName,
           secretmanagerSecretValue: create.value,
         }),
       ),
@@ -172,7 +178,7 @@ export async function applySecrets(
         client.updateSecretManagerSecret({
           workspaceId: update.workspaceId,
           secretmanagerVaultName: update.vaultName,
-          secretmanagerSecretName: update.name.split("/").pop()!,
+          secretmanagerSecretName: update.secretName,
           secretmanagerSecretValue: update.value,
         }),
       ),
@@ -184,7 +190,7 @@ export async function applySecrets(
         client.deleteSecretManagerSecret({
           workspaceId: del.workspaceId,
           secretmanagerVaultName: del.vaultName,
-          secretmanagerSecretName: del.name.split("/").pop()!,
+          secretmanagerSecretName: del.secretName,
         }),
       ),
     );

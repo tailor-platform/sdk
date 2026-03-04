@@ -20,7 +20,7 @@ import { type ExecutorServiceInput } from "@/parser/service/executor";
 import { IdPSchema, type IdP } from "@/parser/service/idp";
 import { type IdPConfig } from "@/parser/service/idp/types";
 import { type ResolverServiceInput } from "@/parser/service/resolver/types";
-import { SecretsSchema, type SecretsConfigInput } from "@/parser/service/secrets";
+import { SecretsSchema } from "@/parser/service/secrets";
 import {
   StaticWebsiteSchema,
   type StaticWebsite,
@@ -210,12 +210,16 @@ function defineStaticWebsites(
   return staticWebsiteServices;
 }
 
-function defineSecrets(config: SecretsConfigInput | undefined): SecretVault[] {
+function defineSecrets(config: AppConfig["secrets"]): SecretVault[] {
   if (!config) {
     return [];
   }
 
-  const parsed = SecretsSchema.parse(config);
+  // Create a plain object with only enumerable properties (vault data).
+  // Zod v4's z.record() uses Reflect.ownKeys() which sees non-enumerable
+  // properties like get/getAll attached by defineSecrets() in the configure layer.
+  const data = Object.fromEntries(Object.entries(config as Record<string, unknown>));
+  const parsed = SecretsSchema.parse(data);
 
   return Object.entries(parsed).map(([vaultName, vaultSecrets]) => ({
     vaultName,

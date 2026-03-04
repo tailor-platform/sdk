@@ -15,6 +15,9 @@ type DefinedSecrets<T extends SecretsInput> = {
   ): Promise<(string | undefined)[]>;
 } & SecretsDefinitionBrand;
 
+/** Type accepted by `AppConfig.secrets`. Only values returned by `defineSecrets()` satisfy this. */
+export type SecretsConfig = DefinedSecrets<SecretsInput>;
+
 /**
  * Define secrets configuration for the Tailor SDK.
  * Each key is a vault name, and its value is a record of secret name to secret value.

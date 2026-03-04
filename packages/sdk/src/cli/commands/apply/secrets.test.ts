@@ -27,6 +27,7 @@ describe("applySecrets phase separation", () => {
         creates: [
           {
             name: "my-vault/NEW_SECRET",
+            secretName: "NEW_SECRET",
             workspaceId: "ws-1",
             vaultName: "my-vault",
             value: "new-value",
@@ -35,6 +36,7 @@ describe("applySecrets phase separation", () => {
         updates: [
           {
             name: "my-vault/EXISTING_SECRET",
+            secretName: "EXISTING_SECRET",
             workspaceId: "ws-1",
             vaultName: "my-vault",
             value: "updated-value",
@@ -43,6 +45,7 @@ describe("applySecrets phase separation", () => {
         deletes: [
           {
             name: "my-vault/ORPHAN_SECRET",
+            secretName: "ORPHAN_SECRET",
             workspaceId: "ws-1",
             vaultName: "my-vault",
           },
