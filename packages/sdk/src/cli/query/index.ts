@@ -31,13 +31,23 @@ const queryOptionsSchema = z.object({
 
 export type QueryEngine = z.infer<typeof queryEngineSchema>;
 type QueryOptions = z.input<typeof queryOptionsSchema>;
+type QuerySharedOptions = Omit<QueryOptions, "engine">;
 type Client = Awaited<ReturnType<typeof initOperatorClient>>;
 
-type QueryDispatchResult = {
-  engine: QueryEngine;
+type SQLQueryDispatchResult = {
+  engine: "sql";
+  namespace: string;
   query: string;
   result: unknown;
 };
+
+type GQLQueryDispatchResult = {
+  engine: "gql";
+  query: string;
+  result: unknown;
+};
+
+type QueryDispatchResult = SQLQueryDispatchResult | GQLQueryDispatchResult;
 
 type SQLResultRow = Record<string, unknown>;
 type SQLExecutionResult = {
@@ -55,12 +65,12 @@ async function getNamespaceFromSqlQuery(
     throw new Error("No namespaces found in configuration.");
   }
 
+  if (namespaces.length === 1) {
+    return namespaces[0];
+  }
+
   const typeNames = extractTypeNamesFromSql(query);
   if (typeNames.length === 0) {
-    if (namespaces.length === 1) {
-      return namespaces[0];
-    }
-
     throw new Error(
       `Could not infer namespace from query. Detected namespaces: ${namespaces.join(", ")}.`,
     );
@@ -163,7 +173,7 @@ async function sqlQuery(
     bundledCode: string;
     query: string;
   },
-) {
+): Promise<SQLQueryDispatchResult> {
   const executed = await executeScript({
     client,
     workspaceId: args.workspaceId,
@@ -198,7 +208,7 @@ async function gqlQuery(
     bundledCode: string;
     query: string;
   },
-) {
+): Promise<GQLQueryDispatchResult> {
   const { access_token: accessToken } = await fetchMachineUserToken(
     application.url,
     machineUser.clientId,
@@ -246,7 +256,7 @@ function parseExecutionResult(result: string): unknown {
  * @param options - Query command options
  * @returns Dispatch result
  */
-export async function query(options: QueryOptions) {
+async function executeQuery(options: QueryOptions): Promise<QueryDispatchResult> {
   const { client, workspaceId, application, machineUserResource, engine, namespace } =
     await loadOptions(options);
 
@@ -284,6 +294,51 @@ export async function query(options: QueryOptions) {
   }
 }
 
+/**
+ * Execute query with explicit engine selection.
+ * @param options - Query command options
+ * @returns Query result
+ */
+export async function query(options: QueryOptions): Promise<QueryDispatchResult> {
+  return executeQuery(options);
+}
+
+/**
+ * Execute SQL query directly.
+ * @param options - Shared query options
+ * @returns SQL query result
+ */
+async function querySql(options: QuerySharedOptions): Promise<SQLQueryDispatchResult> {
+  const result = await executeQuery({
+    ...options,
+    engine: "sql",
+  });
+
+  if (result.engine !== "sql") {
+    throw new Error(`Expected sql engine result but got: ${result.engine}`);
+  }
+
+  return result;
+}
+
+/**
+ * Execute GraphQL query directly.
+ * @param options - Shared query options
+ * @returns GraphQL query result
+ */
+async function queryGql(options: QuerySharedOptions): Promise<GQLQueryDispatchResult> {
+  const result = await executeQuery({
+    ...options,
+    engine: "gql",
+  });
+
+  if (result.engine !== "gql") {
+    throw new Error(`Expected gql engine result but got: ${result.engine}`);
+  }
+
+  return result;
+}
+
 export const queryCommand = defineCommand({
   name: "query",
   description: "Run SQL/GraphQL query.",
@@ -304,16 +359,22 @@ export const queryCommand = defineCommand({
     }),
   }),
   run: withCommonArgs(async (args) => {
-    const result = await query({
+    const sharedOptions: QuerySharedOptions = {
       workspaceId: args["workspace-id"],
       profile: args.profile,
       configPath: args.config,
-      engine: args.engine,
       query: args.query,
       machineUser: args.machineuser,
-    });
+    };
 
-    printQueryResult(result, { json: args.json });
+    if (args.engine === "sql") {
+      const result = await querySql(sharedOptions);
+      printSqlResult(result, { json: args.json });
+      return;
+    }
+
+    const result = await queryGql(sharedOptions);
+    printGqlResult(result, { json: args.json });
   }),
 });
 
@@ -326,46 +387,47 @@ function isSQLExecutionResult(value: unknown): value is SQLExecutionResult {
   return Array.isArray(candidate.rows) && typeof candidate.rowCount === "number";
 }
 
-function printQueryResult(result: QueryDispatchResult, options: { json?: boolean } = {}): void {
-  if (result.engine === "sql" && isSQLExecutionResult(result.result)) {
-    if (result.result.rows.length === 0) {
-      if (options.json) {
-        logger.out({
-          results: [],
-          rowCount: 0,
-        });
-        return;
-      }
-      logger.info("No rows returned.");
-      return;
-    }
-
-    if (options.json) {
-      logger.out({
-        results: result.result.rows,
-        rowCount: result.result.rowCount,
-      });
-      return;
-    }
-    logger.out(result.result.rows, { showNull: true });
-    logger.out(`rows: ${result.result.rowCount}`);
+function printSqlResult(result: SQLQueryDispatchResult, options: { json?: boolean } = {}): void {
+  if (!isSQLExecutionResult(result.result)) {
+    logger.out({
+      engine: result.engine,
+      query: result.query,
+      result: result.result,
+    });
     return;
   }
 
-  if (result.engine === "gql") {
+  if (result.result.rows.length === 0) {
     if (options.json) {
       logger.out({
-        result: result.result,
+        results: [],
+        rowCount: 0,
       });
       return;
     }
-    logger.out(JSON.stringify(result.result, null, 2));
+    logger.info("No rows returned.");
     return;
   }
 
-  logger.out({
-    engine: result.engine,
-    query: result.query,
-    result: result.result,
-  });
+  if (options.json) {
+    logger.out({
+      results: result.result.rows,
+      rowCount: result.result.rowCount,
+    });
+    return;
+  }
+
+  logger.out(result.result.rows, { showNull: true });
+  logger.out(`rows: ${result.result.rowCount}`);
+}
+
+function printGqlResult(result: GQLQueryDispatchResult, options: { json?: boolean } = {}): void {
+  if (options.json) {
+    logger.out({
+      result: result.result,
+    });
+    return;
+  }
+
+  logger.out(JSON.stringify(result.result, null, 2));
 }
