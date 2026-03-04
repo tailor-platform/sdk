@@ -1,14 +1,15 @@
-import type { QueryTypeSchema, ResolverSchema, TailorFieldSchema } from "./schema";
-import type { z } from "zod";
+// Zinfer-generated types
+export type {
+  TailorField,
+  TailorFieldInput,
+  QueryType,
+  ResolverInput,
+  Resolver,
+} from "@/types/resolver";
 
-export type TailorField = z.output<typeof TailorFieldSchema>;
-export type TailorFieldInput = z.input<typeof TailorFieldSchema>;
-export type QueryType = z.output<typeof QueryTypeSchema>;
-export type ResolverInput = z.input<typeof ResolverSchema>;
-export type Resolver = z.output<typeof ResolverSchema>;
-
-export type ResolverServiceConfig = { files: string[]; ignores?: string[] };
-export type ResolverExternalConfig = { external: true };
-export type ResolverServiceInput = {
-  [namespace: string]: ResolverServiceConfig | ResolverExternalConfig;
-};
+// Manual types
+export type {
+  ResolverServiceConfig,
+  ResolverExternalConfig,
+  ResolverServiceInput,
+} from "@/types/resolver.manual";

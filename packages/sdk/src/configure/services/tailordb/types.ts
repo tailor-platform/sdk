@@ -2,12 +2,12 @@ import { type TailorUser } from "@/configure/types";
 import { type output, type Prettify } from "@/configure/types/helpers";
 import { type DefinedFieldMetadata, type FieldMetadata } from "@/configure/types/types";
 import { type TailorAnyDBField, type TailorDBField } from "./schema";
+export type { TailorDBServiceConfig } from "@/types/tailordb";
 export type {
   TailorDBExternalConfig,
   TailorDBMigrationConfig,
-  TailorDBServiceConfig,
   TailorDBServiceInput,
-} from "@/parser/service/tailordb/types";
+} from "@/types/tailordb.manual";
 import type { NonEmptyObject } from "type-fest";
 
 export type SerialConfig<T extends "string" | "integer" = "string" | "integer"> = Prettify<

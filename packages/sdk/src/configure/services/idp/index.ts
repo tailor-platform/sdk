@@ -1,5 +1,6 @@
-import type { BuiltinIdP } from "@/parser/service/auth/types";
-import type { IdPInput, IdpDefinitionBrand } from "@/parser/service/idp/types";
+import type { BuiltinIdP } from "@/types/auth";
+import type { IdPInput } from "@/types/idp";
+import type { IdpDefinitionBrand } from "@/types/idp.manual";
 
 /**
  * Configuration for GraphQL operations on IdP users.
@@ -58,4 +59,4 @@ export function defineIdp<const TClients extends string[]>(
   return result as typeof result & IdpDefinitionBrand;
 }
 
-export type { IdPConfig, IdPExternalConfig } from "@/parser/service/idp/types";
+export type { IdPConfig, IdPExternalConfig } from "@/types/idp.manual";

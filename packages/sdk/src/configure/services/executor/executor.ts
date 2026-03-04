@@ -3,7 +3,7 @@ import type { Operation } from "./operation";
 import type { Trigger } from "./trigger";
 import type { AuthInvoker } from "@/configure/services/auth";
 import type { Workflow } from "@/configure/services/workflow/workflow";
-import type { ExecutorInput } from "@/parser/service/executor/types";
+import type { ExecutorInput } from "@/types/executor";
 
 /**
  * Extract mainJob's Input type from Workflow.

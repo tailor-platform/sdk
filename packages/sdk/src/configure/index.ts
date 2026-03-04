@@ -44,7 +44,7 @@ export type {
   PluginExecutorContext,
   PluginExecutorContextBase,
   TailorDBTypeForPlugin,
-} from "@/parser/plugin-config/types";
+} from "@/types/plugin";
 
 // Generation-time hook context types for plugin development
 export type {
@@ -54,4 +54,4 @@ export type {
   TailorDBNamespaceData,
   ResolverNamespaceData,
   GeneratorResult,
-} from "@/parser/plugin-config/generation-types";
+} from "@/types/plugin-generation";

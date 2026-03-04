@@ -1,6 +1,6 @@
-import type { AppConfig } from "@/parser/app-config/types";
-import type { GeneratorConfig } from "@/parser/generator-config/types";
-import type { Plugin } from "@/parser/plugin-config/types";
+import type { AppConfig } from "@/types/app-config";
+import type { GeneratorConfig } from "@/types/generator-config.manual";
+import type { Plugin } from "@/types/plugin";
 
 /**
  * Define a Tailor SDK application configuration with shallow exactness.

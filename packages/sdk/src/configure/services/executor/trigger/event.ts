@@ -8,7 +8,7 @@ import type {
   ResolverExecutedTrigger as ParserResolverExecutedTrigger,
   IdpUserTrigger as ParserIdpUserTrigger,
   AuthAccessTokenTrigger as ParserAuthAccessTokenTrigger,
-} from "@/parser/service/executor/types";
+} from "@/types/executor";
 
 interface EventArgs {
   workspaceId: string;

@@ -11,12 +11,6 @@ import {
   type TailorFieldType,
   type TailorToTs,
 } from "@/configure/types/types";
-import {
-  type TailorDBTypeMetadata,
-  type RawPermissions,
-  type RawRelationConfig,
-  type RelationType,
-} from "@/parser/service/tailordb/types";
 import { brandValue } from "@/utils/brand";
 import { type TailorTypeGqlPermission, type TailorTypePermission } from "./permission";
 import {
@@ -32,7 +26,13 @@ import {
 import type { InferredAttributeMap, TailorUser } from "@/configure/types";
 import type { Prettify, output, InferFieldsOutput } from "@/configure/types/helpers";
 import type { FieldValidateInput, ValidateConfig, Validators } from "@/configure/types/validation";
-import type { PluginAttachment, PluginConfigs } from "@/parser/plugin-config/types";
+import type { PluginAttachment, PluginConfigs } from "@/types/plugin";
+import type { RawPermissions } from "@/types/tailordb";
+import type {
+  TailorDBTypeMetadata,
+  RawRelationConfig,
+  RelationType,
+} from "@/types/tailordb.manual";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 
 interface RelationConfig<S extends RelationType, T extends TailorDBType> {
