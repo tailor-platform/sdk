@@ -1194,6 +1194,20 @@ async function planTypes(
     }
   }
 
+  // Validate that types used by executors don't have publishEvents explicitly set to false
+  for (const tailordb of tailordbs) {
+    const types = filteredTypesByNamespace?.get(tailordb.namespace) ?? tailordb.types;
+    for (const typeName of Object.keys(types)) {
+      const type = types[typeName];
+      if (executorUsedTypes.has(typeName) && type.settings?.publishEvents === false) {
+        throw new Error(
+          `Type "${typeName}" has publishEvents set to false, but it is used by an executor with a record trigger. ` +
+            `Either remove the publishEvents: false setting or remove the executor trigger for this type.`,
+        );
+      }
+    }
+  }
+
   for (const tailordb of tailordbs) {
     const existingTypes = await fetchTypes(tailordb.namespace);
     const existingNameSet = new Set<string>();
@@ -1296,9 +1310,16 @@ function generateTailorDBTypeManifest(
     pluralForm,
     publishRecordEvents: false,
   };
-  if (executorUsedTypes.has(type.name)) {
+
+  // Determine publishRecordEvents (user-facing name: publishEvents):
+  // - If user explicitly sets a value (true or false), respect that (validation already ensures no executor conflict)
+  // - If not set, use executor detection (true if executor uses this type)
+  if (type.settings?.publishEvents !== undefined) {
+    defaultSettings.publishRecordEvents = type.settings.publishEvents;
+  } else if (executorUsedTypes.has(type.name)) {
     defaultSettings.publishRecordEvents = true;
   }
+
   // Both type.settings.gqlOperations and namespaceGqlOperations are already normalized by schema
   const ops = type.settings?.gqlOperations ?? namespaceGqlOperations;
   if (ops) {

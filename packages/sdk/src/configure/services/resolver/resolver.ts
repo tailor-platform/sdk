@@ -50,6 +50,11 @@ type ResolverReturn<
  *
  * `output` accepts either a single TailorField (e.g. `t.string()`) or a
  * Record of fields (e.g. `{ name: t.string(), age: t.int() }`).
+ *
+ * `publishEvents` enables publishing execution events for this resolver.
+ * If not specified, this is automatically set to true when an executor uses this resolver
+ * with `resolverExecutedTrigger`. If explicitly set to false while an executor uses this
+ * resolver, an error will be thrown during apply.
  * @template Input
  * @template Output
  * @param config - Resolver configuration

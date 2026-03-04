@@ -87,7 +87,9 @@ export function generateTailorDBTypeManifestFromSnapshot(
     defaultQueryLimitSize: 100n,
     maxBulkUpsertSize: 1000n,
     pluralForm,
-    publishRecordEvents: options.publishRecordEvents ?? false,
+    // Read publishEvents from snapshot settings first, then fall back to options
+    publishRecordEvents:
+      snapshotType.settings?.publishEvents ?? options.publishRecordEvents ?? false,
   };
 
   // Apply gqlOperations from snapshot settings or namespace default
@@ -522,9 +524,29 @@ export function generateAllTypeManifestsFromSnapshot(
   const { executorUsedTypes, ...baseOptions } = options;
 
   for (const [typeName, snapshotType] of Object.entries(snapshot.types)) {
+    // Validate: if executor uses this type, publishEvents must not be explicitly false
+    if (executorUsedTypes?.has(typeName) && snapshotType.settings?.publishEvents === false) {
+      throw new Error(
+        `Type "${typeName}" has publishEvents set to false, but it is used by an executor with a record trigger. ` +
+          `Either remove the publishEvents: false setting or remove the executor trigger for this type.`,
+      );
+    }
+
+    // Determine publishRecordEvents:
+    // - If user explicitly sets a value (true or false), respect that (validation above ensures no executor conflict)
+    // - If not set, check if executor uses this type (true if yes)
+    // - Fall back to base options or default to false
+    let publishRecordEvents: boolean;
+    if (snapshotType.settings?.publishEvents !== undefined) {
+      publishRecordEvents = snapshotType.settings.publishEvents;
+    } else if (executorUsedTypes?.has(typeName)) {
+      publishRecordEvents = true;
+    } else {
+      publishRecordEvents = baseOptions.publishRecordEvents ?? false;
+    }
     const typeOptions: GenerateManifestOptions = {
       ...baseOptions,
-      publishRecordEvents: executorUsedTypes?.has(typeName) ?? baseOptions.publishRecordEvents,
+      publishRecordEvents,
     };
     manifests.set(typeName, generateTailorDBTypeManifestFromSnapshot(snapshotType, typeOptions));
   }
