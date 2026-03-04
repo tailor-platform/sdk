@@ -88,7 +88,8 @@
     "postinstall": "node postinstall.mjs",
     "measure:bundle": "node ../../scripts/measure-bundle-size-sonda.js",
     "knip": "knip",
-    "publint": "publint --strict"
+    "publint": "publint --strict",
+    "generate": "zinfer"
   },
   "dependencies": {
     "@0no-co/graphql.web": "1.2.0",
