@@ -41,12 +41,12 @@ export async function prepareFixtures(): Promise<string> {
 
   const configPath = path.join(fixtureDir, "tailor.config.ts");
 
-  // Generate plugin output (db.ts, enums.ts)
   process.env.TAILOR_SDK_OUTPUT_DIR = outputDir;
+
+  // Generate plugin output (db.ts, enums.ts)
   await generate({ configPath });
 
   // Build resolver/executor/workflow bundles
-  process.env.TAILOR_SDK_OUTPUT_DIR = outputDir;
   await apply({ configPath, buildOnly: true });
 
   replaceAbsolutePaths(outputDir);

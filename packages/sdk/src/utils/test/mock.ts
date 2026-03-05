@@ -55,8 +55,7 @@ export function setupTailordbMock(resolver: QueryResolver = () => []): {
 
     async queryObject(query: string, params: unknown[] = []): Promise<{ rows: unknown[] }> {
       executedQueries.push({ query, params });
-      const rows = resolver(query, params) ?? [];
-      return { rows: Array.isArray(rows) ? rows : [] };
+      return { rows: resolver(query, params) ?? [] };
     }
   }
 

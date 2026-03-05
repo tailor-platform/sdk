@@ -159,12 +159,7 @@ describe("bundled execution tests", () => {
     });
 
     test("workflow-jobs/process-order.js throws error when customer not found", async () => {
-      setupWorkflowMock((jobName) => {
-        if (jobName === "fetch-customer") {
-          return null;
-        }
-        return null;
-      });
+      setupWorkflowMock(() => null);
 
       const main = await importActualMain("workflow-jobs/process-order.js");
 
