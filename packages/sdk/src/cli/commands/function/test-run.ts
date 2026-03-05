@@ -180,7 +180,7 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
         }
       }
 
-      if (result.result) {
+      if (result.result && result.success) {
         logger.log(styles.bold("\nResult:"));
         try {
           const parsed = JSON.parse(result.result);
