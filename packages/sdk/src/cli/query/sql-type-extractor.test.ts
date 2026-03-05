@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { extractTypeNamesFromSql, hasWildcardSelect } from "./sql-type-extractor";
+import { extractTypeNamesFromSql, extractWildcardTypeNames } from "./sql-type-extractor";
 
 describe("extractTypeNamesFromSql", () => {
   test("extracts table names using SQL parser", () => {
@@ -27,30 +27,42 @@ describe("extractTypeNamesFromSql", () => {
   });
 });
 
-describe("hasWildcardSelect", () => {
-  test("returns true for SELECT *", () => {
-    expect(hasWildcardSelect('select * from "User"')).toBe(true);
+describe("extractWildcardTypeNames", () => {
+  test("returns type name for SELECT *", () => {
+    expect(extractWildcardTypeNames('select * from "User"')).toEqual(["User"]);
   });
 
-  test("returns true for SELECT * with JOIN", () => {
-    expect(hasWildcardSelect('select * from "User" u join "Order" o on u.id = o.userId')).toBe(
-      true,
-    );
+  test("returns all type names for SELECT * with JOIN", () => {
+    expect(
+      extractWildcardTypeNames('select * from "User" u join "Order" o on u.id = o."userId"'),
+    ).toEqual(["User", "Order"]);
   });
 
-  test("returns false for explicit column list", () => {
-    expect(hasWildcardSelect('select id, name from "User"')).toBe(false);
+  test("returns type name for qualified wildcard (u.*)", () => {
+    expect(extractWildcardTypeNames('select u.* from "User" as u')).toEqual(["User"]);
   });
 
-  test("returns false for unparseable query", () => {
-    expect(hasWildcardSelect("select from")).toBe(false);
+  test("returns only wildcard table for qualified wildcard in JOIN", () => {
+    expect(
+      extractWildcardTypeNames('select u.* from "User" u join "Order" o on u.id = o."userId"'),
+    ).toEqual(["User"]);
   });
 
-  test("returns true for subquery with wildcard", () => {
-    expect(hasWildcardSelect('select * from (select * from "User") u')).toBe(true);
+  test("returns multiple types for multiple qualified wildcards", () => {
+    expect(
+      extractWildcardTypeNames('select u.*, o.* from "User" u join "Order" o on u.id = o."userId"'),
+    ).toEqual(["User", "Order"]);
   });
 
-  test("returns false for COUNT(*)", () => {
-    expect(hasWildcardSelect('select count(*) from "User"')).toBe(false);
+  test("returns empty for explicit column list", () => {
+    expect(extractWildcardTypeNames('select id, name from "User"')).toEqual([]);
+  });
+
+  test("returns empty for unparseable query", () => {
+    expect(extractWildcardTypeNames("select from")).toEqual([]);
+  });
+
+  test("returns empty for COUNT(*)", () => {
+    expect(extractWildcardTypeNames('select count(*) from "User"')).toEqual([]);
   });
 });

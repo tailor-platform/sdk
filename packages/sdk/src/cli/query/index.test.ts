@@ -38,7 +38,7 @@ vi.mock("../shared/tailordb-namespace", () => ({
 
 vi.mock("./sql-type-extractor", () => ({
   extractTypeNamesFromSql: vi.fn(),
-  hasWildcardSelect: vi.fn(),
+  extractWildcardTypeNames: vi.fn(),
 }));
 
 vi.mock("./type-field-order", () => ({
@@ -56,7 +56,8 @@ describe("query", () => {
     const { bundleQueryScript } = await import("../bundler/query/query-bundler");
     const { executeScript } = await import("../shared/script-executor");
     const { resolveTypeNamespaces } = await import("../shared/tailordb-namespace");
-    const { extractTypeNamesFromSql, hasWildcardSelect } = await import("./sql-type-extractor");
+    const { extractTypeNamesFromSql, extractWildcardTypeNames } =
+      await import("./sql-type-extractor");
     const { loadTypeFieldOrder } = await import("./type-field-order");
 
     vi.mocked(loadAccessToken).mockResolvedValue("access-token");
@@ -77,7 +78,7 @@ describe("query", () => {
     vi.mocked(fetchMachineUserToken).mockResolvedValue({ access_token: "mu-token" } as never);
     vi.mocked(resolveTypeNamespaces).mockResolvedValue(new Map([["User", "tailordb"]]));
     vi.mocked(extractTypeNamesFromSql).mockReturnValue(["User"]);
-    vi.mocked(hasWildcardSelect).mockReturnValue(false);
+    vi.mocked(extractWildcardTypeNames).mockReturnValue([]);
     vi.mocked(loadTypeFieldOrder).mockResolvedValue(new Map());
 
     mockClient.getApplication.mockResolvedValue({
@@ -298,10 +299,10 @@ describe("query", () => {
 
   test("reorders SQL result columns by type field definition order when wildcard is used", async () => {
     const { executeScript } = await import("../shared/script-executor");
-    const { hasWildcardSelect } = await import("./sql-type-extractor");
+    const { extractWildcardTypeNames } = await import("./sql-type-extractor");
     const { loadTypeFieldOrder } = await import("./type-field-order");
 
-    vi.mocked(hasWildcardSelect).mockReturnValue(true);
+    vi.mocked(extractWildcardTypeNames).mockReturnValue(["User"]);
     vi.mocked(loadTypeFieldOrder).mockResolvedValue(
       new Map([["User", ["name", "email", "role", "createdAt", "updatedAt"]]]),
     );
@@ -345,9 +346,9 @@ describe("query", () => {
 
   test("does not reorder columns when explicit column list is used", async () => {
     const { executeScript } = await import("../shared/script-executor");
-    const { hasWildcardSelect } = await import("./sql-type-extractor");
+    const { extractWildcardTypeNames } = await import("./sql-type-extractor");
 
-    vi.mocked(hasWildcardSelect).mockReturnValue(false);
+    vi.mocked(extractWildcardTypeNames).mockReturnValue([]);
     vi.mocked(executeScript).mockResolvedValue({
       success: true,
       logs: "",

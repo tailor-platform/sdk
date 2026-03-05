@@ -16,7 +16,7 @@ import { logger } from "../shared/logger";
 import { executeScript } from "../shared/script-executor";
 import { resolveTypeNamespaces } from "../shared/tailordb-namespace";
 import { mapQueryExecutionError } from "./errors";
-import { extractTypeNamesFromSql, hasWildcardSelect } from "./sql-type-extractor";
+import { extractTypeNamesFromSql, extractWildcardTypeNames } from "./sql-type-extractor";
 import { loadTypeFieldOrder } from "./type-field-order";
 import type { Application } from "@tailor-proto/tailor/v1/application_resource_pb";
 
@@ -343,19 +343,15 @@ async function reorderSqlColumns(
     return result;
   }
 
-  if (!hasWildcardSelect(sqlQuery)) {
-    return result;
-  }
-
-  const typeNames = extractTypeNamesFromSql(sqlQuery);
-  if (typeNames.length !== 1) {
+  const wildcardTypeNames = extractWildcardTypeNames(sqlQuery);
+  if (wildcardTypeNames.length === 0) {
     return result;
   }
 
   try {
     const fieldOrder = await loadTypeFieldOrder(config, namespace);
-    const definedFields = fieldOrder.get(typeNames[0]);
-    if (!definedFields) {
+    const definedFields = wildcardTypeNames.flatMap((name) => fieldOrder.get(name) ?? []);
+    if (definedFields.length === 0) {
       return result;
     }
 
