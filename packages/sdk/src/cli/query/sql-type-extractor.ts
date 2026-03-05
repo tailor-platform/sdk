@@ -138,7 +138,8 @@ export function extractColumnTemplate(query: string): ColumnSlot[] | null {
 
 /**
  * Extract the top-level SELECT from a statement, unwrapping WITH/CTE wrappers.
- * @param statement
+ * @param statement - Parsed SQL statement
+ * @returns The top-level SelectFromStatement, or null if not a SELECT
  */
 function extractTopLevelSelect(statement: Statement): SelectFromStatement | null {
   if (statement.type === "select") {
