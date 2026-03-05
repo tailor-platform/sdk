@@ -7,7 +7,6 @@ import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "@/cli/cache/bundle-cache";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { logger, styles } from "@/cli/shared/logger";
-import { tailorUserMap } from "@/cli/shared/runtime-args";
 import { serializeTriggerContext, type TriggerContext } from "@/cli/shared/trigger-context";
 import { detectTriggerCalls, findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
@@ -288,8 +287,7 @@ async function bundleSingleJob(
 
         export async function main(input) {
           const env = ${JSON.stringify(env)};
-          const _user = typeof user !== "undefined" ? ${tailorUserMap} : undefined;
-          return await ${job.exportName}.body(input, { env, user: _user });
+          return await ${job.exportName}.body(input, { env });
         }
       `;
       fs.writeFileSync(entryPath, entryContent);

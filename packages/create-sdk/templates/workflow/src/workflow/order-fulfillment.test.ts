@@ -1,4 +1,4 @@
-import { WORKFLOW_TEST_ENV_KEY, unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
+import { WORKFLOW_TEST_ENV_KEY } from "@tailor-platform/sdk/test";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import workflow, {
   fulfillOrder,
@@ -15,27 +15,18 @@ describe("order fulfillment workflow", () => {
 
   describe("individual job tests with .body()", () => {
     test("validateOrder accepts valid order", () => {
-      const result = validateOrder.body(
-        { orderId: "order-1", amount: 100 },
-        { env: {}, user: unauthenticatedTailorUser },
-      );
+      const result = validateOrder.body({ orderId: "order-1", amount: 100 }, { env: {} });
       expect(result).toEqual({ valid: true, orderId: "order-1" });
     });
 
     test("validateOrder rejects zero amount", () => {
-      expect(() =>
-        validateOrder.body(
-          { orderId: "order-1", amount: 0 },
-          { env: {}, user: unauthenticatedTailorUser },
-        ),
-      ).toThrow("Order amount must be positive");
+      expect(() => validateOrder.body({ orderId: "order-1", amount: 0 }, { env: {} })).toThrow(
+        "Order amount must be positive",
+      );
     });
 
     test("processPayment returns transaction", () => {
-      const result = processPayment.body(
-        { orderId: "order-1", amount: 100 },
-        { env: {}, user: unauthenticatedTailorUser },
-      );
+      const result = processPayment.body({ orderId: "order-1", amount: 100 }, { env: {} });
       expect(result).toEqual({
         transactionId: "txn-order-1",
         amount: 100,
@@ -46,7 +37,7 @@ describe("order fulfillment workflow", () => {
     test("sendConfirmation returns confirmation", () => {
       const result = sendConfirmation.body(
         { orderId: "order-1", transactionId: "txn-1" },
-        { env: {}, user: unauthenticatedTailorUser },
+        { env: {} },
       );
       expect(result).toEqual({
         orderId: "order-1",
@@ -73,10 +64,7 @@ describe("order fulfillment workflow", () => {
         confirmed: true,
       });
 
-      const result = await fulfillOrder.body(
-        { orderId: "order-1", amount: 100 },
-        { env: {}, user: unauthenticatedTailorUser },
-      );
+      const result = await fulfillOrder.body({ orderId: "order-1", amount: 100 }, { env: {} });
 
       expect(validateOrder.trigger).toHaveBeenCalledWith({
         orderId: "order-1",
@@ -114,10 +102,7 @@ describe("order fulfillment workflow", () => {
         confirmed: true,
       });
 
-      const result = await workflow.mainJob.body(
-        { orderId: "order-2", amount: 200 },
-        { env: {}, user: unauthenticatedTailorUser },
-      );
+      const result = await workflow.mainJob.body({ orderId: "order-2", amount: 200 }, { env: {} });
 
       expect(result).toEqual({
         orderId: "order-2",

@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
 import { format as formatDate } from "date-fns";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 
@@ -126,22 +125,10 @@ describe("pnpm apply command integration tests", () => {
     vi.useFakeTimers();
     vi.setSystemTime(fixedSystemTime);
     setupTailordbMock();
-    // Workflow entry files reference `user` global in server format (injected by platform runtime)
-    // and convert to SDK format via tailorUserMap. This is an integration test of the bundled
-    // output, so we set up server format derived from the SDK constant.
-    GlobalThis.user = {
-      id: unauthenticatedTailorUser.id,
-      type: unauthenticatedTailorUser.type,
-      workspace_id: unauthenticatedTailorUser.workspaceId,
-      attribute_map: unauthenticatedTailorUser.attributes,
-      attributes: unauthenticatedTailorUser.attributeList,
-      tenant_id: unauthenticatedTailorUser.id,
-    };
   });
 
   afterAll(() => {
     vi.useRealTimers();
-    delete GlobalThis.user;
   });
 
   type MainFunction = (args: Record<string, unknown>) => unknown | Promise<unknown>;
@@ -163,14 +150,6 @@ describe("pnpm apply command integration tests", () => {
         // triggerJobFunction is synchronous on the server side
         triggerJobFunction: (jobName: string, args: unknown) => unknown;
       };
-    };
-    user?: {
-      id: string;
-      type: string;
-      workspace_id: string;
-      attribute_map: unknown;
-      attributes: unknown[];
-      tenant_id: string;
     };
   };
 
@@ -652,8 +631,8 @@ describe("pnpm apply command integration tests", () => {
           // Check that env is defined with correct values
           expect(content).toContain('const env = {"foo":1,"bar":"hello","baz":true}');
 
-          // Check that body is called with { env, user: _user } context
-          expect(content).toMatch(/\.body\(input, \{ env, user: _user \}\)/);
+          // Check that body is called with { env } context
+          expect(content).toMatch(/\.body\(input, \{ env \}\)/);
         }
       });
 

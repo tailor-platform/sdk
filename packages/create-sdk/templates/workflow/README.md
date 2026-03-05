@@ -6,9 +6,8 @@ Demonstrates workflow patterns with job chaining, trigger testing, and dependenc
 
 - Workflow with multiple jobs (`createWorkflow`, `createWorkflowJob`)
 - Job chaining via `.trigger()`
-- User context access in jobs
 - Database operations in workflow jobs (DI pattern)
-- Integration testing with `WORKFLOW_TEST_ENV_KEY` / `WORKFLOW_TEST_USER_KEY`
+- Integration testing with `WORKFLOW_TEST_ENV_KEY`
 
 ## Getting Started
 
