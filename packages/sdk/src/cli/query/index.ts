@@ -10,13 +10,14 @@ import { bundleQueryScript } from "../bundler/query/query-bundler";
 import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "../shared/args";
 import { fetchMachineUserToken, initOperatorClient } from "../shared/client";
 import { extractAllNamespaces } from "../shared/config";
-import { loadConfig } from "../shared/config-loader";
+import { loadConfig, type LoadedConfig } from "../shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../shared/context";
 import { logger } from "../shared/logger";
 import { executeScript } from "../shared/script-executor";
 import { resolveTypeNamespaces } from "../shared/tailordb-namespace";
 import { mapQueryExecutionError } from "./errors";
-import { extractTypeNamesFromSql } from "./sql-type-extractor";
+import { extractTypeNamesFromSql, hasWildcardSelect } from "./sql-type-extractor";
+import { loadTypeFieldOrder } from "./type-field-order";
 import type { Application } from "@tailor-proto/tailor/v1/application_resource_pb";
 
 const queryEngineSchema = z.enum(["sql", "gql"]);
@@ -257,7 +258,7 @@ function parseExecutionResult(result: string): unknown {
  * @returns Dispatch result
  */
 export async function query(options: QueryOptions): Promise<QueryDispatchResult> {
-  const { client, workspaceId, application, machineUserResource, engine, namespace } =
+  const { client, workspaceId, config, application, machineUserResource, engine, namespace } =
     await loadOptions(options);
 
   try {
@@ -268,13 +269,15 @@ export async function query(options: QueryOptions): Promise<QueryDispatchResult>
     });
 
     switch (engine) {
-      case "sql":
-        return await sqlQuery(client, invoker, {
+      case "sql": {
+        const result = await sqlQuery(client, invoker, {
           workspaceId,
           namespace,
           bundledCode,
           query: options.query,
         });
+        return reorderSqlColumns(result, config, namespace, options.query);
+      }
       case "gql":
         return await gqlQuery(client, invoker, application, machineUserResource, {
           workspaceId,
@@ -328,6 +331,76 @@ async function queryGql(options: QuerySharedOptions): Promise<GQLQueryDispatchRe
   }
 
   return result;
+}
+
+async function reorderSqlColumns(
+  result: SQLQueryDispatchResult,
+  config: LoadedConfig,
+  namespace: string,
+  sqlQuery: string,
+): Promise<SQLQueryDispatchResult> {
+  if (!isSQLExecutionResult(result.result) || result.result.rows.length === 0) {
+    return result;
+  }
+
+  if (!hasWildcardSelect(sqlQuery)) {
+    return result;
+  }
+
+  const typeNames = extractTypeNamesFromSql(sqlQuery);
+  if (typeNames.length !== 1) {
+    return result;
+  }
+
+  try {
+    const fieldOrder = await loadTypeFieldOrder(config, namespace);
+    const definedFields = fieldOrder.get(typeNames[0]);
+    if (!definedFields) {
+      return result;
+    }
+
+    const orderedRows = result.result.rows.map((row) => reorderRowColumns(row, definedFields));
+
+    return {
+      ...result,
+      result: {
+        ...result.result,
+        rows: orderedRows,
+      },
+    };
+  } catch {
+    return result;
+  }
+}
+
+const SYSTEM_FIELD_ORDER = ["id"];
+
+function reorderRowColumns(row: SQLResultRow, definedFields: string[]): SQLResultRow {
+  const ordered: SQLResultRow = {};
+  const rowKeys = new Set(Object.keys(row));
+
+  // 1. System fields first (id)
+  for (const key of SYSTEM_FIELD_ORDER) {
+    if (rowKeys.has(key)) {
+      ordered[key] = row[key];
+      rowKeys.delete(key);
+    }
+  }
+
+  // 2. User-defined fields in definition order
+  for (const key of definedFields) {
+    if (rowKeys.has(key)) {
+      ordered[key] = row[key];
+      rowKeys.delete(key);
+    }
+  }
+
+  // 3. Remaining fields
+  for (const key of rowKeys) {
+    ordered[key] = row[key];
+  }
+
+  return ordered;
 }
 
 export const queryCommand = defineCommand({

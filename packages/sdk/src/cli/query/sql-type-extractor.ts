@@ -1,4 +1,4 @@
-import { astVisitor, parse, type Statement } from "pgsql-ast-parser";
+import { astVisitor, parse, type SelectedColumn, type Statement } from "pgsql-ast-parser";
 
 function collectCteNames(statements: Statement[]): Set<string> {
   const cteNames = new Set<string>();
@@ -50,4 +50,37 @@ export function extractTypeNamesFromSql(query: string): string[] {
   }
 
   return [...typeNames];
+}
+
+function isStarColumn(column: SelectedColumn): boolean {
+  return column.expr.type === "ref" && column.expr.name === "*";
+}
+
+/**
+ * Check if SQL query uses wildcard SELECT (*).
+ * @param query - SQL query
+ * @returns True if query contains SELECT *
+ */
+export function hasWildcardSelect(query: string): boolean {
+  let found = false;
+
+  try {
+    const statements = parse(query);
+    const visitor = astVisitor(() => ({
+      selection: (selection) => {
+        if (selection.columns?.some(isStarColumn)) {
+          found = true;
+        }
+        return selection;
+      },
+    }));
+
+    for (const statement of statements) {
+      visitor.statement(statement);
+    }
+  } catch {
+    return false;
+  }
+
+  return found;
 }

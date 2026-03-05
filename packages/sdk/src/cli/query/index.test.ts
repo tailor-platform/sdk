@@ -38,6 +38,11 @@ vi.mock("../shared/tailordb-namespace", () => ({
 
 vi.mock("./sql-type-extractor", () => ({
   extractTypeNamesFromSql: vi.fn(),
+  hasWildcardSelect: vi.fn(),
+}));
+
+vi.mock("./type-field-order", () => ({
+  loadTypeFieldOrder: vi.fn(),
 }));
 
 describe("query", () => {
@@ -51,7 +56,8 @@ describe("query", () => {
     const { bundleQueryScript } = await import("../bundler/query/query-bundler");
     const { executeScript } = await import("../shared/script-executor");
     const { resolveTypeNamespaces } = await import("../shared/tailordb-namespace");
-    const { extractTypeNamesFromSql } = await import("./sql-type-extractor");
+    const { extractTypeNamesFromSql, hasWildcardSelect } = await import("./sql-type-extractor");
+    const { loadTypeFieldOrder } = await import("./type-field-order");
 
     vi.mocked(loadAccessToken).mockResolvedValue("access-token");
     vi.mocked(loadWorkspaceId).mockReturnValue("workspace-1");
@@ -71,6 +77,8 @@ describe("query", () => {
     vi.mocked(fetchMachineUserToken).mockResolvedValue({ access_token: "mu-token" } as never);
     vi.mocked(resolveTypeNamespaces).mockResolvedValue(new Map([["User", "tailordb"]]));
     vi.mocked(extractTypeNamesFromSql).mockReturnValue(["User"]);
+    vi.mocked(hasWildcardSelect).mockReturnValue(false);
+    vi.mocked(loadTypeFieldOrder).mockResolvedValue(new Map());
 
     mockClient.getApplication.mockResolvedValue({
       application: {
@@ -286,5 +294,78 @@ describe("query", () => {
         query: "{ viewer { id } }",
       }),
     ).rejects.toThrow("Machine user missing-user not found.");
+  });
+
+  test("reorders SQL result columns by type field definition order when wildcard is used", async () => {
+    const { executeScript } = await import("../shared/script-executor");
+    const { hasWildcardSelect } = await import("./sql-type-extractor");
+    const { loadTypeFieldOrder } = await import("./type-field-order");
+
+    vi.mocked(hasWildcardSelect).mockReturnValue(true);
+    vi.mocked(loadTypeFieldOrder).mockResolvedValue(
+      new Map([["User", ["name", "email", "role", "createdAt", "updatedAt"]]]),
+    );
+    vi.mocked(executeScript).mockResolvedValue({
+      success: true,
+      logs: "",
+      result: JSON.stringify({
+        rows: [
+          {
+            updatedAt: "2024-01-02",
+            email: "a@b.com",
+            id: "1",
+            role: "STAFF",
+            name: "Alice",
+            createdAt: "2024-01-01",
+          },
+        ],
+        rowCount: 1,
+      }),
+    });
+
+    const result = await query({
+      workspaceId: "workspace-1",
+      configPath: "tailor.config.ts",
+      engine: "sql",
+      machineUser: "bot",
+      query: 'select * from "User";',
+    });
+
+    expect(result.engine).toBe("sql");
+    const sqlResult = result.result as { rows: Record<string, unknown>[]; rowCount: number };
+    expect(Object.keys(sqlResult.rows[0])).toEqual([
+      "id",
+      "name",
+      "email",
+      "role",
+      "createdAt",
+      "updatedAt",
+    ]);
+  });
+
+  test("does not reorder columns when explicit column list is used", async () => {
+    const { executeScript } = await import("../shared/script-executor");
+    const { hasWildcardSelect } = await import("./sql-type-extractor");
+
+    vi.mocked(hasWildcardSelect).mockReturnValue(false);
+    vi.mocked(executeScript).mockResolvedValue({
+      success: true,
+      logs: "",
+      result: JSON.stringify({
+        rows: [{ email: "a@b.com", name: "Alice" }],
+        rowCount: 1,
+      }),
+    });
+
+    const result = await query({
+      workspaceId: "workspace-1",
+      configPath: "tailor.config.ts",
+      engine: "sql",
+      machineUser: "bot",
+      query: 'select email, name from "User";',
+    });
+
+    const sqlResult = result.result as { rows: Record<string, unknown>[]; rowCount: number };
+    expect(Object.keys(sqlResult.rows[0])).toEqual(["email", "name"]);
   });
 });
