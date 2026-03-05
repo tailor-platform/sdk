@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/sdk",
-  "version": "1.19.0",
+  "version": "1.21.0",
   "description": "Tailor Platform SDK - The SDK to work with Tailor Platform",
   "license": "MIT",
   "repository": {
@@ -111,6 +111,7 @@
     "date-fns": "4.1.0",
     "es-toolkit": "^1.44.0",
     "find-up-simple": "1.0.1",
+    "globals": "17.0.0",
     "inflection": "3.0.2",
     "kysely": "0.28.10",
     "madge": "8.0.0",
@@ -121,6 +122,7 @@
     "oxc-parser": "0.108.0",
     "p-limit": "7.2.0",
     "pathe": "2.0.3",
+    "pgsql-ast-parser": "^12.0.2",
     "pkg-types": "2.3.0",
     "politty": "^0.4.0",
     "rolldown": "1.0.0-beta.60",
@@ -147,7 +149,6 @@
     "eslint": "9.39.2",
     "eslint-plugin-jsdoc": "62.1.0",
     "eslint-plugin-oxlint": "1.39.0",
-    "globals": "17.0.0",
     "oxlint": "1.39.0",
     "oxlint-tsgolint": "0.11.1",
     "sonda": "0.10.1",

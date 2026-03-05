@@ -311,6 +311,18 @@ async function planResolvers(
     }
   }
 
+  // Validate that resolvers used by executors don't have publishEvents explicitly set to false
+  for (const pipeline of pipelines) {
+    for (const resolver of Object.values(pipeline.resolvers)) {
+      if (executorUsedResolvers.has(resolver.name) && resolver.publishEvents === false) {
+        throw new Error(
+          `Resolver "${resolver.name}" has publishEvents set to false, but it is used by an executor with a resolverExecuted trigger. ` +
+            `Either remove the publishEvents: false setting or remove the executor trigger for this resolver.`,
+        );
+      }
+    }
+  }
+
   for (const pipeline of pipelines) {
     const existingResolvers = await fetchResolvers(pipeline.namespace);
     const existingNameSet = new Set<string>();
@@ -418,6 +430,16 @@ function processResolver(
     ? `${resolverDescription}\n\nReturns:\n${outputDescription}`
     : resolverDescription;
 
+  // Determine publishExecutionEvents (user-facing name: publishEvents):
+  // - If user explicitly sets a value (true or false), respect that (validation already ensures no executor conflict)
+  // - If not set, use executor detection (true if executor uses this resolver)
+  let publishExecutionEvents = false;
+  if (resolver.publishEvents !== undefined) {
+    publishExecutionEvents = resolver.publishEvents;
+  } else if (executorUsedResolvers.has(resolver.name)) {
+    publishExecutionEvents = true;
+  }
+
   return {
     authorization: "true==true",
     description: combinedDescription,
@@ -426,7 +448,7 @@ function processResolver(
     operationType: resolver.operation,
     response,
     pipelines,
-    publishExecutionEvents: executorUsedResolvers.has(resolver.name),
+    publishExecutionEvents,
   };
 }
 

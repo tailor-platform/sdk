@@ -143,8 +143,8 @@ export async function executeScript(
     return {
       success: false,
       logs: result.logs,
-      result: result.result,
-      error: result.result || "Script execution failed with unknown error",
+      result: result.result || response.result,
+      error: result.result || response.result || "Script execution failed with unknown error",
     };
   }
 }
