@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import fs from "node:fs";
-import path from "node:path";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { beforeAll, describe, expect, test } from "vitest";
 import { generate } from "@/cli/commands/generate/service";
 

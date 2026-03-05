@@ -1,4 +1,4 @@
-import path from "node:path";
+import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 
 type MainFunction = (args: Record<string, unknown>) => unknown | Promise<unknown>;

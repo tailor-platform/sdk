@@ -1,5 +1,5 @@
-import fs from "node:fs";
-import path from "node:path";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { setupTailordbMock, createImportMain } from "@/utils/test/mock";
 import { prepareFixtures } from "./prepare";

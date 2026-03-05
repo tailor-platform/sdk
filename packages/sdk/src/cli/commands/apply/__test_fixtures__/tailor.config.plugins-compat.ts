@@ -1,6 +1,6 @@
 // eslint-disable-next-line no-restricted-imports -- test fixture runs as standalone config, needs node:path
-import path from "node:path";
-import url from "node:url";
+import * as path from "node:path";
+import * as url from "node:url";
 import { definePlugins } from "@tailor-platform/sdk";
 import { enumConstantsPlugin } from "@tailor-platform/sdk/plugin/enum-constants";
 import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";

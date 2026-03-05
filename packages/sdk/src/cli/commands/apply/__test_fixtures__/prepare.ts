@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import fs from "node:fs";
+import * as fs from "node:fs";
 // eslint-disable-next-line no-restricted-imports -- test fixture script, node:path is fine here
-import path from "node:path";
+import * as path from "node:path";
 import { apply } from "@/cli/commands/apply/apply";
 import { generate } from "@/cli/commands/generate/service";
 
