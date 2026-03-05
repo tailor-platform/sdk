@@ -50,14 +50,12 @@ describe("bundled execution tests", () => {
 
     test("resolvers/stepChain.js returns result with summary", async () => {
       setupTailordbMock((query) => {
-        if (typeof query === "string") {
-          const normalizedQuery = query.replace(/["`]/g, "").toUpperCase();
-          if (normalizedQuery.includes("SELECT NAME FROM USER ORDER BY CREATEDAT DESC")) {
-            return [{ name: "Alice" }];
-          }
-          if (normalizedQuery.includes("SELECT STATE FROM SUPPLIER")) {
-            return [{ state: "CA" }, { state: "NY" }];
-          }
+        const normalizedQuery = query.replace(/["`]/g, "").toUpperCase();
+        if (normalizedQuery.includes("SELECT NAME FROM USER ORDER BY CREATEDAT DESC")) {
+          return [{ name: "Alice" }];
+        }
+        if (normalizedQuery.includes("SELECT STATE FROM SUPPLIER")) {
+          return [{ state: "CA" }, { state: "NY" }];
         }
         return [];
       });

@@ -4,11 +4,9 @@ import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { setupTailordbMock, createImportMain } from "@/utils/test/mock";
 import { prepareFixtures } from "./prepare";
 
-type MainFunction = (args: Record<string, unknown>) => unknown | Promise<unknown>;
-
 describe("apply command integration tests", () => {
   let outputDir: string;
-  let importMain: (relativePath: string) => Promise<MainFunction>;
+  let importMain: ReturnType<typeof createImportMain>;
 
   const fixedSystemTime = new Date("2025-10-06T12:34:56.000Z");
 
