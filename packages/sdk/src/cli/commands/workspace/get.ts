@@ -55,11 +55,13 @@ export async function getWorkspace(options: GetWorkspaceOptions): Promise<Worksp
 export const getCommand = defineCommand({
   name: "get",
   description: "Show detailed information about a workspace",
-  args: z.object({
-    ...commonArgs,
-    ...jsonArgs,
-    ...workspaceArgs,
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...jsonArgs,
+      ...workspaceArgs,
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     const workspace = await getWorkspace({
       workspaceId: args["workspace-id"],

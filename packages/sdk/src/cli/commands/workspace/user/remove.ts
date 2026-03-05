@@ -50,14 +50,16 @@ export async function removeUser(options: RemoveUserOptions): Promise<void> {
 export const removeCommand = defineCommand({
   name: "remove",
   description: "Remove a user from a workspace",
-  args: z.object({
-    ...commonArgs,
-    ...workspaceArgs,
-    email: arg(z.email(), {
-      description: "Email address of the user to remove",
-    }),
-    ...confirmationArgs,
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...workspaceArgs,
+      email: arg(z.email(), {
+        description: "Email address of the user to remove",
+      }),
+      ...confirmationArgs,
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     if (!args.yes) {
       const confirmation = await logger.prompt(

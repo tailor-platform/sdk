@@ -103,9 +103,11 @@ const startAuthServer = async () => {
 export const loginCommand = defineCommand({
   name: "login",
   description: "Login to Tailor Platform.",
-  args: z.object({
-    ...commonArgs,
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+    })
+    .strict(),
   run: withCommonArgs(async () => {
     await startAuthServer();
     logger.success("Successfully logged in to Tailor Platform.");

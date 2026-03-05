@@ -42,11 +42,13 @@ export async function listWorkflows(options?: ListWorkflowsOptions): Promise<Wor
 export const listCommand = defineCommand({
   name: "list",
   description: "List all workflows in the workspace.",
-  args: z.object({
-    ...commonArgs,
-    ...jsonArgs,
-    ...workspaceArgs,
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...jsonArgs,
+      ...workspaceArgs,
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     const workflows = await listWorkflows({
       workspaceId: args["workspace-id"],

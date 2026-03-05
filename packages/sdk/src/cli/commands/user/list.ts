@@ -8,10 +8,12 @@ import { logger } from "@/cli/shared/logger";
 export const listCommand = defineCommand({
   name: "list",
   description: "List all users.",
-  args: z.object({
-    ...commonArgs,
-    ...jsonArgs,
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...jsonArgs,
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     const config = readPlatformConfig();
 

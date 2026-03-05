@@ -9,10 +9,12 @@ import type { ProfileInfo } from ".";
 export const listCommand = defineCommand({
   name: "list",
   description: "List all profiles.",
-  args: z.object({
-    ...commonArgs,
-    ...jsonArgs,
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...jsonArgs,
+    })
+    .strict(),
   run: withCommonArgs(async () => {
     const config = readPlatformConfig();
 
