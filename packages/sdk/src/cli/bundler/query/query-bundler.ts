@@ -25,12 +25,17 @@ function createSqlEntry(): string {
 
     export async function main(input: QueryInput) {
       const db = getDB(input.namespace);
-      const result = await sql.raw(input.query).execute(db);
-      const rows = result.rows ?? [];
-      return {
-        rows,
-        rowCount: rows.length,
-      };
+      const queries = input.query.split(';').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+      const results = [];
+      for (const query of queries) {
+        const result = await sql.raw(query).execute(db);
+        const rows = result.rows ?? [];
+        results.push({ rows, rowCount: rows.length });
+      }
+      if (results.length === 1) {
+        return results[0];
+      }
+      return results;
     }
   `;
 }

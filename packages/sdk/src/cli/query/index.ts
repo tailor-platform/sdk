@@ -473,22 +473,13 @@ function isSQLExecutionResult(value: unknown): value is SQLExecutionResult {
   return Array.isArray(candidate.rows) && typeof candidate.rowCount === "number";
 }
 
-function printSqlResult(result: SQLQueryDispatchResult, options: { json?: boolean } = {}): void {
-  if (!isSQLExecutionResult(result.result)) {
-    logger.out({
-      engine: result.engine,
-      query: result.query,
-      result: result.result,
-    });
-    return;
-  }
-
-  if (result.result.rows.length === 0) {
+function printSingleSqlResult(
+  execResult: SQLExecutionResult,
+  options: { json?: boolean } = {},
+): void {
+  if (execResult.rows.length === 0) {
     if (options.json) {
-      logger.out({
-        results: [],
-        rowCount: 0,
-      });
+      logger.out({ results: [], rowCount: 0 });
       return;
     }
     logger.info("No rows returned.");
@@ -496,15 +487,50 @@ function printSqlResult(result: SQLQueryDispatchResult, options: { json?: boolea
   }
 
   if (options.json) {
-    logger.out({
-      results: result.result.rows,
-      rowCount: result.result.rowCount,
-    });
+    logger.out({ results: execResult.rows, rowCount: execResult.rowCount });
     return;
   }
 
-  logger.out(result.result.rows, { showNull: true });
-  logger.out(`rows: ${result.result.rowCount}`);
+  logger.out(execResult.rows, { showNull: true });
+  logger.out(`rows: ${execResult.rowCount}`);
+}
+
+function splitSqlStatements(query: string): string[] {
+  return query
+    .split(";")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
+function isSQLExecutionResultArray(value: unknown): value is SQLExecutionResult[] {
+  return Array.isArray(value) && value.length > 0 && value.every(isSQLExecutionResult);
+}
+
+function printSqlResult(result: SQLQueryDispatchResult, options: { json?: boolean } = {}): void {
+  if (isSQLExecutionResultArray(result.result)) {
+    if (options.json) {
+      logger.out(result.result.map((r) => ({ results: r.rows, rowCount: r.rowCount })));
+      return;
+    }
+    const queries = splitSqlStatements(result.query);
+    for (let i = 0; i < result.result.length; i++) {
+      if (i > 0) logger.log("");
+      logger.info(queries[i] ?? `Statement ${i + 1}`);
+      printSingleSqlResult(result.result[i], options);
+    }
+    return;
+  }
+
+  if (isSQLExecutionResult(result.result)) {
+    printSingleSqlResult(result.result, options);
+    return;
+  }
+
+  logger.out({
+    engine: result.engine,
+    query: result.query,
+    result: result.result,
+  });
 }
 
 function printGqlResult(result: GQLQueryDispatchResult, options: { json?: boolean } = {}): void {
