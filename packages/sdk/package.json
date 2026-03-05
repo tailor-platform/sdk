@@ -5,7 +5,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/tailor-platform/sdk.git",
+    "url": "git+https://github.com/tailor-platform/sdk.git",
     "directory": "packages/sdk"
   },
   "bin": {
@@ -87,7 +87,8 @@
     "prepublish": "pnpm run build",
     "postinstall": "node postinstall.mjs",
     "measure:bundle": "node ../../scripts/measure-bundle-size-sonda.js",
-    "knip": "knip"
+    "knip": "knip",
+    "publint": "publint --strict"
   },
   "dependencies": {
     "@badgateway/oauth2-client": "3.3.1",
