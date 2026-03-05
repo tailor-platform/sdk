@@ -15,7 +15,24 @@ export default defineConfig({
         test: {
           name: "unit",
           include: ["**/__tests__/**/*.ts", "**/?(*.)+(spec|test).ts"],
-          exclude: ["**/node_modules/**", "**/dist/**", "e2e/**"],
+          exclude: [
+            "**/node_modules/**",
+            "**/dist/**",
+            "e2e/**",
+            "**/__test_fixtures__/**",
+            "src/plugin/compat.test.ts",
+          ],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "integration",
+          include: [
+            "src/cli/commands/apply/__test_fixtures__/**/*.test.ts",
+            "src/plugin/compat.test.ts",
+          ],
+          testTimeout: 60000,
         },
       },
       {

@@ -10,6 +10,13 @@ export default defineConfig({
           include: ["src/**/*.test.ts"],
         },
       },
+      {
+        test: {
+          name: { label: "e2e", color: "green" },
+          include: ["e2e/**/*.test.ts"],
+          globalSetup: "e2e/globalSetup.ts",
+        },
+      },
     ],
   },
 });

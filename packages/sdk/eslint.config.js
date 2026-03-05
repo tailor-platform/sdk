@@ -7,7 +7,14 @@ import jsdocPlugin from "eslint-plugin-jsdoc";
 import oxlint from "eslint-plugin-oxlint";
 
 export default defineConfig([
-  globalIgnores(["dist/", "e2e/fixtures/", "user-defined.d.ts", "plugin-defined.d.ts"]),
+  globalIgnores([
+    "dist/",
+    "e2e/fixtures/",
+    "user-defined.d.ts",
+    "plugin-defined.d.ts",
+    "**/__test_fixtures__/dist/",
+    "**/__test_fixtures__/*-compat-out/",
+  ]),
   eslint.configs.recommended,
   tseslint.configs.recommended,
   importPlugin.flatConfigs.recommended,
