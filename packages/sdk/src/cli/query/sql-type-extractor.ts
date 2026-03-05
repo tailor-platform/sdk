@@ -6,7 +6,15 @@ import { astVisitor, parse, type From } from "pgsql-ast-parser";
  * @returns Type names referenced by query
  */
 export function extractTypeNamesFromSql(query: string): string[] {
-  const statements = parse(query);
+  let statements: Statement[];
+  try {
+    statements = parse(query);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `SQL parse error: ${message}\nIf your table name is a reserved keyword (e.g. User), wrap it in double quotes: SELECT * FROM "User"`,
+    );
+  }
   const typeNames = new Set<string>();
 
   const visitor = astVisitor((mapper) => ({
