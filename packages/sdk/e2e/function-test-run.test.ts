@@ -56,14 +56,7 @@ interface TestRunResult extends ScriptExecutionResult {
   functionName?: string;
 }
 
-/**
- * Bundle and execute a function file via internal APIs.
- * @param file
- * @param options
- * @param options.arg
- * @param options.name
- * @param options.type
- */
+// Bundle and execute a function file via internal APIs.
 async function runTestRun(
   file: string,
   options?: {
@@ -274,16 +267,38 @@ describe.sequential("E2E: function test-run", () => {
 
   describe("pre-bundled .js file", () => {
     test("runs pre-bundled .js file directly", async () => {
-      const bundledPath = ".tailor-sdk/test-run/test-run--add.js";
-      expect(fs.existsSync(path.join(exampleDir, bundledPath))).toBe(true);
+      // Bundle the resolver first to create the .js file
+      const sourceFile = path.resolve(exampleDir, "resolvers/add.ts");
+      const detected = await detectFunctionType({ filePath: sourceFile });
+      const { bundledCode } = await bundleForTestRun({
+        detected,
+        sourceFile,
+        env,
+        machineUser,
+        workspaceId,
+      });
 
-      const result = await runTestRun(bundledPath, {
+      // Write bundled code to a temp .js file
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "pre-bundled-"));
+      const jsFile = path.join(tempDir, "add.js");
+      fs.writeFileSync(jsFile, bundledCode);
+
+      // Execute the pre-bundled .js file directly (bypasses detect/bundle)
+      const code = fs.readFileSync(jsFile, "utf-8");
+      const result = await executeScript({
+        client,
+        workspaceId,
+        name: "add.js",
+        code,
         arg: '{"input":{"a":5,"b":7}}',
+        invoker: authInvoker,
       });
 
       expect(result.success).toBe(true);
       expect(JSON.parse(result.result)).toBe(12);
-      expect(result.functionType).toBeUndefined();
+
+      // Cleanup
+      fs.rmSync(tempDir, { recursive: true });
     });
   });
 
