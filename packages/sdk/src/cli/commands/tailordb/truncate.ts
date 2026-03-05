@@ -207,23 +207,25 @@ async function $truncate(options?: InternalTruncateOptions): Promise<void> {
 export const truncateCommand = defineCommand({
   name: "truncate",
   description: "Truncate (delete all records from) TailorDB tables.",
-  args: z.object({
-    ...commonArgs,
-    ...deploymentArgs,
-    ...confirmationArgs,
-    types: arg(z.string().array().optional(), {
-      positional: true,
-      description: "Type names to truncate",
-    }),
-    all: arg(z.boolean().default(false), {
-      alias: "a",
-      description: "Truncate all tables in all namespaces",
-    }),
-    namespace: arg(z.string().optional(), {
-      alias: "n",
-      description: "Truncate all tables in specified namespace",
-    }),
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...deploymentArgs,
+      ...confirmationArgs,
+      types: arg(z.string().array().optional(), {
+        positional: true,
+        description: "Type names to truncate",
+      }),
+      all: arg(z.boolean().default(false), {
+        alias: "a",
+        description: "Truncate all tables in all namespaces",
+      }),
+      namespace: arg(z.string().optional(), {
+        alias: "n",
+        description: "Truncate all tables in specified namespace",
+      }),
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     const types = args.types && args.types.length > 0 ? args.types : undefined;
     await $truncate({

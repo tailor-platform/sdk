@@ -8,9 +8,11 @@ import { logger } from "@/cli/shared/logger";
 export const logoutCommand = defineCommand({
   name: "logout",
   description: "Logout from Tailor Platform.",
-  args: z.object({
-    ...commonArgs,
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+    })
+    .strict(),
   run: withCommonArgs(async () => {
     const pfConfig = readPlatformConfig();
     const tokens = pfConfig.current_user ? pfConfig.users[pfConfig.current_user] : undefined;

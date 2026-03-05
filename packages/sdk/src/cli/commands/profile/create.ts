@@ -9,22 +9,24 @@ import type { ProfileInfo } from ".";
 export const createCommand = defineCommand({
   name: "create",
   description: "Create a new profile.",
-  args: z.object({
-    ...commonArgs,
-    ...jsonArgs,
-    name: arg(z.string(), {
-      positional: true,
-      description: "Profile name",
-    }),
-    user: arg(z.string(), {
-      alias: "u",
-      description: "User email",
-    }),
-    "workspace-id": arg(z.string(), {
-      alias: "w",
-      description: "Workspace ID",
-    }),
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...jsonArgs,
+      name: arg(z.string(), {
+        positional: true,
+        description: "Profile name",
+      }),
+      user: arg(z.string(), {
+        alias: "u",
+        description: "User email",
+      }),
+      "workspace-id": arg(z.string(), {
+        alias: "w",
+        description: "Workspace ID",
+      }),
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     const config = readPlatformConfig();
 

@@ -333,22 +333,24 @@ async function queryGql(options: QuerySharedOptions): Promise<GQLQueryDispatchRe
 export const queryCommand = defineCommand({
   name: "query",
   description: "Run SQL/GraphQL query.",
-  args: z.object({
-    ...commonArgs,
-    ...jsonArgs,
-    ...deploymentArgs,
-    engine: arg(queryEngineSchema, {
-      description: "Query engine (sql or gql)",
-    }),
-    query: arg(z.string(), {
-      alias: "q",
-      description: "Query string to execute directly",
-    }),
-    machineuser: arg(z.string(), {
-      alias: "m",
-      description: "Machine user name for query execution",
-    }),
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...jsonArgs,
+      ...deploymentArgs,
+      engine: arg(queryEngineSchema, {
+        description: "Query engine (sql or gql)",
+      }),
+      query: arg(z.string(), {
+        alias: "q",
+        description: "Query string to execute directly",
+      }),
+      machineuser: arg(z.string(), {
+        alias: "m",
+        description: "Machine user name for query execution",
+      }),
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     const sharedOptions: QuerySharedOptions = {
       workspaceId: args["workspace-id"],

@@ -529,43 +529,45 @@ export const jobsCommand = defineCommand({
       desc: "Wait for job with logs",
     },
   ],
-  args: z.object({
-    ...commonArgs,
-    ...jsonArgs,
-    ...workspaceArgs,
-    executorName: arg(z.string(), {
-      positional: true,
-      description: "Executor name",
-    }),
-    jobId: arg(z.string().optional(), {
-      positional: true,
-      description: "Job ID (if provided, shows job details)",
-    }),
-    status: arg(z.string().optional(), {
-      alias: "s",
-      description:
-        "Filter by status (PENDING, RUNNING, SUCCESS, FAILED, CANCELED) (list mode only)",
-    }),
-    attempts: arg(z.boolean().default(false), {
-      description: "Show job attempts (only with job ID) (detail mode only)",
-    }),
-    wait: arg(z.boolean().default(false), {
-      alias: "W",
-      description:
-        "Wait for job completion and downstream execution (workflow/function) if applicable (detail mode only)",
-    }),
-    interval: arg(durationArg.default("3s"), {
-      alias: "i",
-      description: "Polling interval when using --wait (e.g., '3s', '500ms', '1m')",
-    }),
-    logs: arg(z.boolean().default(false), {
-      alias: "l",
-      description: "Display function execution logs after completion (requires --wait)",
-    }),
-    limit: arg(positiveIntArg.optional(), {
-      description: "Maximum number of jobs to list (default: 50, max: 1000) (list mode only)",
-    }),
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...jsonArgs,
+      ...workspaceArgs,
+      executorName: arg(z.string(), {
+        positional: true,
+        description: "Executor name",
+      }),
+      jobId: arg(z.string().optional(), {
+        positional: true,
+        description: "Job ID (if provided, shows job details)",
+      }),
+      status: arg(z.string().optional(), {
+        alias: "s",
+        description:
+          "Filter by status (PENDING, RUNNING, SUCCESS, FAILED, CANCELED) (list mode only)",
+      }),
+      attempts: arg(z.boolean().default(false), {
+        description: "Show job attempts (only with job ID) (detail mode only)",
+      }),
+      wait: arg(z.boolean().default(false), {
+        alias: "W",
+        description:
+          "Wait for job completion and downstream execution (workflow/function) if applicable (detail mode only)",
+      }),
+      interval: arg(durationArg.default("3s"), {
+        alias: "i",
+        description: "Polling interval when using --wait (e.g., '3s', '500ms', '1m')",
+      }),
+      logs: arg(z.boolean().default(false), {
+        alias: "l",
+        description: "Display function execution logs after completion (requires --wait)",
+      }),
+      limit: arg(positiveIntArg.optional(), {
+        description: "Maximum number of jobs to list (default: 50, max: 1000) (list mode only)",
+      }),
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     if (args.jobId) {
       if (args.wait) {

@@ -61,15 +61,17 @@ export async function getOAuth2Client(
 export const getCommand = defineCommand({
   name: "get",
   description: "Get OAuth2 client credentials (including client secret).",
-  args: z.object({
-    ...commonArgs,
-    ...jsonArgs,
-    ...deploymentArgs,
-    name: arg(z.string(), {
-      positional: true,
-      description: "OAuth2 client name",
-    }),
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...jsonArgs,
+      ...deploymentArgs,
+      name: arg(z.string(), {
+        positional: true,
+        description: "OAuth2 client name",
+      }),
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     const credentials = await getOAuth2Client({
       name: args.name,

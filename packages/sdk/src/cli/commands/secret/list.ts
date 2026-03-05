@@ -61,12 +61,14 @@ async function secretList(options: SecretListOptions): Promise<SecretInfo[]> {
 export const listSecretCommand = defineCommand({
   name: "list",
   description: "List all secrets in a vault.",
-  args: z.object({
-    ...commonArgs,
-    ...jsonArgs,
-    ...workspaceArgs,
-    ...vaultArgs,
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...jsonArgs,
+      ...workspaceArgs,
+      ...vaultArgs,
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     try {
       const secrets = await secretList({

@@ -391,27 +391,29 @@ export function printExecutionWithLogs(execution: WorkflowExecutionDetailInfo): 
 export const executionsCommand = defineCommand({
   name: "executions",
   description: "List or get workflow executions.",
-  args: z.object({
-    ...commonArgs,
-    ...jsonArgs,
-    ...workspaceArgs,
-    executionId: arg(z.string().optional(), {
-      positional: true,
-      description: "Execution ID (if provided, shows details)",
-    }),
-    "workflow-name": arg(z.string().optional(), {
-      alias: "n",
-      description: "Filter by workflow name (list mode only)",
-    }),
-    status: arg(z.string().optional(), {
-      alias: "s",
-      description: "Filter by status (list mode only)",
-    }),
-    ...waitArgs,
-    logs: arg(z.boolean().default(false), {
-      description: "Display job execution logs (detail mode only)",
-    }),
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...jsonArgs,
+      ...workspaceArgs,
+      executionId: arg(z.string().optional(), {
+        positional: true,
+        description: "Execution ID (if provided, shows details)",
+      }),
+      "workflow-name": arg(z.string().optional(), {
+        alias: "n",
+        description: "Filter by workflow name (list mode only)",
+      }),
+      status: arg(z.string().optional(), {
+        alias: "s",
+        description: "Filter by status (list mode only)",
+      }),
+      ...waitArgs,
+      logs: arg(z.boolean().default(false), {
+        description: "Display job execution logs (detail mode only)",
+      }),
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     if (args.executionId) {
       const interval = parseDuration(args.interval);
