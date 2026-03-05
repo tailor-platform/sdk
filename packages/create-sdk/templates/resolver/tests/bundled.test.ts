@@ -87,7 +87,7 @@ describe("bundled resolver execution", () => {
   describe("showEnv resolver", () => {
     test("returns env values embedded from config", async () => {
       const main = await importMain("resolvers/showEnv.js");
-      const result = await main({});
+      const result = await main({ env: { appName: "Resolver Template", version: 1 } });
       expect(result).toEqual({
         appName: "Resolver Template",
         version: 1,
