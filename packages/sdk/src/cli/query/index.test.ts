@@ -424,4 +424,52 @@ describe("query", () => {
     const sqlResult = result.result as { rows: Record<string, unknown>[]; rowCount: number };
     expect(Object.keys(sqlResult.rows[0])).toEqual(["email", "name"]);
   });
+
+  test("matches columns case-insensitively for unquoted SQL aliases", async () => {
+    const { executeScript } = await import("../shared/script-executor");
+    const { extractColumnTemplate } = await import("./sql-type-extractor");
+    const { loadTypeFieldOrder } = await import("./type-field-order");
+
+    vi.mocked(extractColumnTemplate).mockReturnValue([
+      { type: "explicit", name: "uid" },
+      { type: "wildcard", typeNames: ["SalesOrder"] },
+    ]);
+    vi.mocked(loadTypeFieldOrder).mockResolvedValue(
+      new Map([["SalesOrder", ["customerID", "total", "createdAt"]]]),
+    );
+    vi.mocked(executeScript).mockResolvedValue({
+      success: true,
+      logs: "",
+      result: JSON.stringify({
+        rows: [
+          {
+            createdAt: "2024-01-01",
+            UID: "u1",
+            total: 100,
+            id: "o1",
+            customerID: "c1",
+          },
+        ],
+        rowCount: 1,
+      }),
+    });
+
+    const result = await query({
+      workspaceId: "workspace-1",
+      configPath: "tailor.config.ts",
+      engine: "sql",
+      machineUser: "bot",
+      query:
+        'select u.id as UID, o.* from "Customer" u join "SalesOrder" o on u.id = o."customerID";',
+    });
+
+    const sqlResult = result.result as { rows: Record<string, unknown>[]; rowCount: number };
+    expect(Object.keys(sqlResult.rows[0])).toEqual([
+      "UID",
+      "id",
+      "customerID",
+      "total",
+      "createdAt",
+    ]);
+  });
 });

@@ -399,10 +399,20 @@ function reorderRowByTemplate(row: SQLResultRow, expectedOrder: string[]): SQLRe
   const ordered: SQLResultRow = {};
   const rowKeys = new Set(Object.keys(row));
 
+  // Build case-insensitive lookup: lowercased key → original key in row.
+  // pgsql-ast-parser lowercases unquoted identifiers (PostgreSQL standard),
+  // but TailorDB preserves the original case, so we need case-insensitive matching.
+  const lowerToOriginal = new Map<string, string>();
+  for (const key of rowKeys) {
+    lowerToOriginal.set(key.toLowerCase(), key);
+  }
+
   for (const key of expectedOrder) {
-    if (rowKeys.has(key)) {
-      ordered[key] = row[key];
-      rowKeys.delete(key);
+    const original = lowerToOriginal.get(key.toLowerCase());
+    if (original != null && rowKeys.has(original)) {
+      ordered[original] = row[original];
+      rowKeys.delete(original);
+      lowerToOriginal.delete(key.toLowerCase());
     }
   }
 
