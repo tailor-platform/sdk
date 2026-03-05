@@ -17,19 +17,17 @@ import { buildTriggerContext } from "@/cli/shared/trigger-context";
 import { type AppConfig } from "@/parser/app-config";
 import { type AuthConfig } from "@/parser/service/auth";
 import { type ExecutorServiceInput } from "@/parser/service/executor";
-import { IdPSchema, type IdP } from "@/parser/service/idp";
+import { IdPSchema } from "@/parser/service/idp";
 import { type IdPConfig } from "@/parser/service/idp/types";
 import { type ResolverServiceInput } from "@/parser/service/resolver/types";
-import {
-  StaticWebsiteSchema,
-  type StaticWebsite,
-  type StaticWebsiteInput,
-} from "@/parser/service/staticwebsite";
+import { StaticWebsiteSchema } from "@/parser/service/staticwebsite";
 import { TailorDBServiceConfigSchema } from "@/parser/service/tailordb";
 import { type TailorDBServiceInput } from "@/parser/service/tailordb/types";
 import { type WorkflowServiceConfig } from "@/parser/service/workflow";
 import type { BundleCache } from "@/cli/cache/bundle-cache";
 import type { PluginManager } from "@/plugin/manager";
+import type { IdP } from "@/types/idp.generated";
+import type { StaticWebsite, StaticWebsiteInput } from "@/types/staticwebsite.generated";
 
 export type Application = {
   readonly name: string;

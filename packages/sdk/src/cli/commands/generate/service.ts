@@ -25,13 +25,13 @@ import {
   type TailorDBNamespaceData,
   type ResolverNamespaceData,
 } from "@/parser/plugin-config/generation-types";
-import { type Executor } from "@/parser/service/executor";
-import { type Resolver } from "@/parser/service/resolver";
 import { PluginManager } from "@/plugin/manager";
 import { createDependencyWatcher, type DependencyWatcher } from "./watch";
 import type { GenerateOptions } from "./options";
 import type { Plugin, PluginAttachment } from "@/parser/plugin-config/types";
 import type { TailorDBType, TypeSourceInfo } from "@/parser/service/tailordb/types";
+import type { Executor } from "@/types/executor.generated";
+import type { Resolver } from "@/types/resolver.generated";
 
 export type { CodeGenerator } from "@/cli/commands/generate/types";
 

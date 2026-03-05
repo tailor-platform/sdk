@@ -5,8 +5,8 @@ import type {
   Hook,
   OperatorFieldConfig,
   RawRelationConfig,
-  TailorDBTypeSchemaOutput,
 } from "./types";
+import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "@/types/tailordb.generated";
 
 // Since there's naming difference between platform and sdk,
 // use this mapping in all scripts to provide variables that match sdk types.

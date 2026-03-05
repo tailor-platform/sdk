@@ -19,13 +19,13 @@ import * as inflection from "inflection";
 import { type ResolverService } from "@/cli/services/resolver/service";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { buildResolverOperationHookExpr } from "@/cli/shared/runtime-args";
-import { type Resolver, type TailorField } from "@/parser/service/resolver";
 import { createChangeSet } from "./change-set";
 import { resolverFunctionName } from "./function-registry";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
-import type { Executor } from "@/parser/service/executor";
+import type { Executor } from "@/types/executor.generated";
+import type { Resolver, TailorField } from "@/types/resolver.generated";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
 // Scalar type mapping for field type conversion

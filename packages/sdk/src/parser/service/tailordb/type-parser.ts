@@ -13,9 +13,9 @@ import type {
   ParsedField,
   ParsedRelationship,
   TailorDBType,
-  TailorDBTypeSchemaOutput,
   TypeSourceInfoEntry,
 } from "./types";
+import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "@/types/tailordb.generated";
 
 /**
  * Source information for TailorDB types.

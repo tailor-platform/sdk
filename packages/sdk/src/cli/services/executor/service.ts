@@ -2,12 +2,9 @@ import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "@/cli/services/file-loader";
 import { logger, styles } from "@/cli/shared/logger";
-import {
-  ExecutorSchema,
-  type Executor,
-  type ExecutorServiceConfig,
-} from "@/parser/service/executor";
+import { ExecutorSchema, type ExecutorServiceConfig } from "@/parser/service/executor";
 import { isSdkBranded } from "@/utils/brand";
+import type { Executor } from "@/types/executor.generated";
 
 /**
  * Information about a plugin-generated executor converted to Executor format

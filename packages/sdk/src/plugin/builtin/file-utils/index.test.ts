@@ -6,7 +6,8 @@ import { generateUnifiedFileUtils } from "./generate-file-utils";
 import { processFileType } from "./process-file-type";
 import { fileUtilsPlugin, FileUtilsGeneratorID } from "./index";
 import type { TailorDBReadyContext } from "@/parser/plugin-config/generation-types";
-import type { TailorDBType, TailorDBTypeSchemaOutput } from "@/parser/service/tailordb/types";
+import type { TailorDBType } from "@/parser/service/tailordb/types";
+import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "@/types/tailordb.generated";
 
 function parseTailorDBType(type: TailorDBTypeSchemaOutput): TailorDBType {
   const types = parseTypes({ [type.name]: type }, "test", {});

@@ -4,9 +4,9 @@ import type {
   StandardActionPermission,
   StandardPermissionCondition,
   StandardGqlPermissionPolicy,
-  RawPermissions,
   Permissions,
 } from "./types";
+import type { RawPermissions } from "@/types/tailordb.generated";
 
 // Raw permission types for normalize function parameters
 type PermissionOperator = "=" | "!=" | "in" | "not in" | "hasAny" | "not hasAny";

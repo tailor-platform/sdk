@@ -3,12 +3,12 @@ import * as path from "pathe";
 import { loadFilesWithIgnores } from "@/cli/services/file-loader";
 import { logger, styles } from "@/cli/shared/logger";
 import {
-  type Workflow,
   type WorkflowServiceConfig,
   WorkflowJobSchema,
   WorkflowSchema,
 } from "@/parser/service/workflow";
 import { isSdkBranded } from "@/utils/brand";
+import type { Workflow } from "@/types/workflow.generated";
 
 export interface CollectedJob {
   name: string;

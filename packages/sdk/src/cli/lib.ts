@@ -28,8 +28,8 @@ export type {
   TypeSourceInfoEntry,
 } from "./commands/generate/types";
 export type { TailorDBType } from "@/parser/service/tailordb/types";
-export type { Resolver } from "@/parser/service/resolver";
-export type { Executor } from "@/parser/service/executor";
+export type { Resolver } from "@/types/resolver.generated";
+export type { Executor } from "@/types/executor.generated";
 
 /** @deprecated Import from '@tailor-platform/sdk/plugin/kysely-type' instead */
 export { kyselyTypePlugin } from "@/plugin/builtin/kysely-type";

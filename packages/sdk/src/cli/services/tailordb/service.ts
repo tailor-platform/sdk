@@ -7,8 +7,6 @@ import {
   parseTypes,
   TailorDBTypeSchema,
   type TypeSourceInfo,
-  type TailorDBServiceConfig,
-  type TailorDBTypeSchemaOutput,
   type TailorDBType,
   type TailorAnyDBType,
 } from "@/parser/service/tailordb";
@@ -16,6 +14,10 @@ import { isSdkBranded } from "@/utils/brand";
 import { precompileTailorDBTypeScripts } from "./hooks-validate-bundler";
 import type { PluginAttachment } from "@/parser/plugin-config/types";
 import type { PluginManager } from "@/plugin/manager";
+import type {
+  TailorDBServiceConfig,
+  TailorDBTypeRaw as TailorDBTypeSchemaOutput,
+} from "@/types/tailordb.generated";
 
 export type TailorDBService = {
   readonly namespace: string;

@@ -36,7 +36,7 @@ export const GqlOperationsSchema = z
     }),
   ])
   .describe(
-    "Configuration for GraphQL operations on a TailorDB type. All operations are enabled by default.",
+    "Configuration for GraphQL operations on a TailorDB type.\nAll operations are enabled by default (undefined or true = enabled, false = disabled).",
   )
   .transform((val) => normalizeGqlOperations(val));
 
@@ -132,13 +132,13 @@ export const TailorDBTypeSettingsSchema = z.object({
   aggregation: z.boolean().optional().describe("Enable aggregation queries for this type"),
   bulkUpsert: z.boolean().optional().describe("Enable bulk upsert mutation for this type"),
   gqlOperations: GqlOperationsSchema.optional().describe(
-    "Configure which GraphQL operations are enabled",
+    'Configure GraphQL operations for this type. Use "query" for read-only mode, or an object for granular control.',
   ),
   publishEvents: z
     .boolean()
     .optional()
     .describe(
-      "Enable publishing events for this type. Automatically enabled when an executor uses record triggers.",
+      "Enable publishing events for this type.\nWhen enabled, record creation/update/deletion events are published.\nIf not specified, this is automatically set to true when an executor uses this type\nwith recordCreated/recordUpdated/recordDeleted triggers. If explicitly set to false\nwhile an executor uses this type, an error will be thrown during apply.",
     ),
 });
 

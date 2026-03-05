@@ -1,8 +1,8 @@
-import { type Executor } from "@/parser/service/executor";
-import { type Resolver } from "@/parser/service/resolver";
 import type { PluginAttachment } from "@/parser/plugin-config/types";
-import type { IdProviderConfig, OAuth2ClientInput } from "@/parser/service/auth/types";
 import type { TailorDBType, TypeSourceInfoEntry } from "@/parser/service/tailordb/types";
+import type { IdProvider as IdProviderConfig, OAuth2ClientInput } from "@/types/auth.generated";
+import type { Executor } from "@/types/executor.generated";
+import type { Resolver } from "@/types/resolver.generated";
 
 export type { PluginAttachment } from "@/parser/plugin-config/types";
 

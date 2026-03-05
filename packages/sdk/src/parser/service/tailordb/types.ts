@@ -1,18 +1,5 @@
 export type { TypeSourceInfo } from "./type-parser";
 
-// Zinfer-generated types
-export type {
-  DBFieldMetadata as DBFieldMetadataOutput,
-  RawRelationConfig as RawRelationConfigOutput,
-  TailorDBTypeParsedSettingsInput,
-  TailorDBTypeParsedSettings,
-  RawPermissions,
-  TailorDBTypeRawInput,
-  TailorDBTypeRaw as TailorDBTypeSchemaOutput,
-  TailorDBServiceConfigInput,
-  TailorDBServiceConfig,
-} from "@/types/tailordb.generated";
-
 // Re-exports from configure layer
 export type {
   TailorAnyDBField,
@@ -23,12 +10,6 @@ export type {
   TailorTypePermission,
   TailorTypeGqlPermission,
 } from "@/configure/services/tailordb";
-
-// GqlOperations types from zinfer-generated types
-export type {
-  GqlOperations,
-  GqlOperationsInput as GqlOperationsConfig,
-} from "@/types/tailordb.generated";
 
 // Manual types
 export type {
@@ -56,9 +37,6 @@ export type {
 } from "@/types/tailordb";
 
 export { isPluginGeneratedType } from "@/types/tailordb";
-
-// Legacy aliases - map zinfer names to original names
-export type { DBFieldMetadata as DBFieldMetadataZinfer } from "@/types/tailordb.generated";
 
 // TailorDBFieldOutput uses zinfer-generated types
 import type {

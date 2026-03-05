@@ -48,7 +48,7 @@ export const IdPGqlOperationsSchema = z
     }),
   ])
   .describe(
-    "Configuration for GraphQL operations on IdP users. All operations are enabled by default.",
+    "Configuration for GraphQL operations on IdP users.\nAll operations are enabled by default (undefined or true = enabled, false = disabled).",
   )
   .transform((val) => normalizeIdPGqlOperations(val));
 
