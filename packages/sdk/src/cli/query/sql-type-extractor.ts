@@ -2,6 +2,7 @@ import {
   astVisitor,
   parse,
   type From,
+  type SelectFromStatement,
   type SelectedColumn,
   type Statement,
 } from "pgsql-ast-parser";
@@ -99,6 +100,11 @@ function extractWildcardAliases(columns: SelectedColumn[]): string[] {
 /**
  * Extract type names that have wildcard SELECT (*) in the query.
  * Handles both unqualified `*` and qualified `u.*` with alias resolution.
+ *
+ * Only inspects the top-level SELECT statement, not subqueries.
+ * TailorDB's sqlaccess does not currently support subqueries in FROM clauses,
+ * but we intentionally avoid recursing into nested SELECTs to prevent
+ * false positives if the parser accepts such queries.
  * @param query - SQL query
  * @returns Type names with wildcard selection, empty if no wildcards
  */
@@ -107,46 +113,54 @@ export function extractWildcardTypeNames(query: string): string[] {
     const statements = parse(query);
     const result: string[] = [];
 
-    const visitor = astVisitor(() => ({
-      selection: (selection) => {
-        if (!selection.columns) {
-          return selection;
-        }
+    for (const statement of statements) {
+      const selection = extractTopLevelSelect(statement);
+      if (!selection?.columns) {
+        continue;
+      }
 
-        const wildcardAliases = extractWildcardAliases(selection.columns);
-        if (wildcardAliases.length === 0) {
-          return selection;
-        }
+      const wildcardAliases = extractWildcardAliases(selection.columns);
+      if (wildcardAliases.length === 0) {
+        continue;
+      }
 
-        const fromClauses = ("from" in selection && selection.from) || [];
-        const aliasMap = collectAliasMap(fromClauses as From[]);
+      const aliasMap = collectAliasMap(selection.from ?? []);
 
-        for (const alias of wildcardAliases) {
-          if (alias === "*") {
-            // Unqualified *: add all tables from FROM
-            for (const tableName of aliasMap.values()) {
-              if (!result.includes(tableName)) {
-                result.push(tableName);
-              }
-            }
-          } else {
-            const tableName = aliasMap.get(alias);
-            if (tableName && !result.includes(tableName)) {
+      for (const alias of wildcardAliases) {
+        if (alias === "*") {
+          for (const tableName of aliasMap.values()) {
+            if (!result.includes(tableName)) {
               result.push(tableName);
             }
           }
+        } else {
+          const tableName = aliasMap.get(alias);
+          if (tableName && !result.includes(tableName)) {
+            result.push(tableName);
+          }
         }
-
-        return selection;
-      },
-    }));
-
-    for (const statement of statements) {
-      visitor.statement(statement);
+      }
     }
 
     return result;
   } catch {
     return [];
   }
+}
+
+/**
+ * Extract the top-level SELECT from a statement, unwrapping WITH/CTE wrappers.
+ * @param statement
+ */
+function extractTopLevelSelect(statement: Statement): SelectFromStatement | null {
+  if (statement.type === "select") {
+    return statement;
+  }
+  if (statement.type === "with" || statement.type === "with recursive") {
+    const inner = statement.in;
+    if (inner.type === "select") {
+      return inner;
+    }
+  }
+  return null;
 }

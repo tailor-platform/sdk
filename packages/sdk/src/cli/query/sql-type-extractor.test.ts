@@ -48,10 +48,10 @@ describe("extractWildcardTypeNames", () => {
     ).toEqual(["User"]);
   });
 
-  test("returns multiple types for multiple qualified wildcards", () => {
+  test("returns multiple types for multiple qualified wildcards in wildcard order", () => {
     expect(
-      extractWildcardTypeNames('select u.*, o.* from "User" u join "Order" o on u.id = o."userId"'),
-    ).toEqual(["User", "Order"]);
+      extractWildcardTypeNames('select o.*, u.* from "User" u join "Order" o on u.id = o."userId"'),
+    ).toEqual(["Order", "User"]);
   });
 
   test("returns empty for explicit column list", () => {

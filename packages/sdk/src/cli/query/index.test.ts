@@ -344,6 +344,58 @@ describe("query", () => {
     ]);
   });
 
+  test("reorders wildcard columns while keeping explicit columns in remaining", async () => {
+    const { executeScript } = await import("../shared/script-executor");
+    const { extractWildcardTypeNames } = await import("./sql-type-extractor");
+    const { loadTypeFieldOrder } = await import("./type-field-order");
+
+    vi.mocked(extractWildcardTypeNames).mockReturnValue(["User"]);
+    vi.mocked(loadTypeFieldOrder).mockResolvedValue(
+      new Map([["User", ["name", "email", "role", "createdAt", "updatedAt"]]]),
+    );
+    vi.mocked(executeScript).mockResolvedValue({
+      success: true,
+      logs: "",
+      result: JSON.stringify({
+        rows: [
+          {
+            orderName: "Order-A",
+            email: "a@b.com",
+            orderId: "o1",
+            role: "STAFF",
+            name: "Alice",
+            createdAt: "2024-01-01",
+            id: "1",
+            updatedAt: "2024-01-02",
+          },
+        ],
+        rowCount: 1,
+      }),
+    });
+
+    const result = await query({
+      workspaceId: "workspace-1",
+      configPath: "tailor.config.ts",
+      engine: "sql",
+      machineUser: "bot",
+      query:
+        'select o.id as "orderId", u.*, o.name as "orderName" from "User" u join "Order" o on u.id = o."userId";',
+    });
+
+    expect(result.engine).toBe("sql");
+    const sqlResult = result.result as { rows: Record<string, unknown>[]; rowCount: number };
+    expect(Object.keys(sqlResult.rows[0])).toEqual([
+      "id",
+      "name",
+      "email",
+      "role",
+      "createdAt",
+      "updatedAt",
+      "orderName",
+      "orderId",
+    ]);
+  });
+
   test("does not reorder columns when explicit column list is used", async () => {
     const { executeScript } = await import("../shared/script-executor");
     const { extractWildcardTypeNames } = await import("./sql-type-extractor");
