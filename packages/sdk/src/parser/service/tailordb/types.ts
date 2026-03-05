@@ -57,9 +57,14 @@ export { isPluginGeneratedType } from "@/types/tailordb";
 export type { DBFieldMetadata as DBFieldMetadataZinfer } from "@/types/tailordb.generated";
 
 // TailorDBFieldOutput uses zinfer-generated types
+import type {
+  DBFieldMetadata as DBFieldMetadataGenerated,
+  RawRelationConfig as RawRelationConfigGenerated,
+} from "@/types/tailordb.generated";
+
 export type TailorDBFieldOutput = {
   type: string;
   fields?: Record<string, TailorDBFieldOutput>;
-  metadata: import("@/types/tailordb.generated").DBFieldMetadata;
-  rawRelation?: import("@/types/tailordb.generated").RawRelationConfig;
+  metadata: DBFieldMetadataGenerated;
+  rawRelation?: RawRelationConfigGenerated;
 };

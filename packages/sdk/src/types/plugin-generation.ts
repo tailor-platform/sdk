@@ -121,10 +121,11 @@ export interface ExecutorReadyContext<PluginConfig = unknown> {
 
 /**
  * Derives generation-time dependency set from hook presence on a plugin.
- * @param plugin
- * @param plugin.onTailorDBReady
- * @param plugin.onResolverReady
- * @param plugin.onExecutorReady
+ * @param plugin - The plugin object to inspect.
+ * @param plugin.onTailorDBReady - Hook for TailorDB readiness.
+ * @param plugin.onResolverReady - Hook for resolver readiness.
+ * @param plugin.onExecutorReady - Hook for executor readiness.
+ * @returns Set of dependency kinds required by the plugin.
  */
 export function getPluginGenerationDependencies(plugin: {
   onTailorDBReady?: unknown;
@@ -146,10 +147,11 @@ export function getPluginGenerationDependencies(plugin: {
 
 /**
  * Checks if a plugin has any generation-time hooks.
- * @param plugin
- * @param plugin.onTailorDBReady
- * @param plugin.onResolverReady
- * @param plugin.onExecutorReady
+ * @param plugin - The plugin object to inspect.
+ * @param plugin.onTailorDBReady - Hook for TailorDB readiness.
+ * @param plugin.onResolverReady - Hook for resolver readiness.
+ * @param plugin.onExecutorReady - Hook for executor readiness.
+ * @returns True if the plugin has at least one generation hook.
  */
 export function hasGenerationHooks(plugin: {
   onTailorDBReady?: unknown;

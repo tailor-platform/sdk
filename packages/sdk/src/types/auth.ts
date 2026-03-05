@@ -1,6 +1,5 @@
 import type {
   AuthInvoker,
-  BuiltinIdP,
   IdProvider as IdProviderConfig,
   OAuth2ClientInput,
   SCIMConfig,

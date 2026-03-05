@@ -10,8 +10,6 @@ const relationTypes = {
   "N-1": "n-1",
   keyOnly: "keyOnly",
 } as const;
-type RelationType = keyof typeof relationTypes;
-
 export const relationTypesKeys = Object.keys(relationTypes) as UnionToTuple<
   keyof typeof relationTypes
 >;

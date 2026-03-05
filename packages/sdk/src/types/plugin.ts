@@ -156,8 +156,9 @@ export type PluginGeneratedExecutor =
   | PluginGeneratedExecutorLegacy;
 
 /**
- *
- * @param executor
+ * Checks if a plugin executor uses file-based resolution.
+ * @param executor - The plugin executor to check.
+ * @returns True if the executor uses file-based resolution.
  */
 export function isPluginExecutorWithFile(
   executor: PluginGeneratedExecutor,
