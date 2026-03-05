@@ -1,7 +1,6 @@
 import { pathToFileURL } from "node:url";
 import { loadFilesWithIgnores } from "@/cli/services/file-loader";
 import { TailorDBTypeSchema } from "@/parser/service/tailordb";
-import { isSdkBranded } from "@/utils/brand";
 import type { LoadedConfig } from "@/cli/shared/config-loader";
 
 type TypeFieldOrderMap = Map<string, string[]>;
@@ -33,9 +32,6 @@ export async function loadTypeFieldOrder(
         for (const exportedValue of Object.values(module)) {
           const result = TailorDBTypeSchema.safeParse(exportedValue);
           if (!result.success) {
-            if (isSdkBranded(exportedValue)) {
-              continue;
-            }
             continue;
           }
 

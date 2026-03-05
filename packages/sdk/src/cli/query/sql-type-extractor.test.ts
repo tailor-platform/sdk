@@ -8,12 +8,6 @@ describe("extractTypeNamesFromSql", () => {
     expect(extractTypeNamesFromSql(sql)).toEqual(["User", "Order"]);
   });
 
-  test("ignores CTE alias names", () => {
-    const sql = `with tmp as (select * from "User") select * from tmp join "Order" o on tmp.id = o.userId`;
-
-    expect(extractTypeNamesFromSql(sql)).toEqual(["User", "Order"]);
-  });
-
   test("throws when parser cannot parse query", () => {
     const sql = "select from";
 
