@@ -574,9 +574,12 @@ async function runProblem(
 
       // Restore scaffold files before re-verification
       const retryChanges = restoreScaffoldFiles(workDir, scaffoldSnapshot);
-      if (retryChanges.length > 0 && options.verbose) {
-        const files = retryChanges.map((c) => c.file).join(", ");
-        console.log(`  Restored scaffold files modified during retry: ${files}`);
+      if (retryChanges.length > 0) {
+        scaffoldChanges.push(...retryChanges);
+        if (options.verbose) {
+          const files = retryChanges.map((c) => c.file).join(", ");
+          console.log(`  Restored scaffold files modified during retry: ${files}`);
+        }
       }
 
       // Re-verify using symlink path

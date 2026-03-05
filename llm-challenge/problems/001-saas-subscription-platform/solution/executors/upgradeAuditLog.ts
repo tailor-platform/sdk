@@ -13,6 +13,9 @@ export default createExecutor({
     query: `mutation createAuditEvent($input: AuditEventCreateInput!) {
       createAuditEvent(input: $input) { id }
     }`,
+    // Accepted trade-off: organizationId and metadata are required on AuditEvent but not
+    // available from resolverExecutedTrigger args. A complete implementation would need
+    // the resolver to return organizationId or use a separate lookup.
     variables: (args) => ({
       input: {
         action: "UPDATE",

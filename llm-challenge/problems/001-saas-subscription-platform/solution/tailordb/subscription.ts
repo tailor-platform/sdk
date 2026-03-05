@@ -15,7 +15,7 @@ export const subscription = db
   .hooks({
     endDate: {
       update: ({ value, data }) =>
-        data.status === "CANCELLED" ? new Date().toISOString() : (value as string),
+        data.status === "CANCELLED" ? new Date().toISOString().slice(0, 10) : (value as string),
     },
   })
   .validate({
