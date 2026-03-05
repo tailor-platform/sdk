@@ -38,7 +38,7 @@ vi.mock("../shared/tailordb-namespace", () => ({
 
 vi.mock("./sql-type-extractor", () => ({
   extractTypeNamesFromSql: vi.fn(),
-  extractWildcardTypeNames: vi.fn(),
+  extractColumnTemplate: vi.fn(),
 }));
 
 vi.mock("./type-field-order", () => ({
@@ -56,8 +56,7 @@ describe("query", () => {
     const { bundleQueryScript } = await import("../bundler/query/query-bundler");
     const { executeScript } = await import("../shared/script-executor");
     const { resolveTypeNamespaces } = await import("../shared/tailordb-namespace");
-    const { extractTypeNamesFromSql, extractWildcardTypeNames } =
-      await import("./sql-type-extractor");
+    const { extractTypeNamesFromSql, extractColumnTemplate } = await import("./sql-type-extractor");
     const { loadTypeFieldOrder } = await import("./type-field-order");
 
     vi.mocked(loadAccessToken).mockResolvedValue("access-token");
@@ -78,7 +77,7 @@ describe("query", () => {
     vi.mocked(fetchMachineUserToken).mockResolvedValue({ access_token: "mu-token" } as never);
     vi.mocked(resolveTypeNamespaces).mockResolvedValue(new Map([["User", "tailordb"]]));
     vi.mocked(extractTypeNamesFromSql).mockReturnValue(["User"]);
-    vi.mocked(extractWildcardTypeNames).mockReturnValue([]);
+    vi.mocked(extractColumnTemplate).mockReturnValue(null);
     vi.mocked(loadTypeFieldOrder).mockResolvedValue(new Map());
 
     mockClient.getApplication.mockResolvedValue({
@@ -299,10 +298,10 @@ describe("query", () => {
 
   test("reorders SQL result columns by type field definition order when wildcard is used", async () => {
     const { executeScript } = await import("../shared/script-executor");
-    const { extractWildcardTypeNames } = await import("./sql-type-extractor");
+    const { extractColumnTemplate } = await import("./sql-type-extractor");
     const { loadTypeFieldOrder } = await import("./type-field-order");
 
-    vi.mocked(extractWildcardTypeNames).mockReturnValue(["User"]);
+    vi.mocked(extractColumnTemplate).mockReturnValue([{ type: "wildcard", typeNames: ["User"] }]);
     vi.mocked(loadTypeFieldOrder).mockResolvedValue(
       new Map([["User", ["name", "email", "role", "createdAt", "updatedAt"]]]),
     );
@@ -344,12 +343,16 @@ describe("query", () => {
     ]);
   });
 
-  test("reorders wildcard columns while keeping explicit columns in remaining", async () => {
+  test("preserves SQL declaration order for explicit columns around wildcard expansion", async () => {
     const { executeScript } = await import("../shared/script-executor");
-    const { extractWildcardTypeNames } = await import("./sql-type-extractor");
+    const { extractColumnTemplate } = await import("./sql-type-extractor");
     const { loadTypeFieldOrder } = await import("./type-field-order");
 
-    vi.mocked(extractWildcardTypeNames).mockReturnValue(["User"]);
+    vi.mocked(extractColumnTemplate).mockReturnValue([
+      { type: "explicit", name: "orderId" },
+      { type: "wildcard", typeNames: ["User"] },
+      { type: "explicit", name: "orderName" },
+    ]);
     vi.mocked(loadTypeFieldOrder).mockResolvedValue(
       new Map([["User", ["name", "email", "role", "createdAt", "updatedAt"]]]),
     );
@@ -385,6 +388,7 @@ describe("query", () => {
     expect(result.engine).toBe("sql");
     const sqlResult = result.result as { rows: Record<string, unknown>[]; rowCount: number };
     expect(Object.keys(sqlResult.rows[0])).toEqual([
+      "orderId",
       "id",
       "name",
       "email",
@@ -392,15 +396,14 @@ describe("query", () => {
       "createdAt",
       "updatedAt",
       "orderName",
-      "orderId",
     ]);
   });
 
   test("does not reorder columns when explicit column list is used", async () => {
     const { executeScript } = await import("../shared/script-executor");
-    const { extractWildcardTypeNames } = await import("./sql-type-extractor");
+    const { extractColumnTemplate } = await import("./sql-type-extractor");
 
-    vi.mocked(extractWildcardTypeNames).mockReturnValue([]);
+    vi.mocked(extractColumnTemplate).mockReturnValue(null);
     vi.mocked(executeScript).mockResolvedValue({
       success: true,
       logs: "",

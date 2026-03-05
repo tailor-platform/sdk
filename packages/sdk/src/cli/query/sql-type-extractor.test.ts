@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { extractTypeNamesFromSql, extractWildcardTypeNames } from "./sql-type-extractor";
+import { extractColumnTemplate, extractTypeNamesFromSql } from "./sql-type-extractor";
 
 describe("extractTypeNamesFromSql", () => {
   test("extracts table names using SQL parser", () => {
@@ -27,42 +27,61 @@ describe("extractTypeNamesFromSql", () => {
   });
 });
 
-describe("extractWildcardTypeNames", () => {
-  test("returns type name for SELECT *", () => {
-    expect(extractWildcardTypeNames('select * from "User"')).toEqual(["User"]);
+describe("extractColumnTemplate", () => {
+  test("returns wildcard slot for SELECT *", () => {
+    expect(extractColumnTemplate('select * from "User"')).toEqual([
+      { type: "wildcard", typeNames: ["User"] },
+    ]);
   });
 
-  test("returns all type names for SELECT * with JOIN", () => {
+  test("returns wildcard slot with all types for SELECT * with JOIN", () => {
     expect(
-      extractWildcardTypeNames('select * from "User" u join "Order" o on u.id = o."userId"'),
-    ).toEqual(["User", "Order"]);
+      extractColumnTemplate('select * from "User" u join "Order" o on u.id = o."userId"'),
+    ).toEqual([{ type: "wildcard", typeNames: ["User", "Order"] }]);
   });
 
-  test("returns type name for qualified wildcard (u.*)", () => {
-    expect(extractWildcardTypeNames('select u.* from "User" as u')).toEqual(["User"]);
+  test("returns wildcard slot for qualified wildcard (u.*)", () => {
+    expect(extractColumnTemplate('select u.* from "User" as u')).toEqual([
+      { type: "wildcard", typeNames: ["User"] },
+    ]);
   });
 
   test("returns only wildcard table for qualified wildcard in JOIN", () => {
     expect(
-      extractWildcardTypeNames('select u.* from "User" u join "Order" o on u.id = o."userId"'),
-    ).toEqual(["User"]);
+      extractColumnTemplate('select u.* from "User" u join "Order" o on u.id = o."userId"'),
+    ).toEqual([{ type: "wildcard", typeNames: ["User"] }]);
   });
 
-  test("returns multiple types for multiple qualified wildcards in wildcard order", () => {
+  test("returns separate wildcard slots in declaration order", () => {
     expect(
-      extractWildcardTypeNames('select o.*, u.* from "User" u join "Order" o on u.id = o."userId"'),
-    ).toEqual(["Order", "User"]);
+      extractColumnTemplate('select o.*, u.* from "User" u join "Order" o on u.id = o."userId"'),
+    ).toEqual([
+      { type: "wildcard", typeNames: ["Order"] },
+      { type: "wildcard", typeNames: ["User"] },
+    ]);
   });
 
-  test("returns empty for explicit column list", () => {
-    expect(extractWildcardTypeNames('select id, name from "User"')).toEqual([]);
+  test("returns mixed explicit and wildcard slots preserving SQL declaration order", () => {
+    expect(
+      extractColumnTemplate(
+        'select o.id as "orderId", u.*, o.name as "orderName" from "User" u join "Order" o on u.id = o."userId"',
+      ),
+    ).toEqual([
+      { type: "explicit", name: "orderId" },
+      { type: "wildcard", typeNames: ["User"] },
+      { type: "explicit", name: "orderName" },
+    ]);
   });
 
-  test("returns empty for unparseable query", () => {
-    expect(extractWildcardTypeNames("select from")).toEqual([]);
+  test("returns null for explicit column list", () => {
+    expect(extractColumnTemplate('select id, name from "User"')).toBeNull();
   });
 
-  test("returns empty for COUNT(*)", () => {
-    expect(extractWildcardTypeNames('select count(*) from "User"')).toEqual([]);
+  test("returns null for unparseable query", () => {
+    expect(extractColumnTemplate("select from")).toBeNull();
+  });
+
+  test("returns null for COUNT(*)", () => {
+    expect(extractColumnTemplate('select count(*) from "User"')).toBeNull();
   });
 });

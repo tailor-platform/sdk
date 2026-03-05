@@ -16,7 +16,11 @@ import { logger } from "../shared/logger";
 import { executeScript } from "../shared/script-executor";
 import { resolveTypeNamespaces } from "../shared/tailordb-namespace";
 import { mapQueryExecutionError } from "./errors";
-import { extractTypeNamesFromSql, extractWildcardTypeNames } from "./sql-type-extractor";
+import {
+  extractColumnTemplate,
+  extractTypeNamesFromSql,
+  type ColumnSlot,
+} from "./sql-type-extractor";
 import { loadTypeFieldOrder } from "./type-field-order";
 import type { Application } from "@tailor-proto/tailor/v1/application_resource_pb";
 
@@ -343,19 +347,19 @@ async function reorderSqlColumns(
     return result;
   }
 
-  const wildcardTypeNames = extractWildcardTypeNames(sqlQuery);
-  if (wildcardTypeNames.length === 0) {
+  const template = extractColumnTemplate(sqlQuery);
+  if (!template) {
     return result;
   }
 
   try {
     const fieldOrder = await loadTypeFieldOrder(config, namespace);
-    const definedFields = wildcardTypeNames.flatMap((name) => fieldOrder.get(name) ?? []);
-    if (definedFields.length === 0) {
+    const expectedOrder = buildExpectedColumnOrder(template, fieldOrder);
+    if (expectedOrder.length === 0) {
       return result;
     }
 
-    const orderedRows = result.result.rows.map((row) => reorderRowColumns(row, definedFields));
+    const orderedRows = result.result.rows.map((row) => reorderRowByTemplate(row, expectedOrder));
 
     return {
       ...result,
@@ -371,27 +375,37 @@ async function reorderSqlColumns(
 
 const SYSTEM_FIELD_ORDER = ["id"];
 
-function reorderRowColumns(row: SQLResultRow, definedFields: string[]): SQLResultRow {
+function buildExpectedColumnOrder(
+  template: ColumnSlot[],
+  fieldOrder: Map<string, string[]>,
+): string[] {
+  const order: string[] = [];
+
+  for (const slot of template) {
+    if (slot.type === "explicit") {
+      order.push(slot.name);
+    } else {
+      for (const typeName of slot.typeNames) {
+        order.push(...SYSTEM_FIELD_ORDER);
+        order.push(...(fieldOrder.get(typeName) ?? []));
+      }
+    }
+  }
+
+  return order;
+}
+
+function reorderRowByTemplate(row: SQLResultRow, expectedOrder: string[]): SQLResultRow {
   const ordered: SQLResultRow = {};
   const rowKeys = new Set(Object.keys(row));
 
-  // 1. System fields first (id)
-  for (const key of SYSTEM_FIELD_ORDER) {
+  for (const key of expectedOrder) {
     if (rowKeys.has(key)) {
       ordered[key] = row[key];
       rowKeys.delete(key);
     }
   }
 
-  // 2. User-defined fields in definition order
-  for (const key of definedFields) {
-    if (rowKeys.has(key)) {
-      ordered[key] = row[key];
-      rowKeys.delete(key);
-    }
-  }
-
-  // 3. Remaining fields
   for (const key of rowKeys) {
     ordered[key] = row[key];
   }
