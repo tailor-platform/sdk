@@ -10,8 +10,8 @@ export type {
   IdPConfig,
 } from "@/types/idp";
 
+// IdPGqlOperations types from zinfer-generated types
 export type {
   IdPGqlOperations,
-  IdPGqlOperationsAliasQuery,
-  IdPGqlOperationsConfig,
-} from "@/configure/services/idp";
+  IdPGqlOperationsInput as IdPGqlOperationsConfig,
+} from "@/types/idp.generated";

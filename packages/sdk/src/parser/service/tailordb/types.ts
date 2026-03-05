@@ -22,9 +22,13 @@ export type {
   Hook,
   TailorTypePermission,
   TailorTypeGqlPermission,
-  GqlOperationsConfig,
-  GqlOperations,
 } from "@/configure/services/tailordb";
+
+// GqlOperations types from zinfer-generated types
+export type {
+  GqlOperations,
+  GqlOperationsInput as GqlOperationsConfig,
+} from "@/types/tailordb.generated";
 
 // Manual types
 export type {

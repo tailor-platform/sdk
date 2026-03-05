@@ -1,7 +1,9 @@
 import type {
   AuthInvoker,
   IdProvider as IdProviderConfig,
+  OAuth2Client,
   OAuth2ClientInput,
+  SCIMAttribute,
   SCIMConfig,
   TenantProvider as TenantProviderConfig,
 } from "./auth.generated";
@@ -10,6 +12,10 @@ import type { output } from "@/configure/types/helpers";
 import type { TailorField } from "@/configure/types/type";
 import type { DefinedFieldMetadata, FieldMetadata, TailorFieldType } from "@/configure/types/types";
 import type { IsAny } from "type-fest";
+
+// Derived from generated types (zinfer inlines these literal unions)
+export type OAuth2ClientGrantType = OAuth2Client["grantTypes"][number];
+export type SCIMAttributeType = SCIMAttribute["type"];
 
 export type AuthInvokerWithName<M extends string> = Omit<AuthInvoker, "machineUserName"> & {
   machineUserName: M;

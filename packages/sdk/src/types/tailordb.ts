@@ -17,8 +17,9 @@ export type {
   TailorTypePermission,
   TailorTypeGqlPermission,
   GqlOperationsConfig,
-  GqlOperations,
 } from "@/configure/services/tailordb";
+
+export type { GqlOperations } from "./tailordb.generated";
 
 export type RelationType = "1-1" | "oneToOne" | "n-1" | "manyToOne" | "N-1" | "keyOnly";
 

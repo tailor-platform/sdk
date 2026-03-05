@@ -8,11 +8,9 @@ export type {
   BuiltinIdP,
   IdProviderInput,
   IdProvider as IdProviderConfig,
-  OAuth2ClientGrantType,
   OAuth2ClientInput,
   OAuth2Client,
   SCIMAuthorization,
-  SCIMAttributeType,
   SCIMAttributeInput,
   SCIMAttribute,
   SCIMAttributeMapping,
@@ -23,6 +21,7 @@ export type {
   AuthConfigInput,
   AuthConfig as AuthConfigOutput,
 } from "@/types/auth.generated";
+export type { OAuth2ClientGrantType, SCIMAttributeType } from "@/types/auth";
 
 // Manual types
 export type {

@@ -2,10 +2,10 @@
 export type {
   TailorField,
   TailorFieldInput,
-  QueryType,
   ResolverInput,
   Resolver,
 } from "@/types/resolver.generated";
+export type { QueryType } from "@/types/resolver";
 
 // Service config types
 export type {

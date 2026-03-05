@@ -1,8 +1,44 @@
 import { z } from "zod";
 import { functionSchema } from "../common";
-import { GqlOperationsSchema } from "./gql-operations";
 import { relationTypesKeys } from "./relation";
 import type { TailorDBFieldOutput } from "./types";
+
+/**
+ * Normalize GqlOperationsConfig (alias or object) to GqlOperations object.
+ * "query" alias expands to read-only mode: { create: false, update: false, delete: false, read: true }
+ * @param config - The config to normalize
+ * @returns The normalized GqlOperations object
+ */
+function normalizeGqlOperations(
+  config: "query" | { create?: boolean; update?: boolean; delete?: boolean; read?: boolean },
+) {
+  if (config === "query") {
+    return { create: false, update: false, delete: false, read: true };
+  }
+  return config;
+}
+
+/**
+ * Zod schema for GqlOperations configuration with normalization transform.
+ * Accepts "query" alias or detailed object, normalizes to GqlOperations object.
+ */
+export const GqlOperationsSchema = z
+  .union([
+    z.literal("query"),
+    z.object({
+      create: z.boolean().optional().describe("Enable create mutation (default: true)"),
+      update: z.boolean().optional().describe("Enable update mutation (default: true)"),
+      delete: z.boolean().optional().describe("Enable delete mutation (default: true)"),
+      read: z
+        .boolean()
+        .optional()
+        .describe("Enable read queries - get, list, aggregation (default: true)"),
+    }),
+  ])
+  .describe(
+    "Configuration for GraphQL operations on a TailorDB type. All operations are enabled by default.",
+  )
+  .transform((val) => normalizeGqlOperations(val));
 
 const TailorFieldTypeSchema = z.enum([
   "uuid",
@@ -24,44 +60,58 @@ const AllowedValueSchema = z.object({
 });
 
 export const DBFieldMetadataSchema = z.object({
-  required: z.boolean().optional(),
-  array: z.boolean().optional(),
-  description: z.string().optional(),
-  typeName: z.string().optional(),
-  allowedValues: z.array(AllowedValueSchema).optional(),
-  index: z.boolean().optional(),
-  unique: z.boolean().optional(),
-  vector: z.boolean().optional(),
-  foreignKey: z.boolean().optional(),
-  foreignKeyType: z.string().optional(),
-  foreignKeyField: z.string().optional(),
+  required: z.boolean().optional().describe("Whether the field is required"),
+  array: z.boolean().optional().describe("Whether the field is an array"),
+  description: z.string().optional().describe("Field description"),
+  typeName: z.string().optional().describe("Type name for nested or enum fields"),
+  allowedValues: z.array(AllowedValueSchema).optional().describe("Allowed values for enum fields"),
+  index: z.boolean().optional().describe("Whether the field is indexed for faster queries"),
+  unique: z.boolean().optional().describe("Whether the field value must be unique"),
+  vector: z
+    .boolean()
+    .optional()
+    .describe("Whether the field is a vector field for similarity search"),
+  foreignKey: z.boolean().optional().describe("Whether the field is a foreign key"),
+  foreignKeyType: z.string().optional().describe("Target type name for foreign key relations"),
+  foreignKeyField: z.string().optional().describe("Target field name for foreign key relations"),
   hooks: z
     .object({
-      create: functionSchema.optional(),
-      update: functionSchema.optional(),
+      create: functionSchema.optional().describe("Hook function called on record creation"),
+      update: functionSchema.optional().describe("Hook function called on record update"),
     })
-    .optional(),
-  validate: z.array(z.union([functionSchema, z.tuple([functionSchema, z.string()])])).optional(),
+    .optional()
+    .describe("Lifecycle hooks for the field"),
+  validate: z
+    .array(z.union([functionSchema, z.tuple([functionSchema, z.string()])]))
+    .optional()
+    .describe("Validation functions for the field"),
   serial: z
     .object({
-      start: z.number(),
-      maxValue: z.number().optional(),
-      format: z.string().optional(),
+      start: z.number().describe("Starting value for the serial sequence"),
+      maxValue: z.number().optional().describe("Maximum value for the serial sequence"),
+      format: z.string().optional().describe("Format string for serial value (string type only)"),
     })
-    .optional(),
-  scale: z.number().int().min(0).max(12).optional(),
+    .optional()
+    .describe("Serial (auto-increment) configuration"),
+  scale: z
+    .number()
+    .int()
+    .min(0)
+    .max(12)
+    .optional()
+    .describe("Decimal scale (number of digits after decimal point, 0-12)"),
 });
 
 const RelationTypeSchema = z.enum(relationTypesKeys);
 
 export const RawRelationConfigSchema = z.object({
-  type: RelationTypeSchema,
+  type: RelationTypeSchema.describe("Relation cardinality type"),
   toward: z.object({
-    type: z.string(),
-    as: z.string().optional(),
-    key: z.string().optional(),
+    type: z.string().describe("Target type name, or 'self' for self-relations"),
+    as: z.string().optional().describe("Custom forward relation name"),
+    key: z.string().optional().describe("Target field to join on (default: 'id')"),
   }),
-  backward: z.string().optional(),
+  backward: z.string().optional().describe("Backward relation name on the target type"),
 });
 
 const TailorDBFieldSchema: z.ZodType<TailorDBFieldOutput> = z.lazy(() =>
@@ -78,11 +128,18 @@ const TailorDBFieldSchema: z.ZodType<TailorDBFieldOutput> = z.lazy(() =>
  * Normalizes gqlOperations from alias ("query") to object format.
  */
 export const TailorDBTypeSettingsSchema = z.object({
-  pluralForm: z.string().optional(),
-  aggregation: z.boolean().optional(),
-  bulkUpsert: z.boolean().optional(),
-  gqlOperations: GqlOperationsSchema.optional(),
-  publishEvents: z.boolean().optional(),
+  pluralForm: z.string().optional().describe("Custom plural form of the type name for GraphQL"),
+  aggregation: z.boolean().optional().describe("Enable aggregation queries for this type"),
+  bulkUpsert: z.boolean().optional().describe("Enable bulk upsert mutation for this type"),
+  gqlOperations: GqlOperationsSchema.optional().describe(
+    "Configure which GraphQL operations are enabled",
+  ),
+  publishEvents: z
+    .boolean()
+    .optional()
+    .describe(
+      "Enable publishing events for this type. Automatically enabled when an executor uses record triggers.",
+    ),
 });
 
 export const GQL_PERMISSION_INVALID_OPERAND_MESSAGE =
@@ -213,8 +270,8 @@ export const TailorDBTypeSchema = z.object({
 });
 
 const TailorDBMigrationConfigSchema = z.object({
-  directory: z.string(),
-  machineUser: z.string().optional(),
+  directory: z.string().describe("Directory containing migration files"),
+  machineUser: z.string().optional().describe("Machine user name for migration execution"),
 });
 
 /**
@@ -222,9 +279,11 @@ const TailorDBMigrationConfigSchema = z.object({
  * Normalizes gqlOperations from alias ("query") to object format.
  */
 export const TailorDBServiceConfigSchema = z.object({
-  files: z.array(z.string()),
-  ignores: z.array(z.string()).optional(),
-  erdSite: z.string().optional(),
-  migration: TailorDBMigrationConfigSchema.optional(),
-  gqlOperations: GqlOperationsSchema.optional(),
+  files: z.array(z.string()).describe("Glob patterns for TailorDB type definition files"),
+  ignores: z.array(z.string()).optional().describe("Glob patterns to exclude from type discovery"),
+  erdSite: z.string().optional().describe("URL for the ERD (Entity Relationship Diagram) site"),
+  migration: TailorDBMigrationConfigSchema.optional().describe("Migration configuration"),
+  gqlOperations: GqlOperationsSchema.optional().describe(
+    "Default GraphQL operations for all types in this service",
+  ),
 });

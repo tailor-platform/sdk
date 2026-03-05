@@ -23,5 +23,10 @@ export default defineConfig({
     TailorDBTypeSettingsSchema: "TailorDBTypeParsedSettings",
     TailorDBTypeSchema: "TailorDBTypeRaw",
     SCIMSchema: "SCIMConfig",
+    GqlOperationsSchema: "GqlOperations",
+    IdPGqlOperationsSchema: "IdPGqlOperations",
+    QueryTypeSchema: "QueryType",
+    OAuth2ClientGrantTypeSchema: "OAuth2ClientGrantType",
+    SCIMAttributeTypeSchema: "SCIMAttributeType",
   },
 });
