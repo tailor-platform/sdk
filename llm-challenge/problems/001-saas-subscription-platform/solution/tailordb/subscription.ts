@@ -23,4 +23,3 @@ export const subscription = db
   })
   .indexes({ fields: ["organizationId", "status"] })
   .features({ aggregation: true });
-export type subscription = typeof subscription;

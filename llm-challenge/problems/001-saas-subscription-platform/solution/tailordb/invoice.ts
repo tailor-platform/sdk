@@ -17,4 +17,3 @@ export const invoice = db
     issuedAt: { create: () => new Date() },
     paid: { create: ({ value }) => value ?? false },
   });
-export type invoice = typeof invoice;

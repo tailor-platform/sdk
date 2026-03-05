@@ -16,4 +16,3 @@ export const usageRecord = db
   .hooks({
     recordedAt: { create: () => new Date() },
   });
-export type usageRecord = typeof usageRecord;

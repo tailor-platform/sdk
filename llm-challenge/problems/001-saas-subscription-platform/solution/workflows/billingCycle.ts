@@ -49,12 +49,10 @@ export const calculateCharges = createWorkflowJob({
     const baseCharge = input.monthlyRate;
     const threshold = overageThresholds[input.plan] ?? 100;
 
-    let overageCharge = 0;
-    for (const item of input.usageItems) {
-      if (item.totalQuantity > threshold) {
-        overageCharge += (item.totalQuantity - threshold) * 0.01;
-      }
-    }
+    const overageCharge = input.usageItems.reduce(
+      (sum, item) => sum + Math.max(0, item.totalQuantity - threshold) * 0.01,
+      0,
+    );
 
     return {
       baseCharge,

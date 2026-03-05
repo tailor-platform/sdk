@@ -38,4 +38,3 @@ export const organization = db
       permit: true,
     },
   ]);
-export type organization = typeof organization;

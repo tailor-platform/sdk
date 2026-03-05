@@ -20,4 +20,3 @@ export const auditEvent = db
     occurredAt: { create: () => new Date() },
     createdAt: { create: () => new Date() },
   });
-export type auditEvent = typeof auditEvent;
