@@ -18,7 +18,7 @@ import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger, styles } from "@/cli/shared/logger";
 import { executeScript } from "@/cli/shared/script-executor";
 import { bundleForTestRun, type ResolvedMachineUser } from "./bundle";
-import { detectFunctionType, type FunctionType } from "./detect";
+import { detectFunctionType } from "./detect";
 
 export const testRunCommand = defineCommand({
   name: "test-run",
@@ -34,10 +34,6 @@ export const testRunCommand = defineCommand({
     name: arg(z.string().optional(), {
       alias: "n",
       description: "Workflow job name to run (matches the `name` field of createWorkflowJob)",
-    }),
-    type: arg(z.enum(["resolver", "executor", "workflow-job", "plain"]).optional(), {
-      alias: "t",
-      description: "Function type (auto-detected if not specified)",
     }),
     arg: arg(z.string().optional(), {
       alias: "a",
@@ -124,7 +120,6 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
       const detected = await detectFunctionType({
         filePath,
         jobName: args.name,
-        typeOverride: args.type as FunctionType | undefined,
       });
 
       functionType = detected.type;

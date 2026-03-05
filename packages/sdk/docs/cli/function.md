@@ -130,7 +130,6 @@ tailor-sdk function test-run [options] <file>
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                             | No       | -                    |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile                                                        | No       | -                    |
 | `--name <NAME>`                 | `-n`  | Workflow job name to run (matches the `name` field of createWorkflowJob) | No       | -                    |
-| `--type <TYPE>`                 | `-t`  | Function type (auto-detected if not specified)                           | No       | -                    |
 | `--arg <ARG>`                   | `-a`  | JSON argument to pass to the function                                    | No       | -                    |
 | `--machine-user <MACHINE_USER>` | `-m`  | Machine user name for authentication                                     | No       | -                    |
 | `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                  | No       | `"tailor.config.ts"` |

@@ -29,8 +29,6 @@ interface DetectFunctionOptions {
   filePath: string;
   /** Workflow job name to select (matches the `name` field of createWorkflowJob) */
   jobName?: string;
-  /** Explicit type override */
-  typeOverride?: FunctionType;
 }
 
 /**
@@ -41,13 +39,9 @@ interface DetectFunctionOptions {
 export async function detectFunctionType(
   options: DetectFunctionOptions,
 ): Promise<DetectedFunction> {
-  const { filePath, jobName, typeOverride } = options;
+  const { filePath, jobName } = options;
 
   const module = await import(pathToFileURL(filePath).href);
-
-  if (typeOverride) {
-    return detectWithTypeOverride(module, filePath, typeOverride, jobName);
-  }
 
   // Priority: resolver → executor → workflow job → plain function
 
@@ -92,65 +86,6 @@ export async function detectFunctionType(
       "  - A default-exported function\n" +
       '  - A named-exported "main" function',
   );
-}
-
-/**
- * Detect function type when --type is explicitly specified.
- * @param module - The imported module
- * @param filePath - Absolute path to the function file
- * @param typeOverride - Explicit type override
- * @param jobName - Workflow job name to select
- * @returns Detected function information
- */
-function detectWithTypeOverride(
-  module: Record<string, unknown>,
-  filePath: string,
-  typeOverride: FunctionType,
-  jobName?: string,
-): DetectedFunction {
-  switch (typeOverride) {
-    case "resolver": {
-      const result = ResolverSchema.safeParse(module.default);
-      if (!result.success) {
-        throw new Error(`File does not contain a valid resolver (default export): ${filePath}`);
-      }
-      return { type: "resolver", name: result.data.name };
-    }
-    case "executor": {
-      const result = ExecutorSchema.safeParse(module.default);
-      if (!result.success) {
-        throw new Error(`File does not contain a valid executor (default export): ${filePath}`);
-      }
-      if (
-        result.data.operation.kind !== "function" &&
-        result.data.operation.kind !== "jobFunction"
-      ) {
-        throw new Error(
-          `Executor "${result.data.name}" has operation kind "${result.data.operation.kind}". ` +
-            "Only 'function' and 'jobFunction' executors can be test-run.",
-        );
-      }
-      return { type: "executor", name: result.data.name };
-    }
-    case "workflow-job": {
-      const detected = detectWorkflowJob(module, jobName);
-      if (!detected) {
-        throw new Error(`File does not contain any valid workflow jobs: ${filePath}`);
-      }
-      return detected;
-    }
-    case "plain": {
-      if (typeof module.default === "function") {
-        return { type: "plain", name: deriveNameFromPath(filePath) };
-      }
-      if (typeof module.main === "function") {
-        return { type: "plain", name: deriveNameFromPath(filePath), namedMain: true };
-      }
-      throw new Error(
-        `File does not have a default-exported function or named "main" export: ${filePath}`,
-      );
-    }
-  }
 }
 
 /**

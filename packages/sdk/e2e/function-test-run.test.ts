@@ -25,7 +25,7 @@ import { create } from "@bufbuild/protobuf";
 import { AuthInvokerSchema, type AuthInvoker } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import { describe, test, expect, beforeAll } from "vitest";
 import { bundleForTestRun, type ResolvedMachineUser } from "../src/cli/commands/function/bundle";
-import { detectFunctionType, type FunctionType } from "../src/cli/commands/function/detect";
+import { detectFunctionType } from "../src/cli/commands/function/detect";
 import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
 import { executeScript, type ScriptExecutionResult } from "../src/cli/shared/script-executor";
@@ -62,7 +62,6 @@ async function runTestRun(
   options?: {
     arg?: string;
     name?: string;
-    type?: FunctionType;
   },
 ): Promise<TestRunResult> {
   const filePath = path.resolve(exampleDir, file);
@@ -84,7 +83,6 @@ async function runTestRun(
   const detected = await detectFunctionType({
     filePath,
     jobName: options?.name,
-    typeOverride: options?.type,
   });
 
   const { bundledCode, scriptName } = await bundleForTestRun({
@@ -307,7 +305,7 @@ describe.sequential("E2E: function test-run", () => {
       const fixtureDir = path.join(__dirname, "fixtures", "function-test-run");
       const filePath = path.join(fixtureDir, "error-function.ts");
 
-      const detected = await detectFunctionType({ filePath, typeOverride: "plain" });
+      const detected = await detectFunctionType({ filePath });
       const { bundledCode, scriptName } = await bundleForTestRun({
         detected,
         sourceFile: filePath,
