@@ -4,6 +4,10 @@
  * Verifies that the function test-run command correctly bundles and executes
  * different function types on the Tailor Platform server via TestExecScript API.
  *
+ * Uses internal APIs directly (detectFunctionType, bundleForTestRun, executeScript)
+ * instead of spawning CLI subprocesses. The `apply` step still uses subprocess
+ * since it orchestrates multiple services.
+ *
  * Prerequisites:
  * - TAILOR_PLATFORM_TOKEN environment variable must be set
  * - TAILOR_PLATFORM_ORGANIZATION_ID environment variable must be set
@@ -17,9 +21,14 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
+import { create } from "@bufbuild/protobuf";
+import { AuthInvokerSchema, type AuthInvoker } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import { describe, test, expect, beforeAll } from "vitest";
-import { initOperatorClient } from "../src/cli/shared/client";
+import { bundleForTestRun, type ResolvedMachineUser } from "../src/cli/commands/function/bundle";
+import { detectFunctionType, type FunctionType } from "../src/cli/commands/function/detect";
+import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
+import { executeScript, type ScriptExecutionResult } from "../src/cli/shared/script-executor";
 import { trackWorkspace, trackTempDir } from "./globalSetup";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -34,83 +43,75 @@ const cliPath = path.join(sdkRoot, "dist", "cli", "index.mjs");
 const exampleDir = path.resolve(sdkRoot, "..", "..", "example");
 
 let workspaceId: string;
+let client: OperatorClient;
+let authInvoker: AuthInvoker;
+let machineUser: ResolvedMachineUser;
+const env = { foo: 1, bar: "hello", baz: true };
+const AUTH_NAMESPACE = "my-auth";
+const MACHINE_USER_NAME = "manager-machine-user";
 
-interface TestRunResult {
-  success: boolean;
+interface TestRunResult extends ScriptExecutionResult {
   scriptName: string;
   functionType?: string;
   functionName?: string;
-  logs: string;
-  result: string;
-  error?: string;
-  exitCode: number;
 }
 
 /**
- * Run the function test-run CLI command and return parsed JSON result.
+ * Bundle and execute a function file via internal APIs.
+ * @param file
+ * @param options
+ * @param options.arg
+ * @param options.name
+ * @param options.type
  */
-function runTestRun(
+async function runTestRun(
   file: string,
   options?: {
     arg?: string;
     name?: string;
-    type?: string;
-    cwd?: string;
+    type?: FunctionType;
   },
-): TestRunResult {
-  const cwd = options?.cwd ?? exampleDir;
-  const args = [cliPath, "function", "test-run", file, "--json", "--workspace-id", workspaceId];
-  if (options?.arg) args.push("--arg", options.arg);
-  if (options?.name) args.push("--name", options.name);
-  if (options?.type) args.push("--type", options.type);
+): Promise<TestRunResult> {
+  const filePath = path.resolve(exampleDir, file);
 
-  try {
-    const stdout = execFileSync("node", args, {
-      cwd,
-      stdio: ["ignore", "pipe", "pipe"],
-      env: {
-        ...process.env,
-        NODE_OPTIONS: "--experimental-vm-modules",
-      },
-      encoding: "utf-8",
-      timeout: 120000,
+  if (filePath.endsWith(".js")) {
+    const code = fs.readFileSync(filePath, "utf-8");
+    const scriptName = path.basename(filePath);
+    const result = await executeScript({
+      client,
+      workspaceId,
+      name: scriptName,
+      code,
+      arg: options?.arg,
+      invoker: authInvoker,
     });
-    return { ...JSON.parse(stdout.trim()), exitCode: 0 };
-  } catch (error) {
-    const e = error as { stdout?: string; stderr?: string; status?: number };
-    try {
-      return { ...JSON.parse((e.stdout ?? "").trim()), exitCode: e.status ?? 1 };
-    } catch {
-      return {
-        success: false,
-        scriptName: "",
-        logs: "",
-        result: "",
-        error: e.stderr ?? "Unknown error",
-        exitCode: e.status ?? 1,
-      };
-    }
+    return { ...result, scriptName };
   }
-}
 
-/**
- * Run the apply CLI command.
- */
-function runApplyCli(cwd: string): void {
-  execFileSync(
-    "node",
-    [cliPath, "apply", "--config", "tailor.config.ts", "--workspace-id", workspaceId, "--yes"],
-    {
-      cwd,
-      stdio: ["ignore", "pipe", "pipe"],
-      env: {
-        ...process.env,
-        NODE_OPTIONS: "--experimental-vm-modules",
-      },
-      encoding: "utf-8",
-      timeout: 120000,
-    },
-  );
+  const detected = await detectFunctionType({
+    filePath,
+    jobName: options?.name,
+    typeOverride: options?.type,
+  });
+
+  const { bundledCode, scriptName } = await bundleForTestRun({
+    detected,
+    sourceFile: filePath,
+    env,
+    machineUser,
+    workspaceId,
+  });
+
+  const result = await executeScript({
+    client,
+    workspaceId,
+    name: scriptName,
+    code: bundledCode,
+    arg: options?.arg,
+    invoker: authInvoker,
+  });
+
+  return { ...result, scriptName, functionType: detected.type, functionName: detected.name };
 }
 
 describe.sequential("E2E: function test-run", () => {
@@ -121,7 +122,7 @@ describe.sequential("E2E: function test-run", () => {
 
     // Create workspace
     const accessToken = await loadAccessToken({ useProfile: false });
-    const client = await initOperatorClient(accessToken);
+    client = await initOperatorClient(accessToken);
     const regionsResp = await client.listAvailableWorkspaceRegions({});
     const region = regionsResp.regions[0];
 
@@ -144,13 +145,49 @@ describe.sequential("E2E: function test-run", () => {
 
     // Apply example config to deploy DB schema, auth, machine users
     console.log("Applying example config...");
-    runApplyCli(exampleDir);
+    execFileSync(
+      "node",
+      [cliPath, "apply", "--config", "tailor.config.ts", "--workspace-id", workspaceId, "--yes"],
+      {
+        cwd: exampleDir,
+        stdio: ["ignore", "pipe", "pipe"],
+        env: { ...process.env, NODE_OPTIONS: "--experimental-vm-modules" },
+        encoding: "utf-8",
+        timeout: 120000,
+      },
+    );
     console.log("Apply completed.");
+
+    // Resolve machine user from API + config
+    let machineUserId = "00000000-0000-0000-0000-000000000000";
+    try {
+      const resp = await client.getAuthMachineUser({
+        workspaceId,
+        authNamespace: AUTH_NAMESPACE,
+        name: MACHINE_USER_NAME,
+      });
+      if (resp.machineUser?.id) {
+        machineUserId = resp.machineUser.id;
+      }
+    } catch {
+      // fallback to nil UUID
+    }
+    machineUser = {
+      name: MACHINE_USER_NAME,
+      id: machineUserId,
+      attributes: { role: "MANAGER" },
+      attributeList: [],
+    };
+
+    authInvoker = create(AuthInvokerSchema, {
+      namespace: AUTH_NAMESPACE,
+      machineUserName: MACHINE_USER_NAME,
+    });
   }, 120000);
 
   describe("resolver", () => {
-    test("runs add resolver with input arguments", () => {
-      const result = runTestRun("resolvers/add.ts", {
+    test("runs add resolver with input arguments", async () => {
+      const result = await runTestRun("resolvers/add.ts", {
         arg: '{"input":{"a":1,"b":2}}',
       });
 
@@ -161,21 +198,20 @@ describe.sequential("E2E: function test-run", () => {
       expect(JSON.parse(result.result)).toBe(3);
     });
 
-    test("returns machine user context from userInfo resolver", () => {
-      const result = runTestRun("resolvers/userInfo.ts");
+    test("returns machine user context from userInfo resolver", async () => {
+      const result = await runTestRun("resolvers/userInfo.ts");
 
       expect(result.success).toBe(true);
       const parsed = JSON.parse(result.result);
       expect(parsed.type).toBe("machine_user");
       expect(parsed.workspaceId).toBe(workspaceId);
       expect(parsed.role).toBe("MANAGER");
-      // Machine user ID should be a real UUID (not nil)
       expect(parsed.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
       expect(parsed.id).not.toBe("00000000-0000-0000-0000-000000000000");
     });
 
-    test("injects environment variables into resolver", () => {
-      const result = runTestRun("resolvers/env.ts", {
+    test("injects environment variables into resolver", async () => {
+      const result = await runTestRun("resolvers/env.ts", {
         arg: '{"input":{"multiplier":3}}',
       });
 
@@ -184,12 +220,11 @@ describe.sequential("E2E: function test-run", () => {
       expect(parsed.result).toBe(3); // 3 * env.foo (env.foo = 1)
       expect(parsed.envBar).toBe("hello");
       expect(parsed.envBaz).toBe(true);
-      // env.ts has console.log("Environment variables:", env)
       expect(result.logs).toContain("Environment variables:");
     });
 
-    test("supports getDB in resolver (stepChain)", () => {
-      const result = runTestRun("resolvers/stepChain.ts", {
+    test("supports getDB in resolver (stepChain)", async () => {
+      const result = await runTestRun("resolvers/stepChain.ts", {
         arg: '{"input":{"user":{"name":{"first":"John","last":"Doe"}}}}',
       });
 
@@ -197,25 +232,22 @@ describe.sequential("E2E: function test-run", () => {
       const parsed = JSON.parse(result.result);
       expect(parsed.result.summary).toHaveLength(3);
       expect(parsed.result.summary[0]).toContain("Hello John Doe");
-      // summary[1] is a date-formatted string
       expect(parsed.result.summary[1]).toMatch(/step2: recorded \d{4}-\d{2}-\d{2}/);
-      // summary[2] is the kysely result (may be empty string if no Supplier data)
       expect(typeof parsed.result.summary[2]).toBe("string");
     });
 
-    test("reports validation errors for invalid input", () => {
-      const result = runTestRun("resolvers/add.ts", {
+    test("reports validation errors for invalid input", async () => {
+      const result = await runTestRun("resolvers/add.ts", {
         arg: '{"input":{"a":100,"b":2}}',
       });
 
       expect(result.success).toBe(false);
-      expect(result.exitCode).not.toBe(0);
     });
   });
 
   describe("executor", () => {
-    test("runs webhook executor with body args", () => {
-      const result = runTestRun("executors/testWebhook.ts", {
+    test("runs webhook executor with body args", async () => {
+      const result = await runTestRun("executors/testWebhook.ts", {
         arg: '{"body":{"message":"hello"},"headers":{}}',
       });
 
@@ -227,50 +259,58 @@ describe.sequential("E2E: function test-run", () => {
   });
 
   describe("workflow job", () => {
-    test("runs workflow job by name (check-inventory)", () => {
-      const result = runTestRun("workflows/sample.ts", {
+    test("runs workflow job by name (check-inventory)", async () => {
+      const result = await runTestRun("workflows/sample.ts", {
         name: "check-inventory",
       });
 
       expect(result.success).toBe(true);
       expect(result.functionType).toBe("workflow-job");
       expect(result.functionName).toBe("check-inventory");
-      // check-inventory returns date-formatted string
       const parsed = JSON.parse(result.result);
       expect(parsed).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
     });
   });
 
   describe("pre-bundled .js file", () => {
-    test("runs pre-bundled .js file directly", () => {
-      // The add resolver was bundled in a previous test, reuse that output
+    test("runs pre-bundled .js file directly", async () => {
       const bundledPath = ".tailor-sdk/test-run/test-run--add.js";
       expect(fs.existsSync(path.join(exampleDir, bundledPath))).toBe(true);
 
-      const result = runTestRun(bundledPath, {
+      const result = await runTestRun(bundledPath, {
         arg: '{"input":{"a":5,"b":7}}',
       });
 
       expect(result.success).toBe(true);
       expect(JSON.parse(result.result)).toBe(12);
-      // Pre-bundled files skip detection, so functionType/functionName are undefined
       expect(result.functionType).toBeUndefined();
     });
   });
 
   describe("error handling", () => {
-    test("separates logs from error in failure output", () => {
+    test("separates logs from error in failure output", async () => {
       const fixtureDir = path.join(__dirname, "fixtures", "function-test-run");
-      const result = runTestRun(path.join(fixtureDir, "error-function.ts"), {
-        type: "plain",
+      const filePath = path.join(fixtureDir, "error-function.ts");
+
+      const detected = await detectFunctionType({ filePath, typeOverride: "plain" });
+      const { bundledCode, scriptName } = await bundleForTestRun({
+        detected,
+        sourceFile: filePath,
+        env: {},
+        machineUser,
+        workspaceId,
+      });
+      const result = await executeScript({
+        client,
+        workspaceId,
+        name: scriptName,
+        code: bundledCode,
+        invoker: authInvoker,
       });
 
       expect(result.success).toBe(false);
-      expect(result.exitCode).not.toBe(0);
-      // Logs should contain console.log output
       expect(result.logs).toContain("Log line 1");
       expect(result.logs).toContain("Log line 2");
-      // Error should NOT contain log lines (regression test for logs/error duplication)
       if (result.error) {
         expect(result.error).not.toContain("Log line 1");
       }
