@@ -13,17 +13,19 @@ import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { resolveInlineSourcemap } from "@/cli/shared/inline-sourcemap";
-import { tailorUserMap } from "@/parser/service/tailordb";
 import type { DetectedFunction } from "./detect";
 
-// Inline unauthenticated user fallback (matches unauthenticatedTailorUser from @/configure/types/user)
-const unauthenticatedUserExpr = JSON.stringify({
-  id: "00000000-0000-0000-0000-000000000000",
-  type: "",
-  workspaceId: "00000000-0000-0000-0000-000000000000",
-  attributes: null,
-  attributeList: [],
-});
+/** Machine user info resolved from config and API for bundle-time user context. */
+export interface ResolvedMachineUser {
+  /** Machine user name */
+  name: string;
+  /** Machine user ID (UUID from API, or nil UUID if unavailable) */
+  id: string;
+  /** Attributes from config (null if not found in config, e.g. external auth) */
+  attributes: Record<string, unknown> | null;
+  /** Attribute list from config */
+  attributeList: unknown[];
+}
 
 interface BundleForTestRunOptions {
   /** Detected function info */
@@ -34,6 +36,10 @@ interface BundleForTestRunOptions {
   env?: Record<string, string | number | boolean>;
   /** Inline sourcemap config value from defineConfig */
   inlineSourcemap?: boolean;
+  /** Machine user info for injecting user context into the bundle */
+  machineUser: ResolvedMachineUser;
+  /** Workspace ID for user context */
+  workspaceId: string;
 }
 
 interface BundleForTestRunResult {
@@ -51,7 +57,7 @@ interface BundleForTestRunResult {
 export async function bundleForTestRun(
   options: BundleForTestRunOptions,
 ): Promise<BundleForTestRunResult> {
-  const { detected, sourceFile, env = {} } = options;
+  const { detected, sourceFile, env = {}, machineUser, workspaceId } = options;
   const inlineSourcemap = resolveInlineSourcemap(options.inlineSourcemap);
 
   const outputDir = path.resolve(getDistDir(), "test-run");
@@ -62,7 +68,7 @@ export async function bundleForTestRun(
   const entryPath = path.join(outputDir, `${baseName}.entry.js`);
   const outputPath = path.join(outputDir, scriptName);
 
-  const entryContent = generateEntry(detected, sourceFile, env);
+  const entryContent = generateEntry(detected, sourceFile, env, machineUser, workspaceId);
   fs.writeFileSync(entryPath, entryContent);
 
   let tsconfig: string | undefined;
@@ -108,12 +114,16 @@ export async function bundleForTestRun(
  * @param detected - Detected function info
  * @param sourceFile - Absolute path to the source file
  * @param env - Environment variables for workflow job bundles
+ * @param machineUser - Resolved machine user info
+ * @param workspaceId - Workspace ID
  * @returns Entry file content string
  */
 function generateEntry(
   detected: DetectedFunction,
   sourceFile: string,
   env: Record<string, string | number | boolean>,
+  machineUser: ResolvedMachineUser,
+  workspaceId: string,
 ): string {
   const absoluteSourcePath = path.resolve(sourceFile);
 
@@ -129,18 +139,17 @@ function generateEntry(
         export { _fn as main };
       `;
 
-    case "resolver":
+    case "resolver": {
       // Same pattern as services/resolver/bundler.ts:125-152
       // In production, the operationHook injects user/env into context.
-      // For test-run, we inject them here since there's no operationHook.
+      // For test-run, we embed machine user info since there's no operationHook.
+      const userExpr = buildMachineUserExpr(machineUser, workspaceId);
       return ml /* js */ `
         import _internalResolver from "${absoluteSourcePath}";
         import { t } from "@tailor-platform/sdk";
 
         const _env = ${JSON.stringify(env)};
-        const _user = typeof user !== "undefined"
-          ? ${tailorUserMap}
-          : (console.warn("[test-run] user global not available, using unauthenticated user fallback"), ${unauthenticatedUserExpr});
+        const _user = ${userExpr};
 
         const $tailor_resolver_body = async (context) => {
           const enrichedContext = { ...context, env: _env, user: _user };
@@ -168,22 +177,26 @@ function generateEntry(
 
         export { $tailor_resolver_body as main };
       `;
+    }
 
-    case "executor":
+    case "executor": {
       // Same pattern as services/executor/bundler.ts:144-150
       // In production, buildExecutorArgsExpr injects actor/env into args.
-      // For test-run, we inject env here.
+      // For test-run, we embed machine user as actor.
+      const actorExpr = buildMachineActorExpr(machineUser, workspaceId);
       return ml /* js */ `
         import _internalExecutor from "${absoluteSourcePath}";
 
         const _env = ${JSON.stringify(env)};
+        const _actor = ${actorExpr};
 
         const __executor_function = async (args) => {
-          return _internalExecutor.operation.body({ ...args, env: _env });
+          return _internalExecutor.operation.body({ ...args, env: _env, actor: _actor });
         };
 
         export { __executor_function as main };
       `;
+    }
 
     case "workflow-job": {
       // Same pattern as services/workflow/bundler.ts:286-294
@@ -201,4 +214,36 @@ function generateEntry(
       `;
     }
   }
+}
+
+/**
+ * Build a JSON expression for a machine user TailorUser object.
+ * @param machineUser - Resolved machine user info
+ * @param workspaceId - Workspace ID
+ * @returns JSON string for the user expression
+ */
+function buildMachineUserExpr(machineUser: ResolvedMachineUser, workspaceId: string): string {
+  return JSON.stringify({
+    id: machineUser.id,
+    type: "machine_user",
+    workspaceId,
+    attributes: machineUser.attributes,
+    attributeList: machineUser.attributeList,
+  });
+}
+
+/**
+ * Build a JSON expression for a machine user TailorActor object.
+ * @param machineUser - Resolved machine user info
+ * @param workspaceId - Workspace ID
+ * @returns JSON string for the actor expression
+ */
+function buildMachineActorExpr(machineUser: ResolvedMachineUser, workspaceId: string): string {
+  return JSON.stringify({
+    workspaceId,
+    userId: machineUser.id,
+    attributes: machineUser.attributes,
+    attributeList: machineUser.attributeList,
+    userType: "USER_TYPE_MACHINE_USER",
+  });
 }

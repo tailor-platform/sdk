@@ -12,12 +12,12 @@ import * as path from "pathe";
 import { arg, defineCommand } from "politty";
 import { z } from "zod";
 import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "@/cli/shared/args";
-import { initOperatorClient } from "@/cli/shared/client";
+import { initOperatorClient, type OperatorClient } from "@/cli/shared/client";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger, styles } from "@/cli/shared/logger";
 import { executeScript } from "@/cli/shared/script-executor";
-import { bundleForTestRun } from "./bundle";
+import { bundleForTestRun, type ResolvedMachineUser } from "./bundle";
 import { detectFunctionType, type FunctionType } from "./detect";
 
 export const testRunCommand = defineCommand({
@@ -82,7 +82,29 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
     // 2. Load config (required)
     const { config } = await loadConfig(args.config);
 
-    // 3. Resolve bundled code and script name
+    // 3. Resolve auth, workspace, and machine user info (needed before bundling)
+    const authNamespace = resolveAuthNamespace(config.auth);
+    const machineUserName = resolveMachineUserName(args["machine-user"], config.auth);
+
+    const accessToken = await loadAccessToken({
+      useProfile: true,
+      profile: args.profile,
+    });
+    const client = await initOperatorClient(accessToken);
+    const workspaceId = loadWorkspaceId({
+      workspaceId: args["workspace-id"],
+      profile: args.profile,
+    });
+
+    const machineUser = await resolveMachineUser({
+      client,
+      workspaceId,
+      authNamespace,
+      machineUserName,
+      authConfig: config.auth,
+    });
+
+    // 4. Resolve bundled code and script name
     const relativePath = path.relative(process.cwd(), filePath);
     const isPreBundled = filePath.endsWith(".js");
     let bundledCode: string;
@@ -115,28 +137,16 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
         sourceFile: filePath,
         env: config.env ?? {},
         inlineSourcemap: config.inlineSourcemap,
+        machineUser,
+        workspaceId,
       }));
       logger.info(`Bundled as ${styles.bold(scriptName)}`);
     }
 
-    // 5. Resolve auth info
-    const authNamespace = resolveAuthNamespace(config.auth);
-    const machineUserName = resolveMachineUser(args["machine-user"], config.auth);
-
-    // 6. Execute via TestExecScript
-    const accessToken = await loadAccessToken({
-      useProfile: true,
-      profile: args.profile,
-    });
-    const client = await initOperatorClient(accessToken);
-    const workspaceId = loadWorkspaceId({
-      workspaceId: args["workspace-id"],
-      profile: args.profile,
-    });
-
+    // 5. Execute via TestExecScript
     const authInvoker = create(AuthInvokerSchema, {
       namespace: authNamespace,
-      machineUserName,
+      machineUserName: machineUser.name,
     });
 
     logger.info(`Executing on workspace ${styles.dim(workspaceId)}...`);
@@ -217,7 +227,7 @@ function resolveAuthNamespace(
  * @param authConfig - Auth configuration from tailor.config.ts
  * @returns Resolved machine user name
  */
-function resolveMachineUser(
+function resolveMachineUserName(
   cliMachineUser: string | undefined,
   authConfig:
     | { name: string; external?: boolean; machineUsers?: Record<string, unknown> }
@@ -238,4 +248,55 @@ function resolveMachineUser(
   throw new Error(
     "Machine user is required. Provide --machine-user or ensure tailor.config.ts has machine users configured.",
   );
+}
+
+interface ResolveMachineUserOptions {
+  client: OperatorClient;
+  workspaceId: string;
+  authNamespace: string;
+  machineUserName: string;
+  authConfig:
+    | { name: string; external?: boolean; machineUsers?: Record<string, unknown> }
+    | undefined;
+}
+
+/**
+ * Resolve full machine user info: name, id (from API), and attributes (from config).
+ * @param options - Options for resolving machine user
+ * @returns Resolved machine user with id, attributes, and attributeList
+ */
+async function resolveMachineUser(
+  options: ResolveMachineUserOptions,
+): Promise<ResolvedMachineUser> {
+  const { client, workspaceId, authNamespace, machineUserName, authConfig } = options;
+
+  // Get machine user ID from the server
+  let id = "00000000-0000-0000-0000-000000000000";
+  try {
+    const { machineUser } = await client.getAuthMachineUser({
+      workspaceId,
+      authNamespace,
+      name: machineUserName,
+    });
+    if (machineUser?.id) {
+      id = machineUser.id;
+    }
+  } catch {
+    logger.debug(`Could not fetch machine user "${machineUserName}" from server, using nil UUID`);
+  }
+
+  // Get attributes from config
+  const machineUserConfig = authConfig?.machineUsers?.[machineUserName];
+  let attributes: Record<string, unknown> | null = null;
+  let attributeList: unknown[] = [];
+  if (machineUserConfig && typeof machineUserConfig === "object") {
+    const cfg = machineUserConfig as {
+      attributes?: Record<string, unknown>;
+      attributeList?: unknown[];
+    };
+    attributes = cfg.attributes ?? null;
+    attributeList = cfg.attributeList ?? [];
+  }
+
+  return { name: machineUserName, id, attributes, attributeList };
 }
