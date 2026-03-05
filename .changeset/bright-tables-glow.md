@@ -1,5 +1,5 @@
 ---
-"@tailor-platform/sdk": patch
+"@tailor-platform/sdk": minor
 ---
 
-fix(query): improve SQL parse error message for reserved keywords and add test coverage for script-executor response.result fallback
+Support multiple semicolon-separated SQL statements in `query` command and improve SQL parse error messages with guidance for reserved keywords
