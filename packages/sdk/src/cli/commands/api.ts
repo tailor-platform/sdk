@@ -66,20 +66,22 @@ export async function apiCall(options: ApiCallOptions): Promise<ApiCallResult> {
 export const apiCommand = defineCommand({
   name: "api",
   description: "Call Tailor Platform API endpoints directly.",
-  args: z.object({
-    ...commonArgs,
-    ...jsonArgs,
-    ...workspaceArgs,
-    body: arg(z.string().default("{}"), {
-      alias: "b",
-      description: "Request body as JSON",
-    }),
-    endpoint: arg(z.string(), {
-      positional: true,
-      description:
-        "API endpoint to call (e.g., 'GetApplication' or 'tailor.v1.OperatorService/GetApplication')",
-    }),
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...jsonArgs,
+      ...workspaceArgs,
+      body: arg(z.string().default("{}"), {
+        alias: "b",
+        description: "Request body as JSON",
+      }),
+      endpoint: arg(z.string(), {
+        positional: true,
+        description:
+          "API endpoint to call (e.g., 'GetApplication' or 'tailor.v1.OperatorService/GetApplication')",
+      }),
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     const result = await apiCall({
       profile: args.profile,

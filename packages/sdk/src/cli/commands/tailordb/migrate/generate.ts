@@ -351,21 +351,23 @@ export const generateCommand = defineCommand({
   name: "generate",
   description:
     "Generate migration files by detecting schema differences between current local types and the previous migration snapshot.",
-  args: z.object({
-    ...commonArgs,
-    ...confirmationArgs,
-    config: arg(z.string().default("tailor.config.ts"), {
-      alias: "c",
-      description: "Path to SDK config file",
-    }),
-    name: arg(z.string().optional(), {
-      alias: "n",
-      description: "Optional description for the migration",
-    }),
-    init: arg(z.boolean().default(false), {
-      description: "Delete existing migrations and start fresh",
-    }),
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...confirmationArgs,
+      config: arg(z.string().default("tailor.config.ts"), {
+        alias: "c",
+        description: "Path to SDK config file",
+      }),
+      name: arg(z.string().optional(), {
+        alias: "n",
+        description: "Optional description for the migration",
+      }),
+      init: arg(z.boolean().default(false), {
+        description: "Delete existing migrations and start fresh",
+      }),
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     await generate({
       configPath: args.config,

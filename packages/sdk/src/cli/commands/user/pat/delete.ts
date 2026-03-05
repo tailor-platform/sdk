@@ -9,13 +9,15 @@ import { logger } from "@/cli/shared/logger";
 export const deleteCommand = defineCommand({
   name: "delete",
   description: "Delete a personal access token.",
-  args: z.object({
-    ...commonArgs,
-    name: arg(z.string(), {
-      positional: true,
-      description: "Token name",
-    }),
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      name: arg(z.string(), {
+        positional: true,
+        description: "Token name",
+      }),
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     const config = readPlatformConfig();
 

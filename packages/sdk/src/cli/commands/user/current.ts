@@ -8,9 +8,11 @@ import { logger } from "@/cli/shared/logger";
 export const currentCommand = defineCommand({
   name: "current",
   description: "Show current user.",
-  args: z.object({
-    ...commonArgs,
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+    })
+    .strict(),
   run: withCommonArgs(async () => {
     const config = readPlatformConfig();
 

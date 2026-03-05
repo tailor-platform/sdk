@@ -57,11 +57,13 @@ async function listStaticWebsites(
 export const listCommand = defineCommand({
   name: "list",
   description: "List all static websites in a workspace.",
-  args: z.object({
-    ...commonArgs,
-    ...jsonArgs,
-    ...workspaceArgs,
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...jsonArgs,
+      ...workspaceArgs,
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     const websites = await listStaticWebsites({
       workspaceId: args["workspace-id"],

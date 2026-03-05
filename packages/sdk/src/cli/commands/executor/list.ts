@@ -42,11 +42,13 @@ export async function listExecutors(options?: ListExecutorsOptions): Promise<Exe
 export const listCommand = defineCommand({
   name: "list",
   description: "List all executors",
-  args: z.object({
-    ...commonArgs,
-    ...jsonArgs,
-    ...workspaceArgs,
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...jsonArgs,
+      ...workspaceArgs,
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     const executors = await listExecutors({
       workspaceId: args["workspace-id"],
