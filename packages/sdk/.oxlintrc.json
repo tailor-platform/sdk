@@ -8,7 +8,7 @@
     "builtin": true,
     "es2018": true
   },
-  "ignorePatterns": ["dist/"],
+  "ignorePatterns": ["dist/", "src/types/*.generated.ts"],
   "rules": {
     "constructor-super": "error",
     "for-direction": "error",

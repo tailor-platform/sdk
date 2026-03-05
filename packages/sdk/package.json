@@ -89,7 +89,7 @@
     "measure:bundle": "node ../../scripts/measure-bundle-size-sonda.js",
     "knip": "knip",
     "publint": "publint --strict",
-    "generate": "zinfer"
+    "generate": "zinfer && pnpm oxfmt --write src/types/*.generated.ts"
   },
   "dependencies": {
     "@0no-co/graphql.web": "1.2.0",
