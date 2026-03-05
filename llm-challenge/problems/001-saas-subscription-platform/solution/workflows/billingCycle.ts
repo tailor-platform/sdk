@@ -1,5 +1,7 @@
 import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
 
+type BillingPeriod = { start: string; end: string };
+
 type UsageItem = {
   metric: string;
   totalQuantity: number;
@@ -7,7 +9,7 @@ type UsageItem = {
 
 type CollectUsageInput = {
   organizationId: string;
-  billingPeriod: { start: string; end: string };
+  billingPeriod: BillingPeriod;
 };
 
 type CalculateChargesInput = {
@@ -20,7 +22,7 @@ type ProcessBillingInput = {
   organizationId: string;
   plan: string;
   monthlyRate: number;
-  billingPeriod: { start: string; end: string };
+  billingPeriod: BillingPeriod;
 };
 
 const overageThresholds: Record<string, number> = {
@@ -32,15 +34,13 @@ const overageThresholds: Record<string, number> = {
 
 export const collectUsage = createWorkflowJob({
   name: "collect-usage",
-  body: (_input: CollectUsageInput) => {
-    return {
-      usageItems: [
-        { metric: "api-calls", totalQuantity: 1500 },
-        { metric: "storage-gb", totalQuantity: 25 },
-      ],
-      totalItems: 2,
-    };
-  },
+  body: (_input: CollectUsageInput) => ({
+    usageItems: [
+      { metric: "api-calls", totalQuantity: 1500 },
+      { metric: "storage-gb", totalQuantity: 25 },
+    ],
+    totalItems: 2,
+  }),
 });
 
 export const calculateCharges = createWorkflowJob({
