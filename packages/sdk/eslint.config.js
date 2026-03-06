@@ -13,6 +13,8 @@ export default defineConfig([
     ".tailor-sdk/",
     "user-defined.d.ts",
     "plugin-defined.d.ts",
+    "**/__test_fixtures__/dist/",
+    "**/__test_fixtures__/*-compat-out/",
   ]),
   eslint.configs.recommended,
   tseslint.configs.recommended,

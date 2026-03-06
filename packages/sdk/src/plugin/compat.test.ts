@@ -1,14 +1,16 @@
-import fs from "node:fs";
-import path from "node:path";
-import { describe, expect, test } from "vitest";
+import { randomUUID } from "node:crypto";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { beforeAll, describe, expect, test } from "vitest";
+import { generate } from "@/cli/commands/generate/service";
 
 describe("defineGenerators and definePlugins produce identical output", () => {
-  const generatorsDir = path.join(__dirname, "fixtures/generators");
-  const pluginsDir = path.join(__dirname, "fixtures/plugins");
+  const fixtureDir = path.resolve(__dirname, "../cli/commands/apply/__test_fixtures__");
+  const generatorsDir = path.join(fixtureDir, "generators-compat-out");
+  const pluginsDir = path.join(fixtureDir, "plugins-compat-out");
 
   const collectFiles = (rootDir: string): string[] => {
     const files: string[] = [];
-
     const traverse = (currentDir: string) => {
       const entries = fs.readdirSync(currentDir, { withFileTypes: true });
       for (const entry of entries) {
@@ -21,10 +23,24 @@ describe("defineGenerators and definePlugins produce identical output", () => {
         }
       }
     };
-
     traverse(rootDir);
     return files.sort();
   };
+
+  beforeAll(async () => {
+    process.env.TAILOR_PLATFORM_WORKSPACE_ID ??= randomUUID();
+
+    for (const dir of [generatorsDir, pluginsDir]) {
+      if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true });
+    }
+
+    await generate({
+      configPath: path.join(fixtureDir, "tailor.config.generators-compat.ts"),
+    });
+    await generate({
+      configPath: path.join(fixtureDir, "tailor.config.plugins-compat.ts"),
+    });
+  }, 120000);
 
   test("plugin output includes all generated files from defineGenerators", () => {
     const generatorFiles = collectFiles(generatorsDir);
@@ -39,7 +55,6 @@ describe("defineGenerators and definePlugins produce identical output", () => {
     const files = collectFiles(generatorsDir);
     expect(files.length).toBeGreaterThan(0);
 
-    // The seed exec.mjs embeds the config path, so we normalize it for comparison
     const normalizeConfigPath = (content: string) =>
       content.replace(
         /tailor\.config\.(generators|plugins)-compat\.ts/g,
@@ -53,10 +68,7 @@ describe("defineGenerators and definePlugins produce identical output", () => {
       const pluginContent = normalizeConfigPath(
         fs.readFileSync(path.join(pluginsDir, file), "utf-8"),
       );
-      expect(
-        pluginContent,
-        `Content mismatch in ${file}:\n  diff ${path.join(generatorsDir, file)} ${path.join(pluginsDir, file)}`,
-      ).toBe(generatorContent);
+      expect(pluginContent, `Content mismatch in ${file}`).toBe(generatorContent);
     }
   });
 });
