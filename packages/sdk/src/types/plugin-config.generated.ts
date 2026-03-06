@@ -18,56 +18,39 @@ export type PluginConfig = {
   readonly id: string;
   readonly description: string;
   readonly importPath?: string | undefined;
-  readonly typeConfigRequired?:
-    | import("/home/runner/work/sdk/sdk/packages/sdk/src/types/plugin").TypeConfigRequired<unknown>
-    | undefined;
+  readonly typeConfigRequired?: import("./plugin").TypeConfigRequired<unknown> | undefined;
   readonly pluginConfig?: unknown;
   onTypeLoaded?:
     | ((
-        context: import("/home/runner/work/sdk/sdk/packages/sdk/src/types/plugin").PluginProcessContext<
-          unknown,
-          unknown
-        >,
-      ) =>
-        | import("/home/runner/work/sdk/sdk/packages/sdk/src/types/plugin").TypePluginOutput
-        | Promise<
-            import("/home/runner/work/sdk/sdk/packages/sdk/src/types/plugin").TypePluginOutput
-          >)
+        context: import("./plugin").PluginProcessContext<unknown, unknown>,
+      ) => import("./plugin").TypePluginOutput | Promise<import("./plugin").TypePluginOutput>)
     | undefined;
   onNamespaceLoaded?:
     | ((
-        context: import("/home/runner/work/sdk/sdk/packages/sdk/src/types/plugin").PluginNamespaceProcessContext<unknown>,
+        context: import("./plugin").PluginNamespaceProcessContext<unknown>,
       ) =>
-        | import("/home/runner/work/sdk/sdk/packages/sdk/src/types/plugin").NamespacePluginOutput
-        | Promise<
-            import("/home/runner/work/sdk/sdk/packages/sdk/src/types/plugin").NamespacePluginOutput
-          >)
+        | import("./plugin").NamespacePluginOutput
+        | Promise<import("./plugin").NamespacePluginOutput>)
     | undefined;
   onTailorDBReady?:
     | ((
-        context: import("/home/runner/work/sdk/sdk/packages/sdk/src/types/plugin-generation").TailorDBReadyContext<unknown>,
+        context: import("./plugin-generation").TailorDBReadyContext<unknown>,
       ) =>
-        | import("/home/runner/work/sdk/sdk/packages/sdk/src/types/plugin-generation").GeneratorResult
-        | Promise<
-            import("/home/runner/work/sdk/sdk/packages/sdk/src/types/plugin-generation").GeneratorResult
-          >)
+        | import("./plugin-generation").GeneratorResult
+        | Promise<import("./plugin-generation").GeneratorResult>)
     | undefined;
   onResolverReady?:
     | ((
-        context: import("/home/runner/work/sdk/sdk/packages/sdk/src/types/plugin-generation").ResolverReadyContext<unknown>,
+        context: import("./plugin-generation").ResolverReadyContext<unknown>,
       ) =>
-        | import("/home/runner/work/sdk/sdk/packages/sdk/src/types/plugin-generation").GeneratorResult
-        | Promise<
-            import("/home/runner/work/sdk/sdk/packages/sdk/src/types/plugin-generation").GeneratorResult
-          >)
+        | import("./plugin-generation").GeneratorResult
+        | Promise<import("./plugin-generation").GeneratorResult>)
     | undefined;
   onExecutorReady?:
     | ((
-        context: import("/home/runner/work/sdk/sdk/packages/sdk/src/types/plugin-generation").ExecutorReadyContext<unknown>,
+        context: import("./plugin-generation").ExecutorReadyContext<unknown>,
       ) =>
-        | import("/home/runner/work/sdk/sdk/packages/sdk/src/types/plugin-generation").GeneratorResult
-        | Promise<
-            import("/home/runner/work/sdk/sdk/packages/sdk/src/types/plugin-generation").GeneratorResult
-          >)
+        | import("./plugin-generation").GeneratorResult
+        | Promise<import("./plugin-generation").GeneratorResult>)
     | undefined;
 };
