@@ -1,5 +1,49 @@
 # @tailor-platform/sdk
 
+## 1.22.0
+
+### Minor Changes
+
+- [#629](https://github.com/tailor-platform/sdk/pull/629) [`628a790`](https://github.com/tailor-platform/sdk/commit/628a790ec52a905ff97a0ab5441119855c670880) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `function test-run` CLI command to run functions on the Tailor Platform server without deploying. Auto-detects resolver, executor, workflow job, and plain function types (including `export function main`). Bundles the function using rolldown and executes via TestExecScript API. Also supports passing pre-bundled `.js` files directly to skip detection and bundling. Automatically injects `env` from config into all function type entries. Embeds machine user context (id, attributes, workspaceId) into resolver entries as `user` and into executor entries as `actor`, resolved from the API and config. Auth namespace is resolved automatically from `config.auth.name`. Fixes error/logs separation in script executor and shows Result section only on success to avoid duplicate output with Error section on failure.
+
+- [#665](https://github.com/tailor-platform/sdk/pull/665) [`a7b4a9b`](https://github.com/tailor-platform/sdk/commit/a7b4a9b396aaf6d64343c2f4d4a55fb4216211be) Thanks [@toiroakr](https://github.com/toiroakr)! - Support multiple semicolon-separated SQL statements in `query` command with proper handling of semicolons inside string literals, and improve SQL parse error messages with guidance for reserved keywords
+
+- [#589](https://github.com/tailor-platform/sdk/pull/589) [`39edc3f`](https://github.com/tailor-platform/sdk/commit/39edc3f2b7ec03159ffe1eafbdede77fa34c75fe) Thanks [@r253hmdryou](https://github.com/r253hmdryou)! - feat: add `query` command for SQL/GraphQL playground
+
+  - Add new CLI subcommand: `tailor-sdk query`
+  - Support query engines via `--engine sql | gql`
+  - Execute query string via `--query` (`-q`)
+    Usage examples:
+
+  - SQL:
+    `tailor-sdk query --engine sql -q "SELECT * FROM User" -m admin-machine-user`
+  - GraphQL:
+    `tailor-sdk query --engine gql -q "query { users { id name } }" -m admin-machine-user`
+
+- [#666](https://github.com/tailor-platform/sdk/pull/666) [`ee458b4`](https://github.com/tailor-platform/sdk/commit/ee458b4c05049024a3fd48f85a5e93caa630a4af) Thanks [@dqn](https://github.com/dqn)! - Add test utilities for bundled function testing via `@tailor-platform/sdk/test`
+
+  - `setupTailordbMock(resolver?)`: Mock `globalThis.tailordb.Client` for testing resolvers/executors that use DB queries
+  - `setupWorkflowMock(handler)`: Mock `globalThis.tailor.workflow.triggerJobFunction` for testing workflow job triggers
+  - `createImportMain(baseDir)`: Import bundled JS files and extract the `main` function for execution testing
+
+- [#646](https://github.com/tailor-platform/sdk/pull/646) [`bc45c01`](https://github.com/tailor-platform/sdk/commit/bc45c018aa165aad02ae6e8ef44b1459d859a93a) Thanks [@dqn](https://github.com/dqn)! - Add shell completion metadata to CLI args and upgrade politty to v0.4.3
+
+### Patch Changes
+
+- [#663](https://github.com/tailor-platform/sdk/pull/663) [`7cf2df1`](https://github.com/tailor-platform/sdk/commit/7cf2df1a0429b0bed0065e31b9998c33ce0c237c) Thanks [@toiroakr](https://github.com/toiroakr)! - Add publint to validate package exports before publishing
+
+- [#659](https://github.com/tailor-platform/sdk/pull/659) [`9fc3d02`](https://github.com/tailor-platform/sdk/commit/9fc3d02b99f2236f1f4f49e681ddbecec950c6b5) Thanks [@k1LoW](https://github.com/k1LoW)! - Add allowMicrosoftOauth support to IdP user auth policy
+
+- [#662](https://github.com/tailor-platform/sdk/pull/662) [`514fb40`](https://github.com/tailor-platform/sdk/commit/514fb40e4733e6726f83a58587325b3119fae239) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix column ordering in SQL wildcard query results by sorting columns based on db.type() field definition order. Wildcards are expanded in-place preserving SQL declaration order, with system fields (id) first followed by user-defined fields. Supports both unqualified (`SELECT *`) and qualified (`SELECT u.*`) wildcards with alias resolution. Column matching is case-insensitive to handle unquoted SQL identifiers correctly.
+
+- [#667](https://github.com/tailor-platform/sdk/pull/667) [`b516df2`](https://github.com/tailor-platform/sdk/commit/b516df2ee6b2ba8c77fed8df22cf2942fbb94a75) Thanks [@riku99](https://github.com/riku99)! - Skip application creation when no subgraphs are configured
+
+- [#660](https://github.com/tailor-platform/sdk/pull/660) [`c38bfcc`](https://github.com/tailor-platform/sdk/commit/c38bfcc117bcac6d6d211267f3997ff11df1d8c7) Thanks [@toiroakr](https://github.com/toiroakr)! - Remove `user` from `WorkflowJobContext` — the platform's workflow runtime does not inject a `user` global variable into the JS execution environment, so the field was always undefined. Also remove `WORKFLOW_TEST_USER_KEY` constant.
+
+- [#619](https://github.com/tailor-platform/sdk/pull/619) [`4a686b7`](https://github.com/tailor-platform/sdk/commit/4a686b7e35d7c6bd5aaaea36d44827edae0db68c) Thanks [@riku99](https://github.com/riku99)! - Enable external constants/functions in TailorDB hooks and validators
+
+- [#668](https://github.com/tailor-platform/sdk/pull/668) [`4f93a59`](https://github.com/tailor-platform/sdk/commit/4f93a594113aa99fb464e1202af379dbd92302df) Thanks [@riku99](https://github.com/riku99)! - Add strict() to all command arg schemas to reject unknown options
+
 ## 1.21.0
 
 ### Minor Changes
