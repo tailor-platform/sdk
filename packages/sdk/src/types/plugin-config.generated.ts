@@ -19,55 +19,55 @@ export type PluginConfig = {
   readonly description: string;
   readonly importPath?: string | undefined;
   readonly typeConfigRequired?:
-    | import("/Users/toiroakr/workspace/sdk-wt/feat/zinfer/packages/sdk/src/types/plugin").TypeConfigRequired<unknown>
+    | import("/home/runner/work/sdk/sdk/packages/sdk/src/types/plugin").TypeConfigRequired<unknown>
     | undefined;
   readonly pluginConfig?: unknown;
   onTypeLoaded?:
     | ((
-        context: import("/Users/toiroakr/workspace/sdk-wt/feat/zinfer/packages/sdk/src/types/plugin").PluginProcessContext<
+        context: import("/home/runner/work/sdk/sdk/packages/sdk/src/types/plugin").PluginProcessContext<
           unknown,
           unknown
         >,
       ) =>
-        | import("/Users/toiroakr/workspace/sdk-wt/feat/zinfer/packages/sdk/src/types/plugin").TypePluginOutput
+        | import("/home/runner/work/sdk/sdk/packages/sdk/src/types/plugin").TypePluginOutput
         | Promise<
-            import("/Users/toiroakr/workspace/sdk-wt/feat/zinfer/packages/sdk/src/types/plugin").TypePluginOutput
+            import("/home/runner/work/sdk/sdk/packages/sdk/src/types/plugin").TypePluginOutput
           >)
     | undefined;
   onNamespaceLoaded?:
     | ((
-        context: import("/Users/toiroakr/workspace/sdk-wt/feat/zinfer/packages/sdk/src/types/plugin").PluginNamespaceProcessContext<unknown>,
+        context: import("/home/runner/work/sdk/sdk/packages/sdk/src/types/plugin").PluginNamespaceProcessContext<unknown>,
       ) =>
-        | import("/Users/toiroakr/workspace/sdk-wt/feat/zinfer/packages/sdk/src/types/plugin").NamespacePluginOutput
+        | import("/home/runner/work/sdk/sdk/packages/sdk/src/types/plugin").NamespacePluginOutput
         | Promise<
-            import("/Users/toiroakr/workspace/sdk-wt/feat/zinfer/packages/sdk/src/types/plugin").NamespacePluginOutput
+            import("/home/runner/work/sdk/sdk/packages/sdk/src/types/plugin").NamespacePluginOutput
           >)
     | undefined;
   onTailorDBReady?:
     | ((
-        context: import("/Users/toiroakr/workspace/sdk-wt/feat/zinfer/packages/sdk/src/types/plugin-generation").TailorDBReadyContext<unknown>,
+        context: import("/home/runner/work/sdk/sdk/packages/sdk/src/types/plugin-generation").TailorDBReadyContext<unknown>,
       ) =>
-        | import("/Users/toiroakr/workspace/sdk-wt/feat/zinfer/packages/sdk/src/types/plugin-generation").GeneratorResult
+        | import("/home/runner/work/sdk/sdk/packages/sdk/src/types/plugin-generation").GeneratorResult
         | Promise<
-            import("/Users/toiroakr/workspace/sdk-wt/feat/zinfer/packages/sdk/src/types/plugin-generation").GeneratorResult
+            import("/home/runner/work/sdk/sdk/packages/sdk/src/types/plugin-generation").GeneratorResult
           >)
     | undefined;
   onResolverReady?:
     | ((
-        context: import("/Users/toiroakr/workspace/sdk-wt/feat/zinfer/packages/sdk/src/types/plugin-generation").ResolverReadyContext<unknown>,
+        context: import("/home/runner/work/sdk/sdk/packages/sdk/src/types/plugin-generation").ResolverReadyContext<unknown>,
       ) =>
-        | import("/Users/toiroakr/workspace/sdk-wt/feat/zinfer/packages/sdk/src/types/plugin-generation").GeneratorResult
+        | import("/home/runner/work/sdk/sdk/packages/sdk/src/types/plugin-generation").GeneratorResult
         | Promise<
-            import("/Users/toiroakr/workspace/sdk-wt/feat/zinfer/packages/sdk/src/types/plugin-generation").GeneratorResult
+            import("/home/runner/work/sdk/sdk/packages/sdk/src/types/plugin-generation").GeneratorResult
           >)
     | undefined;
   onExecutorReady?:
     | ((
-        context: import("/Users/toiroakr/workspace/sdk-wt/feat/zinfer/packages/sdk/src/types/plugin-generation").ExecutorReadyContext<unknown>,
+        context: import("/home/runner/work/sdk/sdk/packages/sdk/src/types/plugin-generation").ExecutorReadyContext<unknown>,
       ) =>
-        | import("/Users/toiroakr/workspace/sdk-wt/feat/zinfer/packages/sdk/src/types/plugin-generation").GeneratorResult
+        | import("/home/runner/work/sdk/sdk/packages/sdk/src/types/plugin-generation").GeneratorResult
         | Promise<
-            import("/Users/toiroakr/workspace/sdk-wt/feat/zinfer/packages/sdk/src/types/plugin-generation").GeneratorResult
+            import("/home/runner/work/sdk/sdk/packages/sdk/src/types/plugin-generation").GeneratorResult
           >)
     | undefined;
 };
