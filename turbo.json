@@ -31,10 +31,14 @@
       "cache": false
     },
     "check": {
-      "dependsOn": ["format", "lint:fix", "typecheck:go", "knip"],
+      "dependsOn": ["format", "lint:fix", "typecheck:go", "knip", "publint"],
       "cache": false
     },
     "knip": {
+      "cache": true
+    },
+    "publint": {
+      "dependsOn": ["build"],
       "cache": true
     },
     "lint": {

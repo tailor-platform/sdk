@@ -16,5 +16,15 @@
     "serve",
     "tsx"
   ],
-  "ignoreBinaries": ["vitest", "tsdown", "cross-env", "oxlint", "eslint", "tsc", "tsgo", "knip"]
+  "ignoreBinaries": [
+    "vitest",
+    "tsdown",
+    "cross-env",
+    "oxlint",
+    "eslint",
+    "tsc",
+    "tsgo",
+    "knip",
+    "publint"
+  ]
 }

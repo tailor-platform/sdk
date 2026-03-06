@@ -10,13 +10,18 @@ import { bundleQueryScript } from "../bundler/query/query-bundler";
 import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "../shared/args";
 import { fetchMachineUserToken, initOperatorClient } from "../shared/client";
 import { extractAllNamespaces } from "../shared/config";
-import { loadConfig } from "../shared/config-loader";
+import { loadConfig, type LoadedConfig } from "../shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../shared/context";
 import { logger } from "../shared/logger";
 import { executeScript } from "../shared/script-executor";
 import { resolveTypeNamespaces } from "../shared/tailordb-namespace";
 import { mapQueryExecutionError } from "./errors";
-import { extractTypeNamesFromSql } from "./sql-type-extractor";
+import {
+  extractColumnTemplate,
+  extractTypeNamesFromSql,
+  type ColumnSlot,
+} from "./sql-type-extractor";
+import { loadTypeFieldOrder } from "./type-field-order";
 import type { Application } from "@tailor-proto/tailor/v1/application_resource_pb";
 
 const queryEngineSchema = z.enum(["sql", "gql"]);
@@ -257,7 +262,7 @@ function parseExecutionResult(result: string): unknown {
  * @returns Dispatch result
  */
 export async function query(options: QueryOptions): Promise<QueryDispatchResult> {
-  const { client, workspaceId, application, machineUserResource, engine, namespace } =
+  const { client, workspaceId, config, application, machineUserResource, engine, namespace } =
     await loadOptions(options);
 
   try {
@@ -268,13 +273,15 @@ export async function query(options: QueryOptions): Promise<QueryDispatchResult>
     });
 
     switch (engine) {
-      case "sql":
-        return await sqlQuery(client, invoker, {
+      case "sql": {
+        const result = await sqlQuery(client, invoker, {
           workspaceId,
           namespace,
           bundledCode,
           query: options.query,
         });
+        return reorderSqlColumns(result, config, namespace, options.query);
+      }
       case "gql":
         return await gqlQuery(client, invoker, application, machineUserResource, {
           workspaceId,
@@ -330,25 +337,113 @@ async function queryGql(options: QuerySharedOptions): Promise<GQLQueryDispatchRe
   return result;
 }
 
+async function reorderSqlColumns(
+  result: SQLQueryDispatchResult,
+  config: LoadedConfig,
+  namespace: string,
+  sqlQuery: string,
+): Promise<SQLQueryDispatchResult> {
+  if (!isSQLExecutionResult(result.result) || result.result.rows.length === 0) {
+    return result;
+  }
+
+  const template = extractColumnTemplate(sqlQuery);
+  if (!template) {
+    return result;
+  }
+
+  try {
+    const fieldOrder = await loadTypeFieldOrder(config, namespace);
+    const expectedOrder = buildExpectedColumnOrder(template, fieldOrder);
+    if (expectedOrder.length === 0) {
+      return result;
+    }
+
+    const orderedRows = result.result.rows.map((row) => reorderRowByTemplate(row, expectedOrder));
+
+    return {
+      ...result,
+      result: {
+        ...result.result,
+        rows: orderedRows,
+      },
+    };
+  } catch {
+    return result;
+  }
+}
+
+const SYSTEM_FIELD_ORDER = ["id"];
+
+function buildExpectedColumnOrder(
+  template: ColumnSlot[],
+  fieldOrder: Map<string, string[]>,
+): string[] {
+  const order: string[] = [];
+
+  for (const slot of template) {
+    if (slot.type === "explicit") {
+      order.push(slot.name);
+    } else {
+      for (const typeName of slot.typeNames) {
+        order.push(...SYSTEM_FIELD_ORDER);
+        order.push(...(fieldOrder.get(typeName) ?? []));
+      }
+    }
+  }
+
+  return order;
+}
+
+function reorderRowByTemplate(row: SQLResultRow, expectedOrder: string[]): SQLResultRow {
+  const ordered: SQLResultRow = {};
+  const rowKeys = new Set(Object.keys(row));
+
+  // Build case-insensitive lookup: lowercased key → original key in row.
+  // pgsql-ast-parser lowercases unquoted identifiers (PostgreSQL standard),
+  // but TailorDB preserves the original case, so we need case-insensitive matching.
+  const lowerToOriginal = new Map<string, string>();
+  for (const key of rowKeys) {
+    lowerToOriginal.set(key.toLowerCase(), key);
+  }
+
+  for (const key of expectedOrder) {
+    const original = lowerToOriginal.get(key.toLowerCase());
+    if (original != null && rowKeys.has(original)) {
+      ordered[original] = row[original];
+      rowKeys.delete(original);
+      lowerToOriginal.delete(key.toLowerCase());
+    }
+  }
+
+  for (const key of rowKeys) {
+    ordered[key] = row[key];
+  }
+
+  return ordered;
+}
+
 export const queryCommand = defineCommand({
   name: "query",
   description: "Run SQL/GraphQL query.",
-  args: z.object({
-    ...commonArgs,
-    ...jsonArgs,
-    ...deploymentArgs,
-    engine: arg(queryEngineSchema, {
-      description: "Query engine (sql or gql)",
-    }),
-    query: arg(z.string(), {
-      alias: "q",
-      description: "Query string to execute directly",
-    }),
-    machineuser: arg(z.string(), {
-      alias: "m",
-      description: "Machine user name for query execution",
-    }),
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...jsonArgs,
+      ...deploymentArgs,
+      engine: arg(queryEngineSchema, {
+        description: "Query engine (sql or gql)",
+      }),
+      query: arg(z.string(), {
+        alias: "q",
+        description: "Query string to execute directly",
+      }),
+      machineuser: arg(z.string(), {
+        alias: "m",
+        description: "Machine user name for query execution",
+      }),
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     const sharedOptions: QuerySharedOptions = {
       workspaceId: args["workspace-id"],

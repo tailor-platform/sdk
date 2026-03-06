@@ -10,12 +10,14 @@ import { nameArgs } from "./args";
 export const deleteCommand = defineCommand({
   name: "delete",
   description: "Delete a Secret Manager vault.",
-  args: z.object({
-    ...commonArgs,
-    ...workspaceArgs,
-    ...nameArgs,
-    ...confirmationArgs,
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...workspaceArgs,
+      ...nameArgs,
+      ...confirmationArgs,
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     const accessToken = await loadAccessToken({
       useProfile: true,

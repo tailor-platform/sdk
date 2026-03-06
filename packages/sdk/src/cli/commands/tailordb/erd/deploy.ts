@@ -9,16 +9,18 @@ import { initErdContext } from "./utils";
 export const erdDeployCommand = defineCommand({
   name: "deploy",
   description: "Deploy ERD static website for TailorDB namespace(s).",
-  args: z.object({
-    ...commonArgs,
-    ...deploymentArgs,
-    ...jsonArgs,
-    namespace: arg(z.string().optional(), {
-      alias: "n",
-      description:
-        "TailorDB namespace name (optional - deploys all namespaces with erdSite if omitted)",
-    }),
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...deploymentArgs,
+      ...jsonArgs,
+      namespace: arg(z.string().optional(), {
+        alias: "n",
+        description:
+          "TailorDB namespace name (optional - deploys all namespaces with erdSite if omitted)",
+      }),
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     const { client, workspaceId, config } = await initErdContext(args);
     const buildResults = await prepareErdBuilds({

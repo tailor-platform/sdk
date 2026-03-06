@@ -66,14 +66,16 @@ async function runServeDist(results: ErdBuildResult[]): Promise<void> {
 export const erdServeCommand = defineCommand({
   name: "serve",
   description: "Generate and serve ERD locally (liam build + serve dist). (beta)",
-  args: z.object({
-    ...commonArgs,
-    ...deploymentArgs,
-    namespace: arg(z.string().optional(), {
-      alias: "n",
-      description: "TailorDB namespace name (uses first namespace in config if not specified)",
-    }),
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...deploymentArgs,
+      namespace: arg(z.string().optional(), {
+        alias: "n",
+        description: "TailorDB namespace name (uses first namespace in config if not specified)",
+      }),
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     const { client, workspaceId, config } = await initErdContext(args);
 
