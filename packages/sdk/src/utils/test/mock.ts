@@ -77,6 +77,7 @@ export function setupWorkflowMock(handler: JobHandler): {
   const triggeredJobs: { jobName: string; args: unknown }[] = [];
 
   GlobalThis.tailor = {
+    ...GlobalThis.tailor,
     workflow: {
       triggerJobFunction: (jobName: string, args: unknown) => {
         triggeredJobs.push({ jobName, args });

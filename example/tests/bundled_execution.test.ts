@@ -22,6 +22,37 @@ describe("bundled execution tests", () => {
 
   const importActualMain = createImportMain(actualDir);
 
+  test("bundled JS files should not be excessively large", () => {
+    // Define maximum acceptable sizes (current size + 10KB buffer)
+    const sizeBuffer = 1024 * 10; // 10KB
+    const maxSizes: Record<string, number> = {
+      "executors/user-created.js": 162223 + sizeBuffer,
+      "resolvers/add.js": 4504 + sizeBuffer,
+      "resolvers/showUserInfo.js": 4588 + sizeBuffer,
+      "resolvers/stepChain.js": 176907 + sizeBuffer,
+      // triggerOrderProcessing: imports auth from tailor.config (~14KB)
+      "resolvers/triggerOrderProcessing.js": 14022 + sizeBuffer,
+      // workflow-jobs: Kysely jobs (~160KB), date-fns jobs (~28KB), simple jobs (~9KB)
+      "workflow-jobs/check-inventory.js": 28058 + sizeBuffer,
+      "workflow-jobs/fetch-customer.js": 160819 + sizeBuffer,
+      "workflow-jobs/process-order.js": 8755 + sizeBuffer,
+      "workflow-jobs/process-payment.js": 160729 + sizeBuffer,
+      "workflow-jobs/send-notification.js": 28162 + sizeBuffer,
+      "workflow-jobs/validate-order.js": 8554 + sizeBuffer,
+    };
+
+    for (const [file, maxSize] of Object.entries(maxSizes)) {
+      const filePath = path.join(actualDir, file);
+      const stats = fs.statSync(filePath);
+      const actualSize = stats.size;
+
+      expect(
+        actualSize,
+        `File ${file} is too large: ${actualSize} bytes (max: ${maxSize} bytes). This may indicate unwanted dependencies (e.g., zod) are being bundled.`,
+      ).toBeLessThanOrEqual(maxSize);
+    }
+  });
+
   describe("resolvers", () => {
     test("resolvers/add.js returns the sum of inputs", async () => {
       const main = await importActualMain("resolvers/add.js");

@@ -71,26 +71,6 @@ describe("apply command integration tests", () => {
     }
   });
 
-  test("bundled JS files should not be excessively large", () => {
-    // Note: When running inside the SDK package, bundles are larger due to SDK self-referencing.
-    // The bundler imports `t` from "@tailor-platform/sdk" which resolves to the full configure module.
-    // In external projects, tree-shaking keeps bundles small. Here we use generous limits.
-    const maxBundleSize = 300_000; // 300KB upper bound per bundle
-    const actualFiles = collectGeneratedFiles(outputDir);
-    const jsFiles = actualFiles.filter(
-      (f) => f.endsWith(".js") && !f.endsWith(".entry.js") && !f.endsWith(".js.map"),
-    );
-
-    for (const file of jsFiles) {
-      const filePath = path.join(outputDir, file);
-      const stats = fs.statSync(filePath);
-      expect(
-        stats.size,
-        `File ${file} is too large: ${stats.size} bytes (max: ${maxBundleSize} bytes)`,
-      ).toBeLessThanOrEqual(maxBundleSize);
-    }
-  });
-
   describe("validation", () => {
     test("resolvers/add.js validates input correctly - valid values", async () => {
       const main = await importMain("resolvers/add.js");
