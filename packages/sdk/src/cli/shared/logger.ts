@@ -93,6 +93,9 @@ export type FieldTransformer = ((value: unknown, item: object) => string) | null
 export interface OutOptions {
   /** Table display field transform/exclude settings. Only applied in table mode (not JSON). */
   display?: Record<string, FieldTransformer>;
+
+  /** Show null values in table output (default: false) */
+  showNull?: boolean;
 }
 
 // In JSON mode, all logs go to stderr to keep stdout clean for JSON data
@@ -277,6 +280,7 @@ export const logger = {
 
     // Helper to format a value for table display
     const formatValue = (value: unknown, pretty = false): string => {
+      if (options?.showNull && value === null) return "NULL";
       if (value === null || value === undefined) return "N/A";
       if (value instanceof Date) {
         return formatDistanceToNowStrict(value, { addSuffix: true });

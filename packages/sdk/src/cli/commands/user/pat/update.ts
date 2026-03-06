@@ -9,18 +9,20 @@ import { getScopesFromWriteFlag, printCreatedToken } from "./transform";
 export const updateCommand = defineCommand({
   name: "update",
   description: "Update a personal access token (delete and recreate).",
-  args: z.object({
-    ...commonArgs,
-    ...jsonArgs,
-    name: arg(z.string(), {
-      positional: true,
-      description: "Token name",
-    }),
-    write: arg(z.boolean().default(false), {
-      alias: "W",
-      description: "Grant write permission (if not specified, keeps read-only)",
-    }),
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...jsonArgs,
+      name: arg(z.string(), {
+        positional: true,
+        description: "Token name",
+      }),
+      write: arg(z.boolean().default(false), {
+        alias: "W",
+        description: "Grant write permission (if not specified, keeps read-only)",
+      }),
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     const config = readPlatformConfig();
 

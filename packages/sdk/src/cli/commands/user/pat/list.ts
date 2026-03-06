@@ -10,10 +10,12 @@ import { transformPersonalAccessToken, type PersonalAccessTokenInfo } from "./tr
 export const listCommand = defineCommand({
   name: "list",
   description: "List all personal access tokens.",
-  args: z.object({
-    ...commonArgs,
-    ...jsonArgs,
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...jsonArgs,
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     const config = readPlatformConfig();
 

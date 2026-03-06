@@ -28,9 +28,10 @@ tailor-sdk function [command]
 
 **Commands**
 
-| Command                           | Description                          |
-| --------------------------------- | ------------------------------------ |
-| [`function logs`](#function-logs) | List or get function execution logs. |
+| Command                                   | Description                                                     |
+| ----------------------------------------- | --------------------------------------------------------------- |
+| [`function logs`](#function-logs)         | List or get function execution logs.                            |
+| [`function test-run`](#function-test-run) | Run a function on the Tailor Platform server without deploying. |
 
 <!-- politty:command:function:subcommands:end -->
 <!-- politty:command:function logs:heading:start -->
@@ -90,3 +91,82 @@ tailor-sdk function logs <execution-id>
 tailor-sdk function logs --json
 tailor-sdk function logs <execution-id> --json
 ```
+
+<!-- politty:command:function test-run:heading:start -->
+
+### function test-run
+
+<!-- politty:command:function test-run:heading:end -->
+<!-- politty:command:function test-run:description:start -->
+
+Run a function on the Tailor Platform server without deploying.
+
+<!-- politty:command:function test-run:description:end -->
+<!-- politty:command:function test-run:usage:start -->
+
+**Usage**
+
+```
+tailor-sdk function test-run [options] <file>
+```
+
+<!-- politty:command:function test-run:usage:end -->
+<!-- politty:command:function test-run:arguments:start -->
+
+**Arguments**
+
+| Argument | Description               | Required |
+| -------- | ------------------------- | -------- |
+| `file`   | Path to the function file | Yes      |
+
+<!-- politty:command:function test-run:arguments:end -->
+<!-- politty:command:function test-run:options:start -->
+
+**Options**
+
+| Option                          | Alias | Description                                                              | Required | Default              |
+| ------------------------------- | ----- | ------------------------------------------------------------------------ | -------- | -------------------- |
+| `--json`                        | `-j`  | Output as JSON                                                           | No       | `false`              |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                             | No       | -                    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                        | No       | -                    |
+| `--name <NAME>`                 | `-n`  | Workflow job name to run (matches the `name` field of createWorkflowJob) | No       | -                    |
+| `--arg <ARG>`                   | `-a`  | JSON argument to pass to the function                                    | No       | -                    |
+| `--machine-user <MACHINE_USER>` | `-m`  | Machine user name for authentication                                     | No       | -                    |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                  | No       | `"tailor.config.ts"` |
+
+<!-- politty:command:function test-run:options:end -->
+<!-- politty:command:function test-run:examples:start -->
+
+**Examples**
+
+**Run a resolver with input arguments**
+
+```bash
+$ tailor-sdk function test-run resolvers/add.ts --arg '{"input":{"a":1,"b":2}}'
+```
+
+**Run a specific workflow job by name**
+
+```bash
+$ tailor-sdk function test-run workflows/sample.ts --name validate-order
+```
+
+**Run a pre-bundled .js file directly**
+
+```bash
+$ tailor-sdk function test-run .tailor-sdk/resolvers/add.js --arg '{"input":{"a":1,"b":2}}'
+```
+
+<!-- politty:command:function test-run:examples:end -->
+<!-- politty:command:function test-run:notes:start -->
+
+**Notes**
+
+You can pass either a source file (`.ts`) or a pre-bundled file (`.js`).
+When a `.js` file is provided, detection and bundling are skipped and the file is executed as-is.
+
+> [!WARNING]
+> Workflow job `.trigger()` calls do not work in test-run mode.
+> Triggered jobs are not executed; only the target job's `body` function runs in isolation.
+
+<!-- politty:command:function test-run:notes:end -->

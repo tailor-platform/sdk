@@ -64,14 +64,16 @@ export async function listWorkspaces(options?: ListWorkspacesOptions): Promise<W
 export const listCommand = defineCommand({
   name: "list",
   description: "List all Tailor Platform workspaces.",
-  args: z.object({
-    ...commonArgs,
-    ...jsonArgs,
-    limit: arg(positiveIntArg.optional(), {
-      alias: "l",
-      description: "Maximum number of workspaces to list",
-    }),
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...jsonArgs,
+      limit: arg(positiveIntArg.optional(), {
+        alias: "l",
+        description: "Maximum number of workspaces to list",
+      }),
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     const workspaces = await listWorkspaces({ limit: args.limit });
     logger.out(workspaces, { display: { updatedAt: null } });

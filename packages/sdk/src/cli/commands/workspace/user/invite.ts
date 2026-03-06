@@ -54,17 +54,19 @@ export async function inviteUser(options: InviteUserOptions): Promise<void> {
 export const inviteCommand = defineCommand({
   name: "invite",
   description: "Invite a user to a workspace",
-  args: z.object({
-    ...commonArgs,
-    ...workspaceArgs,
-    email: arg(z.email(), {
-      description: "Email address of the user to invite",
-    }),
-    role: arg(z.enum(validRoles), {
-      description: `Role to assign (${validRoles.join(", ")})`,
-      alias: "r",
-    }),
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...workspaceArgs,
+      email: arg(z.email(), {
+        description: "Email address of the user to invite",
+      }),
+      role: arg(z.enum(validRoles), {
+        description: `Role to assign (${validRoles.join(", ")})`,
+        alias: "r",
+      }),
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     await inviteUser({
       workspaceId: args["workspace-id"],

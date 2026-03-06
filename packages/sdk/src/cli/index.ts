@@ -23,6 +23,7 @@ import { tailordbCommand } from "./commands/tailordb";
 import { userCommand } from "./commands/user";
 import { workflowCommand } from "./commands/workflow";
 import { workspaceCommand } from "./commands/workspace";
+import { queryCommand } from "./query";
 import { readPackageJson } from "./shared/package-json";
 
 register("tsx", import.meta.url, { data: {} });
@@ -48,6 +49,7 @@ export const mainCommand = withCompletionCommand(
       oauth2client: oauth2clientCommand,
       open: openCommand,
       profile: profileCommand,
+      query: queryCommand,
       remove: removeCommand,
       secret: secretCommand,
       show: showCommand,

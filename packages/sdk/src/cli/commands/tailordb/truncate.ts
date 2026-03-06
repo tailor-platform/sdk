@@ -2,9 +2,11 @@ import { defineCommand, arg } from "politty";
 import { z } from "zod";
 import { commonArgs, confirmationArgs, deploymentArgs, withCommonArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
+import { extractAllNamespaces } from "@/cli/shared/config";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
+import { resolveTypeNamespaces } from "@/cli/shared/tailordb-namespace";
 
 export interface TruncateOptions {
   workspaceId?: string;
@@ -51,48 +53,6 @@ async function truncateNamespace(
   logger.success(`Truncated all types in namespace "${namespaceName}"`);
 }
 
-async function getAllNamespaces(configPath?: string): Promise<string[]> {
-  const { config } = await loadConfig(configPath);
-  const namespaces = new Set<string>();
-
-  // Collect namespace names from db configuration
-  if (config.db) {
-    for (const [namespaceName] of Object.entries(config.db)) {
-      namespaces.add(namespaceName);
-    }
-  }
-
-  return Array.from(namespaces);
-}
-
-async function getTypeNamespace(
-  workspaceId: string,
-  typeName: string,
-  client: Awaited<ReturnType<typeof initOperatorClient>>,
-  configPath?: string,
-): Promise<string | null> {
-  const namespaces = await getAllNamespaces(configPath);
-
-  // Try to find the type in each namespace
-  for (const namespace of namespaces) {
-    try {
-      const { tailordbTypes } = await client.listTailorDBTypes({
-        workspaceId,
-        namespaceName: namespace,
-      });
-
-      if (tailordbTypes.some((type) => type.name === typeName)) {
-        return namespace;
-      }
-    } catch {
-      // Continue to next namespace if error occurs
-      continue;
-    }
-  }
-
-  return null;
-}
-
 /**
  * Truncate TailorDB data based on the given options.
  * @param options - Truncate options (all, namespace, or types)
@@ -131,7 +91,8 @@ async function $truncate(options?: InternalTruncateOptions): Promise<void> {
   }
 
   // Validate config and get namespaces before confirmation
-  const namespaces = await getAllNamespaces(options?.configPath);
+  const { config } = await loadConfig(options?.configPath);
+  const namespaces = extractAllNamespaces(config);
 
   // Handle --all flag
   if (hasAll) {
@@ -196,18 +157,13 @@ async function $truncate(options?: InternalTruncateOptions): Promise<void> {
     const typeNames = options.types;
 
     // Validate all types exist and get their namespaces before confirmation
-    const typeNamespaceMap = new Map<string, string>();
-    const notFoundTypes: string[] = [];
-
-    for (const typeName of typeNames) {
-      const namespace = await getTypeNamespace(workspaceId, typeName, client, options.configPath);
-
-      if (namespace) {
-        typeNamespaceMap.set(typeName, namespace);
-      } else {
-        notFoundTypes.push(typeName);
-      }
-    }
+    const typeNamespaceMap = await resolveTypeNamespaces({
+      workspaceId,
+      namespaces,
+      typeNames,
+      client,
+    });
+    const notFoundTypes = typeNames.filter((typeName) => !typeNamespaceMap.has(typeName));
 
     if (notFoundTypes.length > 0) {
       throw new Error(
@@ -251,23 +207,25 @@ async function $truncate(options?: InternalTruncateOptions): Promise<void> {
 export const truncateCommand = defineCommand({
   name: "truncate",
   description: "Truncate (delete all records from) TailorDB tables.",
-  args: z.object({
-    ...commonArgs,
-    ...deploymentArgs,
-    ...confirmationArgs,
-    types: arg(z.string().array().optional(), {
-      positional: true,
-      description: "Type names to truncate",
-    }),
-    all: arg(z.boolean().default(false), {
-      alias: "a",
-      description: "Truncate all tables in all namespaces",
-    }),
-    namespace: arg(z.string().optional(), {
-      alias: "n",
-      description: "Truncate all tables in specified namespace",
-    }),
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...deploymentArgs,
+      ...confirmationArgs,
+      types: arg(z.string().array().optional(), {
+        positional: true,
+        description: "Type names to truncate",
+      }),
+      all: arg(z.boolean().default(false), {
+        alias: "a",
+        description: "Truncate all tables in all namespaces",
+      }),
+      namespace: arg(z.string().optional(), {
+        alias: "n",
+        description: "Truncate all tables in specified namespace",
+      }),
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     const types = args.types && args.types.length > 0 ? args.types : undefined;
     await $truncate({

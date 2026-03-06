@@ -10,11 +10,13 @@ import { nameArgs } from "./args";
 export const createCommand = defineCommand({
   name: "create",
   description: "Create a new Secret Manager vault.",
-  args: z.object({
-    ...commonArgs,
-    ...workspaceArgs,
-    ...nameArgs,
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...workspaceArgs,
+      ...nameArgs,
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     const accessToken = await loadAccessToken({
       useProfile: true,

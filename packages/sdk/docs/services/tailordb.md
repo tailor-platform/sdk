@@ -394,6 +394,61 @@ db.type("User", {
 });
 ```
 
+#### Event Publishing
+
+Enable event publishing for a type to trigger executors on record changes:
+
+```typescript
+db.type("User", {
+  name: db.string(),
+}).features({
+  publishEvents: true,
+});
+```
+
+**Behavior:**
+
+- When `publishEvents: true`, record creation/update/deletion events are published
+- When not specified, it is **automatically set to `true`** if an executor uses this type with `recordCreatedTrigger`, `recordUpdatedTrigger`, or `recordDeletedTrigger`
+- When explicitly set to `false` while an executor uses this type, an error is thrown during `tailor apply`
+
+**Use cases:**
+
+1. **Auto-detection (recommended)**: Don't set `publishEvents` - the SDK automatically enables it when needed by executors
+
+   ```typescript
+   // publishEvents is automatically enabled because an executor uses this type
+   export const order = db.type("Order", {
+     status: db.string(),
+   });
+
+   // In executor file:
+   export default createExecutor({
+     trigger: recordCreatedTrigger(order),
+     // ...
+   });
+   ```
+
+2. **Manual enable**: Enable event publishing for external consumers or debugging
+
+   ```typescript
+   db.type("AuditLog", {
+     action: db.string(),
+   }).features({
+     publishEvents: true, // Enable even without executor triggers
+   });
+   ```
+
+3. **Explicit disable**: Disable event publishing for a type that doesn't need it (error if executor uses it)
+
+   ```typescript
+   db.type("TempData", {
+     data: db.string(),
+   }).features({
+     publishEvents: false, // Explicitly disable
+   });
+   ```
+
 ### Permissions
 
 Configure Permission and GQLPermission. For details, see the [TailorDB Permission documentation](https://docs.tailor.tech/guides/tailordb/permission).

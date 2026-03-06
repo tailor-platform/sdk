@@ -89,11 +89,13 @@ export async function show(options?: ShowOptions): Promise<ShowInfo> {
 export const showCommand = defineCommand({
   name: "show",
   description: "Show information about the deployed application.",
-  args: z.object({
-    ...commonArgs,
-    ...jsonArgs,
-    ...deploymentArgs,
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...jsonArgs,
+      ...deploymentArgs,
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     // Execute show logic
     const appInfo = await show({

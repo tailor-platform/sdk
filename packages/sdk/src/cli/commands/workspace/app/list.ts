@@ -87,15 +87,17 @@ export async function listApps(options: ListAppsOptions): Promise<AppInfo[]> {
 export const listCommand = defineCommand({
   name: "list",
   description: "List applications in a workspace",
-  args: z.object({
-    ...commonArgs,
-    ...jsonArgs,
-    ...workspaceArgs,
-    limit: arg(positiveIntArg.optional(), {
-      alias: "l",
-      description: "Maximum number of applications to list",
-    }),
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...jsonArgs,
+      ...workspaceArgs,
+      limit: arg(positiveIntArg.optional(), {
+        alias: "l",
+        description: "Maximum number of applications to list",
+      }),
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     const apps = await listApps({
       workspaceId: args["workspace-id"],

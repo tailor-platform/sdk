@@ -140,12 +140,11 @@ export async function executeScript(
       result: result.result,
     };
   } else {
-    const errorDetails = [result.logs, result.result].filter(Boolean).join("\n");
     return {
       success: false,
       logs: result.logs,
-      result: result.result,
-      error: errorDetails || "Script execution failed with unknown error",
+      result: result.result || response.result,
+      error: result.result || response.result || "Script execution failed with unknown error",
     };
   }
 }

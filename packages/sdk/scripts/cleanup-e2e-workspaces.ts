@@ -1,7 +1,7 @@
 /**
  * Cleanup script for e2e test workspaces
  *
- * Deletes all workspaces with names starting with "e2e-ws-" or "mig-ws-"
+ * Deletes all workspaces with names starting with "e2e-ws-", "mig-ws-", or "template-e2e-"
  *
  * Usage:
  *   npx tsx scripts/cleanup-e2e-workspaces.ts           # Delete all e2e workspaces
@@ -11,7 +11,7 @@
 import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
 
-const E2E_WORKSPACE_PREFIXES = ["e2e-ws-", "mig-ws-"];
+const E2E_WORKSPACE_PREFIXES = ["e2e-ws-", "mig-ws-", "template-e2e-"];
 
 interface Workspace {
   id?: string;

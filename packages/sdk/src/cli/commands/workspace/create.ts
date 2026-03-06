@@ -80,37 +80,39 @@ export async function createWorkspace(options: CreateWorkspaceOptions): Promise<
 export const createCommand = defineCommand({
   name: "create",
   description: "Create a new Tailor Platform workspace.",
-  args: z.object({
-    ...commonArgs,
-    ...jsonArgs,
-    name: arg(z.string(), {
-      alias: "n",
-      description: "Workspace name",
-    }),
-    region: arg(z.string(), {
-      alias: "r",
-      description: "Workspace region (us-west, asia-northeast)",
-    }),
-    "delete-protection": arg(z.boolean().default(false), {
-      alias: "d",
-      description: "Enable delete protection",
-    }),
-    "organization-id": arg(z.string().optional(), {
-      alias: "o",
-      description: "Organization ID to workspace associate with",
-    }),
-    "folder-id": arg(z.string().optional(), {
-      alias: "f",
-      description: "Folder ID to workspace associate with",
-    }),
-    "profile-name": arg(z.string().optional(), {
-      alias: "p",
-      description: "Profile name to create",
-    }),
-    "profile-user": arg(z.string().optional(), {
-      description: "User email for the profile (defaults to current user)",
-    }),
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...jsonArgs,
+      name: arg(z.string(), {
+        alias: "n",
+        description: "Workspace name",
+      }),
+      region: arg(z.string(), {
+        alias: "r",
+        description: "Workspace region (us-west, asia-northeast)",
+      }),
+      "delete-protection": arg(z.boolean().default(false), {
+        alias: "d",
+        description: "Enable delete protection",
+      }),
+      "organization-id": arg(z.string().optional(), {
+        alias: "o",
+        description: "Organization ID to workspace associate with",
+      }),
+      "folder-id": arg(z.string().optional(), {
+        alias: "f",
+        description: "Folder ID to workspace associate with",
+      }),
+      "profile-name": arg(z.string().optional(), {
+        alias: "p",
+        description: "Profile name to create",
+      }),
+      "profile-user": arg(z.string().optional(), {
+        description: "User email for the profile (defaults to current user)",
+      }),
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     // Execute workspace create logic
     const workspace = await createWorkspace({

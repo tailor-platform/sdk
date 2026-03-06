@@ -351,21 +351,23 @@ export async function startWorkflow<W extends WorkflowLike>(
 export const startCommand = defineCommand({
   name: "start",
   description: "Start a workflow execution.",
-  args: z.object({
-    ...commonArgs,
-    ...jsonArgs,
-    ...deploymentArgs,
-    ...nameArgs,
-    machineuser: arg(z.string(), {
-      alias: "m",
-      description: "Machine user name",
-    }),
-    arg: arg(z.string().optional(), {
-      alias: "a",
-      description: "Workflow argument (JSON string)",
-    }),
-    ...waitArgs,
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...jsonArgs,
+      ...deploymentArgs,
+      ...nameArgs,
+      machineuser: arg(z.string(), {
+        alias: "m",
+        description: "Machine user name",
+      }),
+      arg: arg(z.string().optional(), {
+        alias: "a",
+        description: "Workflow argument (JSON string)",
+      }),
+      ...waitArgs,
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     const { executionId, wait } = await startWorkflowByName({
       name: args.name,

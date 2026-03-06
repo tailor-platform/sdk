@@ -82,6 +82,7 @@ export const TailorDBTypeSettingsSchema = z.object({
   aggregation: z.boolean().optional(),
   bulkUpsert: z.boolean().optional(),
   gqlOperations: GqlOperationsSchema.optional(),
+  publishEvents: z.boolean().optional(),
 });
 
 export const GQL_PERMISSION_INVALID_OPERAND_MESSAGE =

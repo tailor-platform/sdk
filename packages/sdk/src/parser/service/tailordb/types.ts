@@ -238,6 +238,7 @@ export interface TailorDBTypeMetadata {
     aggregation?: boolean;
     bulkUpsert?: boolean;
     gqlOperations?: GqlOperationsConfig;
+    publishEvents?: boolean;
   };
   permissions: RawPermissions;
   files: Record<string, string>;

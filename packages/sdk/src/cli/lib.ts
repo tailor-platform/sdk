@@ -143,6 +143,7 @@ export type {
 } from "./commands/executor/transform";
 export { loadAccessToken, loadWorkspaceId } from "./shared/context";
 export { apiCall, type ApiCallOptions, type ApiCallResult } from "./commands/api";
+export { query } from "./query";
 export { truncate, type TruncateOptions } from "./commands/tailordb/truncate";
 
 // Migration exports
