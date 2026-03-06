@@ -33,6 +33,7 @@ jobs:
             packages:
               - 'packages/sdk/**'
               - 'packages/create-sdk/**'
+              - 'packages/tailor-proto/**'
 
       - name: Fail if no changeset
         if: steps.filter.outputs.packages == 'true' && steps.filter.outputs.changeset != 'true'
