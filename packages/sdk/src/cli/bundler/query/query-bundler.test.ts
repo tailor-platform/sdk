@@ -54,7 +54,7 @@ describe("query-bundler", () => {
 
       expect(sqlBundle).toContain("tailordb.Client");
       expect(sqlBundle).toContain("TailordbDialect");
-      expect(sqlBundle).toContain("sql.raw(input.query).execute");
+      expect(sqlBundle).toContain("sql.raw(query).execute");
       expect(sqlBundle).not.toContain("fetch(input.endpoint");
 
       expect(gqlBundle).toContain("fetch(input.endpoint");
@@ -76,7 +76,7 @@ describe("query-bundler", () => {
       const sqlEntry = fs.readFileSync(path.join(outputDir, "query_sql.entry.ts"), "utf-8");
       const gqlEntry = fs.readFileSync(path.join(outputDir, "query_gql.entry.ts"), "utf-8");
 
-      expect(sqlEntry).toContain("sql.raw(input.query).execute");
+      expect(sqlEntry).toContain("sql.raw(query).execute");
       expect(sqlEntry).toContain("new tailordb.Client");
       expect(gqlEntry).toContain("fetch(input.endpoint");
       expect(gqlEntry).toContain("GraphQL request failed");

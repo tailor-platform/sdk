@@ -8,10 +8,16 @@ describe("extractTypeNamesFromSql", () => {
     expect(extractTypeNamesFromSql(sql)).toEqual(["User", "Order"]);
   });
 
-  test("throws when parser cannot parse query", () => {
+  test("throws with helpful message when parser cannot parse query", () => {
     const sql = "select from";
 
-    expect(() => extractTypeNamesFromSql(sql)).toThrowError();
+    expect(() => extractTypeNamesFromSql(sql)).toThrowError(/SQL parse error:/);
+  });
+
+  test("throws with suggestion to quote reserved keywords", () => {
+    const sql = "SELECT * FROM User";
+
+    expect(() => extractTypeNamesFromSql(sql)).toThrowError(/wrap it in double quotes/);
   });
 
   test("does not throw for parseable non-DML statements", () => {
