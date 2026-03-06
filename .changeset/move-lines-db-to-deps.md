@@ -1,5 +1,5 @@
 ---
-"@tailor-platform/sdk": patch
+"@tailor-platform/sdk": minor
 ---
 
-Move @toiroakr/lines-db from devDependencies to dependencies for end-users using the seed plugin
+Add `validate` subcommand to generated seed `exec.mjs` for validating JSONL data against schema definitions without deploying. Move `@toiroakr/lines-db` from devDependencies to dependencies.

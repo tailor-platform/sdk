@@ -247,7 +247,8 @@ function generateExecScript(
 
   return ml /* js */ `
     import { readFileSync } from "node:fs";
-    import { join } from "node:path";
+    import { join, dirname, basename } from "node:path";
+    import { stat } from "node:fs/promises";
     import { parseArgs, styleText } from "node:util";
     import { createInterface } from "node:readline";
     import {
@@ -260,6 +261,118 @@ function generateExecScript(
       loadAccessToken,
       loadWorkspaceId,
     } from "@tailor-platform/sdk/cli";
+
+    // Handle "validate" subcommand before parseArgs
+    const subcommand = process.argv[2];
+    if (subcommand === "validate") {
+      const { LinesDB, ErrorFormatter } = await import("@toiroakr/lines-db");
+      const validateArgs = parseArgs({
+        args: process.argv.slice(3),
+        options: {
+          verbose: { type: "boolean", short: "v", default: false },
+          help: { type: "boolean", short: "h", default: false },
+        },
+        allowPositionals: true,
+      });
+
+      if (validateArgs.values.help) {
+        console.log(\`
+    Usage: node exec.mjs validate [options] [path]
+
+    Validate JSONL seed data against schema definitions.
+
+    Arguments:
+      path                      File or directory to validate (default: ./data)
+
+    Options:
+      -v, --verbose             Show verbose error output
+      -h, --help                Show help
+
+    Examples:
+      node exec.mjs validate                  # Validate all seed data
+      node exec.mjs validate ./data/User.jsonl # Validate specific file
+      node exec.mjs validate -v               # Verbose error output
+        \`);
+        process.exit(0);
+      }
+
+      const configDir = import.meta.dirname;
+      const targetPath = validateArgs.positionals[0] || join(configDir, "data");
+      const resolvedPath = targetPath.startsWith("/") ? targetPath : join(process.cwd(), targetPath);
+
+      try {
+        const stats = await stat(resolvedPath);
+        let dataDir;
+        let tableName;
+        if (stats.isDirectory()) {
+          dataDir = resolvedPath;
+        } else if (stats.isFile() && resolvedPath.endsWith(".jsonl")) {
+          dataDir = dirname(resolvedPath);
+          tableName = basename(resolvedPath, ".jsonl");
+        } else {
+          console.error(styleText("red", \`Error: Invalid path: \${resolvedPath}. Must be a directory or .jsonl file.\`));
+          process.exit(1);
+        }
+
+        const db = LinesDB.create({ dataDir });
+        let result;
+        try {
+          result = await db.initialize({ tableName, detailedValidate: true });
+        } finally {
+          await db.close();
+        }
+
+        if (result.warnings.length > 0) {
+          for (const warning of result.warnings) {
+            console.warn(styleText("yellow", \`⚠ \${warning}\`));
+          }
+          console.log("");
+        }
+
+        if (result.valid) {
+          console.log("✓ All records are valid");
+          process.exit(0);
+        } else {
+          const formatter = new ErrorFormatter({ verbose: validateArgs.values.verbose });
+          const errorsByFile = new Map();
+          for (const error of result.errors) {
+            const fileErrors = errorsByFile.get(error.file) || [];
+            fileErrors.push(error);
+            errorsByFile.set(error.file, fileErrors);
+          }
+          for (const [file, fileErrors] of errorsByFile) {
+            console.error(formatter.formatErrorHeader(fileErrors.length, file));
+            console.error("");
+            const validationErrors = fileErrors.filter((e) => e.type !== "foreignKey" || !e.foreignKeyError);
+            const foreignKeyErrors = fileErrors.filter((e) => e.type === "foreignKey" && e.foreignKeyError);
+            if (validationErrors.length > 0) {
+              console.error(formatter.formatValidationErrors(validationErrors.map((e) => ({
+                file: e.file,
+                rowIndex: e.rowIndex,
+                issues: e.issues,
+              }))));
+            }
+            for (const error of foreignKeyErrors) {
+              if (error.foreignKeyError) {
+                console.error(formatter.formatForeignKeyError({
+                  file: error.file,
+                  rowIndex: error.rowIndex,
+                  column: error.foreignKeyError.column,
+                  value: error.foreignKeyError.value,
+                  referencedTable: error.foreignKeyError.referencedTable,
+                  referencedColumn: error.foreignKeyError.referencedColumn,
+                }));
+              }
+            }
+            console.error("");
+          }
+          process.exit(1);
+        }
+      } catch (error) {
+        console.error(styleText("red", \`Error: \${error instanceof Error ? error.message : String(error)}\`));
+        process.exit(1);
+      }
+    }
 
     // Parse command-line arguments
     const { values, positionals } = parseArgs({
@@ -277,7 +390,10 @@ function generateExecScript(
 
     if (values.help) {
       console.log(\`
-    Usage: node exec.mjs [options] [types...]
+    Usage: node exec.mjs [command] [options] [types...]
+
+    Commands:
+      validate [path]           Validate seed data against schema (default: ./data)
 
     Options:
       -m, --machine-user <name> Machine user name for authentication (required if not configured)
@@ -297,6 +413,8 @@ function generateExecScript(
       node exec.mjs --truncate --yes                    # Truncate all tables without confirmation, then seed all
       node exec.mjs --truncate --namespace <namespace>  # Truncate tailordb, then seed tailordb
       node exec.mjs --truncate User Order               # Truncate User and Order, then seed them
+      node exec.mjs validate                            # Validate all seed data
+      node exec.mjs validate ./data/User.jsonl          # Validate specific file
       \`);
       process.exit(0);
     }
