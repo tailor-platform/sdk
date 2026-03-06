@@ -7,7 +7,13 @@ import jsdocPlugin from "eslint-plugin-jsdoc";
 import oxlint from "eslint-plugin-oxlint";
 
 export default defineConfig([
-  globalIgnores(["dist/", "e2e/fixtures/", "user-defined.d.ts", "plugin-defined.d.ts"]),
+  globalIgnores([
+    "dist/",
+    "e2e/fixtures/",
+    ".tailor-sdk/",
+    "user-defined.d.ts",
+    "plugin-defined.d.ts",
+  ]),
   eslint.configs.recommended,
   tseslint.configs.recommended,
   importPlugin.flatConfigs.recommended,
@@ -292,6 +298,12 @@ export default defineConfig([
             "toMatchTypeOf is deprecated. Use toEqualTypeOf, toMatchObjectType, or toExtend instead.",
         },
       ],
+    },
+  },
+  {
+    files: ["e2e/**/*.ts"],
+    rules: {
+      "import/no-unresolved": "off",
     },
   },
   {
