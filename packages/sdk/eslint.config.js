@@ -10,6 +10,7 @@ export default defineConfig([
   globalIgnores([
     "dist/",
     "e2e/fixtures/",
+    ".tailor-sdk/",
     "user-defined.d.ts",
     "plugin-defined.d.ts",
     "**/__test_fixtures__/dist/",
@@ -299,6 +300,12 @@ export default defineConfig([
             "toMatchTypeOf is deprecated. Use toEqualTypeOf, toMatchObjectType, or toExtend instead.",
         },
       ],
+    },
+  },
+  {
+    files: ["e2e/**/*.ts"],
+    rules: {
+      "import/no-unresolved": "off",
     },
   },
   {

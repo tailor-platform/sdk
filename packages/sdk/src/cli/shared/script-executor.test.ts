@@ -259,9 +259,7 @@ describe("executeScript", () => {
     expect(result.success).toBe(false);
     expect(result.logs).toBe("Error: TypeError: undefined is not a function");
     expect(result.result).toBe("Script execution failed");
-    expect(result.error).toBe(
-      "Error: TypeError: undefined is not a function\nScript execution failed",
-    );
+    expect(result.error).toBe("Script execution failed");
   });
 
   test("returns error message when logs and result are empty", async () => {

@@ -124,14 +124,16 @@ export const statusCommand = defineCommand({
   name: "status",
   description:
     "Show the current migration status for TailorDB namespaces, including applied and pending migrations.",
-  args: z.object({
-    ...commonArgs,
-    ...deploymentArgs,
-    namespace: arg(z.string().optional(), {
-      alias: "n",
-      description: "Target TailorDB namespace (shows all namespaces if not specified)",
-    }),
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...deploymentArgs,
+      namespace: arg(z.string().optional(), {
+        alias: "n",
+        description: "Target TailorDB namespace (shows all namespaces if not specified)",
+      }),
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     await status({
       configPath: args.config,
