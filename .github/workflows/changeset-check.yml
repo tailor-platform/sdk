@@ -46,32 +46,22 @@ jobs:
           echo "add 'skip-changeset' label to this PR."
           exit 1
 
+      - name: Setup pnpm
+        if: steps.filter.outputs.changeset == 'true'
+        uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
+        with:
+          standalone: true
+          run_install: false
+
+      - name: Install Node.js
+        if: steps.filter.outputs.changeset == 'true'
+        run: pnpm env use --global 24
+        shell: bash
+
+      - name: Install dependencies
+        if: steps.filter.outputs.changeset == 'true'
+        run: pnpm install --frozen-lockfile
+
       - name: Validate changeset packages
         if: steps.filter.outputs.changeset == 'true'
-        run: |
-          ALLOWED_PACKAGES="@tailor-platform/sdk @tailor-platform/create-sdk"
-          errors=()
-          for file in .changeset/*.md; do
-            [ "$(basename "$file")" = "README.md" ] && continue
-            packages=$(sed -n '/^---$/,/^---$/p' "$file" | sed -n 's/^"\([^"]*\)".*/\1/p')
-            for pkg in $packages; do
-              found=false
-              for allowed in $ALLOWED_PACKAGES; do
-                if [ "$pkg" = "$allowed" ]; then
-                  found=true
-                  break
-                fi
-              done
-              if [ "$found" = "false" ]; then
-                errors+=("$file: invalid package \"$pkg\"")
-              fi
-            done
-          done
-          if [ ${#errors[@]} -gt 0 ]; then
-            echo "::error::Changeset files contain invalid packages:"
-            printf '  %s\n' "${errors[@]}"
-            echo ""
-            echo "Only the following packages are allowed in changesets:"
-            echo "  $ALLOWED_PACKAGES"
-            exit 1
-          fi
+        run: pnpm changeset status
