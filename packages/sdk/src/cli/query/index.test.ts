@@ -223,6 +223,44 @@ describe("query", () => {
     }
   });
 
+  test("splits multiple SQL statements and passes queries array to executeScript", async () => {
+    const { executeScript } = await import("../shared/script-executor");
+
+    vi.mocked(executeScript).mockResolvedValue({
+      success: true,
+      logs: "",
+      result: '[{"rows":[{"n":1}],"rowCount":1},{"rows":[{"n":2}],"rowCount":1}]',
+    });
+
+    await query({
+      workspaceId: "workspace-1",
+      configPath: "tailor.config.ts",
+      engine: "sql",
+      machineUser: "bot",
+      query: "SELECT 1; SELECT 2",
+    });
+
+    const call = vi.mocked(executeScript).mock.calls[0]?.[0];
+    const arg = JSON.parse(call?.arg ?? "{}");
+    expect(arg.queries).toEqual(["SELECT (1)", "SELECT (2)"]);
+  });
+
+  test("does not split semicolons inside string literals", async () => {
+    const { executeScript } = await import("../shared/script-executor");
+
+    await query({
+      workspaceId: "workspace-1",
+      configPath: "tailor.config.ts",
+      engine: "sql",
+      machineUser: "bot",
+      query: `INSERT INTO t VALUES ('hello;world')`,
+    });
+
+    const call = vi.mocked(executeScript).mock.calls[0]?.[0];
+    const arg = JSON.parse(call?.arg ?? "{}");
+    expect(arg.queries).toHaveLength(1);
+  });
+
   test("executes GraphQL query via machine user token flow", async () => {
     const { executeScript } = await import("../shared/script-executor");
     const { fetchMachineUserToken } = await import("../shared/client");

@@ -4,6 +4,7 @@ import {
   type AuthInvoker,
   type MachineUser,
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
+import { parse, toSql } from "pgsql-ast-parser";
 import { arg, defineCommand } from "politty";
 import { z } from "zod";
 import { bundleQueryScript } from "../bundler/query/query-bundler";
@@ -179,6 +180,7 @@ async function sqlQuery(
     query: string;
   },
 ): Promise<SQLQueryDispatchResult> {
+  const queries = splitSqlStatements(args.query);
   const executed = await executeScript({
     client,
     workspaceId: args.workspaceId,
@@ -186,7 +188,7 @@ async function sqlQuery(
     code: args.bundledCode,
     arg: JSON.stringify({
       namespace: args.namespace,
-      query: args.query,
+      queries,
     }),
     invoker,
   });
@@ -496,10 +498,14 @@ function printSingleSqlResult(
 }
 
 function splitSqlStatements(query: string): string[] {
-  return query
-    .split(";")
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
+  try {
+    const statements = parse(query);
+    if (statements.length === 0) return [];
+    return statements.map((s) => toSql.statement(s));
+  } catch {
+    const trimmed = query.trim();
+    return trimmed.length > 0 ? [trimmed] : [];
+  }
 }
 
 function isSQLExecutionResultArray(value: unknown): value is SQLExecutionResult[] {
