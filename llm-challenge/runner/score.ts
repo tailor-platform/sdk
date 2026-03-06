@@ -26,6 +26,12 @@ export type StageResult = {
   testDetails?: TestDetail[];
 };
 
+export type ScaffoldChange = {
+  file: string;
+  original: string;
+  modified: string;
+};
+
 export type ProblemResult = {
   problemId: string;
   problemName: string;
@@ -41,6 +47,7 @@ export type ProblemResult = {
   retryCount?: number;
   retrySolveResults?: SolveResult[];
   totalDurationMs?: number;
+  scaffoldChanges?: ScaffoldChange[];
 };
 
 export type SuccessRate = { passed: number; total: number; rate: number };
@@ -517,6 +524,19 @@ export function formatReportTable(report: ChallengeReport): string {
     lines.push(
       `⚠ ${report.infraFailureCount} problem(s) skipped due to infrastructure failures (auth/network/rate-limit)`,
     );
+  }
+
+  // Scaffold modification warnings
+  const scaffoldModified = report.results.filter(
+    (r) => r.scaffoldChanges && r.scaffoldChanges.length > 0,
+  );
+  if (scaffoldModified.length > 0) {
+    lines.push("");
+    lines.push("WARNING: Scaffold files modified during solve (restored before verify):");
+    for (const r of scaffoldModified) {
+      const files = r.scaffoldChanges!.map((c) => c.file).join(", ");
+      lines.push(`  ${problemKey(r.problemId, r.problemName)}: ${files}`);
+    }
   }
 
   // All problems passed warning
