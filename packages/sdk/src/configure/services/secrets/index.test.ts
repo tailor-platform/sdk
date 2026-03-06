@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { defineSecrets } from "./index";
+import { defineSecretManager } from "./index";
 
-describe("defineSecrets", () => {
+describe("defineSecretManager", () => {
   it("should have get and getAll methods", () => {
-    const secrets = defineSecrets({
+    const secrets = defineSecretManager({
       "my-vault": {
         API_KEY: "test-key",
         DB_PASSWORD: "test-password",
@@ -15,7 +15,7 @@ describe("defineSecrets", () => {
   });
 
   it("should support multiple vaults", () => {
-    const secrets = defineSecrets({
+    const secrets = defineSecretManager({
       vault1: {
         SECRET_A: "value-a",
       },

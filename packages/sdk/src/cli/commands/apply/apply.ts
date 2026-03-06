@@ -24,7 +24,7 @@ import {
 } from "./function-registry";
 import { applyIdP, planIdP } from "./idp";
 import { applyPipeline, planPipeline } from "./resolver";
-import { applySecrets, planSecrets } from "./secrets";
+import { applySecretManager, planSecretManager } from "./secret-manager";
 import { applyStaticWebsite, planStaticWebsite } from "./staticwebsite";
 import { applyTailorDB, planTailorDB } from "./tailordb";
 import { applyWorkflow, planWorkflow } from "./workflow";
@@ -125,7 +125,7 @@ export async function apply(options?: ApplyOptions) {
       app,
       executor,
       workflow,
-      secrets,
+      secretManager,
     } = await withSpan("plan", async () => {
       const ctx: PlanContext = {
         client,
@@ -145,7 +145,7 @@ export async function apply(options?: ApplyOptions) {
         app,
         executor,
         workflow,
-        secrets,
+        secretManager,
       ] = await Promise.all([
         withSpan("plan.functionRegistry", () =>
           planFunctionRegistry(client, workspaceId, application.name, functionEntries),
@@ -166,7 +166,7 @@ export async function apply(options?: ApplyOptions) {
             workflowBuildResult?.mainJobDeps ?? {},
           ),
         ),
-        withSpan("plan.secrets", () => planSecrets(ctx)),
+        withSpan("plan.secretManager", () => planSecretManager(ctx)),
       ]);
       return {
         functionRegistry,
@@ -178,7 +178,7 @@ export async function apply(options?: ApplyOptions) {
         app,
         executor,
         workflow,
-        secrets,
+        secretManager,
       };
     });
 
@@ -193,7 +193,7 @@ export async function apply(options?: ApplyOptions) {
         ...pipeline.conflicts,
         ...executor.conflicts,
         ...workflow.conflicts,
-        ...secrets.conflicts,
+        ...secretManager.conflicts,
       ];
       await confirmOwnerConflict(allConflicts, application.name, yes);
 
@@ -206,7 +206,7 @@ export async function apply(options?: ApplyOptions) {
         ...pipeline.unmanaged,
         ...executor.unmanaged,
         ...workflow.unmanaged,
-        ...secrets.unmanaged,
+        ...secretManager.unmanaged,
       ];
       await confirmUnmanagedResources(allUnmanaged, application.name, yes);
 
@@ -247,7 +247,7 @@ export async function apply(options?: ApplyOptions) {
         ...pipeline.resourceOwners,
         ...executor.resourceOwners,
         ...workflow.resourceOwners,
-        ...secrets.resourceOwners,
+        ...secretManager.resourceOwners,
       ]);
       const conflictOwners = new Set(allConflicts.map((c) => c.currentOwner));
       const emptyApps = [...conflictOwners].filter((owner) => !resourceOwners.has(owner));
@@ -269,7 +269,7 @@ export async function apply(options?: ApplyOptions) {
 
     // Phase 2: Create/Update services that Application depends on
     await withSpan("apply.createUpdateServices", async () => {
-      await applySecrets(client, secrets, "create-update", application);
+      await applySecretManager(client, secretManager, "create-update", application);
       await applyFunctionRegistry(client, workspaceId, functionRegistry, "create-update");
       await applyStaticWebsite(client, staticWebsite, "create-update");
       await applyIdP(client, idp, "create-update");
@@ -301,7 +301,7 @@ export async function apply(options?: ApplyOptions) {
       await applyWorkflow(client, workflow, "delete");
       await applyExecutor(client, executor, "delete");
       await applyStaticWebsite(client, staticWebsite, "delete");
-      await applySecrets(client, secrets, "delete");
+      await applySecretManager(client, secretManager, "delete");
     });
 
     // Phase 7: Delete Application

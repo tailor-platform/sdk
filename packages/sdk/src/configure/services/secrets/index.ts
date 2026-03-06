@@ -15,8 +15,8 @@ type DefinedSecrets<T extends SecretsInput> = {
   ): Promise<(string | undefined)[]>;
 } & SecretsDefinitionBrand;
 
-/** Type accepted by `AppConfig.secrets`. Only values returned by `defineSecrets()` satisfy this. */
-export type SecretsConfig = Omit<ReturnType<typeof defineSecrets>, "get" | "getAll">;
+/** Type accepted by `AppConfig.secrets`. Only values returned by `defineSecretManager()` satisfy this. */
+export type SecretsConfig = Omit<ReturnType<typeof defineSecretManager>, "get" | "getAll">;
 
 /**
  * Define secrets configuration for the Tailor SDK.
@@ -24,7 +24,7 @@ export type SecretsConfig = Omit<ReturnType<typeof defineSecrets>, "get" | "getA
  * @param config - Secrets configuration mapping vault names to their secrets
  * @returns Defined secrets with typed runtime access methods
  */
-export function defineSecrets<const T extends SecretsInput>(config: T): DefinedSecrets<T> {
+export function defineSecretManager<const T extends SecretsInput>(config: T): DefinedSecrets<T> {
   const result = { ...config };
 
   // Non-enumerable so Zod's z.record validation ignores them

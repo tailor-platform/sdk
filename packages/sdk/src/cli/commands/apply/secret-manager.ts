@@ -50,7 +50,7 @@ type DeleteSecret = {
  * @param context - Planning context
  * @returns Planned changes for vaults and secrets
  */
-export async function planSecrets(context: PlanContext) {
+export async function planSecretManager(context: PlanContext) {
   const { client, workspaceId, application, forRemoval } = context;
   const secretVaults = forRemoval ? [] : application.secrets;
 
@@ -245,9 +245,9 @@ function vaultTrn(workspaceId: string, name: string) {
  * @param application - Application to read secrets from for hash state persistence
  * @returns Promise that resolves when secret changes are applied
  */
-export async function applySecrets(
+export async function applySecretManager(
   client: OperatorClient,
-  result: Awaited<ReturnType<typeof planSecrets>>,
+  result: Awaited<ReturnType<typeof planSecretManager>>,
   phase: Extract<ApplyPhase, "create-update" | "delete"> = "create-update",
   application?: Readonly<Application>,
 ) {

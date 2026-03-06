@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
-import { applySecrets, planSecrets } from "./secrets";
+import { applySecretManager, planSecretManager } from "./secret-manager";
 import { hashValue } from "./secrets-state";
 import type { PlanContext } from "@/cli/commands/apply/apply";
 import type { Application } from "@/cli/services/application";
@@ -30,7 +30,7 @@ vi.mock("@/cli/shared/client", async (importOriginal) => {
   };
 });
 
-describe("applySecrets phase separation", () => {
+describe("applySecretManager phase separation", () => {
   function createMockClient() {
     return {
       createSecretManagerVault: vi.fn().mockResolvedValue({}),
@@ -85,7 +85,7 @@ describe("applySecrets phase separation", () => {
         isEmpty: () => false,
         print: () => {},
       },
-    } as unknown as Awaited<ReturnType<typeof planSecrets>>;
+    } as unknown as Awaited<ReturnType<typeof planSecretManager>>;
   }
 
   beforeEach(() => {
@@ -104,7 +104,7 @@ describe("applySecrets phase separation", () => {
     const client = createMockClient();
     const planResult = createMockPlanResult();
 
-    await applySecrets(client, planResult, "create-update");
+    await applySecretManager(client, planResult, "create-update");
 
     expect(client.createSecretManagerVault).toHaveBeenCalledTimes(1);
     expect(client.createSecretManagerVault).toHaveBeenCalledWith({
@@ -135,7 +135,7 @@ describe("applySecrets phase separation", () => {
     const client = createMockClient();
     const planResult = createMockPlanResult();
 
-    await applySecrets(client, planResult, "delete");
+    await applySecretManager(client, planResult, "delete");
 
     expect(client.createSecretManagerVault).not.toHaveBeenCalled();
     expect(client.createSecretManagerSecret).not.toHaveBeenCalled();
@@ -170,9 +170,9 @@ describe("applySecrets phase separation", () => {
         isEmpty: () => true,
         print: () => {},
       },
-    } as unknown as Awaited<ReturnType<typeof planSecrets>>;
+    } as unknown as Awaited<ReturnType<typeof planSecretManager>>;
 
-    await applySecrets(client, emptyResult, "create-update");
+    await applySecretManager(client, emptyResult, "create-update");
 
     expect(client.createSecretManagerVault).not.toHaveBeenCalled();
     expect(client.createSecretManagerSecret).not.toHaveBeenCalled();
@@ -181,7 +181,7 @@ describe("applySecrets phase separation", () => {
   });
 });
 
-describe("planSecrets hash-based diff", () => {
+describe("planSecretManager hash-based diff", () => {
   function createMockPlanClient(existingSecrets: string[] = [], vaultName = "my-vault") {
     return {
       listSecretManagerVaults: vi.fn().mockResolvedValue({
@@ -238,7 +238,7 @@ describe("planSecrets hash-based diff", () => {
       },
     ]);
 
-    const result = await planSecrets(ctx);
+    const result = await planSecretManager(ctx);
     expect(result.secretChangeSet.updates).toHaveLength(0);
   });
 
@@ -260,7 +260,7 @@ describe("planSecrets hash-based diff", () => {
       },
     ]);
 
-    const result = await planSecrets(ctx);
+    const result = await planSecretManager(ctx);
     expect(result.secretChangeSet.updates).toHaveLength(1);
     expect(result.secretChangeSet.updates[0].value).toBe("new-value");
   });
@@ -276,12 +276,12 @@ describe("planSecrets hash-based diff", () => {
       },
     ]);
 
-    const result = await planSecrets(ctx);
+    const result = await planSecretManager(ctx);
     expect(result.secretChangeSet.updates).toHaveLength(1);
   });
 });
 
-describe("planSecrets vault metadata and deletion", () => {
+describe("planSecretManager vault metadata and deletion", () => {
   function createPlanContext(
     client: OperatorClient,
     secrets: Array<{ vaultName: string; secrets: Array<{ name: string; value: string }> }>,
@@ -323,7 +323,7 @@ describe("planSecrets vault metadata and deletion", () => {
       { vaultName: "kept-vault", secrets: [{ name: "KEY", value: "val" }] },
     ]);
 
-    const result = await planSecrets(ctx);
+    const result = await planSecretManager(ctx);
 
     expect(result.vaultChangeSet.deletes).toHaveLength(1);
     expect(result.vaultChangeSet.deletes[0].name).toBe("removed-vault");
@@ -355,7 +355,7 @@ describe("planSecrets vault metadata and deletion", () => {
 
     const ctx = createPlanContext(client, []);
 
-    const result = await planSecrets(ctx);
+    const result = await planSecretManager(ctx);
 
     expect(result.vaultChangeSet.deletes).toHaveLength(0);
     expect(result.resourceOwners).toContain("other-app");
@@ -380,7 +380,7 @@ describe("planSecrets vault metadata and deletion", () => {
       { vaultName: "my-vault", secrets: [{ name: "KEY", value: "val" }] },
     ]);
 
-    const result = await planSecrets(ctx);
+    const result = await planSecretManager(ctx);
 
     expect(result.vaultChangeSet.updates).toHaveLength(1);
     expect(result.vaultChangeSet.updates[0].name).toBe("my-vault");
@@ -406,7 +406,7 @@ describe("planSecrets vault metadata and deletion", () => {
       { vaultName: "my-vault", secrets: [{ name: "KEY", value: "val" }] },
     ]);
 
-    const result = await planSecrets(ctx);
+    const result = await planSecretManager(ctx);
 
     expect(result.unmanaged).toEqual([
       { resourceType: "Secret Manager vault", resourceName: "my-vault" },
@@ -432,7 +432,7 @@ describe("planSecrets vault metadata and deletion", () => {
       { vaultName: "my-vault", secrets: [{ name: "KEY", value: "val" }] },
     ]);
 
-    const result = await planSecrets(ctx);
+    const result = await planSecretManager(ctx);
 
     expect(result.conflicts).toEqual([
       {
@@ -444,7 +444,7 @@ describe("planSecrets vault metadata and deletion", () => {
   });
 });
 
-describe("applySecrets metadata update", () => {
+describe("applySecretManager metadata update", () => {
   function createMockClient() {
     return {
       createSecretManagerVault: vi.fn().mockResolvedValue({}),
@@ -476,9 +476,9 @@ describe("applySecrets metadata update", () => {
         replaces: [],
       },
       secretChangeSet: { creates: [], updates: [], deletes: [], replaces: [] },
-    } as unknown as Awaited<ReturnType<typeof planSecrets>>;
+    } as unknown as Awaited<ReturnType<typeof planSecretManager>>;
 
-    await applySecrets(client, planResult, "create-update", application);
+    await applySecretManager(client, planResult, "create-update", application);
 
     expect(client.setMetadata).toHaveBeenCalledTimes(1);
     expect(client.setMetadata).toHaveBeenCalledWith(
@@ -512,9 +512,9 @@ describe("applySecrets metadata update", () => {
         ],
         replaces: [],
       },
-    } as unknown as Awaited<ReturnType<typeof planSecrets>>;
+    } as unknown as Awaited<ReturnType<typeof planSecretManager>>;
 
-    await applySecrets(client, planResult, "delete");
+    await applySecretManager(client, planResult, "delete");
 
     expect(client.deleteSecretManagerSecret).toHaveBeenCalledTimes(1);
     expect(client.deleteSecretManagerSecret).toHaveBeenCalledWith({
@@ -530,7 +530,7 @@ describe("applySecrets metadata update", () => {
   });
 });
 
-describe("applySecrets state persistence", () => {
+describe("applySecretManager state persistence", () => {
   function createMockClient() {
     return {
       createSecretManagerVault: vi.fn().mockResolvedValue({}),
@@ -577,9 +577,9 @@ describe("applySecrets state persistence", () => {
         deletes: [],
         replaces: [],
       },
-    } as unknown as Awaited<ReturnType<typeof planSecrets>>;
+    } as unknown as Awaited<ReturnType<typeof planSecretManager>>;
 
-    await applySecrets(client, planResult, "create-update", application);
+    await applySecretManager(client, planResult, "create-update", application);
 
     expect(mockSaveSecretsState).toHaveBeenCalledTimes(1);
     const savedState = mockSaveSecretsState.mock.calls[0][0];
@@ -592,9 +592,9 @@ describe("applySecrets state persistence", () => {
     const planResult = {
       vaultChangeSet: { creates: [], updates: [], deletes: [], replaces: [] },
       secretChangeSet: { creates: [], updates: [], deletes: [], replaces: [] },
-    } as unknown as Awaited<ReturnType<typeof planSecrets>>;
+    } as unknown as Awaited<ReturnType<typeof planSecretManager>>;
 
-    await applySecrets(client, planResult, "create-update");
+    await applySecretManager(client, planResult, "create-update");
 
     expect(mockSaveSecretsState).not.toHaveBeenCalled();
   });
@@ -626,9 +626,9 @@ describe("applySecrets state persistence", () => {
         ],
         replaces: [],
       },
-    } as unknown as Awaited<ReturnType<typeof planSecrets>>;
+    } as unknown as Awaited<ReturnType<typeof planSecretManager>>;
 
-    await applySecrets(client, planResult, "delete");
+    await applySecretManager(client, planResult, "delete");
 
     expect(mockSaveSecretsState).toHaveBeenCalledTimes(1);
     const savedState = mockSaveSecretsState.mock.calls[0][0];
@@ -662,9 +662,9 @@ describe("applySecrets state persistence", () => {
         ],
         replaces: [],
       },
-    } as unknown as Awaited<ReturnType<typeof planSecrets>>;
+    } as unknown as Awaited<ReturnType<typeof planSecretManager>>;
 
-    await applySecrets(client, planResult, "delete");
+    await applySecretManager(client, planResult, "delete");
 
     const savedState = mockSaveSecretsState.mock.calls[0][0];
     expect(savedState.vaults["my-vault"]).toBeUndefined();
