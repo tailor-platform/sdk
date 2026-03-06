@@ -118,10 +118,6 @@ Default export a resolver created with `createResolver`.
 - Rates: FREE=0, STARTER=29.99, BUSINESS=99.99, ENTERPRISE=299.99
 - Success → `{ success: true, previousPlan, newPlan: targetPlan, proratedAmount: newRate, effectiveDate }`
 
-### usageSummary (`resolvers/usageSummary.ts`)
-
-**NOT part of the challenge** - do NOT create this file.
-
 ---
 
 ## 3. Executors (executors/)
