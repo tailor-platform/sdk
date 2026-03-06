@@ -37,6 +37,8 @@ describe("applySecrets phase separation", () => {
       createSecretManagerSecret: vi.fn().mockResolvedValue({}),
       updateSecretManagerSecret: vi.fn().mockResolvedValue({}),
       deleteSecretManagerSecret: vi.fn().mockResolvedValue({}),
+      deleteSecretManagerVault: vi.fn().mockResolvedValue({}),
+      setMetadata: vi.fn().mockResolvedValue({}),
     } as unknown as OperatorClient;
   }
 
@@ -180,9 +182,15 @@ describe("applySecrets phase separation", () => {
 });
 
 describe("planSecrets hash-based diff", () => {
-  function createMockPlanClient(existingSecrets: string[] = []) {
+  function createMockPlanClient(existingSecrets: string[] = [], vaultName = "my-vault") {
     return {
-      getSecretManagerVault: vi.fn().mockResolvedValue({}),
+      listSecretManagerVaults: vi.fn().mockResolvedValue({
+        vaults: [{ name: vaultName }],
+        nextPageToken: "",
+      }),
+      getMetadata: vi.fn().mockResolvedValue({
+        metadata: { labels: { "sdk-name": "test-app" } },
+      }),
       listSecretManagerSecrets: vi.fn().mockResolvedValue({
         secrets: existingSecrets.map((name) => ({ name })),
         nextPageToken: "",
@@ -198,6 +206,7 @@ describe("planSecrets hash-based diff", () => {
       client,
       workspaceId: "ws-1",
       application: {
+        name: "test-app",
         secrets,
       } as unknown as Application,
       forRemoval: false,
@@ -272,6 +281,255 @@ describe("planSecrets hash-based diff", () => {
   });
 });
 
+describe("planSecrets vault metadata and deletion", () => {
+  function createPlanContext(
+    client: OperatorClient,
+    secrets: Array<{ vaultName: string; secrets: Array<{ name: string; value: string }> }>,
+    forRemoval = false,
+  ): PlanContext {
+    return {
+      client,
+      workspaceId: "ws-1",
+      application: {
+        name: "my-app",
+        secrets,
+      } as unknown as Application,
+      forRemoval,
+      config: {} as PlanContext["config"],
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockLoadSecretsState.mockReturnValue({ version: 1, vaults: {} });
+  });
+
+  test("plans vault deletion for managed vaults removed from config", async () => {
+    const client = {
+      listSecretManagerVaults: vi.fn().mockResolvedValue({
+        vaults: [{ name: "kept-vault" }, { name: "removed-vault" }],
+        nextPageToken: "",
+      }),
+      getMetadata: vi.fn().mockResolvedValue({
+        metadata: { labels: { "sdk-name": "my-app" } },
+      }),
+      listSecretManagerSecrets: vi.fn().mockResolvedValue({
+        secrets: [{ name: "SECRET_IN_REMOVED" }],
+        nextPageToken: "",
+      }),
+    } as unknown as OperatorClient;
+
+    const ctx = createPlanContext(client, [
+      { vaultName: "kept-vault", secrets: [{ name: "KEY", value: "val" }] },
+    ]);
+
+    const result = await planSecrets(ctx);
+
+    expect(result.vaultChangeSet.deletes).toHaveLength(1);
+    expect(result.vaultChangeSet.deletes[0].name).toBe("removed-vault");
+    // Secrets inside deleted vault should also be planned for deletion
+    expect(result.secretChangeSet.deletes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          secretName: "SECRET_IN_REMOVED",
+          vaultName: "removed-vault",
+        }),
+      ]),
+    );
+  });
+
+  test("does not delete vaults managed by another application", async () => {
+    const client = {
+      listSecretManagerVaults: vi.fn().mockResolvedValue({
+        vaults: [{ name: "other-vault" }],
+        nextPageToken: "",
+      }),
+      getMetadata: vi.fn().mockResolvedValue({
+        metadata: { labels: { "sdk-name": "other-app" } },
+      }),
+      listSecretManagerSecrets: vi.fn().mockResolvedValue({
+        secrets: [],
+        nextPageToken: "",
+      }),
+    } as unknown as OperatorClient;
+
+    const ctx = createPlanContext(client, []);
+
+    const result = await planSecrets(ctx);
+
+    expect(result.vaultChangeSet.deletes).toHaveLength(0);
+    expect(result.resourceOwners).toContain("other-app");
+  });
+
+  test("tracks existing vault as update for metadata refresh", async () => {
+    const client = {
+      listSecretManagerVaults: vi.fn().mockResolvedValue({
+        vaults: [{ name: "my-vault" }],
+        nextPageToken: "",
+      }),
+      getMetadata: vi.fn().mockResolvedValue({
+        metadata: { labels: { "sdk-name": "my-app" } },
+      }),
+      listSecretManagerSecrets: vi.fn().mockResolvedValue({
+        secrets: [],
+        nextPageToken: "",
+      }),
+    } as unknown as OperatorClient;
+
+    const ctx = createPlanContext(client, [
+      { vaultName: "my-vault", secrets: [{ name: "KEY", value: "val" }] },
+    ]);
+
+    const result = await planSecrets(ctx);
+
+    expect(result.vaultChangeSet.updates).toHaveLength(1);
+    expect(result.vaultChangeSet.updates[0].name).toBe("my-vault");
+    expect(result.vaultChangeSet.creates).toHaveLength(0);
+  });
+
+  test("detects unmanaged vault without metadata label", async () => {
+    const client = {
+      listSecretManagerVaults: vi.fn().mockResolvedValue({
+        vaults: [{ name: "my-vault" }],
+        nextPageToken: "",
+      }),
+      getMetadata: vi.fn().mockResolvedValue({
+        metadata: { labels: {} },
+      }),
+      listSecretManagerSecrets: vi.fn().mockResolvedValue({
+        secrets: [],
+        nextPageToken: "",
+      }),
+    } as unknown as OperatorClient;
+
+    const ctx = createPlanContext(client, [
+      { vaultName: "my-vault", secrets: [{ name: "KEY", value: "val" }] },
+    ]);
+
+    const result = await planSecrets(ctx);
+
+    expect(result.unmanaged).toEqual([
+      { resourceType: "Secret Manager vault", resourceName: "my-vault" },
+    ]);
+  });
+
+  test("detects ownership conflict when vault owned by another app", async () => {
+    const client = {
+      listSecretManagerVaults: vi.fn().mockResolvedValue({
+        vaults: [{ name: "my-vault" }],
+        nextPageToken: "",
+      }),
+      getMetadata: vi.fn().mockResolvedValue({
+        metadata: { labels: { "sdk-name": "other-app" } },
+      }),
+      listSecretManagerSecrets: vi.fn().mockResolvedValue({
+        secrets: [],
+        nextPageToken: "",
+      }),
+    } as unknown as OperatorClient;
+
+    const ctx = createPlanContext(client, [
+      { vaultName: "my-vault", secrets: [{ name: "KEY", value: "val" }] },
+    ]);
+
+    const result = await planSecrets(ctx);
+
+    expect(result.conflicts).toEqual([
+      {
+        resourceType: "Secret Manager vault",
+        resourceName: "my-vault",
+        currentOwner: "other-app",
+      },
+    ]);
+  });
+});
+
+describe("applySecrets metadata update", () => {
+  function createMockClient() {
+    return {
+      createSecretManagerVault: vi.fn().mockResolvedValue({}),
+      createSecretManagerSecret: vi.fn().mockResolvedValue({}),
+      updateSecretManagerSecret: vi.fn().mockResolvedValue({}),
+      deleteSecretManagerSecret: vi.fn().mockResolvedValue({}),
+      deleteSecretManagerVault: vi.fn().mockResolvedValue({}),
+      setMetadata: vi.fn().mockResolvedValue({}),
+    } as unknown as OperatorClient;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockLoadSecretsState.mockReturnValue({ version: 1, vaults: {} });
+  });
+
+  test("sets metadata on existing vault during create-update phase", async () => {
+    const client = createMockClient();
+    const application = {
+      name: "my-app",
+      secrets: [{ vaultName: "existing-vault", secrets: [] }],
+    } as unknown as Application;
+
+    const planResult = {
+      vaultChangeSet: {
+        creates: [],
+        updates: [{ name: "existing-vault", workspaceId: "ws-1" }],
+        deletes: [],
+        replaces: [],
+      },
+      secretChangeSet: { creates: [], updates: [], deletes: [], replaces: [] },
+    } as unknown as Awaited<ReturnType<typeof planSecrets>>;
+
+    await applySecrets(client, planResult, "create-update", application);
+
+    expect(client.setMetadata).toHaveBeenCalledTimes(1);
+    expect(client.setMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trn: "trn:v1:workspace:ws-1:secret_manager:existing-vault",
+        labels: expect.objectContaining({ "sdk-name": "my-app" }),
+      }),
+    );
+  });
+
+  test("delete phase deletes vault and its secrets", async () => {
+    const client = createMockClient();
+
+    const planResult = {
+      vaultChangeSet: {
+        creates: [],
+        updates: [],
+        deletes: [{ name: "removed-vault", workspaceId: "ws-1" }],
+        replaces: [],
+      },
+      secretChangeSet: {
+        creates: [],
+        updates: [],
+        deletes: [
+          {
+            name: "removed-vault/SECRET_A",
+            secretName: "SECRET_A",
+            workspaceId: "ws-1",
+            vaultName: "removed-vault",
+          },
+        ],
+        replaces: [],
+      },
+    } as unknown as Awaited<ReturnType<typeof planSecrets>>;
+
+    await applySecrets(client, planResult, "delete");
+
+    expect(client.deleteSecretManagerSecret).toHaveBeenCalledTimes(1);
+    expect(client.deleteSecretManagerSecret).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+      secretmanagerVaultName: "removed-vault",
+      secretmanagerSecretName: "SECRET_A",
+    });
+    expect(client.deleteSecretManagerVault).toHaveBeenCalledTimes(1);
+    expect(client.deleteSecretManagerVault).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+      secretmanagerVaultName: "removed-vault",
+    });
+  });
+});
+
 describe("applySecrets state persistence", () => {
   function createMockClient() {
     return {
@@ -279,6 +537,8 @@ describe("applySecrets state persistence", () => {
       createSecretManagerSecret: vi.fn().mockResolvedValue({}),
       updateSecretManagerSecret: vi.fn().mockResolvedValue({}),
       deleteSecretManagerSecret: vi.fn().mockResolvedValue({}),
+      deleteSecretManagerVault: vi.fn().mockResolvedValue({}),
+      setMetadata: vi.fn().mockResolvedValue({}),
     } as unknown as OperatorClient;
   }
 

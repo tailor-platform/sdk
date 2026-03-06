@@ -1,11 +1,23 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { createChangeSet } from "./change-set";
+import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { hashValue, loadSecretsState, saveSecretsState } from "./secrets-state";
+import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
 import type { Application } from "@/cli/services/application";
 
 type CreateVault = {
+  name: string;
+  workspaceId: string;
+};
+
+type ExistingVault = {
+  name: string;
+  workspaceId: string;
+};
+
+type DeleteVault = {
   name: string;
   workspaceId: string;
 };
@@ -42,37 +54,72 @@ export async function planSecrets(context: PlanContext) {
   const { client, workspaceId, application, forRemoval } = context;
   const secretVaults = forRemoval ? [] : application.secrets;
 
-  const vaultChangeSet = createChangeSet<CreateVault, never, never>("Secret Manager vaults");
+  const vaultChangeSet = createChangeSet<CreateVault, ExistingVault, DeleteVault>(
+    "Secret Manager vaults",
+  );
   const secretChangeSet = createChangeSet<CreateSecret, UpdateSecret, DeleteSecret>(
     "Secret Manager secrets",
   );
+  const conflicts: OwnerConflict[] = [];
+  const unmanaged: UnmanagedResource[] = [];
+  const resourceOwners = new Set<string>();
 
-  if (secretVaults.length === 0) {
-    return { vaultChangeSet, secretChangeSet };
-  }
+  // Fetch all existing vaults with metadata to track managed resources
+  const existingVaultList = await fetchAll(async (pageToken, maxPageSize) => {
+    try {
+      const { vaults, nextPageToken } = await client.listSecretManagerVaults({
+        workspaceId,
+        pageToken,
+        pageSize: maxPageSize,
+      });
+      return [vaults, nextPageToken];
+    } catch (error) {
+      if (error instanceof ConnectError && error.code === Code.NotFound) {
+        return [[], ""];
+      }
+      throw error;
+    }
+  });
+
+  const existingVaults: WithLabel<(typeof existingVaultList)[number]> = {};
+  await Promise.all(
+    existingVaultList.map(async (resource) => {
+      const { metadata } = await client.getMetadata({
+        trn: vaultTrn(workspaceId, resource.name),
+      });
+      existingVaults[resource.name] = {
+        resource,
+        label: metadata?.labels[sdkNameLabelKey],
+      };
+    }),
+  );
 
   const state = loadSecretsState();
 
   for (const vault of secretVaults) {
     const vaultName = vault.vaultName;
+    const existing = existingVaults[vaultName];
 
-    // Check if vault exists
-    let vaultExists = false;
-    try {
-      await client.getSecretManagerVault({
-        workspaceId,
-        secretmanagerVaultName: vaultName,
-      });
-      vaultExists = true;
-    } catch (error) {
-      if (error instanceof ConnectError && error.code === Code.NotFound) {
-        vaultExists = false;
-      } else {
-        throw error;
+    if (existing) {
+      if (!existing.label) {
+        unmanaged.push({
+          resourceType: "Secret Manager vault",
+          resourceName: vaultName,
+        });
+      } else if (existing.label !== application.name) {
+        conflicts.push({
+          resourceType: "Secret Manager vault",
+          resourceName: vaultName,
+          currentOwner: existing.label,
+        });
       }
-    }
-
-    if (!vaultExists) {
+      // Track existing vault for metadata update
+      vaultChangeSet.updates.push({
+        name: vaultName,
+        workspaceId,
+      });
+      delete existingVaults[vaultName];
+    } else {
       vaultChangeSet.creates.push({
         name: vaultName,
         workspaceId,
@@ -81,7 +128,7 @@ export async function planSecrets(context: PlanContext) {
 
     // Fetch existing secrets in this vault
     let existingSecrets: string[] = [];
-    if (vaultExists) {
+    if (existing) {
       const secrets = await fetchAll(async (pageToken, maxPageSize) => {
         try {
           const { secrets, nextPageToken } = await client.listSecretManagerSecrets({
@@ -140,9 +187,54 @@ export async function planSecrets(context: PlanContext) {
     }
   }
 
+  // Remaining existing vaults not in config - mark managed ones for deletion
+  for (const [name, entry] of Object.entries(existingVaults)) {
+    if (!entry) continue;
+    const label = entry.label;
+    if (label && label !== application.name) {
+      resourceOwners.add(label);
+    }
+    if (label === application.name) {
+      // Delete secrets inside the vault before deleting the vault itself
+      const secrets = await fetchAll(async (pageToken, maxPageSize) => {
+        try {
+          const { secrets, nextPageToken } = await client.listSecretManagerSecrets({
+            workspaceId,
+            secretmanagerVaultName: name,
+            pageToken,
+            pageSize: maxPageSize,
+          });
+          return [secrets, nextPageToken];
+        } catch (error) {
+          if (error instanceof ConnectError && error.code === Code.NotFound) {
+            return [[], ""];
+          }
+          throw error;
+        }
+      });
+      for (const secret of secrets) {
+        secretChangeSet.deletes.push({
+          name: `${name}/${secret.name}`,
+          secretName: secret.name,
+          workspaceId,
+          vaultName: name,
+        });
+      }
+
+      vaultChangeSet.deletes.push({
+        name,
+        workspaceId,
+      });
+    }
+  }
+
   vaultChangeSet.print();
   secretChangeSet.print();
-  return { vaultChangeSet, secretChangeSet };
+  return { vaultChangeSet, secretChangeSet, conflicts, unmanaged, resourceOwners };
+}
+
+function vaultTrn(workspaceId: string, name: string) {
+  return `trn:v1:workspace:${workspaceId}:secret_manager:${name}`;
 }
 
 /**
@@ -162,12 +254,32 @@ export async function applySecrets(
   const { vaultChangeSet, secretChangeSet } = result;
 
   if (phase === "create-update") {
-    // Create vaults first
+    // Create vaults first and set metadata
     for (const create of vaultChangeSet.creates) {
       await client.createSecretManagerVault({
         workspaceId: create.workspaceId,
         secretmanagerVaultName: create.name,
       });
+      if (application) {
+        const metaRequest = await buildMetaRequest(
+          vaultTrn(create.workspaceId, create.name),
+          application.name,
+        );
+        await client.setMetadata(metaRequest);
+      }
+    }
+
+    // Update metadata for existing vaults
+    if (application) {
+      await Promise.all(
+        vaultChangeSet.updates.map(async (update) => {
+          const metaRequest = await buildMetaRequest(
+            vaultTrn(update.workspaceId, update.name),
+            application.name,
+          );
+          await client.setMetadata(metaRequest);
+        }),
+      );
     }
 
     // Create new secrets
@@ -219,8 +331,18 @@ export async function applySecrets(
       ),
     );
 
-    // Remove deleted secrets from hash state
-    if (secretChangeSet.deletes.length > 0) {
+    // Delete orphan vaults
+    await Promise.all(
+      vaultChangeSet.deletes.map((del) =>
+        client.deleteSecretManagerVault({
+          workspaceId: del.workspaceId,
+          secretmanagerVaultName: del.name,
+        }),
+      ),
+    );
+
+    // Remove deleted secrets and vaults from hash state
+    if (secretChangeSet.deletes.length > 0 || vaultChangeSet.deletes.length > 0) {
       const state = loadSecretsState();
       for (const del of secretChangeSet.deletes) {
         if (state.vaults[del.vaultName]) {
@@ -229,6 +351,9 @@ export async function applySecrets(
             delete state.vaults[del.vaultName];
           }
         }
+      }
+      for (const del of vaultChangeSet.deletes) {
+        delete state.vaults[del.name];
       }
       saveSecretsState(state);
     }

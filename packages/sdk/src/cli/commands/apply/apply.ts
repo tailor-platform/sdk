@@ -193,6 +193,7 @@ export async function apply(options?: ApplyOptions) {
         ...pipeline.conflicts,
         ...executor.conflicts,
         ...workflow.conflicts,
+        ...secrets.conflicts,
       ];
       await confirmOwnerConflict(allConflicts, application.name, yes);
 
@@ -205,6 +206,7 @@ export async function apply(options?: ApplyOptions) {
         ...pipeline.unmanaged,
         ...executor.unmanaged,
         ...workflow.unmanaged,
+        ...secrets.unmanaged,
       ];
       await confirmUnmanagedResources(allUnmanaged, application.name, yes);
 
@@ -245,6 +247,7 @@ export async function apply(options?: ApplyOptions) {
         ...pipeline.resourceOwners,
         ...executor.resourceOwners,
         ...workflow.resourceOwners,
+        ...secrets.resourceOwners,
       ]);
       const conflictOwners = new Set(allConflicts.map((c) => c.currentOwner));
       const emptyApps = [...conflictOwners].filter((owner) => !resourceOwners.has(owner));
