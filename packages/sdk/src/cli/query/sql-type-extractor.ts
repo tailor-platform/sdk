@@ -1,4 +1,4 @@
-import { astVisitor, parse, type From } from "pgsql-ast-parser";
+import { astVisitor, parse, type From, type Statement } from "pgsql-ast-parser";
 
 /**
  * Extract TailorDB type names from SQL query.

@@ -390,7 +390,7 @@ describe("executeScript", () => {
 
     expect(result.success).toBe(false);
     expect(result.result).toBe("execution failed");
-    expect(result.error).toBe("runtime error log\nexecution failed\ninitial error info");
+    expect(result.error).toBe("execution failed");
   });
 
   test("propagates testExecScript errors", async () => {
