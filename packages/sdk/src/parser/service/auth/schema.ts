@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TailorFieldSchema } from "@/parser/service/resolver/schema";
-import type { ValueOperand } from "./types";
+import type { ValueOperand } from "@/types/auth";
 
 export const AuthInvokerSchema = z.object({
   namespace: z.string().describe("Auth namespace"),

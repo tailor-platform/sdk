@@ -21,17 +21,15 @@ import { getDistDir } from "@/cli/shared/dist-dir";
 import { logger, styles } from "@/cli/shared/logger";
 import { generateUserTypes } from "@/cli/shared/type-generator";
 import { withSpan } from "@/cli/telemetry";
-import {
-  type TailorDBNamespaceData,
-  type ResolverNamespaceData,
-} from "@/parser/plugin-config/generation-types";
 import { PluginManager } from "@/plugin/manager";
+import { type TailorDBNamespaceData, type ResolverNamespaceData } from "@/types/plugin-generation";
 import { createDependencyWatcher, type DependencyWatcher } from "./watch";
 import type { GenerateOptions } from "./options";
-import type { Plugin, PluginAttachment } from "@/parser/plugin-config/types";
-import type { TailorDBType, TypeSourceInfo } from "@/parser/service/tailordb/types";
+import type { TypeSourceInfo } from "@/parser/service/tailordb/types";
 import type { Executor } from "@/types/executor.generated";
+import type { Plugin, PluginAttachment } from "@/types/plugin";
 import type { Resolver } from "@/types/resolver.generated";
+import type { TailorDBType } from "@/types/tailordb";
 
 export type { CodeGenerator } from "@/cli/commands/generate/types";
 

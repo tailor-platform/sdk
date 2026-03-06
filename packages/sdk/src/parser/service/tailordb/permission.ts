@@ -5,7 +5,7 @@ import type {
   StandardPermissionCondition,
   StandardGqlPermissionPolicy,
   Permissions,
-} from "./types";
+} from "@/types/tailordb";
 import type { RawPermissions } from "@/types/tailordb.generated";
 
 // Raw permission types for normalize function parameters

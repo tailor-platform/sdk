@@ -11,33 +11,6 @@ export type {
   TailorTypeGqlPermission,
 } from "@/configure/services/tailordb";
 
-// Manual types
-export type {
-  TailorDBExternalConfig,
-  TailorDBServiceInput,
-  TailorDBMigrationConfig,
-  UserDefinedTypeSource,
-  PluginGeneratedTypeSource,
-  TypeSourceInfoEntry,
-  Script,
-  EnumValue,
-  RawRelationConfig,
-  OperatorFieldConfig,
-  PermissionOperand,
-  StandardPermissionCondition,
-  StandardActionPermission,
-  StandardTailorTypePermission,
-  StandardGqlPermissionPolicy,
-  StandardTailorTypeGqlPermission,
-  Permissions,
-  TailorDBTypeMetadata,
-  ParsedField,
-  ParsedRelationship,
-  TailorDBType,
-} from "@/types/tailordb";
-
-export { isPluginGeneratedType } from "@/types/tailordb";
-
 // TailorDBFieldOutput uses zinfer-generated types
 import type {
   DBFieldMetadata as DBFieldMetadataGenerated,

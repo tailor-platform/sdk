@@ -14,12 +14,13 @@ import {
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import { type AuthService } from "@/cli/services/auth/service";
 import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "@/cli/shared/client";
-import { OAuth2ClientSchema, type AuthAttributeValue } from "@/parser/service/auth";
+import { OAuth2ClientSchema } from "@/parser/service/auth";
 import { createChangeSet } from "./change-set";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
+import type { AuthAttributeValue } from "@/types/auth";
 import type {
   BuiltinIdP,
   IdProvider as IdProviderConfig,

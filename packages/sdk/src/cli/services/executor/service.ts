@@ -2,8 +2,9 @@ import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "@/cli/services/file-loader";
 import { logger, styles } from "@/cli/shared/logger";
-import { ExecutorSchema, type ExecutorServiceConfig } from "@/parser/service/executor";
+import { ExecutorSchema } from "@/parser/service/executor";
 import { isSdkBranded } from "@/utils/brand";
+import type { ExecutorServiceConfig } from "@/types/app-config";
 import type { Executor } from "@/types/executor.generated";
 
 /**

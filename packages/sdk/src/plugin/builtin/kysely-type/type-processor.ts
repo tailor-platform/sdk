@@ -1,6 +1,6 @@
 import multiline from "multiline-ts";
 import { type KyselyNamespaceMetadata, type KyselyTypeMetadata } from "./types";
-import type { OperatorFieldConfig, TailorDBType } from "@/parser/service/tailordb/types";
+import type { OperatorFieldConfig, TailorDBType } from "@/types/tailordb";
 
 type UsedUtilityTypes = { Timestamp: boolean; Serial: boolean };
 

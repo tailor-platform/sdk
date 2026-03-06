@@ -1,5 +1,5 @@
 import * as inflection from "inflection";
-import type { RawRelationConfig, OperatorFieldConfig } from "./types";
+import type { RawRelationConfig, OperatorFieldConfig } from "@/types/tailordb";
 import type { UnionToTuple } from "type-fest";
 
 const relationTypes = {

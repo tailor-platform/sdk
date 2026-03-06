@@ -1,10 +1,10 @@
-import type { PluginAttachment } from "@/parser/plugin-config/types";
-import type { TailorDBType, TypeSourceInfoEntry } from "@/parser/service/tailordb/types";
 import type { IdProvider as IdProviderConfig, OAuth2ClientInput } from "@/types/auth.generated";
 import type { Executor } from "@/types/executor.generated";
+import type { PluginAttachment } from "@/types/plugin";
 import type { Resolver } from "@/types/resolver.generated";
+import type { TailorDBType, TypeSourceInfoEntry } from "@/types/tailordb";
 
-export type { PluginAttachment } from "@/parser/plugin-config/types";
+export type { PluginAttachment } from "@/types/plugin";
 
 // ========================================
 // Basic types
@@ -78,7 +78,7 @@ export type {
   UserDefinedTypeSource,
   PluginGeneratedTypeSource,
   TypeSourceInfoEntry,
-} from "@/parser/service/tailordb/types";
+} from "@/types/tailordb";
 
 // ========================================
 // Method interfaces for each dependency

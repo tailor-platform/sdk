@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { functionSchema } from "@/parser/service/common";
-import type { Plugin } from "./types";
+import type { Plugin } from "@/types/plugin";
 
 // Custom plugin schema (object form)
 // Using passthrough() to preserve additional properties on Plugin instances

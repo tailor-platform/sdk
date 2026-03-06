@@ -1,4 +1,5 @@
 import * as inflection from "inflection";
+import { isPluginGeneratedType } from "@/types/tailordb";
 import { parseFieldConfig } from "./field";
 import { parsePermissions } from "./permission";
 import {
@@ -7,14 +8,13 @@ import {
   buildRelationInfo,
   applyRelationMetadataToFieldConfig,
 } from "./relation";
-import { isPluginGeneratedType } from "./types";
+import type { TailorDBField } from "./types";
 import type {
-  TailorDBField,
   ParsedField,
   ParsedRelationship,
   TailorDBType,
   TypeSourceInfoEntry,
-} from "./types";
+} from "@/types/tailordb";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "@/types/tailordb.generated";
 
 /**

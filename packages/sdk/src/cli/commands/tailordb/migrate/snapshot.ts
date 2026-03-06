@@ -16,7 +16,7 @@ import type {
   TailorDBType,
   OperatorFieldConfig,
   StandardActionPermission,
-} from "@/parser/service/tailordb/types";
+} from "@/types/tailordb";
 import type { TailorDBType as ProtoTailorDBType } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
 
 // ============================================================================
