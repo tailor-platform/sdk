@@ -2,7 +2,7 @@
 
 /**
  * Configuration for GraphQL operations on IdP users.
-All operations are enabled by default (undefined or true = enabled, false = disabled).
+ * All operations are enabled by default (undefined or true = enabled, false = disabled).
  */
 export type IdPGqlOperationsInput =
   | "query"

@@ -2,7 +2,7 @@
 
 /**
  * Configuration for GraphQL operations on a TailorDB type.
-All operations are enabled by default (undefined or true = enabled, false = disabled).
+ * All operations are enabled by default (undefined or true = enabled, false = disabled).
  */
 export type GqlOperationsInput =
   | "query"
@@ -102,11 +102,13 @@ export type TailorDBTypeParsedSettingsInput = {
         read?: boolean | undefined;
       }
     | undefined;
-  /** Enable publishing events for this type.
-When enabled, record creation/update/deletion events are published.
-If not specified, this is automatically set to true when an executor uses this type
-with recordCreated/recordUpdated/recordDeleted triggers. If explicitly set to false
-while an executor uses this type, an error will be thrown during apply. */
+  /**
+   * Enable publishing events for this type.
+   * When enabled, record creation/update/deletion events are published.
+   * If not specified, this is automatically set to true when an executor uses this type
+   * with recordCreated/recordUpdated/recordDeleted triggers. If explicitly set to false
+   * while an executor uses this type, an error will be thrown during apply.
+   */
   publishEvents?: boolean | undefined;
 };
 
@@ -126,11 +128,13 @@ export type TailorDBTypeParsedSettings = {
         read?: boolean | undefined;
       }
     | undefined;
-  /** Enable publishing events for this type.
-When enabled, record creation/update/deletion events are published.
-If not specified, this is automatically set to true when an executor uses this type
-with recordCreated/recordUpdated/recordDeleted triggers. If explicitly set to false
-while an executor uses this type, an error will be thrown during apply. */
+  /**
+   * Enable publishing events for this type.
+   * When enabled, record creation/update/deletion events are published.
+   * If not specified, this is automatically set to true when an executor uses this type
+   * with recordCreated/recordUpdated/recordDeleted triggers. If explicitly set to false
+   * while an executor uses this type, an error will be thrown during apply.
+   */
   publishEvents?: boolean | undefined;
 };
 
