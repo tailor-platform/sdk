@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { join, dirname, basename } from "node:path";
+import { join, dirname, basename, isAbsolute } from "node:path";
 import { stat } from "node:fs/promises";
 import { parseArgs, styleText } from "node:util";
 import { createInterface } from "node:readline";
@@ -50,7 +50,7 @@ Examples:
 
   const configDir = import.meta.dirname;
   const targetPath = validateArgs.positionals[0] || join(configDir, "data");
-  const resolvedPath = targetPath.startsWith("/") ? targetPath : join(process.cwd(), targetPath);
+  const resolvedPath = isAbsolute(targetPath) ? targetPath : join(process.cwd(), targetPath);
 
   try {
     const stats = await stat(resolvedPath);
