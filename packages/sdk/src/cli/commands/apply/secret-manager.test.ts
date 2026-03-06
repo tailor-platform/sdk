@@ -91,7 +91,6 @@ describe("applySecretManager phase separation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockLoadSecretsState.mockReturnValue({
-      version: 1,
       vaults: {
         "my-vault": {
           ORPHAN_SECRET: hashValue("orphan-value"),
@@ -216,13 +215,12 @@ describe("planSecretManager hash-based diff", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockLoadSecretsState.mockReturnValue({ version: 1, vaults: {} });
+    mockLoadSecretsState.mockReturnValue({ vaults: {} });
   });
 
   test("skips update when hash matches stored state", async () => {
     const secretValue = "my-secret-value";
     mockLoadSecretsState.mockReturnValue({
-      version: 1,
       vaults: {
         "my-vault": {
           EXISTING_SECRET: hashValue(secretValue),
@@ -244,7 +242,6 @@ describe("planSecretManager hash-based diff", () => {
 
   test("includes update when hash does not match", async () => {
     mockLoadSecretsState.mockReturnValue({
-      version: 1,
       vaults: {
         "my-vault": {
           EXISTING_SECRET: hashValue("old-value"),
@@ -266,7 +263,7 @@ describe("planSecretManager hash-based diff", () => {
   });
 
   test("includes update when no stored state exists", async () => {
-    mockLoadSecretsState.mockReturnValue({ version: 1, vaults: {} });
+    mockLoadSecretsState.mockReturnValue({ vaults: {} });
 
     const client = createMockPlanClient(["EXISTING_SECRET"]);
     const ctx = createPlanContext(client, [
@@ -301,7 +298,7 @@ describe("planSecretManager vault metadata and deletion", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockLoadSecretsState.mockReturnValue({ version: 1, vaults: {} });
+    mockLoadSecretsState.mockReturnValue({ vaults: {} });
   });
 
   test("plans vault deletion for managed vaults removed from config", async () => {
@@ -458,7 +455,7 @@ describe("applySecretManager metadata update", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockLoadSecretsState.mockReturnValue({ version: 1, vaults: {} });
+    mockLoadSecretsState.mockReturnValue({ vaults: {} });
   });
 
   test("sets metadata on existing vault during create-update phase", async () => {
@@ -544,7 +541,7 @@ describe("applySecretManager state persistence", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockLoadSecretsState.mockReturnValue({ version: 1, vaults: {} });
+    mockLoadSecretsState.mockReturnValue({ vaults: {} });
   });
 
   test("saves hash state after create-update phase when application is provided", async () => {
@@ -601,7 +598,6 @@ describe("applySecretManager state persistence", () => {
 
   test("removes deleted secrets from state after delete phase", async () => {
     mockLoadSecretsState.mockReturnValue({
-      version: 1,
       vaults: {
         "my-vault": {
           SECRET_A: hashValue("value-a"),
@@ -638,7 +634,6 @@ describe("applySecretManager state persistence", () => {
 
   test("removes empty vault from state when all secrets deleted", async () => {
     mockLoadSecretsState.mockReturnValue({
-      version: 1,
       vaults: {
         "my-vault": {
           ONLY_SECRET: hashValue("value"),

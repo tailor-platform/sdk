@@ -1,12 +1,14 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import * as path from "pathe";
+import { z } from "zod";
 import { getDistDir } from "@/cli/shared/dist-dir";
 
-export type SecretsState = {
-  version: 1;
-  vaults: Record<string, Record<string, string>>;
-};
+const SecretsStateSchema = z.object({
+  vaults: z.record(z.string(), z.record(z.string(), z.string())),
+});
+
+export type SecretsState = z.infer<typeof SecretsStateSchema>;
 
 /**
  * Get the file path for the secrets state JSON.
@@ -23,13 +25,13 @@ export function getSecretsStatePath(): string {
 export function loadSecretsState(): SecretsState {
   const filePath = getSecretsStatePath();
   if (!existsSync(filePath)) {
-    return { version: 1, vaults: {} };
+    return { vaults: {} };
   }
   try {
     const raw = readFileSync(filePath, "utf-8");
-    return JSON.parse(raw) as SecretsState;
+    return SecretsStateSchema.parse(JSON.parse(raw));
   } catch {
-    return { version: 1, vaults: {} };
+    return { vaults: {} };
   }
 }
 

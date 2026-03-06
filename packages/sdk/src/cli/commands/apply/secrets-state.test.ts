@@ -29,12 +29,11 @@ describe("secrets-state", () => {
 
   test("loadSecretsState returns empty state when file does not exist", () => {
     const state = loadSecretsState();
-    expect(state).toEqual({ version: 1, vaults: {} });
+    expect(state).toEqual({ vaults: {} });
   });
 
   test("saveSecretsState and loadSecretsState round-trip", () => {
     const state = {
-      version: 1 as const,
       vaults: {
         "my-vault": {
           SECRET_A: "abc123",
@@ -52,7 +51,7 @@ describe("secrets-state", () => {
     mkdirSync(path.dirname(statePath), { recursive: true });
     writeFileSync(statePath, "{broken json,,,", "utf-8");
     const state = loadSecretsState();
-    expect(state).toEqual({ version: 1, vaults: {} });
+    expect(state).toEqual({ vaults: {} });
   });
 
   test("hashValue returns consistent SHA-256 hex digest", () => {
