@@ -53,4 +53,4 @@ jobs:
 
       - name: Validate changeset packages
         if: steps.filter.outputs.changeset == 'true'
-        run: pnpm changeset status
+        run: pnpm changeset status --since origin/main
