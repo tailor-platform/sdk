@@ -37,6 +37,7 @@ describe("apply command integration tests", () => {
   }, 120000);
 
   afterAll(() => {
+    delete process.env.TAILOR_SDK_OUTPUT_DIR;
     vi.useRealTimers();
   });
 
