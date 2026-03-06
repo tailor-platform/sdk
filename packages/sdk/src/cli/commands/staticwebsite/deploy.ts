@@ -239,6 +239,7 @@ export const deployCommand = defineCommand({
       dir: arg(z.string(), {
         alias: "d",
         description: "Path to the static website files",
+        completion: { type: "directory" },
       }),
     })
     .strict(),

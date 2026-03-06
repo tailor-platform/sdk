@@ -12,7 +12,7 @@ import * as fsPromises from "node:fs/promises";
 import * as path from "pathe";
 import { defineCommand, arg } from "politty";
 import { z } from "zod";
-import { commonArgs, confirmationArgs, withCommonArgs } from "@/cli/shared/args";
+import { commonArgs, configArg, confirmationArgs, withCommonArgs } from "@/cli/shared/args";
 import { logBetaWarning } from "@/cli/shared/beta";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { logger, styles } from "@/cli/shared/logger";
@@ -355,10 +355,7 @@ export const generateCommand = defineCommand({
     .object({
       ...commonArgs,
       ...confirmationArgs,
-      config: arg(z.string().default("tailor.config.ts"), {
-        alias: "c",
-        description: "Path to SDK config file",
-      }),
+      ...configArg,
       name: arg(z.string().optional(), {
         alias: "n",
         description: "Optional description for the migration",
