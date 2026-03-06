@@ -22,7 +22,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Check for changeset
+      - name: Detect changes
         id: filter
         uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
         with:
@@ -31,9 +31,13 @@ jobs:
             changeset:
               - '.changeset/*.md'
               - '!.changeset/README.md'
+            packages:
+              - 'packages/sdk/**'
+              - 'packages/create-sdk/**'
+              - 'packages/tailor-proto/**'
 
       - name: Fail if no changeset
-        if: steps.filter.outputs.changeset != 'true'
+        if: steps.filter.outputs.packages == 'true' && steps.filter.outputs.changeset != 'true'
         run: |
           echo "::error::No changeset file found in this PR."
           echo ""
