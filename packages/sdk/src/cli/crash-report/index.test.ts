@@ -75,7 +75,7 @@ describe("reportCrash", () => {
     await reportCrash(new Error("send me"), "handledError");
 
     expect(mockFetch).toHaveBeenCalledWith(
-      expect.stringContaining("tailor.wiki"),
+      expect.stringContaining("example.com"),
       expect.objectContaining({ method: "POST" }),
     );
   });

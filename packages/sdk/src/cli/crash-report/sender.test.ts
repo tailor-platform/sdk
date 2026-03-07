@@ -38,7 +38,7 @@ describe("sendCrashReport", () => {
 
     expect(result).toBe(true);
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      expect.stringContaining("tailor.wiki"),
+      expect.stringContaining("example.com"),
       expect.objectContaining({
         method: "POST",
         headers: expect.objectContaining({
