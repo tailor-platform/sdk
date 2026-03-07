@@ -13,6 +13,7 @@ import { fetchMachineUserToken, initOperatorClient } from "../shared/client";
 import { extractAllNamespaces } from "../shared/config";
 import { loadConfig } from "../shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../shared/context";
+import { isCLIError } from "../shared/errors";
 import { logger } from "../shared/logger";
 import { executeScript } from "../shared/script-executor";
 import { resolveTypeNamespaces } from "../shared/tailordb-namespace";
@@ -414,6 +415,10 @@ async function runRepl(
         }
         printGqlResult(result, { json: options.json });
       } catch (error) {
+        if (isCLIError(error)) {
+          logger.log(error.format());
+          continue;
+        }
         if (error instanceof Error) {
           logger.error(error.message);
           continue;
