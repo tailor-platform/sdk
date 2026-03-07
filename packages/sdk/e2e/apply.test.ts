@@ -77,8 +77,6 @@ describe("E2E: Service deletion order", () => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "e2e-test-"));
     trackTempDir(tempDir);
 
-    // Set TAILOR_PLATFORM_SDK_TYPE_PATH to prevent writing to packages/sdk
-    process.env.TAILOR_PLATFORM_SDK_TYPE_PATH = path.join(tempDir, "user-defined.d.ts");
     const nodeModulesDir = path.join(tempDir, "node_modules", "@tailor-platform");
     fs.mkdirSync(nodeModulesDir, { recursive: true });
     fs.symlinkSync(sdkRoot, path.join(nodeModulesDir, "sdk"));

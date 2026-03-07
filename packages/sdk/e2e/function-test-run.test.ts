@@ -29,7 +29,7 @@ import { detectFunctionType } from "../src/cli/commands/function/detect";
 import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
 import { executeScript, type ScriptExecutionResult } from "../src/cli/shared/script-executor";
-import { trackWorkspace, trackTempDir } from "./globalSetup";
+import { trackWorkspace } from "./globalSetup";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -128,11 +128,6 @@ describe.sequential("E2E: function test-run", () => {
     workspaceId = createResp.workspace!.id;
     console.log(`Workspace created: ${workspaceId}`);
     trackWorkspace(workspaceId);
-
-    // Redirect SDK type output to temp dir
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "fn-test-run-e2e-"));
-    trackTempDir(tempDir);
-    process.env.TAILOR_PLATFORM_SDK_TYPE_PATH = path.join(tempDir, "user-defined.d.ts");
 
     // Apply example config to deploy DB schema, auth, machine users
     console.log("Applying example config...");
