@@ -352,7 +352,7 @@ async function runRepl(
   });
 
   logger.info(`Entering ${options.engine.toUpperCase()} REPL mode.`);
-  logger.info("Type .help for usage, .exit to quit.");
+  logger.info("Type \\help for usage, \\q to quit.");
 
   const lines: string[] = [];
   let emptyLineCount = 0;
@@ -371,11 +371,12 @@ async function runRepl(
       }
       const trimmed = line.trim();
 
-      if (lines.length === 0 && trimmed.startsWith(".")) {
-        if (trimmed === ".exit") {
+      if (lines.length === 0 && trimmed.startsWith("\\")) {
+        if (trimmed === "\\q") {
           return;
         }
-        if (trimmed === ".help") {
+
+        if (trimmed === "\\help") {
           printReplHelp(options.engine);
           continue;
         }
@@ -454,8 +455,8 @@ function getReplStatement(lines: string[], engine: QueryEngine): string {
 
 function printReplHelp(engine: QueryEngine): void {
   logger.log("REPL commands:");
-  logger.log("  .help  Show this help");
-  logger.log("  .exit  Exit REPL");
+  logger.log("  \\help  Show this help");
+  logger.log("  \\q     Exit REPL");
   if (engine === "sql") {
     logger.log("SQL execution: statement ending with ';' runs immediately.");
     return;
