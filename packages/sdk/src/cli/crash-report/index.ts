@@ -56,18 +56,14 @@ export function initCrashReporting(): void {
   const config = parseCrashReportConfig();
   if (!config.localEnabled && !config.remoteEnabled) return;
 
-  process.on("uncaughtException", (error) => {
-    logger.error(error instanceof Error ? error.message : String(error));
-    void reportCrash(error, "uncaughtException").finally(() => {
+  const handleFatal = (error: unknown, crashType: CrashType) => {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error(message);
+    void reportCrash(error, crashType).finally(() => {
       process.exit(1);
     });
-  });
+  };
 
-  process.on("unhandledRejection", (reason) => {
-    const error = reason instanceof Error ? reason : new Error(String(reason));
-    logger.error(error.message);
-    void reportCrash(error, "unhandledRejection").finally(() => {
-      process.exit(1);
-    });
-  });
+  process.on("uncaughtException", (error) => handleFatal(error, "uncaughtException"));
+  process.on("unhandledRejection", (reason) => handleFatal(reason, "unhandledRejection"));
 }

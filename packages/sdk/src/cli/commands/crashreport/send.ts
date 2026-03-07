@@ -71,13 +71,14 @@ function parseCrashLogFile(content: string): CrashReport | undefined {
     const stackMatch = content.match(/--- Stack Trace ---\n([\s\S]*?)$/);
     const stackTrace = stackMatch?.[1]?.trim() ?? "";
 
+    const osParts = get("OS").split(" ");
     const report: CrashReport = {
       id: get("Crash Report"),
       timestamp: get("Timestamp"),
       sdkVersion: get("SDK Version"),
       nodeVersion: get("Node Version"),
-      osPlatform: get("OS").split(" ")[0] ?? "",
-      osRelease: get("OS").split(" ").slice(1).join(" "),
+      osPlatform: osParts[0] ?? "",
+      osRelease: osParts.slice(1).join(" "),
       arch: get("Arch"),
       command: get("Command"),
       argv: parseArgv(get("Arguments")),

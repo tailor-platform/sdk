@@ -13,6 +13,10 @@ const URL_QUERY_PATTERN = /(\?|&)[^?\s]*/g;
 // SDK package path marker for relative paths
 const SDK_PACKAGE_MARKER = "packages/sdk/";
 
+function lastSegment(filePath: string, separator: string): string {
+  return filePath.split(separator).pop() ?? filePath;
+}
+
 // Flags whose values should be redacted
 const SENSITIVE_FLAGS = new Set([
   "--workspace-id",
@@ -60,12 +64,10 @@ export function sanitizeStackTrace(stack: string): string {
     }
 
     if (match.startsWith(HOME_DIR)) {
-      const basename = match.split("/").pop() ?? match;
-      return `~/<redacted>/${basename}`;
+      return `~/<redacted>/${lastSegment(match, "/")}`;
     }
 
-    const basename = match.split("/").pop() ?? match;
-    return `<external>/${basename}`;
+    return `<external>/${lastSegment(match, "/")}`;
   });
   result = result.replace(WINDOWS_PATH_PATTERN, (match) => {
     const normalized = match.replace(/\\/g, "/");
@@ -73,8 +75,7 @@ export function sanitizeStackTrace(stack: string): string {
     if (sdkIndex !== -1) {
       return normalized.slice(sdkIndex);
     }
-    const basename = match.split("\\").pop() ?? match;
-    return `<external>/${basename}`;
+    return `<external>/${lastSegment(match, "\\")}`;
   });
   return result;
 }
@@ -93,14 +94,9 @@ export function sanitizeMessage(message: string): string {
   result = result.replace(LONG_HEX_PATTERN, "<redacted>");
   result = result.replace(EMAIL_PATTERN, "<email>");
   result = result.replace(URL_QUERY_PATTERN, "?<redacted>");
-  result = result.replace(ABSOLUTE_PATH_PATTERN, (match) => {
-    const basename = match.split("/").pop() ?? match;
-    return `<path>/${basename}`;
-  });
-  result = result.replace(WINDOWS_PATH_PATTERN, (match) => {
-    const basename = match.split("\\").pop() ?? match;
-    return `<path>/${basename}`;
-  });
+  result = result.replace(ABSOLUTE_PATH_PATTERN, (match) => `<path>/${lastSegment(match, "/")}`);
+  result = result.replace(WINDOWS_PATH_PATTERN, (match) => `<path>/${lastSegment(match, "\\")}`);
+
   return result;
 }
 
@@ -140,21 +136,18 @@ export function sanitizeArgv(argv: string[]): string[] {
 
     // Redact things that look like absolute paths in arguments
     if (arg.startsWith("/") && arg.includes("/", 1)) {
-      const basename = arg.split("/").pop() ?? arg;
-      result.push(`<path>/${basename}`);
+      result.push(`<path>/${lastSegment(arg, "/")}`);
       continue;
     }
 
     // Redact Windows-style absolute paths (e.g., C:\Users\...)
     if (/^[A-Za-z]:\\/.test(arg)) {
-      const basename = arg.split("\\").pop() ?? arg;
-      result.push(`<path>/${basename}`);
+      result.push(`<path>/${lastSegment(arg, "\\")}`);
       continue;
     }
 
     // Redact values that look like email addresses
-    if (EMAIL_PATTERN.test(arg)) {
-      EMAIL_PATTERN.lastIndex = 0;
+    if (/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(arg)) {
       result.push("<email>");
       continue;
     }

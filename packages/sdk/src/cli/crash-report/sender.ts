@@ -14,24 +14,17 @@ const PRODUCTION_ENDPOINT = "https://api.tailor.wiki/hook/crash-report";
  */
 export async function sendCrashReport(report: CrashReport, ua: string): Promise<boolean> {
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), SEND_TIMEOUT_MS);
+    const response = await fetch(PRODUCTION_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "User-Agent": ua,
+      },
+      body: JSON.stringify(report),
+      signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
+    });
 
-    try {
-      const response = await fetch(PRODUCTION_ENDPOINT, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "User-Agent": ua,
-        },
-        body: JSON.stringify(report),
-        signal: controller.signal,
-      });
-
-      return response.ok;
-    } finally {
-      clearTimeout(timeout);
-    }
+    return response.ok;
   } catch {
     return false;
   }
