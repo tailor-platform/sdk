@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { query } from "./index";
+import { query, resolveQueryCommandInput } from "./index";
 
 const mockClient = {
   getApplication: vi.fn(),
@@ -509,5 +509,26 @@ describe("query", () => {
       "total",
       "createdAt",
     ]);
+  });
+});
+
+describe("resolveQueryCommandInput", () => {
+  test("accepts direct query mode", () => {
+    expect(resolveQueryCommandInput({ query: "select 1;", repl: false })).toEqual({
+      query: "select 1;",
+      repl: false,
+    });
+  });
+
+  test("accepts repl mode", () => {
+    expect(resolveQueryCommandInput({ repl: true })).toEqual({
+      repl: true,
+    });
+  });
+
+  test("requires one input mode", () => {
+    expect(() => resolveQueryCommandInput({ repl: false })).toThrow(
+      "Either --query or --repl is required.",
+    );
   });
 });

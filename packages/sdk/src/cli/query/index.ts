@@ -77,6 +77,8 @@ type SQLExecutionResult = {
   rowCount: number;
 };
 
+type QueryCommandInput = z.infer<typeof queryCommandInputSchema>;
+
 async function getNamespaceFromSqlQuery(
   workspaceId: string,
   query: string,
@@ -254,6 +256,30 @@ function parseExecutionResult(result: string): unknown {
   } catch {
     return result;
   }
+}
+
+/**
+ * Resolve mutually exclusive query input modes from CLI args.
+ * @param args - Query input flags
+ * @param args.query - Direct query string
+ * @param args.repl - Whether REPL mode is enabled
+ * @returns Normalized input mode
+ */
+export function resolveQueryCommandInput(args: {
+  query?: string;
+  repl: boolean;
+}): QueryCommandInput {
+  const mode = queryCommandInputSchema.safeParse(args);
+  if (mode.success) {
+    return mode.data;
+  }
+
+  const specifiedModes = [args.query != null, args.repl].filter(Boolean).length;
+  if (specifiedModes > 1) {
+    throw new Error("--query and --repl are mutually exclusive.");
+  }
+
+  throw new Error("Either --query or --repl is required.");
 }
 
 /**
@@ -603,17 +629,10 @@ export const queryCommand = defineCommand({
     })
     .strict(),
   run: withCommonArgs(async (args) => {
-    const mode = queryCommandInputSchema.safeParse({
+    const mode = resolveQueryCommandInput({
       query: args.query,
       repl: args.repl,
     });
-    if (!mode.success) {
-      if (args.repl && args.query != null) {
-        throw new Error("--query and --repl are mutually exclusive.");
-      }
-
-      throw new Error("Either --query or --repl is required.");
-    }
 
     const sharedOptions: QueryBaseOptions = {
       workspaceId: args["workspace-id"],
@@ -623,7 +642,7 @@ export const queryCommand = defineCommand({
       machineUser: args.machineuser,
     };
 
-    if (mode.data.repl) {
+    if (mode.repl) {
       await runRepl({
         ...sharedOptions,
         json: args.json,
@@ -631,7 +650,7 @@ export const queryCommand = defineCommand({
       return;
     }
 
-    const directQuery = mode.data.query;
+    const directQuery = mode.query;
 
     if (args.engine === "sql") {
       const result = await querySql({
