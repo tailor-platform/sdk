@@ -63,7 +63,7 @@ export function buildCrashReport(options: BuildCrashReportOptions): CrashReport 
     osPlatform: process.platform,
     osRelease: os.release(),
     arch: process.arch,
-    command: parseCommand(),
+    command: sanitizeMessage(parseCommand()),
     argv: sanitizeArgv(process.argv),
     errorName,
     errorMessage: sanitizeMessage(rawMessage),

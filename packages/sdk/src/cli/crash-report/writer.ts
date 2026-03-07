@@ -23,7 +23,7 @@ export function formatCrashReport(report: CrashReport): string {
     "",
     "--- Command ---",
     `Command: ${report.command}`,
-    `Arguments: ${report.argv.join(" ")}`,
+    `Arguments: ${JSON.stringify(report.argv)}`,
     "",
     "--- Error ---",
     `Name: ${report.errorName}`,

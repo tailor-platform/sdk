@@ -71,7 +71,7 @@ function parseCrashLogFile(content: string): CrashReport | undefined {
     const stackMatch = content.match(/--- Stack Trace ---\n([\s\S]*?)$/);
     const stackTrace = stackMatch?.[1]?.trim() ?? "";
 
-    return {
+    const report: CrashReport = {
       id: get("Crash Report"),
       timestamp: get("Timestamp"),
       sdkVersion: get("SDK Version"),
@@ -80,13 +80,31 @@ function parseCrashLogFile(content: string): CrashReport | undefined {
       osRelease: get("OS").split(" ").slice(1).join(" "),
       arch: get("Arch"),
       command: get("Command"),
-      argv: get("Arguments").split(" "),
+      argv: parseArgv(get("Arguments")),
       errorName: get("Name"),
       errorMessage: getMultiline("Message", "Stack Trace"),
       stackTrace: stackTrace === "(no stack trace available)" ? "" : stackTrace,
       crashType: get("Crash Type") as CrashReport["crashType"],
     };
+
+    if (!report.id || !report.timestamp || !report.crashType) {
+      return undefined;
+    }
+
+    return report;
   } catch {
     return undefined;
   }
+}
+
+function parseArgv(raw: string): string[] {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.every((v) => typeof v === "string")) {
+      return parsed as string[];
+    }
+  } catch {
+    // Fall back to space-separated for older crash log files
+  }
+  return raw.split(" ");
 }

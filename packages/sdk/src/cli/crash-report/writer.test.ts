@@ -41,6 +41,16 @@ describe("formatCrashReport", () => {
     expect(text).toContain("Cannot read properties of undefined");
   });
 
+  test("serializes argv as JSON array", () => {
+    const report = makeCrashReport({
+      argv: ["node", "tailor-sdk", "apply", "--body", '{"a": "b c"}'],
+    });
+    const text = formatCrashReport(report);
+    expect(text).toContain(
+      'Arguments: ["node","tailor-sdk","apply","--body","{\\"a\\": \\"b c\\"}"]',
+    );
+  });
+
   test("handles empty stack trace", () => {
     const report = makeCrashReport({ stackTrace: "" });
     const text = formatCrashReport(report);
