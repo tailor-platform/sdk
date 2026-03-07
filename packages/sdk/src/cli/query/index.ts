@@ -371,6 +371,10 @@ async function runRepl(
       }
       const trimmed = line.trim();
 
+      if (trimmed === "") {
+        continue;
+      }
+
       if (lines.length === 0 && trimmed.startsWith("\\")) {
         if (trimmed === "\\q") {
           return;
