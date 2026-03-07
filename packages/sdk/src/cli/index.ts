@@ -5,7 +5,7 @@ import { defineCommand, runMain } from "politty";
 import { withCompletionCommand } from "politty/completion";
 import { apiCommand } from "./commands/api";
 import { applyCommand } from "./commands/apply";
-import { crashReportCommand } from "./commands/crashreport";
+import { crashReportCommand } from "./commands/crash-report";
 import { executorCommand } from "./commands/executor";
 import { functionCommand } from "./commands/function";
 import { generateCommand } from "./commands/generate";
