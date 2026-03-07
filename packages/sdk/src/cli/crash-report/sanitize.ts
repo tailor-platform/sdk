@@ -17,38 +17,6 @@ function lastSegment(filePath: string, separator: string): string {
   return filePath.split(separator).pop() ?? filePath;
 }
 
-// Flags whose values should be redacted
-const SENSITIVE_FLAGS = new Set([
-  "--workspace-id",
-  "-w",
-  "--profile",
-  "-p",
-  "--profile-name",
-  "--token",
-  "--access-token",
-  "--refresh-token",
-  "--secret",
-  "--password",
-  "--api-key",
-  "--organization-id",
-  "--folder-id",
-  "--value",
-  "-v",
-  "--body",
-  "-b",
-  "--header",
-  "-H",
-  "--authorization",
-  "--cookie",
-  "--data",
-  "-d",
-  "--arg",
-  "-a",
-  "--email",
-  "--user",
-  "-u",
-]);
-
 /**
  * Sanitize a stack trace by replacing absolute paths with relative SDK paths.
  * External paths are replaced with `<external>/filename.ext`.
@@ -117,37 +85,35 @@ export function sanitizeArgv(argv: string[]): string[] {
       continue;
     }
 
-    // Handle --flag=value format
+    // --flag=value: keep flag name, redact value
     const eqIndex = arg.indexOf("=");
-    if (eqIndex !== -1) {
-      const flag = arg.slice(0, eqIndex);
-      if (SENSITIVE_FLAGS.has(flag)) {
-        result.push(`${flag}=<redacted>`);
-        continue;
-      }
+    if (eqIndex !== -1 && arg.startsWith("-")) {
+      result.push(`${arg.slice(0, eqIndex)}=<redacted>`);
+      continue;
     }
 
-    // Handle --flag value format (next arg is the value)
-    if (SENSITIVE_FLAGS.has(arg)) {
+    // --flag / -f: keep flag name, redact next arg as its value
+    if (arg.startsWith("-")) {
       result.push(arg);
       redactNext = true;
       continue;
     }
 
-    // Redact things that look like absolute paths in arguments
+    // Redact absolute paths
     if (arg.startsWith("/") && arg.includes("/", 1)) {
-      result.push(`<path>/${lastSegment(arg, "/")}`);
+      result.push("<path>");
       continue;
     }
 
-    // Redact Windows-style absolute paths (e.g., C:\Users\...)
+    // Redact Windows-style absolute paths
     if (/^[A-Za-z]:\\/.test(arg)) {
-      result.push(`<path>/${lastSegment(arg, "\\")}`);
+      result.push("<path>");
       continue;
     }
 
-    // Redact values that look like email addresses
-    if (/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(arg)) {
+    // Redact email addresses
+    if (EMAIL_PATTERN.test(arg)) {
+      EMAIL_PATTERN.lastIndex = 0;
       result.push("<email>");
       continue;
     }

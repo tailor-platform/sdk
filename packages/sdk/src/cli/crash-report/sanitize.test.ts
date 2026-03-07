@@ -110,101 +110,60 @@ describe("sanitizeMessage", () => {
 
 describe("sanitizeArgv", () => {
   test("keeps command and subcommand names", () => {
-    const argv = ["node", "tailor-sdk", "apply", "--yes"];
+    const argv = ["node", "tailor-sdk", "apply"];
     const result = sanitizeArgv(argv);
-    expect(result).toEqual(["node", "tailor-sdk", "apply", "--yes"]);
+    expect(result).toEqual(["node", "tailor-sdk", "apply"]);
   });
 
-  test("redacts --workspace-id value (space format)", () => {
+  test("redacts value after any long flag (space format)", () => {
     const argv = ["node", "tailor-sdk", "show", "--workspace-id", "some-uuid"];
     const result = sanitizeArgv(argv);
-    expect(result).toContain("--workspace-id");
-    expect(result).toContain("<redacted>");
-    expect(result).not.toContain("some-uuid");
+    expect(result).toEqual(["node", "tailor-sdk", "show", "--workspace-id", "<redacted>"]);
   });
 
-  test("redacts -w value (alias, space format)", () => {
+  test("redacts value after any short flag (space format)", () => {
     const argv = ["node", "tailor-sdk", "show", "-w", "some-uuid"];
     const result = sanitizeArgv(argv);
-    expect(result).toContain("-w");
-    expect(result).toContain("<redacted>");
-    expect(result).not.toContain("some-uuid");
+    expect(result).toEqual(["node", "tailor-sdk", "show", "-w", "<redacted>"]);
   });
 
-  test("redacts --workspace-id=value (equals format)", () => {
+  test("redacts --flag=value (equals format)", () => {
     const argv = ["node", "tailor-sdk", "show", "--workspace-id=some-uuid"];
     const result = sanitizeArgv(argv);
     expect(result).toContain("--workspace-id=<redacted>");
     expect(result).not.toContain("some-uuid");
   });
 
-  test("redacts --profile value", () => {
-    const argv = ["node", "tailor-sdk", "apply", "--profile", "my-profile"];
+  test("redacts value after any flag regardless of flag name", () => {
+    const argv = ["node", "tailor-sdk", "apply", "--region", "asia-northeast"];
     const result = sanitizeArgv(argv);
-    expect(result).toContain("--profile");
-    expect(result).toContain("<redacted>");
-    expect(result).not.toContain("my-profile");
+    expect(result).toEqual(["node", "tailor-sdk", "apply", "--region", "<redacted>"]);
   });
 
-  test("redacts absolute path arguments", () => {
-    const argv = ["node", "tailor-sdk", "apply", "--config", "/home/user/project/tailor.config.ts"];
+  test("treats consecutive flags correctly (no value between them)", () => {
+    // --verbose is a flag, --yes follows it and is treated as its value (redacted)
+    // This is a conservative tradeoff: we lose flag names after the first flag,
+    // but never leak sensitive values
+    const argv = ["node", "tailor-sdk", "apply", "--verbose", "--yes"];
     const result = sanitizeArgv(argv);
-    expect(result).toContain("<path>/tailor.config.ts");
+    expect(result).toEqual(["node", "tailor-sdk", "apply", "--verbose", "<redacted>"]);
+  });
+
+  test("redacts absolute path positional arguments", () => {
+    const argv = ["node", "tailor-sdk", "/home/user/project/tailor.config.ts"];
+    const result = sanitizeArgv(argv);
+    expect(result).toContain("<path>");
     expect(result).not.toContain("/home/user/");
   });
 
-  test("preserves non-sensitive flags", () => {
-    const argv = ["node", "tailor-sdk", "apply", "--verbose", "--yes"];
+  test("redacts Windows-style absolute path positional arguments", () => {
+    const argv = ["node", "tailor-sdk", "C:\\Users\\admin\\project\\tailor.config.ts"];
     const result = sanitizeArgv(argv);
-    expect(result).toEqual(["node", "tailor-sdk", "apply", "--verbose", "--yes"]);
-  });
-
-  test("redacts --value flag", () => {
-    const argv = ["node", "tailor-sdk", "secret", "create", "--value", "my-secret"];
-    const result = sanitizeArgv(argv);
-    expect(result).toContain("--value");
-    expect(result).toContain("<redacted>");
-    expect(result).not.toContain("my-secret");
-  });
-
-  test("redacts -b (body) flag", () => {
-    const argv = ["node", "tailor-sdk", "api", "-b", '{"password":"secret"}'];
-    const result = sanitizeArgv(argv);
-    expect(result).toContain("-b");
-    expect(result).toContain("<redacted>");
-    expect(result).not.toContain("secret");
-  });
-
-  test("redacts -H (header) flag", () => {
-    const argv = ["node", "tailor-sdk", "api", "-H", "Authorization: Bearer token123"];
-    const result = sanitizeArgv(argv);
-    expect(result).toContain("-H");
-    expect(result).toContain("<redacted>");
-    expect(result).not.toContain("token123");
-  });
-
-  test("redacts Windows-style absolute path arguments", () => {
-    const argv = [
-      "node",
-      "tailor-sdk",
-      "apply",
-      "--config",
-      "C:\\Users\\admin\\project\\tailor.config.ts",
-    ];
-    const result = sanitizeArgv(argv);
-    expect(result).toContain("<path>/tailor.config.ts");
+    expect(result).toContain("<path>");
     expect(result).not.toContain("C:\\Users\\admin");
   });
 
-  test("redacts --data/-d flag values", () => {
-    const argv = ["node", "tailor-sdk", "executor", "trigger", "-d", '{"secret":"value"}'];
-    const result = sanitizeArgv(argv);
-    expect(result).toContain("-d");
-    expect(result).toContain("<redacted>");
-    expect(result).not.toContain("secret");
-  });
-
-  test("redacts email address arguments", () => {
+  test("redacts email address positional arguments", () => {
     const argv = ["node", "tailor-sdk", "user", "switch", "user@example.com"];
     const result = sanitizeArgv(argv);
     expect(result).toContain("<email>");
