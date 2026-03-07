@@ -195,4 +195,19 @@ describe("sanitizeArgv", () => {
     expect(result).toContain("<path>/tailor.config.ts");
     expect(result).not.toContain("C:\\Users\\admin");
   });
+
+  test("redacts --data/-d flag values", () => {
+    const argv = ["node", "tailor-sdk", "executor", "trigger", "-d", '{"secret":"value"}'];
+    const result = sanitizeArgv(argv);
+    expect(result).toContain("-d");
+    expect(result).toContain("<redacted>");
+    expect(result).not.toContain("secret");
+  });
+
+  test("redacts email address arguments", () => {
+    const argv = ["node", "tailor-sdk", "user", "switch", "user@example.com"];
+    const result = sanitizeArgv(argv);
+    expect(result).toContain("<email>");
+    expect(result).not.toContain("user@example.com");
+  });
 });

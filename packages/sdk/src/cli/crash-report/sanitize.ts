@@ -36,6 +36,13 @@ const SENSITIVE_FLAGS = new Set([
   "-H",
   "--authorization",
   "--cookie",
+  "--data",
+  "-d",
+  "--arg",
+  "-a",
+  "--email",
+  "--user",
+  "-u",
 ]);
 
 /**
@@ -142,6 +149,13 @@ export function sanitizeArgv(argv: string[]): string[] {
     if (/^[A-Za-z]:\\/.test(arg)) {
       const basename = arg.split("\\").pop() ?? arg;
       result.push(`<path>/${basename}`);
+      continue;
+    }
+
+    // Redact values that look like email addresses
+    if (EMAIL_PATTERN.test(arg)) {
+      EMAIL_PATTERN.lastIndex = 0;
+      result.push("<email>");
       continue;
     }
 

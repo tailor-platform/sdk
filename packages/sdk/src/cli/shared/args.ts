@@ -224,8 +224,12 @@ export const withCommonArgs =
         if (args.verbose && error.stack) {
           logger.debug(`\nStack trace:\n${error.stack}`);
         }
-        const { reportCrash } = await import("@/cli/crash-report");
-        await reportCrash(error, "handledError");
+        // Only report unexpected errors (TypeError, RangeError, etc.), not plain
+        // Error which is commonly used for user-facing validation/not-found errors.
+        if (error.constructor !== Error) {
+          const { reportCrash } = await import("@/cli/crash-report");
+          await reportCrash(error, "handledError");
+        }
       } else {
         logger.error(`Unknown error: ${error}`);
         const { reportCrash } = await import("@/cli/crash-report");
