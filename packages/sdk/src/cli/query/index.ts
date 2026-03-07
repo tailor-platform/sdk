@@ -5,7 +5,7 @@ import {
   type AuthInvoker,
   type MachineUser,
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
-import { parse, toSql } from "pgsql-ast-parser";
+import { parse as parseSql, toSql } from "pgsql-ast-parser";
 import { arg, defineCommand } from "politty";
 import { z } from "zod";
 import { bundleQueryScript } from "../bundler/query/query-bundler";
@@ -19,6 +19,7 @@ import { logger } from "../shared/logger";
 import { executeScript } from "../shared/script-executor";
 import { resolveTypeNamespaces } from "../shared/tailordb-namespace";
 import { mapQueryExecutionError } from "./errors";
+import { isGraphQLInputComplete } from "./graphql-repl";
 import { isSqlInputComplete } from "./sql-repl";
 import {
   extractColumnTemplate,
@@ -369,7 +370,6 @@ async function runRepl(
   logger.info("Type \\help for usage, \\q to quit.");
 
   const lines: string[] = [];
-  let emptyLineCount = 0;
 
   try {
     while (true) {
@@ -408,20 +408,12 @@ async function runRepl(
         if (!isSqlInputComplete(lines.join("\n"))) {
           continue;
         }
-      } else {
-        if (trimmed === "") {
-          emptyLineCount += 1;
-        } else {
-          emptyLineCount = 0;
-        }
-        if (emptyLineCount < 2) {
-          continue;
-        }
+      } else if (!isGraphQLInputComplete(lines.join("\n"))) {
+        continue;
       }
 
       const statement = getReplStatement(lines, options.engine);
       lines.length = 0;
-      emptyLineCount = 0;
 
       if (statement.length === 0) {
         continue;
@@ -479,7 +471,7 @@ function printReplHelp(engine: QueryEngine): void {
     logger.log("SQL execution: statement ending with ';' runs immediately.");
     return;
   }
-  logger.log("GraphQL execution: submit two consecutive empty lines to run.");
+  logger.log("GraphQL execution: a complete GraphQL document runs immediately.");
 }
 
 /**
@@ -702,7 +694,7 @@ function printSingleSqlResult(
 
 function splitSqlStatements(query: string): string[] {
   try {
-    const statements = parse(query);
+    const statements = parseSql(query);
     if (statements.length === 0) return [];
     return statements.map((s) => toSql.statement(s));
   } catch {
