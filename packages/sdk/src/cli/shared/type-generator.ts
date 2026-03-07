@@ -196,10 +196,6 @@ function collectAttributesFromConfig(config: AppConfig): ExtractedAttributes {
  * @returns Absolute path to the type definition file
  */
 function resolveTypeDefinitionPath(configPath: string): string {
-  const typePath = process.env.TAILOR_PLATFORM_SDK_TYPE_PATH;
-  if (typePath) {
-    return path.resolve(process.cwd(), typePath);
-  }
   return path.join(path.dirname(path.resolve(configPath)), "user-defined.d.ts");
 }
 
