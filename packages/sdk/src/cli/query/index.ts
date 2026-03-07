@@ -371,7 +371,7 @@ async function runRepl(
       }
       const trimmed = line.trim();
 
-      if (trimmed === "") {
+      if (lines.length === 0 && trimmed === "") {
         continue;
       }
 
