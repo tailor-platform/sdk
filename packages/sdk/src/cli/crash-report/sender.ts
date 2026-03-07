@@ -1,4 +1,4 @@
-import type { CrashReport } from "./report";
+import type { CrashReport, RemoteCrashReport } from "./report";
 
 const SEND_TIMEOUT_MS = 5000;
 // Placeholder endpoint; replace with the real URL once the crash report ingestion service is deployed.
@@ -12,7 +12,10 @@ const ENDPOINT = process.env.TAILOR_CRASH_REPORT_ENDPOINT || PRODUCTION_ENDPOINT
  * @param ua - User-Agent header value
  * @returns true if the request succeeded, false otherwise
  */
-export async function sendCrashReport(report: CrashReport, ua: string): Promise<boolean> {
+export async function sendCrashReport(
+  report: CrashReport | RemoteCrashReport,
+  ua: string,
+): Promise<boolean> {
   try {
     const response = await fetch(ENDPOINT, {
       method: "POST",

@@ -1,7 +1,7 @@
 import { logger } from "@/cli/shared/logger";
 import { readPackageJson } from "@/cli/shared/package-json";
 import { parseCrashReportConfig } from "./config";
-import { buildCrashReport, type CrashType } from "./report";
+import { buildCrashReport, toRemoteReport, type CrashType } from "./report";
 import { sendCrashReport } from "./sender";
 import { writeCrashReport } from "./writer";
 
@@ -40,7 +40,7 @@ export async function reportCrash(error: unknown, crashType: CrashType): Promise
     if (config.remoteEnabled) {
       const { userAgent } = await import("@/cli/shared/client");
       const ua = await userAgent();
-      await sendCrashReport(report, ua);
+      await sendCrashReport(toRemoteReport(report), ua);
     }
   } catch {
     // Never throw from crash reporting

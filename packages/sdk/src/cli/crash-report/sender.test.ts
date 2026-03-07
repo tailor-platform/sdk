@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { sendCrashReport } from "./sender";
-import type { CrashReport } from "./report";
+import type { CrashReport, RemoteCrashReport } from "./report";
 
 function makeCrashReport(): CrashReport {
   return {
@@ -75,5 +75,32 @@ describe("sendCrashReport", () => {
     const body = JSON.parse(call[1]!.body as string) as CrashReport;
     expect(body.id).toBe(report.id);
     expect(body.errorName).toBe(report.errorName);
+  });
+
+  test("accepts RemoteCrashReport", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true });
+    const remoteReport: RemoteCrashReport = {
+      id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+      timestamp: "2026-03-07T10:30:00.000Z",
+      sdkVersion: "1.0.0",
+      nodeVersion: "v22.0.0",
+      osPlatform: "darwin",
+      osRelease: "25.3.0",
+      arch: "arm64",
+      command: "apply",
+      errorName: "TypeError",
+      crashType: "handledError",
+      sdkStackTrace: ["    at foo (packages/sdk/src/cli/index.ts:10:5)"],
+    };
+
+    const result = await sendCrashReport(remoteReport, "tailor-sdk/1.0.0");
+
+    expect(result).toBe(true);
+    const call = vi.mocked(globalThis.fetch).mock.calls[0];
+    const body = JSON.parse(call[1]!.body as string);
+    expect(body).not.toHaveProperty("argv");
+    expect(body).not.toHaveProperty("errorMessage");
+    expect(body).not.toHaveProperty("stackTrace");
+    expect(body.sdkStackTrace).toEqual(remoteReport.sdkStackTrace);
   });
 });

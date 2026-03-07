@@ -4,6 +4,24 @@ import { sanitizeArgv, sanitizeMessage, sanitizeStackTrace } from "./sanitize";
 
 export type CrashType = "uncaughtException" | "unhandledRejection" | "handledError";
 
+/**
+ * Strict allowlist report for auto-send to remote endpoint.
+ * Contains only fields that are provably free of PII.
+ */
+export interface RemoteCrashReport {
+  id: string;
+  timestamp: string;
+  sdkVersion: string;
+  nodeVersion: string;
+  osPlatform: string;
+  osRelease: string;
+  arch: string;
+  command: string;
+  errorName: string;
+  crashType: CrashType;
+  sdkStackTrace: string[];
+}
+
 export interface CrashReport {
   id: string;
   timestamp: string;
@@ -74,5 +92,37 @@ export function buildCrashReport(options: BuildCrashReportOptions): CrashReport 
     errorMessage: sanitizeMessage(rawMessage),
     stackTrace: sanitizeStackTrace(rawStack),
     crashType,
+  };
+}
+
+/**
+ * Extract stack frames that originate from the SDK source code.
+ * @param stackTrace - Full stack trace string
+ * @returns Array of stack frame lines containing packages/sdk/ paths
+ */
+export function extractSdkStackFrames(stackTrace: string): string[] {
+  if (!stackTrace) return [];
+  return stackTrace.split("\n").filter((line) => line.includes("packages/sdk/"));
+}
+
+/**
+ * Convert a full CrashReport to a RemoteCrashReport with only allowlisted fields.
+ * Used for auto-send to the remote endpoint where PII must be excluded.
+ * @param report - Full crash report
+ * @returns Report containing only provably safe fields
+ */
+export function toRemoteReport(report: CrashReport): RemoteCrashReport {
+  return {
+    id: report.id,
+    timestamp: report.timestamp,
+    sdkVersion: report.sdkVersion,
+    nodeVersion: report.nodeVersion,
+    osPlatform: report.osPlatform,
+    osRelease: report.osRelease,
+    arch: report.arch,
+    command: report.command,
+    errorName: report.errorName,
+    crashType: report.crashType,
+    sdkStackTrace: extractSdkStackFrames(report.stackTrace),
   };
 }

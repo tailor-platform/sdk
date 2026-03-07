@@ -59,7 +59,7 @@ describe("reportCrash", () => {
     expect(files.length).toBe(0);
   });
 
-  test("sends crash report when remoteEnabled", async () => {
+  test("sends remote report without PII fields when remoteEnabled", async () => {
     const mockFetch = vi.fn().mockResolvedValue({ ok: true });
     globalThis.fetch = mockFetch;
 
@@ -78,6 +78,16 @@ describe("reportCrash", () => {
       expect.stringContaining("example.com"),
       expect.objectContaining({ method: "POST" }),
     );
+
+    // Verify the payload uses RemoteCrashReport (allowlisted fields only)
+    const call = mockFetch.mock.calls[0];
+    const body = JSON.parse(call[1].body as string);
+    expect(body).not.toHaveProperty("argv");
+    expect(body).not.toHaveProperty("errorMessage");
+    expect(body).not.toHaveProperty("stackTrace");
+    expect(body).toHaveProperty("sdkStackTrace");
+    expect(body).toHaveProperty("id");
+    expect(body).toHaveProperty("errorName");
   });
 
   test("never throws even if writing fails", async () => {
