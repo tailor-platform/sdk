@@ -17,6 +17,7 @@ import { logger } from "../shared/logger";
 import { executeScript } from "../shared/script-executor";
 import { resolveTypeNamespaces } from "../shared/tailordb-namespace";
 import { mapQueryExecutionError } from "./errors";
+import { startInteractiveSession } from "./interactive";
 import {
   extractColumnTemplate,
   extractTypeNamesFromSql,
@@ -34,6 +35,8 @@ const queryOptionsSchema = z.object({
   query: z.string(),
   machineUser: z.string(),
 });
+
+type InteractiveSessionOptions = Omit<QueryOptions, "query"> & { engine: QueryEngine };
 
 export type QueryEngine = z.infer<typeof queryEngineSchema>;
 type QueryOptions = z.input<typeof queryOptionsSchema>;
@@ -339,6 +342,74 @@ async function queryGql(options: QuerySharedOptions): Promise<GQLQueryDispatchRe
   return result;
 }
 
+async function runInteractiveSession(options: InteractiveSessionOptions): Promise<void> {
+  const accessToken = await loadAccessToken({
+    useProfile: true,
+    profile: options.profile,
+  });
+  const client = await initOperatorClient(accessToken);
+  const workspaceId = loadWorkspaceId({
+    workspaceId: options.workspaceId,
+    profile: options.profile,
+  });
+  const { config } = await loadConfig(options.configPath);
+  const namespaces = extractAllNamespaces(config);
+  const { application } = await client.getApplication({
+    workspaceId,
+    applicationName: config.name,
+  });
+
+  if (!application?.authNamespace) {
+    throw new Error(`Application ${config.name} does not have an auth configuration.`);
+  }
+
+  const { machineUser: machineUserResource } = await client.getAuthMachineUser({
+    workspaceId,
+    authNamespace: application.authNamespace,
+    name: options.machineUser,
+  });
+
+  if (!machineUserResource) {
+    throw new Error(`Machine user ${options.machineUser} not found.`);
+  }
+
+  const invoker = create(AuthInvokerSchema, {
+    namespace: application.authNamespace,
+    machineUserName: machineUserResource.name,
+  });
+
+  await startInteractiveSession({
+    engine: options.engine,
+    onQuery: async (queryText: string) => {
+      const bundledCode = await bundleQueryScript(options.engine);
+
+      if (options.engine === "sql") {
+        const namespace = await getNamespaceFromSqlQuery(
+          workspaceId,
+          queryText,
+          client,
+          namespaces,
+        );
+        const result = await sqlQuery(client, invoker, {
+          workspaceId,
+          namespace,
+          bundledCode,
+          query: queryText,
+        });
+        const reordered = await reorderSqlColumns(result, config, namespace, queryText);
+        printSqlResult(reordered);
+      } else {
+        const result = await gqlQuery(client, invoker, application, machineUserResource, {
+          workspaceId,
+          bundledCode,
+          query: queryText,
+        });
+        printGqlResult(result);
+      }
+    },
+  });
+}
+
 async function reorderSqlColumns(
   result: SQLQueryDispatchResult,
   config: LoadedConfig,
@@ -427,7 +498,7 @@ function reorderRowByTemplate(row: SQLResultRow, expectedOrder: string[]): SQLRe
 
 export const queryCommand = defineCommand({
   name: "query",
-  description: "Run SQL/GraphQL query.",
+  description: "Run SQL/GraphQL query. Starts interactive mode when -q is omitted.",
   args: z
     .object({
       ...commonArgs,
@@ -436,9 +507,9 @@ export const queryCommand = defineCommand({
       engine: arg(queryEngineSchema, {
         description: "Query engine (sql or gql)",
       }),
-      query: arg(z.string(), {
+      query: arg(z.string().optional(), {
         alias: "q",
-        description: "Query string to execute directly",
+        description: "Query string to execute directly (omit for interactive mode)",
       }),
       machineuser: arg(z.string(), {
         alias: "m",
@@ -447,6 +518,20 @@ export const queryCommand = defineCommand({
     })
     .strict(),
   run: withCommonArgs(async (args) => {
+    if (!args.query) {
+      if (!process.stdin.isTTY) {
+        throw new Error("Interactive mode requires a TTY. Use -q to pass a query directly.");
+      }
+      await runInteractiveSession({
+        workspaceId: args["workspace-id"],
+        profile: args.profile,
+        configPath: args.config,
+        engine: args.engine,
+        machineUser: args.machineuser,
+      });
+      return;
+    }
+
     const sharedOptions: QuerySharedOptions = {
       workspaceId: args["workspace-id"],
       profile: args.profile,
