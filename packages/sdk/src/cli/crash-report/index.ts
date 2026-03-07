@@ -25,7 +25,8 @@ export async function reportCrash(error: unknown, crashType: CrashType): Promise
     const report = buildCrashReport({ error, sdkVersion, crashType });
 
     const filePath = writeCrashReport(report, config.localDir);
-    if (filePath) {
+    // Only show banner for truly unexpected crashes, not routine handled errors
+    if (filePath && crashType !== "handledError") {
       logger.log("");
       logger.log("An unexpected error occurred. A crash report has been saved to:");
       logger.log(`  ${filePath}`);
@@ -54,6 +55,7 @@ export function initCrashReporting(): void {
   if (!config.localEnabled) return;
 
   process.on("uncaughtException", (error) => {
+    logger.error(error instanceof Error ? error.message : String(error));
     void reportCrash(error, "uncaughtException").finally(() => {
       process.exit(1);
     });
@@ -61,6 +63,7 @@ export function initCrashReporting(): void {
 
   process.on("unhandledRejection", (reason) => {
     const error = reason instanceof Error ? reason : new Error(String(reason));
+    logger.error(error.message);
     void reportCrash(error, "unhandledRejection").finally(() => {
       process.exit(1);
     });

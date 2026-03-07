@@ -28,6 +28,14 @@ const SENSITIVE_FLAGS = new Set([
   "--api-key",
   "--organization-id",
   "--folder-id",
+  "--value",
+  "-v",
+  "--body",
+  "-b",
+  "--header",
+  "-H",
+  "--authorization",
+  "--cookie",
 ]);
 
 /**
@@ -72,6 +80,8 @@ export function sanitizeStackTrace(stack: string): string {
  */
 export function sanitizeMessage(message: string): string {
   let result = message;
+  // Strip serialized request/response bodies that may contain secrets
+  result = result.replace(/\nRequest:\s*[\s\S]*$/, "\nRequest: <redacted>");
   result = result.replace(UUID_PATTERN, "<uuid>");
   result = result.replace(LONG_HEX_PATTERN, "<redacted>");
   result = result.replace(EMAIL_PATTERN, "<email>");

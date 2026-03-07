@@ -91,6 +91,15 @@ describe("sanitizeMessage", () => {
     expect(sanitizeMessage(message)).toBe("Something went wrong");
   });
 
+  test("strips serialized request bodies from error messages", () => {
+    const message =
+      'Failed to apply config\nRequest: {"secretmanagerSecretValue":"s3cret","name":"test"}';
+    const result = sanitizeMessage(message);
+    expect(result).toContain("Failed to apply config");
+    expect(result).not.toContain("s3cret");
+    expect(result).toContain("Request: <redacted>");
+  });
+
   test("redacts Windows-style absolute paths keeping basename", () => {
     const message = "File not found: C:\\Users\\admin\\project\\tailor.config.ts";
     const result = sanitizeMessage(message);
@@ -148,6 +157,30 @@ describe("sanitizeArgv", () => {
     const argv = ["node", "tailor-sdk", "apply", "--verbose", "--yes"];
     const result = sanitizeArgv(argv);
     expect(result).toEqual(["node", "tailor-sdk", "apply", "--verbose", "--yes"]);
+  });
+
+  test("redacts --value flag", () => {
+    const argv = ["node", "tailor-sdk", "secret", "create", "--value", "my-secret"];
+    const result = sanitizeArgv(argv);
+    expect(result).toContain("--value");
+    expect(result).toContain("<redacted>");
+    expect(result).not.toContain("my-secret");
+  });
+
+  test("redacts -b (body) flag", () => {
+    const argv = ["node", "tailor-sdk", "api", "-b", '{"password":"secret"}'];
+    const result = sanitizeArgv(argv);
+    expect(result).toContain("-b");
+    expect(result).toContain("<redacted>");
+    expect(result).not.toContain("secret");
+  });
+
+  test("redacts -H (header) flag", () => {
+    const argv = ["node", "tailor-sdk", "api", "-H", "Authorization: Bearer token123"];
+    const result = sanitizeArgv(argv);
+    expect(result).toContain("-H");
+    expect(result).toContain("<redacted>");
+    expect(result).not.toContain("token123");
   });
 
   test("redacts Windows-style absolute path arguments", () => {
