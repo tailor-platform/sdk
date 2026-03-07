@@ -17,22 +17,24 @@ import { writeCrashReport } from "./writer";
 export async function reportCrash(error: unknown, crashType: CrashType): Promise<void> {
   try {
     const config = parseCrashReportConfig();
-    if (!config.localEnabled) return;
+    if (!config.localEnabled && !config.remoteEnabled) return;
 
     const packageJson = await readPackageJson();
     const sdkVersion = packageJson.version ?? "unknown";
 
     const report = buildCrashReport({ error, sdkVersion, crashType });
 
-    const filePath = writeCrashReport(report, config.localDir);
-    // Only show banner for truly unexpected crashes, not routine handled errors
-    if (filePath && crashType !== "handledError") {
-      logger.log("");
-      logger.log("An unexpected error occurred. A crash report has been saved to:");
-      logger.log(`  ${filePath}`);
-      logger.log("");
-      logger.log("To submit this report:");
-      logger.log(`  tailor-sdk crash-report send ${filePath}`);
+    if (config.localEnabled) {
+      const filePath = writeCrashReport(report, config.localDir);
+      // Only show banner for truly unexpected crashes, not routine handled errors
+      if (filePath && crashType !== "handledError") {
+        logger.log("");
+        logger.log("An unexpected error occurred. A crash report has been saved to:");
+        logger.log(`  ${filePath}`);
+        logger.log("");
+        logger.log("To submit this report:");
+        logger.log(`  tailor-sdk crash-report send ${filePath}`);
+      }
     }
 
     if (config.remoteEnabled) {
@@ -52,7 +54,7 @@ export async function reportCrash(error: unknown, crashType: CrashType): Promise
  */
 export function initCrashReporting(): void {
   const config = parseCrashReportConfig();
-  if (!config.localEnabled) return;
+  if (!config.localEnabled && !config.remoteEnabled) return;
 
   process.on("uncaughtException", (error) => {
     logger.error(error instanceof Error ? error.message : String(error));

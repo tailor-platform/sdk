@@ -6,7 +6,7 @@ const HOME_DIR = os.homedir();
 const UUID_PATTERN = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
 const LONG_HEX_PATTERN = /\b[0-9a-fA-F]{32,}\b/g;
 const EMAIL_PATTERN = /\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b/g;
-const ABSOLUTE_PATH_PATTERN = /(?:\/(?:[\w.@-]+\/)+[\w.@-]+)/g;
+const ABSOLUTE_PATH_PATTERN = /(?:\/(?:[\w.@\- ]+\/)+[\w.@\- ]+)/g;
 const WINDOWS_PATH_PATTERN = /(?:[A-Za-z]:\\(?:[\w.@\- ]+\\)+[\w.@\- ]+)/g;
 const URL_QUERY_PATTERN = /(\?|&)[^?\s]*/g;
 

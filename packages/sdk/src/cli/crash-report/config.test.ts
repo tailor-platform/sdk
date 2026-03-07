@@ -50,13 +50,13 @@ describe("parseCrashReportConfig", () => {
     expect(config.remoteEnabled).toBe(true);
   });
 
-  test("remoteEnabled is false when local is off even if REMOTE is on", async () => {
+  test("remoteEnabled is independent of localEnabled", async () => {
     process.env.TAILOR_CRASH_REPORTS_LOCAL = "off";
     process.env.TAILOR_CRASH_REPORTS_REMOTE = "on";
     const { parseCrashReportConfig } = await import("./config");
     const config = parseCrashReportConfig();
     expect(config.localEnabled).toBe(false);
-    expect(config.remoteEnabled).toBe(false);
+    expect(config.remoteEnabled).toBe(true);
   });
 });
 

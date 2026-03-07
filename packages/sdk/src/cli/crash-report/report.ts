@@ -26,9 +26,13 @@ interface BuildCrashReportOptions {
   crashType: CrashType;
 }
 
+// Maximum subcommand depth to keep (e.g., "workspace create" = 2 tokens).
+// Positional arguments beyond this are potentially sensitive user input.
+const MAX_COMMAND_TOKENS = 2;
+
 /**
  * Parse the command name from process.argv.
- * Extracts the first non-flag arguments after the script name.
+ * Extracts up to MAX_COMMAND_TOKENS non-flag arguments after the script name.
  * @returns Parsed command string
  */
 function parseCommand(): string {
@@ -36,6 +40,7 @@ function parseCommand(): string {
   const commandParts: string[] = [];
   for (const arg of args) {
     if (arg.startsWith("-")) break;
+    if (commandParts.length >= MAX_COMMAND_TOKENS) break;
     commandParts.push(arg);
   }
   return commandParts.join(" ") || "<unknown>";

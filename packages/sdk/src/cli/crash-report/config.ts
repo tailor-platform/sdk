@@ -25,13 +25,12 @@ export function parseCrashReportConfig(): CrashReportConfig {
   }
 
   const localEnabled = (process.env.TAILOR_CRASH_REPORTS_LOCAL ?? "on").toLowerCase() !== "off";
-  const remoteEnabled =
-    localEnabled && (process.env.TAILOR_CRASH_REPORTS_REMOTE ?? "off").toLowerCase() === "on";
+  const remoteEnabled = (process.env.TAILOR_CRASH_REPORTS_REMOTE ?? "off").toLowerCase() === "on";
   const localDir = xdgConfig ? path.join(xdgConfig, "tailor-platform", "crash-reports") : "";
 
   return {
     localEnabled: localEnabled && localDir !== "",
-    remoteEnabled: remoteEnabled && localDir !== "",
+    remoteEnabled,
     localDir,
   };
 }
