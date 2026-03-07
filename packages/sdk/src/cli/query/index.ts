@@ -38,29 +38,18 @@ const queryBaseOptionsSchema = z.object({
 const queryOptionsSchema = queryBaseOptionsSchema.extend({
   query: z.string(),
 });
-const queryCommandInputSchema = z
-  .object({
-    query: z.string().optional(),
-    repl: z.boolean(),
-  })
-  .superRefine((input, context) => {
-    if (input.repl && input.query !== undefined) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["query"],
-        message: "--repl and --query cannot be used together.",
-      });
-      return;
-    }
-
-    if (!input.repl && (input.query === undefined || input.query.trim().length === 0)) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["query"],
-        message: "--query is required unless --repl is set.",
-      });
-    }
-  });
+const queryCommandInputSchema = z.union([
+  z.object({
+    query: z.string().refine((value) => value.trim().length > 0, {
+      message: "--query is required unless --repl is set.",
+    }),
+    repl: z.literal(false),
+  }),
+  z.object({
+    query: z.undefined().optional(),
+    repl: z.literal(true),
+  }),
+]);
 
 export type QueryEngine = z.infer<typeof queryEngineSchema>;
 type QueryOptions = z.input<typeof queryOptionsSchema>;
@@ -620,7 +609,11 @@ export const queryCommand = defineCommand({
       repl: args.repl,
     });
     if (!mode.success) {
-      throw new Error(mode.error.issues[0].message);
+      if (args.repl && args.query != null) {
+        throw new Error("--query and --repl are mutually exclusive.");
+      }
+
+      throw new Error("Either --query or --repl is required.");
     }
 
     const sharedOptions: QueryBaseOptions = {
@@ -640,9 +633,6 @@ export const queryCommand = defineCommand({
     }
 
     const directQuery = mode.data.query;
-    if (directQuery === undefined) {
-      throw new Error("--query is required unless --repl is set.");
-    }
 
     if (args.engine === "sql") {
       const result = await querySql({
