@@ -17,6 +17,7 @@ import { logger } from "../shared/logger";
 import { executeScript } from "../shared/script-executor";
 import { resolveTypeNamespaces } from "../shared/tailordb-namespace";
 import { mapQueryExecutionError } from "./errors";
+import { startInteractiveSession } from "./interactive";
 import {
   extractColumnTemplate,
   extractTypeNamesFromSql,
@@ -26,16 +27,19 @@ import { loadTypeFieldOrder } from "./type-field-order";
 import type { Application } from "@tailor-proto/tailor/v1/application_resource_pb";
 
 const queryEngineSchema = z.enum(["sql", "gql"]);
-const queryOptionsSchema = z.object({
+const queryBaseOptionsSchema = z.object({
   workspaceId: z.string().optional(),
   profile: z.string().optional(),
   configPath: z.string().optional(),
   engine: queryEngineSchema,
-  query: z.string(),
   machineUser: z.string(),
+});
+const queryOptionsSchema = queryBaseOptionsSchema.extend({
+  query: z.string(),
 });
 
 export type QueryEngine = z.infer<typeof queryEngineSchema>;
+type QueryBaseOptions = z.input<typeof queryBaseOptionsSchema>;
 type QueryOptions = z.input<typeof queryOptionsSchema>;
 type QuerySharedOptions = Omit<QueryOptions, "engine">;
 type Client = Awaited<ReturnType<typeof initOperatorClient>>;
@@ -104,8 +108,8 @@ async function getNamespaceFromSqlQuery(
   );
 }
 
-async function loadOptions(options: QueryOptions) {
-  const result = queryOptionsSchema.safeParse(options);
+async function loadOptions(options: QueryBaseOptions) {
+  const result = queryBaseOptionsSchema.safeParse(options);
 
   if (!result.success) {
     throw new Error(result.error.issues[0].message);
@@ -141,32 +145,14 @@ async function loadOptions(options: QueryOptions) {
     throw new Error(`Machine user ${result.data.machineUser} not found.`);
   }
 
-  if (options.engine === "gql") {
-    return {
-      engine: options.engine,
-      client,
-      workspaceId,
-      config,
-      application,
-      machineUserResource,
-    };
-  }
-
-  const namespace = await getNamespaceFromSqlQuery(
-    workspaceId,
-    result.data.query,
-    client,
-    namespaces,
-  );
-
   return {
-    engine: options.engine,
+    engine: result.data.engine,
     client,
     workspaceId,
     config,
     application,
     machineUserResource,
-    namespace,
+    namespaces,
   };
 }
 
@@ -258,49 +244,65 @@ function parseExecutionResult(result: string): unknown {
   }
 }
 
+async function prepareQueryExecutor(
+  options: QueryBaseOptions,
+): Promise<(queryString: string) => Promise<QueryDispatchResult>> {
+  const { client, workspaceId, config, application, machineUserResource, engine, namespaces } =
+    await loadOptions(options);
+  const bundledCode = await bundleQueryScript(engine);
+  const invoker = create(AuthInvokerSchema, {
+    namespace: application.authNamespace,
+    machineUserName: machineUserResource.name,
+  });
+
+  return async (queryString: string) => {
+    let namespace: string | undefined;
+
+    try {
+      switch (engine) {
+        case "sql": {
+          namespace = await getNamespaceFromSqlQuery(workspaceId, queryString, client, namespaces);
+          const result = await sqlQuery(client, invoker, {
+            workspaceId,
+            namespace,
+            bundledCode,
+            query: queryString,
+          });
+          return await reorderSqlColumns(result, config, namespace, queryString);
+        }
+        case "gql":
+          return await gqlQuery(client, invoker, application, machineUserResource, {
+            workspaceId,
+            bundledCode,
+            query: queryString,
+          });
+        default:
+          throw new Error(`Unsupported query engine: ${engine satisfies never}`);
+      }
+    } catch (error) {
+      throw mapQueryExecutionError({
+        error,
+        engine,
+        namespace,
+        machineUser: options.machineUser,
+      });
+    }
+  };
+}
+
 /**
  * Dispatch query execution.
  * @param options - Query command options
  * @returns Dispatch result
  */
 export async function query(options: QueryOptions): Promise<QueryDispatchResult> {
-  const { client, workspaceId, config, application, machineUserResource, engine, namespace } =
-    await loadOptions(options);
-
-  try {
-    const bundledCode = await bundleQueryScript(engine);
-    const invoker = create(AuthInvokerSchema, {
-      namespace: application.authNamespace,
-      machineUserName: machineUserResource.name,
-    });
-
-    switch (engine) {
-      case "sql": {
-        const result = await sqlQuery(client, invoker, {
-          workspaceId,
-          namespace,
-          bundledCode,
-          query: options.query,
-        });
-        return reorderSqlColumns(result, config, namespace, options.query);
-      }
-      case "gql":
-        return await gqlQuery(client, invoker, application, machineUserResource, {
-          workspaceId,
-          bundledCode,
-          query: options.query,
-        });
-      default:
-        throw new Error(`Unsupported query engine: ${engine satisfies never}`);
-    }
-  } catch (error) {
-    throw mapQueryExecutionError({
-      error,
-      engine,
-      namespace,
-      machineUser: options.machineUser,
-    });
+  const result = queryOptionsSchema.safeParse(options);
+  if (!result.success) {
+    throw new Error(result.error.issues[0].message);
   }
+
+  const executor = await prepareQueryExecutor(result.data);
+  return await executor(result.data.query);
 }
 
 /**
@@ -427,7 +429,7 @@ function reorderRowByTemplate(row: SQLResultRow, expectedOrder: string[]): SQLRe
 
 export const queryCommand = defineCommand({
   name: "query",
-  description: "Run SQL/GraphQL query.",
+  description: "Run SQL/GraphQL query. Starts interactive mode when -q is omitted.",
   args: z
     .object({
       ...commonArgs,
@@ -436,9 +438,9 @@ export const queryCommand = defineCommand({
       engine: arg(queryEngineSchema, {
         description: "Query engine (sql or gql)",
       }),
-      query: arg(z.string(), {
+      query: arg(z.string().optional(), {
         alias: "q",
-        description: "Query string to execute directly",
+        description: "Query string to execute directly (omit for interactive mode)",
       }),
       machineuser: arg(z.string(), {
         alias: "m",
@@ -447,12 +449,38 @@ export const queryCommand = defineCommand({
     })
     .strict(),
   run: withCommonArgs(async (args) => {
-    const sharedOptions: QuerySharedOptions = {
+    const baseOptions: QueryBaseOptions = {
       workspaceId: args["workspace-id"],
       profile: args.profile,
       configPath: args.config,
-      query: args.query,
+      engine: args.engine,
       machineUser: args.machineuser,
+    };
+
+    if (!args.query) {
+      if (!process.stdin.isTTY) {
+        throw new Error("Interactive mode requires a TTY. Use -q to pass a query directly.");
+      }
+
+      const executor = await prepareQueryExecutor(baseOptions);
+
+      await startInteractiveSession({
+        engine: args.engine,
+        onQuery: async (queryText: string) => {
+          const result = await executor(queryText);
+          if (result.engine === "sql") {
+            printSqlResult(result, { json: args.json });
+          } else {
+            printGqlResult(result, { json: args.json });
+          }
+        },
+      });
+      return;
+    }
+
+    const sharedOptions: QuerySharedOptions = {
+      ...baseOptions,
+      query: args.query,
     };
 
     if (args.engine === "sql") {

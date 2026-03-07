@@ -91,6 +91,7 @@
     "publint": "publint --strict"
   },
   "dependencies": {
+    "@0no-co/graphql.web": "^1.2.0",
     "@badgateway/oauth2-client": "3.3.1",
     "@bufbuild/protobuf": "2.10.2",
     "@connectrpc/connect": "2.1.1",
