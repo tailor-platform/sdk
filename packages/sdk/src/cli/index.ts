@@ -5,6 +5,7 @@ import { defineCommand, runMain } from "politty";
 import { withCompletionCommand } from "politty/completion";
 import { apiCommand } from "./commands/api";
 import { applyCommand } from "./commands/apply";
+import { crashReportCommand } from "./commands/crashreport";
 import { executorCommand } from "./commands/executor";
 import { functionCommand } from "./commands/function";
 import { generateCommand } from "./commands/generate";
@@ -23,10 +24,13 @@ import { tailordbCommand } from "./commands/tailordb";
 import { userCommand } from "./commands/user";
 import { workflowCommand } from "./commands/workflow";
 import { workspaceCommand } from "./commands/workspace";
+import { initCrashReporting } from "./crash-report";
 import { queryCommand } from "./query";
 import { readPackageJson } from "./shared/package-json";
 
 register("tsx", import.meta.url, { data: {} });
+
+initCrashReporting();
 
 const packageJson = await readPackageJson();
 const cliName = Object.keys(packageJson.bin ?? {})[0] || "tailor-sdk";
@@ -39,6 +43,7 @@ export const mainCommand = withCompletionCommand(
     subCommands: {
       api: apiCommand,
       apply: applyCommand,
+      "crash-report": crashReportCommand,
       executor: executorCommand,
       function: functionCommand,
       generate: generateCommand,

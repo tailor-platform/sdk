@@ -51,6 +51,8 @@ You can use environment variables to configure workspace and authentication:
 | `TAILOR_PLATFORM_PROFILE`         | Workspace profile name                                                      |
 | `TAILOR_PLATFORM_SDK_CONFIG_PATH` | Path to SDK config file                                                     |
 | `VISUAL` / `EDITOR`               | Preferred editor for commands that open files (e.g., `vim`, `code`, `nano`) |
+| `TAILOR_CRASH_REPORTS_LOCAL`      | Local crash log writing: `on` (default) or `off`                            |
+| `TAILOR_CRASH_REPORTS_REMOTE`     | Automatic crash report submission: `off` (default) or `on`                  |
 
 ### Authentication Token Priority
 
