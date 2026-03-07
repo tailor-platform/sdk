@@ -1,7 +1,7 @@
-import { extractFields } from "politty";
+import { extractFields, isLazyCommand } from "politty";
 import { describe, it, expect, vi } from "vitest";
 import { mainCommand } from "./index";
-import type { AnyCommand, ExtractedFields } from "politty";
+import type { AnyCommand, ExtractedFields, SubCommandValue } from "politty";
 
 vi.mock("node:module", async () => {
   const actual = await vi.importActual("node:module");
@@ -19,15 +19,14 @@ vi.mock("politty", async () => {
   };
 });
 
-type Resolvable<T> = T | Promise<T> | (() => T | Promise<T>);
-
-// The CLI option test only needs the command shape; arg typing is irrelevant here.
-// oxlint-disable-next-line no-explicit-any
-async function resolveCommand<T extends AnyCommand>(cmd: Resolvable<T>): Promise<T> {
+async function resolveCommand(cmd: SubCommandValue): Promise<AnyCommand> {
+  if (isLazyCommand(cmd)) {
+    return await cmd.load();
+  }
   if (typeof cmd === "function") {
     return await cmd();
   }
-  return await cmd;
+  return cmd;
 }
 
 const checkArgs = (extracted: ExtractedFields, path: string[]): void => {
@@ -49,12 +48,7 @@ const checkArgs = (extracted: ExtractedFields, path: string[]): void => {
   }
 };
 
-// The CLI option test only needs the command shape; arg typing is irrelevant here.
-// oxlint-disable-next-line no-explicit-any
-async function walkCommand<T extends AnyCommand>(
-  cmd: Resolvable<T>,
-  path: string[] = [],
-): Promise<void> {
+async function walkCommand(cmd: SubCommandValue, path: string[] = []): Promise<void> {
   const resolved = await resolveCommand(cmd);
 
   // Check for duplicate aliases if the command has args

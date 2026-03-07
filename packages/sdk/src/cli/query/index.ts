@@ -5,20 +5,26 @@ import {
   type AuthInvoker,
   type MachineUser,
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
+import { parse, toSql } from "pgsql-ast-parser";
 import { arg, defineCommand } from "politty";
 import { z } from "zod";
 import { bundleQueryScript } from "../bundler/query/query-bundler";
 import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "../shared/args";
 import { fetchMachineUserToken, initOperatorClient } from "../shared/client";
 import { extractAllNamespaces } from "../shared/config";
-import { loadConfig } from "../shared/config-loader";
+import { loadConfig, type LoadedConfig } from "../shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../shared/context";
 import { isCLIError } from "../shared/errors";
 import { logger } from "../shared/logger";
 import { executeScript } from "../shared/script-executor";
 import { resolveTypeNamespaces } from "../shared/tailordb-namespace";
 import { mapQueryExecutionError } from "./errors";
-import { extractTypeNamesFromSql } from "./sql-type-extractor";
+import {
+  extractColumnTemplate,
+  extractTypeNamesFromSql,
+  type ColumnSlot,
+} from "./sql-type-extractor";
+import { loadTypeFieldOrder } from "./type-field-order";
 import type { Application } from "@tailor-proto/tailor/v1/application_resource_pb";
 
 const queryEngineSchema = z.enum(["sql", "gql"]);
@@ -184,6 +190,7 @@ async function sqlQuery(
     query: string;
   },
 ): Promise<SQLQueryDispatchResult> {
+  const queries = splitSqlStatements(args.query);
   const executed = await executeScript({
     client,
     workspaceId: args.workspaceId,
@@ -191,7 +198,7 @@ async function sqlQuery(
     code: args.bundledCode,
     arg: JSON.stringify({
       namespace: args.namespace,
-      query: args.query,
+      queries,
     }),
     invoker,
   });
@@ -279,7 +286,7 @@ export async function query(options: QueryOptions): Promise<QueryDispatchResult>
 async function prepareQueryExecutor(
   options: QueryBaseOptions,
 ): Promise<(query: string) => Promise<QueryDispatchResult>> {
-  const { client, workspaceId, application, machineUserResource, engine, namespaces } =
+  const { client, workspaceId, config, application, machineUserResource, engine, namespaces } =
     await loadOptions(options);
   const bundledCode = await bundleQueryScript(engine);
   const invoker = create(AuthInvokerSchema, {
@@ -292,14 +299,16 @@ async function prepareQueryExecutor(
 
     try {
       switch (engine) {
-        case "sql":
+        case "sql": {
           namespace = await getNamespaceFromSqlQuery(workspaceId, queryString, client, namespaces);
-          return await sqlQuery(client, invoker, {
+          const result = await sqlQuery(client, invoker, {
             workspaceId,
             namespace,
             bundledCode,
             query: queryString,
           });
+          return reorderSqlColumns(result, config, namespace, queryString);
+        }
         case "gql":
           return await gqlQuery(client, invoker, application, machineUserResource, {
             workspaceId,
@@ -490,28 +499,116 @@ async function queryGql(options: QuerySharedOptions): Promise<GQLQueryDispatchRe
   return result;
 }
 
+async function reorderSqlColumns(
+  result: SQLQueryDispatchResult,
+  config: LoadedConfig,
+  namespace: string,
+  sqlQuery: string,
+): Promise<SQLQueryDispatchResult> {
+  if (!isSQLExecutionResult(result.result) || result.result.rows.length === 0) {
+    return result;
+  }
+
+  const template = extractColumnTemplate(sqlQuery);
+  if (!template) {
+    return result;
+  }
+
+  try {
+    const fieldOrder = await loadTypeFieldOrder(config, namespace);
+    const expectedOrder = buildExpectedColumnOrder(template, fieldOrder);
+    if (expectedOrder.length === 0) {
+      return result;
+    }
+
+    const orderedRows = result.result.rows.map((row) => reorderRowByTemplate(row, expectedOrder));
+
+    return {
+      ...result,
+      result: {
+        ...result.result,
+        rows: orderedRows,
+      },
+    };
+  } catch {
+    return result;
+  }
+}
+
+const SYSTEM_FIELD_ORDER = ["id"];
+
+function buildExpectedColumnOrder(
+  template: ColumnSlot[],
+  fieldOrder: Map<string, string[]>,
+): string[] {
+  const order: string[] = [];
+
+  for (const slot of template) {
+    if (slot.type === "explicit") {
+      order.push(slot.name);
+    } else {
+      for (const typeName of slot.typeNames) {
+        order.push(...SYSTEM_FIELD_ORDER);
+        order.push(...(fieldOrder.get(typeName) ?? []));
+      }
+    }
+  }
+
+  return order;
+}
+
+function reorderRowByTemplate(row: SQLResultRow, expectedOrder: string[]): SQLResultRow {
+  const ordered: SQLResultRow = {};
+  const rowKeys = new Set(Object.keys(row));
+
+  // Build case-insensitive lookup: lowercased key → original key in row.
+  // pgsql-ast-parser lowercases unquoted identifiers (PostgreSQL standard),
+  // but TailorDB preserves the original case, so we need case-insensitive matching.
+  const lowerToOriginal = new Map<string, string>();
+  for (const key of rowKeys) {
+    lowerToOriginal.set(key.toLowerCase(), key);
+  }
+
+  for (const key of expectedOrder) {
+    const original = lowerToOriginal.get(key.toLowerCase());
+    if (original != null && rowKeys.has(original)) {
+      ordered[original] = row[original];
+      rowKeys.delete(original);
+      lowerToOriginal.delete(key.toLowerCase());
+    }
+  }
+
+  for (const key of rowKeys) {
+    ordered[key] = row[key];
+  }
+
+  return ordered;
+}
+
 export const queryCommand = defineCommand({
   name: "query",
   description: "Run SQL/GraphQL query.",
-  args: z.object({
-    ...commonArgs,
-    ...jsonArgs,
-    ...deploymentArgs,
-    engine: arg(queryEngineSchema, {
-      description: "Query engine (sql or gql)",
-    }),
-    query: arg(z.string().optional(), {
-      alias: "q",
-      description: "Query string to execute directly",
-    }),
-    repl: arg(z.boolean().default(false), {
-      description: "Run query command in interactive REPL mode",
-    }),
-    machineuser: arg(z.string(), {
-      alias: "m",
-      description: "Machine user name for query execution",
-    }),
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...jsonArgs,
+      ...deploymentArgs,
+      engine: arg(queryEngineSchema, {
+        description: "Query engine (sql or gql)",
+      }),
+      query: arg(z.string().optional(), {
+        alias: "q",
+        description: "Query string to execute directly",
+      }),
+      repl: arg(z.boolean().default(false), {
+        description: "Run query command in interactive REPL mode",
+      }),
+      machineuser: arg(z.string(), {
+        alias: "m",
+        description: "Machine user name for query execution",
+      }),
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     const mode = queryCommandInputSchema.safeParse({
       query: args.query,
@@ -568,22 +665,13 @@ function isSQLExecutionResult(value: unknown): value is SQLExecutionResult {
   return Array.isArray(candidate.rows) && typeof candidate.rowCount === "number";
 }
 
-function printSqlResult(result: SQLQueryDispatchResult, options: { json?: boolean } = {}): void {
-  if (!isSQLExecutionResult(result.result)) {
-    logger.out({
-      engine: result.engine,
-      query: result.query,
-      result: result.result,
-    });
-    return;
-  }
-
-  if (result.result.rows.length === 0) {
+function printSingleSqlResult(
+  execResult: SQLExecutionResult,
+  options: { json?: boolean } = {},
+): void {
+  if (execResult.rows.length === 0) {
     if (options.json) {
-      logger.out({
-        results: [],
-        rowCount: 0,
-      });
+      logger.out({ results: [], rowCount: 0 });
       return;
     }
     logger.info("No rows returned.");
@@ -591,15 +679,54 @@ function printSqlResult(result: SQLQueryDispatchResult, options: { json?: boolea
   }
 
   if (options.json) {
-    logger.out({
-      results: result.result.rows,
-      rowCount: result.result.rowCount,
-    });
+    logger.out({ results: execResult.rows, rowCount: execResult.rowCount });
     return;
   }
 
-  logger.out(result.result.rows, { showNull: true });
-  logger.out(`rows: ${result.result.rowCount}`);
+  logger.out(execResult.rows, { showNull: true });
+  logger.out(`rows: ${execResult.rowCount}`);
+}
+
+function splitSqlStatements(query: string): string[] {
+  try {
+    const statements = parse(query);
+    if (statements.length === 0) return [];
+    return statements.map((s) => toSql.statement(s));
+  } catch {
+    const trimmed = query.trim();
+    return trimmed.length > 0 ? [trimmed] : [];
+  }
+}
+
+function isSQLExecutionResultArray(value: unknown): value is SQLExecutionResult[] {
+  return Array.isArray(value) && value.length > 0 && value.every(isSQLExecutionResult);
+}
+
+function printSqlResult(result: SQLQueryDispatchResult, options: { json?: boolean } = {}): void {
+  if (isSQLExecutionResultArray(result.result)) {
+    if (options.json) {
+      logger.out(result.result.map((r) => ({ results: r.rows, rowCount: r.rowCount })));
+      return;
+    }
+    const queries = splitSqlStatements(result.query);
+    for (let i = 0; i < result.result.length; i++) {
+      if (i > 0) logger.log("");
+      logger.info(queries[i] ?? `Statement ${i + 1}`);
+      printSingleSqlResult(result.result[i], options);
+    }
+    return;
+  }
+
+  if (isSQLExecutionResult(result.result)) {
+    printSingleSqlResult(result.result, options);
+    return;
+  }
+
+  logger.out({
+    engine: result.engine,
+    query: result.query,
+    result: result.result,
+  });
 }
 
 function printGqlResult(result: GQLQueryDispatchResult, options: { json?: boolean } = {}): void {

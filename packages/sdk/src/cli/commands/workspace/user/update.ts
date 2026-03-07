@@ -54,17 +54,19 @@ export async function updateUser(options: UpdateUserOptions): Promise<void> {
 export const updateCommand = defineCommand({
   name: "update",
   description: "Update a user's role in a workspace",
-  args: z.object({
-    ...commonArgs,
-    ...workspaceArgs,
-    email: arg(z.email(), {
-      description: "Email address of the user to update",
-    }),
-    role: arg(z.enum(validRoles), {
-      description: `New role to assign (${validRoles.join(", ")})`,
-      alias: "r",
-    }),
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...workspaceArgs,
+      email: arg(z.email(), {
+        description: "Email address of the user to update",
+      }),
+      role: arg(z.enum(validRoles), {
+        description: `New role to assign (${validRoles.join(", ")})`,
+        alias: "r",
+      }),
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     await updateUser({
       workspaceId: args["workspace-id"],

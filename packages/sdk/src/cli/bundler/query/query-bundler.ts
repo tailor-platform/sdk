@@ -13,7 +13,7 @@ function createSqlEntry(): string {
 
     type QueryInput = {
       namespace: string;
-      query: string;
+      queries: string[];
     };
 
     function getDB(namespace: string) {
@@ -25,12 +25,16 @@ function createSqlEntry(): string {
 
     export async function main(input: QueryInput) {
       const db = getDB(input.namespace);
-      const result = await sql.raw(input.query).execute(db);
-      const rows = result.rows ?? [];
-      return {
-        rows,
-        rowCount: rows.length,
-      };
+      const results = [];
+      for (const query of input.queries) {
+        const result = await sql.raw(query).execute(db);
+        const rows = result.rows ?? [];
+        results.push({ rows, rowCount: rows.length });
+      }
+      if (results.length === 1) {
+        return results[0];
+      }
+      return results;
     }
   `;
 }

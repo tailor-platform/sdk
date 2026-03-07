@@ -86,15 +86,17 @@ export async function listUsers(options: ListUsersOptions): Promise<UserInfo[]> 
 export const listCommand = defineCommand({
   name: "list",
   description: "List users in a workspace",
-  args: z.object({
-    ...commonArgs,
-    ...jsonArgs,
-    ...workspaceArgs,
-    limit: arg(positiveIntArg.optional(), {
-      alias: "l",
-      description: "Maximum number of users to list",
-    }),
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...jsonArgs,
+      ...workspaceArgs,
+      limit: arg(positiveIntArg.optional(), {
+        alias: "l",
+        description: "Maximum number of users to list",
+      }),
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     const users = await listUsers({
       workspaceId: args["workspace-id"],

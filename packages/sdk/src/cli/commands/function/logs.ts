@@ -118,15 +118,17 @@ function printFunctionExecutionDetail(detail: FunctionExecutionDetailInfo) {
 export const logsCommand = defineCommand({
   name: "logs",
   description: "List or get function execution logs.",
-  args: z.object({
-    ...commonArgs,
-    ...jsonArgs,
-    ...workspaceArgs,
-    executionId: arg(z.string().optional(), {
-      positional: true,
-      description: "Execution ID (if provided, shows details with logs)",
-    }),
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...jsonArgs,
+      ...workspaceArgs,
+      executionId: arg(z.string().optional(), {
+        positional: true,
+        description: "Execution ID (if provided, shows details with logs)",
+      }),
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     const accessToken = await loadAccessToken({
       useProfile: true,

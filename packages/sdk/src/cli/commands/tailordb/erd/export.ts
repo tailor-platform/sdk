@@ -230,20 +230,24 @@ export async function prepareErdBuilds(options: ErdBuildsOptions): Promise<ErdBu
 export const erdExportCommand = defineCommand({
   name: "export",
   description: "Export Liam ERD dist from applied TailorDB schema.",
-  args: z.object({
-    ...commonArgs,
-    ...deploymentArgs,
-    ...jsonArgs,
-    namespace: arg(z.string().optional(), {
-      alias: "n",
-      description: "TailorDB namespace name (optional if only one namespace is defined in config)",
-    }),
-    output: arg(z.string().default(DEFAULT_ERD_BASE_DIR), {
-      alias: "o",
-      description:
-        "Output directory path for tbls-compatible ERD JSON (writes to `<outputDir>/<namespace>/schema.json`)",
-    }),
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...deploymentArgs,
+      ...jsonArgs,
+      namespace: arg(z.string().optional(), {
+        alias: "n",
+        description:
+          "TailorDB namespace name (optional if only one namespace is defined in config)",
+      }),
+      output: arg(z.string().default(DEFAULT_ERD_BASE_DIR), {
+        alias: "o",
+        description:
+          "Output directory path for tbls-compatible ERD JSON (writes to `<outputDir>/<namespace>/schema.json`)",
+        completion: { type: "directory" },
+      }),
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     const { client, workspaceId, config } = await initErdContext(args);
     const outputDir = path.resolve(process.cwd(), String(args.output));

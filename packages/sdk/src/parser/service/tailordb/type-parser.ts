@@ -7,7 +7,6 @@ import {
   buildRelationInfo,
   applyRelationMetadataToFieldConfig,
 } from "./relation";
-import { ensureNoExternalVariablesInFieldScripts } from "./tailordb-field-script-external-var-guard";
 import { isPluginGeneratedType } from "./types";
 import type {
   TailorDBField,
@@ -105,8 +104,6 @@ function parseTailorDBType(
         `Field "${fieldName}" on type "${type.name}": unique cannot be set on array fields`,
       );
     }
-
-    ensureNoExternalVariablesInFieldScripts(type.name, fieldName, fieldConfig);
 
     const parsedField: ParsedField = { name: fieldName, config: fieldConfig };
 

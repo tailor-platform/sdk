@@ -21,7 +21,7 @@ import {
   formatReportTable,
   isInfraFailure,
 } from "./score";
-import type { ChallengeReport, ProblemResult, StageResult } from "./score";
+import type { ChallengeReport, ProblemResult, ScaffoldChange, StageResult } from "./score";
 import {
   formatSolveModelLabel,
   normalizeModelForAgent,
@@ -62,7 +62,7 @@ function parseArgs(): {
   let agentExplicit = false;
   let model: string | undefined;
   let modelExplicit = false;
-  let maxBudget = 2.0;
+  let maxBudget = 5.0;
   let clean = false;
   let retry = 0;
   let resume = false;
@@ -333,6 +333,43 @@ function createLimiter(concurrency: number) {
     });
 }
 
+const scaffoldFilenames = ["tsconfig.json", "package.json"];
+
+/**
+ * Snapshot scaffold files so we can detect and restore modifications after solve.
+ */
+function snapshotScaffoldFiles(workDir: string): Map<string, string> {
+  const snapshot = new Map<string, string>();
+  for (const f of scaffoldFilenames) {
+    const fp = path.join(workDir, f);
+    if (fs.existsSync(fp)) {
+      snapshot.set(f, fs.readFileSync(fp, "utf-8"));
+    }
+  }
+  return snapshot;
+}
+
+/**
+ * Restore scaffold files to their original content, returning any detected changes.
+ */
+function restoreScaffoldFiles(workDir: string, snapshot: Map<string, string>): ScaffoldChange[] {
+  const changes: ScaffoldChange[] = [];
+  for (const [f, original] of snapshot) {
+    const fp = path.join(workDir, f);
+    if (!fs.existsSync(fp)) {
+      changes.push({ file: f, original, modified: "(deleted)" });
+      fs.writeFileSync(fp, original);
+    } else {
+      const current = fs.readFileSync(fp, "utf-8");
+      if (current !== original) {
+        changes.push({ file: f, original, modified: current });
+        fs.writeFileSync(fp, original);
+      }
+    }
+  }
+  return changes;
+}
+
 // Serialize pnpm install to avoid root node_modules race conditions
 const installLimiter = createLimiter(1);
 
@@ -368,6 +405,9 @@ async function runProblem(
 
   // In solve mode, workDir is a tmpdir. We'll create a symlink later for verify.
   const symlinkPath = path.join(problemDir, "work");
+
+  // Snapshot scaffold files after install (before solve) to detect modifications
+  const scaffoldSnapshot = isSolveMode ? snapshotScaffoldFiles(workDir) : new Map<string, string>();
 
   let solveResult: SolveResult | undefined;
   const retrySolveResults: SolveResult[] = [];
@@ -425,6 +465,14 @@ async function runProblem(
       solveResult,
       totalDurationMs: Date.now() - problemStartTime,
     };
+  }
+
+  // Detect and restore scaffold file modifications after solve
+  const scaffoldChanges =
+    isSolveMode && scaffoldSnapshot.size > 0 ? restoreScaffoldFiles(workDir, scaffoldSnapshot) : [];
+  if (scaffoldChanges.length > 0 && options.verbose) {
+    const files = scaffoldChanges.map((c) => c.file).join(", ");
+    console.log(`  WARNING: Scaffold files modified during solve: ${files} (restored)`);
   }
 
   // In solve mode, create symlink: problems/<name>/work → tmpdir
@@ -524,6 +572,16 @@ async function runProblem(
       }
       infraRetries = 0;
 
+      // Restore scaffold files before re-verification
+      const retryChanges = restoreScaffoldFiles(workDir, scaffoldSnapshot);
+      if (retryChanges.length > 0) {
+        scaffoldChanges.push(...retryChanges);
+        if (options.verbose) {
+          const files = retryChanges.map((c) => c.file).join(", ");
+          console.log(`  Restored scaffold files modified during retry: ${files}`);
+        }
+      }
+
       // Re-verify using symlink path
       rawStages = await verifyProblem(verifyWorkDir, meta, challengeRoot);
       stages = calculateScore(meta, rawStages);
@@ -577,6 +635,7 @@ async function runProblem(
     retryCount,
     retrySolveResults: retrySolveResults.length > 0 ? retrySolveResults : undefined,
     totalDurationMs: Date.now() - problemStartTime,
+    scaffoldChanges: scaffoldChanges.length > 0 ? scaffoldChanges : undefined,
   };
   result.adjustedScore = computeAdjustedScore(result);
   return result;

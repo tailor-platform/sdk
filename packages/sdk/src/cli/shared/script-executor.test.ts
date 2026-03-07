@@ -259,9 +259,7 @@ describe("executeScript", () => {
     expect(result.success).toBe(false);
     expect(result.logs).toBe("Error: TypeError: undefined is not a function");
     expect(result.result).toBe("Script execution failed");
-    expect(result.error).toBe(
-      "Error: TypeError: undefined is not a function\nScript execution failed",
-    );
+    expect(result.error).toBe("Script execution failed");
   });
 
   test("returns error message when logs and result are empty", async () => {
@@ -337,6 +335,62 @@ describe("executeScript", () => {
     expect(getFunctionExecution).toHaveBeenCalledTimes(2);
 
     await resultPromise;
+  });
+
+  test("uses response.result as fallback when execution result is empty", async () => {
+    const client = createMockClient({
+      testExecScript: vi.fn().mockResolvedValue({
+        executionId: "exec-123",
+        result: "compilation error: invalid syntax",
+      }),
+      getFunctionExecution: vi.fn().mockResolvedValue({
+        execution: {
+          status: FunctionExecution_Status.FAILED,
+          logs: "",
+          result: "",
+        },
+      }),
+    });
+
+    const result = await executeScript({
+      client,
+      workspaceId: "workspace-1",
+      name: "test-script.js",
+      code: "invalid code",
+      invoker: mockAuthInvoker,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.result).toBe("compilation error: invalid syntax");
+    expect(result.error).toBe("compilation error: invalid syntax");
+  });
+
+  test("includes response.result in error details alongside execution result", async () => {
+    const client = createMockClient({
+      testExecScript: vi.fn().mockResolvedValue({
+        executionId: "exec-123",
+        result: "initial error info",
+      }),
+      getFunctionExecution: vi.fn().mockResolvedValue({
+        execution: {
+          status: FunctionExecution_Status.FAILED,
+          logs: "runtime error log",
+          result: "execution failed",
+        },
+      }),
+    });
+
+    const result = await executeScript({
+      client,
+      workspaceId: "workspace-1",
+      name: "test-script.js",
+      code: "code",
+      invoker: mockAuthInvoker,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.result).toBe("execution failed");
+    expect(result.error).toBe("execution failed");
   });
 
   test("propagates testExecScript errors", async () => {

@@ -38,6 +38,11 @@ vi.mock("../shared/tailordb-namespace", () => ({
 
 vi.mock("./sql-type-extractor", () => ({
   extractTypeNamesFromSql: vi.fn(),
+  extractColumnTemplate: vi.fn(),
+}));
+
+vi.mock("./type-field-order", () => ({
+  loadTypeFieldOrder: vi.fn(),
 }));
 
 describe("query", () => {
@@ -51,7 +56,8 @@ describe("query", () => {
     const { bundleQueryScript } = await import("../bundler/query/query-bundler");
     const { executeScript } = await import("../shared/script-executor");
     const { resolveTypeNamespaces } = await import("../shared/tailordb-namespace");
-    const { extractTypeNamesFromSql } = await import("./sql-type-extractor");
+    const { extractTypeNamesFromSql, extractColumnTemplate } = await import("./sql-type-extractor");
+    const { loadTypeFieldOrder } = await import("./type-field-order");
 
     vi.mocked(loadAccessToken).mockResolvedValue("access-token");
     vi.mocked(loadWorkspaceId).mockReturnValue("workspace-1");
@@ -71,6 +77,8 @@ describe("query", () => {
     vi.mocked(fetchMachineUserToken).mockResolvedValue({ access_token: "mu-token" } as never);
     vi.mocked(resolveTypeNamespaces).mockResolvedValue(new Map([["User", "tailordb"]]));
     vi.mocked(extractTypeNamesFromSql).mockReturnValue(["User"]);
+    vi.mocked(extractColumnTemplate).mockReturnValue(null);
+    vi.mocked(loadTypeFieldOrder).mockResolvedValue(new Map());
 
     mockClient.getApplication.mockResolvedValue({
       application: {
@@ -215,6 +223,44 @@ describe("query", () => {
     }
   });
 
+  test("splits multiple SQL statements and passes queries array to executeScript", async () => {
+    const { executeScript } = await import("../shared/script-executor");
+
+    vi.mocked(executeScript).mockResolvedValue({
+      success: true,
+      logs: "",
+      result: '[{"rows":[{"n":1}],"rowCount":1},{"rows":[{"n":2}],"rowCount":1}]',
+    });
+
+    await query({
+      workspaceId: "workspace-1",
+      configPath: "tailor.config.ts",
+      engine: "sql",
+      machineUser: "bot",
+      query: "SELECT 1; SELECT 2",
+    });
+
+    const call = vi.mocked(executeScript).mock.calls[0]?.[0];
+    const arg = JSON.parse(call?.arg ?? "{}");
+    expect(arg.queries).toEqual(["SELECT (1)", "SELECT (2)"]);
+  });
+
+  test("does not split semicolons inside string literals", async () => {
+    const { executeScript } = await import("../shared/script-executor");
+
+    await query({
+      workspaceId: "workspace-1",
+      configPath: "tailor.config.ts",
+      engine: "sql",
+      machineUser: "bot",
+      query: `INSERT INTO t VALUES ('hello;world')`,
+    });
+
+    const call = vi.mocked(executeScript).mock.calls[0]?.[0];
+    const arg = JSON.parse(call?.arg ?? "{}");
+    expect(arg.queries).toHaveLength(1);
+  });
+
   test("executes GraphQL query via machine user token flow", async () => {
     const { executeScript } = await import("../shared/script-executor");
     const { fetchMachineUserToken } = await import("../shared/client");
@@ -286,5 +332,182 @@ describe("query", () => {
         query: "{ viewer { id } }",
       }),
     ).rejects.toThrow("Machine user missing-user not found.");
+  });
+
+  test("reorders SQL result columns by type field definition order when wildcard is used", async () => {
+    const { executeScript } = await import("../shared/script-executor");
+    const { extractColumnTemplate } = await import("./sql-type-extractor");
+    const { loadTypeFieldOrder } = await import("./type-field-order");
+
+    vi.mocked(extractColumnTemplate).mockReturnValue([{ type: "wildcard", typeNames: ["User"] }]);
+    vi.mocked(loadTypeFieldOrder).mockResolvedValue(
+      new Map([["User", ["name", "email", "role", "createdAt", "updatedAt"]]]),
+    );
+    vi.mocked(executeScript).mockResolvedValue({
+      success: true,
+      logs: "",
+      result: JSON.stringify({
+        rows: [
+          {
+            updatedAt: "2024-01-02",
+            email: "a@b.com",
+            id: "1",
+            role: "STAFF",
+            name: "Alice",
+            createdAt: "2024-01-01",
+          },
+        ],
+        rowCount: 1,
+      }),
+    });
+
+    const result = await query({
+      workspaceId: "workspace-1",
+      configPath: "tailor.config.ts",
+      engine: "sql",
+      machineUser: "bot",
+      query: 'select * from "User";',
+    });
+
+    expect(result.engine).toBe("sql");
+    const sqlResult = result.result as { rows: Record<string, unknown>[]; rowCount: number };
+    expect(Object.keys(sqlResult.rows[0])).toEqual([
+      "id",
+      "name",
+      "email",
+      "role",
+      "createdAt",
+      "updatedAt",
+    ]);
+  });
+
+  test("preserves SQL declaration order for explicit columns around wildcard expansion", async () => {
+    const { executeScript } = await import("../shared/script-executor");
+    const { extractColumnTemplate } = await import("./sql-type-extractor");
+    const { loadTypeFieldOrder } = await import("./type-field-order");
+
+    vi.mocked(extractColumnTemplate).mockReturnValue([
+      { type: "explicit", name: "orderId" },
+      { type: "wildcard", typeNames: ["User"] },
+      { type: "explicit", name: "orderName" },
+    ]);
+    vi.mocked(loadTypeFieldOrder).mockResolvedValue(
+      new Map([["User", ["name", "email", "role", "createdAt", "updatedAt"]]]),
+    );
+    vi.mocked(executeScript).mockResolvedValue({
+      success: true,
+      logs: "",
+      result: JSON.stringify({
+        rows: [
+          {
+            orderName: "Order-A",
+            email: "a@b.com",
+            orderId: "o1",
+            role: "STAFF",
+            name: "Alice",
+            createdAt: "2024-01-01",
+            id: "1",
+            updatedAt: "2024-01-02",
+          },
+        ],
+        rowCount: 1,
+      }),
+    });
+
+    const result = await query({
+      workspaceId: "workspace-1",
+      configPath: "tailor.config.ts",
+      engine: "sql",
+      machineUser: "bot",
+      query:
+        'select o.id as "orderId", u.*, o.name as "orderName" from "User" u join "Order" o on u.id = o."userId";',
+    });
+
+    expect(result.engine).toBe("sql");
+    const sqlResult = result.result as { rows: Record<string, unknown>[]; rowCount: number };
+    expect(Object.keys(sqlResult.rows[0])).toEqual([
+      "orderId",
+      "id",
+      "name",
+      "email",
+      "role",
+      "createdAt",
+      "updatedAt",
+      "orderName",
+    ]);
+  });
+
+  test("does not reorder columns when explicit column list is used", async () => {
+    const { executeScript } = await import("../shared/script-executor");
+    const { extractColumnTemplate } = await import("./sql-type-extractor");
+
+    vi.mocked(extractColumnTemplate).mockReturnValue(null);
+    vi.mocked(executeScript).mockResolvedValue({
+      success: true,
+      logs: "",
+      result: JSON.stringify({
+        rows: [{ email: "a@b.com", name: "Alice" }],
+        rowCount: 1,
+      }),
+    });
+
+    const result = await query({
+      workspaceId: "workspace-1",
+      configPath: "tailor.config.ts",
+      engine: "sql",
+      machineUser: "bot",
+      query: 'select email, name from "User";',
+    });
+
+    const sqlResult = result.result as { rows: Record<string, unknown>[]; rowCount: number };
+    expect(Object.keys(sqlResult.rows[0])).toEqual(["email", "name"]);
+  });
+
+  test("matches columns case-insensitively for unquoted SQL aliases", async () => {
+    const { executeScript } = await import("../shared/script-executor");
+    const { extractColumnTemplate } = await import("./sql-type-extractor");
+    const { loadTypeFieldOrder } = await import("./type-field-order");
+
+    vi.mocked(extractColumnTemplate).mockReturnValue([
+      { type: "explicit", name: "uid" },
+      { type: "wildcard", typeNames: ["SalesOrder"] },
+    ]);
+    vi.mocked(loadTypeFieldOrder).mockResolvedValue(
+      new Map([["SalesOrder", ["customerID", "total", "createdAt"]]]),
+    );
+    vi.mocked(executeScript).mockResolvedValue({
+      success: true,
+      logs: "",
+      result: JSON.stringify({
+        rows: [
+          {
+            createdAt: "2024-01-01",
+            UID: "u1",
+            total: 100,
+            id: "o1",
+            customerID: "c1",
+          },
+        ],
+        rowCount: 1,
+      }),
+    });
+
+    const result = await query({
+      workspaceId: "workspace-1",
+      configPath: "tailor.config.ts",
+      engine: "sql",
+      machineUser: "bot",
+      query:
+        'select u.id as UID, o.* from "Customer" u join "SalesOrder" o on u.id = o."customerID";',
+    });
+
+    const sqlResult = result.result as { rows: Record<string, unknown>[]; rowCount: number };
+    expect(Object.keys(sqlResult.rows[0])).toEqual([
+      "UID",
+      "id",
+      "customerID",
+      "total",
+      "createdAt",
+    ]);
   });
 });
