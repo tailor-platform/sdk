@@ -19,6 +19,7 @@ import { logger } from "../shared/logger";
 import { executeScript } from "../shared/script-executor";
 import { resolveTypeNamespaces } from "../shared/tailordb-namespace";
 import { mapQueryExecutionError } from "./errors";
+import { isSqlInputComplete } from "./sql-repl";
 import {
   extractColumnTemplate,
   extractTypeNamesFromSql,
@@ -380,7 +381,7 @@ async function runRepl(
       lines.push(line);
 
       if (options.engine === "sql") {
-        if (!trimmed.endsWith(";")) {
+        if (!isSqlInputComplete(lines.join("\n"))) {
           continue;
         }
       } else {
