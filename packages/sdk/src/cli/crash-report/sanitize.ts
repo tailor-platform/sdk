@@ -7,6 +7,7 @@ const UUID_PATTERN = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]
 const LONG_HEX_PATTERN = /\b[0-9a-fA-F]{32,}\b/g;
 const EMAIL_PATTERN = /\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b/g;
 const ABSOLUTE_PATH_PATTERN = /(?:\/(?:[\w.@-]+\/)+[\w.@-]+)/g;
+const WINDOWS_PATH_PATTERN = /(?:[A-Za-z]:\\(?:[\w.@\- ]+\\)+[\w.@\- ]+)/g;
 const URL_QUERY_PATTERN = /(\?|&)[^?\s]*/g;
 
 // SDK package path marker for relative paths
@@ -37,7 +38,7 @@ const SENSITIVE_FLAGS = new Set([
  * @returns Sanitized stack trace
  */
 export function sanitizeStackTrace(stack: string): string {
-  return stack.replace(ABSOLUTE_PATH_PATTERN, (match) => {
+  let result = stack.replace(ABSOLUTE_PATH_PATTERN, (match) => {
     const sdkIndex = match.indexOf(SDK_PACKAGE_MARKER);
     if (sdkIndex !== -1) {
       return match.slice(sdkIndex);
@@ -51,6 +52,16 @@ export function sanitizeStackTrace(stack: string): string {
     const basename = match.split("/").pop() ?? match;
     return `<external>/${basename}`;
   });
+  result = result.replace(WINDOWS_PATH_PATTERN, (match) => {
+    const normalized = match.replace(/\\/g, "/");
+    const sdkIndex = normalized.indexOf(SDK_PACKAGE_MARKER);
+    if (sdkIndex !== -1) {
+      return normalized.slice(sdkIndex);
+    }
+    const basename = match.split("\\").pop() ?? match;
+    return `<external>/${basename}`;
+  });
+  return result;
 }
 
 /**
@@ -67,6 +78,10 @@ export function sanitizeMessage(message: string): string {
   result = result.replace(URL_QUERY_PATTERN, "?<redacted>");
   result = result.replace(ABSOLUTE_PATH_PATTERN, (match) => {
     const basename = match.split("/").pop() ?? match;
+    return `<path>/${basename}`;
+  });
+  result = result.replace(WINDOWS_PATH_PATTERN, (match) => {
+    const basename = match.split("\\").pop() ?? match;
     return `<path>/${basename}`;
   });
   return result;
@@ -109,6 +124,13 @@ export function sanitizeArgv(argv: string[]): string[] {
     // Redact things that look like absolute paths in arguments
     if (arg.startsWith("/") && arg.includes("/", 1)) {
       const basename = arg.split("/").pop() ?? arg;
+      result.push(`<path>/${basename}`);
+      continue;
+    }
+
+    // Redact Windows-style absolute paths (e.g., C:\Users\...)
+    if (/^[A-Za-z]:\\/.test(arg)) {
+      const basename = arg.split("\\").pop() ?? arg;
       result.push(`<path>/${basename}`);
       continue;
     }

@@ -52,6 +52,19 @@ describe("crash-report send command", () => {
     expect(content).toContain("packages/sdk/src/cli/index.ts:10:5");
   });
 
+  test("formatCrashReport preserves multiline error messages", () => {
+    const report = {
+      ...makeCrashReport(),
+      errorMessage: "Failed to apply configuration\nRequest: POST /v1/apply\nStatus: 500",
+    };
+    const formatted = formatCrashReport(report);
+
+    // All lines of the multiline message should be present in the formatted output
+    expect(formatted).toContain("Failed to apply configuration");
+    expect(formatted).toContain("Request: POST /v1/apply");
+    expect(formatted).toContain("Status: 500");
+  });
+
   test("formatCrashReport produces parseable output with all fields", () => {
     const report = makeCrashReport();
     const formatted = formatCrashReport(report);

@@ -32,6 +32,22 @@ describe("sanitizeStackTrace", () => {
     const result = sanitizeStackTrace(stack);
     expect(result).toBe("TypeError: Cannot read properties of undefined");
   });
+
+  test("replaces Windows-style absolute paths with <external>/filename", () => {
+    const stack =
+      "Error: boom\n    at Object.<anonymous> (C:\\Users\\admin\\projects\\some-lib\\index.js:1:1)";
+    const result = sanitizeStackTrace(stack);
+    expect(result).toContain("<external>/index.js");
+    expect(result).not.toContain("C:\\Users\\admin");
+  });
+
+  test("replaces Windows SDK paths with relative paths", () => {
+    const stack =
+      "Error: boom\n    at Object.<anonymous> (D:\\work\\packages\\sdk\\src\\cli\\index.ts:10:5)";
+    const result = sanitizeStackTrace(stack);
+    expect(result).toContain("packages/sdk/src/cli/index.ts:10:5");
+    expect(result).not.toContain("D:\\work\\");
+  });
 });
 
 describe("sanitizeMessage", () => {
@@ -73,6 +89,13 @@ describe("sanitizeMessage", () => {
   test("preserves simple messages", () => {
     const message = "Something went wrong";
     expect(sanitizeMessage(message)).toBe("Something went wrong");
+  });
+
+  test("redacts Windows-style absolute paths keeping basename", () => {
+    const message = "File not found: C:\\Users\\admin\\project\\tailor.config.ts";
+    const result = sanitizeMessage(message);
+    expect(result).toContain("<path>/tailor.config.ts");
+    expect(result).not.toContain("C:\\Users\\admin");
   });
 });
 
@@ -125,5 +148,18 @@ describe("sanitizeArgv", () => {
     const argv = ["node", "tailor-sdk", "apply", "--verbose", "--yes"];
     const result = sanitizeArgv(argv);
     expect(result).toEqual(["node", "tailor-sdk", "apply", "--verbose", "--yes"]);
+  });
+
+  test("redacts Windows-style absolute path arguments", () => {
+    const argv = [
+      "node",
+      "tailor-sdk",
+      "apply",
+      "--config",
+      "C:\\Users\\admin\\project\\tailor.config.ts",
+    ];
+    const result = sanitizeArgv(argv);
+    expect(result).toContain("<path>/tailor.config.ts");
+    expect(result).not.toContain("C:\\Users\\admin");
   });
 });

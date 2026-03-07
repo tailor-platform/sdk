@@ -62,6 +62,12 @@ function parseCrashLogFile(content: string): CrashReport | undefined {
       return content.match(re)?.[1]?.trim() ?? "";
     };
 
+    const getMultiline = (label: string, endMarker: string): string => {
+      const re = new RegExp(`^${label}:\\s*(.*?)\\n(?=\\n--- ${endMarker} ---)`, "ms");
+      const match = content.match(re);
+      return match?.[1]?.trim() ?? get(label);
+    };
+
     const stackMatch = content.match(/--- Stack Trace ---\n([\s\S]*?)$/);
     const stackTrace = stackMatch?.[1]?.trim() ?? "";
 
@@ -76,7 +82,7 @@ function parseCrashLogFile(content: string): CrashReport | undefined {
       command: get("Command"),
       argv: get("Arguments").split(" "),
       errorName: get("Name"),
-      errorMessage: get("Message"),
+      errorMessage: getMultiline("Message", "Stack Trace"),
       stackTrace: stackTrace === "(no stack trace available)" ? "" : stackTrace,
       crashType: get("Crash Type") as CrashReport["crashType"],
     };

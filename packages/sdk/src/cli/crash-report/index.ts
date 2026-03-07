@@ -1,18 +1,9 @@
 import { logger } from "@/cli/shared/logger";
 import { readPackageJson } from "@/cli/shared/package-json";
-import { parseCrashReportConfig, type CrashReportConfig } from "./config";
+import { parseCrashReportConfig } from "./config";
 import { buildCrashReport, type CrashType } from "./report";
 import { sendCrashReport } from "./sender";
 import { writeCrashReport } from "./writer";
-
-let _config: CrashReportConfig | undefined;
-
-function getConfig(): CrashReportConfig {
-  if (!_config) {
-    _config = parseCrashReportConfig();
-  }
-  return _config;
-}
 
 /**
  * Report an unexpected crash. Writes a local crash log file and optionally
@@ -25,7 +16,7 @@ function getConfig(): CrashReportConfig {
  */
 export async function reportCrash(error: unknown, crashType: CrashType): Promise<void> {
   try {
-    const config = getConfig();
+    const config = parseCrashReportConfig();
     if (!config.localEnabled) return;
 
     const packageJson = await readPackageJson();
@@ -59,7 +50,7 @@ export async function reportCrash(error: unknown, crashType: CrashType): Promise
  * argument parsing). Should be called once at CLI startup before runMain.
  */
 export function initCrashReporting(): void {
-  const config = getConfig();
+  const config = parseCrashReportConfig();
   if (!config.localEnabled) return;
 
   process.on("uncaughtException", (error) => {

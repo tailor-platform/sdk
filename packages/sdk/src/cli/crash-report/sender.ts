@@ -1,6 +1,8 @@
 import type { CrashReport } from "./report";
 
 const SEND_TIMEOUT_MS = 5000;
+// Crash reports use api.tailor.wiki (separate from the main api.tailor.tech platform API).
+// This webhook endpoint may not be deployed yet; sendCrashReport returns false on failure.
 const PRODUCTION_ENDPOINT = "https://api.tailor.wiki/hook/crash-report";
 
 /**
