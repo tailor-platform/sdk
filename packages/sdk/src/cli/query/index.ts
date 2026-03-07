@@ -319,6 +319,13 @@ async function prepareQueryExecutor(
   };
 }
 
+function isReadlineTerminationError(error: unknown): boolean {
+  if (!(error instanceof Error) || !("code" in error)) {
+    return false;
+  }
+  return error.code === "ABORT_ERR" || error.code === "ERR_USE_AFTER_CLOSE";
+}
+
 async function runRepl(
   options: QueryBaseOptions & {
     json?: boolean;
@@ -343,7 +350,15 @@ async function runRepl(
   try {
     while (true) {
       const prompt = lines.length === 0 ? `${options.engine}> ` : " ";
-      const line = await rl.question(prompt);
+      let line: string;
+      try {
+        line = await rl.question(prompt);
+      } catch (error) {
+        if (isReadlineTerminationError(error)) {
+          return;
+        }
+        throw error;
+      }
       const trimmed = line.trim();
 
       if (lines.length === 0 && trimmed.startsWith(".")) {
