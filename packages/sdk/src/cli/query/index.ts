@@ -41,9 +41,7 @@ const queryOptionsSchema = queryBaseOptionsSchema.extend({
 });
 const queryCommandInputSchema = z.union([
   z.object({
-    query: z.string().refine((value) => value.trim().length > 0, {
-      message: "--query is required unless --repl is set.",
-    }),
+    query: z.string(),
     repl: z.literal(false),
   }),
   z.object({
