@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { createInterface } from "node:readline/promises";
 import { create } from "@bufbuild/protobuf";
 import {
@@ -42,10 +43,17 @@ const queryOptionsSchema = queryBaseOptionsSchema.extend({
 const queryCommandInputSchema = z.union([
   z.object({
     query: z.string(),
+    file: z.undefined().optional(),
     repl: z.literal(false),
   }),
   z.object({
     query: z.undefined().optional(),
+    file: z.string(),
+    repl: z.literal(false),
+  }),
+  z.object({
+    query: z.undefined().optional(),
+    file: z.undefined().optional(),
     repl: z.literal(true),
   }),
 ]);
@@ -259,14 +267,25 @@ function parseExecutionResult(result: string): unknown {
 }
 
 /**
+ * Read query text from a file.
+ * @param filePath - Path to the query file
+ * @returns Query string
+ */
+export async function readQueryFile(filePath: string): Promise<string> {
+  return await readFile(filePath, "utf-8");
+}
+
+/**
  * Resolve mutually exclusive query input modes from CLI args.
  * @param args - Query input flags
  * @param args.query - Direct query string
+ * @param args.file - Path to a query file
  * @param args.repl - Whether REPL mode is enabled
  * @returns Normalized input mode
  */
 export function resolveQueryCommandInput(args: {
   query?: string;
+  file?: string;
   repl: boolean;
 }): QueryCommandInput {
   const mode = queryCommandInputSchema.safeParse(args);
@@ -274,12 +293,12 @@ export function resolveQueryCommandInput(args: {
     return mode.data;
   }
 
-  const specifiedModes = [args.query != null, args.repl].filter(Boolean).length;
+  const specifiedModes = [args.query != null, args.file != null, args.repl].filter(Boolean).length;
   if (specifiedModes > 1) {
-    throw new Error("--query and --repl are mutually exclusive.");
+    throw new Error("--query, --file, and --repl are mutually exclusive.");
   }
 
-  throw new Error("Either --query or --repl is required.");
+  throw new Error("Either --query, --file, or --repl is required.");
 }
 
 /**
@@ -619,6 +638,11 @@ export const queryCommand = defineCommand({
         alias: "q",
         description: "Query string to execute directly",
       }),
+      file: arg(z.string().optional(), {
+        alias: "f",
+        description: "Path to a file containing the query to execute",
+        completion: { type: "file" },
+      }),
       repl: arg(z.boolean().default(false), {
         description: "Run query command in interactive REPL mode",
       }),
@@ -631,6 +655,7 @@ export const queryCommand = defineCommand({
   run: withCommonArgs(async (args) => {
     const mode = resolveQueryCommandInput({
       query: args.query,
+      file: args.file,
       repl: args.repl,
     });
 
@@ -650,7 +675,10 @@ export const queryCommand = defineCommand({
       return;
     }
 
-    const directQuery = mode.query;
+    const directQuery = mode.query ?? (await readQueryFile(mode.file));
+    if (directQuery == null) {
+      throw new Error("Query input was not resolved.");
+    }
 
     if (args.engine === "sql") {
       const result = await querySql({

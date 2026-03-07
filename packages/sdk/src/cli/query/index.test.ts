@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { query, resolveQueryCommandInput } from "./index";
+import { query, readQueryFile, resolveQueryCommandInput } from "./index";
+
+vi.mock("node:fs/promises", () => ({
+  readFile: vi.fn(),
+}));
 
 const mockClient = {
   getApplication: vi.fn(),
@@ -520,15 +524,44 @@ describe("resolveQueryCommandInput", () => {
     });
   });
 
+  test("accepts file mode", () => {
+    expect(resolveQueryCommandInput({ file: "query.sql", repl: false })).toEqual({
+      file: "query.sql",
+      repl: false,
+    });
+  });
+
   test("accepts repl mode", () => {
     expect(resolveQueryCommandInput({ repl: true })).toEqual({
       repl: true,
     });
   });
 
+  test("rejects query and file together", () => {
+    expect(() =>
+      resolveQueryCommandInput({ query: "select 1;", file: "query.sql", repl: false }),
+    ).toThrow("--query, --file, and --repl are mutually exclusive.");
+  });
+
+  test("rejects file and repl together", () => {
+    expect(() => resolveQueryCommandInput({ file: "query.sql", repl: true })).toThrow(
+      "--query, --file, and --repl are mutually exclusive.",
+    );
+  });
+
   test("requires one input mode", () => {
     expect(() => resolveQueryCommandInput({ repl: false })).toThrow(
-      "Either --query or --repl is required.",
+      "Either --query, --file, or --repl is required.",
     );
+  });
+});
+
+describe("readQueryFile", () => {
+  test("reads query text from file as utf-8", async () => {
+    const { readFile } = await import("node:fs/promises");
+    vi.mocked(readFile).mockResolvedValue('select * from "User";' as never);
+
+    await expect(readQueryFile("query.sql")).resolves.toBe('select * from "User";');
+    expect(readFile).toHaveBeenCalledWith("query.sql", "utf-8");
   });
 });
