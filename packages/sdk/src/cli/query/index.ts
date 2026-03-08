@@ -544,9 +544,10 @@ function getReplStatement(lines: string[], engine: QueryEngine): string {
 
 function printReplHelp(engine: QueryEngine): void {
   logger.log("REPL commands:");
-  logger.log("  \\help, \\h, \\?  Show this help");
-  logger.log("  \\q, \\quit       Exit REPL");
-  logger.log("  \\clear, \\c      Clear the screen");
+  logger.log("  \\help, \\h, \\?        Show this help");
+  logger.log("  Ctrl+C                Clear current input");
+  logger.log("  \\q, \\quit, Ctrl+D   Exit REPL");
+  logger.log("  \\clear, \\c            Clear the screen");
   if (engine === "sql") {
     logger.log("SQL execution: statement ending with ';' runs immediately.");
     return;
