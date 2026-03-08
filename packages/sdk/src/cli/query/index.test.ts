@@ -514,21 +514,14 @@ describe("query", () => {
 
 describe("resolveQueryCommandInput", () => {
   test("accepts direct query mode", () => {
-    expect(resolveQueryCommandInput({ query: "select 1;", repl: false })).toEqual({
+    expect(resolveQueryCommandInput({ query: "select 1;" })).toEqual({
       query: "select 1;",
-      repl: false,
     });
   });
 
-  test("accepts repl mode", () => {
-    expect(resolveQueryCommandInput({ repl: true })).toEqual({
-      repl: true,
+  test("defaults to repl mode when query is omitted", () => {
+    expect(resolveQueryCommandInput({})).toEqual({
+      query: undefined,
     });
-  });
-
-  test("requires one input mode", () => {
-    expect(() => resolveQueryCommandInput({ repl: false })).toThrow(
-      "Either --query or --repl is required.",
-    );
   });
 });

@@ -40,16 +40,6 @@ const queryBaseOptionsSchema = z.object({
 const queryOptionsSchema = queryBaseOptionsSchema.extend({
   query: z.string(),
 });
-const queryCommandInputSchema = z.union([
-  z.object({
-    query: z.string(),
-    repl: z.literal(false),
-  }),
-  z.object({
-    query: z.undefined().optional(),
-    repl: z.literal(true),
-  }),
-]);
 
 export type QueryEngine = z.infer<typeof queryEngineSchema>;
 type QueryOptions = z.input<typeof queryOptionsSchema>;
@@ -78,7 +68,13 @@ type SQLExecutionResult = {
   rowCount: number;
 };
 
-type QueryCommandInput = z.infer<typeof queryCommandInputSchema>;
+type QueryCommandInput =
+  | {
+      query: string;
+    }
+  | {
+      query?: undefined;
+    };
 
 async function getNamespaceFromSqlQuery(
   workspaceId: string,
@@ -260,27 +256,21 @@ function parseExecutionResult(result: string): unknown {
 }
 
 /**
- * Resolve mutually exclusive query input modes from CLI args.
+ * Resolve query input mode from CLI args.
  * @param args - Query input flags
  * @param args.query - Direct query string
- * @param args.repl - Whether REPL mode is enabled
  * @returns Normalized input mode
  */
-export function resolveQueryCommandInput(args: {
-  query?: string;
-  repl: boolean;
-}): QueryCommandInput {
-  const mode = queryCommandInputSchema.safeParse(args);
-  if (mode.success) {
-    return mode.data;
+export function resolveQueryCommandInput(args: { query?: string }): QueryCommandInput {
+  if (args.query != null) {
+    return {
+      query: args.query,
+    };
   }
 
-  const specifiedModes = [args.query != null, args.repl].filter(Boolean).length;
-  if (specifiedModes > 1) {
-    throw new Error("--query and --repl are mutually exclusive.");
-  }
-
-  throw new Error("Either --query or --repl is required.");
+  return {
+    query: undefined,
+  };
 }
 
 /**
@@ -357,7 +347,7 @@ async function runRepl(
   },
 ): Promise<void> {
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    throw new Error("--repl requires an interactive terminal.");
+    throw new Error("Interactive mode requires an interactive terminal. Use -q/--query instead.");
   }
 
   const execute = await prepareQueryExecutor(options);
@@ -609,10 +599,7 @@ export const queryCommand = defineCommand({
       }),
       query: arg(z.string().optional(), {
         alias: "q",
-        description: "Query string to execute directly",
-      }),
-      repl: arg(z.boolean().default(false), {
-        description: "Run query command in interactive REPL mode",
+        description: "Query string to execute directly; omit to start REPL mode",
       }),
       machineuser: arg(z.string(), {
         alias: "m",
@@ -621,10 +608,7 @@ export const queryCommand = defineCommand({
     })
     .strict(),
   run: withCommonArgs(async (args) => {
-    const mode = resolveQueryCommandInput({
-      query: args.query,
-      repl: args.repl,
-    });
+    const mode = resolveQueryCommandInput({ query: args.query });
 
     const sharedOptions: QueryBaseOptions = {
       workspaceId: args["workspace-id"],
@@ -634,7 +618,7 @@ export const queryCommand = defineCommand({
       machineUser: args.machineuser,
     };
 
-    if (mode.repl) {
+    if (mode.query == null) {
       await runRepl({
         ...sharedOptions,
         json: args.json,
