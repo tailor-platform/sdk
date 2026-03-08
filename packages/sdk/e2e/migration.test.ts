@@ -245,9 +245,6 @@ describe.sequential("E2E: TailorDB Migrations", () => {
     trackTempDir(tempDir);
     migrationsDir = path.join(tempDir, "migrations");
 
-    // Set TAILOR_PLATFORM_SDK_TYPE_PATH to prevent writing to packages/sdk
-    process.env.TAILOR_PLATFORM_SDK_TYPE_PATH = path.join(tempDir, "user-defined.d.ts");
-
     // Unset EDITOR to prevent opening editor during migration generation
     delete process.env.EDITOR;
 

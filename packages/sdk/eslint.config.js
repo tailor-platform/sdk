@@ -11,7 +11,7 @@ export default defineConfig([
     "dist/",
     "e2e/fixtures/",
     ".tailor-sdk/",
-    "user-defined.d.ts",
+    "tailor.d.ts",
     "plugin-defined.d.ts",
     "**/__test_fixtures__/dist/",
     "**/__test_fixtures__/*-compat-out/",
