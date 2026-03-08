@@ -196,7 +196,7 @@ function collectAttributesFromConfig(config: AppConfig): ExtractedAttributes {
  * @returns Absolute path to the type definition file
  */
 function resolveTypeDefinitionPath(configPath: string): string {
-  return path.join(path.dirname(path.resolve(configPath)), "user-defined.d.ts");
+  return path.join(path.dirname(path.resolve(configPath)), "tailor.d.ts");
 }
 
 /**
