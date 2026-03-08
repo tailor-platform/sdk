@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { query, resolveQueryCommandInput, resolveReplCommand } from "./index";
+import {
+  query,
+  resolveQueryCommandInput,
+  resolveReplCommand,
+  resolveReplInterruptAction,
+} from "./index";
 
 const mockClient = {
   getApplication: vi.fn(),
@@ -563,5 +568,19 @@ describe("resolveReplCommand", () => {
 
   test("returns unknown for unsupported backslash command", () => {
     expect(resolveReplCommand("\\noop")).toBe("unknown");
+  });
+});
+
+describe("resolveReplInterruptAction", () => {
+  test("exits when there is no buffered input", () => {
+    expect(resolveReplInterruptAction([], "")).toBe("exit");
+  });
+
+  test("clears when buffered lines exist", () => {
+    expect(resolveReplInterruptAction(["select *"], "")).toBe("clear");
+  });
+
+  test("clears when the current line has input", () => {
+    expect(resolveReplInterruptAction([], "select *")).toBe("clear");
   });
 });

@@ -77,6 +77,7 @@ type QueryCommandInput =
     };
 
 type ReplCommand = "quit" | "help" | "clear" | "unknown";
+type ReplInterruptAction = "exit" | "clear";
 
 async function getNamespaceFromSqlQuery(
   workspaceId: string,
@@ -370,6 +371,23 @@ export function resolveReplCommand(input: string): ReplCommand | null {
 }
 
 /**
+ * Decide how REPL should react to Ctrl+C based on current buffered input.
+ * @param bufferedLines - Previously accepted lines in the current statement buffer
+ * @param currentLine - In-progress line currently being edited
+ * @returns Whether to clear the buffer or exit the REPL
+ */
+export function resolveReplInterruptAction(
+  bufferedLines: string[],
+  currentLine: string,
+): ReplInterruptAction {
+  if (bufferedLines.length === 0 && currentLine.length === 0) {
+    return "exit";
+  }
+
+  return "clear";
+}
+
+/**
  * Clear the interactive terminal screen and move the cursor to the top-left.
  */
 function clearReplScreen(): void {
@@ -400,13 +418,43 @@ async function runRepl(
     while (true) {
       const prompt = lines.length === 0 ? `${options.engine}> ` : " ";
       let line: string;
+      let interruptAction: ReplInterruptAction | null = null;
+      const controller = new AbortController();
+      const handleSigint = () => {
+        interruptAction = resolveReplInterruptAction(lines, rl.line);
+        if (interruptAction === "clear") {
+          lines.length = 0;
+          rl.write(null, {
+            ctrl: true,
+            name: "u",
+          });
+          process.stdout.write("\n");
+        } else {
+          rl.close();
+        }
+        controller.abort();
+      };
+
+      rl.once("SIGINT", handleSigint);
+
       try {
-        line = await rl.question(prompt);
+        line = await rl.question(prompt, {
+          signal: controller.signal,
+        });
       } catch (error) {
+        rl.off("SIGINT", handleSigint);
+        if (controller.signal.aborted) {
+          if (interruptAction === "exit") {
+            return;
+          }
+          continue;
+        }
         if (isReadlineTerminationError(error)) {
           return;
         }
         throw error;
+      } finally {
+        rl.off("SIGINT", handleSigint);
       }
       const trimmed = line.trim();
 
