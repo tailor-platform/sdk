@@ -1,5 +1,4 @@
 import * as fs from "node:fs";
-import { createRequire } from "node:module";
 import ml from "multiline-ts";
 import * as path from "pathe";
 import { logger } from "@/cli/shared/logger";
@@ -103,8 +102,6 @@ export {};
 `;
 }
 
-const require = createRequire(import.meta.url);
-
 function collectAttributesFromConfig(config: AppConfig): ExtractedAttributes {
   const auth = config.auth;
   if (!auth || typeof auth !== "object") {
@@ -199,27 +196,7 @@ function collectAttributesFromConfig(config: AppConfig): ExtractedAttributes {
  * @returns Absolute path to the type definition file
  */
 function resolveTypeDefinitionPath(configPath: string): string {
-  // Check for environment variable override
-  const typePath = process.env.TAILOR_PLATFORM_SDK_TYPE_PATH;
-  if (typePath) {
-    return path.resolve(process.cwd(), typePath);
-  }
-
-  const configDir = path.dirname(path.resolve(configPath));
-  const packageDir = resolvePackageDirectory(configDir);
-
-  if (!packageDir) {
-    return path.join(
-      configDir,
-      "node_modules",
-      "@tailor-platform",
-      "sdk",
-      "dist",
-      "user-defined.d.ts",
-    );
-  }
-
-  return path.join(packageDir, "dist", "user-defined.d.ts");
+  return path.join(path.dirname(path.resolve(configPath)), "tailor.d.ts");
 }
 
 /**
@@ -273,34 +250,5 @@ export async function generateUserTypes(options: GenerateUserTypesOptions): Prom
     logger.error("Error generating types");
     logger.error(String(error));
     // Don't throw - this should not block apply/generate
-  }
-}
-
-function resolvePackageDirectory(startDir: string): string | null {
-  let currentDir = startDir;
-  const root = path.parse(currentDir).root;
-
-  while (true) {
-    const candidate = path.join(currentDir, "node_modules", "@tailor-platform", "sdk");
-    const packageJsonPath = path.join(candidate, "package.json");
-    if (fs.existsSync(packageJsonPath)) {
-      return candidate;
-    }
-
-    if (currentDir === root) {
-      break;
-    }
-
-    const parentDir = path.dirname(currentDir);
-    currentDir = parentDir;
-  }
-
-  try {
-    const resolved = require.resolve("@tailor-platform/sdk/package.json", {
-      paths: [startDir],
-    });
-    return path.dirname(resolved);
-  } catch {
-    return null;
   }
 }

@@ -139,7 +139,7 @@ body: (context) => {
 When you want to use machine users without defining a `userProfile`, define `machineUserAttributes` instead. These attributes are used for:
 
 - type-safe `machineUsers[*].attributes`
-- `context.user.attributes` typing (via `user-defined.d.ts`)
+- `context.user.attributes` typing (via `tailor.d.ts`)
 
 ```typescript
 import { defineAuth, t } from "@tailor-platform/sdk";
@@ -158,7 +158,7 @@ export const auth = defineAuth("my-auth", {
 });
 ```
 
-To update types in `user-defined.d.ts`, run:
+To update types in `tailor.d.ts`, run:
 
 ```bash
 tailor-sdk generate
