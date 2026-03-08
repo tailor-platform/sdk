@@ -78,11 +78,13 @@ export function isSqlInputComplete(input: string): boolean {
     }
 
     if (char === "'") {
+      lastSignificantTokenWasSemicolon = false;
       inSingleQuote = true;
       continue;
     }
 
     if (char === '"') {
+      lastSignificantTokenWasSemicolon = false;
       inDoubleQuote = true;
       continue;
     }
@@ -91,6 +93,7 @@ export function isSqlInputComplete(input: string): boolean {
       const rest = input.slice(i);
       const match = rest.match(/^\$[A-Za-z_][A-Za-z0-9_]*\$/) ?? rest.match(/^\$\$/);
       if (match != null) {
+        lastSignificantTokenWasSemicolon = false;
         dollarQuoteTag = match[0];
         i += match[0].length - 1;
         continue;

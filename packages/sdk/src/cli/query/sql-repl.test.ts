@@ -26,4 +26,10 @@ describe("isSqlInputComplete", () => {
   test("supports dollar-quoted strings", () => {
     expect(isSqlInputComplete("select $$hello;world$$;")).toBe(true);
   });
+
+  test("returns false when a quoted token appears after a semicolon", () => {
+    expect(isSqlInputComplete("select 1; 'hello'")).toBe(false);
+    expect(isSqlInputComplete('select 1; "User"')).toBe(false);
+    expect(isSqlInputComplete("select 1; $$hello$$")).toBe(false);
+  });
 });
