@@ -76,6 +76,8 @@ type QueryCommandInput =
       query?: undefined;
     };
 
+type ReplCommand = "quit" | "help" | "unknown";
+
 async function getNamespaceFromSqlQuery(
   workspaceId: string,
   query: string,
@@ -341,6 +343,28 @@ function isReadlineTerminationError(error: unknown): boolean {
   return error.code === "ABORT_ERR" || error.code === "ERR_USE_AFTER_CLOSE";
 }
 
+/**
+ * Resolve a backslash REPL command into its normalized action.
+ * @param input - Raw user input
+ * @returns Normalized REPL command, or null for non-command input
+ */
+export function resolveReplCommand(input: string): ReplCommand | null {
+  const trimmed = input.trim();
+  if (!trimmed.startsWith("\\")) {
+    return null;
+  }
+
+  if (trimmed === "\\q" || trimmed === "\\quit") {
+    return "quit";
+  }
+
+  if (trimmed === "\\help" || trimmed === "\\h" || trimmed === "\\?") {
+    return "help";
+  }
+
+  return "unknown";
+}
+
 async function runRepl(
   options: QueryBaseOptions & {
     json?: boolean;
@@ -379,17 +403,19 @@ async function runRepl(
         continue;
       }
 
-      if (lines.length === 0 && trimmed.startsWith("\\")) {
-        if (trimmed === "\\q") {
+      if (lines.length === 0) {
+        const command = resolveReplCommand(trimmed);
+        if (command === "quit") {
           return;
         }
-
-        if (trimmed === "\\help") {
+        if (command === "help") {
           printReplHelp(options.engine);
           continue;
         }
-        logger.warn(`Unknown command: ${trimmed}`);
-        continue;
+        if (command === "unknown") {
+          logger.warn(`Unknown command: ${trimmed}`);
+          continue;
+        }
       }
 
       lines.push(line);
@@ -455,8 +481,8 @@ function getReplStatement(lines: string[], engine: QueryEngine): string {
 
 function printReplHelp(engine: QueryEngine): void {
   logger.log("REPL commands:");
-  logger.log("  \\help  Show this help");
-  logger.log("  \\q     Exit REPL");
+  logger.log("  \\help, \\h, \\?  Show this help");
+  logger.log("  \\q, \\quit       Exit REPL");
   if (engine === "sql") {
     logger.log("SQL execution: statement ending with ';' runs immediately.");
     return;

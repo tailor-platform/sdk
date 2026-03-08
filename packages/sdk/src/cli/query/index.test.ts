@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { query, resolveQueryCommandInput } from "./index";
+import { query, resolveQueryCommandInput, resolveReplCommand } from "./index";
 
 const mockClient = {
   getApplication: vi.fn(),
@@ -74,7 +74,9 @@ describe("query", () => {
       logs: "",
       result: '{"rows":[{"id":"1"}],"rowCount":1}',
     });
-    vi.mocked(fetchMachineUserToken).mockResolvedValue({ access_token: "mu-token" } as never);
+    vi.mocked(fetchMachineUserToken).mockResolvedValue({
+      access_token: "mu-token",
+    } as never);
     vi.mocked(resolveTypeNamespaces).mockResolvedValue(new Map([["User", "tailordb"]]));
     vi.mocked(extractTypeNamesFromSql).mockReturnValue(["User"]);
     vi.mocked(extractColumnTemplate).mockReturnValue(null);
@@ -370,7 +372,10 @@ describe("query", () => {
     });
 
     expect(result.engine).toBe("sql");
-    const sqlResult = result.result as { rows: Record<string, unknown>[]; rowCount: number };
+    const sqlResult = result.result as {
+      rows: Record<string, unknown>[];
+      rowCount: number;
+    };
     expect(Object.keys(sqlResult.rows[0])).toEqual([
       "id",
       "name",
@@ -424,7 +429,10 @@ describe("query", () => {
     });
 
     expect(result.engine).toBe("sql");
-    const sqlResult = result.result as { rows: Record<string, unknown>[]; rowCount: number };
+    const sqlResult = result.result as {
+      rows: Record<string, unknown>[];
+      rowCount: number;
+    };
     expect(Object.keys(sqlResult.rows[0])).toEqual([
       "orderId",
       "id",
@@ -459,7 +467,10 @@ describe("query", () => {
       query: 'select email, name from "User";',
     });
 
-    const sqlResult = result.result as { rows: Record<string, unknown>[]; rowCount: number };
+    const sqlResult = result.result as {
+      rows: Record<string, unknown>[];
+      rowCount: number;
+    };
     expect(Object.keys(sqlResult.rows[0])).toEqual(["email", "name"]);
   });
 
@@ -501,7 +512,10 @@ describe("query", () => {
         'select u.id as UID, o.* from "Customer" u join "SalesOrder" o on u.id = o."customerID";',
     });
 
-    const sqlResult = result.result as { rows: Record<string, unknown>[]; rowCount: number };
+    const sqlResult = result.result as {
+      rows: Record<string, unknown>[];
+      rowCount: number;
+    };
     expect(Object.keys(sqlResult.rows[0])).toEqual([
       "UID",
       "id",
@@ -523,5 +537,26 @@ describe("resolveQueryCommandInput", () => {
     expect(resolveQueryCommandInput({})).toEqual({
       query: undefined,
     });
+  });
+});
+
+describe("resolveReplCommand", () => {
+  test("accepts quit aliases", () => {
+    expect(resolveReplCommand("\\q")).toBe("quit");
+    expect(resolveReplCommand("\\quit")).toBe("quit");
+  });
+
+  test("accepts help aliases", () => {
+    expect(resolveReplCommand("\\help")).toBe("help");
+    expect(resolveReplCommand("\\h")).toBe("help");
+    expect(resolveReplCommand("\\?")).toBe("help");
+  });
+
+  test("returns null for non-command input", () => {
+    expect(resolveReplCommand("select 1;")).toBeNull();
+  });
+
+  test("returns unknown for unsupported backslash command", () => {
+    expect(resolveReplCommand("\\clear")).toBe("unknown");
   });
 });
