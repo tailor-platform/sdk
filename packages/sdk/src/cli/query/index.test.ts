@@ -552,11 +552,16 @@ describe("resolveReplCommand", () => {
     expect(resolveReplCommand("\\?")).toBe("help");
   });
 
+  test("accepts clear aliases", () => {
+    expect(resolveReplCommand("\\clear")).toBe("clear");
+    expect(resolveReplCommand("\\c")).toBe("clear");
+  });
+
   test("returns null for non-command input", () => {
     expect(resolveReplCommand("select 1;")).toBeNull();
   });
 
   test("returns unknown for unsupported backslash command", () => {
-    expect(resolveReplCommand("\\clear")).toBe("unknown");
+    expect(resolveReplCommand("\\noop")).toBe("unknown");
   });
 });

@@ -76,7 +76,7 @@ type QueryCommandInput =
       query?: undefined;
     };
 
-type ReplCommand = "quit" | "help" | "unknown";
+type ReplCommand = "quit" | "help" | "clear" | "unknown";
 
 async function getNamespaceFromSqlQuery(
   workspaceId: string,
@@ -362,7 +362,18 @@ export function resolveReplCommand(input: string): ReplCommand | null {
     return "help";
   }
 
+  if (trimmed === "\\clear" || trimmed === "\\c") {
+    return "clear";
+  }
+
   return "unknown";
+}
+
+/**
+ * Clear the interactive terminal screen and move the cursor to the top-left.
+ */
+function clearReplScreen(): void {
+  process.stdout.write("\u001Bc");
 }
 
 async function runRepl(
@@ -410,6 +421,10 @@ async function runRepl(
         }
         if (command === "help") {
           printReplHelp(options.engine);
+          continue;
+        }
+        if (command === "clear") {
+          clearReplScreen();
           continue;
         }
         if (command === "unknown") {
@@ -483,6 +498,7 @@ function printReplHelp(engine: QueryEngine): void {
   logger.log("REPL commands:");
   logger.log("  \\help, \\h, \\?  Show this help");
   logger.log("  \\q, \\quit       Exit REPL");
+  logger.log("  \\clear, \\c      Clear the screen");
   if (engine === "sql") {
     logger.log("SQL execution: statement ending with ';' runs immediately.");
     return;
