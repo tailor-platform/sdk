@@ -2,7 +2,7 @@
 "@tailor-platform/sdk": minor
 ---
 
-Add interactive REPL mode to `tailor-sdk query` via `--repl`.
+Add interactive REPL mode to `tailor-sdk query`.
 
 This allows running SQL queries statement-by-statement and GraphQL queries in an
-interactive session without passing `--query` each time.
+interactive session by omitting `--query`.
