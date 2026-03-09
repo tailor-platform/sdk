@@ -45,8 +45,8 @@ importers:
         specifier: 0.0.62
         version: 0.0.62
       publint:
-        specifier: 0.3.12
-        version: 0.3.12
+        specifier: 0.3.18
+        version: 0.3.18
       tsx:
         specifier: 4.21.0
         version: 4.21.0
@@ -178,7 +178,7 @@ importers:
         version: 1.39.0(oxlint-tsgolint@0.11.1)
       tsdown:
         specifier: 0.19.0
-        version: 0.19.0(@typescript/native-preview@7.0.0-dev.20260118.1)(oxc-resolver@11.19.1)(publint@0.3.12)(typescript@5.9.3)
+        version: 0.19.0(@typescript/native-preview@7.0.0-dev.20260118.1)(oxc-resolver@11.19.1)(publint@0.3.18)(typescript@5.9.3)
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -710,7 +710,7 @@ importers:
         version: 0.10.1
       tsdown:
         specifier: 0.19.0
-        version: 0.19.0(@typescript/native-preview@7.0.0-dev.20260118.1)(oxc-resolver@11.19.1)(publint@0.3.12)(typescript@5.9.3)
+        version: 0.19.0(@typescript/native-preview@7.0.0-dev.20260118.1)(oxc-resolver@11.19.1)(publint@0.3.18)(typescript@5.9.3)
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -4537,8 +4537,8 @@ packages:
     resolution: {integrity: sha512-jx6+sE9h/UryaCZhsJWbJtTEy47yXoGNYI4z8ZaRncM0zBKeRqjO2JEcOUYwrYGb1WLhXM1FfMzW3annvFv0rw==}
     engines: {node: '>=12.0.0'}
 
-  publint@0.3.12:
-    resolution: {integrity: sha512-1w3MMtL9iotBjm1mmXtG3Nk06wnq9UhGNRpQ2j6n1Zq7YAD6gnxMMZMIxlRPAydVjVbjSm+n0lhwqsD1m4LD5w==}
+  publint@0.3.18:
+    resolution: {integrity: sha512-JRJFeBTrfx4qLwEuGFPk+haJOJN97KnPuK01yj+4k/Wj5BgoOK5uNsivporiqBjk2JDaslg7qJOhGRnpltGeog==}
     engines: {node: '>=18'}
     hasBin: true
 
@@ -9188,7 +9188,7 @@ snapshots:
       '@types/node': 24.10.9
       long: 5.3.2
 
-  publint@0.3.12:
+  publint@0.3.18:
     dependencies:
       '@publint/pack': 0.1.4
       package-manager-detector: 1.6.0
@@ -9819,7 +9819,7 @@ snapshots:
       minimist: 1.2.8
       strip-bom: 3.0.0
 
-  tsdown@0.19.0(@typescript/native-preview@7.0.0-dev.20260118.1)(oxc-resolver@11.19.1)(publint@0.3.12)(typescript@5.9.3):
+  tsdown@0.19.0(@typescript/native-preview@7.0.0-dev.20260118.1)(oxc-resolver@11.19.1)(publint@0.3.18)(typescript@5.9.3):
     dependencies:
       ansis: 4.2.0
       cac: 6.7.14
@@ -9838,7 +9838,7 @@ snapshots:
       unconfig-core: 7.5.0
       unrun: 0.2.30
     optionalDependencies:
-      publint: 0.3.12
+      publint: 0.3.18
       typescript: 5.9.3
     transitivePeerDependencies:
       - '@ts-macro/tsc'
