@@ -61,9 +61,16 @@ async function main() {
   console.log(`Total workspaces found: ${workspaces.length}\n`);
 
   // Filter e2e workspaces
-  const e2eWorkspaces = workspaces.filter((ws) =>
-    E2E_WORKSPACE_PREFIXES.some((prefix) => ws.name?.startsWith(prefix)),
-  );
+  const runId = process.argv.find((a) => a.startsWith("--run-id="))?.split("=")[1];
+  const e2eWorkspaces = workspaces.filter((ws) => {
+    const matchesPrefix = E2E_WORKSPACE_PREFIXES.some((prefix) => ws.name?.startsWith(prefix));
+    if (!matchesPrefix) return false;
+    // When --run-id is specified (CI), only delete workspaces from this run to avoid cross-run conflicts
+    if (runId) {
+      return ws.name?.includes(runId);
+    }
+    return true;
+  });
 
   if (e2eWorkspaces.length === 0) {
     console.log("✅ No e2e workspaces found to delete.");

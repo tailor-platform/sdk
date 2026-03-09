@@ -33,6 +33,12 @@ jobs:
         env:
           TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
 
+      - name: Cleanup e2e workspaces
+        if: always()
+        run: pnpm --filter @tailor-platform/sdk exec tsx scripts/cleanup-e2e-workspaces.ts --run-id=${{ github.run_id }}
+        env:
+          TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
+
       - name: Upload results
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
