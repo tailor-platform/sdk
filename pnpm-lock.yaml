@@ -155,7 +155,7 @@ importers:
         specifier: 2.3.0
         version: 2.3.0
       politty:
-        specifier: ^0.1.1
+        specifier: 0.1.2
         version: 0.1.2(zod@4.3.5)
       zod:
         specifier: 4.3.5
@@ -546,19 +546,19 @@ importers:
         specifier: 0.7.24
         version: 0.7.24(@types/node@24.10.9)(typescript@5.9.3)
       '@opentelemetry/api':
-        specifier: ^1.9.0
+        specifier: 1.9.0
         version: 1.9.0
       '@opentelemetry/exporter-trace-otlp-proto':
-        specifier: ^0.212.0
+        specifier: 0.212.0
         version: 0.212.0(@opentelemetry/api@1.9.0)
       '@opentelemetry/resources':
-        specifier: ^2.5.1
+        specifier: 2.6.0
         version: 2.6.0(@opentelemetry/api@1.9.0)
       '@opentelemetry/sdk-trace-node':
-        specifier: ^2.5.1
+        specifier: 2.6.0
         version: 2.6.0(@opentelemetry/api@1.9.0)
       '@opentelemetry/semantic-conventions':
-        specifier: ^1.39.0
+        specifier: 1.40.0
         version: 1.40.0
       '@oxc-project/types':
         specifier: 0.108.0
@@ -588,7 +588,7 @@ importers:
         specifier: 4.1.0
         version: 4.1.0
       es-toolkit:
-        specifier: ^1.44.0
+        specifier: 1.45.1
         version: 1.45.1
       find-up-simple:
         specifier: 1.0.1
@@ -627,13 +627,13 @@ importers:
         specifier: 2.0.3
         version: 2.0.3
       pgsql-ast-parser:
-        specifier: ^12.0.2
+        specifier: 12.0.2
         version: 12.0.2
       pkg-types:
         specifier: 2.3.0
         version: 2.3.0
       politty:
-        specifier: ^0.4.4
+        specifier: 0.4.4
         version: 0.4.4(zod@4.3.5)
       rolldown:
         specifier: 1.0.0-beta.60
@@ -667,7 +667,7 @@ importers:
         specifier: 9.39.2
         version: 9.39.2
       '@opentelemetry/sdk-trace-base':
-        specifier: ^2.5.1
+        specifier: 2.6.0
         version: 2.6.0(@opentelemetry/api@1.9.0)
       '@tailor-platform/function-types':
         specifier: 0.8.0
