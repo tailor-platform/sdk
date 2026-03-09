@@ -1,5 +1,22 @@
 # @tailor-platform/sdk
 
+## 1.23.0
+
+### Minor Changes
+
+- [#661](https://github.com/tailor-platform/sdk/pull/661) [`03f33d9`](https://github.com/tailor-platform/sdk/commit/03f33d9c3d789c738c99600148aa52f2586017ea) Thanks [@r253hmdryou](https://github.com/r253hmdryou)! - Add interactive REPL mode to `tailor-sdk query`.
+
+  This allows running SQL queries statement-by-statement and GraphQL queries in an
+  interactive session by omitting `--query`.
+
+### Patch Changes
+
+- [#677](https://github.com/tailor-platform/sdk/pull/677) [`cc6db64`](https://github.com/tailor-platform/sdk/commit/cc6db647361309021268543c291e1f13e9a6cb1c) Thanks [@dqn](https://github.com/dqn)! - Write tailor.d.ts to project root (next to config file) instead of SDK dist directory
+
+- [#680](https://github.com/tailor-platform/sdk/pull/680) [`4d421a8`](https://github.com/tailor-platform/sdk/commit/4d421a8b904b939813b50fb68fff4bafccd10541) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): lock file maintenance
+
+- [#691](https://github.com/tailor-platform/sdk/pull/691) [`008b2b6`](https://github.com/tailor-platform/sdk/commit/008b2b68d750a0799118087e09418d1f16574bb3) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency suzuki-shunsuke/ghalint to v1.5.5
+
 ## 1.22.0
 
 ### Minor Changes
