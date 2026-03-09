@@ -55,10 +55,11 @@ const E2E_WORKSPACE_PREFIX = "e2e-ws-";
 // Fixture directory path
 const FIXTURE_DIR = path.join(__dirname, "fixtures", "migration");
 
-// Generate unique test identifiers
+// Generate unique test identifiers (include GITHUB_RUN_ID in CI to avoid cross-run cleanup conflicts)
+const ciRunId = process.env.GITHUB_RUN_ID ?? "";
 const testRunId = Date.now().toString(36);
 const testAppName = `migration-e2e-${testRunId}`;
-const testWorkspaceName = `${E2E_WORKSPACE_PREFIX}${testRunId}`;
+const testWorkspaceName = `${E2E_WORKSPACE_PREFIX}${ciRunId ? `${ciRunId}-` : ""}${testRunId}`;
 const tailordbName = `testdb-${testRunId}`;
 
 /**

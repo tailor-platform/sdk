@@ -35,8 +35,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const E2E_WORKSPACE_PREFIX = "e2e-ws-";
+const ciRunId = process.env.GITHUB_RUN_ID ?? "";
 const testRunId = Date.now().toString(36);
-const testWorkspaceName = `${E2E_WORKSPACE_PREFIX}${testRunId}`;
+const testWorkspaceName = `${E2E_WORKSPACE_PREFIX}${ciRunId ? `${ciRunId}-` : ""}${testRunId}`;
 
 const sdkRoot = path.resolve(__dirname, "..");
 const cliPath = path.join(sdkRoot, "dist", "cli", "index.mjs");
