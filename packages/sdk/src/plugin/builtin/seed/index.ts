@@ -320,6 +320,7 @@ function generateExecScript(
           console.error(result.error);
           process.exit(1);
         }
+        process.exit(0);
       } catch (error) {
         console.error(styleText("red", \`Error: \${error instanceof Error ? error.message : String(error)}\`));
         process.exit(1);
