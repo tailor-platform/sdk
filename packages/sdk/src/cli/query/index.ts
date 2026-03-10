@@ -760,15 +760,14 @@ export const queryCommand = defineCommand({
       }),
       query: arg(z.string().optional(), {
         alias: "q",
-        description: "Query string to execute directly",
+        description: "Query string to execute directly; omit to start REPL mode",
       }),
       file: arg(z.string().optional(), {
         alias: "f",
-        description: "Read query string from file",
+        description: "Read query string from file; omit to start REPL mode",
       }),
       edit: arg(z.boolean().default(false), {
-        description:
-          "Open a temporary file in your editor; omit all input flags to start REPL mode",
+        description: "Open a temporary file in your editor; omit to start REPL mode",
       }),
       machineuser: arg(z.string(), {
         alias: "m",
