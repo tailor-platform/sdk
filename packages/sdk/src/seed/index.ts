@@ -1,7 +1,7 @@
 /**
  * Seed integration module for generated seed code.
  *
- * Re-exports @toiroakr/lines-db through a single import path
+ * Re-exports `@toiroakr/lines-db` through a single import path
  * to avoid phantom dependency issues with pnpm, and provides
  * seed-specific utility functions used by the code generator.
  */
@@ -28,7 +28,8 @@ type ValidateSeedResult =
 /**
  * Validate JSONL seed data against schema definitions.
  * Wraps LinesDB.create/initialize and ErrorFormatter for convenient use in generated exec.mjs.
- * @param options
+ * @param options - Validation options including dataDir, tableName, and verbose flag
+ * @returns Validation result with output messages and optional error details
  */
 export async function validateSeedData(
   options: ValidateSeedDataOptions,
