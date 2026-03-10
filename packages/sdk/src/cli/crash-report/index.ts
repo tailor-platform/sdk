@@ -32,7 +32,7 @@ export async function reportCrash(error: unknown, errorType: ErrorType): Promise
         logger.log(`  ${filePath}`);
         logger.log("");
         logger.log("To submit this report:");
-        logger.log(`  tailor-sdk crash-report send --file ${filePath}`);
+        logger.log(`  tailor-sdk crash-report send --file "${filePath}"`);
       }
     }
 
