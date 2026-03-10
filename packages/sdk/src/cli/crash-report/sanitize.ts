@@ -25,7 +25,16 @@ function lastSegment(filePath: string, separator: string): string {
  * @returns Sanitized stack trace
  */
 export function sanitizeStackTrace(stack: string): string {
-  let result = stack.replace(ABSOLUTE_PATH_PATTERN, (match) => {
+  // V8 stack traces start with "ErrorType: message\n    at ...".
+  // Apply message sanitization to the first line so secrets embedded in
+  // the error message are redacted consistently with errorMessage.
+  const newlineIndex = stack.indexOf("\n");
+  let result =
+    newlineIndex !== -1
+      ? sanitizeMessage(stack.slice(0, newlineIndex)) + stack.slice(newlineIndex)
+      : sanitizeMessage(stack);
+
+  result = result.replace(ABSOLUTE_PATH_PATTERN, (match) => {
     const sdkIndex = match.indexOf(SDK_PACKAGE_MARKER);
     if (sdkIndex !== -1) {
       return match.slice(sdkIndex);
@@ -80,9 +89,16 @@ export function sanitizeArgv(argv: string[]): string[] {
 
   for (const arg of argv) {
     if (redactNext) {
-      result.push("<redacted>");
+      // If the next token is itself a flag, treat it as a new flag rather
+      // than consuming it as the previous flag's value. This avoids leaking
+      // the *next* flag's value (e.g., `--verbose --workspace-id secret`
+      // would otherwise expose `secret`).
+      if (!arg.startsWith("-")) {
+        result.push("<redacted>");
+        redactNext = false;
+        continue;
+      }
       redactNext = false;
-      continue;
     }
 
     // --flag=value: keep flag name, redact value

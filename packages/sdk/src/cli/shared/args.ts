@@ -227,12 +227,9 @@ export const withCommonArgs =
         // Report programming bugs (native error types that indicate code defects).
         // Skip domain errors like ConnectError or CIPromptError and plain Error
         // used for user-facing validation/not-found messages.
-        if (
-          error instanceof TypeError ||
-          error instanceof RangeError ||
-          error instanceof SyntaxError ||
-          error instanceof ReferenceError
-        ) {
+        // Exclude SyntaxError/ReferenceError: at runtime these typically come from
+        // dynamically imported user config files, not from SDK code.
+        if (error instanceof TypeError || error instanceof RangeError) {
           const { reportCrash } = await import("@/cli/crash-report");
           await reportCrash(error, "handledError");
         }

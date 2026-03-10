@@ -33,6 +33,16 @@ describe("sanitizeStackTrace", () => {
     expect(result).toBe("TypeError: Cannot read properties of undefined");
   });
 
+  test("redacts sensitive data in the error message line of a stack trace", () => {
+    const stack =
+      "Error: token abc123def456789012345678901234567890 for user@example.com\n    at Object.<anonymous> (/home/user/projects/packages/sdk/src/cli/index.ts:10:5)";
+    const result = sanitizeStackTrace(stack);
+    expect(result).not.toContain("abc123def456789012345678901234567890");
+    expect(result).not.toContain("user@example.com");
+    expect(result).toContain("<redacted>");
+    expect(result).toContain("<email>");
+  });
+
   test("replaces Windows-style absolute paths with <external>/filename", () => {
     const stack =
       "Error: boom\n    at Object.<anonymous> (C:\\Users\\admin\\projects\\some-lib\\index.js:1:1)";
@@ -141,12 +151,22 @@ describe("sanitizeArgv", () => {
   });
 
   test("treats consecutive flags correctly (no value between them)", () => {
-    // --verbose is a flag, --yes follows it and is treated as its value (redacted)
-    // This is a conservative tradeoff: we lose flag names after the first flag,
-    // but never leak sensitive values
     const argv = ["node", "tailor-sdk", "apply", "--verbose", "--yes"];
     const result = sanitizeArgv(argv);
-    expect(result).toEqual(["node", "tailor-sdk", "apply", "--verbose", "<redacted>"]);
+    expect(result).toEqual(["node", "tailor-sdk", "apply", "--verbose", "--yes"]);
+  });
+
+  test("redacts value after boolean flag followed by valued flag", () => {
+    const argv = ["node", "tailor-sdk", "apply", "--verbose", "--workspace-id", "secret"];
+    const result = sanitizeArgv(argv);
+    expect(result).toEqual([
+      "node",
+      "tailor-sdk",
+      "apply",
+      "--verbose",
+      "--workspace-id",
+      "<redacted>",
+    ]);
   });
 
   test("redacts absolute path positional arguments", () => {
