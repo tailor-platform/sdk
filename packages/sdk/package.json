@@ -138,7 +138,7 @@
     "zod": "4.3.5"
   },
   "devDependencies": {
-    "@eslint/js": "9.39.2",
+    "@eslint/js": "9.39.4",
     "@opentelemetry/sdk-trace-base": "2.6.0",
     "@tailor-platform/function-types": "0.8.2",
     "@toiroakr/lines-db": "0.6.1",
@@ -147,7 +147,7 @@
     "@types/node": "24.10.9",
     "@typescript/native-preview": "7.0.0-dev.20260306.1",
     "@vitest/coverage-v8": "4.0.17",
-    "eslint": "9.39.2",
+    "eslint": "9.39.4",
     "eslint-plugin-jsdoc": "62.1.0",
     "eslint-plugin-oxlint": "1.39.0",
     "oxlint": "1.39.0",
