@@ -26,8 +26,7 @@ export async function reportCrash(error: unknown, errorType: ErrorType): Promise
 
     if (config.localEnabled) {
       const filePath = writeCrashReport(report, config.localDir);
-      // Only show banner for truly unexpected crashes, not routine handled errors
-      if (filePath && errorType !== "handledError") {
+      if (filePath) {
         logger.log("");
         logger.log("An unexpected error occurred. A crash report has been saved to:");
         logger.log(`  ${filePath}`);

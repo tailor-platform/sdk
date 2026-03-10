@@ -1,7 +1,8 @@
 import type { CrashReport } from "./report";
 
 const SEND_TIMEOUT_MS = 5000;
-// Placeholder endpoint; replace with the real URL once the error tracking service is deployed.
+// Accepted trade-off: placeholder endpoint until the error tracking service is deployed.
+// Remote sending defaults to off, so this only affects explicit opt-in via TAILOR_CRASH_REPORTS_REMOTE=on.
 const PRODUCTION_ENDPOINT = "https://example.com/crash-report";
 const ENDPOINT = process.env.TAILOR_CRASH_REPORT_ENDPOINT || PRODUCTION_ENDPOINT;
 

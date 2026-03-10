@@ -224,9 +224,15 @@ export const withCommonArgs =
         if (args.verbose && error.stack) {
           logger.debug(`\nStack trace:\n${error.stack}`);
         }
-        // Only report unexpected errors (TypeError, RangeError, etc.), not plain
-        // Error which is commonly used for user-facing validation/not-found errors.
-        if (error.constructor !== Error) {
+        // Report programming bugs (native error types that indicate code defects).
+        // Skip domain errors like ConnectError or CIPromptError and plain Error
+        // used for user-facing validation/not-found messages.
+        if (
+          error instanceof TypeError ||
+          error instanceof RangeError ||
+          error instanceof SyntaxError ||
+          error instanceof ReferenceError
+        ) {
           const { reportCrash } = await import("@/cli/crash-report");
           await reportCrash(error, "handledError");
         }
