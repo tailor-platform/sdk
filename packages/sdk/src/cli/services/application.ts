@@ -17,10 +17,12 @@ import { buildTriggerContext } from "@/cli/shared/trigger-context";
 import { IdPSchema } from "@/parser/service/idp";
 import { StaticWebsiteSchema } from "@/parser/service/staticwebsite";
 import { TailorDBServiceConfigSchema } from "@/parser/service/tailordb";
-import { type AppConfig } from "@/types/app-config";
-import { type ExecutorServiceInput } from "@/types/app-config";
-import { type ResolverServiceInput } from "@/types/app-config";
-import { type WorkflowServiceConfig } from "@/types/app-config";
+import {
+  type AppConfig,
+  type ExecutorServiceInput,
+  type ResolverServiceInput,
+  type WorkflowServiceConfig,
+} from "@/types/app-config";
 import { type AuthConfig } from "@/types/auth";
 import { type IdPConfig } from "@/types/idp";
 import { type TailorDBServiceInput } from "@/types/tailordb";

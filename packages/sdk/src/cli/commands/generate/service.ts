@@ -28,8 +28,7 @@ import type { GenerateOptions } from "./options";
 import type { Executor } from "@/types/executor.generated";
 import type { Plugin, PluginAttachment } from "@/types/plugin";
 import type { Resolver } from "@/types/resolver.generated";
-import type { TypeSourceInfo } from "@/types/tailordb";
-import type { TailorDBType } from "@/types/tailordb";
+import type { TypeSourceInfo, TailorDBType } from "@/types/tailordb";
 
 export type { CodeGenerator } from "@/cli/commands/generate/types";
 
