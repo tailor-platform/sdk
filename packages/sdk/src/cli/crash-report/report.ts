@@ -39,8 +39,7 @@ function parseCommand(): string {
   const args = process.argv.slice(2);
   const commandParts: string[] = [];
   for (const arg of args) {
-    if (arg.startsWith("-")) break;
-    if (commandParts.length >= MAX_COMMAND_TOKENS) break;
+    if (arg.startsWith("-") || commandParts.length >= MAX_COMMAND_TOKENS) break;
     commandParts.push(arg);
   }
   return commandParts.join(" ") || "<unknown>";

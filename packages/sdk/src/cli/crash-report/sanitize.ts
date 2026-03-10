@@ -10,8 +10,9 @@ const ABSOLUTE_PATH_PATTERN = /(?:\/(?:[\w.@\- ]+\/)+[\w.@\- ]+)/g;
 const WINDOWS_PATH_PATTERN = /(?:[A-Za-z]:\\(?:[\w.@\- ]+\\)+[\w.@\- ]+)/g;
 const URL_QUERY_PATTERN = /[?&][^?\s]*/g;
 
-// Non-global variant for single-match .test() calls (avoids lastIndex state issues)
+// Non-global variants for single-match .test() calls (avoids lastIndex state issues)
 const EMAIL_TEST_PATTERN = /\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b/;
+const WINDOWS_DRIVE_TEST_PATTERN = /^[A-Za-z]:\\/;
 
 // SDK package path marker for relative paths
 const SDK_PACKAGE_MARKER = "packages/sdk/";
@@ -121,7 +122,7 @@ export function sanitizeArgv(argv: string[]): string[] {
     }
 
     // Redact Windows-style absolute paths
-    if (/^[A-Za-z]:\\/.test(arg)) {
+    if (WINDOWS_DRIVE_TEST_PATTERN.test(arg)) {
       result.push("<path>");
       continue;
     }
