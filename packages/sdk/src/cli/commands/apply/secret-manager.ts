@@ -236,7 +236,7 @@ export async function planSecretManager(context: PlanContext) {
 }
 
 function vaultTrn(workspaceId: string, name: string) {
-  return `trn:v1:workspace:${workspaceId}:secret_manager:${name}`;
+  return `trn:v1:workspace:${workspaceId}:vault:${name}`;
 }
 
 /**

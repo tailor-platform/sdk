@@ -480,7 +480,7 @@ describe("applySecretManager metadata update", () => {
     expect(client.setMetadata).toHaveBeenCalledTimes(1);
     expect(client.setMetadata).toHaveBeenCalledWith(
       expect.objectContaining({
-        trn: "trn:v1:workspace:ws-1:secret_manager:existing-vault",
+        trn: "trn:v1:workspace:ws-1:vault:existing-vault",
         labels: expect.objectContaining({ "sdk-name": "my-app" }),
       }),
     );
