@@ -224,20 +224,22 @@ export const withCommonArgs =
         if (args.verbose && error.stack) {
           logger.debug(`\nStack trace:\n${error.stack}`);
         }
-        // Report programming bugs (native error types that indicate code defects).
-        // Skip domain errors like ConnectError or CIPromptError and plain Error
-        // used for user-facing validation/not-found messages.
-        // Exclude SyntaxError/ReferenceError: at runtime these typically come from
-        // dynamically imported user config files, not from SDK code.
-        // Accepted trade-off: exhaustiveness checks (`satisfies never`) throw plain
-        // Error and won't be captured here. To fix, those would need a dedicated
-        // error type (e.g., InvariantError), which is out of scope for this change.
-        if (error instanceof TypeError || error instanceof RangeError) {
-          const { reportCrash } = await import("@/cli/crash-report");
-          await reportCrash(error, "handledError");
-        }
       } else {
         logger.error(`Unknown error: ${error}`);
+      }
+
+      // Report programming bugs (native error types that indicate code defects).
+      // Skip domain errors like ConnectError, CIPromptError, and plain Error
+      // used for user-facing validation/not-found messages.
+      // Exclude SyntaxError/ReferenceError: at runtime these typically come from
+      // dynamically imported user config files, not from SDK code.
+      // Accepted trade-off: exhaustiveness checks (`satisfies never`) throw plain
+      // Error and won't be captured here. To fix, those would need a dedicated
+      // error type (e.g., InvariantError), which is out of scope for this change.
+      const shouldReport =
+        !isCLIError(error) &&
+        (!(error instanceof Error) || error instanceof TypeError || error instanceof RangeError);
+      if (shouldReport) {
         const { reportCrash } = await import("@/cli/crash-report");
         await reportCrash(error, "handledError");
       }

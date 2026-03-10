@@ -127,9 +127,8 @@ export function sanitizeArgv(argv: string[]): string[] {
       continue;
     }
 
-    // Redact email addresses
-    if (EMAIL_PATTERN.test(arg)) {
-      EMAIL_PATTERN.lastIndex = 0;
+    // Redact email addresses (use a fresh regex to avoid global lastIndex state)
+    if (/\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b/.test(arg)) {
       result.push("<email>");
       continue;
     }
