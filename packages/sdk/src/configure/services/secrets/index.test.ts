@@ -5,8 +5,8 @@ describe("defineSecretManager", () => {
   it("should have get and getAll methods", () => {
     const secrets = defineSecretManager({
       "my-vault": {
-        API_KEY: "test-key",
-        DB_PASSWORD: "test-password",
+        "api-key": "test-key",
+        "db-password": "test-password",
       },
     });
 
@@ -16,11 +16,11 @@ describe("defineSecretManager", () => {
 
   it("should support multiple vaults", () => {
     const secrets = defineSecretManager({
-      vault1: {
-        SECRET_A: "value-a",
+      "vault-1": {
+        "secret-a": "value-a",
       },
-      vault2: {
-        SECRET_B: "value-b",
+      "vault-2": {
+        "secret-b": "value-b",
       },
     });
 

@@ -56,8 +56,8 @@ describe("applySecretManager phase separation", () => {
       secretChangeSet: {
         creates: [
           {
-            name: "my-vault/NEW_SECRET",
-            secretName: "NEW_SECRET",
+            name: "my-vault/new-secret",
+            secretName: "new-secret",
             workspaceId: "ws-1",
             vaultName: "my-vault",
             value: "new-value",
@@ -65,8 +65,8 @@ describe("applySecretManager phase separation", () => {
         ],
         updates: [
           {
-            name: "my-vault/EXISTING_SECRET",
-            secretName: "EXISTING_SECRET",
+            name: "my-vault/existing-secret",
+            secretName: "existing-secret",
             workspaceId: "ws-1",
             vaultName: "my-vault",
             value: "updated-value",
@@ -74,8 +74,8 @@ describe("applySecretManager phase separation", () => {
         ],
         deletes: [
           {
-            name: "my-vault/ORPHAN_SECRET",
-            secretName: "ORPHAN_SECRET",
+            name: "my-vault/orphan-secret",
+            secretName: "orphan-secret",
             workspaceId: "ws-1",
             vaultName: "my-vault",
           },
@@ -93,7 +93,7 @@ describe("applySecretManager phase separation", () => {
     mockLoadSecretsState.mockReturnValue({
       vaults: {
         "my-vault": {
-          ORPHAN_SECRET: hashValue("orphan-value"),
+          "orphan-secret": hashValue("orphan-value"),
         },
       },
     });
@@ -115,7 +115,7 @@ describe("applySecretManager phase separation", () => {
     expect(client.createSecretManagerSecret).toHaveBeenCalledWith({
       workspaceId: "ws-1",
       secretmanagerVaultName: "my-vault",
-      secretmanagerSecretName: "NEW_SECRET",
+      secretmanagerSecretName: "new-secret",
       secretmanagerSecretValue: "new-value",
     });
 
@@ -123,7 +123,7 @@ describe("applySecretManager phase separation", () => {
     expect(client.updateSecretManagerSecret).toHaveBeenCalledWith({
       workspaceId: "ws-1",
       secretmanagerVaultName: "my-vault",
-      secretmanagerSecretName: "EXISTING_SECRET",
+      secretmanagerSecretName: "existing-secret",
       secretmanagerSecretValue: "updated-value",
     });
 
@@ -144,7 +144,7 @@ describe("applySecretManager phase separation", () => {
     expect(client.deleteSecretManagerSecret).toHaveBeenCalledWith({
       workspaceId: "ws-1",
       secretmanagerVaultName: "my-vault",
-      secretmanagerSecretName: "ORPHAN_SECRET",
+      secretmanagerSecretName: "orphan-secret",
     });
   });
 
@@ -223,16 +223,16 @@ describe("planSecretManager hash-based diff", () => {
     mockLoadSecretsState.mockReturnValue({
       vaults: {
         "my-vault": {
-          EXISTING_SECRET: hashValue(secretValue),
+          "existing-secret": hashValue(secretValue),
         },
       },
     });
 
-    const client = createMockPlanClient(["EXISTING_SECRET"]);
+    const client = createMockPlanClient(["existing-secret"]);
     const ctx = createPlanContext(client, [
       {
         vaultName: "my-vault",
-        secrets: [{ name: "EXISTING_SECRET", value: secretValue }],
+        secrets: [{ name: "existing-secret", value: secretValue }],
       },
     ]);
 
@@ -244,16 +244,16 @@ describe("planSecretManager hash-based diff", () => {
     mockLoadSecretsState.mockReturnValue({
       vaults: {
         "my-vault": {
-          EXISTING_SECRET: hashValue("old-value"),
+          "existing-secret": hashValue("old-value"),
         },
       },
     });
 
-    const client = createMockPlanClient(["EXISTING_SECRET"]);
+    const client = createMockPlanClient(["existing-secret"]);
     const ctx = createPlanContext(client, [
       {
         vaultName: "my-vault",
-        secrets: [{ name: "EXISTING_SECRET", value: "new-value" }],
+        secrets: [{ name: "existing-secret", value: "new-value" }],
       },
     ]);
 
@@ -265,11 +265,11 @@ describe("planSecretManager hash-based diff", () => {
   test("includes update when no stored state exists", async () => {
     mockLoadSecretsState.mockReturnValue({ vaults: {} });
 
-    const client = createMockPlanClient(["EXISTING_SECRET"]);
+    const client = createMockPlanClient(["existing-secret"]);
     const ctx = createPlanContext(client, [
       {
         vaultName: "my-vault",
-        secrets: [{ name: "EXISTING_SECRET", value: "some-value" }],
+        secrets: [{ name: "existing-secret", value: "some-value" }],
       },
     ]);
 
@@ -311,13 +311,13 @@ describe("planSecretManager vault metadata and deletion", () => {
         metadata: { labels: { "sdk-name": "my-app" } },
       }),
       listSecretManagerSecrets: vi.fn().mockResolvedValue({
-        secrets: [{ name: "SECRET_IN_REMOVED" }],
+        secrets: [{ name: "secret-in-removed" }],
         nextPageToken: "",
       }),
     } as unknown as OperatorClient;
 
     const ctx = createPlanContext(client, [
-      { vaultName: "kept-vault", secrets: [{ name: "KEY", value: "val" }] },
+      { vaultName: "kept-vault", secrets: [{ name: "app-key", value: "val" }] },
     ]);
 
     const result = await planSecretManager(ctx);
@@ -328,7 +328,7 @@ describe("planSecretManager vault metadata and deletion", () => {
     expect(result.secretChangeSet.deletes).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          secretName: "SECRET_IN_REMOVED",
+          secretName: "secret-in-removed",
           vaultName: "removed-vault",
         }),
       ]),
@@ -374,7 +374,7 @@ describe("planSecretManager vault metadata and deletion", () => {
     } as unknown as OperatorClient;
 
     const ctx = createPlanContext(client, [
-      { vaultName: "my-vault", secrets: [{ name: "KEY", value: "val" }] },
+      { vaultName: "my-vault", secrets: [{ name: "app-key", value: "val" }] },
     ]);
 
     const result = await planSecretManager(ctx);
@@ -400,7 +400,7 @@ describe("planSecretManager vault metadata and deletion", () => {
     } as unknown as OperatorClient;
 
     const ctx = createPlanContext(client, [
-      { vaultName: "my-vault", secrets: [{ name: "KEY", value: "val" }] },
+      { vaultName: "my-vault", secrets: [{ name: "app-key", value: "val" }] },
     ]);
 
     const result = await planSecretManager(ctx);
@@ -426,7 +426,7 @@ describe("planSecretManager vault metadata and deletion", () => {
     } as unknown as OperatorClient;
 
     const ctx = createPlanContext(client, [
-      { vaultName: "my-vault", secrets: [{ name: "KEY", value: "val" }] },
+      { vaultName: "my-vault", secrets: [{ name: "app-key", value: "val" }] },
     ]);
 
     const result = await planSecretManager(ctx);
@@ -501,8 +501,8 @@ describe("applySecretManager metadata update", () => {
         updates: [],
         deletes: [
           {
-            name: "removed-vault/SECRET_A",
-            secretName: "SECRET_A",
+            name: "removed-vault/secret-a",
+            secretName: "secret-a",
             workspaceId: "ws-1",
             vaultName: "removed-vault",
           },
@@ -517,7 +517,7 @@ describe("applySecretManager metadata update", () => {
     expect(client.deleteSecretManagerSecret).toHaveBeenCalledWith({
       workspaceId: "ws-1",
       secretmanagerVaultName: "removed-vault",
-      secretmanagerSecretName: "SECRET_A",
+      secretmanagerSecretName: "secret-a",
     });
     expect(client.deleteSecretManagerVault).toHaveBeenCalledTimes(1);
     expect(client.deleteSecretManagerVault).toHaveBeenCalledWith({
@@ -551,8 +551,8 @@ describe("applySecretManager state persistence", () => {
         {
           vaultName: "my-vault",
           secrets: [
-            { name: "SECRET_A", value: "value-a" },
-            { name: "SECRET_B", value: "value-b" },
+            { name: "secret-a", value: "value-a" },
+            { name: "secret-b", value: "value-b" },
           ],
         },
       ],
@@ -563,8 +563,8 @@ describe("applySecretManager state persistence", () => {
       secretChangeSet: {
         creates: [
           {
-            name: "my-vault/SECRET_A",
-            secretName: "SECRET_A",
+            name: "my-vault/secret-a",
+            secretName: "secret-a",
             workspaceId: "ws-1",
             vaultName: "my-vault",
             value: "value-a",
@@ -580,8 +580,8 @@ describe("applySecretManager state persistence", () => {
 
     expect(mockSaveSecretsState).toHaveBeenCalledTimes(1);
     const savedState = mockSaveSecretsState.mock.calls[0][0];
-    expect(savedState.vaults["my-vault"]["SECRET_A"]).toBe(hashValue("value-a"));
-    expect(savedState.vaults["my-vault"]["SECRET_B"]).toBe(hashValue("value-b"));
+    expect(savedState.vaults["my-vault"]["secret-a"]).toBe(hashValue("value-a"));
+    expect(savedState.vaults["my-vault"]["secret-b"]).toBe(hashValue("value-b"));
   });
 
   test("does not save state when application is not provided", async () => {
@@ -600,8 +600,8 @@ describe("applySecretManager state persistence", () => {
     mockLoadSecretsState.mockReturnValue({
       vaults: {
         "my-vault": {
-          SECRET_A: hashValue("value-a"),
-          ORPHAN: hashValue("orphan-value"),
+          "secret-a": hashValue("value-a"),
+          orphan: hashValue("orphan-value"),
         },
       },
     });
@@ -614,8 +614,8 @@ describe("applySecretManager state persistence", () => {
         updates: [],
         deletes: [
           {
-            name: "my-vault/ORPHAN",
-            secretName: "ORPHAN",
+            name: "my-vault/orphan",
+            secretName: "orphan",
             workspaceId: "ws-1",
             vaultName: "my-vault",
           },
@@ -628,15 +628,15 @@ describe("applySecretManager state persistence", () => {
 
     expect(mockSaveSecretsState).toHaveBeenCalledTimes(1);
     const savedState = mockSaveSecretsState.mock.calls[0][0];
-    expect(savedState.vaults["my-vault"]["SECRET_A"]).toBe(hashValue("value-a"));
-    expect(savedState.vaults["my-vault"]["ORPHAN"]).toBeUndefined();
+    expect(savedState.vaults["my-vault"]["secret-a"]).toBe(hashValue("value-a"));
+    expect(savedState.vaults["my-vault"]["orphan"]).toBeUndefined();
   });
 
   test("removes empty vault from state when all secrets deleted", async () => {
     mockLoadSecretsState.mockReturnValue({
       vaults: {
         "my-vault": {
-          ONLY_SECRET: hashValue("value"),
+          "only-secret": hashValue("value"),
         },
       },
     });
@@ -649,8 +649,8 @@ describe("applySecretManager state persistence", () => {
         updates: [],
         deletes: [
           {
-            name: "my-vault/ONLY_SECRET",
-            secretName: "ONLY_SECRET",
+            name: "my-vault/only-secret",
+            secretName: "only-secret",
             workspaceId: "ws-1",
             vaultName: "my-vault",
           },

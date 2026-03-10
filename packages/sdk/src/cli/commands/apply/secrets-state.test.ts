@@ -36,8 +36,8 @@ describe("secrets-state", () => {
     const state = {
       vaults: {
         "my-vault": {
-          SECRET_A: "abc123",
-          SECRET_B: "def456",
+          "secret-a": "abc123",
+          "secret-b": "def456",
         },
       },
     };
