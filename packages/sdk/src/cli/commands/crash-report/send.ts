@@ -21,16 +21,12 @@ export const sendCommand = defineCommand({
     })
     .strict(),
   run: withCommonArgs(async (args) => {
-    const filePath = args.file;
-
-    if (!fs.existsSync(filePath)) {
-      logger.error(`Crash report file not found: ${filePath}`);
+    if (!fs.existsSync(args.file)) {
+      logger.error(`Crash report file not found: ${args.file}`);
       process.exit(1);
     }
 
-    const content = fs.readFileSync(filePath, "utf-8");
-
-    // Parse the crash report from the text file back to JSON
+    const content = fs.readFileSync(args.file, "utf-8");
     const report = parseCrashLogFile(content);
     if (!report) {
       logger.error("Failed to parse crash report file. The file may be corrupted.");
