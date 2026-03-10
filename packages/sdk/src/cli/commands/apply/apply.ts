@@ -235,6 +235,18 @@ export async function apply(options?: ApplyOptions) {
           resourceName: replace.name,
         });
       }
+      for (const del of secretManager.vaultChangeSet.deletes) {
+        importantDeletions.push({
+          resourceType: "Secret Manager vault",
+          resourceName: del.name,
+        });
+      }
+      for (const del of secretManager.secretChangeSet.deletes) {
+        importantDeletions.push({
+          resourceType: "Secret Manager secret",
+          resourceName: del.name,
+        });
+      }
       await confirmImportantResourceDeletion(importantDeletions, yes);
 
       // Delete renamed applications
