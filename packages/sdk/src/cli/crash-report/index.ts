@@ -27,12 +27,16 @@ export async function reportCrash(error: unknown, errorType: ErrorType): Promise
     if (config.localEnabled) {
       const filePath = writeCrashReport(report, config.localDir);
       if (filePath) {
-        logger.log("");
-        logger.log("An unexpected error occurred. A crash report has been saved to:");
-        logger.log(`  ${filePath}`);
-        logger.log("");
-        logger.log("To submit this report:");
-        logger.log(`  tailor-sdk crash-report send --file "${filePath}"`);
+        logger.log(
+          [
+            "",
+            "An unexpected error occurred. A crash report has been saved to:",
+            `  ${filePath}`,
+            "",
+            "To submit this report:",
+            `  tailor-sdk crash-report send --file "${filePath}"`,
+          ].join("\n"),
+        );
       }
     }
 
