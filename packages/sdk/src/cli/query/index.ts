@@ -411,7 +411,9 @@ async function runRepl(
   },
 ): Promise<void> {
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    throw new Error("Non-interactive terminals are not supported. Pass -q/--query to run a query.");
+    throw new Error(
+      "Non-interactive terminals are not supported. Pass -q/--query or --file to run a query.",
+    );
   }
 
   const execute = await prepareQueryExecutor(options);
