@@ -3,6 +3,7 @@ import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { formatCrashReport } from "@/cli/crash-report/writer";
+import { parseCrashLogFile } from "./send";
 import type { CrashReport } from "@/cli/crash-report/report";
 
 function makeCrashReport(): CrashReport {
@@ -63,6 +64,35 @@ describe("crash-report send command", () => {
     expect(formatted).toContain("Failed to apply configuration");
     expect(formatted).toContain("Request: POST /v1/apply");
     expect(formatted).toContain("Status: 500");
+  });
+
+  test("parseCrashLogFile round-trips with formatCrashReport", () => {
+    const report = makeCrashReport();
+    const formatted = formatCrashReport(report);
+    const parsed = parseCrashLogFile(formatted);
+
+    expect(parsed).toBeDefined();
+    expect(parsed!.id).toBe(report.id);
+    expect(parsed!.errorName).toBe(report.errorName);
+    expect(parsed!.errorMessage).toBe(report.errorMessage);
+  });
+
+  test("parseCrashLogFile uses last JSON marker when error contains marker text", () => {
+    const report = {
+      ...makeCrashReport(),
+      errorMessage: '--- JSON ---\n{"fake": true}',
+    };
+    const formatted = formatCrashReport(report);
+    const parsed = parseCrashLogFile(formatted);
+
+    expect(parsed).toBeDefined();
+    expect(parsed!.id).toBe(report.id);
+    expect(parsed!.errorMessage).toBe('--- JSON ---\n{"fake": true}');
+  });
+
+  test("parseCrashLogFile returns undefined for invalid content", () => {
+    expect(parseCrashLogFile("no json footer here")).toBeUndefined();
+    expect(parseCrashLogFile("")).toBeUndefined();
   });
 
   test("formatCrashReport produces parseable output with all fields", () => {

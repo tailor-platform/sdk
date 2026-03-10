@@ -56,7 +56,7 @@ export const sendCommand = defineCommand({
  * @param content - File content
  * @returns Parsed report or undefined if parsing fails
  */
-function parseCrashLogFile(content: string): CrashReport | undefined {
+export function parseCrashLogFile(content: string): CrashReport | undefined {
   try {
     const lastIdx = content.lastIndexOf("\n--- JSON ---\n");
     if (lastIdx === -1) return undefined;

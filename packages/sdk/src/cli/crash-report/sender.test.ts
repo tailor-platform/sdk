@@ -22,13 +22,20 @@ function makeCrashReport(): CrashReport {
 
 describe("sendCrashReport", () => {
   const originalFetch = globalThis.fetch;
+  const originalEndpoint = process.env.TAILOR_CRASH_REPORT_ENDPOINT;
 
   beforeEach(() => {
     vi.restoreAllMocks();
+    delete process.env.TAILOR_CRASH_REPORT_ENDPOINT;
   });
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
+    if (originalEndpoint !== undefined) {
+      process.env.TAILOR_CRASH_REPORT_ENDPOINT = originalEndpoint;
+    } else {
+      delete process.env.TAILOR_CRASH_REPORT_ENDPOINT;
+    }
   });
 
   test("returns true on successful response", async () => {
@@ -75,6 +82,18 @@ describe("sendCrashReport", () => {
     const body = JSON.parse(call[1]!.body as string) as CrashReport;
     expect(body.id).toBe(report.id);
     expect(body.errorName).toBe(report.errorName);
+  });
+
+  test("uses TAILOR_CRASH_REPORT_ENDPOINT env var at call time", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true });
+
+    process.env.TAILOR_CRASH_REPORT_ENDPOINT = "https://custom.example.com/crash";
+    await sendCrashReport(makeCrashReport(), "tailor-sdk/1.0.0");
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "https://custom.example.com/crash",
+      expect.objectContaining({ method: "POST" }),
+    );
   });
 
   test("sends all CrashReport fields in the payload", async () => {
