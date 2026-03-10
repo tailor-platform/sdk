@@ -6,17 +6,16 @@
  * seed-specific utility functions used by the code generator.
  */
 
+import { stat } from "node:fs/promises";
+import { basename, dirname } from "node:path";
 import { LinesDB, ErrorFormatter } from "@toiroakr/lines-db";
 
 export { defineSchema } from "@toiroakr/lines-db";
 export type { ForeignKeyDefinition, IndexDefinition } from "@toiroakr/lines-db";
-export { createTailorDBHook, createStandardSchema } from "@/utils/test/index";
 
 type ValidateSeedDataOptions = {
-  /** Directory containing seed data and schema files */
-  dataDir: string;
-  /** Optional table name to validate a specific table only */
-  tableName?: string;
+  /** Resolved absolute path to a data directory or a .jsonl file */
+  path: string;
   /** Show verbose error output */
   verbose?: boolean;
 };
@@ -27,14 +26,27 @@ type ValidateSeedResult =
 
 /**
  * Validate JSONL seed data against schema definitions.
- * Wraps LinesDB.create/initialize and ErrorFormatter for convenient use in generated exec.mjs.
- * @param options - Validation options including dataDir, tableName, and verbose flag
+ * Resolves the given path (directory or `.jsonl` file), runs LinesDB
+ * validation, and returns formatted output and error messages.
+ * @param options - Validation options including path and verbose flag
  * @returns Validation result with output messages and optional error details
  */
 export async function validateSeedData(
   options: ValidateSeedDataOptions,
 ): Promise<ValidateSeedResult> {
-  const { dataDir, tableName, verbose = false } = options;
+  const { path: resolvedPath, verbose = false } = options;
+
+  const stats = await stat(resolvedPath);
+  let dataDir: string;
+  let tableName: string | undefined;
+  if (stats.isDirectory()) {
+    dataDir = resolvedPath;
+  } else if (stats.isFile() && resolvedPath.endsWith(".jsonl")) {
+    dataDir = dirname(resolvedPath);
+    tableName = basename(resolvedPath, ".jsonl");
+  } else {
+    throw new Error(`Invalid path: ${resolvedPath}. Must be a directory or .jsonl file.`);
+  }
 
   const db = LinesDB.create({ dataDir });
   let result;

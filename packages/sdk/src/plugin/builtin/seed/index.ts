@@ -247,8 +247,7 @@ function generateExecScript(
 
   return ml /* js */ `
     import { readFileSync } from "node:fs";
-    import { join, dirname, basename, isAbsolute } from "node:path";
-    import { stat } from "node:fs/promises";
+    import { join, isAbsolute } from "node:path";
     import { parseArgs, styleText } from "node:util";
     import { createInterface } from "node:readline";
     import {
@@ -301,20 +300,7 @@ function generateExecScript(
       const resolvedPath = isAbsolute(targetPath) ? targetPath : join(process.cwd(), targetPath);
 
       try {
-        const stats = await stat(resolvedPath);
-        let dataDir;
-        let tableName;
-        if (stats.isDirectory()) {
-          dataDir = resolvedPath;
-        } else if (stats.isFile() && resolvedPath.endsWith(".jsonl")) {
-          dataDir = dirname(resolvedPath);
-          tableName = basename(resolvedPath, ".jsonl");
-        } else {
-          console.error(styleText("red", \`Error: Invalid path: \${resolvedPath}. Must be a directory or .jsonl file.\`));
-          process.exit(1);
-        }
-
-        const result = await validateSeedData({ dataDir, tableName, verbose: validateArgs.values.verbose });
+        const result = await validateSeedData({ path: resolvedPath, verbose: validateArgs.values.verbose });
         if (result.output) console.log(result.output);
         if (!result.valid) {
           console.error(result.error);
