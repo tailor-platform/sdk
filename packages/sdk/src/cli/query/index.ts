@@ -1,3 +1,4 @@
+import * as fs from "node:fs/promises";
 import { createInterface } from "node:readline/promises";
 import { create } from "@bufbuild/protobuf";
 import {
@@ -262,12 +263,22 @@ function parseExecutionResult(result: string): unknown {
  * Resolve query input mode from CLI args.
  * @param args - Query input flags
  * @param args.query - Direct query string
+ * @param args.file - File path containing query text
  * @returns Normalized input mode
  */
-export function resolveQueryCommandInput(args: { query?: string }): QueryCommandInput {
+export async function resolveQueryCommandInput(args: {
+  query?: string;
+  file?: string;
+}): Promise<QueryCommandInput> {
   if (args.query != null) {
     return {
       query: args.query,
+    };
+  }
+
+  if (args.file != null) {
+    return {
+      query: await fs.readFile(args.file, "utf-8"),
     };
   }
 
@@ -692,14 +703,26 @@ export const queryCommand = defineCommand({
         alias: "q",
         description: "Query string to execute directly; omit to start REPL mode",
       }),
+      file: arg(z.string().optional(), {
+        description: "Read query string from file; omit to start REPL mode",
+      }),
       machineuser: arg(z.string(), {
         alias: "m",
         description: "Machine user name for query execution",
       }),
     })
+    .superRefine((args, ctx) => {
+      if (args.query != null && args.file != null) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["file"],
+          message: "Pass either -q/--query or --file, not both.",
+        });
+      }
+    })
     .strict(),
   run: withCommonArgs(async (args) => {
-    const mode = resolveQueryCommandInput({ query: args.query });
+    const mode = await resolveQueryCommandInput({ query: args.query, file: args.file });
 
     const sharedOptions: QueryBaseOptions = {
       workspaceId: args["workspace-id"],
