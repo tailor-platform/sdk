@@ -1,4 +1,5 @@
 import * as fs from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { createInterface } from "node:readline/promises";
 import { create } from "@bufbuild/protobuf";
 import {
@@ -6,6 +7,7 @@ import {
   type AuthInvoker,
   type MachineUser,
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
+import * as path from "pathe";
 import { parse as parseSql, toSql } from "pgsql-ast-parser";
 import { arg, defineCommand } from "politty";
 import { z } from "zod";
@@ -15,6 +17,7 @@ import { fetchMachineUserToken, initOperatorClient } from "../shared/client";
 import { extractAllNamespaces } from "../shared/config";
 import { loadConfig, type LoadedConfig } from "../shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../shared/context";
+import { getEditorCommand, openInEditor } from "../shared/editor";
 import { isCLIError } from "../shared/errors";
 import { logger } from "../shared/logger";
 import { executeScript } from "../shared/script-executor";
@@ -71,10 +74,14 @@ type SQLExecutionResult = {
 
 type QueryCommandInput =
   | {
+      mode: "query";
       query: string;
     }
   | {
-      query?: undefined;
+      mode: "repl";
+    }
+  | {
+      mode: "abort";
     };
 
 type ReplCommand = "quit" | "help" | "clear" | "unknown";
@@ -264,27 +271,77 @@ function parseExecutionResult(result: string): unknown {
  * @param args - Query input flags
  * @param args.query - Direct query string
  * @param args.file - File path containing query text
+ * @param args.edit - Open a query editor instead of REPL
+ * @param args.engine - Query engine used to choose temp file extension
  * @returns Normalized input mode
  */
 export async function resolveQueryCommandInput(args: {
   query?: string;
   file?: string;
+  edit?: boolean;
+  engine: QueryEngine;
 }): Promise<QueryCommandInput> {
   if (args.query != null) {
     return {
+      mode: "query",
       query: args.query,
     };
   }
 
   if (args.file != null) {
     return {
+      mode: "query",
       query: await fs.readFile(args.file, "utf-8"),
     };
   }
 
+  if (args.edit) {
+    return await resolveEditedQueryInput(args.engine);
+  }
+
   return {
-    query: undefined,
+    mode: "repl",
   };
+}
+
+async function resolveEditedQueryInput(engine: QueryEngine): Promise<QueryCommandInput> {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    throw new Error(
+      "Non-interactive terminals are not supported. Pass -q/--query or -f/--file to run a query.",
+    );
+  }
+
+  const editor = getEditorCommand();
+
+  const tempDir = await fs.mkdtemp(path.join(tmpdir(), "tailor-query-"));
+  const fileExtension = engine === "sql" ? "sql" : "graphql";
+  const filePath = path.join(tempDir, `query.${fileExtension}`);
+  const initialQuery = "";
+
+  try {
+    await fs.writeFile(filePath, initialQuery, "utf-8");
+    try {
+      await openInEditor(filePath, editor);
+    } catch (error) {
+      throw new Error(
+        `Failed to open query editor "${editor}": ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+
+    const editedQuery = await fs.readFile(filePath, "utf-8");
+    if (editedQuery.trim().length === 0 || editedQuery === initialQuery) {
+      return {
+        mode: "abort",
+      };
+    }
+
+    return {
+      mode: "query",
+      query: editedQuery,
+    };
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
 }
 
 /**
@@ -703,11 +760,15 @@ export const queryCommand = defineCommand({
       }),
       query: arg(z.string().optional(), {
         alias: "q",
-        description: "Query string to execute directly; omit to start REPL mode",
+        description: "Query string to execute directly",
       }),
       file: arg(z.string().optional(), {
         alias: "f",
-        description: "Read query string from file; omit to start REPL mode",
+        description: "Read query string from file",
+      }),
+      edit: arg(z.boolean().default(false), {
+        description:
+          "Open a temporary file in your editor; omit all input flags to start REPL mode",
       }),
       machineuser: arg(z.string(), {
         alias: "m",
@@ -722,10 +783,31 @@ export const queryCommand = defineCommand({
           message: "Pass either -q/--query or -f/--file, not both.",
         });
       }
+
+      if (args.edit && args.query != null) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["edit"],
+          message: "Pass only one of --edit, -q/--query, or -f/--file.",
+        });
+      }
+
+      if (args.edit && args.file != null) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["edit"],
+          message: "Pass only one of --edit, -q/--query, or -f/--file.",
+        });
+      }
     })
     .strict(),
   run: withCommonArgs(async (args) => {
-    const mode = await resolveQueryCommandInput({ query: args.query, file: args.file });
+    const mode = await resolveQueryCommandInput({
+      query: args.query,
+      file: args.file,
+      edit: args.edit,
+      engine: args.engine,
+    });
 
     const sharedOptions: QueryBaseOptions = {
       workspaceId: args["workspace-id"],
@@ -735,7 +817,12 @@ export const queryCommand = defineCommand({
       machineUser: args.machineuser,
     };
 
-    if (mode.query == null) {
+    if (mode.mode === "abort") {
+      logger.info("Editor closed without a query. Nothing was executed.");
+      return;
+    }
+
+    if (mode.mode === "repl") {
       await runRepl({
         ...sharedOptions,
         json: args.json,

@@ -6,7 +6,6 @@
  * - Subsequent runs: Creates diff from previous snapshot (0001/diff.json, etc.)
  */
 
-import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as fsPromises from "node:fs/promises";
 import * as path from "pathe";
@@ -15,6 +14,7 @@ import { z } from "zod";
 import { commonArgs, configArg, confirmationArgs, withCommonArgs } from "@/cli/shared/args";
 import { logBetaWarning } from "@/cli/shared/beta";
 import { loadConfig } from "@/cli/shared/config-loader";
+import { getConfiguredEditorCommand, openInConfiguredEditor } from "@/cli/shared/editor";
 import { logger, styles } from "@/cli/shared/logger";
 import { PluginManager } from "@/plugin/manager";
 import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
@@ -303,45 +303,26 @@ async function generateDiffFromSnapshot(
     logger.log("A migration script was generated for breaking changes.");
     logger.log("Please review and edit the script before running 'tailor-sdk apply'.");
 
-    // Open script file in editor if EDITOR is set
-    await openInEditor(result.migrateFilePath);
+    const editor = getConfiguredEditorCommand();
+    if (!editor) {
+      return;
+    }
+
+    try {
+      await fsPromises.access(result.migrateFilePath);
+    } catch {
+      return;
+    }
+
+    logger.newline();
+    logger.info(`Opening ${path.basename(result.migrateFilePath)} in ${editor}...`);
+
+    try {
+      await openInConfiguredEditor(result.migrateFilePath);
+    } catch {
+      return;
+    }
   }
-}
-
-/**
- * Open a file in the user's preferred editor
- * @param {string} filePath - Path to file to open
- * @returns {Promise<void>} Promise that resolves when editor closes
- */
-async function openInEditor(filePath: string): Promise<void> {
-  const editor = process.env.EDITOR;
-  if (!editor) {
-    return;
-  }
-
-  try {
-    await fsPromises.access(filePath);
-  } catch {
-    return;
-  }
-
-  // Parse editor command and arguments
-  const [command, ...args] = editor.trim().split(/\s+/);
-
-  logger.newline();
-  logger.info(`Opening ${path.basename(filePath)} in ${editor}...`);
-
-  // Spawn editor with parsed command and arguments
-  const child = spawn(command, [...args, filePath], {
-    stdio: "inherit",
-    detached: false,
-  });
-
-  // Wait for editor to close
-  await new Promise<void>((resolve) => {
-    child.on("close", () => resolve());
-    child.on("error", () => resolve());
-  });
 }
 
 /**
