@@ -85,10 +85,10 @@ function parseCrashLogFile(content: string): CrashReport | undefined {
       errorName: get("Name"),
       errorMessage: getMultiline("Message", "Stack Trace"),
       stackTrace: stackTrace === "(no stack trace available)" ? "" : stackTrace,
-      crashType: get("Crash Type") as CrashReport["crashType"],
+      errorType: get("Error Type") as CrashReport["errorType"],
     };
 
-    if (!report.id || !report.timestamp || !report.crashType) {
+    if (!report.id || !report.timestamp || !report.errorType) {
       return undefined;
     }
 

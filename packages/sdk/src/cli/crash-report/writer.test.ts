@@ -20,7 +20,7 @@ function makeCrashReport(overrides?: Partial<CrashReport>): CrashReport {
     errorMessage: "Cannot read properties of undefined",
     stackTrace:
       "TypeError: Cannot read properties of undefined\n    at foo (packages/sdk/src/cli/index.ts:10:5)",
-    crashType: "handledError",
+    errorType: "handledError",
     ...overrides,
   };
 }

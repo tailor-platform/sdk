@@ -20,7 +20,7 @@ function makeCrashReport(): CrashReport {
     errorMessage: "Cannot read properties of undefined",
     stackTrace:
       "TypeError: Cannot read properties of undefined\n    at foo (packages/sdk/src/cli/index.ts:10:5)",
-    crashType: "handledError",
+    errorType: "handledError",
   };
 }
 
@@ -79,6 +79,6 @@ describe("crash-report send command", () => {
     expect(formatted).toContain(`Command: ${report.command}`);
     expect(formatted).toContain(`Name: ${report.errorName}`);
     expect(formatted).toContain(`Message: ${report.errorMessage}`);
-    expect(formatted).toContain(`Crash Type: ${report.crashType}`);
+    expect(formatted).toContain(`Error Type: ${report.errorType}`);
   });
 });

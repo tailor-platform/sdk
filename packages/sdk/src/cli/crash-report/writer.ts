@@ -13,7 +13,7 @@ export function formatCrashReport(report: CrashReport): string {
   const lines = [
     `Crash Report: ${report.id}`,
     `Timestamp: ${report.timestamp}`,
-    `Crash Type: ${report.crashType}`,
+    `Error Type: ${report.errorType}`,
     "",
     "--- Environment ---",
     `SDK Version: ${report.sdkVersion}`,

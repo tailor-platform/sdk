@@ -1,7 +1,7 @@
 import { logger } from "@/cli/shared/logger";
 import { readPackageJson } from "@/cli/shared/package-json";
 import { parseCrashReportConfig } from "./config";
-import { buildCrashReport, toRemoteReport, type CrashType } from "./report";
+import { buildCrashReport, type ErrorType } from "./report";
 import { sendCrashReport } from "./sender";
 import { writeCrashReport } from "./writer";
 
@@ -12,9 +12,9 @@ import { writeCrashReport } from "./writer";
  *
  * Never throws - all errors are silently caught.
  * @param error - The error that caused the crash
- * @param crashType - How the error was caught
+ * @param errorType - How the error was caught
  */
-export async function reportCrash(error: unknown, crashType: CrashType): Promise<void> {
+export async function reportCrash(error: unknown, errorType: ErrorType): Promise<void> {
   try {
     const config = parseCrashReportConfig();
     if (!config.localEnabled && !config.remoteEnabled) return;
@@ -22,12 +22,12 @@ export async function reportCrash(error: unknown, crashType: CrashType): Promise
     const packageJson = await readPackageJson();
     const sdkVersion = packageJson.version ?? "unknown";
 
-    const report = buildCrashReport({ error, sdkVersion, crashType });
+    const report = buildCrashReport({ error, sdkVersion, errorType });
 
     if (config.localEnabled) {
       const filePath = writeCrashReport(report, config.localDir);
       // Only show banner for truly unexpected crashes, not routine handled errors
-      if (filePath && crashType !== "handledError") {
+      if (filePath && errorType !== "handledError") {
         logger.log("");
         logger.log("An unexpected error occurred. A crash report has been saved to:");
         logger.log(`  ${filePath}`);
@@ -40,7 +40,7 @@ export async function reportCrash(error: unknown, crashType: CrashType): Promise
     if (config.remoteEnabled) {
       const { userAgent } = await import("@/cli/shared/client");
       const ua = await userAgent();
-      await sendCrashReport(toRemoteReport(report), ua);
+      await sendCrashReport(report, ua);
     }
   } catch {
     // Never throw from crash reporting
@@ -56,10 +56,10 @@ export function initCrashReporting(): void {
   const config = parseCrashReportConfig();
   if (!config.localEnabled && !config.remoteEnabled) return;
 
-  const handleFatal = (error: unknown, crashType: CrashType) => {
+  const handleFatal = (error: unknown, errorType: ErrorType) => {
     const message = error instanceof Error ? error.message : String(error);
     logger.error(message);
-    void reportCrash(error, crashType).finally(() => {
+    void reportCrash(error, errorType).finally(() => {
       process.exit(1);
     });
   };
