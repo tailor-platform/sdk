@@ -1,5 +1,5 @@
 ---
-"@tailor-platform/create-sdk": minor
+"@tailor-platform/sdk": minor
 ---
 
 Add `--file` input support to `tailor-sdk query`.
