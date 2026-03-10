@@ -1,3 +1,4 @@
+import { getPrecompiledScriptExpr } from "./hooks-validate-precompiled-expr";
 import type {
   TailorAnyDBField,
   DBFieldMetadata,
@@ -42,6 +43,10 @@ export const stringifyFunction = (fn: Function): string => {
 const convertHookToExpr = (
   fn: NonNullable<Hook<unknown, unknown>["create"] | Hook<unknown, unknown>["update"]>,
 ): string => {
+  const precompiledExpr = getPrecompiledScriptExpr(fn);
+  if (precompiledExpr) {
+    return precompiledExpr;
+  }
   const normalized = stringifyFunction(fn);
   return `(${normalized})({ value: _value, data: _data, user: ${tailorUserMap} })`;
 };
@@ -84,7 +89,9 @@ export function parseFieldConfig(
 
       return {
         script: {
-          expr: `(${fn.toString().trim()})({ value: _value, data: _data, user: ${tailorUserMap} })`,
+          expr:
+            getPrecompiledScriptExpr(fn) ??
+            `(${fn.toString().trim()})({ value: _value, data: _data, user: ${tailorUserMap} })`,
         },
         errorMessage: message,
       };

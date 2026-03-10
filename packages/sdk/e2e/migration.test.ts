@@ -55,10 +55,11 @@ const E2E_WORKSPACE_PREFIX = "e2e-ws-";
 // Fixture directory path
 const FIXTURE_DIR = path.join(__dirname, "fixtures", "migration");
 
-// Generate unique test identifiers
+// Generate unique test identifiers (include GITHUB_RUN_ID in CI to avoid cross-run cleanup conflicts)
+const ciRunId = process.env.GITHUB_RUN_ID ?? "";
 const testRunId = Date.now().toString(36);
 const testAppName = `migration-e2e-${testRunId}`;
-const testWorkspaceName = `${E2E_WORKSPACE_PREFIX}${testRunId}`;
+const testWorkspaceName = `${E2E_WORKSPACE_PREFIX}${ciRunId ? `${ciRunId}-` : ""}${testRunId}`;
 const tailordbName = `testdb-${testRunId}`;
 
 /**
@@ -244,9 +245,6 @@ describe.sequential("E2E: TailorDB Migrations", () => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "migration-e2e-"));
     trackTempDir(tempDir);
     migrationsDir = path.join(tempDir, "migrations");
-
-    // Set TAILOR_PLATFORM_SDK_TYPE_PATH to prevent writing to packages/sdk
-    process.env.TAILOR_PLATFORM_SDK_TYPE_PATH = path.join(tempDir, "user-defined.d.ts");
 
     // Unset EDITOR to prevent opening editor during migration generation
     delete process.env.EDITOR;

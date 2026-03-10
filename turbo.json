@@ -5,8 +5,7 @@
   "globalPassThroughEnv": [
     "TAILOR_PLATFORM_TOKEN",
     "TAILOR_PLATFORM_WORKSPACE_ID",
-    "TAILOR_PLATFORM_PROFILE",
-    "TAILOR_PLATFORM_SDK_TYPE_PATH"
+    "TAILOR_PLATFORM_PROFILE"
   ],
   "tasks": {
     "build": {
@@ -31,10 +30,14 @@
       "cache": false
     },
     "check": {
-      "dependsOn": ["format", "lint:fix", "typecheck:go", "knip"],
+      "dependsOn": ["format", "lint:fix", "typecheck:go", "knip", "publint"],
       "cache": false
     },
     "knip": {
+      "cache": true
+    },
+    "publint": {
+      "dependsOn": ["build"],
       "cache": true
     },
     "lint": {

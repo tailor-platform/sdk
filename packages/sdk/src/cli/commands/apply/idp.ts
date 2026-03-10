@@ -271,6 +271,7 @@ async function planServices(
           lang,
           userAuthPolicy,
           publishUserEvents: idp.publishUserEvents,
+          disableGqlOperations: convertGqlOperationsToDisable(idp.gqlOperations),
         },
         metaRequest,
       });
@@ -285,6 +286,7 @@ async function planServices(
           lang,
           userAuthPolicy,
           publishUserEvents: idp.publishUserEvents,
+          disableGqlOperations: convertGqlOperationsToDisable(idp.gqlOperations),
         },
         metaRequest,
       });
@@ -425,4 +427,22 @@ function convertLang(lang: IdPLangInput | undefined): IdPLang {
     default:
       return IdPLang.UNSPECIFIED;
   }
+}
+
+// Converts gqlOperations (enabled semantics, default true) to
+// disableGqlOperations (disabled semantics) for the Platform API.
+// Undefined fields are treated as true (enabled), matching TailorDB behavior.
+function convertGqlOperationsToDisable(
+  gqlOperations: IdP["gqlOperations"],
+): Record<string, boolean> | undefined {
+  if (!gqlOperations) {
+    return undefined;
+  }
+  return {
+    create: gqlOperations.create === false,
+    update: gqlOperations.update === false,
+    delete: gqlOperations.delete === false,
+    read: gqlOperations.read === false,
+    sendPasswordResetEmail: gqlOperations.sendPasswordResetEmail === false,
+  };
 }

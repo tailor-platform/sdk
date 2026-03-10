@@ -3,10 +3,16 @@ import ml from "multiline-ts";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
+import { computeBundlerContextHash, withCache, type BundleCache } from "@/cli/cache/bundle-cache";
 import { loadFilesWithIgnores, type FileLoadConfig } from "@/cli/services/file-loader";
+import { removeStaleEntryFiles } from "@/cli/services/stale-cleanup";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { logger, styles } from "@/cli/shared/logger";
-import { createTriggerTransformPlugin, type TriggerContext } from "@/cli/shared/trigger-context";
+import {
+  createTriggerTransformPlugin,
+  serializeTriggerContext,
+  type TriggerContext,
+} from "@/cli/shared/trigger-context";
 import { loadExecutor } from "./loader";
 
 interface ExecutorInfo {
@@ -24,6 +30,8 @@ export interface BundleExecutorsOptions {
   triggerContext?: TriggerContext;
   /** Additional files to bundle (e.g., plugin-generated executors) */
   additionalFiles?: string[];
+  /** Optional bundle cache for skipping unchanged builds */
+  cache?: BundleCache;
   /** Whether to enable inline sourcemaps */
   inlineSourcemap?: boolean;
 }
@@ -38,7 +46,7 @@ export interface BundleExecutorsOptions {
  * @returns Promise that resolves when bundling completes
  */
 export async function bundleExecutors(options: BundleExecutorsOptions): Promise<void> {
-  const { config, triggerContext, additionalFiles = [], inlineSourcemap } = options;
+  const { config, triggerContext, additionalFiles = [], cache, inlineSourcemap } = options;
   const configFiles = loadFilesWithIgnores(config);
   const files = [...configFiles, ...additionalFiles];
   if (files.length === 0) {
@@ -81,6 +89,11 @@ export async function bundleExecutors(options: BundleExecutorsOptions): Promise<
 
   fs.mkdirSync(outputDir, { recursive: true });
 
+  // Clean stale entry files from previous builds.
+  // Must complete before Promise.all below; parallel processing
+  // would require separate output directories.
+  await removeStaleEntryFiles(outputDir);
+
   let tsconfig: string | undefined;
   try {
     tsconfig = await resolveTSConfig();
@@ -91,7 +104,7 @@ export async function bundleExecutors(options: BundleExecutorsOptions): Promise<
   // Process each executor
   await Promise.all(
     executors.map((executor) =>
-      bundleSingleExecutor(executor, outputDir, tsconfig, triggerContext, inlineSourcemap),
+      bundleSingleExecutor(executor, outputDir, tsconfig, triggerContext, cache, inlineSourcemap),
     ),
   );
 
@@ -103,51 +116,71 @@ async function bundleSingleExecutor(
   outputDir: string,
   tsconfig: string | undefined,
   triggerContext?: TriggerContext,
+  cache?: BundleCache,
   inlineSourcemap?: boolean,
 ): Promise<void> {
-  // Step 1: Create entry file that imports and extracts operation.body
-  const entryPath = path.join(outputDir, `${executor.name}.entry.js`);
-  const absoluteSourcePath = path.resolve(executor.sourceFile);
-
-  const entryContent = ml /* js */ `
-    import _internalExecutor from "${absoluteSourcePath}";
-
-    const __executor_function = _internalExecutor.operation.body;
-
-    export { __executor_function as main };
-  `;
-  fs.writeFileSync(entryPath, entryContent);
-
-  // Step 2: Bundle with tree-shaking
   const outputPath = path.join(outputDir, `${executor.name}.js`);
+  const serializedTriggerContext = serializeTriggerContext(triggerContext);
 
-  const triggerPlugin = createTriggerTransformPlugin(triggerContext);
-  const plugins: rolldown.Plugin[] = triggerPlugin ? [triggerPlugin] : [];
+  const contextHash = computeBundlerContextHash({
+    sourceFile: executor.sourceFile,
+    serializedTriggerContext,
+    tsconfig,
+    inlineSourcemap,
+  });
 
-  await rolldown.build(
-    rolldown.defineConfig({
-      input: entryPath,
-      output: {
-        file: outputPath,
-        format: "esm",
-        sourcemap: inlineSourcemap ? "inline" : true,
-        minify: inlineSourcemap
-          ? {
-              mangle: {
-                keepNames: true,
-              },
-            }
-          : true,
-        inlineDynamicImports: true,
-      },
-      tsconfig,
-      plugins,
-      treeshake: {
-        moduleSideEffects: false,
-        annotations: true,
-        unknownGlobalSideEffects: false,
-      },
-      logLevel: "silent",
-    }) as rolldown.BuildOptions,
-  );
+  await withCache({
+    cache,
+    kind: "executor",
+    name: executor.name,
+    sourceFile: executor.sourceFile,
+    outputPath,
+    contextHash,
+    async build(cachePlugins) {
+      // Step 1: Create entry file that imports and extracts operation.body
+      const entryPath = path.join(outputDir, `${executor.name}.entry.js`);
+      const absoluteSourcePath = path.resolve(executor.sourceFile);
+
+      const entryContent = ml /* js */ `
+        import _internalExecutor from "${absoluteSourcePath}";
+
+        const __executor_function = _internalExecutor.operation.body;
+
+        export { __executor_function as main };
+      `;
+      fs.writeFileSync(entryPath, entryContent);
+
+      // Step 2: Bundle with tree-shaking
+      const triggerPlugin = createTriggerTransformPlugin(triggerContext);
+      const plugins: rolldown.Plugin[] = triggerPlugin ? [triggerPlugin] : [];
+      plugins.push(...cachePlugins);
+
+      await rolldown.build(
+        rolldown.defineConfig({
+          input: entryPath,
+          output: {
+            file: outputPath,
+            format: "esm",
+            sourcemap: inlineSourcemap ? "inline" : true,
+            minify: inlineSourcemap
+              ? {
+                  mangle: {
+                    keepNames: true,
+                  },
+                }
+              : true,
+            inlineDynamicImports: true,
+          },
+          tsconfig,
+          plugins,
+          treeshake: {
+            moduleSideEffects: false,
+            annotations: true,
+            unknownGlobalSideEffects: false,
+          },
+          logLevel: "silent",
+        }) as rolldown.BuildOptions,
+      );
+    },
+  });
 }

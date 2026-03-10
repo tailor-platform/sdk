@@ -8,13 +8,15 @@ import { logger } from "@/cli/shared/logger";
 export const switchCommand = defineCommand({
   name: "switch",
   description: "Set current user.",
-  args: z.object({
-    ...commonArgs,
-    user: arg(z.string(), {
-      positional: true,
-      description: "User email",
-    }),
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      user: arg(z.string(), {
+        positional: true,
+        description: "User email",
+      }),
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     const config = readPlatformConfig();
 

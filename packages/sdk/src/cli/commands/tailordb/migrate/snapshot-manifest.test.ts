@@ -93,6 +93,35 @@ describe("snapshot-manifest", () => {
       expect(manifestWithoutEvents.schema?.settings?.publishRecordEvents).toBe(false);
     });
 
+    it("reads publishEvents from snapshot settings", () => {
+      const snapshotTypeWithEvents = createTestSnapshotType("User", {
+        settings: { publishEvents: true },
+      });
+      const snapshotTypeWithoutEvents = createTestSnapshotType("Post", {
+        settings: { publishEvents: false },
+      });
+
+      const manifestWithEvents = generateTailorDBTypeManifestFromSnapshot(snapshotTypeWithEvents);
+      const manifestWithoutEvents =
+        generateTailorDBTypeManifestFromSnapshot(snapshotTypeWithoutEvents);
+
+      expect(manifestWithEvents.schema?.settings?.publishRecordEvents).toBe(true);
+      expect(manifestWithoutEvents.schema?.settings?.publishRecordEvents).toBe(false);
+    });
+
+    it("prioritizes snapshot settings.publishEvents over options.publishRecordEvents", () => {
+      const snapshotType = createTestSnapshotType("User", {
+        settings: { publishEvents: true },
+      });
+
+      // Even with options.publishRecordEvents: false, snapshot settings should take precedence
+      const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType, {
+        publishRecordEvents: false,
+      });
+
+      expect(manifest.schema?.settings?.publishRecordEvents).toBe(true);
+    });
+
     it("handles enum fields with allowed values", () => {
       const snapshotType = createTestSnapshotType("Task", {
         fields: {
@@ -399,6 +428,94 @@ describe("snapshot-manifest", () => {
 
       expect(manifests.get("User")?.schema?.settings?.publishRecordEvents).toBe(true);
       expect(manifests.get("Post")?.schema?.settings?.publishRecordEvents).toBe(false);
+    });
+
+    it("applies manual publishEvents setting from snapshot", () => {
+      const snapshot = createTestSnapshot({
+        User: createTestSnapshotType("User", {
+          settings: { publishEvents: true },
+        }),
+        Post: createTestSnapshotType("Post"),
+      });
+
+      const manifests = generateAllTypeManifestsFromSnapshot(snapshot);
+
+      expect(manifests.get("User")?.schema?.settings?.publishRecordEvents).toBe(true);
+      expect(manifests.get("Post")?.schema?.settings?.publishRecordEvents).toBe(false);
+    });
+
+    it("throws error when executor uses type with publishEvents=false", () => {
+      const snapshot = createTestSnapshot({
+        User: createTestSnapshotType("User", {
+          settings: { publishEvents: false },
+        }),
+      });
+
+      expect(() =>
+        generateAllTypeManifestsFromSnapshot(snapshot, {
+          executorUsedTypes: new Set(["User"]),
+        }),
+      ).toThrow(
+        'Type "User" has publishEvents set to false, but it is used by an executor with a record trigger.',
+      );
+    });
+
+    it("respects explicit publishEvents=false when no executor uses the type", () => {
+      const snapshot = createTestSnapshot({
+        User: createTestSnapshotType("User", {
+          settings: { publishEvents: false },
+        }),
+        Post: createTestSnapshotType("Post"),
+      });
+
+      const manifests = generateAllTypeManifestsFromSnapshot(snapshot);
+
+      // User: explicit false → false
+      expect(manifests.get("User")?.schema?.settings?.publishRecordEvents).toBe(false);
+      // Post: no setting → false
+      expect(manifests.get("Post")?.schema?.settings?.publishRecordEvents).toBe(false);
+    });
+
+    it("combines manual setting and executor usage correctly", () => {
+      const snapshot = createTestSnapshot({
+        User: createTestSnapshotType("User", {
+          settings: { publishEvents: true },
+        }),
+        Post: createTestSnapshotType("Post", {
+          settings: { publishEvents: false },
+        }),
+        Comment: createTestSnapshotType("Comment"),
+      });
+
+      // Only Comment is used by executor (not Post which has publishEvents=false)
+      const manifests = generateAllTypeManifestsFromSnapshot(snapshot, {
+        executorUsedTypes: new Set(["Comment"]),
+      });
+
+      // User: manual true, no executor → true
+      expect(manifests.get("User")?.schema?.settings?.publishRecordEvents).toBe(true);
+      // Post: manual false, no executor → false
+      expect(manifests.get("Post")?.schema?.settings?.publishRecordEvents).toBe(false);
+      // Comment: no setting, executor uses it → true
+      expect(manifests.get("Comment")?.schema?.settings?.publishRecordEvents).toBe(true);
+    });
+
+    it("falls back to baseOptions.publishRecordEvents when no manual setting and no executor", () => {
+      const snapshot = createTestSnapshot({
+        User: createTestSnapshotType("User"),
+        Post: createTestSnapshotType("Post"),
+      });
+
+      // executorUsedTypes is defined but doesn't contain these types
+      // baseOptions.publishRecordEvents is true
+      const manifests = generateAllTypeManifestsFromSnapshot(snapshot, {
+        executorUsedTypes: new Set(["Other"]), // Neither User nor Post
+        publishRecordEvents: true,
+      });
+
+      // Both should use baseOptions.publishRecordEvents = true
+      expect(manifests.get("User")?.schema?.settings?.publishRecordEvents).toBe(true);
+      expect(manifests.get("Post")?.schema?.settings?.publishRecordEvents).toBe(true);
     });
 
     it("returns empty map for empty snapshot", () => {

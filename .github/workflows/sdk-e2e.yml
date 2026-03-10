@@ -54,10 +54,21 @@ jobs:
           TAILOR_PLATFORM_ORGANIZATION_ID: ${{ secrets.TAILOR_PLATFORM_ORGANIZATION_ID }}
           TAILOR_PLATFORM_FOLDER_ID: ${{ secrets.TAILOR_PLATFORM_FOLDER_ID }}
 
+      - name: Run template e2e tests
+        working-directory: packages/create-sdk/templates/workflow
+        run: pnpm test:e2e
+        env:
+          CI: "true"
+          TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
+          TAILOR_PLATFORM_ORGANIZATION_ID: ${{ secrets.TAILOR_PLATFORM_ORGANIZATION_ID }}
+          TAILOR_PLATFORM_FOLDER_ID: ${{ secrets.TAILOR_PLATFORM_FOLDER_ID }}
+          TAILOR_PLATFORM_WORKSPACE_NAME: template-e2e-${{ github.run_id }}
+          TAILOR_PLATFORM_WORKSPACE_REGION: asia-northeast
+
       - name: Cleanup e2e workspaces
         if: always()
         working-directory: packages/sdk
-        run: pnpm exec tsx scripts/cleanup-e2e-workspaces.ts
+        run: pnpm exec tsx scripts/cleanup-e2e-workspaces.ts --run-id=${{ github.run_id }}
         env:
           TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
 

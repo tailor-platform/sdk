@@ -1,5 +1,110 @@
 # @tailor-platform/sdk
 
+## 1.23.0
+
+### Minor Changes
+
+- [#661](https://github.com/tailor-platform/sdk/pull/661) [`03f33d9`](https://github.com/tailor-platform/sdk/commit/03f33d9c3d789c738c99600148aa52f2586017ea) Thanks [@r253hmdryou](https://github.com/r253hmdryou)! - Add interactive REPL mode to `tailor-sdk query`.
+
+  This allows running SQL queries statement-by-statement and GraphQL queries in an
+  interactive session by omitting `--query`.
+
+### Patch Changes
+
+- [#677](https://github.com/tailor-platform/sdk/pull/677) [`cc6db64`](https://github.com/tailor-platform/sdk/commit/cc6db647361309021268543c291e1f13e9a6cb1c) Thanks [@dqn](https://github.com/dqn)! - Write tailor.d.ts to project root (next to config file) instead of SDK dist directory
+
+- [#680](https://github.com/tailor-platform/sdk/pull/680) [`4d421a8`](https://github.com/tailor-platform/sdk/commit/4d421a8b904b939813b50fb68fff4bafccd10541) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): lock file maintenance
+
+- [#691](https://github.com/tailor-platform/sdk/pull/691) [`008b2b6`](https://github.com/tailor-platform/sdk/commit/008b2b68d750a0799118087e09418d1f16574bb3) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency suzuki-shunsuke/ghalint to v1.5.5
+
+## 1.22.0
+
+### Minor Changes
+
+- [#629](https://github.com/tailor-platform/sdk/pull/629) [`628a790`](https://github.com/tailor-platform/sdk/commit/628a790ec52a905ff97a0ab5441119855c670880) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `function test-run` CLI command to run functions on the Tailor Platform server without deploying. Auto-detects resolver, executor, workflow job, and plain function types (including `export function main`). Bundles the function using rolldown and executes via TestExecScript API. Also supports passing pre-bundled `.js` files directly to skip detection and bundling. Automatically injects `env` from config into all function type entries. Embeds machine user context (id, attributes, workspaceId) into resolver entries as `user` and into executor entries as `actor`, resolved from the API and config. Auth namespace is resolved automatically from `config.auth.name`. Fixes error/logs separation in script executor and shows Result section only on success to avoid duplicate output with Error section on failure.
+
+- [#665](https://github.com/tailor-platform/sdk/pull/665) [`a7b4a9b`](https://github.com/tailor-platform/sdk/commit/a7b4a9b396aaf6d64343c2f4d4a55fb4216211be) Thanks [@toiroakr](https://github.com/toiroakr)! - Support multiple semicolon-separated SQL statements in `query` command with proper handling of semicolons inside string literals, and improve SQL parse error messages with guidance for reserved keywords
+
+- [#589](https://github.com/tailor-platform/sdk/pull/589) [`39edc3f`](https://github.com/tailor-platform/sdk/commit/39edc3f2b7ec03159ffe1eafbdede77fa34c75fe) Thanks [@r253hmdryou](https://github.com/r253hmdryou)! - feat: add `query` command for SQL/GraphQL playground
+
+  - Add new CLI subcommand: `tailor-sdk query`
+  - Support query engines via `--engine sql | gql`
+  - Execute query string via `--query` (`-q`)
+    Usage examples:
+
+  - SQL:
+    `tailor-sdk query --engine sql -q "SELECT * FROM User" -m admin-machine-user`
+  - GraphQL:
+    `tailor-sdk query --engine gql -q "query { users { id name } }" -m admin-machine-user`
+
+- [#666](https://github.com/tailor-platform/sdk/pull/666) [`ee458b4`](https://github.com/tailor-platform/sdk/commit/ee458b4c05049024a3fd48f85a5e93caa630a4af) Thanks [@dqn](https://github.com/dqn)! - Add test utilities for bundled function testing via `@tailor-platform/sdk/test`
+
+  - `setupTailordbMock(resolver?)`: Mock `globalThis.tailordb.Client` for testing resolvers/executors that use DB queries
+  - `setupWorkflowMock(handler)`: Mock `globalThis.tailor.workflow.triggerJobFunction` for testing workflow job triggers
+  - `createImportMain(baseDir)`: Import bundled JS files and extract the `main` function for execution testing
+
+- [#646](https://github.com/tailor-platform/sdk/pull/646) [`bc45c01`](https://github.com/tailor-platform/sdk/commit/bc45c018aa165aad02ae6e8ef44b1459d859a93a) Thanks [@dqn](https://github.com/dqn)! - Add shell completion metadata to CLI args and upgrade politty to v0.4.3
+
+### Patch Changes
+
+- [#663](https://github.com/tailor-platform/sdk/pull/663) [`7cf2df1`](https://github.com/tailor-platform/sdk/commit/7cf2df1a0429b0bed0065e31b9998c33ce0c237c) Thanks [@toiroakr](https://github.com/toiroakr)! - Add publint to validate package exports before publishing
+
+- [#659](https://github.com/tailor-platform/sdk/pull/659) [`9fc3d02`](https://github.com/tailor-platform/sdk/commit/9fc3d02b99f2236f1f4f49e681ddbecec950c6b5) Thanks [@k1LoW](https://github.com/k1LoW)! - Add allowMicrosoftOauth support to IdP user auth policy
+
+- [#662](https://github.com/tailor-platform/sdk/pull/662) [`514fb40`](https://github.com/tailor-platform/sdk/commit/514fb40e4733e6726f83a58587325b3119fae239) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix column ordering in SQL wildcard query results by sorting columns based on db.type() field definition order. Wildcards are expanded in-place preserving SQL declaration order, with system fields (id) first followed by user-defined fields. Supports both unqualified (`SELECT *`) and qualified (`SELECT u.*`) wildcards with alias resolution. Column matching is case-insensitive to handle unquoted SQL identifiers correctly.
+
+- [#667](https://github.com/tailor-platform/sdk/pull/667) [`b516df2`](https://github.com/tailor-platform/sdk/commit/b516df2ee6b2ba8c77fed8df22cf2942fbb94a75) Thanks [@riku99](https://github.com/riku99)! - Skip application creation when no subgraphs are configured
+
+- [#660](https://github.com/tailor-platform/sdk/pull/660) [`c38bfcc`](https://github.com/tailor-platform/sdk/commit/c38bfcc117bcac6d6d211267f3997ff11df1d8c7) Thanks [@toiroakr](https://github.com/toiroakr)! - Remove `user` from `WorkflowJobContext` — the platform's workflow runtime does not inject a `user` global variable into the JS execution environment, so the field was always undefined. Also remove `WORKFLOW_TEST_USER_KEY` constant.
+
+- [#619](https://github.com/tailor-platform/sdk/pull/619) [`4a686b7`](https://github.com/tailor-platform/sdk/commit/4a686b7e35d7c6bd5aaaea36d44827edae0db68c) Thanks [@riku99](https://github.com/riku99)! - Enable external constants/functions in TailorDB hooks and validators
+
+- [#668](https://github.com/tailor-platform/sdk/pull/668) [`4f93a59`](https://github.com/tailor-platform/sdk/commit/4f93a594113aa99fb464e1202af379dbd92302df) Thanks [@riku99](https://github.com/riku99)! - Add strict() to all command arg schemas to reject unknown options
+
+## 1.21.0
+
+### Minor Changes
+
+- [#649](https://github.com/tailor-platform/sdk/pull/649) [`4fd37bf`](https://github.com/tailor-platform/sdk/commit/4fd37bfa13d7d356c919491da7f5886830dce80a) Thanks [@toiroakr](https://github.com/toiroakr)! - Add OpenTelemetry tracing instrumentation to the generate command. Each phase (loadTypes, loadResolvers, loadExecutors, generators) is measured as a span, opt-in via `OTEL_EXPORTER_OTLP_ENDPOINT` with zero overhead when disabled. Refactor generator scheduling to align with the plugin hook model — generators are now called at each phase they subscribe to via their dependencies array, matching how plugins use onTailorDBReady/onResolverReady/onExecutorReady hooks.
+
+- [#653](https://github.com/tailor-platform/sdk/pull/653) [`6b5f1db`](https://github.com/tailor-platform/sdk/commit/6b5f1dbb84f27559312b0868c9b8e7efbb5580a8) Thanks [@murayama-r](https://github.com/murayama-r)! - Add manual configuration for publishEvents on TailorDB types and resolvers
+
+### Patch Changes
+
+- [#651](https://github.com/tailor-platform/sdk/pull/651) [`3c8068d`](https://github.com/tailor-platform/sdk/commit/3c8068da663b28e73c6adaa0feb2fbd0934c860e) Thanks [@dqn](https://github.com/dqn)! - Guard undefined user global in workflow bundler entry
+
+## 1.20.0
+
+### Minor Changes
+
+- [#644](https://github.com/tailor-platform/sdk/pull/644) [`e7ac6ae`](https://github.com/tailor-platform/sdk/commit/e7ac6aeabeb85786fff2e71629377a55c9a45bb3) Thanks [@dqn](https://github.com/dqn)! - Add bundle caching to accelerate apply command
+
+### Patch Changes
+
+- [#648](https://github.com/tailor-platform/sdk/pull/648) [`484cd98`](https://github.com/tailor-platform/sdk/commit/484cd989163b441385dd2794a9580716825de658) Thanks [@k1LoW](https://github.com/k1LoW)! - Add `gqlOperations` option for IdP configuration
+
+  Configure which GraphQL operations are enabled for IdP users. All operations are enabled by default (set `false` to disable):
+
+  - `create`: Enable \_createUser mutation (default: true)
+  - `update`: Enable \_updateUser mutation (default: true)
+  - `delete`: Enable \_deleteUser mutation (default: true)
+  - `read`: Enable \_users and \_user queries (default: true)
+  - `sendPasswordResetEmail`: Enable \_sendPasswordResetEmail mutation (default: true)
+
+  Supports `"query"` alias for read-only mode (disables all mutations):
+
+  ```typescript
+  defineIdp("my-idp", {
+    authorization: "loggedIn",
+    clients: ["my-client"],
+    gqlOperations: "query", // Equivalent to { create: false, update: false, delete: false, read: true, sendPasswordResetEmail: false }
+  });
+  ```
+
+- [#639](https://github.com/tailor-platform/sdk/pull/639) [`2d25e53`](https://github.com/tailor-platform/sdk/commit/2d25e534c34bc0297f95ead6f163e02b1567e93a) Thanks [@dqn](https://github.com/dqn)! - Refactor CLI internal directory layout to align with package-by-feature boundaries, colocating apply/generate command logic under commands and consolidating shared CLI helpers.
+
+- [#650](https://github.com/tailor-platform/sdk/pull/650) [`55fb921`](https://github.com/tailor-platform/sdk/commit/55fb9210e4a0bd45a4d82d3f91df3930b4273d49) Thanks [@toiroakr](https://github.com/toiroakr)! - Add GitHub Actions workflow for automated dependency review on Renovate PRs using Claude
+
 ## 1.19.0
 
 ### Minor Changes

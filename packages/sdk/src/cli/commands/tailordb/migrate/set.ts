@@ -150,19 +150,21 @@ async function set(options: SetOptions): Promise<void> {
 export const setCommand = defineCommand({
   name: "set",
   description: "Set migration checkpoint to a specific number.",
-  args: z.object({
-    ...commonArgs,
-    ...deploymentArgs,
-    ...confirmationArgs,
-    number: arg(z.string(), {
-      positional: true,
-      description: "Migration number to set (e.g., 0001 or 1)",
-    }),
-    namespace: arg(z.string().optional(), {
-      alias: "n",
-      description: "Target TailorDB namespace (required if multiple namespaces exist)",
-    }),
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...deploymentArgs,
+      ...confirmationArgs,
+      number: arg(z.string(), {
+        positional: true,
+        description: "Migration number to set (e.g., 0001 or 1)",
+      }),
+      namespace: arg(z.string().optional(), {
+        alias: "n",
+        description: "Target TailorDB namespace (required if multiple namespaces exist)",
+      }),
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     await set({
       configPath: args.config,

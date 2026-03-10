@@ -69,11 +69,13 @@ export async function listWebhookExecutors(
 const listWebhookCommand = defineCommand({
   name: "list",
   description: "List executors with incoming webhook triggers",
-  args: z.object({
-    ...commonArgs,
-    ...jsonArgs,
-    ...workspaceArgs,
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...jsonArgs,
+      ...workspaceArgs,
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     const executors = await listWebhookExecutors({
       workspaceId: args["workspace-id"],

@@ -124,6 +124,13 @@ export async function planApplication(context: PlanContext) {
     return changeSet;
   }
 
+  // Skip application create/update when there are no subgraphs
+  // (e.g. deploying only static web hosting)
+  if (application.subgraphs.length === 0) {
+    changeSet.print();
+    return changeSet;
+  }
+
   let authNamespace: string | undefined;
   let authIdpConfigName: string | undefined;
   if (application.authService && application.authService.config) {

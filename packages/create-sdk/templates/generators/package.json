@@ -1,0 +1,30 @@
+{
+  "name": "generators",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "tailor-sdk generate",
+    "deploy": "tailor-sdk apply",
+    "test": "vitest --project unit",
+    "test:unit": "vitest --project unit",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
+    "lint": "oxlint --type-aware . && eslint --cache .",
+    "lint:fix": "oxlint --type-aware --fix . && eslint --cache --fix .",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.4",
+    "@tailor-platform/function-types": "0.8.2",
+    "@tailor-platform/sdk": "workspace:^",
+    "@types/node": "24.10.9",
+    "eslint": "9.39.4",
+    "eslint-plugin-oxlint": "1.39.0",
+    "oxfmt": "0.24.0",
+    "oxlint": "1.39.0",
+    "oxlint-tsgolint": "0.11.1",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.53.0",
+    "vitest": "4.0.17"
+  }
+}

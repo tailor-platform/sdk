@@ -9,22 +9,24 @@ import type { ProfileInfo } from ".";
 export const updateCommand = defineCommand({
   name: "update",
   description: "Update profile properties.",
-  args: z.object({
-    ...commonArgs,
-    ...jsonArgs,
-    name: arg(z.string(), {
-      positional: true,
-      description: "Profile name",
-    }),
-    user: arg(z.string().optional(), {
-      alias: "u",
-      description: "New user email",
-    }),
-    "workspace-id": arg(z.string().optional(), {
-      alias: "w",
-      description: "New workspace ID",
-    }),
-  }),
+  args: z
+    .object({
+      ...commonArgs,
+      ...jsonArgs,
+      name: arg(z.string(), {
+        positional: true,
+        description: "Profile name",
+      }),
+      user: arg(z.string().optional(), {
+        alias: "u",
+        description: "New user email",
+      }),
+      "workspace-id": arg(z.string().optional(), {
+        alias: "w",
+        description: "New workspace ID",
+      }),
+    })
+    .strict(),
   run: withCommonArgs(async (args) => {
     const config = readPlatformConfig();
 

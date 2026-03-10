@@ -17,7 +17,7 @@
     "@tailor-platform/sdk": "workspace:^"
   },
   "devDependencies": {
-    "@tailor-platform/function-types": "0.8.0",
+    "@tailor-platform/function-types": "0.8.2",
     "@types/node": "24.10.9",
     "tsx": "4.21.0",
     "typescript": "5.9.3",

@@ -123,4 +123,12 @@ export interface TypeFeatures {
   bulkUpsert?: true;
   /** Configure GraphQL operations for this type. Use "query" for read-only mode, or an object for granular control. */
   gqlOperations?: GqlOperationsConfig;
+  /**
+   * Enable publishing events for this type.
+   * When enabled, record creation/update/deletion events are published.
+   * If not specified, this is automatically set to true when an executor uses this type
+   * with recordCreated/recordUpdated/recordDeleted triggers. If explicitly set to false
+   * while an executor uses this type, an error will be thrown during apply.
+   */
+  publishEvents?: boolean;
 }

@@ -87,6 +87,25 @@ export async function buildTriggerContext(
   return { workflowNameMap, jobNameMap, workflowFileMap };
 }
 
+function sortedMapToJson(m: Map<string, string>): string {
+  return JSON.stringify([...m.entries()].sort(([a], [b]) => a.localeCompare(b)));
+}
+
+/**
+ * Serialize trigger context to a deterministic string for cache hashing.
+ * Returns an empty string if no context is provided.
+ * @param ctx - Trigger context to serialize
+ * @returns Deterministic string representation
+ */
+export function serializeTriggerContext(ctx: TriggerContext | undefined): string {
+  if (!ctx) return "";
+  return (
+    sortedMapToJson(ctx.workflowNameMap) +
+    sortedMapToJson(ctx.jobNameMap) +
+    sortedMapToJson(ctx.workflowFileMap)
+  );
+}
+
 /**
  * Create a rolldown plugin for transforming trigger calls
  * Returns undefined if no trigger context is provided

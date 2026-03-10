@@ -5,16 +5,15 @@
     "type": true
   },
   "tags": ["-lintignore"],
-  "ignore": ["scripts/**", "e2e/fixtures/**"],
+  "ignore": ["scripts/**", "e2e/fixtures/**", "src/cli/commands/apply/__test_fixtures__/**"],
   "ignoreDependencies": [
     "@liam-hq/cli",
     "@typescript/native-preview",
-    "cross-env",
     "eslint-plugin-import",
     "oxlint",
     "oxlint-tsgolint",
     "serve",
     "tsx"
   ],
-  "ignoreBinaries": ["vitest", "tsdown", "cross-env", "oxlint", "eslint", "tsc", "tsgo", "knip"]
+  "ignoreBinaries": ["vitest", "tsdown", "oxlint", "eslint", "tsc", "tsgo", "knip", "publint"]
 }
