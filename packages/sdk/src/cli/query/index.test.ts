@@ -1,10 +1,15 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import {
   query,
+  queryCommand,
   resolveQueryCommandInput,
   resolveReplCommand,
   resolveReplInterruptAction,
 } from "./index";
+
+vi.mock("node:fs/promises", () => ({
+  readFile: vi.fn(),
+}));
 
 const mockClient = {
   getApplication: vi.fn(),
@@ -54,6 +59,7 @@ describe("query", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
 
+    const { readFile } = await import("node:fs/promises");
     const { loadAccessToken, loadWorkspaceId } = await import("../shared/context");
     const { initOperatorClient, fetchMachineUserToken } = await import("../shared/client");
     const { loadConfig } = await import("../shared/config-loader");
@@ -64,6 +70,7 @@ describe("query", () => {
     const { extractTypeNamesFromSql, extractColumnTemplate } = await import("./sql-type-extractor");
     const { loadTypeFieldOrder } = await import("./type-field-order");
 
+    vi.mocked(readFile).mockResolvedValue('select * from "User";' as never);
     vi.mocked(loadAccessToken).mockResolvedValue("access-token");
     vi.mocked(loadWorkspaceId).mockReturnValue("workspace-1");
     vi.mocked(initOperatorClient).mockResolvedValue(mockClient as never);
@@ -532,14 +539,31 @@ describe("query", () => {
 });
 
 describe("resolveQueryCommandInput", () => {
-  test("accepts direct query mode", () => {
-    expect(resolveQueryCommandInput({ query: "select 1;" })).toEqual({
+  test("accepts direct query mode", async () => {
+    await expect(resolveQueryCommandInput({ query: "select 1;" })).resolves.toEqual({
       query: "select 1;",
     });
   });
 
-  test("defaults to repl mode when query is omitted", () => {
-    expect(resolveQueryCommandInput({})).toEqual({
+  test("reads query text from file", async () => {
+    const { readFile } = await import("node:fs/promises");
+
+    await expect(resolveQueryCommandInput({ file: "query.sql" })).resolves.toEqual({
+      query: 'select * from "User";',
+    });
+    expect(readFile).toHaveBeenCalledWith("query.sql", "utf-8");
+  });
+
+  test("allows both fields at input-resolution layer", async () => {
+    await expect(
+      resolveQueryCommandInput({ query: "select 1;", file: "query.sql" }),
+    ).resolves.toEqual({
+      query: "select 1;",
+    });
+  });
+
+  test("defaults to repl mode when query is omitted", async () => {
+    await expect(resolveQueryCommandInput({})).resolves.toEqual({
       query: undefined,
     });
   });
@@ -568,6 +592,23 @@ describe("resolveReplCommand", () => {
 
   test("returns unknown for unsupported backslash command", () => {
     expect(resolveReplCommand("\\noop")).toBe("unknown");
+  });
+});
+
+describe("queryCommand args", () => {
+  test("rejects when query and file are both passed", () => {
+    const result = queryCommand.args.safeParse({
+      engine: "sql",
+      query: "select 1;",
+      file: "query.sql",
+      machineuser: "bot",
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) {
+      throw new Error("expected args parsing to fail");
+    }
+    expect(result.error.issues[0]?.message).toBe("Pass either -q/--query or --file, not both.");
   });
 });
 
