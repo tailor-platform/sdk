@@ -51,61 +51,17 @@ export const sendCommand = defineCommand({
 });
 
 /**
- * Parse a human-readable crash log file back into a CrashReport object.
+ * Parse a crash log file back into a CrashReport object.
+ * Reads the embedded JSON footer appended by formatCrashReport.
  * @param content - File content
  * @returns Parsed report or undefined if parsing fails
  */
 function parseCrashLogFile(content: string): CrashReport | undefined {
   try {
-    const get = (label: string): string => {
-      const re = new RegExp(`^${label}:\\s*(.+)$`, "m");
-      return content.match(re)?.[1]?.trim() ?? "";
-    };
-
-    const getMultiline = (label: string, endMarker: string): string => {
-      const re = new RegExp(`^${label}:\\s*(.*?)\\n(?=\\n--- ${endMarker} ---)`, "ms");
-      const match = content.match(re);
-      return match?.[1]?.trim() ?? get(label);
-    };
-
-    const stackMatch = content.match(/--- Stack Trace ---\n([\s\S]*?)$/);
-    const stackTrace = stackMatch?.[1]?.trim() ?? "";
-
-    const osParts = get("OS").split(" ");
-    const report: CrashReport = {
-      id: get("Crash Report"),
-      timestamp: get("Timestamp"),
-      sdkVersion: get("SDK Version"),
-      nodeVersion: get("Node Version"),
-      osPlatform: osParts[0] ?? "",
-      osRelease: osParts.slice(1).join(" "),
-      arch: get("Arch"),
-      command: get("Command"),
-      argv: parseArgv(get("Arguments")),
-      errorName: get("Name"),
-      errorMessage: getMultiline("Message", "Stack Trace"),
-      stackTrace: stackTrace === "(no stack trace available)" ? "" : stackTrace,
-      errorType: get("Error Type") as CrashReport["errorType"],
-    };
-
-    if (!report.id || !report.timestamp || !report.errorType) {
-      return undefined;
-    }
-
-    return report;
+    const match = content.match(/^--- JSON ---\n(.+)$/m);
+    if (!match?.[1]) return undefined;
+    return JSON.parse(match[1]) as CrashReport;
   } catch {
     return undefined;
   }
-}
-
-function parseArgv(raw: string): string[] {
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.every((v) => typeof v === "string")) {
-      return parsed as string[];
-    }
-  } catch {
-    // Fall back to space-separated for older crash log files
-  }
-  return raw.split(" ");
 }

@@ -32,6 +32,9 @@ export function formatCrashReport(report: CrashReport): string {
     "--- Stack Trace ---",
     report.stackTrace || "(no stack trace available)",
     "",
+    "--- JSON ---",
+    JSON.stringify(report),
+    "",
   ];
   return lines.join("\n");
 }

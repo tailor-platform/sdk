@@ -8,7 +8,7 @@ const LONG_HEX_PATTERN = /\b[0-9a-fA-F]{32,}\b/g;
 const EMAIL_PATTERN = /\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b/g;
 const ABSOLUTE_PATH_PATTERN = /(?:\/(?:[\w.@\- ]+\/)+[\w.@\- ]+)/g;
 const WINDOWS_PATH_PATTERN = /(?:[A-Za-z]:\\(?:[\w.@\- ]+\\)+[\w.@\- ]+)/g;
-const URL_QUERY_PATTERN = /(\?|&)[^?\s]*/g;
+const URL_QUERY_PATTERN = /[?&][^?\s]*/g;
 
 // Non-global variant for single-match .test() calls (avoids lastIndex state issues)
 const EMAIL_TEST_PATTERN = /\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b/;
@@ -31,7 +31,7 @@ export function sanitizeStackTrace(stack: string): string {
   // V8 stack traces start with "ErrorType: message\n    at ...".
   // Apply message sanitization to the first line so secrets embedded in
   // the error message are redacted consistently with errorMessage.
-  let result = stack.replace(/^[^\n]+/, (firstLine) => sanitizeMessage(firstLine));
+  let result = stack.replace(/^[^\n]+/, sanitizeMessage);
 
   result = result.replace(ABSOLUTE_PATH_PATTERN, (match) => {
     const sdkIndex = match.indexOf(SDK_PACKAGE_MARKER);
