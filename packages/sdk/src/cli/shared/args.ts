@@ -229,6 +229,9 @@ export const withCommonArgs =
         // used for user-facing validation/not-found messages.
         // Exclude SyntaxError/ReferenceError: at runtime these typically come from
         // dynamically imported user config files, not from SDK code.
+        // Accepted trade-off: exhaustiveness checks (`satisfies never`) throw plain
+        // Error and won't be captured here. To fix, those would need a dedicated
+        // error type (e.g., InvariantError), which is out of scope for this change.
         if (error instanceof TypeError || error instanceof RangeError) {
           const { reportCrash } = await import("@/cli/crash-report");
           await reportCrash(error, "handledError");

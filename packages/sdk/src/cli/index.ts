@@ -30,6 +30,10 @@ import { readPackageJson } from "./shared/package-json";
 
 register("tsx", import.meta.url, { data: {} });
 
+// Runs before withCommonArgs loads --env-file, so env file overrides for
+// TAILOR_CRASH_REPORTS_* are not available for early startup failures.
+// This is intentional: we want crash reporting active before argument parsing,
+// and env files require parsing to be complete. Shell-level env vars still work.
 initCrashReporting();
 
 const packageJson = await readPackageJson();
