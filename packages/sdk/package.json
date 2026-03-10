@@ -136,7 +136,7 @@
     "tsx": "4.21.0",
     "type-fest": "5.4.1",
     "xdg-basedir": "5.1.0",
-    "zod": "4.3.5"
+    "zod": "4.3.6"
   },
   "devDependencies": {
     "@eslint/js": "9.39.4",
