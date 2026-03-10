@@ -128,7 +128,7 @@
     "pkg-types": "2.3.0",
     "politty": "0.4.4",
     "rolldown": "1.0.0-beta.60",
-    "serve": "14.2.5",
+    "serve": "14.2.6",
     "std-env": "3.10.0",
     "table": "6.9.0",
     "ts-cron-validator": "1.1.5",
