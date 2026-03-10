@@ -608,7 +608,7 @@ describe("queryCommand args", () => {
     if (result.success) {
       throw new Error("expected args parsing to fail");
     }
-    expect(result.error.issues[0]?.message).toBe("Pass either -q/--query or --file, not both.");
+    expect(result.error.issues[0]?.message).toBe("Pass either -q/--query or -f/--file, not both.");
   });
 });
 

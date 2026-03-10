@@ -412,7 +412,7 @@ async function runRepl(
 ): Promise<void> {
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     throw new Error(
-      "Non-interactive terminals are not supported. Pass -q/--query or --file to run a query.",
+      "Non-interactive terminals are not supported. Pass -q/--query or -f/--file to run a query.",
     );
   }
 
@@ -706,6 +706,7 @@ export const queryCommand = defineCommand({
         description: "Query string to execute directly; omit to start REPL mode",
       }),
       file: arg(z.string().optional(), {
+        alias: "f",
         description: "Read query string from file; omit to start REPL mode",
       }),
       machineuser: arg(z.string(), {
@@ -718,7 +719,7 @@ export const queryCommand = defineCommand({
         ctx.addIssue({
           code: "custom",
           path: ["file"],
-          message: "Pass either -q/--query or --file, not both.",
+          message: "Pass either -q/--query or -f/--file, not both.",
         });
       }
     })
