@@ -1,13 +1,15 @@
 import type { ValueOperand } from "./auth";
 import type {
+  DBFieldMetadata as DBFieldMetadataGenerated,
   RawPermissions,
+  RawRelationConfig as RawRelationConfigGenerated,
   TailorDBServiceConfig,
   TailorDBServiceConfigInput,
   TailorDBTypeParsedSettings,
 } from "./tailordb.generated";
 import type { GqlOperationsConfig } from "@/configure/services/tailordb";
 
-// Re-exports from configure layer for convenience
+// Re-exports from configure layer (needed because parser cannot import from configure)
 export type {
   TailorAnyDBField,
   TailorAnyDBType,
@@ -20,6 +22,15 @@ export type {
 } from "@/configure/services/tailordb";
 
 export type { GqlOperations } from "./tailordb.generated";
+
+export type TailorDBFieldOutput = {
+  type: string;
+  fields?: Record<string, TailorDBFieldOutput>;
+  metadata: DBFieldMetadataGenerated;
+  rawRelation?: RawRelationConfigGenerated;
+};
+
+export type TypeSourceInfo = Record<string, TypeSourceInfoEntry>;
 
 export type RelationType = "1-1" | "oneToOne" | "n-1" | "manyToOne" | "N-1" | "keyOnly";
 

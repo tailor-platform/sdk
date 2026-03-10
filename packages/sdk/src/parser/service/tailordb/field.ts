@@ -1,5 +1,5 @@
 import { getPrecompiledScriptExpr } from "./hooks-validate-precompiled-expr";
-import type { TailorAnyDBField, DBFieldMetadata, Hook } from "./types";
+import type { TailorAnyDBField, DBFieldMetadata, Hook } from "@/types/tailordb";
 import type { OperatorFieldConfig, RawRelationConfig } from "@/types/tailordb";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "@/types/tailordb.generated";
 

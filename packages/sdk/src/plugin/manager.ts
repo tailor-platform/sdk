@@ -2,11 +2,6 @@ import { db } from "@/parser/service/tailordb/runtime";
 import { hasGenerationHooks, getPluginGenerationDependencies } from "@/types/plugin-generation";
 import type { DependencyKind } from "@/parser/generator-config";
 import type {
-  TailorAnyDBType,
-  TailorTypePermission,
-  TailorTypeGqlPermission,
-} from "@/parser/service/tailordb/types";
-import type {
   Plugin,
   PluginGeneratedExecutor,
   PluginGeneratedType,
@@ -14,6 +9,11 @@ import type {
   PluginOutput,
   TypePluginOutput,
 } from "@/types/plugin";
+import type {
+  TailorAnyDBType,
+  TailorTypePermission,
+  TailorTypeGqlPermission,
+} from "@/types/tailordb";
 
 /**
  * Context for processing a single plugin attachment on a raw TailorDBType
