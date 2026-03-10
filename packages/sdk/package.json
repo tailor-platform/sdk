@@ -109,7 +109,7 @@
     "@urql/core": "6.0.1",
     "chalk": "5.6.2",
     "chokidar": "5.0.0",
-    "confbox": "0.2.2",
+    "confbox": "0.2.4",
     "consola": "3.4.2",
     "date-fns": "4.1.0",
     "es-toolkit": "1.45.1",
