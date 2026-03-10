@@ -30,6 +30,6 @@
     "oxlint-tsgolint": "0.11.1",
     "typescript": "5.9.3",
     "typescript-eslint": "8.53.0",
-    "vitest": "4.0.17"
+    "vitest": "4.0.18"
   }
 }
