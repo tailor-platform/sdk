@@ -21,7 +21,7 @@ import { executorFunctionName } from "./function-registry";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
-import type { Executor, Trigger } from "@/parser/service/executor";
+import type { Executor, Trigger } from "@/types/executor.generated";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
 /**

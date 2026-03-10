@@ -6,7 +6,7 @@ import { getDistDir } from "@/cli/shared/dist-dir";
 import { stringifyFunction, tailorUserMap } from "@/parser/service/tailordb/field";
 import { setPrecompiledScriptExpr } from "@/parser/service/tailordb/hooks-validate-precompiled-expr";
 import { ES_BUILTINS } from "./es-builtins";
-import type { TailorDBTypeSchemaOutput } from "@/parser/service/tailordb/types";
+import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "@/types/tailordb.generated";
 import type {
   BindingPattern,
   ExportNamedDeclaration,
@@ -112,7 +112,7 @@ function collectScriptTargets(type: TailorDBTypeSchemaOutput): ScriptTarget[] {
     }
 
     if (field.type === "nested" && field.fields) {
-      for (const nestedField of Object.values(field.fields)) {
+      for (const nestedField of Object.values(field.fields as TailorDBTypeSchemaOutput["fields"])) {
         collectFieldTargets(nestedField);
       }
     }

@@ -10,7 +10,7 @@ import { writeTblsSchemaToFile } from "./schema";
 import { initErdContext } from "./utils";
 import type { TailorDBSchemaOptions } from "./schema";
 import type { OperatorClient } from "@/cli/shared/client";
-import type { AppConfig } from "@/parser/app-config";
+import type { AppConfig } from "@/types/app-config";
 
 const DEFAULT_ERD_BASE_DIR = ".tailor-sdk/erd";
 

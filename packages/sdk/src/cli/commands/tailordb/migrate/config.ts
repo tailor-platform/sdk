@@ -3,7 +3,7 @@
  */
 
 import * as path from "pathe";
-import type { AppConfig } from "@/parser/app-config";
+import type { AppConfig } from "@/types/app-config";
 
 // ============================================================================
 // Types

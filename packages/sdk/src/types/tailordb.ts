@@ -1,76 +1,15 @@
-import type { RelationType } from "./relation";
+import type { ValueOperand } from "./auth";
 import type {
-  DBFieldMetadataSchema,
-  RawRelationConfigSchema,
-  RawPermissionsSchema,
-  TailorDBTypeSchema,
-  TailorDBServiceConfig as TailorDBServiceConfigType,
-  TailorDBTypeSettingsSchema,
-} from "./schema";
+  DBFieldMetadata as DBFieldMetadataGenerated,
+  RawPermissions,
+  RawRelationConfig as RawRelationConfigGenerated,
+  TailorDBServiceConfig,
+  TailorDBServiceConfigInput,
+  TailorDBTypeParsedSettings,
+} from "./tailordb.generated";
 import type { GqlOperationsConfig } from "@/configure/services/tailordb";
-import type { ValueOperand } from "@/parser/service/auth/types";
-import type { z } from "zod";
 
-export type { RelationType } from "./relation";
-export type { TypeSourceInfo } from "./type-parser";
-
-// ========================================
-// Source info type for TailorDB types
-// ========================================
-
-/**
- * Source information for a user-defined TailorDB type.
- */
-export interface UserDefinedTypeSource {
-  /** File path to import from */
-  filePath: string;
-  /** Export name in the source file */
-  exportName: string;
-  /** Not present for user-defined types */
-  pluginId?: never;
-}
-
-/**
- * Source information for a plugin-generated TailorDB type.
- */
-export interface PluginGeneratedTypeSource {
-  /** Not present for plugin-generated types */
-  filePath?: never;
-  /** Export name of the generated type */
-  exportName: string;
-  /** Plugin ID that generated this type */
-  pluginId: string;
-  /** Plugin import path for code generators */
-  pluginImportPath: string;
-  /** Original type's file path */
-  originalFilePath: string;
-  /** Original type's export name */
-  originalExportName: string;
-  /** Generated type kind for getGeneratedType() API (e.g., "request", "step") */
-  generatedTypeKind?: string;
-  /** Plugin config used to generate this type */
-  pluginConfig?: unknown;
-  /** Namespace where this type was generated */
-  namespace?: string;
-}
-
-/**
- * Source information for a TailorDB type.
- * Discriminated union: use `pluginId` to distinguish between user-defined and plugin-generated types.
- */
-export type TypeSourceInfoEntry = UserDefinedTypeSource | PluginGeneratedTypeSource;
-
-/**
- * Type guard to check if source is plugin-generated
- * @param source - Type source info to check
- * @returns True if source is plugin-generated
- */
-export function isPluginGeneratedType(
-  source: TypeSourceInfoEntry,
-): source is PluginGeneratedTypeSource {
-  return source.pluginId !== undefined;
-}
-
+// Re-exports from configure layer (needed because parser cannot import from configure)
 export type {
   TailorAnyDBField,
   TailorAnyDBType,
@@ -80,42 +19,63 @@ export type {
   TailorTypePermission,
   TailorTypeGqlPermission,
   GqlOperationsConfig,
-  GqlOperations,
 } from "@/configure/services/tailordb";
-export type {
-  TailorDBServiceConfigInput,
-  TailorDBServiceConfig,
-  TailorDBExternalConfig,
-  TailorDBServiceInput,
-} from "./schema";
 
-/**
- * Parsed and normalized settings for TailorDB type.
- * gqlOperations is normalized from alias to object format.
- * @public
- */
-export type TailorDBTypeParsedSettings = z.output<typeof TailorDBTypeSettingsSchema>;
-
-/**
- * Migration configuration for TailorDB
- * @public
- */
-export type TailorDBMigrationConfig = NonNullable<TailorDBServiceConfigType["migration"]>;
-
-export type TailorDBTypeSchemaOutput = z.output<typeof TailorDBTypeSchema>;
-
-export type DBFieldMetadataOutput = z.output<typeof DBFieldMetadataSchema>;
-export type RawRelationConfigOutput = z.output<typeof RawRelationConfigSchema>;
-
-export type RawPermissions = z.output<typeof RawPermissionsSchema>;
+export type { GqlOperations } from "./tailordb.generated";
 
 export type TailorDBFieldOutput = {
   type: string;
   fields?: Record<string, TailorDBFieldOutput>;
-  metadata: DBFieldMetadataOutput;
-  rawRelation?: RawRelationConfigOutput;
+  metadata: DBFieldMetadataGenerated;
+  rawRelation?: RawRelationConfigGenerated;
 };
 
+export type TypeSourceInfo = Record<string, TypeSourceInfoEntry>;
+
+export type RelationType = "1-1" | "oneToOne" | "n-1" | "manyToOne" | "N-1" | "keyOnly";
+
+// Service config types
+export type TailorDBExternalConfig = { external: true };
+
+export type TailorDBServiceInput = {
+  [namespace: string]: TailorDBServiceConfigInput | TailorDBExternalConfig;
+};
+
+export type TailorDBMigrationConfig = NonNullable<TailorDBServiceConfig["migration"]>;
+
+// Source info types
+export interface UserDefinedTypeSource {
+  filePath: string;
+  exportName: string;
+  pluginId?: never;
+}
+
+export interface PluginGeneratedTypeSource {
+  filePath?: never;
+  exportName: string;
+  pluginId: string;
+  pluginImportPath: string;
+  originalFilePath: string;
+  originalExportName: string;
+  generatedTypeKind?: string;
+  pluginConfig?: unknown;
+  namespace?: string;
+}
+
+export type TypeSourceInfoEntry = UserDefinedTypeSource | PluginGeneratedTypeSource;
+
+/**
+ * Checks if a type source is generated by a plugin.
+ * @param source - The type source entry to check.
+ * @returns True if the source was generated by a plugin.
+ */
+export function isPluginGeneratedType(
+  source: TypeSourceInfoEntry,
+): source is PluginGeneratedTypeSource {
+  return source.pluginId !== undefined;
+}
+
+// Operator field types
 export interface Script {
   expr: string;
 }
@@ -135,13 +95,8 @@ interface OperatorFieldHook {
   update?: Script;
 }
 
-/**
- * Raw relation config stored in configure layer, processed in parser layer.
- * This is the serialized form of RelationConfig from schema.ts where
- * the TailorDBType reference is replaced with the type name string.
- */
 export interface RawRelationConfig {
-  type: RelationType;
+  type: "1-1" | "n-1" | "keyOnly" | "oneToOne" | "manyToOne" | "N-1";
   toward: {
     type: string;
     as?: string;
@@ -174,6 +129,7 @@ export interface OperatorFieldConfig {
   fields?: Record<string, OperatorFieldConfig>;
 }
 
+// Permission types
 type GqlPermissionAction = "read" | "create" | "update" | "delete" | "aggregate" | "bulkUpsert";
 
 type StandardPermissionOperator = "eq" | "ne" | "in" | "nin" | "hasAny" | "nhasAny";
@@ -230,6 +186,7 @@ export interface Permissions {
   gql?: StandardTailorTypeGqlPermission;
 }
 
+// TailorDB type metadata and parsed types
 export interface TailorDBTypeMetadata {
   name: string;
   description?: string;
@@ -251,9 +208,6 @@ export interface TailorDBTypeMetadata {
   >;
 }
 
-/**
- * Parsed and normalized TailorDB field information
- */
 export interface ParsedField {
   name: string;
   config: OperatorFieldConfig;
@@ -266,9 +220,6 @@ export interface ParsedField {
   };
 }
 
-/**
- * Parsed and normalized TailorDB relationship information
- */
 export interface ParsedRelationship {
   name: string;
   targetType: string;
@@ -278,9 +229,6 @@ export interface ParsedRelationship {
   description: string;
 }
 
-/**
- * Parsed and normalized TailorDB type information
- */
 export interface TailorDBType {
   name: string;
   pluralForm: string;

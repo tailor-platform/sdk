@@ -72,10 +72,9 @@ import type {
   RemoteSchemaVerificationResult,
 } from "@/cli/commands/tailordb/migrate/types";
 import type { LoadedConfig } from "@/cli/shared/config-loader";
-import type { Executor } from "@/parser/service/executor";
+import type { Executor } from "@/types/executor.generated";
 import type {
   EnumValue,
-  GqlOperations,
   PermissionOperand,
   StandardActionPermission,
   StandardGqlPermissionPolicy,
@@ -84,8 +83,8 @@ import type {
   StandardTailorTypePermission,
   OperatorFieldConfig,
   TailorDBType,
-  TailorDBServiceConfig,
-} from "@/parser/service/tailordb/types";
+} from "@/types/tailordb";
+import type { GqlOperations, TailorDBServiceConfig } from "@/types/tailordb.generated";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
 // ============================================================================

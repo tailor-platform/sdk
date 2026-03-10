@@ -2,7 +2,7 @@ import { describe, test, expect, vi, beforeEach } from "vitest";
 import { sdkNameLabelKey } from "./label";
 import { planWorkflow } from "./workflow";
 import type { OperatorClient } from "@/cli/shared/client";
-import type { Workflow, WorkflowJob } from "@/parser/service/workflow";
+import type { Workflow, WorkflowJob } from "@/types/workflow.generated";
 
 // Mock label.ts
 vi.mock("./label", async (importOriginal) => {

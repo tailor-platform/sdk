@@ -88,7 +88,8 @@
     "postinstall": "node postinstall.mjs",
     "measure:bundle": "node ../../scripts/measure-bundle-size-sonda.js",
     "knip": "knip",
-    "publint": "publint --strict"
+    "publint": "publint --strict",
+    "generate": "zinfer && node -e \"const f=require('fs').readdirSync('src/types').filter(f=>f.endsWith('.generated.ts')).map(f=>'src/types/'+f);if(f.length)require('child_process').execSync('pnpm oxfmt --write '+f.join(' '),{stdio:'inherit'})\""
   },
   "dependencies": {
     "@0no-co/graphql.web": "1.2.0",
@@ -156,6 +157,7 @@
     "tsdown": "0.19.0",
     "typescript": "5.9.3",
     "typescript-eslint": "8.53.0",
-    "vitest": "4.0.17"
+    "vitest": "4.0.17",
+    "zinfer": "0.1.7"
   }
 }

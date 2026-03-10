@@ -8,7 +8,7 @@
     "builtin": true,
     "es2018": true
   },
-  "ignorePatterns": ["dist/"],
+  "ignorePatterns": ["dist/", "src/types/*.generated.ts"],
   "rules": {
     "constructor-super": "error",
     "for-direction": "error",
@@ -263,6 +263,10 @@
           "error",
           {
             "patterns": [
+              {
+                "group": ["**/parser/**", "@/parser/**"],
+                "message": "Configure module should not import from parser module. Use @/types/ instead."
+              },
               {
                 "group": ["**/plugin/**", "@/plugin/**"],
                 "message": "Configure module should not import from plugin module."

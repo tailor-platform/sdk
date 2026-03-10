@@ -2,10 +2,11 @@ import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { CodeGeneratorSchema, BaseGeneratorConfigSchema } from "@/parser/generator-config";
-import { createPluginConfigSchema, type Plugin } from "@/parser/plugin-config";
+import { PluginConfigSchema } from "@/parser/plugin-config";
 import { builtinPlugins } from "@/plugin/builtin/registry";
 import { loadConfigPath } from "./context";
-import type { AppConfig } from "@/parser/app-config";
+import type { AppConfig } from "@/types/app-config";
+import type { Plugin } from "@/types/plugin";
 import type { z } from "zod";
 import "./mock";
 
@@ -18,8 +19,6 @@ export type LoadedConfig = AppConfig & { path: string };
 const GeneratorConfigSchema = CodeGeneratorSchema.brand("CodeGenerator");
 
 export type Generator = z.output<typeof GeneratorConfigSchema>;
-
-const PluginConfigSchema = createPluginConfigSchema();
 
 /**
  * Load Tailor configuration file and associated generators and plugins.

@@ -1,11 +1,14 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
-  "ignoreExportsUsedInFile": {
-    "interface": true,
-    "type": true
-  },
+  "ignoreExportsUsedInFile": true,
   "tags": ["-lintignore"],
-  "ignore": ["scripts/**", "e2e/fixtures/**", "src/cli/commands/apply/__test_fixtures__/**"],
+  "ignore": [
+    "scripts/**",
+    "e2e/fixtures/**",
+    "src/cli/commands/apply/__test_fixtures__/**",
+    "src/types/*.ts",
+    "zinfer.config.ts"
+  ],
   "ignoreDependencies": [
     "@liam-hq/cli",
     "@typescript/native-preview",
@@ -13,7 +16,18 @@
     "oxlint",
     "oxlint-tsgolint",
     "serve",
-    "tsx"
+    "tsx",
+    "zinfer"
   ],
-  "ignoreBinaries": ["vitest", "tsdown", "oxlint", "eslint", "tsc", "tsgo", "knip", "publint"]
+  "ignoreBinaries": [
+    "vitest",
+    "tsdown",
+    "oxlint",
+    "eslint",
+    "tsc",
+    "tsgo",
+    "knip",
+    "publint",
+    "zinfer"
+  ]
 }

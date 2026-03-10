@@ -6,12 +6,12 @@ import { defineApplication } from "@/cli/services/application";
 import { createResolver } from "@/configure/services/resolver/resolver";
 import { db } from "@/configure/services/tailordb/schema";
 import { t } from "@/configure/types";
-import { type Resolver } from "@/parser/service/resolver";
 import { parseTypes } from "@/parser/service/tailordb";
 import { toSchemaOutputs } from "@/utils/test/internal";
 import { createGenerationManager } from "./service";
 import type { LoadedConfig, Generator } from "@/cli/shared/config-loader";
 import type { TailorDBType } from "@/configure/services/tailordb/schema";
+import type { Resolver } from "@/types/resolver.generated";
 
 // ESM-safe explicit mock for Node's fs
 vi.mock("node:fs", () => {

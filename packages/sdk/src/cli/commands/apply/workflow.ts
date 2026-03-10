@@ -4,7 +4,7 @@ import { createChangeSet, type ChangeSet } from "./change-set";
 import { workflowJobFunctionName } from "./function-registry";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { Workflow } from "@/parser/service/workflow";
+import type { Workflow } from "@/types/workflow.generated";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 

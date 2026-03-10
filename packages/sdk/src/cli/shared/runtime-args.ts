@@ -9,7 +9,7 @@
  * `@/parser/service/tailordb` as `tailorUserMap`.
  */
 import { tailorUserMap } from "@/parser/service/tailordb";
-import type { Trigger } from "@/parser/service/executor";
+import type { Trigger } from "@/types/executor.generated";
 
 // ---------------------------------------------------------------------------
 // Executor

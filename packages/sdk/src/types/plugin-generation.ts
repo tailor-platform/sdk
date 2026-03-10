@@ -1,9 +1,9 @@
-import type { PluginAttachment } from "./types";
-import type { DependencyKind } from "@/parser/generator-config";
-import type { IdProviderConfig, OAuth2ClientInput } from "@/parser/service/auth/types";
-import type { Executor } from "@/parser/service/executor";
-import type { Resolver } from "@/parser/service/resolver";
-import type { TailorDBType, TypeSourceInfoEntry } from "@/parser/service/tailordb/types";
+import type { IdProvider as IdProviderConfig, OAuth2ClientInput } from "./auth.generated";
+import type { Executor } from "./executor.generated";
+import type { DependencyKind } from "./generator-config";
+import type { PluginAttachment } from "./plugin";
+import type { Resolver } from "./resolver.generated";
+import type { TailorDBType, TypeSourceInfoEntry } from "./tailordb";
 
 /**
  * A single generated file to write to disk.
@@ -64,7 +64,6 @@ export interface ResolverNamespaceData {
 
 /**
  * Context passed to plugin's onTailorDBReady hook.
- * Called after all TailorDB types are loaded and finalized.
  * @template PluginConfig - Plugin-level configuration type
  */
 export interface TailorDBReadyContext<PluginConfig = unknown> {
@@ -82,7 +81,6 @@ export interface TailorDBReadyContext<PluginConfig = unknown> {
 
 /**
  * Context passed to plugin's onResolverReady hook.
- * Called after all resolvers are loaded and finalized.
  * @template PluginConfig - Plugin-level configuration type
  */
 export interface ResolverReadyContext<PluginConfig = unknown> {
@@ -102,7 +100,6 @@ export interface ResolverReadyContext<PluginConfig = unknown> {
 
 /**
  * Context passed to plugin's onExecutorReady hook.
- * Called after all executors are loaded and finalized.
  * @template PluginConfig - Plugin-level configuration type
  */
 export interface ExecutorReadyContext<PluginConfig = unknown> {
@@ -124,11 +121,11 @@ export interface ExecutorReadyContext<PluginConfig = unknown> {
 
 /**
  * Derives generation-time dependency set from hook presence on a plugin.
- * @param plugin - Plugin to check for generation hooks
- * @param plugin.onTailorDBReady - TailorDB phase-complete hook
- * @param plugin.onResolverReady - Resolver phase-complete hook
- * @param plugin.onExecutorReady - Executor phase-complete hook
- * @returns Set of dependency kinds based on which hooks are implemented
+ * @param plugin - The plugin object to inspect.
+ * @param plugin.onTailorDBReady - Hook for TailorDB readiness.
+ * @param plugin.onResolverReady - Hook for resolver readiness.
+ * @param plugin.onExecutorReady - Hook for executor readiness.
+ * @returns Set of dependency kinds required by the plugin.
  */
 export function getPluginGenerationDependencies(plugin: {
   onTailorDBReady?: unknown;
@@ -150,11 +147,11 @@ export function getPluginGenerationDependencies(plugin: {
 
 /**
  * Checks if a plugin has any generation-time hooks.
- * @param plugin - Plugin to check
- * @param plugin.onTailorDBReady - TailorDB phase-complete hook
- * @param plugin.onResolverReady - Resolver phase-complete hook
- * @param plugin.onExecutorReady - Executor phase-complete hook
- * @returns True if the plugin has at least one generation hook
+ * @param plugin - The plugin object to inspect.
+ * @param plugin.onTailorDBReady - Hook for TailorDB readiness.
+ * @param plugin.onResolverReady - Hook for resolver readiness.
+ * @param plugin.onExecutorReady - Hook for executor readiness.
+ * @returns True if the plugin has at least one generation hook.
  */
 export function hasGenerationHooks(plugin: {
   onTailorDBReady?: unknown;

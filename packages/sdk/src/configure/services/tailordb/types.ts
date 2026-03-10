@@ -2,12 +2,13 @@ import { type TailorUser } from "@/configure/types";
 import { type output, type Prettify } from "@/configure/types/helpers";
 import { type DefinedFieldMetadata, type FieldMetadata } from "@/configure/types/types";
 import { type TailorAnyDBField, type TailorDBField } from "./schema";
+export type { TailorDBServiceConfig } from "@/types/tailordb.generated";
 export type {
   TailorDBExternalConfig,
   TailorDBMigrationConfig,
-  TailorDBServiceConfig,
   TailorDBServiceInput,
-} from "@/parser/service/tailordb/types";
+} from "@/types/tailordb";
+import type { GqlOperationsInput } from "@/types/tailordb.generated";
 import type { NonEmptyObject } from "type-fest";
 
 export type SerialConfig<T extends "string" | "integer" = "string" | "integer"> = Prettify<
@@ -91,31 +92,7 @@ export type IndexDef<T extends { fields: Record<PropertyKey, unknown> }> = {
   name?: string;
 };
 
-/**
- * Configuration for GraphQL operations on a TailorDB type.
- * All operations are enabled by default (undefined or true = enabled, false = disabled).
- */
-export interface GqlOperations {
-  /** Enable create mutation (default: true) */
-  create?: boolean;
-  /** Enable update mutation (default: true) */
-  update?: boolean;
-  /** Enable delete mutation (default: true) */
-  delete?: boolean;
-  /** Enable read queries - get, list, aggregation (default: true) */
-  read?: boolean;
-}
-
-/**
- * Alias for common GqlOperations configurations.
- * - "query": Read-only mode - disables all mutations (create, update, delete)
- */
-export type GqlOperationsAliasQuery = "query";
-
-/**
- * Configuration for GraphQL operations - either an alias string or detailed object.
- */
-export type GqlOperationsConfig = GqlOperationsAliasQuery | GqlOperations;
+export type GqlOperationsConfig = GqlOperationsInput;
 
 export interface TypeFeatures {
   pluralForm?: string;

@@ -9,11 +9,11 @@ import {
 } from "@tailor-proto/tailor/v1/idp_pb";
 import { IdPLang } from "@tailor-proto/tailor/v1/idp_resource_pb";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
-import { type IdP, type IdPLang as IdPLangInput } from "@/parser/service/idp";
 import { createChangeSet } from "./change-set";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
+import type { IdP, IdPLang as IdPLangInput } from "@/types/idp.generated";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
 /**

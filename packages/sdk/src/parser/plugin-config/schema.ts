@@ -1,10 +1,10 @@
 import { z } from "zod";
 import { functionSchema } from "@/parser/service/common";
-import type { Plugin } from "./types";
+import type { Plugin } from "@/types/plugin";
 
 // Custom plugin schema (object form)
 // Using passthrough() to preserve additional properties on Plugin instances
-const CustomPluginSchema = z
+export const PluginConfigSchema = z
   .object({
     id: z.string(),
     description: z.string(),
@@ -30,12 +30,5 @@ const CustomPluginSchema = z
       message:
         "importPath is required when plugin has definition-time hooks (onTypeLoaded/onNamespaceLoaded)",
     },
-  );
-
-/**
- * Creates a PluginConfigSchema for custom plugins
- * @returns Plugin config schema that validates and transforms Plugin instances
- */
-export function createPluginConfigSchema() {
-  return CustomPluginSchema.transform((plugin) => plugin as Plugin);
-}
+  )
+  .transform((plugin) => plugin as Plugin);

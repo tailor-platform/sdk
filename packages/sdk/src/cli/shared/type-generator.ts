@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import ml from "multiline-ts";
 import * as path from "pathe";
 import { logger } from "@/cli/shared/logger";
-import type { AppConfig } from "@/parser/app-config";
+import type { AppConfig } from "@/types/app-config";
 
 export interface AttributeMapConfig {
   [key: string]: string;

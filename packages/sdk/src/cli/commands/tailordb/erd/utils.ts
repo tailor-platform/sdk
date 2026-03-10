@@ -3,7 +3,7 @@ import { initOperatorClient } from "@/cli/shared/client";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import type { OperatorClient } from "@/cli/shared/client";
-import type { AppConfig } from "@/parser/app-config";
+import type { AppConfig } from "@/types/app-config";
 
 export interface ErdCommandContext {
   client: OperatorClient;

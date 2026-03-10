@@ -46,5 +46,3 @@ export const BaseGeneratorConfigSchema = z.union([
   FileUtilsConfigSchema,
   CodeGeneratorSchema,
 ]);
-
-export type * from "./types";

@@ -15,41 +15,44 @@ const TailorFieldTypeSchema = z.enum([
   "nested",
 ]);
 
-export const QueryTypeSchema = z.union([z.literal("query"), z.literal("mutation")]);
+export const QueryTypeSchema = z
+  .union([z.literal("query"), z.literal("mutation")])
+  .describe("GraphQL operation type");
 
 const AllowedValueSchema = z.object({
-  value: z.string(),
-  description: z.string().optional(),
+  value: z.string().describe("The allowed value"),
+  description: z.string().optional().describe("Description of the allowed value"),
 });
 
 const FieldMetadataSchema = z.object({
-  required: z.boolean().optional(),
-  array: z.boolean().optional(),
-  description: z.string().optional(),
-  allowedValues: z.array(AllowedValueSchema).optional(),
+  required: z.boolean().optional().describe("Whether the field is required"),
+  array: z.boolean().optional().describe("Whether the field is an array"),
+  description: z.string().optional().describe("Field description"),
+  allowedValues: z.array(AllowedValueSchema).optional().describe("Allowed values for enum fields"),
   hooks: z
     .object({
-      create: functionSchema.optional(),
-      update: functionSchema.optional(),
+      create: functionSchema.optional().describe("Hook function called on creation"),
+      update: functionSchema.optional().describe("Hook function called on update"),
     })
-    .optional(),
-  typeName: z.string().optional(),
+    .optional()
+    .describe("Lifecycle hooks"),
+  typeName: z.string().optional().describe("Type name for nested or enum fields"),
 });
 
 export const TailorFieldSchema = z.object({
-  type: TailorFieldTypeSchema,
-  metadata: FieldMetadataSchema,
+  type: TailorFieldTypeSchema.describe("Field data type"),
+  metadata: FieldMetadataSchema.describe("Field metadata configuration"),
   get fields() {
     return z.record(z.string(), TailorFieldSchema);
   },
 });
 
 export const ResolverSchema = z.object({
-  operation: QueryTypeSchema,
-  name: z.string(),
-  description: z.string().optional(),
-  input: z.record(z.string(), TailorFieldSchema).optional(),
-  body: functionSchema,
-  output: TailorFieldSchema,
-  publishEvents: z.boolean().optional(),
+  operation: QueryTypeSchema.describe("GraphQL operation type (query or mutation)"),
+  name: z.string().describe("Resolver name"),
+  description: z.string().optional().describe("Resolver description"),
+  input: z.record(z.string(), TailorFieldSchema).optional().describe("Input field definitions"),
+  body: functionSchema.describe("Resolver implementation function"),
+  output: TailorFieldSchema.describe("Output field definition"),
+  publishEvents: z.boolean().optional().describe("Enable publishing events from this resolver"),
 });

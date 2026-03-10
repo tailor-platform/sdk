@@ -13,11 +13,8 @@ import {
   type PluginSchemaParams,
 } from "./lines-db-processor";
 import { processSeedTypeInfo } from "./seed-type-processor";
-import type {
-  GeneratorResult,
-  TailorDBReadyContext,
-} from "@/parser/plugin-config/generation-types";
-import type { Plugin } from "@/parser/plugin-config/types";
+import type { Plugin } from "@/types/plugin";
+import type { GeneratorResult, TailorDBReadyContext } from "@/types/plugin-generation";
 
 export const SeedGeneratorID = "@tailor-platform/seed";
 

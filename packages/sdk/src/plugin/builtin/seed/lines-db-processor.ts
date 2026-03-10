@@ -4,7 +4,7 @@ import {
   type PluginGeneratedTypeSource,
   type TailorDBType,
   type TypeSourceInfoEntry,
-} from "@/parser/service/tailordb/types";
+} from "@/types/tailordb";
 import type { LinesDbMetadata } from "./types";
 import type { ForeignKeyDefinition, IndexDefinition } from "@toiroakr/lines-db";
 

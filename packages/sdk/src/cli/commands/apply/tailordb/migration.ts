@@ -25,7 +25,7 @@ import { type OperatorClient } from "@/cli/shared/client";
 import { logger, styles } from "@/cli/shared/logger";
 import { executeScript } from "@/cli/shared/script-executor";
 import { trnPrefix } from "../label";
-import type { TailorDBServiceConfig } from "@/parser/service/tailordb/types";
+import type { TailorDBServiceConfig } from "@/types/tailordb.generated";
 
 // ============================================================================
 // Types
