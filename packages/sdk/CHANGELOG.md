@@ -1,5 +1,62 @@
 # @tailor-platform/sdk
 
+## 1.24.0
+
+### Minor Changes
+
+- [#701](https://github.com/tailor-platform/sdk/pull/701) [`3ea08c0`](https://github.com/tailor-platform/sdk/commit/3ea08c0e2c7ea49b43e67e6c83ac87d4b7e6be08) Thanks [@r253hmdryou](https://github.com/r253hmdryou)! - Add `--file` input support to `tailor-sdk query`.
+
+  This allows loading SQL or GraphQL queries from a file instead of passing the
+  query text directly via `--query`.
+
+- [#708](https://github.com/tailor-platform/sdk/pull/708) [`a67a1e4`](https://github.com/tailor-platform/sdk/commit/a67a1e4f49de8c550db69d744d305e6ab3aaece5) Thanks [@r253hmdryou](https://github.com/r253hmdryou)! - Add `tailor-sdk query --edit` to open a temporary SQL or GraphQL file in your preferred editor before executing it, and honor `VISUAL` as well as `EDITOR` when choosing that editor.
+
+### Patch Changes
+
+- [#685](https://github.com/tailor-platform/sdk/pull/685) [`d00cea8`](https://github.com/tailor-platform/sdk/commit/d00cea879a094952b2d02fb3d844ef9157beccbe) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix CI race condition where concurrent PR runs delete each other's e2e workspaces by scoping cleanup to the current GitHub Actions run ID
+
+- [#681](https://github.com/tailor-platform/sdk/pull/681) [`c333a70`](https://github.com/tailor-platform/sdk/commit/c333a700e1b409f0fd920c32fe2dd366b9e3df96) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): pin dependencies
+
+- [#682](https://github.com/tailor-platform/sdk/pull/682) [`004cc5a`](https://github.com/tailor-platform/sdk/commit/004cc5a2db0b95049d5d3fff1f568018ff7ac268) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update actions/checkout action to v6.0.2
+
+- [#683](https://github.com/tailor-platform/sdk/pull/683) [`551f234`](https://github.com/tailor-platform/sdk/commit/551f234c3e594c7b191ff99207a2564182b62908) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update anthropics/claude-code-action action to v1.0.70
+
+- [#684](https://github.com/tailor-platform/sdk/pull/684) [`48dda57`](https://github.com/tailor-platform/sdk/commit/48dda572fe70bb6504eac034ba32be5cb37a842e) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @tailor-platform/function-types to v0.8.2
+
+- [#686](https://github.com/tailor-platform/sdk/pull/686) [`0ffe758`](https://github.com/tailor-platform/sdk/commit/0ffe7584ba2c58c51ae27f544dafc8d6c0e0f52d) Thanks [@renovate](https://github.com/apps/renovate)! - Update @typescript/native-preview to v7.0.0-dev.20260306.1 and remove deprecated tsconfig options (`esModuleInterop`, `allowSyntheticDefaultImports`) for tsgo 7.x compatibility
+
+- [#687](https://github.com/tailor-platform/sdk/pull/687) [`5e756a8`](https://github.com/tailor-platform/sdk/commit/5e756a874820594ebd86565607c4e23902e9c22a) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency aquaproj/aqua to v2.56.7
+
+- [#688](https://github.com/tailor-platform/sdk/pull/688) [`b9b0759`](https://github.com/tailor-platform/sdk/commit/b9b0759479b6ec6f48a8b09d353126e511936762) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency pkg-pr-new to v0.0.65
+
+- [#689](https://github.com/tailor-platform/sdk/pull/689) [`ccd55f7`](https://github.com/tailor-platform/sdk/commit/ccd55f7814f14ac024f3da434f797d9a4c088007) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency publint to v0.3.18
+
+- [#690](https://github.com/tailor-platform/sdk/pull/690) [`dc2111a`](https://github.com/tailor-platform/sdk/commit/dc2111a79c20a4bfcefccaf2fb6b57480bc32542) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency rhysd/actionlint to v1.7.11
+
+- [#694](https://github.com/tailor-platform/sdk/pull/694) [`b4a8c52`](https://github.com/tailor-platform/sdk/commit/b4a8c523c6ead4f2bd672336540db0f1182b04a6) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update eslint monorepo to v9.39.4
+
+- [#695](https://github.com/tailor-platform/sdk/pull/695) [`e43ab99`](https://github.com/tailor-platform/sdk/commit/e43ab993d181abb837c70a031cb1a5cc95b1b298) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update suzuki-shunsuke/commit-action action to v0.1.1
+
+- [#696](https://github.com/tailor-platform/sdk/pull/696) [`3b93367`](https://github.com/tailor-platform/sdk/commit/3b93367c23ebda117e277c5aa12bb8a30443b0ea) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update vitest monorepo to v4.0.18
+
+- [#697](https://github.com/tailor-platform/sdk/pull/697) [`6c48ec7`](https://github.com/tailor-platform/sdk/commit/6c48ec745ffd07420ab1591ef9c94e2d41fc5e0f) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency confbox to v0.2.4
+
+- [#698](https://github.com/tailor-platform/sdk/pull/698) [`ebeb9a3`](https://github.com/tailor-platform/sdk/commit/ebeb9a31fae493d45f6c010301b83283001d2fba) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency kysely to v0.28.11
+
+- [#699](https://github.com/tailor-platform/sdk/pull/699) [`7639610`](https://github.com/tailor-platform/sdk/commit/7639610d234c27b7df64e87144b7400391272610) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency rolldown to v1.0.0-rc.7
+
+- [#703](https://github.com/tailor-platform/sdk/pull/703) [`6b19c90`](https://github.com/tailor-platform/sdk/commit/6b19c90acc2d505766c7c1c5c7caae3f18ebfeb7) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency serve to v14.2.6
+
+- [#704](https://github.com/tailor-platform/sdk/pull/704) [`a963287`](https://github.com/tailor-platform/sdk/commit/a9632875973c1590b0232ba1bb0fe34feb219bc2) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency type-fest to v5.4.4
+
+- [#705](https://github.com/tailor-platform/sdk/pull/705) [`40a654c`](https://github.com/tailor-platform/sdk/commit/40a654c757b69f8484bea44c763394179b926be4) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @typescript/native-preview to v7.0.0-dev.20260307.1
+
+- [#706](https://github.com/tailor-platform/sdk/pull/706) [`e6870b0`](https://github.com/tailor-platform/sdk/commit/e6870b06807a419dcff7602a8836ff250c31574e) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency zod to v4.3.6
+
+- [#707](https://github.com/tailor-platform/sdk/pull/707) [`08b48d8`](https://github.com/tailor-platform/sdk/commit/08b48d8ba979188388a9135105a7042f9f64e259) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update actions/setup-node action to v6.3.0
+
+- [#658](https://github.com/tailor-platform/sdk/pull/658) [`4aadd81`](https://github.com/tailor-platform/sdk/commit/4aadd812e58256b19ca5dcd21a9ac37652910728) Thanks [@toiroakr](https://github.com/toiroakr)! - Generate TypeScript types from Zod schemas using zinfer, replacing manual z.infer/z.input/z.output usage
+
 ## 1.23.0
 
 ### Minor Changes
