@@ -2,13 +2,16 @@ import * as os from "node:os";
 
 const HOME_DIR = os.homedir();
 
-// Patterns for sanitization
+// Patterns for sanitization (global variants for use with .replace())
 const UUID_PATTERN = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
 const LONG_HEX_PATTERN = /\b[0-9a-fA-F]{32,}\b/g;
 const EMAIL_PATTERN = /\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b/g;
 const ABSOLUTE_PATH_PATTERN = /(?:\/(?:[\w.@\- ]+\/)+[\w.@\- ]+)/g;
 const WINDOWS_PATH_PATTERN = /(?:[A-Za-z]:\\(?:[\w.@\- ]+\\)+[\w.@\- ]+)/g;
 const URL_QUERY_PATTERN = /(\?|&)[^?\s]*/g;
+
+// Non-global variant for single-match .test() calls (avoids lastIndex state issues)
+const EMAIL_TEST_PATTERN = /\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b/;
 
 // SDK package path marker for relative paths
 const SDK_PACKAGE_MARKER = "packages/sdk/";
@@ -28,11 +31,7 @@ export function sanitizeStackTrace(stack: string): string {
   // V8 stack traces start with "ErrorType: message\n    at ...".
   // Apply message sanitization to the first line so secrets embedded in
   // the error message are redacted consistently with errorMessage.
-  const newlineIndex = stack.indexOf("\n");
-  let result =
-    newlineIndex !== -1
-      ? sanitizeMessage(stack.slice(0, newlineIndex)) + stack.slice(newlineIndex)
-      : sanitizeMessage(stack);
+  let result = stack.replace(/^[^\n]+/, (firstLine) => sanitizeMessage(firstLine));
 
   result = result.replace(ABSOLUTE_PATH_PATTERN, (match) => {
     const sdkIndex = match.indexOf(SDK_PACKAGE_MARKER);
@@ -101,15 +100,15 @@ export function sanitizeArgv(argv: string[]): string[] {
       redactNext = false;
     }
 
-    // --flag=value: keep flag name, redact value
-    const eqIndex = arg.indexOf("=");
-    if (eqIndex !== -1 && arg.startsWith("-")) {
-      result.push(`${arg.slice(0, eqIndex)}=<redacted>`);
-      continue;
-    }
-
-    // --flag / -f: keep flag name, redact next arg as its value
     if (arg.startsWith("-")) {
+      // --flag=value: keep flag name, redact value
+      const eqIndex = arg.indexOf("=");
+      if (eqIndex !== -1) {
+        result.push(`${arg.slice(0, eqIndex)}=<redacted>`);
+        continue;
+      }
+
+      // --flag / -f: keep flag name, redact next arg as its value
       result.push(arg);
       redactNext = true;
       continue;
@@ -127,8 +126,8 @@ export function sanitizeArgv(argv: string[]): string[] {
       continue;
     }
 
-    // Redact email addresses (use a fresh regex to avoid global lastIndex state)
-    if (/\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b/.test(arg)) {
+    // Redact email addresses
+    if (EMAIL_TEST_PATTERN.test(arg)) {
       result.push("<email>");
       continue;
     }
