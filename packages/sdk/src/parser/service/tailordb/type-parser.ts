@@ -8,16 +8,14 @@ import {
   buildRelationInfo,
   applyRelationMetadataToFieldConfig,
 } from "./relation";
-import type { TailorDBField, TypeSourceInfo } from "@/types/tailordb";
 import type {
+  TailorDBField,
+  TypeSourceInfo,
   ParsedField,
   ParsedRelationship,
   TailorDBType,
-  TypeSourceInfoEntry,
 } from "@/types/tailordb";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "@/types/tailordb.generated";
-
-export type { TypeSourceInfo } from "@/types/tailordb";
 
 /**
  * Parse multiple TailorDB types, build relationships, and validate uniqueness.

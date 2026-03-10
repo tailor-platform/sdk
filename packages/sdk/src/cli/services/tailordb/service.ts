@@ -8,8 +8,7 @@ import { isSdkBranded } from "@/utils/brand";
 import { precompileTailorDBTypeScripts } from "./hooks-validate-bundler";
 import type { PluginManager } from "@/plugin/manager";
 import type { PluginAttachment } from "@/types/plugin";
-import type { TypeSourceInfo, TailorAnyDBType } from "@/types/tailordb";
-import type { TailorDBType } from "@/types/tailordb";
+import type { TypeSourceInfo, TailorAnyDBType, TailorDBType } from "@/types/tailordb";
 import type {
   TailorDBServiceConfig,
   TailorDBTypeRaw as TailorDBTypeSchemaOutput,
