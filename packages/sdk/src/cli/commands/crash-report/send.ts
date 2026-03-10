@@ -58,9 +58,11 @@ export const sendCommand = defineCommand({
  */
 function parseCrashLogFile(content: string): CrashReport | undefined {
   try {
-    const match = content.match(/^--- JSON ---\n(.+)$/m);
-    if (!match?.[1]) return undefined;
-    return JSON.parse(match[1]) as CrashReport;
+    const lastIdx = content.lastIndexOf("\n--- JSON ---\n");
+    if (lastIdx === -1) return undefined;
+    const jsonLine = content.slice(lastIdx + "\n--- JSON ---\n".length).split("\n")[0];
+    if (!jsonLine) return undefined;
+    return JSON.parse(jsonLine) as CrashReport;
   } catch {
     return undefined;
   }
