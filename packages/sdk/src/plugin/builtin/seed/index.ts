@@ -265,7 +265,7 @@ function generateExecScript(
     // Handle "validate" subcommand before parseArgs
     const subcommand = process.argv[2];
     if (subcommand === "validate") {
-      const { LinesDB, ErrorFormatter } = await import("@toiroakr/lines-db");
+      const { validateSeedData } = await import("@tailor-platform/sdk/seed");
       const validateArgs = parseArgs({
         args: process.argv.slice(3),
         options: {
@@ -314,58 +314,10 @@ function generateExecScript(
           process.exit(1);
         }
 
-        const db = LinesDB.create({ dataDir });
-        let result;
-        try {
-          result = await db.initialize({ tableName, detailedValidate: true });
-        } finally {
-          await db.close();
-        }
-
-        if (result.warnings.length > 0) {
-          for (const warning of result.warnings) {
-            console.warn(styleText("yellow", \`⚠ \${warning}\`));
-          }
-          console.log("");
-        }
-
-        if (result.valid) {
-          console.log("✓ All records are valid");
-          process.exit(0);
-        } else {
-          const formatter = new ErrorFormatter({ verbose: validateArgs.values.verbose });
-          const errorsByFile = new Map();
-          for (const error of result.errors) {
-            const fileErrors = errorsByFile.get(error.file) || [];
-            fileErrors.push(error);
-            errorsByFile.set(error.file, fileErrors);
-          }
-          for (const [file, fileErrors] of errorsByFile) {
-            console.error(formatter.formatErrorHeader(fileErrors.length, file));
-            console.error("");
-            const validationErrors = fileErrors.filter((e) => e.type !== "foreignKey" || !e.foreignKeyError);
-            const foreignKeyErrors = fileErrors.filter((e) => e.type === "foreignKey" && e.foreignKeyError);
-            if (validationErrors.length > 0) {
-              console.error(formatter.formatValidationErrors(validationErrors.map((e) => ({
-                file: e.file,
-                rowIndex: e.rowIndex,
-                issues: e.issues,
-              }))));
-            }
-            for (const error of foreignKeyErrors) {
-              if (error.foreignKeyError) {
-                console.error(formatter.formatForeignKeyError({
-                  file: error.file,
-                  rowIndex: error.rowIndex,
-                  column: error.foreignKeyError.column,
-                  value: error.foreignKeyError.value,
-                  referencedTable: error.foreignKeyError.referencedTable,
-                  referencedColumn: error.foreignKeyError.referencedColumn,
-                }));
-              }
-            }
-            console.error("");
-          }
+        const result = await validateSeedData({ dataDir, tableName, verbose: validateArgs.values.verbose });
+        if (result.output) console.log(result.output);
+        if (!result.valid) {
+          console.error(result.error);
           process.exit(1);
         }
       } catch (error) {

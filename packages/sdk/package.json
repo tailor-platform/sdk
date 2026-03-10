@@ -68,6 +68,11 @@
       "types": "./dist/plugin/builtin/seed/index.d.mts",
       "import": "./dist/plugin/builtin/seed/index.mjs",
       "default": "./dist/plugin/builtin/seed/index.mjs"
+    },
+    "./seed": {
+      "types": "./dist/seed/index.d.mts",
+      "import": "./dist/seed/index.mjs",
+      "default": "./dist/seed/index.mjs"
     }
   },
   "scripts": {

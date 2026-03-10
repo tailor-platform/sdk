@@ -1,6 +1,5 @@
 import { t } from "@tailor-platform/sdk";
-import { createStandardSchema } from "@tailor-platform/sdk/test";
-import { defineSchema } from "@toiroakr/lines-db";
+import { defineSchema, createStandardSchema } from "@tailor-platform/sdk/seed";
 
 const schemaType = t.object({
   name: t.string(),
