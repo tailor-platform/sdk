@@ -43,6 +43,17 @@ describe("sanitizeStackTrace", () => {
     expect(result).toContain("<email>");
   });
 
+  test("redacts sensitive data in multiline error messages before stack frames", () => {
+    const stack = [
+      "Error: Failed to connect",
+      'Request: {"token":"s3cret","email":"admin@corp.com"}',
+      "    at Object.<anonymous> (/home/user/projects/packages/sdk/src/cli/index.ts:10:5)",
+    ].join("\n");
+    const result = sanitizeStackTrace(stack);
+    expect(result).not.toContain("s3cret");
+    expect(result).not.toContain("admin@corp.com");
+  });
+
   test("replaces Windows-style absolute paths with <external>/filename", () => {
     const stack =
       "Error: boom\n    at Object.<anonymous> (C:\\Users\\admin\\projects\\some-lib\\index.js:1:1)";

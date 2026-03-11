@@ -63,8 +63,12 @@ export async function sendCrashReport(report: CrashReport, ua: string): Promise<
 
     if (!response.ok) return false;
 
-    const data = (await response.json()) as { errors?: unknown[] };
-    return !data.errors;
+    const data = (await response.json()) as {
+      errors?: unknown[];
+      data?: { submitCrashReport: { success: boolean } };
+    };
+    if (data.errors) return false;
+    return data.data?.submitCrashReport.success === true;
   } catch {
     return false;
   }

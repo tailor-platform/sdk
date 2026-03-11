@@ -30,9 +30,16 @@ function lastSegment(filePath: string, separator: string): string {
  */
 export function sanitizeStackTrace(stack: string): string {
   // V8 stack traces start with "ErrorType: message\n    at ...".
-  // Apply message sanitization to the first line so secrets embedded in
-  // the error message are redacted consistently with errorMessage.
-  let result = stack.replace(/^[^\n]+/, sanitizeMessage);
+  // The error message may span multiple lines before the first "    at " frame.
+  // Apply message sanitization to all message lines so secrets embedded in
+  // multiline error messages are redacted consistently with errorMessage.
+  const firstFrameIndex = stack.search(/\n\s+at /);
+  let result: string;
+  if (firstFrameIndex !== -1) {
+    result = sanitizeMessage(stack.slice(0, firstFrameIndex)) + stack.slice(firstFrameIndex);
+  } else {
+    result = sanitizeMessage(stack);
+  }
 
   result = result.replace(ABSOLUTE_PATH_PATTERN, (match) => {
     const sdkIndex = match.indexOf(SDK_PACKAGE_MARKER);

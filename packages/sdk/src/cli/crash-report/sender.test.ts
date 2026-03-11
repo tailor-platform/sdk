@@ -97,6 +97,17 @@ describe("sendCrashReport", () => {
     expect(result).toBe(false);
   });
 
+  test("returns false when mutation returns success: false", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ data: { submitCrashReport: { success: false } } }),
+    });
+
+    const result = await sendCrashReport(makeCrashReport(), "tailor-sdk/1.0.0");
+
+    expect(result).toBe(false);
+  });
+
   test("returns false on non-ok HTTP response", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: false,
