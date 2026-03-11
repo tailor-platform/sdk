@@ -257,19 +257,21 @@ export async function applySecretManager(
 
   if (phase === "create-update") {
     // Create vaults first and set metadata
-    for (const create of vaultChangeSet.creates) {
-      await client.createSecretManagerVault({
-        workspaceId: create.workspaceId,
-        secretmanagerVaultName: create.name,
-      });
-      if (application) {
-        const metaRequest = await buildMetaRequest(
-          vaultTrn(create.workspaceId, create.name),
-          application.name,
-        );
-        await client.setMetadata(metaRequest);
-      }
-    }
+    await Promise.all(
+      vaultChangeSet.creates.map(async (create) => {
+        await client.createSecretManagerVault({
+          workspaceId: create.workspaceId,
+          secretmanagerVaultName: create.name,
+        });
+        if (application) {
+          const metaRequest = await buildMetaRequest(
+            vaultTrn(create.workspaceId, create.name),
+            application.name,
+          );
+          await client.setMetadata(metaRequest);
+        }
+      }),
+    );
 
     // Update metadata for existing vaults
     if (application) {
