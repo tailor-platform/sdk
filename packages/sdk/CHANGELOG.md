@@ -1,5 +1,27 @@
 # @tailor-platform/sdk
 
+## 1.25.0
+
+### Minor Changes
+
+- [#670](https://github.com/tailor-platform/sdk/pull/670) [`0659515`](https://github.com/tailor-platform/sdk/commit/0659515f2aa2db5fa0e23c2cfe3e3af04dec2b3d) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `validate` subcommand to generated seed `exec.mjs` for validating JSONL data against schema definitions without deploying. Add `@tailor-platform/sdk/seed` export that provides `defineSchema` (re-exported from `@toiroakr/lines-db`) and `validateSeedData` wrapper to avoid phantom dependency issues.
+
+### Patch Changes
+
+- [#711](https://github.com/tailor-platform/sdk/pull/711) [`60d4803`](https://github.com/tailor-platform/sdk/commit/60d48038a5faa80846f8e7ce46a45fbe49e0cbdc) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update changesets/action action to v1.7.0
+
+- [#713](https://github.com/tailor-platform/sdk/pull/713) [`a20860d`](https://github.com/tailor-platform/sdk/commit/a20860d67cda7a16f009fc11e7f06e488b54189a) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @changesets/changelog-github to v0.6.0
+
+- [#715](https://github.com/tailor-platform/sdk/pull/715) [`1ae10fc`](https://github.com/tailor-platform/sdk/commit/1ae10fc99e953f3e44e23a7ad75d9c8c1fe6e8ed) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @changesets/cli to v2.30.0
+
+- [#718](https://github.com/tailor-platform/sdk/pull/718) [`1f85c44`](https://github.com/tailor-platform/sdk/commit/1f85c44cb2bf20a932b4c002ffec9d8e83b696b5) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency aquaproj/aqua-registry to v4.481.0
+
+- [#720](https://github.com/tailor-platform/sdk/pull/720) [`681daa4`](https://github.com/tailor-platform/sdk/commit/681daa473d7bce4cda8e12fa9525175c2d19e4ad) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency aquaproj/aqua-renovate-config to v2.11.0
+
+- [#721](https://github.com/tailor-platform/sdk/pull/721) [`aa7d7ef`](https://github.com/tailor-platform/sdk/commit/aa7d7ef407cbe8d022f104589fc331db70788336) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency bufbuild/buf to v1.66.1
+
+- [#652](https://github.com/tailor-platform/sdk/pull/652) [`988d5af`](https://github.com/tailor-platform/sdk/commit/988d5af6031d6a4373140590710186edef54529f) Thanks [@riku99](https://github.com/riku99)! - Add declarative secret management in tailor.config.ts via defineSecretManager() API
+
 ## 1.24.0
 
 ### Minor Changes
