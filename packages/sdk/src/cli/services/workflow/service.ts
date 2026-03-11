@@ -180,10 +180,7 @@ async function loadFileContent(filePath: string): Promise<{
         const workflowResult = WorkflowSchema.safeParse(exportValue);
         if (workflowResult.success) {
           workflow = workflowResult.data;
-        } else if (
-          isSdkBranded(exportValue, "workflow") ||
-          isSdkBranded(exportValue, "workflow-job")
-        ) {
+        } else if (isSdkBranded(exportValue, ["workflow", "workflow-job"])) {
           throw workflowResult.error;
         }
         continue;
@@ -196,10 +193,7 @@ async function loadFileContent(filePath: string): Promise<{
           exportName,
           sourceFile: filePath,
         });
-      } else if (
-        isSdkBranded(exportValue, "workflow-job") ||
-        isSdkBranded(exportValue, "workflow")
-      ) {
+      } else if (isSdkBranded(exportValue, ["workflow", "workflow-job"])) {
         throw jobResult.error;
       }
     }

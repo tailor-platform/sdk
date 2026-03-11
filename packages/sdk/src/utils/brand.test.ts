@@ -47,6 +47,18 @@ describe("brand", () => {
       expect(isSdkBranded(obj, "tailordb-type")).toBe(false);
     });
 
+    test("returns true when kind matches one of array entries", () => {
+      const obj = brandValue({ name: "test" }, "workflow");
+
+      expect(isSdkBranded(obj, ["workflow", "workflow-job"])).toBe(true);
+    });
+
+    test("returns false when kind matches none of array entries", () => {
+      const obj = brandValue({ name: "test" }, "executor");
+
+      expect(isSdkBranded(obj, ["workflow", "workflow-job"])).toBe(false);
+    });
+
     test("returns false for plain objects", () => {
       const obj = { name: "test" };
 

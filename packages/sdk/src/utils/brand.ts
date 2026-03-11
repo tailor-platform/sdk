@@ -25,14 +25,21 @@ export function brandValue<T extends object>(value: T, kind: SdkBrandKind): T {
 /**
  * Checks whether the given value has been branded by the SDK.
  * When kind is specified, only returns true if the brand matches that kind.
+ * Accepts a single kind or an array of kinds for multi-kind matching.
  * @param value - The value to check
- * @param kind - Optional kind to match against
+ * @param kind - Optional kind or kinds to match against
  * @returns True if the value has the SDK brand symbol (and matches kind if specified)
  */
-export function isSdkBranded(value: unknown, kind?: SdkBrandKind): boolean {
+export function isSdkBranded(
+  value: unknown,
+  kind?: SdkBrandKind | readonly SdkBrandKind[],
+): boolean {
   if (value === null || typeof value !== "object" || !(SDK_BRAND in value)) return false;
   const stored = (value as Record<symbol, unknown>)[SDK_BRAND];
-  // Legacy SDK versions store `true` instead of a kind string.
-  // Without kind filter, any brand matches. With kind filter, legacy `true` also matches.
-  return kind === undefined || stored === true || stored === kind;
+  // No kind filter → any brand matches. Legacy `true` brand → matches any kind.
+  return (
+    kind === undefined ||
+    stored === true ||
+    (Array.isArray(kind) ? kind.includes(stored as SdkBrandKind) : stored === kind)
+  );
 }
