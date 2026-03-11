@@ -77,14 +77,14 @@ tailor-sdk tailordb truncate [options] [types]
 
 **Options**
 
-| Option                          | Alias | Description                                | Required | Default              |
-| ------------------------------- | ----- | ------------------------------------------ | -------- | -------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                               | No       | -                    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                          | No       | -                    |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file                    | No       | `"tailor.config.ts"` |
-| `--yes`                         | `-y`  | Skip confirmation prompts                  | No       | `false`              |
-| `--all`                         | `-a`  | Truncate all tables in all namespaces      | No       | `false`              |
-| `--namespace <NAMESPACE>`       | `-n`  | Truncate all tables in specified namespace | No       | -                    |
+| Option                          | Alias | Description                                | Required | Default              | Env                               |
+| ------------------------------- | ----- | ------------------------------------------ | -------- | -------------------- | --------------------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                               | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                          | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file                    | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| `--yes`                         | `-y`  | Skip confirmation prompts                  | No       | `false`              | -                                 |
+| `--all`                         | `-a`  | Truncate all tables in all namespaces      | No       | `false`              | -                                 |
+| `--namespace <NAMESPACE>`       | `-n`  | Truncate all tables in specified namespace | No       | -                    | -                                 |
 
 <!-- politty:command:tailordb truncate:options:end -->
 
@@ -158,12 +158,12 @@ tailor-sdk tailordb migration generate [options]
 
 **Options**
 
-| Option              | Alias | Description                                | Required | Default              |
-| ------------------- | ----- | ------------------------------------------ | -------- | -------------------- |
-| `--yes`             | `-y`  | Skip confirmation prompts                  | No       | `false`              |
-| `--config <CONFIG>` | `-c`  | Path to SDK config file                    | No       | `"tailor.config.ts"` |
-| `--name <NAME>`     | `-n`  | Optional description for the migration     | No       | -                    |
-| `--init`            | -     | Delete existing migrations and start fresh | No       | `false`              |
+| Option              | Alias | Description                                | Required | Default              | Env                               |
+| ------------------- | ----- | ------------------------------------------ | -------- | -------------------- | --------------------------------- |
+| `--yes`             | `-y`  | Skip confirmation prompts                  | No       | `false`              | -                                 |
+| `--config <CONFIG>` | `-c`  | Path to SDK config file                    | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| `--name <NAME>`     | `-n`  | Optional description for the migration     | No       | -                    | -                                 |
+| `--init`            | -     | Delete existing migrations and start fresh | No       | `false`              | -                                 |
 
 <!-- politty:command:tailordb migration generate:options:end -->
 
@@ -208,13 +208,13 @@ tailor-sdk tailordb migration set [options] <number>
 
 **Options**
 
-| Option                          | Alias | Description                                                       | Required | Default              |
-| ------------------------------- | ----- | ----------------------------------------------------------------- | -------- | -------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                      | No       | -                    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                 | No       | -                    |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                           | No       | `"tailor.config.ts"` |
-| `--yes`                         | `-y`  | Skip confirmation prompts                                         | No       | `false`              |
-| `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (required if multiple namespaces exist) | No       | -                    |
+| Option                          | Alias | Description                                                       | Required | Default              | Env                               |
+| ------------------------------- | ----- | ----------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                      | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                 | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                           | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| `--yes`                         | `-y`  | Skip confirmation prompts                                         | No       | `false`              | -                                 |
+| `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (required if multiple namespaces exist) | No       | -                    | -                                 |
 
 <!-- politty:command:tailordb migration set:options:end -->
 
@@ -249,12 +249,12 @@ tailor-sdk tailordb migration status [options]
 
 **Options**
 
-| Option                          | Alias | Description                                                       | Required | Default              |
-| ------------------------------- | ----- | ----------------------------------------------------------------- | -------- | -------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                      | No       | -                    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                 | No       | -                    |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                           | No       | `"tailor.config.ts"` |
-| `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (shows all namespaces if not specified) | No       | -                    |
+| Option                          | Alias | Description                                                       | Required | Default              | Env                               |
+| ------------------------------- | ----- | ----------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                      | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                 | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                           | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (shows all namespaces if not specified) | No       | -                    | -                                 |
 
 <!-- politty:command:tailordb migration status:options:end -->
 
@@ -328,13 +328,13 @@ tailor-sdk tailordb erd export [options]
 
 **Options**
 
-| Option                          | Alias | Description                                                                                          | Required | Default              |
-| ------------------------------- | ----- | ---------------------------------------------------------------------------------------------------- | -------- | -------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                         | No       | -                    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                    | No       | -                    |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                                              | No       | `"tailor.config.ts"` |
-| `--namespace <NAMESPACE>`       | `-n`  | TailorDB namespace name (optional if only one namespace is defined in config)                        | No       | -                    |
-| `--output <OUTPUT>`             | `-o`  | Output directory path for tbls-compatible ERD JSON (writes to `<outputDir>/<namespace>/schema.json`) | No       | `".tailor-sdk/erd"`  |
+| Option                          | Alias | Description                                                                                          | Required | Default              | Env                               |
+| ------------------------------- | ----- | ---------------------------------------------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                         | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                    | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                                              | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| `--namespace <NAMESPACE>`       | `-n`  | TailorDB namespace name (optional if only one namespace is defined in config)                        | No       | -                    | -                                 |
+| `--output <OUTPUT>`             | `-o`  | Output directory path for tbls-compatible ERD JSON (writes to `<outputDir>/<namespace>/schema.json`) | No       | `".tailor-sdk/erd"`  | -                                 |
 
 <!-- politty:command:tailordb erd export:options:end -->
 
@@ -369,12 +369,12 @@ tailor-sdk tailordb erd serve [options]
 
 **Options**
 
-| Option                          | Alias | Description                                                               | Required | Default              |
-| ------------------------------- | ----- | ------------------------------------------------------------------------- | -------- | -------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                              | No       | -                    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                         | No       | -                    |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                   | No       | `"tailor.config.ts"` |
-| `--namespace <NAMESPACE>`       | `-n`  | TailorDB namespace name (uses first namespace in config if not specified) | No       | -                    |
+| Option                          | Alias | Description                                                               | Required | Default              | Env                               |
+| ------------------------------- | ----- | ------------------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                              | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                         | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                   | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| `--namespace <NAMESPACE>`       | `-n`  | TailorDB namespace name (uses first namespace in config if not specified) | No       | -                    | -                                 |
 
 <!-- politty:command:tailordb erd serve:options:end -->
 
@@ -409,12 +409,12 @@ tailor-sdk tailordb erd deploy [options]
 
 **Options**
 
-| Option                          | Alias | Description                                                                         | Required | Default              |
-| ------------------------------- | ----- | ----------------------------------------------------------------------------------- | -------- | -------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                        | No       | -                    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                   | No       | -                    |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                             | No       | `"tailor.config.ts"` |
-| `--namespace <NAMESPACE>`       | `-n`  | TailorDB namespace name (optional - deploys all namespaces with erdSite if omitted) | No       | -                    |
+| Option                          | Alias | Description                                                                         | Required | Default              | Env                               |
+| ------------------------------- | ----- | ----------------------------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                        | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                   | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                             | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| `--namespace <NAMESPACE>`       | `-n`  | TailorDB namespace name (optional - deploys all namespaces with erdSite if omitted) | No       | -                    | -                                 |
 
 <!-- politty:command:tailordb erd deploy:options:end -->
 

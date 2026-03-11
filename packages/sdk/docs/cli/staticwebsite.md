@@ -67,12 +67,12 @@ tailor-sdk staticwebsite deploy [options]
 
 **Options**
 
-| Option                          | Alias | Description                      | Required | Default |
-| ------------------------------- | ----- | -------------------------------- | -------- | ------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                     | No       | -       |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                | No       | -       |
-| `--name <NAME>`                 | `-n`  | Static website name              | Yes      | -       |
-| `--dir <DIR>`                   | `-d`  | Path to the static website files | Yes      | -       |
+| Option                          | Alias | Description                      | Required | Default | Env                            |
+| ------------------------------- | ----- | -------------------------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                     | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| `--name <NAME>`                 | `-n`  | Static website name              | Yes      | -       | -                              |
+| `--dir <DIR>`                   | `-d`  | Path to the static website files | Yes      | -       | -                              |
 
 <!-- politty:command:staticwebsite deploy:options:end -->
 
@@ -107,10 +107,10 @@ tailor-sdk staticwebsite list [options]
 
 **Options**
 
-| Option                          | Alias | Description       | Required | Default |
-| ------------------------------- | ----- | ----------------- | -------- | ------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
+| Option                          | Alias | Description       | Required | Default | Env                            |
+| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
 
 <!-- politty:command:staticwebsite list:options:end -->
 
@@ -155,10 +155,10 @@ tailor-sdk staticwebsite get [options] <name>
 
 **Options**
 
-| Option                          | Alias | Description       | Required | Default |
-| ------------------------------- | ----- | ----------------- | -------- | ------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
+| Option                          | Alias | Description       | Required | Default | Env                            |
+| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
 
 <!-- politty:command:staticwebsite get:options:end -->
 

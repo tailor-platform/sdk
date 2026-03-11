@@ -8,6 +8,8 @@ Tailor Platform SDK - The SDK to work with Tailor Platform
 tailor-sdk <command> [options]
 ```
 
+## Global Options
+
 <!-- politty:global-options:start -->
 
 <a id="global-options"></a>
