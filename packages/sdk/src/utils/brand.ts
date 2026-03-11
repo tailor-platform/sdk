@@ -31,10 +31,8 @@ export function brandValue<T extends object>(value: T, kind: SdkBrandKind): T {
  */
 export function isSdkBranded(value: unknown, kind?: SdkBrandKind): boolean {
   if (value === null || typeof value !== "object" || !(SDK_BRAND in value)) return false;
-  if (kind === undefined) return true;
   const stored = (value as Record<symbol, unknown>)[SDK_BRAND];
   // Legacy SDK versions store `true` instead of a kind string.
-  // Treat legacy brands as matching any kind so mixed-version setups still fail fast.
-  if (stored === true) return true;
-  return stored === kind;
+  // Without kind filter, any brand matches. With kind filter, legacy `true` also matches.
+  return kind === undefined || stored === true || stored === kind;
 }
