@@ -43,14 +43,14 @@ tailor-sdk apply --env-file .env --env-file .env.production
 
 You can use environment variables to configure workspace and authentication:
 
-| Variable                          | Description                                                  |
-| --------------------------------- | ------------------------------------------------------------ |
-| `TAILOR_PLATFORM_WORKSPACE_ID`    | Workspace ID for deployment commands                         |
-| `TAILOR_PLATFORM_TOKEN`           | Authentication token (alternative to `login`)                |
-| `TAILOR_TOKEN`                    | **Deprecated.** Use `TAILOR_PLATFORM_TOKEN` instead          |
-| `TAILOR_PLATFORM_PROFILE`         | Workspace profile name                                       |
-| `TAILOR_PLATFORM_SDK_CONFIG_PATH` | Path to SDK config file                                      |
-| `EDITOR`                          | Editor to open generated files (e.g., `vim`, `code`, `nano`) |
+| Variable                          | Description                                                                 |
+| --------------------------------- | --------------------------------------------------------------------------- |
+| `TAILOR_PLATFORM_WORKSPACE_ID`    | Workspace ID for deployment commands                                        |
+| `TAILOR_PLATFORM_TOKEN`           | Authentication token (alternative to `login`)                               |
+| `TAILOR_TOKEN`                    | **Deprecated.** Use `TAILOR_PLATFORM_TOKEN` instead                         |
+| `TAILOR_PLATFORM_PROFILE`         | Workspace profile name                                                      |
+| `TAILOR_PLATFORM_SDK_CONFIG_PATH` | Path to SDK config file                                                     |
+| `VISUAL` / `EDITOR`               | Preferred editor for commands that open files (e.g., `vim`, `code`, `nano`) |
 
 ### Authentication Token Priority
 

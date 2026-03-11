@@ -1,11 +1,25 @@
-import type { ExecutorServiceInput } from "@/configure/services/executor/types";
+import type { AuthConfig } from "./auth";
+import type { IdPConfig } from "./idp";
+import type { TailorDBServiceInput } from "./tailordb";
 import type { SecretsConfig } from "@/configure/services/secrets";
 import type { StaticWebsiteConfig } from "@/configure/services/staticwebsite";
-import type { WorkflowServiceInput } from "@/configure/services/workflow/types";
-import type { AuthConfig } from "@/parser/service/auth/types";
-import type { IdPConfig } from "@/parser/service/idp/types";
-import type { ResolverServiceInput } from "@/parser/service/resolver/types";
-import type { TailorDBServiceInput } from "@/parser/service/tailordb/types";
+
+export type ExecutorServiceConfig = { files: string[]; ignores?: string[] };
+export type ExecutorServiceInput = ExecutorServiceConfig;
+
+export type ResolverServiceConfig = { files: string[]; ignores?: string[] };
+export type ResolverExternalConfig = { external: true };
+export type ResolverServiceInput = {
+  [namespace: string]: ResolverServiceConfig | ResolverExternalConfig;
+};
+
+export type WorkflowServiceConfig = {
+  files: string[];
+  job_files?: string[];
+  ignores?: string[];
+  job_ignores?: string[];
+};
+export type WorkflowServiceInput = WorkflowServiceConfig;
 
 /**
  * Application configuration for `defineConfig()`.
@@ -52,8 +66,6 @@ export interface AppConfig<
   secrets?: SecretsConfig;
   /**
    * Enable inline sourcemaps in bundled functions for better error stack traces.
-   * When enabled, sourcemaps are embedded directly in the bundle file.
-   * Set to `false` to disable (e.g. if bundle size exceeds limits).
    * @default true
    */
   inlineSourcemap?: boolean;

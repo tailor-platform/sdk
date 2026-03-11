@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { db } from "@/configure/services/tailordb";
 import { PluginManager } from "@/plugin/manager";
-import type { Plugin } from "@/parser/plugin-config/types";
+import type { Plugin } from "@/types/plugin";
 
 describe("PluginManager", () => {
   it("collects namespace plugin-generated types", async () => {

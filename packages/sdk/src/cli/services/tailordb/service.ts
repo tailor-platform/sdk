@@ -3,19 +3,16 @@ import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import { loadFilesWithIgnores } from "@/cli/services/file-loader";
 import { logger, styles } from "@/cli/shared/logger";
-import {
-  parseTypes,
-  TailorDBTypeSchema,
-  type TypeSourceInfo,
-  type TailorDBServiceConfig,
-  type TailorDBTypeSchemaOutput,
-  type TailorDBType,
-  type TailorAnyDBType,
-} from "@/parser/service/tailordb";
+import { parseTypes, TailorDBTypeSchema } from "@/parser/service/tailordb";
 import { isSdkBranded } from "@/utils/brand";
 import { precompileTailorDBTypeScripts } from "./hooks-validate-bundler";
-import type { PluginAttachment } from "@/parser/plugin-config/types";
 import type { PluginManager } from "@/plugin/manager";
+import type { PluginAttachment } from "@/types/plugin";
+import type { TypeSourceInfo, TailorAnyDBType, TailorDBType } from "@/types/tailordb";
+import type {
+  TailorDBServiceConfig,
+  TailorDBTypeRaw as TailorDBTypeSchemaOutput,
+} from "@/types/tailordb.generated";
 
 export type TailorDBService = {
   readonly namespace: string;

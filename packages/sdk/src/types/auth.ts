@@ -1,48 +1,25 @@
 import type {
-  AuthInvokerSchema,
-  BuiltinIdPSchema,
-  IDTokenSchema,
-  IdProviderSchema,
-  OAuth2ClientGrantTypeSchema,
-  OAuth2ClientSchema,
-  OIDCSchema,
-  SAMLSchema,
-  SCIMAttributeMappingSchema,
-  SCIMAttributeSchema,
-  SCIMAttributeTypeSchema,
-  SCIMAuthorizationSchema,
-  SCIMResourceSchema,
-  SCIMSchema as SCIMSchemaType,
-  TenantProviderSchema,
-} from "./schema";
+  AuthInvoker,
+  IdProvider as IdProviderConfig,
+  OAuth2Client,
+  OAuth2ClientInput,
+  SCIMAttribute,
+  SCIMConfig,
+  TenantProvider as TenantProviderConfig,
+} from "./auth.generated";
 import type { TailorDBInstance } from "@/configure/services/tailordb/schema";
 import type { output } from "@/configure/types/helpers";
 import type { TailorField } from "@/configure/types/type";
 import type { DefinedFieldMetadata, FieldMetadata, TailorFieldType } from "@/configure/types/types";
 import type { IsAny } from "type-fest";
-import type { z } from "zod";
 
-export type AuthInvoker = z.output<typeof AuthInvokerSchema>;
+// Derived from generated types (zinfer inlines these literal unions)
+export type OAuth2ClientGrantType = OAuth2Client["grantTypes"][number];
+export type SCIMAttributeType = SCIMAttribute["type"];
+
 export type AuthInvokerWithName<M extends string> = Omit<AuthInvoker, "machineUserName"> & {
   machineUserName: M;
 };
-
-// Types derived from zod schemas
-export type OIDC = z.output<typeof OIDCSchema>;
-export type SAML = z.output<typeof SAMLSchema>;
-export type IDToken = z.output<typeof IDTokenSchema>;
-export type BuiltinIdP = z.output<typeof BuiltinIdPSchema>;
-export type IdProviderConfig = z.output<typeof IdProviderSchema>;
-export type OAuth2ClientGrantType = z.output<typeof OAuth2ClientGrantTypeSchema>;
-// OAuth2Client input type (before transform) for configure layer
-export type OAuth2ClientInput = z.input<typeof OAuth2ClientSchema>;
-export type SCIMAuthorization = z.output<typeof SCIMAuthorizationSchema>;
-export type SCIMAttributeType = z.output<typeof SCIMAttributeTypeSchema>;
-export type SCIMAttribute = z.output<typeof SCIMAttributeSchema>;
-export type SCIMAttributeMapping = z.output<typeof SCIMAttributeMappingSchema>;
-export type SCIMResource = z.output<typeof SCIMResourceSchema>;
-export type SCIMConfig = z.output<typeof SCIMSchemaType>;
-export type TenantProviderConfig = z.output<typeof TenantProviderSchema>;
 
 // Helper types for ValueOperand
 export type ValueOperand = string | boolean | string[] | boolean[];
@@ -281,7 +258,7 @@ type AuthServiceInputLoose = AuthServiceInput<any, any, any, string, any>;
 
 export type AuthOwnConfig = DefinedAuth<
   string,
-  // Intentionally permissive: AuthConfig is the “container” type for AppConfig.auth.
+  // Intentionally permissive: AuthConfig is the "container" type for AppConfig.auth.
   // We want any concrete `defineAuth(...)` result to be assignable here, while the
   // strong typing remains on the `defineAuth` return type itself.
   AuthServiceInputLoose,

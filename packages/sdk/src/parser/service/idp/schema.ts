@@ -1,36 +1,108 @@
 import { z } from "zod";
-import { IdPGqlOperationsSchema } from "./gql-operations";
 
-export { IdPGqlOperationsSchema } from "./gql-operations";
+/**
+ * Normalize IdPGqlOperationsConfig (alias or object) to IdPGqlOperations object.
+ * "query" alias expands to read-only mode: { create: false, update: false, delete: false, read: true, sendPasswordResetEmail: false }
+ * @param config - The config to normalize
+ * @returns The normalized IdPGqlOperations object
+ */
+function normalizeIdPGqlOperations(
+  config:
+    | "query"
+    | {
+        create?: boolean;
+        update?: boolean;
+        delete?: boolean;
+        read?: boolean;
+        sendPasswordResetEmail?: boolean;
+      },
+) {
+  if (config === "query") {
+    return {
+      create: false,
+      update: false,
+      delete: false,
+      read: true,
+      sendPasswordResetEmail: false,
+    };
+  }
+  return config;
+}
 
-export const IdPLangSchema = z.enum(["en", "ja"]);
+/**
+ * Zod schema for IdPGqlOperations configuration with normalization transform.
+ * Accepts "query" alias or detailed object, normalizes to IdPGqlOperations object.
+ */
+export const IdPGqlOperationsSchema = z
+  .union([
+    z.literal("query"),
+    z.object({
+      create: z.boolean().optional().describe("Enable _createUser mutation (default: true)"),
+      update: z.boolean().optional().describe("Enable _updateUser mutation (default: true)"),
+      delete: z.boolean().optional().describe("Enable _deleteUser mutation (default: true)"),
+      read: z.boolean().optional().describe("Enable _users and _user queries (default: true)"),
+      sendPasswordResetEmail: z
+        .boolean()
+        .optional()
+        .describe("Enable _sendPasswordResetEmail mutation (default: true)"),
+    }),
+  ])
+  .describe(
+    "Configuration for GraphQL operations on IdP users.\nAll operations are enabled by default (undefined or true = enabled, false = disabled).",
+  )
+  .transform((val) => normalizeIdPGqlOperations(val));
+
+export const IdPLangSchema = z.enum(["en", "ja"]).describe("IdP UI language");
 
 export const IdPUserAuthPolicySchema = z
   .object({
-    useNonEmailIdentifier: z.boolean().optional(),
-    allowSelfPasswordReset: z.boolean().optional(),
-    passwordRequireUppercase: z.boolean().optional(),
-    passwordRequireLowercase: z.boolean().optional(),
-    passwordRequireNonAlphanumeric: z.boolean().optional(),
-    passwordRequireNumeric: z.boolean().optional(),
+    useNonEmailIdentifier: z
+      .boolean()
+      .optional()
+      .describe("Use non-email identifier for usernames"),
+    allowSelfPasswordReset: z
+      .boolean()
+      .optional()
+      .describe("Allow users to reset their own passwords"),
+    passwordRequireUppercase: z
+      .boolean()
+      .optional()
+      .describe("Require uppercase letters in passwords"),
+    passwordRequireLowercase: z
+      .boolean()
+      .optional()
+      .describe("Require lowercase letters in passwords"),
+    passwordRequireNonAlphanumeric: z
+      .boolean()
+      .optional()
+      .describe("Require non-alphanumeric characters in passwords"),
+    passwordRequireNumeric: z
+      .boolean()
+      .optional()
+      .describe("Require numeric characters in passwords"),
     passwordMinLength: z
       .number()
       .int()
       .refine((val) => val >= 6 && val <= 30, {
         message: "passwordMinLength must be between 6 and 30",
       })
-      .optional(),
+      .optional()
+      .describe("Minimum password length (6-30)"),
     passwordMaxLength: z
       .number()
       .int()
       .refine((val) => val >= 6 && val <= 4096, {
         message: "passwordMaxLength must be between 6 and 4096",
       })
-      .optional(),
-    allowedEmailDomains: z.array(z.string()).optional(),
-    allowGoogleOauth: z.boolean().optional(),
-    allowMicrosoftOauth: z.boolean().optional(),
-    disablePasswordAuth: z.boolean().optional(),
+      .optional()
+      .describe("Maximum password length (6-4096)"),
+    allowedEmailDomains: z
+      .array(z.string())
+      .optional()
+      .describe("Restrict registration to these email domains"),
+    allowGoogleOauth: z.boolean().optional().describe("Enable Google OAuth login"),
+    allowMicrosoftOauth: z.boolean().optional().describe("Enable Microsoft OAuth login"),
+    disablePasswordAuth: z.boolean().optional().describe("Disable password-based authentication"),
   })
   .refine(
     (data) =>
@@ -104,18 +176,20 @@ export const IdPUserAuthPolicySchema = z
 
 export const IdPSchema = z
   .object({
-    name: z.string(),
-    authorization: z.union([
-      z.literal("insecure"),
-      z.literal("loggedIn"),
-      z.object({ cel: z.string() }),
-    ]),
-    clients: z.array(z.string()),
-    lang: IdPLangSchema.optional(),
+    name: z.string().describe("IdP service name"),
+    authorization: z
+      .union([z.literal("insecure"), z.literal("loggedIn"), z.object({ cel: z.string() })])
+      .describe("Authorization mode for IdP API access"),
+    clients: z.array(z.string()).describe("OAuth2 client names that can use this IdP"),
+    lang: IdPLangSchema.optional().describe("UI language for IdP pages"),
     userAuthPolicy: IdPUserAuthPolicySchema.transform((input) =>
       IdPUserAuthPolicySchema.parse(input ?? {}),
-    ).optional(),
-    publishUserEvents: z.boolean().optional(),
-    gqlOperations: IdPGqlOperationsSchema.optional(),
+    )
+      .optional()
+      .describe("User authentication policy configuration"),
+    publishUserEvents: z.boolean().optional().describe("Enable publishing user lifecycle events"),
+    gqlOperations: IdPGqlOperationsSchema.optional().describe(
+      "Configure which GraphQL operations are enabled",
+    ),
   })
   .brand("IdPConfig");

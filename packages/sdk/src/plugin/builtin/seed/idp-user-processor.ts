@@ -1,5 +1,5 @@
 import ml from "multiline-ts";
-import type { GeneratorAuthInput } from "@/parser/plugin-config/generation-types";
+import type { GeneratorAuthInput } from "@/types/plugin-generation";
 
 export interface IdpUserMetadata {
   name: "_User";

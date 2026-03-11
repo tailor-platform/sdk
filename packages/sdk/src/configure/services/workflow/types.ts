@@ -1,1 +1,1 @@
-export type { WorkflowServiceConfig, WorkflowServiceInput } from "@/parser/service/workflow/types";
+export type { WorkflowServiceConfig, WorkflowServiceInput } from "@/types/app-config";

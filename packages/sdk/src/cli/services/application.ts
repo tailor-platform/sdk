@@ -14,23 +14,23 @@ import { getDistDir } from "@/cli/shared/dist-dir";
 import { resolveInlineSourcemap } from "@/cli/shared/inline-sourcemap";
 import { logger } from "@/cli/shared/logger";
 import { buildTriggerContext } from "@/cli/shared/trigger-context";
-import { type AppConfig } from "@/parser/app-config";
-import { type AuthConfig } from "@/parser/service/auth";
-import { type ExecutorServiceInput } from "@/parser/service/executor";
-import { IdPSchema, type IdP } from "@/parser/service/idp";
-import { type IdPConfig } from "@/parser/service/idp/types";
-import { type ResolverServiceInput } from "@/parser/service/resolver/types";
+import { IdPSchema } from "@/parser/service/idp";
 import { SecretsSchema } from "@/parser/service/secrets";
-import {
-  StaticWebsiteSchema,
-  type StaticWebsite,
-  type StaticWebsiteInput,
-} from "@/parser/service/staticwebsite";
+import { StaticWebsiteSchema } from "@/parser/service/staticwebsite";
 import { TailorDBServiceConfigSchema } from "@/parser/service/tailordb";
-import { type TailorDBServiceInput } from "@/parser/service/tailordb/types";
-import { type WorkflowServiceConfig } from "@/parser/service/workflow";
+import {
+  type AppConfig,
+  type ExecutorServiceInput,
+  type ResolverServiceInput,
+  type WorkflowServiceConfig,
+} from "@/types/app-config";
+import { type AuthConfig } from "@/types/auth";
+import { type IdPConfig } from "@/types/idp";
+import { type TailorDBServiceInput } from "@/types/tailordb";
 import type { BundleCache } from "@/cli/cache/bundle-cache";
 import type { PluginManager } from "@/plugin/manager";
+import type { IdP } from "@/types/idp.generated";
+import type { StaticWebsite, StaticWebsiteInput } from "@/types/staticwebsite.generated";
 
 export type SecretVault = {
   readonly vaultName: string;

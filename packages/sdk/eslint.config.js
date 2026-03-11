@@ -92,16 +92,12 @@ export default defineConfig([
             },
             {
               group: ["**/parser/**", "@/parser/**"],
-              message: "Configure module should not import from parser module.",
+              message:
+                "Configure module should not import from parser module. Use @/types/ instead.",
             },
             {
               group: ["**/plugin/**", "@/plugin/**"],
               message: "Configure module should not import from plugin module.",
-            },
-            {
-              group: ["**/parser/**/types", "@/parser/**/types"],
-              allowTypeImports: true,
-              message: "Configure module should not import from parser module.",
             },
             {
               group: ["zod"],

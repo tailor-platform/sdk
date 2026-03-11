@@ -22,7 +22,7 @@ import {
   type PluginOperationConfig,
   type PluginInjectMap,
   type PluginExecutorContext,
-} from "@/parser/plugin-config/types";
+} from "@/types/plugin";
 import type {
   PluginExecutorInfoExtended,
   PluginTypeGenerationResult,

@@ -10,7 +10,7 @@ import {
   type AnyCodeGenerator,
   type DependencyKind,
 } from "@/cli/commands/generate/types";
-import type { CodeGeneratorBase } from "@/parser/generator-config";
+import type { CodeGeneratorBase } from "@/types/generator-config";
 
 describe("Generator type compatibility", () => {
   describe("TailorDBGenerator", () => {

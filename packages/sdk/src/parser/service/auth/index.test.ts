@@ -2,7 +2,7 @@ import { describe, it, expectTypeOf, expect } from "vitest";
 import { db } from "@/configure/services/tailordb/schema";
 import { t } from "@/configure/types/type";
 import { AuthConfigSchema, OAuth2ClientSchema } from "./schema";
-import type { AuthServiceInput } from "./types";
+import type { AuthServiceInput } from "@/types/auth";
 import type { OptionalKeysOf } from "type-fest";
 import type { z } from "zod";
 

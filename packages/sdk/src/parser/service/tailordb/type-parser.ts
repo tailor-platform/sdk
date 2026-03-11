@@ -1,4 +1,5 @@
 import * as inflection from "inflection";
+import { isPluginGeneratedType } from "@/types/tailordb";
 import { parseFieldConfig } from "./field";
 import { parsePermissions } from "./permission";
 import {
@@ -7,21 +8,14 @@ import {
   buildRelationInfo,
   applyRelationMetadataToFieldConfig,
 } from "./relation";
-import { isPluginGeneratedType } from "./types";
 import type {
   TailorDBField,
+  TypeSourceInfo,
   ParsedField,
   ParsedRelationship,
   TailorDBType,
-  TailorDBTypeSchemaOutput,
-  TypeSourceInfoEntry,
-} from "./types";
-
-/**
- * Source information for TailorDB types.
- * Maps type names to their source information (user-defined or plugin-generated).
- */
-export type TypeSourceInfo = Record<string, TypeSourceInfoEntry>;
+} from "@/types/tailordb";
+import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "@/types/tailordb.generated";
 
 /**
  * Parse multiple TailorDB types, build relationships, and validate uniqueness.

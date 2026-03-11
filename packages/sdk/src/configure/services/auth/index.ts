@@ -2,13 +2,13 @@ import { type TailorDBInstance } from "../tailordb/schema";
 import type { TailorField } from "@/configure/types/type";
 import type { DefinedFieldMetadata, FieldMetadata, TailorFieldType } from "@/configure/types/types";
 import type {
-  AuthInvoker as ParserAuthInvoker,
   AuthDefinitionBrand,
   AuthServiceInput,
   DefinedAuth,
   UserAttributeListKey,
   UserAttributeMap,
-} from "@/parser/service/auth/types";
+} from "@/types/auth";
+import type { AuthInvoker as ParserAuthInvoker } from "@/types/auth.generated";
 
 type MachineUserAttributeFields = Record<
   string,
@@ -56,16 +56,17 @@ export type {
   SAML,
   IDToken,
   BuiltinIdP,
-  IdProviderConfig,
-  OAuth2ClientGrantType,
+  IdProvider as IdProviderConfig,
   OAuth2ClientInput as OAuth2Client,
   SCIMAuthorization,
-  SCIMAttributeType,
   SCIMAttribute,
   SCIMAttributeMapping,
   SCIMResource,
   SCIMConfig,
-  TenantProviderConfig,
+  TenantProvider as TenantProviderConfig,
+} from "@/types/auth.generated";
+export type { OAuth2ClientGrantType, SCIMAttributeType } from "@/types/auth";
+export type {
   ValueOperand,
   UsernameFieldKey,
   UserAttributeKey,
@@ -76,7 +77,7 @@ export type {
   AuthExternalConfig,
   AuthOwnConfig,
   DefinedAuth,
-} from "@/parser/service/auth/types";
+} from "@/types/auth";
 
 /**
  * Invoker type compatible with tailor.v1.AuthInvoker

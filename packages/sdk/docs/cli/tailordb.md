@@ -454,7 +454,7 @@ The `main` function receives a Kysely transaction object. All database operation
 
 **Editor Integration:**
 
-If the `EDITOR` environment variable is set, the generated script file will automatically open in your preferred editor:
+If `VISUAL` or `EDITOR` is set, the generated script file will automatically open in your preferred editor:
 
 ```bash
 export EDITOR=vim

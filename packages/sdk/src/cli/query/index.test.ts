@@ -9,6 +9,15 @@ import {
 
 vi.mock("node:fs/promises", () => ({
   readFile: vi.fn(),
+  mkdtemp: vi.fn(),
+  writeFile: vi.fn(),
+  rm: vi.fn(),
+}));
+
+vi.mock("../shared/editor", () => ({
+  getConfiguredEditorCommand: vi.fn(),
+  getEditorCommand: vi.fn(),
+  openInEditor: vi.fn(),
 }));
 
 const mockClient = {
@@ -59,7 +68,17 @@ describe("query", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
 
+    Object.defineProperty(process.stdin, "isTTY", {
+      configurable: true,
+      value: true,
+    });
+    Object.defineProperty(process.stdout, "isTTY", {
+      configurable: true,
+      value: true,
+    });
+
     const { readFile } = await import("node:fs/promises");
+    const { getEditorCommand, openInEditor } = await import("../shared/editor");
     const { loadAccessToken, loadWorkspaceId } = await import("../shared/context");
     const { initOperatorClient, fetchMachineUserToken } = await import("../shared/client");
     const { loadConfig } = await import("../shared/config-loader");
@@ -71,6 +90,8 @@ describe("query", () => {
     const { loadTypeFieldOrder } = await import("./type-field-order");
 
     vi.mocked(readFile).mockResolvedValue('select * from "User";' as never);
+    vi.mocked(getEditorCommand).mockReturnValue("vim");
+    vi.mocked(openInEditor).mockResolvedValue(true);
     vi.mocked(loadAccessToken).mockResolvedValue("access-token");
     vi.mocked(loadWorkspaceId).mockReturnValue("workspace-1");
     vi.mocked(initOperatorClient).mockResolvedValue(mockClient as never);
@@ -540,7 +561,8 @@ describe("query", () => {
 
 describe("resolveQueryCommandInput", () => {
   test("accepts direct query mode", async () => {
-    await expect(resolveQueryCommandInput({ query: "select 1;" })).resolves.toEqual({
+    await expect(resolveQueryCommandInput({ query: "select 1;", engine: "sql" })).resolves.toEqual({
+      mode: "query",
       query: "select 1;",
     });
   });
@@ -548,7 +570,8 @@ describe("resolveQueryCommandInput", () => {
   test("reads query text from file", async () => {
     const { readFile } = await import("node:fs/promises");
 
-    await expect(resolveQueryCommandInput({ file: "query.sql" })).resolves.toEqual({
+    await expect(resolveQueryCommandInput({ file: "query.sql", engine: "sql" })).resolves.toEqual({
+      mode: "query",
       query: 'select * from "User";',
     });
     expect(readFile).toHaveBeenCalledWith("query.sql", "utf-8");
@@ -556,16 +579,110 @@ describe("resolveQueryCommandInput", () => {
 
   test("allows both fields at input-resolution layer", async () => {
     await expect(
-      resolveQueryCommandInput({ query: "select 1;", file: "query.sql" }),
+      resolveQueryCommandInput({ query: "select 1;", file: "query.sql", engine: "sql" }),
     ).resolves.toEqual({
+      mode: "query",
       query: "select 1;",
     });
   });
 
   test("defaults to repl mode when query is omitted", async () => {
-    await expect(resolveQueryCommandInput({})).resolves.toEqual({
-      query: undefined,
+    await expect(resolveQueryCommandInput({ engine: "sql" })).resolves.toEqual({
+      mode: "repl",
     });
+  });
+
+  test("reads edited query from a temporary file", async () => {
+    const { mkdtemp, readFile, writeFile, rm } = await import("node:fs/promises");
+    const { openInEditor } = await import("../shared/editor");
+
+    vi.mocked(mkdtemp).mockResolvedValue("/tmp/tailor-query-123");
+    vi.mocked(readFile).mockResolvedValueOnce("select 1;");
+
+    await expect(resolveQueryCommandInput({ edit: true, engine: "sql" })).resolves.toEqual({
+      mode: "query",
+      query: "select 1;",
+    });
+
+    expect(writeFile).toHaveBeenCalledWith("/tmp/tailor-query-123/query.sql", "", "utf-8");
+    expect(openInEditor).toHaveBeenCalledWith("/tmp/tailor-query-123/query.sql", "vim");
+    expect(rm).toHaveBeenCalledWith("/tmp/tailor-query-123", {
+      recursive: true,
+      force: true,
+    });
+  });
+
+  test("aborts edited query when the editor output is empty", async () => {
+    const { mkdtemp, readFile } = await import("node:fs/promises");
+
+    vi.mocked(mkdtemp).mockResolvedValue("/tmp/tailor-query-123");
+    vi.mocked(readFile).mockResolvedValueOnce("   ");
+
+    await expect(resolveQueryCommandInput({ edit: true, engine: "gql" })).resolves.toEqual({
+      mode: "abort",
+    });
+  });
+
+  test("uses fallback editor when no editor environment variable is configured", async () => {
+    const { mkdtemp, readFile } = await import("node:fs/promises");
+    const { getEditorCommand, openInEditor } = await import("../shared/editor");
+
+    vi.mocked(getEditorCommand).mockReturnValue("editor");
+    vi.mocked(mkdtemp).mockResolvedValue("/tmp/tailor-query-123");
+    vi.mocked(readFile).mockResolvedValueOnce("select 1;");
+
+    await expect(resolveQueryCommandInput({ edit: true, engine: "sql" })).resolves.toEqual({
+      mode: "query",
+      query: "select 1;",
+    });
+    expect(openInEditor).toHaveBeenCalledWith("/tmp/tailor-query-123/query.sql", "editor");
+  });
+
+  test("uses graphql extension for GraphQL editor mode", async () => {
+    const { mkdtemp, readFile, writeFile } = await import("node:fs/promises");
+    const { openInEditor } = await import("../shared/editor");
+
+    vi.mocked(mkdtemp).mockResolvedValue("/tmp/tailor-query-123");
+    vi.mocked(readFile).mockResolvedValueOnce("query { viewer { id } }");
+
+    await expect(resolveQueryCommandInput({ edit: true, engine: "gql" })).resolves.toEqual({
+      mode: "query",
+      query: "query { viewer { id } }",
+    });
+
+    expect(writeFile).toHaveBeenCalledWith("/tmp/tailor-query-123/query.graphql", "", "utf-8");
+    expect(openInEditor).toHaveBeenCalledWith("/tmp/tailor-query-123/query.graphql", "vim");
+  });
+
+  test("surfaces a helpful error when the editor command fails", async () => {
+    const { mkdtemp } = await import("node:fs/promises");
+    const { getEditorCommand, openInEditor } = await import("../shared/editor");
+
+    vi.mocked(getEditorCommand).mockReturnValue("vim");
+    vi.mocked(mkdtemp).mockResolvedValue("/tmp/tailor-query-123");
+    vi.mocked(openInEditor).mockRejectedValue(new Error("spawn editor ENOENT"));
+
+    await expect(resolveQueryCommandInput({ edit: true, engine: "sql" })).rejects.toThrow(
+      'Failed to open query editor "vim": spawn editor ENOENT',
+    );
+  });
+
+  test("rejects edit mode in non-interactive terminals", async () => {
+    const stdinDescriptor = Object.getOwnPropertyDescriptor(process.stdin, "isTTY");
+    Object.defineProperty(process.stdin, "isTTY", {
+      configurable: true,
+      value: false,
+    });
+
+    try {
+      await expect(resolveQueryCommandInput({ edit: true, engine: "sql" })).rejects.toThrow(
+        "Non-interactive terminals are not supported. Pass -q/--query or -f/--file to run a query.",
+      );
+    } finally {
+      if (stdinDescriptor) {
+        Object.defineProperty(process.stdin, "isTTY", stdinDescriptor);
+      }
+    }
   });
 });
 
@@ -609,6 +726,40 @@ describe("queryCommand args", () => {
       throw new Error("expected args parsing to fail");
     }
     expect(result.error.issues[0]?.message).toBe("Pass either -q/--query or -f/--file, not both.");
+  });
+
+  test("rejects when edit and query are both passed", () => {
+    const result = queryCommand.args.safeParse({
+      engine: "sql",
+      edit: true,
+      query: "select 1;",
+      machineuser: "bot",
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) {
+      throw new Error("expected args parsing to fail");
+    }
+    expect(result.error.issues[0]?.message).toBe(
+      "Pass only one of --edit, -q/--query, or -f/--file.",
+    );
+  });
+
+  test("rejects when edit and file are both passed", () => {
+    const result = queryCommand.args.safeParse({
+      engine: "sql",
+      edit: true,
+      file: "query.sql",
+      machineuser: "bot",
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) {
+      throw new Error("expected args parsing to fail");
+    }
+    expect(result.error.issues[0]?.message).toBe(
+      "Pass only one of --edit, -q/--query, or -f/--file.",
+    );
   });
 });
 

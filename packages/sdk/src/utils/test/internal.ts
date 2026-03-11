@@ -3,7 +3,7 @@
  * These are NOT exported to library users.
  */
 import { TailorDBTypeSchema } from "@/parser/service/tailordb/schema";
-import type { TailorDBTypeSchemaOutput } from "@/parser/service/tailordb/types";
+import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "@/types/tailordb.generated";
 
 /**
  * Converts a single db.type() result to schema-parsed output for testing.

@@ -10,7 +10,7 @@ import {
 import type { Prettify, InferFieldsOutput } from "./helpers";
 import type { FieldValidateInput } from "./validation";
 import type { TailorUser } from "@/configure/types";
-import type { TailorFieldInput } from "@/parser/service/resolver/types";
+import type { TailorFieldInput } from "@/types/resolver.generated";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 
 const regex = {

@@ -15,7 +15,7 @@ import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger, styles } from "@/cli/shared/logger";
 import { watchExecutorJob } from "./jobs";
 import { executorTriggerTypeToString } from "./status";
-import type { IncomingWebhookTrigger, ScheduleTriggerInput } from "@/parser/service/executor/types";
+import type { IncomingWebhookTrigger, ScheduleTriggerInput } from "@/types/executor.generated";
 import type { JsonObject } from "@bufbuild/protobuf";
 
 /**

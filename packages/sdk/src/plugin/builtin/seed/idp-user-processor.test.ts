@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { processIdpUser } from "./idp-user-processor";
-import type { GeneratorAuthInput } from "@/parser/plugin-config/generation-types";
+import type { GeneratorAuthInput } from "@/types/plugin-generation";
 
 describe("processIdpUser", () => {
   it("returns undefined when idProvider is not BuiltInIdP", () => {
