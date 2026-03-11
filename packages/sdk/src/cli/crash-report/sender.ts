@@ -1,12 +1,45 @@
 import type { CrashReport } from "./report";
 
 const SEND_TIMEOUT_MS = 5000;
-// Accepted trade-off: placeholder endpoint until the error tracking service is deployed.
-// Remote sending defaults to off, so this only affects explicit opt-in via TAILOR_CRASH_REPORTS_REMOTE=on.
-const PRODUCTION_ENDPOINT = "https://example.com/crash-report";
+const PRODUCTION_ENDPOINT = "https://sdk-error-tracking-u2yjqq8iuv.erp.dev/query";
+
+const SUBMIT_MUTATION = `
+mutation SubmitCrashReport(
+  $id: String!
+  $timestamp: String!
+  $sdkVersion: String!
+  $nodeVersion: String!
+  $osPlatform: String!
+  $osRelease: String!
+  $arch: String!
+  $command: String!
+  $argv: [String!]!
+  $errorName: String!
+  $errorMessage: String!
+  $stackTrace: String!
+  $errorType: String!
+) {
+  submitCrashReport(
+    id: $id
+    timestamp: $timestamp
+    sdkVersion: $sdkVersion
+    nodeVersion: $nodeVersion
+    osPlatform: $osPlatform
+    osRelease: $osRelease
+    arch: $arch
+    command: $command
+    argv: $argv
+    errorName: $errorName
+    errorMessage: $errorMessage
+    stackTrace: $stackTrace
+    errorType: $errorType
+  ) {
+    success
+  }
+}`;
 
 /**
- * Send a crash report to the remote endpoint via HTTP POST.
+ * Send a crash report to the remote endpoint via GraphQL mutation.
  * Best-effort: never throws, returns boolean success.
  * @param report - Crash report to send
  * @param ua - User-Agent header value
@@ -21,11 +54,17 @@ export async function sendCrashReport(report: CrashReport, ua: string): Promise<
         "Content-Type": "application/json",
         "User-Agent": ua,
       },
-      body: JSON.stringify(report),
+      body: JSON.stringify({
+        query: SUBMIT_MUTATION,
+        variables: report,
+      }),
       signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
     });
 
-    return response.ok;
+    if (!response.ok) return false;
+
+    const data = (await response.json()) as { errors?: unknown[] };
+    return !data.errors;
   } catch {
     return false;
   }

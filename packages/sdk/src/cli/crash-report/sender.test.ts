@@ -38,26 +38,71 @@ describe("sendCrashReport", () => {
     }
   });
 
-  test("returns true on successful response", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true });
+  test("sends GraphQL mutation with variables", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ data: { submitCrashReport: { success: true } } }),
+    });
+    const report = makeCrashReport();
+
+    await sendCrashReport(report, "tailor-sdk/1.0.0");
+
+    const call = vi.mocked(globalThis.fetch).mock.calls[0];
+    const body = JSON.parse(call[1]!.body as string);
+    expect(body).toHaveProperty("query");
+    expect(body).toHaveProperty("variables");
+    expect(body.query).toContain("mutation");
+    expect(body.query).toContain("submitCrashReport");
+    expect(body.variables.id).toBe(report.id);
+    expect(body.variables.errorName).toBe(report.errorName);
+  });
+
+  test("includes all CrashReport fields as variables", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ data: { submitCrashReport: { success: true } } }),
+    });
+    const report = makeCrashReport();
+
+    await sendCrashReport(report, "tailor-sdk/1.0.0");
+
+    const call = vi.mocked(globalThis.fetch).mock.calls[0];
+    const { variables } = JSON.parse(call[1]!.body as string);
+    expect(variables).toEqual(report);
+  });
+
+  test("returns true when server responds with success", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ data: { submitCrashReport: { success: true } } }),
+    });
 
     const result = await sendCrashReport(makeCrashReport(), "tailor-sdk/1.0.0");
 
     expect(result).toBe(true);
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      expect.stringContaining("example.com"),
-      expect.objectContaining({
-        method: "POST",
-        headers: expect.objectContaining({
-          "Content-Type": "application/json",
-          "User-Agent": "tailor-sdk/1.0.0",
-        }),
-      }),
-    );
   });
 
-  test("returns false on non-ok response", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500 });
+  test("returns false when response contains GraphQL errors", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          errors: [{ message: "permission denied" }],
+          data: { submitCrashReport: null },
+        }),
+    });
+
+    const result = await sendCrashReport(makeCrashReport(), "tailor-sdk/1.0.0");
+
+    expect(result).toBe(false);
+  });
+
+  test("returns false on non-ok HTTP response", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: () => Promise.resolve({}),
+    });
 
     const result = await sendCrashReport(makeCrashReport(), "tailor-sdk/1.0.0");
 
@@ -72,41 +117,37 @@ describe("sendCrashReport", () => {
     expect(result).toBe(false);
   });
 
-  test("sends JSON body with crash report data", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true });
-    const report = makeCrashReport();
+  test("uses TAILOR_CRASH_REPORT_ENDPOINT env var", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ data: { submitCrashReport: { success: true } } }),
+    });
 
-    await sendCrashReport(report, "tailor-sdk/1.0.0");
-
-    const call = vi.mocked(globalThis.fetch).mock.calls[0];
-    const body = JSON.parse(call[1]!.body as string) as CrashReport;
-    expect(body.id).toBe(report.id);
-    expect(body.errorName).toBe(report.errorName);
-  });
-
-  test("uses TAILOR_CRASH_REPORT_ENDPOINT env var at call time", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true });
-
-    process.env.TAILOR_CRASH_REPORT_ENDPOINT = "https://custom.example.com/crash";
+    process.env.TAILOR_CRASH_REPORT_ENDPOINT = "https://custom.example.com/query";
     await sendCrashReport(makeCrashReport(), "tailor-sdk/1.0.0");
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      "https://custom.example.com/crash",
+      "https://custom.example.com/query",
       expect.objectContaining({ method: "POST" }),
     );
   });
 
-  test("sends all CrashReport fields in the payload", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true });
-    const report = makeCrashReport();
+  test("sends Content-Type application/json and User-Agent headers", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ data: { submitCrashReport: { success: true } } }),
+    });
 
-    await sendCrashReport(report, "tailor-sdk/1.0.0");
+    await sendCrashReport(makeCrashReport(), "tailor-sdk/1.0.0");
 
-    const call = vi.mocked(globalThis.fetch).mock.calls[0];
-    const body = JSON.parse(call[1]!.body as string);
-    expect(body).toHaveProperty("errorType", "handledError");
-    expect(body).toHaveProperty("errorMessage");
-    expect(body).toHaveProperty("stackTrace");
-    expect(body).toHaveProperty("argv");
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "Content-Type": "application/json",
+          "User-Agent": "tailor-sdk/1.0.0",
+        }),
+      }),
+    );
   });
 });

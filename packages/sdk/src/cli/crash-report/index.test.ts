@@ -60,7 +60,10 @@ describe("reportCrash", () => {
   });
 
   test("sends full crash report when remoteEnabled", async () => {
-    const mockFetch = vi.fn().mockResolvedValue({ ok: true });
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ data: { submitCrashReport: { success: true } } }),
+    });
     globalThis.fetch = mockFetch;
 
     vi.doMock("./config", () => ({
@@ -75,17 +78,20 @@ describe("reportCrash", () => {
     await reportCrash(new Error("send me"), "handledError");
 
     expect(mockFetch).toHaveBeenCalledWith(
-      expect.stringContaining("example.com"),
+      expect.stringContaining("erp.dev/query"),
       expect.objectContaining({ method: "POST" }),
     );
 
     const call = mockFetch.mock.calls[0];
     const body = JSON.parse(call[1].body as string);
-    expect(body).toHaveProperty("id");
-    expect(body).toHaveProperty("errorName");
-    expect(body).toHaveProperty("errorType", "handledError");
-    expect(body).toHaveProperty("errorMessage");
-    expect(body).toHaveProperty("stackTrace");
+    expect(body).toHaveProperty("query");
+    expect(body.query).toContain("submitCrashReport");
+    const { variables } = body;
+    expect(variables).toHaveProperty("id");
+    expect(variables).toHaveProperty("errorName");
+    expect(variables).toHaveProperty("errorType", "handledError");
+    expect(variables).toHaveProperty("errorMessage");
+    expect(variables).toHaveProperty("stackTrace");
   });
 
   test("never throws even if writing fails", async () => {
