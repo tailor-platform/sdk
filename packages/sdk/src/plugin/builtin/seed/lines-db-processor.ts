@@ -179,8 +179,8 @@ export function generateLinesDbSchemaFile(metadata: LinesDbMetadata, importPath:
 
   return ml /* ts */ `
     import { t } from "@tailor-platform/sdk";
+    import { defineSchema } from "@tailor-platform/sdk/seed";
     import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/test";
-    import { defineSchema } from "@toiroakr/lines-db";
     import { ${exportName} } from "${importPath}";
 
     ${schemaTypeCode}
@@ -239,8 +239,8 @@ export function generateLinesDbSchemaFileWithPluginAPI(
     import { join } from "node:path";
     import { t } from "@tailor-platform/sdk";
     import { getGeneratedType } from "@tailor-platform/sdk/plugin";
+    import { defineSchema } from "@tailor-platform/sdk/seed";
     import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/test";
-    import { defineSchema } from "@toiroakr/lines-db";
     import { ${pluginSource.originalExportName} } from "${originalImportPath}";
 
     const configPath = join(import.meta.dirname, "${configImportPath}");
@@ -269,8 +269,8 @@ export function generateLinesDbSchemaFileWithPluginAPI(
     import { join } from "node:path";
     import { t } from "@tailor-platform/sdk";
     import { getGeneratedType } from "@tailor-platform/sdk/plugin";
+    import { defineSchema } from "@tailor-platform/sdk/seed";
     import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/test";
-    import { defineSchema } from "@toiroakr/lines-db";
 
     const configPath = join(import.meta.dirname, "${configImportPath}");
     const ${exportName} = await getGeneratedType(configPath, "${pluginSource.pluginId}", null, "${pluginSource.generatedTypeKind}");

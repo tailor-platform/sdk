@@ -126,8 +126,8 @@ export function generateIdpTruncateScriptCode(idpNamespace: string): string {
 export function generateIdpUserSchemaFile(usernameField: string, userTypeName: string): string {
   return ml /* ts */ `
     import { t } from "@tailor-platform/sdk";
+    import { defineSchema } from "@tailor-platform/sdk/seed";
     import { createStandardSchema } from "@tailor-platform/sdk/test";
-    import { defineSchema } from "@toiroakr/lines-db";
 
     const schemaType = t.object({
       name: t.string(),

@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, isAbsolute } from "node:path";
 import { parseArgs, styleText } from "node:util";
 import { createInterface } from "node:readline";
 import {
@@ -12,6 +12,58 @@ import {
   loadAccessToken,
   loadWorkspaceId,
 } from "@tailor-platform/sdk/cli";
+
+// Handle "validate" subcommand before parseArgs
+const subcommand = process.argv[2];
+if (subcommand === "validate") {
+  const { validateSeedData } = await import("@tailor-platform/sdk/seed");
+  const validateArgs = parseArgs({
+    args: process.argv.slice(3),
+    options: {
+      verbose: { type: "boolean", short: "v", default: false },
+      help: { type: "boolean", short: "h", default: false },
+    },
+    allowPositionals: true,
+  });
+
+  if (validateArgs.values.help) {
+    console.log(`
+Usage: node exec.mjs validate [options] [path]
+
+Validate JSONL seed data against schema definitions.
+
+Arguments:
+  path                      File or directory to validate (default: ./data)
+
+Options:
+  -v, --verbose             Show verbose error output
+  -h, --help                Show help
+
+Examples:
+  node exec.mjs validate                  # Validate all seed data
+  node exec.mjs validate ./data/User.jsonl # Validate specific file
+  node exec.mjs validate -v               # Verbose error output
+    `);
+    process.exit(0);
+  }
+
+  const configDir = import.meta.dirname;
+  const targetPath = validateArgs.positionals[0] || join(configDir, "data");
+  const resolvedPath = isAbsolute(targetPath) ? targetPath : join(process.cwd(), targetPath);
+
+  try {
+    const result = await validateSeedData({ path: resolvedPath, verbose: validateArgs.values.verbose });
+    if (result.output) console.log(result.output);
+    if (!result.valid) {
+      console.error(result.error);
+      process.exit(1);
+    }
+    process.exit(0);
+  } catch (error) {
+    console.error(styleText("red", `Error: ${error instanceof Error ? error.message : String(error)}`));
+    process.exit(1);
+  }
+}
 
 // Parse command-line arguments
 const { values, positionals } = parseArgs({
@@ -29,7 +81,10 @@ const { values, positionals } = parseArgs({
 
 if (values.help) {
   console.log(`
-Usage: node exec.mjs [options] [types...]
+Usage: node exec.mjs [command] [options] [types...]
+
+Commands:
+  validate [path]           Validate seed data against schema (default: ./data)
 
 Options:
   -m, --machine-user <name> Machine user name for authentication (required if not configured)
@@ -49,6 +104,8 @@ Examples:
   node exec.mjs --truncate --yes                    # Truncate all tables without confirmation, then seed all
   node exec.mjs --truncate --namespace <namespace>  # Truncate tailordb, then seed tailordb
   node exec.mjs --truncate User Order               # Truncate User and Order, then seed them
+  node exec.mjs validate                            # Validate all seed data
+  node exec.mjs validate ./data/User.jsonl          # Validate specific file
   `);
   process.exit(0);
 }
