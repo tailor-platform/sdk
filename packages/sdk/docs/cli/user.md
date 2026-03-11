@@ -24,6 +24,12 @@ tailor-sdk login
 
 <!-- politty:command:login:usage:end -->
 
+<!-- politty:command:login:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:login:global-options-link:end -->
+
 <!-- politty:command:logout:heading:start -->
 
 ## logout
@@ -45,6 +51,12 @@ tailor-sdk logout
 ```
 
 <!-- politty:command:logout:usage:end -->
+
+<!-- politty:command:logout:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:logout:global-options-link:end -->
 
 <!-- politty:command:user:heading:start -->
 
@@ -80,6 +92,12 @@ tailor-sdk user [command]
 | [`user switch`](#user-switch)   | Set current user.              |
 
 <!-- politty:command:user:subcommands:end -->
+
+<!-- politty:command:user:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:user:global-options-link:end -->
 <!-- politty:command:user current:heading:start -->
 
 ### user current
@@ -101,6 +119,12 @@ tailor-sdk user current
 ```
 
 <!-- politty:command:user current:usage:end -->
+
+<!-- politty:command:user current:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:user current:global-options-link:end -->
 <!-- politty:command:user list:heading:start -->
 
 ### user list
@@ -132,6 +156,12 @@ tailor-sdk user list [options]
 | `--json` | `-j`  | Output as JSON | No       | `false` |
 
 <!-- politty:command:user list:options:end -->
+
+<!-- politty:command:user list:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:user list:global-options-link:end -->
 <!-- politty:command:user switch:heading:start -->
 
 ### user switch
@@ -163,6 +193,12 @@ tailor-sdk user switch <user>
 | `user`   | User email  | Yes      |
 
 <!-- politty:command:user switch:arguments:end -->
+
+<!-- politty:command:user switch:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:user switch:global-options-link:end -->
 <!-- politty:command:user pat:heading:start -->
 
 ### user pat
@@ -207,6 +243,12 @@ tailor-sdk user pat [command]
 | [`user pat update`](#user-pat-update) | Update a personal access token (delete and recreate). |
 
 <!-- politty:command:user pat:subcommands:end -->
+
+<!-- politty:command:user pat:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:user pat:global-options-link:end -->
 <!-- politty:command:user pat list:heading:start -->
 
 #### user pat list
@@ -238,6 +280,12 @@ tailor-sdk user pat list [options]
 | `--json` | `-j`  | Output as JSON | No       | `false` |
 
 <!-- politty:command:user pat list:options:end -->
+
+<!-- politty:command:user pat list:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:user pat list:global-options-link:end -->
 <!-- politty:command:user pat create:heading:start -->
 
 #### user pat create
@@ -280,6 +328,12 @@ tailor-sdk user pat create [options] <name>
 | `--write` | `-W`  | Grant write permission (default: read-only) | No       | `false` |
 
 <!-- politty:command:user pat create:options:end -->
+
+<!-- politty:command:user pat create:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:user pat create:global-options-link:end -->
 <!-- politty:command:user pat delete:heading:start -->
 
 #### user pat delete
@@ -311,6 +365,12 @@ tailor-sdk user pat delete <name>
 | `name`   | Token name  | Yes      |
 
 <!-- politty:command:user pat delete:arguments:end -->
+
+<!-- politty:command:user pat delete:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:user pat delete:global-options-link:end -->
 <!-- politty:command:user pat update:heading:start -->
 
 #### user pat update
@@ -353,6 +413,12 @@ tailor-sdk user pat update [options] <name>
 | `--write` | `-W`  | Grant write permission (if not specified, keeps read-only) | No       | `false` |
 
 <!-- politty:command:user pat update:options:end -->
+
+<!-- politty:command:user pat update:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:user pat update:global-options-link:end -->
 
 When no subcommand is provided, defaults to `list`.
 

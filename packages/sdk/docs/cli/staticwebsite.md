@@ -35,6 +35,12 @@ tailor-sdk staticwebsite [command]
 | [`staticwebsite list`](#staticwebsite-list)     | List all static websites in a workspace.              |
 
 <!-- politty:command:staticwebsite:subcommands:end -->
+
+<!-- politty:command:staticwebsite:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:staticwebsite:global-options-link:end -->
 <!-- politty:command:staticwebsite deploy:heading:start -->
 
 ### staticwebsite deploy
@@ -70,6 +76,12 @@ tailor-sdk staticwebsite deploy [options]
 | `--dir <DIR>`                   | `-d`  | Path to the static website files | Yes      | -       |
 
 <!-- politty:command:staticwebsite deploy:options:end -->
+
+<!-- politty:command:staticwebsite deploy:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:staticwebsite deploy:global-options-link:end -->
 <!-- politty:command:staticwebsite list:heading:start -->
 
 ### staticwebsite list
@@ -103,6 +115,12 @@ tailor-sdk staticwebsite list [options]
 | `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
 
 <!-- politty:command:staticwebsite list:options:end -->
+
+<!-- politty:command:staticwebsite list:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:staticwebsite list:global-options-link:end -->
 <!-- politty:command:staticwebsite get:heading:start -->
 
 ### staticwebsite get
@@ -146,6 +164,12 @@ tailor-sdk staticwebsite get [options] <name>
 | `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
 
 <!-- politty:command:staticwebsite get:options:end -->
+
+<!-- politty:command:staticwebsite get:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:staticwebsite get:global-options-link:end -->
 
 **Example:**
 

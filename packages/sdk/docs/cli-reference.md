@@ -1,6 +1,6 @@
-# CLI Reference
+# tailor-sdk
 
-The Tailor Platform SDK provides a command-line interface for managing projects and workspaces.
+Tailor Platform SDK - The SDK to work with Tailor Platform
 
 ## Usage
 
@@ -8,20 +8,27 @@ The Tailor Platform SDK provides a command-line interface for managing projects 
 tailor-sdk <command> [options]
 ```
 
+<!-- politty:global-options:start -->
+
+<a id="global-options"></a>
+| Option | Alias | Description | Required | Default |
+|--------|-------|-------------|----------|---------|
+| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | No | - |
+| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | No | - |
+| `--verbose` | - | Enable verbose logging | No | `false` |
+
+<!-- politty:global-options:end -->
+
 ## Common Options
 
 The following options are available for most commands:
 
-| Option                 | Short | Description                                         |
-| ---------------------- | ----- | --------------------------------------------------- |
-| `--env-file`           | `-e`  | Path to environment file (error if not found)       |
-| `--env-file-if-exists` |       | Path to environment file (ignored if not found)     |
-| `--verbose`            |       | Enable verbose logging (show stack traces on error) |
-| `--json`               | `-j`  | Output as JSON (where applicable)                   |
-| `--workspace-id`       | `-w`  | Workspace ID (for deployment commands)              |
-| `--profile`            | `-p`  | Workspace profile                                   |
-| `--config`             | `-c`  | Path to SDK config file                             |
-| `--yes`                | `-y`  | Skip confirmation prompts                           |
+| Option           | Short | Description                            |
+| ---------------- | ----- | -------------------------------------- |
+| `--workspace-id` | `-w`  | Workspace ID (for deployment commands) |
+| `--profile`      | `-p`  | Workspace profile                      |
+| `--config`       | `-c`  | Path to SDK config file                |
+| `--yes`          | `-y`  | Skip confirmation prompts              |
 
 ### Environment File Loading
 

@@ -34,6 +34,12 @@ tailor-sdk machineuser [command]
 | [`machineuser token`](#machineuser-token) | Get an access token for a machine user.    |
 
 <!-- politty:command:machineuser:subcommands:end -->
+
+<!-- politty:command:machineuser:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:machineuser:global-options-link:end -->
 <!-- politty:command:machineuser list:heading:start -->
 
 ### machineuser list
@@ -68,6 +74,12 @@ tailor-sdk machineuser list [options]
 | `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` |
 
 <!-- politty:command:machineuser list:options:end -->
+
+<!-- politty:command:machineuser list:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:machineuser list:global-options-link:end -->
 <!-- politty:command:machineuser token:heading:start -->
 
 ### machineuser token
@@ -112,6 +124,12 @@ tailor-sdk machineuser token [options] <name>
 | `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` |
 
 <!-- politty:command:machineuser token:options:end -->
+
+<!-- politty:command:machineuser token:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:machineuser token:global-options-link:end -->
 <!-- politty:command:oauth2client:heading:start -->
 
 ## oauth2client
@@ -144,6 +162,12 @@ tailor-sdk oauth2client [command]
 | [`oauth2client list`](#oauth2client-list) | List all OAuth2 clients in the application.              |
 
 <!-- politty:command:oauth2client:subcommands:end -->
+
+<!-- politty:command:oauth2client:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:oauth2client:global-options-link:end -->
 <!-- politty:command:oauth2client list:heading:start -->
 
 ### oauth2client list
@@ -178,6 +202,12 @@ tailor-sdk oauth2client list [options]
 | `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` |
 
 <!-- politty:command:oauth2client list:options:end -->
+
+<!-- politty:command:oauth2client list:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:oauth2client list:global-options-link:end -->
 <!-- politty:command:oauth2client get:heading:start -->
 
 ### oauth2client get
@@ -222,6 +252,12 @@ tailor-sdk oauth2client get [options] <name>
 | `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` |
 
 <!-- politty:command:oauth2client get:options:end -->
+
+<!-- politty:command:oauth2client get:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:oauth2client get:global-options-link:end -->
 
 **Output:**
 
