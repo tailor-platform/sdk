@@ -53,6 +53,14 @@ describe("brand", () => {
       expect(isSdkBranded(obj)).toBe(false);
     });
 
+    test("returns true for legacy boolean brand with any kind filter", () => {
+      const obj = { name: "test" };
+      Object.defineProperty(obj, SDK_BRAND, { value: true, enumerable: false });
+
+      expect(isSdkBranded(obj, "executor")).toBe(true);
+      expect(isSdkBranded(obj, "tailordb-type")).toBe(true);
+    });
+
     test("returns false for null/undefined/primitives", () => {
       expect(isSdkBranded(null)).toBe(false);
       expect(isSdkBranded(undefined)).toBe(false);
