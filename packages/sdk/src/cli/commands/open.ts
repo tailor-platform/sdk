@@ -1,6 +1,6 @@
 import open from "open";
 import { z } from "zod";
-import { deploymentArgs, setupCommonArgs } from "@/cli/shared/args";
+import { deploymentArgs } from "@/cli/shared/args";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadWorkspaceId } from "@/cli/shared/context";
@@ -17,7 +17,6 @@ export const openCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    setupCommonArgs(args);
     const workspaceId = loadWorkspaceId({
       workspaceId: args["workspace-id"],
       profile: args.profile,

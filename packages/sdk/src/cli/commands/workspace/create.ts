@@ -1,6 +1,6 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { jsonArgs, setupCommonArgs } from "@/cli/shared/args";
+import { jsonArgs } from "@/cli/shared/args";
 import { initOperatorClient, type OperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import {
@@ -114,7 +114,6 @@ export const createCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    setupCommonArgs(args);
     // Execute workspace create logic
     const workspace = await createWorkspace({
       name: args.name,

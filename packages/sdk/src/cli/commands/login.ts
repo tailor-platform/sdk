@@ -3,7 +3,6 @@ import * as http from "node:http";
 import { generateCodeVerifier } from "@badgateway/oauth2-client";
 import open from "open";
 import { z } from "zod";
-import { setupCommonArgs } from "@/cli/shared/args";
 import { fetchUserInfo, initOAuth2Client } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
@@ -104,8 +103,7 @@ export const loginCommand = defineAppCommand({
   name: "login",
   description: "Login to Tailor Platform.",
   args: z.object({}).strict(),
-  run: async (args) => {
-    setupCommonArgs(args);
+  run: async () => {
     await startAuthServer();
     logger.success("Successfully logged in to Tailor Platform.");
   },

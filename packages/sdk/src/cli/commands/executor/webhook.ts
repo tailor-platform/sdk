@@ -1,7 +1,7 @@
 import { ExecutorTriggerType } from "@tailor-proto/tailor/v1/executor_resource_pb";
 import { defineCommand, runCommand } from "politty";
 import { z } from "zod";
-import { jsonArgs, workspaceArgs, setupCommonArgs } from "@/cli/shared/args";
+import { jsonArgs, workspaceArgs } from "@/cli/shared/args";
 import { fetchAll, initOperatorClient, platformBaseUrl } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
@@ -77,7 +77,6 @@ const listWebhookCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    setupCommonArgs(args);
     const executors = await listWebhookExecutors({
       workspaceId: args["workspace-id"],
       profile: args.profile,

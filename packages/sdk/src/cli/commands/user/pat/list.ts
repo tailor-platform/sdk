@@ -1,6 +1,6 @@
 import ml from "multiline-ts";
 import { z } from "zod";
-import { jsonArgs, setupCommonArgs } from "@/cli/shared/args";
+import { jsonArgs } from "@/cli/shared/args";
 import { fetchAll, initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { fetchLatestToken, readPlatformConfig } from "@/cli/shared/context";
@@ -16,7 +16,6 @@ export const listCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    setupCommonArgs(args);
     const config = readPlatformConfig();
 
     if (!config.current_user) {

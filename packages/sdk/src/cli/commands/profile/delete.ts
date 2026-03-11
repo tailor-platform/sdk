@@ -1,6 +1,5 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { setupCommonArgs } from "@/cli/shared/args";
 import { defineAppCommand } from "@/cli/shared/command";
 import { readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
@@ -17,7 +16,6 @@ export const deleteCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    setupCommonArgs(args);
     const config = readPlatformConfig();
 
     // Check if profile exists

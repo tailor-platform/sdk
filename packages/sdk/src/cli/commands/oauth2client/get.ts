@@ -1,7 +1,7 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { arg } from "politty";
 import { z } from "zod";
-import { deploymentArgs, jsonArgs, setupCommonArgs } from "@/cli/shared/args";
+import { deploymentArgs, jsonArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
@@ -73,7 +73,6 @@ export const getCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    setupCommonArgs(args);
     const credentials = await getOAuth2Client({
       name: args.name,
       workspaceId: args["workspace-id"],

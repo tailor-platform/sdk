@@ -1,6 +1,6 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { deploymentArgs, jsonArgs, setupCommonArgs } from "@/cli/shared/args";
+import { deploymentArgs, jsonArgs } from "@/cli/shared/args";
 import { defineAppCommand } from "@/cli/shared/command";
 import { logger } from "@/cli/shared/logger";
 import { deployStaticWebsite, logSkippedFiles } from "../../staticwebsite/deploy";
@@ -22,7 +22,6 @@ export const erdDeployCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    setupCommonArgs(args);
     const { client, workspaceId, config } = await initErdContext(args);
     const buildResults = await prepareErdBuilds({
       client,

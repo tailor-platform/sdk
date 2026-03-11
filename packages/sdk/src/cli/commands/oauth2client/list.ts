@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { deploymentArgs, jsonArgs, setupCommonArgs } from "@/cli/shared/args";
+import { deploymentArgs, jsonArgs } from "@/cli/shared/args";
 import { fetchAll, initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
@@ -63,7 +63,6 @@ export const listCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    setupCommonArgs(args);
     const oauth2Clients = await listOAuth2Clients({
       workspaceId: args["workspace-id"],
       profile: args.profile,

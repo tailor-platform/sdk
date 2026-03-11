@@ -5,7 +5,7 @@ import pLimit from "p-limit";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
-import { jsonArgs, workspaceArgs, setupCommonArgs } from "@/cli/shared/args";
+import { jsonArgs, workspaceArgs } from "@/cli/shared/args";
 import { initOperatorClient, type OperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
@@ -244,7 +244,6 @@ export const deployCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    setupCommonArgs(args);
     logger.info(`Deploying static website "${args.name}" from directory: ${args.dir}`);
     const accessToken = await loadAccessToken({
       useProfile: true,

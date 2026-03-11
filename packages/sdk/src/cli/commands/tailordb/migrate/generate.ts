@@ -11,7 +11,7 @@ import * as fsPromises from "node:fs/promises";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
-import { configArg, confirmationArgs, setupCommonArgs } from "@/cli/shared/args";
+import { configArg, confirmationArgs } from "@/cli/shared/args";
 import { logBetaWarning } from "@/cli/shared/beta";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
@@ -347,7 +347,6 @@ export const generateCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    setupCommonArgs(args);
     await generate({
       configPath: args.config,
       name: args.name,

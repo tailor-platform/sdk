@@ -1,6 +1,6 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { z } from "zod";
-import { deploymentArgs, jsonArgs, setupCommonArgs } from "@/cli/shared/args";
+import { deploymentArgs, jsonArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
@@ -96,7 +96,6 @@ export const showCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    setupCommonArgs(args);
     // Execute show logic
     const appInfo = await show({
       workspaceId: args["workspace-id"],

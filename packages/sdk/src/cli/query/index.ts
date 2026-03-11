@@ -12,7 +12,7 @@ import { parse as parseSql, toSql } from "pgsql-ast-parser";
 import { arg } from "politty";
 import { z } from "zod";
 import { bundleQueryScript } from "../bundler/query/query-bundler";
-import { deploymentArgs, jsonArgs, setupCommonArgs } from "../shared/args";
+import { deploymentArgs, jsonArgs } from "../shared/args";
 import { fetchMachineUserToken, initOperatorClient } from "../shared/client";
 import { defineAppCommand } from "../shared/command";
 import { extractAllNamespaces } from "../shared/config";
@@ -801,7 +801,6 @@ export const queryCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    setupCommonArgs(args);
     const mode = await resolveQueryCommandInput({
       query: args.query,
       file: args.file,

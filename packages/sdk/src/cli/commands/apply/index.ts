@@ -1,7 +1,7 @@
 import { arg } from "politty";
 import { z } from "zod";
 import { apply } from "@/cli/commands/apply/apply";
-import { confirmationArgs, deploymentArgs, setupCommonArgs } from "@/cli/shared/args";
+import { confirmationArgs, deploymentArgs } from "@/cli/shared/args";
 import { defineAppCommand } from "@/cli/shared/command";
 
 export const applyCommand = defineAppCommand({
@@ -27,7 +27,6 @@ export const applyCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    setupCommonArgs(args);
     const { initTelemetry } = await import("@/cli/telemetry");
     await initTelemetry();
     await apply({

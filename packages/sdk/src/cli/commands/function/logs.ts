@@ -2,7 +2,7 @@ import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { FunctionExecution_Type } from "@tailor-proto/tailor/v1/function_resource_pb";
 import { arg } from "politty";
 import { z } from "zod";
-import { jsonArgs, workspaceArgs, setupCommonArgs } from "@/cli/shared/args";
+import { jsonArgs, workspaceArgs } from "@/cli/shared/args";
 import { fetchAll, initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
@@ -130,7 +130,6 @@ export const logsCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    setupCommonArgs(args);
     const accessToken = await loadAccessToken({
       useProfile: true,
       profile: args.profile,

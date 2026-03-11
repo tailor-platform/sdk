@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import { arg } from "politty";
 import { z } from "zod";
-import { deploymentArgs, setupCommonArgs } from "@/cli/shared/args";
+import { deploymentArgs } from "@/cli/shared/args";
 import { defineAppCommand } from "@/cli/shared/command";
 import { logger } from "@/cli/shared/logger";
 import { resolveCliBinPath } from "@/cli/shared/resolve-cli-bin";
@@ -77,7 +77,6 @@ export const erdServeCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    setupCommonArgs(args);
     const { client, workspaceId, config } = await initErdContext(args);
 
     const results = await prepareErdBuilds({

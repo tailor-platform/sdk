@@ -3,7 +3,7 @@ import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
 import { trnPrefix } from "@/cli/commands/apply/label";
-import { deploymentArgs, setupCommonArgs } from "@/cli/shared/args";
+import { deploymentArgs } from "@/cli/shared/args";
 import { logBetaWarning } from "@/cli/shared/beta";
 import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
@@ -135,7 +135,6 @@ export const statusCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    setupCommonArgs(args);
     await status({
       configPath: args.config,
       namespace: args.namespace,

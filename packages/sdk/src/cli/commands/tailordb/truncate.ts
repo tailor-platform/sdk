@@ -1,6 +1,6 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { confirmationArgs, deploymentArgs, setupCommonArgs } from "@/cli/shared/args";
+import { confirmationArgs, deploymentArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { extractAllNamespaces } from "@/cli/shared/config";
@@ -227,7 +227,6 @@ export const truncateCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    setupCommonArgs(args);
     const types = args.types && args.types.length > 0 ? args.types : undefined;
     await $truncate({
       workspaceId: args["workspace-id"],

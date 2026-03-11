@@ -1,6 +1,6 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { confirmationArgs, workspaceArgs, setupCommonArgs } from "@/cli/shared/args";
+import { confirmationArgs, workspaceArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
@@ -61,7 +61,6 @@ export const removeCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    setupCommonArgs(args);
     if (!args.yes) {
       const confirmation = await logger.prompt(
         `Are you sure you want to remove user "${args.email}" from the workspace? (yes/no):`,

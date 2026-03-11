@@ -1,7 +1,6 @@
 import ml from "multiline-ts";
 import { arg } from "politty";
 import { z } from "zod";
-import { setupCommonArgs } from "@/cli/shared/args";
 import { defineAppCommand } from "@/cli/shared/command";
 import { readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
@@ -18,7 +17,6 @@ export const switchCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    setupCommonArgs(args);
     const config = readPlatformConfig();
 
     // Check if user exists

@@ -1,7 +1,7 @@
 import { toJson } from "@bufbuild/protobuf";
 import { timestampDate, ValueSchema } from "@bufbuild/protobuf/wkt";
 import { z } from "zod";
-import { deploymentArgs, jsonArgs, setupCommonArgs } from "@/cli/shared/args";
+import { deploymentArgs, jsonArgs } from "@/cli/shared/args";
 import { fetchAll, initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
@@ -95,7 +95,6 @@ export const listCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    setupCommonArgs(args);
     // Execute machineuser list logic
     const machineUsers = await listMachineUsers({
       workspaceId: args["workspace-id"],

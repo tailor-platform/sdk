@@ -15,7 +15,7 @@ import { applyStaticWebsite, planStaticWebsite } from "@/cli/commands/apply/stat
 import { applyTailorDB, planTailorDB } from "@/cli/commands/apply/tailordb";
 import { applyWorkflow, planWorkflow } from "@/cli/commands/apply/workflow";
 import { type Application, defineApplication } from "@/cli/services/application";
-import { confirmationArgs, deploymentArgs, setupCommonArgs } from "@/cli/shared/args";
+import { confirmationArgs, deploymentArgs } from "@/cli/shared/args";
 import { initOperatorClient, type OperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig, type LoadedConfig } from "@/cli/shared/config-loader";
@@ -132,7 +132,6 @@ export const removeCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    setupCommonArgs(args);
     const { client, workspaceId, application, config } = await loadOptions({
       workspaceId: args["workspace-id"],
       profile: args.profile,

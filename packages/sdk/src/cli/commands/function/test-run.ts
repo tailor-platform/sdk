@@ -11,7 +11,7 @@ import { AuthInvokerSchema } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
-import { jsonArgs, workspaceArgs, setupCommonArgs } from "@/cli/shared/args";
+import { jsonArgs, workspaceArgs } from "@/cli/shared/args";
 import { initOperatorClient, type OperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
@@ -69,7 +69,6 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
     },
   ],
   run: async (args) => {
-    setupCommonArgs(args);
     // 1. Resolve and validate file path
     const filePath = path.resolve(args.file);
     if (!fs.existsSync(filePath)) {

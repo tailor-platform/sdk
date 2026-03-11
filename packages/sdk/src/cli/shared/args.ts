@@ -123,9 +123,18 @@ export const commonArgs = {
   "env-file-if-exists": arg(z.string().optional(), {
     description: "Path to the environment file (ignored if not found)",
     completion: { type: "file", matcher: [".env.*", ".env"] },
+    effect: (_value, { args }) => {
+      loadEnvFiles(
+        args["env-file"] as string | undefined,
+        args["env-file-if-exists"] as string | undefined,
+      );
+    },
   }),
   verbose: arg(z.boolean().default(false), {
     description: "Enable verbose logging",
+    effect: (value) => {
+      verboseMode = value;
+    },
   }),
 } satisfies ArgsShape;
 
@@ -181,6 +190,9 @@ export const jsonArgs = {
   json: arg(z.boolean().default(false), {
     alias: "j",
     description: "Output as JSON",
+    effect: (value) => {
+      logger.jsonMode = value;
+    },
   }),
 } satisfies ArgsShape;
 
@@ -196,18 +208,4 @@ let verboseMode = false;
  */
 export function isVerbose(): boolean {
   return verboseMode;
-}
-
-/**
- * Initialize common args state for a command.
- * Sets up JSON mode (if applicable) and loads environment files.
- * Should be called at the start of each command's `run` function.
- * @param args - Parsed command args (includes global common args)
- */
-export function setupCommonArgs(args: CommonArgsType & Record<string, unknown>): void {
-  verboseMode = args.verbose;
-  if ("json" in args && typeof args.json === "boolean") {
-    logger.jsonMode = args.json;
-  }
-  loadEnvFiles(args["env-file"], args["env-file-if-exists"]);
 }

@@ -1,7 +1,7 @@
 import ml from "multiline-ts";
 import { arg } from "politty";
 import { z } from "zod";
-import { jsonArgs, setupCommonArgs } from "@/cli/shared/args";
+import { jsonArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { fetchLatestToken, readPlatformConfig } from "@/cli/shared/context";
@@ -24,7 +24,6 @@ export const createCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    setupCommonArgs(args);
     const config = readPlatformConfig();
 
     if (!config.current_user) {

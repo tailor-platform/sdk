@@ -1,6 +1,6 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { workspaceArgs, setupCommonArgs } from "@/cli/shared/args";
+import { workspaceArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
@@ -68,7 +68,6 @@ export const inviteCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    setupCommonArgs(args);
     await inviteUser({
       workspaceId: args["workspace-id"],
       profile: args.profile,

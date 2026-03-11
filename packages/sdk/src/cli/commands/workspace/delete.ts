@@ -1,6 +1,6 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { confirmationArgs, setupCommonArgs } from "@/cli/shared/args";
+import { confirmationArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
@@ -56,7 +56,6 @@ export const deleteCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    setupCommonArgs(args);
     // Load and validate options
     const { client, workspaceId } = await loadOptions({
       workspaceId: args["workspace-id"],

@@ -21,7 +21,6 @@ import {
   parseDuration,
   positiveIntArg,
   workspaceArgs,
-  setupCommonArgs,
 } from "@/cli/shared/args";
 import { fetchAll, initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
@@ -568,7 +567,6 @@ export const jobsCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    setupCommonArgs(args);
     if (args.jobId) {
       if (args.wait) {
         const result = await watchExecutorJob({

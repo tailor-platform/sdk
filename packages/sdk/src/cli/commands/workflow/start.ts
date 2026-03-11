@@ -8,7 +8,7 @@ import {
 import ora from "ora";
 import { arg } from "politty";
 import { z } from "zod";
-import { deploymentArgs, jsonArgs, parseDuration, setupCommonArgs } from "@/cli/shared/args";
+import { deploymentArgs, jsonArgs, parseDuration } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
@@ -363,7 +363,6 @@ export const startCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    setupCommonArgs(args);
     const { executionId, wait } = await startWorkflowByName({
       name: args.name,
       machineUser: args.machineuser,

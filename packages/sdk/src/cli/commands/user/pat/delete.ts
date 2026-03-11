@@ -1,7 +1,6 @@
 import ml from "multiline-ts";
 import { arg } from "politty";
 import { z } from "zod";
-import { setupCommonArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { fetchLatestToken, readPlatformConfig } from "@/cli/shared/context";
@@ -19,7 +18,6 @@ export const deleteCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    setupCommonArgs(args);
     const config = readPlatformConfig();
 
     if (!config.current_user) {

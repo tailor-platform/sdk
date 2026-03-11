@@ -1,6 +1,6 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { jsonArgs, positiveIntArg, setupCommonArgs } from "@/cli/shared/args";
+import { jsonArgs, positiveIntArg } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken } from "@/cli/shared/context";
@@ -75,7 +75,6 @@ export const listCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    setupCommonArgs(args);
     const workspaces = await listWorkspaces({ limit: args.limit });
     logger.out(workspaces, { display: { updatedAt: null } });
   },

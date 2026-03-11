@@ -1,7 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { arg } from "politty";
 import { z } from "zod";
-import { setupCommonArgs } from "@/cli/shared/args";
 import { defineAppCommand } from "@/cli/shared/command";
 import { logger } from "@/cli/shared/logger";
 import { readPackageJson } from "@/cli/shared/package-json";
@@ -31,7 +30,6 @@ export const initCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    setupCommonArgs(args);
     const packageJson = await readPackageJson();
     const version =
       packageJson.version && packageJson.version !== "0.0.0" ? packageJson.version : "latest";

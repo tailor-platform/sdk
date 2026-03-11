@@ -9,7 +9,7 @@ import { WorkflowExecution_Status } from "@tailor-proto/tailor/v1/workflow_resou
 import ora from "ora";
 import { arg } from "politty";
 import { z } from "zod";
-import { jsonArgs, parseDuration, workspaceArgs, setupCommonArgs } from "@/cli/shared/args";
+import { jsonArgs, parseDuration, workspaceArgs } from "@/cli/shared/args";
 import { fetchAll, initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
@@ -409,7 +409,6 @@ export const executionsCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    setupCommonArgs(args);
     if (args.executionId) {
       const interval = parseDuration(args.interval);
       const { execution, wait } = await getWorkflowExecution({

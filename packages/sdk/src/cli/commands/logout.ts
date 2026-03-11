@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { setupCommonArgs } from "@/cli/shared/args";
 import { initOAuth2Client } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
@@ -9,8 +8,7 @@ export const logoutCommand = defineAppCommand({
   name: "logout",
   description: "Logout from Tailor Platform.",
   args: z.object({}).strict(),
-  run: async (args) => {
-    setupCommonArgs(args);
+  run: async () => {
     const pfConfig = readPlatformConfig();
     const tokens = pfConfig.current_user ? pfConfig.users[pfConfig.current_user] : undefined;
     if (!tokens) {

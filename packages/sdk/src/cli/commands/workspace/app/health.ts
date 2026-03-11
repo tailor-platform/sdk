@@ -1,6 +1,6 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { jsonArgs, workspaceArgs, setupCommonArgs } from "@/cli/shared/args";
+import { jsonArgs, workspaceArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
@@ -66,7 +66,6 @@ export const healthCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    setupCommonArgs(args);
     const health = await getAppHealth({
       workspaceId: args["workspace-id"],
       profile: args.profile,

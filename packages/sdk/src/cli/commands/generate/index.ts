@@ -1,7 +1,6 @@
 import { arg } from "politty";
 import { z } from "zod";
 import { generate } from "@/cli/commands/generate/service";
-import { setupCommonArgs } from "@/cli/shared/args";
 import { defineAppCommand } from "@/cli/shared/command";
 
 export const generateCommand = defineAppCommand({
@@ -20,7 +19,6 @@ export const generateCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    setupCommonArgs(args);
     const { initTelemetry } = await import("@/cli/telemetry");
     await initTelemetry();
     await generate({

@@ -1,6 +1,6 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { deploymentArgs, jsonArgs, setupCommonArgs } from "@/cli/shared/args";
+import { deploymentArgs, jsonArgs } from "@/cli/shared/args";
 import { fetchMachineUserToken, initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
@@ -89,7 +89,6 @@ export const tokenCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    setupCommonArgs(args);
     // Execute machineuser token logic
     const token = await getMachineUserToken({
       name: args.name,

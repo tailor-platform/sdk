@@ -1,6 +1,5 @@
 import ml from "multiline-ts";
 import { z } from "zod";
-import { setupCommonArgs } from "@/cli/shared/args";
 import { defineAppCommand } from "@/cli/shared/command";
 import { readPlatformConfig } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
@@ -9,8 +8,7 @@ export const currentCommand = defineAppCommand({
   name: "current",
   description: "Show current user.",
   args: z.object({}).strict(),
-  run: async (args) => {
-    setupCommonArgs(args);
+  run: async () => {
     const config = readPlatformConfig();
 
     // Check if current user is set
