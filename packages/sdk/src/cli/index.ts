@@ -3,6 +3,7 @@
 import { register } from "node:module";
 import { defineCommand, runMain } from "politty";
 import { withCompletionCommand } from "politty/completion";
+import { z } from "zod";
 import { apiCommand } from "./commands/api";
 import { applyCommand } from "./commands/apply";
 import { executorCommand } from "./commands/executor";
@@ -24,6 +25,9 @@ import { userCommand } from "./commands/user";
 import { workflowCommand } from "./commands/workflow";
 import { workspaceCommand } from "./commands/workspace";
 import { queryCommand } from "./query";
+import { commonArgs, isVerbose } from "./shared/args";
+import { isCLIError } from "./shared/errors";
+import { logger } from "./shared/logger";
 import { readPackageJson } from "./shared/package-json";
 
 register("tsx", import.meta.url, { data: {} });
@@ -62,4 +66,26 @@ export const mainCommand = withCompletionCommand(
   }),
 );
 
-runMain(mainCommand, { version: packageJson.version });
+runMain(mainCommand, {
+  version: packageJson.version,
+  globalArgs: z.object(commonArgs),
+  cleanup: async ({ error }) => {
+    if (error) {
+      if (isCLIError(error)) {
+        logger.log(error.format());
+        if (isVerbose() && error.stack) {
+          logger.debug(`\nStack trace:\n${error.stack}`);
+        }
+      } else if (error instanceof Error) {
+        logger.error(error.message);
+        if (isVerbose() && error.stack) {
+          logger.debug(`\nStack trace:\n${error.stack}`);
+        }
+      } else {
+        logger.error(`Unknown error: ${error}`);
+      }
+    }
+    const { shutdownTelemetry } = await import("@/cli/telemetry");
+    await shutdownTelemetry();
+  },
+});

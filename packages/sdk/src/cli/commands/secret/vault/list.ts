@@ -1,8 +1,8 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
-import { defineCommand } from "politty";
 import { z } from "zod";
-import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "@/cli/shared/args";
+import { jsonArgs, workspaceArgs, setupCommonArgs } from "@/cli/shared/args";
 import { fetchAll, initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import type { SecretManagerVault } from "@tailor-proto/tailor/v1/secret_manager_resource_pb";
@@ -54,22 +54,22 @@ async function vaultList(options?: VaultListOptions): Promise<VaultInfo[]> {
   return vaults.map(vaultInfo);
 }
 
-export const listCommand = defineCommand({
+export const listCommand = defineAppCommand({
   name: "list",
   description: "List all Secret Manager vaults in the workspace.",
   args: z
     .object({
-      ...commonArgs,
       ...jsonArgs,
       ...workspaceArgs,
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
+    setupCommonArgs(args);
     const vaults = await vaultList({
       workspaceId: args["workspace-id"],
       profile: args.profile,
     });
 
     logger.out(vaults);
-  }),
+  },
 });

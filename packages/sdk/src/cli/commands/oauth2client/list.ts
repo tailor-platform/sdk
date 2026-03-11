@@ -1,7 +1,7 @@
-import { defineCommand } from "politty";
 import { z } from "zod";
-import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "@/cli/shared/args";
+import { deploymentArgs, jsonArgs, setupCommonArgs } from "@/cli/shared/args";
 import { fetchAll, initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
@@ -53,17 +53,17 @@ export async function listOAuth2Clients(
   return oauth2Clients.map(toOAuth2ClientInfo);
 }
 
-export const listCommand = defineCommand({
+export const listCommand = defineAppCommand({
   name: "list",
   description: "List all OAuth2 clients in the application.",
   args: z
     .object({
-      ...commonArgs,
       ...jsonArgs,
       ...deploymentArgs,
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
+    setupCommonArgs(args);
     const oauth2Clients = await listOAuth2Clients({
       workspaceId: args["workspace-id"],
       profile: args.profile,
@@ -71,5 +71,5 @@ export const listCommand = defineCommand({
     });
 
     logger.out(oauth2Clients);
-  }),
+  },
 });

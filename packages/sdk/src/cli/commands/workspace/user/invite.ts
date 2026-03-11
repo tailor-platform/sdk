@@ -1,7 +1,8 @@
-import { arg, defineCommand } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
-import { commonArgs, withCommonArgs, workspaceArgs } from "@/cli/shared/args";
+import { workspaceArgs, setupCommonArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { stringToRole, validRoles } from "./transform";
@@ -51,12 +52,11 @@ export async function inviteUser(options: InviteUserOptions): Promise<void> {
   });
 }
 
-export const inviteCommand = defineCommand({
+export const inviteCommand = defineAppCommand({
   name: "invite",
   description: "Invite a user to a workspace",
   args: z
     .object({
-      ...commonArgs,
       ...workspaceArgs,
       email: arg(z.email(), {
         description: "Email address of the user to invite",
@@ -67,7 +67,8 @@ export const inviteCommand = defineCommand({
       }),
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
+    setupCommonArgs(args);
     await inviteUser({
       workspaceId: args["workspace-id"],
       profile: args.profile,
@@ -76,5 +77,5 @@ export const inviteCommand = defineCommand({
     });
 
     logger.success(`User "${args.email}" invited successfully with role "${args.role}".`);
-  }),
+  },
 });

@@ -9,10 +9,11 @@
 import * as fs from "node:fs";
 import * as fsPromises from "node:fs/promises";
 import * as path from "pathe";
-import { defineCommand, arg } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
-import { commonArgs, configArg, confirmationArgs, withCommonArgs } from "@/cli/shared/args";
+import { configArg, confirmationArgs, setupCommonArgs } from "@/cli/shared/args";
 import { logBetaWarning } from "@/cli/shared/beta";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { getConfiguredEditorCommand, openInConfiguredEditor } from "@/cli/shared/editor";
 import { logger, styles } from "@/cli/shared/logger";
@@ -328,13 +329,12 @@ async function generateDiffFromSnapshot(
 /**
  * CLI command definition for generate
  */
-export const generateCommand = defineCommand({
+export const generateCommand = defineAppCommand({
   name: "generate",
   description:
     "Generate migration files by detecting schema differences between current local types and the previous migration snapshot.",
   args: z
     .object({
-      ...commonArgs,
       ...confirmationArgs,
       ...configArg,
       name: arg(z.string().optional(), {
@@ -346,12 +346,13 @@ export const generateCommand = defineCommand({
       }),
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
+    setupCommonArgs(args);
     await generate({
       configPath: args.config,
       name: args.name,
       yes: args.yes,
       init: args.init,
     });
-  }),
+  },
 });

@@ -1,7 +1,7 @@
-import { defineCommand } from "politty";
 import { z } from "zod";
-import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "@/cli/shared/args";
+import { jsonArgs, workspaceArgs, setupCommonArgs } from "@/cli/shared/args";
 import { fetchAll, initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { type WorkflowListInfo, toWorkflowListInfo } from "./transform";
@@ -39,17 +39,17 @@ export async function listWorkflows(options?: ListWorkflowsOptions): Promise<Wor
   return workflows.map(toWorkflowListInfo);
 }
 
-export const listCommand = defineCommand({
+export const listCommand = defineAppCommand({
   name: "list",
   description: "List all workflows in the workspace.",
   args: z
     .object({
-      ...commonArgs,
       ...jsonArgs,
       ...workspaceArgs,
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
+    setupCommonArgs(args);
     const workflows = await listWorkflows({
       workspaceId: args["workspace-id"],
       profile: args.profile,
@@ -60,5 +60,5 @@ export const listCommand = defineCommand({
       return;
     }
     logger.out(workflows);
-  }),
+  },
 });

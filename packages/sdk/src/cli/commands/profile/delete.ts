@@ -1,22 +1,23 @@
-import { defineCommand, arg } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
-import { commonArgs, withCommonArgs } from "@/cli/shared/args";
+import { setupCommonArgs } from "@/cli/shared/args";
+import { defineAppCommand } from "@/cli/shared/command";
 import { readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 
-export const deleteCommand = defineCommand({
+export const deleteCommand = defineAppCommand({
   name: "delete",
   description: "Delete a profile.",
   args: z
     .object({
-      ...commonArgs,
       name: arg(z.string(), {
         positional: true,
         description: "Profile name",
       }),
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
+    setupCommonArgs(args);
     const config = readPlatformConfig();
 
     // Check if profile exists
@@ -29,5 +30,5 @@ export const deleteCommand = defineCommand({
     writePlatformConfig(config);
 
     logger.success(`Profile "${args.name}" deleted successfully.`);
-  }),
+  },
 });

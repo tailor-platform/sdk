@@ -1,22 +1,22 @@
 import ml from "multiline-ts";
-import { defineCommand } from "politty";
 import { z } from "zod";
-import { commonArgs, jsonArgs, withCommonArgs } from "@/cli/shared/args";
+import { jsonArgs, setupCommonArgs } from "@/cli/shared/args";
 import { fetchAll, initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { fetchLatestToken, readPlatformConfig } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { transformPersonalAccessToken, type PersonalAccessTokenInfo } from "./transform";
 
-export const listCommand = defineCommand({
+export const listCommand = defineAppCommand({
   name: "list",
   description: "List all personal access tokens.",
   args: z
     .object({
-      ...commonArgs,
       ...jsonArgs,
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
+    setupCommonArgs(args);
     const config = readPlatformConfig();
 
     if (!config.current_user) {
@@ -63,5 +63,5 @@ export const listCommand = defineCommand({
       const paddedName = info.name.padStart(maxNameLength);
       logger.log(`${paddedName}: ${info.scopes.join("/")}`);
     });
-  }),
+  },
 });

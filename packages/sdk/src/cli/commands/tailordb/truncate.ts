@@ -1,7 +1,8 @@
-import { defineCommand, arg } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
-import { commonArgs, confirmationArgs, deploymentArgs, withCommonArgs } from "@/cli/shared/args";
+import { confirmationArgs, deploymentArgs, setupCommonArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { extractAllNamespaces } from "@/cli/shared/config";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
@@ -204,12 +205,11 @@ async function $truncate(options?: InternalTruncateOptions): Promise<void> {
   }
 }
 
-export const truncateCommand = defineCommand({
+export const truncateCommand = defineAppCommand({
   name: "truncate",
   description: "Truncate (delete all records from) TailorDB tables.",
   args: z
     .object({
-      ...commonArgs,
       ...deploymentArgs,
       ...confirmationArgs,
       types: arg(z.string().array().optional(), {
@@ -226,7 +226,8 @@ export const truncateCommand = defineCommand({
       }),
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
+    setupCommonArgs(args);
     const types = args.types && args.types.length > 0 ? args.types : undefined;
     await $truncate({
       workspaceId: args["workspace-id"],
@@ -237,5 +238,5 @@ export const truncateCommand = defineCommand({
       types,
       yes: args.yes,
     });
-  }),
+  },
 });

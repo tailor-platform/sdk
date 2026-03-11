@@ -1,16 +1,16 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { ExecutorTriggerType } from "@tailor-proto/tailor/v1/executor_resource_pb";
-import { defineCommand, arg } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
 import {
-  commonArgs,
   durationArg,
   jsonArgs,
   parseDuration,
-  withCommonArgs,
   workspaceArgs,
+  setupCommonArgs,
 } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger, styles } from "@/cli/shared/logger";
 import { watchExecutorJob } from "./jobs";
@@ -160,7 +160,7 @@ export async function triggerExecutor<E extends ManualTriggerExecutor>(
   });
 }
 
-export const triggerCommand = defineCommand({
+export const triggerCommand = defineAppCommand({
   name: "trigger",
   description: "Trigger an executor manually.",
   notes: `Only executors with \`INCOMING_WEBHOOK\` or \`SCHEDULE\` trigger types can be triggered manually.
@@ -192,7 +192,6 @@ The \`--logs\` option displays logs from the downstream execution when available
   ],
   args: z
     .object({
-      ...commonArgs,
       ...jsonArgs,
       ...workspaceArgs,
       executorName: arg(z.string(), {
@@ -223,7 +222,8 @@ The \`--logs\` option displays logs from the downstream execution when available
       }),
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
+    setupCommonArgs(args);
     // Validate trigger type before processing
     const accessToken = await loadAccessToken({
       useProfile: true,
@@ -359,5 +359,5 @@ The \`--logs\` option displays logs from the downstream execution when available
         logger.out(watchResult);
       }
     }
-  }),
+  },
 });

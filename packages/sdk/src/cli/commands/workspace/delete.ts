@@ -1,7 +1,8 @@
-import { defineCommand, arg } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
-import { commonArgs, confirmationArgs, withCommonArgs } from "@/cli/shared/args";
+import { confirmationArgs, setupCommonArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 
@@ -42,12 +43,11 @@ export async function deleteWorkspace(options: DeleteWorkspaceOptions): Promise<
   });
 }
 
-export const deleteCommand = defineCommand({
+export const deleteCommand = defineAppCommand({
   name: "delete",
   description: "Delete a Tailor Platform workspace.",
   args: z
     .object({
-      ...commonArgs,
       "workspace-id": arg(z.string(), {
         alias: "w",
         description: "Workspace ID",
@@ -55,7 +55,8 @@ export const deleteCommand = defineCommand({
       ...confirmationArgs,
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
+    setupCommonArgs(args);
     // Load and validate options
     const { client, workspaceId } = await loadOptions({
       workspaceId: args["workspace-id"],
@@ -110,5 +111,5 @@ export const deleteCommand = defineCommand({
     } else {
       logger.success(`Workspace "${args["workspace-id"]}" deleted successfully.`);
     }
-  }),
+  },
 });

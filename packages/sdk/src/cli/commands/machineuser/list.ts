@@ -1,9 +1,9 @@
 import { toJson } from "@bufbuild/protobuf";
 import { timestampDate, ValueSchema } from "@bufbuild/protobuf/wkt";
-import { defineCommand } from "politty";
 import { z } from "zod";
-import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "@/cli/shared/args";
+import { deploymentArgs, jsonArgs, setupCommonArgs } from "@/cli/shared/args";
 import { fetchAll, initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
@@ -85,17 +85,17 @@ export async function listMachineUsers(
   return machineUsers.map(machineUserInfo);
 }
 
-export const listCommand = defineCommand({
+export const listCommand = defineAppCommand({
   name: "list",
   description: "List all machine users in the application.",
   args: z
     .object({
-      ...commonArgs,
       ...jsonArgs,
       ...deploymentArgs,
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
+    setupCommonArgs(args);
     // Execute machineuser list logic
     const machineUsers = await listMachineUsers({
       workspaceId: args["workspace-id"],
@@ -105,5 +105,5 @@ export const listCommand = defineCommand({
 
     // Show machine users info
     logger.out(machineUsers, { display: { createdAt: null, updatedAt: null } });
-  }),
+  },
 });

@@ -1,23 +1,23 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { defineCommand } from "politty";
 import { z } from "zod";
-import { commonArgs, withCommonArgs, workspaceArgs } from "@/cli/shared/args";
+import { workspaceArgs, setupCommonArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { secretValueArgs } from "./args";
 
-export const createSecretCommand = defineCommand({
+export const createSecretCommand = defineAppCommand({
   name: "create",
   description: "Create a secret in a vault.",
   args: z
     .object({
-      ...commonArgs,
       ...workspaceArgs,
       ...secretValueArgs,
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
+    setupCommonArgs(args);
     const accessToken = await loadAccessToken({
       useProfile: true,
       profile: args.profile,
@@ -48,5 +48,5 @@ export const createSecretCommand = defineCommand({
     }
 
     logger.success(`Secret: ${args.name} created in vault: ${args["vault-name"]}`);
-  }),
+  },
 });

@@ -1,17 +1,17 @@
-import { defineCommand, arg } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
-import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "@/cli/shared/args";
+import { deploymentArgs, jsonArgs, setupCommonArgs } from "@/cli/shared/args";
+import { defineAppCommand } from "@/cli/shared/command";
 import { logger } from "@/cli/shared/logger";
 import { deployStaticWebsite, logSkippedFiles } from "../../staticwebsite/deploy";
 import { prepareErdBuilds } from "./export";
 import { initErdContext } from "./utils";
 
-export const erdDeployCommand = defineCommand({
+export const erdDeployCommand = defineAppCommand({
   name: "deploy",
   description: "Deploy ERD static website for TailorDB namespace(s).",
   args: z
     .object({
-      ...commonArgs,
       ...deploymentArgs,
       ...jsonArgs,
       namespace: arg(z.string().optional(), {
@@ -21,7 +21,8 @@ export const erdDeployCommand = defineCommand({
       }),
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
+    setupCommonArgs(args);
     const { client, workspaceId, config } = await initErdContext(args);
     const buildResults = await prepareErdBuilds({
       client,
@@ -74,5 +75,5 @@ export const erdDeployCommand = defineCommand({
         logger.out(result.url);
       }
     }
-  }),
+  },
 });

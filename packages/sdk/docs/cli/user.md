@@ -19,7 +19,7 @@ Login to Tailor Platform.
 **Usage**
 
 ```
-tailor-sdk login [options]
+tailor-sdk login
 ```
 
 <!-- politty:command:login:usage:end -->
@@ -41,7 +41,7 @@ Logout from Tailor Platform.
 **Usage**
 
 ```
-tailor-sdk logout [options]
+tailor-sdk logout
 ```
 
 <!-- politty:command:logout:usage:end -->
@@ -97,7 +97,7 @@ Show current user.
 **Usage**
 
 ```
-tailor-sdk user current [options]
+tailor-sdk user current
 ```
 
 <!-- politty:command:user current:usage:end -->
@@ -149,7 +149,7 @@ Set current user.
 **Usage**
 
 ```
-tailor-sdk user switch [options] <user>
+tailor-sdk user switch <user>
 ```
 
 <!-- politty:command:user switch:usage:end -->
@@ -180,7 +180,7 @@ Manage personal access tokens.
 **Usage**
 
 ```
-tailor-sdk user pat [options] [command]
+tailor-sdk user pat [command]
 ```
 
 <!-- politty:command:user pat:usage:end -->
@@ -297,7 +297,7 @@ Delete a personal access token.
 **Usage**
 
 ```
-tailor-sdk user pat delete [options] <name>
+tailor-sdk user pat delete <name>
 ```
 
 <!-- politty:command:user pat delete:usage:end -->

@@ -1,10 +1,11 @@
 import * as path from "pathe";
-import { defineCommand, arg } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
 import { trnPrefix } from "@/cli/commands/apply/label";
-import { commonArgs, confirmationArgs, deploymentArgs, withCommonArgs } from "@/cli/shared/args";
+import { confirmationArgs, deploymentArgs, setupCommonArgs } from "@/cli/shared/args";
 import { logBetaWarning } from "@/cli/shared/beta";
 import { initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger, styles } from "@/cli/shared/logger";
@@ -147,12 +148,11 @@ async function set(options: SetOptions): Promise<void> {
   );
 }
 
-export const setCommand = defineCommand({
+export const setCommand = defineAppCommand({
   name: "set",
   description: "Set migration checkpoint to a specific number.",
   args: z
     .object({
-      ...commonArgs,
       ...deploymentArgs,
       ...confirmationArgs,
       number: arg(z.string(), {
@@ -165,7 +165,8 @@ export const setCommand = defineCommand({
       }),
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
+    setupCommonArgs(args);
     await set({
       configPath: args.config,
       number: args.number,
@@ -174,5 +175,5 @@ export const setCommand = defineCommand({
       workspaceId: args["workspace-id"],
       profile: args.profile,
     });
-  }),
+  },
 });

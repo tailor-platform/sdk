@@ -1,7 +1,8 @@
-import { arg, defineCommand } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
-import { commonArgs, withCommonArgs, workspaceArgs } from "@/cli/shared/args";
+import { setupCommonArgs, workspaceArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { stringToRole, validRoles } from "./transform";
@@ -51,12 +52,11 @@ export async function updateUser(options: UpdateUserOptions): Promise<void> {
   });
 }
 
-export const updateCommand = defineCommand({
+export const updateCommand = defineAppCommand({
   name: "update",
   description: "Update a user's role in a workspace",
   args: z
     .object({
-      ...commonArgs,
       ...workspaceArgs,
       email: arg(z.email(), {
         description: "Email address of the user to update",
@@ -67,7 +67,8 @@ export const updateCommand = defineCommand({
       }),
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
+    setupCommonArgs(args);
     await updateUser({
       workspaceId: args["workspace-id"],
       profile: args.profile,
@@ -76,5 +77,5 @@ export const updateCommand = defineCommand({
     });
 
     logger.success(`User "${args.email}" updated to role "${args.role}".`);
-  }),
+  },
 });

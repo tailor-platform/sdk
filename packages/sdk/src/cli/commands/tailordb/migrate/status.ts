@@ -1,11 +1,12 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { defineCommand, arg } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
 import { trnPrefix } from "@/cli/commands/apply/label";
-import { commonArgs, deploymentArgs, withCommonArgs } from "@/cli/shared/args";
+import { deploymentArgs, setupCommonArgs } from "@/cli/shared/args";
 import { logBetaWarning } from "@/cli/shared/beta";
 import { initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger, styles } from "@/cli/shared/logger";
@@ -120,13 +121,12 @@ async function status(options: StatusOptions): Promise<void> {
   logger.newline();
 }
 
-export const statusCommand = defineCommand({
+export const statusCommand = defineAppCommand({
   name: "status",
   description:
     "Show the current migration status for TailorDB namespaces, including applied and pending migrations.",
   args: z
     .object({
-      ...commonArgs,
       ...deploymentArgs,
       namespace: arg(z.string().optional(), {
         alias: "n",
@@ -134,12 +134,13 @@ export const statusCommand = defineCommand({
       }),
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
+    setupCommonArgs(args);
     await status({
       configPath: args.config,
       namespace: args.namespace,
       workspaceId: args["workspace-id"],
       profile: args.profile,
     });
-  }),
+  },
 });

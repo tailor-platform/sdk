@@ -1,7 +1,7 @@
-import { defineCommand } from "politty";
 import { z } from "zod";
-import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "@/cli/shared/args";
+import { jsonArgs, workspaceArgs, setupCommonArgs } from "@/cli/shared/args";
 import { fetchAll, initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger, styles } from "@/cli/shared/logger";
 import { type ExecutorListInfo, toExecutorListInfo } from "./transform";
@@ -39,17 +39,17 @@ export async function listExecutors(options?: ListExecutorsOptions): Promise<Exe
   return executors.map((e) => toExecutorListInfo(e));
 }
 
-export const listCommand = defineCommand({
+export const listCommand = defineAppCommand({
   name: "list",
   description: "List all executors",
   args: z
     .object({
-      ...commonArgs,
       ...jsonArgs,
       ...workspaceArgs,
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
+    setupCommonArgs(args);
     const executors = await listExecutors({
       workspaceId: args["workspace-id"],
       profile: args.profile,
@@ -73,5 +73,5 @@ export const listCommand = defineCommand({
         logger.info("To see webhook URLs, run: tailor-sdk executor webhook list");
       }
     }
-  }),
+  },
 });

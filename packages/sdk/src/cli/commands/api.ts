@@ -1,7 +1,8 @@
-import { defineCommand, arg } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
-import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "@/cli/shared/args";
+import { jsonArgs, workspaceArgs, setupCommonArgs } from "@/cli/shared/args";
 import { platformBaseUrl, userAgent } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 
@@ -63,12 +64,11 @@ export async function apiCall(options: ApiCallOptions): Promise<ApiCallResult> {
   };
 }
 
-export const apiCommand = defineCommand({
+export const apiCommand = defineAppCommand({
   name: "api",
   description: "Call Tailor Platform API endpoints directly.",
   args: z
     .object({
-      ...commonArgs,
       ...jsonArgs,
       ...workspaceArgs,
       body: arg(z.string().default("{}"), {
@@ -82,7 +82,8 @@ export const apiCommand = defineCommand({
       }),
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
+    setupCommonArgs(args);
     const result = await apiCall({
       profile: args.profile,
       endpoint: args.endpoint as string,
@@ -94,5 +95,5 @@ export const apiCommand = defineCommand({
     } else {
       logger.log(JSON.stringify(result.data, null, 2));
     }
-  }),
+  },
 });

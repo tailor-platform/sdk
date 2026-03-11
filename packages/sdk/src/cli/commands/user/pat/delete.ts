@@ -1,24 +1,25 @@
 import ml from "multiline-ts";
-import { defineCommand, arg } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
-import { commonArgs, withCommonArgs } from "@/cli/shared/args";
+import { setupCommonArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { fetchLatestToken, readPlatformConfig } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 
-export const deleteCommand = defineCommand({
+export const deleteCommand = defineAppCommand({
   name: "delete",
   description: "Delete a personal access token.",
   args: z
     .object({
-      ...commonArgs,
       name: arg(z.string(), {
         positional: true,
         description: "Token name",
       }),
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
+    setupCommonArgs(args);
     const config = readPlatformConfig();
 
     if (!config.current_user) {
@@ -36,5 +37,5 @@ export const deleteCommand = defineCommand({
     });
 
     logger.success(`Personal access token "${args.name}" deleted successfully.`);
-  }),
+  },
 });

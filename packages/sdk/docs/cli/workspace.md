@@ -309,7 +309,7 @@ Delete a profile.
 **Usage**
 
 ```
-tailor-sdk profile delete [options] <name>
+tailor-sdk profile delete <name>
 ```
 
 <!-- politty:command:profile delete:usage:end -->

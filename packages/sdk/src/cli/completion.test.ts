@@ -50,7 +50,7 @@ describe("shell completion", () => {
       expect(values).toContain("--config");
       expect(values).toContain("--workspace-id");
       expect(values).toContain("--profile");
-      expect(values).toContain("--env-file");
+      expect(values).toContain("--yes");
     });
 
     it("completes option names for workspace create command", () => {
@@ -73,19 +73,8 @@ describe("shell completion", () => {
       expect(result.fileExtensions).toEqual(["ts"]);
     });
 
-    it("triggers file matcher completion for --env-file", () => {
-      const ctx = parseCompletionContext(["apply", "--env-file", ""], mainCommand);
-      const result = generateCandidates(ctx);
-
-      expect(result.fileMatchers).toEqual([".env.*", ".env"]);
-    });
-
-    it("triggers file matcher completion for --env-file-if-exists", () => {
-      const ctx = parseCompletionContext(["apply", "--env-file-if-exists", ""], mainCommand);
-      const result = generateCandidates(ctx);
-
-      expect(result.fileMatchers).toEqual([".env.*", ".env"]);
-    });
+    // --env-file and --env-file-if-exists are global args (via runMain's globalArgs),
+    // so they are not visible through the low-level parseCompletionContext API.
   });
 
   describe("directory completion", () => {

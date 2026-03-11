@@ -1,7 +1,7 @@
-import { defineCommand } from "politty";
 import { z } from "zod";
-import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "@/cli/shared/args";
+import { jsonArgs, workspaceArgs, setupCommonArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { humanizeRelativeTime } from "@/cli/shared/format";
 import { logger } from "@/cli/shared/logger";
@@ -52,17 +52,17 @@ export async function getWorkspace(options: GetWorkspaceOptions): Promise<Worksp
   return workspaceDetails(response.workspace);
 }
 
-export const getCommand = defineCommand({
+export const getCommand = defineAppCommand({
   name: "get",
   description: "Show detailed information about a workspace",
   args: z
     .object({
-      ...commonArgs,
       ...jsonArgs,
       ...workspaceArgs,
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
+    setupCommonArgs(args);
     const workspace = await getWorkspace({
       workspaceId: args["workspace-id"],
       profile: args.profile,
@@ -77,5 +77,5 @@ export const getCommand = defineCommand({
         };
 
     logger.out(formattedWorkspace);
-  }),
+  },
 });

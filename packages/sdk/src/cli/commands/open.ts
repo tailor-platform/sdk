@@ -1,23 +1,23 @@
 import open from "open";
-import { defineCommand } from "politty";
 import { z } from "zod";
-import { commonArgs, deploymentArgs, withCommonArgs } from "@/cli/shared/args";
+import { deploymentArgs, setupCommonArgs } from "@/cli/shared/args";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 
 const consoleBaseUrl = "https://console.tailor.tech";
 
-export const openCommand = defineCommand({
+export const openCommand = defineAppCommand({
   name: "open",
   description: "Open Tailor Platform Console.",
   args: z
     .object({
-      ...commonArgs,
       ...deploymentArgs,
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
+    setupCommonArgs(args);
     const workspaceId = loadWorkspaceId({
       workspaceId: args["workspace-id"],
       profile: args.profile,
@@ -39,5 +39,5 @@ export const openCommand = defineCommand({
         `Failed to open browser automatically. Please open this URL manually:\n${consoleUrl}`,
       );
     }
-  }),
+  },
 });

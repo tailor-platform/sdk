@@ -13,18 +13,18 @@ import {
   PageDirection,
 } from "@tailor-proto/tailor/v1/resource_pb";
 import ora from "ora";
-import { defineCommand, arg } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
 import {
-  commonArgs,
   durationArg,
   jsonArgs,
   parseDuration,
   positiveIntArg,
-  withCommonArgs,
   workspaceArgs,
+  setupCommonArgs,
 } from "@/cli/shared/args";
 import { fetchAll, initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { formatKeyValueTable } from "@/cli/shared/format";
 import { functionExecutionStatusToString } from "@/cli/shared/function-execution";
@@ -508,7 +508,7 @@ function printJobWithAttempts(job: ExecutorJobDetailInfo): void {
   }
 }
 
-export const jobsCommand = defineCommand({
+export const jobsCommand = defineAppCommand({
   name: "jobs",
   description: "List or get executor jobs.",
   examples: [
@@ -531,7 +531,6 @@ export const jobsCommand = defineCommand({
   ],
   args: z
     .object({
-      ...commonArgs,
       ...jsonArgs,
       ...workspaceArgs,
       executorName: arg(z.string(), {
@@ -568,7 +567,8 @@ export const jobsCommand = defineCommand({
       }),
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
+    setupCommonArgs(args);
     if (args.jobId) {
       if (args.wait) {
         const result = await watchExecutorJob({
@@ -658,5 +658,5 @@ export const jobsCommand = defineCommand({
       });
       logger.out(jobs);
     }
-  }),
+  },
 });

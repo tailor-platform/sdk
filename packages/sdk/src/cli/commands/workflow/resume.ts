@@ -1,14 +1,9 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { defineCommand, arg } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
-import {
-  commonArgs,
-  jsonArgs,
-  parseDuration,
-  withCommonArgs,
-  workspaceArgs,
-} from "@/cli/shared/args";
+import { jsonArgs, parseDuration, workspaceArgs, setupCommonArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { waitArgs } from "./args";
@@ -76,12 +71,11 @@ export async function resumeWorkflow(
   }
 }
 
-export const resumeCommand = defineCommand({
+export const resumeCommand = defineAppCommand({
   name: "resume",
   description: "Resume a failed or pending workflow execution.",
   args: z
     .object({
-      ...commonArgs,
       ...jsonArgs,
       ...workspaceArgs,
       executionId: arg(z.string(), {
@@ -91,7 +85,8 @@ export const resumeCommand = defineCommand({
       ...waitArgs,
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
+    setupCommonArgs(args);
     const { executionId, wait } = await resumeWorkflow({
       executionId: args.executionId,
       workspaceId: args["workspace-id"],
@@ -119,5 +114,5 @@ export const resumeCommand = defineCommand({
     } else {
       logger.out({ executionId });
     }
-  }),
+  },
 });

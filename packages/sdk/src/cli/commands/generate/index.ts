@@ -1,14 +1,14 @@
-import { defineCommand, arg } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
 import { generate } from "@/cli/commands/generate/service";
-import { commonArgs, withCommonArgs } from "@/cli/shared/args";
+import { setupCommonArgs } from "@/cli/shared/args";
+import { defineAppCommand } from "@/cli/shared/command";
 
-export const generateCommand = defineCommand({
+export const generateCommand = defineAppCommand({
   name: "generate",
   description: "Generate files using Tailor configuration.",
   args: z
     .object({
-      ...commonArgs,
       config: arg(z.string().default("tailor.config.ts"), {
         alias: "c",
         description: "Path to SDK config file",
@@ -19,10 +19,13 @@ export const generateCommand = defineCommand({
       }),
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
+    setupCommonArgs(args);
+    const { initTelemetry } = await import("@/cli/telemetry");
+    await initTelemetry();
     await generate({
       configPath: args.config,
       watch: args.watch,
     });
-  }),
+  },
 });

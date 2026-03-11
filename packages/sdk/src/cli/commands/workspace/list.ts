@@ -1,7 +1,8 @@
-import { defineCommand, arg } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
-import { commonArgs, jsonArgs, positiveIntArg, withCommonArgs } from "@/cli/shared/args";
+import { jsonArgs, positiveIntArg, setupCommonArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { workspaceInfo, type WorkspaceInfo } from "./transform";
@@ -61,12 +62,11 @@ export async function listWorkspaces(options?: ListWorkspacesOptions): Promise<W
   return results;
 }
 
-export const listCommand = defineCommand({
+export const listCommand = defineAppCommand({
   name: "list",
   description: "List all Tailor Platform workspaces.",
   args: z
     .object({
-      ...commonArgs,
       ...jsonArgs,
       limit: arg(positiveIntArg.optional(), {
         alias: "l",
@@ -74,8 +74,9 @@ export const listCommand = defineCommand({
       }),
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
+    setupCommonArgs(args);
     const workspaces = await listWorkspaces({ limit: args.limit });
     logger.out(workspaces, { display: { updatedAt: null } });
-  }),
+  },
 });

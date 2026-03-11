@@ -1,8 +1,9 @@
 import { ExecutorTriggerType } from "@tailor-proto/tailor/v1/executor_resource_pb";
 import { defineCommand, runCommand } from "politty";
 import { z } from "zod";
-import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "@/cli/shared/args";
+import { jsonArgs, workspaceArgs, setupCommonArgs } from "@/cli/shared/args";
 import { fetchAll, initOperatorClient, platformBaseUrl } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger, styles } from "@/cli/shared/logger";
 
@@ -66,17 +67,17 @@ export async function listWebhookExecutors(
   }));
 }
 
-const listWebhookCommand = defineCommand({
+const listWebhookCommand = defineAppCommand({
   name: "list",
   description: "List executors with incoming webhook triggers",
   args: z
     .object({
-      ...commonArgs,
       ...jsonArgs,
       ...workspaceArgs,
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
+    setupCommonArgs(args);
     const executors = await listWebhookExecutors({
       workspaceId: args["workspace-id"],
       profile: args.profile,
@@ -98,7 +99,7 @@ const listWebhookCommand = defineCommand({
         'To test a webhook, run: tailor-sdk executor trigger <name> -d \'{"key":"value"}\'',
       );
     }
-  }),
+  },
 });
 
 export const webhookCommand = defineCommand({

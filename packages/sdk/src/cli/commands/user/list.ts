@@ -1,20 +1,20 @@
 import ml from "multiline-ts";
-import { defineCommand } from "politty";
 import { z } from "zod";
-import { commonArgs, jsonArgs, withCommonArgs } from "@/cli/shared/args";
+import { jsonArgs, setupCommonArgs } from "@/cli/shared/args";
+import { defineAppCommand } from "@/cli/shared/command";
 import { readPlatformConfig } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 
-export const listCommand = defineCommand({
+export const listCommand = defineAppCommand({
   name: "list",
   description: "List all users.",
   args: z
     .object({
-      ...commonArgs,
       ...jsonArgs,
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
+    setupCommonArgs(args);
     const config = readPlatformConfig();
 
     const users = Object.keys(config.users);
@@ -38,5 +38,5 @@ export const listCommand = defineCommand({
         logger.log(user);
       }
     });
-  }),
+  },
 });

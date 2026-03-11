@@ -1,17 +1,17 @@
-import { defineCommand, arg } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
-import { commonArgs, jsonArgs, withCommonArgs } from "@/cli/shared/args";
+import { jsonArgs, setupCommonArgs } from "@/cli/shared/args";
 import { fetchAll, initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { fetchLatestToken, readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import type { ProfileInfo } from ".";
 
-export const createCommand = defineCommand({
+export const createCommand = defineAppCommand({
   name: "create",
   description: "Create a new profile.",
   args: z
     .object({
-      ...commonArgs,
       ...jsonArgs,
       name: arg(z.string(), {
         positional: true,
@@ -27,7 +27,8 @@ export const createCommand = defineCommand({
       }),
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
+    setupCommonArgs(args);
     const config = readPlatformConfig();
 
     // Check if profile already exists
@@ -71,5 +72,5 @@ export const createCommand = defineCommand({
       workspaceId: args["workspace-id"],
     };
     logger.out(profileInfo);
-  }),
+  },
 });

@@ -3,7 +3,6 @@ import { parseEnv } from "node:util";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
-import { isCLIError } from "./errors";
 import { logger } from "./logger";
 
 type ArgsShape = Record<string, z.ZodType>;
@@ -187,56 +186,28 @@ export const jsonArgs = {
 
 export type CommonArgsType = z.infer<z.ZodObject<typeof commonArgs>>;
 
+// Tracks verbose mode for use in global error handler (cleanup)
+let verboseMode = false;
+
 /**
- * Wrapper for command handlers that provides:
- * - Environment file loading
- * - Error handling with formatted output
- * - Exit code management
- *
- * Uses function-type-preserving pattern (`<F>(...): F`) so that the wrapper
- * is transparent to `defineCommand`'s generic inference (politty ≥ 0.4.5).
- * @param handler - Command handler function
- * @returns Wrapped handler with the same type signature
+ * Returns whether verbose mode is enabled.
+ * Used by the global cleanup handler which doesn't have access to parsed args.
+ * @returns Whether verbose mode is enabled
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const withCommonArgs = <F extends (...args: any[]) => Promise<void>>(handler: F): F => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (async (...rawArgs: any[]) => {
-    const args = rawArgs[0] as CommonArgsType & Record<string, unknown>;
-    try {
-      // Set JSON mode if --json flag is provided
-      if ("json" in args && typeof args.json === "boolean") {
-        logger.jsonMode = args.json;
-      }
+export function isVerbose(): boolean {
+  return verboseMode;
+}
 
-      // Load env files
-      loadEnvFiles(args["env-file"] as EnvFileArg, args["env-file-if-exists"] as EnvFileArg);
-
-      // Initialize telemetry (no-op if OTEL_EXPORTER_OTLP_ENDPOINT is not set)
-      const { initTelemetry } = await import("@/cli/telemetry");
-      await initTelemetry();
-
-      await handler(...rawArgs);
-    } catch (error) {
-      if (isCLIError(error)) {
-        logger.log(error.format());
-        if (args.verbose && error.stack) {
-          logger.debug(`\nStack trace:\n${error.stack}`);
-        }
-      } else if (error instanceof Error) {
-        logger.error(error.message);
-        if (args.verbose && error.stack) {
-          logger.debug(`\nStack trace:\n${error.stack}`);
-        }
-      } else {
-        logger.error(`Unknown error: ${error}`);
-      }
-      process.exit(1);
-    } finally {
-      // Flush pending traces before process exit
-      const { shutdownTelemetry } = await import("@/cli/telemetry");
-      await shutdownTelemetry();
-    }
-    process.exit(0);
-  }) as unknown as F;
-};
+/**
+ * Initialize common args state for a command.
+ * Sets up JSON mode (if applicable) and loads environment files.
+ * Should be called at the start of each command's `run` function.
+ * @param args - Parsed command args (includes global common args)
+ */
+export function setupCommonArgs(args: CommonArgsType & Record<string, unknown>): void {
+  verboseMode = args.verbose;
+  if ("json" in args && typeof args.json === "boolean") {
+    logger.jsonMode = args.json;
+  }
+  loadEnvFiles(args["env-file"], args["env-file-if-exists"]);
+}

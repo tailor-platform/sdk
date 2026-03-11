@@ -1,7 +1,8 @@
-import { arg, defineCommand } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
-import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "@/cli/shared/args";
+import { jsonArgs, workspaceArgs, setupCommonArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { humanizeRelativeTime } from "@/cli/shared/format";
 import { logger } from "@/cli/shared/logger";
@@ -51,12 +52,11 @@ export async function getAppHealth(options: HealthOptions): Promise<AppHealthInf
   return appHealthInfo(name, response);
 }
 
-export const healthCommand = defineCommand({
+export const healthCommand = defineAppCommand({
   name: "health",
   description: "Check application schema health",
   args: z
     .object({
-      ...commonArgs,
       ...jsonArgs,
       ...workspaceArgs,
       name: arg(z.string(), {
@@ -65,7 +65,8 @@ export const healthCommand = defineCommand({
       }),
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
+    setupCommonArgs(args);
     const health = await getAppHealth({
       workspaceId: args["workspace-id"],
       profile: args.profile,
@@ -81,5 +82,5 @@ export const healthCommand = defineCommand({
         };
 
     logger.out(formattedHealth);
-  }),
+  },
 });
