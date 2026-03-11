@@ -28,6 +28,9 @@ interface BuildCrashReportOptions {
 
 // Maximum subcommand depth to keep (e.g., "tailordb migrate generate" = 3 tokens).
 // Positional arguments beyond this are potentially sensitive user input.
+// Accepted trade-off: plain-text positional args that don't match known patterns
+// (UUIDs, hex tokens, emails, paths) pass through to `command` and `argv`.
+// Full redaction would require embedding the CLI command tree here, which is fragile.
 const MAX_COMMAND_TOKENS = 3;
 
 /**
