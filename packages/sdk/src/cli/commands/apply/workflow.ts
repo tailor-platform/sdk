@@ -1,4 +1,5 @@
 import { type ApplyPhase } from "@/cli/commands/apply/apply";
+import { parseDuration } from "@/cli/shared/args";
 import { type OperatorClient, fetchAll } from "@/cli/shared/client";
 import { createChangeSet, type ChangeSet } from "./change-set";
 import { workflowJobFunctionName } from "./function-registry";
@@ -216,26 +217,8 @@ type DeleteWorkflow = {
   workflowId: string;
 };
 
-const durationPattern = /^(\d+)(ms|s|m)$/;
-
 function parseDurationToProto(duration: string): { seconds: bigint; nanos: number } {
-  const match = duration.match(durationPattern)!;
-  const value = parseInt(match[1], 10);
-  const unit = match[2];
-  let ms: number;
-  switch (unit) {
-    case "ms":
-      ms = value;
-      break;
-    case "s":
-      ms = value * 1000;
-      break;
-    case "m":
-      ms = value * 60 * 1000;
-      break;
-    default:
-      ms = 0;
-  }
+  const ms = parseDuration(duration);
   const seconds = Math.floor(ms / 1000);
   const nanos = (ms % 1000) * 1_000_000;
   return { seconds: BigInt(seconds), nanos };
