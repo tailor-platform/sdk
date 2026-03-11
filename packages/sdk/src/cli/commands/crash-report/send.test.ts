@@ -90,6 +90,17 @@ describe("crash-report send command", () => {
     expect(parsed!.errorMessage).toBe('--- JSON ---\n{"fake": true}');
   });
 
+  test("parseCrashLogFile handles CRLF line endings", () => {
+    const report = makeCrashReport();
+    const formatted = formatCrashReport(report);
+    const crlfContent = formatted.replace(/\n/g, "\r\n");
+    const parsed = parseCrashLogFile(crlfContent);
+
+    expect(parsed).toBeDefined();
+    expect(parsed!.id).toBe(report.id);
+    expect(parsed!.errorName).toBe(report.errorName);
+  });
+
   test("parseCrashLogFile returns undefined for invalid content", () => {
     expect(parseCrashLogFile("no json footer here")).toBeUndefined();
     expect(parseCrashLogFile("")).toBeUndefined();

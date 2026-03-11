@@ -26,9 +26,9 @@ interface BuildCrashReportOptions {
   errorType: ErrorType;
 }
 
-// Maximum subcommand depth to keep (e.g., "workspace create" = 2 tokens).
+// Maximum subcommand depth to keep (e.g., "tailordb migrate generate" = 3 tokens).
 // Positional arguments beyond this are potentially sensitive user input.
-const MAX_COMMAND_TOKENS = 2;
+const MAX_COMMAND_TOKENS = 3;
 
 /**
  * Parse the command name from process.argv.
