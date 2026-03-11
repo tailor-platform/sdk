@@ -4,9 +4,10 @@ import { createChangeSet, type ChangeSet } from "./change-set";
 import { workflowJobFunctionName } from "./function-registry";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { Workflow } from "@/types/workflow.generated";
+import type { Workflow, RetryPolicy } from "@/types/workflow.generated";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
+import type { RetryPolicySchema } from "@tailor-proto/tailor/v1/workflow_resource_pb";
 
 /**
  * Apply workflow changes for the given phase.
@@ -38,6 +39,9 @@ export async function applyWorkflow(
           workflowName: create.workflow.name,
           mainJobFunctionName: create.workflow.mainJob.name,
           jobFunctions: filteredVersions,
+          ...(create.workflow.retryPolicy && {
+            retryPolicy: toRetryPolicy(create.workflow.retryPolicy),
+          }),
         });
         await client.setMetadata(create.metaRequest);
       }),
@@ -51,6 +55,9 @@ export async function applyWorkflow(
           workflowName: update.workflow.name,
           mainJobFunctionName: update.workflow.mainJob.name,
           jobFunctions: filteredVersions,
+          ...(update.workflow.retryPolicy && {
+            retryPolicy: toRetryPolicy(update.workflow.retryPolicy),
+          }),
         });
         await client.setMetadata(update.metaRequest);
       }),
@@ -208,6 +215,40 @@ type DeleteWorkflow = {
   workspaceId: string;
   workflowId: string;
 };
+
+const durationPattern = /^(\d+)(ms|s|m)$/;
+
+function parseDurationToProto(duration: string): { seconds: bigint; nanos: number } {
+  const match = duration.match(durationPattern)!;
+  const value = parseInt(match[1], 10);
+  const unit = match[2];
+  let ms: number;
+  switch (unit) {
+    case "ms":
+      ms = value;
+      break;
+    case "s":
+      ms = value * 1000;
+      break;
+    case "m":
+      ms = value * 60 * 1000;
+      break;
+    default:
+      ms = 0;
+  }
+  const seconds = Math.floor(ms / 1000);
+  const nanos = (ms % 1000) * 1_000_000;
+  return { seconds: BigInt(seconds), nanos };
+}
+
+function toRetryPolicy(policy: RetryPolicy): MessageInitShape<typeof RetryPolicySchema> {
+  return {
+    maxRetries: policy.maxRetries,
+    ...(policy.initialBackoff && { initialBackoff: parseDurationToProto(policy.initialBackoff) }),
+    ...(policy.maxBackoff && { maxBackoff: parseDurationToProto(policy.maxBackoff) }),
+    ...(policy.backoffMultiplier !== undefined && { backoffMultiplier: policy.backoffMultiplier }),
+  };
+}
 
 function workflowTrn(workspaceId: string, name: string) {
   return `trn:v1:workspace:${workspaceId}:workflow:${name}`;

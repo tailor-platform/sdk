@@ -38,4 +38,10 @@ export const processOrder = createWorkflowJob({
 export default createWorkflow({
   name: "order-processing",
   mainJob: processOrder,
+  retryPolicy: {
+    maxRetries: 3,
+    initialBackoff: "1s",
+    maxBackoff: "30s",
+    backoffMultiplier: 2,
+  },
 });

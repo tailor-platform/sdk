@@ -10,6 +10,18 @@ export type WorkflowJob = {
 };
 export type WorkflowJobInput = WorkflowJob;
 
+export type RetryPolicy = {
+  /** Maximum number of retries */
+  maxRetries: number;
+  /** Initial backoff duration (e.g., '1s', '500ms', '1m') */
+  initialBackoff?: string | undefined;
+  /** Maximum backoff duration (e.g., '30s', '5m') */
+  maxBackoff?: string | undefined;
+  /** Backoff multiplier */
+  backoffMultiplier?: number | undefined;
+};
+export type RetryPolicyInput = RetryPolicy;
+
 export type Workflow = {
   /** Workflow name */
   name: string;
@@ -20,5 +32,14 @@ export type Workflow = {
     trigger: Function;
     body: Function;
   };
+  /** Retry policy for the workflow */
+  retryPolicy?:
+    | {
+        maxRetries: number;
+        initialBackoff?: string | undefined;
+        maxBackoff?: string | undefined;
+        backoffMultiplier?: number | undefined;
+      }
+    | undefined;
 };
 export type WorkflowInput = Workflow;
