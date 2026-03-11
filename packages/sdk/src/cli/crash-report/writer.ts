@@ -4,6 +4,12 @@ import type { CrashReport } from "./report";
 
 const MAX_CRASH_FILES = 10;
 
+/** Marker line that separates human-readable content from the JSON footer. */
+export const JSON_FOOTER_MARKER = "--- JSON ---";
+
+/** File extension for crash log files. */
+export const CRASH_LOG_EXTENSION = ".crash.log";
+
 /**
  * Format a CrashReport as human-readable text for local crash log files.
  * @param report - Crash report to format
@@ -32,7 +38,7 @@ export function formatCrashReport(report: CrashReport): string {
     "--- Stack Trace ---",
     report.stackTrace || "(no stack trace available)",
     "",
-    "--- JSON ---",
+    JSON_FOOTER_MARKER,
     JSON.stringify(report),
     "",
   ];
@@ -48,7 +54,7 @@ export function formatCrashReport(report: CrashReport): string {
 function generateFilename(report: CrashReport): string {
   const safeTimestamp = report.timestamp.replace(/[:.]/g, "-");
   const shortId = report.id.slice(0, 8);
-  return `${safeTimestamp}-${shortId}.crash.log`;
+  return `${safeTimestamp}-${shortId}${CRASH_LOG_EXTENSION}`;
 }
 
 /**
@@ -59,7 +65,7 @@ function cleanupOldFiles(dir: string): void {
   try {
     const files = fs
       .readdirSync(dir)
-      .filter((f) => f.endsWith(".crash.log"))
+      .filter((f) => f.endsWith(CRASH_LOG_EXTENSION))
       .sort()
       .reverse();
 

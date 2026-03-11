@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import { arg, defineCommand } from "politty";
 import { z } from "zod";
 import { sendCrashReport } from "@/cli/crash-report/sender";
+import { JSON_FOOTER_MARKER } from "@/cli/crash-report/writer";
 import { commonArgs, withCommonArgs } from "@/cli/shared/args";
 import { userAgent } from "@/cli/shared/client";
 import { logger } from "@/cli/shared/logger";
@@ -21,12 +22,14 @@ export const sendCommand = defineCommand({
     })
     .strict(),
   run: withCommonArgs(async (args) => {
-    if (!fs.existsSync(args.file)) {
+    let content: string;
+    try {
+      content = fs.readFileSync(args.file, "utf-8");
+    } catch {
       logger.error(`Crash report file not found: ${args.file}`);
       process.exit(1);
     }
 
-    const content = fs.readFileSync(args.file, "utf-8");
     const report = parseCrashLogFile(content);
     if (!report) {
       logger.error("Failed to parse crash report file. The file may be corrupted.");
@@ -55,7 +58,7 @@ export const sendCommand = defineCommand({
 export function parseCrashLogFile(content: string): CrashReport | undefined {
   try {
     const normalized = content.replace(/\r\n/g, "\n");
-    const marker = "\n--- JSON ---\n";
+    const marker = `\n${JSON_FOOTER_MARKER}\n`;
     const lastIdx = normalized.lastIndexOf(marker);
     if (lastIdx === -1) return undefined;
     const jsonLine = normalized.slice(lastIdx + marker.length).split("\n")[0];
