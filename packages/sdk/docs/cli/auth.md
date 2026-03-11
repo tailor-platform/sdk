@@ -66,11 +66,11 @@ tailor-sdk machineuser list [options]
 
 **Options**
 
-| Option                          | Alias | Description             | Required | Default              | Env                               |
-| ------------------------------- | ----- | ----------------------- | -------- | -------------------- | --------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile       | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| Option                          | Alias | Description             | Required | Default              |
+| ------------------------------- | ----- | ----------------------- | -------- | -------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | No       | -                    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile       | No       | -                    |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` |
 
 <!-- politty:command:machineuser list:options:end -->
 
@@ -115,11 +115,11 @@ tailor-sdk machineuser token [options] <name>
 
 **Options**
 
-| Option                          | Alias | Description             | Required | Default              | Env                               |
-| ------------------------------- | ----- | ----------------------- | -------- | -------------------- | --------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile       | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| Option                          | Alias | Description             | Required | Default              |
+| ------------------------------- | ----- | ----------------------- | -------- | -------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | No       | -                    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile       | No       | -                    |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` |
 
 <!-- politty:command:machineuser token:options:end -->
 
@@ -192,11 +192,11 @@ tailor-sdk oauth2client list [options]
 
 **Options**
 
-| Option                          | Alias | Description             | Required | Default              | Env                               |
-| ------------------------------- | ----- | ----------------------- | -------- | -------------------- | --------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile       | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| Option                          | Alias | Description             | Required | Default              |
+| ------------------------------- | ----- | ----------------------- | -------- | -------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | No       | -                    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile       | No       | -                    |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` |
 
 <!-- politty:command:oauth2client list:options:end -->
 
@@ -241,11 +241,11 @@ tailor-sdk oauth2client get [options] <name>
 
 **Options**
 
-| Option                          | Alias | Description             | Required | Default              | Env                               |
-| ------------------------------- | ----- | ----------------------- | -------- | -------------------- | --------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile       | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| Option                          | Alias | Description             | Required | Default              |
+| ------------------------------- | ----- | ----------------------- | -------- | -------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | No       | -                    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile       | No       | -                    |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` |
 
 <!-- politty:command:oauth2client get:options:end -->
 

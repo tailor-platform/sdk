@@ -97,12 +97,10 @@ export const createCommand = defineAppCommand({
       "organization-id": arg(z.string().optional(), {
         alias: "o",
         description: "Organization ID to workspace associate with",
-        env: "TAILOR_PLATFORM_ORGANIZATION_ID",
       }),
       "folder-id": arg(z.string().optional(), {
         alias: "f",
         description: "Folder ID to workspace associate with",
-        env: "TAILOR_PLATFORM_FOLDER_ID",
       }),
       "profile-name": arg(z.string().optional(), {
         alias: "p",

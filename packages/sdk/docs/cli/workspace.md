@@ -71,15 +71,15 @@ tailor-sdk workspace create [options]
 
 **Options**
 
-| Option                                | Alias | Description                                           | Required | Default | Env                               |
-| ------------------------------------- | ----- | ----------------------------------------------------- | -------- | ------- | --------------------------------- |
-| `--name <NAME>`                       | `-n`  | Workspace name                                        | Yes      | -       | -                                 |
-| `--region <REGION>`                   | `-r`  | Workspace region (us-west, asia-northeast)            | Yes      | -       | -                                 |
-| `--delete-protection`                 | `-d`  | Enable delete protection                              | No       | `false` | -                                 |
-| `--organization-id <ORGANIZATION_ID>` | `-o`  | Organization ID to workspace associate with           | No       | -       | `TAILOR_PLATFORM_ORGANIZATION_ID` |
-| `--folder-id <FOLDER_ID>`             | `-f`  | Folder ID to workspace associate with                 | No       | -       | `TAILOR_PLATFORM_FOLDER_ID`       |
-| `--profile-name <PROFILE_NAME>`       | `-p`  | Profile name to create                                | No       | -       | -                                 |
-| `--profile-user <PROFILE_USER>`       | -     | User email for the profile (defaults to current user) | No       | -       | -                                 |
+| Option                                | Alias | Description                                           | Required | Default |
+| ------------------------------------- | ----- | ----------------------------------------------------- | -------- | ------- |
+| `--name <NAME>`                       | `-n`  | Workspace name                                        | Yes      | -       |
+| `--region <REGION>`                   | `-r`  | Workspace region (us-west, asia-northeast)            | Yes      | -       |
+| `--delete-protection`                 | `-d`  | Enable delete protection                              | No       | `false` |
+| `--organization-id <ORGANIZATION_ID>` | `-o`  | Organization ID to workspace associate with           | No       | -       |
+| `--folder-id <FOLDER_ID>`             | `-f`  | Folder ID to workspace associate with                 | No       | -       |
+| `--profile-name <PROFILE_NAME>`       | `-p`  | Profile name to create                                | No       | -       |
+| `--profile-user <PROFILE_USER>`       | -     | User email for the profile (defaults to current user) | No       | -       |
 
 <!-- politty:command:workspace create:options:end -->
 
@@ -439,11 +439,11 @@ tailor-sdk workspace app health [options]
 
 **Options**
 
-| Option                          | Alias | Description       | Required | Default | Env                            |
-| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
-| `--name <NAME>`                 | `-n`  | Application name  | Yes      | -       | -                              |
+| Option                          | Alias | Description       | Required | Default |
+| ------------------------------- | ----- | ----------------- | -------- | ------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
+| `--name <NAME>`                 | `-n`  | Application name  | Yes      | -       |
 
 <!-- politty:command:workspace app health:options:end -->
 
@@ -479,11 +479,11 @@ tailor-sdk workspace app list [options]
 
 **Options**
 
-| Option                          | Alias | Description                            | Required | Default | Env                            |
-| ------------------------------- | ----- | -------------------------------------- | -------- | ------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                           | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                      | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
-| `--limit <LIMIT>`               | `-l`  | Maximum number of applications to list | No       | -       | -                              |
+| Option                          | Alias | Description                            | Required | Default |
+| ------------------------------- | ----- | -------------------------------------- | -------- | ------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                           | No       | -       |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                      | No       | -       |
+| `--limit <LIMIT>`               | `-l`  | Maximum number of applications to list | No       | -       |
 
 <!-- politty:command:workspace app list:options:end -->
 
@@ -519,10 +519,10 @@ tailor-sdk workspace get [options]
 
 **Options**
 
-| Option                          | Alias | Description       | Required | Default | Env                            |
-| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| Option                          | Alias | Description       | Required | Default |
+| ------------------------------- | ----- | ----------------- | -------- | ------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
 
 <!-- politty:command:workspace get:options:end -->
 
@@ -638,12 +638,12 @@ tailor-sdk workspace user invite [options]
 
 **Options**
 
-| Option                          | Alias | Description                            | Required | Default | Env                            |
-| ------------------------------- | ----- | -------------------------------------- | -------- | ------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                           | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                      | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
-| `--email <EMAIL>`               | -     | Email address of the user to invite    | Yes      | -       | -                              |
-| `--role <ROLE>`                 | `-r`  | Role to assign (admin, editor, viewer) | Yes      | -       | -                              |
+| Option                          | Alias | Description                            | Required | Default |
+| ------------------------------- | ----- | -------------------------------------- | -------- | ------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                           | No       | -       |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                      | No       | -       |
+| `--email <EMAIL>`               | -     | Email address of the user to invite    | Yes      | -       |
+| `--role <ROLE>`                 | `-r`  | Role to assign (admin, editor, viewer) | Yes      | -       |
 
 <!-- politty:command:workspace user invite:options:end -->
 
@@ -679,11 +679,11 @@ tailor-sdk workspace user list [options]
 
 **Options**
 
-| Option                          | Alias | Description                     | Required | Default | Env                            |
-| ------------------------------- | ----- | ------------------------------- | -------- | ------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                    | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile               | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
-| `--limit <LIMIT>`               | `-l`  | Maximum number of users to list | No       | -       | -                              |
+| Option                          | Alias | Description                     | Required | Default |
+| ------------------------------- | ----- | ------------------------------- | -------- | ------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                    | No       | -       |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile               | No       | -       |
+| `--limit <LIMIT>`               | `-l`  | Maximum number of users to list | No       | -       |
 
 <!-- politty:command:workspace user list:options:end -->
 
@@ -719,12 +719,12 @@ tailor-sdk workspace user remove [options]
 
 **Options**
 
-| Option                          | Alias | Description                         | Required | Default | Env                            |
-| ------------------------------- | ----- | ----------------------------------- | -------- | ------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                        | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                   | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
-| `--email <EMAIL>`               | -     | Email address of the user to remove | Yes      | -       | -                              |
-| `--yes`                         | `-y`  | Skip confirmation prompts           | No       | `false` | -                              |
+| Option                          | Alias | Description                         | Required | Default |
+| ------------------------------- | ----- | ----------------------------------- | -------- | ------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                        | No       | -       |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                   | No       | -       |
+| `--email <EMAIL>`               | -     | Email address of the user to remove | Yes      | -       |
+| `--yes`                         | `-y`  | Skip confirmation prompts           | No       | `false` |
 
 <!-- politty:command:workspace user remove:options:end -->
 
@@ -760,12 +760,12 @@ tailor-sdk workspace user update [options]
 
 **Options**
 
-| Option                          | Alias | Description                                | Required | Default | Env                            |
-| ------------------------------- | ----- | ------------------------------------------ | -------- | ------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                               | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                          | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
-| `--email <EMAIL>`               | -     | Email address of the user to update        | Yes      | -       | -                              |
-| `--role <ROLE>`                 | `-r`  | New role to assign (admin, editor, viewer) | Yes      | -       | -                              |
+| Option                          | Alias | Description                                | Required | Default |
+| ------------------------------- | ----- | ------------------------------------------ | -------- | ------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                               | No       | -       |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                          | No       | -       |
+| `--email <EMAIL>`               | -     | Email address of the user to update        | Yes      | -       |
+| `--role <ROLE>`                 | `-r`  | New role to assign (admin, editor, viewer) | Yes      | -       |
 
 <!-- politty:command:workspace user update:options:end -->
 

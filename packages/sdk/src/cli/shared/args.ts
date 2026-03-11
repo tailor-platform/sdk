@@ -152,13 +152,11 @@ export const workspaceArgs = {
   "workspace-id": arg(z.string().optional(), {
     alias: "w",
     description: "Workspace ID",
-    env: "TAILOR_PLATFORM_WORKSPACE_ID",
     completion: { type: "none" },
   }),
   profile: arg(z.string().optional(), {
     alias: "p",
     description: "Workspace profile",
-    env: "TAILOR_PLATFORM_PROFILE",
     completion: { type: "none" },
   }),
 } satisfies ArgsShape;
@@ -170,7 +168,6 @@ export const configArg = {
   config: arg(z.string().default("tailor.config.ts"), {
     alias: "c",
     description: "Path to SDK config file",
-    env: "TAILOR_PLATFORM_SDK_CONFIG_PATH",
     completion: { type: "file", extensions: ["ts"] },
   }),
 } satisfies ArgsShape;
