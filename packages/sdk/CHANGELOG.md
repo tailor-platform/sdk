@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 1.25.1
+
+### Patch Changes
+
+- [#727](https://github.com/tailor-platform/sdk/pull/727) [`cf08b9b`](https://github.com/tailor-platform/sdk/commit/cf08b9be9af5027b4bfce6537ee182fb4d3586ab) Thanks [@dqn](https://github.com/dqn)! - fix: use kind-specific brand symbols to prevent cross-service false positives during generate
+
 ## 1.25.0
 
 ### Minor Changes
