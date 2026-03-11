@@ -192,13 +192,17 @@ export type CommonArgsType = z.infer<z.ZodObject<typeof commonArgs>>;
  * - Environment file loading
  * - Error handling with formatted output
  * - Exit code management
- * @template T
+ *
+ * Uses function-type-preserving pattern (`<F>(...): F`) so that the wrapper
+ * is transparent to `defineCommand`'s generic inference (politty ≥ 0.4.5).
  * @param handler - Command handler function
- * @returns Wrapped handler
+ * @returns Wrapped handler with the same type signature
  */
-export const withCommonArgs =
-  <T extends CommonArgsType>(handler: (args: T) => Promise<void>) =>
-  async (args: T) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const withCommonArgs = <F extends (...args: any[]) => Promise<void>>(handler: F): F => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (async (...rawArgs: any[]) => {
+    const args = rawArgs[0] as CommonArgsType & Record<string, unknown>;
     try {
       // Set JSON mode if --json flag is provided
       if ("json" in args && typeof args.json === "boolean") {
@@ -212,7 +216,7 @@ export const withCommonArgs =
       const { initTelemetry } = await import("@/cli/telemetry");
       await initTelemetry();
 
-      await handler(args);
+      await handler(...rawArgs);
     } catch (error) {
       if (isCLIError(error)) {
         logger.log(error.format());
@@ -234,4 +238,5 @@ export const withCommonArgs =
       await shutdownTelemetry();
     }
     process.exit(0);
-  };
+  }) as unknown as F;
+};
