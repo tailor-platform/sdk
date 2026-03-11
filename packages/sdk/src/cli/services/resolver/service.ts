@@ -38,7 +38,7 @@ export function createResolverService(
         resolvers[resolverFile] = result.data;
         return result.data;
       }
-      if (isSdkBranded(resolverModule.default)) {
+      if (isSdkBranded(resolverModule.default, "resolver")) {
         throw result.error;
       }
     } catch (error) {

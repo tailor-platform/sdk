@@ -58,7 +58,7 @@ export function createExecutorService(params: CreateExecutorServiceParams): Exec
         executors[executorFile] = result.data;
         return result.data;
       }
-      if (isSdkBranded(executorModule.default)) {
+      if (isSdkBranded(executorModule.default, "executor")) {
         throw result.error;
       }
     } catch (error) {

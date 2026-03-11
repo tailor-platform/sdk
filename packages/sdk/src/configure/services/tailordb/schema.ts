@@ -1158,7 +1158,7 @@ function createTailorDBType<
     },
   };
 
-  return brandValue(dbType);
+  return brandValue(dbType, "tailordb-type");
 }
 
 export type TailorDBInstance<
