@@ -2,14 +2,19 @@
 // avoiding identity mismatches when multiple copies of the SDK are loaded.
 export const SDK_BRAND: unique symbol = Symbol.for("tailor-platform/sdk");
 
+export type SdkBrandKind = "tailordb-type" | "resolver" | "executor" | "workflow" | "workflow-job";
+
 /**
  * Adds a non-enumerable SDK brand symbol to the given object (in-place).
+ * The brand stores the kind so service loaders can distinguish between
+ * different SDK object types (e.g. a type loader skips executors).
  * @param value - The object to brand
+ * @param kind - The kind of SDK object
  * @returns The same object with the brand applied
  */
-export function brandValue<T extends object>(value: T): T {
+export function brandValue<T extends object>(value: T, kind: SdkBrandKind): T {
   Object.defineProperty(value, SDK_BRAND, {
-    value: true,
+    value: kind,
     enumerable: false,
     configurable: false,
     writable: false,
@@ -19,9 +24,13 @@ export function brandValue<T extends object>(value: T): T {
 
 /**
  * Checks whether the given value has been branded by the SDK.
+ * When kind is specified, only returns true if the brand matches that kind.
  * @param value - The value to check
- * @returns True if the value has the SDK brand symbol
+ * @param kind - Optional kind to match against
+ * @returns True if the value has the SDK brand symbol (and matches kind if specified)
  */
-export function isSdkBranded(value: unknown): boolean {
-  return value !== null && typeof value === "object" && SDK_BRAND in value;
+export function isSdkBranded(value: unknown, kind?: SdkBrandKind): boolean {
+  if (value === null || typeof value !== "object" || !(SDK_BRAND in value)) return false;
+  if (kind === undefined) return true;
+  return (value as Record<symbol, unknown>)[SDK_BRAND] === kind;
 }

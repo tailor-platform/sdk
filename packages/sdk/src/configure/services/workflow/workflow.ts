@@ -52,13 +52,16 @@ interface WorkflowDefinition<Job extends WorkflowJob<any, any, any>> {
 export function createWorkflow<Job extends WorkflowJob<any, any, any>>(
   config: WorkflowDefinition<Job>,
 ): Workflow<Job> {
-  return brandValue({
-    ...config,
-    // For local execution, directly call mainJob.trigger()
-    // In production, bundler transforms this to tailor.workflow.triggerWorkflow()
-    trigger: async (args) => {
-      await config.mainJob.trigger(...([args] as unknown as []));
-      return "00000000-0000-0000-0000-000000000000";
+  return brandValue(
+    {
+      ...config,
+      // For local execution, directly call mainJob.trigger()
+      // In production, bundler transforms this to tailor.workflow.triggerWorkflow()
+      trigger: async (args) => {
+        await config.mainJob.trigger(...([args] as unknown as []));
+        return "00000000-0000-0000-0000-000000000000";
+      },
     },
-  });
+    "workflow",
+  );
 }

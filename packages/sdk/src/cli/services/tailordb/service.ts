@@ -144,7 +144,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
 
         const result = TailorDBTypeSchema.safeParse(exportedValue);
         if (!result.success) {
-          if (isSdkBranded(exportedValue)) {
+          if (isSdkBranded(exportedValue, "tailordb-type")) {
             throw result.error;
           }
           continue;
