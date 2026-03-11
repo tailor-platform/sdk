@@ -1,6 +1,6 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { jsonArgs, positiveIntArg } from "@/cli/shared/args";
+import { positiveIntArg } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken } from "@/cli/shared/context";
@@ -67,7 +67,6 @@ export const listCommand = defineAppCommand({
   description: "List all Tailor Platform workspaces.",
   args: z
     .object({
-      ...jsonArgs,
       limit: arg(positiveIntArg.optional(), {
         alias: "l",
         description: "Maximum number of workspaces to list",

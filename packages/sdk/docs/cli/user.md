@@ -142,7 +142,7 @@ List all users.
 **Usage**
 
 ```
-tailor-sdk user list [options]
+tailor-sdk user list
 ```
 
 <!-- politty:command:user list:usage:end -->
@@ -266,7 +266,7 @@ List all personal access tokens.
 **Usage**
 
 ```
-tailor-sdk user pat list [options]
+tailor-sdk user pat list
 ```
 
 <!-- politty:command:user pat list:usage:end -->
@@ -324,7 +324,6 @@ tailor-sdk user pat create [options] <name>
 
 | Option    | Alias | Description                                 | Required | Default |
 | --------- | ----- | ------------------------------------------- | -------- | ------- |
-| `--json`  | `-j`  | Output as JSON                              | No       | `false` |
 | `--write` | `-W`  | Grant write permission (default: read-only) | No       | `false` |
 
 <!-- politty:command:user pat create:options:end -->
@@ -409,7 +408,6 @@ tailor-sdk user pat update [options] <name>
 
 | Option    | Alias | Description                                                | Required | Default |
 | --------- | ----- | ---------------------------------------------------------- | -------- | ------- |
-| `--json`  | `-j`  | Output as JSON                                             | No       | `false` |
 | `--write` | `-W`  | Grant write permission (if not specified, keeps read-only) | No       | `false` |
 
 <!-- politty:command:user pat update:options:end -->

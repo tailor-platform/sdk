@@ -72,7 +72,6 @@ tailor-sdk executor list [options]
 
 | Option                          | Alias | Description       | Required | Default |
 | ------------------------------- | ----- | ----------------- | -------- | ------- |
-| `--json`                        | `-j`  | Output as JSON    | No       | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
 
@@ -122,7 +121,6 @@ tailor-sdk executor get [options] <name>
 
 | Option                          | Alias | Description       | Required | Default |
 | ------------------------------- | ----- | ----------------- | -------- | ------- |
-| `--json`                        | `-j`  | Output as JSON    | No       | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
 
@@ -173,7 +171,6 @@ tailor-sdk executor jobs [options] <executorName> [jobId]
 
 | Option                          | Alias | Description                                                                                           | Required | Default |
 | ------------------------------- | ----- | ----------------------------------------------------------------------------------------------------- | -------- | ------- |
-| `--json`                        | `-j`  | Output as JSON                                                                                        | No       | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                          | No       | -       |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                     | No       | -       |
 | `--status <STATUS>`             | `-s`  | Filter by status (PENDING, RUNNING, SUCCESS, FAILED, CANCELED) (list mode only)                       | No       | -       |
@@ -277,7 +274,6 @@ tailor-sdk executor trigger [options] <executorName>
 
 | Option                          | Alias | Description                                                                        | Required | Default |
 | ------------------------------- | ----- | ---------------------------------------------------------------------------------- | -------- | ------- |
-| `--json`                        | `-j`  | Output as JSON                                                                     | No       | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                       | No       | -       |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                  | No       | -       |
 | `--data <DATA>`                 | `-d`  | Request body (JSON string)                                                         | No       | -       |
@@ -417,7 +413,6 @@ tailor-sdk executor webhook list [options]
 
 | Option                          | Alias | Description       | Required | Default |
 | ------------------------------- | ----- | ----------------- | -------- | ------- |
-| `--json`                        | `-j`  | Output as JSON    | No       | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
 

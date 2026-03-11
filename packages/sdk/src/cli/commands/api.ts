@@ -1,6 +1,6 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { jsonArgs, workspaceArgs } from "@/cli/shared/args";
+import { workspaceArgs } from "@/cli/shared/args";
 import { platformBaseUrl, userAgent } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken } from "@/cli/shared/context";
@@ -69,7 +69,6 @@ export const apiCommand = defineAppCommand({
   description: "Call Tailor Platform API endpoints directly.",
   args: z
     .object({
-      ...jsonArgs,
       ...workspaceArgs,
       body: arg(z.string().default("{}"), {
         alias: "b",

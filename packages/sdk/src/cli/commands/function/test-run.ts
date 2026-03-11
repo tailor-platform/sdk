@@ -11,7 +11,7 @@ import { AuthInvokerSchema } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
-import { jsonArgs, workspaceArgs } from "@/cli/shared/args";
+import { workspaceArgs } from "@/cli/shared/args";
 import { initOperatorClient, type OperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
@@ -25,7 +25,6 @@ export const testRunCommand = defineAppCommand({
   name: "test-run",
   description: "Run a function on the Tailor Platform server without deploying.",
   args: z.object({
-    ...jsonArgs,
     ...workspaceArgs,
     file: arg(z.string(), {
       positional: true,

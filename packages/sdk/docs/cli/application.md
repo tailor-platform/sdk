@@ -225,7 +225,6 @@ tailor-sdk show [options]
 
 | Option                          | Alias | Description             | Required | Default              |
 | ------------------------------- | ----- | ----------------------- | -------- | -------------------- |
-| `--json`                        | `-j`  | Output as JSON          | No       | `false`              |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | No       | -                    |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile       | No       | -                    |
 | `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` |
@@ -316,7 +315,6 @@ tailor-sdk api [options] <endpoint>
 
 | Option                          | Alias | Description          | Required | Default |
 | ------------------------------- | ----- | -------------------- | -------- | ------- |
-| `--json`                        | `-j`  | Output as JSON       | No       | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID         | No       | -       |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile    | No       | -       |
 | `--body <BODY>`                 | `-b`  | Request body as JSON | No       | `"{}"`  |

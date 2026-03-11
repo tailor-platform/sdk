@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { jsonArgs, workspaceArgs } from "@/cli/shared/args";
+import { workspaceArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
@@ -57,7 +57,6 @@ export const getCommand = defineAppCommand({
   description: "Show detailed information about a workspace",
   args: z
     .object({
-      ...jsonArgs,
       ...workspaceArgs,
     })
     .strict(),

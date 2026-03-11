@@ -1,6 +1,5 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { jsonArgs } from "@/cli/shared/args";
 import { initOperatorClient, type OperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import {
@@ -83,7 +82,6 @@ export const createCommand = defineAppCommand({
   description: "Create a new Tailor Platform workspace.",
   args: z
     .object({
-      ...jsonArgs,
       name: arg(z.string(), {
         alias: "n",
         description: "Workspace name",

@@ -9,7 +9,7 @@ import { WorkflowExecution_Status } from "@tailor-proto/tailor/v1/workflow_resou
 import ora from "ora";
 import { arg } from "politty";
 import { z } from "zod";
-import { jsonArgs, parseDuration, workspaceArgs } from "@/cli/shared/args";
+import { parseDuration, workspaceArgs } from "@/cli/shared/args";
 import { fetchAll, initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
@@ -388,7 +388,6 @@ export const executionsCommand = defineAppCommand({
   description: "List or get workflow executions.",
   args: z
     .object({
-      ...jsonArgs,
       ...workspaceArgs,
       executionId: arg(z.string().optional(), {
         positional: true,

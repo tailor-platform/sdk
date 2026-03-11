@@ -136,6 +136,13 @@ export const commonArgs = {
       verboseMode = value;
     },
   }),
+  json: arg(z.boolean().default(false), {
+    alias: "j",
+    description: "Output as JSON",
+    effect: (value) => {
+      logger.jsonMode = value;
+    },
+  }),
 } satisfies ArgsShape;
 
 /**
@@ -180,19 +187,6 @@ export const confirmationArgs = {
   yes: arg(z.boolean().default(false), {
     alias: "y",
     description: "Skip confirmation prompts",
-  }),
-} satisfies ArgsShape;
-
-/**
- * Arguments for JSON output
- */
-export const jsonArgs = {
-  json: arg(z.boolean().default(false), {
-    alias: "j",
-    description: "Output as JSON",
-    effect: (value) => {
-      logger.jsonMode = value;
-    },
   }),
 } satisfies ArgsShape;
 

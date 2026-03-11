@@ -2,7 +2,7 @@ import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { FunctionExecution_Type } from "@tailor-proto/tailor/v1/function_resource_pb";
 import { arg } from "politty";
 import { z } from "zod";
-import { jsonArgs, workspaceArgs } from "@/cli/shared/args";
+import { workspaceArgs } from "@/cli/shared/args";
 import { fetchAll, initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
@@ -121,7 +121,6 @@ export const logsCommand = defineAppCommand({
   description: "List or get function execution logs.",
   args: z
     .object({
-      ...jsonArgs,
       ...workspaceArgs,
       executionId: arg(z.string().optional(), {
         positional: true,

@@ -1,6 +1,6 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { z } from "zod";
-import { jsonArgs, workspaceArgs } from "@/cli/shared/args";
+import { workspaceArgs } from "@/cli/shared/args";
 import { fetchAll, initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
@@ -59,7 +59,6 @@ export const listCommand = defineAppCommand({
   description: "List all Secret Manager vaults in the workspace.",
   args: z
     .object({
-      ...jsonArgs,
       ...workspaceArgs,
     })
     .strict(),

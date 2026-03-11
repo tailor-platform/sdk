@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
-import { deploymentArgs, jsonArgs } from "@/cli/shared/args";
+import { deploymentArgs } from "@/cli/shared/args";
 import { defineAppCommand } from "@/cli/shared/command";
 import { logger } from "@/cli/shared/logger";
 import { resolveCliBinPath } from "@/cli/shared/resolve-cli-bin";
@@ -234,7 +234,6 @@ export const erdExportCommand = defineAppCommand({
   args: z
     .object({
       ...deploymentArgs,
-      ...jsonArgs,
       namespace: arg(z.string().optional(), {
         alias: "n",
         description:

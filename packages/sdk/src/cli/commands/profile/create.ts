@@ -1,6 +1,5 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { jsonArgs } from "@/cli/shared/args";
 import { fetchAll, initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { fetchLatestToken, readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
@@ -12,7 +11,6 @@ export const createCommand = defineAppCommand({
   description: "Create a new profile.",
   args: z
     .object({
-      ...jsonArgs,
       name: arg(z.string(), {
         positional: true,
         description: "Profile name",

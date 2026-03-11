@@ -207,7 +207,6 @@ tailor-sdk secret vault list [options]
 
 | Option                          | Alias | Description       | Required | Default |
 | ------------------------------- | ----- | ----------------- | -------- | ------- |
-| `--json`                        | `-j`  | Output as JSON    | No       | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
 
@@ -328,7 +327,6 @@ tailor-sdk secret list [options]
 
 | Option                          | Alias | Description       | Required | Default |
 | ------------------------------- | ----- | ----------------- | -------- | ------- |
-| `--json`                        | `-j`  | Output as JSON    | No       | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
 | `--vault-name <VAULT_NAME>`     | `-V`  | Vault name        | Yes      | -       |

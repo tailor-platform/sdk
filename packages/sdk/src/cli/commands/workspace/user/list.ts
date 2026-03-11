@@ -1,6 +1,6 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { jsonArgs, positiveIntArg, workspaceArgs } from "@/cli/shared/args";
+import { positiveIntArg, workspaceArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
@@ -83,7 +83,6 @@ export const listCommand = defineAppCommand({
   description: "List users in a workspace",
   args: z
     .object({
-      ...jsonArgs,
       ...workspaceArgs,
       limit: arg(positiveIntArg.optional(), {
         alias: "l",

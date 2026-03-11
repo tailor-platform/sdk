@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { deploymentArgs, jsonArgs } from "@/cli/shared/args";
+import { deploymentArgs } from "@/cli/shared/args";
 import { fetchAll, initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
@@ -58,7 +58,6 @@ export const listCommand = defineAppCommand({
   description: "List all OAuth2 clients in the application.",
   args: z
     .object({
-      ...jsonArgs,
       ...deploymentArgs,
     })
     .strict(),

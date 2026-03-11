@@ -1,6 +1,5 @@
 import ml from "multiline-ts";
 import { z } from "zod";
-import { jsonArgs } from "@/cli/shared/args";
 import { fetchAll, initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { fetchLatestToken, readPlatformConfig } from "@/cli/shared/context";
@@ -10,11 +9,7 @@ import { transformPersonalAccessToken, type PersonalAccessTokenInfo } from "./tr
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List all personal access tokens.",
-  args: z
-    .object({
-      ...jsonArgs,
-    })
-    .strict(),
+  args: z.object({}).strict(),
   run: async (args) => {
     const config = readPlatformConfig();
 

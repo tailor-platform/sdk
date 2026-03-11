@@ -1,7 +1,7 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { arg } from "politty";
 import { z } from "zod";
-import { deploymentArgs, jsonArgs } from "@/cli/shared/args";
+import { deploymentArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
@@ -64,7 +64,6 @@ export const getCommand = defineAppCommand({
   description: "Get OAuth2 client credentials (including client secret).",
   args: z
     .object({
-      ...jsonArgs,
       ...deploymentArgs,
       name: arg(z.string(), {
         positional: true,

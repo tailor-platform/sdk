@@ -1,6 +1,5 @@
 import ml from "multiline-ts";
 import { z } from "zod";
-import { jsonArgs } from "@/cli/shared/args";
 import { defineAppCommand } from "@/cli/shared/command";
 import { readPlatformConfig } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
@@ -9,11 +8,7 @@ import type { ProfileInfo } from ".";
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List all profiles.",
-  args: z
-    .object({
-      ...jsonArgs,
-    })
-    .strict(),
+  args: z.object({}).strict(),
   run: async () => {
     const config = readPlatformConfig();
 

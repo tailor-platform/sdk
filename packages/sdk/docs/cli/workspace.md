@@ -73,7 +73,6 @@ tailor-sdk workspace create [options]
 
 | Option                                | Alias | Description                                           | Required | Default |
 | ------------------------------------- | ----- | ----------------------------------------------------- | -------- | ------- |
-| `--json`                              | `-j`  | Output as JSON                                        | No       | `false` |
 | `--name <NAME>`                       | `-n`  | Workspace name                                        | Yes      | -       |
 | `--region <REGION>`                   | `-r`  | Workspace region (us-west, asia-northeast)            | Yes      | -       |
 | `--delete-protection`                 | `-d`  | Enable delete protection                              | No       | `false` |
@@ -117,7 +116,6 @@ tailor-sdk workspace list [options]
 
 | Option            | Alias | Description                          | Required | Default |
 | ----------------- | ----- | ------------------------------------ | -------- | ------- |
-| `--json`          | `-j`  | Output as JSON                       | No       | `false` |
 | `--limit <LIMIT>` | `-l`  | Maximum number of workspaces to list | No       | -       |
 
 <!-- politty:command:workspace list:options:end -->
@@ -241,11 +239,10 @@ tailor-sdk profile create [options] <name>
 
 **Options**
 
-| Option                          | Alias | Description    | Required | Default |
-| ------------------------------- | ----- | -------------- | -------- | ------- |
-| `--json`                        | `-j`  | Output as JSON | No       | `false` |
-| `--user <USER>`                 | `-u`  | User email     | Yes      | -       |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID   | Yes      | -       |
+| Option                          | Alias | Description  | Required | Default |
+| ------------------------------- | ----- | ------------ | -------- | ------- |
+| `--user <USER>`                 | `-u`  | User email   | Yes      | -       |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID | Yes      | -       |
 
 <!-- politty:command:profile create:options:end -->
 
@@ -271,7 +268,7 @@ List all profiles.
 **Usage**
 
 ```
-tailor-sdk profile list [options]
+tailor-sdk profile list
 ```
 
 <!-- politty:command:profile list:usage:end -->
@@ -329,7 +326,6 @@ tailor-sdk profile update [options] <name>
 
 | Option                          | Alias | Description      | Required | Default |
 | ------------------------------- | ----- | ---------------- | -------- | ------- |
-| `--json`                        | `-j`  | Output as JSON   | No       | `false` |
 | `--user <USER>`                 | `-u`  | New user email   | No       | -       |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | New workspace ID | No       | -       |
 
@@ -445,7 +441,6 @@ tailor-sdk workspace app health [options]
 
 | Option                          | Alias | Description       | Required | Default |
 | ------------------------------- | ----- | ----------------- | -------- | ------- |
-| `--json`                        | `-j`  | Output as JSON    | No       | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
 | `--name <NAME>`                 | `-n`  | Application name  | Yes      | -       |
@@ -486,7 +481,6 @@ tailor-sdk workspace app list [options]
 
 | Option                          | Alias | Description                            | Required | Default |
 | ------------------------------- | ----- | -------------------------------------- | -------- | ------- |
-| `--json`                        | `-j`  | Output as JSON                         | No       | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                           | No       | -       |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile                      | No       | -       |
 | `--limit <LIMIT>`               | `-l`  | Maximum number of applications to list | No       | -       |
@@ -527,7 +521,6 @@ tailor-sdk workspace get [options]
 
 | Option                          | Alias | Description       | Required | Default |
 | ------------------------------- | ----- | ----------------- | -------- | ------- |
-| `--json`                        | `-j`  | Output as JSON    | No       | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
 
@@ -688,7 +681,6 @@ tailor-sdk workspace user list [options]
 
 | Option                          | Alias | Description                     | Required | Default |
 | ------------------------------- | ----- | ------------------------------- | -------- | ------- |
-| `--json`                        | `-j`  | Output as JSON                  | No       | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                    | No       | -       |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile               | No       | -       |
 | `--limit <LIMIT>`               | `-l`  | Maximum number of users to list | No       | -       |

@@ -15,13 +15,7 @@ import {
 import ora from "ora";
 import { arg } from "politty";
 import { z } from "zod";
-import {
-  durationArg,
-  jsonArgs,
-  parseDuration,
-  positiveIntArg,
-  workspaceArgs,
-} from "@/cli/shared/args";
+import { durationArg, parseDuration, positiveIntArg, workspaceArgs } from "@/cli/shared/args";
 import { fetchAll, initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
@@ -530,7 +524,6 @@ export const jobsCommand = defineAppCommand({
   ],
   args: z
     .object({
-      ...jsonArgs,
       ...workspaceArgs,
       executorName: arg(z.string(), {
         positional: true,

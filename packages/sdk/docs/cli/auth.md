@@ -68,7 +68,6 @@ tailor-sdk machineuser list [options]
 
 | Option                          | Alias | Description             | Required | Default              |
 | ------------------------------- | ----- | ----------------------- | -------- | -------------------- |
-| `--json`                        | `-j`  | Output as JSON          | No       | `false`              |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | No       | -                    |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile       | No       | -                    |
 | `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` |
@@ -118,7 +117,6 @@ tailor-sdk machineuser token [options] <name>
 
 | Option                          | Alias | Description             | Required | Default              |
 | ------------------------------- | ----- | ----------------------- | -------- | -------------------- |
-| `--json`                        | `-j`  | Output as JSON          | No       | `false`              |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | No       | -                    |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile       | No       | -                    |
 | `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` |
@@ -196,7 +194,6 @@ tailor-sdk oauth2client list [options]
 
 | Option                          | Alias | Description             | Required | Default              |
 | ------------------------------- | ----- | ----------------------- | -------- | -------------------- |
-| `--json`                        | `-j`  | Output as JSON          | No       | `false`              |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | No       | -                    |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile       | No       | -                    |
 | `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` |
@@ -246,7 +243,6 @@ tailor-sdk oauth2client get [options] <name>
 
 | Option                          | Alias | Description             | Required | Default              |
 | ------------------------------- | ----- | ----------------------- | -------- | -------------------- |
-| `--json`                        | `-j`  | Output as JSON          | No       | `false`              |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | No       | -                    |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile       | No       | -                    |
 | `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` |

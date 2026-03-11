@@ -12,7 +12,7 @@ import { parse as parseSql, toSql } from "pgsql-ast-parser";
 import { arg } from "politty";
 import { z } from "zod";
 import { bundleQueryScript } from "../bundler/query/query-bundler";
-import { deploymentArgs, jsonArgs } from "../shared/args";
+import { deploymentArgs } from "../shared/args";
 import { fetchMachineUserToken, initOperatorClient } from "../shared/client";
 import { defineAppCommand } from "../shared/command";
 import { extractAllNamespaces } from "../shared/config";
@@ -753,7 +753,6 @@ export const queryCommand = defineAppCommand({
   description: "Run SQL/GraphQL query.",
   args: z
     .object({
-      ...jsonArgs,
       ...deploymentArgs,
       engine: arg(queryEngineSchema, {
         description: "Query engine (sql or gql)",

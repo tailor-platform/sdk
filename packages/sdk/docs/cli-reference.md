@@ -16,6 +16,7 @@ tailor-sdk <command> [options]
 | `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | No | - |
 | `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | No | - |
 | `--verbose` | - | Enable verbose logging | No | `false` |
+| `--json` | `-j` | Output as JSON | No | `false` |
 
 <!-- politty:global-options:end -->
 

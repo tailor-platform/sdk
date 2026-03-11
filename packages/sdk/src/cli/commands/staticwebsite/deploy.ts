@@ -5,7 +5,7 @@ import pLimit from "p-limit";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
-import { jsonArgs, workspaceArgs } from "@/cli/shared/args";
+import { workspaceArgs } from "@/cli/shared/args";
 import { initOperatorClient, type OperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
@@ -230,7 +230,6 @@ export const deployCommand = defineAppCommand({
   description: "Deploy a static website from a local build directory.",
   args: z
     .object({
-      ...jsonArgs,
       ...workspaceArgs,
       name: arg(z.string(), {
         alias: "n",

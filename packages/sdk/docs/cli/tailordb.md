@@ -333,7 +333,6 @@ tailor-sdk tailordb erd export [options]
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                         | No       | -                    |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                    | No       | -                    |
 | `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                                              | No       | `"tailor.config.ts"` |
-| `--json`                        | `-j`  | Output as JSON                                                                                       | No       | `false`              |
 | `--namespace <NAMESPACE>`       | `-n`  | TailorDB namespace name (optional if only one namespace is defined in config)                        | No       | -                    |
 | `--output <OUTPUT>`             | `-o`  | Output directory path for tbls-compatible ERD JSON (writes to `<outputDir>/<namespace>/schema.json`) | No       | `".tailor-sdk/erd"`  |
 
@@ -415,7 +414,6 @@ tailor-sdk tailordb erd deploy [options]
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                        | No       | -                    |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                   | No       | -                    |
 | `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                             | No       | `"tailor.config.ts"` |
-| `--json`                        | `-j`  | Output as JSON                                                                      | No       | `false`              |
 | `--namespace <NAMESPACE>`       | `-n`  | TailorDB namespace name (optional - deploys all namespaces with erdSite if omitted) | No       | -                    |
 
 <!-- politty:command:tailordb erd deploy:options:end -->

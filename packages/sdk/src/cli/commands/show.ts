@@ -1,6 +1,6 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { z } from "zod";
-import { deploymentArgs, jsonArgs } from "@/cli/shared/args";
+import { deploymentArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
@@ -91,7 +91,6 @@ export const showCommand = defineAppCommand({
   description: "Show information about the deployed application.",
   args: z
     .object({
-      ...jsonArgs,
       ...deploymentArgs,
     })
     .strict(),

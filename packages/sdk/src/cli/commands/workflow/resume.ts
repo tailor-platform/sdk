@@ -1,7 +1,7 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { arg } from "politty";
 import { z } from "zod";
-import { jsonArgs, parseDuration, workspaceArgs } from "@/cli/shared/args";
+import { parseDuration, workspaceArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
@@ -76,7 +76,6 @@ export const resumeCommand = defineAppCommand({
   description: "Resume a failed or pending workflow execution.",
   args: z
     .object({
-      ...jsonArgs,
       ...workspaceArgs,
       executionId: arg(z.string(), {
         positional: true,

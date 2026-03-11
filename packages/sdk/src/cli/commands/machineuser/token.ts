@@ -1,6 +1,6 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { deploymentArgs, jsonArgs } from "@/cli/shared/args";
+import { deploymentArgs } from "@/cli/shared/args";
 import { fetchMachineUserToken, initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
@@ -80,7 +80,6 @@ export const tokenCommand = defineAppCommand({
   description: "Get an access token for a machine user.",
   args: z
     .object({
-      ...jsonArgs,
       ...deploymentArgs,
       name: arg(z.string(), {
         positional: true,

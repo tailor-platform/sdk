@@ -8,7 +8,7 @@ import {
 import ora from "ora";
 import { arg } from "politty";
 import { z } from "zod";
-import { deploymentArgs, jsonArgs, parseDuration } from "@/cli/shared/args";
+import { deploymentArgs, parseDuration } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
@@ -348,7 +348,6 @@ export const startCommand = defineAppCommand({
   description: "Start a workflow execution.",
   args: z
     .object({
-      ...jsonArgs,
       ...deploymentArgs,
       ...nameArgs,
       machineuser: arg(z.string(), {

@@ -78,7 +78,6 @@ tailor-sdk function logs [options] [executionId]
 
 | Option                          | Alias | Description       | Required | Default |
 | ------------------------------- | ----- | ----------------- | -------- | ------- |
-| `--json`                        | `-j`  | Output as JSON    | No       | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
 
@@ -138,7 +137,6 @@ tailor-sdk function test-run [options] <file>
 
 | Option                          | Alias | Description                                                              | Required | Default              |
 | ------------------------------- | ----- | ------------------------------------------------------------------------ | -------- | -------------------- |
-| `--json`                        | `-j`  | Output as JSON                                                           | No       | `false`              |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                             | No       | -                    |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile                                                        | No       | -                    |
 | `--name <NAME>`                 | `-n`  | Workflow job name to run (matches the `name` field of createWorkflowJob) | No       | -                    |

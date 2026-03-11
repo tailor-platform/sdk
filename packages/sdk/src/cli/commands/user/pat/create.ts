@@ -1,7 +1,6 @@
 import ml from "multiline-ts";
 import { arg } from "politty";
 import { z } from "zod";
-import { jsonArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { fetchLatestToken, readPlatformConfig } from "@/cli/shared/context";
@@ -12,7 +11,6 @@ export const createCommand = defineAppCommand({
   description: "Create a new personal access token.",
   args: z
     .object({
-      ...jsonArgs,
       name: arg(z.string(), {
         positional: true,
         description: "Token name",
