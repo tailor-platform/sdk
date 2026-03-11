@@ -1,6 +1,7 @@
 import type { AuthConfig } from "./auth";
 import type { IdPConfig } from "./idp";
 import type { TailorDBServiceInput } from "./tailordb";
+import type { SecretsConfig } from "@/configure/services/secrets";
 import type { StaticWebsiteConfig } from "@/configure/services/staticwebsite";
 
 export type ExecutorServiceConfig = { files: string[]; ignores?: string[] };
@@ -61,6 +62,8 @@ export interface AppConfig<
   workflow?: WorkflowServiceInput;
   /** Static website configurations. Must be an array, e.g. `[website]`. */
   staticWebsites?: StaticWebsites;
+  /** Secret Manager vault configurations. Keys are vault names, values are records of secret names to values. */
+  secrets?: SecretsConfig;
   /**
    * Enable inline sourcemaps in bundled functions for better error stack traces.
    * @default true

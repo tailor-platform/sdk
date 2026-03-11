@@ -15,6 +15,7 @@ import { resolveInlineSourcemap } from "@/cli/shared/inline-sourcemap";
 import { logger } from "@/cli/shared/logger";
 import { buildTriggerContext } from "@/cli/shared/trigger-context";
 import { IdPSchema } from "@/parser/service/idp";
+import { SecretsSchema } from "@/parser/service/secrets";
 import { StaticWebsiteSchema } from "@/parser/service/staticwebsite";
 import { TailorDBServiceConfigSchema } from "@/parser/service/tailordb";
 import {
@@ -31,6 +32,11 @@ import type { PluginManager } from "@/plugin/manager";
 import type { IdP } from "@/types/idp.generated";
 import type { StaticWebsite, StaticWebsiteInput } from "@/types/staticwebsite.generated";
 
+export type SecretVault = {
+  readonly vaultName: string;
+  readonly secrets: ReadonlyArray<{ name: string; value: string }>;
+};
+
 export type Application = {
   readonly name: string;
   readonly config: AppConfig;
@@ -43,6 +49,7 @@ export type Application = {
   readonly executorService: Readonly<ExecutorService> | undefined;
   readonly workflowService: Readonly<WorkflowService> | undefined;
   readonly staticWebsiteServices: ReadonlyArray<StaticWebsite>;
+  readonly secrets: ReadonlyArray<SecretVault>;
   readonly env: Readonly<Record<string, string | number | boolean>>;
   readonly applications: ReadonlyArray<Application>;
 };
@@ -204,12 +211,30 @@ function defineStaticWebsites(
   return staticWebsiteServices;
 }
 
+function defineSecretManager(config: AppConfig["secrets"]): SecretVault[] {
+  if (!config) {
+    return [];
+  }
+
+  // Create a plain object with only enumerable properties (vault data).
+  // Zod v4's z.record() uses Reflect.ownKeys() which sees non-enumerable
+  // properties like get/getAll attached by defineSecretManager() in the configure layer.
+  const data = Object.fromEntries(Object.entries(config));
+  const parsed = SecretsSchema.parse(data);
+
+  return Object.entries(parsed).map(([vaultName, vaultSecrets]) => ({
+    vaultName,
+    secrets: Object.entries(vaultSecrets).map(([name, value]) => ({ name, value })),
+  }));
+}
+
 type DefineServicesResult = {
   tailordbResult: DefineTailorDBResult;
   resolverResult: DefineResolverResult;
   idpResult: DefineIdpResult;
   authResult: DefineAuthResult;
   staticWebsiteServices: StaticWebsite[];
+  secrets: SecretVault[];
 };
 
 function defineServices(config: AppConfig, pluginManager?: PluginManager): DefineServicesResult {
@@ -222,7 +247,8 @@ function defineServices(config: AppConfig, pluginManager?: PluginManager): Defin
     tailordbResult.externalTailorDBNamespaces,
   );
   const staticWebsiteServices = defineStaticWebsites(config.staticWebsites);
-  return { tailordbResult, resolverResult, idpResult, authResult, staticWebsiteServices };
+  const secrets = defineSecretManager(config.secrets);
+  return { tailordbResult, resolverResult, idpResult, authResult, staticWebsiteServices, secrets };
 }
 
 function buildApplication(params: {
@@ -234,6 +260,7 @@ function buildApplication(params: {
   executorService: ExecutorService | undefined;
   workflowService: WorkflowService | undefined;
   staticWebsiteServices: StaticWebsite[];
+  secrets: SecretVault[];
   env: Record<string, string | number | boolean>;
 }): Application {
   const application: Application = {
@@ -253,6 +280,7 @@ function buildApplication(params: {
     executorService: params.executorService,
     workflowService: params.workflowService,
     staticWebsiteServices: params.staticWebsiteServices,
+    secrets: params.secrets,
     env: params.env,
     get applications() {
       return [application];
@@ -346,7 +374,7 @@ export async function loadApplication(
   const { config, pluginManager, bundleCache } = params;
 
   // 1. Define services (synchronous)
-  const { tailordbResult, resolverResult, idpResult, authResult, staticWebsiteServices } =
+  const { tailordbResult, resolverResult, idpResult, authResult, staticWebsiteServices, secrets } =
     defineServices(config, pluginManager);
 
   // 2. Load TailorDB types and process namespace plugins
@@ -438,6 +466,7 @@ export async function loadApplication(
     executorService,
     workflowService,
     staticWebsiteServices,
+    secrets,
     env: config.env ?? {},
   });
 
