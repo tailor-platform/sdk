@@ -154,7 +154,7 @@
     "@typescript/native-preview": "7.0.0-dev.20260308.1",
     "@vitest/coverage-v8": "4.0.18",
     "eslint": "9.39.4",
-    "eslint-plugin-jsdoc": "62.1.0",
+    "eslint-plugin-jsdoc": "62.7.1",
     "eslint-plugin-oxlint": "1.39.0",
     "oxlint": "1.39.0",
     "oxlint-tsgolint": "0.11.1",
