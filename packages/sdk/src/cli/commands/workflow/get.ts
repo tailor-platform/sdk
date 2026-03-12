@@ -1,8 +1,8 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { defineCommand } from "politty";
 import { z } from "zod";
-import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "@/cli/shared/args";
+import { workspaceArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { nameArgs } from "./args";
@@ -86,18 +86,16 @@ export async function getWorkflow<W extends WorkflowLike>(
   }
 }
 
-export const getCommand = defineCommand({
+export const getCommand = defineAppCommand({
   name: "get",
   description: "Get workflow details.",
   args: z
     .object({
-      ...commonArgs,
-      ...jsonArgs,
       ...workspaceArgs,
       ...nameArgs,
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
     const workflow = await getWorkflow({
       name: args.name,
       workspaceId: args["workspace-id"],
@@ -105,5 +103,5 @@ export const getCommand = defineCommand({
     });
 
     logger.out(workflow);
-  }),
+  },
 });

@@ -9,11 +9,12 @@ import {
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import * as path from "pathe";
 import { parse as parseSql, toSql } from "pgsql-ast-parser";
-import { arg, defineCommand } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
 import { bundleQueryScript } from "../bundler/query/query-bundler";
-import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "../shared/args";
+import { deploymentArgs } from "../shared/args";
 import { fetchMachineUserToken, initOperatorClient } from "../shared/client";
+import { defineAppCommand } from "../shared/command";
 import { extractAllNamespaces } from "../shared/config";
 import { loadConfig, type LoadedConfig } from "../shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "../shared/context";
@@ -747,13 +748,11 @@ function reorderRowByTemplate(row: SQLResultRow, expectedOrder: string[]): SQLRe
   return ordered;
 }
 
-export const queryCommand = defineCommand({
+export const queryCommand = defineAppCommand({
   name: "query",
   description: "Run SQL/GraphQL query.",
   args: z
     .object({
-      ...commonArgs,
-      ...jsonArgs,
       ...deploymentArgs,
       engine: arg(queryEngineSchema, {
         description: "Query engine (sql or gql)",
@@ -800,7 +799,7 @@ export const queryCommand = defineCommand({
       }
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
     const mode = await resolveQueryCommandInput({
       query: args.query,
       file: args.file,
@@ -845,7 +844,7 @@ export const queryCommand = defineCommand({
       query: directQuery,
     });
     printGqlResult(result, { json: args.json });
-  }),
+  },
 });
 
 function isSQLExecutionResult(value: unknown): value is SQLExecutionResult {

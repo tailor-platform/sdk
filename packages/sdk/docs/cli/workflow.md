@@ -37,6 +37,12 @@ tailor-sdk workflow [command]
 | [`workflow resume`](#workflow-resume)         | Resume a failed or pending workflow execution. |
 
 <!-- politty:command:workflow:subcommands:end -->
+
+<!-- politty:command:workflow:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:workflow:global-options-link:end -->
 <!-- politty:command:workflow list:heading:start -->
 
 ### workflow list
@@ -65,11 +71,16 @@ tailor-sdk workflow list [options]
 
 | Option                          | Alias | Description       | Required | Default |
 | ------------------------------- | ----- | ----------------- | -------- | ------- |
-| `--json`                        | `-j`  | Output as JSON    | No       | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
 
 <!-- politty:command:workflow list:options:end -->
+
+<!-- politty:command:workflow list:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:workflow list:global-options-link:end -->
 <!-- politty:command:workflow get:heading:start -->
 
 ### workflow get
@@ -108,11 +119,16 @@ tailor-sdk workflow get [options] <name>
 
 | Option                          | Alias | Description       | Required | Default |
 | ------------------------------- | ----- | ----------------- | -------- | ------- |
-| `--json`                        | `-j`  | Output as JSON    | No       | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
 
 <!-- politty:command:workflow get:options:end -->
+
+<!-- politty:command:workflow get:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:workflow get:global-options-link:end -->
 <!-- politty:command:workflow start:heading:start -->
 
 ### workflow start
@@ -151,7 +167,6 @@ tailor-sdk workflow start [options] <name>
 
 | Option                          | Alias | Description                                                    | Required | Default              |
 | ------------------------------- | ----- | -------------------------------------------------------------- | -------- | -------------------- |
-| `--json`                        | `-j`  | Output as JSON                                                 | No       | `false`              |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                   | No       | -                    |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile                                              | No       | -                    |
 | `--config <CONFIG>`             | `-c`  | Path to SDK config file                                        | No       | `"tailor.config.ts"` |
@@ -162,6 +177,12 @@ tailor-sdk workflow start [options] <name>
 | `--logs`                        | `-l`  | Display job execution logs after completion (requires --wait)  | No       | `false`              |
 
 <!-- politty:command:workflow start:options:end -->
+
+<!-- politty:command:workflow start:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:workflow start:global-options-link:end -->
 <!-- politty:command:workflow executions:heading:start -->
 
 ### workflow executions
@@ -200,7 +221,6 @@ tailor-sdk workflow executions [options] [executionId]
 
 | Option                            | Alias | Description                                                    | Required | Default |
 | --------------------------------- | ----- | -------------------------------------------------------------- | -------- | ------- |
-| `--json`                          | `-j`  | Output as JSON                                                 | No       | `false` |
 | `--workspace-id <WORKSPACE_ID>`   | `-w`  | Workspace ID                                                   | No       | -       |
 | `--profile <PROFILE>`             | `-p`  | Workspace profile                                              | No       | -       |
 | `--workflow-name <WORKFLOW_NAME>` | `-n`  | Filter by workflow name (list mode only)                       | No       | -       |
@@ -210,6 +230,12 @@ tailor-sdk workflow executions [options] [executionId]
 | `--logs`                          | -     | Display job execution logs (detail mode only)                  | No       | `false` |
 
 <!-- politty:command:workflow executions:options:end -->
+
+<!-- politty:command:workflow executions:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:workflow executions:global-options-link:end -->
 <!-- politty:command:workflow resume:heading:start -->
 
 ### workflow resume
@@ -248,7 +274,6 @@ tailor-sdk workflow resume [options] <executionId>
 
 | Option                          | Alias | Description                                                    | Required | Default |
 | ------------------------------- | ----- | -------------------------------------------------------------- | -------- | ------- |
-| `--json`                        | `-j`  | Output as JSON                                                 | No       | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                   | No       | -       |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile                                              | No       | -       |
 | `--wait`                        | `-W`  | Wait for execution to complete                                 | No       | `false` |
@@ -256,6 +281,12 @@ tailor-sdk workflow resume [options] <executionId>
 | `--logs`                        | `-l`  | Display job execution logs after completion (requires --wait)  | No       | `false` |
 
 <!-- politty:command:workflow resume:options:end -->
+
+<!-- politty:command:workflow resume:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:workflow resume:global-options-link:end -->
 
 **Usage Examples:**
 

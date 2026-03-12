@@ -1,8 +1,9 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { defineCommand, arg } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
-import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "@/cli/shared/args";
+import { deploymentArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
@@ -58,13 +59,11 @@ export async function getOAuth2Client(
   }
 }
 
-export const getCommand = defineCommand({
+export const getCommand = defineAppCommand({
   name: "get",
   description: "Get OAuth2 client credentials (including client secret).",
   args: z
     .object({
-      ...commonArgs,
-      ...jsonArgs,
       ...deploymentArgs,
       name: arg(z.string(), {
         positional: true,
@@ -72,7 +71,7 @@ export const getCommand = defineCommand({
       }),
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
     const credentials = await getOAuth2Client({
       name: args.name,
       workspaceId: args["workspace-id"],
@@ -81,5 +80,5 @@ export const getCommand = defineCommand({
     });
 
     logger.out(credentials);
-  }),
+  },
 });

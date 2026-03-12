@@ -41,3 +41,9 @@ tailor-sdk completion [options] [shell]
 | `--instructions` | `-i`  | Show installation instructions | No       | `false` |
 
 <!-- politty:command:completion:options:end -->
+
+<!-- politty:command:completion:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:completion:global-options-link:end -->

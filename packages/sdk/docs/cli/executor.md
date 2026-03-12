@@ -38,6 +38,12 @@ tailor-sdk executor [command]
 
 <!-- politty:command:executor:subcommands:end -->
 
+<!-- politty:command:executor:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:executor:global-options-link:end -->
+
 <!-- politty:command:executor list:heading:start -->
 
 ### executor list
@@ -66,11 +72,16 @@ tailor-sdk executor list [options]
 
 | Option                          | Alias | Description       | Required | Default |
 | ------------------------------- | ----- | ----------------- | -------- | ------- |
-| `--json`                        | `-j`  | Output as JSON    | No       | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
 
 <!-- politty:command:executor list:options:end -->
+
+<!-- politty:command:executor list:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:executor list:global-options-link:end -->
 
 <!-- politty:command:executor get:heading:start -->
 
@@ -110,11 +121,16 @@ tailor-sdk executor get [options] <name>
 
 | Option                          | Alias | Description       | Required | Default |
 | ------------------------------- | ----- | ----------------- | -------- | ------- |
-| `--json`                        | `-j`  | Output as JSON    | No       | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
 
 <!-- politty:command:executor get:options:end -->
+
+<!-- politty:command:executor get:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:executor get:global-options-link:end -->
 
 <!-- politty:command:executor jobs:heading:start -->
 
@@ -155,7 +171,6 @@ tailor-sdk executor jobs [options] <executorName> [jobId]
 
 | Option                          | Alias | Description                                                                                           | Required | Default |
 | ------------------------------- | ----- | ----------------------------------------------------------------------------------------------------- | -------- | ------- |
-| `--json`                        | `-j`  | Output as JSON                                                                                        | No       | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                          | No       | -       |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                     | No       | -       |
 | `--status <STATUS>`             | `-s`  | Filter by status (PENDING, RUNNING, SUCCESS, FAILED, CANCELED) (list mode only)                       | No       | -       |
@@ -215,6 +230,12 @@ $ tailor-sdk executor jobs my-executor <job-id> -W -l
 
 <!-- politty:command:executor jobs:examples:end -->
 
+<!-- politty:command:executor jobs:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:executor jobs:global-options-link:end -->
+
 <!-- politty:command:executor trigger:heading:start -->
 
 ### executor trigger
@@ -253,7 +274,6 @@ tailor-sdk executor trigger [options] <executorName>
 
 | Option                          | Alias | Description                                                                        | Required | Default |
 | ------------------------------- | ----- | ---------------------------------------------------------------------------------- | -------- | ------- |
-| `--json`                        | `-j`  | Output as JSON                                                                     | No       | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                       | No       | -       |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                  | No       | -       |
 | `--data <DATA>`                 | `-d`  | Request body (JSON string)                                                         | No       | -       |
@@ -321,6 +341,12 @@ The `--logs` option displays logs from the downstream execution when available.
 
 <!-- politty:command:executor trigger:notes:end -->
 
+<!-- politty:command:executor trigger:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:executor trigger:global-options-link:end -->
+
 <!-- politty:command:executor webhook:heading:start -->
 
 ### executor webhook
@@ -353,6 +379,12 @@ tailor-sdk executor webhook [command]
 
 <!-- politty:command:executor webhook:subcommands:end -->
 
+<!-- politty:command:executor webhook:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:executor webhook:global-options-link:end -->
+
 <!-- politty:command:executor webhook list:heading:start -->
 
 #### executor webhook list
@@ -381,8 +413,13 @@ tailor-sdk executor webhook list [options]
 
 | Option                          | Alias | Description       | Required | Default |
 | ------------------------------- | ----- | ----------------- | -------- | ------- |
-| `--json`                        | `-j`  | Output as JSON    | No       | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
 
 <!-- politty:command:executor webhook list:options:end -->
+
+<!-- politty:command:executor webhook list:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:executor webhook list:global-options-link:end -->

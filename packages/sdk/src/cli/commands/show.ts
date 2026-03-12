@@ -1,8 +1,8 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
-import { defineCommand } from "politty";
 import { z } from "zod";
-import { commonArgs, deploymentArgs, jsonArgs, withCommonArgs } from "@/cli/shared/args";
+import { deploymentArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
@@ -86,17 +86,15 @@ export async function show(options?: ShowOptions): Promise<ShowInfo> {
   };
 }
 
-export const showCommand = defineCommand({
+export const showCommand = defineAppCommand({
   name: "show",
   description: "Show information about the deployed application.",
   args: z
     .object({
-      ...commonArgs,
-      ...jsonArgs,
       ...deploymentArgs,
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
     // Execute show logic
     const appInfo = await show({
       workspaceId: args["workspace-id"],
@@ -105,5 +103,5 @@ export const showCommand = defineCommand({
     });
 
     logger.out(appInfo);
-  }),
+  },
 });

@@ -1,13 +1,8 @@
-import { arg, defineCommand } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
-import {
-  commonArgs,
-  jsonArgs,
-  positiveIntArg,
-  withCommonArgs,
-  workspaceArgs,
-} from "@/cli/shared/args";
+import { positiveIntArg, workspaceArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { userInfo, type UserInfo } from "./transform";
@@ -83,13 +78,11 @@ export async function listUsers(options: ListUsersOptions): Promise<UserInfo[]> 
   return results;
 }
 
-export const listCommand = defineCommand({
+export const listCommand = defineAppCommand({
   name: "list",
   description: "List users in a workspace",
   args: z
     .object({
-      ...commonArgs,
-      ...jsonArgs,
       ...workspaceArgs,
       limit: arg(positiveIntArg.optional(), {
         alias: "l",
@@ -97,7 +90,7 @@ export const listCommand = defineCommand({
       }),
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
     const users = await listUsers({
       workspaceId: args["workspace-id"],
       profile: args.profile,
@@ -105,5 +98,5 @@ export const listCommand = defineCommand({
     });
 
     logger.out(users);
-  }),
+  },
 });

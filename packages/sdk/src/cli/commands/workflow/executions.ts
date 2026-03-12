@@ -7,16 +7,11 @@ import {
 } from "@tailor-proto/tailor/v1/resource_pb";
 import { WorkflowExecution_Status } from "@tailor-proto/tailor/v1/workflow_resource_pb";
 import ora from "ora";
-import { defineCommand, arg } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
-import {
-  commonArgs,
-  jsonArgs,
-  parseDuration,
-  withCommonArgs,
-  workspaceArgs,
-} from "@/cli/shared/args";
+import { parseDuration, workspaceArgs } from "@/cli/shared/args";
 import { fetchAll, initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { formatKeyValueTable } from "@/cli/shared/format";
 import { styles, logger } from "@/cli/shared/logger";
@@ -388,13 +383,11 @@ export function printExecutionWithLogs(execution: WorkflowExecutionDetailInfo): 
   }
 }
 
-export const executionsCommand = defineCommand({
+export const executionsCommand = defineAppCommand({
   name: "executions",
   description: "List or get workflow executions.",
   args: z
     .object({
-      ...commonArgs,
-      ...jsonArgs,
       ...workspaceArgs,
       executionId: arg(z.string().optional(), {
         positional: true,
@@ -414,7 +407,7 @@ export const executionsCommand = defineCommand({
       }),
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
     if (args.executionId) {
       const interval = parseDuration(args.interval);
       const { execution, wait } = await getWorkflowExecution({
@@ -445,5 +438,5 @@ export const executionsCommand = defineCommand({
       });
       logger.out(executions);
     }
-  }),
+  },
 });

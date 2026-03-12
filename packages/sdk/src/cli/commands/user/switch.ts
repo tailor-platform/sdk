@@ -1,23 +1,22 @@
 import ml from "multiline-ts";
-import { defineCommand, arg } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
-import { commonArgs, withCommonArgs } from "@/cli/shared/args";
+import { defineAppCommand } from "@/cli/shared/command";
 import { readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 
-export const switchCommand = defineCommand({
+export const switchCommand = defineAppCommand({
   name: "switch",
   description: "Set current user.",
   args: z
     .object({
-      ...commonArgs,
       user: arg(z.string(), {
         positional: true,
         description: "User email",
       }),
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
     const config = readPlatformConfig();
 
     // Check if user exists
@@ -33,5 +32,5 @@ export const switchCommand = defineCommand({
     writePlatformConfig(config);
 
     logger.success(`Current user set to "${args.user}" successfully.`);
-  }),
+  },
 });

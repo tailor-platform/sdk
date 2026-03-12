@@ -44,6 +44,12 @@ tailor-sdk init [options] [name]
 
 <!-- politty:command:init:options:end -->
 
+<!-- politty:command:init:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:init:global-options-link:end -->
+
 <!-- politty:command:generate:heading:start -->
 
 ## generate
@@ -76,6 +82,12 @@ tailor-sdk generate [options]
 | `--watch`           | `-W`  | Watch for type/resolver changes and regenerate | No       | `false`              |
 
 <!-- politty:command:generate:options:end -->
+
+<!-- politty:command:generate:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:generate:global-options-link:end -->
 
 <!-- politty:command:apply:heading:start -->
 
@@ -115,6 +127,12 @@ tailor-sdk apply [options]
 | `--clean-cache`                 | -     | Clean the bundle cache before building             | No       | -                    |
 
 <!-- politty:command:apply:options:end -->
+
+<!-- politty:command:apply:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:apply:global-options-link:end -->
 
 **Migration Handling:**
 
@@ -173,6 +191,12 @@ tailor-sdk remove [options]
 
 <!-- politty:command:remove:options:end -->
 
+<!-- politty:command:remove:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:remove:global-options-link:end -->
+
 <!-- politty:command:show:heading:start -->
 
 ## show
@@ -201,12 +225,17 @@ tailor-sdk show [options]
 
 | Option                          | Alias | Description             | Required | Default              |
 | ------------------------------- | ----- | ----------------------- | -------- | -------------------- |
-| `--json`                        | `-j`  | Output as JSON          | No       | `false`              |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | No       | -                    |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile       | No       | -                    |
 | `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` |
 
 <!-- politty:command:show:options:end -->
+
+<!-- politty:command:show:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:show:global-options-link:end -->
 
 <!-- politty:command:open:heading:start -->
 
@@ -241,6 +270,12 @@ tailor-sdk open [options]
 | `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` |
 
 <!-- politty:command:open:options:end -->
+
+<!-- politty:command:open:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:open:global-options-link:end -->
 
 <!-- politty:command:api:heading:start -->
 
@@ -280,9 +315,14 @@ tailor-sdk api [options] <endpoint>
 
 | Option                          | Alias | Description          | Required | Default |
 | ------------------------------- | ----- | -------------------- | -------- | ------- |
-| `--json`                        | `-j`  | Output as JSON       | No       | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID         | No       | -       |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile    | No       | -       |
 | `--body <BODY>`                 | `-b`  | Request body as JSON | No       | `"{}"`  |
 
 <!-- politty:command:api:options:end -->
+
+<!-- politty:command:api:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:api:global-options-link:end -->

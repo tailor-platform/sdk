@@ -37,6 +37,12 @@ tailor-sdk secret [command]
 | [`secret vault`](#secret-vault)   | Manage Secret Manager vaults. |
 
 <!-- politty:command:secret:subcommands:end -->
+
+<!-- politty:command:secret:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:secret:global-options-link:end -->
 <!-- politty:command:secret vault:heading:start -->
 
 ### secret vault
@@ -70,6 +76,12 @@ tailor-sdk secret vault [command]
 | [`secret vault list`](#secret-vault-list)     | List all Secret Manager vaults in the workspace. |
 
 <!-- politty:command:secret vault:subcommands:end -->
+
+<!-- politty:command:secret vault:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:secret vault:global-options-link:end -->
 <!-- politty:command:secret vault create:heading:start -->
 
 #### secret vault create
@@ -112,6 +124,12 @@ tailor-sdk secret vault create [options] <name>
 | `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
 
 <!-- politty:command:secret vault create:options:end -->
+
+<!-- politty:command:secret vault create:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:secret vault create:global-options-link:end -->
 <!-- politty:command:secret vault delete:heading:start -->
 
 #### secret vault delete
@@ -155,6 +173,12 @@ tailor-sdk secret vault delete [options] <name>
 | `--yes`                         | `-y`  | Skip confirmation prompts | No       | `false` |
 
 <!-- politty:command:secret vault delete:options:end -->
+
+<!-- politty:command:secret vault delete:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:secret vault delete:global-options-link:end -->
 <!-- politty:command:secret vault list:heading:start -->
 
 #### secret vault list
@@ -183,11 +207,16 @@ tailor-sdk secret vault list [options]
 
 | Option                          | Alias | Description       | Required | Default |
 | ------------------------------- | ----- | ----------------- | -------- | ------- |
-| `--json`                        | `-j`  | Output as JSON    | No       | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
 
 <!-- politty:command:secret vault list:options:end -->
+
+<!-- politty:command:secret vault list:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:secret vault list:global-options-link:end -->
 <!-- politty:command:secret create:heading:start -->
 
 ### secret create
@@ -223,6 +252,12 @@ tailor-sdk secret create [options]
 | `--value <VALUE>`               | `-v`  | Secret value      | Yes      | -       |
 
 <!-- politty:command:secret create:options:end -->
+
+<!-- politty:command:secret create:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:secret create:global-options-link:end -->
 <!-- politty:command:secret update:heading:start -->
 
 ### secret update
@@ -258,6 +293,12 @@ tailor-sdk secret update [options]
 | `--value <VALUE>`               | `-v`  | Secret value      | Yes      | -       |
 
 <!-- politty:command:secret update:options:end -->
+
+<!-- politty:command:secret update:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:secret update:global-options-link:end -->
 <!-- politty:command:secret list:heading:start -->
 
 ### secret list
@@ -286,12 +327,17 @@ tailor-sdk secret list [options]
 
 | Option                          | Alias | Description       | Required | Default |
 | ------------------------------- | ----- | ----------------- | -------- | ------- |
-| `--json`                        | `-j`  | Output as JSON    | No       | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
 | `--vault-name <VAULT_NAME>`     | `-V`  | Vault name        | Yes      | -       |
 
 <!-- politty:command:secret list:options:end -->
+
+<!-- politty:command:secret list:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:secret list:global-options-link:end -->
 <!-- politty:command:secret delete:heading:start -->
 
 ### secret delete
@@ -327,3 +373,9 @@ tailor-sdk secret delete [options]
 | `--yes`                         | `-y`  | Skip confirmation prompts | No       | `false` |
 
 <!-- politty:command:secret delete:options:end -->
+
+<!-- politty:command:secret delete:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:secret delete:global-options-link:end -->

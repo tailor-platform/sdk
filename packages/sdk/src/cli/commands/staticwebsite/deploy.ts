@@ -3,10 +3,11 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { lookup as mimeLookup } from "mime-types";
 import pLimit from "p-limit";
 import * as path from "pathe";
-import { defineCommand, arg } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
-import { withCommonArgs, commonArgs, jsonArgs, workspaceArgs } from "@/cli/shared/args";
+import { workspaceArgs } from "@/cli/shared/args";
 import { initOperatorClient, type OperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { createProgress, withTimeout } from "@/cli/shared/progress";
@@ -224,13 +225,11 @@ export function logSkippedFiles(skippedFiles: string[]) {
   }
 }
 
-export const deployCommand = defineCommand({
+export const deployCommand = defineAppCommand({
   name: "deploy",
   description: "Deploy a static website from a local build directory.",
   args: z
     .object({
-      ...commonArgs,
-      ...jsonArgs,
       ...workspaceArgs,
       name: arg(z.string(), {
         alias: "n",
@@ -243,7 +242,7 @@ export const deployCommand = defineCommand({
       }),
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
     logger.info(`Deploying static website "${args.name}" from directory: ${args.dir}`);
     const accessToken = await loadAccessToken({
       useProfile: true,
@@ -275,5 +274,5 @@ export const deployCommand = defineCommand({
       logger.success(`Static website "${name}" deployed successfully. URL: ${url}`);
       logSkippedFiles(skippedFiles);
     }
-  }),
+  },
 });

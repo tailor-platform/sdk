@@ -1,7 +1,7 @@
-import { defineCommand, arg } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
-import { commonArgs, jsonArgs, withCommonArgs } from "@/cli/shared/args";
 import { initOperatorClient, type OperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import {
   loadAccessToken,
   loadFolderId,
@@ -77,13 +77,11 @@ export async function createWorkspace(options: CreateWorkspaceOptions): Promise<
   return workspaceInfo(resp.workspace!);
 }
 
-export const createCommand = defineCommand({
+export const createCommand = defineAppCommand({
   name: "create",
   description: "Create a new Tailor Platform workspace.",
   args: z
     .object({
-      ...commonArgs,
-      ...jsonArgs,
       name: arg(z.string(), {
         alias: "n",
         description: "Workspace name",
@@ -113,7 +111,7 @@ export const createCommand = defineCommand({
       }),
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
     // Execute workspace create logic
     const workspace = await createWorkspace({
       name: args.name,
@@ -173,5 +171,5 @@ export const createCommand = defineCommand({
       logger.out("Profile:");
       logger.out(profileInfo);
     }
-  }),
+  },
 });

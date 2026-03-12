@@ -35,6 +35,12 @@ tailor-sdk tailordb [command]
 | [`tailordb truncate`](#tailordb-truncate)   | Truncate (delete all records from) TailorDB tables.                   |
 
 <!-- politty:command:tailordb:subcommands:end -->
+
+<!-- politty:command:tailordb:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:tailordb:global-options-link:end -->
 <!-- politty:command:tailordb truncate:heading:start -->
 
 ### tailordb truncate
@@ -81,6 +87,12 @@ tailor-sdk tailordb truncate [options] [types]
 | `--namespace <NAMESPACE>`       | `-n`  | Truncate all tables in specified namespace | No       | -                    |
 
 <!-- politty:command:tailordb truncate:options:end -->
+
+<!-- politty:command:tailordb truncate:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:tailordb truncate:global-options-link:end -->
 <!-- politty:command:tailordb migration:heading:start -->
 
 ### tailordb migration
@@ -114,6 +126,12 @@ tailor-sdk tailordb migration [command]
 | [`tailordb migration status`](#tailordb-migration-status)     | Show the current migration status for TailorDB namespaces, including applied and pending migrations.                      |
 
 <!-- politty:command:tailordb migration:subcommands:end -->
+
+<!-- politty:command:tailordb migration:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:tailordb migration:global-options-link:end -->
 <!-- politty:command:tailordb migration generate:heading:start -->
 
 #### tailordb migration generate
@@ -148,6 +166,12 @@ tailor-sdk tailordb migration generate [options]
 | `--init`            | -     | Delete existing migrations and start fresh | No       | `false`              |
 
 <!-- politty:command:tailordb migration generate:options:end -->
+
+<!-- politty:command:tailordb migration generate:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:tailordb migration generate:global-options-link:end -->
 <!-- politty:command:tailordb migration set:heading:start -->
 
 #### tailordb migration set
@@ -193,6 +217,12 @@ tailor-sdk tailordb migration set [options] <number>
 | `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (required if multiple namespaces exist) | No       | -                    |
 
 <!-- politty:command:tailordb migration set:options:end -->
+
+<!-- politty:command:tailordb migration set:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:tailordb migration set:global-options-link:end -->
 <!-- politty:command:tailordb migration status:heading:start -->
 
 #### tailordb migration status
@@ -227,6 +257,12 @@ tailor-sdk tailordb migration status [options]
 | `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (shows all namespaces if not specified) | No       | -                    |
 
 <!-- politty:command:tailordb migration status:options:end -->
+
+<!-- politty:command:tailordb migration status:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:tailordb migration status:global-options-link:end -->
 <!-- politty:command:tailordb erd:heading:start -->
 
 ### tailordb erd
@@ -260,6 +296,12 @@ tailor-sdk tailordb erd [command]
 | [`tailordb erd deploy`](#tailordb-erd-deploy) | Deploy ERD static website for TailorDB namespace(s).             |
 
 <!-- politty:command:tailordb erd:subcommands:end -->
+
+<!-- politty:command:tailordb erd:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:tailordb erd:global-options-link:end -->
 <!-- politty:command:tailordb erd export:heading:start -->
 
 #### tailordb erd export
@@ -291,11 +333,16 @@ tailor-sdk tailordb erd export [options]
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                         | No       | -                    |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                    | No       | -                    |
 | `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                                              | No       | `"tailor.config.ts"` |
-| `--json`                        | `-j`  | Output as JSON                                                                                       | No       | `false`              |
 | `--namespace <NAMESPACE>`       | `-n`  | TailorDB namespace name (optional if only one namespace is defined in config)                        | No       | -                    |
 | `--output <OUTPUT>`             | `-o`  | Output directory path for tbls-compatible ERD JSON (writes to `<outputDir>/<namespace>/schema.json`) | No       | `".tailor-sdk/erd"`  |
 
 <!-- politty:command:tailordb erd export:options:end -->
+
+<!-- politty:command:tailordb erd export:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:tailordb erd export:global-options-link:end -->
 <!-- politty:command:tailordb erd serve:heading:start -->
 
 #### tailordb erd serve
@@ -330,6 +377,12 @@ tailor-sdk tailordb erd serve [options]
 | `--namespace <NAMESPACE>`       | `-n`  | TailorDB namespace name (uses first namespace in config if not specified) | No       | -                    |
 
 <!-- politty:command:tailordb erd serve:options:end -->
+
+<!-- politty:command:tailordb erd serve:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:tailordb erd serve:global-options-link:end -->
 <!-- politty:command:tailordb erd deploy:heading:start -->
 
 #### tailordb erd deploy
@@ -361,10 +414,15 @@ tailor-sdk tailordb erd deploy [options]
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                        | No       | -                    |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                   | No       | -                    |
 | `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                             | No       | `"tailor.config.ts"` |
-| `--json`                        | `-j`  | Output as JSON                                                                      | No       | `false`              |
 | `--namespace <NAMESPACE>`       | `-n`  | TailorDB namespace name (optional - deploys all namespaces with erdSite if omitted) | No       | -                    |
 
 <!-- politty:command:tailordb erd deploy:options:end -->
+
+<!-- politty:command:tailordb erd deploy:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:tailordb erd deploy:global-options-link:end -->
 
 **Usage Examples:**
 

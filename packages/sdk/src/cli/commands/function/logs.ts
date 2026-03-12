@@ -1,9 +1,10 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { FunctionExecution_Type } from "@tailor-proto/tailor/v1/function_resource_pb";
-import { arg, defineCommand } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
-import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "@/cli/shared/args";
+import { workspaceArgs } from "@/cli/shared/args";
 import { fetchAll, initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { formatKeyValueTable } from "@/cli/shared/format";
 import { functionExecutionStatusToString } from "@/cli/shared/function-execution";
@@ -115,13 +116,11 @@ function printFunctionExecutionDetail(detail: FunctionExecutionDetailInfo) {
   }
 }
 
-export const logsCommand = defineCommand({
+export const logsCommand = defineAppCommand({
   name: "logs",
   description: "List or get function execution logs.",
   args: z
     .object({
-      ...commonArgs,
-      ...jsonArgs,
       ...workspaceArgs,
       executionId: arg(z.string().optional(), {
         positional: true,
@@ -129,7 +128,7 @@ export const logsCommand = defineCommand({
       }),
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
     const accessToken = await loadAccessToken({
       useProfile: true,
       profile: args.profile,
@@ -175,5 +174,5 @@ export const logsCommand = defineCommand({
       }
       logger.out(logs);
     }
-  }),
+  },
 });

@@ -3,7 +3,6 @@ import { parseEnv } from "node:util";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
-import { isCLIError } from "./errors";
 import { logger } from "./logger";
 
 type ArgsShape = Record<string, z.ZodType>;
@@ -124,9 +123,25 @@ export const commonArgs = {
   "env-file-if-exists": arg(z.string().optional(), {
     description: "Path to the environment file (ignored if not found)",
     completion: { type: "file", matcher: [".env.*", ".env"] },
+    effect: (_value, { args }) => {
+      loadEnvFiles(
+        args["env-file"] as string | undefined,
+        args["env-file-if-exists"] as string | undefined,
+      );
+    },
   }),
   verbose: arg(z.boolean().default(false), {
     description: "Enable verbose logging",
+    effect: (value) => {
+      verboseMode = value;
+    },
+  }),
+  json: arg(z.boolean().default(false), {
+    alias: "j",
+    description: "Output as JSON",
+    effect: (value) => {
+      logger.jsonMode = value;
+    },
   }),
 } satisfies ArgsShape;
 
@@ -175,63 +190,16 @@ export const confirmationArgs = {
   }),
 } satisfies ArgsShape;
 
-/**
- * Arguments for JSON output
- */
-export const jsonArgs = {
-  json: arg(z.boolean().default(false), {
-    alias: "j",
-    description: "Output as JSON",
-  }),
-} satisfies ArgsShape;
-
 export type CommonArgsType = z.infer<z.ZodObject<typeof commonArgs>>;
 
+// Tracks verbose mode for use in global error handler (cleanup)
+let verboseMode = false;
+
 /**
- * Wrapper for command handlers that provides:
- * - Environment file loading
- * - Error handling with formatted output
- * - Exit code management
- * @template T
- * @param handler - Command handler function
- * @returns Wrapped handler
+ * Returns whether verbose mode is enabled.
+ * Used by the global cleanup handler which doesn't have access to parsed args.
+ * @returns Whether verbose mode is enabled
  */
-export const withCommonArgs =
-  <T extends CommonArgsType>(handler: (args: T) => Promise<void>) =>
-  async (args: T) => {
-    try {
-      // Set JSON mode if --json flag is provided
-      if ("json" in args && typeof args.json === "boolean") {
-        logger.jsonMode = args.json;
-      }
-
-      // Load env files
-      loadEnvFiles(args["env-file"] as EnvFileArg, args["env-file-if-exists"] as EnvFileArg);
-
-      // Initialize telemetry (no-op if OTEL_EXPORTER_OTLP_ENDPOINT is not set)
-      const { initTelemetry } = await import("@/cli/telemetry");
-      await initTelemetry();
-
-      await handler(args);
-    } catch (error) {
-      if (isCLIError(error)) {
-        logger.log(error.format());
-        if (args.verbose && error.stack) {
-          logger.debug(`\nStack trace:\n${error.stack}`);
-        }
-      } else if (error instanceof Error) {
-        logger.error(error.message);
-        if (args.verbose && error.stack) {
-          logger.debug(`\nStack trace:\n${error.stack}`);
-        }
-      } else {
-        logger.error(`Unknown error: ${error}`);
-      }
-      process.exit(1);
-    } finally {
-      // Flush pending traces before process exit
-      const { shutdownTelemetry } = await import("@/cli/telemetry");
-      await shutdownTelemetry();
-    }
-    process.exit(0);
-  };
+export function isVerbose(): boolean {
+  return verboseMode;
+}

@@ -2,10 +2,9 @@ import * as crypto from "node:crypto";
 import * as http from "node:http";
 import { generateCodeVerifier } from "@badgateway/oauth2-client";
 import open from "open";
-import { defineCommand } from "politty";
 import { z } from "zod";
-import { commonArgs, withCommonArgs } from "@/cli/shared/args";
 import { fetchUserInfo, initOAuth2Client } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 
@@ -100,16 +99,12 @@ const startAuthServer = async () => {
   });
 };
 
-export const loginCommand = defineCommand({
+export const loginCommand = defineAppCommand({
   name: "login",
   description: "Login to Tailor Platform.",
-  args: z
-    .object({
-      ...commonArgs,
-    })
-    .strict(),
-  run: withCommonArgs(async () => {
+  args: z.object({}).strict(),
+  run: async () => {
     await startAuthServer();
     logger.success("Successfully logged in to Tailor Platform.");
-  }),
+  },
 });

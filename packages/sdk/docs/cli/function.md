@@ -34,6 +34,12 @@ tailor-sdk function [command]
 | [`function test-run`](#function-test-run) | Run a function on the Tailor Platform server without deploying. |
 
 <!-- politty:command:function:subcommands:end -->
+
+<!-- politty:command:function:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:function:global-options-link:end -->
 <!-- politty:command:function logs:heading:start -->
 
 ### function logs
@@ -72,11 +78,16 @@ tailor-sdk function logs [options] [executionId]
 
 | Option                          | Alias | Description       | Required | Default |
 | ------------------------------- | ----- | ----------------- | -------- | ------- |
-| `--json`                        | `-j`  | Output as JSON    | No       | `false` |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
 
 <!-- politty:command:function logs:options:end -->
+
+<!-- politty:command:function logs:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:function logs:global-options-link:end -->
 
 **Usage Examples:**
 
@@ -126,7 +137,6 @@ tailor-sdk function test-run [options] <file>
 
 | Option                          | Alias | Description                                                              | Required | Default              |
 | ------------------------------- | ----- | ------------------------------------------------------------------------ | -------- | -------------------- |
-| `--json`                        | `-j`  | Output as JSON                                                           | No       | `false`              |
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                             | No       | -                    |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile                                                        | No       | -                    |
 | `--name <NAME>`                 | `-n`  | Workflow job name to run (matches the `name` field of createWorkflowJob) | No       | -                    |
@@ -170,3 +180,9 @@ When a `.js` file is provided, detection and bundling are skipped and the file i
 > Triggered jobs are not executed; only the target job's `body` function runs in isolation.
 
 <!-- politty:command:function test-run:notes:end -->
+
+<!-- politty:command:function test-run:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:function test-run:global-options-link:end -->
