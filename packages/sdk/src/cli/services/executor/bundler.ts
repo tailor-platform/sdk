@@ -169,7 +169,7 @@ async function bundleSingleExecutor(
                   },
                 }
               : true,
-            inlineDynamicImports: true,
+            codeSplitting: false,
           },
           tsconfig,
           plugins,

@@ -476,7 +476,7 @@ async function bundleScriptTarget(args: {
         format: "cjs",
         sourcemap: false,
         minify: true,
-        inlineDynamicImports: true,
+        codeSplitting: false,
       },
       tsconfig,
       treeshake: {

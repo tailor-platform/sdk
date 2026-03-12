@@ -171,7 +171,7 @@ async function bundleSingleResolver(
                   },
                 }
               : true,
-            inlineDynamicImports: true,
+            codeSplitting: false,
           },
           tsconfig,
           plugins,

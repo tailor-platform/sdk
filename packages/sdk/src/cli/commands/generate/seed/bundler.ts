@@ -165,7 +165,7 @@ export async function bundleSeedScript(
         format: "esm",
         sourcemap: false,
         minify: false,
-        inlineDynamicImports: true,
+        codeSplitting: false,
         globals: {
           tailordb: "tailordb",
         },

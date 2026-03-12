@@ -92,7 +92,7 @@ export async function bundleForTestRun(
               },
             }
           : true,
-        inlineDynamicImports: true,
+        codeSplitting: false,
       },
       tsconfig,
       treeshake: {
