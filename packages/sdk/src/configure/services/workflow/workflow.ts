@@ -5,9 +5,9 @@ import type { AuthInvoker } from "../auth";
 
 export interface RetryPolicy {
   maxRetries: number;
-  initialBackoff?: string;
-  maxBackoff?: string;
-  backoffMultiplier?: number;
+  initialBackoff: string;
+  maxBackoff: string;
+  backoffMultiplier: number; // >= 1
 }
 
 export interface WorkflowConfig<

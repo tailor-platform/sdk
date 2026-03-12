@@ -227,9 +227,9 @@ function parseDurationToProto(duration: string): { seconds: bigint; nanos: numbe
 function toRetryPolicy(policy: RetryPolicy): MessageInitShape<typeof RetryPolicySchema> {
   return {
     maxRetries: policy.maxRetries,
-    ...(policy.initialBackoff && { initialBackoff: parseDurationToProto(policy.initialBackoff) }),
-    ...(policy.maxBackoff && { maxBackoff: parseDurationToProto(policy.maxBackoff) }),
-    ...(policy.backoffMultiplier !== undefined && { backoffMultiplier: policy.backoffMultiplier }),
+    initialBackoff: parseDurationToProto(policy.initialBackoff),
+    maxBackoff: parseDurationToProto(policy.maxBackoff),
+    backoffMultiplier: policy.backoffMultiplier,
   };
 }
 
