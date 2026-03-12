@@ -74,9 +74,9 @@ export declare type RetryPolicy = Message<"tailor.v1.RetryPolicy"> & {
   maxBackoff?: Duration;
 
   /**
-   * @generated from field: optional double backoff_multiplier = 4;
+   * @generated from field: double backoff_multiplier = 4;
    */
-  backoffMultiplier?: number;
+  backoffMultiplier: number;
 };
 
 /**
