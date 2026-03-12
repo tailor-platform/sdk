@@ -27,6 +27,7 @@ type NamespaceConfig = {
   namespace: string;
   types: string[];
   dependencies: Record<string, string[]>;
+  selfRefTypes: string[];
 };
 
 /**
@@ -245,6 +246,14 @@ function generateExecScript(
     })
     .join(",\n");
 
+  // Generate self-referencing types map for each namespace
+  const namespaceSelfRefEntries = namespaceConfigs
+    .map(({ namespace, selfRefTypes }) => {
+      const formatted = selfRefTypes.map((t) => `"${t}"`).join(", ");
+      return `      "${namespace}": [${formatted}]`;
+    })
+    .join(",\n");
+
   return ml /* js */ `
     import { readFileSync } from "node:fs";
     import { join, isAbsolute } from "node:path";
@@ -392,6 +401,9 @@ ${namespaceEntitiesEntries}
     };
     const namespaceDeps = {
 ${namespaceDepsEntries}
+    };
+    const namespaceSelfRefTypes = {
+${namespaceSelfRefEntries}
     };
     const entities = Object.values(namespaceEntities).flat();
     const hasIdpUser = ${String(hasIdpUser)};
@@ -570,7 +582,7 @@ ${namespaceDepsEntries}
     };
 
     // Seed TailorDB types via testExecScript
-    const seedViaTestExecScript = async (namespace, typesToSeed, deps) => {
+    const seedViaTestExecScript = async (namespace, typesToSeed, deps, selfRefTypes) => {
       const dataDir = join(configDir, "data");
       const sortedTypes = topologicalSort(typesToSeed, deps);
       const data = loadSeedData(dataDir, sortedTypes);
@@ -618,7 +630,7 @@ ${namespaceDepsEntries}
           workspaceId,
           name: \`seed-\${namespace}.ts\`,
           code: bundled.bundledCode,
-          arg: JSON.stringify({ data: chunk.data, order: chunk.order }),
+          arg: JSON.stringify({ data: chunk.data, order: chunk.order, selfRefTypes }),
           invoker: {
             namespace: authNamespace,
             machineUserName,
@@ -686,6 +698,7 @@ ${namespaceDepsEntries}
       for (const namespace of namespacesToProcess) {
         const nsTypes = namespaceEntities[namespace] || [];
         const nsDeps = namespaceDeps[namespace] || {};
+        const nsSelfRefTypes = namespaceSelfRefTypes[namespace] || [];
 
         // Filter types if specific types requested
         let typesToSeed = entitiesToProcess
@@ -694,7 +707,7 @@ ${namespaceDepsEntries}
 
         if (typesToSeed.length === 0) continue;
 
-        const result = await seedViaTestExecScript(namespace, typesToSeed, nsDeps);
+        const result = await seedViaTestExecScript(namespace, typesToSeed, nsDeps, nsSelfRefTypes);
         if (!result.success) {
           allSuccess = false;
         }
@@ -736,6 +749,7 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
       for (const ns of ctx.tailordb) {
         const types: string[] = [];
         const dependencies: Record<string, string[]> = {};
+        const selfRefTypes: string[] = [];
 
         for (const [typeName, type] of Object.entries(ns.types)) {
           const source = ns.sourceInfo.get(typeName)!;
@@ -744,6 +758,9 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
 
           types.push(typeInfo.name);
           dependencies[typeInfo.name] = typeInfo.dependencies;
+          if (typeInfo.selfRefFields.length > 0) {
+            selfRefTypes.push(typeInfo.name);
+          }
 
           // Generate empty JSONL data file
           files.push({
@@ -805,6 +822,7 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
           namespace: ns.namespace,
           types,
           dependencies,
+          selfRefTypes,
         });
       }
 

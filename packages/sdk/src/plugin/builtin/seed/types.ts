@@ -12,6 +12,7 @@ export interface SeedTypeInfo {
   name: string;
   namespace: string;
   dependencies: string[];
+  selfRefFields: string[];
   dataFile: string;
 }
 

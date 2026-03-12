@@ -175,6 +175,10 @@ const namespaceDeps = {
     "Event": []
   }
 };
+const namespaceSelfRefTypes = {
+  "tailordb": [],
+  "analyticsdb": []
+};
 const entities = Object.values(namespaceEntities).flat();
 const hasIdpUser = true;
 
@@ -444,7 +448,7 @@ const topologicalSort = (types, deps) => {
 };
 
 // Seed TailorDB types via testExecScript
-const seedViaTestExecScript = async (namespace, typesToSeed, deps) => {
+const seedViaTestExecScript = async (namespace, typesToSeed, deps, selfRefTypes) => {
   const dataDir = join(configDir, "data");
   const sortedTypes = topologicalSort(typesToSeed, deps);
   const data = loadSeedData(dataDir, sortedTypes);
@@ -492,7 +496,7 @@ const seedViaTestExecScript = async (namespace, typesToSeed, deps) => {
       workspaceId,
       name: `seed-${namespace}.ts`,
       code: bundled.bundledCode,
-      arg: JSON.stringify({ data: chunk.data, order: chunk.order }),
+      arg: JSON.stringify({ data: chunk.data, order: chunk.order, selfRefTypes }),
       invoker: {
         namespace: authNamespace,
         machineUserName,
@@ -640,6 +644,7 @@ try {
   for (const namespace of namespacesToProcess) {
     const nsTypes = namespaceEntities[namespace] || [];
     const nsDeps = namespaceDeps[namespace] || {};
+    const nsSelfRefTypes = namespaceSelfRefTypes[namespace] || [];
 
     // Filter types if specific types requested
     let typesToSeed = entitiesToProcess
@@ -648,7 +653,7 @@ try {
 
     if (typesToSeed.length === 0) continue;
 
-    const result = await seedViaTestExecScript(namespace, typesToSeed, nsDeps);
+    const result = await seedViaTestExecScript(namespace, typesToSeed, nsDeps, nsSelfRefTypes);
     if (!result.success) {
       allSuccess = false;
     }
