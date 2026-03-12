@@ -2,17 +2,22 @@
 import { brandValue } from "@/utils/brand";
 import type { WorkflowJob } from "./job";
 import type { AuthInvoker } from "../auth";
+import type { RetryPolicy } from "@/types/workflow.generated";
+
+export type { RetryPolicy };
 
 export interface WorkflowConfig<
   Job extends WorkflowJob<any, any, any> = WorkflowJob<any, any, any>,
 > {
   name: string;
   mainJob: Job;
+  retryPolicy?: RetryPolicy;
 }
 
 export interface Workflow<Job extends WorkflowJob<any, any, any> = WorkflowJob<any, any, any>> {
   name: string;
   mainJob: Job;
+  retryPolicy?: RetryPolicy;
   trigger: (
     args: Parameters<Job["trigger"]>[0],
     options?: { authInvoker: AuthInvoker<string> },
@@ -22,6 +27,7 @@ export interface Workflow<Job extends WorkflowJob<any, any, any> = WorkflowJob<a
 interface WorkflowDefinition<Job extends WorkflowJob<any, any, any>> {
   name: string;
   mainJob: Job;
+  retryPolicy?: RetryPolicy;
 }
 
 /**

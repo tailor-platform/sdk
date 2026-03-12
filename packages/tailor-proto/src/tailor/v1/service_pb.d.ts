@@ -20,6 +20,7 @@ import type { CreateIdPClientRequestSchema, CreateIdPClientResponseSchema, Creat
 import type { CreateDeploymentRequestSchema, CreateDeploymentResponseSchema, CreateStaticWebsiteRequestSchema, CreateStaticWebsiteResponseSchema, DeleteStaticWebsiteRequestSchema, DeleteStaticWebsiteResponseSchema, GetStaticWebsiteRequestSchema, GetStaticWebsiteResponseSchema, ListStaticWebsitesRequestSchema, ListStaticWebsitesResponseSchema, PublishDeploymentRequestSchema, PublishDeploymentResponseSchema, UpdateStaticWebsiteRequestSchema, UpdateStaticWebsiteResponseSchema, UploadFileRequestSchema, UploadFileResponseSchema } from "./staticwebsite_pb";
 import type { CreateWorkflowJobFunctionRequestSchema, CreateWorkflowJobFunctionResponseSchema, CreateWorkflowRequestSchema, CreateWorkflowResponseSchema, DeleteWorkflowRequestSchema, DeleteWorkflowResponseSchema, GetWorkflowByNameRequestSchema, GetWorkflowByNameResponseSchema, GetWorkflowExecutionRequestSchema, GetWorkflowExecutionResponseSchema, GetWorkflowJobFunctionByNameRequestSchema, GetWorkflowJobFunctionByNameResponseSchema, GetWorkflowJobFunctionRequestSchema, GetWorkflowJobFunctionResponseSchema, GetWorkflowRequestSchema, GetWorkflowResponseSchema, ListWorkflowExecutionsRequestSchema, ListWorkflowExecutionsResponseSchema, ListWorkflowJobFunctionsRequestSchema, ListWorkflowJobFunctionsResponseSchema, ListWorkflowsRequestSchema, ListWorkflowsResponseSchema, TestResumeWorkflowRequestSchema, TestResumeWorkflowResponseSchema, TestStartWorkflowRequestSchema, TestStartWorkflowResponseSchema, UpdateWorkflowJobFunctionRequestSchema, UpdateWorkflowJobFunctionResponseSchema, UpdateWorkflowRequestSchema, UpdateWorkflowResponseSchema } from "./workflow_pb";
 import type { GetMetadataRequestSchema, GetMetadataResponseSchema, SetMetadataRequestSchema, SetMetadataResponseSchema } from "./metadata_pb";
+import type { CreateTelemetryExportRequestSchema, CreateTelemetryExportResponseSchema, DeleteTelemetryExportRequestSchema, DeleteTelemetryExportResponseSchema, GetTelemetryExportRequestSchema, GetTelemetryExportResponseSchema, ListTelemetryExportsRequestSchema, ListTelemetryExportsResponseSchema, TestTelemetryExportRequestSchema, TestTelemetryExportResponseSchema, UpdateTelemetryExportRequestSchema, UpdateTelemetryExportResponseSchema } from "./telemetry_export_pb";
 
 /**
  * Describes the file tailor/v1/service.proto.
@@ -2997,6 +2998,101 @@ export declare const OperatorService: GenService<{
     methodKind: "unary";
     input: typeof DeleteControlplaneMachineUserRequestSchema;
     output: typeof DeleteControlplaneMachineUserResponseSchema;
+  },
+  /**
+   * CreateTelemetryExport creates a new telemetry export configuration.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - PermissionDenied: can view workspace but no permission to update
+   * - NotFound: workspace does not exist or can not be accessed
+   * - AlreadyExists: telemetry export with the same name already exists
+   *
+   * @generated from rpc tailor.v1.OperatorService.CreateTelemetryExport
+   */
+  createTelemetryExport: {
+    methodKind: "unary";
+    input: typeof CreateTelemetryExportRequestSchema;
+    output: typeof CreateTelemetryExportResponseSchema;
+  },
+  /**
+   * UpdateTelemetryExport updates an existing telemetry export configuration.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - PermissionDenied: can view workspace but no permission to update
+   * - NotFound: workspace or telemetry export does not exist or can not be accessed
+   *
+   * @generated from rpc tailor.v1.OperatorService.UpdateTelemetryExport
+   */
+  updateTelemetryExport: {
+    methodKind: "unary";
+    input: typeof UpdateTelemetryExportRequestSchema;
+    output: typeof UpdateTelemetryExportResponseSchema;
+  },
+  /**
+   * GetTelemetryExport returns a telemetry export configuration.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - NotFound: workspace or telemetry export does not exist or can not be accessed
+   *
+   * @generated from rpc tailor.v1.OperatorService.GetTelemetryExport
+   */
+  getTelemetryExport: {
+    methodKind: "unary";
+    input: typeof GetTelemetryExportRequestSchema;
+    output: typeof GetTelemetryExportResponseSchema;
+  },
+  /**
+   * ListTelemetryExports returns telemetry export configurations in a workspace.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - NotFound: workspace does not exist or can not be accessed
+   *
+   * @generated from rpc tailor.v1.OperatorService.ListTelemetryExports
+   */
+  listTelemetryExports: {
+    methodKind: "unary";
+    input: typeof ListTelemetryExportsRequestSchema;
+    output: typeof ListTelemetryExportsResponseSchema;
+  },
+  /**
+   * DeleteTelemetryExport deletes a telemetry export configuration.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - PermissionDenied: can view workspace but no permission to delete
+   * - NotFound: workspace or telemetry export does not exist or can not be accessed
+   *
+   * @generated from rpc tailor.v1.OperatorService.DeleteTelemetryExport
+   */
+  deleteTelemetryExport: {
+    methodKind: "unary";
+    input: typeof DeleteTelemetryExportRequestSchema;
+    output: typeof DeleteTelemetryExportResponseSchema;
+  },
+  /**
+   * TestTelemetryExport sends a test span to validate endpoint reachability.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - PermissionDenied: can view workspace but no permission to update
+   * - NotFound: workspace or telemetry export does not exist or can not be accessed
+   *
+   * @generated from rpc tailor.v1.OperatorService.TestTelemetryExport
+   */
+  testTelemetryExport: {
+    methodKind: "unary";
+    input: typeof TestTelemetryExportRequestSchema;
+    output: typeof TestTelemetryExportResponseSchema;
   },
 }>;
 

@@ -12,6 +12,27 @@ import type { Timestamp } from "@bufbuild/protobuf/wkt";
 export declare const file_tailor_v1_function_resource: GenFile;
 
 /**
+ * @generated from message tailor.v1.FunctionErrorInfo
+ */
+export declare type FunctionErrorInfo = Message<"tailor.v1.FunctionErrorInfo"> & {
+  /**
+   * @generated from field: string name = 1;
+   */
+  name: string;
+
+  /**
+   * @generated from field: string message = 2;
+   */
+  message: string;
+};
+
+/**
+ * Describes the message tailor.v1.FunctionErrorInfo.
+ * Use `create(FunctionErrorInfoSchema)` to create a new message.
+ */
+export declare const FunctionErrorInfoSchema: GenMessage<FunctionErrorInfo>;
+
+/**
  * @generated from message tailor.v1.FunctionExecution
  */
 export declare type FunctionExecution = Message<"tailor.v1.FunctionExecution"> & {
@@ -59,6 +80,11 @@ export declare type FunctionExecution = Message<"tailor.v1.FunctionExecution"> &
    * @generated from field: string result = 9;
    */
   result: string;
+
+  /**
+   * @generated from field: tailor.v1.FunctionErrorInfo error = 10;
+   */
+  error?: FunctionErrorInfo;
 };
 
 /**
