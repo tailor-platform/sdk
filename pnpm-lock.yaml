@@ -149,7 +149,7 @@ importers:
         specifier: 2.3.0
         version: 2.3.0
       politty:
-        specifier: ^0.4.9
+        specifier: 0.4.9
         version: 0.4.9(zod@4.3.6)
       zod:
         specifier: 4.3.6
@@ -630,7 +630,7 @@ importers:
         specifier: 2.3.0
         version: 2.3.0
       politty:
-        specifier: ^0.4.9
+        specifier: 0.4.9
         version: 0.4.9(zod@4.3.6)
       rolldown:
         specifier: 1.0.0-rc.7
