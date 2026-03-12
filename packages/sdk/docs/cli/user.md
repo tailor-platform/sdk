@@ -147,16 +147,6 @@ tailor-sdk user list
 
 <!-- politty:command:user list:usage:end -->
 
-<!-- politty:command:user list:options:start -->
-
-**Options**
-
-| Option   | Alias | Description    | Required | Default |
-| -------- | ----- | -------------- | -------- | ------- |
-| `--json` | `-j`  | Output as JSON | No       | `false` |
-
-<!-- politty:command:user list:options:end -->
-
 <!-- politty:command:user list:global-options-link:start -->
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -221,16 +211,6 @@ tailor-sdk user pat [command]
 
 <!-- politty:command:user pat:usage:end -->
 
-<!-- politty:command:user pat:options:start -->
-
-**Options**
-
-| Option   | Alias | Description    | Required | Default |
-| -------- | ----- | -------------- | -------- | ------- |
-| `--json` | `-j`  | Output as JSON | No       | `false` |
-
-<!-- politty:command:user pat:options:end -->
-
 <!-- politty:command:user pat:subcommands:start -->
 
 **Commands**
@@ -270,16 +250,6 @@ tailor-sdk user pat list
 ```
 
 <!-- politty:command:user pat list:usage:end -->
-
-<!-- politty:command:user pat list:options:start -->
-
-**Options**
-
-| Option   | Alias | Description    | Required | Default |
-| -------- | ----- | -------------- | -------- | ------- |
-| `--json` | `-j`  | Output as JSON | No       | `false` |
-
-<!-- politty:command:user pat list:options:end -->
 
 <!-- politty:command:user pat list:global-options-link:start -->
 
