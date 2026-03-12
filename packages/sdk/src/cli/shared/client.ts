@@ -365,3 +365,37 @@ export async function fetchMachineUserToken(url: string, clientId: string, clien
   });
   return schema.parse(rawJson);
 }
+
+/**
+ * Fetch an OAuth2 access token for a platform machine user.
+ * @param clientId - Client ID for the platform machine user
+ * @param clientSecret - Client secret for the platform machine user
+ * @returns Access token
+ */
+export async function fetchPlatformMachineUserToken(clientId: string, clientSecret: string) {
+  const tokenEndpoint = new URL("/oauth2/platform/token", platformBaseUrl).href;
+  const formData = new URLSearchParams();
+  formData.append("grant_type", "client_credentials");
+  formData.append("client_id", clientId);
+  formData.append("client_secret", clientSecret);
+
+  const resp = await fetch(tokenEndpoint, {
+    method: "POST",
+    headers: {
+      "User-Agent": await userAgent(),
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: formData,
+  });
+  if (!resp.ok) {
+    throw new Error("Failed to fetch platform machine user token");
+  }
+  const rawJson = await resp.json();
+
+  const schema = z.object({
+    token_type: z.string(),
+    access_token: z.string(),
+    expires_in: z.number(),
+  });
+  return schema.parse(rawJson);
+}

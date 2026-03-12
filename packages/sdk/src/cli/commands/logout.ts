@@ -16,15 +16,17 @@ export const logoutCommand = defineAppCommand({
       return;
     }
 
-    const client = initOAuth2Client();
-    client.revoke(
-      {
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token,
-        expiresAt: Date.parse(tokens.token_expires_at),
-      },
-      "refresh_token",
-    );
+    if (tokens.refresh_token) {
+      const client = initOAuth2Client();
+      client.revoke(
+        {
+          accessToken: tokens.access_token,
+          refreshToken: tokens.refresh_token,
+          expiresAt: Date.parse(tokens.token_expires_at),
+        },
+        "refresh_token",
+      );
+    }
 
     delete pfConfig.users[pfConfig.current_user!];
     pfConfig.current_user = null;
