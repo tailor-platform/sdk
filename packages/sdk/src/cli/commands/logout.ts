@@ -1,7 +1,12 @@
 import { z } from "zod";
 import { initOAuth2Client } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
-import { readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
+import {
+  deleteUserTokens,
+  readPlatformConfig,
+  resolveTokens,
+  writePlatformConfig,
+} from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 
 export const logoutCommand = defineAppCommand({
@@ -10,24 +15,36 @@ export const logoutCommand = defineAppCommand({
   args: z.object({}).strict(),
   run: async () => {
     const pfConfig = readPlatformConfig();
-    const tokens = pfConfig.current_user ? pfConfig.users[pfConfig.current_user] : undefined;
-    if (!tokens) {
+    const userEntry = pfConfig.current_user ? pfConfig.users[pfConfig.current_user] : undefined;
+    if (!userEntry) {
       logger.info("You are not logged in.");
       return;
     }
 
-    if (tokens.refresh_token) {
+    // Resolve tokens from keyring or config for revocation
+    let accessToken: string | undefined;
+    let refreshToken: string | undefined;
+    try {
+      const tokens = await resolveTokens(userEntry, pfConfig.current_user!);
+      accessToken = tokens.accessToken;
+      refreshToken = tokens.refreshToken;
+    } catch {
+      // Tokens may already be missing from keyring — continue with logout
+    }
+
+    if (refreshToken && accessToken) {
       const client = initOAuth2Client();
       client.revoke(
         {
-          accessToken: tokens.access_token,
-          refreshToken: tokens.refresh_token,
-          expiresAt: Date.parse(tokens.token_expires_at),
+          accessToken,
+          refreshToken,
+          expiresAt: Date.parse(userEntry.token_expires_at),
         },
         "refresh_token",
       );
     }
 
+    await deleteUserTokens(pfConfig, pfConfig.current_user!);
     delete pfConfig.users[pfConfig.current_user!];
     pfConfig.current_user = null;
     writePlatformConfig(pfConfig);

@@ -28,6 +28,7 @@ export default defineConfig({
     js: ".mjs",
     dts: ".d.mts",
   }),
+  external: ["@napi-rs/keyring"],
   sourcemap: true,
   plugins: [
     Sonda({

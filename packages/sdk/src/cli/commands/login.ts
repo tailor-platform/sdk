@@ -10,7 +10,7 @@ import {
   initOAuth2Client,
 } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
-import { readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
+import { readPlatformConfig, saveUserTokens, writePlatformConfig } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { prompt } from "@/cli/shared/prompt";
 
@@ -43,14 +43,15 @@ const startAuthServer = async () => {
         const userInfo = await fetchUserInfo(tokens.accessToken);
 
         const pfConfig = readPlatformConfig();
-        pfConfig.users = {
-          ...pfConfig.users,
-          [userInfo.email]: {
-            access_token: tokens.accessToken,
-            refresh_token: tokens.refreshToken!,
-            token_expires_at: new Date(tokens.expiresAt!).toISOString(),
+        await saveUserTokens(
+          pfConfig,
+          userInfo.email,
+          {
+            accessToken: tokens.accessToken,
+            refreshToken: tokens.refreshToken ?? undefined,
           },
-        };
+          new Date(tokens.expiresAt!).toISOString(),
+        );
         pfConfig.current_user = userInfo.email;
         writePlatformConfig(pfConfig);
 
@@ -112,13 +113,12 @@ async function loginAsMachineUser(args: { clientId: string; clientSecret?: strin
   expiresAt.setSeconds(expiresAt.getSeconds() + resp.expires_in);
 
   const pfConfig = readPlatformConfig();
-  pfConfig.users = {
-    ...pfConfig.users,
-    [args.clientId]: {
-      access_token: resp.access_token,
-      token_expires_at: expiresAt.toISOString(),
-    },
-  };
+  await saveUserTokens(
+    pfConfig,
+    args.clientId,
+    { accessToken: resp.access_token },
+    expiresAt.toISOString(),
+  );
   pfConfig.current_user = args.clientId;
   writePlatformConfig(pfConfig);
 }

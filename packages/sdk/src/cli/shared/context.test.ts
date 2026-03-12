@@ -4,11 +4,22 @@ import * as path from "pathe";
 import { describe, it, expect, vi, beforeEach, afterEach, afterAll, beforeAll } from "vitest";
 import { loadAccessToken, loadConfigPath, loadWorkspaceId, writePlatformConfig } from "./context";
 import { logger } from "./logger";
+import { resetKeyringState } from "./token-store";
 
 const xdgTempDir = vi.hoisted(() => `/tmp/tailor-xdg-${Date.now()}-${Math.random()}`);
 
 vi.mock("xdg-basedir", () => ({
   xdgConfig: xdgTempDir,
+}));
+
+vi.mock("@napi-rs/keyring", () => ({
+  Entry: class {
+    setPassword() {}
+    getPassword(): string | null {
+      return null;
+    }
+    deletePassword() {}
+  },
 }));
 
 describe("loadConfigPath", () => {
@@ -101,11 +112,12 @@ describe("loadWorkspaceId", () => {
 
   beforeEach(() => {
     vi.resetModules();
+    resetKeyringState();
     process.env = { ...originalEnv };
     delete process.env.TAILOR_PLATFORM_WORKSPACE_ID;
     delete process.env.TAILOR_PLATFORM_PROFILE;
     writePlatformConfig({
-      version: 1,
+      version: 2,
       users: {},
       profiles: {},
       current_user: null,
@@ -153,7 +165,7 @@ describe("loadWorkspaceId", () => {
     it("env takes precedence over profile", () => {
       process.env.TAILOR_PLATFORM_WORKSPACE_ID = validUUID;
       writePlatformConfig({
-        version: 1,
+        version: 2,
         users: {},
         profiles: {
           myprofile: { user: "test", workspace_id: otherUUID },
@@ -168,7 +180,7 @@ describe("loadWorkspaceId", () => {
   describe("opts.profile", () => {
     it("returns workspaceId from profile when opts.profile provided", () => {
       writePlatformConfig({
-        version: 1,
+        version: 2,
         users: {},
         profiles: { myprofile: { user: "testuser", workspace_id: validUUID } },
         current_user: null,
@@ -179,7 +191,7 @@ describe("loadWorkspaceId", () => {
 
     it("throws error when profile not found", () => {
       writePlatformConfig({
-        version: 1,
+        version: 2,
         users: {},
         profiles: {},
         current_user: null,
@@ -191,7 +203,7 @@ describe("loadWorkspaceId", () => {
 
     it("throws error when profile workspace_id is invalid UUID", () => {
       writePlatformConfig({
-        version: 1,
+        version: 2,
         users: {},
         profiles: { badprofile: { user: "testuser", workspace_id: invalidUUID } },
         current_user: null,
@@ -206,7 +218,7 @@ describe("loadWorkspaceId", () => {
     it("returns workspaceId from env profile when set", () => {
       process.env.TAILOR_PLATFORM_PROFILE = "envprofile";
       writePlatformConfig({
-        version: 1,
+        version: 2,
         users: {},
         profiles: { envprofile: { user: "testuser", workspace_id: validUUID } },
         current_user: null,
@@ -218,7 +230,7 @@ describe("loadWorkspaceId", () => {
     it("opts.profile takes precedence over env profile", () => {
       process.env.TAILOR_PLATFORM_PROFILE = "envprofile";
       writePlatformConfig({
-        version: 1,
+        version: 2,
         users: {},
         profiles: {
           envprofile: { user: "testuser", workspace_id: otherUUID },
@@ -245,6 +257,7 @@ describe("loadAccessToken", () => {
 
   beforeEach(() => {
     vi.resetModules();
+    resetKeyringState();
     // Explicitly stub env vars to undefined instead of using vi.unstubAllEnvs().
     // unstubAllEnvs() restores to original values, not undefined, so if these
     // vars are set in the real environment, they would leak into tests.
@@ -252,7 +265,7 @@ describe("loadAccessToken", () => {
     vi.stubEnv("TAILOR_TOKEN", undefined);
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
     writePlatformConfig({
-      version: 1,
+      version: 2,
       users: {},
       profiles: {},
       current_user: null,
@@ -280,12 +293,13 @@ describe("loadAccessToken", () => {
     it("TAILOR_PLATFORM_TOKEN takes precedence over profile", async () => {
       vi.stubEnv("TAILOR_PLATFORM_TOKEN", validToken);
       writePlatformConfig({
-        version: 1,
+        version: 2,
         users: {
           testuser: {
             access_token: otherToken,
             refresh_token: "refresh",
             token_expires_at: futureDate,
+            storage: "file",
           },
         },
         profiles: {
@@ -313,12 +327,13 @@ describe("loadAccessToken", () => {
   describe("opts.profile", () => {
     it("returns token from profile when useProfile is true and profile provided", async () => {
       writePlatformConfig({
-        version: 1,
+        version: 2,
         users: {
           testuser: {
             access_token: validToken,
             refresh_token: "refresh",
             token_expires_at: futureDate,
+            storage: "file",
           },
         },
         profiles: {
@@ -332,7 +347,7 @@ describe("loadAccessToken", () => {
 
     it("throws error when profile not found", async () => {
       writePlatformConfig({
-        version: 1,
+        version: 2,
         users: {},
         profiles: {},
         current_user: null,
@@ -344,12 +359,13 @@ describe("loadAccessToken", () => {
 
     it("does not use profile when useProfile is false", async () => {
       writePlatformConfig({
-        version: 1,
+        version: 2,
         users: {
           currentuser: {
             access_token: validToken,
             refresh_token: "refresh",
             token_expires_at: futureDate,
+            storage: "file",
           },
         },
         profiles: {
@@ -366,12 +382,13 @@ describe("loadAccessToken", () => {
     it("returns token from env profile when useProfile is true", async () => {
       vi.stubEnv("TAILOR_PLATFORM_PROFILE", "envprofile");
       writePlatformConfig({
-        version: 1,
+        version: 2,
         users: {
           testuser: {
             access_token: validToken,
             refresh_token: "refresh",
             token_expires_at: futureDate,
+            storage: "file",
           },
         },
         profiles: {
@@ -386,17 +403,19 @@ describe("loadAccessToken", () => {
     it("opts.profile takes precedence over env profile", async () => {
       vi.stubEnv("TAILOR_PLATFORM_PROFILE", "envprofile");
       writePlatformConfig({
-        version: 1,
+        version: 2,
         users: {
           envuser: {
             access_token: otherToken,
             refresh_token: "refresh",
             token_expires_at: futureDate,
+            storage: "file",
           },
           optsuser: {
             access_token: validToken,
             refresh_token: "refresh",
             token_expires_at: futureDate,
+            storage: "file",
           },
         },
         profiles: {
@@ -413,12 +432,13 @@ describe("loadAccessToken", () => {
   describe("config.current_user", () => {
     it("returns token from current_user when no env or profile", async () => {
       writePlatformConfig({
-        version: 1,
+        version: 2,
         users: {
           currentuser: {
             access_token: validToken,
             refresh_token: "refresh",
             token_expires_at: futureDate,
+            storage: "file",
           },
         },
         profiles: {},
@@ -433,6 +453,45 @@ describe("loadAccessToken", () => {
     it("throws error when no token source is available", async () => {
       await expect(loadAccessToken()).rejects.toThrow("Tailor Platform token not found");
     });
+  });
+});
+
+describe("V1 to V2 migration", () => {
+  const futureDate = new Date(Date.now() + 3600 * 1000).toISOString();
+
+  beforeEach(() => {
+    resetKeyringState();
+  });
+
+  it("migrates V1 config to V2 with storage: file", async () => {
+    writePlatformConfig({
+      version: 1,
+      users: {
+        "user@example.com": {
+          access_token: "v1-access-token",
+          refresh_token: "v1-refresh-token",
+          token_expires_at: futureDate,
+        },
+      },
+      profiles: {
+        default: { user: "user@example.com", workspace_id: "12345678-1234-4abc-8def-123456789012" },
+      },
+      current_user: "user@example.com",
+    });
+
+    // readPlatformConfig triggers migration
+    const { readPlatformConfig } = await import("./context");
+    const config = readPlatformConfig();
+
+    expect(config.version).toBe(2);
+    const userEntry = config.users["user@example.com"];
+    expect(userEntry).toBeDefined();
+    expect(userEntry!.storage).toBe("file");
+    expect(userEntry!.token_expires_at).toBe(futureDate);
+    if (userEntry!.storage === "file") {
+      expect(userEntry!.access_token).toBe("v1-access-token");
+      expect(userEntry!.refresh_token).toBe("v1-refresh-token");
+    }
   });
 });
 

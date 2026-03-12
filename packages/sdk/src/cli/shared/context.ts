@@ -8,29 +8,56 @@ import { xdgConfig } from "xdg-basedir";
 import { z } from "zod";
 import { initOAuth2Client } from "./client";
 import { logger } from "./logger";
+import {
+  isKeyringAvailable,
+  loadKeyringTokens,
+  saveKeyringTokens,
+  deleteKeyringTokens,
+} from "./token-store";
 
-const pfConfigSchema = z.object({
+const pfProfileSchema = z.object({
+  user: z.string(),
+  workspace_id: z.string(),
+});
+
+const pfUserSchemaV1 = z.object({
+  access_token: z.string(),
+  refresh_token: z.string().optional(),
+  token_expires_at: z.string(),
+});
+
+const pfUserKeyringSchema = z.object({
+  storage: z.literal("keyring"),
+  token_expires_at: z.string(),
+});
+
+const pfUserFileSchema = z.object({
+  storage: z.literal("file"),
+  token_expires_at: z.string(),
+  access_token: z.string(),
+  refresh_token: z.string().optional(),
+});
+
+const pfUserSchemaV2 = z.discriminatedUnion("storage", [pfUserKeyringSchema, pfUserFileSchema]);
+
+type PfUserV2 = z.output<typeof pfUserSchemaV2>;
+
+const pfConfigSchemaV1 = z.object({
   version: z.literal(1),
-  users: z.partialRecord(
-    z.string(),
-    z.object({
-      access_token: z.string(),
-      refresh_token: z.string().optional(),
-      token_expires_at: z.string(),
-    }),
-  ),
-  profiles: z.partialRecord(
-    z.string(),
-    z.object({
-      user: z.string(),
-      workspace_id: z.string(),
-    }),
-  ),
-  // null if no user is currently selected
+  users: z.partialRecord(z.string(), pfUserSchemaV1),
+  profiles: z.partialRecord(z.string(), pfProfileSchema),
   current_user: z.string().nullable(),
 });
 
-type PfConfig = z.output<typeof pfConfigSchema>;
+const pfConfigSchemaV2 = z.object({
+  version: z.literal(2),
+  users: z.partialRecord(z.string(), pfUserSchemaV2),
+  profiles: z.partialRecord(z.string(), pfProfileSchema),
+  current_user: z.string().nullable(),
+});
+
+type PfConfigV1 = z.output<typeof pfConfigSchemaV1>;
+type PfConfig = z.output<typeof pfConfigSchemaV2>;
 type LoadWorkspaceIdOptions = {
   workspaceId?: string;
   profile?: string;
@@ -48,7 +75,36 @@ function platformConfigPath() {
 }
 
 /**
- * Read Tailor Platform CLI configuration, migrating from tailorctl if necessary.
+ * Migrate a v1 config to v2.
+ * Tokens are kept in the config file (storage: "file") during migration.
+ * They will be moved to the OS keyring on next login or token refresh.
+ * @param v1Config - v1 configuration to migrate
+ * @returns Migrated v2 configuration
+ */
+function migrateV1ToV2(v1Config: PfConfigV1): PfConfig {
+  const users: PfConfig["users"] = {};
+
+  for (const [name, v1User] of Object.entries(v1Config.users)) {
+    if (!v1User) continue;
+
+    users[name] = {
+      access_token: v1User.access_token,
+      refresh_token: v1User.refresh_token,
+      token_expires_at: v1User.token_expires_at,
+      storage: "file",
+    };
+  }
+
+  return {
+    version: 2,
+    users,
+    profiles: v1Config.profiles,
+    current_user: v1Config.current_user,
+  };
+}
+
+/**
+ * Read Tailor Platform CLI configuration, migrating from tailorctl or v1 if necessary.
  * @returns Parsed platform configuration
  */
 export function readPlatformConfig(): PfConfig {
@@ -58,21 +114,39 @@ export function readPlatformConfig(): PfConfig {
   if (!fs.existsSync(configPath)) {
     logger.warn(`Config not found at ${configPath}, migrating from tailorctl config...`);
     const tcConfig = readTailorctlConfig();
-    const pfConfig = tcConfig
+    const v1Config = tcConfig
       ? fromTailorctlConfig(tcConfig)
       : ({ version: 1, users: {}, profiles: {}, current_user: null } as const);
+    const pfConfig = migrateV1ToV2(v1Config);
     writePlatformConfig(pfConfig);
     return pfConfig;
   }
+
   const rawConfig = parseYAML(fs.readFileSync(configPath, "utf-8"));
-  return pfConfigSchema.parse(rawConfig);
+
+  // Try v2 first
+  const v2Result = pfConfigSchemaV2.safeParse(rawConfig);
+  if (v2Result.success) {
+    return v2Result.data;
+  }
+
+  // Fall back to v1 and migrate
+  const v1Result = pfConfigSchemaV1.safeParse(rawConfig);
+  if (v1Result.success) {
+    const pfConfig = migrateV1ToV2(v1Result.data);
+    writePlatformConfig(pfConfig);
+    return pfConfig;
+  }
+
+  // Neither v1 nor v2 — throw with v2 error for clarity
+  return pfConfigSchemaV2.parse(rawConfig);
 }
 
 /**
  * Write Tailor Platform CLI configuration to disk.
  * @param config - Platform configuration to write
  */
-export function writePlatformConfig(config: PfConfig) {
+export function writePlatformConfig(config: PfConfig | PfConfigV1) {
   const configPath = platformConfigPath();
   fs.mkdirSync(path.dirname(configPath), { recursive: true });
   fs.writeFileSync(configPath, stringifyYAML(config));
@@ -108,10 +182,10 @@ function readTailorctlConfig(): TcConfig | undefined {
   return tcConfigSchema.parse(rawConfig);
 }
 
-function fromTailorctlConfig(config: TcConfig): PfConfig {
-  const users: PfConfig["users"] = {};
-  const profiles: PfConfig["profiles"] = {};
-  let currentUser: PfConfig["current_user"] = null;
+function fromTailorctlConfig(config: TcConfig): PfConfigV1 {
+  const users: PfConfigV1["users"] = {};
+  const profiles: PfConfigV1["profiles"] = {};
+  let currentUser: PfConfigV1["current_user"] = null;
 
   const currentContext = config.global?.context || "default";
   for (const [key, val] of Object.entries(config)) {
@@ -236,24 +310,97 @@ export async function loadAccessToken(opts?: LoadAccessTokenOptions) {
 }
 
 /**
+ * Resolve the actual token values for a user, reading from keyring or config as appropriate.
+ * @param userEntry - User entry from the config
+ * @param user - User identifier
+ * @returns Access token and optional refresh token
+ */
+export async function resolveTokens(
+  userEntry: PfUserV2,
+  user: string,
+): Promise<{ accessToken: string; refreshToken?: string }> {
+  if (userEntry.storage === "keyring") {
+    const tokens = await loadKeyringTokens(user);
+    if (!tokens) {
+      throw new Error(ml`
+        Credentials not found in OS keyring for "${user}".
+        Please run 'tailor-sdk login' and try again.
+      `);
+    }
+    return tokens;
+  }
+
+  return {
+    accessToken: userEntry.access_token,
+    refreshToken: userEntry.refresh_token,
+  };
+}
+
+/**
+ * Save tokens for a user, writing to keyring or config as appropriate.
+ * @param config - Platform config
+ * @param user - User identifier
+ * @param tokens - Token data to save
+ * @param tokens.accessToken
+ * @param tokens.refreshToken
+ * @param expiresAt - Token expiration date
+ */
+export async function saveUserTokens(
+  config: PfConfig,
+  user: string,
+  tokens: { accessToken: string; refreshToken?: string },
+  expiresAt: string,
+): Promise<void> {
+  if (await isKeyringAvailable()) {
+    await saveKeyringTokens(user, tokens);
+    config.users[user] = {
+      token_expires_at: expiresAt,
+      storage: "keyring",
+    };
+  } else {
+    config.users[user] = {
+      access_token: tokens.accessToken,
+      refresh_token: tokens.refreshToken,
+      token_expires_at: expiresAt,
+      storage: "file",
+    };
+  }
+}
+
+/**
+ * Delete tokens for a user from keyring if applicable.
+ * @param config - Platform config
+ * @param user - User identifier
+ */
+export async function deleteUserTokens(config: PfConfig, user: string): Promise<void> {
+  const userEntry = config.users[user];
+  if (userEntry?.storage === "keyring") {
+    await deleteKeyringTokens(user);
+  }
+}
+
+/**
  * Fetch the latest access token, refreshing if necessary.
  * @param config - Platform config
  * @param user - User name
  * @returns Latest access token
  */
 export async function fetchLatestToken(config: PfConfig, user: string): Promise<string> {
-  const tokens = config.users[user];
-  if (!tokens) {
+  const userEntry = config.users[user];
+  if (!userEntry) {
     throw new Error(ml`
       User "${user}" not found.
       Please verify your user name and login using 'tailor-sdk login' command.
     `);
   }
-  if (new Date(tokens.token_expires_at) > new Date()) {
-    return tokens.access_token;
+
+  const tokens = await resolveTokens(userEntry, user);
+
+  if (new Date(userEntry.token_expires_at) > new Date()) {
+    return tokens.accessToken;
   }
 
-  if (!tokens.refresh_token) {
+  if (!tokens.refreshToken) {
     throw new Error(ml`
       Token expired.
       Please run 'tailor-sdk login' and try again.
@@ -264,9 +411,9 @@ export async function fetchLatestToken(config: PfConfig, user: string): Promise<
   let resp;
   try {
     resp = await client.refreshToken({
-      accessToken: tokens.access_token,
-      refreshToken: tokens.refresh_token,
-      expiresAt: Date.parse(tokens.token_expires_at),
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresAt: Date.parse(userEntry.token_expires_at),
     });
   } catch {
     throw new Error(ml`
@@ -274,11 +421,17 @@ export async function fetchLatestToken(config: PfConfig, user: string): Promise<
       Please run 'tailor-sdk login' and try again.
     `);
   }
-  config.users[user] = {
-    access_token: resp.accessToken,
-    refresh_token: resp.refreshToken!,
-    token_expires_at: new Date(resp.expiresAt!).toISOString(),
-  };
+
+  const newExpiresAt = new Date(resp.expiresAt!).toISOString();
+  await saveUserTokens(
+    config,
+    user,
+    {
+      accessToken: resp.accessToken,
+      refreshToken: resp.refreshToken ?? undefined,
+    },
+    newExpiresAt,
+  );
   writePlatformConfig(config);
   return resp.accessToken;
 }
