@@ -7,32 +7,26 @@ export const WorkflowJobSchema = z.object({
   body: functionSchema.describe("Job implementation function"),
 });
 
-const durationPattern = /^(\d+)(ms|s|m)$/;
+const durationUnits = ["ms", "s", "m"] as const;
+
+const unitToSeconds: Record<(typeof durationUnits)[number], number> = {
+  ms: 1 / 1000,
+  s: 1,
+  m: 60,
+};
 
 function durationToSeconds(duration: string): number {
-  const match = duration.match(durationPattern);
+  const match = duration.match(/^(\d+)(ms|s|m)$/);
   if (!match) return 0;
-  const value = parseInt(match[1], 10);
-  const unit = match[2];
-  switch (unit) {
-    case "ms":
-      return value / 1000;
-    case "s":
-      return value;
-    case "m":
-      return value * 60;
-    default:
-      return 0;
-  }
+  return parseInt(match[1], 10) * unitToSeconds[match[2] as (typeof durationUnits)[number]];
 }
 
+const baseDurationSchema = z.templateLiteral([z.number().int().positive(), z.enum(durationUnits)]);
+
 const durationSchema = (maxSeconds: number) =>
-  z
-    .string()
-    .regex(durationPattern, "Invalid duration format. Expected format: '1s', '500ms', '1m'")
-    .refine((val) => durationToSeconds(val) <= maxSeconds, {
-      message: `Duration must be at most ${maxSeconds} seconds`,
-    });
+  baseDurationSchema.refine((val) => durationToSeconds(val) <= maxSeconds, {
+    message: `Duration must be at most ${maxSeconds} seconds`,
+  });
 
 export const RetryPolicySchema = z
   .object({
