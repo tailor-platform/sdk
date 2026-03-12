@@ -65,6 +65,7 @@ function generateSeedScriptContent(namespace: string): string {
     type SeedInput = {
       data: Record<string, Record<string, unknown>[]>;
       order: string[];
+      selfRefTypes: string[];
     };
 
     type SeedResult = {
@@ -94,13 +95,23 @@ function generateSeedScriptContent(namespace: string): string {
         }
 
         processed[typeName] = 0;
+        const hasSelfRef = (input.selfRefTypes || []).includes(typeName);
 
         try {
-          for (let i = 0; i < records.length; i += BATCH_SIZE) {
-            const batch = records.slice(i, i + BATCH_SIZE);
-            await db.insertInto(typeName).values(batch).execute();
-            processed[typeName] += batch.length;
-            console.log(\`[${namespace}] \${typeName}: \${processed[typeName]}/\${records.length}\`);
+          if (hasSelfRef) {
+            // Insert one-by-one to respect self-referencing foreign key order
+            for (const record of records) {
+              await db.insertInto(typeName).values(record).execute();
+              processed[typeName] += 1;
+            }
+            console.log(\`[${namespace}] \${typeName}: \${processed[typeName]}/\${records.length} (one-by-one)\`);
+          } else {
+            for (let i = 0; i < records.length; i += BATCH_SIZE) {
+              const batch = records.slice(i, i + BATCH_SIZE);
+              await db.insertInto(typeName).values(batch).execute();
+              processed[typeName] += batch.length;
+              console.log(\`[${namespace}] \${typeName}: \${processed[typeName]}/\${records.length}\`);
+            }
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
