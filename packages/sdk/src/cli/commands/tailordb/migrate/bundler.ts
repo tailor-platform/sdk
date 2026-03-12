@@ -84,7 +84,7 @@ export async function bundleMigrationScript(
         format: "esm",
         sourcemap: false,
         minify: false,
-        inlineDynamicImports: true,
+        codeSplitting: false,
         globals: {
           tailordb: "tailordb",
         },

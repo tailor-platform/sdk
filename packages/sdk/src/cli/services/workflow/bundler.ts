@@ -364,7 +364,7 @@ async function bundleSingleJob(
                   },
                 }
               : true,
-            inlineDynamicImports: true,
+            codeSplitting: false,
           },
           tsconfig,
           plugins,
