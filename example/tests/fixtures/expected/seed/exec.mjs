@@ -176,7 +176,7 @@ const namespaceDeps = {
   }
 };
 const namespaceSelfRefTypes = {
-  "tailordb": [],
+  "tailordb": ["Selfie"],
   "analyticsdb": []
 };
 const entities = Object.values(namespaceEntities).flat();
