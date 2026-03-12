@@ -2,13 +2,9 @@
 import { brandValue } from "@/utils/brand";
 import type { WorkflowJob } from "./job";
 import type { AuthInvoker } from "../auth";
+import type { RetryPolicy } from "@/types/workflow.generated";
 
-export interface RetryPolicy {
-  maxRetries: number;
-  initialBackoff: string;
-  maxBackoff: string;
-  backoffMultiplier: number; // >= 1
-}
+export type { RetryPolicy };
 
 export interface WorkflowConfig<
   Job extends WorkflowJob<any, any, any> = WorkflowJob<any, any, any>,
