@@ -9,7 +9,7 @@ import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger, styles } from "@/cli/shared/logger";
-import { confirm } from "@/cli/shared/prompt";
+import { prompt } from "@/cli/shared/prompt";
 import { getNamespacesWithMigrations } from "./config";
 import { formatMigrationNumber, isValidMigrationNumber } from "./snapshot";
 import { parseMigrationLabelNumber } from "./types";
@@ -120,7 +120,7 @@ async function set(options: SetOptions): Promise<void> {
 
   // 8. Confirmation prompt (unless --yes flag)
   if (!options.yes) {
-    const confirmation = await confirm({
+    const confirmation = await prompt.confirm({
       message: "Continue with migration checkpoint update?",
       initialValue: false,
     });

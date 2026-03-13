@@ -1,6 +1,6 @@
 import ml from "multiline-ts";
 import { styles, logger } from "@/cli/shared/logger";
-import { confirm } from "@/cli/shared/prompt";
+import { prompt } from "@/cli/shared/prompt";
 
 export interface OwnerConflict {
   resourceType: string;
@@ -52,7 +52,7 @@ export async function confirmOwnerConflict(
     currentOwners.length === 1
       ? `Update these resources to be managed by "${appName}"?\n${styles.dim("(Common when renaming your application)")}`
       : `Update these resources to be managed by "${appName}"?`;
-  const confirmed = await confirm({
+  const confirmed = await prompt.confirm({
     message: promptMessage,
     initialValue: false,
   });
@@ -98,7 +98,7 @@ export async function confirmUnmanagedResources(
     return;
   }
 
-  const confirmed = await confirm({
+  const confirmed = await prompt.confirm({
     message: `Allow tailor-sdk to manage these resources for "${appName}"?`,
     initialValue: false,
   });
@@ -145,7 +145,7 @@ export async function confirmImportantResourceDeletion(
     return;
   }
 
-  const confirmed = await confirm({
+  const confirmed = await prompt.confirm({
     message: "Are you sure you want to delete these resources?",
     initialValue: false,
   });

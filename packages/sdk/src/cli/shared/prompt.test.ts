@@ -9,11 +9,11 @@ describe("prompt", () => {
     test("confirm throws CIPromptError when isCI is true", async () => {
       vi.doMock("std-env", () => ({ isCI: true }));
 
-      const { confirm } = await import("./prompt");
+      const { prompt } = await import("./prompt");
       const { CIPromptError } = await import("./logger");
 
-      await expect(confirm({ message: "test" })).rejects.toThrow(CIPromptError);
-      await expect(confirm({ message: "test" })).rejects.toThrow(
+      await expect(prompt.confirm({ message: "test" })).rejects.toThrow(CIPromptError);
+      await expect(prompt.confirm({ message: "test" })).rejects.toThrow(
         /Interactive prompts are not available in CI environments/,
       );
     });
@@ -21,10 +21,10 @@ describe("prompt", () => {
     test("text throws CIPromptError when isCI is true", async () => {
       vi.doMock("std-env", () => ({ isCI: true }));
 
-      const { text } = await import("./prompt");
+      const { prompt } = await import("./prompt");
       const { CIPromptError } = await import("./logger");
 
-      await expect(text({ message: "test" })).rejects.toThrow(CIPromptError);
+      await expect(prompt.text({ message: "test" })).rejects.toThrow(CIPromptError);
     });
   });
 });

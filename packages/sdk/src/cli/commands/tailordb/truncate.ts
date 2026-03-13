@@ -7,7 +7,7 @@ import { extractAllNamespaces } from "@/cli/shared/config";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
-import { confirm } from "@/cli/shared/prompt";
+import { prompt } from "@/cli/shared/prompt";
 import { resolveTypeNamespaces } from "@/cli/shared/tailordb-namespace";
 
 export interface TruncateOptions {
@@ -105,7 +105,7 @@ async function $truncate(options?: InternalTruncateOptions): Promise<void> {
 
     if (!options?.yes) {
       const namespaceList = namespaces.join(", ");
-      const confirmation = await confirm({
+      const confirmation = await prompt.confirm({
         message: `This will truncate ALL tables in the following namespaces: ${namespaceList}. Continue?`,
         initialValue: false,
       });
@@ -134,7 +134,7 @@ async function $truncate(options?: InternalTruncateOptions): Promise<void> {
     }
 
     if (!options.yes) {
-      const confirmation = await confirm({
+      const confirmation = await prompt.confirm({
         message: `This will truncate ALL tables in namespace "${namespace}". Continue?`,
         initialValue: false,
       });
@@ -169,7 +169,7 @@ async function $truncate(options?: InternalTruncateOptions): Promise<void> {
 
     if (!options.yes) {
       const typeList = typeNames.join(", ");
-      const confirmation = await confirm({
+      const confirmation = await prompt.confirm({
         message: `This will truncate the following types: ${typeList}. Continue?`,
         initialValue: false,
       });

@@ -229,7 +229,12 @@ export default defineConfig([
   },
   {
     files: ["src/cli/**/*.ts"],
-    ignores: ["src/cli/shared/logger.ts", "src/cli/shared/errors.ts", "src/cli/shared/format.ts"],
+    ignores: [
+      "src/cli/shared/logger.ts",
+      "src/cli/shared/errors.ts",
+      "src/cli/shared/format.ts",
+      "src/cli/shared/prompt.ts",
+    ],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -259,6 +264,11 @@ export default defineConfig([
               name: "node:path",
               message:
                 "Use 'pathe' instead of 'node:path' for consistent cross-platform path handling.",
+            },
+            {
+              name: "@clack/prompts",
+              message:
+                "Use 'prompt' from '@/cli/shared/prompt' instead of @clack/prompts directly.",
             },
           ],
         },

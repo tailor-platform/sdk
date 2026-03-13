@@ -17,7 +17,7 @@ import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { getConfiguredEditorCommand, openInConfiguredEditor } from "@/cli/shared/editor";
 import { logger, styles } from "@/cli/shared/logger";
-import { confirm } from "@/cli/shared/prompt";
+import { prompt } from "@/cli/shared/prompt";
 import { PluginManager } from "@/plugin/manager";
 import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
 import {
@@ -72,7 +72,7 @@ async function handleInitOption(
 
   // Confirmation prompt
   if (!skipConfirmation) {
-    const confirmation = await confirm({
+    const confirmation = await prompt.confirm({
       message: "Are you sure you want to delete these directories and start fresh?",
       initialValue: false,
     });
@@ -262,7 +262,7 @@ async function generateDiffFromSnapshot(
     logger.warn(formatBreakingChanges(diff.breakingChanges));
 
     if (!options.yes) {
-      const confirmation = await confirm({
+      const confirmation = await prompt.confirm({
         message: "Continue generating migration?",
         initialValue: true,
       });

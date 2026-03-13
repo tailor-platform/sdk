@@ -303,6 +303,10 @@
               {
                 "name": "node:path",
                 "message": "Use 'pathe' instead of 'node:path' for consistent cross-platform path handling."
+              },
+              {
+                "name": "@clack/prompts",
+                "message": "Use 'prompt' from '@/cli/shared/prompt' instead of @clack/prompts directly."
               }
             ],
             "patterns": [
@@ -322,7 +326,12 @@
       }
     },
     {
-      "files": ["src/cli/shared/logger.ts", "src/cli/shared/errors.ts", "src/cli/shared/format.ts"],
+      "files": [
+        "src/cli/shared/logger.ts",
+        "src/cli/shared/errors.ts",
+        "src/cli/shared/format.ts",
+        "src/cli/shared/prompt.ts"
+      ],
       "rules": {
         "no-restricted-imports": "off"
       }

@@ -5,7 +5,7 @@ import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
-import { text } from "@/cli/shared/prompt";
+import { prompt } from "@/cli/shared/prompt";
 import { nameArgs } from "./args";
 
 export const deleteCommand = defineAppCommand({
@@ -30,7 +30,7 @@ export const deleteCommand = defineAppCommand({
     });
 
     if (!args.yes) {
-      const confirmation = await text({
+      const confirmation = await prompt.text({
         message: `Enter the vault name to confirm deletion ("${args.name}"):`,
       });
       if (confirmation !== args.name) {

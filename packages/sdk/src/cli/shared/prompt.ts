@@ -1,21 +1,32 @@
 import * as clack from "@clack/prompts";
 import { isCI } from "std-env";
 import { CIPromptError } from "./logger";
-import type { ConfirmOptions, TextOptions } from "@clack/prompts";
-
 /**
- * Wraps a `@clack/prompts` function with CI guard and cancellation handling.
- * @param fn - A prompt function that returns `T | symbol`
- * @returns A wrapped function that throws in CI and exits on cancel
+ * Wraps `@clack/prompts` functions with CI guard and cancellation handling.
+ * @param fns
+ * @returns Guarded prompt functions that throw in CI and exit on cancel
  */
-function withGuard<Opts, T>(fn: (opts: Opts) => Promise<T | symbol>) {
-  return async (opts: Opts): Promise<T> => {
-    if (isCI) throw new CIPromptError();
-    const result = await fn(opts);
-    if (clack.isCancel(result)) process.exit(0);
-    return result;
-  };
+function guardedPrompts<T extends Record<string, (opts: never) => Promise<unknown>>>(
+  fns: T,
+): {
+  [K in keyof T]: T[K] extends (opts: infer O) => Promise<(infer R) | symbol>
+    ? (opts: O) => Promise<R>
+    : T[K];
+} {
+  return Object.fromEntries(
+    Object.entries(fns).map(([key, fn]) => [
+      key,
+      async (opts: never) => {
+        if (isCI) throw new CIPromptError();
+        const result = await fn(opts);
+        if (clack.isCancel(result)) process.exit(0);
+        return result;
+      },
+    ]),
+  ) as ReturnType<typeof guardedPrompts<T>>;
 }
 
-export const confirm = withGuard<ConfirmOptions, boolean>(clack.confirm);
-export const text = withGuard<TextOptions, string>(clack.text);
+export const prompt = guardedPrompts({
+  confirm: clack.confirm,
+  text: clack.text,
+});
