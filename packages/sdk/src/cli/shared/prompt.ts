@@ -9,29 +9,18 @@ import { isCI } from "std-env";
 import { CIPromptError } from "./logger";
 
 /**
- * Prompt the user for confirmation unless running in CI.
- * Cancellation (Ctrl+C) exits the process.
- * @param opts - @clack/prompts ConfirmOptions
- * @throws {CIPromptError} When called in a CI environment
- * @returns true or false
+ * Wraps a @clack/prompts function with CI guard and cancellation handling.
+ * @param fn - A @clack/prompts prompt function that returns `T | symbol`
+ * @returns A wrapped function that throws in CI and exits on cancel
  */
-export async function confirm(opts: ConfirmOptions): Promise<boolean> {
-  if (isCI) throw new CIPromptError();
-  const result = await clackConfirm(opts);
-  if (isCancel(result)) process.exit(0);
-  return result;
+function withGuard<Opts, T>(fn: (opts: Opts) => Promise<T | symbol>) {
+  return async (opts: Opts): Promise<T> => {
+    if (isCI) throw new CIPromptError();
+    const result = await fn(opts);
+    if (isCancel(result)) process.exit(0);
+    return result;
+  };
 }
 
-/**
- * Prompt the user for text input unless running in CI.
- * Cancellation (Ctrl+C) exits the process.
- * @param opts - @clack/prompts TextOptions
- * @throws {CIPromptError} When called in a CI environment
- * @returns User input string
- */
-export async function text(opts: TextOptions): Promise<string> {
-  if (isCI) throw new CIPromptError();
-  const result = await clackText(opts);
-  if (isCancel(result)) process.exit(0);
-  return result;
-}
+export const confirm = withGuard<ConfirmOptions, boolean>(clackConfirm);
+export const text = withGuard<TextOptions, string>(clackText);
