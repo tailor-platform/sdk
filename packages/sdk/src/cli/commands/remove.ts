@@ -146,7 +146,7 @@ export const removeCommand = defineAppCommand({
       if (!args.yes) {
         const confirmed = await prompt.confirm({
           message: "Are you sure you want to remove all resources?",
-          initialValue: false,
+          default: false,
         });
         if (!confirmed) {
           throw new Error(ml`

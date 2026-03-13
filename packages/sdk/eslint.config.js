@@ -266,9 +266,14 @@ export default defineConfig([
                 "Use 'pathe' instead of 'node:path' for consistent cross-platform path handling.",
             },
             {
-              name: "@clack/prompts",
+              name: "@inquirer/prompts",
               message:
-                "Use 'prompt' from '@/cli/shared/prompt' instead of @clack/prompts directly.",
+                "Use 'prompt' from '@/cli/shared/prompt' instead of @inquirer/prompts directly.",
+            },
+            {
+              name: "@inquirer/core",
+              message:
+                "Use 'prompt' from '@/cli/shared/prompt' instead of @inquirer/core directly.",
             },
           ],
         },

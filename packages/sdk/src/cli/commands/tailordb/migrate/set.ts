@@ -122,7 +122,7 @@ async function set(options: SetOptions): Promise<void> {
   if (!options.yes) {
     const confirmation = await prompt.confirm({
       message: "Continue with migration checkpoint update?",
-      initialValue: false,
+      default: false,
     });
 
     if (!confirmation) {

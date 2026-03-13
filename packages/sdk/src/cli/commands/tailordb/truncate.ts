@@ -107,7 +107,7 @@ async function $truncate(options?: InternalTruncateOptions): Promise<void> {
       const namespaceList = namespaces.join(", ");
       const confirmation = await prompt.confirm({
         message: `This will truncate ALL tables in the following namespaces: ${namespaceList}. Continue?`,
-        initialValue: false,
+        default: false,
       });
       if (!confirmation) {
         logger.info("Truncate cancelled.");
@@ -136,7 +136,7 @@ async function $truncate(options?: InternalTruncateOptions): Promise<void> {
     if (!options.yes) {
       const confirmation = await prompt.confirm({
         message: `This will truncate ALL tables in namespace "${namespace}". Continue?`,
-        initialValue: false,
+        default: false,
       });
       if (!confirmation) {
         logger.info("Truncate cancelled.");
@@ -171,7 +171,7 @@ async function $truncate(options?: InternalTruncateOptions): Promise<void> {
       const typeList = typeNames.join(", ");
       const confirmation = await prompt.confirm({
         message: `This will truncate the following types: ${typeList}. Continue?`,
-        initialValue: false,
+        default: false,
       });
       if (!confirmation) {
         logger.info("Truncate cancelled.");

@@ -74,7 +74,7 @@ async function handleInitOption(
   if (!skipConfirmation) {
     const confirmation = await prompt.confirm({
       message: "Are you sure you want to delete these directories and start fresh?",
-      initialValue: false,
+      default: false,
     });
 
     if (!confirmation) {
@@ -264,7 +264,7 @@ async function generateDiffFromSnapshot(
     if (!options.yes) {
       const confirmation = await prompt.confirm({
         message: "Continue generating migration?",
-        initialValue: true,
+        default: true,
       });
 
       if (!confirmation) {

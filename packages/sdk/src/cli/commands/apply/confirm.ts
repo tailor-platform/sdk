@@ -54,7 +54,7 @@ export async function confirmOwnerConflict(
       : `Update these resources to be managed by "${appName}"?`;
   const confirmed = await prompt.confirm({
     message: promptMessage,
-    initialValue: false,
+    default: false,
   });
   if (!confirmed) {
     throw new Error(ml`
@@ -100,7 +100,7 @@ export async function confirmUnmanagedResources(
 
   const confirmed = await prompt.confirm({
     message: `Allow tailor-sdk to manage these resources for "${appName}"?`,
-    initialValue: false,
+    default: false,
   });
   if (!confirmed) {
     throw new Error(ml`
@@ -147,7 +147,7 @@ export async function confirmImportantResourceDeletion(
 
   const confirmed = await prompt.confirm({
     message: "Are you sure you want to delete these resources?",
-    initialValue: false,
+    default: false,
   });
   if (!confirmed) {
     throw new Error(ml`
