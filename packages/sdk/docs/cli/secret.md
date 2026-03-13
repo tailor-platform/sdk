@@ -118,10 +118,10 @@ tailor-sdk secret vault create [options] <name>
 
 **Options**
 
-| Option                          | Alias | Description       | Required | Default |
-| ------------------------------- | ----- | ----------------- | -------- | ------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
+| Option                          | Alias | Description       | Required | Default | Env                            |
+| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
 
 <!-- politty:command:secret vault create:options:end -->
 
@@ -166,11 +166,11 @@ tailor-sdk secret vault delete [options] <name>
 
 **Options**
 
-| Option                          | Alias | Description               | Required | Default |
-| ------------------------------- | ----- | ------------------------- | -------- | ------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID              | No       | -       |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile         | No       | -       |
-| `--yes`                         | `-y`  | Skip confirmation prompts | No       | `false` |
+| Option                          | Alias | Description               | Required | Default | Env                            |
+| ------------------------------- | ----- | ------------------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID              | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile         | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| `--yes`                         | `-y`  | Skip confirmation prompts | No       | `false` | -                              |
 
 <!-- politty:command:secret vault delete:options:end -->
 
@@ -205,10 +205,10 @@ tailor-sdk secret vault list [options]
 
 **Options**
 
-| Option                          | Alias | Description       | Required | Default |
-| ------------------------------- | ----- | ----------------- | -------- | ------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
+| Option                          | Alias | Description       | Required | Default | Env                            |
+| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
 
 <!-- politty:command:secret vault list:options:end -->
 
@@ -243,13 +243,13 @@ tailor-sdk secret create [options]
 
 **Options**
 
-| Option                          | Alias | Description       | Required | Default |
-| ------------------------------- | ----- | ----------------- | -------- | ------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
-| `--vault-name <VAULT_NAME>`     | `-V`  | Vault name        | Yes      | -       |
-| `--name <NAME>`                 | `-n`  | Secret name       | Yes      | -       |
-| `--value <VALUE>`               | `-v`  | Secret value      | Yes      | -       |
+| Option                          | Alias | Description       | Required | Default | Env                            |
+| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| `--vault-name <VAULT_NAME>`     | `-V`  | Vault name        | Yes      | -       | -                              |
+| `--name <NAME>`                 | `-n`  | Secret name       | Yes      | -       | -                              |
+| `--value <VALUE>`               | `-v`  | Secret value      | Yes      | -       | -                              |
 
 <!-- politty:command:secret create:options:end -->
 
@@ -284,13 +284,13 @@ tailor-sdk secret update [options]
 
 **Options**
 
-| Option                          | Alias | Description       | Required | Default |
-| ------------------------------- | ----- | ----------------- | -------- | ------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
-| `--vault-name <VAULT_NAME>`     | `-V`  | Vault name        | Yes      | -       |
-| `--name <NAME>`                 | `-n`  | Secret name       | Yes      | -       |
-| `--value <VALUE>`               | `-v`  | Secret value      | Yes      | -       |
+| Option                          | Alias | Description       | Required | Default | Env                            |
+| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| `--vault-name <VAULT_NAME>`     | `-V`  | Vault name        | Yes      | -       | -                              |
+| `--name <NAME>`                 | `-n`  | Secret name       | Yes      | -       | -                              |
+| `--value <VALUE>`               | `-v`  | Secret value      | Yes      | -       | -                              |
 
 <!-- politty:command:secret update:options:end -->
 
@@ -325,11 +325,11 @@ tailor-sdk secret list [options]
 
 **Options**
 
-| Option                          | Alias | Description       | Required | Default |
-| ------------------------------- | ----- | ----------------- | -------- | ------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
-| `--vault-name <VAULT_NAME>`     | `-V`  | Vault name        | Yes      | -       |
+| Option                          | Alias | Description       | Required | Default | Env                            |
+| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| `--vault-name <VAULT_NAME>`     | `-V`  | Vault name        | Yes      | -       | -                              |
 
 <!-- politty:command:secret list:options:end -->
 
@@ -364,13 +364,13 @@ tailor-sdk secret delete [options]
 
 **Options**
 
-| Option                          | Alias | Description               | Required | Default |
-| ------------------------------- | ----- | ------------------------- | -------- | ------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID              | No       | -       |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile         | No       | -       |
-| `--vault-name <VAULT_NAME>`     | `-V`  | Vault name                | Yes      | -       |
-| `--name <NAME>`                 | `-n`  | Secret name               | Yes      | -       |
-| `--yes`                         | `-y`  | Skip confirmation prompts | No       | `false` |
+| Option                          | Alias | Description               | Required | Default | Env                            |
+| ------------------------------- | ----- | ------------------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID              | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile         | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| `--vault-name <VAULT_NAME>`     | `-V`  | Vault name                | Yes      | -       | -                              |
+| `--name <NAME>`                 | `-n`  | Secret name               | Yes      | -       | -                              |
+| `--yes`                         | `-y`  | Skip confirmation prompts | No       | `false` | -                              |
 
 <!-- politty:command:secret delete:options:end -->
 

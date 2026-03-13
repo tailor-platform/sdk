@@ -156,37 +156,26 @@ function validateUUID(value: string, source: string): string {
 }
 
 /**
- * Load workspace ID from command options, environment variables, or platform config.
- * Priority: opts/workspaceId > env/workspaceId > opts/profile > env/profile > error
+ * Load workspace ID from command options or platform config.
+ * Environment variable fallback is handled by politty's arg env option.
+ * Priority: opts/workspaceId > opts/profile > error
  * @param opts - Workspace and profile options
  * @returns Resolved workspace ID
  */
 export function loadWorkspaceId(opts?: LoadWorkspaceIdOptions): string {
-  // opts/workspaceId
   if (opts?.workspaceId) {
     return validateUUID(opts.workspaceId, "--workspace-id option");
   }
 
-  // env/workspaceId
-  if (process.env.TAILOR_PLATFORM_WORKSPACE_ID) {
-    return validateUUID(
-      process.env.TAILOR_PLATFORM_WORKSPACE_ID,
-      "TAILOR_PLATFORM_WORKSPACE_ID environment variable",
-    );
-  }
-
-  // opts/profile > env/profile
-  const profile = opts?.profile || process.env.TAILOR_PLATFORM_PROFILE;
-  if (profile) {
+  if (opts?.profile) {
     const pfConfig = readPlatformConfig();
-    const wsId = pfConfig.profiles[profile]?.workspace_id;
+    const wsId = pfConfig.profiles[opts.profile]?.workspace_id;
     if (!wsId) {
-      throw new Error(`Profile "${profile}" not found`);
+      throw new Error(`Profile "${opts.profile}" not found`);
     }
-    return validateUUID(wsId, `profile "${profile}"`);
+    return validateUUID(wsId, `profile "${opts.profile}"`);
   }
 
-  // error
   throw new Error(ml`
     Workspace ID not found.
     Please specify workspace ID via --workspace-id option or TAILOR_PLATFORM_WORKSPACE_ID environment variable.
@@ -194,8 +183,9 @@ export function loadWorkspaceId(opts?: LoadWorkspaceIdOptions): string {
 }
 
 /**
- * Load access token from command options, environment variables, or platform config.
- * Priority: env/TAILOR_PLATFORM_TOKEN > env/TAILOR_TOKEN (deprecated) > opts/profile > env/profile > config/currentUser > error
+ * Load access token from environment variables, command options, or platform config.
+ * Profile env fallback is handled by politty's arg env option.
+ * Priority: env/TAILOR_PLATFORM_TOKEN > env/TAILOR_TOKEN (deprecated) > opts/profile > config/currentUser > error
  * @param opts - Profile options
  * @returns Resolved access token
  */
@@ -212,10 +202,7 @@ export async function loadAccessToken(opts?: LoadAccessTokenOptions) {
 
   const pfConfig = readPlatformConfig();
   let user;
-  // opts/profile > env/profile
-  const profile = opts?.useProfile
-    ? opts.profile || process.env.TAILOR_PLATFORM_PROFILE
-    : undefined;
+  const profile = opts?.useProfile ? opts.profile : undefined;
   if (profile) {
     const u = pfConfig.profiles[profile]?.user;
     if (!u) {
@@ -282,8 +269,9 @@ export async function fetchLatestToken(config: PfConfig, user: string): Promise<
 const DEFAULT_CONFIG_FILENAME = "tailor.config.ts";
 
 /**
- * Load config path from command options or environment variables.
- * Priority: opts/config > env/config > search parent directories
+ * Load config path from command options or search parent directories.
+ * Environment variable fallback is handled by politty's arg env option.
+ * Priority: opts/config > search parent directories
  * @param configPath - Optional explicit config path
  * @returns Resolved config path or undefined
  */
@@ -291,17 +279,14 @@ export function loadConfigPath(configPath?: string): string | undefined {
   if (configPath) {
     return configPath;
   }
-  if (process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH) {
-    return process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH;
-  }
 
   // Search for config file in current directory and parent directories
   return findUpSync(DEFAULT_CONFIG_FILENAME);
 }
 
 /**
- * Load organization ID from command options or environment variables.
- * Priority: opts/organizationId > env/organizationId > undefined (optional)
+ * Load organization ID from command options.
+ * Environment variable fallback is handled by politty's arg env option.
  * @param organizationId - Organization ID override
  * @returns Resolved organization ID or undefined
  */
@@ -309,30 +294,18 @@ export function loadOrganizationId(organizationId?: string): string | undefined 
   if (organizationId) {
     return validateUUID(organizationId, "--organization-id option");
   }
-  if (process.env.TAILOR_PLATFORM_ORGANIZATION_ID) {
-    return validateUUID(
-      process.env.TAILOR_PLATFORM_ORGANIZATION_ID,
-      "TAILOR_PLATFORM_ORGANIZATION_ID environment variable",
-    );
-  }
   return undefined;
 }
 
 /**
- * Load folder ID from command options or environment variables.
- * Priority: opts/folderId > env/folderId > undefined (optional)
+ * Load folder ID from command options.
+ * Environment variable fallback is handled by politty's arg env option.
  * @param folderId - Folder ID override
  * @returns Resolved folder ID or undefined
  */
 export function loadFolderId(folderId?: string): string | undefined {
   if (folderId) {
     return validateUUID(folderId, "--folder-id option");
-  }
-  if (process.env.TAILOR_PLATFORM_FOLDER_ID) {
-    return validateUUID(
-      process.env.TAILOR_PLATFORM_FOLDER_ID,
-      "TAILOR_PLATFORM_FOLDER_ID environment variable",
-    );
   }
   return undefined;
 }

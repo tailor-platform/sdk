@@ -115,16 +115,16 @@ tailor-sdk apply [options]
 
 **Options**
 
-| Option                          | Alias | Description                                        | Required | Default              |
-| ------------------------------- | ----- | -------------------------------------------------- | -------- | -------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                       | No       | -                    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                  | No       | -                    |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file                            | No       | `"tailor.config.ts"` |
-| `--yes`                         | `-y`  | Skip confirmation prompts                          | No       | `false`              |
-| `--dry-run`                     | `-d`  | Run the command without making any changes         | No       | -                    |
-| `--no-schema-check`             | -     | Skip schema diff check against migration snapshots | No       | -                    |
-| `--no-cache`                    | -     | Disable bundle caching for this run                | No       | -                    |
-| `--clean-cache`                 | -     | Clean the bundle cache before building             | No       | -                    |
+| Option                          | Alias | Description                                        | Required | Default              | Env                               |
+| ------------------------------- | ----- | -------------------------------------------------- | -------- | -------------------- | --------------------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                       | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                  | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file                            | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| `--yes`                         | `-y`  | Skip confirmation prompts                          | No       | `false`              | -                                 |
+| `--dry-run`                     | `-d`  | Run the command without making any changes         | No       | -                    | -                                 |
+| `--no-schema-check`             | -     | Skip schema diff check against migration snapshots | No       | -                    | -                                 |
+| `--no-cache`                    | -     | Disable bundle caching for this run                | No       | -                    | -                                 |
+| `--clean-cache`                 | -     | Clean the bundle cache before building             | No       | -                    | -                                 |
 
 <!-- politty:command:apply:options:end -->
 
@@ -182,12 +182,12 @@ tailor-sdk remove [options]
 
 **Options**
 
-| Option                          | Alias | Description               | Required | Default              |
-| ------------------------------- | ----- | ------------------------- | -------- | -------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID              | No       | -                    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile         | No       | -                    |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file   | No       | `"tailor.config.ts"` |
-| `--yes`                         | `-y`  | Skip confirmation prompts | No       | `false`              |
+| Option                          | Alias | Description               | Required | Default              | Env                               |
+| ------------------------------- | ----- | ------------------------- | -------- | -------------------- | --------------------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID              | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile         | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file   | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| `--yes`                         | `-y`  | Skip confirmation prompts | No       | `false`              | -                                 |
 
 <!-- politty:command:remove:options:end -->
 
@@ -223,11 +223,11 @@ tailor-sdk show [options]
 
 **Options**
 
-| Option                          | Alias | Description             | Required | Default              |
-| ------------------------------- | ----- | ----------------------- | -------- | -------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | No       | -                    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile       | No       | -                    |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` |
+| Option                          | Alias | Description             | Required | Default              | Env                               |
+| ------------------------------- | ----- | ----------------------- | -------- | -------------------- | --------------------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile       | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
 
 <!-- politty:command:show:options:end -->
 
@@ -263,11 +263,11 @@ tailor-sdk open [options]
 
 **Options**
 
-| Option                          | Alias | Description             | Required | Default              |
-| ------------------------------- | ----- | ----------------------- | -------- | -------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | No       | -                    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile       | No       | -                    |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` |
+| Option                          | Alias | Description             | Required | Default              | Env                               |
+| ------------------------------- | ----- | ----------------------- | -------- | -------------------- | --------------------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile       | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
 
 <!-- politty:command:open:options:end -->
 
@@ -313,11 +313,11 @@ tailor-sdk api [options] <endpoint>
 
 **Options**
 
-| Option                          | Alias | Description          | Required | Default |
-| ------------------------------- | ----- | -------------------- | -------- | ------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID         | No       | -       |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile    | No       | -       |
-| `--body <BODY>`                 | `-b`  | Request body as JSON | No       | `"{}"`  |
+| Option                          | Alias | Description          | Required | Default | Env                            |
+| ------------------------------- | ----- | -------------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID         | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile    | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| `--body <BODY>`                 | `-b`  | Request body as JSON | No       | `"{}"`  | -                              |
 
 <!-- politty:command:api:options:end -->
 
