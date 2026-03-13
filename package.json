@@ -5,6 +5,14 @@
   "keywords": [],
   "license": "MIT",
   "author": "",
+  "bin": {
+    "intent": "./bin/intent.js"
+  },
+  "files": [
+    "bin",
+    "skills",
+    "!skills/_artifacts"
+  ],
   "type": "module",
   "scripts": {
     "test": "turbo run test",
