@@ -47,7 +47,7 @@ describe("truncate command", () => {
     vi.clearAllMocks();
     // Re-setup default mock behavior after clearAllMocks
     const { logger } = await import("@/cli/shared/logger");
-    vi.mocked(logger.prompt).mockResolvedValue(true as never);
+    (logger.prompt as ReturnType<typeof vi.fn>).mockResolvedValue(true);
   });
 
   afterEach(() => {
