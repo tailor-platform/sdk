@@ -382,10 +382,19 @@ export const executionsCommand = defineAppCommand({
         positional: true,
         description: "Execution ID (if provided, shows details)",
       }),
-      "workflow-name": arg(z.string().optional(), {
-        alias: "n",
-        description: "Filter by workflow name (list mode only)",
-      }),
+      "workflow-name": arg(
+        z
+          .string()
+          .regex(
+            /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/,
+            "Must be 3-63 lowercase alphanumeric characters or hyphens, starting and ending with alphanumeric",
+          )
+          .optional(),
+        {
+          alias: "n",
+          description: "Filter by workflow name (list mode only)",
+        },
+      ),
       status: arg(z.string().optional(), {
         alias: "s",
         description: "Filter by status (list mode only)",
