@@ -41,10 +41,10 @@ tailor.d.ts
 # AI
 .agent/
 .claude/*
-!.claude/rules
-!.claude/rules/**
-!.claude/skills
-!.claude/skills/**
+!.claude/rules/
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/llm-challenge/
 CLAUDE.local.md
 
 # LLM Challenge
