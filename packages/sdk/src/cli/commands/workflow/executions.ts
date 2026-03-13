@@ -148,18 +148,6 @@ export async function listWorkflowExecutions<W extends WorkflowLike>(
 
   const filters: ReturnType<typeof create<typeof FilterSchema>>[] = [];
 
-  if (workflowName) {
-    filters.push(
-      create(FilterSchema, {
-        condition: create(ConditionSchema, {
-          field: "workflow_name",
-          operator: Condition_Operator.EQ,
-          value: { kind: { case: "stringValue", value: workflowName } },
-        }),
-      }),
-    );
-  }
-
   if (options?.status) {
     const statusValue = parseStatus(options.status);
     filters.push(
@@ -183,6 +171,7 @@ export async function listWorkflowExecutions<W extends WorkflowLike>(
   const executions = await fetchAll(async (pageToken, maxPageSize) => {
     const { executions, nextPageToken } = await client.listWorkflowExecutions({
       workspaceId,
+      workflowName: workflowName ?? "",
       pageToken,
       pageSize: maxPageSize,
       pageDirection: PageDirection.DESC,
@@ -393,10 +382,19 @@ export const executionsCommand = defineAppCommand({
         positional: true,
         description: "Execution ID (if provided, shows details)",
       }),
-      "workflow-name": arg(z.string().optional(), {
-        alias: "n",
-        description: "Filter by workflow name (list mode only)",
-      }),
+      "workflow-name": arg(
+        z
+          .string()
+          .regex(
+            /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/,
+            "Must be 3-63 lowercase alphanumeric characters or hyphens, starting and ending with alphanumeric",
+          )
+          .optional(),
+        {
+          alias: "n",
+          description: "Filter by workflow name (list mode only)",
+        },
+      ),
       status: arg(z.string().optional(), {
         alias: "s",
         description: "Filter by status (list mode only)",
