@@ -247,11 +247,6 @@ export default defineConfig([
                 "Use colors/symbols/logger from '@/cli/shared/logger' instead of chalk for consistent styling.",
             },
             {
-              name: "consola",
-              message:
-                "Use logger from '@/cli/shared/logger' instead of consola for consistent logging.",
-            },
-            {
               name: "table",
               message:
                 "Use formatTable/formatKeyValueTable/formatTableWithHeaders from '@/cli/shared/format' instead of table for consistent table styling.",

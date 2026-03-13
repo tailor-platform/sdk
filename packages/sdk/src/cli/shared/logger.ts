@@ -1,12 +1,6 @@
 import { formatWithOptions, type InspectOptions } from "node:util";
+import { confirm as clackConfirm, isCancel, text as clackText } from "@clack/prompts";
 import chalk from "chalk";
-import {
-  createConsola,
-  type ConsolaOptions,
-  type ConsolaReporter,
-  type LogObject,
-  type PromptOptions,
-} from "consola";
 import { formatDistanceToNowStrict } from "date-fns";
 import { isCI } from "std-env";
 import { getBorderCharacters, table } from "table";
@@ -23,6 +17,18 @@ export class CIPromptError extends Error {
     this.name = "CIPromptError";
   }
 }
+
+export interface ConfirmPromptOptions {
+  type: "confirm";
+  initial?: boolean;
+  cancel?: "symbol";
+}
+
+export interface TextPromptOptions {
+  type: "text";
+}
+
+export type PromptOptions = ConfirmPromptOptions | TextPromptOptions;
 
 /**
  * Semantic style functions for inline text styling
@@ -123,33 +129,6 @@ const TYPE_COLORS: Record<string, (text: string) => string> = {
   log: (text) => text,
 };
 
-interface ParsedLogTag {
-  mode: string;
-  indent: number;
-}
-
-/**
- * Parses a log tag in "mode:indent" format
- * @param tag - Tag string (e.g., "default:4", "stream:2", "plain:0")
- * @returns Parsed mode and indent values
- */
-export function parseLogTag(tag: string | undefined): ParsedLogTag {
-  const [mode, indentStr] = (tag || "default:0").split(":");
-  const indent = Number(indentStr) || 0;
-  return { mode, indent };
-}
-
-/**
- * Builds a log tag from LogOptions
- * @param opts - Log options
- * @returns Tag string in "mode:indent" format
- */
-export function buildLogTag(opts?: LogOptions): string {
-  const mode = opts?.mode ?? "default";
-  const indent = opts?.indent ?? 0;
-  return `${mode}:${indent}`;
-}
-
 interface FormatLogLineOptions {
   mode: string;
   indent: number;
@@ -183,48 +162,53 @@ export function formatLogLine(opts: FormatLogLineOptions): string {
 }
 
 /**
- * Creates a reporter that handles all log output modes.
- *
- * Supports three modes controlled via logObj.tag:
- * - "default": Colored icons and messages, no timestamp, dynamic line wrapping
- * - "stream": Colored icons with timestamps, for streaming/polling operations
- * - "plain": Colored messages only, no icons, no timestamp
- * @returns A ConsolaReporter instance
+ * Prompt the user for input unless running in CI.
+ * @param message - Prompt message
+ * @param options - Prompt options
+ * @throws {CIPromptError} When called in a CI environment
+ * @returns Prompt result
  */
-function createReporter(): ConsolaReporter {
-  return {
-    log(logObj: LogObject, ctx: { options: ConsolaOptions }) {
-      const { mode, indent } = parseLogTag(logObj.tag);
+async function loggerPrompt(message: string, options: ConfirmPromptOptions): Promise<boolean>;
+async function loggerPrompt(message: string, options: TextPromptOptions): Promise<string>;
+async function loggerPrompt(message: string, options?: PromptOptions): Promise<boolean | string> {
+  if (isCI) {
+    throw new CIPromptError();
+  }
 
-      const stdout = ctx.options.stdout || process.stdout;
-      const stderr = ctx.options.stderr || process.stderr;
-      const formatOptions = ctx.options.formatOptions;
-      const inspectOpts: InspectOptions = {
-        breakLength: stdout.columns || 80,
-        compact: formatOptions.compact,
-      };
-      const message = formatWithOptions(inspectOpts, ...logObj.args);
+  if (!options || options.type === "confirm") {
+    const result = await clackConfirm({
+      message,
+      initialValue: (options as ConfirmPromptOptions)?.initial,
+    });
+    if (isCancel(result)) {
+      if ((options as ConfirmPromptOptions)?.cancel === "symbol") return false;
+      process.exit(0);
+    }
+    return result;
+  }
 
-      const timestamp =
-        mode === "stream" && logObj.date ? `${logObj.date.toLocaleTimeString()} ` : "";
-
-      const output = formatLogLine({
-        mode,
-        indent,
-        type: logObj.type,
-        message,
-        timestamp,
-      });
-
-      stderr.write(output);
-    },
-  };
+  const result = await clackText({ message });
+  if (isCancel(result)) process.exit(0);
+  return result;
 }
 
-const consola = createConsola({
-  reporters: [createReporter()],
-  formatOptions: { date: true },
-});
+/**
+ * Writes a formatted log line to stderr.
+ * @param type - Log type (info, success, warn, error, log)
+ * @param message - Log message
+ * @param opts - Log options (mode and indent)
+ */
+function writeLog(type: string, message: string, opts?: LogOptions): void {
+  const mode = opts?.mode ?? "default";
+  const indent = opts?.indent ?? 0;
+  const inspectOpts: InspectOptions = {
+    breakLength: process.stdout.columns || 80,
+  };
+  const formattedMessage = formatWithOptions(inspectOpts, message);
+  const timestamp = mode === "stream" ? `${new Date().toLocaleTimeString()} ` : "";
+  const output = formatLogLine({ mode, indent, type, message: formattedMessage, timestamp });
+  process.stderr.write(output);
+}
 
 export const logger = {
   get jsonMode(): boolean {
@@ -235,32 +219,32 @@ export const logger = {
   },
 
   info(message: string, opts?: LogOptions): void {
-    consola.withTag(buildLogTag(opts)).info(message);
+    writeLog("info", message, opts);
   },
 
   success(message: string, opts?: LogOptions): void {
-    consola.withTag(buildLogTag(opts)).success(message);
+    writeLog("success", message, opts);
   },
 
   warn(message: string, opts?: LogOptions): void {
-    consola.withTag(buildLogTag(opts)).warn(message);
+    writeLog("warn", message, opts);
   },
 
   error(message: string, opts?: LogOptions): void {
-    consola.withTag(buildLogTag(opts)).error(message);
+    writeLog("error", message, opts);
   },
 
   log(message: string): void {
-    consola.withTag("plain").log(message);
+    writeLog("log", message, { mode: "plain" });
   },
 
   newline(): void {
-    consola.withTag("plain").log("");
+    process.stderr.write("\n");
   },
 
   debug(message: string): void {
     if (process.env.DEBUG === "true") {
-      consola.withTag("plain").log(styles.dim(message));
+      writeLog("log", styles.dim(message), { mode: "plain" });
     }
   },
 
@@ -344,19 +328,10 @@ export const logger = {
 
   /**
    * Prompt the user for input unless running in CI.
-   * @template T
    * @param message - Prompt message
    * @param options - Prompt options
    * @throws {CIPromptError} When called in a CI environment
    * @returns Prompt result
    */
-  prompt<T extends PromptOptions>(
-    message: string,
-    options?: T,
-  ): ReturnType<typeof consola.prompt<T>> {
-    if (isCI) {
-      throw new CIPromptError();
-    }
-    return consola.prompt(message, options);
-  },
+  prompt: loggerPrompt,
 };
