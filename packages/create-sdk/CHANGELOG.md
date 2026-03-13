@@ -1,5 +1,11 @@
 # @tailor-platform/create-sdk
 
+## 1.25.2
+
+### Patch Changes
+
+- [#719](https://github.com/tailor-platform/sdk/pull/719) [`60b882d`](https://github.com/tailor-platform/sdk/commit/60b882d631bd959f1b2e760430030edc68aa3dba) Thanks [@toiroakr](https://github.com/toiroakr)! - Upgrade politty to v0.4.9 and migrate to native globalArgs, cleanup, and arg effect patterns, eliminating the withCommonArgs wrapper
+
 ## 1.25.1
 
 ## 1.25.0

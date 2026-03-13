@@ -1,5 +1,35 @@
 # @tailor-platform/sdk
 
+## 1.25.2
+
+### Patch Changes
+
+- [#751](https://github.com/tailor-platform/sdk/pull/751) [`fd41720`](https://github.com/tailor-platform/sdk/commit/fd41720d8568e7082094e8f47f0cd7f77bb66e40) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix workflow executions list command failing with validation error when filtering by workflow name
+
+- [#739](https://github.com/tailor-platform/sdk/pull/739) [`1342733`](https://github.com/tailor-platform/sdk/commit/1342733c952161025546e35f7a18ad1b5a7d492d) Thanks [@riku99](https://github.com/riku99)! - Insert rows one-by-one for tables with self-referencing foreign keys
+
+- [#748](https://github.com/tailor-platform/sdk/pull/748) [`49d4db8`](https://github.com/tailor-platform/sdk/commit/49d4db84a987cc7b87367d8ee4725a2f52749a95) Thanks [@toiroakr](https://github.com/toiroakr)! - Use politty's `env` option for CLI argument environment variable fallback instead of manual `process.env` checks
+
+- [#722](https://github.com/tailor-platform/sdk/pull/722) [`19504f0`](https://github.com/tailor-platform/sdk/commit/19504f00c271c9add68571499c11568dc31f38a7) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency eslint-plugin-jsdoc to v62.7.1
+
+- [#723](https://github.com/tailor-platform/sdk/pull/723) [`b30f396`](https://github.com/tailor-platform/sdk/commit/b30f3960cc7447a3b6fab7100492ce56fae39317) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency graphql to v16.13.1
+
+- [#724](https://github.com/tailor-platform/sdk/pull/724) [`d0b35d7`](https://github.com/tailor-platform/sdk/commit/d0b35d738539f3a1a89b0daf11429a5d86f4b6cc) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @typescript/native-preview to v7.0.0-dev.20260308.1
+
+- [#729](https://github.com/tailor-platform/sdk/pull/729) [`80dddf2`](https://github.com/tailor-platform/sdk/commit/80dddf2c980c02e847615b5978bd9df1bbd88c84) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency aquaproj/aqua to v2.57.0
+
+- [#730](https://github.com/tailor-platform/sdk/pull/730) [`0088b14`](https://github.com/tailor-platform/sdk/commit/0088b14ee2331e341d8c9f867890683c81348539) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency lefthook to v2.1.3
+
+- [#735](https://github.com/tailor-platform/sdk/pull/735) [`5ad8650`](https://github.com/tailor-platform/sdk/commit/5ad86506c873183d99a438790cbad4866fcd0ce1) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency tsdown to v0.21.1
+
+- [#741](https://github.com/tailor-platform/sdk/pull/741) [`8a40799`](https://github.com/tailor-platform/sdk/commit/8a4079936cd68323bb5d354e7d39b0cf9d6c46c4) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update pnpm to v10.32.0
+
+- [#719](https://github.com/tailor-platform/sdk/pull/719) [`60b882d`](https://github.com/tailor-platform/sdk/commit/60b882d631bd959f1b2e760430030edc68aa3dba) Thanks [@toiroakr](https://github.com/toiroakr)! - Upgrade politty to v0.4.9 and migrate to native globalArgs, cleanup, and arg effect patterns, eliminating the withCommonArgs wrapper
+
+- [#736](https://github.com/tailor-platform/sdk/pull/736) [`db7399c`](https://github.com/tailor-platform/sdk/commit/db7399c9816f1f4b6a00f0ada0edd2cea23e26bd) Thanks [@remiposo](https://github.com/remiposo)! - Replace deprecated rolldown `inlineDynamicImports` option with `codeSplitting`
+
+- [#726](https://github.com/tailor-platform/sdk/pull/726) [`75c3007`](https://github.com/tailor-platform/sdk/commit/75c30079a252618a812ae9ea96f97ae3c8fcbb9c) Thanks [@k1LoW](https://github.com/k1LoW)! - Add `retryPolicy` option to `createWorkflow` for configuring workflow retry behavior with exponential backoff
+
 ## 1.25.1
 
 ### Patch Changes
