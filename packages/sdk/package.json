@@ -9,16 +9,19 @@
     "directory": "packages/sdk"
   },
   "bin": {
+    "intent": "./bin/intent.js",
     "tailor-sdk": "./dist/cli/index.mjs",
     "tailor-sdk-skills": "./dist/cli/skills.mjs"
   },
   "files": [
+    "bin",
     "CHANGELOG.md",
     "dist",
     "docs",
     "postinstall.mjs",
     "README.md",
-    "skills"
+    "skills",
+    "!skills/_artifacts"
   ],
   "type": "module",
   "main": "./dist/configure/index.mjs",
@@ -148,6 +151,7 @@
     "@eslint/js": "9.39.4",
     "@opentelemetry/sdk-trace-base": "2.6.0",
     "@tailor-platform/function-types": "0.8.2",
+    "@tanstack/intent": "0.0.14",
     "@types/madge": "5.0.3",
     "@types/mime-types": "3.0.1",
     "@types/node": "24.10.9",

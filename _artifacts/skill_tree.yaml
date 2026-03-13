@@ -1,0 +1,209 @@
+# skills/_artifacts/skill_tree.yaml
+library:
+  name: "@tailor-platform/sdk"
+  version: "1.25.1"
+  repository: "https://github.com/tailor-platform/sdk"
+  description: >
+    TypeScript SDK for declaratively defining and deploying enterprise
+    applications on the Tailor Platform.
+generated_from:
+  domain_map: "_artifacts/domain_map.yaml"
+  skill_spec: "_artifacts/skill_spec.md"
+generated_at: "2026-03-13"
+
+skills:
+  - name: "Tailor SDK — Core"
+    slug: "tailor-sdk"
+    type: "core"
+    domain: "project-config"
+    path: "skills/tailor-sdk/SKILL.md"
+    package: "packages/sdk"
+    description: >
+      Core overview and sub-skill registry for @tailor-platform/sdk.
+      Covers defineConfig, db.type, createResolver, createExecutor,
+      createWorkflow, tailor-sdk CLI. Entry point for all Tailor SDK skills.
+    sources:
+      - "tailor-platform/sdk:packages/sdk/README.md"
+      - "tailor-platform/sdk:packages/sdk/docs/configuration.md"
+
+  - name: "Project setup"
+    slug: "tailor-sdk/project-setup"
+    type: "sub-skill"
+    domain: "project-config"
+    path: "skills/tailor-sdk/project-setup/SKILL.md"
+    package: "packages/sdk"
+    description: >
+      Scaffold a new Tailor Platform project using create-sdk. Covers
+      npm create @tailor-platform/sdk, project directory structure,
+      tailor.config.ts skeleton, pnpm workspace setup.
+    requires:
+      - "tailor-sdk"
+    sources:
+      - "tailor-platform/sdk:packages/sdk/docs/quickstart.md"
+      - "tailor-platform/sdk:packages/create-sdk/src/index.ts"
+
+  - name: "Configuration"
+    slug: "tailor-sdk/configuration"
+    type: "sub-skill"
+    domain: "project-config"
+    path: "skills/tailor-sdk/configuration/SKILL.md"
+    package: "packages/sdk"
+    description: >
+      Define tailor.config.ts with defineConfig, defineAuth, defineIdp,
+      defineStaticWebSite, definePlugins. Covers auth with userProfile
+      and machineUsers, IdP authorization, CORS with deployment-time URLs,
+      environment variables, external resource references for multi-app
+      DB sharing, service glob patterns.
+    requires:
+      - "tailor-sdk"
+    sources:
+      - "tailor-platform/sdk:packages/sdk/docs/configuration.md"
+      - "tailor-platform/sdk:packages/sdk/docs/services/auth.md"
+      - "tailor-platform/sdk:packages/sdk/docs/services/idp.md"
+      - "tailor-platform/sdk:packages/sdk/docs/services/staticwebsite.md"
+      - "tailor-platform/sdk:packages/sdk/src/configure/config.ts"
+      - "tailor-platform/sdk:packages/sdk/src/configure/services/auth/index.ts"
+
+  - name: "Model definition"
+    slug: "tailor-sdk/model-definition"
+    type: "sub-skill"
+    domain: "data-modeling"
+    path: "skills/tailor-sdk/model-definition/SKILL.md"
+    package: "packages/sdk"
+    description: >
+      Define TailorDB types with db.type(), db.string(), db.int(),
+      db.uuid(), db.enum(), db.object(). Covers field modifiers
+      (optional, array, index, unique, serial, vector), .relation()
+      (n-1, 1-1, keyOnly, self), .permission(), .gqlPermission(),
+      .hooks(), .validate(), .indexes(), .files(), .features(),
+      db.fields.timestamps().
+    requires:
+      - "tailor-sdk"
+    sources:
+      - "tailor-platform/sdk:packages/sdk/docs/services/tailordb.md"
+      - "tailor-platform/sdk:packages/sdk/src/configure/services/tailordb/schema.ts"
+      - "tailor-platform/sdk:packages/sdk/src/configure/services/tailordb/permission.ts"
+    references:
+      - "references/field-types.md"
+      - "references/permissions.md"
+
+  - name: "Code generation"
+    slug: "tailor-sdk/code-generation"
+    type: "sub-skill"
+    domain: "data-modeling"
+    path: "skills/tailor-sdk/code-generation/SKILL.md"
+    package: "packages/sdk"
+    description: >
+      Generate TypeScript types from TailorDB definitions using plugins.
+      Covers kyselyTypePlugin, enumConstantsPlugin, fileUtilsPlugin,
+      seedPlugin, getDB() for type-safe Kysely database access,
+      tailor-sdk generate command.
+    requires:
+      - "tailor-sdk"
+      - "tailor-sdk/model-definition"
+    sources:
+      - "tailor-platform/sdk:packages/sdk/docs/generator/index.md"
+      - "tailor-platform/sdk:packages/sdk/docs/generator/builtin.md"
+      - "tailor-platform/sdk:packages/sdk/src/plugin/builtin/kysely-type/index.ts"
+      - "tailor-platform/sdk:packages/sdk/src/plugin/builtin/enum-constants/index.ts"
+
+  - name: "Resolver"
+    slug: "tailor-sdk/resolver"
+    type: "sub-skill"
+    domain: "server-logic"
+    path: "skills/tailor-sdk/resolver/SKILL.md"
+    package: "packages/sdk"
+    description: >
+      Implement custom GraphQL endpoints with createResolver. Covers
+      t type builder for input/output schemas (t.string, t.int, t.object,
+      t.enum), operation query/mutation, body context (input, user, env),
+      .validate() on input fields, Kysely DB access via getDB(),
+      triggering workflows from resolvers with authInvoker.
+    requires:
+      - "tailor-sdk"
+    sources:
+      - "tailor-platform/sdk:packages/sdk/docs/services/resolver.md"
+      - "tailor-platform/sdk:packages/sdk/src/configure/services/resolver/resolver.ts"
+      - "tailor-platform/sdk:example/resolvers/"
+
+  - name: "Executor"
+    slug: "tailor-sdk/executor"
+    type: "sub-skill"
+    domain: "server-logic"
+    path: "skills/tailor-sdk/executor/SKILL.md"
+    package: "packages/sdk"
+    description: >
+      Set up event-driven automation with createExecutor. Covers triggers:
+      recordCreatedTrigger, recordUpdatedTrigger, recordDeletedTrigger,
+      scheduleTrigger (cron), incomingWebhookTrigger, resolverExecutedTrigger,
+      idpUser*Trigger, authAccessToken*Trigger. Operation kinds: function,
+      graphql, webhook, workflow. authInvoker, secret references.
+    requires:
+      - "tailor-sdk"
+    sources:
+      - "tailor-platform/sdk:packages/sdk/docs/services/executor.md"
+      - "tailor-platform/sdk:packages/sdk/src/configure/services/executor/executor.ts"
+      - "tailor-platform/sdk:packages/sdk/src/configure/services/executor/trigger/"
+      - "tailor-platform/sdk:example/executors/"
+    references:
+      - "references/triggers.md"
+
+  - name: "Workflow"
+    slug: "tailor-sdk/workflow"
+    type: "sub-skill"
+    domain: "server-logic"
+    path: "skills/tailor-sdk/workflow/SKILL.md"
+    package: "packages/sdk"
+    description: >
+      Orchestrate multi-step business logic with createWorkflow and
+      createWorkflowJob. Covers default export for workflow, named exports
+      for jobs, .trigger() for inter-job communication, retryPolicy,
+      JSON-serializable input constraints, Kysely DB access in jobs,
+      starting workflows from resolvers and CLI.
+    requires:
+      - "tailor-sdk"
+    sources:
+      - "tailor-platform/sdk:packages/sdk/docs/services/workflow.md"
+      - "tailor-platform/sdk:packages/sdk/src/configure/services/workflow/workflow.ts"
+      - "tailor-platform/sdk:packages/sdk/src/configure/services/workflow/job.ts"
+      - "tailor-platform/sdk:example/workflows/"
+
+  - name: "CLI operations"
+    slug: "tailor-sdk/cli-operations"
+    type: "sub-skill"
+    domain: "operations"
+    path: "skills/tailor-sdk/cli-operations/SKILL.md"
+    package: "packages/sdk"
+    description: >
+      Use tailor-sdk CLI for deployment and operations. Covers apply,
+      generate, login, workspace create/list/delete, tailordb truncate,
+      tailordb migration, workflow start/executions/resume, executor
+      trigger/jobs, machineuser token, secret vault, function test-run,
+      --env-file, --workspace-id, --profile, --json flags.
+    requires:
+      - "tailor-sdk"
+    sources:
+      - "tailor-platform/sdk:packages/sdk/docs/cli-reference.md"
+      - "tailor-platform/sdk:packages/sdk/docs/cli/"
+    references:
+      - "references/cli-commands.md"
+
+  - name: "Quickstart"
+    slug: "tailor-sdk/quickstart"
+    type: "sub-skill"
+    domain: "project-config"
+    path: "skills/tailor-sdk/quickstart/SKILL.md"
+    package: "packages/sdk"
+    description: >
+      End-to-end guide from project creation to first deployment.
+      Covers create-sdk scaffolding, first tailor.config.ts, first
+      model with permissions, first resolver, workspace creation,
+      tailor-sdk apply, deployment verification.
+    requires:
+      - "tailor-sdk"
+      - "tailor-sdk/project-setup"
+      - "tailor-sdk/configuration"
+      - "tailor-sdk/model-definition"
+      - "tailor-sdk/cli-operations"
+    sources:
+      - "tailor-platform/sdk:packages/sdk/docs/quickstart.md"
