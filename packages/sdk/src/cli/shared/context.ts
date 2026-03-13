@@ -156,9 +156,9 @@ function validateUUID(value: string, source: string): string {
 }
 
 /**
- * Load workspace ID from command options or platform config.
- * Environment variable fallback is handled by politty's arg env option.
- * Priority: opts/workspaceId > opts/profile > error
+ * Load workspace ID from command options, environment variables, or platform config.
+ * In CLI context, env fallback is also handled by politty's arg env option.
+ * Priority: opts/workspaceId > env/workspaceId > opts/profile > error
  * @param opts - Workspace and profile options
  * @returns Resolved workspace ID
  */
@@ -167,13 +167,21 @@ export function loadWorkspaceId(opts?: LoadWorkspaceIdOptions): string {
     return validateUUID(opts.workspaceId, "--workspace-id option");
   }
 
-  if (opts?.profile) {
+  if (process.env.TAILOR_PLATFORM_WORKSPACE_ID) {
+    return validateUUID(
+      process.env.TAILOR_PLATFORM_WORKSPACE_ID,
+      "TAILOR_PLATFORM_WORKSPACE_ID environment variable",
+    );
+  }
+
+  const profile = opts?.profile || process.env.TAILOR_PLATFORM_PROFILE;
+  if (profile) {
     const pfConfig = readPlatformConfig();
-    const wsId = pfConfig.profiles[opts.profile]?.workspace_id;
+    const wsId = pfConfig.profiles[profile]?.workspace_id;
     if (!wsId) {
-      throw new Error(`Profile "${opts.profile}" not found`);
+      throw new Error(`Profile "${profile}" not found`);
     }
-    return validateUUID(wsId, `profile "${opts.profile}"`);
+    return validateUUID(wsId, `profile "${profile}"`);
   }
 
   throw new Error(ml`
@@ -184,8 +192,8 @@ export function loadWorkspaceId(opts?: LoadWorkspaceIdOptions): string {
 
 /**
  * Load access token from environment variables, command options, or platform config.
- * Profile env fallback is handled by politty's arg env option.
- * Priority: env/TAILOR_PLATFORM_TOKEN > env/TAILOR_TOKEN (deprecated) > opts/profile > config/currentUser > error
+ * In CLI context, profile env fallback is also handled by politty's arg env option.
+ * Priority: env/TAILOR_PLATFORM_TOKEN > env/TAILOR_TOKEN (deprecated) > opts/profile > env/profile > config/currentUser > error
  * @param opts - Profile options
  * @returns Resolved access token
  */
@@ -202,7 +210,9 @@ export async function loadAccessToken(opts?: LoadAccessTokenOptions) {
 
   const pfConfig = readPlatformConfig();
   let user;
-  const profile = opts?.useProfile ? opts.profile : undefined;
+  const profile = opts?.useProfile
+    ? opts.profile || process.env.TAILOR_PLATFORM_PROFILE
+    : undefined;
   if (profile) {
     const u = pfConfig.profiles[profile]?.user;
     if (!u) {
@@ -269,15 +279,18 @@ export async function fetchLatestToken(config: PfConfig, user: string): Promise<
 const DEFAULT_CONFIG_FILENAME = "tailor.config.ts";
 
 /**
- * Load config path from command options or search parent directories.
- * Environment variable fallback is handled by politty's arg env option.
- * Priority: opts/config > search parent directories
+ * Load config path from command options, environment variables, or search parent directories.
+ * In CLI context, env fallback is also handled by politty's arg env option.
+ * Priority: opts/config > env/config > search parent directories
  * @param configPath - Optional explicit config path
  * @returns Resolved config path or undefined
  */
 export function loadConfigPath(configPath?: string): string | undefined {
   if (configPath) {
     return configPath;
+  }
+  if (process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH) {
+    return process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH;
   }
 
   // Search for config file in current directory and parent directories
