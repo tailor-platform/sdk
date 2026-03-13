@@ -148,18 +148,6 @@ export async function listWorkflowExecutions<W extends WorkflowLike>(
 
   const filters: ReturnType<typeof create<typeof FilterSchema>>[] = [];
 
-  if (workflowName) {
-    filters.push(
-      create(FilterSchema, {
-        condition: create(ConditionSchema, {
-          field: "workflow_name",
-          operator: Condition_Operator.EQ,
-          value: { kind: { case: "stringValue", value: workflowName } },
-        }),
-      }),
-    );
-  }
-
   if (options?.status) {
     const statusValue = parseStatus(options.status);
     filters.push(
@@ -183,6 +171,7 @@ export async function listWorkflowExecutions<W extends WorkflowLike>(
   const executions = await fetchAll(async (pageToken, maxPageSize) => {
     const { executions, nextPageToken } = await client.listWorkflowExecutions({
       workspaceId,
+      workflowName: workflowName ?? "",
       pageToken,
       pageSize: maxPageSize,
       pageDirection: PageDirection.DESC,
