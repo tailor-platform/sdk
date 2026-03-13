@@ -34,7 +34,6 @@ vi.mock("@/cli/shared/logger", () => ({
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
-    prompt: vi.fn().mockResolvedValue(true),
   },
   styles: {
     dim: vi.fn((s: string) => s),
@@ -42,12 +41,17 @@ vi.mock("@/cli/shared/logger", () => ({
   symbols: {},
 }));
 
+vi.mock("@/cli/shared/prompt", () => ({
+  confirm: vi.fn().mockResolvedValue(true),
+  text: vi.fn().mockResolvedValue(""),
+}));
+
 describe("truncate command", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     // Re-setup default mock behavior after clearAllMocks
-    const { logger } = await import("@/cli/shared/logger");
-    (logger.prompt as ReturnType<typeof vi.fn>).mockResolvedValue(true);
+    const { confirm } = await import("@/cli/shared/prompt");
+    vi.mocked(confirm).mockResolvedValue(true);
   });
 
   afterEach(() => {

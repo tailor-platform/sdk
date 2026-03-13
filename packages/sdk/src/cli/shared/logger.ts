@@ -1,8 +1,6 @@
 import { formatWithOptions, type InspectOptions } from "node:util";
-import { confirm as clackConfirm, isCancel, text as clackText } from "@clack/prompts";
 import chalk from "chalk";
 import { formatDistanceToNowStrict } from "date-fns";
-import { isCI } from "std-env";
 import { getBorderCharacters, table } from "table";
 
 /**
@@ -17,18 +15,6 @@ export class CIPromptError extends Error {
     this.name = "CIPromptError";
   }
 }
-
-export interface ConfirmPromptOptions {
-  type: "confirm";
-  initial?: boolean;
-  cancel?: "symbol";
-}
-
-export interface TextPromptOptions {
-  type: "text";
-}
-
-export type PromptOptions = ConfirmPromptOptions | TextPromptOptions;
 
 /**
  * Semantic style functions for inline text styling
@@ -159,37 +145,6 @@ export function formatLogLine(opts: FormatLogLineOptions): string {
   const timestampPrefix = timestamp ?? "";
 
   return `${indentPrefix}${timestampPrefix}${coloredOutput}\n`;
-}
-
-/**
- * Prompt the user for input unless running in CI.
- * @param message - Prompt message
- * @param options - Prompt options
- * @throws {CIPromptError} When called in a CI environment
- * @returns Prompt result
- */
-async function loggerPrompt(message: string, options: ConfirmPromptOptions): Promise<boolean>;
-async function loggerPrompt(message: string, options: TextPromptOptions): Promise<string>;
-async function loggerPrompt(message: string, options?: PromptOptions): Promise<boolean | string> {
-  if (isCI) {
-    throw new CIPromptError();
-  }
-
-  if (!options || options.type === "confirm") {
-    const result = await clackConfirm({
-      message,
-      initialValue: (options as ConfirmPromptOptions)?.initial,
-    });
-    if (isCancel(result)) {
-      if ((options as ConfirmPromptOptions)?.cancel === "symbol") return false;
-      process.exit(0);
-    }
-    return result;
-  }
-
-  const result = await clackText({ message });
-  if (isCancel(result)) process.exit(0);
-  return result;
 }
 
 /**
@@ -325,13 +280,4 @@ export const logger = {
     });
     process.stdout.write(t);
   },
-
-  /**
-   * Prompt the user for input unless running in CI.
-   * @param message - Prompt message
-   * @param options - Prompt options
-   * @throws {CIPromptError} When called in a CI environment
-   * @returns Prompt result
-   */
-  prompt: loggerPrompt,
 };

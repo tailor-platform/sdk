@@ -21,6 +21,7 @@ import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig, type LoadedConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
+import { confirm } from "@/cli/shared/prompt";
 
 export interface RemoveOptions {
   workspaceId?: string;
@@ -143,9 +144,9 @@ export const removeCommand = defineAppCommand({
 
     await execRemove(client, workspaceId, application, config, async () => {
       if (!args.yes) {
-        const confirmed = await logger.prompt("Are you sure you want to remove all resources?", {
-          type: "confirm",
-          initial: false,
+        const confirmed = await confirm({
+          message: "Are you sure you want to remove all resources?",
+          initialValue: false,
         });
         if (!confirmed) {
           throw new Error(ml`

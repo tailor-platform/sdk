@@ -17,6 +17,7 @@ import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { getConfiguredEditorCommand, openInConfiguredEditor } from "@/cli/shared/editor";
 import { logger, styles } from "@/cli/shared/logger";
+import { confirm } from "@/cli/shared/prompt";
 import { PluginManager } from "@/plugin/manager";
 import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
 import {
@@ -71,13 +72,10 @@ async function handleInitOption(
 
   // Confirmation prompt
   if (!skipConfirmation) {
-    const confirmation = await logger.prompt(
-      "Are you sure you want to delete these directories and start fresh?",
-      {
-        type: "confirm",
-        initial: false,
-      },
-    );
+    const confirmation = await confirm({
+      message: "Are you sure you want to delete these directories and start fresh?",
+      initialValue: false,
+    });
 
     if (!confirmation) {
       logger.info("Operation cancelled.");
@@ -264,13 +262,12 @@ async function generateDiffFromSnapshot(
     logger.warn(formatBreakingChanges(diff.breakingChanges));
 
     if (!options.yes) {
-      const confirmation = await logger.prompt("Continue generating migration?", {
-        type: "confirm",
-        initial: true,
-        cancel: "symbol",
+      const confirmation = await confirm({
+        message: "Continue generating migration?",
+        initialValue: true,
       });
 
-      if (confirmation !== true) {
+      if (!confirmation) {
         logger.info("Migration generation cancelled.");
         return;
       }

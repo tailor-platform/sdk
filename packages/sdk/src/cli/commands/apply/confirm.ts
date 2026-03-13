@@ -1,5 +1,6 @@
 import ml from "multiline-ts";
 import { styles, logger } from "@/cli/shared/logger";
+import { confirm } from "@/cli/shared/prompt";
 
 export interface OwnerConflict {
   resourceType: string;
@@ -51,9 +52,9 @@ export async function confirmOwnerConflict(
     currentOwners.length === 1
       ? `Update these resources to be managed by "${appName}"?\n${styles.dim("(Common when renaming your application)")}`
       : `Update these resources to be managed by "${appName}"?`;
-  const confirmed = await logger.prompt(promptMessage, {
-    type: "confirm",
-    initial: false,
+  const confirmed = await confirm({
+    message: promptMessage,
+    initialValue: false,
   });
   if (!confirmed) {
     throw new Error(ml`
@@ -97,10 +98,10 @@ export async function confirmUnmanagedResources(
     return;
   }
 
-  const confirmed = await logger.prompt(
-    `Allow tailor-sdk to manage these resources for "${appName}"?`,
-    { type: "confirm", initial: false },
-  );
+  const confirmed = await confirm({
+    message: `Allow tailor-sdk to manage these resources for "${appName}"?`,
+    initialValue: false,
+  });
   if (!confirmed) {
     throw new Error(ml`
       Apply cancelled. Resources remain unmanaged.
@@ -144,9 +145,9 @@ export async function confirmImportantResourceDeletion(
     return;
   }
 
-  const confirmed = await logger.prompt("Are you sure you want to delete these resources?", {
-    type: "confirm",
-    initial: false,
+  const confirmed = await confirm({
+    message: "Are you sure you want to delete these resources?",
+    initialValue: false,
   });
   if (!confirmed) {
     throw new Error(ml`
