@@ -283,29 +283,3 @@ export function loadConfigPath(configPath?: string): string | undefined {
   // Search for config file in current directory and parent directories
   return findUpSync(DEFAULT_CONFIG_FILENAME);
 }
-
-/**
- * Load organization ID from command options.
- * Environment variable fallback is handled by politty's arg env option.
- * @param organizationId - Organization ID override
- * @returns Resolved organization ID or undefined
- */
-export function loadOrganizationId(organizationId?: string): string | undefined {
-  if (organizationId) {
-    return validateUUID(organizationId, "--organization-id option");
-  }
-  return undefined;
-}
-
-/**
- * Load folder ID from command options.
- * Environment variable fallback is handled by politty's arg env option.
- * @param folderId - Folder ID override
- * @returns Resolved folder ID or undefined
- */
-export function loadFolderId(folderId?: string): string | undefined {
-  if (folderId) {
-    return validateUUID(folderId, "--folder-id option");
-  }
-  return undefined;
-}

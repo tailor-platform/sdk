@@ -2,13 +2,7 @@ import { arg } from "politty";
 import { z } from "zod";
 import { initOperatorClient, type OperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
-import {
-  loadAccessToken,
-  loadFolderId,
-  loadOrganizationId,
-  readPlatformConfig,
-  writePlatformConfig,
-} from "@/cli/shared/context";
+import { loadAccessToken, readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { workspaceInfo, type WorkspaceInfo } from "./transform";
 import type { ProfileInfo } from "../profile";
@@ -61,17 +55,13 @@ export async function createWorkspace(options: CreateWorkspaceOptions): Promise<
   const client = await initOperatorClient(accessToken);
   await validateRegion(validated.region, client);
 
-  // Resolve organization and folder IDs from options or environment variables
-  const organizationId = loadOrganizationId(validated.organizationId);
-  const folderId = loadFolderId(validated.folderId);
-
   // Create workspace
   const resp = await client.createWorkspace({
     workspaceName: validated.name,
     workspaceRegion: validated.region,
     deleteProtection: validated.deleteProtection ?? false,
-    organizationId,
-    folderId,
+    organizationId: validated.organizationId,
+    folderId: validated.folderId,
   });
 
   return workspaceInfo(resp.workspace!);
