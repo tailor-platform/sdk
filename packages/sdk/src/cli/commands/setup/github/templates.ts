@@ -42,6 +42,7 @@ runs:
 
 /**
  * The install-node composite action YAML.
+ * Targets pnpm projects -- the SDK scaffolds with pnpm and generated projects use pnpm.
  */
 export const installNodeYaml = `name: Install Node.js
 description: Install pnpm, Node.js, and project dependencies
@@ -79,6 +80,8 @@ interface DeployParams {
 export function renderDeploy(params: DeployParams): string {
   const { workspaceName, workspaceRegion, organizationId, folderId, workingDirectory } = params;
 
+  // --dir sets working-directory for all run steps. Assumes the target directory
+  // is a pnpm workspace member with its own package.json (standard monorepo layout).
   const defaultsBlock = workingDirectory
     ? `\ndefaults:\n  run:\n    working-directory: ${workingDirectory}\n`
     : "";
@@ -137,6 +140,7 @@ jobs:
         run: pnpm generate
 
       - name: Deploy
+        # Runs the "apply" script from package.json (tailor-sdk apply -c tailor.config.ts --yes)
         run: pnpm apply -- --yes
 
       - name: Show application info
