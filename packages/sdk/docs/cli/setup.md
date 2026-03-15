@@ -33,6 +33,12 @@ tailor-sdk setup [command]
 | [`setup github`](#setup-github) | Generate GitHub Actions workflow for deployment. |
 
 <!-- politty:command:setup:subcommands:end -->
+
+<!-- politty:command:setup:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:setup:global-options-link:end -->
 <!-- politty:command:setup github:heading:start -->
 
 ### setup github
@@ -68,3 +74,9 @@ tailor-sdk setup github [options]
 | `--dir <DIR>`                           | `-d`  | App directory (for monorepo setups) | No       | `"."`   |
 
 <!-- politty:command:setup github:options:end -->
+
+<!-- politty:command:setup github:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:setup github:global-options-link:end -->
