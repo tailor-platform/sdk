@@ -366,6 +366,11 @@ async function planServices(
     const { parsedConfig: config } = auth;
     const existing = existingServices[config.name];
     const metaRequest = await buildMetaRequest(trn(workspaceId, config.name), appName);
+    const request = {
+      workspaceId,
+      namespaceName: config.name,
+      publishSessionEvents: config.publishSessionEvents,
+    };
     if (existing) {
       if (!existing.label) {
         unmanaged.push({
@@ -382,22 +387,14 @@ async function planServices(
 
       changeSet.updates.push({
         name: config.name,
-        request: {
-          workspaceId,
-          namespaceName: config.name,
-          publishSessionEvents: config.publishSessionEvents,
-        },
+        request,
         metaRequest,
       });
       delete existingServices[config.name];
     } else {
       changeSet.creates.push({
         name: config.name,
-        request: {
-          workspaceId,
-          namespaceName: config.name,
-          publishSessionEvents: config.publishSessionEvents,
-        },
+        request,
         metaRequest,
       });
     }
@@ -471,23 +468,25 @@ async function planIdPConfigs(
   for (const authService of auths) {
     const { parsedConfig: config } = authService;
     const existingIdPConfigs = await fetchIdPConfigs(config.name);
-    const existingNameSet = new Set<string>();
+    const existingMap = new Map<string, (typeof existingIdPConfigs)[number]>();
     existingIdPConfigs.forEach((idpConfig) => {
-      existingNameSet.add(idpConfig.name);
+      existingMap.set(idpConfig.name, idpConfig);
     });
     const idpConfig = config.idProvider;
     if (idpConfig) {
-      if (existingNameSet.has(idpConfig.name)) {
+      const desired = protoIdPConfig(idpConfig);
+      const existing = existingMap.get(idpConfig.name);
+      if (existing) {
         changeSet.updates.push({
           name: idpConfig.name,
           idpConfig,
           request: {
             workspaceId,
             namespaceName: config.name,
-            idpConfig: protoIdPConfig(idpConfig),
+            idpConfig: desired,
           },
         });
-        existingNameSet.delete(idpConfig.name);
+        existingMap.delete(idpConfig.name);
       } else {
         changeSet.creates.push({
           name: idpConfig.name,
@@ -495,12 +494,12 @@ async function planIdPConfigs(
           request: {
             workspaceId,
             namespaceName: config.name,
-            idpConfig: protoIdPConfig(idpConfig),
+            idpConfig: desired,
           },
         });
       }
     }
-    existingNameSet.forEach((name) => {
+    existingMap.forEach((_, name) => {
       changeSet.deletes.push({
         name,
         request: {
@@ -916,16 +915,17 @@ async function planMachineUsers(
   for (const auth of auths) {
     const { parsedConfig: config } = auth;
     const existingMachineUsers = await fetchMachineUsers(config.name);
-    const existingNameSet = new Set<string>();
+    const existingMap = new Map<string, (typeof existingMachineUsers)[number]>();
     existingMachineUsers.forEach((machineUser) => {
-      existingNameSet.add(machineUser.name);
+      existingMap.set(machineUser.name, machineUser);
     });
     for (const machineUsername of Object.keys(config.machineUsers ?? {})) {
       const machineUser = config.machineUsers?.[machineUsername];
       if (!machineUser) {
         continue;
       }
-      if (existingNameSet.has(machineUsername)) {
+      const existing = existingMap.get(machineUsername);
+      if (existing) {
         changeSet.updates.push({
           name: machineUsername,
           request: {
@@ -938,7 +938,7 @@ async function planMachineUsers(
               : undefined,
           },
         });
-        existingNameSet.delete(machineUsername);
+        existingMap.delete(machineUsername);
       } else {
         changeSet.creates.push({
           name: machineUsername,
@@ -954,7 +954,7 @@ async function planMachineUsers(
         });
       }
     }
-    existingNameSet.forEach((name) => {
+    existingMap.forEach((_, name) => {
       changeSet.deletes.push({
         name,
         request: {

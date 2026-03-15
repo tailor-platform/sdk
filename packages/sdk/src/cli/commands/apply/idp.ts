@@ -247,6 +247,17 @@ async function planServices(
 
     const lang = convertLang(idp.lang);
     const userAuthPolicy = idp.userAuthPolicy;
+    const publishUserEvents = idp.publishUserEvents;
+
+    const request = {
+      workspaceId,
+      namespaceName,
+      authorization,
+      lang,
+      userAuthPolicy,
+      publishUserEvents,
+      disableGqlOperations: convertGqlOperationsToDisable(idp.gqlOperations),
+    };
 
     if (existing) {
       if (!existing.label) {
@@ -264,30 +275,14 @@ async function planServices(
 
       changeSet.updates.push({
         name: namespaceName,
-        request: {
-          workspaceId,
-          namespaceName,
-          authorization,
-          lang,
-          userAuthPolicy,
-          publishUserEvents: idp.publishUserEvents,
-          disableGqlOperations: convertGqlOperationsToDisable(idp.gqlOperations),
-        },
+        request,
         metaRequest,
       });
       delete existingServices[namespaceName];
     } else {
       changeSet.creates.push({
         name: namespaceName,
-        request: {
-          workspaceId,
-          namespaceName,
-          authorization,
-          lang,
-          userAuthPolicy,
-          publishUserEvents: idp.publishUserEvents,
-          disableGqlOperations: convertGqlOperationsToDisable(idp.gqlOperations),
-        },
+        request,
         metaRequest,
       });
     }

@@ -121,6 +121,7 @@ export async function planExecutor(context: PlanContext) {
   for (const executor of Object.values(executors)) {
     const existing = existingExecutors[executor.name];
     const metaRequest = await buildMetaRequest(trn(workspaceId, executor.name), application.name);
+    const desiredExecutor = protoExecutor(application.name, executor, application.env);
     if (existing) {
       if (!existing.label) {
         unmanaged.push({
@@ -139,7 +140,7 @@ export async function planExecutor(context: PlanContext) {
         name: executor.name,
         request: {
           workspaceId,
-          executor: protoExecutor(application.name, executor, application.env),
+          executor: desiredExecutor,
         },
         metaRequest,
       });
@@ -149,7 +150,7 @@ export async function planExecutor(context: PlanContext) {
         name: executor.name,
         request: {
           workspaceId,
-          executor: protoExecutor(application.name, executor, application.env),
+          executor: desiredExecutor,
         },
         metaRequest,
       });

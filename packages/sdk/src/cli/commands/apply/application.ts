@@ -164,35 +164,28 @@ export async function planApplication(context: PlanContext) {
     }
   }
   const metaRequest = await buildMetaRequest(trn(workspaceId, application.name), application.name);
+  const request = {
+    workspaceId,
+    applicationName: application.name,
+    authNamespace,
+    authIdpConfigName,
+    cors: application.config.cors,
+    subgraphs: application.subgraphs.map((subgraph) => protoSubgraph(subgraph)),
+    allowedIpAddresses: application.config.allowedIpAddresses,
+    disableIntrospection: application.config.disableIntrospection,
+  };
+  const existing = existingApplications.find((app) => app.name === application.name);
 
-  if (existingApplications.some((app) => app.name === application.name)) {
+  if (existing) {
     changeSet.updates.push({
       name: application.name,
-      request: {
-        workspaceId,
-        applicationName: application.name,
-        authNamespace,
-        authIdpConfigName,
-        cors: application.config.cors,
-        subgraphs: application.subgraphs.map((subgraph) => protoSubgraph(subgraph)),
-        allowedIpAddresses: application.config.allowedIpAddresses,
-        disableIntrospection: application.config.disableIntrospection,
-      },
+      request,
       metaRequest,
     });
   } else {
     changeSet.creates.push({
       name: application.name,
-      request: {
-        workspaceId,
-        applicationName: application.name,
-        authNamespace,
-        authIdpConfigName,
-        cors: application.config.cors,
-        subgraphs: application.subgraphs.map((subgraph) => protoSubgraph(subgraph)),
-        allowedIpAddresses: application.config.allowedIpAddresses,
-        disableIntrospection: application.config.disableIntrospection,
-      },
+      request,
       metaRequest,
     });
   }

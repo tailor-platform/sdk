@@ -1708,6 +1708,7 @@ async function planGqlPermissions(
       if (!gqlPermission) {
         continue;
       }
+      const desiredPermission = protoGqlPermission(gqlPermission);
       if (existingNameSet.has(typeName)) {
         changeSet.updates.push({
           name: typeName,
@@ -1715,7 +1716,7 @@ async function planGqlPermissions(
             workspaceId,
             namespaceName: tailordb.namespace,
             typeName: typeName,
-            permission: protoGqlPermission(gqlPermission),
+            permission: desiredPermission,
           },
         });
         existingNameSet.delete(typeName);
@@ -1726,7 +1727,7 @@ async function planGqlPermissions(
             workspaceId,
             namespaceName: tailordb.namespace,
             typeName: typeName,
-            permission: protoGqlPermission(gqlPermission),
+            permission: desiredPermission,
           },
         });
       }

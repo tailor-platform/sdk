@@ -114,6 +114,14 @@ export async function planStaticWebsite(context: PlanContext) {
     const name = websiteService.name;
     const existing = existingWebsites[name];
     const metaRequest = await buildMetaRequest(trn(workspaceId, name), application.name);
+    const request = {
+      workspaceId,
+      staticwebsite: {
+        name,
+        description: config.description || "",
+        allowedIpAddresses: config.allowedIpAddresses || [],
+      },
+    };
 
     if (existing) {
       if (!existing.label) {
@@ -131,28 +139,14 @@ export async function planStaticWebsite(context: PlanContext) {
 
       changeSet.updates.push({
         name,
-        request: {
-          workspaceId,
-          staticwebsite: {
-            name,
-            description: config.description || "",
-            allowedIpAddresses: config.allowedIpAddresses || [],
-          },
-        },
+        request,
         metaRequest,
       });
       delete existingWebsites[name];
     } else {
       changeSet.creates.push({
         name,
-        request: {
-          workspaceId,
-          staticwebsite: {
-            name,
-            description: config.description || "",
-            allowedIpAddresses: config.allowedIpAddresses || [],
-          },
-        },
+        request,
         metaRequest,
       });
     }

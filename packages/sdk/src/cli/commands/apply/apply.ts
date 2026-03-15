@@ -175,39 +175,29 @@ export async function apply(options?: ApplyOptions) {
         config,
         noSchemaCheck: options?.noSchemaCheck,
       };
-      const [
-        functionRegistry,
-        tailorDB,
-        staticWebsite,
-        idp,
-        auth,
-        pipeline,
-        app,
-        executor,
-        workflow,
-        secretManager,
-      ] = await Promise.all([
-        withSpan("plan.functionRegistry", () =>
-          planFunctionRegistry(client, workspaceId, application.name, functionEntries),
-        ),
-        withSpan("plan.tailorDB", () => planTailorDB(ctx)),
-        withSpan("plan.staticWebsite", () => planStaticWebsite(ctx)),
-        withSpan("plan.idp", () => planIdP(ctx)),
-        withSpan("plan.auth", () => planAuth(ctx)),
-        withSpan("plan.pipeline", () => planPipeline(ctx)),
-        withSpan("plan.application", () => planApplication(ctx)),
-        withSpan("plan.executor", () => planExecutor(ctx)),
-        withSpan("plan.workflow", () =>
-          planWorkflow(
-            client,
-            workspaceId,
-            application.name,
-            workflowService?.workflows ?? {},
-            workflowBuildResult?.mainJobDeps ?? {},
+      const functionRegistry = await withSpan("plan.functionRegistry", () =>
+        planFunctionRegistry(client, workspaceId, application.name, functionEntries),
+      );
+      const [tailorDB, staticWebsite, idp, auth, pipeline, app, executor, workflow, secretManager] =
+        await Promise.all([
+          withSpan("plan.tailorDB", () => planTailorDB(ctx)),
+          withSpan("plan.staticWebsite", () => planStaticWebsite(ctx)),
+          withSpan("plan.idp", () => planIdP(ctx)),
+          withSpan("plan.auth", () => planAuth(ctx)),
+          withSpan("plan.pipeline", () => planPipeline(ctx)),
+          withSpan("plan.application", () => planApplication(ctx)),
+          withSpan("plan.executor", () => planExecutor(ctx)),
+          withSpan("plan.workflow", () =>
+            planWorkflow(
+              client,
+              workspaceId,
+              application.name,
+              workflowService?.workflows ?? {},
+              workflowBuildResult?.mainJobDeps ?? {},
+            ),
           ),
-        ),
-        withSpan("plan.secretManager", () => planSecretManager(ctx)),
-      ]);
+          withSpan("plan.secretManager", () => planSecretManager(ctx)),
+        ]);
       return {
         functionRegistry,
         tailorDB,

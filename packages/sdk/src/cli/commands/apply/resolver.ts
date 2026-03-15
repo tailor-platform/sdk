@@ -330,18 +330,19 @@ async function planResolvers(
       existingNameSet.add(resolver.name);
     });
     for (const resolver of Object.values(pipeline.resolvers)) {
+      const desiredResolver = processResolver(
+        pipeline.namespace,
+        resolver,
+        executorUsedResolvers,
+        env,
+      );
       if (existingNameSet.has(resolver.name)) {
         changeSet.updates.push({
           name: resolver.name,
           request: {
             workspaceId,
             namespaceName: pipeline.namespace,
-            pipelineResolver: processResolver(
-              pipeline.namespace,
-              resolver,
-              executorUsedResolvers,
-              env,
-            ),
+            pipelineResolver: desiredResolver,
           },
         });
         existingNameSet.delete(resolver.name);
@@ -351,12 +352,7 @@ async function planResolvers(
           request: {
             workspaceId,
             namespaceName: pipeline.namespace,
-            pipelineResolver: processResolver(
-              pipeline.namespace,
-              resolver,
-              executorUsedResolvers,
-              env,
-            ),
+            pipelineResolver: desiredResolver,
           },
         });
       }
