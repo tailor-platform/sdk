@@ -74,6 +74,9 @@ interface DeployParams {
 
 /**
  * Render the deploy workflow YAML.
+ *
+ * Targets single-application scaffolds (those with `generate` and `deploy` scripts).
+ * Multi-application projects (e.g. chained `deploy:*` scripts) need manual workflow customization.
  * @param params - Workspace and deployment configuration
  * @returns Workflow YAML content
  */
