@@ -13,10 +13,10 @@ describe("buildFiles", () => {
     outputDir: "/tmp/test-project",
   };
 
-  it("returns 3 files", () => {
-    const files = buildFiles(baseOptions);
-    expect(files).toHaveLength(3);
-  });
+  function getDeployContent(options = baseOptions): string {
+    const files = buildFiles(options);
+    return files.find((f) => f.path.endsWith("deploy.yml"))!.content;
+  }
 
   it("generates correct file paths", () => {
     const files = buildFiles(baseOptions);
@@ -30,30 +30,22 @@ describe("buildFiles", () => {
     );
   });
 
-  it("includes workspace name and region in deploy.yml", () => {
-    const files = buildFiles(baseOptions);
-    const deploy = files.find((f) => f.path.endsWith("deploy.yml"))!;
-    expect(deploy.content).toContain("WORKSPACE_NAME: my-app");
-    expect(deploy.content).toContain("WORKSPACE_REGION: asia-northeast");
-  });
-
-  it("includes organization ID and folder ID in deploy.yml", () => {
-    const files = buildFiles(baseOptions);
-    const deploy = files.find((f) => f.path.endsWith("deploy.yml"))!;
-    expect(deploy.content).toContain("TAILOR_PLATFORM_ORGANIZATION_ID: org-123");
-    expect(deploy.content).toContain("TAILOR_PLATFORM_FOLDER_ID: folder-456");
+  it("includes all env vars in deploy.yml", () => {
+    const content = getDeployContent();
+    expect(content).toContain("WORKSPACE_NAME: my-app");
+    expect(content).toContain("WORKSPACE_REGION: asia-northeast");
+    expect(content).toContain("TAILOR_PLATFORM_ORGANIZATION_ID: org-123");
+    expect(content).toContain("TAILOR_PLATFORM_FOLDER_ID: folder-456");
   });
 
   it("does not include working-directory when dir is '.'", () => {
-    const files = buildFiles(baseOptions);
-    const deploy = files.find((f) => f.path.endsWith("deploy.yml"))!;
-    expect(deploy.content).not.toContain("working-directory");
+    expect(getDeployContent()).not.toContain("working-directory");
   });
 
   it("includes working-directory when dir is not '.'", () => {
-    const files = buildFiles({ ...baseOptions, dir: "apps/foo" });
-    const deploy = files.find((f) => f.path.endsWith("deploy.yml"))!;
-    expect(deploy.content).toContain("working-directory: apps/foo");
+    expect(getDeployContent({ ...baseOptions, dir: "apps/foo" })).toContain(
+      "working-directory: apps/foo",
+    );
   });
 });
 
