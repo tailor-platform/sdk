@@ -1,14 +1,13 @@
-import { arg, defineCommand } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
-import { commonArgs, withCommonArgs } from "@/cli/shared/args";
+import { defineAppCommand } from "@/cli/shared/command";
 import { setupGitHub } from "./github";
 
-export const githubCommand = defineCommand({
+export const githubCommand = defineAppCommand({
   name: "github",
   description: "Generate GitHub Actions workflow for deployment.",
   args: z
     .object({
-      ...commonArgs,
       "workspace-name": arg(z.string(), {
         alias: "n",
         description: "Workspace name",
@@ -31,7 +30,7 @@ export const githubCommand = defineCommand({
       }),
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
     await setupGitHub({
       workspaceName: args["workspace-name"],
       workspaceRegion: args["workspace-region"],
@@ -40,5 +39,5 @@ export const githubCommand = defineCommand({
       dir: args.dir,
       outputDir: process.cwd(),
     });
-  }),
+  },
 });
