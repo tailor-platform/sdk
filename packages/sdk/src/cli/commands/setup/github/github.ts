@@ -3,24 +3,24 @@ import * as path from "pathe";
 import { logger, styles } from "@/cli/shared/logger";
 import { fetchTailorTokenYaml, installNodeYaml, renderDeploy } from "./templates";
 
-export interface SetupGitHubOptions {
+export type SetupGitHubOptions = {
   workspaceName: string;
   workspaceRegion: string;
   organizationId: string;
   folderId: string;
   dir: string;
   outputDir: string;
-}
+};
 
-interface GeneratedFile {
+type GeneratedFile = {
   path: string;
   content: string;
-}
+};
 
-interface WriteResult {
+type WriteResult = {
   written: string[];
   skipped: string[];
-}
+};
 
 /**
  * Build the list of GitHub Actions files to generate.
