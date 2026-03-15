@@ -68,35 +68,35 @@ describe("writeFiles", () => {
     fs.rmSync(testDir, { recursive: true, force: true });
   });
 
-  it("writes files that do not exist", async () => {
+  it("writes files that do not exist", () => {
     const filePath = path.join(testDir, "workflow.yml");
-    const result = await writeFiles([{ path: filePath, content: "test content" }]);
+    const result = writeFiles([{ path: filePath, content: "test content" }]);
     expect(result.written).toContain(filePath);
     expect(result.skipped).toHaveLength(0);
     expect(fs.readFileSync(filePath, "utf-8")).toBe("test content");
   });
 
-  it("skips files that already exist", async () => {
+  it("skips files that already exist", () => {
     const filePath = path.join(testDir, "existing.yml");
     fs.writeFileSync(filePath, "original content");
-    const result = await writeFiles([{ path: filePath, content: "new content" }]);
+    const result = writeFiles([{ path: filePath, content: "new content" }]);
     expect(result.skipped).toContain(filePath);
     expect(result.written).toHaveLength(0);
     expect(fs.readFileSync(filePath, "utf-8")).toBe("original content");
   });
 
-  it("creates parent directories as needed", async () => {
+  it("creates parent directories as needed", () => {
     const filePath = path.join(testDir, "deep/nested/dir/file.yml");
-    const result = await writeFiles([{ path: filePath, content: "nested" }]);
+    const result = writeFiles([{ path: filePath, content: "nested" }]);
     expect(result.written).toContain(filePath);
     expect(fs.readFileSync(filePath, "utf-8")).toBe("nested");
   });
 
-  it("handles mixed existing and new files", async () => {
+  it("handles mixed existing and new files", () => {
     const existingPath = path.join(testDir, "existing.yml");
     const newPath = path.join(testDir, "new.yml");
     fs.writeFileSync(existingPath, "original");
-    const result = await writeFiles([
+    const result = writeFiles([
       { path: existingPath, content: "updated" },
       { path: newPath, content: "brand new" },
     ]);

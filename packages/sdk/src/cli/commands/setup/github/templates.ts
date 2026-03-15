@@ -85,10 +85,9 @@ interface DeployParams {
 export function renderDeploy(params: DeployParams): string {
   const { workspaceName, workspaceRegion, organizationId, folderId, workingDirectory } = params;
 
-  const defaultsBlock =
-    workingDirectory && workingDirectory !== "."
-      ? `\ndefaults:\n  run:\n    working-directory: ${workingDirectory}\n`
-      : "";
+  const defaultsBlock = workingDirectory
+    ? `\ndefaults:\n  run:\n    working-directory: ${workingDirectory}\n`
+    : "";
 
   return `name: Deploy
 

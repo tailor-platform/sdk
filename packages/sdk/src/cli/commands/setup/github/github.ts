@@ -58,7 +58,7 @@ export function buildFiles(options: SetupGitHubOptions): GeneratedFile[] {
  * @param files - Files to write
  * @returns Result with lists of written and skipped file paths
  */
-export async function writeFiles(files: GeneratedFile[]): Promise<WriteResult> {
+export function writeFiles(files: GeneratedFile[]): WriteResult {
   const written: string[] = [];
   const skipped: string[] = [];
 
@@ -79,9 +79,9 @@ export async function writeFiles(files: GeneratedFile[]): Promise<WriteResult> {
  * Generate GitHub Actions workflow files and print next steps.
  * @param options - Setup options including workspace config and output directory
  */
-export async function setupGitHub(options: SetupGitHubOptions): Promise<void> {
+export function setupGitHub(options: SetupGitHubOptions): void {
   const files = buildFiles(options);
-  const result = await writeFiles(files);
+  const result = writeFiles(files);
 
   for (const filePath of result.written) {
     const relativePath = path.relative(options.outputDir, filePath);

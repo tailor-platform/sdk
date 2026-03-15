@@ -1,4 +1,4 @@
-import { defineCommand, runCommand } from "politty";
+import { defineCommand } from "politty";
 import { githubCommand } from "./github";
 
 export const setupCommand = defineCommand({
@@ -6,8 +6,5 @@ export const setupCommand = defineCommand({
   description: "Set up project infrastructure.",
   subCommands: {
     github: githubCommand,
-  },
-  async run() {
-    await runCommand(githubCommand, []);
   },
 });

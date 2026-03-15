@@ -30,8 +30,8 @@ export const githubCommand = defineAppCommand({
       }),
     })
     .strict(),
-  run: async (args) => {
-    await setupGitHub({
+  run: (args) => {
+    setupGitHub({
       workspaceName: args["workspace-name"],
       workspaceRegion: args["workspace-region"],
       organizationId: args["organization-id"],
