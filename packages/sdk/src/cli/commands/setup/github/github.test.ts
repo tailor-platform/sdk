@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildFiles, writeFiles } from "./github";
+import { installNodeYaml } from "./templates";
 
 describe("buildFiles", () => {
   const baseOptions = {
@@ -46,6 +47,18 @@ describe("buildFiles", () => {
     expect(getDeployContent({ ...baseOptions, dir: "apps/foo" })).toContain(
       "working-directory: apps/foo",
     );
+  });
+
+  it("uses pnpm run deploy for the deploy step", () => {
+    const content = getDeployContent();
+    expect(content).toContain("run: pnpm run deploy -- --yes");
+    expect(content).not.toContain("run: pnpm apply");
+  });
+});
+
+describe("installNodeYaml", () => {
+  it("pins pnpm version for projects without packageManager field", () => {
+    expect(installNodeYaml).toContain("version: 10");
   });
 });
 
