@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { logger, styles } from "@/cli/shared/logger";
-import { renderDeploy, renderFetchTailorToken, renderInstallNode } from "./templates";
+import { fetchTailorTokenYaml, installNodeYaml, renderDeploy } from "./templates";
 
 export interface SetupGitHubOptions {
   workspaceName: string;
@@ -28,26 +28,25 @@ interface WriteResult {
  * @returns Array of files with paths and rendered content
  */
 export function buildFiles(options: SetupGitHubOptions): GeneratedFile[] {
-  const { workspaceName, workspaceRegion, organizationId, folderId, dir, outputDir } = options;
-  const githubDir = path.join(outputDir, ".github");
+  const githubDir = path.join(options.outputDir, ".github");
 
   return [
     {
       path: path.join(githubDir, "actions/fetch-tailor-token/action.yml"),
-      content: renderFetchTailorToken(),
+      content: fetchTailorTokenYaml,
     },
     {
       path: path.join(githubDir, "actions/install-node/action.yml"),
-      content: renderInstallNode(),
+      content: installNodeYaml,
     },
     {
       path: path.join(githubDir, "workflows/deploy.yml"),
       content: renderDeploy({
-        workspaceName,
-        workspaceRegion,
-        organizationId,
-        folderId,
-        workingDirectory: dir !== "." ? dir : undefined,
+        workspaceName: options.workspaceName,
+        workspaceRegion: options.workspaceRegion,
+        organizationId: options.organizationId,
+        folderId: options.folderId,
+        workingDirectory: options.dir !== "." ? options.dir : undefined,
       }),
     },
   ];

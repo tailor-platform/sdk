@@ -1,9 +1,7 @@
 /**
- * Render the fetch-tailor-token composite action YAML.
- * @returns Action YAML content
+ * The fetch-tailor-token composite action YAML.
  */
-export function renderFetchTailorToken(): string {
-  return `name: Fetch Tailor Platform Token
+export const fetchTailorTokenYaml = `name: Fetch Tailor Platform Token
 description: Fetch an OAuth2 access token via client credentials grant and export as TAILOR_PLATFORM_TOKEN
 
 inputs:
@@ -41,14 +39,11 @@ runs:
         echo "::add-mask::$TOKEN"
         echo "TAILOR_PLATFORM_TOKEN=$TOKEN" >> "$GITHUB_ENV"
 `;
-}
 
 /**
- * Render the install-node composite action YAML.
- * @returns Action YAML content
+ * The install-node composite action YAML.
  */
-export function renderInstallNode(): string {
-  return `name: Install Node.js
+export const installNodeYaml = `name: Install Node.js
 description: Install pnpm, Node.js, and project dependencies
 
 runs:
@@ -67,7 +62,6 @@ runs:
       run: pnpm install --frozen-lockfile
       shell: bash
 `;
-}
 
 interface DeployParams {
   workspaceName: string;
