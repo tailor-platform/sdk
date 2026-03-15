@@ -140,8 +140,8 @@ jobs:
         run: pnpm generate
 
       - name: Deploy
-        # Runs the "apply" script from package.json (tailor-sdk apply -c tailor.config.ts --yes)
-        run: pnpm apply -- --yes
+        # Runs the "deploy" script from package.json (tailor-sdk apply --yes)
+        run: pnpm run deploy -- --yes
 
       - name: Show application info
         run: pnpm tailor-sdk show -j -w "$TAILOR_PLATFORM_WORKSPACE_ID"

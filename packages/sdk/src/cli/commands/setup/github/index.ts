@@ -16,6 +16,8 @@ export const githubCommand = defineAppCommand({
         alias: "r",
         description: "Workspace region",
       }),
+      // Required here because the generated workflow uses these for workspace creation.
+      // Could be made optional in the future if we add conditional template rendering.
       "organization-id": arg(z.string(), {
         alias: "o",
         description: "Organization ID",
