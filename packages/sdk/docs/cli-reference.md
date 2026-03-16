@@ -131,9 +131,11 @@ Commands for authentication and user management.
 | [user pat delete](./cli/user.md#user-pat-delete) | Delete a personal access token |
 | [user pat update](./cli/user.md#user-pat-update) | Update a personal access token |
 
-### [Organization Commands](./cli/organization.md)
+### Workspace & Organization Commands
 
-Commands for managing organizations and folders.
+Commands for managing workspaces, profiles, organizations, and folders.
+
+**[Organization Commands](./cli/organization.md)**
 
 | Command                                                                        | Description                                     |
 | ------------------------------------------------------------------------------ | ----------------------------------------------- |
@@ -147,9 +149,7 @@ Commands for managing organizations and folders.
 | [organization folder update](./cli/organization.md#organization-folder-update) | Update a folder's name                          |
 | [organization folder delete](./cli/organization.md#organization-folder-delete) | Delete a folder from an organization            |
 
-### [Workspace Commands](./cli/workspace.md)
-
-Commands for managing workspaces and profiles.
+**[Workspace Commands](./cli/workspace.md)**
 
 | Command                                                 | Description            |
 | ------------------------------------------------------- | ---------------------- |
