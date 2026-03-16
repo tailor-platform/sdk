@@ -29,12 +29,12 @@ describe("skills-installer", () => {
     skillsSourceDir = path.join(tmpDir, "source-skills");
 
     // Create a fake skills source tree matching the real layout:
-    //   skills/SKILL.md              (root skill)
+    //   skills/tailor-sdk/SKILL.md    (root skill)
     //   skills/plugin/SKILL.md
     //   skills/services/auth/SKILL.md
-    //   skills/_artifacts/spec.md    (should be excluded)
-    fs.mkdirSync(skillsSourceDir, { recursive: true });
-    fs.writeFileSync(path.join(skillsSourceDir, "SKILL.md"), "# Tailor SDK");
+    //   skills/_artifacts/spec.md     (should be excluded)
+    fs.mkdirSync(path.join(skillsSourceDir, "tailor-sdk"), { recursive: true });
+    fs.writeFileSync(path.join(skillsSourceDir, "tailor-sdk", "SKILL.md"), "# Tailor SDK");
 
     fs.mkdirSync(path.join(skillsSourceDir, "plugin"), { recursive: true });
     fs.writeFileSync(path.join(skillsSourceDir, "plugin", "SKILL.md"), "# Plugin");
@@ -60,25 +60,23 @@ describe("skills-installer", () => {
   });
 
   describe("copySkills", () => {
-    it("copies files to .claude/skills/tailor-sdk/ preserving structure", () => {
+    it("copies files to .claude/skills/ preserving structure", () => {
       const projectDir = path.join(tmpDir, "project");
       fs.mkdirSync(projectDir);
 
       const result = copySkills({ projectDir, sourceDir: skillsSourceDir });
 
-      expect(result.destinationDir).toBe(path.join(projectDir, ".claude/skills/tailor-sdk"));
-      expect(result.copiedFiles).toContain("SKILL.md");
+      expect(result.destinationDir).toBe(path.join(projectDir, ".claude/skills"));
+      expect(result.copiedFiles).toContain("tailor-sdk/SKILL.md");
       expect(result.copiedFiles).toContain("plugin/SKILL.md");
       expect(result.copiedFiles).toContain("services/auth/SKILL.md");
 
-      // Verify files exist on disk
+      // Verify files exist on disk — tailor-sdk/ is NOT double-nested
       expect(fs.existsSync(path.join(projectDir, ".claude/skills/tailor-sdk/SKILL.md"))).toBe(true);
-      expect(
-        fs.existsSync(path.join(projectDir, ".claude/skills/tailor-sdk/plugin/SKILL.md")),
-      ).toBe(true);
-      expect(
-        fs.existsSync(path.join(projectDir, ".claude/skills/tailor-sdk/services/auth/SKILL.md")),
-      ).toBe(true);
+      expect(fs.existsSync(path.join(projectDir, ".claude/skills/plugin/SKILL.md"))).toBe(true);
+      expect(fs.existsSync(path.join(projectDir, ".claude/skills/services/auth/SKILL.md"))).toBe(
+        true,
+      );
     });
 
     it("excludes _artifacts/ directory", () => {
@@ -88,9 +86,7 @@ describe("skills-installer", () => {
       const result = copySkills({ projectDir, sourceDir: skillsSourceDir });
 
       expect(result.copiedFiles).not.toContain("_artifacts/spec.md");
-      expect(
-        fs.existsSync(path.join(projectDir, ".claude/skills/tailor-sdk/_artifacts/spec.md")),
-      ).toBe(false);
+      expect(fs.existsSync(path.join(projectDir, ".claude/skills/_artifacts/spec.md"))).toBe(false);
     });
 
     it("skips existing files when force is false", () => {
@@ -105,7 +101,7 @@ describe("skills-installer", () => {
         force: false,
       });
 
-      expect(result.skippedFiles).toContain("SKILL.md");
+      expect(result.skippedFiles).toContain("tailor-sdk/SKILL.md");
       expect(fs.readFileSync(destFile, "utf8")).toBe("existing content");
     });
 
@@ -117,7 +113,7 @@ describe("skills-installer", () => {
 
       const result = copySkills({ projectDir, sourceDir: skillsSourceDir });
 
-      expect(result.copiedFiles).toContain("SKILL.md");
+      expect(result.copiedFiles).toContain("tailor-sdk/SKILL.md");
       expect(fs.readFileSync(destFile, "utf8")).toBe("# Tailor SDK");
     });
 
@@ -132,7 +128,7 @@ describe("skills-installer", () => {
       });
 
       expect(result.copiedFiles.length).toBeGreaterThan(0);
-      expect(fs.existsSync(path.join(projectDir, ".claude/skills/tailor-sdk"))).toBe(false);
+      expect(fs.existsSync(path.join(projectDir, ".claude/skills"))).toBe(false);
     });
 
     it("throws when skills source directory does not exist", () => {
