@@ -2,4 +2,4 @@
 "@tailor-platform/sdk": patch
 ---
 
-fix: use `@tailor-platform/sdk/kysely` re-export in seed bundler instead of importing `kysely` directly, so seed works without users installing kysely as a direct dependency
+Fix seed and query bundlers to use `@tailor-platform/sdk/kysely` re-export instead of importing `kysely` and `@tailor-platform/function-kysely-tailordb` directly, so they work without users installing these as direct dependencies
