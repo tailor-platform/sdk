@@ -99,6 +99,9 @@ export function copySkills(options: CopySkillsOptions = {}): CopySkillsResult {
   const destDirs = SKILLS_DEST_DIRS.map((d) => path.join(projectDir, d));
 
   for (const destDir of destDirs) {
+    if (fs.existsSync(destDir)) {
+      fs.rmSync(destDir, { recursive: true, force: true });
+    }
     for (const relFile of relativeFiles) {
       const srcFile = path.join(sourceDir, relFile);
       const destFile = path.join(destDir, relFile);

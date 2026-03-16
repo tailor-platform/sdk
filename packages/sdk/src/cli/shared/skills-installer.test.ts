@@ -95,6 +95,32 @@ describe("skills-installer", () => {
       ).toBe(false);
     });
 
+    it("removes stale files from previous versions", () => {
+      const projectDir = path.join(tmpDir, "project");
+
+      // Simulate a stale file from a previous SDK version
+      for (const dir of [".claude/skills/tailor-sdk", ".agents/skills/tailor-sdk"]) {
+        const staleFile = path.join(projectDir, dir, "old-skill/SKILL.md");
+        fs.mkdirSync(path.dirname(staleFile), { recursive: true });
+        fs.writeFileSync(staleFile, "stale");
+      }
+
+      copySkills({ projectDir, sourceDir: skillsSourceDir });
+
+      // Stale files should be gone
+      expect(
+        fs.existsSync(path.join(projectDir, ".claude/skills/tailor-sdk/old-skill/SKILL.md")),
+      ).toBe(false);
+      expect(
+        fs.existsSync(path.join(projectDir, ".agents/skills/tailor-sdk/old-skill/SKILL.md")),
+      ).toBe(false);
+
+      // New files should exist
+      expect(
+        fs.existsSync(path.join(projectDir, ".claude/skills/tailor-sdk/overview/SKILL.md")),
+      ).toBe(true);
+    });
+
     it("overwrites existing files", () => {
       const projectDir = path.join(tmpDir, "project");
       const destFile = path.join(projectDir, ".claude/skills/tailor-sdk/overview/SKILL.md");
