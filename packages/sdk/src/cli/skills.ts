@@ -2,8 +2,6 @@
 
 import { runSkillsInstaller } from "./shared/skills-installer";
 
-const exitCode = await runSkillsInstaller({
-  additionalArgs: process.argv.slice(2),
-});
+const exitCode = await runSkillsInstaller();
 
 process.exit(exitCode);

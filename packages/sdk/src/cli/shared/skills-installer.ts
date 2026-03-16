@@ -10,14 +10,11 @@ const SDK_PACKAGE_NAME = "@tailor-platform/sdk";
 export interface CopySkillsOptions {
   projectDir?: string;
   sourceDir?: string;
-  force?: boolean;
-  dryRun?: boolean;
 }
 
 export interface CopySkillsResult {
   copiedFiles: string[];
   destinationDir: string;
-  skippedFiles: string[];
 }
 
 /**
@@ -89,7 +86,7 @@ function collectFiles(dir: string, baseDir: string): string[] {
  * @returns Result object describing what was copied.
  */
 export function copySkills(options: CopySkillsOptions = {}): CopySkillsResult {
-  const { projectDir = process.cwd(), force = true, dryRun = false } = options;
+  const { projectDir = process.cwd() } = options;
 
   const sourceDir = options.sourceDir ?? resolveSkillsSourceDir();
   const destDir = path.join(projectDir, SKILLS_DEST_DIR);
@@ -100,29 +97,20 @@ export function copySkills(options: CopySkillsOptions = {}): CopySkillsResult {
 
   const relativeFiles = collectFiles(sourceDir, sourceDir);
   const copiedFiles: string[] = [];
-  const skippedFiles: string[] = [];
 
   for (const relFile of relativeFiles) {
     const srcFile = path.join(sourceDir, relFile);
     const destFile = path.join(destDir, relFile);
 
-    if (!force && fs.existsSync(destFile)) {
-      skippedFiles.push(relFile);
-      continue;
-    }
-
-    if (!dryRun) {
-      fs.mkdirSync(path.dirname(destFile), { recursive: true });
-      fs.copyFileSync(srcFile, destFile);
-    }
+    fs.mkdirSync(path.dirname(destFile), { recursive: true });
+    fs.copyFileSync(srcFile, destFile);
     copiedFiles.push(relFile);
   }
 
-  return { copiedFiles, destinationDir: destDir, skippedFiles };
+  return { copiedFiles, destinationDir: destDir };
 }
 
 interface RunSkillsInstallerOptions {
-  additionalArgs?: string[];
   sourceDir?: string;
   projectDir?: string;
 }
@@ -130,30 +118,18 @@ interface RunSkillsInstallerOptions {
 /**
  * Run the skills installer to copy skill files into the project.
  * @param options - Runtime options for skill installation.
- * @param options.additionalArgs - CLI flags to parse (e.g. --dry-run, --no-force).
  * @param options.sourceDir - Override the skills source directory.
  * @param options.projectDir - Override the target project directory.
  * @returns Process exit code (0 for success, 1 for failure).
  */
 export async function runSkillsInstaller(options: RunSkillsInstallerOptions = {}): Promise<number> {
-  const args = options.additionalArgs ?? [];
-  const dryRun = args.includes("--dry-run");
-  const noForce = args.includes("--no-force");
-
   try {
     const result = copySkills({
       projectDir: options.projectDir,
       sourceDir: options.sourceDir,
-      force: !noForce,
-      dryRun,
     });
 
-    if (dryRun) {
-      logger.info("Dry run — files that would be copied:");
-      for (const file of result.copiedFiles) {
-        logger.info(styles.dim(file), { mode: "plain" });
-      }
-    } else if (result.copiedFiles.length === 0) {
+    if (result.copiedFiles.length === 0) {
       logger.info("No skill files to copy.");
     } else {
       logger.success(
@@ -162,12 +138,6 @@ export async function runSkillsInstaller(options: RunSkillsInstallerOptions = {}
       for (const file of result.copiedFiles) {
         logger.info(styles.dim(file), { mode: "plain" });
       }
-    }
-
-    if (result.skippedFiles.length > 0) {
-      logger.warn(
-        `Skipped ${result.skippedFiles.length} existing file(s). Use --force to overwrite.`,
-      );
     }
 
     return 0;

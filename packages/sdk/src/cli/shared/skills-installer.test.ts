@@ -29,7 +29,7 @@ describe("skills-installer", () => {
     skillsSourceDir = path.join(tmpDir, "source-skills");
 
     // Create a fake skills source tree matching the real layout:
-    //   skills/tailor-sdk/SKILL.md    (root skill)
+    //   skills/tailor-sdk/SKILL.md
     //   skills/plugin/SKILL.md
     //   skills/services/auth/SKILL.md
     //   skills/_artifacts/spec.md     (should be excluded)
@@ -39,9 +39,7 @@ describe("skills-installer", () => {
     fs.mkdirSync(path.join(skillsSourceDir, "plugin"), { recursive: true });
     fs.writeFileSync(path.join(skillsSourceDir, "plugin", "SKILL.md"), "# Plugin");
 
-    fs.mkdirSync(path.join(skillsSourceDir, "services", "auth"), {
-      recursive: true,
-    });
+    fs.mkdirSync(path.join(skillsSourceDir, "services", "auth"), { recursive: true });
     fs.writeFileSync(path.join(skillsSourceDir, "services", "auth", "SKILL.md"), "# Auth");
 
     fs.mkdirSync(path.join(skillsSourceDir, "_artifacts"), { recursive: true });
@@ -71,7 +69,7 @@ describe("skills-installer", () => {
       expect(result.copiedFiles).toContain("plugin/SKILL.md");
       expect(result.copiedFiles).toContain("services/auth/SKILL.md");
 
-      // Verify files exist on disk — tailor-sdk/ is NOT double-nested
+      // Verify files exist on disk
       expect(fs.existsSync(path.join(projectDir, ".claude/skills/tailor-sdk/SKILL.md"))).toBe(true);
       expect(fs.existsSync(path.join(projectDir, ".claude/skills/plugin/SKILL.md"))).toBe(true);
       expect(fs.existsSync(path.join(projectDir, ".claude/skills/services/auth/SKILL.md"))).toBe(
@@ -89,23 +87,7 @@ describe("skills-installer", () => {
       expect(fs.existsSync(path.join(projectDir, ".claude/skills/_artifacts/spec.md"))).toBe(false);
     });
 
-    it("skips existing files when force is false", () => {
-      const projectDir = path.join(tmpDir, "project");
-      const destFile = path.join(projectDir, ".claude/skills/tailor-sdk/SKILL.md");
-      fs.mkdirSync(path.dirname(destFile), { recursive: true });
-      fs.writeFileSync(destFile, "existing content");
-
-      const result = copySkills({
-        projectDir,
-        sourceDir: skillsSourceDir,
-        force: false,
-      });
-
-      expect(result.skippedFiles).toContain("tailor-sdk/SKILL.md");
-      expect(fs.readFileSync(destFile, "utf8")).toBe("existing content");
-    });
-
-    it("overwrites existing files when force is true (default)", () => {
+    it("overwrites existing files", () => {
       const projectDir = path.join(tmpDir, "project");
       const destFile = path.join(projectDir, ".claude/skills/tailor-sdk/SKILL.md");
       fs.mkdirSync(path.dirname(destFile), { recursive: true });
@@ -115,20 +97,6 @@ describe("skills-installer", () => {
 
       expect(result.copiedFiles).toContain("tailor-sdk/SKILL.md");
       expect(fs.readFileSync(destFile, "utf8")).toBe("# Tailor SDK");
-    });
-
-    it("does not write files in dry-run mode", () => {
-      const projectDir = path.join(tmpDir, "project");
-      fs.mkdirSync(projectDir);
-
-      const result = copySkills({
-        projectDir,
-        sourceDir: skillsSourceDir,
-        dryRun: true,
-      });
-
-      expect(result.copiedFiles.length).toBeGreaterThan(0);
-      expect(fs.existsSync(path.join(projectDir, ".claude/skills"))).toBe(false);
     });
 
     it("throws when skills source directory does not exist", () => {
@@ -143,13 +111,9 @@ describe("skills-installer", () => {
       const projectDir = path.join(tmpDir, "project-run");
       fs.mkdirSync(projectDir);
 
-      const code = await runSkillsInstaller({
-        sourceDir: skillsSourceDir,
-        projectDir,
-      });
+      const code = await runSkillsInstaller({ sourceDir: skillsSourceDir, projectDir });
       expect(code).toBe(0);
 
-      // Verify files were actually copied
       expect(fs.existsSync(path.join(projectDir, ".claude/skills/tailor-sdk/SKILL.md"))).toBe(true);
     });
 
@@ -159,21 +123,6 @@ describe("skills-installer", () => {
         projectDir: path.join(tmpDir, "project-fail"),
       });
       expect(code).toBe(1);
-    });
-
-    it("supports --dry-run flag", async () => {
-      const projectDir = path.join(tmpDir, "project-dry");
-      fs.mkdirSync(projectDir);
-
-      const code = await runSkillsInstaller({
-        sourceDir: skillsSourceDir,
-        projectDir,
-        additionalArgs: ["--dry-run"],
-      });
-      expect(code).toBe(0);
-
-      // Verify nothing was actually written
-      expect(fs.existsSync(path.join(projectDir, ".claude"))).toBe(false);
     });
   });
 
