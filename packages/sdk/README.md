@@ -46,24 +46,21 @@ See [Available Templates](https://github.com/tailor-platform/sdk/tree/main/packa
 
 For more details, see the [Quickstart Guide](./docs/quickstart.md).
 
-## Agent Skill
+## Agent Skills
 
-Install the `tailor-sdk` skill with the open `skills` CLI:
-
-```bash
-npx skills add https://github.com/tailor-platform/sdk/tree/main/packages/sdk/skills --skill tailor-sdk
-```
-
-Use the SDK-provided shorthand command (internally uses `skills add`):
+Copy all SDK skills to your project:
 
 ```bash
 npx tailor-sdk-skills
-
-# Example: install to Codex in non-interactive mode
-npx tailor-sdk-skills -a codex -y
 ```
 
-`npx tailor-sdk-skills` requires an environment where the `@tailor-platform/sdk` package binary is available.
+This copies skill files from the installed SDK package to `.claude/skills/tailor-sdk/`.
+
+Alternatively, use [TanStack Intent](https://tanstack.com/intent/latest) to set up skill-to-task mappings referencing skills directly from `node_modules/`:
+
+```bash
+npx @tanstack/intent install
+```
 
 ## Learn More
 

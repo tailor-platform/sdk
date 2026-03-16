@@ -32,7 +32,9 @@ jobs:
             Check whether SKILL.md files under `packages/sdk/skills/` are consistent
             with their source documentation under `packages/sdk/docs/`.
 
-            Each SKILL.md declares its source docs in frontmatter `metadata.sources`.
+            Each SKILL.md may declare its source docs in frontmatter `metadata.sources`.
+            Skills without `metadata.sources` should be skipped for doc-consistency checks
+            (they may be navigational or general-purpose skills).
 
             ## Investigation Steps
 
@@ -45,10 +47,11 @@ jobs:
 
             ### 2. Identify affected skills
 
-            For each changed file, determine which skills are affected:
+            For each changed file, determine which skills are affected.
+            Only consider skills that have `metadata.sources` in their frontmatter:
 
             - **docs/ changed** → find skills whose `metadata.sources` reference that doc
-            - **skills/ changed** → read the skill's `metadata.sources` and check those docs
+            - **skills/ changed** → read the skill's `metadata.sources` (if present) and check those docs
             - **src/ changed** → check if the change affects patterns documented in skills
 
             ### 3. Cross-reference content
