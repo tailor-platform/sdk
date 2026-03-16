@@ -158,7 +158,7 @@
     "eslint-plugin-jsdoc": "62.7.1",
     "eslint-plugin-oxlint": "1.39.0",
     "oxlint": "1.39.0",
-    "oxlint-tsgolint": "0.11.1",
+    "oxlint-tsgolint": "0.16.0",
     "sonda": "0.11.1",
     "tsdown": "0.21.1",
     "typescript": "5.9.3",
