@@ -350,13 +350,23 @@ export const logger = {
    * @throws {CIPromptError} When called in a CI environment
    * @returns Prompt result
    */
-  prompt<T extends PromptOptions>(
-    message: string,
-    options?: T,
-  ): ReturnType<typeof consola.prompt<T>> {
-    if (isCI) {
-      throw new CIPromptError();
-    }
-    return consola.prompt(message, options);
-  },
+  prompt: promptUser,
 };
+
+/**
+ * Prompt the user for input unless running in CI.
+ * @template T
+ * @param message - Prompt message
+ * @param options - Prompt options
+ * @throws {CIPromptError} When called in a CI environment
+ * @returns Prompt result
+ */
+export function promptUser<T extends PromptOptions>(
+  message: string,
+  options?: T,
+): ReturnType<typeof consola.prompt<T>> {
+  if (isCI) {
+    throw new CIPromptError();
+  }
+  return consola.prompt(message, options);
+}
