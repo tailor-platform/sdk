@@ -16,7 +16,7 @@ function withGuard<Args extends unknown[], R>(
     try {
       return await fn(...args);
     } catch (error) {
-      if (error instanceof ExitPromptError) process.exit(0);
+      if (error instanceof ExitPromptError) process.exit(130);
       throw error;
     }
   };
