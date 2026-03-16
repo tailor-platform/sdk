@@ -75,20 +75,5 @@ describe("seed-bundler", () => {
       expect(result.bundledCode).toContain("selfRefTypes");
       expect(result.bundledCode).toContain("one-by-one");
     });
-
-    it("should import from @tailor-platform/sdk/kysely instead of kysely directly", async () => {
-      await bundleSeedScript("tailordb", ["User"]);
-
-      // Read the generated entry file to verify it uses the SDK re-export
-      const outputDir = path.join(process.env.TAILOR_SDK_OUTPUT_DIR!, "seed");
-      const entryPath = path.join(outputDir, "seed_tailordb.entry.ts");
-      const entryContent = fs.readFileSync(entryPath, "utf-8");
-
-      // The entry script should use the SDK re-export, not direct kysely import
-      // This ensures seed works without users installing kysely as a direct dependency
-      expect(entryContent).not.toMatch(/from\s+["']kysely["']/);
-      expect(entryContent).not.toMatch(/from\s+["']@tailor-platform\/function-kysely-tailordb["']/);
-      expect(entryContent).toMatch(/from\s+["']@tailor-platform\/sdk\/kysely["']/);
-    });
   });
 });

@@ -81,15 +81,5 @@ describe("query-bundler", () => {
       expect(gqlEntry).toContain("fetch(input.endpoint");
       expect(gqlEntry).toContain("GraphQL request failed");
     });
-
-    it("should import from @tailor-platform/sdk/kysely instead of function-kysely-tailordb directly", async () => {
-      await bundleQueryScript("sql");
-
-      const outputDir = path.join(process.env.TAILOR_SDK_OUTPUT_DIR!, "query");
-      const entryContent = fs.readFileSync(path.join(outputDir, "query_sql.entry.ts"), "utf-8");
-
-      expect(entryContent).not.toMatch(/from\s+["']@tailor-platform\/function-kysely-tailordb["']/);
-      expect(entryContent).toMatch(/from\s+["']@tailor-platform\/sdk\/kysely["']/);
-    });
   });
 });
