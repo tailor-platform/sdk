@@ -1,61 +1,180 @@
-import { spawn } from "node:child_process";
+import * as fs from "node:fs";
+import * as path from "pathe";
+import { logger, styles } from "./logger";
 
 export const SKILL_NAME = "tailor-sdk";
-export const DEFAULT_SKILLS_SOURCE =
-  "https://github.com/tailor-platform/sdk/tree/main/packages/sdk/skills";
-const SKILLS_SOURCE_ENV_KEY = "TAILOR_SDK_SKILLS_SOURCE";
+const SKILLS_DEST_DIR = ".claude/skills/tailor-sdk";
+const ARTIFACTS_DIR = "_artifacts";
+const SDK_PACKAGE_NAME = "@tailor-platform/sdk";
 
-interface ChildProcessLike {
-  on(event: "close", listener: (code: number | null) => void): ChildProcessLike;
-  on(event: "error", listener: (error: Error) => void): ChildProcessLike;
+export interface CopySkillsOptions {
+  projectDir?: string;
+  sourceDir?: string;
+  force?: boolean;
+  dryRun?: boolean;
 }
 
-type SpawnLike = (
-  command: string,
-  args: string[],
-  options: { stdio: "inherit" },
-) => ChildProcessLike;
+export interface CopySkillsResult {
+  copiedFiles: string[];
+  destinationDir: string;
+  skippedFiles: string[];
+}
+
+/**
+ * Find the SDK package root by walking up from the current file's directory,
+ * looking for a package.json with the SDK package name.
+ * Works regardless of bundler inlining depth (src/cli/shared/, dist/cli/, etc.).
+ * @returns Absolute path to the skills/ directory within the SDK package.
+ */
+export function resolveSkillsSourceDir(): string {
+  const startDir = path.dirname(
+    typeof import.meta.filename === "string"
+      ? import.meta.filename
+      : new URL(import.meta.url).pathname,
+  );
+
+  let dir = startDir;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const pkgJsonPath = path.join(dir, "package.json");
+    if (fs.existsSync(pkgJsonPath)) {
+      try {
+        const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, "utf8")) as { name?: string };
+        if (pkg.name === SDK_PACKAGE_NAME) {
+          const skillsDir = path.join(dir, "skills");
+          if (fs.existsSync(skillsDir)) {
+            return skillsDir;
+          }
+        }
+      } catch {
+        // Ignore malformed package.json, keep searching
+      }
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) {
+      break;
+    }
+    dir = parent;
+  }
+
+  throw new Error("Failed to resolve `@tailor-platform/sdk`. Ensure the package is installed.");
+}
+
+function collectFiles(dir: string, baseDir: string): string[] {
+  const results: string[] = [];
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return results;
+  }
+
+  for (const entry of entries) {
+    if (entry.name === ARTIFACTS_DIR) {
+      continue;
+    }
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      results.push(...collectFiles(fullPath, baseDir));
+    } else {
+      results.push(path.relative(baseDir, fullPath));
+    }
+  }
+  return results;
+}
+
+/**
+ * Copy skill files from the SDK package to the project's .claude/skills directory.
+ * @param options - Options for controlling the copy behavior.
+ * @returns Result object describing what was copied.
+ */
+export function copySkills(options: CopySkillsOptions = {}): CopySkillsResult {
+  const { projectDir = process.cwd(), force = true, dryRun = false } = options;
+
+  const sourceDir = options.sourceDir ?? resolveSkillsSourceDir();
+  const destDir = path.join(projectDir, SKILLS_DEST_DIR);
+
+  if (!fs.existsSync(sourceDir)) {
+    throw new Error(`Skills directory not found at ${sourceDir}`);
+  }
+
+  const relativeFiles = collectFiles(sourceDir, sourceDir);
+  const copiedFiles: string[] = [];
+  const skippedFiles: string[] = [];
+
+  for (const relFile of relativeFiles) {
+    const srcFile = path.join(sourceDir, relFile);
+    const destFile = path.join(destDir, relFile);
+
+    if (!force && fs.existsSync(destFile)) {
+      skippedFiles.push(relFile);
+      continue;
+    }
+
+    if (!dryRun) {
+      fs.mkdirSync(path.dirname(destFile), { recursive: true });
+      fs.copyFileSync(srcFile, destFile);
+    }
+    copiedFiles.push(relFile);
+  }
+
+  return { copiedFiles, destinationDir: destDir, skippedFiles };
+}
 
 interface RunSkillsInstallerOptions {
   additionalArgs?: string[];
-  source?: string;
-  spawnFn?: SpawnLike;
-}
-
-function resolveNpxCommand(platform: NodeJS.Platform = process.platform): string {
-  return platform === "win32" ? "npx.cmd" : "npx";
-}
-
-function resolveSkillsSource(source?: string): string {
-  return source ?? process.env[SKILLS_SOURCE_ENV_KEY] ?? DEFAULT_SKILLS_SOURCE;
+  sourceDir?: string;
+  projectDir?: string;
 }
 
 /**
- * Build CLI arguments for `skills add` with the fixed tailor-sdk skill target.
- * @param additionalArgs - Additional options to pass through to `skills add`
- * @param source - Optional skill source URL or path
- * @returns CLI arguments for `npx skills add`
- */
-export function buildSkillsAddArgs(additionalArgs: readonly string[], source?: string): string[] {
-  return ["skills", "add", resolveSkillsSource(source), "--skill", SKILL_NAME, ...additionalArgs];
-}
-
-/**
- * Run `npx skills add` to install the tailor-sdk skill.
- * @param options - Runtime options for skill installation
- * @returns Process exit code from the spawned `npx` command
+ * Run the skills installer to copy skill files into the project.
+ * @param options - Runtime options for skill installation.
+ * @param options.additionalArgs - CLI flags to parse (e.g. --dry-run, --no-force).
+ * @param options.sourceDir - Override the skills source directory.
+ * @param options.projectDir - Override the target project directory.
+ * @returns Process exit code (0 for success, 1 for failure).
  */
 export async function runSkillsInstaller(options: RunSkillsInstallerOptions = {}): Promise<number> {
-  const args = buildSkillsAddArgs(options.additionalArgs ?? [], options.source);
-  const spawnFn =
-    options.spawnFn ??
-    ((command: string, spawnArgs: string[], spawnOptions: { stdio: "inherit" }) =>
-      spawn(command, spawnArgs, spawnOptions));
+  const args = options.additionalArgs ?? [];
+  const dryRun = args.includes("--dry-run");
+  const noForce = args.includes("--no-force");
 
-  const childProcess = spawnFn(resolveNpxCommand(), args, { stdio: "inherit" });
+  try {
+    const result = copySkills({
+      projectDir: options.projectDir,
+      sourceDir: options.sourceDir,
+      force: !noForce,
+      dryRun,
+    });
 
-  return await new Promise<number>((resolve, reject) => {
-    childProcess.on("error", (error) => reject(error));
-    childProcess.on("close", (code) => resolve(code ?? 1));
-  });
+    if (dryRun) {
+      logger.info("Dry run — files that would be copied:");
+      for (const file of result.copiedFiles) {
+        logger.info(styles.dim(file), { mode: "plain" });
+      }
+    } else if (result.copiedFiles.length === 0) {
+      logger.info("No skill files to copy.");
+    } else {
+      logger.success(
+        `Copied ${result.copiedFiles.length} skill file(s) to ${styles.dim(result.destinationDir)}`,
+      );
+      for (const file of result.copiedFiles) {
+        logger.info(styles.dim(file), { mode: "plain" });
+      }
+    }
+
+    if (result.skippedFiles.length > 0) {
+      logger.warn(
+        `Skipped ${result.skippedFiles.length} existing file(s). Use --force to overwrite.`,
+      );
+    }
+
+    return 0;
+  } catch (error) {
+    logger.error(
+      `Failed to install skills: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return 1;
+  }
 }
