@@ -7,6 +7,7 @@ import { extractAllNamespaces } from "@/cli/shared/config";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
+import { prompt } from "@/cli/shared/prompt";
 import { resolveTypeNamespaces } from "@/cli/shared/tailordb-namespace";
 
 export interface TruncateOptions {
@@ -104,13 +105,10 @@ async function $truncate(options?: InternalTruncateOptions): Promise<void> {
 
     if (!options?.yes) {
       const namespaceList = namespaces.join(", ");
-      const confirmation = await logger.prompt(
-        `This will truncate ALL tables in the following namespaces: ${namespaceList}. Continue? (yes/no)`,
-        {
-          type: "confirm",
-          initial: false,
-        },
-      );
+      const confirmation = await prompt.confirm({
+        message: `This will truncate ALL tables in the following namespaces: ${namespaceList}. Continue?`,
+        default: false,
+      });
       if (!confirmation) {
         logger.info("Truncate cancelled.");
         return;
@@ -136,13 +134,10 @@ async function $truncate(options?: InternalTruncateOptions): Promise<void> {
     }
 
     if (!options.yes) {
-      const confirmation = await logger.prompt(
-        `This will truncate ALL tables in namespace "${namespace}". Continue? (yes/no)`,
-        {
-          type: "confirm",
-          initial: false,
-        },
-      );
+      const confirmation = await prompt.confirm({
+        message: `This will truncate ALL tables in namespace "${namespace}". Continue?`,
+        default: false,
+      });
       if (!confirmation) {
         logger.info("Truncate cancelled.");
         return;
@@ -174,13 +169,10 @@ async function $truncate(options?: InternalTruncateOptions): Promise<void> {
 
     if (!options.yes) {
       const typeList = typeNames.join(", ");
-      const confirmation = await logger.prompt(
-        `This will truncate the following types: ${typeList}. Continue? (yes/no)`,
-        {
-          type: "confirm",
-          initial: false,
-        },
-      );
+      const confirmation = await prompt.confirm({
+        message: `This will truncate the following types: ${typeList}. Continue?`,
+        default: false,
+      });
       if (!confirmation) {
         logger.info("Truncate cancelled.");
         return;
