@@ -66,7 +66,7 @@ describe("planPipeline (resolver service level)", () => {
   // Helper to create mock client
   function createMockClient(
     existingServices: Array<{ name: string; label?: string }>,
-    existingResolvers: Record<string, Array<{ name: string }>> = {},
+    existingResolvers: Record<string, Array<Record<string, unknown>>> = {},
   ): OperatorClient {
     return {
       listPipelineServices: vi.fn().mockResolvedValue({
@@ -81,6 +81,15 @@ describe("planPipeline (resolver service level)", () => {
           pipelineResolvers: existingResolvers[namespaceName] || [],
           nextPageToken: "",
         })),
+      getPipelineResolver: vi
+        .fn()
+        .mockImplementation(
+          ({ namespaceName, resolverName }: { namespaceName: string; resolverName: string }) => ({
+            pipelineResolver: (existingResolvers[namespaceName] || []).find(
+              (resolver) => resolver.name === resolverName,
+            ),
+          }),
+        ),
       getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
         const name = trn.split(":").pop();
         const service = existingServices.find((s) => s.name === name);
@@ -155,9 +164,9 @@ describe("planPipeline (resolver service level)", () => {
 
       const result = await planPipeline(ctx);
 
-      // "resolver-a" should be updated
-      expect(result.changeSet.service.updates).toHaveLength(1);
-      expect(result.changeSet.service.updates[0].name).toBe("resolver-a");
+      // "resolver-a" should be unchanged
+      expect(result.changeSet.service.unchanged).toHaveLength(1);
+      expect(result.changeSet.service.unchanged[0].name).toBe("resolver-a");
 
       // "resolver-b" should be deleted
       expect(result.changeSet.service.deletes).toHaveLength(1);
@@ -252,6 +261,50 @@ describe("planPipeline (resolver service level)", () => {
       expect(result.changeSet.service.deletes).toHaveLength(1);
       expect(result.changeSet.service.deletes[0].name).toBe("my-resolver");
       expect(result.resourceOwners.has("other-app")).toBe(true);
+    });
+  });
+
+  describe("resolver no-op detection", () => {
+    test("resolver is unchanged when remote definition matches desired definition", async () => {
+      const resolver = {
+        name: "test-resolver",
+        operation: 0,
+        output: {
+          type: "string",
+          metadata: {},
+        },
+      };
+      const pipeline = {
+        namespace: "my-resolver",
+        config: {},
+        resolvers: { [resolver.name]: resolver },
+        loadResolvers: vi.fn().mockResolvedValue(undefined),
+      } as unknown as ResolverService;
+
+      const createClient = createMockClient([]);
+      const createResult = await planPipeline({
+        client: createClient,
+        workspaceId,
+        application: createMockApplication([pipeline]),
+        forRemoval: false,
+        config: mockConfig,
+      });
+      const desiredResolver = createResult.changeSet.resolver.creates[0].request.pipelineResolver;
+
+      const client = createMockClient([{ name: "my-resolver", label: appName }], {
+        "my-resolver": [desiredResolver as Record<string, unknown>],
+      });
+      const result = await planPipeline({
+        client,
+        workspaceId,
+        application: createMockApplication([pipeline]),
+        forRemoval: false,
+        config: mockConfig,
+      });
+
+      expect(result.changeSet.resolver.unchanged).toHaveLength(1);
+      expect(result.changeSet.resolver.unchanged[0].name).toBe("test-resolver");
+      expect(result.changeSet.resolver.updates).toHaveLength(0);
     });
   });
 });

@@ -11,6 +11,7 @@ import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
+import type { StaticWebsite as ProtoStaticWebsite } from "@tailor-proto/tailor/v1/staticwebsite_resource_pb";
 
 /**
  * Apply static website changes for the given phase.
@@ -61,8 +62,22 @@ type DeleteStaticWebsite = {
   request: MessageInitShape<typeof DeleteStaticWebsiteRequestSchema>;
 };
 
+type ComparableStaticWebsite = {
+  description: string;
+  allowedIpAddresses: string[];
+};
+
 function trn(workspaceId: string, name: string) {
   return `trn:v1:workspace:${workspaceId}:staticwebsite:${name}`;
+}
+
+function comparableStaticWebsite(
+  input: Pick<ComparableStaticWebsite, "description" | "allowedIpAddresses">,
+): ComparableStaticWebsite {
+  return {
+    description: input.description,
+    allowedIpAddresses: [...input.allowedIpAddresses].sort(),
+  };
 }
 
 /**
@@ -114,6 +129,10 @@ export async function planStaticWebsite(context: PlanContext) {
     const name = websiteService.name;
     const existing = existingWebsites[name];
     const metaRequest = await buildMetaRequest(trn(workspaceId, name), application.name);
+    const desired = comparableStaticWebsite({
+      description: config.description || "",
+      allowedIpAddresses: config.allowedIpAddresses || [],
+    });
     const request = {
       workspaceId,
       staticwebsite: {
@@ -124,6 +143,7 @@ export async function planStaticWebsite(context: PlanContext) {
     };
 
     if (existing) {
+      const isManagedByApp = existing.label === application.name;
       if (!existing.label) {
         unmanaged.push({
           resourceType: "StaticWebsite",
@@ -137,11 +157,23 @@ export async function planStaticWebsite(context: PlanContext) {
         });
       }
 
-      changeSet.updates.push({
-        name,
-        request,
-        metaRequest,
-      });
+      if (
+        JSON.stringify(
+          comparableStaticWebsite({
+            description: (existing.resource as ProtoStaticWebsite).description,
+            allowedIpAddresses: (existing.resource as ProtoStaticWebsite).allowedIpAddresses,
+          }),
+        ) === JSON.stringify(desired) &&
+        isManagedByApp
+      ) {
+        changeSet.unchanged.push({ name });
+      } else {
+        changeSet.updates.push({
+          name,
+          request,
+          metaRequest,
+        });
+      }
       delete existingWebsites[name];
     } else {
       changeSet.creates.push({

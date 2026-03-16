@@ -56,11 +56,16 @@ describe("planWorkflow", () => {
 
   // Helper to create mock client
   function createMockClient(
-    existingWorkflows: Array<{ id: string; name: string; label?: string }>,
+    existingWorkflows: Array<{
+      id: string;
+      name: string;
+      label?: string;
+      resource?: Record<string, unknown>;
+    }>,
   ): OperatorClient {
     return {
       listWorkflows: vi.fn().mockResolvedValue({
-        workflows: existingWorkflows.map((w) => ({ id: w.id, name: w.name })),
+        workflows: existingWorkflows.map((w) => w.resource ?? { id: w.id, name: w.name }),
         nextPageToken: "",
       }),
       getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
@@ -184,6 +189,108 @@ describe("planWorkflow", () => {
       expect(result.changeSet.deletes).toHaveLength(1);
       expect(result.changeSet.deletes[0].name).toBe("my-workflow");
       expect(result.resourceOwners.has("other-app")).toBe(true);
+    });
+  });
+
+  describe("no-op detection", () => {
+    test("workflow is unchanged when definition and job functions match unchanged registry entries", async () => {
+      const client = createMockClient([
+        {
+          id: "1",
+          name: "sample-workflow",
+          label: appName,
+          resource: {
+            id: "1",
+            name: "sample-workflow",
+            mainJobFunctionName: "validate-order",
+            jobFunctions: {
+              "check-inventory": "5",
+              "process-payment": "5",
+              "validate-order": "5",
+            },
+          },
+        },
+      ]);
+
+      const workflows = {
+        "sample-workflow": createMockWorkflow("sample-workflow", "validate-order"),
+      };
+      const mainJobDeps = {
+        "validate-order": ["validate-order", "check-inventory", "process-payment"],
+      };
+
+      const result = await planWorkflow(
+        client,
+        workspaceId,
+        appName,
+        workflows,
+        mainJobDeps,
+        new Set(["validate-order", "check-inventory", "process-payment"]),
+      );
+
+      expect(result.changeSet.unchanged).toHaveLength(1);
+      expect(result.changeSet.unchanged[0].name).toBe("sample-workflow");
+      expect(result.changeSet.updates).toHaveLength(0);
+    });
+
+    test("workflow with retryPolicy is unchanged when remote bigint durations match local parsed durations", async () => {
+      const client = createMockClient([
+        {
+          id: "1",
+          name: "order-processing",
+          label: appName,
+          resource: {
+            id: "1",
+            name: "order-processing",
+            mainJobFunctionName: "process-order",
+            jobFunctions: {
+              "fetch-customer": "5",
+              "send-notification": "5",
+              "process-order": "5",
+            },
+            retryPolicy: {
+              maxRetries: 3,
+              backoffMultiplier: 2,
+              initialBackoff: {
+                seconds: 1n,
+                nanos: 0,
+              },
+              maxBackoff: {
+                seconds: 30n,
+                nanos: 0,
+              },
+            },
+          },
+        },
+      ]);
+
+      const workflow = createMockWorkflow("order-processing", "process-order");
+      workflow.retryPolicy = {
+        maxRetries: 3,
+        initialBackoff: "1s",
+        maxBackoff: "30s",
+        backoffMultiplier: 2,
+      };
+
+      const workflows = {
+        "order-processing": workflow,
+      };
+      const mainJobDeps = {
+        "process-order": ["process-order", "fetch-customer", "send-notification"],
+      };
+
+      const result = await planWorkflow(
+        client,
+        workspaceId,
+        appName,
+        workflows,
+        mainJobDeps,
+        new Set(["process-order", "fetch-customer", "send-notification"]),
+      );
+
+      expect(result.changeSet.unchanged).toHaveLength(1);
+      expect(result.changeSet.unchanged[0].name).toBe("order-processing");
+      expect(result.changeSet.updates).toHaveLength(0);
     });
   });
 });

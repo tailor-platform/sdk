@@ -21,6 +21,8 @@ interface JobInfo {
 export interface BundleWorkflowJobsResult {
   /** Maps mainJobName -> list of all job names it depends on (including itself) */
   mainJobDeps: Record<string, string[]>;
+  /** Job names that were actually bundled */
+  usedJobNames: string[];
 }
 
 /**
@@ -50,7 +52,7 @@ export async function bundleWorkflowJobs(
 ): Promise<BundleWorkflowJobsResult> {
   if (allJobs.length === 0) {
     logger.warn("No workflow jobs to bundle");
-    return { mainJobDeps: {} };
+    return { mainJobDeps: {}, usedJobNames: [] };
   }
 
   // Filter to only used jobs and get per-mainJob dependencies
@@ -101,7 +103,10 @@ export async function bundleWorkflowJobs(
 
   logger.log(`${styles.success("Bundled")} ${styles.info('"workflow-job"')}`);
 
-  return { mainJobDeps };
+  return {
+    mainJobDeps,
+    usedJobNames: usedJobs.map((job) => job.name),
+  };
 }
 
 interface FilterUsedJobsResult {

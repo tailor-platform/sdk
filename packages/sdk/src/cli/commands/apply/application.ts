@@ -1,6 +1,7 @@
 import { type MessageInitShape } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
 import {
+  type Application as ProtoApplication,
   Subgraph_ServiceType,
   type SubgraphSchema,
 } from "@tailor-proto/tailor/v1/application_resource_pb";
@@ -8,6 +9,7 @@ import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "@/cli/s
 import { createChangeSet } from "./change-set";
 import { buildMetaRequest } from "./label";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
+import type { Application } from "@/cli/services/application";
 import type {
   DeleteApplicationRequestSchema,
   CreateApplicationRequestSchema,
@@ -79,8 +81,90 @@ type DeleteApplication = {
   request: MessageInitShape<typeof DeleteApplicationRequestSchema>;
 };
 
+type ComparableApplication = {
+  authNamespace: string;
+  authIdpConfigName: string;
+  cors: string[];
+  subgraphs: Array<{ serviceType: Subgraph_ServiceType; serviceNamespace: string }>;
+  allowedIpAddresses: string[];
+  disableIntrospection: boolean;
+  disabled: boolean;
+};
+
 function trn(workspaceId: string, name: string) {
   return `trn:v1:workspace:${workspaceId}:application:${name}`;
+}
+
+function sortStrings(values: readonly string[] | undefined): string[] {
+  return [...(values ?? [])].sort();
+}
+
+function normalizeSubgraphs(
+  subgraphs: ReadonlyArray<MessageInitShape<typeof SubgraphSchema>> | undefined,
+): ComparableApplication["subgraphs"] {
+  return [...(subgraphs ?? [])]
+    .map((subgraph) => ({
+      serviceType: subgraph.serviceType!,
+      serviceNamespace: subgraph.serviceNamespace ?? "",
+    }))
+    .sort((left, right) => {
+      if (left.serviceType !== right.serviceType) {
+        return left.serviceType - right.serviceType;
+      }
+      return left.serviceNamespace.localeCompare(right.serviceNamespace);
+    });
+}
+
+function toComparableApplication(
+  input: Pick<
+    ComparableApplication,
+    | "authNamespace"
+    | "authIdpConfigName"
+    | "cors"
+    | "subgraphs"
+    | "allowedIpAddresses"
+    | "disableIntrospection"
+    | "disabled"
+  >,
+): ComparableApplication {
+  return {
+    authNamespace: input.authNamespace,
+    authIdpConfigName: input.authIdpConfigName,
+    cors: sortStrings(input.cors),
+    subgraphs: [...input.subgraphs],
+    allowedIpAddresses: sortStrings(input.allowedIpAddresses),
+    disableIntrospection: input.disableIntrospection,
+    disabled: input.disabled,
+  };
+}
+
+function desiredApplication(
+  application: Readonly<Application>,
+  authNamespace: string | undefined,
+  authIdpConfigName: string | undefined,
+  cors: string[],
+): ComparableApplication {
+  return toComparableApplication({
+    authNamespace: authNamespace ?? "",
+    authIdpConfigName: authIdpConfigName ?? "",
+    cors,
+    subgraphs: normalizeSubgraphs(application.subgraphs.map((subgraph) => protoSubgraph(subgraph))),
+    allowedIpAddresses: application.config.allowedIpAddresses ?? [],
+    disableIntrospection: application.config.disableIntrospection ?? false,
+    disabled: false,
+  });
+}
+
+function existingApplication(app: ProtoApplication): ComparableApplication {
+  return toComparableApplication({
+    authNamespace: app.authNamespace,
+    authIdpConfigName: app.authIdpConfigName,
+    cors: app.cors,
+    subgraphs: normalizeSubgraphs(app.subgraphs),
+    allowedIpAddresses: app.allowedIpAddresses,
+    disableIntrospection: app.disableIntrospection,
+    disabled: app.disabled,
+  });
 }
 
 /**
@@ -164,6 +248,13 @@ export async function planApplication(context: PlanContext) {
     }
   }
   const metaRequest = await buildMetaRequest(trn(workspaceId, application.name), application.name);
+  const resolvedCors = await resolveStaticWebsiteUrls(
+    client,
+    workspaceId,
+    application.config.cors,
+    "CORS",
+  );
+  const desired = desiredApplication(application, authNamespace, authIdpConfigName, resolvedCors);
   const request = {
     workspaceId,
     applicationName: application.name,
@@ -177,11 +268,17 @@ export async function planApplication(context: PlanContext) {
   const existing = existingApplications.find((app) => app.name === application.name);
 
   if (existing) {
-    changeSet.updates.push({
-      name: application.name,
-      request,
-      metaRequest,
-    });
+    if (JSON.stringify(existingApplication(existing)) === JSON.stringify(desired)) {
+      changeSet.unchanged.push({
+        name: application.name,
+      });
+    } else {
+      changeSet.updates.push({
+        name: application.name,
+        request,
+        metaRequest,
+      });
+    }
   } else {
     changeSet.creates.push({
       name: application.name,

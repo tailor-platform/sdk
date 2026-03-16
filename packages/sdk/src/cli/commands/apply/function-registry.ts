@@ -158,6 +158,20 @@ export function collectFunctionEntries(
   return entries;
 }
 
+/**
+ * Filter collected workflow jobs down to the ones actually bundled.
+ * @param jobs - All collected workflow jobs
+ * @param usedJobNames - Job names that were bundled
+ * @returns Bundled workflow jobs only
+ */
+export function filterBundledWorkflowJobs(
+  jobs: CollectedJob[],
+  usedJobNames: readonly string[],
+): CollectedJob[] {
+  const used = new Set(usedJobNames);
+  return jobs.filter((job) => used.has(job.name));
+}
+
 type ExistingFunction = {
   name: string;
   contentHash: string;
@@ -232,6 +246,7 @@ export async function planFunctionRegistry(
     );
 
     if (existing) {
+      const isManagedByApp = existing.label === appName;
       if (!existing.label) {
         unmanaged.push({
           resourceType: "Function registry",
@@ -245,11 +260,17 @@ export async function planFunctionRegistry(
         });
       }
 
-      changeSet.updates.push({
-        name: entry.name,
-        entry,
-        metaRequest,
-      });
+      if (existing.resource.contentHash === entry.contentHash && isManagedByApp) {
+        changeSet.unchanged.push({
+          name: entry.name,
+        });
+      } else {
+        changeSet.updates.push({
+          name: entry.name,
+          entry,
+          metaRequest,
+        });
+      }
       delete existingMap[entry.name];
     } else {
       changeSet.creates.push({

@@ -358,7 +358,7 @@ describe("planSecretManager vault metadata and deletion", () => {
     expect(result.resourceOwners).toContain("other-app");
   });
 
-  test("tracks existing vault as update for metadata refresh", async () => {
+  test("treats matching managed vault as unchanged", async () => {
     const client = {
       listSecretManagerVaults: vi.fn().mockResolvedValue({
         vaults: [{ name: "my-vault" }],
@@ -379,8 +379,8 @@ describe("planSecretManager vault metadata and deletion", () => {
 
     const result = await planSecretManager(ctx);
 
-    expect(result.vaultChangeSet.updates).toHaveLength(1);
-    expect(result.vaultChangeSet.updates[0].name).toBe("my-vault");
+    expect(result.vaultChangeSet.unchanged).toHaveLength(1);
+    expect(result.vaultChangeSet.unchanged[0].name).toBe("my-vault");
     expect(result.vaultChangeSet.creates).toHaveLength(0);
   });
 

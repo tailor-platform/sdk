@@ -1,6 +1,7 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { createChangeSet } from "./change-set";
+import { areNormalizedEqual, normalizeProtoConfig } from "./compare";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { hashValue, loadSecretsState, saveSecretsState } from "./secrets-state";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
@@ -114,11 +115,24 @@ export async function planSecretManager(context: PlanContext) {
             currentOwner: existing.label,
           });
         }
-        // Track existing vault for metadata update
-        vaultChangeSet.updates.push({
-          name: vaultName,
-          workspaceId,
-        });
+        if (
+          existing.label === application.name &&
+          areNormalizedEqual(
+            normalizeProtoConfig({
+              name: existing.resource.name,
+            }),
+            normalizeProtoConfig({
+              name: vaultName,
+            }),
+          )
+        ) {
+          vaultChangeSet.unchanged.push({ name: vaultName });
+        } else {
+          vaultChangeSet.updates.push({
+            name: vaultName,
+            workspaceId,
+          });
+        }
         delete existingVaults[vaultName];
       } else {
         vaultChangeSet.creates.push({

@@ -20,6 +20,7 @@ import { type ResolverService } from "@/cli/services/resolver/service";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { buildResolverOperationHookExpr } from "@/cli/shared/runtime-args";
 import { createChangeSet } from "./change-set";
+import { areNormalizedEqual, normalizeProtoConfig } from "./compare";
 import { resolverFunctionName } from "./function-registry";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
@@ -218,14 +219,18 @@ async function planServices(
         });
       }
 
-      changeSet.updates.push({
-        name: pipeline.namespace,
-        request: {
-          workspaceId,
-          namespaceName: pipeline.namespace,
-        },
-        metaRequest,
-      });
+      if (existing.label === appName) {
+        changeSet.unchanged.push({ name: pipeline.namespace });
+      } else {
+        changeSet.updates.push({
+          name: pipeline.namespace,
+          request: {
+            workspaceId,
+            namespaceName: pipeline.namespace,
+          },
+          metaRequest,
+        });
+      }
       delete existingServices[pipeline.namespace];
     } else {
       changeSet.creates.push({
@@ -337,14 +342,30 @@ async function planResolvers(
         env,
       );
       if (existingNameSet.has(resolver.name)) {
-        changeSet.updates.push({
-          name: resolver.name,
-          request: {
-            workspaceId,
-            namespaceName: pipeline.namespace,
-            pipelineResolver: desiredResolver,
-          },
+        const existingResolverResponse = await client.getPipelineResolver({
+          workspaceId,
+          namespaceName: pipeline.namespace,
+          resolverName: resolver.name,
         });
+        const existingResolver = existingResolverResponse.pipelineResolver;
+        if (
+          existingResolver &&
+          areNormalizedEqual(
+            normalizeComparableResolver(existingResolver),
+            normalizeComparableResolver(desiredResolver),
+          )
+        ) {
+          changeSet.unchanged.push({ name: resolver.name });
+        } else {
+          changeSet.updates.push({
+            name: resolver.name,
+            request: {
+              workspaceId,
+              namespaceName: pipeline.namespace,
+              pipelineResolver: desiredResolver,
+            },
+          });
+        }
         existingNameSet.delete(resolver.name);
       } else {
         changeSet.creates.push({
@@ -383,6 +404,98 @@ async function planResolvers(
     });
   }
   return changeSet;
+}
+
+function normalizeComparableResolver(resolver: MessageInitShape<typeof PipelineResolverSchema>) {
+  const normalized = normalizeProtoConfig(resolver) ?? {};
+  return {
+    name: normalized.name,
+    description: normalized.description ?? "",
+    authorization: normalized.authorization ?? "",
+    operationType: normalized.operationType,
+    publishExecutionEvents: normalized.publishExecutionEvents ?? false,
+    inputs: normalizeComparableFields(normalized.inputs),
+    response: normalizeComparableField(normalized.response),
+    pipelines: normalizeComparablePipelines(normalized.pipelines),
+  };
+}
+
+function normalizeComparablePipelines(
+  pipelines: MessageInitShape<typeof PipelineResolverSchema>["pipelines"],
+): Array<{
+  name: string;
+  operationName: string;
+  description: string;
+  operationType: PipelineResolver_OperationType | undefined;
+  operationSourceRef: string;
+  operationHook: string;
+  postScript: string;
+  skipOperationOnError: boolean;
+}> {
+  return (pipelines ?? []).map((pipeline) => ({
+    name: pipeline.name ?? "",
+    operationName: pipeline.operationName ?? "",
+    description: pipeline.description ?? "",
+    operationType: pipeline.operationType,
+    operationSourceRef: pipeline.operationSourceRef ?? "",
+    operationHook: pipeline.operationHook?.expr ?? "",
+    postScript: pipeline.postScript ?? "",
+    skipOperationOnError: pipeline.skipOperationOnError ?? false,
+  }));
+}
+
+function normalizeComparableFields(
+  fields: MessageInitShape<typeof PipelineResolverSchema>["inputs"],
+): Array<ReturnType<typeof normalizeComparableField>> {
+  return (fields ?? []).map((field) => normalizeComparableField(field));
+}
+
+function normalizeComparableField(
+  field: MessageInitShape<typeof PipelineResolver_FieldSchema> | undefined,
+):
+  | {
+      name: string;
+      array: boolean;
+      required: boolean;
+      description: string;
+      type: ReturnType<typeof normalizeComparableType>;
+    }
+  | undefined {
+  if (!field) {
+    return undefined;
+  }
+  return {
+    name: field.name ?? "",
+    array: field.array ?? false,
+    required: field.required ?? true,
+    description: field.description ?? "",
+    type: normalizeComparableType(field.type),
+  };
+}
+
+function normalizeComparableType(
+  type: MessageInitShape<typeof PipelineResolver_TypeSchema> | undefined,
+):
+  | {
+      kind: string;
+      name: string;
+      required: boolean;
+      description: string;
+      allowedValues: unknown[];
+      fields: Array<ReturnType<typeof normalizeComparableField>>;
+    }
+  | undefined {
+  if (!type) {
+    return undefined;
+  }
+  return {
+    kind: type.kind ?? "",
+    name: type.name ?? "",
+    required: type.required ?? true,
+    description: type.description ?? "",
+    allowedValues: type.allowedValues ?? [],
+    fields: (type.fields ?? []).map((field) => normalizeComparableField(field)),
+  };
 }
 
 function processResolver(

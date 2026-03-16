@@ -58,6 +58,7 @@ import { type TailorDBService } from "@/cli/services/tailordb/service";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { logger } from "@/cli/shared/logger";
 import { createChangeSet } from "../change-set";
+import { areNormalizedEqual, normalizeProtoConfig, stableStringify } from "../compare";
 import { buildMetaRequest, sdkNameLabelKey, trnPrefix, type WithLabel } from "../label";
 import {
   executeMigrations,
@@ -1100,10 +1101,26 @@ async function planServices(
         });
       }
 
-      changeSet.updates.push({
-        name: tailordb.namespace,
-        metaRequest,
-      });
+      if (
+        existing.label === appName &&
+        areNormalizedEqual(
+          normalizeProtoConfig({
+            namespace: existing.resource.namespace?.name,
+            defaultTimezone: existing.resource.defaultTimezone || "UTC",
+          }),
+          normalizeProtoConfig({
+            namespace: tailordb.namespace,
+            defaultTimezone: "UTC",
+          }),
+        )
+      ) {
+        changeSet.unchanged.push({ name: tailordb.namespace });
+      } else {
+        changeSet.updates.push({
+          name: tailordb.namespace,
+          metaRequest,
+        });
+      }
       delete existingServices[tailordb.namespace];
     } else {
       changeSet.creates.push({
@@ -1222,14 +1239,34 @@ async function planTypes(
         tailordb.config.gqlOperations,
       );
       if (existingNameSet.has(typeName)) {
-        changeSet.updates.push({
-          name: typeName,
-          request: {
-            workspaceId,
-            namespaceName: tailordb.namespace,
-            tailordbType,
-          },
+        const existingType = await client.getTailorDBType({
+          workspaceId,
+          namespaceName: tailordb.namespace,
+          tailordbTypeName: typeName,
         });
+        if (
+          areNormalizedEqual(
+            normalizeComparableTailorDBType(existingType.tailordbType),
+            normalizeComparableTailorDBType(tailordbType),
+          )
+        ) {
+          changeSet.unchanged.push({ name: typeName });
+        } else {
+          logTailorDBTypeDiff(
+            tailordb.namespace,
+            typeName,
+            normalizeComparableTailorDBType(existingType.tailordbType),
+            normalizeComparableTailorDBType(tailordbType),
+          );
+          changeSet.updates.push({
+            name: typeName,
+            request: {
+              workspaceId,
+              namespaceName: tailordb.namespace,
+              tailordbType,
+            },
+          });
+        }
         existingNameSet.delete(typeName);
       } else {
         changeSet.creates.push({
@@ -1267,6 +1304,217 @@ async function planTypes(
     });
   }
   return changeSet;
+}
+
+const shouldDebugTailorDBTypeDiff = process.env.TAILOR_DEBUG_TAILORDB_TYPE_DIFF === "true";
+const maxTailorDBTypeDiffLines = 60;
+
+function logTailorDBTypeDiff(
+  namespaceName: string,
+  typeName: string,
+  remoteType: ReturnType<typeof normalizeComparableTailorDBType>,
+  localType: ReturnType<typeof normalizeComparableTailorDBType>,
+): void {
+  if (!shouldDebugTailorDBTypeDiff) {
+    return;
+  }
+
+  const diffLines = collectDebugDiffLines(remoteType, localType);
+  logger.info(`[tailordb:type-diff] ${namespaceName}.${typeName}`);
+  diffLines.forEach((line) => logger.info(`  ${line}`, { mode: "plain" }));
+}
+
+function collectDebugDiffLines(left: unknown, right: unknown): string[] {
+  const lines: string[] = [];
+
+  const walk = (leftValue: unknown, rightValue: unknown, path: string) => {
+    if (lines.length >= maxTailorDBTypeDiffLines) {
+      return;
+    }
+
+    if (stableStringify(leftValue) === stableStringify(rightValue)) {
+      return;
+    }
+
+    if (Array.isArray(leftValue) || Array.isArray(rightValue)) {
+      const linesBefore = lines.length;
+      const leftArray = Array.isArray(leftValue) ? leftValue : [];
+      const rightArray = Array.isArray(rightValue) ? rightValue : [];
+      const maxLength = Math.max(leftArray.length, rightArray.length);
+      for (let index = 0; index < maxLength; index += 1) {
+        walk(leftArray[index], rightArray[index], `${path}[${index}]`);
+        if (lines.length >= maxTailorDBTypeDiffLines) {
+          return;
+        }
+      }
+      if (lines.length === linesBefore) {
+        lines.push(
+          `${path}: remote=${stableStringify(leftValue)} local=${stableStringify(rightValue)}`,
+        );
+      }
+      return;
+    }
+
+    if (isPlainObject(leftValue) || isPlainObject(rightValue)) {
+      const linesBefore = lines.length;
+      const leftObject = isPlainObject(leftValue) ? leftValue : {};
+      const rightObject = isPlainObject(rightValue) ? rightValue : {};
+      const keys = new Set([...Object.keys(leftObject), ...Object.keys(rightObject)]);
+      for (const key of [...keys].sort()) {
+        walk(leftObject[key], rightObject[key], path === "$" ? key : `${path}.${key}`);
+        if (lines.length >= maxTailorDBTypeDiffLines) {
+          return;
+        }
+      }
+      if (lines.length === linesBefore) {
+        lines.push(
+          `${path}: remote=${stableStringify(leftValue)} local=${stableStringify(rightValue)}`,
+        );
+      }
+      return;
+    }
+
+    lines.push(
+      `${path}: remote=${stableStringify(leftValue)} local=${stableStringify(rightValue)}`,
+    );
+  };
+
+  walk(left, right, "$");
+
+  if (lines.length === maxTailorDBTypeDiffLines) {
+    lines.push("...diff output truncated");
+  }
+
+  return lines;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+const tailordbCompareKnownDefaults = {
+  /**
+   * Platform returns this object with explicit false flags even when the SDK omitted
+   * gqlOperations entirely. Treat the all-false object as "unset" for diff purposes.
+   */
+  disableGqlOperations: {
+    create: false,
+    update: false,
+    delete: false,
+    read: false,
+  },
+  /**
+   * Some remote validate expressions are emitted as an empty string when the SDK did
+   * not define a script. Local manifests omit the field entirely.
+   */
+  emptyExpression: "",
+  /**
+   * Proto bigint-backed values can round-trip as numbers locally and strings remotely.
+   * Canonicalize them to strings at compare time.
+   */
+  numericStringPaths: new Set([
+    "schema.fields.*.serial.start",
+    "schema.fields.*.serial.maxValue",
+    "schema.settings.defaultQueryLimitSize",
+    "schema.settings.maxBulkUpsertSize",
+  ]),
+} as const;
+
+function normalizeComparableTailorDBType(type: unknown) {
+  const normalized = normalizeProtoConfig(type) as {
+    name?: string;
+    schema?: {
+      description?: string;
+      fields?: Record<string, unknown>;
+      relationships?: Record<string, unknown>;
+      settings?: Record<string, unknown>;
+      indexes?: Record<string, unknown>;
+      files?: Record<string, unknown>;
+      permission?: Record<string, unknown>;
+    };
+  } | null;
+  return normalizeTailorDBCompareValue(
+    {
+      name: normalized?.name ?? "",
+      schema: {
+        description: normalized?.schema?.description ?? "",
+        fields: normalized?.schema?.fields ?? {},
+        relationships: normalized?.schema?.relationships ?? {},
+        settings: normalized?.schema?.settings ?? {},
+        indexes: normalized?.schema?.indexes ?? {},
+        files: normalized?.schema?.files ?? {},
+        permission: normalized?.schema?.permission ?? {},
+      },
+    },
+    [],
+  );
+}
+
+function normalizeTailorDBCompareValue(
+  value: unknown,
+  path: readonly (string | number)[],
+): unknown {
+  if (value === undefined || value === null) {
+    return value;
+  }
+
+  if (typeof value === "number" || typeof value === "bigint" || typeof value === "string") {
+    if (matchesNumericStringPath(path) && isNumericLikeValue(value)) {
+      return String(value);
+    }
+    if (path.at(-1) === "expr" && value === tailordbCompareKnownDefaults.emptyExpression) {
+      return undefined;
+    }
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .map((item, index) => normalizeTailorDBCompareValue(item, [...path, index]))
+      .filter((item) => item !== undefined);
+  }
+
+  if (!isPlainObject(value)) {
+    return value;
+  }
+
+  const normalizedEntries = Object.entries(value)
+    .map(
+      ([key, entryValue]) =>
+        [key, normalizeTailorDBCompareValue(entryValue, [...path, key])] as const,
+    )
+    .filter(([, entryValue]) => entryValue !== undefined);
+
+  const normalizedObject = Object.fromEntries(normalizedEntries);
+
+  if (path.at(-1) === "fields" && Object.keys(normalizedObject).length === 0) {
+    return undefined;
+  }
+
+  if (
+    path.at(-1) === "disableGqlOperations" &&
+    areNormalizedEqual(normalizedObject, tailordbCompareKnownDefaults.disableGqlOperations)
+  ) {
+    return undefined;
+  }
+
+  return normalizedObject;
+}
+
+function matchesNumericStringPath(path: readonly (string | number)[]): boolean {
+  const pathKey = path.map((segment) => String(segment)).join(".");
+  return [...tailordbCompareKnownDefaults.numericStringPaths].some((pattern) => {
+    const patternParts = pattern.split(".");
+    const pathParts = pathKey.split(".");
+    if (patternParts.length !== pathParts.length) {
+      return false;
+    }
+    return patternParts.every((part, index) => part === "*" || part === pathParts[index]);
+  });
+}
+
+function isNumericLikeValue(value: string | number | bigint): boolean {
+  return typeof value === "number" || typeof value === "bigint" || /^-?\d+$/.test(value);
 }
 
 // TODO(remiposo): Copied the type-processor / aggregator processing almost as-is.
@@ -1709,16 +1957,29 @@ async function planGqlPermissions(
         continue;
       }
       const desiredPermission = protoGqlPermission(gqlPermission);
+      const existingPermission = existingGqlPermissions.find(
+        (entry) => entry.typeName === typeName,
+      );
       if (existingNameSet.has(typeName)) {
-        changeSet.updates.push({
-          name: typeName,
-          request: {
-            workspaceId,
-            namespaceName: tailordb.namespace,
-            typeName: typeName,
-            permission: desiredPermission,
-          },
-        });
+        if (
+          existingPermission &&
+          areNormalizedEqual(
+            normalizeComparableGqlPermission(existingPermission.permission),
+            normalizeComparableGqlPermission(desiredPermission),
+          )
+        ) {
+          changeSet.unchanged.push({ name: typeName });
+        } else {
+          changeSet.updates.push({
+            name: typeName,
+            request: {
+              workspaceId,
+              namespaceName: tailordb.namespace,
+              typeName: typeName,
+              permission: desiredPermission,
+            },
+          });
+        }
         existingNameSet.delete(typeName);
       } else {
         changeSet.creates.push({
@@ -1757,6 +2018,23 @@ async function planGqlPermissions(
     });
   }
   return changeSet;
+}
+
+function normalizeComparableGqlPermission(permission: unknown) {
+  const normalized = normalizeProtoConfig(permission) as {
+    policies?: Array<{
+      actions?: number[];
+      conditions?: unknown[];
+      permit?: number;
+      description?: string;
+    }>;
+  } | null;
+  return {
+    policies: (normalized?.policies ?? []).map((policy) => ({
+      ...policy,
+      actions: [...(policy.actions ?? [])].sort((left, right) => left - right),
+    })),
+  };
 }
 
 function protoGqlPermission(

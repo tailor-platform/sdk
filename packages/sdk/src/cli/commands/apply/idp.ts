@@ -7,7 +7,10 @@ import {
   type DeleteIdPServiceRequestSchema,
   type UpdateIdPServiceRequestSchema,
 } from "@tailor-proto/tailor/v1/idp_pb";
-import { IdPLang } from "@tailor-proto/tailor/v1/idp_resource_pb";
+import {
+  IdPLang,
+  type IdPService as ProtoIdPService,
+} from "@tailor-proto/tailor/v1/idp_resource_pb";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { createChangeSet } from "./change-set";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
@@ -186,6 +189,60 @@ function trn(workspaceId: string, name: string) {
   return `trn:v1:workspace:${workspaceId}:idp:${name}`;
 }
 
+type ComparableIdPService = {
+  authorization: string;
+  lang: IdPLang;
+  userAuthPolicy: Record<string, unknown> | undefined;
+  publishUserEvents: boolean;
+  disableGqlOperations: Record<string, boolean> | undefined;
+};
+
+function comparableUserAuthPolicy(
+  policy: ProtoIdPService["userAuthPolicy"] | IdP["userAuthPolicy"] | undefined,
+): Record<string, unknown> | undefined {
+  return {
+    useNonEmailIdentifier: policy?.useNonEmailIdentifier ?? false,
+    allowSelfPasswordReset: policy?.allowSelfPasswordReset ?? false,
+    passwordRequireUppercase: policy?.passwordRequireUppercase ?? false,
+    passwordRequireLowercase: policy?.passwordRequireLowercase ?? false,
+    passwordRequireNonAlphanumeric: policy?.passwordRequireNonAlphanumeric ?? false,
+    passwordRequireNumeric: policy?.passwordRequireNumeric ?? false,
+    passwordMinLength: policy?.passwordMinLength ?? 0,
+    passwordMaxLength: policy?.passwordMaxLength ?? 0,
+    allowedEmailDomains: [...(policy?.allowedEmailDomains ?? [])].sort(),
+    allowGoogleOauth: policy?.allowGoogleOauth ?? false,
+    disablePasswordAuth: policy?.disablePasswordAuth ?? false,
+    allowMicrosoftOauth: policy?.allowMicrosoftOauth ?? false,
+  };
+}
+
+function comparableDisableGqlOperations(
+  value: ProtoIdPService["disableGqlOperations"] | Record<string, boolean> | undefined,
+): Record<string, boolean> | undefined {
+  return {
+    create: value?.create ?? false,
+    update: value?.update ?? false,
+    delete: value?.delete ?? false,
+    read: value?.read ?? false,
+    sendPasswordResetEmail: value?.sendPasswordResetEmail ?? false,
+  };
+}
+
+function comparableIdPService(
+  input: Pick<
+    ComparableIdPService,
+    "authorization" | "lang" | "userAuthPolicy" | "publishUserEvents" | "disableGqlOperations"
+  >,
+): ComparableIdPService {
+  return {
+    authorization: input.authorization,
+    lang: input.lang,
+    userAuthPolicy: input.userAuthPolicy,
+    publishUserEvents: input.publishUserEvents,
+    disableGqlOperations: input.disableGqlOperations,
+  };
+}
+
 async function planServices(
   client: OperatorClient,
   workspaceId: string,
@@ -247,8 +304,16 @@ async function planServices(
 
     const lang = convertLang(idp.lang);
     const userAuthPolicy = idp.userAuthPolicy;
-    const publishUserEvents = idp.publishUserEvents;
-
+    const publishUserEvents = idp.publishUserEvents ?? false;
+    const desired = comparableIdPService({
+      authorization,
+      lang,
+      userAuthPolicy: comparableUserAuthPolicy(userAuthPolicy),
+      publishUserEvents,
+      disableGqlOperations: comparableDisableGqlOperations(
+        convertGqlOperationsToDisable(idp.gqlOperations),
+      ),
+    });
     const request = {
       workspaceId,
       namespaceName,
@@ -260,6 +325,7 @@ async function planServices(
     };
 
     if (existing) {
+      const isManagedByApp = existing.label === appName;
       if (!existing.label) {
         unmanaged.push({
           resourceType: "IdP service",
@@ -273,11 +339,25 @@ async function planServices(
         });
       }
 
-      changeSet.updates.push({
-        name: namespaceName,
-        request,
-        metaRequest,
+      const current = comparableIdPService({
+        authorization: existing.resource.authorization,
+        lang: existing.resource.lang,
+        userAuthPolicy: comparableUserAuthPolicy(existing.resource.userAuthPolicy),
+        publishUserEvents: existing.resource.publishUserEvents,
+        disableGqlOperations: comparableDisableGqlOperations(
+          existing.resource.disableGqlOperations,
+        ),
       });
+
+      if (JSON.stringify(current) === JSON.stringify(desired) && isManagedByApp) {
+        changeSet.unchanged.push({ name: namespaceName });
+      } else {
+        changeSet.updates.push({
+          name: namespaceName,
+          request,
+          metaRequest,
+        });
+      }
       delete existingServices[namespaceName];
     } else {
       changeSet.creates.push({
@@ -362,11 +442,8 @@ async function planClients(
     });
     for (const name of idp.clients) {
       if (existingNameMap.has(name)) {
-        changeSet.updates.push({
+        changeSet.unchanged.push({
           name,
-          workspaceId,
-          namespaceName,
-          clientSecret: existingNameMap.get(name)!,
         });
         existingNameMap.delete(name);
       } else {
@@ -420,7 +497,7 @@ function convertLang(lang: IdPLangInput | undefined): IdPLang {
     case "ja":
       return IdPLang.JA;
     default:
-      return IdPLang.UNSPECIFIED;
+      return IdPLang.EN;
   }
 }
 

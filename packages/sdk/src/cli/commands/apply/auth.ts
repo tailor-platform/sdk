@@ -9,13 +9,22 @@ import {
   AuthSCIMAttribute_Type,
   AuthSCIMAttribute_Uniqueness,
   AuthSCIMConfig_AuthorizationType,
+  type AuthIDPConfig_ConfigSchema,
   TenantProviderConfig_TenantProviderType,
   UserProfileProviderConfig_UserProfileProviderType,
+  type AuthIDPConfigSchema,
+  type AuthOAuth2ClientSchema,
+  type AuthSCIMAttributeSchema,
+  type AuthSCIMConfigSchema,
+  type AuthSCIMResourceSchema,
+  type TenantProviderConfigSchema,
+  type UserProfileProviderConfigSchema,
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import { type AuthService } from "@/cli/services/auth/service";
 import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "@/cli/shared/client";
 import { OAuth2ClientSchema } from "@/parser/service/auth";
 import { createChangeSet } from "./change-set";
+import { normalizeProtoConfig, normalizeStringArray, stableStringify } from "./compare";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
@@ -56,16 +65,6 @@ import type {
   UpdateTenantConfigRequestSchema,
   UpdateUserProfileConfigRequestSchema,
 } from "@tailor-proto/tailor/v1/auth_pb";
-import type {
-  AuthIDPConfig_ConfigSchema,
-  AuthIDPConfigSchema,
-  AuthOAuth2ClientSchema,
-  AuthSCIMAttributeSchema,
-  AuthSCIMConfigSchema,
-  AuthSCIMResourceSchema,
-  TenantProviderConfigSchema,
-  UserProfileProviderConfigSchema,
-} from "@tailor-proto/tailor/v1/auth_resource_pb";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
 /**
@@ -372,6 +371,7 @@ async function planServices(
       publishSessionEvents: config.publishSessionEvents,
     };
     if (existing) {
+      const isManagedByApp = existing.label === appName;
       if (!existing.label) {
         unmanaged.push({
           resourceType: "Auth service",
@@ -385,11 +385,18 @@ async function planServices(
         });
       }
 
-      changeSet.updates.push({
-        name: config.name,
-        request,
-        metaRequest,
-      });
+      if (
+        existing.resource.publishSessionEvents === (config.publishSessionEvents ?? false) &&
+        isManagedByApp
+      ) {
+        changeSet.unchanged.push({ name: config.name });
+      } else {
+        changeSet.updates.push({
+          name: config.name,
+          request,
+          metaRequest,
+        });
+      }
       delete existingServices[config.name];
     } else {
       changeSet.creates.push({
@@ -475,17 +482,59 @@ async function planIdPConfigs(
     const idpConfig = config.idProvider;
     if (idpConfig) {
       const desired = protoIdPConfig(idpConfig);
+      const desiredComparable =
+        idpConfig.kind === "BuiltInIdP"
+          ? {
+              ...desired,
+              config: await protoBuiltinIdPConfig(client, workspaceId, idpConfig),
+            }
+          : desired;
       const existing = existingMap.get(idpConfig.name);
       if (existing) {
-        changeSet.updates.push({
-          name: idpConfig.name,
-          idpConfig,
-          request: {
-            workspaceId,
-            namespaceName: config.name,
-            idpConfig: desired,
-          },
+        const existingComparable = normalizeProtoConfig({
+          name: existing.name,
+          authType: existing.authType,
+          config:
+            existing.config?.config.case === "oidc"
+              ? {
+                  config: {
+                    case: "oidc",
+                    value: {
+                      ...existing.config.config.value,
+                      issuerUrl: existing.config.config.value.issuerUrl || undefined,
+                    },
+                  },
+                }
+              : existing.config,
         });
+        const desiredComparableNormalized = normalizeProtoConfig({
+          ...desiredComparable,
+          config:
+            desiredComparable.config?.config?.case === "oidc"
+              ? {
+                  config: {
+                    case: "oidc",
+                    value: {
+                      ...desiredComparable.config.config.value,
+                      issuerUrl: desiredComparable.config.config.value.issuerUrl || undefined,
+                    },
+                  },
+                }
+              : desiredComparable.config,
+        });
+        if (stableStringify(existingComparable) === stableStringify(desiredComparableNormalized)) {
+          changeSet.unchanged.push({ name: idpConfig.name });
+        } else {
+          changeSet.updates.push({
+            name: idpConfig.name,
+            idpConfig,
+            request: {
+              workspaceId,
+              namespaceName: config.name,
+              idpConfig: desired,
+            },
+          });
+        }
         existingMap.delete(idpConfig.name);
       } else {
         changeSet.creates.push({
@@ -666,10 +715,72 @@ async function planUserProfileConfigs(
     const { parsedConfig: config } = auth;
     const name = `${config.name}-user-profile-config`;
     try {
-      await client.getUserProfileConfig({
+      const { userProfileProviderConfig } = await client.getUserProfileConfig({
         workspaceId,
         namespaceName: config.name,
       });
+      const userProfileForUpdate = auth.userProfile;
+      if (userProfileForUpdate) {
+        const desired = protoUserProfileConfig(userProfileForUpdate);
+        const desiredConfig = desired.config?.config;
+        const existingConfig = userProfileProviderConfig?.config?.config;
+        const desiredTailorDBConfig =
+          desiredConfig?.case === "tailordb" ? desiredConfig.value : undefined;
+        const existingTailorDBConfig =
+          existingConfig?.case === "tailordb" ? existingConfig.value : undefined;
+        const desiredComparable = normalizeProtoConfig({
+          providerType: desired.providerType,
+          config: {
+            config: {
+              case: desiredConfig?.case,
+              value: desiredTailorDBConfig
+                ? {
+                    ...desiredTailorDBConfig,
+                    tenantIdField: desiredTailorDBConfig.tenantIdField || undefined,
+                    attributesFields: normalizeStringArray(desiredTailorDBConfig.attributesFields),
+                    attributeMap: normalizeProtoConfig(desiredTailorDBConfig.attributeMap),
+                  }
+                : desiredConfig?.value,
+            },
+          },
+        });
+        const existingComparable = normalizeProtoConfig({
+          providerType: userProfileProviderConfig?.providerType,
+          config: {
+            config: {
+              case: existingConfig?.case,
+              value: existingTailorDBConfig
+                ? {
+                    ...existingTailorDBConfig,
+                    tenantIdField: existingTailorDBConfig.tenantIdField || undefined,
+                    attributesFields: normalizeStringArray(existingTailorDBConfig.attributesFields),
+                    attributeMap: normalizeProtoConfig(existingTailorDBConfig.attributeMap),
+                  }
+                : existingConfig?.value,
+            },
+          },
+        });
+        if (stableStringify(existingComparable) === stableStringify(desiredComparable)) {
+          changeSet.unchanged.push({ name });
+        } else {
+          changeSet.updates.push({
+            name,
+            request: {
+              workspaceId,
+              namespaceName: config.name,
+              userProfileProviderConfig: desired,
+            },
+          });
+        }
+      } else {
+        changeSet.deletes.push({
+          name,
+          request: {
+            workspaceId,
+            namespaceName: config.name,
+          },
+        });
+      }
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
         const userProfileForCreate = auth.userProfile;
@@ -686,25 +797,6 @@ async function planUserProfileConfigs(
         continue;
       }
       throw error;
-    }
-    const userProfileForUpdate = auth.userProfile;
-    if (userProfileForUpdate) {
-      changeSet.updates.push({
-        name,
-        request: {
-          workspaceId,
-          namespaceName: config.name,
-          userProfileProviderConfig: protoUserProfileConfig(userProfileForUpdate),
-        },
-      });
-    } else {
-      changeSet.deletes.push({
-        name,
-        request: {
-          workspaceId,
-          namespaceName: config.name,
-        },
-      });
     }
   }
 
@@ -787,10 +879,36 @@ async function planTenantConfigs(
     const { parsedConfig: config } = auth;
     const name = `${config.name}-tenant-config`;
     try {
-      await client.getTenantConfig({
+      const { tenantProviderConfig } = await client.getTenantConfig({
         workspaceId,
         namespaceName: config.name,
       });
+      if (config.tenantProvider) {
+        const desired = protoTenantConfig(config.tenantProvider);
+        if (
+          stableStringify(normalizeProtoConfig(tenantProviderConfig)) ===
+          stableStringify(normalizeProtoConfig(desired))
+        ) {
+          changeSet.unchanged.push({ name });
+        } else {
+          changeSet.updates.push({
+            name,
+            request: {
+              workspaceId,
+              namespaceName: config.name,
+              tenantProviderConfig: desired,
+            },
+          });
+        }
+      } else {
+        changeSet.deletes.push({
+          name,
+          request: {
+            workspaceId,
+            namespaceName: config.name,
+          },
+        });
+      }
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
         if (config.tenantProvider) {
@@ -806,24 +924,6 @@ async function planTenantConfigs(
         continue;
       }
       throw error;
-    }
-    if (config.tenantProvider) {
-      changeSet.updates.push({
-        name,
-        request: {
-          workspaceId,
-          namespaceName: config.name,
-          tenantProviderConfig: protoTenantConfig(config.tenantProvider),
-        },
-      });
-    } else {
-      changeSet.deletes.push({
-        name,
-        request: {
-          workspaceId,
-          namespaceName: config.name,
-        },
-      });
     }
   }
 
@@ -924,20 +1024,33 @@ async function planMachineUsers(
       if (!machineUser) {
         continue;
       }
+      const desiredAttributes = normalizeStringArray(machineUser.attributeList);
+      const desiredAttributeMap = normalizeProtoConfig(
+        machineUser.attributes ? protoMachineUserAttributeMap(machineUser.attributes) : {},
+      );
       const existing = existingMap.get(machineUsername);
       if (existing) {
-        changeSet.updates.push({
-          name: machineUsername,
-          request: {
-            workspaceId,
-            authNamespace: config.name,
+        if (
+          stableStringify(desiredAttributes) ===
+            stableStringify(normalizeStringArray(existing.attributes)) &&
+          stableStringify(desiredAttributeMap) ===
+            stableStringify(normalizeProtoConfig(existing.attributeMap))
+        ) {
+          changeSet.unchanged.push({ name: machineUsername });
+        } else {
+          changeSet.updates.push({
             name: machineUsername,
-            attributes: machineUser.attributeList,
-            attributeMap: machineUser.attributes
-              ? protoMachineUserAttributeMap(machineUser.attributes)
-              : undefined,
-          },
-        });
+            request: {
+              workspaceId,
+              authNamespace: config.name,
+              name: machineUsername,
+              attributes: machineUser.attributeList,
+              attributeMap: machineUser.attributes
+                ? protoMachineUserAttributeMap(machineUser.attributes)
+                : undefined,
+            },
+          });
+        }
         existingMap.delete(machineUsername);
       } else {
         changeSet.creates.push({
@@ -1048,9 +1161,9 @@ async function planOAuth2Clients(
   for (const auth of auths) {
     const { parsedConfig: config } = auth;
     const existingOAuth2Clients = await fetchOAuth2Clients(config.name);
-    const existingClientsMap = new Map<string, AuthOAuth2Client_ClientType>();
+    const existingClientsMap = new Map<string, (typeof existingOAuth2Clients)[number]>();
     existingOAuth2Clients.forEach((oauth2Client) => {
-      existingClientsMap.set(oauth2Client.name, oauth2Client.clientType);
+      existingClientsMap.set(oauth2Client.name, oauth2Client);
     });
     for (const oauth2ClientName of Object.keys(config.oauth2Clients ?? {})) {
       const oauth2Client = config.oauth2Clients?.[oauth2ClientName];
@@ -1058,9 +1171,15 @@ async function planOAuth2Clients(
         continue;
       }
       const newOAuth2Client = protoOAuth2Client(oauth2ClientName, oauth2Client);
+      const resolvedRedirectUris = await resolveStaticWebsiteUrls(
+        client,
+        workspaceId,
+        newOAuth2Client.redirectUris ?? [],
+        "OAuth2 redirect URIs",
+      );
       if (existingClientsMap.has(oauth2ClientName)) {
-        const existingClientType = existingClientsMap.get(oauth2ClientName)!;
-        if (existingClientType !== newOAuth2Client.clientType) {
+        const existingClient = existingClientsMap.get(oauth2ClientName)!;
+        if (existingClient.clientType !== newOAuth2Client.clientType) {
           // Client type changed: need to replace (delete then create)
           changeSet.replaces.push({
             name: oauth2ClientName,
@@ -1076,14 +1195,40 @@ async function planOAuth2Clients(
             },
           });
         } else {
-          changeSet.updates.push({
-            name: oauth2ClientName,
-            request: {
-              workspaceId,
-              namespaceName: config.name,
-              oauth2Client: newOAuth2Client,
-            },
+          const desiredComparable = normalizeProtoConfig({
+            ...newOAuth2Client,
+            redirectUris: normalizeStringArray(resolvedRedirectUris),
+            grantTypes: [...(newOAuth2Client.grantTypes ?? [])].sort((left, right) => left - right),
+            accessTokenLifetime: newOAuth2Client.accessTokenLifetime ?? 86400,
+            refreshTokenLifetime: newOAuth2Client.refreshTokenLifetime ?? 604800,
+            requireDpop: newOAuth2Client.requireDpop ?? false,
           });
+          const existingComparable = normalizeProtoConfig({
+            name: existingClient.name,
+            description: existingClient.description,
+            grantTypes: [...(existingClient.grantTypes ?? [])].sort((left, right) => left - right),
+            redirectUris: normalizeStringArray(existingClient.redirectUris),
+            clientType: existingClient.clientType,
+            accessTokenLifetime: existingClient.accessTokenLifetime?.seconds
+              ? Number(existingClient.accessTokenLifetime.seconds)
+              : undefined,
+            refreshTokenLifetime: existingClient.refreshTokenLifetime?.seconds
+              ? Number(existingClient.refreshTokenLifetime.seconds)
+              : undefined,
+            requireDpop: existingClient.requireDpop,
+          });
+          if (stableStringify(existingComparable) === stableStringify(desiredComparable)) {
+            changeSet.unchanged.push({ name: oauth2ClientName });
+          } else {
+            changeSet.updates.push({
+              name: oauth2ClientName,
+              request: {
+                workspaceId,
+                namespaceName: config.name,
+                oauth2Client: newOAuth2Client,
+              },
+            });
+          }
         }
         existingClientsMap.delete(oauth2ClientName);
       } else {

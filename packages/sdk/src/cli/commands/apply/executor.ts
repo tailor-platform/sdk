@@ -17,6 +17,7 @@ import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { buildExecutorArgsExpr } from "@/cli/shared/runtime-args";
 import { stringifyFunction } from "@/parser/service/tailordb";
 import { createChangeSet } from "./change-set";
+import { areNormalizedEqual, normalizeProtoConfig } from "./compare";
 import { executorFunctionName } from "./function-registry";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
@@ -136,14 +137,24 @@ export async function planExecutor(context: PlanContext) {
         });
       }
 
-      changeSet.updates.push({
-        name: executor.name,
-        request: {
-          workspaceId,
-          executor: desiredExecutor,
-        },
-        metaRequest,
-      });
+      if (
+        existing.label === application.name &&
+        areNormalizedEqual(
+          normalizeComparableExecutor(existing.resource),
+          normalizeComparableExecutor(desiredExecutor),
+        )
+      ) {
+        changeSet.unchanged.push({ name: executor.name });
+      } else {
+        changeSet.updates.push({
+          name: executor.name,
+          request: {
+            workspaceId,
+            executor: desiredExecutor,
+          },
+          metaRequest,
+        });
+      }
       delete existingExecutors[executor.name];
     } else {
       changeSet.creates.push({
@@ -175,6 +186,57 @@ export async function planExecutor(context: PlanContext) {
 
   changeSet.print();
   return { changeSet, conflicts, unmanaged, resourceOwners };
+}
+
+function normalizeComparableExecutor(executor: MessageInitShape<typeof ExecutorExecutorSchema>) {
+  const normalized = normalizeProtoConfig(executor) ?? {};
+  const webhookHeaders =
+    normalized.targetConfig?.config?.case === "webhook"
+      ? [...(normalized.targetConfig.config.value.headers ?? [])].sort((left, right) =>
+          (left.key ?? "").localeCompare(right.key ?? ""),
+        )
+      : undefined;
+  return {
+    name: normalized.name,
+    description: normalized.description ?? "",
+    disabled: normalized.disabled ?? false,
+    triggerType: normalized.triggerType,
+    triggerConfig:
+      normalized.triggerConfig?.config?.case === "incomingWebhook"
+        ? {
+            ...normalized.triggerConfig,
+            config: {
+              ...normalized.triggerConfig.config,
+              value: {},
+            },
+          }
+        : normalized.triggerConfig,
+    targetType: normalized.targetType,
+    targetConfig:
+      normalized.targetConfig?.config?.case === "webhook"
+        ? {
+            ...normalized.targetConfig,
+            config: {
+              ...normalized.targetConfig.config,
+              value: {
+                ...normalized.targetConfig.config.value,
+                headers: webhookHeaders,
+              },
+            },
+          }
+        : normalized.targetConfig?.config?.case === "function"
+          ? {
+              ...normalized.targetConfig,
+              config: {
+                ...normalized.targetConfig.config,
+                value: {
+                  ...normalized.targetConfig.config.value,
+                  script: undefined,
+                },
+              },
+            }
+          : normalized.targetConfig,
+  };
 }
 
 function protoExecutor(

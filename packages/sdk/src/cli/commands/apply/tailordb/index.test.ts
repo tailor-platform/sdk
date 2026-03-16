@@ -158,9 +158,9 @@ describe("planTailorDB (service level)", () => {
 
       const result = await planTailorDB(ctx);
 
-      // "tailordb-a" should be updated
-      expect(result.changeSet.service.updates).toHaveLength(1);
-      expect(result.changeSet.service.updates[0].name).toBe("tailordb-a");
+      // "tailordb-a" should be unchanged
+      expect(result.changeSet.service.unchanged).toHaveLength(1);
+      expect(result.changeSet.service.unchanged[0].name).toBe("tailordb-a");
 
       // "tailordb-b" should be deleted
       expect(result.changeSet.service.deletes).toHaveLength(1);
@@ -353,6 +353,147 @@ describe("planTailorDB (service level)", () => {
         "!((_value ?? '').includes('@'))",
       );
       expect(contactEmailField?.hooks?.create?.expr).toBe("(_value ?? '').toLowerCase()");
+    });
+  });
+
+  describe("type diff normalization", () => {
+    test("treats known platform defaults and scalar field placeholders as unchanged", async () => {
+      const tailordbType: TailorDBType = {
+        name: "Invoice",
+        pluralForm: "Invoices",
+        description: "Invoice type",
+        fields: {
+          code: {
+            name: "code",
+            config: {
+              type: "string",
+              required: true,
+            },
+          },
+          serialNumber: {
+            name: "serialNumber",
+            config: {
+              type: "integer",
+              required: true,
+              serial: {
+                start: 1,
+                maxValue: 999,
+              },
+            },
+          },
+        },
+        forwardRelationships: {},
+        backwardRelationships: {},
+        settings: {},
+        permissions: {},
+        files: {},
+      };
+
+      const tailorDBService = createMockTailorDBService("test-tailordb");
+      Object.defineProperty(tailorDBService, "types", {
+        value: { [tailordbType.name]: tailordbType },
+      });
+
+      const client = {
+        listTailorDBServices: vi.fn().mockResolvedValue({
+          tailordbServices: [{ namespace: { name: "test-tailordb" } }],
+          nextPageToken: "",
+        }),
+        listTailorDBTypes: vi.fn().mockResolvedValue({
+          tailordbTypes: [{ name: "Invoice" }],
+          nextPageToken: "",
+        }),
+        getTailorDBType: vi.fn().mockResolvedValue({
+          tailordbType: {
+            name: "Invoice",
+            schema: {
+              description: "Invoice type",
+              fields: {
+                code: {
+                  type: "string",
+                  required: true,
+                  allowedValues: [],
+                  description: "",
+                  validate: [],
+                  array: false,
+                  index: false,
+                  unique: false,
+                  foreignKey: false,
+                  vector: false,
+                  fields: {},
+                },
+                serialNumber: {
+                  type: "integer",
+                  required: true,
+                  allowedValues: [],
+                  description: "",
+                  validate: [],
+                  array: false,
+                  index: false,
+                  unique: false,
+                  foreignKey: false,
+                  vector: false,
+                  fields: {},
+                  serial: {
+                    start: "1",
+                    maxValue: "999",
+                  },
+                },
+              },
+              relationships: {},
+              settings: {
+                aggregation: false,
+                bulkUpsert: false,
+                draft: false,
+                defaultQueryLimitSize: "100",
+                maxBulkUpsertSize: "1000",
+                pluralForm: "invoices",
+                publishRecordEvents: false,
+                disableGqlOperations: {
+                  create: false,
+                  update: false,
+                  delete: false,
+                  read: false,
+                },
+              },
+              extends: false,
+              directives: [],
+              indexes: {},
+              files: {},
+              permission: {
+                create: [],
+                read: [],
+                update: [],
+                delete: [],
+              },
+            },
+          },
+        }),
+        listTailorDBGQLPermissions: vi.fn().mockResolvedValue({
+          permissions: [],
+          nextPageToken: "",
+        }),
+        getMetadata: vi.fn().mockResolvedValue({
+          metadata: {
+            labels: { [sdkNameLabelKey]: appName },
+          },
+        }),
+      } as unknown as OperatorClient;
+
+      const application = createMockApplication([tailorDBService]);
+      const ctx: PlanContext = {
+        client,
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: mockConfig,
+        noSchemaCheck: true,
+      };
+
+      const result = await planTailorDB(ctx);
+
+      expect(result.changeSet.type.unchanged).toEqual([{ name: "Invoice" }]);
+      expect(result.changeSet.type.updates).toHaveLength(0);
     });
   });
 });

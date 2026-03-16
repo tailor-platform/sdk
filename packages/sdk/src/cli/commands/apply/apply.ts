@@ -15,6 +15,7 @@ import { withSpan } from "@/cli/telemetry";
 import { PluginManager } from "@/plugin/manager";
 import { applyApplication, planApplication } from "./application";
 import { applyAuth, planAuth } from "./auth";
+import { formatPlanSummary, summarizeChangeSets } from "./change-set";
 import {
   confirmImportantResourceDeletion,
   confirmOwnerConflict,
@@ -27,6 +28,7 @@ import { applyExecutor, planExecutor } from "./executor";
 import {
   applyFunctionRegistry,
   collectFunctionEntries,
+  filterBundledWorkflowJobs,
   planFunctionRegistry,
 } from "./function-registry";
 import { applyIdP, planIdP } from "./idp";
@@ -62,6 +64,46 @@ export interface PlanContext {
 }
 
 export type ApplyPhase = "create-update" | "delete" | "delete-resources" | "delete-services";
+
+function printPlanSummary(results: {
+  functionRegistry: Awaited<ReturnType<typeof planFunctionRegistry>>;
+  tailorDB: Awaited<ReturnType<typeof planTailorDB>>;
+  staticWebsite: Awaited<ReturnType<typeof planStaticWebsite>>;
+  idp: Awaited<ReturnType<typeof planIdP>>;
+  auth: Awaited<ReturnType<typeof planAuth>>;
+  pipeline: Awaited<ReturnType<typeof planPipeline>>;
+  app: Awaited<ReturnType<typeof planApplication>>;
+  executor: Awaited<ReturnType<typeof planExecutor>>;
+  workflow: Awaited<ReturnType<typeof planWorkflow>>;
+  secretManager: Awaited<ReturnType<typeof planSecretManager>>;
+}) {
+  const summary = summarizeChangeSets([
+    results.functionRegistry.changeSet,
+    results.tailorDB.changeSet.service,
+    results.tailorDB.changeSet.type,
+    results.tailorDB.changeSet.gqlPermission,
+    results.staticWebsite.changeSet,
+    results.idp.changeSet.service,
+    results.idp.changeSet.client,
+    results.auth.changeSet.service,
+    results.auth.changeSet.idpConfig,
+    results.auth.changeSet.userProfileConfig,
+    results.auth.changeSet.tenantConfig,
+    results.auth.changeSet.machineUser,
+    results.auth.changeSet.oauth2Client,
+    results.auth.changeSet.scim,
+    results.auth.changeSet.scimResource,
+    results.pipeline.changeSet.service,
+    results.pipeline.changeSet.resolver,
+    results.app,
+    results.executor.changeSet,
+    results.workflow.changeSet,
+    results.secretManager.vaultChangeSet,
+    results.secretManager.secretChangeSet,
+  ]);
+
+  logger.log(formatPlanSummary(summary));
+}
 
 /**
  * Apply the configured application to the Tailor platform.
@@ -149,7 +191,11 @@ export async function apply(options?: ApplyOptions) {
 
     // Collect function entries from bundled scripts (after build, before plan)
     const workflowService = application.workflowService;
-    const functionEntries = collectFunctionEntries(application, workflowService?.jobs ?? []);
+    const bundledWorkflowJobs = filterBundledWorkflowJobs(
+      workflowService?.jobs ?? [],
+      workflowBuildResult?.usedJobNames ?? [],
+    );
+    const functionEntries = collectFunctionEntries(application, bundledWorkflowJobs);
 
     const dryRun = options?.dryRun ?? false;
     const yes = options?.yes ?? false;
@@ -178,6 +224,12 @@ export async function apply(options?: ApplyOptions) {
       const functionRegistry = await withSpan("plan.functionRegistry", () =>
         planFunctionRegistry(client, workspaceId, application.name, functionEntries),
       );
+      const unchangedWorkflowJobs = new Set(
+        functionRegistry.changeSet.unchanged
+          .map((entry) => entry.name)
+          .filter((name) => name.startsWith("workflow--"))
+          .map((name) => name.slice("workflow--".length)),
+      );
       const [tailorDB, staticWebsite, idp, auth, pipeline, app, executor, workflow, secretManager] =
         await Promise.all([
           withSpan("plan.tailorDB", () => planTailorDB(ctx)),
@@ -194,6 +246,7 @@ export async function apply(options?: ApplyOptions) {
               application.name,
               workflowService?.workflows ?? {},
               workflowBuildResult?.mainJobDeps ?? {},
+              unchangedWorkflowJobs,
             ),
           ),
           withSpan("plan.secretManager", () => planSecretManager(ctx)),
@@ -302,6 +355,19 @@ export async function apply(options?: ApplyOptions) {
           },
         });
       }
+    });
+
+    printPlanSummary({
+      functionRegistry,
+      tailorDB,
+      staticWebsite,
+      idp,
+      auth,
+      pipeline,
+      app,
+      executor,
+      workflow,
+      secretManager,
     });
 
     if (dryRun) {
