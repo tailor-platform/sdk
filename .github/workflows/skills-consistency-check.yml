@@ -1,0 +1,123 @@
+name: Skills Consistency Check
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+    paths:
+      - "packages/sdk/src/**"
+      - "packages/sdk/docs/**"
+      - "packages/sdk/skills/**"
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+jobs:
+  skills-consistency:
+    runs-on: ubuntu-slim
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Check skills-docs consistency
+        uses: anthropics/claude-code-action@26ec041249acb0a944c0a47b6c0c13f05dbc5b44 # v1.0.70
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            # Skills vs Documentation Consistency Check
+
+            Check whether SKILL.md files under `packages/sdk/skills/` are consistent
+            with their source documentation under `packages/sdk/docs/`.
+
+            Each SKILL.md declares its source docs in frontmatter `metadata.sources`.
+
+            ## Investigation Steps
+
+            ### 1. Retrieve PR Changes
+
+            ```bash
+            gh pr view ${{ github.event.number }} --json title,body,files
+            gh pr diff ${{ github.event.number }}
+            ```
+
+            ### 2. Identify affected skills
+
+            For each changed file, determine which skills are affected:
+
+            - **docs/ changed** → find skills whose `metadata.sources` reference that doc
+            - **skills/ changed** → read the skill's `metadata.sources` and check those docs
+            - **src/ changed** → check if the change affects patterns documented in skills
+
+            ### 3. Cross-reference content
+
+            For each affected skill:
+
+            - Read the SKILL.md file
+            - Read each file listed in `metadata.sources`
+            - Compare: do the code patterns, API signatures, and common mistakes in the
+              skill still match the documentation?
+            - Check for: renamed functions, changed parameters, new features documented
+              but not in the skill, removed features still in the skill
+
+            ### 4. Post Results
+
+            Search for an existing comment and update it, or create a new one.
+
+            ```bash
+            COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ github.event.number }}/comments \
+              --jq '.[] | select(.body | contains("<!-- skills-consistency-check -->")) | .id' | head -n 1)
+            ```
+
+            **If inconsistencies are found**, post a comment:
+
+            ```markdown
+            ## 🎯 Skills Consistency Check
+
+            ### ⚠️ Inconsistencies Found
+
+            | Skill | Source | Issue |
+            |-------|--------|-------|
+            | `services/resolver` | `docs/services/resolver.md` | Description of mismatch |
+
+            ### Details
+
+            (For each inconsistency, explain what the doc says vs what the skill says,
+            with specific file paths and line numbers.)
+
+            ### Recommended Actions
+            - ...
+
+            ---
+            <!-- skills-consistency-check -->
+            ```
+
+            **If no inconsistencies are found**, post:
+
+            ```markdown
+            ## 🎯 Skills Consistency Check
+
+            ✅ Skills are consistent with documentation.
+
+            **Checked:**
+            - (list skills and docs checked)
+
+            ---
+            <!-- skills-consistency-check -->
+            ```
+
+            Use `gh api --method PATCH` to update if `COMMENT_ID` is set, otherwise use `gh pr comment` to create.
+
+            ## Important Notes
+            - The PR branch is already checked out
+            - Always post results as a PR comment using `gh` commands
+            - Be specific: include file paths and line numbers
+            - Only flag real inconsistencies, not stylistic differences
+            - If docs changed but the skill content is still accurate, report as consistent
+            - If unsure, mention it with a note that it may be intentional
+
+          claude_args: |
+            --model claude-sonnet-4-5-20250929
+            --allowedTools "Bash(gh pr:*),Bash(gh api:*),Read,Glob,Grep"

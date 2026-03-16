@@ -1,0 +1,25 @@
+name: Validate Skills
+
+on:
+  pull_request:
+    paths:
+      - "packages/sdk/skills/**"
+
+jobs:
+  validate:
+    name: Validate skill files
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: 20
+
+      - name: Validate skills
+        working-directory: packages/sdk
+        run: npx @tanstack/intent@0.0.21 validate
