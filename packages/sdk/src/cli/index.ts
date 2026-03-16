@@ -16,6 +16,7 @@ import { logoutCommand } from "./commands/logout";
 import { machineuserCommand } from "./commands/machineuser";
 import { oauth2clientCommand } from "./commands/oauth2client";
 import { openCommand } from "./commands/open";
+import { organizationCommand } from "./commands/organization";
 import { profileCommand } from "./commands/profile";
 import { removeCommand } from "./commands/remove";
 import { secretCommand } from "./commands/secret";
@@ -62,6 +63,7 @@ export const mainCommand = withCompletionCommand(
       machineuser: machineuserCommand,
       oauth2client: oauth2clientCommand,
       open: openCommand,
+      organization: organizationCommand,
       profile: profileCommand,
       query: queryCommand,
       remove: removeCommand,
