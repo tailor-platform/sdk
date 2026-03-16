@@ -56,6 +56,8 @@ You can use environment variables to configure workspace and authentication:
 | Variable                                     | Description                                                                 |
 | -------------------------------------------- | --------------------------------------------------------------------------- |
 | `TAILOR_PLATFORM_WORKSPACE_ID`               | Workspace ID for deployment commands                                        |
+| `TAILOR_PLATFORM_ORGANIZATION_ID`            | Organization ID for organization commands                                   |
+| `TAILOR_PLATFORM_FOLDER_ID`                  | Folder ID for folder commands                                               |
 | `TAILOR_PLATFORM_TOKEN`                      | Authentication token (alternative to `login`)                               |
 | `TAILOR_TOKEN`                               | **Deprecated.** Use `TAILOR_PLATFORM_TOKEN` instead                         |
 | `TAILOR_PLATFORM_PROFILE`                    | Workspace profile name                                                      |
@@ -128,6 +130,22 @@ Commands for authentication and user management.
 | [user pat create](./cli/user.md#user-pat-create) | Create a personal access token |
 | [user pat delete](./cli/user.md#user-pat-delete) | Delete a personal access token |
 | [user pat update](./cli/user.md#user-pat-update) | Update a personal access token |
+
+### [Organization Commands](./cli/organization.md)
+
+Commands for managing organizations and folders.
+
+| Command                                                                        | Description                                     |
+| ------------------------------------------------------------------------------ | ----------------------------------------------- |
+| [organization list](./cli/organization.md#organization-list)                   | List organizations you belong to                |
+| [organization get](./cli/organization.md#organization-get)                     | Show detailed information about an organization |
+| [organization update](./cli/organization.md#organization-update)               | Update an organization's name                   |
+| [organization tree](./cli/organization.md#organization-tree)                   | Display organization folder hierarchy as a tree |
+| [organization folder list](./cli/organization.md#organization-folder-list)     | List folders in an organization                 |
+| [organization folder get](./cli/organization.md#organization-folder-get)       | Show detailed information about a folder        |
+| [organization folder create](./cli/organization.md#organization-folder-create) | Create a new folder in an organization          |
+| [organization folder update](./cli/organization.md#organization-folder-update) | Update a folder's name                          |
+| [organization folder delete](./cli/organization.md#organization-folder-delete) | Delete a folder from an organization            |
 
 ### [Workspace Commands](./cli/workspace.md)
 
