@@ -124,19 +124,26 @@ export const myJob = createWorkflowJob({
 Use `workflow.trigger()` with `authInvoker` for machine user permissions:
 
 ```typescript
-import { createResolver } from "@tailor-platform/sdk";
+import { createResolver, t } from "@tailor-platform/sdk";
 import orderWorkflow from "../workflows/order";
 import { auth } from "../auth";
 
 export default createResolver({
   name: "start-order",
-  body: async (args: { orderId: string }) => {
-    const result = await orderWorkflow.trigger(
-      { orderId: args.orderId },
+  operation: "mutation",
+  input: {
+    orderId: t.string(),
+  },
+  body: async ({ input }) => {
+    const workflowRunId = await orderWorkflow.trigger(
+      { orderId: input.orderId },
       { authInvoker: auth.invoker("machine-user") },
     );
-    return result;
+    return { workflowRunId };
   },
+  output: t.object({
+    workflowRunId: t.string(),
+  }),
 });
 ```
 

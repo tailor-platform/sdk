@@ -24,10 +24,10 @@ import { fileUtilsPlugin } from "@tailor-platform/sdk/plugin/file-utils";
 import { seedPlugin } from "@tailor-platform/sdk/plugin/seed";
 
 export const plugins = definePlugins(
-  kyselyTypePlugin(),
-  enumConstantsPlugin(),
-  fileUtilsPlugin(),
-  seedPlugin({ machineUserName: "admin" }),
+  kyselyTypePlugin({ distPath: "./generated/tailordb.ts" }),
+  enumConstantsPlugin({ distPath: "./generated/enums.ts" }),
+  fileUtilsPlugin({ distPath: "./generated/files.ts" }),
+  seedPlugin({ distPath: "./seed", machineUserName: "admin" }),
 );
 
 export default defineConfig({
@@ -43,7 +43,7 @@ export default defineConfig({
 | `kyselyTypePlugin`    | `@tailor-platform/sdk/plugin/kysely-type`    | Generates typed Kysely database interfaces; enables `getDB()` in resolvers, executors, and workflows. Requires `@tailor-platform/function-types` as devDependency. |
 | `enumConstantsPlugin` | `@tailor-platform/sdk/plugin/enum-constants` | Extracts enum values as TypeScript constants with matching type aliases.                                                                                           |
 | `fileUtilsPlugin`     | `@tailor-platform/sdk/plugin/file-utils`     | Generates file field utility interfaces for types with file-type fields.                                                                                           |
-| `seedPlugin`          | `@tailor-platform/sdk/plugin/seed`           | Generates seed data JSONL files compatible with gql-ingest. Accepts `machineUserName` in config.                                                                   |
+| `seedPlugin`          | `@tailor-platform/sdk/plugin/seed`           | Generates seed data JSONL files compatible with gql-ingest. Requires `distPath`; accepts optional `machineUserName`.                                               |
 
 ## Core Patterns: Custom Plugins
 
