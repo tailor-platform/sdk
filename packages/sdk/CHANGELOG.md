@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 1.25.3
+
+### Patch Changes
+
+- [#749](https://github.com/tailor-platform/sdk/pull/749) [`5cf46ec`](https://github.com/tailor-platform/sdk/commit/5cf46ec88d7d7517300b916b02249d9ffaf8a083) Thanks [@toiroakr](https://github.com/toiroakr)! - Replace consola dependency with @inquirer/prompts for interactive prompts and direct stderr logging
+
 ## 1.25.2
 
 ### Patch Changes
