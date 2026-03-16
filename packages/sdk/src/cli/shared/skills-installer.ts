@@ -3,7 +3,7 @@ import * as path from "pathe";
 import { logger, styles } from "./logger";
 
 export const SKILL_NAME = "tailor-sdk";
-const SKILLS_DEST_DIR = ".claude/skills";
+const SKILLS_DEST_DIR = ".claude/skills/tailor-sdk";
 const ARTIFACTS_DIR = "_artifacts";
 const SDK_PACKAGE_NAME = "@tailor-platform/sdk";
 

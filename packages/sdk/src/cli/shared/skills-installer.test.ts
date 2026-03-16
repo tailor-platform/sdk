@@ -29,12 +29,12 @@ describe("skills-installer", () => {
     skillsSourceDir = path.join(tmpDir, "source-skills");
 
     // Create a fake skills source tree matching the real layout:
-    //   skills/tailor-sdk/SKILL.md
+    //   skills/overview/SKILL.md
     //   skills/plugin/SKILL.md
     //   skills/services/auth/SKILL.md
     //   skills/_artifacts/spec.md     (should be excluded)
-    fs.mkdirSync(path.join(skillsSourceDir, "tailor-sdk"), { recursive: true });
-    fs.writeFileSync(path.join(skillsSourceDir, "tailor-sdk", "SKILL.md"), "# Tailor SDK");
+    fs.mkdirSync(path.join(skillsSourceDir, "overview"), { recursive: true });
+    fs.writeFileSync(path.join(skillsSourceDir, "overview", "SKILL.md"), "# Overview");
 
     fs.mkdirSync(path.join(skillsSourceDir, "plugin"), { recursive: true });
     fs.writeFileSync(path.join(skillsSourceDir, "plugin", "SKILL.md"), "# Plugin");
@@ -58,23 +58,27 @@ describe("skills-installer", () => {
   });
 
   describe("copySkills", () => {
-    it("copies files to .claude/skills/ preserving structure", () => {
+    it("copies files to .claude/skills/tailor-sdk/ preserving structure", () => {
       const projectDir = path.join(tmpDir, "project");
       fs.mkdirSync(projectDir);
 
       const result = copySkills({ projectDir, sourceDir: skillsSourceDir });
 
-      expect(result.destinationDir).toBe(path.join(projectDir, ".claude/skills"));
-      expect(result.copiedFiles).toContain("tailor-sdk/SKILL.md");
+      expect(result.destinationDir).toBe(path.join(projectDir, ".claude/skills/tailor-sdk"));
+      expect(result.copiedFiles).toContain("overview/SKILL.md");
       expect(result.copiedFiles).toContain("plugin/SKILL.md");
       expect(result.copiedFiles).toContain("services/auth/SKILL.md");
 
       // Verify files exist on disk
-      expect(fs.existsSync(path.join(projectDir, ".claude/skills/tailor-sdk/SKILL.md"))).toBe(true);
-      expect(fs.existsSync(path.join(projectDir, ".claude/skills/plugin/SKILL.md"))).toBe(true);
-      expect(fs.existsSync(path.join(projectDir, ".claude/skills/services/auth/SKILL.md"))).toBe(
-        true,
-      );
+      expect(
+        fs.existsSync(path.join(projectDir, ".claude/skills/tailor-sdk/overview/SKILL.md")),
+      ).toBe(true);
+      expect(
+        fs.existsSync(path.join(projectDir, ".claude/skills/tailor-sdk/plugin/SKILL.md")),
+      ).toBe(true);
+      expect(
+        fs.existsSync(path.join(projectDir, ".claude/skills/tailor-sdk/services/auth/SKILL.md")),
+      ).toBe(true);
     });
 
     it("excludes _artifacts/ directory", () => {
@@ -84,19 +88,21 @@ describe("skills-installer", () => {
       const result = copySkills({ projectDir, sourceDir: skillsSourceDir });
 
       expect(result.copiedFiles).not.toContain("_artifacts/spec.md");
-      expect(fs.existsSync(path.join(projectDir, ".claude/skills/_artifacts/spec.md"))).toBe(false);
+      expect(
+        fs.existsSync(path.join(projectDir, ".claude/skills/tailor-sdk/_artifacts/spec.md")),
+      ).toBe(false);
     });
 
     it("overwrites existing files", () => {
       const projectDir = path.join(tmpDir, "project");
-      const destFile = path.join(projectDir, ".claude/skills/tailor-sdk/SKILL.md");
+      const destFile = path.join(projectDir, ".claude/skills/tailor-sdk/overview/SKILL.md");
       fs.mkdirSync(path.dirname(destFile), { recursive: true });
       fs.writeFileSync(destFile, "old content");
 
       const result = copySkills({ projectDir, sourceDir: skillsSourceDir });
 
-      expect(result.copiedFiles).toContain("tailor-sdk/SKILL.md");
-      expect(fs.readFileSync(destFile, "utf8")).toBe("# Tailor SDK");
+      expect(result.copiedFiles).toContain("overview/SKILL.md");
+      expect(fs.readFileSync(destFile, "utf8")).toBe("# Overview");
     });
 
     it("throws when skills source directory does not exist", () => {
@@ -114,7 +120,9 @@ describe("skills-installer", () => {
       const code = await runSkillsInstaller({ sourceDir: skillsSourceDir, projectDir });
       expect(code).toBe(0);
 
-      expect(fs.existsSync(path.join(projectDir, ".claude/skills/tailor-sdk/SKILL.md"))).toBe(true);
+      expect(
+        fs.existsSync(path.join(projectDir, ".claude/skills/tailor-sdk/overview/SKILL.md")),
+      ).toBe(true);
     });
 
     it("returns 1 on failure", async () => {
