@@ -2,6 +2,8 @@
 
 Resolvers are custom GraphQL endpoints with business logic that execute on the Tailor Platform.
 
+<!-- stale test -->
+
 ## Overview
 
 Resolvers provide:
