@@ -54,7 +54,7 @@ Copy all SDK skills to your project:
 npx tailor-sdk-skills
 ```
 
-This copies skill files from the installed SDK package to `.claude/skills/tailor-sdk/`.
+This copies skill files from the installed SDK package to `.claude/skills/tailor-sdk/` (Claude Code) and `.agents/skills/tailor-sdk/` (Codex).
 
 Alternatively, use [TanStack Intent](https://tanstack.com/intent/latest) to set up skill-to-task mappings referencing skills directly from `node_modules/`:
 

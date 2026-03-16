@@ -3,7 +3,7 @@ import * as path from "pathe";
 import { logger, styles } from "./logger";
 
 export const SKILL_NAME = "tailor-sdk";
-const SKILLS_DEST_DIR = ".claude/skills/tailor-sdk";
+const SKILLS_DEST_DIRS = [".claude/skills/tailor-sdk", ".agents/skills/tailor-sdk"];
 const ARTIFACTS_DIR = "_artifacts";
 const SDK_PACKAGE_NAME = "@tailor-platform/sdk";
 
@@ -14,7 +14,7 @@ export interface CopySkillsOptions {
 
 export interface CopySkillsResult {
   copiedFiles: string[];
-  destinationDir: string;
+  destinationDirs: string[];
 }
 
 /**
@@ -81,7 +81,8 @@ function collectFiles(dir: string, baseDir: string): string[] {
 }
 
 /**
- * Copy skill files from the SDK package to the project's .claude/skills directory.
+ * Copy skill files from the SDK package to the project's skill directories.
+ * Copies to both .claude/skills/tailor-sdk/ and .agents/skills/tailor-sdk/.
  * @param options - Options for controlling the copy behavior.
  * @returns Result object describing what was copied.
  */
@@ -89,25 +90,25 @@ export function copySkills(options: CopySkillsOptions = {}): CopySkillsResult {
   const { projectDir = process.cwd() } = options;
 
   const sourceDir = options.sourceDir ?? resolveSkillsSourceDir();
-  const destDir = path.join(projectDir, SKILLS_DEST_DIR);
 
   if (!fs.existsSync(sourceDir)) {
     throw new Error(`Skills directory not found at ${sourceDir}`);
   }
 
   const relativeFiles = collectFiles(sourceDir, sourceDir);
-  const copiedFiles: string[] = [];
+  const destDirs = SKILLS_DEST_DIRS.map((d) => path.join(projectDir, d));
 
-  for (const relFile of relativeFiles) {
-    const srcFile = path.join(sourceDir, relFile);
-    const destFile = path.join(destDir, relFile);
+  for (const destDir of destDirs) {
+    for (const relFile of relativeFiles) {
+      const srcFile = path.join(sourceDir, relFile);
+      const destFile = path.join(destDir, relFile);
 
-    fs.mkdirSync(path.dirname(destFile), { recursive: true });
-    fs.copyFileSync(srcFile, destFile);
-    copiedFiles.push(relFile);
+      fs.mkdirSync(path.dirname(destFile), { recursive: true });
+      fs.copyFileSync(srcFile, destFile);
+    }
   }
 
-  return { copiedFiles, destinationDir: destDir };
+  return { copiedFiles: relativeFiles, destinationDirs: destDirs };
 }
 
 interface RunSkillsInstallerOptions {
@@ -132,9 +133,11 @@ export async function runSkillsInstaller(options: RunSkillsInstallerOptions = {}
     if (result.copiedFiles.length === 0) {
       logger.info("No skill files to copy.");
     } else {
-      logger.success(
-        `Copied ${result.copiedFiles.length} skill file(s) to ${styles.dim(result.destinationDir)}`,
-      );
+      for (const destDir of result.destinationDirs) {
+        logger.success(
+          `Copied ${result.copiedFiles.length} skill file(s) to ${styles.dim(destDir)}`,
+        );
+      }
       for (const file of result.copiedFiles) {
         logger.info(styles.dim(file), { mode: "plain" });
       }
