@@ -18,7 +18,8 @@
     "docs",
     "postinstall.mjs",
     "README.md",
-    "skills"
+    "skills",
+    "!skills/_artifacts"
   ],
   "type": "module",
   "main": "./dist/configure/index.mjs",
