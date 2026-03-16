@@ -2,6 +2,9 @@
   "name": "@tailor-platform/sdk",
   "version": "1.25.1",
   "description": "Tailor Platform SDK - The SDK to work with Tailor Platform",
+  "keywords": [
+    "tanstack-intent"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",
