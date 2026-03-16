@@ -22,6 +22,6 @@
     "oxlint": "1.39.0",
     "oxlint-tsgolint": "0.16.0",
     "typescript": "5.9.3",
-    "typescript-eslint": "8.53.0"
+    "typescript-eslint": "8.57.0"
   }
 }
