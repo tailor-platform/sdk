@@ -47,6 +47,9 @@ tailor.d.ts
 !.claude/skills/**
 CLAUDE.local.md
 
+# TanStack Intent scaffold artifacts
+_artifacts/
+
 # LLM Challenge
 llm-challenge/results/
 llm-challenge/problems/*/work
