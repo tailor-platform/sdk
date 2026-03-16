@@ -5,6 +5,9 @@ on:
     paths:
       - "packages/sdk/skills/**"
 
+permissions:
+  contents: read
+
 jobs:
   validate:
     name: Validate skill files
