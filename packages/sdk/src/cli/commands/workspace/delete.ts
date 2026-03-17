@@ -5,6 +5,7 @@ import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
+import { prompt } from "@/cli/shared/prompt";
 
 const deleteWorkspaceOptionsSchema = z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }),
@@ -73,12 +74,9 @@ export const deleteCommand = defineAppCommand({
 
     // Confirm deletion if not forced
     if (!args.yes) {
-      const confirmation = await logger.prompt(
-        `Enter the workspace name to confirm deletion (${workspace.workspace?.name}):`,
-        {
-          type: "text",
-        },
-      );
+      const confirmation = await prompt.text({
+        message: `Enter the workspace name to confirm deletion (${workspace.workspace?.name}):`,
+      });
       if (confirmation !== workspace.workspace?.name) {
         logger.info("Workspace deletion cancelled.");
         return;
