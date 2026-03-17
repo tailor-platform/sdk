@@ -30,14 +30,17 @@ export const createSecretCommand = defineAppCommand({
       profile: args.profile,
     });
 
-    if (await checkVaultManaged({ client, workspaceId, vaultName: args["vault-name"] })) {
-      if (!args.yes) {
-        const confirmed = await prompt.confirm({
-          message: "Do you want to proceed?",
-          default: false,
-        });
-        if (!confirmed) return;
-      }
+    const isManaged = await checkVaultManaged({
+      client,
+      workspaceId,
+      vaultName: args["vault-name"],
+    });
+    if (isManaged && !args.yes) {
+      const confirmed = await prompt.confirm({
+        message: "Do you want to proceed?",
+        default: false,
+      });
+      if (!confirmed) return;
     }
 
     try {
