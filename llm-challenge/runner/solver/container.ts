@@ -88,7 +88,12 @@ export function ensureImage(): Promise<void> {
         timeout: 300_000,
       });
       console.log("Container image built successfully.");
-    })();
+    })().catch((err: unknown) => {
+      // Clear cached promise so the next call retries the build
+      // (e.g., transient network failure during apt-get).
+      imagePromise = undefined;
+      throw err;
+    });
   }
   return imagePromise;
 }
