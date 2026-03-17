@@ -38,6 +38,7 @@ export function checkPodmanAvailability(): PodmanStatus {
 export function getContainerfileContent(): string {
   return [
     "FROM node:22-slim",
+    "RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*",
     "RUN corepack enable && corepack prepare pnpm@latest --activate",
     "RUN npm install -g @anthropic-ai/claude-code @openai/codex",
     // Run as non-root user. Claude Code's --permission-mode bypassPermissions
