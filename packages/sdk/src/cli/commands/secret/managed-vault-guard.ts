@@ -24,27 +24,29 @@ export async function managedVaultGuard(params: ManagedVaultGuardParams): Promis
   const { client, workspaceId, vaultName, yes, warnOnly } = params;
   const trn = `${trnPrefix(workspaceId)}:vault:${vaultName}`;
 
+  let owner: string | undefined;
   try {
     const { metadata } = await client.getMetadata({ trn });
-    const owner = metadata?.labels[sdkNameLabelKey];
-    if (!owner) return true;
-
-    logger.warn(
-      `Vault "${vaultName}" is managed by defineSecretManager() in tailor.config.ts (owner: "${owner}"). ` +
-        `Changes made via CLI will be overwritten on the next apply. ` +
-        `To manage this vault via CLI, remove it from the config and run apply first.`,
-    );
-
-    if (warnOnly || yes) return true;
-
-    const confirmed = await prompt.confirm({
-      message: "Do you want to proceed?",
-      default: false,
-    });
-    return confirmed;
+    owner = metadata?.labels[sdkNameLabelKey];
   } catch {
     // If metadata fetch fails (e.g., vault doesn't exist yet), proceed silently.
     // The actual operation will surface the appropriate error.
     return true;
   }
+
+  if (!owner) return true;
+
+  logger.warn(
+    `Vault "${vaultName}" is managed by defineSecretManager() in tailor.config.ts (owner: "${owner}"). ` +
+      `Changes made via CLI will be overwritten on the next apply. ` +
+      `To manage this vault via CLI, remove it from the config and run apply first.`,
+  );
+
+  if (warnOnly || yes) return true;
+
+  const confirmed = await prompt.confirm({
+    message: "Do you want to proceed?",
+    default: false,
+  });
+  return confirmed;
 }
