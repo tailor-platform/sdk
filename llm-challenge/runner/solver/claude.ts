@@ -197,7 +197,6 @@ async function checkClaudeAuthStatus(model?: string): Promise<AuthCheckResult> {
   return new Promise<AuthCheckResult>((resolve) => {
     const proc = spawn("podman", containerArgs, {
       stdio: ["ignore", "pipe", "pipe"],
-      detached: true,
     });
 
     const stdoutChunks: Buffer[] = [];
