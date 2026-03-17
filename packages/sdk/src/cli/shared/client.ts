@@ -1,3 +1,4 @@
+import * as https from "node:https";
 import { OAuth2Client } from "@badgateway/oauth2-client";
 import { MethodOptions_IdempotencyLevel } from "@bufbuild/protobuf/wkt";
 import {
@@ -374,23 +375,42 @@ export async function fetchMachineUserToken(url: string, clientId: string, clien
  */
 export async function fetchPlatformMachineUserToken(clientId: string, clientSecret: string) {
   const tokenEndpoint = new URL("/oauth2/platform/token", platformBaseUrl).href;
-  const formData = new URLSearchParams();
-  formData.append("grant_type", "client_credentials");
-  formData.append("client_id", clientId);
-  formData.append("client_secret", clientSecret);
+  const body = new URLSearchParams({
+    grant_type: "client_credentials",
+    client_id: clientId,
+    client_secret: clientSecret,
+  }).toString();
 
-  const resp = await fetch(tokenEndpoint, {
-    method: "POST",
-    headers: {
-      "User-Agent": await userAgent(),
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: formData,
+  // Use node:https instead of fetch to avoid undici keep-alive connection pool
+  // causing libuv UV_HANDLE_CLOSING assertion failure on Windows at process exit.
+  // See: https://github.com/nodejs/node/issues/56645
+  const ua = await userAgent();
+  const rawJson = await new Promise<unknown>((resolve, reject) => {
+    const req = https.request(
+      tokenEndpoint,
+      {
+        method: "POST",
+        headers: {
+          "User-Agent": ua,
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Content-Length": Buffer.byteLength(body),
+        },
+      },
+      (res) => {
+        let data = "";
+        res.on("data", (chunk: string) => (data += chunk));
+        res.on("end", () => {
+          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+            resolve(JSON.parse(data));
+          } else {
+            reject(new Error("Failed to fetch platform machine user token"));
+          }
+        });
+      },
+    );
+    req.on("error", reject);
+    req.end(body);
   });
-  if (!resp.ok) {
-    throw new Error("Failed to fetch platform machine user token");
-  }
-  const rawJson = await resp.json();
 
   const schema = z.object({
     token_type: z.string(),
