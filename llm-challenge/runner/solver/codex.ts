@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { buildContainerRunArgs, ensureImage } from "./container";
+import { CONTAINER_WORK_DIR, buildContainerRunArgs, ensureImage } from "./container";
 import { detectInfraFailure } from "./shared";
 import type { AuthCheckResult, SolveAdapter, SolveResult, SolveRunOptions } from "./types";
 
@@ -224,11 +224,12 @@ async function runCodex(options: SolveRunOptions): Promise<SolveResult> {
   const cliArgs = [
     "exec",
     "--json",
-    "--full-auto",
-    "--sandbox",
-    "workspace-write",
+    // Bypass Codex's bubblewrap sandbox: it cannot create mount namespaces
+    // inside a rootless Podman container. The container itself provides
+    // filesystem isolation, so the internal sandbox is redundant.
+    "--dangerously-bypass-approvals-and-sandbox",
     "--cd",
-    workDir,
+    CONTAINER_WORK_DIR,
     "--skip-git-repo-check",
     "-c",
     `model_max_output_tokens=${String(modelMaxOutputTokens)}`,
@@ -319,9 +320,7 @@ async function checkCodexAuthStatus(model?: string): Promise<AuthCheckResult> {
   const cliArgs = [
     "exec",
     "--json",
-    "--full-auto",
-    "--sandbox",
-    "read-only",
+    "--dangerously-bypass-approvals-and-sandbox",
     "--cd",
     "/tmp",
     "--skip-git-repo-check",

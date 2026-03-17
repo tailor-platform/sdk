@@ -5,6 +5,16 @@ import type { SolveAgent } from "./types";
 
 const IMAGE_NAME = "llm-challenge-runner";
 
+/**
+ * Fixed working directory inside the container.
+ *
+ * Host workDir (e.g. /var/folders/.../sdk-ws-xxx) is mounted here to avoid
+ * macOS-specific paths leaking into the container. Codex's bubblewrap sandbox
+ * derives writable roots from the working directory path, and macOS paths
+ * like /Users/<name>/Library cause sandbox startup failures in Linux.
+ */
+export const CONTAINER_WORK_DIR = "/workspace";
+
 type PodmanStatus = {
   available: boolean;
   error?: string;
@@ -41,6 +51,9 @@ export function getContainerfileContent(): string {
     "RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*",
     "RUN corepack enable && corepack prepare pnpm@latest --activate",
     "RUN npm install -g @anthropic-ai/claude-code @openai/codex",
+    // Pre-create writable config dirs for both agents before switching to
+    // non-root user. Codex writes logs/state to ~/.codex/ at runtime.
+    "RUN mkdir -p /home/node/.codex /home/node/.claude && chown -R node:node /home/node/.codex /home/node/.claude",
     // Run as non-root user. Claude Code's --permission-mode bypassPermissions
     // refuses to run as root for security reasons.
     "USER node",
@@ -83,7 +96,7 @@ export function ensureImage(): Promise<void> {
 /**
  * Build `podman run` arguments for executing an agent CLI inside the container.
  *
- * - Volume-mounts workDir at the same host path (preserves symlinks)
+ * - Volume-mounts host workDir to /workspace inside the container
  * - Mounts agent auth directories read-only for login-based credentials:
  *   - Claude: CLAUDE_CODE_OAUTH_TOKEN env var (from `claude setup-token`)
  *   - Codex: ~/.codex/ mounted to /home/node/.codex (contains auth.json)
@@ -97,8 +110,8 @@ export function buildContainerRunArgs(
   const args = ["run", "--rm"];
 
   if (options?.workDir) {
-    args.push("--volume", `${options.workDir}:${options.workDir}:Z`);
-    args.push("--workdir", options.workDir);
+    args.push("--volume", `${options.workDir}:${CONTAINER_WORK_DIR}:Z`);
+    args.push("--workdir", CONTAINER_WORK_DIR);
   }
 
   // Auth: mount config dirs or pass env vars depending on agent.
@@ -109,9 +122,12 @@ export function buildContainerRunArgs(
     // mounting ~/.claude causes startup errors with .claude.json writes)
     args.push("--env", "CLAUDE_CODE_OAUTH_TOKEN");
   } else {
-    // Codex: mount ~/.codex read-only (contains auth.json with ChatGPT OAuth tokens)
-    const codexDir = path.join(homeDir, ".codex");
-    args.push("--volume", `${codexDir}:/home/node/.codex:ro,Z`);
+    // Codex: mount only auth.json read-only (ChatGPT OAuth tokens).
+    // Mounting the entire ~/.codex/ would also bring in config.toml which may
+    // contain host-specific writable_roots (e.g. /Users/<name>/Library) that
+    // cause sandbox startup failures inside the Linux container.
+    const codexAuth = path.join(homeDir, ".codex", "auth.json");
+    args.push("--volume", `${codexAuth}:/home/node/.codex/auth.json:ro,Z`);
   }
 
   if (options?.stdin) {
