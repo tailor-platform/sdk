@@ -243,7 +243,7 @@ async function runCodex(options: SolveRunOptions): Promise<SolveResult> {
 
   const containerArgs = buildContainerRunArgs("codex", cliArgs, { workDir, stdin: true });
   const startTime = Date.now();
-  const timeout = 600_000; // 10 minutes
+  const timeout = 1_200_000; // 20 minutes
 
   return new Promise<SolveResult>((resolve) => {
     const proc = spawn("podman", containerArgs, {
