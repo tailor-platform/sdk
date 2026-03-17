@@ -6,7 +6,7 @@ import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { prompt } from "@/cli/shared/prompt";
-import { managedVaultGuard } from "../managed-vault-guard";
+import { checkVaultManaged } from "../check-vault-managed";
 import { nameArgs } from "./args";
 
 export const deleteCommand = defineAppCommand({
@@ -30,14 +30,7 @@ export const deleteCommand = defineAppCommand({
       profile: args.profile,
     });
 
-    const shouldProceed = await managedVaultGuard({
-      client,
-      workspaceId,
-      vaultName: args.name,
-      yes: args.yes,
-      warnOnly: true,
-    });
-    if (!shouldProceed) return;
+    await checkVaultManaged({ client, workspaceId, vaultName: args.name });
 
     if (!args.yes) {
       const confirmation = await prompt.text({

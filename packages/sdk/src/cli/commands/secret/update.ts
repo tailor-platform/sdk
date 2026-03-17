@@ -5,8 +5,9 @@ import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
+import { prompt } from "@/cli/shared/prompt";
 import { secretValueArgs } from "./args";
-import { managedVaultGuard } from "./managed-vault-guard";
+import { checkVaultManaged } from "./check-vault-managed";
 
 export const updateSecretCommand = defineAppCommand({
   name: "update",
@@ -29,13 +30,15 @@ export const updateSecretCommand = defineAppCommand({
       profile: args.profile,
     });
 
-    const shouldProceed = await managedVaultGuard({
-      client,
-      workspaceId,
-      vaultName: args["vault-name"],
-      yes: args.yes,
-    });
-    if (!shouldProceed) return;
+    if (await checkVaultManaged({ client, workspaceId, vaultName: args["vault-name"] })) {
+      if (!args.yes) {
+        const confirmed = await prompt.confirm({
+          message: "Do you want to proceed?",
+          default: false,
+        });
+        if (!confirmed) return;
+      }
+    }
 
     try {
       await client.updateSecretManagerSecret({
