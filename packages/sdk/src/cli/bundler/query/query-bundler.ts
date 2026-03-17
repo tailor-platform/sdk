@@ -8,8 +8,7 @@ import type { QueryEngine } from "@/cli/query";
 
 function createSqlEntry(): string {
   return ml /* ts */ `
-    import { Kysely, sql } from "@tailor-platform/sdk/kysely";
-    import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
+    import { Kysely, sql, TailordbDialect } from "@tailor-platform/sdk/kysely";
 
     type QueryInput = {
       namespace: string;
