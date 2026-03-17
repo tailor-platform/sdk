@@ -1,7 +1,7 @@
 import type { CrashReport } from "./report";
 
 const SEND_TIMEOUT_MS = 5000;
-const PRODUCTION_ENDPOINT = "https://sdk-error-tracking-u2yjqq8iuv.erp.dev/query";
+const PRODUCTION_ENDPOINT = "https://sdk-error-tracking-926vh9t4cl.erp.dev/query";
 
 const SUBMIT_MUTATION = `
 mutation SubmitCrashReport(
@@ -13,10 +13,10 @@ mutation SubmitCrashReport(
   $osRelease: String!
   $arch: String!
   $command: String!
-  $argv: [String!]!
+  $argv: [String]
   $errorName: String!
   $errorMessage: String!
-  $stackTrace: String!
+  $stackTrace: String
   $errorType: String!
 ) {
   submitCrashReport(
