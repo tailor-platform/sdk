@@ -56,6 +56,14 @@ describe("buildFiles", () => {
     expect(content).toContain("run: pnpm run deploy -- --yes");
     expect(content).not.toContain("run: pnpm apply");
   });
+
+  it("preserves $ characters in parameter values", () => {
+    const content = getDeployContent({
+      ...baseOptions,
+      workspaceName: "test$&end",
+    });
+    expect(content).toContain("WORKSPACE_NAME: test$&end");
+  });
 });
 
 describe("installNodeYaml", () => {

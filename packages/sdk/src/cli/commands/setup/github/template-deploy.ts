@@ -26,9 +26,9 @@ export function renderDeploy(params: DeployParams): string {
     : "";
 
   return deployTemplate
-    .replace("__WORKSPACE_NAME__", workspaceName)
-    .replace("__WORKSPACE_REGION__", workspaceRegion)
-    .replace("__ORGANIZATION_ID__", organizationId)
-    .replace("__FOLDER_ID__", folderId)
-    .replace("# __DEFAULTS_BLOCK__\n", defaultsBlock);
+    .replace("__WORKSPACE_NAME__", () => workspaceName)
+    .replace("__WORKSPACE_REGION__", () => workspaceRegion)
+    .replace("__ORGANIZATION_ID__", () => organizationId)
+    .replace("__FOLDER_ID__", () => folderId)
+    .replace("# __DEFAULTS_BLOCK__\n", () => defaultsBlock);
 }
