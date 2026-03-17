@@ -1,4 +1,6 @@
 import { execFileSync } from "node:child_process";
+import os from "node:os";
+import path from "node:path";
 import type { SolveAgent } from "./types";
 
 const IMAGE_NAME = "llm-challenge-runner";
@@ -81,14 +83,10 @@ export function ensureImage(): Promise<void> {
  * Build `podman run` arguments for executing an agent CLI inside the container.
  *
  * - Volume-mounts workDir at the same host path (preserves symlinks)
- * - Passes through auth environment variables (CLAUDE_CODE_OAUTH_TOKEN
- *   for Claude, OPENAI_API_KEY for Codex) so that token-based auth works
+ * - Mounts agent auth directories read-only for login-based credentials:
+ *   - Claude: CLAUDE_CODE_OAUTH_TOKEN env var (from `claude setup-token`)
+ *   - Codex: ~/.codex/ mounted to /home/node/.codex (contains auth.json)
  * - Adds `-i` for agents that pipe prompts via stdin (Codex)
- *
- * Auth directories (~/.claude, ~/.codex) are NOT mounted because:
- * - Claude Code attempts to write config files (.claude.json) which fails
- *   on read-only mounts and causes startup errors
- * - Auth is handled entirely via environment variables
  */
 export function buildContainerRunArgs(
   agent: SolveAgent,
@@ -102,14 +100,17 @@ export function buildContainerRunArgs(
     args.push("--workdir", options.workDir);
   }
 
-  // Pass through auth environment variables.
-  // For Claude: CLAUDE_CODE_OAUTH_TOKEN (from `claude setup-token`)
-  // For Codex: OPENAI_API_KEY
-  // podman --env VAR passes the host value; if unset, it is silently ignored.
+  // Auth: mount config dirs or pass env vars depending on agent.
+  // Container runs as USER node (HOME=/home/node).
+  const homeDir = os.homedir();
   if (agent === "claude") {
+    // Claude Code: OAuth token via env var (file-based auth not available;
+    // mounting ~/.claude causes startup errors with .claude.json writes)
     args.push("--env", "CLAUDE_CODE_OAUTH_TOKEN");
   } else {
-    args.push("--env", "OPENAI_API_KEY");
+    // Codex: mount ~/.codex read-only (contains auth.json with ChatGPT OAuth tokens)
+    const codexDir = path.join(homeDir, ".codex");
+    args.push("--volume", `${codexDir}:/home/node/.codex:ro,Z`);
   }
 
   if (options?.stdin) {

@@ -1,3 +1,5 @@
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildContainerRunArgs, getContainerfileContent } from "./container";
 
@@ -76,30 +78,29 @@ describe("buildContainerRunArgs", () => {
     expect(args[volumeIdx + 1]).toBe(`${workDir}:${workDir}:Z`);
   });
 
-  it("passes correct auth env var per agent", () => {
-    const claudeArgs = buildContainerRunArgs("claude", ["-p", "test"]);
-    const codexArgs = buildContainerRunArgs("codex", ["exec"]);
+  it("uses env var auth for Claude (no dir mount)", () => {
+    const args = buildContainerRunArgs("claude", ["-p", "test"]);
 
-    // Claude uses CLAUDE_CODE_OAUTH_TOKEN
-    expect(claudeArgs).toContain("CLAUDE_CODE_OAUTH_TOKEN");
-    expect(claudeArgs).not.toContain("OPENAI_API_KEY");
+    expect(args).toContain("CLAUDE_CODE_OAUTH_TOKEN");
 
-    // Codex uses OPENAI_API_KEY
-    expect(codexArgs).toContain("OPENAI_API_KEY");
-    expect(codexArgs).not.toContain("CLAUDE_CODE_OAUTH_TOKEN");
+    // Claude auth dir NOT mounted (causes .claude.json write errors)
+    const volumes = args.filter((_, i) => i > 0 && args[i - 1] === "--volume");
+    for (const v of volumes) {
+      expect(v).not.toContain(".claude");
+    }
   });
 
-  it("does not mount auth directories", () => {
-    const claudeArgs = buildContainerRunArgs("claude", ["-p", "test"]);
-    const codexArgs = buildContainerRunArgs("codex", ["exec"]);
+  it("mounts ~/.codex read-only for Codex auth (no API key)", () => {
+    const args = buildContainerRunArgs("codex", ["exec"]);
+    const codexDir = path.join(os.homedir(), ".codex");
 
-    // Auth dirs should NOT be mounted (causes Claude startup errors)
-    const claudeVolumes = claudeArgs.filter((_, i) => i > 0 && claudeArgs[i - 1] === "--volume");
-    const codexVolumes = codexArgs.filter((_, i) => i > 0 && codexArgs[i - 1] === "--volume");
+    // Should mount ~/.codex read-only
+    const volumes = args.filter((_, i) => i > 0 && args[i - 1] === "--volume");
+    const codexMount = volumes.find((v) => v.includes(".codex"));
+    expect(codexMount).toBe(`${codexDir}:/home/node/.codex:ro,Z`);
 
-    for (const v of [...claudeVolumes, ...codexVolumes]) {
-      expect(v).not.toContain(".claude");
-      expect(v).not.toContain(".codex");
-    }
+    // No API key env vars
+    expect(args).not.toContain("OPENAI_API_KEY");
+    expect(args).not.toContain("CLAUDE_CODE_OAUTH_TOKEN");
   });
 });

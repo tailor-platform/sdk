@@ -761,7 +761,7 @@ async function ensureAuthenticated(agent: SolveAgent, targetModel?: string): Pro
         'Hint: Run "claude setup-token" and set CLAUDE_CODE_OAUTH_TOKEN in your environment.',
       );
     } else {
-      console.error("Hint: Set OPENAI_API_KEY in your environment.");
+      console.error('Hint: Run "codex login" to store credentials in ~/.codex/auth.json.');
     }
     process.exit(1);
   }
