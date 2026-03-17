@@ -29,18 +29,24 @@ describe("skills-installer", () => {
     skillsSourceDir = path.join(tmpDir, "source-skills");
 
     // Create a fake skills source tree matching the real layout:
-    //   skills/overview/SKILL.md
-    //   skills/plugin/SKILL.md
-    //   skills/services/auth/SKILL.md
+    //   skills/tailor-sdk-overview/SKILL.md
+    //   skills/tailor-sdk-plugin/SKILL.md
+    //   skills/tailor-sdk-auth/SKILL.md
     //   skills/_artifacts/spec.md     (should be excluded)
-    fs.mkdirSync(path.join(skillsSourceDir, "overview"), { recursive: true });
-    fs.writeFileSync(path.join(skillsSourceDir, "overview", "SKILL.md"), "# Overview");
+    fs.mkdirSync(path.join(skillsSourceDir, "tailor-sdk-overview"), {
+      recursive: true,
+    });
+    fs.writeFileSync(path.join(skillsSourceDir, "tailor-sdk-overview", "SKILL.md"), "# Overview");
 
-    fs.mkdirSync(path.join(skillsSourceDir, "plugin"), { recursive: true });
-    fs.writeFileSync(path.join(skillsSourceDir, "plugin", "SKILL.md"), "# Plugin");
+    fs.mkdirSync(path.join(skillsSourceDir, "tailor-sdk-plugin"), {
+      recursive: true,
+    });
+    fs.writeFileSync(path.join(skillsSourceDir, "tailor-sdk-plugin", "SKILL.md"), "# Plugin");
 
-    fs.mkdirSync(path.join(skillsSourceDir, "services", "auth"), { recursive: true });
-    fs.writeFileSync(path.join(skillsSourceDir, "services", "auth", "SKILL.md"), "# Auth");
+    fs.mkdirSync(path.join(skillsSourceDir, "tailor-sdk-auth"), {
+      recursive: true,
+    });
+    fs.writeFileSync(path.join(skillsSourceDir, "tailor-sdk-auth", "SKILL.md"), "# Auth");
 
     fs.mkdirSync(path.join(skillsSourceDir, "_artifacts"), { recursive: true });
     fs.writeFileSync(path.join(skillsSourceDir, "_artifacts", "spec.md"), "artifact");
@@ -65,18 +71,20 @@ describe("skills-installer", () => {
       const result = copySkills({ projectDir, sourceDir: skillsSourceDir });
 
       expect(result.destinationDirs).toEqual([
-        path.join(projectDir, ".claude/skills/tailor-sdk"),
-        path.join(projectDir, ".agents/skills/tailor-sdk"),
+        path.join(projectDir, ".claude/skills"),
+        path.join(projectDir, ".agents/skills"),
       ]);
-      expect(result.copiedFiles).toContain("overview/SKILL.md");
-      expect(result.copiedFiles).toContain("plugin/SKILL.md");
-      expect(result.copiedFiles).toContain("services/auth/SKILL.md");
+      expect(result.copiedFiles).toContain("tailor-sdk-overview/SKILL.md");
+      expect(result.copiedFiles).toContain("tailor-sdk-plugin/SKILL.md");
+      expect(result.copiedFiles).toContain("tailor-sdk-auth/SKILL.md");
 
       // Verify files exist in both destinations
-      for (const dir of [".claude/skills/tailor-sdk", ".agents/skills/tailor-sdk"]) {
-        expect(fs.existsSync(path.join(projectDir, dir, "overview/SKILL.md"))).toBe(true);
-        expect(fs.existsSync(path.join(projectDir, dir, "plugin/SKILL.md"))).toBe(true);
-        expect(fs.existsSync(path.join(projectDir, dir, "services/auth/SKILL.md"))).toBe(true);
+      for (const dir of [".claude/skills", ".agents/skills"]) {
+        expect(fs.existsSync(path.join(projectDir, dir, "tailor-sdk-overview/SKILL.md"))).toBe(
+          true,
+        );
+        expect(fs.existsSync(path.join(projectDir, dir, "tailor-sdk-plugin/SKILL.md"))).toBe(true);
+        expect(fs.existsSync(path.join(projectDir, dir, "tailor-sdk-auth/SKILL.md"))).toBe(true);
       }
     });
 
@@ -87,49 +95,57 @@ describe("skills-installer", () => {
       const result = copySkills({ projectDir, sourceDir: skillsSourceDir });
 
       expect(result.copiedFiles).not.toContain("_artifacts/spec.md");
-      expect(
-        fs.existsSync(path.join(projectDir, ".claude/skills/tailor-sdk/_artifacts/spec.md")),
-      ).toBe(false);
-      expect(
-        fs.existsSync(path.join(projectDir, ".agents/skills/tailor-sdk/_artifacts/spec.md")),
-      ).toBe(false);
+      expect(fs.existsSync(path.join(projectDir, ".claude/skills/_artifacts/spec.md"))).toBe(false);
+      expect(fs.existsSync(path.join(projectDir, ".agents/skills/_artifacts/spec.md"))).toBe(false);
     });
 
     it("removes stale files from previous versions", () => {
       const projectDir = path.join(tmpDir, "project");
 
-      // Simulate a stale file from a previous SDK version
-      for (const dir of [".claude/skills/tailor-sdk", ".agents/skills/tailor-sdk"]) {
-        const staleFile = path.join(projectDir, dir, "old-skill/SKILL.md");
+      // Simulate a stale SDK skill and a non-SDK skill
+      for (const dir of [".claude/skills", ".agents/skills"]) {
+        const staleFile = path.join(projectDir, dir, "tailor-sdk-old-skill/SKILL.md");
         fs.mkdirSync(path.dirname(staleFile), { recursive: true });
         fs.writeFileSync(staleFile, "stale");
+
+        const otherFile = path.join(projectDir, dir, "other-skill/SKILL.md");
+        fs.mkdirSync(path.dirname(otherFile), { recursive: true });
+        fs.writeFileSync(otherFile, "keep me");
       }
 
       copySkills({ projectDir, sourceDir: skillsSourceDir });
 
-      // Stale files should be gone
+      // Stale SDK skills should be gone
       expect(
-        fs.existsSync(path.join(projectDir, ".claude/skills/tailor-sdk/old-skill/SKILL.md")),
+        fs.existsSync(path.join(projectDir, ".claude/skills/tailor-sdk-old-skill/SKILL.md")),
       ).toBe(false);
       expect(
-        fs.existsSync(path.join(projectDir, ".agents/skills/tailor-sdk/old-skill/SKILL.md")),
+        fs.existsSync(path.join(projectDir, ".agents/skills/tailor-sdk-old-skill/SKILL.md")),
       ).toBe(false);
+
+      // Non-SDK skills should be preserved
+      expect(fs.existsSync(path.join(projectDir, ".claude/skills/other-skill/SKILL.md"))).toBe(
+        true,
+      );
+      expect(fs.existsSync(path.join(projectDir, ".agents/skills/other-skill/SKILL.md"))).toBe(
+        true,
+      );
 
       // New files should exist
       expect(
-        fs.existsSync(path.join(projectDir, ".claude/skills/tailor-sdk/overview/SKILL.md")),
+        fs.existsSync(path.join(projectDir, ".claude/skills/tailor-sdk-overview/SKILL.md")),
       ).toBe(true);
     });
 
     it("overwrites existing files", () => {
       const projectDir = path.join(tmpDir, "project");
-      const destFile = path.join(projectDir, ".claude/skills/tailor-sdk/overview/SKILL.md");
+      const destFile = path.join(projectDir, ".claude/skills/tailor-sdk-overview/SKILL.md");
       fs.mkdirSync(path.dirname(destFile), { recursive: true });
       fs.writeFileSync(destFile, "old content");
 
       const result = copySkills({ projectDir, sourceDir: skillsSourceDir });
 
-      expect(result.copiedFiles).toContain("overview/SKILL.md");
+      expect(result.copiedFiles).toContain("tailor-sdk-overview/SKILL.md");
       expect(fs.readFileSync(destFile, "utf8")).toBe("# Overview");
     });
 
@@ -145,14 +161,17 @@ describe("skills-installer", () => {
       const projectDir = path.join(tmpDir, "project-run");
       fs.mkdirSync(projectDir);
 
-      const code = await runSkillsInstaller({ sourceDir: skillsSourceDir, projectDir });
+      const code = await runSkillsInstaller({
+        sourceDir: skillsSourceDir,
+        projectDir,
+      });
       expect(code).toBe(0);
 
       expect(
-        fs.existsSync(path.join(projectDir, ".claude/skills/tailor-sdk/overview/SKILL.md")),
+        fs.existsSync(path.join(projectDir, ".claude/skills/tailor-sdk-overview/SKILL.md")),
       ).toBe(true);
       expect(
-        fs.existsSync(path.join(projectDir, ".agents/skills/tailor-sdk/overview/SKILL.md")),
+        fs.existsSync(path.join(projectDir, ".agents/skills/tailor-sdk-overview/SKILL.md")),
       ).toBe(true);
     });
 

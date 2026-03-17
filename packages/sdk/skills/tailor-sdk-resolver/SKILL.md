@@ -1,5 +1,5 @@
 ---
-name: services/resolver
+name: tailor-sdk-resolver
 description: Create custom GraphQL query and mutation endpoints with createResolver(). Covers typed input/output schemas using t.* field types, input validation, Kysely database access via getDB(), context (input, env, user), pickFields/omitFields for type reuse, and publishEvents.
 metadata:
   sources:
@@ -224,5 +224,5 @@ body: async (context) => {
 
 Kysely operations return Promises. Missing `await` returns a pending Promise instead of data.
 
-See also: services/tailordb/SKILL.md — reuse field definitions via pickFields/omitFields
-See also: services/workflow/SKILL.md — trigger workflows from resolvers
+See also: tailor-sdk-tailordb — reuse field definitions via pickFields/omitFields
+See also: tailor-sdk-workflow — trigger workflows from resolvers

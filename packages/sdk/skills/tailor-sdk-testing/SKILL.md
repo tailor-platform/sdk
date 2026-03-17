@@ -1,5 +1,5 @@
 ---
-name: testing
+name: tailor-sdk-testing
 description: Patterns for unit testing resolvers, workflows, and e2e tests in @tailor-platform/sdk projects.
 metadata:
   sources:
@@ -318,5 +318,5 @@ Without `mockQueryObject.mockReset()` in `afterEach`, leftover mock responses le
 
 ## Cross-References
 
-- **services/resolver** -- resolver mock patterns and `createResolver` API
-- **services/workflow** -- workflow test patterns with env stubbing and `createWorkflow` API
+- **tailor-sdk-resolver** -- resolver mock patterns and `createResolver` API
+- **tailor-sdk-workflow** -- workflow test patterns with env stubbing and `createWorkflow` API

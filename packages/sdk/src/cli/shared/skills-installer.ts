@@ -3,7 +3,8 @@ import * as path from "pathe";
 import { logger, styles } from "./logger";
 
 export const SKILL_NAME = "tailor-sdk";
-const SKILLS_DEST_DIRS = [".claude/skills/tailor-sdk", ".agents/skills/tailor-sdk"];
+const SKILL_PREFIX = `${SKILL_NAME}-`;
+const SKILLS_DEST_DIRS = [".claude/skills", ".agents/skills"];
 const ARTIFACTS_DIR = "_artifacts";
 const SDK_PACKAGE_NAME = "@tailor-platform/sdk";
 
@@ -99,8 +100,13 @@ export function copySkills(options: CopySkillsOptions = {}): CopySkillsResult {
   const destDirs = SKILLS_DEST_DIRS.map((d) => path.join(projectDir, d));
 
   for (const destDir of destDirs) {
+    // Only remove SDK-owned skill directories (tailor-sdk-*), leave others untouched
     if (fs.existsSync(destDir)) {
-      fs.rmSync(destDir, { recursive: true, force: true });
+      for (const entry of fs.readdirSync(destDir, { withFileTypes: true })) {
+        if (entry.isDirectory() && entry.name.startsWith(SKILL_PREFIX)) {
+          fs.rmSync(path.join(destDir, entry.name), { recursive: true, force: true });
+        }
+      }
     }
     for (const relFile of relativeFiles) {
       const srcFile = path.join(sourceDir, relFile);

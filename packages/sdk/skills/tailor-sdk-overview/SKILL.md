@@ -1,5 +1,5 @@
 ---
-name: overview
+name: tailor-sdk-overview
 description: Use this skill when working with @tailor-platform/sdk projects, including service configuration, CLI usage, and docs navigation.
 ---
 

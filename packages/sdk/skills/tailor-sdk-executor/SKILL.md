@@ -1,5 +1,5 @@
 ---
-name: services/executor
+name: tailor-sdk-executor
 description: Use this skill when creating or modifying executors — event-driven handlers triggered by record changes, schedules, webhooks, or resolver execution.
 metadata:
   sources:
@@ -317,6 +317,6 @@ scheduleTrigger({ cron: "*/5 * * * *" });
 
 ## Cross-References
 
-- **services/tailordb** — Record triggers reference TailorDB types; `publishEvents` is auto-detected when a type is used in a record trigger
-- **services/resolver** — `resolverExecutedTrigger` references a resolver created with `createResolver`
-- **services/workflow** — Workflow operations trigger workflows created with `createWorkflow`
+- **tailor-sdk-tailordb** — Record triggers reference TailorDB types; `publishEvents` is auto-detected when a type is used in a record trigger
+- **tailor-sdk-resolver** — `resolverExecutedTrigger` references a resolver created with `createResolver`
+- **tailor-sdk-workflow** — Workflow operations trigger workflows created with `createWorkflow`

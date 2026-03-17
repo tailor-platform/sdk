@@ -1,5 +1,5 @@
 ---
-name: services/auth
+name: tailor-sdk-auth
 description: Use this skill when configuring authentication, authorization, machine users, OAuth2 clients, or identity providers in a Tailor Platform application.
 metadata:
   sources:
@@ -311,5 +311,5 @@ defineIdp("my-idp", { authorization: "user.role == 'admin'", clients: ["web-clie
 
 ## Cross-References
 
-- **services/tailordb** — `userProfile.type` references a TailorDB type; TailorDB permissions use user attributes from Auth
-- **services/workflow** — `authInvoker` in workflow triggers requires a machine user defined in Auth
+- **tailor-sdk-tailordb** — `userProfile.type` references a TailorDB type; TailorDB permissions use user attributes from Auth
+- **tailor-sdk-workflow** — `authInvoker` in workflow triggers requires a machine user defined in Auth

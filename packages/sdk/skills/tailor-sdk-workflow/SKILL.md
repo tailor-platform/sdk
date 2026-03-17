@@ -1,5 +1,5 @@
 ---
-name: services/workflow
+name: tailor-sdk-workflow
 description: Use this skill when creating or modifying workflows and workflow jobs in @tailor-platform/sdk projects. Covers createWorkflow, createWorkflowJob, job triggers, JSON serialization constraints, and cross-service integration.
 metadata:
   sources:
@@ -147,7 +147,7 @@ export default createResolver({
 });
 ```
 
-`authInvoker` requires a machine user defined in `defineAuth`. See the `services/auth` skill for machine user configuration.
+`authInvoker` requires a machine user defined in `defineAuth`. See the `tailor-sdk-auth` skill for machine user configuration.
 
 ## JSON Serialization Constraints
 
@@ -280,5 +280,5 @@ const date = new Date(result.createdAt);
 
 ## Cross-References
 
-- **services/auth** — `authInvoker` requires a machine user from `defineAuth`
-- **services/resolver** — resolvers can trigger workflows using `workflow.trigger()`
+- **tailor-sdk-auth** — `authInvoker` requires a machine user from `defineAuth`
+- **tailor-sdk-resolver** — resolvers can trigger workflows using `workflow.trigger()`

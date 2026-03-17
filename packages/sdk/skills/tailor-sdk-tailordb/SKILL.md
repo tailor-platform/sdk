@@ -1,12 +1,12 @@
 ---
-name: services/tailordb
+name: tailor-sdk-tailordb
 description: Use this skill when defining TailorDB types, fields, relations, hooks, validations, permissions, and features using db.type() from @tailor-platform/sdk.
 metadata:
   sources:
     - docs/services/tailordb.md
   cross_references:
-    - services/resolver
-    - services/executor
+    - tailor-sdk-resolver
+    - tailor-sdk-executor
 ---
 
 # TailorDB Type Definitions
@@ -485,8 +485,8 @@ Source: `docs/services/tailordb.md` — "Do not use unsafeAllowAll\* in producti
 
 ## Cross-References
 
-- **services/resolver** — `pickFields()` and `omitFields()` on a TailorDB type produce field subsets for resolver input/output definitions.
-- **services/executor** — `recordCreatedTrigger(type)`, `recordUpdatedTrigger(type)`, `recordDeletedTrigger(type)` reference TailorDB types and implicitly enable `publishEvents`.
+- **tailor-sdk-resolver** — `pickFields()` and `omitFields()` on a TailorDB type produce field subsets for resolver input/output definitions.
+- **tailor-sdk-executor** — `recordCreatedTrigger(type)`, `recordUpdatedTrigger(type)`, `recordDeletedTrigger(type)` reference TailorDB types and implicitly enable `publishEvents`.
 
 ## References
 

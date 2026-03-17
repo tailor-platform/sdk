@@ -1,5 +1,5 @@
 ---
-name: plugin
+name: tailor-sdk-plugin
 description: Use this skill when working with the @tailor-platform/sdk plugin system, including builtin plugins (kysely-type, enum-constants, file-utils, seed), custom plugin authoring, lifecycle hooks, and code generation.
 metadata:
   sources:
@@ -318,6 +318,6 @@ Without declaration merging, `.plugin()` config objects are untyped. Plugin auth
 
 ## Cross-References
 
-- **services/tailordb**: Plugins generate artifacts based on type definitions. Definition-time hooks receive `TailorAnyDBType` and can extend types with additional fields.
-- **services/executor**: Plugin-generated executors use `withPluginContext()` for context injection and standard executor triggers.
-- **services/resolver**: Plugin-generated resolvers follow the same patterns as user-defined resolvers.
+- **tailor-sdk-tailordb**: Plugins generate artifacts based on type definitions. Definition-time hooks receive `TailorAnyDBType` and can extend types with additional fields.
+- **tailor-sdk-executor**: Plugin-generated executors use `withPluginContext()` for context injection and standard executor triggers.
+- **tailor-sdk-resolver**: Plugin-generated resolvers follow the same patterns as user-defined resolvers.
