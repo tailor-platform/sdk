@@ -20,9 +20,37 @@ export type PluginConfig = {
   readonly importPath?: string | undefined;
   readonly typeConfigRequired?: import("./plugin").TypeConfigRequired<unknown> | undefined;
   readonly pluginConfig?: unknown;
-  onTypeLoaded?: ((context: import("./plugin").PluginProcessContext<unknown, unknown>) => import("./plugin").TypePluginOutput | Promise<import("./plugin").TypePluginOutput>) | undefined;
-  onNamespaceLoaded?: ((context: import("./plugin").PluginNamespaceProcessContext<unknown>) => import("./plugin").NamespacePluginOutput | Promise<import("./plugin").NamespacePluginOutput>) | undefined;
-  onTailorDBReady?: ((context: import("./plugin-generation").TailorDBReadyContext<unknown>) => import("./plugin-generation").GeneratorResult | Promise<import("./plugin-generation").GeneratorResult>) | undefined;
-  onResolverReady?: ((context: import("./plugin-generation").ResolverReadyContext<unknown>) => import("./plugin-generation").GeneratorResult | Promise<import("./plugin-generation").GeneratorResult>) | undefined;
-  onExecutorReady?: ((context: import("./plugin-generation").ExecutorReadyContext<unknown>) => import("./plugin-generation").GeneratorResult | Promise<import("./plugin-generation").GeneratorResult>) | undefined;
+  onTypeLoaded?:
+    | ((
+        context: import("./plugin").PluginProcessContext<unknown, unknown>,
+      ) => import("./plugin").TypePluginOutput | Promise<import("./plugin").TypePluginOutput>)
+    | undefined;
+  onNamespaceLoaded?:
+    | ((
+        context: import("./plugin").PluginNamespaceProcessContext<unknown>,
+      ) =>
+        | import("./plugin").NamespacePluginOutput
+        | Promise<import("./plugin").NamespacePluginOutput>)
+    | undefined;
+  onTailorDBReady?:
+    | ((
+        context: import("./plugin-generation").TailorDBReadyContext<unknown>,
+      ) =>
+        | import("./plugin-generation").GeneratorResult
+        | Promise<import("./plugin-generation").GeneratorResult>)
+    | undefined;
+  onResolverReady?:
+    | ((
+        context: import("./plugin-generation").ResolverReadyContext<unknown>,
+      ) =>
+        | import("./plugin-generation").GeneratorResult
+        | Promise<import("./plugin-generation").GeneratorResult>)
+    | undefined;
+  onExecutorReady?:
+    | ((
+        context: import("./plugin-generation").ExecutorReadyContext<unknown>,
+      ) =>
+        | import("./plugin-generation").GeneratorResult
+        | Promise<import("./plugin-generation").GeneratorResult>)
+    | undefined;
 };
