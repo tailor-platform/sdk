@@ -17,6 +17,8 @@ function makeCrashReport(): CrashReport {
     errorMessage: "Cannot read properties of undefined",
     stackTrace: "TypeError: Cannot read properties of undefined",
     errorType: "handledError",
+    userId: null,
+    userEmail: null,
   };
 }
 

@@ -1,5 +1,9 @@
 import * as crypto from "node:crypto";
+import * as fs from "node:fs";
 import * as os from "node:os";
+import { parseYAML } from "confbox";
+import * as path from "pathe";
+import { xdgConfig } from "xdg-basedir";
 import { sanitizeArgv, sanitizeMessage, sanitizeStackTrace } from "./sanitize";
 
 export type ErrorType = "uncaughtException" | "unhandledRejection" | "handledError";
@@ -18,6 +22,8 @@ export interface CrashReport {
   errorMessage: string;
   stackTrace: string;
   errorType: ErrorType;
+  userId: string | null;
+  userEmail: string | null;
 }
 
 interface BuildCrashReportOptions {
@@ -62,6 +68,8 @@ export function buildCrashReport(options: BuildCrashReportOptions): CrashReport 
   const rawStack = isError && error.stack ? error.stack : "";
   const errorName = isError ? error.name : "UnknownError";
 
+  const currentUser = readCurrentUser();
+
   return {
     id: crypto.randomUUID(),
     timestamp: new Date().toISOString(),
@@ -76,5 +84,24 @@ export function buildCrashReport(options: BuildCrashReportOptions): CrashReport 
     errorMessage: sanitizeMessage(rawMessage),
     stackTrace: sanitizeStackTrace(rawStack),
     errorType,
+    userId: currentUser,
+    userEmail: currentUser,
   };
+}
+
+/**
+ * Read current_user from Tailor Platform config without side effects.
+ * Unlike readPlatformConfig(), this never triggers migration or logs warnings.
+ * @returns The current user email, or null if unavailable
+ */
+function readCurrentUser(): string | null {
+  try {
+    if (!xdgConfig) return null;
+    const configPath = path.join(xdgConfig, "tailor-platform", "config.yaml");
+    if (!fs.existsSync(configPath)) return null;
+    const raw = parseYAML(fs.readFileSync(configPath, "utf-8")) as { current_user?: string | null };
+    return raw?.current_user ?? null;
+  } catch {
+    return null;
+  }
 }

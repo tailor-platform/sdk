@@ -18,6 +18,8 @@ mutation SubmitCrashReport(
   $errorMessage: String!
   $stackTrace: String
   $errorType: String!
+  $userId: String
+  $userEmail: String
 ) {
   submitCrashReport(
     id: $id
@@ -33,6 +35,8 @@ mutation SubmitCrashReport(
     errorMessage: $errorMessage
     stackTrace: $stackTrace
     errorType: $errorType
+    userId: $userId
+    userEmail: $userEmail
   ) {
     success
   }
