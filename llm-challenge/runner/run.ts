@@ -21,6 +21,7 @@ import {
   formatReportTable,
   isInfraFailure,
 } from "./score";
+import { checkPodmanAvailability } from "./solver/container";
 import type { ChallengeReport, ProblemResult, ScaffoldChange, StageResult } from "./score";
 import {
   formatSolveModelLabel,
@@ -215,20 +216,6 @@ function setupWorkDir(problemDir: string, implDir?: string, useTmpDir?: boolean)
   // 3. Copy implementation files (overrides scaffold) - skip for --solve mode
   if (implDir) {
     copyDir(implDir, workDir);
-  }
-
-  // 4. Place AGENTS.md in solve mode to guide agent behavior
-  if (useTmpDir) {
-    fs.writeFileSync(
-      path.join(workDir, "AGENTS.md"),
-      [
-        "You are solving an SDK implementation task.",
-        "Work ONLY within the current workspace directory.",
-        "Do NOT search for or read files outside this directory.",
-        "Do NOT attempt to find test files, solution files, or any benchmark artifacts.",
-        "",
-      ].join("\n"),
-    );
   }
 
   return workDir;
@@ -769,6 +756,13 @@ async function ensureAuthenticated(agent: SolveAgent, targetModel?: string): Pro
     } else {
       console.error(`Please check your ${tool} setup and try again.`);
     }
+    if (agent === "claude") {
+      console.error(
+        'Hint: Run "claude setup-token" and set CLAUDE_CODE_OAUTH_TOKEN in your environment.',
+      );
+    } else {
+      console.error("Hint: Set OPENAI_API_KEY in your environment.");
+    }
     process.exit(1);
   }
   console.log("Authentication: ok");
@@ -826,6 +820,7 @@ async function main(): Promise<void> {
     console.error(
       "  tsx runner/run.ts --rerun-infra --solve [--agent claude|codex] [--model sonnet] [--clean]",
     );
+    console.error("\nNote: --solve requires Podman. On macOS, run 'podman machine start' first.");
     process.exit(1);
   }
 
@@ -843,6 +838,15 @@ async function main(): Promise<void> {
   const resultsDir = path.join(challengeRoot, "results");
   const verbose = concurrency === 1;
   const solveModelLabel = solve ? formatSolveModelLabel(agent, model) : undefined;
+
+  // Podman is required for all solve paths (including rerun-infra)
+  if (solve || rerunInfra) {
+    const podmanStatus = checkPodmanAvailability();
+    if (!podmanStatus.available) {
+      console.error(`Error: ${podmanStatus.error}`);
+      process.exit(1);
+    }
+  }
 
   // Auth pre-check for solve mode (skip when rerun-infra -- deferred until targets are known)
   if (solve && !rerunInfra) {

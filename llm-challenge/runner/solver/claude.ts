@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
-import { cleanEnv, detectInfraFailure, infraFailurePatterns } from "./shared";
+import { buildContainerRunArgs, ensureImage } from "./container";
+import { detectInfraFailure, infraFailurePatterns } from "./shared";
 import type { AuthCheckResult, SolveAdapter, SolveResult, SolveRunOptions } from "./types";
 
 type ClaudeCodeOutput = {
@@ -73,16 +74,14 @@ export function interpretClaudeAuthStatus(input: ClaudeAuthStatusInput): AuthChe
   };
 }
 
-function runClaude(claudeSettingsPath: string, options: SolveRunOptions): Promise<SolveResult> {
+async function runClaude(options: SolveRunOptions): Promise<SolveResult> {
+  await ensureImage();
+
   const { prompt, workDir, model, maxBudget } = options;
 
-  const args = [
+  const cliArgs = [
     "-p",
     prompt,
-    "--setting-sources",
-    "",
-    "--settings",
-    claudeSettingsPath,
     "--permission-mode",
     "bypassPermissions",
     "--output-format",
@@ -95,15 +94,13 @@ function runClaude(claudeSettingsPath: string, options: SolveRunOptions): Promis
     "--no-session-persistence",
   ];
 
-  const env = cleanEnv();
+  const containerArgs = buildContainerRunArgs("claude", cliArgs, { workDir });
   const startTime = Date.now();
   const timeout = 1_200_000; // 20 minutes
 
   return new Promise<SolveResult>((resolve) => {
-    const proc = spawn("claude", args, {
-      cwd: workDir,
+    const proc = spawn("podman", containerArgs, {
       stdio: ["ignore", "pipe", "pipe"],
-      env,
     });
 
     const stdoutChunks: Buffer[] = [];
@@ -180,17 +177,12 @@ function runClaude(claudeSettingsPath: string, options: SolveRunOptions): Promis
   });
 }
 
-function checkClaudeAuthStatus(
-  claudeSettingsPath: string,
-  model?: string,
-): Promise<AuthCheckResult> {
-  const args = [
+async function checkClaudeAuthStatus(model?: string): Promise<AuthCheckResult> {
+  await ensureImage();
+
+  const cliArgs = [
     "-p",
     "Reply with exactly: ok",
-    "--setting-sources",
-    "",
-    "--settings",
-    claudeSettingsPath,
     "--output-format",
     "json",
     "--max-budget-usd",
@@ -199,13 +191,12 @@ function checkClaudeAuthStatus(
     ...(model ? ["--model", model] : []),
   ];
 
-  const env = cleanEnv();
+  const containerArgs = buildContainerRunArgs("claude", cliArgs);
   const timeout = 30_000;
 
   return new Promise<AuthCheckResult>((resolve) => {
-    const proc = spawn("claude", args, {
+    const proc = spawn("podman", containerArgs, {
       stdio: ["ignore", "pipe", "pipe"],
-      env,
       detached: true,
     });
 
@@ -234,9 +225,9 @@ function checkClaudeAuthStatus(
   });
 }
 
-export function createClaudeAdapter(claudeSettingsPath: string): SolveAdapter {
+export function createClaudeAdapter(): SolveAdapter {
   return {
-    run: (options) => runClaude(claudeSettingsPath, options),
-    checkAuth: (model) => checkClaudeAuthStatus(claudeSettingsPath, model),
+    run: runClaude,
+    checkAuth: checkClaudeAuthStatus,
   };
 }

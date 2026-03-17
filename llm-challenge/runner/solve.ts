@@ -223,10 +223,8 @@ function truncateErrorOutput(output: string, maxLength = 5000): string {
   return priorityBlock ? `${priorityBlock}\n${otherBlock}` : otherBlock;
 }
 
-const claudeSettingsPath = path.join(import.meta.dirname, "claude-settings.json");
-
 const solveAdapters: Record<SolveAgent, SolveAdapter> = {
-  claude: createClaudeAdapter(claudeSettingsPath),
+  claude: createClaudeAdapter(),
   codex: createCodexAdapter(),
 };
 
