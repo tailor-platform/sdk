@@ -145,8 +145,7 @@ export function buildContainerRunArgs(
 
   args.push(IMAGE_NAME);
 
-  const command = agent === "claude" ? "claude" : "codex";
-  args.push(command, ...cliArgs);
+  args.push(agent, ...cliArgs);
 
   return args;
 }
