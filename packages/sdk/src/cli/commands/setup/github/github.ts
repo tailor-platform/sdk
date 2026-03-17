@@ -40,7 +40,7 @@ export function buildFiles(options: SetupGitHubOptions): GeneratedFile[] {
       content: installNodeYaml,
     },
     {
-      path: path.join(githubDir, "workflows/deploy.yml"),
+      path: path.join(githubDir, `workflows/deploy-${options.workspaceName}.yml`),
       content: renderDeploy({
         workspaceName: options.workspaceName,
         workspaceRegion: options.workspaceRegion,

@@ -16,13 +16,15 @@ describe("buildFiles", () => {
 
   function getDeployContent(options = baseOptions): string {
     const files = buildFiles(options);
-    return files.find((f) => f.path.endsWith("deploy.yml"))!.content;
+    return files.find((f) => f.path.includes("workflows/deploy-"))!.content;
   }
 
   it("generates correct file paths", () => {
     const files = buildFiles(baseOptions);
     const paths = files.map((f) => f.path);
-    expect(paths).toContain(path.join(baseOptions.outputDir, ".github/workflows/deploy.yml"));
+    expect(paths).toContain(
+      path.join(baseOptions.outputDir, ".github/workflows/deploy-my-app.yml"),
+    );
     expect(paths).toContain(
       path.join(baseOptions.outputDir, ".github/actions/fetch-tailor-token/action.yml"),
     );
