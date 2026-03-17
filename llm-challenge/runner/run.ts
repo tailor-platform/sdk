@@ -243,7 +243,14 @@ function rewriteWorkspaceRefs(workDir: string, tarballPath?: string): void {
 
   let ref: string;
   if (tarballPath) {
-    ref = `file:${tarballPath.replace(/\\/g, "/")}`;
+    // Copy the tarball into workDir so it remains accessible inside the Podman container.
+    // The host tarball path is not mounted in the container, but workDir is mounted at
+    // CONTAINER_WORK_DIR. Using a relative file: reference resolves correctly on both the
+    // host (during the initial pnpm install) and inside the container (if the agent reruns it).
+    const sdkDir = path.join(workDir, ".sdk");
+    fs.mkdirSync(sdkDir, { recursive: true });
+    fs.copyFileSync(tarballPath, path.join(sdkDir, "sdk.tgz"));
+    ref = "file:./.sdk/sdk.tgz";
   } else {
     const sdkPath = path.resolve(challengeRoot, "..", "packages", "sdk");
     ref = `link:${sdkPath.replace(/\\/g, "/")}`;

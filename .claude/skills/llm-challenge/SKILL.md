@@ -27,7 +27,7 @@ Solve runs inside a Podman container for filesystem isolation.
 
 - **Podman required**: `podman machine start` on macOS
 - **Claude auth**: `claude setup-token` then `export CLAUDE_CODE_OAUTH_TOKEN=<token>`
-- **Codex auth**: `export OPENAI_API_KEY=<key>`
+- **Codex auth**: `codex login` (stores credentials in `~/.codex/auth.json`, mounted into the container)
 - Container image auto-builds on first run (`llm-challenge-runner`)
 
 ## Problem Conventions

@@ -116,6 +116,15 @@ export function buildContainerRunArgs(
 
   // Auth: mount config dirs or pass env vars depending on agent.
   // Container runs as USER node (HOME=/home/node).
+  //
+  // Security model: credentials (CLAUDE_CODE_OAUTH_TOKEN / auth.json) are intentionally
+  // passed into the container because the agent must be authenticated to call the API.
+  // Both Claude Code (--permission-mode bypassPermissions) and Codex
+  // (--dangerously-bypass-approvals-and-sandbox) run with tool restrictions disabled,
+  // which means a prompt-injected or malicious task could in principle exfiltrate these
+  // credentials. This is an accepted trade-off: the Podman container already reduces the
+  // attack surface to only the workspace directory and a single credential, compared to
+  // running the agent on the host where it could access the entire filesystem.
   const homeDir = os.homedir();
   if (agent === "claude") {
     // Claude Code: OAuth token via env var (file-based auth not available;
