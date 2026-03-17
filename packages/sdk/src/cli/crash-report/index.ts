@@ -41,6 +41,8 @@ export async function reportCrash(error: unknown, errorType: ErrorType): Promise
     }
 
     if (config.remoteEnabled) {
+      // Lazy import: client.ts pulls in heavy dependencies (OAuth2, Connect, Protobuf)
+      // that should not be loaded on the startup critical path via initCrashReporting().
       const { userAgent } = await import("@/cli/shared/client");
       const ua = await userAgent();
       await sendCrashReport(report, ua);
