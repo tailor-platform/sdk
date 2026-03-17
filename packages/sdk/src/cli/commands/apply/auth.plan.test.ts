@@ -74,12 +74,36 @@ function createMockApplication(): Application {
   } as unknown as Application;
 }
 
+function createMockApplicationWithBuiltInIdP(): Application {
+  return {
+    name: appName,
+    authService: {
+      resolveNamespaces: vi.fn().mockResolvedValue(undefined),
+      parsedConfig: {
+        name: "auth-a",
+        idProvider: {
+          name: "default",
+          kind: "BuiltInIdP",
+          namespace: "my-idp",
+          clientName: "default-idp-client",
+        },
+      },
+      userProfile: undefined,
+    },
+  } as unknown as Application;
+}
+
 function notFound(): never {
   throw new ConnectError("not found", Code.NotFound);
 }
 
 function createMockClient(opts?: {
   authServices?: Array<{ name: string; publishSessionEvents: boolean; label?: string }>;
+  authIdPConfigs?: Array<{
+    name: string;
+    authType?: number;
+    config?: Record<string, unknown>;
+  }>;
   machineUsers?: Array<{
     name: string;
     attributes: string[];
@@ -97,6 +121,7 @@ function createMockClient(opts?: {
   }>;
 }): OperatorClient {
   const authServices = opts?.authServices ?? [];
+  const authIdPConfigs = opts?.authIdPConfigs ?? [];
   const machineUsers = opts?.machineUsers ?? [];
   const oauth2Clients = opts?.oauth2Clients ?? [];
 
@@ -118,9 +143,11 @@ function createMockClient(opts?: {
       };
     }),
     listAuthIDPConfigs: vi.fn().mockResolvedValue({
-      idpConfigs: [],
+      idpConfigs: authIdPConfigs,
       nextPageToken: "",
     }),
+    getIdPService: vi.fn().mockImplementation(notFound),
+    getIdPClient: vi.fn().mockImplementation(notFound),
     getUserProfileConfig: vi.fn().mockImplementation(notFound),
     getTenantConfig: vi.fn().mockImplementation(notFound),
     listAuthMachineUsers: vi.fn().mockResolvedValue({
@@ -143,6 +170,16 @@ function createContext(client: OperatorClient): PlanContext {
     client,
     workspaceId,
     application: createMockApplication(),
+    forRemoval: false,
+    config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
+  };
+}
+
+function createBuiltInIdPContext(client: OperatorClient): PlanContext {
+  return {
+    client,
+    workspaceId,
+    application: createMockApplicationWithBuiltInIdP(),
     forRemoval: false,
     config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
   };
@@ -222,5 +259,32 @@ describe("planAuth", () => {
     expect(result.changeSet.service.updates).toHaveLength(1);
     expect(result.changeSet.service.unchanged).toHaveLength(0);
     expect(result.conflicts).toHaveLength(1);
+  });
+
+  test("falls back to create when built-in IdP is not found during idpConfig diff", async () => {
+    const client = createMockClient({
+      authServices: [{ name: "auth-a", publishSessionEvents: false, label: appName }],
+    });
+
+    const result = await planAuth(createBuiltInIdPContext(client));
+
+    expect(result.changeSet.idpConfig.creates).toHaveLength(1);
+    expect(result.changeSet.idpConfig.creates[0]?.name).toBe("default");
+    expect(result.changeSet.idpConfig.updates).toHaveLength(0);
+    expect(result.changeSet.idpConfig.unchanged).toHaveLength(0);
+  });
+
+  test("falls back to update when built-in IdP is not found but auth idpConfig already exists", async () => {
+    const client = createMockClient({
+      authServices: [{ name: "auth-a", publishSessionEvents: false, label: appName }],
+      authIdPConfigs: [{ name: "default" }],
+    });
+
+    const result = await planAuth(createBuiltInIdPContext(client));
+
+    expect(result.changeSet.idpConfig.creates).toHaveLength(0);
+    expect(result.changeSet.idpConfig.updates).toHaveLength(1);
+    expect(result.changeSet.idpConfig.updates[0]?.name).toBe("default");
+    expect(result.changeSet.idpConfig.unchanged).toHaveLength(0);
   });
 });

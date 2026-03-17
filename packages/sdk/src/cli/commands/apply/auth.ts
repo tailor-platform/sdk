@@ -482,15 +482,27 @@ async function planIdPConfigs(
     const idpConfig = config.idProvider;
     if (idpConfig) {
       const desired = protoIdPConfig(idpConfig);
-      const desiredComparable =
-        idpConfig.kind === "BuiltInIdP"
-          ? {
-              ...desired,
-              config: await protoBuiltinIdPConfig(client, workspaceId, idpConfig),
-            }
-          : desired;
       const existing = existingMap.get(idpConfig.name);
       if (existing) {
+        const desiredComparable = await protoIdPConfigForComparison(
+          client,
+          workspaceId,
+          idpConfig,
+          desired,
+        );
+        if (!desiredComparable) {
+          changeSet.updates.push({
+            name: idpConfig.name,
+            idpConfig,
+            request: {
+              workspaceId,
+              namespaceName: config.name,
+              idpConfig: desired,
+            },
+          });
+          existingMap.delete(idpConfig.name);
+          continue;
+        }
         const existingComparable = normalizeProtoConfig({
           name: existing.name,
           authType: existing.authType,
@@ -576,6 +588,25 @@ async function planIdPConfigs(
   return changeSet;
 }
 
+async function protoIdPConfigForComparison(
+  client: OperatorClient,
+  workspaceId: string,
+  idpConfig: Readonly<IdProviderConfig>,
+  desired: MessageInitShape<typeof AuthIDPConfigSchema>,
+) {
+  if (idpConfig.kind !== "BuiltInIdP") {
+    return desired;
+  }
+
+  const config = await tryProtoBuiltinIdPConfig(client, workspaceId, idpConfig);
+  return config
+    ? {
+        ...desired,
+        config,
+      }
+    : undefined;
+}
+
 function protoIdPConfig(idpConfig: IdProviderConfig): MessageInitShape<typeof AuthIDPConfigSchema> {
   switch (idpConfig.kind) {
     case "IDToken":
@@ -647,6 +678,20 @@ async function protoBuiltinIdPConfig(
   workspaceId: string,
   builtinIdPConfig: BuiltinIdP,
 ): Promise<MessageInitShape<typeof AuthIDPConfig_ConfigSchema>> {
+  const config = await tryProtoBuiltinIdPConfig(client, workspaceId, builtinIdPConfig);
+  if (!config) {
+    throw new Error(
+      `Built-in IdP "${builtinIdPConfig.namespace}" not found. Please ensure that idp is configured correctly.`,
+    );
+  }
+  return config;
+}
+
+async function tryProtoBuiltinIdPConfig(
+  client: OperatorClient,
+  workspaceId: string,
+  builtinIdPConfig: BuiltinIdP,
+): Promise<MessageInitShape<typeof AuthIDPConfig_ConfigSchema> | undefined> {
   let idpService;
   try {
     idpService = await client.getIdPService({
@@ -655,17 +700,23 @@ async function protoBuiltinIdPConfig(
     });
   } catch (error) {
     if (error instanceof ConnectError && error.code === Code.NotFound) {
-      throw new Error(
-        `Built-in IdP "${builtinIdPConfig.namespace}" not found. Please ensure that idp is configured correctly.`,
-      );
+      return undefined;
     }
     throw error;
   }
-  const idpClient = await client.getIdPClient({
-    workspaceId,
-    namespaceName: builtinIdPConfig.namespace,
-    name: builtinIdPConfig.clientName,
-  });
+  let idpClient;
+  try {
+    idpClient = await client.getIdPClient({
+      workspaceId,
+      namespaceName: builtinIdPConfig.namespace,
+      name: builtinIdPConfig.clientName,
+    });
+  } catch (error) {
+    if (error instanceof ConnectError && error.code === Code.NotFound) {
+      return undefined;
+    }
+    throw error;
+  }
   const vaultName = idpClientVaultName(builtinIdPConfig.namespace, builtinIdPConfig.clientName);
   const secretKey = idpClientSecretName(builtinIdPConfig.namespace, builtinIdPConfig.clientName);
   return {
