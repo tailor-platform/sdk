@@ -205,6 +205,15 @@ Commands for managing and deploying static websites.
 | [staticwebsite list](./cli/staticwebsite.md#staticwebsite-list)     | List static websites in a workspace                  |
 | [staticwebsite get](./cli/staticwebsite.md#staticwebsite-get)       | Get details of a static website                      |
 
+### [Crash Report Commands](./cli/crash-report.md)
+
+Commands for managing crash reports.
+
+| Command                                                      | Description                                   |
+| ------------------------------------------------------------ | --------------------------------------------- |
+| [crash-report list](./cli/crash-report.md#crash-report-list) | List local crash report files                 |
+| [crash-report send](./cli/crash-report.md#crash-report-send) | Submit a crash report to help improve the SDK |
+
 ### [Completion](./cli/completion.md)
 
 Generate shell completion scripts for bash, zsh, and fish.
