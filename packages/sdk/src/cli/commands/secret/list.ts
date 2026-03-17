@@ -1,9 +1,9 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
-import { defineCommand } from "politty";
 import { z } from "zod";
-import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "@/cli/shared/args";
+import { workspaceArgs } from "@/cli/shared/args";
 import { fetchAll, initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { vaultArgs } from "./args";
@@ -58,18 +58,16 @@ async function secretList(options: SecretListOptions): Promise<SecretInfo[]> {
   return secrets.map(secretInfo);
 }
 
-export const listSecretCommand = defineCommand({
+export const listSecretCommand = defineAppCommand({
   name: "list",
   description: "List all secrets in a vault.",
   args: z
     .object({
-      ...commonArgs,
-      ...jsonArgs,
       ...workspaceArgs,
       ...vaultArgs,
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
     try {
       const secrets = await secretList({
         workspaceId: args["workspace-id"],
@@ -83,5 +81,5 @@ export const listSecretCommand = defineCommand({
       }
       throw error;
     }
-  }),
+  },
 });

@@ -1,24 +1,24 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { defineCommand } from "politty";
 import { z } from "zod";
-import { commonArgs, confirmationArgs, withCommonArgs, workspaceArgs } from "@/cli/shared/args";
+import { confirmationArgs, workspaceArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
+import { prompt } from "@/cli/shared/prompt";
 import { nameArgs } from "./args";
 
-export const deleteCommand = defineCommand({
+export const deleteCommand = defineAppCommand({
   name: "delete",
   description: "Delete a Secret Manager vault.",
   args: z
     .object({
-      ...commonArgs,
       ...workspaceArgs,
       ...nameArgs,
       ...confirmationArgs,
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
     const accessToken = await loadAccessToken({
       useProfile: true,
       profile: args.profile,
@@ -30,10 +30,9 @@ export const deleteCommand = defineCommand({
     });
 
     if (!args.yes) {
-      const confirmation = await logger.prompt(
-        `Enter the vault name to confirm deletion ("${args.name}"): `,
-        { type: "text" },
-      );
+      const confirmation = await prompt.text({
+        message: `Enter the vault name to confirm deletion ("${args.name}"):`,
+      });
       if (confirmation !== args.name) {
         logger.info("Vault deletion cancelled.");
         return;
@@ -53,5 +52,5 @@ export const deleteCommand = defineCommand({
     }
 
     logger.success(`Vault: ${args.name} deleted`);
-  }),
+  },
 });

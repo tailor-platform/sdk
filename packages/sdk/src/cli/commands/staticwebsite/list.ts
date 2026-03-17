@@ -1,7 +1,7 @@
-import { defineCommand } from "politty";
 import { z } from "zod";
-import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "@/cli/shared/args";
+import { workspaceArgs } from "@/cli/shared/args";
 import { fetchAll, initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 
@@ -54,17 +54,15 @@ async function listStaticWebsites(
   }));
 }
 
-export const listCommand = defineCommand({
+export const listCommand = defineAppCommand({
   name: "list",
   description: "List all static websites in a workspace.",
   args: z
     .object({
-      ...commonArgs,
-      ...jsonArgs,
       ...workspaceArgs,
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
     const websites = await listStaticWebsites({
       workspaceId: args["workspace-id"],
       profile: args.profile,
@@ -90,5 +88,5 @@ export const listCommand = defineCommand({
         });
 
     logger.out(formatted);
-  }),
+  },
 });

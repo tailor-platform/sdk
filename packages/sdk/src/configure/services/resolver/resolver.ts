@@ -101,10 +101,13 @@ export function createResolver<
 
   const normalizedOutput = isTailorField(config.output) ? config.output : t.object(config.output);
 
-  return brandValue({
-    ...config,
-    output: normalizedOutput,
-  } as ResolverReturn<Input, Output>);
+  return brandValue(
+    {
+      ...config,
+      output: normalizedOutput,
+    } as ResolverReturn<Input, Output>,
+    "resolver",
+  );
 }
 
 // A loose config alias for userland use-cases

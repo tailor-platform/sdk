@@ -148,6 +148,32 @@ export default createWorkflow({
 });
 ```
 
+## Retry Policy
+
+You can configure automatic retry behavior with exponential backoff by setting `retryPolicy` on a workflow. All fields are required when `retryPolicy` is set:
+
+| Field               | Type     | Description                                                |
+| ------------------- | -------- | ---------------------------------------------------------- |
+| `maxRetries`        | `number` | Maximum number of retries (1–10)                           |
+| `initialBackoff`    | `string` | Initial backoff duration (e.g., `"1s"`, `"500ms"`, max 1h) |
+| `maxBackoff`        | `string` | Maximum backoff duration (e.g., `"30s"`, `"5m"`, max 24h)  |
+| `backoffMultiplier` | `number` | Backoff multiplier for exponential backoff (>= 1)          |
+
+Duration strings support `ms`, `s`, and `m` units. `initialBackoff` must be less than or equal to `maxBackoff`.
+
+```typescript
+export default createWorkflow({
+  name: "order-processing",
+  mainJob: processOrder,
+  retryPolicy: {
+    maxRetries: 3,
+    initialBackoff: "1s",
+    maxBackoff: "30s",
+    backoffMultiplier: 2,
+  },
+});
+```
+
 ## Triggering a Workflow from a Resolver
 
 You can start a workflow execution from a resolver using `workflow.trigger()`.

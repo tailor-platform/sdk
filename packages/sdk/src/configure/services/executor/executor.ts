@@ -87,5 +87,5 @@ export function createExecutor<
   T extends Trigger<unknown>,
   O extends Operation<TriggerArgs<T>> | { kind: "workflow"; workflow: Workflow },
 >(config: Executor<T, O>) {
-  return brandValue(config);
+  return brandValue(config, "executor");
 }

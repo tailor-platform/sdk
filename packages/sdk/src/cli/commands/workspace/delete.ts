@@ -1,9 +1,11 @@
-import { defineCommand, arg } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
-import { commonArgs, confirmationArgs, withCommonArgs } from "@/cli/shared/args";
+import { confirmationArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
+import { prompt } from "@/cli/shared/prompt";
 
 const deleteWorkspaceOptionsSchema = z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }),
@@ -42,12 +44,11 @@ export async function deleteWorkspace(options: DeleteWorkspaceOptions): Promise<
   });
 }
 
-export const deleteCommand = defineCommand({
+export const deleteCommand = defineAppCommand({
   name: "delete",
   description: "Delete a Tailor Platform workspace.",
   args: z
     .object({
-      ...commonArgs,
       "workspace-id": arg(z.string(), {
         alias: "w",
         description: "Workspace ID",
@@ -55,7 +56,7 @@ export const deleteCommand = defineCommand({
       ...confirmationArgs,
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
     // Load and validate options
     const { client, workspaceId } = await loadOptions({
       workspaceId: args["workspace-id"],
@@ -73,12 +74,9 @@ export const deleteCommand = defineCommand({
 
     // Confirm deletion if not forced
     if (!args.yes) {
-      const confirmation = await logger.prompt(
-        `Enter the workspace name to confirm deletion (${workspace.workspace?.name}):`,
-        {
-          type: "text",
-        },
-      );
+      const confirmation = await prompt.text({
+        message: `Enter the workspace name to confirm deletion (${workspace.workspace?.name}):`,
+      });
       if (confirmation !== workspace.workspace?.name) {
         logger.info("Workspace deletion cancelled.");
         return;
@@ -110,5 +108,5 @@ export const deleteCommand = defineCommand({
     } else {
       logger.success(`Workspace "${args["workspace-id"]}" deleted successfully.`);
     }
-  }),
+  },
 });

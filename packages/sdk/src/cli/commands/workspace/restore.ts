@@ -1,9 +1,11 @@
-import { arg, defineCommand } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
-import { commonArgs, confirmationArgs, withCommonArgs } from "@/cli/shared/args";
+import { confirmationArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
+import { prompt } from "@/cli/shared/prompt";
 
 const restoreWorkspaceOptionsSchema = z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }),
@@ -39,12 +41,11 @@ export async function restoreWorkspace(options: RestoreWorkspaceOptions): Promis
   });
 }
 
-export const restoreCommand = defineCommand({
+export const restoreCommand = defineAppCommand({
   name: "restore",
   description: "Restore a deleted workspace",
   args: z
     .object({
-      ...commonArgs,
       "workspace-id": arg(z.string(), {
         alias: "w",
         description: "Workspace ID",
@@ -52,18 +53,15 @@ export const restoreCommand = defineCommand({
       ...confirmationArgs,
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
     const { client, workspaceId } = await loadOptions({
       workspaceId: args["workspace-id"],
     });
 
     if (!args.yes) {
-      const confirmation = await logger.prompt(
-        `Are you sure you want to restore workspace "${workspaceId}"? (yes/no):`,
-        {
-          type: "text",
-        },
-      );
+      const confirmation = await prompt.text({
+        message: `Are you sure you want to restore workspace "${workspaceId}"? (yes/no):`,
+      });
       if (confirmation !== "yes") {
         logger.info("Workspace restoration cancelled.");
         return;
@@ -75,5 +73,5 @@ export const restoreCommand = defineCommand({
     });
 
     logger.success(`Workspace "${workspaceId}" restored successfully.`);
-  }),
+  },
 });

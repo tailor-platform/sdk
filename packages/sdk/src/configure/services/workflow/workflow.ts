@@ -2,17 +2,22 @@
 import { brandValue } from "@/utils/brand";
 import type { WorkflowJob } from "./job";
 import type { AuthInvoker } from "../auth";
+import type { RetryPolicy } from "@/types/workflow.generated";
+
+export type { RetryPolicy };
 
 export interface WorkflowConfig<
   Job extends WorkflowJob<any, any, any> = WorkflowJob<any, any, any>,
 > {
   name: string;
   mainJob: Job;
+  retryPolicy?: RetryPolicy;
 }
 
 export interface Workflow<Job extends WorkflowJob<any, any, any> = WorkflowJob<any, any, any>> {
   name: string;
   mainJob: Job;
+  retryPolicy?: RetryPolicy;
   trigger: (
     args: Parameters<Job["trigger"]>[0],
     options?: { authInvoker: AuthInvoker<string> },
@@ -22,6 +27,7 @@ export interface Workflow<Job extends WorkflowJob<any, any, any> = WorkflowJob<a
 interface WorkflowDefinition<Job extends WorkflowJob<any, any, any>> {
   name: string;
   mainJob: Job;
+  retryPolicy?: RetryPolicy;
 }
 
 /**
@@ -52,13 +58,16 @@ interface WorkflowDefinition<Job extends WorkflowJob<any, any, any>> {
 export function createWorkflow<Job extends WorkflowJob<any, any, any>>(
   config: WorkflowDefinition<Job>,
 ): Workflow<Job> {
-  return brandValue({
-    ...config,
-    // For local execution, directly call mainJob.trigger()
-    // In production, bundler transforms this to tailor.workflow.triggerWorkflow()
-    trigger: async (args) => {
-      await config.mainJob.trigger(...([args] as unknown as []));
-      return "00000000-0000-0000-0000-000000000000";
+  return brandValue(
+    {
+      ...config,
+      // For local execution, directly call mainJob.trigger()
+      // In production, bundler transforms this to tailor.workflow.triggerWorkflow()
+      trigger: async (args) => {
+        await config.mainJob.trigger(...([args] as unknown as []));
+        return "00000000-0000-0000-0000-000000000000";
+      },
     },
-  });
+    "workflow",
+  );
 }

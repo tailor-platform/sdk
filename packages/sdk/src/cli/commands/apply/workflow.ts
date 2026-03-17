@@ -1,12 +1,14 @@
 import { type ApplyPhase } from "@/cli/commands/apply/apply";
+import { parseDuration } from "@/cli/shared/args";
 import { type OperatorClient, fetchAll } from "@/cli/shared/client";
 import { createChangeSet, type ChangeSet } from "./change-set";
 import { workflowJobFunctionName } from "./function-registry";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { Workflow } from "@/types/workflow.generated";
+import type { Workflow, RetryPolicy } from "@/types/workflow.generated";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
+import type { RetryPolicySchema } from "@tailor-proto/tailor/v1/workflow_resource_pb";
 
 /**
  * Apply workflow changes for the given phase.
@@ -38,6 +40,9 @@ export async function applyWorkflow(
           workflowName: create.workflow.name,
           mainJobFunctionName: create.workflow.mainJob.name,
           jobFunctions: filteredVersions,
+          ...(create.workflow.retryPolicy && {
+            retryPolicy: toRetryPolicy(create.workflow.retryPolicy),
+          }),
         });
         await client.setMetadata(create.metaRequest);
       }),
@@ -51,6 +56,9 @@ export async function applyWorkflow(
           workflowName: update.workflow.name,
           mainJobFunctionName: update.workflow.mainJob.name,
           jobFunctions: filteredVersions,
+          ...(update.workflow.retryPolicy && {
+            retryPolicy: toRetryPolicy(update.workflow.retryPolicy),
+          }),
         });
         await client.setMetadata(update.metaRequest);
       }),
@@ -208,6 +216,22 @@ type DeleteWorkflow = {
   workspaceId: string;
   workflowId: string;
 };
+
+function parseDurationToProto(duration: string): { seconds: bigint; nanos: number } {
+  const ms = parseDuration(duration);
+  const seconds = Math.floor(ms / 1000);
+  const nanos = (ms % 1000) * 1_000_000;
+  return { seconds: BigInt(seconds), nanos };
+}
+
+function toRetryPolicy(policy: RetryPolicy): MessageInitShape<typeof RetryPolicySchema> {
+  return {
+    maxRetries: policy.maxRetries,
+    initialBackoff: parseDurationToProto(policy.initialBackoff),
+    maxBackoff: parseDurationToProto(policy.maxBackoff),
+    backoffMultiplier: policy.backoffMultiplier,
+  };
+}
 
 function workflowTrn(workspaceId: string, name: string) {
   return `trn:v1:workspace:${workspaceId}:workflow:${name}`;

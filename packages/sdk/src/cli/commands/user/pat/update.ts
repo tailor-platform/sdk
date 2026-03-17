@@ -1,18 +1,16 @@
 import ml from "multiline-ts";
-import { defineCommand, arg } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
-import { commonArgs, jsonArgs, withCommonArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { fetchLatestToken, readPlatformConfig } from "@/cli/shared/context";
 import { getScopesFromWriteFlag, printCreatedToken } from "./transform";
 
-export const updateCommand = defineCommand({
+export const updateCommand = defineAppCommand({
   name: "update",
   description: "Update a personal access token (delete and recreate).",
   args: z
     .object({
-      ...commonArgs,
-      ...jsonArgs,
       name: arg(z.string(), {
         positional: true,
         description: "Token name",
@@ -23,7 +21,7 @@ export const updateCommand = defineCommand({
       }),
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
     const config = readPlatformConfig();
 
     if (!config.current_user) {
@@ -53,5 +51,5 @@ export const updateCommand = defineCommand({
     }
 
     printCreatedToken(args.name, result.accessToken, args.write, "updated");
-  }),
+  },
 });

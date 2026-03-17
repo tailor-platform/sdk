@@ -1,14 +1,14 @@
-import { defineCommand, arg } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
 import { apply } from "@/cli/commands/apply/apply";
-import { commonArgs, confirmationArgs, deploymentArgs, withCommonArgs } from "@/cli/shared/args";
+import { confirmationArgs, deploymentArgs } from "@/cli/shared/args";
+import { defineAppCommand } from "@/cli/shared/command";
 
-export const applyCommand = defineCommand({
+export const applyCommand = defineAppCommand({
   name: "apply",
   description: "Apply Tailor configuration to deploy your application.",
   args: z
     .object({
-      ...commonArgs,
       ...deploymentArgs,
       ...confirmationArgs,
       "dry-run": arg(z.boolean().optional(), {
@@ -26,7 +26,9 @@ export const applyCommand = defineCommand({
       }),
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
+    const { initTelemetry } = await import("@/cli/telemetry");
+    await initTelemetry();
     await apply({
       workspaceId: args["workspace-id"],
       profile: args.profile,
@@ -37,5 +39,5 @@ export const applyCommand = defineCommand({
       noCache: args["no-cache"],
       cleanCache: args["clean-cache"],
     });
-  }),
+  },
 });

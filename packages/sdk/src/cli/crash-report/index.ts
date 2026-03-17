@@ -52,7 +52,7 @@ export async function reportCrash(error: unknown, errorType: ErrorType): Promise
 
 /**
  * Register global uncaughtException and unhandledRejection handlers.
- * These catch errors outside the normal withCommonArgs flow (e.g., during
+ * These catch errors outside the normal cleanup flow (e.g., during
  * argument parsing). Should be called once at CLI startup before runMain.
  */
 export function initCrashReporting(): void {

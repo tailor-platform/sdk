@@ -1,19 +1,14 @@
-import { defineCommand } from "politty";
 import { z } from "zod";
-import { commonArgs, withCommonArgs } from "@/cli/shared/args";
 import { initOAuth2Client } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 
-export const logoutCommand = defineCommand({
+export const logoutCommand = defineAppCommand({
   name: "logout",
   description: "Logout from Tailor Platform.",
-  args: z
-    .object({
-      ...commonArgs,
-    })
-    .strict(),
-  run: withCommonArgs(async () => {
+  args: z.object({}).strict(),
+  run: async () => {
     const pfConfig = readPlatformConfig();
     const tokens = pfConfig.current_user ? pfConfig.users[pfConfig.current_user] : undefined;
     if (!tokens) {
@@ -35,5 +30,5 @@ export const logoutCommand = defineCommand({
     pfConfig.current_user = null;
     writePlatformConfig(pfConfig);
     logger.success("Successfully logged out from Tailor Platform.");
-  }),
+  },
 });

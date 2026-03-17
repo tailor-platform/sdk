@@ -6,16 +6,11 @@ import {
   WorkflowJobExecution_Status,
 } from "@tailor-proto/tailor/v1/workflow_resource_pb";
 import ora from "ora";
-import { defineCommand, arg } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
-import {
-  commonArgs,
-  deploymentArgs,
-  jsonArgs,
-  parseDuration,
-  withCommonArgs,
-} from "@/cli/shared/args";
+import { deploymentArgs, parseDuration } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger, styles } from "@/cli/shared/logger";
@@ -348,13 +343,11 @@ export async function startWorkflow<W extends WorkflowLike>(
   });
 }
 
-export const startCommand = defineCommand({
+export const startCommand = defineAppCommand({
   name: "start",
   description: "Start a workflow execution.",
   args: z
     .object({
-      ...commonArgs,
-      ...jsonArgs,
       ...deploymentArgs,
       ...nameArgs,
       machineuser: arg(z.string(), {
@@ -368,7 +361,7 @@ export const startCommand = defineCommand({
       ...waitArgs,
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
     const { executionId, wait } = await startWorkflowByName({
       name: args.name,
       machineUser: args.machineuser,
@@ -397,5 +390,5 @@ export const startCommand = defineCommand({
     } else {
       logger.out({ executionId });
     }
-  }),
+  },
 });

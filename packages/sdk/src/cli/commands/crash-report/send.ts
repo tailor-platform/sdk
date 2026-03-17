@@ -1,19 +1,18 @@
 import * as fs from "node:fs";
-import { arg, defineCommand } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
 import { sendCrashReport } from "@/cli/crash-report/sender";
 import { JSON_FOOTER_MARKER } from "@/cli/crash-report/writer";
-import { commonArgs, withCommonArgs } from "@/cli/shared/args";
 import { userAgent } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { logger } from "@/cli/shared/logger";
 import type { CrashReport } from "@/cli/crash-report/report";
 
-export const sendCommand = defineCommand({
+export const sendCommand = defineAppCommand({
   name: "send",
   description: "Submit a crash report to help improve the SDK.",
   args: z
     .object({
-      ...commonArgs,
       file: arg(z.string(), {
         description: "Path to the crash report file",
         required: true,
@@ -21,7 +20,7 @@ export const sendCommand = defineCommand({
       }),
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
     let content: string;
     try {
       content = fs.readFileSync(args.file, "utf-8");
@@ -46,7 +45,7 @@ export const sendCommand = defineCommand({
       logger.error("Failed to submit crash report. The server may be unavailable.");
       process.exit(1);
     }
-  }),
+  },
 });
 
 /**

@@ -1,8 +1,9 @@
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
-import { defineCommand, arg } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
-import { commonArgs, deploymentArgs, withCommonArgs } from "@/cli/shared/args";
+import { deploymentArgs } from "@/cli/shared/args";
+import { defineAppCommand } from "@/cli/shared/command";
 import { logger } from "@/cli/shared/logger";
 import { resolveCliBinPath } from "@/cli/shared/resolve-cli-bin";
 import { prepareErdBuilds, type ErdBuildResult } from "./export";
@@ -63,12 +64,11 @@ async function runServeDist(results: ErdBuildResult[]): Promise<void> {
   });
 }
 
-export const erdServeCommand = defineCommand({
+export const erdServeCommand = defineAppCommand({
   name: "serve",
   description: "Generate and serve ERD locally (liam build + serve dist). (beta)",
   args: z
     .object({
-      ...commonArgs,
       ...deploymentArgs,
       namespace: arg(z.string().optional(), {
         alias: "n",
@@ -76,7 +76,7 @@ export const erdServeCommand = defineCommand({
       }),
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
     const { client, workspaceId, config } = await initErdContext(args);
 
     const results = await prepareErdBuilds({
@@ -87,5 +87,5 @@ export const erdServeCommand = defineCommand({
     });
 
     await runServeDist(results);
-  }),
+  },
 });

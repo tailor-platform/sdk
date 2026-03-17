@@ -229,7 +229,12 @@ export default defineConfig([
   },
   {
     files: ["src/cli/**/*.ts"],
-    ignores: ["src/cli/shared/logger.ts", "src/cli/shared/errors.ts", "src/cli/shared/format.ts"],
+    ignores: [
+      "src/cli/shared/logger.ts",
+      "src/cli/shared/errors.ts",
+      "src/cli/shared/format.ts",
+      "src/cli/shared/prompt.ts",
+    ],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -247,11 +252,6 @@ export default defineConfig([
                 "Use colors/symbols/logger from '@/cli/shared/logger' instead of chalk for consistent styling.",
             },
             {
-              name: "consola",
-              message:
-                "Use logger from '@/cli/shared/logger' instead of consola for consistent logging.",
-            },
-            {
               name: "table",
               message:
                 "Use formatTable/formatKeyValueTable/formatTableWithHeaders from '@/cli/shared/format' instead of table for consistent table styling.",
@@ -264,6 +264,16 @@ export default defineConfig([
               name: "node:path",
               message:
                 "Use 'pathe' instead of 'node:path' for consistent cross-platform path handling.",
+            },
+            {
+              name: "@inquirer/prompts",
+              message:
+                "Use 'prompt' from '@/cli/shared/prompt' instead of @inquirer/prompts directly.",
+            },
+            {
+              name: "@inquirer/core",
+              message:
+                "Use 'prompt' from '@/cli/shared/prompt' instead of @inquirer/core directly.",
             },
           ],
         },

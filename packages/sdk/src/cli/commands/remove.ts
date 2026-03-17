@@ -1,5 +1,4 @@
 import ml from "multiline-ts";
-import { defineCommand } from "politty";
 import { z } from "zod";
 import { applyApplication, planApplication } from "@/cli/commands/apply/application";
 import { type PlanContext } from "@/cli/commands/apply/apply";
@@ -16,11 +15,13 @@ import { applyStaticWebsite, planStaticWebsite } from "@/cli/commands/apply/stat
 import { applyTailorDB, planTailorDB } from "@/cli/commands/apply/tailordb";
 import { applyWorkflow, planWorkflow } from "@/cli/commands/apply/workflow";
 import { type Application, defineApplication } from "@/cli/services/application";
-import { commonArgs, confirmationArgs, deploymentArgs, withCommonArgs } from "@/cli/shared/args";
+import { confirmationArgs, deploymentArgs } from "@/cli/shared/args";
 import { initOperatorClient, type OperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig, type LoadedConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
+import { prompt } from "@/cli/shared/prompt";
 
 export interface RemoveOptions {
   workspaceId?: string;
@@ -122,17 +123,16 @@ export async function remove(options?: RemoveOptions): Promise<void> {
   await execRemove(client, workspaceId, application, config);
 }
 
-export const removeCommand = defineCommand({
+export const removeCommand = defineAppCommand({
   name: "remove",
   description: "Remove all resources managed by the application from the workspace.",
   args: z
     .object({
-      ...commonArgs,
       ...deploymentArgs,
       ...confirmationArgs,
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
     const { client, workspaceId, application, config } = await loadOptions({
       workspaceId: args["workspace-id"],
       profile: args.profile,
@@ -144,9 +144,9 @@ export const removeCommand = defineCommand({
 
     await execRemove(client, workspaceId, application, config, async () => {
       if (!args.yes) {
-        const confirmed = await logger.prompt("Are you sure you want to remove all resources?", {
-          type: "confirm",
-          initial: false,
+        const confirmed = await prompt.confirm({
+          message: "Are you sure you want to remove all resources?",
+          default: false,
         });
         if (!confirmed) {
           throw new Error(ml`
@@ -160,5 +160,5 @@ export const removeCommand = defineCommand({
     });
 
     logger.success(`Successfully removed all resources managed by "${application.name}".`);
-  }),
+  },
 });

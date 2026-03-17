@@ -3,6 +3,7 @@
 import { register } from "node:module";
 import { defineCommand, runMain } from "politty";
 import { withCompletionCommand } from "politty/completion";
+import { z } from "zod";
 import { apiCommand } from "./commands/api";
 import { applyCommand } from "./commands/apply";
 import { crashReportCommand } from "./commands/crash-report";
@@ -26,11 +27,14 @@ import { workflowCommand } from "./commands/workflow";
 import { workspaceCommand } from "./commands/workspace";
 import { initCrashReporting } from "./crash-report";
 import { queryCommand } from "./query";
+import { commonArgs, isVerbose } from "./shared/args";
+import { isCLIError } from "./shared/errors";
+import { logger } from "./shared/logger";
 import { readPackageJson } from "./shared/package-json";
 
 register("tsx", import.meta.url, { data: {} });
 
-// Runs before withCommonArgs loads --env-file, so env file overrides for
+// Runs before globalArgs effects load --env-file, so env file overrides for
 // TAILOR_CRASH_REPORTS_* are not available for early startup failures.
 // This is intentional: we want crash reporting active before argument parsing,
 // and env files require parsing to be complete. Shell-level env vars still work.
@@ -71,4 +75,39 @@ export const mainCommand = withCompletionCommand(
   }),
 );
 
-runMain(mainCommand, { version: packageJson.version });
+runMain(mainCommand, {
+  version: packageJson.version,
+  globalArgs: z.object(commonArgs),
+  cleanup: async ({ error }) => {
+    if (error) {
+      if (isCLIError(error)) {
+        logger.log(error.format());
+        if (isVerbose() && error.stack) {
+          logger.debug(`\nStack trace:\n${error.stack}`);
+        }
+      } else if (error instanceof Error) {
+        logger.error(error.message);
+        if (isVerbose() && error.stack) {
+          logger.debug(`\nStack trace:\n${error.stack}`);
+        }
+      } else {
+        logger.error(`Unknown error: ${error}`);
+      }
+
+      // Report programming bugs (native error types that indicate code defects).
+      // Skip domain errors like ConnectError, CIPromptError, and plain Error
+      // used for user-facing validation/not-found messages.
+      // Exclude SyntaxError/ReferenceError: at runtime these typically come from
+      // dynamically imported user config files, not from SDK code.
+      const shouldReport =
+        !isCLIError(error) &&
+        (!(error instanceof Error) || error instanceof TypeError || error instanceof RangeError);
+      if (shouldReport) {
+        const { reportCrash } = await import("@/cli/crash-report");
+        await reportCrash(error, "handledError");
+      }
+    }
+    const { shutdownTelemetry } = await import("@/cli/telemetry");
+    await shutdownTelemetry();
+  },
+});

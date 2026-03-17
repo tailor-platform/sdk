@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
-import { defineCommand, arg } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
-import { commonArgs, withCommonArgs } from "@/cli/shared/args";
+import { defineAppCommand } from "@/cli/shared/command";
 import { logger } from "@/cli/shared/logger";
 import { readPackageJson } from "@/cli/shared/package-json";
 
@@ -14,12 +14,11 @@ const detectPackageManager = () => {
   return name;
 };
 
-export const initCommand = defineCommand({
+export const initCommand = defineAppCommand({
   name: "init",
   description: "Initialize a new project using create-sdk.",
   args: z
     .object({
-      ...commonArgs,
       name: arg(z.string().optional(), {
         positional: true,
         description: "Project name",
@@ -30,7 +29,7 @@ export const initCommand = defineCommand({
       }),
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
     const packageJson = await readPackageJson();
     const version =
       packageJson.version && packageJson.version !== "0.0.0" ? packageJson.version : "latest";
@@ -50,5 +49,5 @@ export const initCommand = defineCommand({
     logger.log(`Running: ${packageManager} ${initArgs.join(" ")}`);
 
     spawnSync(packageManager, initArgs, { stdio: "inherit" });
-  }),
+  },
 });

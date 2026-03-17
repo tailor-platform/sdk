@@ -2,9 +2,10 @@ import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { assertDocMatch, createCommandRenderer } from "politty/docs";
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 import { commonArgs } from "./shared/args";
 import { mainCommand } from "./index";
-import type { FileConfig, OptionsRenderContext } from "politty/docs";
+import type { FileConfig } from "politty/docs";
 
 /**
  * Format markdown content using oxfmt
@@ -28,35 +29,7 @@ vi.mock("politty", async () => {
   return { ...actual, runMain: vi.fn() };
 });
 
-// Options to exclude from documentation (auto-generated from commonArgs)
-const excludedOptions = new Set(Object.keys(commonArgs));
-
-/**
- * Custom options renderer that filters out commonArgs
- * @param context - Options render context from politty
- * @returns Rendered options markdown without commonArgs
- */
-function renderOptionsWithoutCommonArgs(context: OptionsRenderContext): string {
-  const filteredOptions = context.options.filter((opt) => !excludedOptions.has(opt.name));
-  if (filteredOptions.length === 0) {
-    return "";
-  }
-  return context.render(filteredOptions);
-}
-
-/**
- * Create a command renderer that excludes commonArgs from options
- * @param headingLevel - Heading level for the command documentation
- * @returns Command renderer function
- */
-function createRenderer(headingLevel: 1 | 2 | 3 | 4 | 5 | 6) {
-  return createCommandRenderer({
-    headingLevel,
-    renderOptions: renderOptionsWithoutCommonArgs,
-  });
-}
-
-const defaultRender = createRenderer(1);
+const defaultRender = createCommandRenderer({ headingLevel: 1 });
 
 // File configurations - subcommands are auto-expanded from parent command names
 const files: Record<string, FileConfig> = {
@@ -126,6 +99,8 @@ describe("CLI Documentation", () => {
       command: mainCommand,
       files,
       targetCommands,
+      globalArgs: z.object(commonArgs),
+      rootDoc: { path: "docs/cli-reference.md" },
       formatter: mdFormatter,
     });
   });

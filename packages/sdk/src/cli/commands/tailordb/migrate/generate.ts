@@ -9,13 +9,15 @@
 import * as fs from "node:fs";
 import * as fsPromises from "node:fs/promises";
 import * as path from "pathe";
-import { defineCommand, arg } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
-import { commonArgs, configArg, confirmationArgs, withCommonArgs } from "@/cli/shared/args";
+import { configArg, confirmationArgs } from "@/cli/shared/args";
 import { logBetaWarning } from "@/cli/shared/beta";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { getConfiguredEditorCommand, openInConfiguredEditor } from "@/cli/shared/editor";
 import { logger, styles } from "@/cli/shared/logger";
+import { prompt } from "@/cli/shared/prompt";
 import { PluginManager } from "@/plugin/manager";
 import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
 import {
@@ -70,13 +72,10 @@ async function handleInitOption(
 
   // Confirmation prompt
   if (!skipConfirmation) {
-    const confirmation = await logger.prompt(
-      "Are you sure you want to delete these directories and start fresh?",
-      {
-        type: "confirm",
-        initial: false,
-      },
-    );
+    const confirmation = await prompt.confirm({
+      message: "Are you sure you want to delete these directories and start fresh?",
+      default: false,
+    });
 
     if (!confirmation) {
       logger.info("Operation cancelled.");
@@ -263,13 +262,12 @@ async function generateDiffFromSnapshot(
     logger.warn(formatBreakingChanges(diff.breakingChanges));
 
     if (!options.yes) {
-      const confirmation = await logger.prompt("Continue generating migration?", {
-        type: "confirm",
-        initial: true,
-        cancel: "symbol",
+      const confirmation = await prompt.confirm({
+        message: "Continue generating migration?",
+        default: true,
       });
 
-      if (confirmation !== true) {
+      if (!confirmation) {
         logger.info("Migration generation cancelled.");
         return;
       }
@@ -328,13 +326,12 @@ async function generateDiffFromSnapshot(
 /**
  * CLI command definition for generate
  */
-export const generateCommand = defineCommand({
+export const generateCommand = defineAppCommand({
   name: "generate",
   description:
     "Generate migration files by detecting schema differences between current local types and the previous migration snapshot.",
   args: z
     .object({
-      ...commonArgs,
       ...confirmationArgs,
       ...configArg,
       name: arg(z.string().optional(), {
@@ -346,12 +343,12 @@ export const generateCommand = defineCommand({
       }),
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
     await generate({
       configPath: args.config,
       name: args.name,
       yes: args.yes,
       init: args.init,
     });
-  }),
+  },
 });

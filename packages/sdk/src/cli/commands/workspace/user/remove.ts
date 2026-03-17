@@ -1,9 +1,11 @@
-import { arg, defineCommand } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
-import { commonArgs, confirmationArgs, withCommonArgs, workspaceArgs } from "@/cli/shared/args";
+import { confirmationArgs, workspaceArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
+import { prompt } from "@/cli/shared/prompt";
 
 const removeUserOptionsSchema = z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
@@ -47,12 +49,11 @@ export async function removeUser(options: RemoveUserOptions): Promise<void> {
   });
 }
 
-export const removeCommand = defineCommand({
+export const removeCommand = defineAppCommand({
   name: "remove",
   description: "Remove a user from a workspace",
   args: z
     .object({
-      ...commonArgs,
       ...workspaceArgs,
       email: arg(z.email(), {
         description: "Email address of the user to remove",
@@ -60,14 +61,11 @@ export const removeCommand = defineCommand({
       ...confirmationArgs,
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
     if (!args.yes) {
-      const confirmation = await logger.prompt(
-        `Are you sure you want to remove user "${args.email}" from the workspace? (yes/no):`,
-        {
-          type: "text",
-        },
-      );
+      const confirmation = await prompt.text({
+        message: `Are you sure you want to remove user "${args.email}" from the workspace? (yes/no):`,
+      });
       if (confirmation !== "yes") {
         logger.info("User removal cancelled.");
         return;
@@ -81,5 +79,5 @@ export const removeCommand = defineCommand({
     });
 
     logger.success(`User "${args.email}" removed from workspace.`);
-  }),
+  },
 });

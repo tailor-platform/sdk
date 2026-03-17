@@ -1,18 +1,17 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { defineCommand, arg } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
-import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "@/cli/shared/args";
+import { workspaceArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 
-export const getCommand = defineCommand({
+export const getCommand = defineAppCommand({
   name: "get",
   description: "Get details of a specific static website.",
   args: z
     .object({
-      ...commonArgs,
-      ...jsonArgs,
       ...workspaceArgs,
       name: arg(z.string(), {
         positional: true,
@@ -20,7 +19,7 @@ export const getCommand = defineCommand({
       }),
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
     const accessToken = await loadAccessToken({
       useProfile: true,
       profile: args.profile,
@@ -60,5 +59,5 @@ export const getCommand = defineCommand({
       }
       throw error;
     }
-  }),
+  },
 });

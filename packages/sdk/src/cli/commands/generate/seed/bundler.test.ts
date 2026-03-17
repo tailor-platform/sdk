@@ -68,5 +68,12 @@ describe("seed-bundler", () => {
       expect(result.bundledCode).toContain("errors");
       expect(result.bundledCode).toContain("success");
     });
+
+    it("generates code with self-referencing FK handling", async () => {
+      const result = await bundleSeedScript("tailordb", ["Category"]);
+
+      expect(result.bundledCode).toContain("selfRefTypes");
+      expect(result.bundledCode).toContain("one-by-one");
+    });
   });
 });

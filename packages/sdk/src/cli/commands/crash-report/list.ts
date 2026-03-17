@@ -1,20 +1,15 @@
 import * as fs from "node:fs";
-import { defineCommand } from "politty";
 import { z } from "zod";
 import { parseCrashReportConfig } from "@/cli/crash-report/config";
 import { CRASH_LOG_EXTENSION } from "@/cli/crash-report/writer";
-import { commonArgs, withCommonArgs } from "@/cli/shared/args";
+import { defineAppCommand } from "@/cli/shared/command";
 import { logger } from "@/cli/shared/logger";
 
-export const listCommand = defineCommand({
+export const listCommand = defineAppCommand({
   name: "list",
   description: "List local crash report files.",
-  args: z
-    .object({
-      ...commonArgs,
-    })
-    .strict(),
-  run: withCommonArgs(async () => {
+  args: z.object({}).strict(),
+  run: async () => {
     const config = parseCrashReportConfig();
     if (!config.localDir) {
       logger.info("Crash report directory not available.");
@@ -43,5 +38,5 @@ export const listCommand = defineCommand({
     for (const file of files) {
       logger.log(`  ${file}`);
     }
-  }),
+  },
 });

@@ -9,10 +9,11 @@ import * as fs from "node:fs";
 import { create } from "@bufbuild/protobuf";
 import { AuthInvokerSchema } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import * as path from "pathe";
-import { arg, defineCommand } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
-import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "@/cli/shared/args";
+import { workspaceArgs } from "@/cli/shared/args";
 import { initOperatorClient, type OperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger, styles } from "@/cli/shared/logger";
@@ -20,12 +21,10 @@ import { executeScript } from "@/cli/shared/script-executor";
 import { bundleForTestRun, type ResolvedMachineUser } from "./bundle";
 import { detectFunctionType } from "./detect";
 
-export const testRunCommand = defineCommand({
+export const testRunCommand = defineAppCommand({
   name: "test-run",
   description: "Run a function on the Tailor Platform server without deploying.",
   args: z.object({
-    ...commonArgs,
-    ...jsonArgs,
     ...workspaceArgs,
     file: arg(z.string(), {
       positional: true,
@@ -68,7 +67,7 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
       desc: "Run a pre-bundled .js file directly",
     },
   ],
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
     // 1. Resolve and validate file path
     const filePath = path.resolve(args.file);
     if (!fs.existsSync(filePath)) {
@@ -199,7 +198,7 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
     if (!result.success) {
       process.exit(1);
     }
-  }),
+  },
 });
 
 /**

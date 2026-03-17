@@ -1,8 +1,9 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { arg, defineCommand } from "politty";
+import { arg } from "politty";
 import { z } from "zod";
-import { commonArgs, jsonArgs, withCommonArgs, workspaceArgs } from "@/cli/shared/args";
+import { workspaceArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { type ExecutorInfo, toExecutorInfo } from "./transform";
@@ -90,18 +91,16 @@ export async function getExecutor<E extends ExecutorLike>(
   }
 }
 
-export const getCommand = defineCommand({
+export const getCommand = defineAppCommand({
   name: "get",
   description: "Get executor details",
   args: z
     .object({
-      ...commonArgs,
-      ...jsonArgs,
       ...workspaceArgs,
       ...nameArgs,
     })
     .strict(),
-  run: withCommonArgs(async (args) => {
+  run: async (args) => {
     const executor = await getExecutor({
       name: args.name,
       workspaceId: args["workspace-id"],
@@ -114,5 +113,5 @@ export const getCommand = defineCommand({
         targetConfig: null,
       },
     });
-  }),
+  },
 });

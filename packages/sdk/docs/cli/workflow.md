@@ -37,6 +37,12 @@ tailor-sdk workflow [command]
 | [`workflow resume`](#workflow-resume)         | Resume a failed or pending workflow execution. |
 
 <!-- politty:command:workflow:subcommands:end -->
+
+<!-- politty:command:workflow:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:workflow:global-options-link:end -->
 <!-- politty:command:workflow list:heading:start -->
 
 ### workflow list
@@ -63,13 +69,18 @@ tailor-sdk workflow list [options]
 
 **Options**
 
-| Option                          | Alias | Description       | Required | Default |
-| ------------------------------- | ----- | ----------------- | -------- | ------- |
-| `--json`                        | `-j`  | Output as JSON    | No       | `false` |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
+| Option                          | Alias | Description       | Required | Default | Env                            |
+| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
 
 <!-- politty:command:workflow list:options:end -->
+
+<!-- politty:command:workflow list:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:workflow list:global-options-link:end -->
 <!-- politty:command:workflow get:heading:start -->
 
 ### workflow get
@@ -106,13 +117,18 @@ tailor-sdk workflow get [options] <name>
 
 **Options**
 
-| Option                          | Alias | Description       | Required | Default |
-| ------------------------------- | ----- | ----------------- | -------- | ------- |
-| `--json`                        | `-j`  | Output as JSON    | No       | `false` |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       |
+| Option                          | Alias | Description       | Required | Default | Env                            |
+| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
 
 <!-- politty:command:workflow get:options:end -->
+
+<!-- politty:command:workflow get:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:workflow get:global-options-link:end -->
 <!-- politty:command:workflow start:heading:start -->
 
 ### workflow start
@@ -149,19 +165,24 @@ tailor-sdk workflow start [options] <name>
 
 **Options**
 
-| Option                          | Alias | Description                                                    | Required | Default              |
-| ------------------------------- | ----- | -------------------------------------------------------------- | -------- | -------------------- |
-| `--json`                        | `-j`  | Output as JSON                                                 | No       | `false`              |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                   | No       | -                    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                              | No       | -                    |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                        | No       | `"tailor.config.ts"` |
-| `--machineuser <MACHINEUSER>`   | `-m`  | Machine user name                                              | Yes      | -                    |
-| `--arg <ARG>`                   | `-a`  | Workflow argument (JSON string)                                | No       | -                    |
-| `--wait`                        | `-W`  | Wait for execution to complete                                 | No       | `false`              |
-| `--interval <INTERVAL>`         | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m') | No       | `"3s"`               |
-| `--logs`                        | `-l`  | Display job execution logs after completion (requires --wait)  | No       | `false`              |
+| Option                          | Alias | Description                                                    | Required | Default              | Env                               |
+| ------------------------------- | ----- | -------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                   | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                              | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                        | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| `--machineuser <MACHINEUSER>`   | `-m`  | Machine user name                                              | Yes      | -                    | -                                 |
+| `--arg <ARG>`                   | `-a`  | Workflow argument (JSON string)                                | No       | -                    | -                                 |
+| `--wait`                        | `-W`  | Wait for execution to complete                                 | No       | `false`              | -                                 |
+| `--interval <INTERVAL>`         | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m') | No       | `"3s"`               | -                                 |
+| `--logs`                        | `-l`  | Display job execution logs after completion (requires --wait)  | No       | `false`              | -                                 |
 
 <!-- politty:command:workflow start:options:end -->
+
+<!-- politty:command:workflow start:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:workflow start:global-options-link:end -->
 <!-- politty:command:workflow executions:heading:start -->
 
 ### workflow executions
@@ -198,18 +219,23 @@ tailor-sdk workflow executions [options] [executionId]
 
 **Options**
 
-| Option                            | Alias | Description                                                    | Required | Default |
-| --------------------------------- | ----- | -------------------------------------------------------------- | -------- | ------- |
-| `--json`                          | `-j`  | Output as JSON                                                 | No       | `false` |
-| `--workspace-id <WORKSPACE_ID>`   | `-w`  | Workspace ID                                                   | No       | -       |
-| `--profile <PROFILE>`             | `-p`  | Workspace profile                                              | No       | -       |
-| `--workflow-name <WORKFLOW_NAME>` | `-n`  | Filter by workflow name (list mode only)                       | No       | -       |
-| `--status <STATUS>`               | `-s`  | Filter by status (list mode only)                              | No       | -       |
-| `--wait`                          | `-W`  | Wait for execution to complete                                 | No       | `false` |
-| `--interval <INTERVAL>`           | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m') | No       | `"3s"`  |
-| `--logs`                          | -     | Display job execution logs (detail mode only)                  | No       | `false` |
+| Option                            | Alias | Description                                                    | Required | Default | Env                            |
+| --------------------------------- | ----- | -------------------------------------------------------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>`   | `-w`  | Workspace ID                                                   | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`             | `-p`  | Workspace profile                                              | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| `--workflow-name <WORKFLOW_NAME>` | `-n`  | Filter by workflow name (list mode only)                       | No       | -       | -                              |
+| `--status <STATUS>`               | `-s`  | Filter by status (list mode only)                              | No       | -       | -                              |
+| `--wait`                          | `-W`  | Wait for execution to complete                                 | No       | `false` | -                              |
+| `--interval <INTERVAL>`           | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m') | No       | `"3s"`  | -                              |
+| `--logs`                          | -     | Display job execution logs (detail mode only)                  | No       | `false` | -                              |
 
 <!-- politty:command:workflow executions:options:end -->
+
+<!-- politty:command:workflow executions:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:workflow executions:global-options-link:end -->
 <!-- politty:command:workflow resume:heading:start -->
 
 ### workflow resume
@@ -246,16 +272,21 @@ tailor-sdk workflow resume [options] <executionId>
 
 **Options**
 
-| Option                          | Alias | Description                                                    | Required | Default |
-| ------------------------------- | ----- | -------------------------------------------------------------- | -------- | ------- |
-| `--json`                        | `-j`  | Output as JSON                                                 | No       | `false` |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                   | No       | -       |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                              | No       | -       |
-| `--wait`                        | `-W`  | Wait for execution to complete                                 | No       | `false` |
-| `--interval <INTERVAL>`         | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m') | No       | `"3s"`  |
-| `--logs`                        | `-l`  | Display job execution logs after completion (requires --wait)  | No       | `false` |
+| Option                          | Alias | Description                                                    | Required | Default | Env                            |
+| ------------------------------- | ----- | -------------------------------------------------------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                   | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                              | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| `--wait`                        | `-W`  | Wait for execution to complete                                 | No       | `false` | -                              |
+| `--interval <INTERVAL>`         | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m') | No       | `"3s"`  | -                              |
+| `--logs`                        | `-l`  | Display job execution logs after completion (requires --wait)  | No       | `false` | -                              |
 
 <!-- politty:command:workflow resume:options:end -->
+
+<!-- politty:command:workflow resume:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:workflow resume:global-options-link:end -->
 
 **Usage Examples:**
 

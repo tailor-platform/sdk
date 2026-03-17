@@ -187,16 +187,19 @@ export const createWorkflowJob = <const Name extends string, I = undefined, O = 
   readonly name: Name;
   readonly body: WorkflowJobBody<I, O>;
 }): WorkflowJob<Name, I, Awaited<O>> => {
-  return brandValue({
-    name: config.name,
-    // JSON.parse(JSON.stringify(...)) ensures the return value matches Jsonify<Output> type.
-    // This converts Date objects to strings, matching actual runtime behavior.
-    // In production, bundler transforms .trigger() calls to tailor.workflow.triggerJobFunction().
-    trigger: async (args?: unknown) => {
-      const env: TailorEnv = JSON.parse(process.env[WORKFLOW_TEST_ENV_KEY] || "{}");
-      const result = await config.body(args as I, { env });
-      return result ? JSON.parse(JSON.stringify(result)) : result;
-    },
-    body: config.body,
-  } as WorkflowJob<Name, I, Awaited<O>>);
+  return brandValue(
+    {
+      name: config.name,
+      // JSON.parse(JSON.stringify(...)) ensures the return value matches Jsonify<Output> type.
+      // This converts Date objects to strings, matching actual runtime behavior.
+      // In production, bundler transforms .trigger() calls to tailor.workflow.triggerJobFunction().
+      trigger: async (args?: unknown) => {
+        const env: TailorEnv = JSON.parse(process.env[WORKFLOW_TEST_ENV_KEY] || "{}");
+        const result = await config.body(args as I, { env });
+        return result ? JSON.parse(JSON.stringify(result)) : result;
+      },
+      body: config.body,
+    } as WorkflowJob<Name, I, Awaited<O>>,
+    "workflow-job",
+  );
 };
