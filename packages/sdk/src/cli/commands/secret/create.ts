@@ -1,11 +1,12 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { z } from "zod";
-import { workspaceArgs } from "@/cli/shared/args";
+import { confirmationArgs, workspaceArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { secretValueArgs } from "./args";
+import { managedVaultGuard } from "./managed-vault-guard";
 
 export const createSecretCommand = defineAppCommand({
   name: "create",
@@ -14,6 +15,7 @@ export const createSecretCommand = defineAppCommand({
     .object({
       ...workspaceArgs,
       ...secretValueArgs,
+      ...confirmationArgs,
     })
     .strict(),
   run: async (args) => {
@@ -26,6 +28,14 @@ export const createSecretCommand = defineAppCommand({
       workspaceId: args["workspace-id"],
       profile: args.profile,
     });
+
+    const shouldProceed = await managedVaultGuard({
+      client,
+      workspaceId,
+      vaultName: args["vault-name"],
+      yes: args.yes,
+    });
+    if (!shouldProceed) return;
 
     try {
       await client.createSecretManagerSecret({
