@@ -1,5 +1,19 @@
+import * as fs from "node:fs";
 import Sonda from "sonda/rolldown";
 import { defineConfig } from "tsdown";
+import type { Plugin } from "rolldown";
+
+function yamlText(): Plugin {
+  return {
+    name: "yaml-text",
+    load(id) {
+      if (id.endsWith(".yml") || id.endsWith(".yaml")) {
+        const content = fs.readFileSync(id, "utf-8");
+        return { code: `export default ${JSON.stringify(content)};` };
+      }
+    },
+  };
+}
 
 export default defineConfig({
   entry: [
@@ -30,6 +44,7 @@ export default defineConfig({
   }),
   sourcemap: true,
   plugins: [
+    yamlText(),
     Sonda({
       open: false,
       format: "json",

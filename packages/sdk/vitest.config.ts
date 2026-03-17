@@ -1,7 +1,21 @@
+import * as fs from "node:fs";
 import * as path from "node:path";
 import { defineConfig } from "vitest/config";
 
+function yamlText() {
+  return {
+    name: "yaml-text",
+    load(id: string) {
+      if (id.endsWith(".yml") || id.endsWith(".yaml")) {
+        const content = fs.readFileSync(id, "utf-8");
+        return `export default ${JSON.stringify(content)};`;
+      }
+    },
+  };
+}
+
 export default defineConfig({
+  plugins: [yamlText()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
