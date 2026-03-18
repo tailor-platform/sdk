@@ -227,7 +227,7 @@ export type BeforeLoginHookArgs = {
 
 export type BeforeLoginHook<MachineUserNames extends string> = {
   handler: (args: BeforeLoginHookArgs) => Promise<void>;
-  invoker: MachineUserNames;
+  invoker: NoInfer<MachineUserNames>;
 };
 
 // Input type (before parsing) - used by configure layer

@@ -259,6 +259,30 @@ describe("defineAuth", () => {
       expectTypeOf<Hook["invoker"]>().toEqualTypeOf<"admin" | "worker">();
     });
 
+    it("works with multiple machine users without narrowing MachineUserNames", () => {
+      const authConfig = defineAuth("multi-mu-hook", {
+        userProfile: {
+          type: userType,
+          usernameField: "email",
+        },
+        machineUsers: {
+          admin: {},
+          worker: {},
+        },
+        beforeLogin: {
+          handler: async ({ claims, idpConfigName }) => {
+            void claims;
+            void idpConfigName;
+          },
+          invoker: "admin",
+        },
+      });
+
+      expect(authConfig.beforeLogin!.invoker).toBe("admin");
+      // invoker should not narrow MachineUserNames — both machine users must remain valid
+      expectTypeOf(authConfig.invoker).parameter(0).toEqualTypeOf<"admin" | "worker">();
+    });
+
     it("is optional — existing tests continue to pass without it", () => {
       const authConfig = defineAuth("no-hook", {
         userProfile: {
