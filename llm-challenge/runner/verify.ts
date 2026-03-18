@@ -244,7 +244,7 @@ export async function verifyProblem(
   const problemDir = path.dirname(workDir);
   const testsDir = path.join(problemDir, "tests");
   const testResult = await runCommand(
-    `npx vitest run --reporter=json --config "${path.join(challengeRoot, "vitest.config.ts")}" --root "${challengeRoot}" "${testsDir}"`,
+    `npx vp test run --reporter=json --config "${path.join(challengeRoot, "vitest.config.ts")}" --root "${challengeRoot}" "${testsDir}"`,
     challengeRoot,
   );
 

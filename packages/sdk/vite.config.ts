@@ -102,6 +102,8 @@ export default defineConfig({
     globals: true,
     watch: false,
     typecheck: { enabled: true },
+    // @vitest/coverage-v8 reports a version mismatch warning with the aliased vitest
+    // (vite-plus-test). Coverage still works correctly but runs on an unsupported combination.
     coverage: {
       reporter: ["text", "lcov"],
     },
