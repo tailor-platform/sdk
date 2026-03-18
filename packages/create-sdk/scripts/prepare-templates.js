@@ -19,6 +19,41 @@ if (sdkVersionOrUrl) {
   console.log(`Using SDK version from package.json: ${version}`);
 }
 
+// Parse the catalog section from pnpm-workspace.yaml to resolve "catalog:" specs.
+// Uses simple line parsing since the catalog is a flat key-value map.
+function parseCatalog(yamlPath) {
+  const lines = readFileSync(yamlPath, "utf-8").split("\n");
+  const result = {};
+  let inCatalog = false;
+  for (const line of lines) {
+    if (/^catalog:\s*$/.test(line)) {
+      inCatalog = true;
+      continue;
+    }
+    if (inCatalog) {
+      const match = line.match(/^ {2}(\S+):\s+(.+)$/);
+      if (match) {
+        result[match[1]] = match[2];
+      } else if (/^\S/.test(line)) {
+        break; // next top-level key
+      }
+    }
+  }
+  return result;
+}
+
+const workspaceYamlPath = resolve(import.meta.dirname, "..", "..", "..", "pnpm-workspace.yaml");
+const catalog = parseCatalog(workspaceYamlPath);
+
+function resolveCatalogSpecs(deps) {
+  if (!deps) return;
+  for (const [name, spec] of Object.entries(deps)) {
+    if (spec === "catalog:" && catalog[name]) {
+      deps[name] = catalog[name];
+    }
+  }
+}
+
 // Update version in each template's package.json
 const templatesDir = resolve(import.meta.dirname, "..", "templates");
 const templates = readdirSync(templatesDir, { withFileTypes: true })
@@ -35,6 +70,10 @@ for (const template of templates) {
   if (content.devDependencies?.["@tailor-platform/sdk"]) {
     content.devDependencies["@tailor-platform/sdk"] = version;
   }
+
+  // Resolve "catalog:" specs so scaffolded projects work outside this monorepo
+  resolveCatalogSpecs(content.dependencies);
+  resolveCatalogSpecs(content.devDependencies);
 
   writeFileSync(packageJsonPath, JSON.stringify(content, null, 2) + "\n");
   console.log(`Updated ${template}/package.json to use SDK: ${version}`);
