@@ -9,6 +9,7 @@ import {
 } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-node";
 import { OperatorService } from "@tailor-proto/tailor/v1/service_pb";
+import { getGlobalDispatcher } from "undici";
 import { z } from "zod";
 import { logger } from "./logger";
 import { readPackageJson } from "./package-json";
@@ -388,6 +389,5 @@ export async function fetchPlatformMachineUserToken(clientId: string, clientSecr
  * See: https://github.com/nodejs/node/issues/56645
  */
 export async function closeConnectionPool() {
-  const { getGlobalDispatcher } = await import("undici");
   await getGlobalDispatcher().close();
 }
