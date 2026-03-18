@@ -502,13 +502,18 @@ describe("planExecutor", () => {
       expect(result.changeSet.creates).toHaveLength(1);
       const create = result.changeSet.creates[0];
 
-      // Check that condition expression includes success field
-      const conditionExpr = (
+      const eventConfig = (
         create.request.executor?.triggerConfig?.config as {
           case: "event";
-          value: { condition: { expr: string } };
+          value: {
+            typedConfig: {
+              case: "pipeline";
+              value: { condition: { expr: string } };
+            };
+          };
         }
-      ).value.condition.expr;
+      ).value.typedConfig.value;
+      const conditionExpr = eventConfig.condition.expr;
       expect(conditionExpr).toContain("success: !!args.succeeded");
       expect(conditionExpr).toContain("result: args.succeeded?.result.resolver");
       expect(conditionExpr).toContain("error: args.failed?.error");
@@ -533,7 +538,6 @@ describe("planExecutor", () => {
       expect(result.changeSet.creates).toHaveLength(1);
       const create = result.changeSet.creates[0];
 
-      // Check that function variables expression includes success field
       const variablesExpr = (
         create.request.executor?.targetConfig?.config as {
           case: "function";
@@ -543,6 +547,159 @@ describe("planExecutor", () => {
       expect(variablesExpr).toContain("success: !!args.succeeded");
       expect(variablesExpr).toContain("result: args.succeeded?.result.resolver");
       expect(variablesExpr).toContain("error: args.failed?.error");
+    });
+  });
+
+  describe("typed event config", () => {
+    function getEventConfig(result: Awaited<ReturnType<typeof planExecutor>>) {
+      const create = result.changeSet.creates[0];
+      return (
+        create.request.executor?.triggerConfig?.config as {
+          case: "event";
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          value: { typedConfig: { case: string; value: any } };
+        }
+      ).value.typedConfig;
+    }
+
+    test("recordCreated emits tailordb typed config", async () => {
+      const client = createMockClient([]);
+      const executor: Executor = {
+        name: "on-record-created",
+        description: "test",
+        disabled: false,
+        trigger: {
+          kind: "recordCreated",
+          typeName: "User",
+        },
+        operation: { kind: "function", body: () => {} },
+      };
+      const application = createMockApplication([executor]);
+
+      const result = await planExecutor({
+        client,
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: mockConfig,
+      });
+
+      expect(result.changeSet.creates).toHaveLength(1);
+      const typedConfig = getEventConfig(result);
+      expect(typedConfig.case).toBe("tailordb");
+      expect(typedConfig.value.eventTypes).toEqual(["tailordb.type_record.created"]);
+      expect(typedConfig.value.namespaceName).toBe(appName);
+      expect(typedConfig.value.typeName).toBe("User");
+      expect(typedConfig.value.condition).toBeUndefined();
+    });
+
+    test("recordCreated with condition emits condition in typed config", async () => {
+      const client = createMockClient([]);
+      const executor: Executor = {
+        name: "on-record-created-cond",
+        description: "test",
+        disabled: false,
+        trigger: {
+          kind: "recordCreated",
+          typeName: "User",
+          condition: ({ newRecord }: { newRecord: { active: boolean } }) => newRecord.active,
+        },
+        operation: { kind: "function", body: () => {} },
+      };
+      const application = createMockApplication([executor]);
+
+      const result = await planExecutor({
+        client,
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: mockConfig,
+      });
+
+      const typedConfig = getEventConfig(result);
+      expect(typedConfig.case).toBe("tailordb");
+      expect(typedConfig.value.condition).toBeDefined();
+      expect(typedConfig.value.condition.expr).not.toContain("args.typeName");
+    });
+
+    test("resolverExecuted emits pipeline typed config", async () => {
+      const client = createMockClient([]);
+      const executor: Executor = {
+        name: "on-resolver-exec",
+        description: "test",
+        disabled: false,
+        trigger: {
+          kind: "resolverExecuted",
+          resolverName: "myResolver",
+        },
+        operation: { kind: "function", body: () => {} },
+      };
+      const application = createMockApplication([executor]);
+
+      const result = await planExecutor({
+        client,
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: mockConfig,
+      });
+
+      const typedConfig = getEventConfig(result);
+      expect(typedConfig.case).toBe("pipeline");
+      expect(typedConfig.value.eventTypes).toEqual(["pipeline.resolver.executed"]);
+      expect(typedConfig.value.namespaceName).toBe(appName);
+      expect(typedConfig.value.resolverName).toBe("myResolver");
+      expect(typedConfig.value.condition).toBeUndefined();
+    });
+
+    test("idpUserCreated emits idp typed config", async () => {
+      const client = createMockClient([]);
+      const executor: Executor = {
+        name: "on-idp-user-created",
+        description: "test",
+        disabled: false,
+        trigger: { kind: "idpUserCreated" },
+        operation: { kind: "function", body: () => {} },
+      };
+      const application = createMockApplication([executor]);
+
+      const result = await planExecutor({
+        client,
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: mockConfig,
+      });
+
+      const typedConfig = getEventConfig(result);
+      expect(typedConfig.case).toBe("idp");
+      expect(typedConfig.value.eventTypes).toEqual(["idp.user.created"]);
+      expect(typedConfig.value.namespaceName).toBe(appName);
+    });
+
+    test("authAccessTokenIssued emits auth typed config", async () => {
+      const client = createMockClient([]);
+      const executor: Executor = {
+        name: "on-auth-token-issued",
+        description: "test",
+        disabled: false,
+        trigger: { kind: "authAccessTokenIssued" },
+        operation: { kind: "function", body: () => {} },
+      };
+      const application = createMockApplication([executor]);
+
+      const result = await planExecutor({
+        client,
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: mockConfig,
+      });
+
+      const typedConfig = getEventConfig(result);
+      expect(typedConfig.case).toBe("auth");
+      expect(typedConfig.value.eventTypes).toEqual(["auth.access_token.issued"]);
+      expect(typedConfig.value.namespaceName).toBe(appName);
     });
   });
 });

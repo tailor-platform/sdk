@@ -11,6 +11,7 @@ import {
   ExecutorTargetType,
   type ExecutorTargetWebhookHeaderSchema,
   type ExecutorTriggerConfigSchema,
+  type ExecutorTriggerEventConfigSchema,
   ExecutorTriggerType,
 } from "@tailor-proto/tailor/v1/executor_resource_pb";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
@@ -199,6 +200,13 @@ function protoExecutor(
     authAccessTokenRefreshed: "auth.access_token.refreshed",
     authAccessTokenRevoked: "auth.access_token.revoked",
   };
+
+  function typedEventTrigger(
+    typedConfig: MessageInitShape<typeof ExecutorTriggerEventConfigSchema>["typedConfig"],
+  ): MessageInitShape<typeof ExecutorTriggerConfigSchema> {
+    return { config: { case: "event", value: { typedConfig } } };
+  }
+
   switch (trigger.kind) {
     case "schedule":
       triggerType = ExecutorTriggerType.SCHEDULE;
@@ -216,41 +224,31 @@ function protoExecutor(
     case "recordUpdated":
     case "recordDeleted":
       triggerType = ExecutorTriggerType.EVENT;
-      triggerConfig = {
-        config: {
-          case: "event",
-          value: {
-            eventType: eventType[trigger.kind],
-            condition: {
-              expr: [
-                /* js */ `args.typeName === "${trigger.typeName}"`,
-                ...(trigger.condition
-                  ? [/* js */ `(${stringifyFunction(trigger.condition)})(${argsExpr})`]
-                  : []),
-              ].join(" && "),
-            },
-          },
+      triggerConfig = typedEventTrigger({
+        case: "tailordb",
+        value: {
+          eventTypes: [eventType[trigger.kind]!],
+          namespaceName: appName,
+          typeName: trigger.typeName,
+          ...(trigger.condition
+            ? { condition: { expr: `(${stringifyFunction(trigger.condition)})(${argsExpr})` } }
+            : {}),
         },
-      };
+      });
       break;
     case "resolverExecuted":
       triggerType = ExecutorTriggerType.EVENT;
-      triggerConfig = {
-        config: {
-          case: "event",
-          value: {
-            eventType: eventType[trigger.kind],
-            condition: {
-              expr: [
-                /* js */ `args.resolverName === "${trigger.resolverName}"`,
-                ...(trigger.condition
-                  ? [/* js */ `(${stringifyFunction(trigger.condition)})(${argsExpr})`]
-                  : []),
-              ].join(" && "),
-            },
-          },
+      triggerConfig = typedEventTrigger({
+        case: "pipeline",
+        value: {
+          eventTypes: [eventType[trigger.kind]!],
+          namespaceName: appName,
+          resolverName: trigger.resolverName,
+          ...(trigger.condition
+            ? { condition: { expr: `(${stringifyFunction(trigger.condition)})(${argsExpr})` } }
+            : {}),
         },
-      };
+      });
       break;
     case "incomingWebhook":
       triggerType = ExecutorTriggerType.INCOMING_WEBHOOK;
@@ -264,18 +262,26 @@ function protoExecutor(
     case "idpUserCreated":
     case "idpUserUpdated":
     case "idpUserDeleted":
+      triggerType = ExecutorTriggerType.EVENT;
+      triggerConfig = typedEventTrigger({
+        case: "idp",
+        value: {
+          eventTypes: [eventType[trigger.kind]!],
+          namespaceName: appName,
+        },
+      });
+      break;
     case "authAccessTokenIssued":
     case "authAccessTokenRefreshed":
     case "authAccessTokenRevoked":
       triggerType = ExecutorTriggerType.EVENT;
-      triggerConfig = {
-        config: {
-          case: "event",
-          value: {
-            eventType: eventType[trigger.kind],
-          },
+      triggerConfig = typedEventTrigger({
+        case: "auth",
+        value: {
+          eventTypes: [eventType[trigger.kind]!],
+          namespaceName: appName,
         },
-      };
+      });
       break;
     default:
       throw new Error(`Unknown trigger: ${trigger satisfies never}`);

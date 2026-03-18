@@ -815,6 +815,32 @@ export enum AuthSCIMAttribute_Uniqueness {
 export declare const AuthSCIMAttribute_UniquenessSchema: GenEnum<AuthSCIMAttribute_Uniqueness>;
 
 /**
+ * @generated from message tailor.v1.AuthHook
+ */
+export declare type AuthHook = Message<"tailor.v1.AuthHook"> & {
+  /**
+   * @generated from field: tailor.v1.AuthHookPoint hook_point = 1;
+   */
+  hookPoint: AuthHookPoint;
+
+  /**
+   * @generated from field: string script_ref = 2;
+   */
+  scriptRef: string;
+
+  /**
+   * @generated from field: tailor.v1.AuthInvoker invoker = 4;
+   */
+  invoker?: AuthInvoker;
+};
+
+/**
+ * Describes the message tailor.v1.AuthHook.
+ * Use `create(AuthHookSchema)` to create a new message.
+ */
+export declare const AuthHookSchema: GenMessage<AuthHook>;
+
+/**
  * @generated from message tailor.v1.AuthConnection
  */
 export declare type AuthConnection = Message<"tailor.v1.AuthConnection"> & {
@@ -1120,4 +1146,26 @@ export enum PATScope {
  * Describes the enum tailor.v1.PATScope.
  */
 export declare const PATScopeSchema: GenEnum<PATScope>;
+
+/**
+ * Auth Hook --------------------------------------------------------
+ *
+ * @generated from enum tailor.v1.AuthHookPoint
+ */
+export enum AuthHookPoint {
+  /**
+   * @generated from enum value: AUTH_HOOK_POINT_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: AUTH_HOOK_POINT_BEFORE_LOGIN = 1;
+   */
+  BEFORE_LOGIN = 1,
+}
+
+/**
+ * Describes the enum tailor.v1.AuthHookPoint.
+ */
+export declare const AuthHookPointSchema: GenEnum<AuthHookPoint>;
 
