@@ -1,16 +1,14 @@
-import * as fs from "node:fs";
 import Sonda from "sonda/rolldown";
 import { defineConfig } from "tsdown";
+import { loadYamlText } from "./scripts/yaml-text-plugin.mjs";
 import type { Plugin } from "rolldown";
 
 function yamlText(): Plugin {
   return {
     name: "yaml-text",
     load(id) {
-      if (id.endsWith(".yml") || id.endsWith(".yaml")) {
-        const content = fs.readFileSync(id, "utf-8");
-        return { code: `export default ${JSON.stringify(content)};` };
-      }
+      const result = loadYamlText(id);
+      return result ? { code: result } : undefined;
     },
   };
 }
