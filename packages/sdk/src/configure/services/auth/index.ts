@@ -65,7 +65,7 @@ export type {
   SCIMConfig,
   TenantProvider as TenantProviderConfig,
 } from "@/types/auth.generated";
-export type { OAuth2ClientGrantType, SCIMAttributeType } from "@/types/auth";
+export type { OAuth2ClientGrantType, SCIMAttributeType, BeforeLoginHookArgs } from "@/types/auth";
 export type {
   ValueOperand,
   UsernameFieldKey,

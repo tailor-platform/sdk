@@ -4,7 +4,7 @@
 
 import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
-import type { AuthConnection, AuthIDPConfig, AuthOAuth2Client, AuthSCIMConfig, AuthSCIMResource, AuthService, ControlplaneMachineUser, MachineUser, PATScope, PersonalAccessToken, TenantProviderConfig, UserProfileProviderConfig } from "./auth_resource_pb";
+import type { AuthConnection, AuthHook, AuthHookPoint, AuthIDPConfig, AuthOAuth2Client, AuthSCIMConfig, AuthSCIMResource, AuthService, ControlplaneMachineUser, MachineUser, PATScope, PersonalAccessToken, TenantProviderConfig, UserProfileProviderConfig } from "./auth_resource_pb";
 import type { PageDirection } from "./resource_pb";
 import type { Timestamp, Value } from "@bufbuild/protobuf/wkt";
 
@@ -1479,6 +1479,172 @@ export declare type GetAuthSCIMResourcesResponse = Message<"tailor.v1.GetAuthSCI
  * Use `create(GetAuthSCIMResourcesResponseSchema)` to create a new message.
  */
 export declare const GetAuthSCIMResourcesResponseSchema: GenMessage<GetAuthSCIMResourcesResponse>;
+
+/**
+ * Auth Hook --------------------------------------------------------
+ *
+ * @generated from message tailor.v1.CreateAuthHookRequest
+ */
+export declare type CreateAuthHookRequest = Message<"tailor.v1.CreateAuthHookRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string namespace_name = 2;
+   */
+  namespaceName: string;
+
+  /**
+   * @generated from field: tailor.v1.AuthHook hook = 3;
+   */
+  hook?: AuthHook;
+};
+
+/**
+ * Describes the message tailor.v1.CreateAuthHookRequest.
+ * Use `create(CreateAuthHookRequestSchema)` to create a new message.
+ */
+export declare const CreateAuthHookRequestSchema: GenMessage<CreateAuthHookRequest>;
+
+/**
+ * @generated from message tailor.v1.CreateAuthHookResponse
+ */
+export declare type CreateAuthHookResponse = Message<"tailor.v1.CreateAuthHookResponse"> & {
+  /**
+   * @generated from field: tailor.v1.AuthHook hook = 1;
+   */
+  hook?: AuthHook;
+};
+
+/**
+ * Describes the message tailor.v1.CreateAuthHookResponse.
+ * Use `create(CreateAuthHookResponseSchema)` to create a new message.
+ */
+export declare const CreateAuthHookResponseSchema: GenMessage<CreateAuthHookResponse>;
+
+/**
+ * @generated from message tailor.v1.UpdateAuthHookRequest
+ */
+export declare type UpdateAuthHookRequest = Message<"tailor.v1.UpdateAuthHookRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string namespace_name = 2;
+   */
+  namespaceName: string;
+
+  /**
+   * @generated from field: tailor.v1.AuthHook hook = 3;
+   */
+  hook?: AuthHook;
+};
+
+/**
+ * Describes the message tailor.v1.UpdateAuthHookRequest.
+ * Use `create(UpdateAuthHookRequestSchema)` to create a new message.
+ */
+export declare const UpdateAuthHookRequestSchema: GenMessage<UpdateAuthHookRequest>;
+
+/**
+ * @generated from message tailor.v1.UpdateAuthHookResponse
+ */
+export declare type UpdateAuthHookResponse = Message<"tailor.v1.UpdateAuthHookResponse"> & {
+  /**
+   * @generated from field: tailor.v1.AuthHook hook = 1;
+   */
+  hook?: AuthHook;
+};
+
+/**
+ * Describes the message tailor.v1.UpdateAuthHookResponse.
+ * Use `create(UpdateAuthHookResponseSchema)` to create a new message.
+ */
+export declare const UpdateAuthHookResponseSchema: GenMessage<UpdateAuthHookResponse>;
+
+/**
+ * @generated from message tailor.v1.DeleteAuthHookRequest
+ */
+export declare type DeleteAuthHookRequest = Message<"tailor.v1.DeleteAuthHookRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string namespace_name = 2;
+   */
+  namespaceName: string;
+
+  /**
+   * @generated from field: tailor.v1.AuthHookPoint hook_point = 3;
+   */
+  hookPoint: AuthHookPoint;
+};
+
+/**
+ * Describes the message tailor.v1.DeleteAuthHookRequest.
+ * Use `create(DeleteAuthHookRequestSchema)` to create a new message.
+ */
+export declare const DeleteAuthHookRequestSchema: GenMessage<DeleteAuthHookRequest>;
+
+/**
+ * @generated from message tailor.v1.DeleteAuthHookResponse
+ */
+export declare type DeleteAuthHookResponse = Message<"tailor.v1.DeleteAuthHookResponse"> & {
+};
+
+/**
+ * Describes the message tailor.v1.DeleteAuthHookResponse.
+ * Use `create(DeleteAuthHookResponseSchema)` to create a new message.
+ */
+export declare const DeleteAuthHookResponseSchema: GenMessage<DeleteAuthHookResponse>;
+
+/**
+ * @generated from message tailor.v1.GetAuthHookRequest
+ */
+export declare type GetAuthHookRequest = Message<"tailor.v1.GetAuthHookRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string namespace_name = 2;
+   */
+  namespaceName: string;
+
+  /**
+   * @generated from field: tailor.v1.AuthHookPoint hook_point = 3;
+   */
+  hookPoint: AuthHookPoint;
+};
+
+/**
+ * Describes the message tailor.v1.GetAuthHookRequest.
+ * Use `create(GetAuthHookRequestSchema)` to create a new message.
+ */
+export declare const GetAuthHookRequestSchema: GenMessage<GetAuthHookRequest>;
+
+/**
+ * @generated from message tailor.v1.GetAuthHookResponse
+ */
+export declare type GetAuthHookResponse = Message<"tailor.v1.GetAuthHookResponse"> & {
+  /**
+   * @generated from field: tailor.v1.AuthHook hook = 1;
+   */
+  hook?: AuthHook;
+};
+
+/**
+ * Describes the message tailor.v1.GetAuthHookResponse.
+ * Use `create(GetAuthHookResponseSchema)` to create a new message.
+ */
+export declare const GetAuthHookResponseSchema: GenMessage<GetAuthHookResponse>;
 
 /**
  * @generated from message tailor.v1.CreateAuthConnectionRequest

@@ -215,8 +215,19 @@ const MachineUserSchema = z.object({
   attributeList: z.array(z.uuid()).optional(),
 });
 
+const BeforeLoginHookSchema = z.object({
+  handler: z.function(),
+  invoker: z.string(),
+});
+
 const AuthConfigBaseSchema = z.object({
   name: z.string().describe("Auth service name"),
+  hooks: z
+    .object({
+      beforeLogin: BeforeLoginHookSchema.optional().describe("Before login auth hook"),
+    })
+    .optional()
+    .describe("Auth hooks"),
   machineUsers: z
     .record(z.string(), MachineUserSchema)
     .optional()

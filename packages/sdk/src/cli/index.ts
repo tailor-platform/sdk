@@ -19,6 +19,7 @@ import { openCommand } from "./commands/open";
 import { profileCommand } from "./commands/profile";
 import { removeCommand } from "./commands/remove";
 import { secretCommand } from "./commands/secret";
+import { setupCommand } from "./commands/setup";
 import { showCommand } from "./commands/show";
 import { staticwebsiteCommand } from "./commands/staticwebsite";
 import { tailordbCommand } from "./commands/tailordb";
@@ -65,6 +66,7 @@ export const mainCommand = withCompletionCommand(
       query: queryCommand,
       remove: removeCommand,
       secret: secretCommand,
+      setup: setupCommand,
       show: showCommand,
       staticwebsite: staticwebsiteCommand,
       tailordb: tailordbCommand,
