@@ -1,5 +1,25 @@
 # @tailor-platform/sdk
 
+## 1.26.0
+
+### Minor Changes
+
+- [#778](https://github.com/tailor-platform/sdk/pull/778) [`392819d`](https://github.com/tailor-platform/sdk/commit/392819df890ce46f5884c438bdb7f3bce51bc9fd) Thanks [@k1LoW](https://github.com/k1LoW)! - Add `hooks.beforeLogin` to `defineAuth` for running custom logic before user login (e.g. JIT provisioning)
+
+- [#752](https://github.com/tailor-platform/sdk/pull/752) [`e4a965f`](https://github.com/tailor-platform/sdk/commit/e4a965f9934e495e190b00fa48f8fa50b479ec98) Thanks [@dqn](https://github.com/dqn)! - Add `tailor-sdk setup github` command for GitHub Actions workflow generation
+
+### Patch Changes
+
+- [#763](https://github.com/tailor-platform/sdk/pull/763) [`87e55af`](https://github.com/tailor-platform/sdk/commit/87e55af401b033fc3a403c15d5f1e7fce4a36b07) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency eslint-plugin-jsdoc to v62.8.0
+
+- [#764](https://github.com/tailor-platform/sdk/pull/764) [`563b358`](https://github.com/tailor-platform/sdk/commit/563b35801e728684e8cbe67d94b5e53558b49f1e) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update pnpm/action-setup action to v4.4.0
+
+- [#767](https://github.com/tailor-platform/sdk/pull/767) [`0eaa3f3`](https://github.com/tailor-platform/sdk/commit/0eaa3f32acc613ca112dcd5e2562ef43f41e8c8b) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update vitest monorepo to v4.1.0
+
+- [#771](https://github.com/tailor-platform/sdk/pull/771) [`31ac830`](https://github.com/tailor-platform/sdk/commit/31ac8305a90071ffba5150b0989c25adbeb55067) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency turbo to v2.8.17
+
+- [#773](https://github.com/tailor-platform/sdk/pull/773) [`6e2bc16`](https://github.com/tailor-platform/sdk/commit/6e2bc16fdf772d36cb231fc7baa874c018e10904) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency aquaproj/aqua-registry to v4.486.0
+
 ## 1.25.4
 
 ### Patch Changes
