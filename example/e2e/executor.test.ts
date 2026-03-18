@@ -23,8 +23,15 @@ describe("controlplane", async () => {
         config: {
           case: "event",
           value: {
-            eventType: "tailordb.type_record.created",
-            condition: expect.any(Object),
+            typedConfig: {
+              case: "tailordb",
+              value: {
+                eventTypes: ["tailordb.type_record.created"],
+                namespaceName: "my-app",
+                typeName: "SalesOrder",
+                condition: expect.any(Object),
+              },
+            },
           },
         },
       },
@@ -51,8 +58,15 @@ describe("controlplane", async () => {
         config: {
           case: "event",
           value: {
-            eventType: "pipeline.resolver.executed",
-            condition: expect.any(Object),
+            typedConfig: {
+              case: "pipeline",
+              value: {
+                eventTypes: ["pipeline.resolver.executed"],
+                namespaceName: "my-app",
+                resolverName: "stepChain",
+                condition: expect.any(Object),
+              },
+            },
           },
         },
       },
@@ -97,8 +111,15 @@ describe("controlplane", async () => {
         config: {
           case: "event",
           value: {
-            eventType: "tailordb.type_record.created",
-            condition: expect.any(Object),
+            typedConfig: {
+              case: "tailordb",
+              value: {
+                eventTypes: ["tailordb.type_record.created"],
+                namespaceName: "my-app",
+                typeName: "User",
+                condition: expect.any(Object),
+              },
+            },
           },
         },
       },
