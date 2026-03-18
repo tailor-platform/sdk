@@ -6,12 +6,13 @@ import {
   ConnectError,
   createClient,
   type Interceptor,
+  type Transport,
 } from "@connectrpc/connect";
-import { createConnectTransport } from "@connectrpc/connect-node";
 import { OperatorService } from "@tailor-proto/tailor/v1/service_pb";
 import { z } from "zod";
 import { logger } from "./logger";
 import { readPackageJson } from "./package-json";
+import { isBun } from "./runtime";
 
 export const platformBaseUrl = process.env.PLATFORM_URL ?? "https://api.tailor.tech";
 
@@ -41,18 +42,32 @@ export type OperatorClient = Client<typeof OperatorService>;
 export async function initOperatorClient(accessToken: string) {
   const { createTracingInterceptor } = await import("@/cli/telemetry/interceptor");
 
-  const transport = createConnectTransport({
-    httpVersion: "2",
-    baseUrl: platformBaseUrl,
-    interceptors: [
-      await userAgentInterceptor(),
-      await bearerTokenInterceptor(accessToken),
-      retryInterceptor(),
-      errorHandlingInterceptor(),
-      createTracingInterceptor(),
-    ],
-  });
+  const interceptors: Interceptor[] = [
+    await userAgentInterceptor(),
+    await bearerTokenInterceptor(accessToken),
+    retryInterceptor(),
+    errorHandlingInterceptor(),
+    createTracingInterceptor(),
+  ];
+
+  const transport = await createTransport(platformBaseUrl, interceptors);
   return createClient(OperatorService, transport);
+}
+
+/**
+ * Create a Connect transport appropriate for the current runtime.
+ * Uses connect-node (HTTP/2) on Node.js and connect-web (fetch) on Bun/Deno.
+ * @param baseUrl - Base URL for the transport
+ * @param interceptors - Request interceptors
+ * @returns Configured transport
+ */
+async function createTransport(baseUrl: string, interceptors: Interceptor[]): Promise<Transport> {
+  if (isBun()) {
+    const { createConnectTransport } = await import("@connectrpc/connect-web");
+    return createConnectTransport({ baseUrl, interceptors });
+  }
+  const { createConnectTransport } = await import("@connectrpc/connect-node");
+  return createConnectTransport({ httpVersion: "2", baseUrl, interceptors });
 }
 
 /**
