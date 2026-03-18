@@ -25,6 +25,9 @@ jobs:
       - name: Install deps
         uses: ./.github/actions/install-deps
 
+      # vp run -r test runs in all workspace packages (same scope as `turbo run test`).
+      # Template packages under packages/create-sdk/templates/* are included because they
+      # are workspace members with test scripts. This matches the pre-migration behavior.
       - name: Run tests
         run: pnpm exec vp run -r test -- --project unit
         env:
