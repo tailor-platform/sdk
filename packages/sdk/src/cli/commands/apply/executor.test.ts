@@ -584,8 +584,7 @@ describe("planExecutor", () => {
       return (
         create.request.executor?.triggerConfig?.config as {
           case: "event";
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          value: { typedConfig: { case: string; value: any } };
+          value: { typedConfig: { case: string; value: Record<string, unknown> } };
         }
       ).value.typedConfig;
     }
@@ -651,7 +650,7 @@ describe("planExecutor", () => {
       const typedConfig = getEventConfig(result);
       expect(typedConfig.case).toBe("tailordb");
       expect(typedConfig.value.condition).toBeDefined();
-      expect(typedConfig.value.condition.expr).not.toContain("args.typeName");
+      expect((typedConfig.value.condition as { expr: string }).expr).not.toContain("args.typeName");
     });
 
     test("resolverExecuted emits pipeline typed config", async () => {
@@ -738,6 +737,74 @@ describe("planExecutor", () => {
       expect(typedConfig.case).toBe("auth");
       expect(typedConfig.value.eventTypes).toEqual(["auth.access_token.issued"]);
       expect(typedConfig.value.namespaceName).toBe("my-auth");
+    });
+
+    test("recordCreated throws when typeName not found in any TailorDB service", async () => {
+      const client = createMockClient([]);
+      const executor: Executor = {
+        name: "on-record-created",
+        description: "test",
+        disabled: false,
+        trigger: { kind: "recordCreated", typeName: "Unknown" },
+        operation: { kind: "function", body: () => {} },
+      };
+      const application = createMockApplication([executor], {
+        tailorDBTypes: { User: "my-tailordb" },
+      });
+
+      await expect(
+        planExecutor({ client, workspaceId, application, forRemoval: false, config: mockConfig }),
+      ).rejects.toThrow('TailorDB type "Unknown" not found in any namespace');
+    });
+
+    test("resolverExecuted throws when resolver not found in any namespace", async () => {
+      const client = createMockClient([]);
+      const executor: Executor = {
+        name: "on-resolver-exec",
+        description: "test",
+        disabled: false,
+        trigger: { kind: "resolverExecuted", resolverName: "unknown" },
+        operation: { kind: "function", body: () => {} },
+      };
+      const application = createMockApplication([executor], {
+        resolverNames: { myResolver: "my-pipeline" },
+      });
+
+      await expect(
+        planExecutor({ client, workspaceId, application, forRemoval: false, config: mockConfig }),
+      ).rejects.toThrow('Resolver "unknown" not found in any namespace');
+    });
+
+    test("idpUserCreated throws when no IdP service configured", async () => {
+      const client = createMockClient([]);
+      const executor: Executor = {
+        name: "on-idp-user-created",
+        description: "test",
+        disabled: false,
+        trigger: { kind: "idpUserCreated" },
+        operation: { kind: "function", body: () => {} },
+      };
+      const application = createMockApplication([executor]);
+
+      await expect(
+        planExecutor({ client, workspaceId, application, forRemoval: false, config: mockConfig }),
+      ).rejects.toThrow("No IdP service configured");
+    });
+
+    test("authAccessTokenIssued throws when no Auth service configured", async () => {
+      const client = createMockClient([]);
+      const executor: Executor = {
+        name: "on-auth-token-issued",
+        description: "test",
+        disabled: false,
+        trigger: { kind: "authAccessTokenIssued" },
+        operation: { kind: "function", body: () => {} },
+      };
+      const application = createMockApplication([executor]);
+
+      await expect(
+        planExecutor({ client, workspaceId, application, forRemoval: false, config: mockConfig }),
+      ).rejects.toThrow("No Auth service configured");
     });
   });
 });
