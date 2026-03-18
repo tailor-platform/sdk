@@ -43,7 +43,7 @@ export async function checkVaultManaged(
 
   logger.warn(
     `Vault "${vaultName}" is managed by defineSecretManager() in tailor.config.ts (owner: "${owner}"). ` +
-      `Proceeding will release ownership so the vault is no longer managed by config.`,
+      `Changes made via CLI may conflict with the config on the next apply.`,
   );
 
   return { isManaged: true, trn, existingLabels: allLabels };
@@ -65,5 +65,8 @@ export async function releaseVaultOwnership(params: {
   const { client, trn, existingLabels } = params;
   const { [sdkNameLabelKey]: _, "sdk-version": __, ...remainingLabels } = existingLabels;
   await client.setMetadata({ trn, labels: remainingLabels });
-  logger.info("Vault ownership released. It will no longer be managed by config.");
+  logger.info(
+    "Config ownership has been removed from this vault. " +
+      "Remove it from defineSecretManager() in your config to prevent the next apply from re-claiming it.",
+  );
 }

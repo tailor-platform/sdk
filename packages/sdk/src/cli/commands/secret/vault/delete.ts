@@ -6,7 +6,7 @@ import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { prompt } from "@/cli/shared/prompt";
-import { checkVaultManaged, releaseVaultOwnership } from "../check-vault-managed";
+import { checkVaultManaged } from "../check-vault-managed";
 import { nameArgs } from "./args";
 
 export const deleteCommand = defineAppCommand({
@@ -56,7 +56,9 @@ export const deleteCommand = defineAppCommand({
     }
 
     if (managed.isManaged) {
-      await releaseVaultOwnership({ client, ...managed });
+      logger.info(
+        "Remove this vault from defineSecretManager() in your config to prevent the next apply from re-creating it.",
+      );
     }
 
     logger.success(`Vault: ${args.name} deleted`);
