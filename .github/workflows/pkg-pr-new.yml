@@ -79,12 +79,15 @@ jobs:
       fail-fast: false
       matrix:
         runtime: [node, bun]
-        pm: [pnpm, npm, yarn]
+        pm: [pnpm, npm, yarn, bun]
         node: [22, 24]
         exclude:
           # Bun has its own runtime version; only run once per PM
           - runtime: bun
             node: 22
+          # bun install with Node runtime is out of scope
+          - runtime: node
+            pm: bun
     runs-on: ubuntu-latest
     name: Smoke (${{ matrix.runtime }}, ${{ matrix.pm }}, node${{ matrix.node }})
     timeout-minutes: 10
