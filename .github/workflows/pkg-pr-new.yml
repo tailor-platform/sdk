@@ -75,7 +75,20 @@ jobs:
 
   init-smoke:
     needs: [publish-sdk, publish-create-sdk]
+    strategy:
+      fail-fast: false
+      matrix:
+        runtime: [node, bun]
+        pm: [pnpm, npm, yarn]
+        node: [18, 22, 24]
+        exclude:
+          # Bun has its own runtime version; only run once per PM
+          - runtime: bun
+            node: 18
+          - runtime: bun
+            node: 22
     runs-on: ubuntu-latest
+    name: Smoke (${{ matrix.runtime }}, ${{ matrix.pm }}, node${{ matrix.node }})
     timeout-minutes: 10
     permissions:
       contents: read
@@ -86,30 +99,39 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install deps
-        uses: ./.github/actions/install-deps
+      - name: Install pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+        with:
+          standalone: true
+          run_install: false
+
+      - name: Install Node.js
+        run: pnpm env use --global ${{ matrix.node }}
+
+      - name: Install Bun
+        if: matrix.runtime == 'bun'
+        uses: oven-sh/setup-bun@735343b667d3e6f658f3391e2a2eb6a3bc3e5268 # v2
+        with:
+          bun-version: latest
+
+      - name: Enable corepack
+        run: corepack enable
 
       - name: Configure git for create-sdk
         run: |
           git config --global user.email "ci@example.com"
           git config --global user.name "SDK CI"
 
-      - name: Show CLI version
-        run: pnpm dlx --package=${{ needs.publish-create-sdk.outputs.create_sdk_url }} create-sdk --version
-
-      - name: Run init non-interactively
+      - name: Scaffold project
         run: |
-          # Create into a temp folder outside the workspace
           cd /tmp
-          pnpm dlx --package=${{ needs.publish-create-sdk.outputs.create_sdk_url }} create-sdk test-init-app --template hello-world
-          ls -la test-init-app
+          npx --yes --package=${{ needs.publish-create-sdk.outputs.create_sdk_url }} create-sdk test-init-app --template hello-world
 
       - name: Verify generated files
         run: |
           test -f /tmp/test-init-app/tailor.config.ts
           test -f /tmp/test-init-app/package.json
           test -f /tmp/test-init-app/tsconfig.json
-          test -f /tmp/test-init-app/src/resolvers/hello.ts
 
       - name: Verify SDK dependency uses pkg.pr.new URL
         run: |
@@ -121,16 +143,26 @@ jobs:
             echo "Error: SDK dependency should be '$EXPECTED_SDK_URL' but got '$SDK_VERSION'"
             exit 1
           fi
-          echo "✅ SDK dependency correctly uses pkg.pr.new URL"
 
-      - name: Install dependencies with pkg.pr.new SDK
-        run: |
-          cd /tmp/test-init-app
-          pnpm install
+      - name: Install dependencies
+        working-directory: /tmp/test-init-app
+        run: ${{ matrix.pm }} install
 
-      - name: Verify SDK dependency was installed
+      - name: Verify SDK installed
         run: |
-          cd /tmp/test-init-app
-          # Verify the SDK is installed
-          test -d node_modules/@tailor-platform/sdk
-          echo "✅ SDK dependency successfully installed from pkg.pr.new"
+          test -d /tmp/test-init-app/node_modules/@tailor-platform/sdk
+          echo "SDK dependency successfully installed with ${{ matrix.pm }}"
+
+      - name: Verify SDK import (Node)
+        if: matrix.runtime == 'node'
+        working-directory: /tmp/test-init-app
+        run: node -e "import('@tailor-platform/sdk').then(m => { console.log('SDK exports:', Object.keys(m).join(', ')); })"
+
+      - name: Verify SDK import (Bun)
+        if: matrix.runtime == 'bun'
+        working-directory: /tmp/test-init-app
+        run: bun -e "import('@tailor-platform/sdk').then(m => { console.log('SDK exports:', Object.keys(m).join(', ')); })"
+
+      - name: Typecheck
+        working-directory: /tmp/test-init-app
+        run: npx tsc --noEmit

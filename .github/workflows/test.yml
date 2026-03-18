@@ -11,7 +11,17 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        node: [22, 24]
+        exclude:
+          # Save macOS runner minutes (10x cost) - only test LTS
+          - os: macos-latest
+            node: 24
+    runs-on: ${{ matrix.os }}
+    name: Test (Node ${{ matrix.node }}, ${{ matrix.os }})
     timeout-minutes: 10
     permissions:
       contents: read
@@ -24,6 +34,8 @@ jobs:
 
       - name: Install deps
         uses: ./.github/actions/install-deps
+        with:
+          node-version: ${{ matrix.node }}
 
       - name: Run tests
         run: pnpm exec turbo run test -- --project unit
