@@ -2,4 +2,4 @@
 "@tailor-platform/sdk": minor
 ---
 
-Add `beforeLogin` auth hook support to `defineAuth` for declarative before-login hook configuration
+Add `hooks.beforeLogin` to `defineAuth` for running custom logic before user login (e.g. JIT provisioning)
