@@ -21,7 +21,7 @@ export const logoutCommand = defineAppCommand({
     client.revoke(
       {
         accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token ?? "",
+        refreshToken: tokens.refresh_token ?? null,
         expiresAt: Date.parse(tokens.token_expires_at),
       },
       tokenTypeHint,
