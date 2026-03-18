@@ -33,15 +33,19 @@ export const logoutCommand = defineAppCommand({
     }
 
     if (refreshToken && accessToken) {
-      const client = initOAuth2Client();
-      client.revoke(
-        {
-          accessToken,
-          refreshToken,
-          expiresAt: Date.parse(userEntry.token_expires_at),
-        },
-        "refresh_token",
-      );
+      try {
+        const client = initOAuth2Client();
+        await client.revoke(
+          {
+            accessToken,
+            refreshToken,
+            expiresAt: Date.parse(userEntry.token_expires_at),
+          },
+          "refresh_token",
+        );
+      } catch {
+        // Best-effort revocation — continue with local logout
+      }
     }
 
     await deleteUserTokens(pfConfig, pfConfig.current_user!);
