@@ -61,7 +61,10 @@ export async function initOperatorClient(accessToken: string) {
  * @param interceptors - Request interceptors
  * @returns Configured transport
  */
-async function createTransport(baseUrl: string, interceptors: Interceptor[]): Promise<Transport> {
+export async function createTransport(
+  baseUrl: string,
+  interceptors: Interceptor[],
+): Promise<Transport> {
   if (isBun()) {
     const { createConnectTransport } = await import("@connectrpc/connect-web");
     return createConnectTransport({ baseUrl, interceptors });

@@ -1,5 +1,47 @@
-import { describe, test, expect, vi } from "vitest";
-import { fetchAll, formatRequestParams, MAX_PAGE_SIZE, parseMethodName } from "./client";
+import { afterEach, describe, test, expect, vi } from "vitest";
+import {
+  createTransport,
+  fetchAll,
+  formatRequestParams,
+  MAX_PAGE_SIZE,
+  parseMethodName,
+} from "./client";
+
+vi.mock("@connectrpc/connect-node", () => ({
+  createConnectTransport: vi.fn(() => ({ type: "node-transport" })),
+}));
+
+vi.mock("@connectrpc/connect-web", () => ({
+  createConnectTransport: vi.fn(() => ({ type: "web-transport" })),
+}));
+
+describe("createTransport", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  test("uses connect-node transport on Node.js", async () => {
+    const transport = await createTransport("https://example.com", []);
+    const connectNode = await import("@connectrpc/connect-node");
+    expect(connectNode.createConnectTransport).toHaveBeenCalledWith({
+      httpVersion: "2",
+      baseUrl: "https://example.com",
+      interceptors: [],
+    });
+    expect(transport).toEqual({ type: "node-transport" });
+  });
+
+  test("uses connect-web transport on Bun", async () => {
+    vi.stubGlobal("Bun", {});
+    const transport = await createTransport("https://example.com", []);
+    const connectWeb = await import("@connectrpc/connect-web");
+    expect(connectWeb.createConnectTransport).toHaveBeenCalledWith({
+      baseUrl: "https://example.com",
+      interceptors: [],
+    });
+    expect(transport).toEqual({ type: "web-transport" });
+  });
+});
 
 describe("fetchAll", () => {
   test("passes MAX_PAGE_SIZE to callback", async () => {
