@@ -203,6 +203,14 @@ Commands for managing and deploying static websites.
 | [staticwebsite list](./cli/staticwebsite.md#staticwebsite-list)     | List static websites in a workspace                  |
 | [staticwebsite get](./cli/staticwebsite.md#staticwebsite-get)       | Get details of a static website                      |
 
+### [Setup Commands](./cli/setup.md)
+
+Commands for setting up project infrastructure.
+
+| Command                                     | Description                                     |
+| ------------------------------------------- | ----------------------------------------------- |
+| [setup github](./cli/setup.md#setup-github) | Generate GitHub Actions workflow for deployment |
+
 ### [Completion](./cli/completion.md)
 
 Generate shell completion scripts for bash, zsh, and fish.
