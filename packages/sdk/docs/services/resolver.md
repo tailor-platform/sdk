@@ -275,3 +275,33 @@ createResolver({
      // ...
    });
    ```
+
+## Authentication
+
+Specify an `authInvoker` to execute the resolver with machine user credentials:
+
+```typescript
+import { defineAuth, createResolver, t } from "@tailor-platform/sdk";
+
+const auth = defineAuth("my-auth", {
+  // ... auth configuration
+  machineUsers: {
+    "batch-processor": {
+      attributes: { role: "ADMIN" },
+    },
+  },
+});
+
+export default createResolver({
+  name: "adminQuery",
+  operation: "query",
+  output: t.object({ result: t.string() }),
+  body: async () => {
+    // Executes as "batch-processor" machine user
+    return { result: "ok" };
+  },
+  authInvoker: auth.invoker("batch-processor"),
+});
+```
+
+The `authInvoker` option accepts the return value of `auth.invoker()`, which specifies the auth namespace and machine user name. The resolver's body function will execute with the permissions of the specified machine user.

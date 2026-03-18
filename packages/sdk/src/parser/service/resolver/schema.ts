@@ -55,4 +55,11 @@ export const ResolverSchema = z.object({
   body: functionSchema.describe("Resolver implementation function"),
   output: TailorFieldSchema.describe("Output field definition"),
   publishEvents: z.boolean().optional().describe("Enable publishing events from this resolver"),
+  authInvoker: z
+    .object({
+      namespace: z.string().describe("Auth namespace"),
+      machineUserName: z.string().describe("Machine user name for authentication"),
+    })
+    .optional()
+    .describe("Machine user to execute this resolver as"),
 });
