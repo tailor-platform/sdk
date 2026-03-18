@@ -220,6 +220,16 @@ type MachineUser<
               ? { attributeList?: never }
               : { attributeList: AttributeListToTuple<User, AttributeList> });
 
+export type BeforeLoginHookArgs = {
+  claims: Record<string, unknown>;
+  idpConfigName: string;
+};
+
+export type BeforeLoginHook<MachineUserNames extends string> = {
+  handler: (args: BeforeLoginHookArgs) => Promise<unknown>;
+  invoker: MachineUserNames;
+};
+
 // Input type (before parsing) - used by configure layer
 export type AuthServiceInput<
   User extends TailorDBInstance,
@@ -230,6 +240,7 @@ export type AuthServiceInput<
     | MachineUserAttributeFields
     | undefined,
 > = {
+  beforeLogin?: BeforeLoginHook<MachineUserNames>;
   userProfile?: UserProfile<User, AttributeMap, AttributeList>;
   machineUserAttributes?: MachineUserAttributes;
   machineUsers?: Record<

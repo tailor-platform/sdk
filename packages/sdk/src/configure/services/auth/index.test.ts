@@ -3,6 +3,7 @@ import { describe, it, expect, expectTypeOf } from "vitest";
 import { t } from "@/configure/types/type";
 import { db } from "../tailordb/schema";
 import { defineAuth, type AuthInvoker } from "./index";
+import type { BeforeLoginHook } from "@/types/auth";
 import type { AuthInvoker as ProtoAuthInvoker } from "@tailor-proto/tailor/v1/auth_resource_pb";
 
 const userType = db.type("User", {
@@ -224,6 +225,49 @@ describe("defineAuth", () => {
 
       type ExtractedName = typeof _authConfig.name;
       expectTypeOf<ExtractedName>().toEqualTypeOf<"typed-auth">();
+    });
+  });
+
+  describe("beforeLogin hook", () => {
+    it("includes beforeLogin in auth config when provided", () => {
+      const handler = async (_args: { claims: Record<string, unknown>; idpConfigName: string }) => {
+        return {};
+      };
+      const authConfig = defineAuth("hook-auth", {
+        userProfile: {
+          type: userType,
+          usernameField: "email",
+        },
+        machineUsers: {
+          "hook-invoker": {},
+        },
+        beforeLogin: {
+          handler,
+          invoker: "hook-invoker",
+        },
+      });
+
+      expect(authConfig.beforeLogin).toBeDefined();
+      expect(authConfig.beforeLogin!.handler).toBe(handler);
+      expect(authConfig.beforeLogin!.invoker).toBe("hook-invoker");
+    });
+
+    it("constrains invoker to machine user names at the type level", () => {
+      // BeforeLoginHook<MachineUserNames> constrains invoker to MachineUserNames.
+      // We verify this structurally rather than via overload resolution (which differs in tsgo).
+      type Hook = BeforeLoginHook<"admin" | "worker">;
+      expectTypeOf<Hook["invoker"]>().toEqualTypeOf<"admin" | "worker">();
+    });
+
+    it("is optional — existing tests continue to pass without it", () => {
+      const authConfig = defineAuth("no-hook", {
+        userProfile: {
+          type: userType,
+          usernameField: "email",
+        },
+      });
+
+      expect(authConfig.beforeLogin).toBeUndefined();
     });
   });
 

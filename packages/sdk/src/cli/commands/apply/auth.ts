@@ -2,6 +2,7 @@ import { fromJson, type MessageInitShape } from "@bufbuild/protobuf";
 import { ValueSchema } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
 import {
+  AuthHookPoint,
   AuthIDPConfig_AuthType,
   AuthOAuth2Client_ClientType,
   AuthOAuth2Client_GrantType,
@@ -16,6 +17,7 @@ import { type AuthService } from "@/cli/services/auth/service";
 import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "@/cli/shared/client";
 import { OAuth2ClientSchema } from "@/parser/service/auth";
 import { createChangeSet } from "./change-set";
+import { authHookFunctionName } from "./function-registry";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
@@ -31,6 +33,7 @@ import type {
   TenantProvider as TenantProviderConfig,
 } from "@/types/auth.generated";
 import type {
+  CreateAuthHookRequestSchema,
   CreateAuthIDPConfigRequestSchema,
   CreateAuthMachineUserRequestSchema,
   CreateAuthOAuth2ClientRequestSchema,
@@ -39,6 +42,7 @@ import type {
   CreateAuthServiceRequestSchema,
   CreateTenantConfigRequestSchema,
   CreateUserProfileConfigRequestSchema,
+  DeleteAuthHookRequestSchema,
   DeleteAuthIDPConfigRequestSchema,
   DeleteAuthMachineUserRequestSchema,
   DeleteAuthOAuth2ClientRequestSchema,
@@ -47,6 +51,7 @@ import type {
   DeleteAuthServiceRequestSchema,
   DeleteTenantConfigRequestSchema,
   DeleteUserProfileConfigRequestSchema,
+  UpdateAuthHookRequestSchema,
   UpdateAuthIDPConfigRequestSchema,
   UpdateAuthMachineUserRequestSchema,
   UpdateAuthOAuth2ClientRequestSchema,
@@ -144,6 +149,12 @@ export async function applyAuth(
       ),
     ]);
 
+    // AuthHooks (after machine users, since hooks reference invokers)
+    await Promise.all([
+      ...changeSet.authHook.creates.map((create) => client.createAuthHook(create.request)),
+      ...changeSet.authHook.updates.map((update) => client.updateAuthHook(update.request)),
+    ]);
+
     // OAuth2Clients
     await Promise.all([
       ...changeSet.oauth2Client.creates.map(async (create) => {
@@ -210,6 +221,9 @@ export async function applyAuth(
       changeSet.oauth2Client.deletes.map((del) => client.deleteAuthOAuth2Client(del.request)),
     );
 
+    // AuthHooks (before machine users, since hooks reference invokers)
+    await Promise.all(changeSet.authHook.deletes.map((del) => client.deleteAuthHook(del.request)));
+
     // MachineUsers
     await Promise.all(
       changeSet.machineUser.deletes.map((del) => client.deleteAuthMachineUser(del.request)),
@@ -261,6 +275,7 @@ export async function planAuth(context: PlanContext) {
     userProfileConfigChangeSet,
     tenantConfigChangeSet,
     machineUserChangeSet,
+    authHookChangeSet,
     oauth2ClientChangeSet,
     scimChangeSet,
     scimResourceChangeSet,
@@ -269,6 +284,7 @@ export async function planAuth(context: PlanContext) {
     planUserProfileConfigs(client, workspaceId, auths, deletedServices),
     planTenantConfigs(client, workspaceId, auths, deletedServices),
     planMachineUsers(client, workspaceId, auths, deletedServices),
+    planAuthHooks(client, workspaceId, auths, deletedServices),
     planOAuth2Clients(client, workspaceId, auths, deletedServices),
     planSCIMConfigs(client, workspaceId, auths, deletedServices),
     planSCIMResources(client, workspaceId, auths, deletedServices),
@@ -279,6 +295,7 @@ export async function planAuth(context: PlanContext) {
   userProfileConfigChangeSet.print();
   tenantConfigChangeSet.print();
   machineUserChangeSet.print();
+  authHookChangeSet.print();
   oauth2ClientChangeSet.print();
   scimChangeSet.print();
   scimResourceChangeSet.print();
@@ -289,6 +306,7 @@ export async function planAuth(context: PlanContext) {
       userProfileConfig: userProfileConfigChangeSet,
       tenantConfig: tenantConfigChangeSet,
       machineUser: machineUserChangeSet,
+      authHook: authHookChangeSet,
       oauth2Client: oauth2ClientChangeSet,
       scim: scimChangeSet,
       scimResource: scimResourceChangeSet,
@@ -1459,4 +1477,111 @@ function protoSCIMAttribute(attr: SCIMAttribute): MessageInitShape<typeof AuthSC
     canonicalValues: attr.canonicalValues ?? undefined,
     subAttributes: attr.subAttributes?.map((attr) => protoSCIMAttribute(attr)),
   };
+}
+
+type CreateAuthHook = {
+  name: string;
+  request: MessageInitShape<typeof CreateAuthHookRequestSchema>;
+};
+
+type UpdateAuthHook = {
+  name: string;
+  request: MessageInitShape<typeof UpdateAuthHookRequestSchema>;
+};
+
+type DeleteAuthHook = {
+  name: string;
+  request: MessageInitShape<typeof DeleteAuthHookRequestSchema>;
+};
+
+async function planAuthHooks(
+  client: OperatorClient,
+  workspaceId: string,
+  auths: ReadonlyArray<Readonly<AuthService>>,
+  deletedServices: ReadonlyArray<string>,
+) {
+  const changeSet = createChangeSet<CreateAuthHook, UpdateAuthHook, DeleteAuthHook>("Auth hooks");
+
+  for (const auth of auths) {
+    const { parsedConfig: config } = auth;
+    const beforeLogin = config.beforeLogin;
+
+    let existingHook: boolean;
+    try {
+      await client.getAuthHook({
+        workspaceId,
+        namespaceName: config.name,
+        hookPoint: AuthHookPoint.BEFORE_LOGIN,
+      });
+      existingHook = true;
+    } catch (error) {
+      if (error instanceof ConnectError && error.code === Code.NotFound) {
+        existingHook = false;
+      } else {
+        throw error;
+      }
+    }
+
+    if (beforeLogin) {
+      const hookRequest = {
+        workspaceId,
+        namespaceName: config.name,
+        hook: {
+          hookPoint: AuthHookPoint.BEFORE_LOGIN,
+          scriptRef: authHookFunctionName(config.name, "before-login"),
+          invoker: {
+            namespace: config.name,
+            machineUserName: beforeLogin.invoker,
+          },
+        },
+      };
+
+      if (existingHook) {
+        changeSet.updates.push({
+          name: `${config.name}/before-login`,
+          request: hookRequest,
+        });
+      } else {
+        changeSet.creates.push({
+          name: `${config.name}/before-login`,
+          request: hookRequest,
+        });
+      }
+    } else if (existingHook) {
+      changeSet.deletes.push({
+        name: `${config.name}/before-login`,
+        request: {
+          workspaceId,
+          namespaceName: config.name,
+          hookPoint: AuthHookPoint.BEFORE_LOGIN,
+        },
+      });
+    }
+  }
+
+  for (const namespaceName of deletedServices) {
+    try {
+      await client.getAuthHook({
+        workspaceId,
+        namespaceName,
+        hookPoint: AuthHookPoint.BEFORE_LOGIN,
+      });
+      changeSet.deletes.push({
+        name: `${namespaceName}/before-login`,
+        request: {
+          workspaceId,
+          namespaceName,
+          hookPoint: AuthHookPoint.BEFORE_LOGIN,
+        },
+      });
+    } catch (error) {
+      if (error instanceof ConnectError && error.code === Code.NotFound) {
+        // No existing hook to delete
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  return changeSet;
 }
