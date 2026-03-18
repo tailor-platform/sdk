@@ -17,7 +17,7 @@ jobs:
         os: [ubuntu-latest, macos-latest]
         node: [22, 24]
         exclude:
-          # Save macOS runner minutes (10x cost) - only test LTS
+          # Save macOS runner minutes (10x cost) - skip Current (24), keep LTS (22) only
           - os: macos-latest
             node: 24
     runs-on: ${{ matrix.os }}

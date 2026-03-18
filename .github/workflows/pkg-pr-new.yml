@@ -80,11 +80,9 @@ jobs:
       matrix:
         runtime: [node, bun]
         pm: [pnpm, npm, yarn]
-        node: [18, 22, 24]
+        node: [22, 24]
         exclude:
           # Bun has its own runtime version; only run once per PM
-          - runtime: bun
-            node: 18
           - runtime: bun
             node: 22
     runs-on: ubuntu-latest
@@ -144,6 +142,7 @@ jobs:
             exit 1
           fi
 
+      # Lockfile-less install is expected: scaffolded projects have no lockfile
       - name: Install dependencies
         working-directory: /tmp/test-init-app
         run: ${{ matrix.pm }} install

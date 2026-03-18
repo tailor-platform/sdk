@@ -12,7 +12,7 @@ import { OperatorService } from "@tailor-proto/tailor/v1/service_pb";
 import { z } from "zod";
 import { logger } from "./logger";
 import { readPackageJson } from "./package-json";
-import { isBun } from "./runtime";
+import { isBun, isDeno } from "./runtime";
 
 export const platformBaseUrl = process.env.PLATFORM_URL ?? "https://api.tailor.tech";
 
@@ -65,7 +65,7 @@ export async function createTransport(
   baseUrl: string,
   interceptors: Interceptor[],
 ): Promise<Transport> {
-  if (isBun()) {
+  if (isBun() || isDeno()) {
     const { createConnectTransport } = await import("@connectrpc/connect-web");
     return createConnectTransport({ baseUrl, interceptors });
   }

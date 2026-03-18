@@ -18,6 +18,7 @@ vi.mock("@connectrpc/connect-web", () => ({
 describe("createTransport", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.clearAllMocks();
   });
 
   test("uses connect-node transport on Node.js", async () => {
@@ -33,6 +34,17 @@ describe("createTransport", () => {
 
   test("uses connect-web transport on Bun", async () => {
     vi.stubGlobal("Bun", {});
+    const transport = await createTransport("https://example.com", []);
+    const connectWeb = await import("@connectrpc/connect-web");
+    expect(connectWeb.createConnectTransport).toHaveBeenCalledWith({
+      baseUrl: "https://example.com",
+      interceptors: [],
+    });
+    expect(transport).toEqual({ type: "web-transport" });
+  });
+
+  test("uses connect-web transport on Deno", async () => {
+    vi.stubGlobal("Deno", {});
     const transport = await createTransport("https://example.com", []);
     const connectWeb = await import("@connectrpc/connect-web");
     expect(connectWeb.createConnectTransport).toHaveBeenCalledWith({
