@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "vite-plus/test";
 import { startWorkflow } from "@tailor-platform/sdk/cli";
 import config from "../tailor.config";
 import userProfileSyncWorkflow from "../src/workflow/sync-profile";

@@ -1,4 +1,4 @@
-import { describe, it, expectTypeOf } from "vitest";
+import { describe, it, expectTypeOf } from "vite-plus/test";
 import { t } from "./type";
 
 describe("typeName method type safety", () => {

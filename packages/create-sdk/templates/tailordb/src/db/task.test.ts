@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "vite-plus/test";
 import { task } from "./task";
 import { user } from "./user";
 import { category } from "./category";

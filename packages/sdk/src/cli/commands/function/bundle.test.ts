@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it } from "vite-plus/test";
 import { bundleForTestRun, type ResolvedMachineUser } from "./bundle";
 import type { DetectedFunction } from "./detect";
 

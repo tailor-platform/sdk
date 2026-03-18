@@ -1,4 +1,4 @@
-import { describe, test, expect, vi } from "vitest";
+import { describe, test, expect, vi } from "vite-plus/test";
 import { fetchAll, formatRequestParams, MAX_PAGE_SIZE, parseMethodName } from "./client";
 
 describe("fetchAll", () => {

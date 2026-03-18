@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { describe, expect, it, beforeEach, afterAll } from "vitest";
+import { describe, expect, it, beforeEach, afterAll } from "vite-plus/test";
 import {
   createSnapshotFromLocalTypes,
   loadSnapshot,

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { gql, GraphQLClient } from "graphql-request";
-import { describe, expect, inject, test } from "vitest";
+import { describe, expect, inject, test } from "vite-plus/test";
 
 function createGraphQLClient(): GraphQLClient {
   const endpoint = new URL("/query", inject("url")).href;

@@ -1,5 +1,5 @@
 import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "vite-plus/test";
 import resolver from "./showEnv";
 
 describe("showEnv resolver", () => {

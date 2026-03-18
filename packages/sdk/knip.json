@@ -2,6 +2,20 @@
   "$schema": "https://unpkg.com/knip@5/schema.json",
   "ignoreExportsUsedInFile": true,
   "tags": ["-lintignore"],
+  "entry": [
+    "src/configure/index.ts",
+    "src/cli/index.ts",
+    "src/cli/lib.ts",
+    "src/cli/skills.ts",
+    "src/utils/test/index.ts",
+    "src/kysely/index.ts",
+    "src/plugin/index.ts",
+    "src/plugin/builtin/kysely-type/index.ts",
+    "src/plugin/builtin/enum-constants/index.ts",
+    "src/plugin/builtin/file-utils/index.ts",
+    "src/plugin/builtin/seed/index.ts",
+    "src/seed/index.ts"
+  ],
   "ignore": [
     "scripts/**",
     "e2e/fixtures/**",
@@ -13,21 +27,10 @@
     "@liam-hq/cli",
     "@typescript/native-preview",
     "eslint-plugin-import",
-    "oxlint",
-    "oxlint-tsgolint",
     "serve",
     "tsx",
+    "vitest",
     "zinfer"
   ],
-  "ignoreBinaries": [
-    "vitest",
-    "tsdown",
-    "oxlint",
-    "eslint",
-    "tsc",
-    "tsgo",
-    "knip",
-    "publint",
-    "zinfer"
-  ]
+  "ignoreBinaries": ["eslint", "knip", "publint", "tsc", "tsgo", "vp", "zinfer"]
 }

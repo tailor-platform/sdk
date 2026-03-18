@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "vite-plus/test";
 import { createDepCollectorPlugin } from "./dep-collector-plugin";
 import type { Plugin } from "rolldown";
 

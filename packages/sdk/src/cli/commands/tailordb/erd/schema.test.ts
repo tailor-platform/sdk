@@ -6,7 +6,7 @@ import {
   TailorDBType_FieldConfigSchema,
 } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
 import * as path from "pathe";
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vite-plus/test";
 import { writeTblsSchemaToFile, buildTblsSchema, toTblsColumn } from "./schema";
 import type {
   TailorDBType as TailorDBProtoType,

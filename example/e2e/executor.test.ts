@@ -3,7 +3,7 @@ import {
   ExecutorTriggerType,
 } from "@tailor-platform/tailor-proto/executor_resource_pb";
 import { gql } from "graphql-request";
-import { describe, expect, inject, test } from "vitest";
+import { describe, expect, inject, test } from "vite-plus/test";
 import { createGraphQLClient, createOperatorClient } from "./utils";
 
 describe("controlplane", async () => {

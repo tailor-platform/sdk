@@ -1,4 +1,4 @@
-import { describe, it } from "vitest";
+import { describe, it } from "vite-plus/test";
 import { createWorkflow, createWorkflowJob } from "@/configure/services/workflow";
 import { type GetWorkflowOptions, type GetWorkflowTypedOptions } from "./get";
 

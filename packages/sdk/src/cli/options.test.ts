@@ -1,5 +1,5 @@
 import { extractFields, isLazyCommand } from "politty";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi } from "vite-plus/test";
 import { mainCommand } from "./index";
 import type { AnyCommand, ExtractedFields, SubCommandValue } from "politty";
 

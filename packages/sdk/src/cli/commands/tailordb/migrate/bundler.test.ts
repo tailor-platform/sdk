@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { describe, expect, it, beforeEach, afterAll } from "vitest";
+import { describe, expect, it, beforeEach, afterAll } from "vite-plus/test";
 import { bundleMigrationScript } from "./bundler";
 
 const TEST_BUNDLER_BASE = path.join(__dirname, "__test_bundler__");

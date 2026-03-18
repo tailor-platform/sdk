@@ -1,4 +1,4 @@
-import { describe, it, expectTypeOf, expect } from "vitest";
+import { describe, it, expectTypeOf, expect } from "vite-plus/test";
 import { t } from "@/configure/types";
 import { db } from "./schema";
 import type { Hook } from "./types";

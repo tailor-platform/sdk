@@ -1,4 +1,4 @@
-import { describe, test, expect } from "vitest";
+import { describe, test, expect } from "vite-plus/test";
 import { buildExecutorArgsExpr, buildResolverOperationHookExpr } from "./runtime-args";
 
 describe("buildExecutorArgsExpr", () => {

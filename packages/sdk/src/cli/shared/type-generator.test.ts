@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { defineAuth } from "@/configure/services/auth";
 import { t } from "@/configure/types/type";
 import { extractAttributesFromConfig, generateTypeDefinition } from "./type-generator";

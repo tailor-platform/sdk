@@ -5,7 +5,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { expect } from "vitest";
+import { expect } from "vite-plus/test";
 import { importPath } from "./helpers.js";
 
 export type WorkDirContext = {

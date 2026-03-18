@@ -1,4 +1,4 @@
-import { describe, expectTypeOf, it } from "vitest";
+import { describe, expectTypeOf, it } from "vite-plus/test";
 import { defineAuth } from "@/configure/services/auth";
 import { db } from "@/configure/services/tailordb";
 import { createWorkflow, createWorkflowJob } from "@/configure/services/workflow";

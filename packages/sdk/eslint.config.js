@@ -44,7 +44,7 @@ export default defineConfig([
     },
   },
   {
-    files: ["src/**/*.ts", "tsdown.config.ts", "vitest.config.ts"],
+    files: ["src/**/*.ts", "vite.config.ts"],
     rules: {
       "@typescript-eslint/consistent-type-imports": [
         "error",

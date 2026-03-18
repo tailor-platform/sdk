@@ -76,15 +76,15 @@
     }
   },
   "scripts": {
-    "test": "vitest",
-    "test:unit": "vitest --project=unit",
-    "test:e2e": "vitest --project=e2e",
-    "test:coverage": "vitest --coverage",
-    "docs:check": "vitest run --project=unit src/cli/docs.test.ts",
-    "docs:update": "POLITTY_DOCS_UPDATE=true vitest run --project=unit src/cli/docs.test.ts",
-    "build": "tsdown",
-    "lint": "oxlint --type-aware . && eslint --cache .",
-    "lint:fix": "oxlint --type-aware . --fix && eslint --cache . --fix",
+    "test": "vp test",
+    "test:unit": "vp test --project=unit",
+    "test:e2e": "vp test --project=e2e",
+    "test:coverage": "vp test --coverage",
+    "docs:check": "vp test run --project=unit src/cli/docs.test.ts",
+    "docs:update": "POLITTY_DOCS_UPDATE=true vp test run --project=unit src/cli/docs.test.ts",
+    "build": "vp pack",
+    "lint": "vp lint --type-aware . && eslint --cache .",
+    "lint:fix": "vp lint --type-aware . --fix && eslint --cache . --fix",
     "typecheck": "tsc --noEmit",
     "typecheck:go": "tsgo",
     "perf:typecheck": "bash scripts/perf/exec.sh",
@@ -94,7 +94,7 @@
     "measure:bundle": "node ../../scripts/measure-bundle-size-sonda.js",
     "knip": "knip",
     "publint": "publint --strict",
-    "generate": "zinfer && node -e \"const f=require('fs').readdirSync('src/types').filter(f=>f.endsWith('.generated.ts')).map(f=>'src/types/'+f);if(f.length)require('child_process').execSync('pnpm oxfmt --write '+f.join(' '),{stdio:'inherit'})\""
+    "generate": "zinfer && node -e \"const f=require('fs').readdirSync('src/types').filter(f=>f.endsWith('.generated.ts')).map(f=>'src/types/'+f);if(f.length)require('child_process').execSync('vp fmt --write '+f.join(' '),{stdio:'inherit'})\""
   },
   "dependencies": {
     "@0no-co/graphql.web": "1.2.0",
@@ -157,13 +157,11 @@
     "eslint": "9.39.4",
     "eslint-plugin-jsdoc": "62.8.0",
     "eslint-plugin-oxlint": "1.39.0",
-    "oxlint": "1.39.0",
-    "oxlint-tsgolint": "0.16.0",
     "sonda": "0.11.1",
-    "tsdown": "0.21.2",
     "typescript": "5.9.3",
     "typescript-eslint": "8.57.0",
-    "vitest": "4.1.0",
+    "vite-plus": "catalog:",
+    "vitest": "catalog:",
     "zinfer": "0.1.7"
   }
 }

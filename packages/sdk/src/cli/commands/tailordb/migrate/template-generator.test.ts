@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "pathe";
-import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import { describe, expect, it, beforeEach, afterEach } from "vite-plus/test";
 import { SCHEMA_SNAPSHOT_VERSION, type MigrationDiff } from "./diff-calculator";
 import {
   SCHEMA_FILE_NAME,

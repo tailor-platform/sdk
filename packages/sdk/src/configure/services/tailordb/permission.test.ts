@@ -1,4 +1,4 @@
-import { describe, test } from "vitest";
+import { describe, test } from "vite-plus/test";
 import type { PermissionCondition } from "./permission";
 
 describe("tailordb permission types", () => {

@@ -25,17 +25,17 @@ pre-commit:
         - "example/generated/**"
         - "example/seed/**"
         - "packages/tailor-proto/**"
-      run: pnpm oxfmt --check {staged_files}
+      run: pnpm exec vp fmt --check {staged_files}
 
     checks:
       glob: "*.{ts,js}"
       run: >-
-        pnpm exec turbo run build lint typecheck:go knip
-        --filter=@tailor-platform/sdk --filter=example
-        --no-update-notifier --output-logs=errors-only
-        && pnpm exec turbo run lint
-        --filter='./packages/create-sdk/templates/*'
-        --no-update-notifier --output-logs=errors-only
+        pnpm exec vp run --filter @tailor-platform/sdk --filter example build --cache
+        && pnpm exec vp run --filter @tailor-platform/sdk --filter example generate --cache
+        && pnpm exec vp run --filter @tailor-platform/sdk --filter example lint --cache
+        && pnpm exec vp run --filter @tailor-platform/sdk --filter example typecheck:go --cache
+        && pnpm exec vp run --filter @tailor-platform/sdk --filter example knip --cache
+        && pnpm exec vp run --filter './packages/create-sdk/templates/*' lint --cache
 
 post-commit:
   commands:

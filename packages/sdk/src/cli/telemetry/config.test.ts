@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach } from "vitest";
+import { describe, test, expect, beforeEach, afterEach } from "vite-plus/test";
 import { parseTelemetryConfig } from "./config";
 
 describe("parseTelemetryConfig", () => {

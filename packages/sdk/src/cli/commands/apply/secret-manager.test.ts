@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { describe, test, expect, vi, beforeEach } from "vite-plus/test";
 import { applySecretManager, planSecretManager } from "./secret-manager";
 import { hashValue } from "./secrets-state";
 import type { PlanContext } from "@/cli/commands/apply/apply";

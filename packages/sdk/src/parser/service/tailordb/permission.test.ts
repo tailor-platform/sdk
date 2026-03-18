@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { normalizeActionPermission, normalizeGqlPermission } from "./permission";
 
 type Permission = Parameters<typeof normalizeActionPermission>[0];

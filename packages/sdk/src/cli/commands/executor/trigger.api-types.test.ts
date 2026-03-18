@@ -1,4 +1,4 @@
-import { describe, it } from "vitest";
+import { describe, it } from "vite-plus/test";
 import { createExecutor } from "@/configure/services/executor";
 import { idpUserCreatedTrigger } from "@/configure/services/executor/trigger/event";
 import { scheduleTrigger } from "@/configure/services/executor/trigger/schedule";

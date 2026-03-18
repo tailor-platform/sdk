@@ -5,10 +5,10 @@
   "scripts": {
     "deploy": "tailor-sdk apply",
     "generate": "tailor-sdk generate",
-    "format": "oxfmt --write .",
-    "format:check": "oxfmt --check .",
-    "lint": "oxlint --type-aware . && eslint --cache .",
-    "lint:fix": "oxlint --type-aware --fix . && eslint --cache --fix .",
+    "format": "vp fmt --write .",
+    "format:check": "vp fmt --check .",
+    "lint": "vp lint --type-aware . && eslint --cache .",
+    "lint:fix": "vp lint --type-aware --fix . && eslint --cache --fix .",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
@@ -17,10 +17,8 @@
     "@types/node": "24.12.0",
     "eslint": "9.39.4",
     "eslint-plugin-oxlint": "1.39.0",
-    "oxfmt": "0.24.0",
-    "oxlint": "1.39.0",
-    "oxlint-tsgolint": "0.16.0",
     "typescript": "5.9.3",
-    "typescript-eslint": "8.57.0"
+    "typescript-eslint": "8.57.0",
+    "vite-plus": "catalog:"
   }
 }

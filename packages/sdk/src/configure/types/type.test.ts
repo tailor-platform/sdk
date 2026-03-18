@@ -1,4 +1,4 @@
-import { describe, it, expect, expectTypeOf } from "vitest";
+import { describe, it, expect, expectTypeOf } from "vite-plus/test";
 import { t } from "./type";
 import type { output } from "./helpers";
 import type { TailorUser } from "./user";

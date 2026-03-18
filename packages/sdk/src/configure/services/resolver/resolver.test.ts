@@ -1,4 +1,4 @@
-import { describe, expectTypeOf, test, expect } from "vitest";
+import { describe, expectTypeOf, test, expect } from "vite-plus/test";
 import { db } from "@/configure/services/tailordb";
 import { t } from "@/configure/types";
 import { createResolver } from "./resolver";

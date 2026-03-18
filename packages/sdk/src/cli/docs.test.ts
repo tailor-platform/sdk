@@ -1,7 +1,7 @@
 import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { assertDocMatch, createCommandRenderer } from "politty/docs";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vite-plus/test";
 import { z } from "zod";
 import { commonArgs } from "./shared/args";
 import { mainCommand } from "./index";
@@ -13,7 +13,7 @@ import type { FileConfig } from "politty/docs";
  * @returns Formatted markdown content
  */
 function mdFormatter(content: string): string {
-  return execSync("pnpm oxfmt --stdin-filepath=file.md", {
+  return execSync("vp fmt --stdin-filepath=file.md", {
     input: content,
     encoding: "utf-8",
   });

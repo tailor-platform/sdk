@@ -1,4 +1,4 @@
-import { inject } from "vitest";
+import { inject } from "vite-plus/test";
 import type { Client } from "@connectrpc/connect";
 import type { OperatorService } from "@tailor-platform/tailor-proto/service_pb";
 

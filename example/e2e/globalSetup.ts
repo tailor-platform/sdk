@@ -4,9 +4,9 @@ import {
   getMachineUserToken,
   show,
 } from "@tailor-platform/sdk/cli";
-import type { TestProject } from "vitest/node";
+import type { TestProject } from "vite-plus/test/node";
 
-declare module "vitest" {
+declare module "vite-plus/test" {
   export interface ProvidedContext {
     url: string;
     token: string;

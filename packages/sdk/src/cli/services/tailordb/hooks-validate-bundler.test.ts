@@ -1,7 +1,7 @@
 import { writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "pathe";
-import { describe, expect, it, beforeAll, afterAll } from "vitest";
+import { describe, expect, it, beforeAll, afterAll } from "vite-plus/test";
 import {
   findUndefinedReferences,
   collectSourceBindings,

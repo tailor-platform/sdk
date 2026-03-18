@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { build } from "tsdown";
+import { build } from "vite-plus/pack";
 
 interface LibraryModule {
   name: string;

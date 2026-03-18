@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, test, expect, beforeEach, afterEach, vi } from "vite-plus/test";
 
 describe("telemetry", () => {
   const originalEnv = process.env;

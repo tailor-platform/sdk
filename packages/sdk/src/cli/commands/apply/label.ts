@@ -45,7 +45,7 @@ export async function buildMetaRequest(
   return {
     trn,
     labels: {
-      ...(existingLabels ?? {}),
+      ...existingLabels,
       [sdkNameLabelKey]: appName,
       "sdk-version": sdkVersion,
     },

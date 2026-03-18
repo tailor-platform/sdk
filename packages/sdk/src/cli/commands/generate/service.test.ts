@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { describe, it, expect, beforeEach, afterEach, vi, afterAll } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi, afterAll } from "vite-plus/test";
 import { defineApplication } from "@/cli/services/application";
 import { createResolver } from "@/configure/services/resolver/resolver";
 import { db } from "@/configure/services/tailordb/schema";
@@ -36,7 +36,7 @@ vi.mock("@/cli/shared/logger", async (importOriginal) => {
   return {
     ...actual,
     logger: {
-      ...(actual.logger ?? {}),
+      ...actual.logger,
       log: vi.fn(),
       debug: vi.fn(),
       warn: vi.fn(),

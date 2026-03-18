@@ -3,7 +3,7 @@ import {
   AuthOAuth2Client_GrantType,
   UserProfileProviderConfig_UserProfileProviderType,
 } from "@tailor-platform/tailor-proto/auth_resource_pb";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "vite-plus/test";
 import { authTrn, filterByMetadata } from "./metadata";
 import { createOperatorClient } from "./utils";
 

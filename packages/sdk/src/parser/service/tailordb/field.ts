@@ -40,9 +40,7 @@ export const stringifyFunction = (fn: Function): string => {
  * @param fn - Hook function
  * @returns JavaScript expression calling the hook
  */
-const convertHookToExpr = (
-  fn: NonNullable<Hook<unknown, unknown>["create"] | Hook<unknown, unknown>["update"]>,
-): string => {
+const convertHookToExpr = (fn: NonNullable<Hook<unknown, unknown>["create"]>): string => {
   const precompiledExpr = getPrecompiledScriptExpr(fn);
   if (precompiledExpr) {
     return precompiledExpr;

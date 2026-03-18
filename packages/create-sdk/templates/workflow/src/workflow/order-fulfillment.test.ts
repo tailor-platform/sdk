@@ -1,5 +1,5 @@
 import { WORKFLOW_TEST_ENV_KEY } from "@tailor-platform/sdk/test";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 import workflow, {
   fulfillOrder,
   processPayment,

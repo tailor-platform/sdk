@@ -23,7 +23,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { create } from "@bufbuild/protobuf";
 import { AuthInvokerSchema, type AuthInvoker } from "@tailor-proto/tailor/v1/auth_resource_pb";
-import { describe, test, expect, beforeAll } from "vitest";
+import { describe, test, expect, beforeAll } from "vite-plus/test";
 import { bundleForTestRun, type ResolvedMachineUser } from "../src/cli/commands/function/bundle";
 import { detectFunctionType } from "../src/cli/commands/function/detect";
 import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";

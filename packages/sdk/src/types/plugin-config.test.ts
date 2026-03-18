@@ -1,4 +1,4 @@
-import { describe, it, expectTypeOf } from "vitest";
+import { describe, it, expectTypeOf } from "vite-plus/test";
 import type { Plugin } from "@/types/plugin";
 import type { PluginConfig } from "@/types/plugin-config.generated";
 

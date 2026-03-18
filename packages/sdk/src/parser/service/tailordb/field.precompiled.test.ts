@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { db } from "@/configure/services/tailordb/schema";
 import { toSchemaOutputs } from "@/utils/test/internal";
 import { parseFieldConfig } from "./field";

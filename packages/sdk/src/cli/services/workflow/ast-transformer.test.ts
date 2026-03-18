@@ -1,5 +1,5 @@
 import { parseSync } from "oxc-parser";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { findAllJobs, detectTriggerCalls, buildJobNameMap } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
 import { transformFunctionTriggers } from "./trigger-transformer";

@@ -1,4 +1,4 @@
-import { describe, it, expectTypeOf, expect } from "vitest";
+import { describe, it, expectTypeOf, expect } from "vite-plus/test";
 import { db } from "@/configure/services/tailordb/schema";
 import { t } from "@/configure/types/type";
 import { AuthConfigSchema, OAuth2ClientSchema } from "./schema";

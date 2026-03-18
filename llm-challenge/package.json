@@ -9,7 +9,7 @@
     "challenge:verify-solution": "tsx runner/run.ts --all --use-solution",
     "challenge:solve": "tsx runner/run.ts --all --solve",
     "challenge:analyze": "tsx runner/analyze.ts",
-    "test:runner": "vitest run --config vitest.runner.config.ts",
+    "test:runner": "vp test run --config vitest.runner.config.ts",
     "typecheck": "tsc --noEmit",
     "typecheck:go": "tsgo"
   },
@@ -21,7 +21,8 @@
     "@types/node": "24.12.0",
     "tsx": "4.21.0",
     "typescript": "5.9.3",
-    "vitest": "4.1.0"
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
   },
   "engines": {
     "node": ">= 22.14.0"

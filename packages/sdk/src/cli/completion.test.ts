@@ -3,7 +3,7 @@ import {
   generateCandidates,
   parseCompletionContext,
 } from "politty/completion";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vite-plus/test";
 import { mainCommand } from "./index";
 
 vi.mock("node:module", async (importOriginal) => ({

@@ -1,4 +1,4 @@
-import { describe, test, expect } from "vitest";
+import { describe, test, expect } from "vite-plus/test";
 import { chunkSeedData, DEFAULT_MAX_MESSAGE_SIZE, type SeedData } from "./seed-chunker";
 
 describe("chunkSeedData", () => {

@@ -1,4 +1,4 @@
-import { describe, it, expectTypeOf } from "vitest";
+import { describe, it, expectTypeOf } from "vite-plus/test";
 import { createWorkflowJob, type WorkflowJob } from "./job";
 
 describe("WorkflowJob type inference", () => {

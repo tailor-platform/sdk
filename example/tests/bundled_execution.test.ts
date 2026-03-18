@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { setupTailordbMock, setupWorkflowMock, createImportMain } from "@tailor-platform/sdk/test";
 import { format as formatDate } from "date-fns";
-import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, test, vi } from "vite-plus/test";
 
 describe("bundled execution tests", () => {
   const actualDir = path.join(__dirname, "fixtures/plugins");

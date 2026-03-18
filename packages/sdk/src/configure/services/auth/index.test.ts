@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { describe, it, expect, expectTypeOf } from "vitest";
+import { describe, it, expect, expectTypeOf } from "vite-plus/test";
 import { t } from "@/configure/types/type";
 import { db } from "../tailordb/schema";
 import { defineAuth, type AuthInvoker } from "./index";

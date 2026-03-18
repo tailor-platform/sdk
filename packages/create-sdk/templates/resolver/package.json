@@ -5,14 +5,14 @@
   "scripts": {
     "generate": "tailor-sdk generate",
     "deploy": "tailor-sdk apply",
-    "test": "vitest --project unit",
-    "test:unit": "vitest --project unit",
+    "test": "vp test --project unit",
+    "test:unit": "vp test --project unit",
     "test:bundled:prepare": "TAILOR_PLATFORM_SDK_BUILD_ONLY=true tailor-sdk apply -c tailor.config.ts",
-    "test:bundled": "pnpm test:bundled:prepare && vitest --project bundled",
-    "format": "oxfmt --write .",
-    "format:check": "oxfmt --check .",
-    "lint": "oxlint --type-aware . && eslint --cache .",
-    "lint:fix": "oxlint --type-aware --fix . && eslint --cache --fix .",
+    "test:bundled": "pnpm test:bundled:prepare && vp test --project bundled",
+    "format": "vp fmt --write .",
+    "format:check": "vp fmt --check .",
+    "lint": "vp lint --type-aware . && eslint --cache .",
+    "lint:fix": "vp lint --type-aware --fix . && eslint --cache --fix .",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
@@ -22,11 +22,9 @@
     "@types/node": "24.12.0",
     "eslint": "9.39.4",
     "eslint-plugin-oxlint": "1.39.0",
-    "oxfmt": "0.24.0",
-    "oxlint": "1.39.0",
-    "oxlint-tsgolint": "0.16.0",
     "typescript": "5.9.3",
     "typescript-eslint": "8.57.0",
-    "vitest": "4.1.0"
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
   }
 }

@@ -1,6 +1,6 @@
 import path from "node:path";
 import { createImportMain, setupTailordbMock } from "@tailor-platform/sdk/test";
-import { beforeAll, beforeEach, describe, expect, test } from "vitest";
+import { beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
 
 const outputDir = path.join(__dirname, "../.tailor-sdk");
 

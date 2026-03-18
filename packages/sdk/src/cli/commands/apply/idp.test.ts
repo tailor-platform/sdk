@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { describe, test, expect, vi, beforeEach } from "vite-plus/test";
 import { applyIdP, type planIdP } from "./idp";
 import type { OperatorClient } from "@/cli/shared/client";
 

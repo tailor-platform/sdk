@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 import { db } from "@/configure/services/tailordb";
 import { PluginManager } from "@/plugin/manager";
 import type { Plugin } from "@/types/plugin";

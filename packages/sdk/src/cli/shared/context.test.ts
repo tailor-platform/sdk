@@ -1,7 +1,16 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { describe, it, expect, vi, beforeEach, afterEach, afterAll, beforeAll } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+  afterAll,
+  beforeAll,
+} from "vite-plus/test";
 import { loadAccessToken, loadConfigPath, loadWorkspaceId, writePlatformConfig } from "./context";
 import { logger } from "./logger";
 

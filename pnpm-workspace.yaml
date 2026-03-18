@@ -3,6 +3,14 @@ minimumReleaseAgeExclude:
   - "@toiroakr/lines-db"
   - politty
   - zinfer
+  - vite-plus
+  - "@voidzero-dev/*"
+  - oxlint
+  - "@oxlint/*"
+  - oxlint-tsgolint
+  - "@oxlint-tsgolint/*"
+  - oxfmt
+  - "@oxfmt/*"
 
 packages:
   - packages/*
@@ -16,3 +24,17 @@ allowBuilds:
   lefthook: true
   multiline-ts: true
   oxc-resolver: true
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vitest: npm:@voidzero-dev/vite-plus-test@latest
+  vite-plus: latest
+overrides:
+  vite: "catalog:"
+  vitest: "catalog:"
+peerDependencyRules:
+  allowAny:
+    - vite
+    - vitest
+  allowedVersions:
+    vite: "*"
+    vitest: "*"

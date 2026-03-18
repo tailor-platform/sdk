@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { describe, test, expect, vi, beforeEach } from "vite-plus/test";
 import { planExecutor } from "./executor";
 import { sdkNameLabelKey } from "./label";
 import type { PlanContext } from "./apply";

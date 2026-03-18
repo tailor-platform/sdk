@@ -5,7 +5,7 @@ import {
   ExecutorTargetType,
   ExecutorTriggerType,
 } from "@tailor-proto/tailor/v1/executor_resource_pb";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "vite-plus/test";
 import {
   toExecutorInfo,
   toExecutorJobAttemptInfo,

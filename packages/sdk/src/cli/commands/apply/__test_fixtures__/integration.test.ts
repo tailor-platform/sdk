@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, test, vi } from "vite-plus/test";
 import { setupTailordbMock, createImportMain } from "@/utils/test/mock";
 import { prepareFixtures } from "./prepare";
 

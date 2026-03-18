@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "vite-plus/test";
 import { ZodError } from "zod";
 import { ExecutorSchema } from "@/parser/service/executor";
 import { ResolverSchema } from "@/parser/service/resolver";

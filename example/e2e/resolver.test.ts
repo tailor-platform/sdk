@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { PipelineResolverView } from "@tailor-platform/tailor-proto/pipeline_pb";
 import { gql } from "graphql-request";
 import ml from "multiline-ts";
-import { describe, expect, inject, test } from "vitest";
+import { describe, expect, inject, test } from "vite-plus/test";
 import { filterByMetadata, pipelineTrn } from "./metadata";
 import { createGraphQLClient, createOperatorClient } from "./utils";
 

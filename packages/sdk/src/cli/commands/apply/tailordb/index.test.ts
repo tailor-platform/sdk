@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { describe, test, expect, vi, beforeEach } from "vite-plus/test";
 import { sdkNameLabelKey } from "../label";
 import { applyTailorDB, planTailorDB } from ".";
 import type { PlanContext } from "../apply";
