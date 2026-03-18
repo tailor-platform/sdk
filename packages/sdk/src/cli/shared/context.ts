@@ -49,8 +49,10 @@ const pfConfigSchemaV1 = z.object({
   current_user: z.string().nullable(),
 });
 
+const LATEST_CONFIG_VERSION = 2;
+
 const pfConfigSchemaV2 = z.object({
-  version: z.literal(2),
+  version: z.literal(LATEST_CONFIG_VERSION),
   users: z.partialRecord(z.string(), pfUserSchemaV2),
   profiles: z.partialRecord(z.string(), pfProfileSchema),
   current_user: z.string().nullable(),
@@ -96,7 +98,7 @@ function migrateV1ToV2(v1Config: PfConfigV1): PfConfig {
   }
 
   return {
-    version: 2,
+    version: LATEST_CONFIG_VERSION,
     users,
     profiles: v1Config.profiles,
     current_user: v1Config.current_user,
@@ -123,6 +125,18 @@ export function readPlatformConfig(): PfConfig {
 
   const rawConfig = parseYAML(fs.readFileSync(configPath, "utf-8"));
 
+  // Check for unsupported future versions
+  const version =
+    rawConfig != null && typeof rawConfig === "object" && "version" in rawConfig
+      ? (rawConfig as { version: unknown }).version
+      : undefined;
+  if (typeof version === "number" && version > LATEST_CONFIG_VERSION) {
+    throw new Error(ml`
+      Config file uses version ${String(version)}, but this SDK only supports up to version ${String(LATEST_CONFIG_VERSION)}.
+      Please update your SDK: pnpm update @tailor-platform/sdk
+    `);
+  }
+
   // Try v2 first
   const v2Result = pfConfigSchemaV2.safeParse(rawConfig);
   if (v2Result.success) {
@@ -135,8 +149,11 @@ export function readPlatformConfig(): PfConfig {
     return migrateV1ToV2(v1Result.data);
   }
 
-  // Neither v1 nor v2 — throw with v2 error for clarity
-  return pfConfigSchemaV2.parse(rawConfig);
+  // Neither v1 nor v2
+  throw new Error(ml`
+    Failed to parse config file at ${configPath}.
+    The file may be corrupted or created by an incompatible SDK version.
+  `);
 }
 
 function toV1ForDisk(config: PfConfig): PfConfigV1 {
