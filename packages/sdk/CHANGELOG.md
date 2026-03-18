@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 1.28.0
+
+### Minor Changes
+
+- [#776](https://github.com/tailor-platform/sdk/pull/776) [`a2734bf`](https://github.com/tailor-platform/sdk/commit/a2734bfbfb71c06be324d162f2301f2930e3bfa6) Thanks [@toiroakr](https://github.com/toiroakr)! - Add managed vault guard to CLI secret commands and document runtime secret access via defineSecretManager
+
 ## 1.27.0
 
 ### Minor Changes
