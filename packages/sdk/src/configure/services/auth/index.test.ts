@@ -231,7 +231,7 @@ describe("defineAuth", () => {
   describe("beforeLogin hook", () => {
     it("includes beforeLogin in auth config when provided", () => {
       const handler = async (_args: { claims: Record<string, unknown>; idpConfigName: string }) => {
-        return {};
+        // no return value
       };
       const authConfig = defineAuth("hook-auth", {
         userProfile: {

@@ -226,7 +226,7 @@ export type BeforeLoginHookArgs = {
 };
 
 export type BeforeLoginHook<MachineUserNames extends string> = {
-  handler: (args: BeforeLoginHookArgs) => Promise<unknown>;
+  handler: (args: BeforeLoginHookArgs) => Promise<void>;
   invoker: MachineUserNames;
 };
 
