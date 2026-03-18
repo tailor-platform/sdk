@@ -108,16 +108,14 @@ const startAuthServer = async () => {
 
 async function loginAsMachineUser(args: { clientId: string; clientSecret?: string }) {
   const clientSecret = args.clientSecret ?? (await prompt.password({ message: "Client secret" }));
-  const resp = await fetchPlatformMachineUserToken(args.clientId, clientSecret);
-  const expiresAt = new Date();
-  expiresAt.setSeconds(expiresAt.getSeconds() + resp.expires_in);
+  const tokens = await fetchPlatformMachineUserToken(args.clientId, clientSecret);
 
   const pfConfig = readPlatformConfig();
   pfConfig.users = {
     ...pfConfig.users,
     [args.clientId]: {
-      access_token: resp.access_token,
-      token_expires_at: expiresAt.toISOString(),
+      access_token: tokens.accessToken,
+      token_expires_at: new Date(tokens.expiresAt!).toISOString(),
     },
   };
   pfConfig.current_user = args.clientId;
