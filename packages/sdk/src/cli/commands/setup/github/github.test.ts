@@ -64,6 +64,12 @@ describe("buildFiles", () => {
     });
     expect(content).toContain("WORKSPACE_NAME: test$&end");
   });
+
+  it("parameterizes concurrency group with workspace name", () => {
+    const content = getDeployContent();
+    expect(content).toContain("group: deploy-my-app");
+    expect(content).not.toContain("group: deploy\n");
+  });
 });
 
 describe("installNodeYaml", () => {

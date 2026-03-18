@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: deploy
+  group: deploy-__WORKSPACE_NAME__
   cancel-in-progress: false
 
 env:
