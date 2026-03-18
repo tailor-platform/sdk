@@ -32,7 +32,84 @@ workspace/
 
 Secrets are key-value pairs stored within a vault. Secret values are encrypted at rest and only accessible at runtime by authorized services.
 
+## Managing Secrets
+
+There are two ways to manage secrets: declaratively via `defineSecretManager()` in `tailor.config.ts`, or imperatively via the [CLI](#cli-management). Management is scoped per vault — **do not mix both approaches for the same vault**. When a vault is defined in config, the config becomes the source of truth: any secrets in that vault not present in the config will be deleted on `tailor-sdk apply`.
+
+### Declarative Configuration
+
+Define your secrets in `tailor.config.ts` using `defineSecretManager()`. Each key is a vault name, and its value is a record of secret names to their values. These values are deployed to each vault on `tailor-sdk apply`.
+
+Since secret values should not be committed to source control, use environment variables:
+
+```typescript
+import { defineConfig, defineSecretManager } from "@tailor-platform/sdk";
+
+export const secrets = defineSecretManager({
+  "api-keys": {
+    "stripe-secret-key": process.env.STRIPE_SECRET_KEY!,
+    "sendgrid-api-key": process.env.SENDGRID_API_KEY!,
+  },
+  database: {
+    "analytics-connection-string": process.env.ANALYTICS_DB_URL!,
+  },
+});
+
+export default defineConfig({
+  name: "my-app",
+  secrets,
+  // ...other config
+});
+```
+
+The exported `secrets` object provides type-safe `get()` and `getAll()` methods for runtime access from resolvers, executors, and workflows.
+
 ## Using Secrets
+
+### Runtime Access with `get()` / `getAll()`
+
+Use the `secrets` object exported from `tailor.config.ts` to retrieve secret values at runtime. The vault and secret names are fully type-checked based on the `defineSecretManager()` configuration.
+
+#### `get(vault, secret)`
+
+Retrieves a single secret value.
+
+```typescript
+import { createResolver } from "@tailor-platform/sdk";
+import { secrets } from "../tailor.config";
+
+export default createResolver({
+  name: "call-stripe",
+  // ...
+  operation: async ({ input }) => {
+    const apiKey = await secrets.get("api-keys", "stripe-secret-key");
+    // Use apiKey to call the Stripe API
+  },
+});
+```
+
+#### `getAll(vault, secrets)`
+
+Retrieves multiple secret values at once from the same vault.
+
+```typescript
+import { createResolver } from "@tailor-platform/sdk";
+import { secrets } from "../tailor.config";
+
+export default createResolver({
+  name: "send-notification",
+  // ...
+  operation: async ({ input }) => {
+    const [apiKey, webhookSecret] = await secrets.getAll("api-keys", [
+      "sendgrid-api-key",
+      "stripe-secret-key",
+    ]);
+    // Use the retrieved secrets
+  },
+});
+```
+
+Both methods return `Promise<string | undefined>` (or an array of them for `getAll`).
 
 ### In Webhook Operations
 
@@ -70,6 +147,10 @@ The secret reference format:
 At runtime, these references are replaced with the actual secret values.
 
 ## CLI Management
+
+Use the CLI to manage vaults that are **not** defined in `defineSecretManager()`. If you attempt to modify a vault that is managed by the config, the CLI will show a warning and ask for confirmation. Once confirmed, the CLI releases the vault's ownership label so it is no longer managed by config.
+
+After ownership is released, the next `tailor-sdk apply` will treat the vault as an unmanaged resource and prompt for confirmation before taking any action on it.
 
 ### Create a Vault
 
