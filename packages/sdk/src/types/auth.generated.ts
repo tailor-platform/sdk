@@ -282,6 +282,16 @@ export type TenantProviderInput = TenantProvider;
 export type AuthConfigInput =
   | {
       name: string;
+      hooks?:
+        | {
+            beforeLogin?:
+              | {
+                  handler: Function;
+                  invoker: string;
+                }
+              | undefined;
+          }
+        | undefined;
       machineUsers?:
         | {
             [x: string]: {
@@ -419,6 +429,16 @@ export type AuthConfigInput =
           | undefined;
         attributeList?: string[] | undefined;
       };
+      hooks?:
+        | {
+            beforeLogin?:
+              | {
+                  handler: Function;
+                  invoker: string;
+                }
+              | undefined;
+          }
+        | undefined;
       machineUsers?:
         | {
             [x: string]: {
@@ -568,6 +588,16 @@ export type AuthConfigInput =
           fields: any;
         };
       };
+      hooks?:
+        | {
+            beforeLogin?:
+              | {
+                  handler: Function;
+                  invoker: string;
+                }
+              | undefined;
+          }
+        | undefined;
       machineUsers?:
         | {
             [x: string]: {
@@ -684,6 +714,16 @@ export type AuthConfigInput =
 export type AuthConfig =
   | {
       name: string;
+      hooks?:
+        | {
+            beforeLogin?:
+              | {
+                  handler: Function;
+                  invoker: string;
+                }
+              | undefined;
+          }
+        | undefined;
       machineUsers?:
         | {
             [x: string]: {
@@ -831,6 +871,16 @@ export type AuthConfig =
           | undefined;
         attributeList?: string[] | undefined;
       };
+      hooks?:
+        | {
+            beforeLogin?:
+              | {
+                  handler: Function;
+                  invoker: string;
+                }
+              | undefined;
+          }
+        | undefined;
       machineUsers?:
         | {
             [x: string]: {
@@ -990,6 +1040,16 @@ export type AuthConfig =
           fields: any;
         };
       };
+      hooks?:
+        | {
+            beforeLogin?:
+              | {
+                  handler: Function;
+                  invoker: string;
+                }
+              | undefined;
+          }
+        | undefined;
       machineUsers?:
         | {
             [x: string]: {

@@ -1,11 +1,13 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { z } from "zod";
-import { workspaceArgs } from "@/cli/shared/args";
+import { confirmationArgs, workspaceArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
+import { prompt } from "@/cli/shared/prompt";
 import { secretValueArgs } from "./args";
+import { checkVaultManaged, releaseVaultOwnership } from "./check-vault-managed";
 
 export const createSecretCommand = defineAppCommand({
   name: "create",
@@ -14,6 +16,7 @@ export const createSecretCommand = defineAppCommand({
     .object({
       ...workspaceArgs,
       ...secretValueArgs,
+      ...confirmationArgs,
     })
     .strict(),
   run: async (args) => {
@@ -27,6 +30,18 @@ export const createSecretCommand = defineAppCommand({
       profile: args.profile,
     });
 
+    const managed = await checkVaultManaged({
+      client,
+      workspaceId,
+      vaultName: args["vault-name"],
+    });
+    if (managed.isManaged && !args.yes) {
+      const confirmed = await prompt.confirm({
+        message: "Do you want to proceed?",
+        default: false,
+      });
+      if (!confirmed) return;
+    }
     try {
       await client.createSecretManagerSecret({
         workspaceId,
@@ -44,6 +59,10 @@ export const createSecretCommand = defineAppCommand({
         }
       }
       throw error;
+    }
+
+    if (managed.isManaged) {
+      await releaseVaultOwnership({ client, ...managed });
     }
 
     logger.success(`Secret: ${args.name} created in vault: ${args["vault-name"]}`);

@@ -131,5 +131,12 @@ export type Resolver = {
     | undefined;
   /** Enable publishing events from this resolver */
   publishEvents?: boolean | undefined;
+  /** Machine user to execute this resolver as */
+  authInvoker?:
+    | {
+        namespace: string;
+        machineUserName: string;
+      }
+    | undefined;
 };
 export type ResolverInput = Resolver;
