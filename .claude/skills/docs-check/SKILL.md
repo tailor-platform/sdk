@@ -58,19 +58,3 @@ Use WebFetch on the most relevant pages (usually 1-3). Extract:
 - **Caveats** -- note any limits, edge cases, or non-obvious behavior
 
 Keep the output focused. Do not dump entire pages -- extract only what is relevant to the question at hand.
-
-## Site structure reference
-
-Main sections and what they cover:
-
-- `/guides/tailordb/` -- Data modeling, fields, permissions, hooks, indexes, relationships, validations, filters, versioning, advanced settings (aggregation, bulk-upsert, CDC, vector-search)
-- `/guides/auth/` -- Authentication, OAuth2, IdP integrations (Auth0, Okta, Entra ID, Google Workspace, built-in IdP), SCIM
-- `/guides/executor/` -- Event triggers, webhooks, scheduled tasks, function/workflow/GraphQL operations
-- `/guides/function/` -- Serverless functions, built-in interfaces, DB access, IDP user management, debugging
-- `/guides/workflow/` -- Workflow creation, triggering, monitoring
-- `/guides/resolver/` -- Custom GraphQL resolvers
-- `/guides/secretmanager/` -- Secret management
-- `/sdk/` -- SDK configuration, CLI reference, services, generators, plugins, testing
-- `/reference/` -- API reference, CEL/JS scripting, TRN format, platform limits, timeouts, security
-- `/app-shell/` -- Frontend framework: components, routing, authentication, theming
-- `/tutorials/` -- Step-by-step guides for common tasks
