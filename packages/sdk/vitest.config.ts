@@ -1,7 +1,9 @@
 import * as path from "node:path";
 import { defineConfig } from "vitest/config";
+import { loadYamlText } from "./scripts/yaml-text-plugin.mjs";
 
 export default defineConfig({
+  plugins: [{ name: "yaml-text", load: loadYamlText }],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
