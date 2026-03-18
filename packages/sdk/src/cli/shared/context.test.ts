@@ -119,6 +119,7 @@ describe("loadWorkspaceId", () => {
     delete process.env.TAILOR_PLATFORM_PROFILE;
     writePlatformConfig({
       version: 2,
+      min_sdk_version: "1.29.0",
       users: {},
       profiles: {},
       current_user: null,
@@ -167,6 +168,7 @@ describe("loadWorkspaceId", () => {
       process.env.TAILOR_PLATFORM_WORKSPACE_ID = validUUID;
       writePlatformConfig({
         version: 2,
+        min_sdk_version: "1.29.0",
         users: {},
         profiles: {
           myprofile: { user: "test", workspace_id: otherUUID },
@@ -182,6 +184,7 @@ describe("loadWorkspaceId", () => {
     it("returns workspaceId from profile when opts.profile provided", () => {
       writePlatformConfig({
         version: 2,
+        min_sdk_version: "1.29.0",
         users: {},
         profiles: { myprofile: { user: "testuser", workspace_id: validUUID } },
         current_user: null,
@@ -193,6 +196,7 @@ describe("loadWorkspaceId", () => {
     it("throws error when profile not found", () => {
       writePlatformConfig({
         version: 2,
+        min_sdk_version: "1.29.0",
         users: {},
         profiles: {},
         current_user: null,
@@ -205,6 +209,7 @@ describe("loadWorkspaceId", () => {
     it("throws error when profile workspace_id is invalid UUID", () => {
       writePlatformConfig({
         version: 2,
+        min_sdk_version: "1.29.0",
         users: {},
         profiles: { badprofile: { user: "testuser", workspace_id: invalidUUID } },
         current_user: null,
@@ -220,6 +225,7 @@ describe("loadWorkspaceId", () => {
       process.env.TAILOR_PLATFORM_PROFILE = "envprofile";
       writePlatformConfig({
         version: 2,
+        min_sdk_version: "1.29.0",
         users: {},
         profiles: { envprofile: { user: "testuser", workspace_id: validUUID } },
         current_user: null,
@@ -232,6 +238,7 @@ describe("loadWorkspaceId", () => {
       process.env.TAILOR_PLATFORM_PROFILE = "envprofile";
       writePlatformConfig({
         version: 2,
+        min_sdk_version: "1.29.0",
         users: {},
         profiles: {
           envprofile: { user: "testuser", workspace_id: otherUUID },
@@ -267,6 +274,7 @@ describe("loadAccessToken", () => {
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
     writePlatformConfig({
       version: 2,
+      min_sdk_version: "1.29.0",
       users: {},
       profiles: {},
       current_user: null,
@@ -295,6 +303,7 @@ describe("loadAccessToken", () => {
       vi.stubEnv("TAILOR_PLATFORM_TOKEN", validToken);
       writePlatformConfig({
         version: 2,
+        min_sdk_version: "1.29.0",
         users: {
           testuser: {
             access_token: otherToken,
@@ -329,6 +338,7 @@ describe("loadAccessToken", () => {
     it("returns token from profile when useProfile is true and profile provided", async () => {
       writePlatformConfig({
         version: 2,
+        min_sdk_version: "1.29.0",
         users: {
           testuser: {
             access_token: validToken,
@@ -349,6 +359,7 @@ describe("loadAccessToken", () => {
     it("throws error when profile not found", async () => {
       writePlatformConfig({
         version: 2,
+        min_sdk_version: "1.29.0",
         users: {},
         profiles: {},
         current_user: null,
@@ -361,6 +372,7 @@ describe("loadAccessToken", () => {
     it("does not use profile when useProfile is false", async () => {
       writePlatformConfig({
         version: 2,
+        min_sdk_version: "1.29.0",
         users: {
           currentuser: {
             access_token: validToken,
@@ -384,6 +396,7 @@ describe("loadAccessToken", () => {
       vi.stubEnv("TAILOR_PLATFORM_PROFILE", "envprofile");
       writePlatformConfig({
         version: 2,
+        min_sdk_version: "1.29.0",
         users: {
           testuser: {
             access_token: validToken,
@@ -405,6 +418,7 @@ describe("loadAccessToken", () => {
       vi.stubEnv("TAILOR_PLATFORM_PROFILE", "envprofile");
       writePlatformConfig({
         version: 2,
+        min_sdk_version: "1.29.0",
         users: {
           envuser: {
             access_token: otherToken,
@@ -434,6 +448,7 @@ describe("loadAccessToken", () => {
     it("returns token from current_user when no env or profile", async () => {
       writePlatformConfig({
         version: 2,
+        min_sdk_version: "1.29.0",
         users: {
           currentuser: {
             access_token: validToken,

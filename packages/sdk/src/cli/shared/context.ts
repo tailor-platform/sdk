@@ -50,9 +50,17 @@ const pfConfigSchemaV1 = z.object({
 });
 
 const LATEST_CONFIG_VERSION = 2;
+const V2_MIN_SDK_VERSION = "1.29.0";
 
 const pfConfigSchemaV2 = z.object({
   version: z.literal(LATEST_CONFIG_VERSION),
+  min_sdk_version: z.templateLiteral([
+    z.number().int(),
+    ".",
+    z.number().int(),
+    ".",
+    z.number().int(),
+  ]),
   users: z.partialRecord(z.string(), pfUserSchemaV2),
   profiles: z.partialRecord(z.string(), pfProfileSchema),
   current_user: z.string().nullable(),
@@ -99,6 +107,7 @@ function migrateV1ToV2(v1Config: PfConfigV1): PfConfig {
 
   return {
     version: LATEST_CONFIG_VERSION,
+    min_sdk_version: V2_MIN_SDK_VERSION,
     users,
     profiles: v1Config.profiles,
     current_user: v1Config.current_user,
@@ -131,9 +140,16 @@ export function readPlatformConfig(): PfConfig {
       ? (rawConfig as { version: unknown }).version
       : undefined;
   if (typeof version === "number" && version > LATEST_CONFIG_VERSION) {
+    const minSdk =
+      "min_sdk_version" in (rawConfig as object)
+        ? String((rawConfig as { min_sdk_version: unknown }).min_sdk_version)
+        : undefined;
+    const updateHint = minSdk
+      ? `Please update your SDK to >= ${minSdk}: pnpm update @tailor-platform/sdk`
+      : "Please update your SDK: pnpm update @tailor-platform/sdk";
     throw new Error(ml`
       Config file uses version ${String(version)}, but this SDK only supports up to version ${String(LATEST_CONFIG_VERSION)}.
-      Please update your SDK: pnpm update @tailor-platform/sdk
+      ${updateHint}
     `);
   }
 
