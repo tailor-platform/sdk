@@ -9,18 +9,16 @@ vi.mock("std-env", () => ({
 
 describe("crash-report list command", () => {
   let tmpDir: string;
-  const originalEnv = process.env;
 
   beforeEach(() => {
-    process.env = { ...originalEnv };
-    delete process.env.TAILOR_CRASH_REPORTS_LOCAL;
-    delete process.env.TAILOR_CRASH_REPORTS_REMOTE;
+    vi.stubEnv("TAILOR_CRASH_REPORTS_LOCAL", undefined);
+    vi.stubEnv("TAILOR_CRASH_REPORTS_REMOTE", undefined);
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "crash-report-list-test-"));
     vi.resetModules();
   });
 
   afterEach(() => {
-    process.env = originalEnv;
+    vi.unstubAllEnvs();
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
