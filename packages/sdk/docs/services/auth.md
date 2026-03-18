@@ -341,6 +341,37 @@ idProvider: idp.provider("my-provider", "my-client"),
 
 See [IdP](./idp.md) for configuring identity providers.
 
+## Before Login Hook
+
+Run custom logic before a user logs in. This is useful for JIT (Just-In-Time) user provisioning — automatically creating or updating user records when a user authenticates for the first time.
+
+```typescript
+import { defineAuth } from "@tailor-platform/sdk";
+import { user } from "./tailordb/user";
+
+export const auth = defineAuth("my-auth", {
+  userProfile: {
+    type: user,
+    usernameField: "email",
+  },
+  machineUsers: {
+    "hook-invoker": {
+      attributes: { role: "ADMIN" },
+    },
+  },
+  beforeLogin: {
+    handler: async ({ claims, idpConfigName }) => {
+      // Provision or update user based on IdP claims
+    },
+    invoker: "hook-invoker",
+  },
+});
+```
+
+**handler**: An async function that receives `{ claims, idpConfigName }` and is called before each login. `claims` contains the token claims from the identity provider, and `idpConfigName` is the name of the IdP configuration used for authentication.
+
+**invoker**: The machine user whose permissions are used to execute the hook. Must reference a machine user defined in the same auth configuration.
+
 ## CLI Commands
 
 Manage Auth resources using the CLI:
