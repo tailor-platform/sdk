@@ -125,10 +125,14 @@ jobs:
 
       # npx is used regardless of matrix.pm: pkg.pr.new URLs are most reliable
       # via npx, and the PM matrix tests dependency resolution, not scaffolding.
+      # npm_config_user_agent is cleared so create-sdk skips its internal install;
+      # the "Install dependencies" step below tests resolution with the matrix PM.
       - name: Scaffold project
         run: |
           cd /tmp
           npx --yes --package=${{ needs.publish-create-sdk.outputs.create_sdk_url }} create-sdk test-init-app --template hello-world
+        env:
+          npm_config_user_agent: ""
 
       - name: Verify generated files
         run: |
