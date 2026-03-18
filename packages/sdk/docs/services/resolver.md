@@ -304,4 +304,6 @@ export default createResolver({
 });
 ```
 
-The `authInvoker` option accepts the return value of `auth.invoker()`, which specifies the auth namespace and machine user name. The resolver's body function will execute with the permissions of the specified machine user.
+The `authInvoker` option accepts the return value of `auth.invoker()`, which specifies the auth namespace and machine user name.
+
+**Note:** `authInvoker` controls the permissions for database operations and other platform actions, but the `user` object passed to the `body` function still reflects the original caller who invoked the resolver.
