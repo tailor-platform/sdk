@@ -2,20 +2,11 @@ import * as path from "node:path";
 import Sonda from "sonda/rolldown";
 import { defineConfig } from "vite-plus";
 import { loadYamlText } from "./scripts/yaml-text-plugin.mjs";
-import type { Plugin } from "rolldown";
 
-function yamlTextPlugin(): Plugin {
-  return {
-    name: "yaml-text",
-    load(id) {
-      const result = loadYamlText(id);
-      return result ? { code: result } : undefined;
-    },
-  };
-}
+const yamlTextPlugin = { name: "yaml-text", load: loadYamlText } as const;
 
 export default defineConfig({
-  plugins: [{ name: "yaml-text", load: loadYamlText }],
+  plugins: [yamlTextPlugin],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -51,7 +42,7 @@ export default defineConfig({
     }),
     sourcemap: true,
     plugins: [
-      yamlTextPlugin(),
+      yamlTextPlugin,
       Sonda({
         open: false,
         format: "json",
