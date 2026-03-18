@@ -49,6 +49,17 @@ export const auth = defineAuth("my-auth", {
       },
     },
   },
+  hooks: {
+    beforeLogin: {
+      handler: async ({ claims, idpConfigName }) => {
+        // Example before login hook implementation
+        console.log("Before login hook triggered with claims:", claims);
+        console.log("IDP Config Name:", idpConfigName);
+        // You can perform additional checks or modifications to claims here
+      },
+      invoker: "manager-machine-user",
+    },
+  },
   oauth2Clients: {
     sample: {
       redirectURIs: ["https://example.com/callback", `${website.url}/callback`],

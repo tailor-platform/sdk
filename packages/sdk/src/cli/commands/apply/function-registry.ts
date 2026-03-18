@@ -86,6 +86,16 @@ export function workflowJobFunctionName(jobName: string): string {
 }
 
 /**
+ * Build a function registry name for an auth hook.
+ * @param authName - Auth namespace name
+ * @param hookPoint - Hook point identifier (e.g. "before-login")
+ * @returns Function registry name
+ */
+export function authHookFunctionName(authName: string, hookPoint: string): string {
+  return `auth-hook--${authName}--${hookPoint}`;
+}
+
+/**
  * Collect all function entries from bundled scripts for all services.
  * @param application - Application definition
  * @param workflowJobs - Collected workflow jobs from config
@@ -152,6 +162,26 @@ export function collectFunctionEntries(
       });
     } catch {
       logger.warn(`Function file not found: ${scriptPath}`);
+    }
+  }
+
+  // Auth hooks
+  for (const app of application.applications) {
+    if (app.authService?.config.hooks?.beforeLogin) {
+      const authName = app.authService.config.name;
+      const funcName = authHookFunctionName(authName, "before-login");
+      const scriptPath = path.join(distDir, "auth-hooks", `${funcName}.js`);
+      try {
+        const content = fs.readFileSync(scriptPath, "utf-8");
+        entries.push({
+          name: funcName,
+          scriptContent: content,
+          contentHash: computeContentHash(content),
+          description: `Auth hook: ${authName}/before-login`,
+        });
+      } catch {
+        logger.warn(`Function file not found: ${scriptPath}`);
+      }
     }
   }
 
