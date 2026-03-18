@@ -8,15 +8,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Development
 
-- `pnpm exec turbo run build` - Build all packages
-- `pnpm exec turbo run test` - Run all tests
-- `pnpm exec turbo run check` - Run format, lint:fix, typecheck:go, and knip in sequence
-- `pnpm exec turbo run generate` - Run code generation
-- `pnpm exec turbo run apply` - Deploy to the Tailor Platform
+- `pnpm build` - Build all packages
+- `pnpm test` - Run all tests
+- `pnpm check` - Run format, lint:fix, typecheck:go, knip, and publint in sequence
+- `pnpm exec vp run -r generate` - Run code generation
+- `pnpm exec vp run -r apply` - Deploy to the Tailor Platform
 
 ### Package-specific (in packages/sdk)
 
-- `pnpm test` / `pnpm test path/to/test.ts` / `pnpm test -t "pattern"` - Run tests with Vitest
+- `pnpm test` / `pnpm test path/to/test.ts` / `pnpm test -t "pattern"` - Run tests with vite-plus (Vitest)
 - `pnpm build` - Build SDK
 - `pnpm docs:check` / `pnpm docs:update` - Check/update CLI documentation
 
@@ -77,5 +77,5 @@ See [docs/](docs/README.md) for developer and contributor documentation.
 
 ## Environment
 
-- Linting runs oxlint first, then ESLint
+- Linting runs oxlint (via `vp lint`) first, then ESLint
 - Lefthook runs pre-commit checks (lint, format, typecheck) and post-commit signature verification

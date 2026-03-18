@@ -19,7 +19,7 @@ pnpm install
 pnpm test
 
 # Build all packages
-pnpm turbo run build
+pnpm build
 
 # Type checking
 pnpm typecheck

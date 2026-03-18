@@ -27,7 +27,7 @@ jobs:
         uses: ./.github/actions/install-deps
 
       - name: Run generate
-        run: pnpm exec turbo run generate
+        run: pnpm exec vp run -r generate
 
       - name: Get changed files
         id: changes
@@ -63,7 +63,7 @@ jobs:
         uses: ./.github/actions/install-deps
 
       - name: Run generate
-        run: pnpm exec turbo run generate
+        run: pnpm exec vp run -r generate
 
       - name: Check for uncommitted changes
         shell: bash

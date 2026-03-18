@@ -24,7 +24,7 @@ jobs:
         uses: ./.github/actions/install-deps
 
       - name: Build SDK
-        run: pnpm exec turbo run build --filter @tailor-platform/sdk
+        run: pnpm exec vp run --filter @tailor-platform/sdk build --cache
 
       - name: Publish SDK to pkg.pr.new
         id: publish

@@ -2,14 +2,14 @@
 
 ## Test Projects
 
-Vitest is configured with two projects (see [`packages/sdk/vitest.config.ts`](../packages/sdk/vitest.config.ts)):
+Vitest is configured with two projects (see [`packages/sdk/vite.config.ts`](../packages/sdk/vite.config.ts)):
 
 - **unit** — Files matching `**/?(*.)+(spec|test).ts` (excludes `e2e/`, `dist/`)
 - **e2e** — Files in `e2e/**/*.test.ts` (120-second timeout)
 
 ```bash
 # All tests
-pnpm exec turbo run test
+pnpm test
 
 # In packages/sdk/:
 pnpm test                      # All (unit + e2e)
