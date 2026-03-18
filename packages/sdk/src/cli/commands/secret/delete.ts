@@ -30,6 +30,7 @@ export const deleteSecretCommand = defineAppCommand({
       profile: args.profile,
     });
 
+    // No additional confirmation for managed vaults — the name-typing confirmation below is a stronger guard.
     await checkVaultManaged({ client, workspaceId, vaultName: args["vault-name"] });
 
     if (!args.yes) {
