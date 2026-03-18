@@ -42,10 +42,6 @@ export const createSecretCommand = defineAppCommand({
       });
       if (!confirmed) return;
     }
-    if (managed.isManaged) {
-      await releaseVaultOwnership({ client, ...managed });
-    }
-
     try {
       await client.createSecretManagerSecret({
         workspaceId,
@@ -63,6 +59,10 @@ export const createSecretCommand = defineAppCommand({
         }
       }
       throw error;
+    }
+
+    if (managed.isManaged) {
+      await releaseVaultOwnership({ client, ...managed });
     }
 
     logger.success(`Secret: ${args.name} created in vault: ${args["vault-name"]}`);

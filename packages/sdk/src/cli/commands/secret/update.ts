@@ -42,10 +42,6 @@ export const updateSecretCommand = defineAppCommand({
       });
       if (!confirmed) return;
     }
-    if (managed.isManaged) {
-      await releaseVaultOwnership({ client, ...managed });
-    }
-
     try {
       await client.updateSecretManagerSecret({
         workspaceId,
@@ -58,6 +54,10 @@ export const updateSecretCommand = defineAppCommand({
         throw new Error(`Secret "${args.name}" not found in vault "${args["vault-name"]}".`);
       }
       throw error;
+    }
+
+    if (managed.isManaged) {
+      await releaseVaultOwnership({ client, ...managed });
     }
 
     logger.success(`Secret: ${args.name} updated in vault: ${args["vault-name"]}`);

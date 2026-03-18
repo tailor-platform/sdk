@@ -44,10 +44,6 @@ export const deleteSecretCommand = defineAppCommand({
       }
     }
 
-    if (managed.isManaged) {
-      await releaseVaultOwnership({ client, ...managed });
-    }
-
     try {
       await client.deleteSecretManagerSecret({
         workspaceId,
@@ -59,6 +55,10 @@ export const deleteSecretCommand = defineAppCommand({
         throw new Error(`Secret "${args.name}" not found in vault "${args["vault-name"]}".`);
       }
       throw error;
+    }
+
+    if (managed.isManaged) {
+      await releaseVaultOwnership({ client, ...managed });
     }
 
     logger.success(`Secret: ${args.name} deleted from vault: ${args["vault-name"]}`);
