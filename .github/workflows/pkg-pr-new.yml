@@ -165,6 +165,11 @@ jobs:
         working-directory: /tmp/test-init-app
         run: bun -e "import('@tailor-platform/sdk').then(m => { console.log('SDK exports:', Object.keys(m).join(', ')); })"
 
+      - name: Verify CLI bootstrap (Bun)
+        if: matrix.runtime == 'bun'
+        working-directory: /tmp/test-init-app
+        run: bun node_modules/@tailor-platform/sdk/dist/cli/index.mjs --version
+
       - name: Typecheck
         working-directory: /tmp/test-init-app
         run: npx tsc --noEmit
