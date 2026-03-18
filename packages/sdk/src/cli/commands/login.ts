@@ -5,6 +5,7 @@ import open from "open";
 import { arg } from "politty";
 import { z } from "zod";
 import {
+  closeConnectionPool,
   fetchPlatformMachineUserToken,
   fetchUserInfo,
   initOAuth2Client,
@@ -157,5 +158,6 @@ export const loginCommand = defineAppCommand({
       await startAuthServer();
     }
     logger.success("Successfully logged in to Tailor Platform.");
+    await closeConnectionPool();
   },
 });

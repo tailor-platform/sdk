@@ -10,6 +10,7 @@
     "zinfer.config.ts"
   ],
   "ignoreDependencies": [
+    "undici",
     "@liam-hq/cli",
     "@typescript/native-preview",
     "eslint-plugin-import",
