@@ -167,7 +167,7 @@ export function collectFunctionEntries(
 
   // Auth hooks
   for (const app of application.applications) {
-    if (app.authService?.config.beforeLogin) {
+    if (app.authService?.config.hooks?.beforeLogin) {
       const authName = app.authService.config.name;
       const funcName = authHookFunctionName(authName, "before-login");
       const scriptPath = path.join(distDir, "auth-hooks", `${funcName}.js`);

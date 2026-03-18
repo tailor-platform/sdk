@@ -226,8 +226,12 @@ export type BeforeLoginHookArgs = {
 };
 
 export type BeforeLoginHook<MachineUserNames extends string> = {
-  handler: (args: BeforeLoginHookArgs) => Promise<void>;
+  handler(args: BeforeLoginHookArgs): Promise<void>;
   invoker: NoInfer<MachineUserNames>;
+};
+
+export type AuthHooks<MachineUserNames extends string> = {
+  beforeLogin?: BeforeLoginHook<MachineUserNames>;
 };
 
 // Input type (before parsing) - used by configure layer
@@ -240,7 +244,7 @@ export type AuthServiceInput<
     | MachineUserAttributeFields
     | undefined,
 > = {
-  beforeLogin?: BeforeLoginHook<MachineUserNames>;
+  hooks?: AuthHooks<MachineUserNames>;
   userProfile?: UserProfile<User, AttributeMap, AttributeList>;
   machineUserAttributes?: MachineUserAttributes;
   machineUsers?: Record<

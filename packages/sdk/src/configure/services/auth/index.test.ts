@@ -241,15 +241,17 @@ describe("defineAuth", () => {
         machineUsers: {
           "hook-invoker": {},
         },
-        beforeLogin: {
-          handler,
-          invoker: "hook-invoker",
+        hooks: {
+          beforeLogin: {
+            handler,
+            invoker: "hook-invoker",
+          },
         },
       });
 
-      expect(authConfig.beforeLogin).toBeDefined();
-      expect(authConfig.beforeLogin!.handler).toBe(handler);
-      expect(authConfig.beforeLogin!.invoker).toBe("hook-invoker");
+      expect(authConfig.hooks!.beforeLogin).toBeDefined();
+      expect(authConfig.hooks!.beforeLogin!.handler).toBe(handler);
+      expect(authConfig.hooks!.beforeLogin!.invoker).toBe("hook-invoker");
     });
 
     it("constrains invoker to machine user names at the type level", () => {
@@ -269,16 +271,18 @@ describe("defineAuth", () => {
           admin: {},
           worker: {},
         },
-        beforeLogin: {
-          handler: async ({ claims, idpConfigName }) => {
-            void claims;
-            void idpConfigName;
+        hooks: {
+          beforeLogin: {
+            handler: async ({ claims, idpConfigName }) => {
+              void claims;
+              void idpConfigName;
+            },
+            invoker: "admin",
           },
-          invoker: "admin",
         },
       });
 
-      expect(authConfig.beforeLogin!.invoker).toBe("admin");
+      expect(authConfig.hooks!.beforeLogin!.invoker).toBe("admin");
       // invoker should not narrow MachineUserNames — both machine users must remain valid
       expectTypeOf(authConfig.invoker).parameter(0).toEqualTypeOf<"admin" | "worker">();
     });
@@ -291,7 +295,7 @@ describe("defineAuth", () => {
         },
       });
 
-      expect(authConfig.beforeLogin).toBeUndefined();
+      expect(authConfig.hooks).toBeUndefined();
     });
   });
 

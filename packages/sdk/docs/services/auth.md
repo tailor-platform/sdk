@@ -359,11 +359,13 @@ export const auth = defineAuth("my-auth", {
       attributes: { role: "ADMIN" },
     },
   },
-  beforeLogin: {
-    handler: async ({ claims, idpConfigName }) => {
-      // Provision or update user based on IdP claims
+  hooks: {
+    beforeLogin: {
+      handler: async ({ claims, idpConfigName }) => {
+        // Provision or update user based on IdP claims
+      },
+      invoker: "hook-invoker",
     },
-    invoker: "hook-invoker",
   },
 });
 ```

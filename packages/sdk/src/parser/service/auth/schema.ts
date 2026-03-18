@@ -222,7 +222,12 @@ const BeforeLoginHookSchema = z.object({
 
 const AuthConfigBaseSchema = z.object({
   name: z.string().describe("Auth service name"),
-  beforeLogin: BeforeLoginHookSchema.optional().describe("Before login auth hook"),
+  hooks: z
+    .object({
+      beforeLogin: BeforeLoginHookSchema.optional().describe("Before login auth hook"),
+    })
+    .optional()
+    .describe("Auth hooks"),
   machineUsers: z
     .record(z.string(), MachineUserSchema)
     .optional()

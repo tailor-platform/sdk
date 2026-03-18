@@ -1504,7 +1504,7 @@ async function planAuthHooks(
 
   for (const auth of auths) {
     const { parsedConfig: config } = auth;
-    const beforeLogin = config.beforeLogin;
+    const beforeLogin = config.hooks?.beforeLogin;
 
     let existingHook: boolean;
     try {

@@ -443,12 +443,12 @@ export async function loadApplication(
   }
 
   // 9.5. Bundle auth hooks
-  if (authResult.authService?.config.beforeLogin) {
+  if (authResult.authService?.config.hooks?.beforeLogin) {
     const authName = authResult.authService.config.name;
     await bundleAuthHooks({
       configPath: config.path,
       authName,
-      handlerAccessPath: `auth.beforeLogin.handler`,
+      handlerAccessPath: `auth.hooks.beforeLogin.handler`,
       triggerContext,
       cache: bundleCache,
       inlineSourcemap,
