@@ -123,6 +123,8 @@ jobs:
           git config --global user.email "ci@example.com"
           git config --global user.name "SDK CI"
 
+      # npx is used regardless of matrix.pm: pkg.pr.new URLs are most reliable
+      # via npx, and the PM matrix tests dependency resolution, not scaffolding.
       - name: Scaffold project
         run: |
           cd /tmp
@@ -145,7 +147,8 @@ jobs:
             exit 1
           fi
 
-      # Lockfile-less install is expected: scaffolded projects have no lockfile
+      # Lockfile-less install is expected: scaffolded projects have no lockfile.
+      # Yarn 4 PnP is not tested here; this validates node_modules-based resolution.
       - name: Install dependencies
         working-directory: /tmp/test-init-app
         run: ${{ matrix.pm }} install
