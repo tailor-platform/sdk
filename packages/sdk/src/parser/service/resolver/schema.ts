@@ -56,6 +56,7 @@ export const ResolverSchema = z.object({
   body: functionSchema.describe("Resolver implementation function"),
   output: TailorFieldSchema.describe("Output field definition"),
   publishEvents: z.boolean().optional().describe("Enable publishing events from this resolver"),
+  // getter defers access to AuthInvokerSchema, avoiding circular initialization with auth/schema.ts
   get authInvoker() {
     return AuthInvokerSchema.optional().describe("Machine user to execute this resolver as");
   },
