@@ -143,7 +143,7 @@ describe("planExecutor", () => {
       Object.groupBy(Object.entries(options?.resolverNames ?? {}), ([, ns]) => ns),
     ).map(([namespace, entries]) => ({
       namespace,
-      resolvers: Object.fromEntries((entries ?? []).map(([name]) => [name, {}])),
+      resolvers: Object.fromEntries((entries ?? []).map(([name]) => [name, { name }])),
     }));
 
     return {

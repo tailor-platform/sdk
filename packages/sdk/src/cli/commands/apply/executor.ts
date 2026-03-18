@@ -194,7 +194,7 @@ function resolveResolverNamespace(
   resolverName: string,
 ): string {
   for (const service of application.resolverServices) {
-    if (service.resolvers[resolverName]) {
+    if (Object.values(service.resolvers).some((r) => r.name === resolverName)) {
       return service.namespace;
     }
   }
