@@ -16,16 +16,13 @@ describe("cleanEnv", () => {
     const original = {
       npm_config_local_prefix: process.env.npm_config_local_prefix,
       npm_package_json: process.env.npm_package_json,
-      TURBO_HASH: process.env.TURBO_HASH,
     };
     process.env.npm_config_local_prefix = "/some/path";
     process.env.npm_package_json = "/some/path/package.json";
-    process.env.TURBO_HASH = "abc123";
     try {
       const env = cleanEnv();
       expect(env.npm_config_local_prefix).toBeUndefined();
       expect(env.npm_package_json).toBeUndefined();
-      expect(env.TURBO_HASH).toBeUndefined();
     } finally {
       if (original.npm_config_local_prefix !== undefined) {
         process.env.npm_config_local_prefix = original.npm_config_local_prefix;
@@ -36,11 +33,6 @@ describe("cleanEnv", () => {
         process.env.npm_package_json = original.npm_package_json;
       } else {
         delete process.env.npm_package_json;
-      }
-      if (original.TURBO_HASH !== undefined) {
-        process.env.TURBO_HASH = original.TURBO_HASH;
-      } else {
-        delete process.env.TURBO_HASH;
       }
     }
   });

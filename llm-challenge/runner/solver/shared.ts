@@ -39,7 +39,6 @@ export function cleanEnv(): NodeJS.ProcessEnv {
   // receives the correct cwd via spawn's `cwd` option.
   delete env.npm_config_local_prefix;
   delete env.npm_package_json;
-  delete env.TURBO_HASH;
   delete env.PWD;
   delete env.INIT_CWD;
 
