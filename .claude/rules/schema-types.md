@@ -60,4 +60,4 @@ import type { TailorDBTypeRaw } from "@/parser/service/tailordb/types";
 1. Edit `src/parser/**/schema.ts`
 2. Run `pnpm -C packages/sdk generate` to regenerate `src/types/*.generated.ts`
 3. Update `src/types/*.ts` (manual types) if new derived types are needed
-4. Run `pnpm exec turbo run check` to verify build, lint, and typecheck
+4. Run `pnpm check` to verify build, lint, and typecheck
