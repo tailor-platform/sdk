@@ -282,10 +282,14 @@ export type TenantProviderInput = TenantProvider;
 export type AuthConfigInput =
   | {
       name: string;
-      beforeLogin?:
+      hooks?:
         | {
-            handler: Function;
-            invoker: string;
+            beforeLogin?:
+              | {
+                  handler: Function;
+                  invoker: string;
+                }
+              | undefined;
           }
         | undefined;
       machineUsers?:
@@ -425,10 +429,14 @@ export type AuthConfigInput =
           | undefined;
         attributeList?: string[] | undefined;
       };
-      beforeLogin?:
+      hooks?:
         | {
-            handler: Function;
-            invoker: string;
+            beforeLogin?:
+              | {
+                  handler: Function;
+                  invoker: string;
+                }
+              | undefined;
           }
         | undefined;
       machineUsers?:
@@ -580,10 +588,14 @@ export type AuthConfigInput =
           fields: any;
         };
       };
-      beforeLogin?:
+      hooks?:
         | {
-            handler: Function;
-            invoker: string;
+            beforeLogin?:
+              | {
+                  handler: Function;
+                  invoker: string;
+                }
+              | undefined;
           }
         | undefined;
       machineUsers?:
@@ -702,10 +714,14 @@ export type AuthConfigInput =
 export type AuthConfig =
   | {
       name: string;
-      beforeLogin?:
+      hooks?:
         | {
-            handler: Function;
-            invoker: string;
+            beforeLogin?:
+              | {
+                  handler: Function;
+                  invoker: string;
+                }
+              | undefined;
           }
         | undefined;
       machineUsers?:
@@ -855,10 +871,14 @@ export type AuthConfig =
           | undefined;
         attributeList?: string[] | undefined;
       };
-      beforeLogin?:
+      hooks?:
         | {
-            handler: Function;
-            invoker: string;
+            beforeLogin?:
+              | {
+                  handler: Function;
+                  invoker: string;
+                }
+              | undefined;
           }
         | undefined;
       machineUsers?:
@@ -1020,10 +1040,14 @@ export type AuthConfig =
           fields: any;
         };
       };
-      beforeLogin?:
+      hooks?:
         | {
-            handler: Function;
-            invoker: string;
+            beforeLogin?:
+              | {
+                  handler: Function;
+                  invoker: string;
+                }
+              | undefined;
           }
         | undefined;
       machineUsers?:
