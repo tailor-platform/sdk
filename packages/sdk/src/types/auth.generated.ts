@@ -282,6 +282,12 @@ export type TenantProviderInput = TenantProvider;
 export type AuthConfigInput =
   | {
       name: string;
+      beforeLogin?:
+        | {
+            handler: Function;
+            invoker: string;
+          }
+        | undefined;
       machineUsers?:
         | {
             [x: string]: {
@@ -419,6 +425,12 @@ export type AuthConfigInput =
           | undefined;
         attributeList?: string[] | undefined;
       };
+      beforeLogin?:
+        | {
+            handler: Function;
+            invoker: string;
+          }
+        | undefined;
       machineUsers?:
         | {
             [x: string]: {
@@ -568,6 +580,12 @@ export type AuthConfigInput =
           fields: any;
         };
       };
+      beforeLogin?:
+        | {
+            handler: Function;
+            invoker: string;
+          }
+        | undefined;
       machineUsers?:
         | {
             [x: string]: {
@@ -684,6 +702,12 @@ export type AuthConfigInput =
 export type AuthConfig =
   | {
       name: string;
+      beforeLogin?:
+        | {
+            handler: Function;
+            invoker: string;
+          }
+        | undefined;
       machineUsers?:
         | {
             [x: string]: {
@@ -831,6 +855,12 @@ export type AuthConfig =
           | undefined;
         attributeList?: string[] | undefined;
       };
+      beforeLogin?:
+        | {
+            handler: Function;
+            invoker: string;
+          }
+        | undefined;
       machineUsers?:
         | {
             [x: string]: {
@@ -990,6 +1020,12 @@ export type AuthConfig =
           fields: any;
         };
       };
+      beforeLogin?:
+        | {
+            handler: Function;
+            invoker: string;
+          }
+        | undefined;
       machineUsers?:
         | {
             [x: string]: {
