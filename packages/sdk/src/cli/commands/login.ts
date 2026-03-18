@@ -5,6 +5,7 @@ import open from "open";
 import { arg } from "politty";
 import { z } from "zod";
 import {
+  closeConnectionPool,
   fetchPlatformMachineUserToken,
   fetchUserInfo,
   initOAuth2Client,
@@ -108,16 +109,14 @@ const startAuthServer = async () => {
 
 async function loginAsMachineUser(args: { clientId: string; clientSecret?: string }) {
   const clientSecret = args.clientSecret ?? (await prompt.password({ message: "Client secret" }));
-  const resp = await fetchPlatformMachineUserToken(args.clientId, clientSecret);
-  const expiresAt = new Date();
-  expiresAt.setSeconds(expiresAt.getSeconds() + resp.expires_in);
+  const tokens = await fetchPlatformMachineUserToken(args.clientId, clientSecret);
 
   const pfConfig = readPlatformConfig();
   await saveUserTokens(
     pfConfig,
     args.clientId,
-    { accessToken: resp.access_token },
-    expiresAt.toISOString(),
+    { accessToken: tokens.accessToken },
+    new Date(tokens.expiresAt!).toISOString(),
   );
   pfConfig.current_user = args.clientId;
   writePlatformConfig(pfConfig);
@@ -157,5 +156,6 @@ export const loginCommand = defineAppCommand({
       await startAuthServer();
     }
     logger.success("Successfully logged in to Tailor Platform.");
+    await closeConnectionPool();
   },
 });

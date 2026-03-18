@@ -32,16 +32,17 @@ export const logoutCommand = defineAppCommand({
       // Tokens may already be missing from keyring — continue with logout
     }
 
-    if (refreshToken && accessToken) {
+    if (accessToken) {
       try {
         const client = initOAuth2Client();
+        const tokenTypeHint = refreshToken ? "refresh_token" : "access_token";
         await client.revoke(
           {
             accessToken,
-            refreshToken,
+            refreshToken: refreshToken ?? null,
             expiresAt: Date.parse(userEntry.token_expires_at),
           },
-          "refresh_token",
+          tokenTypeHint,
         );
       } catch {
         // Best-effort revocation — continue with local logout

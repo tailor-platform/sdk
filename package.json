@@ -32,18 +32,18 @@
     "eslint": "9.39.4",
     "eslint-plugin-import": "2.32.0",
     "globals": "17.0.0",
-    "knip": "5.82.0",
+    "knip": "5.86.0",
     "lefthook": "2.1.4",
     "oxfmt": "0.24.0",
     "pkg-pr-new": "0.0.65",
     "publint": "0.3.18",
     "tsx": "4.21.0",
-    "turbo": "2.8.16",
+    "turbo": "2.8.17",
     "typescript": "5.9.3",
-    "typescript-eslint": "8.53.0"
+    "typescript-eslint": "8.57.0"
   },
   "engines": {
     "node": ">= 22.14.0"
   },
-  "packageManager": "pnpm@10.32.0"
+  "packageManager": "pnpm@10.32.1"
 }

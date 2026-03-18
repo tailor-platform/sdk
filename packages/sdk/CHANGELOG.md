@@ -1,5 +1,69 @@
 # @tailor-platform/sdk
 
+## 1.27.0
+
+### Minor Changes
+
+- [#674](https://github.com/tailor-platform/sdk/pull/674) [`1d50f25`](https://github.com/tailor-platform/sdk/commit/1d50f25aa6baca46fe886dca2c8eeade28f89186) Thanks [@dqn](https://github.com/dqn)! - Add crash reporting for automatic error capture
+
+- [#787](https://github.com/tailor-platform/sdk/pull/787) [`10ade9a`](https://github.com/tailor-platform/sdk/commit/10ade9a4618aad4db4c63143e579de6216ddd07a) Thanks [@remiposo](https://github.com/remiposo)! - Add `authInvoker` option to `createResolver` for specifying a machine user to execute database operations and other platform actions. The `user` in the body function still reflects the original caller. Usage: `authInvoker: auth.invoker("machine-user-name")`
+
+## 1.26.0
+
+### Minor Changes
+
+- [#778](https://github.com/tailor-platform/sdk/pull/778) [`392819d`](https://github.com/tailor-platform/sdk/commit/392819df890ce46f5884c438bdb7f3bce51bc9fd) Thanks [@k1LoW](https://github.com/k1LoW)! - Add `hooks.beforeLogin` to `defineAuth` for running custom logic before user login (e.g. JIT provisioning)
+
+- [#752](https://github.com/tailor-platform/sdk/pull/752) [`e4a965f`](https://github.com/tailor-platform/sdk/commit/e4a965f9934e495e190b00fa48f8fa50b479ec98) Thanks [@dqn](https://github.com/dqn)! - Add `tailor-sdk setup github` command for GitHub Actions workflow generation
+
+### Patch Changes
+
+- [#763](https://github.com/tailor-platform/sdk/pull/763) [`87e55af`](https://github.com/tailor-platform/sdk/commit/87e55af401b033fc3a403c15d5f1e7fce4a36b07) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency eslint-plugin-jsdoc to v62.8.0
+
+- [#764](https://github.com/tailor-platform/sdk/pull/764) [`563b358`](https://github.com/tailor-platform/sdk/commit/563b35801e728684e8cbe67d94b5e53558b49f1e) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update pnpm/action-setup action to v4.4.0
+
+- [#767](https://github.com/tailor-platform/sdk/pull/767) [`0eaa3f3`](https://github.com/tailor-platform/sdk/commit/0eaa3f32acc613ca112dcd5e2562ef43f41e8c8b) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update vitest monorepo to v4.1.0
+
+- [#771](https://github.com/tailor-platform/sdk/pull/771) [`31ac830`](https://github.com/tailor-platform/sdk/commit/31ac8305a90071ffba5150b0989c25adbeb55067) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency turbo to v2.8.17
+
+- [#773](https://github.com/tailor-platform/sdk/pull/773) [`6e2bc16`](https://github.com/tailor-platform/sdk/commit/6e2bc16fdf772d36cb231fc7baa874c018e10904) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency aquaproj/aqua-registry to v4.486.0
+
+## 1.25.4
+
+### Patch Changes
+
+- [#775](https://github.com/tailor-platform/sdk/pull/775) [`a7a99da`](https://github.com/tailor-platform/sdk/commit/a7a99da4d7c1dfcb80db4de5d4fe7e5161c23e64) Thanks [@toiroakr](https://github.com/toiroakr)! - Skip postinstall type generation when no tailor.config.ts is found instead of creating an empty tailor.d.ts
+
+- [#717](https://github.com/tailor-platform/sdk/pull/717) [`cabb93b`](https://github.com/tailor-platform/sdk/commit/cabb93b0b0837122f958be4fadda0da164c527f2) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @types/node to v24.12.0
+
+- [#725](https://github.com/tailor-platform/sdk/pull/725) [`368a2fd`](https://github.com/tailor-platform/sdk/commit/368a2fdd2c1f28d12d5b010a1359322117e0c359) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency knip to v5.86.0
+
+- [#732](https://github.com/tailor-platform/sdk/pull/732) [`0cb5d7f`](https://github.com/tailor-platform/sdk/commit/0cb5d7f296d30e14eeb55a60729583594fd138a4) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency aquaproj/aqua-registry to v4.485.0
+
+- [#733](https://github.com/tailor-platform/sdk/pull/733) [`9543d3a`](https://github.com/tailor-platform/sdk/commit/9543d3a6c36396d6a29020edf15429fe1795bea3) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency oxlint-tsgolint to v0.16.0
+
+- [#734](https://github.com/tailor-platform/sdk/pull/734) [`8460bdc`](https://github.com/tailor-platform/sdk/commit/8460bdc82a2da327a4436856b7a81be1636d1ff5) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency sonda to v0.11.1
+
+- [#737](https://github.com/tailor-platform/sdk/pull/737) [`69fe62c`](https://github.com/tailor-platform/sdk/commit/69fe62c308c971256707953a12e972faf4220697) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency rolldown to v1.0.0-rc.9
+
+- [#738](https://github.com/tailor-platform/sdk/pull/738) [`7db1d9a`](https://github.com/tailor-platform/sdk/commit/7db1d9a646c6833a82191249f7d0c6cd5c2f066b) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency turbo to v2.8.15
+
+- [#740](https://github.com/tailor-platform/sdk/pull/740) [`e9fc3f6`](https://github.com/tailor-platform/sdk/commit/e9fc3f6a2472c230cb8015c3adb45d691b795737) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency typescript-eslint to v8.57.0
+
+- [#747](https://github.com/tailor-platform/sdk/pull/747) [`72c14a7`](https://github.com/tailor-platform/sdk/commit/72c14a795dd60f28ebeae159f06908b88e9eed47) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update anthropics/claude-code-action action to v1.0.72
+
+- [#754](https://github.com/tailor-platform/sdk/pull/754) [`cad764d`](https://github.com/tailor-platform/sdk/commit/cad764d28499466d4cd65786481eca6e0cebfe87) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update actions/create-github-app-token action to v2.2.2
+
+- [#756](https://github.com/tailor-platform/sdk/pull/756) [`1e972a4`](https://github.com/tailor-platform/sdk/commit/1e972a463be48c23ffabf71194f785face7e32f3) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency lefthook to v2.1.4
+
+- [#757](https://github.com/tailor-platform/sdk/pull/757) [`1ceb017`](https://github.com/tailor-platform/sdk/commit/1ceb017f86196c66e19572fb43e12a1989e5f432) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency tsdown to v0.21.2
+
+- [#758](https://github.com/tailor-platform/sdk/pull/758) [`73a5684`](https://github.com/tailor-platform/sdk/commit/73a5684f04467a3eacdedfeb35dd2a3c17690a31) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dorny/paths-filter action to v3.0.3
+
+- [#759](https://github.com/tailor-platform/sdk/pull/759) [`4690057`](https://github.com/tailor-platform/sdk/commit/4690057b4798e728c6dff8851415c62c3c6b0fc7) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update pnpm to v10.32.1
+
+- [#770](https://github.com/tailor-platform/sdk/pull/770) [`6b93e7a`](https://github.com/tailor-platform/sdk/commit/6b93e7a5e673d8f2016f29f3fd4a1436d5ce119b) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix seed and query bundlers to use `@tailor-platform/sdk/kysely` re-export instead of importing `kysely` and `@tailor-platform/function-kysely-tailordb` directly, so they work without users installing these as direct dependencies
+
 ## 1.25.3
 
 ### Patch Changes

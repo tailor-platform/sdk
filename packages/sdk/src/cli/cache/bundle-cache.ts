@@ -6,7 +6,7 @@ import { hashContent, hashFile, hashFiles } from "./hasher";
 import type { CacheStore } from "./store";
 import type { Plugin } from "rolldown";
 
-type BundleKind = "resolver" | "executor" | "workflow-job";
+type BundleKind = "resolver" | "executor" | "workflow-job" | "auth-hook";
 
 type BundleCacheRestoreParams = {
   kind: BundleKind;

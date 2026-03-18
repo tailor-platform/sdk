@@ -1,4 +1,3 @@
-import * as https from "node:https";
 import { OAuth2Client } from "@badgateway/oauth2-client";
 import { MethodOptions_IdempotencyLevel } from "@bufbuild/protobuf/wkt";
 import {
@@ -10,6 +9,7 @@ import {
 } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-node";
 import { OperatorService } from "@tailor-proto/tailor/v1/service_pb";
+import { getGlobalDispatcher } from "undici";
 import { z } from "zod";
 import { logger } from "./logger";
 import { readPackageJson } from "./package-json";
@@ -368,54 +368,26 @@ export async function fetchMachineUserToken(url: string, clientId: string, clien
 }
 
 /**
- * Fetch an OAuth2 access token for a platform machine user.
+ * Fetch an OAuth2 token for a platform machine user via client_credentials grant.
  * @param clientId - Client ID for the platform machine user
  * @param clientSecret - Client secret for the platform machine user
- * @returns Access token
+ * @returns OAuth2 token
  */
 export async function fetchPlatformMachineUserToken(clientId: string, clientSecret: string) {
-  const tokenEndpoint = new URL("/oauth2/platform/token", platformBaseUrl).href;
-  const body = new URLSearchParams({
-    grant_type: "client_credentials",
-    client_id: clientId,
-    client_secret: clientSecret,
-  }).toString();
-
-  // Use node:https instead of fetch to avoid undici keep-alive connection pool
-  // causing libuv UV_HANDLE_CLOSING assertion failure on Windows at process exit.
-  // See: https://github.com/nodejs/node/issues/56645
-  const ua = await userAgent();
-  const rawJson = await new Promise<unknown>((resolve, reject) => {
-    const req = https.request(
-      tokenEndpoint,
-      {
-        method: "POST",
-        headers: {
-          "User-Agent": ua,
-          "Content-Type": "application/x-www-form-urlencoded",
-          "Content-Length": Buffer.byteLength(body),
-        },
-      },
-      (res) => {
-        let data = "";
-        res.on("data", (chunk: string) => (data += chunk));
-        res.on("end", () => {
-          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-            resolve(JSON.parse(data));
-          } else {
-            reject(new Error("Failed to fetch platform machine user token"));
-          }
-        });
-      },
-    );
-    req.on("error", reject);
-    req.end(body);
+  const client = new OAuth2Client({
+    clientId,
+    clientSecret,
+    server: platformBaseUrl,
+    discoveryEndpoint: oauth2DiscoveryEndpoint,
   });
+  return await client.clientCredentials();
+}
 
-  const schema = z.object({
-    token_type: z.string(),
-    access_token: z.string(),
-    expires_in: z.number(),
-  });
-  return schema.parse(rawJson);
+/**
+ * Close undici's global HTTP connection pool to prevent libuv UV_HANDLE_CLOSING
+ * assertion failure on Windows at process exit (Node.js 23.x+).
+ * See: https://github.com/nodejs/node/issues/56645
+ */
+export async function closeConnectionPool() {
+  await getGlobalDispatcher().close();
 }
