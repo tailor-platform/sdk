@@ -6,7 +6,7 @@ import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { prompt } from "@/cli/shared/prompt";
-import { checkVaultManaged } from "../check-vault-managed";
+import { checkVaultManaged, releaseVaultOwnership } from "../check-vault-managed";
 import { nameArgs } from "./args";
 
 export const deleteCommand = defineAppCommand({
@@ -31,7 +31,7 @@ export const deleteCommand = defineAppCommand({
     });
 
     // No additional confirmation for managed vaults — the name-typing confirmation below is a stronger guard.
-    await checkVaultManaged({ client, workspaceId, vaultName: args.name });
+    const managed = await checkVaultManaged({ client, workspaceId, vaultName: args.name });
 
     if (!args.yes) {
       const confirmation = await prompt.text({
@@ -41,6 +41,10 @@ export const deleteCommand = defineAppCommand({
         logger.info("Vault deletion cancelled.");
         return;
       }
+    }
+
+    if (managed.isManaged) {
+      await releaseVaultOwnership({ client, ...managed });
     }
 
     try {

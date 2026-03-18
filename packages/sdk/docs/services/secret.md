@@ -148,9 +148,9 @@ At runtime, these references are replaced with the actual secret values.
 
 ## CLI Management
 
-Use the CLI to manage vaults that are **not** defined in `defineSecretManager()`. If you attempt to modify a vault that is managed by the config, the CLI will show a warning and ask for confirmation, since those changes will be overwritten on the next `tailor-sdk apply`.
+Use the CLI to manage vaults that are **not** defined in `defineSecretManager()`. If you attempt to modify a vault that is managed by the config, the CLI will show a warning and ask for confirmation. Once confirmed, the CLI releases the vault's ownership label so it is no longer managed by config.
 
-To migrate a config-managed vault to CLI management, remove it from `defineSecretManager()` and run `tailor-sdk apply` first. This releases ownership of the vault, after which it can be managed freely via CLI.
+After ownership is released, the next `tailor-sdk apply` will treat the vault as an unmanaged resource and prompt for confirmation before taking any action on it.
 
 ### Create a Vault
 

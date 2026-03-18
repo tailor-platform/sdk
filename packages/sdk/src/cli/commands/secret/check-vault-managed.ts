@@ -8,33 +8,62 @@ type CheckVaultManagedParams = {
   vaultName: string;
 };
 
+type CheckVaultManagedResult = {
+  isManaged: boolean;
+  trn: string;
+  existingLabels: Record<string, string>;
+};
+
 /**
  * Check if a vault is managed by defineSecretManager() and warn the user.
- * Returns true if the vault is managed, false otherwise.
+ * Returns management status and metadata needed for releasing ownership.
  * @param params - Check parameters
- * @returns Whether the vault is managed by config
+ * @returns Management status, TRN, and existing labels
  */
-export async function checkVaultManaged(params: CheckVaultManagedParams): Promise<boolean> {
+export async function checkVaultManaged(
+  params: CheckVaultManagedParams,
+): Promise<CheckVaultManagedResult> {
   const { client, workspaceId, vaultName } = params;
   const trn = `${trnPrefix(workspaceId)}:vault:${vaultName}`;
+  const notManaged = { isManaged: false, trn, existingLabels: {} };
 
   let owner: string | undefined;
+  let allLabels: Record<string, string> = {};
   try {
     const { metadata } = await client.getMetadata({ trn });
-    owner = metadata?.labels[sdkNameLabelKey];
+    allLabels = metadata?.labels ?? {};
+    owner = allLabels[sdkNameLabelKey];
   } catch {
     // If metadata fetch fails (e.g., vault doesn't exist yet), proceed silently.
     // The actual operation will surface the appropriate error.
-    return false;
+    return notManaged;
   }
 
-  if (!owner) return false;
+  if (!owner) return notManaged;
 
   logger.warn(
     `Vault "${vaultName}" is managed by defineSecretManager() in tailor.config.ts (owner: "${owner}"). ` +
-      `Changes made via CLI will be overwritten on the next apply. ` +
-      `To manage this vault via CLI, remove it from the config and run apply first.`,
+      `Proceeding will release ownership so the vault is no longer managed by config.`,
   );
 
-  return true;
+  return { isManaged: true, trn, existingLabels: allLabels };
+}
+
+/**
+ * Release ownership of a managed vault by removing SDK labels from metadata.
+ * Call this after the user has confirmed they want to proceed with a CLI operation on a managed vault.
+ * @param params - Client, TRN, and existing labels from checkVaultManaged result
+ * @param params.client
+ * @param params.trn
+ * @param params.existingLabels
+ */
+export async function releaseVaultOwnership(params: {
+  client: OperatorClient;
+  trn: string;
+  existingLabels: Record<string, string>;
+}): Promise<void> {
+  const { client, trn, existingLabels } = params;
+  const { [sdkNameLabelKey]: _, "sdk-version": __, ...remainingLabels } = existingLabels;
+  await client.setMetadata({ trn, labels: remainingLabels });
+  logger.info("Vault ownership released. It will no longer be managed by config.");
 }

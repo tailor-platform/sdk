@@ -7,7 +7,7 @@ import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { prompt } from "@/cli/shared/prompt";
 import { secretValueArgs } from "./args";
-import { checkVaultManaged } from "./check-vault-managed";
+import { checkVaultManaged, releaseVaultOwnership } from "./check-vault-managed";
 
 export const createSecretCommand = defineAppCommand({
   name: "create",
@@ -30,17 +30,20 @@ export const createSecretCommand = defineAppCommand({
       profile: args.profile,
     });
 
-    const isManaged = await checkVaultManaged({
+    const managed = await checkVaultManaged({
       client,
       workspaceId,
       vaultName: args["vault-name"],
     });
-    if (isManaged && !args.yes) {
+    if (managed.isManaged && !args.yes) {
       const confirmed = await prompt.confirm({
         message: "Do you want to proceed?",
         default: false,
       });
       if (!confirmed) return;
+    }
+    if (managed.isManaged) {
+      await releaseVaultOwnership({ client, ...managed });
     }
 
     try {
