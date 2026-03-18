@@ -127,7 +127,7 @@ export const loginCommand = defineAppCommand({
   name: "login",
   description: "Login to Tailor Platform.",
   args: z.xor([
-    z.object({}).strict(),
+    z.object({}).strict().describe("User Login"),
     z
       .object({
         machineuser: arg(z.literal(true), {

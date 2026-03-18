@@ -30,7 +30,7 @@ tailor-sdk login [options]
 
 > One of the following option groups is required:
 
-**Variant 1:**
+**User Login:**
 
 _no options_
 
