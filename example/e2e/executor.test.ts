@@ -27,7 +27,7 @@ describe("controlplane", async () => {
               case: "tailordb",
               value: {
                 eventTypes: ["tailordb.type_record.created"],
-                namespaceName: "my-app",
+                namespaceName: "tailordb",
                 typeName: "SalesOrder",
                 condition: expect.any(Object),
               },
@@ -62,7 +62,7 @@ describe("controlplane", async () => {
               case: "pipeline",
               value: {
                 eventTypes: ["pipeline.resolver.executed"],
-                namespaceName: "my-app",
+                namespaceName: "my-resolver",
                 resolverName: "stepChain",
                 condition: expect.any(Object),
               },
@@ -115,7 +115,7 @@ describe("controlplane", async () => {
               case: "tailordb",
               value: {
                 eventTypes: ["tailordb.type_record.created"],
-                namespaceName: "my-app",
+                namespaceName: "tailordb",
                 typeName: "User",
                 condition: expect.any(Object),
               },

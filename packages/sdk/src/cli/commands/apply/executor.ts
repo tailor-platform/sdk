@@ -22,6 +22,7 @@ import { executorFunctionName } from "./function-registry";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
+import type { Application } from "@/cli/services/application";
 import type { Executor, Trigger } from "@/types/executor.generated";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
@@ -140,7 +141,7 @@ export async function planExecutor(context: PlanContext) {
         name: executor.name,
         request: {
           workspaceId,
-          executor: protoExecutor(application.name, executor, application.env),
+          executor: protoExecutor(application, executor),
         },
         metaRequest,
       });
@@ -150,7 +151,7 @@ export async function planExecutor(context: PlanContext) {
         name: executor.name,
         request: {
           workspaceId,
-          executor: protoExecutor(application.name, executor, application.env),
+          executor: protoExecutor(application, executor),
         },
         metaRequest,
       });
@@ -177,11 +178,52 @@ export async function planExecutor(context: PlanContext) {
   return { changeSet, conflicts, unmanaged, resourceOwners };
 }
 
+function resolveTailorDBNamespace(application: Readonly<Application>, typeName: string): string {
+  for (const service of application.tailorDBServices) {
+    if (service.types[typeName]) {
+      return service.namespace;
+    }
+  }
+  throw new Error(
+    `TailorDB type "${typeName}" not found in any namespace. Available namespaces: ${application.tailorDBServices.map((s) => s.namespace).join(", ")}`,
+  );
+}
+
+function resolveResolverNamespace(
+  application: Readonly<Application>,
+  resolverName: string,
+): string {
+  for (const service of application.resolverServices) {
+    if (service.resolvers[resolverName]) {
+      return service.namespace;
+    }
+  }
+  throw new Error(
+    `Resolver "${resolverName}" not found in any namespace. Available namespaces: ${application.resolverServices.map((s) => s.namespace).join(", ")}`,
+  );
+}
+
+function resolveIdpNamespace(application: Readonly<Application>): string {
+  const idp = application.idpServices[0];
+  if (!idp) {
+    throw new Error("No IdP service configured");
+  }
+  return idp.name;
+}
+
+function resolveAuthNamespace(application: Readonly<Application>): string {
+  if (!application.authService) {
+    throw new Error("No Auth service configured");
+  }
+  return application.authService.parsedConfig.name;
+}
+
 function protoExecutor(
-  appName: string,
+  application: Readonly<Application>,
   executor: Executor,
-  env: Record<string, string | number | boolean>,
 ): MessageInitShape<typeof ExecutorExecutorSchema> {
+  const appName = application.name;
+  const env = application.env;
   const trigger = executor.trigger;
   let triggerType: ExecutorTriggerType;
   let triggerConfig: MessageInitShape<typeof ExecutorTriggerConfigSchema>;
@@ -228,7 +270,7 @@ function protoExecutor(
         case: "tailordb",
         value: {
           eventTypes: [eventType[trigger.kind]!],
-          namespaceName: appName,
+          namespaceName: resolveTailorDBNamespace(application, trigger.typeName),
           typeName: trigger.typeName,
           ...(trigger.condition
             ? { condition: { expr: `(${stringifyFunction(trigger.condition)})(${argsExpr})` } }
@@ -242,7 +284,7 @@ function protoExecutor(
         case: "pipeline",
         value: {
           eventTypes: [eventType[trigger.kind]!],
-          namespaceName: appName,
+          namespaceName: resolveResolverNamespace(application, trigger.resolverName),
           resolverName: trigger.resolverName,
           ...(trigger.condition
             ? { condition: { expr: `(${stringifyFunction(trigger.condition)})(${argsExpr})` } }
@@ -267,7 +309,7 @@ function protoExecutor(
         case: "idp",
         value: {
           eventTypes: [eventType[trigger.kind]!],
-          namespaceName: appName,
+          namespaceName: resolveIdpNamespace(application),
         },
       });
       break;
@@ -279,7 +321,7 @@ function protoExecutor(
         case: "auth",
         value: {
           eventTypes: [eventType[trigger.kind]!],
-          namespaceName: appName,
+          namespaceName: resolveAuthNamespace(application),
         },
       });
       break;

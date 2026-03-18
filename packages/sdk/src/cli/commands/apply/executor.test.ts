@@ -123,11 +123,37 @@ describe("planExecutor", () => {
   }
 
   // Helper to create mock application
-  function createMockApplication(executors: Executor[]): Application {
+  function createMockApplication(
+    executors: Executor[],
+    options?: {
+      tailorDBTypes?: Record<string, string>;
+      resolverNames?: Record<string, string>;
+      idpName?: string;
+      authName?: string;
+    },
+  ): Application {
+    const tailorDBServices = Object.entries(
+      Object.groupBy(Object.entries(options?.tailorDBTypes ?? {}), ([, ns]) => ns),
+    ).map(([namespace, entries]) => ({
+      namespace,
+      types: Object.fromEntries((entries ?? []).map(([typeName]) => [typeName, {}])),
+    }));
+
+    const resolverServices = Object.entries(
+      Object.groupBy(Object.entries(options?.resolverNames ?? {}), ([, ns]) => ns),
+    ).map(([namespace, entries]) => ({
+      namespace,
+      resolvers: Object.fromEntries((entries ?? []).map(([name]) => [name, {}])),
+    }));
+
     return {
       name: appName,
       env: {},
       executorService: createMockExecutorService(executors),
+      tailorDBServices,
+      resolverServices,
+      idpServices: options?.idpName ? [{ name: options.idpName }] : [],
+      authService: options?.authName ? { parsedConfig: { name: options.authName } } : undefined,
     } as unknown as Application;
   }
 
@@ -485,9 +511,10 @@ describe("planExecutor", () => {
   describe("resolverExecutedTrigger success field", () => {
     test("includes success field in trigger condition expression", async () => {
       const client = createMockClient([]);
-      const application = createMockApplication([
-        createMockResolverExecutedExecutor("test-executor"),
-      ]);
+      const application = createMockApplication(
+        [createMockResolverExecutedExecutor("test-executor")],
+        { resolverNames: { testResolver: "test-resolver-ns" } },
+      );
 
       const ctx: PlanContext = {
         client,
@@ -521,9 +548,10 @@ describe("planExecutor", () => {
 
     test("includes success field in function operation variables expression", async () => {
       const client = createMockClient([]);
-      const application = createMockApplication([
-        createMockResolverExecutedExecutor("test-executor"),
-      ]);
+      const application = createMockApplication(
+        [createMockResolverExecutedExecutor("test-executor")],
+        { resolverNames: { testResolver: "test-resolver-ns" } },
+      );
 
       const ctx: PlanContext = {
         client,
@@ -574,7 +602,9 @@ describe("planExecutor", () => {
         },
         operation: { kind: "function", body: () => {} },
       };
-      const application = createMockApplication([executor]);
+      const application = createMockApplication([executor], {
+        tailorDBTypes: { User: "my-tailordb" },
+      });
 
       const result = await planExecutor({
         client,
@@ -588,7 +618,7 @@ describe("planExecutor", () => {
       const typedConfig = getEventConfig(result);
       expect(typedConfig.case).toBe("tailordb");
       expect(typedConfig.value.eventTypes).toEqual(["tailordb.type_record.created"]);
-      expect(typedConfig.value.namespaceName).toBe(appName);
+      expect(typedConfig.value.namespaceName).toBe("my-tailordb");
       expect(typedConfig.value.typeName).toBe("User");
       expect(typedConfig.value.condition).toBeUndefined();
     });
@@ -606,7 +636,9 @@ describe("planExecutor", () => {
         },
         operation: { kind: "function", body: () => {} },
       };
-      const application = createMockApplication([executor]);
+      const application = createMockApplication([executor], {
+        tailorDBTypes: { User: "my-tailordb" },
+      });
 
       const result = await planExecutor({
         client,
@@ -634,7 +666,9 @@ describe("planExecutor", () => {
         },
         operation: { kind: "function", body: () => {} },
       };
-      const application = createMockApplication([executor]);
+      const application = createMockApplication([executor], {
+        resolverNames: { myResolver: "my-pipeline" },
+      });
 
       const result = await planExecutor({
         client,
@@ -647,7 +681,7 @@ describe("planExecutor", () => {
       const typedConfig = getEventConfig(result);
       expect(typedConfig.case).toBe("pipeline");
       expect(typedConfig.value.eventTypes).toEqual(["pipeline.resolver.executed"]);
-      expect(typedConfig.value.namespaceName).toBe(appName);
+      expect(typedConfig.value.namespaceName).toBe("my-pipeline");
       expect(typedConfig.value.resolverName).toBe("myResolver");
       expect(typedConfig.value.condition).toBeUndefined();
     });
@@ -661,7 +695,9 @@ describe("planExecutor", () => {
         trigger: { kind: "idpUserCreated" },
         operation: { kind: "function", body: () => {} },
       };
-      const application = createMockApplication([executor]);
+      const application = createMockApplication([executor], {
+        idpName: "my-idp",
+      });
 
       const result = await planExecutor({
         client,
@@ -674,7 +710,7 @@ describe("planExecutor", () => {
       const typedConfig = getEventConfig(result);
       expect(typedConfig.case).toBe("idp");
       expect(typedConfig.value.eventTypes).toEqual(["idp.user.created"]);
-      expect(typedConfig.value.namespaceName).toBe(appName);
+      expect(typedConfig.value.namespaceName).toBe("my-idp");
     });
 
     test("authAccessTokenIssued emits auth typed config", async () => {
@@ -686,7 +722,9 @@ describe("planExecutor", () => {
         trigger: { kind: "authAccessTokenIssued" },
         operation: { kind: "function", body: () => {} },
       };
-      const application = createMockApplication([executor]);
+      const application = createMockApplication([executor], {
+        authName: "my-auth",
+      });
 
       const result = await planExecutor({
         client,
@@ -699,7 +737,7 @@ describe("planExecutor", () => {
       const typedConfig = getEventConfig(result);
       expect(typedConfig.case).toBe("auth");
       expect(typedConfig.value.eventTypes).toEqual(["auth.access_token.issued"]);
-      expect(typedConfig.value.namespaceName).toBe(appName);
+      expect(typedConfig.value.namespaceName).toBe("my-auth");
     });
   });
 });
