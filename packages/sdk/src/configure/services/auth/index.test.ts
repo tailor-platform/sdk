@@ -5,6 +5,7 @@ import { db } from "../tailordb/schema";
 import { defineAuth, type AuthInvoker } from "./index";
 import type { BeforeLoginHook } from "@/types/auth";
 import type { AuthInvoker as ProtoAuthInvoker } from "@tailor-proto/tailor/v1/auth_resource_pb";
+import type { JsonObject } from "type-fest";
 
 const userType = db.type("User", {
   email: db.string().unique(),
@@ -230,7 +231,7 @@ describe("defineAuth", () => {
 
   describe("beforeLogin hook", () => {
     it("includes beforeLogin in auth config when provided", () => {
-      const handler = async (_args: { claims: Record<string, unknown>; idpConfigName: string }) => {
+      const handler = async (_args: { claims: JsonObject; idpConfigName: string }) => {
         // no return value
       };
       const authConfig = defineAuth("hook-auth", {

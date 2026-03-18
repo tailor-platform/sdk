@@ -11,7 +11,7 @@ import type { TailorDBInstance } from "@/configure/services/tailordb/schema";
 import type { output } from "@/configure/types/helpers";
 import type { TailorField } from "@/configure/types/type";
 import type { DefinedFieldMetadata, FieldMetadata, TailorFieldType } from "@/configure/types/types";
-import type { IsAny } from "type-fest";
+import type { IsAny, JsonObject } from "type-fest";
 
 // Derived from generated types (zinfer inlines these literal unions)
 export type OAuth2ClientGrantType = OAuth2Client["grantTypes"][number];
@@ -221,7 +221,7 @@ type MachineUser<
               : { attributeList: AttributeListToTuple<User, AttributeList> });
 
 export type BeforeLoginHookArgs = {
-  claims: Record<string, unknown>;
+  claims: JsonObject;
   idpConfigName: string;
 };
 
