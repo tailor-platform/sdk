@@ -81,6 +81,10 @@ const files: Record<string, FileConfig> = {
     commands: ["function"],
     render: defaultRender,
   },
+  "docs/cli/crash-report.md": {
+    commands: ["crash-report"],
+    render: defaultRender,
+  },
 };
 
 // Auto-generate targetCommands from files

@@ -6,6 +6,7 @@ import { withCompletionCommand } from "politty/completion";
 import { z } from "zod";
 import { apiCommand } from "./commands/api";
 import { applyCommand } from "./commands/apply";
+import { crashReportCommand } from "./commands/crash-report";
 import { executorCommand } from "./commands/executor";
 import { functionCommand } from "./commands/function";
 import { generateCommand } from "./commands/generate";
@@ -25,6 +26,7 @@ import { tailordbCommand } from "./commands/tailordb";
 import { userCommand } from "./commands/user";
 import { workflowCommand } from "./commands/workflow";
 import { workspaceCommand } from "./commands/workspace";
+import { initCrashReporting } from "./crash-report";
 import { queryCommand } from "./query";
 import { commonArgs, isVerbose } from "./shared/args";
 import { isCLIError } from "./shared/errors";
@@ -32,6 +34,12 @@ import { logger } from "./shared/logger";
 import { readPackageJson } from "./shared/package-json";
 
 register("tsx", import.meta.url, { data: {} });
+
+// Runs before globalArgs effects load --env-file, so env file overrides for
+// TAILOR_CRASH_REPORTS_* are not available for early startup failures.
+// This is intentional: we want crash reporting active before argument parsing,
+// and env files require parsing to be complete. Shell-level env vars still work.
+initCrashReporting();
 
 const packageJson = await readPackageJson();
 const cliName = Object.keys(packageJson.bin ?? {})[0] || "tailor-sdk";
@@ -44,6 +52,7 @@ export const mainCommand = withCompletionCommand(
     subCommands: {
       api: apiCommand,
       apply: applyCommand,
+      "crash-report": crashReportCommand,
       executor: executorCommand,
       function: functionCommand,
       generate: generateCommand,
@@ -85,6 +94,20 @@ runMain(mainCommand, {
         }
       } else {
         logger.error(`Unknown error: ${error}`);
+      }
+
+      // Report programming bugs (native error types that indicate code defects).
+      // Skip domain errors like ConnectError, CIPromptError, and plain Error
+      // used for user-facing validation/not-found messages.
+      // Exclude SyntaxError/ReferenceError: at runtime these typically come from
+      // dynamically imported user config files, not from SDK code.
+      const shouldReport =
+        !isCLIError(error) &&
+        (!(error instanceof Error) || error instanceof TypeError || error instanceof RangeError);
+      if (shouldReport) {
+        // Lazy import to match shutdownTelemetry pattern and keep cleanup handler lightweight.
+        const { reportCrash } = await import("@/cli/crash-report");
+        await reportCrash(error, "handledError");
       }
     }
     const { shutdownTelemetry } = await import("@/cli/telemetry");
