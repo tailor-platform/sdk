@@ -5,7 +5,7 @@ import { setupGitHub } from "./github";
 
 export const githubCommand = defineAppCommand({
   name: "github",
-  description: "Generate GitHub Actions workflow for deployment.",
+  description: "Generate GitHub Actions workflow for deployment. (beta)",
   args: z
     .object({
       "workspace-name": arg(z.string(), {

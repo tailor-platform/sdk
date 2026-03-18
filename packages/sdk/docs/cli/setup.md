@@ -28,9 +28,9 @@ tailor-sdk setup [command]
 
 **Commands**
 
-| Command                         | Description                                      |
-| ------------------------------- | ------------------------------------------------ |
-| [`setup github`](#setup-github) | Generate GitHub Actions workflow for deployment. |
+| Command                         | Description                                             |
+| ------------------------------- | ------------------------------------------------------- |
+| [`setup github`](#setup-github) | Generate GitHub Actions workflow for deployment. (beta) |
 
 <!-- politty:command:setup:subcommands:end -->
 
@@ -47,7 +47,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 <!-- politty:command:setup github:description:start -->
 
-Generate GitHub Actions workflow for deployment.
+Generate GitHub Actions workflow for deployment. (beta)
 
 <!-- politty:command:setup github:description:end -->
 

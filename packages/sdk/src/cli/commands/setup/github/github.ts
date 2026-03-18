@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
+import { logBetaWarning } from "@/cli/shared/beta";
 import { logger, styles } from "@/cli/shared/logger";
 import { fetchTailorTokenYaml, installNodeYaml, renderDeploy } from "./templates";
 
@@ -79,6 +80,8 @@ export function writeFiles(files: GeneratedFile[]): WriteResult {
  * @param options - Setup options including workspace config and output directory
  */
 export function setupGitHub(options: SetupGitHubOptions): void {
+  logBetaWarning("setup github");
+
   const files = buildFiles(options);
   const result = writeFiles(files);
 
