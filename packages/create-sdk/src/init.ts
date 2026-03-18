@@ -21,7 +21,9 @@ const isGitRepository = async () => {
 
 export const initProject = async () => {
   const packageManager = detectPackageManager();
-  if (packageManager) {
+  if (process.env.CREATE_SDK_NO_INSTALL) {
+    log.info("ℹ️ Skipping dependency installation (CREATE_SDK_NO_INSTALL is set)");
+  } else if (packageManager) {
     const s = spinner();
     s.start(`📦 Installing dependencies with ${packageManager}...`);
     await execa(packageManager, ["install"]);
