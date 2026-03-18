@@ -21,32 +21,20 @@ export const logoutCommand = defineAppCommand({
       return;
     }
 
-    // Resolve tokens from keyring or config for revocation
-    let accessToken: string | undefined;
-    let refreshToken: string | undefined;
     try {
-      const tokens = await resolveTokens(userEntry, pfConfig.current_user!);
-      accessToken = tokens.accessToken;
-      refreshToken = tokens.refreshToken;
-    } catch {
-      // Tokens may already be missing from keyring — continue with logout
-    }
-
-    if (accessToken) {
-      try {
-        const client = initOAuth2Client();
-        const tokenTypeHint = refreshToken ? "refresh_token" : "access_token";
-        await client.revoke(
-          {
-            accessToken,
-            refreshToken: refreshToken ?? null,
-            expiresAt: Date.parse(userEntry.token_expires_at),
-          },
-          tokenTypeHint,
-        );
-      } catch {
-        // Best-effort revocation — continue with local logout
-      }
+      const { accessToken, refreshToken } = await resolveTokens(userEntry, pfConfig.current_user!);
+      const client = initOAuth2Client();
+      const tokenTypeHint = refreshToken ? "refresh_token" : "access_token";
+      await client.revoke(
+        {
+          accessToken,
+          refreshToken: refreshToken ?? null,
+          expiresAt: Date.parse(userEntry.token_expires_at),
+        },
+        tokenTypeHint,
+      );
+    } catch (error) {
+      logger.warn(`Failed to revoke token: ${error instanceof Error ? error.message : error}`);
     }
 
     await deleteUserTokens(pfConfig, pfConfig.current_user!);
