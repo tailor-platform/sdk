@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
+import { parseYAML } from "confbox";
 import * as path from "pathe";
 import { describe, it, expect, vi, beforeEach, afterEach, afterAll, beforeAll } from "vitest";
 import { loadAccessToken, loadConfigPath, loadWorkspaceId, writePlatformConfig } from "./context";
@@ -463,7 +464,8 @@ describe("V1 to V2 migration", () => {
     resetKeyringState();
   });
 
-  it("migrates V1 config to V2 with storage: file", async () => {
+  it("migrates V1 config to V2 in memory without rewriting disk", async () => {
+    const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
     writePlatformConfig({
       version: 1,
       users: {
@@ -479,10 +481,11 @@ describe("V1 to V2 migration", () => {
       current_user: "user@example.com",
     });
 
-    // readPlatformConfig triggers migration
+    // readPlatformConfig triggers in-memory migration
     const { readPlatformConfig } = await import("./context");
     const config = readPlatformConfig();
 
+    // In-memory: V2 with storage: "file"
     expect(config.version).toBe(2);
     const userEntry = config.users["user@example.com"];
     expect(userEntry).toBeDefined();
@@ -492,6 +495,10 @@ describe("V1 to V2 migration", () => {
       expect(userEntry!.access_token).toBe("v1-access-token");
       expect(userEntry!.refresh_token).toBe("v1-refresh-token");
     }
+
+    // Disk: still V1 (not rewritten to V2)
+    const diskConfig = parseYAML(fs.readFileSync(configPath, "utf-8")) as { version: number };
+    expect(diskConfig.version).toBe(1);
   });
 });
 

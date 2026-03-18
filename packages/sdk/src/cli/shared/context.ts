@@ -117,9 +117,8 @@ export function readPlatformConfig(): PfConfig {
     const v1Config = tcConfig
       ? fromTailorctlConfig(tcConfig)
       : ({ version: 1, users: {}, profiles: {}, current_user: null } as const);
-    const pfConfig = migrateV1ToV2(v1Config);
-    writePlatformConfig(pfConfig);
-    return pfConfig;
+    writePlatformConfig(v1Config);
+    return migrateV1ToV2(v1Config);
   }
 
   const rawConfig = parseYAML(fs.readFileSync(configPath, "utf-8"));
@@ -130,26 +129,46 @@ export function readPlatformConfig(): PfConfig {
     return v2Result.data;
   }
 
-  // Fall back to v1 and migrate
+  // Fall back to v1 (convert to v2 in memory, but don't rewrite disk)
   const v1Result = pfConfigSchemaV1.safeParse(rawConfig);
   if (v1Result.success) {
-    const pfConfig = migrateV1ToV2(v1Result.data);
-    writePlatformConfig(pfConfig);
-    return pfConfig;
+    return migrateV1ToV2(v1Result.data);
   }
 
   // Neither v1 nor v2 — throw with v2 error for clarity
   return pfConfigSchemaV2.parse(rawConfig);
 }
 
+function toV1ForDisk(config: PfConfig): PfConfigV1 {
+  const users: PfConfigV1["users"] = {};
+  for (const [name, entry] of Object.entries(config.users)) {
+    if (!entry || entry.storage === "keyring") continue;
+    users[name] = {
+      access_token: entry.access_token,
+      refresh_token: entry.refresh_token,
+      token_expires_at: entry.token_expires_at,
+    };
+  }
+  return {
+    version: 1,
+    users,
+    profiles: config.profiles,
+    current_user: config.current_user,
+  };
+}
+
 /**
  * Write Tailor Platform CLI configuration to disk.
+ * By default, V2 configs are converted to V1 for backward compatibility.
+ * Set TAILOR_USE_KEYRING to write V2 format (required for keyring storage).
  * @param config - Platform configuration to write
  */
 export function writePlatformConfig(config: PfConfig | PfConfigV1) {
   const configPath = platformConfigPath();
   fs.mkdirSync(path.dirname(configPath), { recursive: true });
-  fs.writeFileSync(configPath, stringifyYAML(config));
+  const diskConfig =
+    config.version === 2 && !process.env.TAILOR_USE_KEYRING ? toV1ForDisk(config) : config;
+  fs.writeFileSync(configPath, stringifyYAML(diskConfig));
 }
 
 const tcContextConfigSchema = z.object({
@@ -351,7 +370,7 @@ export async function saveUserTokens(
   tokens: { accessToken: string; refreshToken?: string },
   expiresAt: string,
 ): Promise<void> {
-  if (await isKeyringAvailable()) {
+  if (process.env.TAILOR_USE_KEYRING && (await isKeyringAvailable())) {
     await saveKeyringTokens(user, tokens);
     config.users[user] = {
       token_expires_at: expiresAt,
