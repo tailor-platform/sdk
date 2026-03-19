@@ -82,6 +82,7 @@ export const mainCommand = withCompletionCommand(
 runMain(mainCommand, {
   version: packageJson.version,
   globalArgs: z.object(commonArgs),
+  displayErrors: false,
   cleanup: async ({ error }) => {
     if (error) {
       if (isCLIError(error)) {
