@@ -1,5 +1,6 @@
 import { arg } from "politty";
 import { z } from "zod";
+import { organizationArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken } from "@/cli/shared/context";
@@ -46,11 +47,7 @@ export const updateCommand = defineAppCommand({
   description: "Update an organization's name.",
   args: z
     .object({
-      "organization-id": arg(z.string(), {
-        alias: "o",
-        description: "Organization ID",
-        env: "TAILOR_PLATFORM_ORGANIZATION_ID",
-      }),
+      ...organizationArgs,
       name: arg(z.string(), {
         alias: "n",
         description: "New organization name",

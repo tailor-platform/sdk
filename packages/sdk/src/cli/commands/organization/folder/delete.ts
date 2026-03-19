@@ -1,6 +1,5 @@
-import { arg } from "politty";
 import { z } from "zod";
-import { confirmationArgs } from "@/cli/shared/args";
+import { confirmationArgs, folderArgs, organizationArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken } from "@/cli/shared/context";
@@ -39,16 +38,8 @@ export const deleteCommand = defineAppCommand({
   description: "Delete a folder from an organization.",
   args: z
     .object({
-      "organization-id": arg(z.string(), {
-        alias: "o",
-        description: "Organization ID",
-        env: "TAILOR_PLATFORM_ORGANIZATION_ID",
-      }),
-      "folder-id": arg(z.string(), {
-        alias: "f",
-        description: "Folder ID",
-        env: "TAILOR_PLATFORM_FOLDER_ID",
-      }),
+      ...organizationArgs,
+      ...folderArgs,
       ...confirmationArgs,
     })
     .strict(),

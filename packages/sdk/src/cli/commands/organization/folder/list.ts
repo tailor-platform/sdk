@@ -1,6 +1,6 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { positiveIntArg } from "@/cli/shared/args";
+import { organizationArgs, positiveIntArg } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken } from "@/cli/shared/context";
@@ -72,11 +72,7 @@ export const listCommand = defineAppCommand({
   description: "List folders in an organization.",
   args: z
     .object({
-      "organization-id": arg(z.string(), {
-        alias: "o",
-        description: "Organization ID",
-        env: "TAILOR_PLATFORM_ORGANIZATION_ID",
-      }),
+      ...organizationArgs,
       "parent-folder-id": arg(z.string().optional(), {
         description: "Parent folder ID to list children of",
       }),
