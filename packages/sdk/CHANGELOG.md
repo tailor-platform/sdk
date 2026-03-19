@@ -1,5 +1,19 @@
 # @tailor-platform/sdk
 
+## 1.28.0
+
+### Minor Changes
+
+- [#776](https://github.com/tailor-platform/sdk/pull/776) [`a2734bf`](https://github.com/tailor-platform/sdk/commit/a2734bfbfb71c06be324d162f2301f2930e3bfa6) Thanks [@toiroakr](https://github.com/toiroakr)! - Add managed vault guard to CLI secret commands and document runtime secret access via defineSecretManager
+
+## 1.27.0
+
+### Minor Changes
+
+- [#674](https://github.com/tailor-platform/sdk/pull/674) [`1d50f25`](https://github.com/tailor-platform/sdk/commit/1d50f25aa6baca46fe886dca2c8eeade28f89186) Thanks [@dqn](https://github.com/dqn)! - Add crash reporting for automatic error capture
+
+- [#787](https://github.com/tailor-platform/sdk/pull/787) [`10ade9a`](https://github.com/tailor-platform/sdk/commit/10ade9a4618aad4db4c63143e579de6216ddd07a) Thanks [@remiposo](https://github.com/remiposo)! - Add `authInvoker` option to `createResolver` for specifying a machine user to execute database operations and other platform actions. The `user` in the body function still reflects the original caller. Usage: `authInvoker: auth.invoker("machine-user-name")`
+
 ## 1.26.0
 
 ### Minor Changes

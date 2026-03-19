@@ -484,6 +484,26 @@ describe("createResolver", () => {
       expect(typeof resolver.body).toBe("function");
     });
 
+    test("creates resolver with authInvoker", () => {
+      const outputType = t.object({
+        result: t.string(),
+      });
+
+      const resolver = createResolver({
+        name: "withAuthInvoker",
+        operation: "query",
+        output: outputType,
+        body: () => ({ result: "ok" }),
+        authInvoker: { namespace: "my-auth", machineUserName: "batch-user" },
+      });
+
+      expect(resolver.name).toBe("withAuthInvoker");
+      expect(resolver.authInvoker).toEqual({
+        namespace: "my-auth",
+        machineUserName: "batch-user",
+      });
+    });
+
     test("creates minimal resolver without optional fields", () => {
       const outputType = t.object({
         result: t.string(),

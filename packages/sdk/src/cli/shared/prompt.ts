@@ -1,5 +1,5 @@
 import { ExitPromptError } from "@inquirer/core";
-import { confirm, input } from "@inquirer/prompts";
+import { confirm, input, password } from "@inquirer/prompts";
 import { isCI } from "std-env";
 import { CIPromptError } from "./logger";
 
@@ -25,4 +25,5 @@ function withGuard<Args extends unknown[], R>(
 export const prompt = {
   confirm: withGuard(confirm),
   text: withGuard(input),
+  password: withGuard(password),
 };

@@ -256,6 +256,138 @@ describe("planPipeline (resolver service level)", () => {
   });
 });
 
+describe("processResolver authInvoker mapping", () => {
+  const workspaceId = "test-workspace";
+  const appName = "test-app";
+
+  function createMockClient(
+    existingServices: Array<{ name: string; label?: string }>,
+    existingResolvers: Record<string, Array<{ name: string }>> = {},
+  ): OperatorClient {
+    return {
+      listPipelineServices: vi.fn().mockResolvedValue({
+        pipelineServices: existingServices.map((s) => ({
+          namespace: { name: s.name },
+        })),
+        nextPageToken: "",
+      }),
+      listPipelineResolvers: vi
+        .fn()
+        .mockImplementation(({ namespaceName }: { namespaceName: string }) => ({
+          pipelineResolvers: existingResolvers[namespaceName] || [],
+          nextPageToken: "",
+        })),
+      getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
+        const name = trn.split(":").pop();
+        const service = existingServices.find((s) => s.name === name);
+        return {
+          metadata: {
+            labels: service?.label ? { [sdkNameLabelKey]: service.label } : {},
+          },
+        };
+      }),
+    } as unknown as OperatorClient;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  test("authInvoker is mapped to proto invoker field", async () => {
+    const client = createMockClient([{ name: "test-ns", label: appName }]);
+
+    const resolverService = {
+      namespace: "test-ns",
+      config: {},
+      resolvers: {
+        myResolver: {
+          name: "myResolver",
+          operation: "query",
+          body: () => "hello",
+          output: { type: "string", metadata: {}, fields: {} },
+          authInvoker: { namespace: "my-auth", machineUserName: "batch-user" },
+        },
+      },
+      loadResolvers: vi.fn().mockResolvedValue(undefined),
+    } as unknown as ResolverService;
+
+    const application = {
+      name: appName,
+      env: {},
+      resolverServices: [resolverService],
+      executorService: {
+        config: {},
+        executors: {},
+        loadExecutors: vi.fn().mockResolvedValue({}),
+      },
+    } as unknown as Application;
+
+    const ctx: PlanContext = {
+      client,
+      workspaceId,
+      application,
+      forRemoval: false,
+      config: { path: "/test/tailor.config.ts" } as LoadedConfig,
+    };
+
+    const result = await planPipeline(ctx);
+
+    const resolverCreate = result.changeSet.resolver.creates[0];
+    expect(resolverCreate).toBeDefined();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const proto = (resolverCreate as any).request.pipelineResolver;
+    expect(proto.pipelines[0].invoker).toEqual({
+      namespace: "my-auth",
+      machineUserName: "batch-user",
+    });
+  });
+
+  test("invoker is undefined when authInvoker is not set", async () => {
+    const client = createMockClient([{ name: "test-ns", label: appName }]);
+
+    const resolverService = {
+      namespace: "test-ns",
+      config: {},
+      resolvers: {
+        myResolver: {
+          name: "myResolver",
+          operation: "query",
+          body: () => "hello",
+          output: { type: "string", metadata: {}, fields: {} },
+        },
+      },
+      loadResolvers: vi.fn().mockResolvedValue(undefined),
+    } as unknown as ResolverService;
+
+    const application = {
+      name: appName,
+      env: {},
+      resolverServices: [resolverService],
+      executorService: {
+        config: {},
+        executors: {},
+        loadExecutors: vi.fn().mockResolvedValue({}),
+      },
+    } as unknown as Application;
+
+    const ctx: PlanContext = {
+      client,
+      workspaceId,
+      application,
+      forRemoval: false,
+      config: { path: "/test/tailor.config.ts" } as LoadedConfig,
+    };
+
+    const result = await planPipeline(ctx);
+
+    const resolverCreate = result.changeSet.resolver.creates[0];
+    expect(resolverCreate).toBeDefined();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const proto = (resolverCreate as any).request.pipelineResolver;
+    expect(proto.pipelines[0].invoker).toBeUndefined();
+  });
+});
+
 describe("applyPipeline phase separation", () => {
   // Helper to create mock client with spies for delete operations
   function createMockClientWithSpies() {

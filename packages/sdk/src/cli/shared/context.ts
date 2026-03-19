@@ -15,7 +15,7 @@ const pfConfigSchema = z.object({
     z.string(),
     z.object({
       access_token: z.string(),
-      refresh_token: z.string(),
+      refresh_token: z.string().optional(),
       token_expires_at: z.string(),
     }),
   ),
@@ -251,6 +251,13 @@ export async function fetchLatestToken(config: PfConfig, user: string): Promise<
   }
   if (new Date(tokens.token_expires_at) > new Date()) {
     return tokens.access_token;
+  }
+
+  if (!tokens.refresh_token) {
+    throw new Error(ml`
+      Token expired.
+      Please run 'tailor-sdk login' and try again.
+    `);
   }
 
   const client = initOAuth2Client();

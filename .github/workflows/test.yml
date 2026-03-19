@@ -25,10 +25,14 @@ jobs:
       - name: Install deps
         uses: ./.github/actions/install-deps
 
+      - name: Login as machine user
+        run: pnpm tailor-sdk login --machineuser
+        env:
+          TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_ID }}
+          TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_SECRET }}
+
       # vp run -r test runs in all workspace packages (same scope as `turbo run test`).
       # Template packages under packages/create-sdk/templates/* are included because they
       # are workspace members with test scripts. This matches the pre-migration behavior.
       - name: Run tests
         run: pnpm exec vp run -r test -- --project unit
-        env:
-          TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}

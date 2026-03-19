@@ -145,6 +145,25 @@ export default defineConfig({
 });
 ```
 
+### Secret Manager
+
+Configure secrets using `defineSecretManager()`. See [Secret Manager](./services/secret.md) for full documentation.
+
+```typescript
+import { defineSecretManager } from "@tailor-platform/sdk";
+
+export const secrets = defineSecretManager({
+  "api-keys": {
+    "stripe-secret-key": process.env.STRIPE_SECRET_KEY!,
+    "sendgrid-api-key": process.env.SENDGRID_API_KEY!,
+  },
+});
+
+export default defineConfig({
+  secrets,
+});
+```
+
 ### Environment Variables
 
 Define environment variables that can be accessed in resolvers, executors, and workflows:

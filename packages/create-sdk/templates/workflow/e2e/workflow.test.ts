@@ -5,7 +5,7 @@ import config from "../tailor.config";
 import userProfileSyncWorkflow from "../src/workflow/sync-profile";
 
 describe("workflow", () => {
-  test("user-profile-sync: execute db-backed workflow", { timeout: 120000 }, async () => {
+  test("user-profile-sync: execute db-backed workflow", { timeout: 180000 }, async () => {
     const uuid = randomUUID();
     const testEmail = `workflow-test-${uuid}@example.com`;
 
