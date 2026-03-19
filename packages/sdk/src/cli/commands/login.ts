@@ -2,11 +2,18 @@ import * as crypto from "node:crypto";
 import * as http from "node:http";
 import { generateCodeVerifier } from "@badgateway/oauth2-client";
 import open from "open";
+import { arg } from "politty";
 import { z } from "zod";
-import { fetchUserInfo, initOAuth2Client } from "@/cli/shared/client";
+import {
+  closeConnectionPool,
+  fetchPlatformMachineUserToken,
+  fetchUserInfo,
+  initOAuth2Client,
+} from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
+import { prompt } from "@/cli/shared/prompt";
 
 const redirectPort = 8085;
 const redirectUri = `http://localhost:${redirectPort}/callback`;
@@ -99,12 +106,56 @@ const startAuthServer = async () => {
   });
 };
 
+async function loginAsMachineUser(args: { clientId: string; clientSecret?: string }) {
+  const clientSecret = args.clientSecret ?? (await prompt.password({ message: "Client secret" }));
+  const tokens = await fetchPlatformMachineUserToken(args.clientId, clientSecret);
+
+  const pfConfig = readPlatformConfig();
+  pfConfig.users = {
+    ...pfConfig.users,
+    [args.clientId]: {
+      access_token: tokens.accessToken,
+      token_expires_at: new Date(tokens.expiresAt!).toISOString(),
+    },
+  };
+  pfConfig.current_user = args.clientId;
+  writePlatformConfig(pfConfig);
+}
+
 export const loginCommand = defineAppCommand({
   name: "login",
   description: "Login to Tailor Platform.",
-  args: z.object({}).strict(),
-  run: async () => {
-    await startAuthServer();
+  args: z.xor([
+    z.object({}).strict().describe("User Login"),
+    z
+      .object({
+        machineuser: arg(z.literal(true), {
+          description: "Login as a platform machine user.",
+          required: true,
+        }),
+        "client-id": arg(z.string(), {
+          description: "Client ID",
+          env: "TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID",
+          required: true,
+        }),
+        "client-secret": arg(z.string().optional(), {
+          description: "Client secret",
+          env: "TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET",
+        }),
+      })
+      .strict()
+      .describe("Machine User Login"),
+  ]),
+  run: async (args) => {
+    if ("machineuser" in args && args.machineuser) {
+      await loginAsMachineUser({
+        clientId: args.clientId,
+        clientSecret: args.clientSecret,
+      });
+    } else {
+      await startAuthServer();
+    }
     logger.success("Successfully logged in to Tailor Platform.");
+    await closeConnectionPool();
   },
 });

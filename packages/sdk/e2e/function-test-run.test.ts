@@ -9,7 +9,7 @@
  * since it orchestrates multiple services.
  *
  * Prerequisites:
- * - TAILOR_PLATFORM_TOKEN environment variable must be set
+ * - Authentication via TAILOR_PLATFORM_TOKEN env var or `tailor-sdk login`
  * - TAILOR_PLATFORM_ORGANIZATION_ID environment variable must be set
  * - packages/sdk must be built (dist/cli/index.mjs must exist)
  *
@@ -108,11 +108,7 @@ async function runTestRun(
 
 describe.sequential("E2E: function test-run", () => {
   beforeAll(async () => {
-    if (!process.env.TAILOR_PLATFORM_TOKEN) {
-      throw new Error("TAILOR_PLATFORM_TOKEN must be set for E2E tests");
-    }
-
-    // Create workspace
+    // Create workspace (supports both TAILOR_PLATFORM_TOKEN env var and platform config login)
     const accessToken = await loadAccessToken({ useProfile: false });
     client = await initOperatorClient(accessToken);
     const regionsResp = await client.listAvailableWorkspaceRegions({});

@@ -9,6 +9,7 @@ import {
   type Transport,
 } from "@connectrpc/connect";
 import { OperatorService } from "@tailor-proto/tailor/v1/service_pb";
+import { getGlobalDispatcher } from "undici";
 import { z } from "zod";
 import { logger } from "./logger";
 import { readPackageJson } from "./package-json";
@@ -382,4 +383,29 @@ export async function fetchMachineUserToken(url: string, clientId: string, clien
     expires_in: z.number(),
   });
   return schema.parse(rawJson);
+}
+
+/**
+ * Fetch an OAuth2 token for a platform machine user via client_credentials grant.
+ * @param clientId - Client ID for the platform machine user
+ * @param clientSecret - Client secret for the platform machine user
+ * @returns OAuth2 token
+ */
+export async function fetchPlatformMachineUserToken(clientId: string, clientSecret: string) {
+  const client = new OAuth2Client({
+    clientId,
+    clientSecret,
+    server: platformBaseUrl,
+    discoveryEndpoint: oauth2DiscoveryEndpoint,
+  });
+  return await client.clientCredentials();
+}
+
+/**
+ * Close undici's global HTTP connection pool to prevent libuv UV_HANDLE_CLOSING
+ * assertion failure on Windows at process exit (Node.js 23.x+).
+ * See: https://github.com/nodejs/node/issues/56645
+ */
+export async function closeConnectionPool() {
+  await getGlobalDispatcher().close();
 }

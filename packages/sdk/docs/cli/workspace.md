@@ -274,13 +274,6 @@ tailor-sdk profile list
 <!-- politty:command:profile list:usage:end -->
 
 <!-- politty:command:profile list:options:start -->
-
-**Options**
-
-| Option   | Alias | Description    | Required | Default |
-| -------- | ----- | -------------- | -------- | ------- |
-| `--json` | `-j`  | Output as JSON | No       | `false` |
-
 <!-- politty:command:profile list:options:end -->
 
 <!-- politty:command:profile list:global-options-link:start -->
