@@ -132,39 +132,39 @@ describe("loadWorkspaceId", () => {
   });
 
   describe("opts.workspaceId", () => {
-    it("returns workspaceId from options when provided", () => {
-      const result = loadWorkspaceId({ workspaceId: validUUID });
+    it("returns workspaceId from options when provided", async () => {
+      const result = await loadWorkspaceId({ workspaceId: validUUID });
       expect(result).toBe(validUUID);
     });
 
-    it("throws error when opts.workspaceId is invalid UUID", () => {
-      expect(() => loadWorkspaceId({ workspaceId: invalidUUID })).toThrow(
+    it("throws error when opts.workspaceId is invalid UUID", async () => {
+      await expect(loadWorkspaceId({ workspaceId: invalidUUID })).rejects.toThrow(
         "Invalid value from --workspace-id option: must be a valid UUID",
       );
     });
 
-    it("opts.workspaceId takes precedence over env variable", () => {
+    it("opts.workspaceId takes precedence over env variable", async () => {
       process.env.TAILOR_PLATFORM_WORKSPACE_ID = otherUUID;
-      const result = loadWorkspaceId({ workspaceId: validUUID });
+      const result = await loadWorkspaceId({ workspaceId: validUUID });
       expect(result).toBe(validUUID);
     });
   });
 
   describe("env.TAILOR_PLATFORM_WORKSPACE_ID", () => {
-    it("returns workspaceId from env when opts not provided", () => {
+    it("returns workspaceId from env when opts not provided", async () => {
       process.env.TAILOR_PLATFORM_WORKSPACE_ID = validUUID;
-      const result = loadWorkspaceId();
+      const result = await loadWorkspaceId();
       expect(result).toBe(validUUID);
     });
 
-    it("throws error when env workspaceId is invalid UUID", () => {
+    it("throws error when env workspaceId is invalid UUID", async () => {
       process.env.TAILOR_PLATFORM_WORKSPACE_ID = invalidUUID;
-      expect(() => loadWorkspaceId()).toThrow(
+      await expect(loadWorkspaceId()).rejects.toThrow(
         "Invalid value from TAILOR_PLATFORM_WORKSPACE_ID environment variable: must be a valid UUID",
       );
     });
 
-    it("env takes precedence over profile", () => {
+    it("env takes precedence over profile", async () => {
       process.env.TAILOR_PLATFORM_WORKSPACE_ID = validUUID;
       writePlatformConfig({
         version: 2,
@@ -175,13 +175,13 @@ describe("loadWorkspaceId", () => {
         },
         current_user: null,
       });
-      const result = loadWorkspaceId({ profile: "myprofile" });
+      const result = await loadWorkspaceId({ profile: "myprofile" });
       expect(result).toBe(validUUID);
     });
   });
 
   describe("opts.profile", () => {
-    it("returns workspaceId from profile when opts.profile provided", () => {
+    it("returns workspaceId from profile when opts.profile provided", async () => {
       writePlatformConfig({
         version: 2,
         min_sdk_version: "1.29.0",
@@ -189,11 +189,11 @@ describe("loadWorkspaceId", () => {
         profiles: { myprofile: { user: "testuser", workspace_id: validUUID } },
         current_user: null,
       });
-      const result = loadWorkspaceId({ profile: "myprofile" });
+      const result = await loadWorkspaceId({ profile: "myprofile" });
       expect(result).toBe(validUUID);
     });
 
-    it("throws error when profile not found", () => {
+    it("throws error when profile not found", async () => {
       writePlatformConfig({
         version: 2,
         min_sdk_version: "1.29.0",
@@ -201,12 +201,12 @@ describe("loadWorkspaceId", () => {
         profiles: {},
         current_user: null,
       });
-      expect(() => loadWorkspaceId({ profile: "nonexistent" })).toThrow(
+      await expect(loadWorkspaceId({ profile: "nonexistent" })).rejects.toThrow(
         'Profile "nonexistent" not found',
       );
     });
 
-    it("throws error when profile workspace_id is invalid UUID", () => {
+    it("throws error when profile workspace_id is invalid UUID", async () => {
       writePlatformConfig({
         version: 2,
         min_sdk_version: "1.29.0",
@@ -214,14 +214,14 @@ describe("loadWorkspaceId", () => {
         profiles: { badprofile: { user: "testuser", workspace_id: invalidUUID } },
         current_user: null,
       });
-      expect(() => loadWorkspaceId({ profile: "badprofile" })).toThrow(
+      await expect(loadWorkspaceId({ profile: "badprofile" })).rejects.toThrow(
         'Invalid value from profile "badprofile": must be a valid UUID',
       );
     });
   });
 
   describe("env.TAILOR_PLATFORM_PROFILE", () => {
-    it("returns workspaceId from env profile when set", () => {
+    it("returns workspaceId from env profile when set", async () => {
       process.env.TAILOR_PLATFORM_PROFILE = "envprofile";
       writePlatformConfig({
         version: 2,
@@ -230,11 +230,11 @@ describe("loadWorkspaceId", () => {
         profiles: { envprofile: { user: "testuser", workspace_id: validUUID } },
         current_user: null,
       });
-      const result = loadWorkspaceId();
+      const result = await loadWorkspaceId();
       expect(result).toBe(validUUID);
     });
 
-    it("opts.profile takes precedence over env profile", () => {
+    it("opts.profile takes precedence over env profile", async () => {
       process.env.TAILOR_PLATFORM_PROFILE = "envprofile";
       writePlatformConfig({
         version: 2,
@@ -246,14 +246,14 @@ describe("loadWorkspaceId", () => {
         },
         current_user: null,
       });
-      const result = loadWorkspaceId({ profile: "optsprofile" });
+      const result = await loadWorkspaceId({ profile: "optsprofile" });
       expect(result).toBe(validUUID);
     });
   });
 
   describe("error case: no workspace ID source", () => {
-    it("throws error when no workspaceId source is available", () => {
-      expect(() => loadWorkspaceId()).toThrow("Workspace ID not found");
+    it("throws error when no workspaceId source is available", async () => {
+      await expect(loadWorkspaceId()).rejects.toThrow("Workspace ID not found");
     });
   });
 });
@@ -498,7 +498,7 @@ describe("V1 to V2 migration", () => {
 
     // readPlatformConfig triggers in-memory migration
     const { readPlatformConfig } = await import("./context");
-    const config = readPlatformConfig();
+    const config = await readPlatformConfig();
 
     // In-memory: V2 with storage: "file"
     expect(config.version).toBe(2);

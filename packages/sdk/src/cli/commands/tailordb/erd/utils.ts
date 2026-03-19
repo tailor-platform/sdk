@@ -29,7 +29,7 @@ export async function initErdContext(args: ErdCommandOptions): Promise<ErdComman
     profile: args.profile,
   });
   const client = await initOperatorClient(accessToken);
-  const workspaceId = loadWorkspaceId({
+  const workspaceId = await loadWorkspaceId({
     workspaceId: args.workspaceId,
     profile: args.profile,
   });

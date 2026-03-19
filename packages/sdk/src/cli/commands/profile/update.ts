@@ -26,7 +26,7 @@ export const updateCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    const config = readPlatformConfig();
+    const config = await readPlatformConfig();
 
     // Check if profile exists
     if (!config.profiles[args.name]) {

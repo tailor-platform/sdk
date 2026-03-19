@@ -43,7 +43,7 @@ const startAuthServer = async () => {
         );
         const userInfo = await fetchUserInfo(tokens.accessToken);
 
-        const pfConfig = readPlatformConfig();
+        const pfConfig = await readPlatformConfig();
         await saveUserTokens(
           pfConfig,
           userInfo.email,
@@ -111,7 +111,7 @@ async function loginAsMachineUser(args: { clientId: string; clientSecret?: strin
   const clientSecret = args.clientSecret ?? (await prompt.password({ message: "Client secret" }));
   const tokens = await fetchPlatformMachineUserToken(args.clientId, clientSecret);
 
-  const pfConfig = readPlatformConfig();
+  const pfConfig = await readPlatformConfig();
   await saveUserTokens(
     pfConfig,
     args.clientId,

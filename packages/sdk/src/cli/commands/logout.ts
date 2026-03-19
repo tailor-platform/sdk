@@ -14,7 +14,7 @@ export const logoutCommand = defineAppCommand({
   description: "Logout from Tailor Platform.",
   args: z.object({}).strict(),
   run: async () => {
-    const pfConfig = readPlatformConfig();
+    const pfConfig = await readPlatformConfig();
     const userEntry = pfConfig.current_user ? pfConfig.users[pfConfig.current_user] : undefined;
     if (!userEntry) {
       logger.info("You are not logged in.");

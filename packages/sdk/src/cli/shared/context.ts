@@ -8,6 +8,7 @@ import { xdgConfig } from "xdg-basedir";
 import { z } from "zod";
 import { initOAuth2Client } from "./client";
 import { logger } from "./logger";
+import { readPackageJson } from "./package-json";
 import {
   isKeyringAvailable,
   loadKeyringTokens,
@@ -52,15 +53,19 @@ const pfConfigSchemaV1 = z.object({
 const LATEST_CONFIG_VERSION = 2;
 const V2_MIN_SDK_VERSION = "1.29.0";
 
+const semverSchema = z.templateLiteral([
+  z.number().int(),
+  ".",
+  z.number().int(),
+  ".",
+  z.number().int(),
+]);
+
 const pfConfigSchemaV2 = z.object({
   version: z.literal(LATEST_CONFIG_VERSION),
-  min_sdk_version: z.templateLiteral([
-    z.number().int(),
-    ".",
-    z.number().int(),
-    ".",
-    z.number().int(),
-  ]),
+  min_sdk_version: semverSchema,
+  latest_version: z.number().int().optional(),
+  latest_min_sdk_version: semverSchema.optional(),
   users: z.partialRecord(z.string(), pfUserSchemaV2),
   profiles: z.partialRecord(z.string(), pfProfileSchema),
   current_user: z.string().nullable(),
@@ -118,7 +123,7 @@ function migrateV1ToV2(v1Config: PfConfigV1): PfConfig {
  * Read Tailor Platform CLI configuration, migrating from tailorctl or v1 if necessary.
  * @returns Parsed platform configuration
  */
-export function readPlatformConfig(): PfConfig {
+export async function readPlatformConfig(): Promise<PfConfig> {
   const configPath = platformConfigPath();
 
   // If platform config doesn't exist, try to read tailorctl config and migrate
@@ -156,6 +161,16 @@ export function readPlatformConfig(): PfConfig {
   // Try v2 first
   const v2Result = pfConfigSchemaV2.safeParse(rawConfig);
   if (v2Result.success) {
+    if (v2Result.data.latest_min_sdk_version) {
+      const packageJson = await readPackageJson();
+      const sdkVersion = packageJson.version ?? "0.0.0";
+      if (sdkVersion < v2Result.data.latest_min_sdk_version) {
+        logger.warn(ml`
+          A newer config version (${String(v2Result.data.latest_version)}) is available.
+          Please update your SDK to >= ${v2Result.data.latest_min_sdk_version}: pnpm update @tailor-platform/sdk
+        `);
+      }
+    }
     return v2Result.data;
   }
 
@@ -288,7 +303,7 @@ function validateUUID(value: string, source: string): string {
  * @param opts - Workspace and profile options
  * @returns Resolved workspace ID
  */
-export function loadWorkspaceId(opts?: LoadWorkspaceIdOptions): string {
+export async function loadWorkspaceId(opts?: LoadWorkspaceIdOptions): Promise<string> {
   if (opts?.workspaceId) {
     return validateUUID(opts.workspaceId, "--workspace-id option");
   }
@@ -302,7 +317,7 @@ export function loadWorkspaceId(opts?: LoadWorkspaceIdOptions): string {
 
   const profile = opts?.profile || process.env.TAILOR_PLATFORM_PROFILE;
   if (profile) {
-    const pfConfig = readPlatformConfig();
+    const pfConfig = await readPlatformConfig();
     const wsId = pfConfig.profiles[profile]?.workspace_id;
     if (!wsId) {
       throw new Error(`Profile "${profile}" not found`);
@@ -334,7 +349,7 @@ export async function loadAccessToken(opts?: LoadAccessTokenOptions) {
     return process.env.TAILOR_TOKEN;
   }
 
-  const pfConfig = readPlatformConfig();
+  const pfConfig = await readPlatformConfig();
   let user;
   const profile = opts?.useProfile
     ? opts.profile || process.env.TAILOR_PLATFORM_PROFILE

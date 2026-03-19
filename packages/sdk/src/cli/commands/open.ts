@@ -17,7 +17,7 @@ export const openCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    const workspaceId = loadWorkspaceId({
+    const workspaceId = await loadWorkspaceId({
       workspaceId: args["workspace-id"],
       profile: args.profile,
     });

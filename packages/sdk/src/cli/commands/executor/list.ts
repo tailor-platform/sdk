@@ -22,7 +22,7 @@ export async function listExecutors(options?: ListExecutorsOptions): Promise<Exe
     profile: options?.profile,
   });
   const client = await initOperatorClient(accessToken);
-  const workspaceId = loadWorkspaceId({
+  const workspaceId = await loadWorkspaceId({
     workspaceId: options?.workspaceId,
     profile: options?.profile,
   });

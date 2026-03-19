@@ -24,7 +24,7 @@ async function loadOptions(options: InviteUserOptions) {
 
   const accessToken = await loadAccessToken();
   const client = await initOperatorClient(accessToken);
-  const workspaceId = loadWorkspaceId({
+  const workspaceId = await loadWorkspaceId({
     workspaceId: result.data.workspaceId,
     profile: result.data.profile,
   });

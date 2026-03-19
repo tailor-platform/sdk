@@ -18,7 +18,7 @@ export const deleteCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    const config = readPlatformConfig();
+    const config = await readPlatformConfig();
 
     if (!config.current_user) {
       throw new Error(ml`
