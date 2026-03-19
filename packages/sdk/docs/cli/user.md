@@ -19,10 +19,30 @@ Login to Tailor Platform.
 **Usage**
 
 ```
-tailor-sdk login
+tailor-sdk login [options]
 ```
 
 <!-- politty:command:login:usage:end -->
+
+<!-- politty:command:login:options:start -->
+
+**Options**
+
+> One of the following option groups is required:
+
+**User Login:**
+
+_no options_
+
+**Machine User Login:**
+
+| Option                            | Alias | Description                       | Required | Default | Env                                          |
+| --------------------------------- | ----- | --------------------------------- | -------- | ------- | -------------------------------------------- |
+| `--machineuser <MACHINEUSER>`     | -     | Login as a platform machine user. | Yes      | -       | -                                            |
+| `--client-id <CLIENT_ID>`         | -     | Client ID                         | Yes      | -       | `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     |
+| `--client-secret <CLIENT_SECRET>` | -     | Client secret                     | No       | -       | `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` |
+
+<!-- politty:command:login:options:end -->
 
 <!-- politty:command:login:global-options-link:start -->
 
@@ -148,13 +168,6 @@ tailor-sdk user list
 <!-- politty:command:user list:usage:end -->
 
 <!-- politty:command:user list:options:start -->
-
-**Options**
-
-| Option   | Alias | Description    | Required | Default |
-| -------- | ----- | -------------- | -------- | ------- |
-| `--json` | `-j`  | Output as JSON | No       | `false` |
-
 <!-- politty:command:user list:options:end -->
 
 <!-- politty:command:user list:global-options-link:start -->
@@ -222,13 +235,6 @@ tailor-sdk user pat [command]
 <!-- politty:command:user pat:usage:end -->
 
 <!-- politty:command:user pat:options:start -->
-
-**Options**
-
-| Option   | Alias | Description    | Required | Default |
-| -------- | ----- | -------------- | -------- | ------- |
-| `--json` | `-j`  | Output as JSON | No       | `false` |
-
 <!-- politty:command:user pat:options:end -->
 
 <!-- politty:command:user pat:subcommands:start -->
@@ -272,13 +278,6 @@ tailor-sdk user pat list
 <!-- politty:command:user pat list:usage:end -->
 
 <!-- politty:command:user pat list:options:start -->
-
-**Options**
-
-| Option   | Alias | Description    | Required | Default |
-| -------- | ----- | -------------- | -------- | ------- |
-| `--json` | `-j`  | Output as JSON | No       | `false` |
-
 <!-- politty:command:user pat list:options:end -->
 
 <!-- politty:command:user pat list:global-options-link:start -->

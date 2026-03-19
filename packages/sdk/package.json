@@ -134,7 +134,7 @@
     "pathe": "2.0.3",
     "pgsql-ast-parser": "12.0.2",
     "pkg-types": "2.3.0",
-    "politty": "0.4.9",
+    "politty": "0.4.11",
     "rolldown": "1.0.0-rc.9",
     "serve": "14.2.6",
     "std-env": "3.10.0",
