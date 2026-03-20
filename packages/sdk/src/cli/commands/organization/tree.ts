@@ -120,11 +120,11 @@ async function buildOrgTree(
 /**
  * Display a tree view of organizations and their folder hierarchy.
  * @param options - Tree display options
- * @returns Tree output as string (text mode) or structured data (JSON mode)
+ * @returns Organization tree as structured data
  */
 export async function organizationTree(
   options?: OrganizationTreeOptions,
-): Promise<OrganizationTreeJson[] | string> {
+): Promise<OrganizationTreeJson[]> {
   const accessToken = await loadAccessToken();
   const client = await initOperatorClient(accessToken);
 
@@ -140,7 +140,6 @@ export async function organizationTree(
 
   const depth = options?.depth;
 
-  // JSON mode returns structured data
   const jsonResult: OrganizationTreeJson[] = [];
   for (const org of orgs) {
     const folders = await buildFolderTreeJson(
@@ -157,7 +156,6 @@ export async function organizationTree(
     });
   }
 
-  // For programmatic API, return JSON structure; CLI will format
   return jsonResult;
 }
 
