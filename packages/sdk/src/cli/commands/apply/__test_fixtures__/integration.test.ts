@@ -9,23 +9,20 @@ type MainFunction = (args: Record<string, unknown>) => unknown | Promise<unknown
 
 /**
  * Evaluate bundled code string and return its `main` export.
+ * Uses data: URL which is supported by Node.js ESM loader.
  * @param code - Bundled JavaScript code string
  * @param name - Name for error messages
  * @returns The `main` function exported by the bundle
  */
 async function importFromCode(code: string, name: string): Promise<MainFunction> {
-  const blob = new Blob([code], { type: "text/javascript" });
-  const url = URL.createObjectURL(blob);
-  try {
-    const module = await import(/* @vite-ignore */ url);
-    const main = module.main;
-    if (typeof main !== "function") {
-      throw new Error(`Expected "main" to be a function in ${name}, got ${typeof main}`);
-    }
-    return main;
-  } finally {
-    URL.revokeObjectURL(url);
+  const encoded = Buffer.from(code).toString("base64");
+  const url = `data:text/javascript;base64,${encoded}`;
+  const module = await import(/* @vite-ignore */ url);
+  const main = module.main;
+  if (typeof main !== "function") {
+    throw new Error(`Expected "main" to be a function in ${name}, got ${typeof main}`);
   }
+  return main;
 }
 
 describe("apply command integration tests", () => {
