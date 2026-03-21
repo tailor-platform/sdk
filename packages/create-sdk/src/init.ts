@@ -2,7 +2,7 @@ import { log, spinner } from "@clack/prompts";
 import { execa } from "execa";
 
 const detectPackageManager = () => {
-  const availablePMs = ["npm", "yarn", "pnpm"];
+  const availablePMs = ["npm", "yarn", "pnpm", "bun"];
   const userAgent = process.env.npm_config_user_agent;
   if (!userAgent) return;
   const [name] = userAgent.split("/");
