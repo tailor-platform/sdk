@@ -2,7 +2,6 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildFiles, writeFiles } from "./github";
-import { installNodeYaml } from "./templates";
 
 describe("buildFiles", () => {
   const baseOptions = {
@@ -19,26 +18,35 @@ describe("buildFiles", () => {
     return files.find((f) => f.path.includes("workflows/deploy-"))!.content;
   }
 
-  it("generates correct file paths", () => {
+  it("generates only the caller workflow file", () => {
     const files = buildFiles(baseOptions);
-    const paths = files.map((f) => f.path);
-    expect(paths).toContain(
+    expect(files).toHaveLength(1);
+    expect(files[0]!.path).toBe(
       path.join(baseOptions.outputDir, ".github/workflows/deploy-my-app.yml"),
-    );
-    expect(paths).toContain(
-      path.join(baseOptions.outputDir, ".github/actions/fetch-tailor-token/action.yml"),
-    );
-    expect(paths).toContain(
-      path.join(baseOptions.outputDir, ".github/actions/install-node/action.yml"),
     );
   });
 
-  it("includes all env vars in deploy.yml", () => {
+  it("references the reusable workflow", () => {
     const content = getDeployContent();
-    expect(content).toContain("WORKSPACE_NAME: my-app");
-    expect(content).toContain("WORKSPACE_REGION: asia-northeast");
-    expect(content).toContain("TAILOR_PLATFORM_ORGANIZATION_ID: org-123");
-    expect(content).toContain("TAILOR_PLATFORM_FOLDER_ID: folder-456");
+    expect(content).toContain("uses: tailor-platform/sdk/.github/workflows/deploy.yml@actions/v1");
+  });
+
+  it("passes workspace inputs", () => {
+    const content = getDeployContent();
+    expect(content).toContain("workspace-name: my-app");
+    expect(content).toContain("workspace-region: asia-northeast");
+    expect(content).toContain("organization-id: org-123");
+    expect(content).toContain("folder-id: folder-456");
+  });
+
+  it("passes secrets", () => {
+    const content = getDeployContent();
+    expect(content).toContain(
+      "PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_ID }}",
+    );
+    expect(content).toContain(
+      "PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_SECRET }}",
+    );
   });
 
   it("does not include working-directory when dir is '.'", () => {
@@ -51,30 +59,18 @@ describe("buildFiles", () => {
     );
   });
 
-  it("uses pnpm run deploy for the deploy step", () => {
-    const content = getDeployContent();
-    expect(content).toContain("run: pnpm run deploy -- --yes");
-    expect(content).not.toContain("run: pnpm apply");
-  });
-
   it("preserves $ characters in parameter values", () => {
     const content = getDeployContent({
       ...baseOptions,
       workspaceName: "test$&end",
     });
-    expect(content).toContain("WORKSPACE_NAME: test$&end");
+    expect(content).toContain("workspace-name: test$&end");
   });
 
   it("parameterizes concurrency group with workspace name", () => {
     const content = getDeployContent();
     expect(content).toContain("group: deploy-my-app");
     expect(content).not.toContain("group: deploy\n");
-  });
-});
-
-describe("installNodeYaml", () => {
-  it("pins pnpm version for projects without packageManager field", () => {
-    expect(installNodeYaml).toContain("version: 10");
   });
 });
 

@@ -1,0 +1,74 @@
+name: Release Actions
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g. 1.0.0, 1.1.0)"
+        required: true
+        type: string
+      dry-run:
+        description: "Dry run (validate only, do not push tags)"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Validate version format
+        run: |
+          VERSION="${{ inputs.version }}"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Invalid version format '$VERSION'. Expected: X.Y.Z (e.g. 1.0.0)"
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "MAJOR=$(echo "$VERSION" | cut -d. -f1)" >> "$GITHUB_ENV"
+
+      - name: Check deploy workflow exists
+        run: |
+          if [ ! -f ".github/workflows/deploy.yml" ]; then
+            echo "::error::.github/workflows/deploy.yml not found"
+            exit 1
+          fi
+
+      - name: Create tags
+        run: |
+          git tag "actions/v${VERSION}"
+          git tag -f "actions/v${MAJOR}"
+          echo "Created tag: actions/v${VERSION}"
+          echo "Updated floating tag: actions/v${MAJOR}"
+
+      - name: Push tags
+        if: ${{ !inputs.dry-run }}
+        run: |
+          git push origin "actions/v${VERSION}"
+          git push origin -f "actions/v${MAJOR}"
+
+      - name: Create GitHub Release
+        if: ${{ !inputs.dry-run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "actions/v${VERSION}" \
+            --title "Actions v${VERSION}" \
+            --notes "Release of reusable deploy workflow v${VERSION}" \
+            --target "${{ github.sha }}"
+
+      - name: Dry run summary
+        if: ${{ inputs.dry-run }}
+        run: |
+          echo "::notice::Dry run complete. Would have created:"
+          echo "  - Tag: actions/v${VERSION}"
+          echo "  - Floating tag: actions/v${MAJOR}"
+          echo "  - GitHub Release: Actions v${VERSION}"

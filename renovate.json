@@ -10,16 +10,6 @@
   "dependencyDashboardApproval": false,
   "timezone": "Asia/Tokyo",
   "schedule": ["* 9-18 * * 1-5"],
-  "customManagers": [
-    {
-      "customType": "regex",
-      "managerFilePatterns": ["packages/sdk/src/cli/commands/setup/github/.+\\.ya?ml$"],
-      "matchStrings": [
-        "uses:\\s+(?<depName>[\\w-]+/[\\w-]+)@(?<currentDigest>[a-f0-9]+)\\s+#\\s+(?<currentValue>v[\\d.]+)"
-      ],
-      "datasourceTemplate": "github-tags"
-    }
-  ],
   "packageRules": [
     {
       "description": "Enable major updates without dashboard approval (dashboard is disabled)",

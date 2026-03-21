@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { logBetaWarning } from "@/cli/shared/beta";
 import { logger, styles } from "@/cli/shared/logger";
-import { fetchTailorTokenYaml, installNodeYaml, renderDeploy } from "./templates";
+import { renderDeploy } from "./templates";
 
 export type SetupGitHubOptions = {
   workspaceName: string;
@@ -32,14 +32,6 @@ export function buildFiles(options: SetupGitHubOptions): GeneratedFile[] {
   const githubDir = path.join(options.outputDir, ".github");
 
   return [
-    {
-      path: path.join(githubDir, "actions/fetch-tailor-token/action.yml"),
-      content: fetchTailorTokenYaml,
-    },
-    {
-      path: path.join(githubDir, "actions/install-node/action.yml"),
-      content: installNodeYaml,
-    },
     {
       path: path.join(githubDir, `workflows/deploy-${options.workspaceName}.yml`),
       content: renderDeploy({

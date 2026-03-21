@@ -9,20 +9,21 @@ type DeployParams = {
 };
 
 /**
- * Render the deploy workflow YAML.
+ * Render the deploy caller workflow YAML.
  *
- * Targets single-application scaffolds (those with `generate` and `deploy` scripts).
- * Multi-application projects (e.g. chained `deploy:*` scripts) need manual workflow customization.
+ * Generates a thin workflow that calls the reusable deploy workflow
+ * from tailor-platform/sdk. Targets single-application scaffolds
+ * (those with `generate` and `deploy` scripts). Multi-application
+ * projects (e.g. chained `deploy:*` scripts) need manual workflow
+ * customization.
  * @param params - Workspace and deployment configuration
  * @returns Workflow YAML content
  */
 export function renderDeploy(params: DeployParams): string {
   const { workspaceName, workspaceRegion, organizationId, folderId, workingDirectory } = params;
 
-  // --dir sets working-directory for all run steps. Assumes the target directory
-  // is a pnpm workspace member with its own package.json (standard monorepo layout).
-  const defaultsBlock = workingDirectory
-    ? `\ndefaults:\n  run:\n    working-directory: ${workingDirectory}\n`
+  const workingDirectoryLine = workingDirectory
+    ? `      working-directory: ${workingDirectory}\n`
     : "";
 
   return deployTemplate
@@ -30,5 +31,5 @@ export function renderDeploy(params: DeployParams): string {
     .replace("__WORKSPACE_REGION__", () => workspaceRegion)
     .replace("__ORGANIZATION_ID__", () => organizationId)
     .replace("__FOLDER_ID__", () => folderId)
-    .replace("# __DEFAULTS_BLOCK__\n", () => defaultsBlock);
+    .replace(/ *# __WORKING_DIRECTORY__\n/, () => workingDirectoryLine);
 }
