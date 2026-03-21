@@ -1,6 +1,7 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { createChangeSet } from "./change-set";
+import { collectDiffLines } from "./compare";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { hashValue, loadSecretsState, saveSecretsState } from "./secrets-state";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
@@ -14,6 +15,7 @@ type CreateVault = {
 
 type ExistingVault = {
   name: string;
+  details?: string[];
   workspaceId: string;
 };
 
@@ -32,6 +34,7 @@ type CreateSecret = {
 
 type UpdateSecret = {
   name: string;
+  details?: string[];
   secretName: string;
   workspaceId: string;
   vaultName: string;
@@ -127,6 +130,7 @@ export async function planSecretManager(context: PlanContext) {
         } else {
           vaultChangeSet.updates.push({
             name: vaultName,
+            details: collectDiffLines({ name: existing.resource.name }, { name: vaultName }),
             workspaceId,
           });
         }
@@ -170,6 +174,7 @@ export async function planSecretManager(context: PlanContext) {
           if (currentHash !== storedHash) {
             secretChangeSet.updates.push({
               name: `${vaultName}/${secret.name}`,
+              details: collectDiffLines({ hash: storedHash ?? "unknown" }, { hash: currentHash }),
               secretName: secret.name,
               workspaceId,
               vaultName,
@@ -241,8 +246,8 @@ export async function planSecretManager(context: PlanContext) {
     }
   }
 
-  vaultChangeSet.print();
-  secretChangeSet.print();
+  vaultChangeSet.print({ detail: context.detailPlan });
+  secretChangeSet.print({ detail: context.detailPlan });
   return { vaultChangeSet, secretChangeSet, conflicts, unmanaged, resourceOwners };
 }
 

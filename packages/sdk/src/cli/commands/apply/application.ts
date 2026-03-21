@@ -7,7 +7,7 @@ import {
 } from "@tailor-proto/tailor/v1/application_resource_pb";
 import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "@/cli/shared/client";
 import { createChangeSet } from "./change-set";
-import { areNormalizedEqual } from "./compare";
+import { areNormalizedEqual, collectDiffLines } from "./compare";
 import { buildMetaRequest } from "./label";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
 import type { Application } from "@/cli/services/application";
@@ -73,6 +73,7 @@ type CreateApplication = {
 
 type UpdateApplication = {
   name: string;
+  details?: string[];
   request: MessageInitShape<typeof UpdateApplicationRequestSchema>;
   metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
@@ -86,7 +87,10 @@ type ComparableApplication = {
   authNamespace: string;
   authIdpConfigName: string;
   cors: string[];
-  subgraphs: Array<{ serviceType: Subgraph_ServiceType; serviceNamespace: string }>;
+  subgraphs: Array<{
+    serviceType: Subgraph_ServiceType;
+    serviceNamespace: string;
+  }>;
   allowedIpAddresses: string[];
   disableIntrospection: boolean;
   disabled: boolean;
@@ -209,14 +213,14 @@ export async function planApplication(context: PlanContext) {
         },
       });
     }
-    changeSet.print();
+    changeSet.print({ detail: context.detailPlan });
     return changeSet;
   }
 
   // Skip application create/update when there are no subgraphs
   // (e.g. deploying only static web hosting)
   if (application.subgraphs.length === 0) {
-    changeSet.print();
+    changeSet.print({ detail: context.detailPlan });
     return changeSet;
   }
 
@@ -285,6 +289,7 @@ export async function planApplication(context: PlanContext) {
     } else {
       changeSet.updates.push({
         name: application.name,
+        details: collectDiffLines(normalizeComparableExistingApplication(existing), desired),
         request,
         metaRequest,
       });
@@ -297,7 +302,7 @@ export async function planApplication(context: PlanContext) {
     });
   }
 
-  changeSet.print();
+  changeSet.print({ detail: context.detailPlan });
   return changeSet;
 }
 

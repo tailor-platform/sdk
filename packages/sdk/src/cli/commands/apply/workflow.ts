@@ -2,7 +2,7 @@ import { type ApplyPhase } from "@/cli/commands/apply/apply";
 import { parseDuration } from "@/cli/shared/args";
 import { type OperatorClient, fetchAll } from "@/cli/shared/client";
 import { createChangeSet, type ChangeSet } from "./change-set";
-import { areNormalizedEqual } from "./compare";
+import { areNormalizedEqual, collectDiffLines } from "./compare";
 import { workflowJobFunctionName } from "./function-registry";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
@@ -214,6 +214,7 @@ type CreateWorkflow = {
 
 type UpdateWorkflow = {
   name: string;
+  details?: string[];
   workspaceId: string;
   workflow: Workflow;
   usedJobNames: string[];
@@ -258,6 +259,7 @@ function jobFunctionTrn(workspaceId: string, name: string) {
  * @param workflows - Parsed workflows
  * @param mainJobDeps - Main job dependencies by workflow
  * @param unchangedJobFunctions - Job functions already proven unchanged by function registry plan
+ * @param detailPlan - Whether to include detailed plan information
  * @returns Planned workflow changes
  */
 export async function planWorkflow(
@@ -267,6 +269,7 @@ export async function planWorkflow(
   workflows: Record<string, Workflow>,
   mainJobDeps: Record<string, string[]>,
   unchangedJobFunctions: ReadonlySet<string> = new Set<string>(),
+  detailPlan = false,
 ) {
   const changeSet = createChangeSet<CreateWorkflow, UpdateWorkflow, DeleteWorkflow>("Workflows");
   const conflicts: OwnerConflict[] = [];
@@ -342,6 +345,10 @@ export async function planWorkflow(
       } else {
         changeSet.updates.push({
           name: workflow.name,
+          details: collectDiffLines(
+            normalizeComparableWorkflow(existing.resource),
+            normalizeComparableWorkflow(existing.resource, workflow, usedJobNames),
+          ),
           workspaceId,
           workflow,
           usedJobNames,
@@ -375,7 +382,7 @@ export async function planWorkflow(
     }
   });
 
-  changeSet.print();
+  changeSet.print({ detail: detailPlan });
   return {
     changeSet,
     conflicts,
@@ -383,6 +390,49 @@ export async function planWorkflow(
     resourceOwners,
     appName,
     unchangedWorkflowJobNames,
+  };
+}
+
+function normalizeComparableWorkflow(
+  existing: {
+    mainJobFunctionName?: string;
+    retryPolicy?: {
+      maxRetries?: number;
+      backoffMultiplier?: number;
+      initialBackoff?: { seconds?: bigint; nanos?: number };
+      maxBackoff?: { seconds?: bigint; nanos?: number };
+    };
+    jobFunctions?: Record<string, string | bigint>;
+  },
+  workflow?: Workflow,
+  usedJobNames: string[] = [],
+) {
+  const retryPolicy = workflow?.retryPolicy
+    ? normalizeRetryPolicyForCompare({
+        maxRetries: workflow.retryPolicy.maxRetries,
+        backoffMultiplier: workflow.retryPolicy.backoffMultiplier,
+        initialBackoff: parseDurationToProto(workflow.retryPolicy.initialBackoff),
+        maxBackoff: parseDurationToProto(workflow.retryPolicy.maxBackoff),
+      })
+    : existing.retryPolicy
+      ? normalizeRetryPolicyForCompare({
+          maxRetries: existing.retryPolicy.maxRetries ?? 0,
+          backoffMultiplier: existing.retryPolicy.backoffMultiplier ?? 0,
+          initialBackoff: {
+            seconds: existing.retryPolicy.initialBackoff?.seconds ?? 0n,
+            nanos: existing.retryPolicy.initialBackoff?.nanos ?? 0,
+          },
+          maxBackoff: {
+            seconds: existing.retryPolicy.maxBackoff?.seconds ?? 0n,
+            nanos: existing.retryPolicy.maxBackoff?.nanos ?? 0,
+          },
+        })
+      : undefined;
+
+  return {
+    mainJobFunctionName: workflow ? workflow.mainJob.name : existing.mainJobFunctionName,
+    retryPolicy,
+    jobFunctions: [...(workflow ? usedJobNames : Object.keys(existing.jobFunctions ?? {}))].sort(),
   };
 }
 

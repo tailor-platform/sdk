@@ -2,6 +2,7 @@ import { logger, styles, symbols } from "@/cli/shared/logger";
 
 export interface HasName {
   name: string;
+  details?: string[];
 }
 
 export type ChangeSet<
@@ -17,7 +18,7 @@ export type ChangeSet<
   readonly replaces: R[];
   readonly unchanged: HasName[];
   isEmpty: () => boolean;
-  print: () => void;
+  print: (options?: { detail?: boolean }) => void;
 };
 
 export interface PlanSummary {
@@ -56,15 +57,32 @@ export function createChangeSet<
     replaces,
     unchanged,
     isEmpty,
-    print: () => {
+    print: (options) => {
       if (isEmpty()) {
         return;
       }
       logger.log(styles.bold(`${title}:`));
-      creates.forEach((item) => logger.log(`  ${symbols.create} ${item.name}`));
-      deletes.forEach((item) => logger.log(`  ${symbols.delete} ${item.name}`));
-      updates.forEach((item) => logger.log(`  ${symbols.update} ${item.name}`));
-      replaces.forEach((item) => logger.log(`  ${symbols.replace} ${item.name}`));
+      const printItem = (symbol: string, item: HasName, fallback: string[]) => {
+        logger.log(`  ${symbol} ${item.name}`);
+        if (!options?.detail) {
+          return;
+        }
+        for (const detail of item.details ?? fallback) {
+          logger.info(`    ${detail}`, { mode: "plain" });
+        }
+      };
+      creates.forEach((item) =>
+        printItem(symbols.create, item, ["resource: remote=missing local=present"]),
+      );
+      deletes.forEach((item) =>
+        printItem(symbols.delete, item, ["resource: remote=present local=missing"]),
+      );
+      updates.forEach((item) =>
+        printItem(symbols.update, item, ["resource: remote and local differ"]),
+      );
+      replaces.forEach((item) =>
+        printItem(symbols.replace, item, ["resource: replacement required"]),
+      );
     },
   };
 }

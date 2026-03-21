@@ -7,7 +7,7 @@ import {
 } from "@tailor-proto/tailor/v1/staticwebsite_pb";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { createChangeSet } from "./change-set";
-import { areNormalizedEqual } from "./compare";
+import { areNormalizedEqual, collectDiffLines } from "./compare";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
@@ -54,6 +54,7 @@ type CreateStaticWebsite = {
 
 type UpdateStaticWebsite = {
   name: string;
+  details?: string[];
   request: MessageInitShape<typeof UpdateStaticWebsiteRequestSchema>;
   metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
@@ -185,8 +186,10 @@ export async function planStaticWebsite(context: PlanContext) {
       ) {
         changeSet.unchanged.push({ name });
       } else {
+        const current = normalizeComparableStaticWebsite(existing.resource as ProtoStaticWebsite);
         changeSet.updates.push({
           name,
+          details: collectDiffLines(current, desired),
           request,
           metaRequest,
         });
@@ -217,6 +220,6 @@ export async function planStaticWebsite(context: PlanContext) {
     }
   });
 
-  changeSet.print();
+  changeSet.print({ detail: context.detailPlan });
   return { changeSet, conflicts, unmanaged, resourceOwners };
 }

@@ -58,7 +58,12 @@ import { type TailorDBService } from "@/cli/services/tailordb/service";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { logger } from "@/cli/shared/logger";
 import { createChangeSet } from "../change-set";
-import { areNormalizedEqual, normalizeProtoConfig } from "../compare";
+import {
+  areNormalizedEqual,
+  collectDiffLines,
+  normalizeProtoConfig,
+  stableStringify,
+} from "../compare";
 import { buildMetaRequest, sdkNameLabelKey, trnPrefix, type WithLabel } from "../label";
 import {
   executeMigrations,
@@ -291,8 +296,12 @@ async function validateAndDetectMigrations(
         logger.log(formatRemoteVerificationResults(remoteVerificationResults));
         logger.newline();
         logger.info("This may indicate:");
-        logger.info("  - Another developer applied different migrations", { mode: "plain" });
-        logger.info("  - Manual schema changes were made directly", { mode: "plain" });
+        logger.info("  - Another developer applied different migrations", {
+          mode: "plain",
+        });
+        logger.info("  - Manual schema changes were made directly", {
+          mode: "plain",
+        });
         logger.info("  - Migration history is out of sync", { mode: "plain" });
         logger.newline();
         logger.info("Use '--no-schema-check' to skip this check (not recommended).");
@@ -993,9 +1002,9 @@ export async function planTailorDB(context: PlanContext) {
     planGqlPermissions(client, workspaceId, tailordbs, deletedServices),
   ]);
 
-  serviceChangeSet.print();
-  typeChangeSet.print();
-  gqlPermissionChangeSet.print();
+  serviceChangeSet.print({ detail: context.detailPlan });
+  typeChangeSet.print({ detail: context.detailPlan });
+  gqlPermissionChangeSet.print({ detail: context.detailPlan });
 
   return {
     changeSet: {
@@ -1023,6 +1032,7 @@ type CreateService = {
 
 type UpdateService = {
   name: string;
+  details?: string[];
   metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
 
@@ -1135,6 +1145,16 @@ async function planServices(
       } else {
         changeSet.updates.push({
           name: tailordb.namespace,
+          details: collectDiffLines(
+            {
+              namespace: existing.resource.namespace?.name,
+              defaultTimezone: existing.resource.defaultTimezone || "UTC",
+            },
+            {
+              namespace: tailordb.namespace,
+              defaultTimezone: "UTC",
+            },
+          ),
           metaRequest,
         });
       }
@@ -1179,6 +1199,7 @@ type CreateType = {
 
 type UpdateType = {
   name: string;
+  details?: string[];
   request: MessageInitShape<typeof UpdateTailorDBTypeRequestSchema>;
 };
 
@@ -1269,8 +1290,12 @@ async function planTypes(
         ) {
           changeSet.unchanged.push({ name: typeName });
         } else {
+          const current = normalizeComparableTailorDBType(existingType.tailordbType);
+          const desired = normalizeComparableTailorDBType(tailordbType);
+          logTailorDBTypeDiff(tailordb.namespace, typeName, current, desired);
           changeSet.updates.push({
             name: typeName,
+            details: collectDiffLines(current, desired),
             request: {
               workspaceId,
               namespaceName: tailordb.namespace,
@@ -1315,6 +1340,88 @@ async function planTypes(
     });
   }
   return changeSet;
+}
+
+const shouldDebugTailorDBTypeDiff = process.env.TAILOR_DEBUG_TAILORDB_TYPE_DIFF === "true";
+const maxTailorDBTypeDiffLines = 60;
+
+function logTailorDBTypeDiff(
+  namespaceName: string,
+  typeName: string,
+  remoteType: ReturnType<typeof normalizeComparableTailorDBType>,
+  localType: ReturnType<typeof normalizeComparableTailorDBType>,
+): void {
+  if (!shouldDebugTailorDBTypeDiff) {
+    return;
+  }
+
+  const diffLines = collectDebugDiffLines(remoteType, localType);
+  logger.info(`[tailordb:type-diff] ${namespaceName}.${typeName}`);
+  diffLines.forEach((line) => logger.info(`  ${line}`, { mode: "plain" }));
+}
+
+function collectDebugDiffLines(left: unknown, right: unknown): string[] {
+  const lines: string[] = [];
+
+  const walk = (leftValue: unknown, rightValue: unknown, path: string) => {
+    if (lines.length >= maxTailorDBTypeDiffLines) {
+      return;
+    }
+
+    if (stableStringify(leftValue) === stableStringify(rightValue)) {
+      return;
+    }
+
+    if (Array.isArray(leftValue) || Array.isArray(rightValue)) {
+      const linesBefore = lines.length;
+      const leftArray = Array.isArray(leftValue) ? leftValue : [];
+      const rightArray = Array.isArray(rightValue) ? rightValue : [];
+      const maxLength = Math.max(leftArray.length, rightArray.length);
+      for (let index = 0; index < maxLength; index += 1) {
+        walk(leftArray[index], rightArray[index], `${path}[${index}]`);
+        if (lines.length >= maxTailorDBTypeDiffLines) {
+          return;
+        }
+      }
+      if (lines.length === linesBefore) {
+        lines.push(
+          `${path}: remote=${stableStringify(leftValue)} local=${stableStringify(rightValue)}`,
+        );
+      }
+      return;
+    }
+
+    if (isPlainObject(leftValue) || isPlainObject(rightValue)) {
+      const linesBefore = lines.length;
+      const leftObject = isPlainObject(leftValue) ? leftValue : {};
+      const rightObject = isPlainObject(rightValue) ? rightValue : {};
+      const keys = new Set([...Object.keys(leftObject), ...Object.keys(rightObject)]);
+      for (const key of [...keys].sort()) {
+        walk(leftObject[key], rightObject[key], path === "$" ? key : `${path}.${key}`);
+        if (lines.length >= maxTailorDBTypeDiffLines) {
+          return;
+        }
+      }
+      if (lines.length === linesBefore) {
+        lines.push(
+          `${path}: remote=${stableStringify(leftValue)} local=${stableStringify(rightValue)}`,
+        );
+      }
+      return;
+    }
+
+    lines.push(
+      `${path}: remote=${stableStringify(leftValue)} local=${stableStringify(rightValue)}`,
+    );
+  };
+
+  walk(left, right, "$");
+
+  if (lines.length >= maxTailorDBTypeDiffLines) {
+    return [...lines.slice(0, maxTailorDBTypeDiffLines), "...diff output truncated"];
+  }
+
+  return lines;
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -1681,7 +1788,9 @@ function processNestedFields(
         vector: false,
         ...toProtoFieldHooks(nestedFieldConfig),
         fields: deepNestedFields,
-        ...(nestedFieldConfig.scale !== undefined && { scale: nestedFieldConfig.scale }),
+        ...(nestedFieldConfig.scale !== undefined && {
+          scale: nestedFieldConfig.scale,
+        }),
       };
     } else {
       nestedFields[nestedFieldName] = {
@@ -1707,7 +1816,9 @@ function processNestedFields(
             }),
           },
         }),
-        ...(nestedFieldConfig.scale !== undefined && { scale: nestedFieldConfig.scale }),
+        ...(nestedFieldConfig.scale !== undefined && {
+          scale: nestedFieldConfig.scale,
+        }),
       };
     }
   });
@@ -1835,6 +1946,7 @@ type CreateGqlPermission = {
 
 type UpdateGqlPermission = {
   name: string;
+  details?: string[];
   request: MessageInitShape<typeof UpdateTailorDBGQLPermissionRequestSchema>;
 };
 
@@ -1899,8 +2011,12 @@ async function planGqlPermissions(
         ) {
           changeSet.unchanged.push({ name: typeName });
         } else {
+          const current = existingPermission
+            ? normalizeComparableGqlPermission(existingPermission.permission)
+            : undefined;
           changeSet.updates.push({
             name: typeName,
+            details: collectDiffLines(current, normalizeComparableGqlPermission(desiredPermission)),
             request: {
               workspaceId,
               namespaceName: tailordb.namespace,

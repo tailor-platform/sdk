@@ -51,3 +51,100 @@ export function areNormalizedEqual(left: unknown, right: unknown): boolean {
     stableStringify(normalizeProtoConfig(left)) === stableStringify(normalizeProtoConfig(right))
   );
 }
+
+const DEFAULT_DIFF_LINE_LIMIT = 40;
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function formatDiffValue(value: unknown): string {
+  if (value === undefined) {
+    return "undefined";
+  }
+  if (value === null) {
+    return "null";
+  }
+  return stableStringify(value);
+}
+
+function describePresence(value: unknown): "present" | "missing" {
+  return value === undefined || value === null ? "missing" : "present";
+}
+
+/**
+ * Collect field-path diff lines between two normalized values.
+ * @param left - Remote/current value
+ * @param right - Desired/local value
+ * @param maxLines - Maximum number of diff lines to emit
+ * @returns Diff lines
+ */
+export function collectDiffLines(
+  left: unknown,
+  right: unknown,
+  maxLines = DEFAULT_DIFF_LINE_LIMIT,
+): string[] {
+  const lines: string[] = [];
+  const normalizedLeft = normalizeProtoConfig(left);
+  const normalizedRight = normalizeProtoConfig(right);
+
+  const walk = (leftValue: unknown, rightValue: unknown, path: string) => {
+    if (lines.length >= maxLines) {
+      return;
+    }
+
+    if (stableStringify(leftValue) === stableStringify(rightValue)) {
+      return;
+    }
+
+    if (
+      ((leftValue === undefined || leftValue === null) &&
+        (Array.isArray(rightValue) || isPlainObject(rightValue))) ||
+      ((rightValue === undefined || rightValue === null) &&
+        (Array.isArray(leftValue) || isPlainObject(leftValue)))
+    ) {
+      lines.push(
+        `${path}: remote=${describePresence(leftValue)} local=${describePresence(rightValue)}`,
+      );
+      return;
+    }
+
+    if (Array.isArray(leftValue) || Array.isArray(rightValue)) {
+      const leftArray = Array.isArray(leftValue) ? leftValue : [];
+      const rightArray = Array.isArray(rightValue) ? rightValue : [];
+      const maxLength = Math.max(leftArray.length, rightArray.length);
+      for (let index = 0; index < maxLength; index += 1) {
+        walk(leftArray[index], rightArray[index], `${path}[${index}]`);
+        if (lines.length >= maxLines) {
+          return;
+        }
+      }
+      return;
+    }
+
+    if (isPlainObject(leftValue) || isPlainObject(rightValue)) {
+      const leftObject = isPlainObject(leftValue) ? leftValue : {};
+      const rightObject = isPlainObject(rightValue) ? rightValue : {};
+      const keys = new Set([...Object.keys(leftObject), ...Object.keys(rightObject)]);
+      for (const key of [...keys].sort()) {
+        walk(leftObject[key], rightObject[key], path === "$" ? key : `${path}.${key}`);
+        if (lines.length >= maxLines) {
+          return;
+        }
+      }
+      return;
+    }
+
+    lines.push(
+      `${path}: remote=${formatDiffValue(leftValue)} local=${formatDiffValue(rightValue)}`,
+    );
+  };
+
+  walk(normalizedLeft, normalizedRight, "$");
+
+  if (lines.length >= maxLines) {
+    return [...lines.slice(0, maxLines), "...diff output truncated"];
+  }
+
+  return lines;
+}

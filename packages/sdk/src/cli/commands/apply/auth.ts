@@ -25,7 +25,12 @@ import { type AuthService } from "@/cli/services/auth/service";
 import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "@/cli/shared/client";
 import { OAuth2ClientSchema } from "@/parser/service/auth";
 import { createChangeSet } from "./change-set";
-import { areNormalizedEqual, normalizeProtoConfig, normalizeStringArray } from "./compare";
+import {
+  areNormalizedEqual,
+  collectDiffLines,
+  normalizeProtoConfig,
+  normalizeStringArray,
+} from "./compare";
 import { authHookFunctionName } from "./function-registry";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
@@ -289,15 +294,15 @@ export async function planAuth(context: PlanContext) {
     planSCIMResources(client, workspaceId, auths, deletedServices),
   ]);
 
-  serviceChangeSet.print();
-  idpConfigChangeSet.print();
-  userProfileConfigChangeSet.print();
-  tenantConfigChangeSet.print();
-  machineUserChangeSet.print();
-  authHookChangeSet.print();
-  oauth2ClientChangeSet.print();
-  scimChangeSet.print();
-  scimResourceChangeSet.print();
+  serviceChangeSet.print({ detail: context.detailPlan });
+  idpConfigChangeSet.print({ detail: context.detailPlan });
+  userProfileConfigChangeSet.print({ detail: context.detailPlan });
+  tenantConfigChangeSet.print({ detail: context.detailPlan });
+  machineUserChangeSet.print({ detail: context.detailPlan });
+  authHookChangeSet.print({ detail: context.detailPlan });
+  oauth2ClientChangeSet.print({ detail: context.detailPlan });
+  scimChangeSet.print({ detail: context.detailPlan });
+  scimResourceChangeSet.print({ detail: context.detailPlan });
   return {
     changeSet: {
       service: serviceChangeSet,
@@ -324,6 +329,7 @@ type CreateService = {
 
 type UpdateService = {
   name: string;
+  details?: string[];
   request: MessageInitShape<typeof UpdateAuthServiceRequestSchema>;
   metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
@@ -411,6 +417,14 @@ async function planServices(
       } else {
         changeSet.updates.push({
           name: config.name,
+          details: collectDiffLines(
+            {
+              publishSessionEvents: existing.resource.publishSessionEvents,
+            },
+            {
+              publishSessionEvents: config.publishSessionEvents ?? false,
+            },
+          ),
           request,
           metaRequest,
         });
@@ -452,6 +466,7 @@ type CreateIdPConfig = {
 
 type UpdateIdPConfig = {
   name: string;
+  details?: string[];
   idpConfig: Readonly<IdProviderConfig>;
   request: MessageInitShape<typeof UpdateAuthIDPConfigRequestSchema>;
 };
@@ -521,11 +536,43 @@ async function planIdPConfigs(
           existingMap.delete(idpConfig.name);
           continue;
         }
+        const existingComparable = normalizeProtoConfig({
+          name: existing.name,
+          authType: existing.authType,
+          config:
+            existing.config?.config.case === "oidc"
+              ? {
+                  config: {
+                    case: "oidc",
+                    value: {
+                      ...existing.config.config.value,
+                      issuerUrl: existing.config.config.value.issuerUrl || undefined,
+                    },
+                  },
+                }
+              : existing.config,
+        });
+        const desiredComparableNormalized = normalizeProtoConfig({
+          ...desiredComparable,
+          config:
+            desiredComparable.config?.config?.case === "oidc"
+              ? {
+                  config: {
+                    case: "oidc",
+                    value: {
+                      ...desiredComparable.config.config.value,
+                      issuerUrl: desiredComparable.config.config.value.issuerUrl || undefined,
+                    },
+                  },
+                }
+              : desiredComparable.config,
+        });
         if (areAuthIdPConfigsEqual(existing, desiredComparable)) {
           changeSet.unchanged.push({ name: idpConfig.name });
         } else {
           changeSet.updates.push({
             name: idpConfig.name,
+            details: collectDiffLines(existingComparable, desiredComparableNormalized),
             idpConfig,
             request: {
               workspaceId,
@@ -1166,7 +1213,9 @@ function normalizeComparableUserProfileConfig(
     | MessageInitShape<typeof UserProfileProviderConfigSchema>
     | {
         providerType?: UserProfileProviderConfig_UserProfileProviderType;
-        config?: { config?: { case?: string; value?: Record<string, unknown> } };
+        config?: {
+          config?: { case?: string; value?: Record<string, unknown> };
+        };
       },
 ) {
   const comparableConfig = config.config?.config;
@@ -1211,7 +1260,9 @@ function normalizeComparableTenantProviderConfig(
     | undefined
     | {
         providerType?: TenantProviderConfig_TenantProviderType;
-        config?: { config?: { case?: string; value?: Record<string, unknown> } };
+        config?: {
+          config?: { case?: string; value?: Record<string, unknown> };
+        };
       },
 ) {
   return normalizeProtoConfig(config);
@@ -1223,7 +1274,9 @@ function areTenantProviderConfigsEqual(
     | undefined
     | {
         providerType?: TenantProviderConfig_TenantProviderType;
-        config?: { config?: { case?: string; value?: Record<string, unknown> } };
+        config?: {
+          config?: { case?: string; value?: Record<string, unknown> };
+        };
       },
   desired: MessageInitShape<typeof TenantProviderConfigSchema>,
 ) {

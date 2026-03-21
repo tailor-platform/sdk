@@ -24,6 +24,9 @@ export const applyCommand = defineAppCommand({
       "clean-cache": arg(z.boolean().optional(), {
         description: "Clean the bundle cache before building",
       }),
+      "detail-plan": arg(z.boolean().optional(), {
+        description: "Show detailed reasons for each planned action",
+      }),
     })
     .strict(),
   run: async (args) => {
@@ -38,6 +41,7 @@ export const applyCommand = defineAppCommand({
       noSchemaCheck: args["no-schema-check"],
       noCache: args["no-cache"],
       cleanCache: args["clean-cache"],
+      detailPlan: args["detail-plan"],
     });
   },
 });

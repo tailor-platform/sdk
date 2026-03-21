@@ -49,6 +49,7 @@ export interface ApplyOptions {
   noSchemaCheck?: boolean;
   noCache?: boolean;
   cleanCache?: boolean;
+  detailPlan?: boolean;
   // NOTE(remiposo): Provide an option to run build-only for testing purposes.
   // This could potentially be exposed as a CLI option.
   buildOnly?: boolean;
@@ -61,6 +62,7 @@ export interface PlanContext {
   forRemoval: boolean;
   config: LoadedConfig;
   noSchemaCheck?: boolean;
+  detailPlan?: boolean;
 }
 
 export type ApplyPhase = "create-update" | "delete" | "delete-resources" | "delete-services";
@@ -221,9 +223,16 @@ export async function apply(options?: ApplyOptions) {
         forRemoval: false,
         config,
         noSchemaCheck: options?.noSchemaCheck,
+        detailPlan: options?.detailPlan,
       };
       const functionRegistry = await withSpan("plan.functionRegistry", () =>
-        planFunctionRegistry(client, workspaceId, application.name, functionEntries),
+        planFunctionRegistry(
+          client,
+          workspaceId,
+          application.name,
+          functionEntries,
+          options?.detailPlan,
+        ),
       );
       const unchangedWorkflowJobs = new Set(
         functionRegistry.changeSet.unchanged
@@ -248,6 +257,7 @@ export async function apply(options?: ApplyOptions) {
               workflowService?.workflows ?? {},
               workflowBuildResult?.mainJobDeps ?? {},
               unchangedWorkflowJobs,
+              options?.detailPlan,
             ),
           ),
           withSpan("plan.secretManager", () => planSecretManager(ctx)),

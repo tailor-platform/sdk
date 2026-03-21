@@ -6,6 +6,7 @@ import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { logger } from "@/cli/shared/logger";
 import { createChangeSet } from "./change-set";
+import { collectDiffLines } from "./compare";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase } from "@/cli/commands/apply/apply";
@@ -35,6 +36,7 @@ type CreateFunction = {
 
 type UpdateFunction = {
   name: string;
+  details?: string[];
   entry: FunctionEntry;
   metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
@@ -213,6 +215,7 @@ type ExistingFunction = {
  * @param workspaceId - Workspace ID
  * @param appName - Application name
  * @param entries - Desired function entries
+ * @param detailPlan - Whether to include detailed plan information
  * @returns Planned changes
  */
 export async function planFunctionRegistry(
@@ -220,6 +223,7 @@ export async function planFunctionRegistry(
   workspaceId: string,
   appName: string,
   entries: FunctionEntry[],
+  detailPlan = false,
 ) {
   const changeSet = createChangeSet<CreateFunction, UpdateFunction, DeleteFunction>(
     "Function registry",
@@ -297,6 +301,10 @@ export async function planFunctionRegistry(
       } else {
         changeSet.updates.push({
           name: entry.name,
+          details: collectDiffLines(
+            { contentHash: existing.resource.contentHash },
+            { contentHash: entry.contentHash },
+          ),
           entry,
           metaRequest,
         });
@@ -327,7 +335,7 @@ export async function planFunctionRegistry(
     }
   }
 
-  changeSet.print();
+  changeSet.print({ detail: detailPlan });
   return { changeSet, conflicts, unmanaged, resourceOwners };
 }
 

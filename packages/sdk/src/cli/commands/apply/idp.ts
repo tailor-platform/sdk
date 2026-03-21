@@ -13,7 +13,7 @@ import {
 } from "@tailor-proto/tailor/v1/idp_resource_pb";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { createChangeSet } from "./change-set";
-import { areNormalizedEqual } from "./compare";
+import { areNormalizedEqual, collectDiffLines } from "./compare";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
@@ -156,8 +156,8 @@ export async function planIdP(context: PlanContext) {
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
   const clientChangeSet = await planClients(client, workspaceId, idps, deletedServices);
 
-  serviceChangeSet.print();
-  clientChangeSet.print();
+  serviceChangeSet.print({ detail: context.detailPlan });
+  clientChangeSet.print({ detail: context.detailPlan });
   return {
     changeSet: {
       service: serviceChangeSet,
@@ -177,6 +177,7 @@ type CreateService = {
 
 type UpdateService = {
   name: string;
+  details?: string[];
   request: MessageInitShape<typeof UpdateIdPServiceRequestSchema>;
   metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
@@ -361,11 +362,21 @@ async function planServices(
           currentOwner: existing.label,
         });
       }
+      const current = normalizeComparableIdPService({
+        authorization: existing.resource.authorization,
+        lang: existing.resource.lang,
+        userAuthPolicy: normalizeComparableUserAuthPolicy(existing.resource.userAuthPolicy),
+        publishUserEvents: existing.resource.publishUserEvents,
+        disableGqlOperations: normalizeComparableDisableGqlOperations(
+          existing.resource.disableGqlOperations,
+        ),
+      });
       if (isManagedByApp && areIdPServicesEqual(existing.resource, desired)) {
         changeSet.unchanged.push({ name: namespaceName });
       } else {
         changeSet.updates.push({
           name: namespaceName,
+          details: collectDiffLines(current, desired),
           request,
           metaRequest,
         });
