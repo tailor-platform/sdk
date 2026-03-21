@@ -23,6 +23,10 @@ type CacheStore = {
   storeBundleOutput(cacheKey: string, sourcePath: string): void;
   /** Copy a cached bundle back to the target path. Returns false if not found. */
   restoreBundleOutput(cacheKey: string, targetPath: string): boolean;
+  /** Store bundled code content directly into cache/bundles/. */
+  storeBundleContent(cacheKey: string, content: string): void;
+  /** Restore bundled code content from cache/bundles/. Returns undefined if not found. */
+  restoreBundleContent(cacheKey: string): string | undefined;
   /** Delete the entire cache directory. */
   clean(): void;
 };
@@ -162,6 +166,21 @@ function createCacheStore(config: CacheConfig): CacheStore {
     return true;
   }
 
+  function storeBundleContent(cacheKey: string, content: string): void {
+    const dir = bundlesDir();
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(bundlePath(cacheKey), content, "utf-8");
+  }
+
+  function restoreBundleContent(cacheKey: string): string | undefined {
+    try {
+      return fs.readFileSync(bundlePath(cacheKey), "utf-8");
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+      throw e;
+    }
+  }
+
   function clean(): void {
     fs.rmSync(config.cacheDir, { recursive: true, force: true });
     cachedManifest = null;
@@ -176,6 +195,8 @@ function createCacheStore(config: CacheConfig): CacheStore {
     deleteEntry,
     storeBundleOutput,
     restoreBundleOutput,
+    storeBundleContent,
+    restoreBundleContent,
     clean,
   };
 }

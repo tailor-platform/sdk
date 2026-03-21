@@ -43,15 +43,18 @@ export interface BundleExecutorsOptions {
  * 1. Creates entry file that extracts operation.body
  * 2. Bundles in a single step with tree-shaking
  * @param options - Bundle executor options
- * @returns Promise that resolves when bundling completes
+ * @returns Map of executor name to bundled code
  */
-export async function bundleExecutors(options: BundleExecutorsOptions): Promise<void> {
+export async function bundleExecutors(
+  options: BundleExecutorsOptions,
+): Promise<Map<string, string>> {
+  const bundledCode = new Map<string, string>();
   const { config, triggerContext, additionalFiles = [], cache, inlineSourcemap } = options;
   const configFiles = loadFilesWithIgnores(config);
   const files = [...configFiles, ...additionalFiles];
   if (files.length === 0) {
     logger.warn(`No executor files found for patterns: ${config.files?.join(", ") ?? "(none)"}`);
-    return;
+    return bundledCode;
   }
 
   logger.newline();
@@ -82,7 +85,7 @@ export async function bundleExecutors(options: BundleExecutorsOptions): Promise<
 
   if (executors.length === 0) {
     logger.debug("  No function executors to bundle");
-    return;
+    return bundledCode;
   }
 
   const outputDir = path.resolve(getDistDir(), "executors");
@@ -102,13 +105,19 @@ export async function bundleExecutors(options: BundleExecutorsOptions): Promise<
   }
 
   // Process each executor
-  await Promise.all(
+  const results = await Promise.all(
     executors.map((executor) =>
       bundleSingleExecutor(executor, outputDir, tsconfig, triggerContext, cache, inlineSourcemap),
     ),
   );
 
+  for (const [name, code] of results) {
+    bundledCode.set(name, code);
+  }
+
   logger.log(`${styles.success("Bundled")} ${styles.info('"executor"')}`);
+
+  return bundledCode;
 }
 
 async function bundleSingleExecutor(
@@ -118,8 +127,7 @@ async function bundleSingleExecutor(
   triggerContext?: TriggerContext,
   cache?: BundleCache,
   inlineSourcemap?: boolean,
-): Promise<void> {
-  const outputPath = path.join(outputDir, `${executor.name}.js`);
+): Promise<[string, string]> {
   const serializedTriggerContext = serializeTriggerContext(triggerContext);
 
   const contextHash = computeBundlerContextHash({
@@ -129,12 +137,11 @@ async function bundleSingleExecutor(
     inlineSourcemap,
   });
 
-  await withCache({
+  const code = await withCache({
     cache,
     kind: "executor",
     name: executor.name,
     sourceFile: executor.sourceFile,
-    outputPath,
     contextHash,
     async build(cachePlugins) {
       // Step 1: Create entry file that imports and extracts operation.body
@@ -150,37 +157,39 @@ async function bundleSingleExecutor(
       `;
       fs.writeFileSync(entryPath, entryContent);
 
-      // Step 2: Bundle with tree-shaking
+      // Step 2: Bundle with tree-shaking (write: false to avoid unnecessary disk I/O)
       const triggerPlugin = createTriggerTransformPlugin(triggerContext);
       const plugins: rolldown.Plugin[] = triggerPlugin ? [triggerPlugin] : [];
       plugins.push(...cachePlugins);
 
-      await rolldown.build(
-        rolldown.defineConfig({
-          input: entryPath,
-          output: {
-            file: outputPath,
-            format: "esm",
-            sourcemap: inlineSourcemap ? "inline" : true,
-            minify: inlineSourcemap
-              ? {
-                  mangle: {
-                    keepNames: true,
-                  },
-                }
-              : true,
-            codeSplitting: false,
-          },
-          tsconfig,
-          plugins,
-          treeshake: {
-            moduleSideEffects: false,
-            annotations: true,
-            unknownGlobalSideEffects: false,
-          },
-          logLevel: "silent",
-        }) as rolldown.BuildOptions,
-      );
+      const result = await rolldown.build({
+        input: entryPath,
+        write: false,
+        output: {
+          format: "esm",
+          sourcemap: inlineSourcemap ? "inline" : true,
+          minify: inlineSourcemap
+            ? {
+                mangle: {
+                  keepNames: true,
+                },
+              }
+            : true,
+          codeSplitting: false,
+        },
+        tsconfig,
+        plugins,
+        treeshake: {
+          moduleSideEffects: false,
+          annotations: true,
+          unknownGlobalSideEffects: false,
+        },
+        logLevel: "silent",
+      } as rolldown.BuildOptions);
+
+      return result.output[0].code;
     },
   });
+
+  return [executor.name, code];
 }

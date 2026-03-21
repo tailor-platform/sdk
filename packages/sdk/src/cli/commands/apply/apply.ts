@@ -73,7 +73,7 @@ export async function apply(options?: ApplyOptions) {
     rootSpan.setAttribute("apply.dry_run", options?.dryRun ?? false);
 
     // Phase 0: Build
-    const { config, application, workflowBuildResult, buildOnly } = await withSpan(
+    const { config, application, workflowBuildResult, bundledScripts, buildOnly } = await withSpan(
       "build",
       async () => {
         const { config, plugins } = await withSpan("build.loadConfig", () =>
@@ -116,19 +116,29 @@ export async function apply(options?: ApplyOptions) {
 
         let application: Application;
         let workflowBuildResult: Awaited<ReturnType<typeof loadApplication>>["workflowBuildResult"];
+        let bundledScripts: Awaited<ReturnType<typeof loadApplication>>["bundledScripts"];
         try {
           const result = await withSpan("build.loadApplication", () =>
             loadApplication({ config, pluginManager, bundleCache: cacheManager.bundleCache }),
           );
           application = result.application;
           workflowBuildResult = result.workflowBuildResult;
+          bundledScripts = result.bundledScripts;
         } finally {
           // Persist even on partial failure: successfully built bundles
           // are cached so the next run only rebuilds what failed.
           cacheManager.finalize();
         }
 
-        return { config, plugins, application, workflowBuildResult, dryRun, buildOnly };
+        return {
+          config,
+          plugins,
+          application,
+          workflowBuildResult,
+          bundledScripts,
+          dryRun,
+          buildOnly,
+        };
       },
     );
     if (buildOnly) return;
@@ -147,9 +157,13 @@ export async function apply(options?: ApplyOptions) {
     rootSpan.setAttribute("app.name", application.name);
     rootSpan.setAttribute("workspace.id", workspaceId);
 
-    // Collect function entries from bundled scripts (after build, before plan)
+    // Collect function entries from in-memory bundled scripts (after build, before plan)
     const workflowService = application.workflowService;
-    const functionEntries = collectFunctionEntries(application, workflowService?.jobs ?? []);
+    const functionEntries = collectFunctionEntries(
+      application,
+      workflowService?.jobs ?? [],
+      bundledScripts,
+    );
 
     const dryRun = options?.dryRun ?? false;
     const yes = options?.yes ?? false;

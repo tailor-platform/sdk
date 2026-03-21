@@ -130,36 +130,34 @@ export async function bundleSeedScript(
     tsconfig = undefined;
   }
 
-  // Bundle with tree-shaking
-  await rolldown.build(
-    rolldown.defineConfig({
-      input: entryPath,
-      output: {
-        file: outputPath,
-        format: "esm",
-        sourcemap: false,
-        minify: false,
-        codeSplitting: false,
-        globals: {
-          tailordb: "tailordb",
-        },
+  // Bundle with tree-shaking (write: false to avoid unnecessary disk I/O)
+  const result = await rolldown.build({
+    input: entryPath,
+    write: false,
+    output: {
+      file: outputPath,
+      format: "esm",
+      sourcemap: false,
+      minify: false,
+      codeSplitting: false,
+      globals: {
+        tailordb: "tailordb",
       },
-      external: ["tailordb"],
-      resolve: {
-        conditionNames: ["node", "import"],
-      },
-      tsconfig,
-      treeshake: {
-        moduleSideEffects: false,
-        annotations: true,
-        unknownGlobalSideEffects: false,
-      },
-      logLevel: "silent",
-    }) as rolldown.BuildOptions,
-  );
+    },
+    external: ["tailordb"],
+    resolve: {
+      conditionNames: ["node", "import"],
+    },
+    tsconfig,
+    treeshake: {
+      moduleSideEffects: false,
+      annotations: true,
+      unknownGlobalSideEffects: false,
+    },
+    logLevel: "silent",
+  } as rolldown.BuildOptions);
 
-  // Read bundled output
-  const bundledCode = fs.readFileSync(outputPath, "utf-8");
+  const bundledCode = result.output[0].code;
 
   return {
     namespace,

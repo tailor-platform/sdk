@@ -468,27 +468,26 @@ async function bundleScriptTarget(args: {
 
   writeFileSync(entryPath, entryContent);
 
-  await rolldown.build(
-    rolldown.defineConfig({
-      input: entryPath,
-      output: {
-        file: outputPath,
-        format: "cjs",
-        sourcemap: false,
-        minify: true,
-        codeSplitting: false,
-      },
-      tsconfig,
-      treeshake: {
-        moduleSideEffects: false,
-        annotations: true,
-        unknownGlobalSideEffects: false,
-      },
-      logLevel: "silent",
-    }) as rolldown.BuildOptions,
-  );
+  const buildResult = await rolldown.build({
+    input: entryPath,
+    write: false,
+    output: {
+      file: outputPath,
+      format: "cjs",
+      sourcemap: false,
+      minify: true,
+      codeSplitting: false,
+    },
+    tsconfig,
+    treeshake: {
+      moduleSideEffects: false,
+      annotations: true,
+      unknownGlobalSideEffects: false,
+    },
+    logLevel: "silent",
+  } as rolldown.BuildOptions);
 
-  const bundledCode = readFileSync(outputPath, "utf-8");
+  const bundledCode = buildResult.output[0].code;
   return buildPrecompiledExpr(bundledCode);
 }
 

@@ -29,6 +29,7 @@ import { type AuthConfig } from "@/types/auth";
 import { type IdPConfig } from "@/types/idp";
 import { type TailorDBServiceInput } from "@/types/tailordb";
 import type { BundleCache } from "@/cli/cache/bundle-cache";
+import type { BundledScripts } from "@/cli/commands/apply/function-registry";
 import type { PluginManager } from "@/plugin/manager";
 import type { IdP } from "@/types/idp.generated";
 import type { StaticWebsite, StaticWebsiteInput } from "@/types/staticwebsite.generated";
@@ -63,6 +64,8 @@ export interface LoadApplicationResult {
   application: Application;
   /** Workflow bundling result (if workflows were bundled) */
   workflowBuildResult?: BundleWorkflowJobsResult;
+  /** In-memory bundled scripts organized by kind */
+  bundledScripts: BundledScripts;
 }
 
 type DefineTailorDBResult = {
@@ -406,26 +409,40 @@ export async function loadApplication(
   // 6.5. Resolve inline sourcemap setting
   const inlineSourcemap = resolveInlineSourcemap(config.inlineSourcemap);
 
+  // Collect in-memory bundled scripts
+  const bundledScripts: BundledScripts = {
+    resolvers: new Map(),
+    executors: new Map(),
+    workflowJobs: new Map(),
+    authHooks: new Map(),
+  };
+
   // 7. Bundle resolvers
   for (const pipeline of resolverResult.resolverServices) {
-    await bundleResolvers(
+    const resolverBundles = await bundleResolvers(
       pipeline.namespace,
       pipeline.config,
       triggerContext,
       bundleCache,
       inlineSourcemap,
     );
+    for (const [name, code] of resolverBundles) {
+      bundledScripts.resolvers.set(name, code);
+    }
   }
 
   // 8. Bundle executors
   if (executorService) {
-    await bundleExecutors({
+    const executorBundles = await bundleExecutors({
       config: executorService.config,
       triggerContext,
       additionalFiles: [...pluginExecutorFiles],
       cache: bundleCache,
       inlineSourcemap,
     });
+    for (const [name, code] of executorBundles) {
+      bundledScripts.executors.set(name, code);
+    }
   }
 
   // 9. Bundle workflows
@@ -440,12 +457,15 @@ export async function loadApplication(
       bundleCache,
       inlineSourcemap,
     );
+    for (const [name, code] of workflowBuildResult.bundledCode) {
+      bundledScripts.workflowJobs.set(name, code);
+    }
   }
 
   // 9.5. Bundle auth hooks
   if (authResult.authService?.config.hooks?.beforeLogin) {
     const authName = authResult.authService.config.name;
-    await bundleAuthHooks({
+    const authBundles = await bundleAuthHooks({
       configPath: config.path,
       authName,
       handlerAccessPath: `auth.hooks.beforeLogin.handler`,
@@ -453,6 +473,9 @@ export async function loadApplication(
       cache: bundleCache,
       inlineSourcemap,
     });
+    for (const [name, code] of authBundles) {
+      bundledScripts.authHooks.set(name, code);
+    }
   }
 
   // 10. Load resolver and executor definitions (for validation/logging)
@@ -484,5 +507,5 @@ export async function loadApplication(
     env: config.env ?? {},
   });
 
-  return { application, workflowBuildResult };
+  return { application, workflowBuildResult, bundledScripts };
 }

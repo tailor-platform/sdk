@@ -97,32 +97,31 @@ export async function bundleQueryScript(engine: QueryEngine): Promise<string> {
     tsconfig = undefined;
   }
 
-  await rolldown.build(
-    rolldown.defineConfig({
-      input: entryPath,
-      output: {
-        file: outputPath,
-        format: "esm",
-        sourcemap: false,
-        minify: false,
-        codeSplitting: false,
-        globals: {
-          tailordb: "tailordb",
-        },
+  const result = await rolldown.build({
+    input: entryPath,
+    write: false,
+    output: {
+      file: outputPath,
+      format: "esm",
+      sourcemap: false,
+      minify: false,
+      codeSplitting: false,
+      globals: {
+        tailordb: "tailordb",
       },
-      external: engine === "sql" ? ["tailordb"] : [],
-      resolve: {
-        conditionNames: ["node", "import"],
-      },
-      tsconfig,
-      treeshake: {
-        moduleSideEffects: false,
-        annotations: true,
-        unknownGlobalSideEffects: false,
-      },
-      logLevel: "silent",
-    }) as rolldown.BuildOptions,
-  );
+    },
+    external: engine === "sql" ? ["tailordb"] : [],
+    resolve: {
+      conditionNames: ["node", "import"],
+    },
+    tsconfig,
+    treeshake: {
+      moduleSideEffects: false,
+      annotations: true,
+      unknownGlobalSideEffects: false,
+    },
+    logLevel: "silent",
+  } as rolldown.BuildOptions);
 
-  return fs.readFileSync(outputPath, "utf-8");
+  return result.output[0].code;
 }

@@ -21,7 +21,7 @@ describe("bundleExecutors", () => {
             files: ["./src/backend/provisioning/executor/*.ts"],
           },
         }),
-      ).resolves.toBeUndefined();
+      ).resolves.toEqual(new Map());
     } finally {
       process.chdir(originalCwd);
       fs.rmSync(tempDir, { recursive: true, force: true });
