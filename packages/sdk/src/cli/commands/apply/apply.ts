@@ -91,6 +91,7 @@ function printPlanSummary(results: {
     results.auth.changeSet.tenantConfig,
     results.auth.changeSet.machineUser,
     results.auth.changeSet.oauth2Client,
+    results.auth.changeSet.authHook,
     results.auth.changeSet.scim,
     results.auth.changeSet.scimResource,
     results.pipeline.changeSet.service,

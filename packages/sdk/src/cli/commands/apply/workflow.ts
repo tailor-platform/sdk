@@ -26,7 +26,12 @@ export async function applyWorkflow(
   const { changeSet, appName } = result;
   if (phase === "create-update") {
     // Register job functions used by any workflow, returns map of job name to version
-    const jobFunctionVersions = await registerJobFunctions(client, changeSet, appName);
+    const jobFunctionVersions = await registerJobFunctions(
+      client,
+      changeSet,
+      appName,
+      result.unchangedWorkflowJobNames,
+    );
 
     // Create and update workflows in parallel
     // Each workflow only gets the job function versions it actually uses
@@ -104,12 +109,14 @@ function filterJobFunctionVersions(
  * @param client - Operator client instance
  * @param changeSet - Workflow change set
  * @param appName - Application name
+ * @param unchangedWorkflowJobNames - Job function names used by unchanged workflows
  * @returns Map of job function names to versions
  */
 async function registerJobFunctions(
   client: OperatorClient,
   changeSet: ChangeSet<CreateWorkflow, UpdateWorkflow, DeleteWorkflow>,
   appName: string,
+  unchangedWorkflowJobNames: ReadonlySet<string> = new Set(),
 ): Promise<{ [key: string]: bigint }> {
   const jobFunctionVersions: { [key: string]: bigint } = {};
 
@@ -123,6 +130,7 @@ async function registerJobFunctions(
 
   // Collect all job names used by any workflow
   const allUsedJobNames = new Set<string>();
+  unchangedWorkflowJobNames.forEach((jobName) => allUsedJobNames.add(jobName));
   for (const item of [...changeSet.creates, ...changeSet.updates]) {
     for (const jobName of item.usedJobNames) {
       allUsedJobNames.add(jobName);
@@ -264,6 +272,7 @@ export async function planWorkflow(
   const conflicts: OwnerConflict[] = [];
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
+  const unchangedWorkflowJobNames = new Set<string>();
 
   // Fetch existing workflows from API
   const withoutLabel = await fetchAll(async (pageToken, maxPageSize) => {
@@ -327,6 +336,9 @@ export async function planWorkflow(
         )
       ) {
         changeSet.unchanged.push({ name: workflow.name });
+        for (const jobName of usedJobNames) {
+          unchangedWorkflowJobNames.add(jobName);
+        }
       } else {
         changeSet.updates.push({
           name: workflow.name,
@@ -364,7 +376,14 @@ export async function planWorkflow(
   });
 
   changeSet.print();
-  return { changeSet, conflicts, unmanaged, resourceOwners, appName };
+  return {
+    changeSet,
+    conflicts,
+    unmanaged,
+    resourceOwners,
+    appName,
+    unchangedWorkflowJobNames,
+  };
 }
 
 function canTreatWorkflowAsUnchanged(
