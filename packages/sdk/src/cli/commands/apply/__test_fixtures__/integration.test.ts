@@ -55,10 +55,10 @@ describe("apply command integration tests", () => {
     expect(workflowFiles.length).toBeGreaterThan(0);
     expect(pluginFiles.length).toBeGreaterThan(0);
 
-    // Each bundled file should have .js, .js.map, and .entry.js
+    // Each bundled file should have .js and .entry.js
+    // (source maps are not written to disk when using in-memory bundling)
     for (const prefix of ["resolvers/add", "resolvers/showInfo"]) {
       expect(actualFiles).toContain(`${prefix}.js`);
-      expect(actualFiles).toContain(`${prefix}.js.map`);
       expect(actualFiles).toContain(`${prefix}.entry.js`);
     }
   });

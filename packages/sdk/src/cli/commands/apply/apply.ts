@@ -28,6 +28,7 @@ import {
   applyFunctionRegistry,
   collectFunctionEntries,
   planFunctionRegistry,
+  type BundledScripts,
 } from "./function-registry";
 import { applyIdP, planIdP } from "./idp";
 import { applyPipeline, planPipeline } from "./resolver";
@@ -141,7 +142,12 @@ export async function apply(options?: ApplyOptions) {
         };
       },
     );
-    if (buildOnly) return;
+    if (buildOnly) {
+      // Write in-memory bundled scripts to disk so build-only consumers
+      // (e.g. integration test fixtures) can import the generated files.
+      writeBundledScriptsToDisk(bundledScripts);
+      return;
+    }
 
     // Initialize client
     const accessToken = await loadAccessToken({
@@ -388,4 +394,30 @@ export async function apply(options?: ApplyOptions) {
 
     logger.success("Successfully applied changes.");
   });
+}
+
+/**
+ * Write in-memory bundled scripts to the dist directory.
+ * Used by the buildOnly path so that consumers (e.g. integration tests)
+ * can import the generated bundle files from disk.
+ * @param bundledScripts - In-memory bundled code organized by kind
+ */
+function writeBundledScriptsToDisk(bundledScripts: BundledScripts): void {
+  const distDir = getDistDir();
+
+  const kindDirMap: Record<keyof BundledScripts, string> = {
+    resolvers: path.join(distDir, "resolvers"),
+    executors: path.join(distDir, "executors"),
+    workflowJobs: path.join(distDir, "workflow-jobs"),
+    authHooks: path.join(distDir, "auth-hooks"),
+  };
+
+  for (const [kind, dirPath] of Object.entries(kindDirMap)) {
+    const scripts = bundledScripts[kind as keyof BundledScripts];
+    if (scripts.size === 0) continue;
+    fs.mkdirSync(dirPath, { recursive: true });
+    for (const [name, code] of scripts) {
+      fs.writeFileSync(path.join(dirPath, `${name}.js`), code);
+    }
+  }
 }
