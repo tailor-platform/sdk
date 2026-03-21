@@ -144,7 +144,6 @@ const namespaceEntities = {
     "Customer",
     "Invoice",
     "NestedProfile",
-    "Project",
     "PurchaseOrder",
     "SalesOrder",
     "SalesOrderCreated",
