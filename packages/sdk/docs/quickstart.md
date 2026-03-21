@@ -14,6 +14,8 @@ Contact us [here](https://www.tailor.tech/demo) to get started.
 
 The SDK requires Node.js 22 or later. Install Node.js via your package manager by following the official Node.js instructions.
 
+Alternatively, you can use [Bun](https://bun.sh/) as the runtime.
+
 ### Create an Example App
 
 The following command creates a new project with the required configuration files and example code.
