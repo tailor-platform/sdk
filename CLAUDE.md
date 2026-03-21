@@ -75,6 +75,10 @@ See [docs/](docs/README.md) for developer and contributor documentation.
 - [Changeset Conventions](docs/changeset.md) - Version bump level guidelines
 - [Telemetry / Performance Profiling](docs/telemetry.md) - OTLP tracing for CLI performance analysis
 
+## Platform Documentation
+
+- Use `/docs-check` to search https://docs.tailor.tech/ when you need platform-side specs that the codebase doesn't cover
+
 ## Environment
 
 - Linting runs oxlint (via `vp lint`) first, then ESLint

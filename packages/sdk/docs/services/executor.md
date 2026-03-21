@@ -99,6 +99,30 @@ resolverExecutedTrigger({
 });
 ```
 
+### IdP User Triggers
+
+Fire when IdP users are created, updated, or deleted:
+
+- `idpUserCreatedTrigger()`: Fires when a new IdP user is created
+- `idpUserUpdatedTrigger()`: Fires when an IdP user is updated
+- `idpUserDeletedTrigger()`: Fires when an IdP user is deleted
+
+```typescript
+idpUserCreatedTrigger();
+```
+
+### Auth Access Token Triggers
+
+Fire on auth access token lifecycle events:
+
+- `authAccessTokenIssuedTrigger()`: Fires when a new access token is issued
+- `authAccessTokenRefreshedTrigger()`: Fires when an access token is refreshed
+- `authAccessTokenRevokedTrigger()`: Fires when an access token is revoked
+
+```typescript
+authAccessTokenIssuedTrigger();
+```
+
 ## Operation Types
 
 ### Function Operation
@@ -400,4 +424,26 @@ export default createExecutor({
     },
   },
 });
+```
+
+### IdP User Event Payload
+
+IdP user triggers receive user context:
+
+```typescript
+interface IdpUserContext {
+  namespaceName: string; // IdP namespace name
+  userId: string; // The affected user ID
+}
+```
+
+### Auth Access Token Event Payload
+
+Auth access token triggers receive token context:
+
+```typescript
+interface AuthAccessTokenContext {
+  namespaceName: string; // Auth namespace name
+  userId: string; // The user associated with the token
+}
 ```
