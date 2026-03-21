@@ -1,12 +1,36 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
-import { setupTailordbMock, createImportMain } from "@/utils/test/mock";
+import { setupTailordbMock } from "@/utils/test/mock";
 import { prepareFixtures } from "./prepare";
+import type { BundledScripts } from "@/cli/commands/apply/function-registry";
+
+type MainFunction = (args: Record<string, unknown>) => unknown | Promise<unknown>;
+
+/**
+ * Evaluate bundled code string and return its `main` export.
+ * @param code - Bundled JavaScript code string
+ * @param name - Name for error messages
+ * @returns The `main` function exported by the bundle
+ */
+async function importFromCode(code: string, name: string): Promise<MainFunction> {
+  const blob = new Blob([code], { type: "text/javascript" });
+  const url = URL.createObjectURL(blob);
+  try {
+    const module = await import(/* @vite-ignore */ url);
+    const main = module.main;
+    if (typeof main !== "function") {
+      throw new Error(`Expected "main" to be a function in ${name}, got ${typeof main}`);
+    }
+    return main;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
 
 describe("apply command integration tests", () => {
   let outputDir: string;
-  let importMain: ReturnType<typeof createImportMain>;
+  let bundledScripts: BundledScripts;
 
   const fixedSystemTime = new Date("2025-10-06T12:34:56.000Z");
 
@@ -32,8 +56,9 @@ describe("apply command integration tests", () => {
     vi.useFakeTimers();
     vi.setSystemTime(fixedSystemTime);
     setupTailordbMock();
-    outputDir = await prepareFixtures();
-    importMain = createImportMain(outputDir);
+    const result = await prepareFixtures();
+    outputDir = result.outputDir;
+    bundledScripts = result.bundledScripts;
   }, 120000);
 
   afterAll(() => {
@@ -44,23 +69,22 @@ describe("apply command integration tests", () => {
   test("compare directory structure", () => {
     const actualFiles = collectGeneratedFiles(outputDir).sort();
 
-    // Verify expected file categories exist
-    const resolverFiles = actualFiles.filter((f) => f.startsWith("resolvers/"));
-    const executorFiles = actualFiles.filter((f) => f.startsWith("executors/"));
-    const workflowFiles = actualFiles.filter((f) => f.startsWith("workflow-jobs/"));
+    // Plugin-generated files should exist on disk
     const pluginFiles = actualFiles.filter((f) => f === "db.ts" || f === "enums.ts");
-
-    expect(resolverFiles.length).toBeGreaterThan(0);
-    expect(executorFiles.length).toBeGreaterThan(0);
-    expect(workflowFiles.length).toBeGreaterThan(0);
     expect(pluginFiles.length).toBeGreaterThan(0);
 
-    // Each bundled file should have .js and .entry.js
-    // (source maps are not written to disk when using in-memory bundling)
-    for (const prefix of ["resolvers/add", "resolvers/showInfo"]) {
-      expect(actualFiles).toContain(`${prefix}.js`);
-      expect(actualFiles).toContain(`${prefix}.entry.js`);
-    }
+    // Entry files should exist on disk (rolldown input)
+    const entryFiles = actualFiles.filter((f) => f.endsWith(".entry.js"));
+    expect(entryFiles.length).toBeGreaterThan(0);
+
+    // Bundle output files should NOT exist on disk (in-memory only)
+    const bundleOutputFiles = actualFiles.filter(
+      (f) => f.endsWith(".js") && !f.endsWith(".entry.js"),
+    );
+    expect(bundleOutputFiles).toEqual([]);
+
+    // Bundled scripts should be available in memory
+    expect(bundledScripts.resolvers.size).toBeGreaterThan(0);
   });
 
   test("generated ts files exist and are non-empty", () => {
@@ -73,41 +97,53 @@ describe("apply command integration tests", () => {
   });
 
   describe("validation", () => {
-    test("resolvers/add.js validates input correctly - valid values", async () => {
-      const main = await importMain("resolvers/add.js");
+    test("resolvers/add validates input correctly - valid values", async () => {
+      const code = bundledScripts.resolvers.get("add");
+      expect(code).toBeDefined();
+      const main = await importFromCode(code!, "resolvers/add");
       await expect(main({ input: { a: 4, b: 6 } })).resolves.not.toThrow();
     });
 
-    test("resolvers/add.js validates input correctly - negative value throws error", async () => {
-      const main = await importMain("resolvers/add.js");
+    test("resolvers/add validates input correctly - negative value throws error", async () => {
+      const code = bundledScripts.resolvers.get("add");
+      expect(code).toBeDefined();
+      const main = await importFromCode(code!, "resolvers/add");
       await expect(main({ input: { a: -1, b: 5 } })).rejects.toThrow(
         "a: Value must be non-negative",
       );
     });
 
-    test("resolvers/add.js validates input correctly - value >= 10 throws error", async () => {
-      const main = await importMain("resolvers/add.js");
+    test("resolvers/add validates input correctly - value >= 10 throws error", async () => {
+      const code = bundledScripts.resolvers.get("add");
+      expect(code).toBeDefined();
+      const main = await importFromCode(code!, "resolvers/add");
       await expect(main({ input: { a: 10, b: 5 } })).rejects.toThrow(
         "a: Value must be less than 10",
       );
     });
 
-    test("resolvers/add.js validates input correctly - b negative throws error", async () => {
-      const main = await importMain("resolvers/add.js");
+    test("resolvers/add validates input correctly - b negative throws error", async () => {
+      const code = bundledScripts.resolvers.get("add");
+      expect(code).toBeDefined();
+      const main = await importFromCode(code!, "resolvers/add");
       await expect(main({ input: { a: 5, b: -2 } })).rejects.toThrow(
         "b: Value must be non-negative",
       );
     });
 
-    test("resolvers/add.js validates input correctly - b >= 10 throws error", async () => {
-      const main = await importMain("resolvers/add.js");
+    test("resolvers/add validates input correctly - b >= 10 throws error", async () => {
+      const code = bundledScripts.resolvers.get("add");
+      expect(code).toBeDefined();
+      const main = await importFromCode(code!, "resolvers/add");
       await expect(main({ input: { a: 5, b: 15 } })).rejects.toThrow(
         "b: Value must be less than 10",
       );
     });
 
-    test("resolvers/add.js validates input correctly - multiple errors", async () => {
-      const main = await importMain("resolvers/add.js");
+    test("resolvers/add validates input correctly - multiple errors", async () => {
+      const code = bundledScripts.resolvers.get("add");
+      expect(code).toBeDefined();
+      const main = await importFromCode(code!, "resolvers/add");
       await expect(main({ input: { a: -1, b: -2 } })).rejects.toThrow(
         [
           "Failed to input validation:",
@@ -117,8 +153,10 @@ describe("apply command integration tests", () => {
       );
     });
 
-    test("resolvers/add.js validates input correctly - both >= 10", async () => {
-      const main = await importMain("resolvers/add.js");
+    test("resolvers/add validates input correctly - both >= 10", async () => {
+      const code = bundledScripts.resolvers.get("add");
+      expect(code).toBeDefined();
+      const main = await importFromCode(code!, "resolvers/add");
       await expect(main({ input: { a: 10, b: 15 } })).rejects.toThrow(
         [
           "Failed to input validation:",
