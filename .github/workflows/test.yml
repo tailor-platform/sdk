@@ -14,14 +14,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
         node: [22, 24]
-        exclude:
-          # Save macOS runner minutes (10x cost) - keep Active LTS (24) only
-          - os: macos-latest
-            node: 22
-    runs-on: ${{ matrix.os }}
-    name: Test (Node ${{ matrix.node }}, ${{ matrix.os }})
+    runs-on: ubuntu-latest
+    name: Test (Node ${{ matrix.node }})
     timeout-minutes: 10
     permissions:
       contents: read
