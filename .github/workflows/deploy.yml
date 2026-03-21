@@ -46,6 +46,8 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Least-privilege: only contents:read is needed for checkout and deploy.
+    # Callers needing extra scopes (e.g. packages:read) must fork this workflow.
     permissions:
       contents: read
     env:
