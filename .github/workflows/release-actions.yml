@@ -22,16 +22,21 @@ jobs:
     steps:
       - name: Verify running on main branch
         if: github.ref != 'refs/heads/main'
+        env:
+          GIT_REF: ${{ github.ref }}
         run: |
-          echo "::error::This workflow must be run from the main branch, not ${{ github.ref }}"
+          echo "::error::This workflow must be run from the main branch, not ${GIT_REF}"
           exit 1
 
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Validate version format
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
-          VERSION="${{ inputs.version }}"
           if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "::error::Invalid version format '$VERSION'. Expected: X.Y.Z (e.g. 1.0.0)"
             exit 1
@@ -46,28 +51,32 @@ jobs:
             exit 1
           fi
 
-      - name: Create tags
-        run: |
-          git tag "actions/v${VERSION}"
-          git tag -f "actions/v${MAJOR}"
-          echo "Created tag: actions/v${VERSION}"
-          echo "Updated floating tag: actions/v${MAJOR}"
-
-      - name: Push tags
-        if: ${{ !inputs.dry-run }}
-        run: |
-          git push origin "actions/v${VERSION}"
-          git push origin -f "actions/v${MAJOR}"
-
       - name: Create GitHub Release
         if: ${{ !inputs.dry-run }}
         env:
           GH_TOKEN: ${{ github.token }}
+          COMMIT_SHA: ${{ github.sha }}
         run: |
           gh release create "actions/v${VERSION}" \
             --title "Actions v${VERSION}" \
             --notes "Release of reusable deploy workflow v${VERSION}" \
-            --target "${{ github.sha }}"
+            --target "${COMMIT_SHA}"
+
+      - name: Update floating major tag
+        if: ${{ !inputs.dry-run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          if gh api "repos/${GITHUB_REPOSITORY}/git/refs/tags/actions/v${MAJOR}" --silent 2>/dev/null; then
+            gh api "repos/${GITHUB_REPOSITORY}/git/refs/tags/actions/v${MAJOR}" \
+              -X PATCH -F "sha=${COMMIT_SHA}" -F "force=true"
+          else
+            gh api "repos/${GITHUB_REPOSITORY}/git/refs" \
+              -f "ref=refs/tags/actions/v${MAJOR}" \
+              -f "sha=${COMMIT_SHA}"
+          fi
+          echo "Updated floating tag: actions/v${MAJOR}"
 
       - name: Dry run summary
         if: ${{ inputs.dry-run }}
