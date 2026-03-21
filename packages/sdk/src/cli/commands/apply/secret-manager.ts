@@ -1,7 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { createChangeSet } from "./change-set";
-import { areNormalizedEqual, normalizeProtoConfig } from "./compare";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import { hashValue, loadSecretsState, saveSecretsState } from "./secrets-state";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
@@ -45,6 +44,14 @@ type DeleteSecret = {
   workspaceId: string;
   vaultName: string;
 };
+
+function isManagedVaultUnchanged(
+  existing: { resource: { name: string }; label?: string },
+  applicationName: string,
+  vaultName: string,
+): boolean {
+  return existing.label === applicationName && existing.resource.name === vaultName;
+}
 
 /**
  * Plan secret manager changes based on current and desired state.
@@ -115,17 +122,7 @@ export async function planSecretManager(context: PlanContext) {
             currentOwner: existing.label,
           });
         }
-        if (
-          existing.label === application.name &&
-          areNormalizedEqual(
-            normalizeProtoConfig({
-              name: existing.resource.name,
-            }),
-            normalizeProtoConfig({
-              name: vaultName,
-            }),
-          )
-        ) {
+        if (isManagedVaultUnchanged(existing, application.name, vaultName)) {
           vaultChangeSet.unchanged.push({ name: vaultName });
         } else {
           vaultChangeSet.updates.push({

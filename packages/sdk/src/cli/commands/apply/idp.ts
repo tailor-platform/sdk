@@ -13,6 +13,7 @@ import {
 } from "@tailor-proto/tailor/v1/idp_resource_pb";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { createChangeSet } from "./change-set";
+import { areNormalizedEqual } from "./compare";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
@@ -197,7 +198,7 @@ type ComparableIdPService = {
   disableGqlOperations: Record<string, boolean> | undefined;
 };
 
-function comparableUserAuthPolicy(
+function normalizeComparableUserAuthPolicy(
   policy: ProtoIdPService["userAuthPolicy"] | IdP["userAuthPolicy"] | undefined,
 ): Record<string, unknown> | undefined {
   return {
@@ -216,7 +217,7 @@ function comparableUserAuthPolicy(
   };
 }
 
-function comparableDisableGqlOperations(
+function normalizeComparableDisableGqlOperations(
   value: ProtoIdPService["disableGqlOperations"] | Record<string, boolean> | undefined,
 ): Record<string, boolean> | undefined {
   return {
@@ -228,7 +229,7 @@ function comparableDisableGqlOperations(
   };
 }
 
-function comparableIdPService(
+function normalizeComparableIdPServiceShape(
   input: Pick<
     ComparableIdPService,
     "authorization" | "lang" | "userAuthPolicy" | "publishUserEvents" | "disableGqlOperations"
@@ -241,6 +242,28 @@ function comparableIdPService(
     publishUserEvents: input.publishUserEvents,
     disableGqlOperations: input.disableGqlOperations,
   };
+}
+
+function normalizeComparableIdPService(
+  input: Pick<
+    ComparableIdPService,
+    "authorization" | "lang" | "userAuthPolicy" | "publishUserEvents" | "disableGqlOperations"
+  >,
+): ComparableIdPService {
+  return normalizeComparableIdPServiceShape(input);
+}
+
+function areIdPServicesEqual(existing: ProtoIdPService, desired: ComparableIdPService): boolean {
+  return areNormalizedEqual(
+    normalizeComparableIdPService({
+      authorization: existing.authorization,
+      lang: existing.lang,
+      userAuthPolicy: normalizeComparableUserAuthPolicy(existing.userAuthPolicy),
+      publishUserEvents: existing.publishUserEvents,
+      disableGqlOperations: normalizeComparableDisableGqlOperations(existing.disableGqlOperations),
+    }),
+    desired,
+  );
 }
 
 async function planServices(
@@ -305,12 +328,12 @@ async function planServices(
     const lang = convertLang(idp.lang);
     const userAuthPolicy = idp.userAuthPolicy;
     const publishUserEvents = idp.publishUserEvents ?? false;
-    const desired = comparableIdPService({
+    const desired = normalizeComparableIdPService({
       authorization,
       lang,
-      userAuthPolicy: comparableUserAuthPolicy(userAuthPolicy),
+      userAuthPolicy: normalizeComparableUserAuthPolicy(userAuthPolicy),
       publishUserEvents,
-      disableGqlOperations: comparableDisableGqlOperations(
+      disableGqlOperations: normalizeComparableDisableGqlOperations(
         convertGqlOperationsToDisable(idp.gqlOperations),
       ),
     });
@@ -338,18 +361,7 @@ async function planServices(
           currentOwner: existing.label,
         });
       }
-
-      const current = comparableIdPService({
-        authorization: existing.resource.authorization,
-        lang: existing.resource.lang,
-        userAuthPolicy: comparableUserAuthPolicy(existing.resource.userAuthPolicy),
-        publishUserEvents: existing.resource.publishUserEvents,
-        disableGqlOperations: comparableDisableGqlOperations(
-          existing.resource.disableGqlOperations,
-        ),
-      });
-
-      if (JSON.stringify(current) === JSON.stringify(desired) && isManagedByApp) {
+      if (isManagedByApp && areIdPServicesEqual(existing.resource, desired)) {
         changeSet.unchanged.push({ name: namespaceName });
       } else {
         changeSet.updates.push({

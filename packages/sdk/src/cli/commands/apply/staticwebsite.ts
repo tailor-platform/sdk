@@ -7,6 +7,7 @@ import {
 } from "@tailor-proto/tailor/v1/staticwebsite_pb";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { createChangeSet } from "./change-set";
+import { areNormalizedEqual } from "./compare";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
@@ -67,17 +68,41 @@ type ComparableStaticWebsite = {
   allowedIpAddresses: string[];
 };
 
+type ComparableStaticWebsiteInput = {
+  description?: string;
+  allowedIpAddresses?: readonly string[];
+};
+
 function trn(workspaceId: string, name: string) {
   return `trn:v1:workspace:${workspaceId}:staticwebsite:${name}`;
 }
 
-function comparableStaticWebsite(
+function normalizeComparableStaticWebsiteShape(
   input: Pick<ComparableStaticWebsite, "description" | "allowedIpAddresses">,
 ): ComparableStaticWebsite {
   return {
     description: input.description,
     allowedIpAddresses: [...input.allowedIpAddresses].sort(),
   };
+}
+
+function normalizeComparableStaticWebsite(
+  input: ComparableStaticWebsiteInput,
+): ComparableStaticWebsite {
+  return normalizeComparableStaticWebsiteShape({
+    description: input.description || "",
+    allowedIpAddresses: [...(input.allowedIpAddresses || [])],
+  });
+}
+
+function areStaticWebsitesEqual(
+  existing: ProtoStaticWebsite,
+  desired: ComparableStaticWebsiteInput,
+): boolean {
+  return areNormalizedEqual(
+    normalizeComparableStaticWebsite(existing),
+    normalizeComparableStaticWebsite(desired),
+  );
 }
 
 /**
@@ -129,10 +154,7 @@ export async function planStaticWebsite(context: PlanContext) {
     const name = websiteService.name;
     const existing = existingWebsites[name];
     const metaRequest = await buildMetaRequest(trn(workspaceId, name), application.name);
-    const desired = comparableStaticWebsite({
-      description: config.description || "",
-      allowedIpAddresses: config.allowedIpAddresses || [],
-    });
+    const desired = normalizeComparableStaticWebsite(config);
     const request = {
       workspaceId,
       staticwebsite: {
@@ -158,13 +180,8 @@ export async function planStaticWebsite(context: PlanContext) {
       }
 
       if (
-        JSON.stringify(
-          comparableStaticWebsite({
-            description: (existing.resource as ProtoStaticWebsite).description,
-            allowedIpAddresses: (existing.resource as ProtoStaticWebsite).allowedIpAddresses,
-          }),
-        ) === JSON.stringify(desired) &&
-        isManagedByApp
+        isManagedByApp &&
+        areStaticWebsitesEqual(existing.resource as ProtoStaticWebsite, desired)
       ) {
         changeSet.unchanged.push({ name });
       } else {

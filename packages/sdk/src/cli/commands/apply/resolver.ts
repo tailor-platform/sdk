@@ -341,7 +341,6 @@ async function planResolvers(
         executorUsedResolvers,
         env,
       );
-      const normalizedDesiredResolver = normalizeComparableResolver(desiredResolver);
       if (existingNameSet.has(resolver.name)) {
         const existingResolverResponse = await client.getPipelineResolver({
           workspaceId,
@@ -349,13 +348,7 @@ async function planResolvers(
           resolverName: resolver.name,
         });
         const existingResolver = existingResolverResponse.pipelineResolver;
-        if (
-          existingResolver &&
-          areNormalizedEqual(
-            normalizeComparableResolver(existingResolver),
-            normalizedDesiredResolver,
-          )
-        ) {
+        if (existingResolver && areResolversEqual(existingResolver, desiredResolver)) {
           changeSet.unchanged.push({ name: resolver.name });
         } else {
           changeSet.updates.push({
@@ -419,6 +412,16 @@ function normalizeComparableResolver(resolver: MessageInitShape<typeof PipelineR
     response: normalizeComparableField(normalized.response),
     pipelines: normalizeComparablePipelines(normalized.pipelines),
   };
+}
+
+function areResolversEqual(
+  existing: MessageInitShape<typeof PipelineResolverSchema>,
+  desired: MessageInitShape<typeof PipelineResolverSchema>,
+): boolean {
+  return areNormalizedEqual(
+    normalizeComparableResolver(existing),
+    normalizeComparableResolver(desired),
+  );
 }
 
 function normalizeComparablePipelines(

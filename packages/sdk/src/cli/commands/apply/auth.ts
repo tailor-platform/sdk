@@ -521,38 +521,7 @@ async function planIdPConfigs(
           existingMap.delete(idpConfig.name);
           continue;
         }
-        const existingComparable = normalizeProtoConfig({
-          name: existing.name,
-          authType: existing.authType,
-          config:
-            existing.config?.config.case === "oidc"
-              ? {
-                  config: {
-                    case: "oidc",
-                    value: {
-                      ...existing.config.config.value,
-                      issuerUrl: existing.config.config.value.issuerUrl || undefined,
-                    },
-                  },
-                }
-              : existing.config,
-        });
-        const desiredComparableNormalized = normalizeProtoConfig({
-          ...desiredComparable,
-          config:
-            desiredComparable.config?.config?.case === "oidc"
-              ? {
-                  config: {
-                    case: "oidc",
-                    value: {
-                      ...desiredComparable.config.config.value,
-                      issuerUrl: desiredComparable.config.config.value.issuerUrl || undefined,
-                    },
-                  },
-                }
-              : desiredComparable.config,
-        });
-        if (stableStringify(existingComparable) === stableStringify(desiredComparableNormalized)) {
+        if (areAuthIdPConfigsEqual(existing, desiredComparable)) {
           changeSet.unchanged.push({ name: idpConfig.name });
         } else {
           changeSet.updates.push({
@@ -623,6 +592,72 @@ async function protoIdPConfigForComparison(
         config,
       }
     : undefined;
+}
+
+function normalizeComparableAuthIdPConfig(idpConfig: {
+  name?: string;
+  authType?: AuthIDPConfig_AuthType;
+  config?: {
+    config?: {
+      case?: "oidc" | "saml" | "idToken";
+      value?: unknown;
+    };
+  };
+}) {
+  const configCase = idpConfig.config?.config?.case;
+  const oidcValue =
+    configCase === "oidc" &&
+    typeof idpConfig.config?.config?.value === "object" &&
+    idpConfig.config.config.value !== null
+      ? idpConfig.config.config.value
+      : undefined;
+  return normalizeProtoConfig({
+    name: idpConfig.name,
+    authType: idpConfig.authType,
+    config:
+      configCase === "oidc"
+        ? {
+            config: {
+              case: "oidc" as const,
+              value: {
+                ...(oidcValue ?? {}),
+                issuerUrl:
+                  oidcValue && "issuerUrl" in oidcValue
+                    ? oidcValue.issuerUrl || undefined
+                    : undefined,
+              },
+            },
+          }
+        : idpConfig.config,
+  });
+}
+
+function areAuthIdPConfigsEqual(
+  existing: {
+    name?: string;
+    authType?: AuthIDPConfig_AuthType;
+    config?: {
+      config?: {
+        case?: "oidc" | "saml" | "idToken";
+        value?: unknown;
+      };
+    };
+  },
+  desired: {
+    name?: string;
+    authType?: AuthIDPConfig_AuthType;
+    config?: {
+      config?: {
+        case?: "oidc" | "saml" | "idToken";
+        value?: unknown;
+      };
+    };
+  },
+) {
+  return (
+    stableStringify(normalizeComparableAuthIdPConfig(existing)) ===
+    stableStringify(normalizeComparableAuthIdPConfig(desired))
+  );
 }
 
 function protoIdPConfig(idpConfig: IdProviderConfig): MessageInitShape<typeof AuthIDPConfigSchema> {
@@ -791,45 +826,7 @@ async function planUserProfileConfigs(
       const userProfileForUpdate = auth.userProfile;
       if (userProfileForUpdate) {
         const desired = protoUserProfileConfig(userProfileForUpdate);
-        const desiredConfig = desired.config?.config;
-        const existingConfig = userProfileProviderConfig?.config?.config;
-        const desiredTailorDBConfig =
-          desiredConfig?.case === "tailordb" ? desiredConfig.value : undefined;
-        const existingTailorDBConfig =
-          existingConfig?.case === "tailordb" ? existingConfig.value : undefined;
-        const desiredComparable = normalizeProtoConfig({
-          providerType: desired.providerType,
-          config: {
-            config: {
-              case: desiredConfig?.case,
-              value: desiredTailorDBConfig
-                ? {
-                    ...desiredTailorDBConfig,
-                    tenantIdField: desiredTailorDBConfig.tenantIdField || undefined,
-                    attributesFields: normalizeStringArray(desiredTailorDBConfig.attributesFields),
-                    attributeMap: normalizeProtoConfig(desiredTailorDBConfig.attributeMap),
-                  }
-                : desiredConfig?.value,
-            },
-          },
-        });
-        const existingComparable = normalizeProtoConfig({
-          providerType: userProfileProviderConfig?.providerType,
-          config: {
-            config: {
-              case: existingConfig?.case,
-              value: existingTailorDBConfig
-                ? {
-                    ...existingTailorDBConfig,
-                    tenantIdField: existingTailorDBConfig.tenantIdField || undefined,
-                    attributesFields: normalizeStringArray(existingTailorDBConfig.attributesFields),
-                    attributeMap: normalizeProtoConfig(existingTailorDBConfig.attributeMap),
-                  }
-                : existingConfig?.value,
-            },
-          },
-        });
-        if (stableStringify(existingComparable) === stableStringify(desiredComparable)) {
+        if (areUserProfileConfigsEqual(userProfileProviderConfig ?? {}, desired)) {
           changeSet.unchanged.push({ name });
         } else {
           changeSet.updates.push({
@@ -954,10 +951,7 @@ async function planTenantConfigs(
       });
       if (config.tenantProvider) {
         const desired = protoTenantConfig(config.tenantProvider);
-        if (
-          stableStringify(normalizeProtoConfig(tenantProviderConfig)) ===
-          stableStringify(normalizeProtoConfig(desired))
-        ) {
+        if (areTenantProviderConfigsEqual(tenantProviderConfig, desired)) {
           changeSet.unchanged.push({ name });
         } else {
           changeSet.updates.push({
@@ -1093,18 +1087,15 @@ async function planMachineUsers(
       if (!machineUser) {
         continue;
       }
-      const desiredAttributes = normalizeStringArray(machineUser.attributeList);
-      const desiredAttributeMap = normalizeProtoConfig(
-        machineUser.attributes ? protoMachineUserAttributeMap(machineUser.attributes) : {},
-      );
+      const desiredMachineUser = {
+        attributes: machineUser.attributeList,
+        attributeMap: machineUser.attributes
+          ? protoMachineUserAttributeMap(machineUser.attributes)
+          : undefined,
+      };
       const existing = existingMap.get(machineUsername);
       if (existing) {
-        if (
-          stableStringify(desiredAttributes) ===
-            stableStringify(normalizeStringArray(existing.attributes)) &&
-          stableStringify(desiredAttributeMap) ===
-            stableStringify(normalizeProtoConfig(existing.attributeMap))
-        ) {
+        if (areMachineUsersEqual(existing, desiredMachineUser)) {
           changeSet.unchanged.push({ name: machineUsername });
         } else {
           changeSet.updates.push({
@@ -1114,9 +1105,7 @@ async function planMachineUsers(
               authNamespace: config.name,
               name: machineUsername,
               attributes: machineUser.attributeList,
-              attributeMap: machineUser.attributes
-                ? protoMachineUserAttributeMap(machineUser.attributes)
-                : undefined,
+              attributeMap: desiredMachineUser.attributeMap,
             },
           });
         }
@@ -1129,9 +1118,7 @@ async function planMachineUsers(
             authNamespace: config.name,
             name: machineUsername,
             attributes: machineUser.attributeList,
-            attributeMap: machineUser.attributes
-              ? protoMachineUserAttributeMap(machineUser.attributes)
-              : undefined,
+            attributeMap: desiredMachineUser.attributeMap,
           },
         });
       }
@@ -1172,6 +1159,147 @@ function protoMachineUserAttributeMap(
     ret[key] = fromJson(ValueSchema, value ?? null);
   }
   return ret;
+}
+
+function normalizeComparableUserProfileConfig(
+  config:
+    | MessageInitShape<typeof UserProfileProviderConfigSchema>
+    | {
+        providerType?: UserProfileProviderConfig_UserProfileProviderType;
+        config?: { config?: { case?: string; value?: Record<string, unknown> } };
+      },
+) {
+  const comparableConfig = config.config?.config;
+  const tailorDBConfig = comparableConfig?.case === "tailordb" ? comparableConfig.value : undefined;
+
+  return normalizeProtoConfig({
+    providerType: config.providerType,
+    config: {
+      config: {
+        case: comparableConfig?.case,
+        value: tailorDBConfig
+          ? {
+              ...tailorDBConfig,
+              tenantIdField: tailorDBConfig.tenantIdField || undefined,
+              attributesFields: normalizeStringArray(
+                tailorDBConfig.attributesFields as readonly string[] | undefined,
+              ),
+              attributeMap: normalizeProtoConfig(tailorDBConfig.attributeMap),
+            }
+          : comparableConfig?.value,
+      },
+    },
+  });
+}
+
+function areUserProfileConfigsEqual(
+  existing: {
+    providerType?: UserProfileProviderConfig_UserProfileProviderType;
+    config?: { config?: { case?: string; value?: Record<string, unknown> } };
+  },
+  desired: MessageInitShape<typeof UserProfileProviderConfigSchema>,
+) {
+  return (
+    stableStringify(normalizeComparableUserProfileConfig(existing)) ===
+    stableStringify(normalizeComparableUserProfileConfig(desired))
+  );
+}
+
+function normalizeComparableTenantProviderConfig(
+  config:
+    | MessageInitShape<typeof TenantProviderConfigSchema>
+    | undefined
+    | {
+        providerType?: TenantProviderConfig_TenantProviderType;
+        config?: { config?: { case?: string; value?: Record<string, unknown> } };
+      },
+) {
+  return normalizeProtoConfig(config);
+}
+
+function areTenantProviderConfigsEqual(
+  existing:
+    | MessageInitShape<typeof TenantProviderConfigSchema>
+    | undefined
+    | {
+        providerType?: TenantProviderConfig_TenantProviderType;
+        config?: { config?: { case?: string; value?: Record<string, unknown> } };
+      },
+  desired: MessageInitShape<typeof TenantProviderConfigSchema>,
+) {
+  return (
+    stableStringify(normalizeComparableTenantProviderConfig(existing)) ===
+    stableStringify(normalizeComparableTenantProviderConfig(desired))
+  );
+}
+
+function normalizeComparableMachineUser(input: {
+  attributes?: readonly string[];
+  attributeMap?: Record<string, MessageInitShape<typeof ValueSchema>>;
+}) {
+  return normalizeProtoConfig({
+    attributes: normalizeStringArray(input.attributes),
+    attributeMap: normalizeProtoConfig(input.attributeMap ?? {}),
+  });
+}
+
+function areMachineUsersEqual(
+  existing: {
+    attributes?: readonly string[];
+    attributeMap?: Record<string, MessageInitShape<typeof ValueSchema>>;
+  },
+  desired: {
+    attributes?: readonly string[];
+    attributeMap?: Record<string, MessageInitShape<typeof ValueSchema>>;
+  },
+) {
+  return (
+    stableStringify(normalizeComparableMachineUser(existing)) ===
+    stableStringify(normalizeComparableMachineUser(desired))
+  );
+}
+
+function normalizeComparableOAuth2Client(
+  client:
+    | MessageInitShape<typeof AuthOAuth2ClientSchema>
+    | {
+        name?: string;
+        description?: string;
+        grantTypes?: readonly AuthOAuth2Client_GrantType[];
+        redirectUris?: readonly string[];
+        clientType?: AuthOAuth2Client_ClientType;
+        accessTokenLifetime?: number;
+        refreshTokenLifetime?: number;
+        requireDpop?: boolean;
+      },
+) {
+  return normalizeProtoConfig({
+    ...client,
+    redirectUris: normalizeStringArray(client.redirectUris),
+    grantTypes: [...(client.grantTypes ?? [])].sort((left, right) => left - right),
+    accessTokenLifetime: client.accessTokenLifetime ?? 86400,
+    refreshTokenLifetime: client.refreshTokenLifetime ?? 604800,
+    requireDpop: client.requireDpop ?? false,
+  });
+}
+
+function areOAuth2ClientsEqual(
+  existing: {
+    name: string;
+    description?: string;
+    grantTypes?: readonly AuthOAuth2Client_GrantType[];
+    redirectUris?: readonly string[];
+    clientType?: AuthOAuth2Client_ClientType;
+    accessTokenLifetime?: number;
+    refreshTokenLifetime?: number;
+    requireDpop?: boolean;
+  },
+  desired: MessageInitShape<typeof AuthOAuth2ClientSchema>,
+) {
+  return (
+    stableStringify(normalizeComparableOAuth2Client(existing)) ===
+    stableStringify(normalizeComparableOAuth2Client(desired))
+  );
 }
 
 type CreateOAuth2Clients = {
@@ -1264,19 +1392,15 @@ async function planOAuth2Clients(
             },
           });
         } else {
-          const desiredComparable = normalizeProtoConfig({
+          const desiredComparable = {
             ...newOAuth2Client,
-            redirectUris: normalizeStringArray(resolvedRedirectUris),
-            grantTypes: [...(newOAuth2Client.grantTypes ?? [])].sort((left, right) => left - right),
-            accessTokenLifetime: newOAuth2Client.accessTokenLifetime ?? 86400,
-            refreshTokenLifetime: newOAuth2Client.refreshTokenLifetime ?? 604800,
-            requireDpop: newOAuth2Client.requireDpop ?? false,
-          });
-          const existingComparable = normalizeProtoConfig({
+            redirectUris: resolvedRedirectUris,
+          };
+          const existingComparable = {
             name: existingClient.name,
             description: existingClient.description,
-            grantTypes: [...(existingClient.grantTypes ?? [])].sort((left, right) => left - right),
-            redirectUris: normalizeStringArray(existingClient.redirectUris),
+            grantTypes: existingClient.grantTypes,
+            redirectUris: existingClient.redirectUris,
             clientType: existingClient.clientType,
             accessTokenLifetime: existingClient.accessTokenLifetime?.seconds
               ? Number(existingClient.accessTokenLifetime.seconds)
@@ -1285,8 +1409,8 @@ async function planOAuth2Clients(
               ? Number(existingClient.refreshTokenLifetime.seconds)
               : undefined,
             requireDpop: existingClient.requireDpop,
-          });
-          if (stableStringify(existingComparable) === stableStringify(desiredComparable)) {
+          };
+          if (areOAuth2ClientsEqual(existingComparable, desiredComparable)) {
             changeSet.unchanged.push({ name: oauth2ClientName });
           } else {
             changeSet.updates.push({

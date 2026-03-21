@@ -385,38 +385,79 @@ function canTreatWorkflowAsUnchanged(
   if (!usedJobNames.every((jobName) => unchangedJobFunctions.has(jobName))) {
     return false;
   }
+  return areWorkflowsEqual(existing, workflow, usedJobNames);
+}
 
-  const remoteRetryPolicy = existing.retryPolicy
-    ? normalizeRetryPolicyForCompare({
-        maxRetries: existing.retryPolicy.maxRetries ?? 0,
-        backoffMultiplier: existing.retryPolicy.backoffMultiplier ?? 0,
-        initialBackoff: {
-          seconds: existing.retryPolicy.initialBackoff?.seconds ?? 0n,
-          nanos: existing.retryPolicy.initialBackoff?.nanos ?? 0,
-        },
-        maxBackoff: {
-          seconds: existing.retryPolicy.maxBackoff?.seconds ?? 0n,
-          nanos: existing.retryPolicy.maxBackoff?.nanos ?? 0,
-        },
-      })
-    : undefined;
-  const desiredRetryPolicy = workflow.retryPolicy
-    ? normalizeRetryPolicyForCompare({
-        maxRetries: workflow.retryPolicy.maxRetries,
-        backoffMultiplier: workflow.retryPolicy.backoffMultiplier,
-        initialBackoff: parseDurationToProto(workflow.retryPolicy.initialBackoff),
-        maxBackoff: parseDurationToProto(workflow.retryPolicy.maxBackoff),
-      })
-    : undefined;
-
-  const remoteJobNames = Object.keys(existing.jobFunctions ?? {}).sort();
-  const desiredJobNames = [...usedJobNames].sort();
-
+function areWorkflowsEqual(
+  existing: {
+    mainJobFunctionName?: string;
+    retryPolicy?: {
+      maxRetries?: number;
+      backoffMultiplier?: number;
+      initialBackoff?: { seconds?: bigint; nanos?: number };
+      maxBackoff?: { seconds?: bigint; nanos?: number };
+    };
+    jobFunctions?: Record<string, string | bigint>;
+  },
+  workflow: Workflow,
+  usedJobNames: readonly string[],
+) {
   return (
     existing.mainJobFunctionName === workflow.mainJob.name &&
-    stableStringify(remoteRetryPolicy) === stableStringify(desiredRetryPolicy) &&
-    stableStringify(remoteJobNames) === stableStringify(desiredJobNames)
+    stableStringify(normalizeComparableExistingWorkflowRetryPolicy(existing.retryPolicy)) ===
+      stableStringify(normalizeComparableWorkflowRetryPolicy(workflow.retryPolicy)) &&
+    stableStringify(normalizeComparableWorkflowJobNames(existing.jobFunctions)) ===
+      stableStringify(normalizeComparableWorkflowJobNames(usedJobNames))
   );
+}
+
+function normalizeComparableExistingWorkflowRetryPolicy(
+  policy:
+    | {
+        maxRetries?: number;
+        backoffMultiplier?: number;
+        initialBackoff?: { seconds?: bigint; nanos?: number };
+        maxBackoff?: { seconds?: bigint; nanos?: number };
+      }
+    | undefined,
+) {
+  if (!policy) {
+    return undefined;
+  }
+
+  return normalizeRetryPolicyForCompare({
+    maxRetries: policy.maxRetries ?? 0,
+    backoffMultiplier: policy.backoffMultiplier ?? 0,
+    initialBackoff: {
+      seconds: policy.initialBackoff?.seconds ?? 0n,
+      nanos: policy.initialBackoff?.nanos ?? 0,
+    },
+    maxBackoff: {
+      seconds: policy.maxBackoff?.seconds ?? 0n,
+      nanos: policy.maxBackoff?.nanos ?? 0,
+    },
+  });
+}
+
+function normalizeComparableWorkflowRetryPolicy(policy: RetryPolicy | undefined) {
+  if (!policy) {
+    return undefined;
+  }
+
+  return normalizeRetryPolicyForCompare({
+    maxRetries: policy.maxRetries,
+    backoffMultiplier: policy.backoffMultiplier,
+    initialBackoff: parseDurationToProto(policy.initialBackoff),
+    maxBackoff: parseDurationToProto(policy.maxBackoff),
+  });
+}
+
+function normalizeComparableWorkflowJobNames(
+  jobFunctions: Record<string, string | bigint> | readonly string[] | undefined,
+) {
+  return Array.isArray(jobFunctions)
+    ? [...jobFunctions].sort()
+    : Object.keys(jobFunctions ?? {}).sort();
 }
 
 function normalizeRetryPolicyForCompare(policy: {

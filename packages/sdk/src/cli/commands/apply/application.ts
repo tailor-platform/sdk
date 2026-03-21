@@ -7,6 +7,7 @@ import {
 } from "@tailor-proto/tailor/v1/application_resource_pb";
 import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "@/cli/shared/client";
 import { createChangeSet } from "./change-set";
+import { areNormalizedEqual } from "./compare";
 import { buildMetaRequest } from "./label";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
 import type { Application } from "@/cli/services/application";
@@ -138,7 +139,7 @@ function toComparableApplication(
   };
 }
 
-function desiredApplication(
+function normalizeComparableApplication(
   application: Readonly<Application>,
   authNamespace: string | undefined,
   authIdpConfigName: string | undefined,
@@ -155,7 +156,7 @@ function desiredApplication(
   });
 }
 
-function existingApplication(app: ProtoApplication): ComparableApplication {
+function normalizeComparableExistingApplication(app: ProtoApplication): ComparableApplication {
   return toComparableApplication({
     authNamespace: app.authNamespace,
     authIdpConfigName: app.authIdpConfigName,
@@ -165,6 +166,10 @@ function existingApplication(app: ProtoApplication): ComparableApplication {
     disableIntrospection: app.disableIntrospection,
     disabled: app.disabled,
   });
+}
+
+function areApplicationsEqual(existing: ProtoApplication, desired: ComparableApplication): boolean {
+  return areNormalizedEqual(normalizeComparableExistingApplication(existing), desired);
 }
 
 /**
@@ -254,7 +259,12 @@ export async function planApplication(context: PlanContext) {
     application.config.cors,
     "CORS",
   );
-  const desired = desiredApplication(application, authNamespace, authIdpConfigName, resolvedCors);
+  const desired = normalizeComparableApplication(
+    application,
+    authNamespace,
+    authIdpConfigName,
+    resolvedCors,
+  );
   const request = {
     workspaceId,
     applicationName: application.name,
@@ -268,7 +278,7 @@ export async function planApplication(context: PlanContext) {
   const existing = existingApplications.find((app) => app.name === application.name);
 
   if (existing) {
-    if (JSON.stringify(existingApplication(existing)) === JSON.stringify(desired)) {
+    if (areApplicationsEqual(existing, desired)) {
       changeSet.unchanged.push({
         name: application.name,
       });

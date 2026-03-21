@@ -125,7 +125,6 @@ export async function planExecutor(context: PlanContext) {
     const existing = existingExecutors[executor.name];
     const metaRequest = await buildMetaRequest(trn(workspaceId, executor.name), application.name);
     const desiredExecutor = protoExecutor(application, executor);
-    const normalizedDesiredExecutor = normalizeComparableExecutor(desiredExecutor);
     if (existing) {
       if (!existing.label) {
         unmanaged.push({
@@ -142,10 +141,7 @@ export async function planExecutor(context: PlanContext) {
 
       if (
         existing.label === application.name &&
-        areNormalizedEqual(
-          normalizeComparableExecutor(existing.resource),
-          normalizedDesiredExecutor,
-        )
+        areExecutorsEqual(existing.resource, desiredExecutor)
       ) {
         changeSet.unchanged.push({ name: executor.name });
       } else {
@@ -240,6 +236,16 @@ function normalizeComparableExecutor(executor: MessageInitShape<typeof ExecutorE
             }
           : normalized.targetConfig,
   };
+}
+
+function areExecutorsEqual(
+  existing: MessageInitShape<typeof ExecutorExecutorSchema>,
+  desired: MessageInitShape<typeof ExecutorExecutorSchema>,
+): boolean {
+  return areNormalizedEqual(
+    normalizeComparableExecutor(existing),
+    normalizeComparableExecutor(desired),
+  );
 }
 
 function resolveTailorDBNamespace(application: Readonly<Application>, typeName: string): string {
