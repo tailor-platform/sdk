@@ -53,14 +53,18 @@ tailor-sdk apply --env-file .env --env-file .env.production
 
 You can use environment variables to configure workspace and authentication:
 
-| Variable                          | Description                                                                 |
-| --------------------------------- | --------------------------------------------------------------------------- |
-| `TAILOR_PLATFORM_WORKSPACE_ID`    | Workspace ID for deployment commands                                        |
-| `TAILOR_PLATFORM_TOKEN`           | Authentication token (alternative to `login`)                               |
-| `TAILOR_TOKEN`                    | **Deprecated.** Use `TAILOR_PLATFORM_TOKEN` instead                         |
-| `TAILOR_PLATFORM_PROFILE`         | Workspace profile name                                                      |
-| `TAILOR_PLATFORM_SDK_CONFIG_PATH` | Path to SDK config file                                                     |
-| `VISUAL` / `EDITOR`               | Preferred editor for commands that open files (e.g., `vim`, `code`, `nano`) |
+| Variable                                     | Description                                                                 |
+| -------------------------------------------- | --------------------------------------------------------------------------- |
+| `TAILOR_PLATFORM_WORKSPACE_ID`               | Workspace ID for deployment commands                                        |
+| `TAILOR_PLATFORM_TOKEN`                      | Authentication token (alternative to `login`)                               |
+| `TAILOR_TOKEN`                               | **Deprecated.** Use `TAILOR_PLATFORM_TOKEN` instead                         |
+| `TAILOR_PLATFORM_PROFILE`                    | Workspace profile name                                                      |
+| `TAILOR_PLATFORM_SDK_CONFIG_PATH`            | Path to SDK config file                                                     |
+| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     | Client ID for `login --machineuser`                                         |
+| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | Client secret for `login --machineuser`                                     |
+| `VISUAL` / `EDITOR`                          | Preferred editor for commands that open files (e.g., `vim`, `code`, `nano`) |
+| `TAILOR_CRASH_REPORTS_LOCAL`                 | Local crash log writing: `on` (default) or `off`                            |
+| `TAILOR_CRASH_REPORTS_REMOTE`                | Automatic crash report submission: `off` (default) or `on`                  |
 
 ### Authentication Token Priority
 
@@ -202,6 +206,23 @@ Commands for managing and deploying static websites.
 | [staticwebsite deploy](./cli/staticwebsite.md#staticwebsite-deploy) | Deploy a static website from a local build directory |
 | [staticwebsite list](./cli/staticwebsite.md#staticwebsite-list)     | List static websites in a workspace                  |
 | [staticwebsite get](./cli/staticwebsite.md#staticwebsite-get)       | Get details of a static website                      |
+
+### [Crash Report Commands](./cli/crash-report.md)
+
+Commands for managing crash reports.
+
+| Command                                                      | Description                                   |
+| ------------------------------------------------------------ | --------------------------------------------- |
+| [crash-report list](./cli/crash-report.md#crash-report-list) | List local crash report files                 |
+| [crash-report send](./cli/crash-report.md#crash-report-send) | Submit a crash report to help improve the SDK |
+
+### [Setup Commands](./cli/setup.md)
+
+Commands for setting up project infrastructure.
+
+| Command                                     | Description                                     |
+| ------------------------------------------- | ----------------------------------------------- |
+| [setup github](./cli/setup.md#setup-github) | Generate GitHub Actions workflow for deployment |
 
 ### [Completion](./cli/completion.md)
 

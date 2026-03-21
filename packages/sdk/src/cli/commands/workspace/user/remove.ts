@@ -5,6 +5,7 @@ import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
+import { prompt } from "@/cli/shared/prompt";
 
 const removeUserOptionsSchema = z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
@@ -62,12 +63,9 @@ export const removeCommand = defineAppCommand({
     .strict(),
   run: async (args) => {
     if (!args.yes) {
-      const confirmation = await logger.prompt(
-        `Are you sure you want to remove user "${args.email}" from the workspace? (yes/no):`,
-        {
-          type: "text",
-        },
-      );
+      const confirmation = await prompt.text({
+        message: `Are you sure you want to remove user "${args.email}" from the workspace? (yes/no):`,
+      });
       if (confirmation !== "yes") {
         logger.info("User removal cancelled.");
         return;

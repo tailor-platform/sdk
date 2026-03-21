@@ -69,12 +69,20 @@ const files: Record<string, FileConfig> = {
     commands: ["staticwebsite"],
     render: defaultRender,
   },
+  "docs/cli/setup.md": {
+    commands: ["setup"],
+    render: defaultRender,
+  },
   "docs/cli/completion.md": {
     commands: ["completion"],
     render: defaultRender,
   },
   "docs/cli/function.md": {
     commands: ["function"],
+    render: defaultRender,
+  },
+  "docs/cli/crash-report.md": {
+    commands: ["crash-report"],
     render: defaultRender,
   },
 };

@@ -5,7 +5,9 @@ import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
+import { prompt } from "@/cli/shared/prompt";
 import { secretIdentifyArgs } from "./args";
+import { checkVaultManaged, releaseVaultOwnership } from "./check-vault-managed";
 
 export const deleteSecretCommand = defineAppCommand({
   name: "delete",
@@ -28,11 +30,13 @@ export const deleteSecretCommand = defineAppCommand({
       profile: args.profile,
     });
 
+    // No additional confirmation for managed vaults — the name-typing confirmation below is a stronger guard.
+    const managed = await checkVaultManaged({ client, workspaceId, vaultName: args["vault-name"] });
+
     if (!args.yes) {
-      const confirmation = await logger.prompt(
-        `Enter the secret name to confirm deletion ("${args.name}"): `,
-        { type: "text" },
-      );
+      const confirmation = await prompt.text({
+        message: `Enter the secret name to confirm deletion ("${args.name}"):`,
+      });
 
       if (confirmation !== args.name) {
         logger.info("Secret deletion cancelled.");
@@ -51,6 +55,10 @@ export const deleteSecretCommand = defineAppCommand({
         throw new Error(`Secret "${args.name}" not found in vault "${args["vault-name"]}".`);
       }
       throw error;
+    }
+
+    if (managed.isManaged) {
+      await releaseVaultOwnership({ client, ...managed });
     }
 
     logger.success(`Secret: ${args.name} deleted from vault: ${args["vault-name"]}`);

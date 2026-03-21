@@ -1,5 +1,17 @@
 import Sonda from "sonda/rolldown";
 import { defineConfig } from "tsdown";
+import { loadYamlText } from "./scripts/yaml-text-plugin.mjs";
+import type { Plugin } from "rolldown";
+
+function yamlText(): Plugin {
+  return {
+    name: "yaml-text",
+    load(id) {
+      const result = loadYamlText(id);
+      return result ? { code: result } : undefined;
+    },
+  };
+}
 
 export default defineConfig({
   entry: [
@@ -30,6 +42,7 @@ export default defineConfig({
   }),
   sourcemap: true,
   plugins: [
+    yamlText(),
     Sonda({
       open: false,
       format: "json",

@@ -158,6 +158,7 @@ function createMockClient(opts?: {
       oauth2Clients,
       nextPageToken: "",
     }),
+    getAuthHook: vi.fn().mockImplementation(notFound),
     getAuthSCIMConfig: vi.fn().mockImplementation(notFound),
     getAuthSCIMResources: vi.fn().mockResolvedValue({
       scimResources: [],

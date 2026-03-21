@@ -236,7 +236,7 @@ function comparableIdPService(
 ): ComparableIdPService {
   return {
     authorization: input.authorization,
-    lang: input.lang,
+    lang: input.lang === IdPLang.UNSPECIFIED ? IdPLang.EN : input.lang,
     userAuthPolicy: input.userAuthPolicy,
     publishUserEvents: input.publishUserEvents,
     disableGqlOperations: input.disableGqlOperations,
@@ -497,7 +497,7 @@ function convertLang(lang: IdPLangInput | undefined): IdPLang {
     case "ja":
       return IdPLang.JA;
     default:
-      return IdPLang.EN;
+      return IdPLang.UNSPECIFIED;
   }
 }
 

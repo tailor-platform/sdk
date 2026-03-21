@@ -1,6 +1,7 @@
 import * as path from "pathe";
 import { generatePluginExecutorFiles } from "@/cli/commands/generate/plugin-executor-generator";
 import { generatePluginTypeFiles } from "@/cli/commands/generate/plugin-type-generator";
+import { bundleAuthHooks } from "@/cli/services/auth/bundler";
 import { createAuthService, type AuthService } from "@/cli/services/auth/service";
 import { bundleExecutors } from "@/cli/services/executor/bundler";
 import { createExecutorService, type ExecutorService } from "@/cli/services/executor/service";
@@ -439,6 +440,19 @@ export async function loadApplication(
       bundleCache,
       inlineSourcemap,
     );
+  }
+
+  // 9.5. Bundle auth hooks
+  if (authResult.authService?.config.hooks?.beforeLogin) {
+    const authName = authResult.authService.config.name;
+    await bundleAuthHooks({
+      configPath: config.path,
+      authName,
+      handlerAccessPath: `auth.hooks.beforeLogin.handler`,
+      triggerContext,
+      cache: bundleCache,
+      inlineSourcemap,
+    });
   }
 
   // 10. Load resolver and executor definitions (for validation/logging)

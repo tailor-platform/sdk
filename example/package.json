@@ -33,16 +33,16 @@
     "@connectrpc/connect": "2.1.1",
     "@connectrpc/connect-node": "2.1.1",
     "@tailor-platform/function-types": "0.8.2",
-    "@types/node": "24.10.9",
+    "@types/node": "24.12.0",
     "@typescript/native-preview": "7.0.0-dev.20260308.1",
-    "eslint-plugin-oxlint": "1.39.0",
+    "eslint-plugin-oxlint": "1.55.0",
     "graphql": "16.13.1",
     "graphql-request": "7.4.0",
-    "oxfmt": "0.24.0",
-    "oxlint": "1.39.0",
+    "oxfmt": "0.40.0",
+    "oxlint": "1.55.0",
     "tsx": "4.21.0",
     "typescript": "5.9.3",
-    "vitest": "4.0.18"
+    "vitest": "4.1.0"
   },
   "engines": {
     "node": ">= 22.14.0"

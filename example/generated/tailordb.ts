@@ -59,6 +59,14 @@ export interface Namespace {
       updatedAt: Timestamp | null;
     }
 
+    Project: {
+      id: Generated<string>;
+      name: string;
+      key: number;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Timestamp | null;
+    }
+
     PurchaseOrder: {
       id: Generated<string>;
       supplierID: string;

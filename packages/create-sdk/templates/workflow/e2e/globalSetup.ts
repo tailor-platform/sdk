@@ -19,7 +19,12 @@ let createdWorkspace: WorkspaceInfo | null = null;
 
 async function setupWorkspace(name: string, region: string): Promise<WorkspaceInfo> {
   console.log(`Creating workspace "${name}" in region "${region}"...`);
-  const workspace = await createWorkspace({ name, region });
+  const workspace = await createWorkspace({
+    name,
+    region,
+    organizationId: process.env.TAILOR_PLATFORM_ORGANIZATION_ID,
+    folderId: process.env.TAILOR_PLATFORM_FOLDER_ID,
+  });
   console.log(`Workspace "${workspace.name}" created successfully.`);
   return workspace;
 }

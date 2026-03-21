@@ -11,6 +11,7 @@ import {
   ExecutorTargetType,
   type ExecutorTargetWebhookHeaderSchema,
   type ExecutorTriggerConfigSchema,
+  type ExecutorTriggerEventConfigSchema,
   ExecutorTriggerType,
 } from "@tailor-proto/tailor/v1/executor_resource_pb";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
@@ -22,6 +23,7 @@ import { executorFunctionName } from "./function-registry";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
+import type { Application } from "@/cli/services/application";
 import type { Executor, Trigger } from "@/types/executor.generated";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
@@ -122,7 +124,7 @@ export async function planExecutor(context: PlanContext) {
   for (const executor of Object.values(executors)) {
     const existing = existingExecutors[executor.name];
     const metaRequest = await buildMetaRequest(trn(workspaceId, executor.name), application.name);
-    const desiredExecutor = protoExecutor(application.name, executor, application.env);
+    const desiredExecutor = protoExecutor(application, executor);
     const normalizedDesiredExecutor = normalizeComparableExecutor(desiredExecutor);
     if (existing) {
       if (!existing.label) {
@@ -240,18 +242,64 @@ function normalizeComparableExecutor(executor: MessageInitShape<typeof ExecutorE
   };
 }
 
+function resolveTailorDBNamespace(application: Readonly<Application>, typeName: string): string {
+  for (const service of application.tailorDBServices) {
+    if (service.types[typeName]) {
+      return service.namespace;
+    }
+  }
+  throw new Error(
+    `TailorDB type "${typeName}" not found in any namespace. Available namespaces: ${application.tailorDBServices.map((s) => s.namespace).join(", ")}`,
+  );
+}
+
+function resolveResolverNamespace(
+  application: Readonly<Application>,
+  resolverName: string,
+): string {
+  for (const service of application.resolverServices) {
+    if (Object.values(service.resolvers).some((r) => r.name === resolverName)) {
+      return service.namespace;
+    }
+  }
+  throw new Error(
+    `Resolver "${resolverName}" not found in any namespace. Available namespaces: ${application.resolverServices.map((s) => s.namespace).join(", ")}`,
+  );
+}
+
+function resolveIdpNamespace(application: Readonly<Application>): string {
+  if (application.idpServices.length === 0) {
+    throw new Error("No IdP service configured");
+  }
+  if (application.idpServices.length > 1) {
+    throw new Error(
+      "Multiple IdP services found; cannot determine which to use for executor trigger",
+    );
+  }
+  return application.idpServices[0].name;
+}
+
+function resolveAuthNamespace(application: Readonly<Application>): string {
+  if (!application.authService) {
+    throw new Error("No Auth service configured");
+  }
+  return application.authService.parsedConfig.name;
+}
+
 function protoExecutor(
-  appName: string,
+  application: Readonly<Application>,
   executor: Executor,
-  env: Record<string, string | number | boolean>,
 ): MessageInitShape<typeof ExecutorExecutorSchema> {
+  const appName = application.name;
+  const env = application.env;
   const trigger = executor.trigger;
   let triggerType: ExecutorTriggerType;
   let triggerConfig: MessageInitShape<typeof ExecutorTriggerConfigSchema>;
 
   const argsExpr = buildExecutorArgsExpr(trigger.kind, env);
 
-  const eventType: { [key in Trigger["kind"]]?: string } = {
+  type EventTriggerKind = Exclude<Trigger["kind"], "schedule" | "incomingWebhook">;
+  const eventType: Record<EventTriggerKind, string> = {
     recordCreated: "tailordb.type_record.created",
     recordUpdated: "tailordb.type_record.updated",
     recordDeleted: "tailordb.type_record.deleted",
@@ -263,6 +311,13 @@ function protoExecutor(
     authAccessTokenRefreshed: "auth.access_token.refreshed",
     authAccessTokenRevoked: "auth.access_token.revoked",
   };
+
+  function typedEventTrigger(
+    typedConfig: MessageInitShape<typeof ExecutorTriggerEventConfigSchema>["typedConfig"],
+  ): MessageInitShape<typeof ExecutorTriggerConfigSchema> {
+    return { config: { case: "event", value: { typedConfig } } };
+  }
+
   switch (trigger.kind) {
     case "schedule":
       triggerType = ExecutorTriggerType.SCHEDULE;
@@ -280,41 +335,31 @@ function protoExecutor(
     case "recordUpdated":
     case "recordDeleted":
       triggerType = ExecutorTriggerType.EVENT;
-      triggerConfig = {
-        config: {
-          case: "event",
-          value: {
-            eventType: eventType[trigger.kind],
-            condition: {
-              expr: [
-                /* js */ `args.typeName === "${trigger.typeName}"`,
-                ...(trigger.condition
-                  ? [/* js */ `(${stringifyFunction(trigger.condition)})(${argsExpr})`]
-                  : []),
-              ].join(" && "),
-            },
-          },
+      triggerConfig = typedEventTrigger({
+        case: "tailordb",
+        value: {
+          eventTypes: [eventType[trigger.kind]],
+          namespaceName: resolveTailorDBNamespace(application, trigger.typeName),
+          typeName: trigger.typeName,
+          ...(trigger.condition
+            ? { condition: { expr: `(${stringifyFunction(trigger.condition)})(${argsExpr})` } }
+            : {}),
         },
-      };
+      });
       break;
     case "resolverExecuted":
       triggerType = ExecutorTriggerType.EVENT;
-      triggerConfig = {
-        config: {
-          case: "event",
-          value: {
-            eventType: eventType[trigger.kind],
-            condition: {
-              expr: [
-                /* js */ `args.resolverName === "${trigger.resolverName}"`,
-                ...(trigger.condition
-                  ? [/* js */ `(${stringifyFunction(trigger.condition)})(${argsExpr})`]
-                  : []),
-              ].join(" && "),
-            },
-          },
+      triggerConfig = typedEventTrigger({
+        case: "pipeline",
+        value: {
+          eventTypes: [eventType[trigger.kind]],
+          namespaceName: resolveResolverNamespace(application, trigger.resolverName),
+          resolverName: trigger.resolverName,
+          ...(trigger.condition
+            ? { condition: { expr: `(${stringifyFunction(trigger.condition)})(${argsExpr})` } }
+            : {}),
         },
-      };
+      });
       break;
     case "incomingWebhook":
       triggerType = ExecutorTriggerType.INCOMING_WEBHOOK;
@@ -328,18 +373,26 @@ function protoExecutor(
     case "idpUserCreated":
     case "idpUserUpdated":
     case "idpUserDeleted":
+      triggerType = ExecutorTriggerType.EVENT;
+      triggerConfig = typedEventTrigger({
+        case: "idp",
+        value: {
+          eventTypes: [eventType[trigger.kind]],
+          namespaceName: resolveIdpNamespace(application),
+        },
+      });
+      break;
     case "authAccessTokenIssued":
     case "authAccessTokenRefreshed":
     case "authAccessTokenRevoked":
       triggerType = ExecutorTriggerType.EVENT;
-      triggerConfig = {
-        config: {
-          case: "event",
-          value: {
-            eventType: eventType[trigger.kind],
-          },
+      triggerConfig = typedEventTrigger({
+        case: "auth",
+        value: {
+          eventTypes: [eventType[trigger.kind]],
+          namespaceName: resolveAuthNamespace(application),
         },
-      };
+      });
       break;
     default:
       throw new Error(`Unknown trigger: ${trigger satisfies never}`);

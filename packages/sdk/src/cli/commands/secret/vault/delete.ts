@@ -5,6 +5,8 @@ import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
+import { prompt } from "@/cli/shared/prompt";
+import { checkVaultManaged } from "../check-vault-managed";
 import { nameArgs } from "./args";
 
 export const deleteCommand = defineAppCommand({
@@ -28,11 +30,13 @@ export const deleteCommand = defineAppCommand({
       profile: args.profile,
     });
 
+    // No additional confirmation for managed vaults — the name-typing confirmation below is a stronger guard.
+    const managed = await checkVaultManaged({ client, workspaceId, vaultName: args.name });
+
     if (!args.yes) {
-      const confirmation = await logger.prompt(
-        `Enter the vault name to confirm deletion ("${args.name}"): `,
-        { type: "text" },
-      );
+      const confirmation = await prompt.text({
+        message: `Enter the vault name to confirm deletion ("${args.name}"):`,
+      });
       if (confirmation !== args.name) {
         logger.info("Vault deletion cancelled.");
         return;
@@ -49,6 +53,12 @@ export const deleteCommand = defineAppCommand({
         throw new Error(`Vault "${args.name}" not found.`);
       }
       throw error;
+    }
+
+    if (managed.isManaged) {
+      logger.info(
+        "Remove this vault from defineSecretManager() in your config to prevent the next apply from re-creating it.",
+      );
     }
 
     logger.success(`Vault: ${args.name} deleted`);

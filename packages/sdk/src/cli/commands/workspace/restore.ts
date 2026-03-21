@@ -5,6 +5,7 @@ import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
+import { prompt } from "@/cli/shared/prompt";
 
 const restoreWorkspaceOptionsSchema = z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }),
@@ -58,12 +59,9 @@ export const restoreCommand = defineAppCommand({
     });
 
     if (!args.yes) {
-      const confirmation = await logger.prompt(
-        `Are you sure you want to restore workspace "${workspaceId}"? (yes/no):`,
-        {
-          type: "text",
-        },
-      );
+      const confirmation = await prompt.text({
+        message: `Are you sure you want to restore workspace "${workspaceId}"? (yes/no):`,
+      });
       if (confirmation !== "yes") {
         logger.info("Workspace restoration cancelled.");
         return;
