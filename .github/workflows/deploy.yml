@@ -45,6 +45,9 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
     env:
       WORKSPACE_NAME: ${{ inputs.workspace-name }}
       WORKSPACE_REGION: ${{ inputs.workspace-region }}
