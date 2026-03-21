@@ -145,9 +145,17 @@ export async function apply(options?: ApplyOptions) {
     if (buildOnly) {
       // Write in-memory bundled scripts to disk so build-only consumers
       // (e.g. integration test fixtures) can import the generated files.
+      // Note: separate .js.map files are not written because in-memory bundling
+      // only captures code strings; the dangling sourceMappingURL in the output
+      // is harmless for test consumers.
       writeBundledScriptsToDisk(bundledScripts);
       return;
     }
+
+    // Note: the normal apply path intentionally skips writing bundle files to
+    // .tailor-sdk/. Bundles are kept in memory and uploaded directly to the
+    // function registry. To test a function locally, use `function test-run`
+    // with a .ts source file instead of a pre-bundled .js file.
 
     // Initialize client
     const accessToken = await loadAccessToken({
