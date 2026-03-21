@@ -1,7 +1,3 @@
 import { defineConfig } from "vite-plus";
 
-export default defineConfig({
-  fmt: {
-    ignorePatterns: ["pnpm-lock.yaml"],
-  },
-});
+export default defineConfig({});
