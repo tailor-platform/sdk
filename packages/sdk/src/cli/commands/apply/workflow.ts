@@ -2,7 +2,7 @@ import { type ApplyPhase } from "@/cli/commands/apply/apply";
 import { parseDuration } from "@/cli/shared/args";
 import { type OperatorClient, fetchAll } from "@/cli/shared/client";
 import { createChangeSet, type ChangeSet } from "./change-set";
-import { stableStringify } from "./compare";
+import { areNormalizedEqual } from "./compare";
 import { workflowJobFunctionName } from "./function-registry";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
@@ -404,10 +404,14 @@ function areWorkflowsEqual(
 ) {
   return (
     existing.mainJobFunctionName === workflow.mainJob.name &&
-    stableStringify(normalizeComparableExistingWorkflowRetryPolicy(existing.retryPolicy)) ===
-      stableStringify(normalizeComparableWorkflowRetryPolicy(workflow.retryPolicy)) &&
-    stableStringify(normalizeComparableWorkflowJobNames(existing.jobFunctions)) ===
-      stableStringify(normalizeComparableWorkflowJobNames(usedJobNames))
+    areNormalizedEqual(
+      normalizeComparableExistingWorkflowRetryPolicy(existing.retryPolicy),
+      normalizeComparableWorkflowRetryPolicy(workflow.retryPolicy),
+    ) &&
+    areNormalizedEqual(
+      normalizeComparableWorkflowJobNames(existing.jobFunctions),
+      normalizeComparableWorkflowJobNames(usedJobNames),
+    )
   );
 }
 

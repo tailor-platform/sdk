@@ -58,7 +58,7 @@ import { type TailorDBService } from "@/cli/services/tailordb/service";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { logger } from "@/cli/shared/logger";
 import { createChangeSet } from "../change-set";
-import { areNormalizedEqual, normalizeProtoConfig, stableStringify } from "../compare";
+import { areNormalizedEqual, normalizeProtoConfig } from "../compare";
 import { buildMetaRequest, sdkNameLabelKey, trnPrefix, type WithLabel } from "../label";
 import {
   executeMigrations,
@@ -1035,6 +1035,35 @@ function trn(workspaceId: string, name: string) {
   return `${trnPrefix(workspaceId)}:tailordb:${name}`;
 }
 
+function normalizeComparableTailorDBService(service: {
+  namespace?: string;
+  defaultTimezone?: string;
+}) {
+  return normalizeProtoConfig({
+    namespace: service.namespace,
+    defaultTimezone: service.defaultTimezone || "UTC",
+  });
+}
+
+function areTailorDBServicesEqual(
+  existing: {
+    namespace?: { name?: string };
+    defaultTimezone?: string;
+  },
+  desired: Readonly<TailorDBService>,
+): boolean {
+  return areNormalizedEqual(
+    normalizeComparableTailorDBService({
+      namespace: existing.namespace?.name,
+      defaultTimezone: existing.defaultTimezone,
+    }),
+    normalizeComparableTailorDBService({
+      namespace: desired.namespace,
+      defaultTimezone: "UTC",
+    }),
+  );
+}
+
 async function planServices(
   client: OperatorClient,
   workspaceId: string,
@@ -1101,19 +1130,7 @@ async function planServices(
         });
       }
 
-      if (
-        existing.label === appName &&
-        areNormalizedEqual(
-          normalizeProtoConfig({
-            namespace: existing.resource.namespace?.name,
-            defaultTimezone: existing.resource.defaultTimezone || "UTC",
-          }),
-          normalizeProtoConfig({
-            namespace: tailordb.namespace,
-            defaultTimezone: "UTC",
-          }),
-        )
-      ) {
+      if (existing.label === appName && areTailorDBServicesEqual(existing.resource, tailordb)) {
         changeSet.unchanged.push({ name: tailordb.namespace });
       } else {
         changeSet.updates.push({
@@ -1252,12 +1269,6 @@ async function planTypes(
         ) {
           changeSet.unchanged.push({ name: typeName });
         } else {
-          logTailorDBTypeDiff(
-            tailordb.namespace,
-            typeName,
-            normalizeComparableTailorDBType(existingType.tailordbType),
-            normalizeComparableTailorDBType(tailordbType),
-          );
           changeSet.updates.push({
             name: typeName,
             request: {
@@ -1304,88 +1315,6 @@ async function planTypes(
     });
   }
   return changeSet;
-}
-
-const shouldDebugTailorDBTypeDiff = process.env.TAILOR_DEBUG_TAILORDB_TYPE_DIFF === "true";
-const maxTailorDBTypeDiffLines = 60;
-
-function logTailorDBTypeDiff(
-  namespaceName: string,
-  typeName: string,
-  remoteType: ReturnType<typeof normalizeComparableTailorDBType>,
-  localType: ReturnType<typeof normalizeComparableTailorDBType>,
-): void {
-  if (!shouldDebugTailorDBTypeDiff) {
-    return;
-  }
-
-  const diffLines = collectDebugDiffLines(remoteType, localType);
-  logger.info(`[tailordb:type-diff] ${namespaceName}.${typeName}`);
-  diffLines.forEach((line) => logger.info(`  ${line}`, { mode: "plain" }));
-}
-
-function collectDebugDiffLines(left: unknown, right: unknown): string[] {
-  const lines: string[] = [];
-
-  const walk = (leftValue: unknown, rightValue: unknown, path: string) => {
-    if (lines.length >= maxTailorDBTypeDiffLines) {
-      return;
-    }
-
-    if (stableStringify(leftValue) === stableStringify(rightValue)) {
-      return;
-    }
-
-    if (Array.isArray(leftValue) || Array.isArray(rightValue)) {
-      const linesBefore = lines.length;
-      const leftArray = Array.isArray(leftValue) ? leftValue : [];
-      const rightArray = Array.isArray(rightValue) ? rightValue : [];
-      const maxLength = Math.max(leftArray.length, rightArray.length);
-      for (let index = 0; index < maxLength; index += 1) {
-        walk(leftArray[index], rightArray[index], `${path}[${index}]`);
-        if (lines.length >= maxTailorDBTypeDiffLines) {
-          return;
-        }
-      }
-      if (lines.length === linesBefore) {
-        lines.push(
-          `${path}: remote=${stableStringify(leftValue)} local=${stableStringify(rightValue)}`,
-        );
-      }
-      return;
-    }
-
-    if (isPlainObject(leftValue) || isPlainObject(rightValue)) {
-      const linesBefore = lines.length;
-      const leftObject = isPlainObject(leftValue) ? leftValue : {};
-      const rightObject = isPlainObject(rightValue) ? rightValue : {};
-      const keys = new Set([...Object.keys(leftObject), ...Object.keys(rightObject)]);
-      for (const key of [...keys].sort()) {
-        walk(leftObject[key], rightObject[key], path === "$" ? key : `${path}.${key}`);
-        if (lines.length >= maxTailorDBTypeDiffLines) {
-          return;
-        }
-      }
-      if (lines.length === linesBefore) {
-        lines.push(
-          `${path}: remote=${stableStringify(leftValue)} local=${stableStringify(rightValue)}`,
-        );
-      }
-      return;
-    }
-
-    lines.push(
-      `${path}: remote=${stableStringify(leftValue)} local=${stableStringify(rightValue)}`,
-    );
-  };
-
-  walk(left, right, "$");
-
-  if (lines.length === maxTailorDBTypeDiffLines) {
-    lines.push("...diff output truncated");
-  }
-
-  return lines;
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

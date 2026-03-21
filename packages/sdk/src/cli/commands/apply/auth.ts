@@ -25,7 +25,7 @@ import { type AuthService } from "@/cli/services/auth/service";
 import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "@/cli/shared/client";
 import { OAuth2ClientSchema } from "@/parser/service/auth";
 import { createChangeSet } from "./change-set";
-import { normalizeProtoConfig, normalizeStringArray, stableStringify } from "./compare";
+import { areNormalizedEqual, normalizeProtoConfig, normalizeStringArray } from "./compare";
 import { authHookFunctionName } from "./function-registry";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
@@ -654,9 +654,9 @@ function areAuthIdPConfigsEqual(
     };
   },
 ) {
-  return (
-    stableStringify(normalizeComparableAuthIdPConfig(existing)) ===
-    stableStringify(normalizeComparableAuthIdPConfig(desired))
+  return areNormalizedEqual(
+    normalizeComparableAuthIdPConfig(existing),
+    normalizeComparableAuthIdPConfig(desired),
   );
 }
 
@@ -1199,9 +1199,9 @@ function areUserProfileConfigsEqual(
   },
   desired: MessageInitShape<typeof UserProfileProviderConfigSchema>,
 ) {
-  return (
-    stableStringify(normalizeComparableUserProfileConfig(existing)) ===
-    stableStringify(normalizeComparableUserProfileConfig(desired))
+  return areNormalizedEqual(
+    normalizeComparableUserProfileConfig(existing),
+    normalizeComparableUserProfileConfig(desired),
   );
 }
 
@@ -1227,9 +1227,9 @@ function areTenantProviderConfigsEqual(
       },
   desired: MessageInitShape<typeof TenantProviderConfigSchema>,
 ) {
-  return (
-    stableStringify(normalizeComparableTenantProviderConfig(existing)) ===
-    stableStringify(normalizeComparableTenantProviderConfig(desired))
+  return areNormalizedEqual(
+    normalizeComparableTenantProviderConfig(existing),
+    normalizeComparableTenantProviderConfig(desired),
   );
 }
 
@@ -1253,9 +1253,9 @@ function areMachineUsersEqual(
     attributeMap?: Record<string, MessageInitShape<typeof ValueSchema>>;
   },
 ) {
-  return (
-    stableStringify(normalizeComparableMachineUser(existing)) ===
-    stableStringify(normalizeComparableMachineUser(desired))
+  return areNormalizedEqual(
+    normalizeComparableMachineUser(existing),
+    normalizeComparableMachineUser(desired),
   );
 }
 
@@ -1296,9 +1296,9 @@ function areOAuth2ClientsEqual(
   },
   desired: MessageInitShape<typeof AuthOAuth2ClientSchema>,
 ) {
-  return (
-    stableStringify(normalizeComparableOAuth2Client(existing)) ===
-    stableStringify(normalizeComparableOAuth2Client(desired))
+  return areNormalizedEqual(
+    normalizeComparableOAuth2Client(existing),
+    normalizeComparableOAuth2Client(desired),
   );
 }
 
