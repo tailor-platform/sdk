@@ -1,8 +1,8 @@
 # Refer for explanation to following link: https://lefthook.dev/configuration/
 
 pre-commit:
-  commands:
-    format:
+  jobs:
+    - name: format
       glob: "*.{ts,js,json,md,yml,yaml}"
       exclude:
         - "node_modules/**"
@@ -27,17 +27,29 @@ pre-commit:
         - "packages/tailor-proto/**"
       run: pnpm exec vp fmt --check {staged_files}
 
-    checks:
+    - name: checks
       glob: "*.{ts,js}"
-      run: >-
-        pnpm exec vp run --filter @tailor-platform/sdk --filter example build --cache
-        && pnpm exec vp run --filter @tailor-platform/sdk --filter example generate --cache
-        && pnpm exec vp run --filter @tailor-platform/sdk --filter example lint --cache
-        && pnpm exec vp run --filter @tailor-platform/sdk --filter example typecheck:go --cache
-        && pnpm exec vp run --filter @tailor-platform/sdk --filter example knip --cache
-        && pnpm exec vp run --filter './packages/create-sdk/templates/*' lint --cache
+      group:
+        piped: true
+        jobs:
+          - name: build
+            run: pnpm exec vp run --filter @tailor-platform/sdk --filter example build --cache
+          - name: generate
+            run: pnpm exec vp run --filter @tailor-platform/sdk --filter example generate --cache
+          - name: parallel-checks
+            group:
+              parallel: true
+              jobs:
+                - name: lint
+                  run: pnpm exec vp run --filter @tailor-platform/sdk --filter example lint --cache
+                - name: typecheck-go
+                  run: pnpm exec vp run --filter @tailor-platform/sdk --filter example typecheck:go --cache
+                - name: knip
+                  run: pnpm exec vp run --filter @tailor-platform/sdk --filter example knip --cache
+          - name: template-lint
+            run: pnpm exec vp run --filter './packages/create-sdk/templates/*' lint --cache
 
 post-commit:
-  commands:
-    verify-signature:
+  jobs:
+    - name: verify-signature
       run: 'git cat-file -p HEAD | grep -q "gpgsig" || { echo "ERROR: Commit is not signed!" >&2; exit 1; }'
