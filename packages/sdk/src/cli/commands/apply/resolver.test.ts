@@ -306,6 +306,54 @@ describe("planPipeline (resolver service level)", () => {
       expect(result.changeSet.resolver.unchanged[0].name).toBe("test-resolver");
       expect(result.changeSet.resolver.updates).toHaveLength(0);
     });
+
+    test("resolver is updated when authInvoker differs", async () => {
+      const resolver = {
+        name: "test-resolver",
+        operation: 0,
+        body: () => "hello",
+        output: {
+          type: "string",
+          metadata: {},
+        },
+        authInvoker: { namespace: "my-auth", machineUserName: "batch-user" },
+      };
+      const pipeline = {
+        namespace: "my-resolver",
+        config: {},
+        resolvers: { [resolver.name]: resolver },
+        loadResolvers: vi.fn().mockResolvedValue(undefined),
+      } as unknown as ResolverService;
+
+      const createClient = createMockClient([]);
+      const createResult = await planPipeline({
+        client: createClient,
+        workspaceId,
+        application: createMockApplication([pipeline]),
+        forRemoval: false,
+        config: mockConfig,
+      });
+      const desiredResolver = structuredClone(
+        createResult.changeSet.resolver.creates[0]!.request.pipelineResolver,
+      );
+      expect(desiredResolver).toBeDefined();
+      delete desiredResolver!.pipelines?.[0]?.invoker;
+
+      const client = createMockClient([{ name: "my-resolver", label: appName }], {
+        "my-resolver": [desiredResolver as Record<string, unknown>],
+      });
+      const result = await planPipeline({
+        client,
+        workspaceId,
+        application: createMockApplication([pipeline]),
+        forRemoval: false,
+        config: mockConfig,
+      });
+
+      expect(result.changeSet.resolver.updates).toHaveLength(1);
+      expect(result.changeSet.resolver.updates[0].name).toBe("test-resolver");
+      expect(result.changeSet.resolver.unchanged).toHaveLength(0);
+    });
   });
 });
 

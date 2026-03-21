@@ -435,6 +435,9 @@ function normalizeComparablePipelines(
   operationHook: string;
   postScript: string;
   skipOperationOnError: boolean;
+  invoker:
+    | NonNullable<MessageInitShape<typeof PipelineResolverSchema>["pipelines"]>[number]["invoker"]
+    | undefined;
 }> {
   return (pipelines ?? []).map((pipeline) => ({
     name: pipeline.name ?? "",
@@ -445,6 +448,7 @@ function normalizeComparablePipelines(
     operationHook: pipeline.operationHook?.expr ?? "",
     postScript: pipeline.postScript ?? "",
     skipOperationOnError: pipeline.skipOperationOnError ?? false,
+    invoker: pipeline.invoker ?? undefined,
   }));
 }
 
