@@ -163,7 +163,6 @@ const namespaceDeps = {
     "Customer": [],
     "Invoice": ["SalesOrder"],
     "NestedProfile": [],
-    "Project": [],
     "PurchaseOrder": ["Supplier"],
     "SalesOrder": ["Customer", "User"],
     "SalesOrderCreated": [],
