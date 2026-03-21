@@ -12,6 +12,8 @@ concurrency:
 
 jobs:
   deploy:
+    # The @actions/v1 ref is published separately via the "Release Actions" workflow
+    # (release-actions.yml) in the tailor-platform/sdk repository.
     uses: tailor-platform/sdk/.github/workflows/deploy.yml@actions/v1
     with:
       workspace-name: __WORKSPACE_NAME__

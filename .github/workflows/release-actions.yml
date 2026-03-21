@@ -20,6 +20,12 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Verify running on main branch
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::This workflow must be run from the main branch, not ${{ github.ref }}"
+          exit 1
+
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
