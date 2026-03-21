@@ -341,6 +341,7 @@ async function planResolvers(
         executorUsedResolvers,
         env,
       );
+      const normalizedDesiredResolver = normalizeComparableResolver(desiredResolver);
       if (existingNameSet.has(resolver.name)) {
         const existingResolverResponse = await client.getPipelineResolver({
           workspaceId,
@@ -352,7 +353,7 @@ async function planResolvers(
           existingResolver &&
           areNormalizedEqual(
             normalizeComparableResolver(existingResolver),
-            normalizeComparableResolver(desiredResolver),
+            normalizedDesiredResolver,
           )
         ) {
           changeSet.unchanged.push({ name: resolver.name });

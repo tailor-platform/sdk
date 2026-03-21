@@ -123,6 +123,7 @@ export async function planExecutor(context: PlanContext) {
     const existing = existingExecutors[executor.name];
     const metaRequest = await buildMetaRequest(trn(workspaceId, executor.name), application.name);
     const desiredExecutor = protoExecutor(application.name, executor, application.env);
+    const normalizedDesiredExecutor = normalizeComparableExecutor(desiredExecutor);
     if (existing) {
       if (!existing.label) {
         unmanaged.push({
@@ -141,7 +142,7 @@ export async function planExecutor(context: PlanContext) {
         existing.label === application.name &&
         areNormalizedEqual(
           normalizeComparableExecutor(existing.resource),
-          normalizeComparableExecutor(desiredExecutor),
+          normalizedDesiredExecutor,
         )
       ) {
         changeSet.unchanged.push({ name: executor.name });
