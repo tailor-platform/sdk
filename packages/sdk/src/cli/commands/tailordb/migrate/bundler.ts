@@ -41,7 +41,6 @@ export async function bundleMigrationScript(
 
   // Entry file in output directory (consistent with resolver/executor bundlers)
   const entryPath = path.join(outputDir, `migration_${namespace}_${migrationNumber}.entry.js`);
-  const outputPath = path.join(outputDir, `migration_${namespace}_${migrationNumber}.js`);
 
   const absoluteSourcePath = path.resolve(sourceFile).replace(/\\/g, "/");
 
@@ -80,7 +79,6 @@ export async function bundleMigrationScript(
     input: entryPath,
     write: false,
     output: {
-      file: outputPath,
       format: "esm",
       sourcemap: false,
       minify: false,

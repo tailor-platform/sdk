@@ -19,10 +19,6 @@ type CacheStore = {
   setEntry(key: string, entry: CacheEntry): void;
   /** Remove a cache entry from the in-memory manifest. */
   deleteEntry(key: string): void;
-  /** Copy a bundled output file into cache/bundles/. */
-  storeBundleOutput(cacheKey: string, sourcePath: string): void;
-  /** Copy a cached bundle back to the target path. Returns false if not found. */
-  restoreBundleOutput(cacheKey: string, targetPath: string): boolean;
   /** Store bundled code content directly into cache/bundles/. */
   storeBundleContent(cacheKey: string, content: string): void;
   /** Restore bundled code content from cache/bundles/. Returns undefined if not found. */
@@ -133,39 +129,6 @@ function createCacheStore(config: CacheConfig): CacheStore {
     delete manifest.entries[key];
   }
 
-  function storeBundleOutput(cacheKey: string, sourcePath: string): void {
-    const dir = bundlesDir();
-    fs.mkdirSync(dir, { recursive: true });
-    fs.copyFileSync(sourcePath, bundlePath(cacheKey));
-
-    const mapSource = `${sourcePath}.map`;
-    const cachedMapPath = `${bundlePath(cacheKey)}.map`;
-    if (fs.existsSync(mapSource)) {
-      fs.copyFileSync(mapSource, cachedMapPath);
-    } else {
-      fs.rmSync(cachedMapPath, { force: true });
-    }
-  }
-
-  function restoreBundleOutput(cacheKey: string, targetPath: string): boolean {
-    const cached = bundlePath(cacheKey);
-    const targetDir = path.dirname(targetPath);
-    fs.mkdirSync(targetDir, { recursive: true });
-    try {
-      fs.copyFileSync(cached, targetPath);
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code === "ENOENT") return false;
-      throw e;
-    }
-
-    const cachedMap = `${cached}.map`;
-    if (fs.existsSync(cachedMap)) {
-      fs.copyFileSync(cachedMap, `${targetPath}.map`);
-    }
-
-    return true;
-  }
-
   function storeBundleContent(cacheKey: string, content: string): void {
     const dir = bundlesDir();
     fs.mkdirSync(dir, { recursive: true });
@@ -193,8 +156,6 @@ function createCacheStore(config: CacheConfig): CacheStore {
     getEntry,
     setEntry,
     deleteEntry,
-    storeBundleOutput,
-    restoreBundleOutput,
     storeBundleContent,
     restoreBundleContent,
     clean,

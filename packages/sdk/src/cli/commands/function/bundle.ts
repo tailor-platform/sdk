@@ -66,7 +66,6 @@ export async function bundleForTestRun(
   const baseName = `test-run--${detected.name}`;
   const scriptName = `${baseName}.js`;
   const entryPath = path.join(outputDir, `${baseName}.entry.js`);
-  const outputPath = path.join(outputDir, scriptName);
 
   const entryContent = generateEntry(detected, sourceFile, env, machineUser, workspaceId);
   fs.writeFileSync(entryPath, entryContent);
@@ -82,7 +81,6 @@ export async function bundleForTestRun(
     input: entryPath,
     write: false,
     output: {
-      file: outputPath,
       format: "esm",
       sourcemap: inlineSourcemap ? "inline" : true,
       minify: inlineSourcemap

@@ -86,7 +86,6 @@ export async function bundleQueryScript(engine: QueryEngine): Promise<string> {
   fs.mkdirSync(outputDir, { recursive: true });
 
   const entryPath = path.join(outputDir, `query_${engine}.entry.ts`);
-  const outputPath = path.join(outputDir, `query_${engine}.js`);
   const entryContent = engine === "sql" ? createSqlEntry() : createGqlEntry();
   fs.writeFileSync(entryPath, entryContent);
 
@@ -101,7 +100,6 @@ export async function bundleQueryScript(engine: QueryEngine): Promise<string> {
     input: entryPath,
     write: false,
     output: {
-      file: outputPath,
       format: "esm",
       sourcemap: false,
       minify: false,

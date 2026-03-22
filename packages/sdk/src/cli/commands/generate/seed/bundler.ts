@@ -117,7 +117,6 @@ export async function bundleSeedScript(
 
   // Entry file in output directory
   const entryPath = path.join(outputDir, `seed_${namespace}.entry.ts`);
-  const outputPath = path.join(outputDir, `seed_${namespace}.js`);
 
   // Generate seed script content
   const entryContent = generateSeedScriptContent(namespace);
@@ -135,7 +134,6 @@ export async function bundleSeedScript(
     input: entryPath,
     write: false,
     output: {
-      file: outputPath,
       format: "esm",
       sourcemap: false,
       minify: false,

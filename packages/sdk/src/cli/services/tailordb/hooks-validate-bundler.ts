@@ -464,7 +464,6 @@ async function bundleScriptTarget(args: {
     sourceFilePath,
   );
   const entryPath = join(tempDir, `tailordb-script-${targetIndex}.entry.ts`);
-  const outputPath = join(tempDir, `tailordb-script-${targetIndex}.bundle.cjs`);
 
   writeFileSync(entryPath, entryContent);
 
@@ -472,7 +471,6 @@ async function bundleScriptTarget(args: {
     input: entryPath,
     write: false,
     output: {
-      file: outputPath,
       format: "cjs",
       sourcemap: false,
       minify: true,
