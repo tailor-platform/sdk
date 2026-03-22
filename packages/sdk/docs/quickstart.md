@@ -22,6 +22,8 @@ The following command creates a new project with the required configuration file
 
 ```bash
 npm create @tailor-platform/sdk -- --template hello-world example-app
+# Or with Bun:
+# bun create @tailor-platform/sdk --template hello-world example-app
 ```
 
 Before deploying your app, you need to create a workspace:
@@ -30,6 +32,10 @@ Before deploying your app, you need to create a workspace:
 npx tailor-sdk login
 npx tailor-sdk workspace create --name <workspace-name> --region <workspace-region>
 npx tailor-sdk workspace list
+
+# Or with Bun:
+# bunx tailor-sdk login
+# bunx tailor-sdk workspace create --name <workspace-name> --region <workspace-region>
 
 # OR
 # Create a new workspace using Tailor Platform Console
@@ -43,6 +49,8 @@ Run the apply command to deploy your project:
 ```bash
 cd example-app
 npm run deploy -- --workspace-id <your-workspace-id>
+# Or with Bun:
+# bun run deploy --workspace-id <your-workspace-id>
 ```
 
 You can now open the GraphQL Playground and execute the `hello` query:
