@@ -66,7 +66,7 @@ export type ApplyPhase = "create-update" | "delete" | "delete-resources" | "dele
 /**
  * Apply the configured application to the Tailor platform.
  * @param options - Options for apply execution
- * @returns Promise that resolves when apply completes
+ * @returns Promise that resolves to `{ bundledScripts }` when `buildOnly` is true, otherwise void
  */
 export async function apply(options?: ApplyOptions) {
   return withSpan("apply", async (rootSpan) => {
