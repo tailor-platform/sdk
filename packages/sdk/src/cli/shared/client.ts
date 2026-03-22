@@ -13,7 +13,6 @@ import { getGlobalDispatcher } from "undici";
 import { z } from "zod";
 import { logger } from "./logger";
 import { readPackageJson } from "./package-json";
-import { isBun, isDeno } from "./runtime";
 
 export const platformBaseUrl = process.env.PLATFORM_URL ?? "https://api.tailor.tech";
 
@@ -56,8 +55,10 @@ export async function initOperatorClient(accessToken: string) {
 }
 
 /**
- * Create a Connect transport appropriate for the current runtime.
- * Uses connect-node (HTTP/2) on Node.js and connect-web (fetch) on Bun/Deno.
+ * Create a Connect transport using connect-node (HTTP/2).
+ *
+ * connect-node works on both Node.js and Bun. connect-web is not used because
+ * it does not support client_streaming, which is required for function uploads.
  * @param baseUrl - Base URL for the transport
  * @param interceptors - Request interceptors
  * @returns Configured transport
@@ -66,10 +67,6 @@ export async function createTransport(
   baseUrl: string,
   interceptors: Interceptor[],
 ): Promise<Transport> {
-  if (isBun() || isDeno()) {
-    const { createConnectTransport } = await import("@connectrpc/connect-web");
-    return createConnectTransport({ baseUrl, interceptors });
-  }
   const { createConnectTransport } = await import("@connectrpc/connect-node");
   return createConnectTransport({ httpVersion: "2", baseUrl, interceptors });
 }
