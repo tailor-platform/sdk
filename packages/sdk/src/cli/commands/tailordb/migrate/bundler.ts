@@ -41,7 +41,6 @@ export async function bundleMigrationScript(
 
   // Entry file in output directory (consistent with resolver/executor bundlers)
   const entryPath = path.join(outputDir, `migration_${namespace}_${migrationNumber}.entry.js`);
-  const outputPath = path.join(outputDir, `migration_${namespace}_${migrationNumber}.js`);
 
   const absoluteSourcePath = path.resolve(sourceFile).replace(/\\/g, "/");
 
@@ -75,36 +74,33 @@ export async function bundleMigrationScript(
     tsconfig = undefined;
   }
 
-  // Bundle with tree-shaking
-  await rolldown.build(
-    rolldown.defineConfig({
-      input: entryPath,
-      output: {
-        file: outputPath,
-        format: "esm",
-        sourcemap: false,
-        minify: false,
-        codeSplitting: false,
-        globals: {
-          tailordb: "tailordb",
-        },
+  // Bundle with tree-shaking (write: false to avoid unnecessary disk I/O)
+  const result = await rolldown.build({
+    input: entryPath,
+    write: false,
+    output: {
+      format: "esm",
+      sourcemap: false,
+      minify: false,
+      codeSplitting: false,
+      globals: {
+        tailordb: "tailordb",
       },
-      external: ["tailordb"],
-      resolve: {
-        conditionNames: ["node", "import"],
-      },
-      tsconfig,
-      treeshake: {
-        moduleSideEffects: false,
-        annotations: true,
-        unknownGlobalSideEffects: false,
-      },
-      logLevel: "silent",
-    }) as rolldown.BuildOptions,
-  );
+    },
+    external: ["tailordb"],
+    resolve: {
+      conditionNames: ["node", "import"],
+    },
+    tsconfig,
+    treeshake: {
+      moduleSideEffects: false,
+      annotations: true,
+      unknownGlobalSideEffects: false,
+    },
+    logLevel: "silent",
+  } as rolldown.BuildOptions);
 
-  // Read bundled output
-  const bundledCode = fs.readFileSync(outputPath, "utf-8");
+  const bundledCode = result.output[0].code;
 
   // Entry file remains in output directory (consistent with resolver/executor bundlers)
 

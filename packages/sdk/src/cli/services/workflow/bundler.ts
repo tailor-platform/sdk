@@ -21,6 +21,8 @@ interface JobInfo {
 export interface BundleWorkflowJobsResult {
   /** Maps mainJobName -> list of all job names it depends on (including itself) */
   mainJobDeps: Record<string, string[]>;
+  /** Maps job name to bundled code string */
+  bundledCode: Map<string, string>;
 }
 
 /**
@@ -50,7 +52,7 @@ export async function bundleWorkflowJobs(
 ): Promise<BundleWorkflowJobsResult> {
   if (allJobs.length === 0) {
     logger.warn("No workflow jobs to bundle");
-    return { mainJobDeps: {} };
+    return { mainJobDeps: {}, bundledCode: new Map() };
   }
 
   // Filter to only used jobs and get per-mainJob dependencies
@@ -84,7 +86,7 @@ export async function bundleWorkflowJobs(
   }
 
   // Process each job
-  await Promise.all(
+  const results = await Promise.all(
     usedJobs.map((job) =>
       bundleSingleJob(
         job,
@@ -99,9 +101,14 @@ export async function bundleWorkflowJobs(
     ),
   );
 
+  const bundledCode = new Map<string, string>();
+  for (const [name, code] of results) {
+    bundledCode.set(name, code);
+  }
+
   logger.log(`${styles.success("Bundled")} ${styles.info('"workflow-job"')}`);
 
-  return { mainJobDeps };
+  return { mainJobDeps, bundledCode };
 }
 
 interface FilterUsedJobsResult {
@@ -254,8 +261,7 @@ async function bundleSingleJob(
   triggerContext?: TriggerContext,
   cache?: BundleCache,
   inlineSourcemap?: boolean,
-): Promise<void> {
-  const outputPath = path.join(outputDir, `${job.name}.js`);
+): Promise<[string, string]> {
   const serializedTriggerContext = serializeTriggerContext(triggerContext);
 
   // Include sorted env variables as a prefix so that env changes invalidate the cache
@@ -270,12 +276,11 @@ async function bundleSingleJob(
     prefix: sortedEnvPrefix,
   });
 
-  await withCache({
+  const code = await withCache({
     cache,
     kind: "workflow-job",
     name: job.name,
     sourceFile: job.sourceFile,
-    outputPath,
     contextHash,
     async build(cachePlugins) {
       // Step 1: Create entry file that imports job by named export
@@ -350,32 +355,34 @@ async function bundleSingleJob(
 
       const plugins: rolldown.Plugin[] = [transformPlugin, ...cachePlugins];
 
-      await rolldown.build(
-        rolldown.defineConfig({
-          input: entryPath,
-          output: {
-            file: outputPath,
-            format: "esm",
-            sourcemap: inlineSourcemap ? "inline" : true,
-            minify: inlineSourcemap
-              ? {
-                  mangle: {
-                    keepNames: true,
-                  },
-                }
-              : true,
-            codeSplitting: false,
-          },
-          tsconfig,
-          plugins,
-          treeshake: {
-            moduleSideEffects: false,
-            annotations: true,
-            unknownGlobalSideEffects: false,
-          },
-          logLevel: "silent",
-        }) as rolldown.BuildOptions,
-      );
+      const result = await rolldown.build({
+        input: entryPath,
+        write: false,
+        output: {
+          format: "esm",
+          sourcemap: inlineSourcemap ? "inline" : true,
+          minify: inlineSourcemap
+            ? {
+                mangle: {
+                  keepNames: true,
+                },
+              }
+            : true,
+          codeSplitting: false,
+        },
+        tsconfig,
+        plugins,
+        treeshake: {
+          moduleSideEffects: false,
+          annotations: true,
+          unknownGlobalSideEffects: false,
+        },
+        logLevel: "silent",
+      } as rolldown.BuildOptions);
+
+      return result.output[0].code;
     },
   });
+
+  return [job.name, code];
 }

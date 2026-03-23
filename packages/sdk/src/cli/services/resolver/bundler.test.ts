@@ -19,7 +19,7 @@ describe("bundleResolvers", () => {
         bundleResolvers("provisioning", {
           files: ["./src/backend/provisioning/resolver/*.ts"],
         }),
-      ).resolves.toBeUndefined();
+      ).resolves.toEqual(new Map());
     } finally {
       process.chdir(originalCwd);
       fs.rmSync(tempDir, { recursive: true, force: true });
