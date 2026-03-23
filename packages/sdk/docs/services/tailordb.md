@@ -123,9 +123,7 @@ db.object({
 - Can be chained with other modifiers like `description()`
 
 ```typescript
-db.enum(["active", "inactive"])
-  .description("Account status")
-  .typeName("AccountStatus");
+db.enum(["active", "inactive"]).description("Account status").typeName("AccountStatus");
 ```
 
 **Why use it:** When the same enum or nested structure is used in multiple contexts (e.g., resolvers, executors), specifying a `typeName` gives it a stable, human-readable name instead of the auto-generated one. This is especially useful when the field appears in Resolver/Executor input/output schemas, as the generated protobuf type name becomes predictable and consistent.
