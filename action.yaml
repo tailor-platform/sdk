@@ -1,0 +1,129 @@
+name: Deploy to Tailor Platform
+description: Deploy application to Tailor Platform
+
+inputs:
+  workspace-name:
+    description: Tailor Platform workspace name
+    required: true
+  workspace-region:
+    description: Tailor Platform workspace region
+    required: true
+  organization-id:
+    description: Tailor Platform organization ID
+    required: true
+  folder-id:
+    description: Tailor Platform folder ID
+    required: true
+  working-directory:
+    description: Working directory for the project (for monorepo setups)
+    required: false
+    default: "."
+  node-version:
+    description: Node.js version to install
+    required: false
+    default: "22"
+  pnpm-version:
+    description: pnpm version to install
+    required: false
+    default: "10"
+  platform-client-id:
+    description: OAuth2 client ID for Tailor Platform machine user
+    required: true
+  platform-client-secret:
+    description: OAuth2 client secret for Tailor Platform machine user
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Mask credentials
+      shell: bash
+      run: |
+        echo "::add-mask::$CLIENT_ID"
+        echo "::add-mask::$CLIENT_SECRET"
+      env:
+        CLIENT_ID: ${{ inputs.platform-client-id }}
+        CLIENT_SECRET: ${{ inputs.platform-client-secret }}
+
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        persist-credentials: false
+
+    - name: Install pnpm
+      uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
+      with:
+        version: ${{ inputs.pnpm-version }}
+
+    - name: Setup Node.js
+      uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: pnpm
+        cache-dependency-path: pnpm-lock.yaml
+
+    - name: Install dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile
+
+    - name: Fetch Tailor Platform token
+      shell: bash
+      env:
+        CLIENT_ID: ${{ inputs.platform-client-id }}
+        CLIENT_SECRET: ${{ inputs.platform-client-secret }}
+      run: |
+        RESPONSE=$(curl -s -X POST "https://api.tailor.tech/oauth2/platform/token" \
+          -H "Content-Type: application/x-www-form-urlencoded" \
+          -d "grant_type=client_credentials" \
+          --data-urlencode "client_id=$CLIENT_ID" \
+          --data-urlencode "client_secret=$CLIENT_SECRET")
+
+        TOKEN=$(echo "$RESPONSE" | jq -r '.access_token')
+
+        if [ "$TOKEN" = "null" ] || [ -z "$TOKEN" ]; then
+          echo "::error::Failed to fetch access token"
+          echo "$RESPONSE" | jq .
+          exit 1
+        fi
+
+        echo "::add-mask::$TOKEN"
+        echo "TAILOR_PLATFORM_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+
+    - name: Ensure workspace exists
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        WORKSPACE_NAME: ${{ inputs.workspace-name }}
+        WORKSPACE_REGION: ${{ inputs.workspace-region }}
+        TAILOR_PLATFORM_ORGANIZATION_ID: ${{ inputs.organization-id }}
+        TAILOR_PLATFORM_FOLDER_ID: ${{ inputs.folder-id }}
+      run: |
+        WORKSPACE_ID=$(pnpm tailor-sdk workspace list -j | jq -r --arg name "$WORKSPACE_NAME" --arg region "$WORKSPACE_REGION" '.[] | select(.name == $name and .region == $region) | .id')
+
+        if [ -z "$WORKSPACE_ID" ]; then
+          echo "Workspace '$WORKSPACE_NAME' not found, creating..."
+          WORKSPACE_ID=$(pnpm tailor-sdk workspace create -j --name "$WORKSPACE_NAME" --region "$WORKSPACE_REGION" --organization-id "$TAILOR_PLATFORM_ORGANIZATION_ID" --folder-id "$TAILOR_PLATFORM_FOLDER_ID" | jq -r '.id')
+          echo "Created workspace: $WORKSPACE_ID"
+        else
+          echo "Found existing workspace: $WORKSPACE_ID"
+        fi
+
+        echo "TAILOR_PLATFORM_WORKSPACE_ID=$WORKSPACE_ID" >> "$GITHUB_ENV"
+
+    - name: Generate types
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: pnpm generate
+
+    - name: Deploy
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      # Runs the "deploy" script from package.json (tailor-sdk apply --yes)
+      run: pnpm run deploy -- --yes
+
+    - name: Show application info
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        WORKSPACE_ID: ${{ env.TAILOR_PLATFORM_WORKSPACE_ID }}
+      run: pnpm tailor-sdk show -j -w "$WORKSPACE_ID"

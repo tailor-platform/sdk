@@ -26,9 +26,9 @@ describe("buildFiles", () => {
     );
   });
 
-  it("references the reusable workflow", () => {
+  it("references the composite action", () => {
     const content = getDeployContent();
-    expect(content).toContain("uses: tailor-platform/sdk/.github/workflows/deploy.yml@actions/v1");
+    expect(content).toContain("uses: tailor-platform/sdk@actions/v1");
   });
 
   it("passes workspace inputs", () => {
@@ -39,13 +39,11 @@ describe("buildFiles", () => {
     expect(content).toContain("folder-id: folder-456");
   });
 
-  it("passes secrets", () => {
+  it("passes secrets as action inputs", () => {
     const content = getDeployContent();
+    expect(content).toContain("platform-client-id: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_ID }}");
     expect(content).toContain(
-      "PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_ID }}",
-    );
-    expect(content).toContain(
-      "PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_SECRET }}",
+      "platform-client-secret: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_SECRET }}",
     );
   });
 

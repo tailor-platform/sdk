@@ -44,10 +44,10 @@ jobs:
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "MAJOR=$(echo "$VERSION" | cut -d. -f1)" >> "$GITHUB_ENV"
 
-      - name: Check deploy workflow exists
+      - name: Check action definition exists
         run: |
-          if [ ! -f ".github/workflows/deploy.yml" ]; then
-            echo "::error::.github/workflows/deploy.yml not found"
+          if [ ! -f "action.yaml" ]; then
+            echo "::error::action.yaml not found"
             exit 1
           fi
 
@@ -59,7 +59,7 @@ jobs:
         run: |
           gh release create "actions/v${VERSION}" \
             --title "Actions v${VERSION}" \
-            --notes "Release of reusable deploy workflow v${VERSION}" \
+            --notes "Release of deploy action v${VERSION}" \
             --target "${COMMIT_SHA}"
 
       - name: Update floating major tag

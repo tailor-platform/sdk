@@ -11,7 +11,7 @@ type DeployParams = {
 /**
  * Render the deploy caller workflow YAML.
  *
- * Generates a thin workflow that calls the reusable deploy workflow
+ * Generates a thin workflow that calls the composite deploy action
  * from tailor-platform/sdk. Targets single-application scaffolds
  * (those with `generate` and `deploy` scripts). Multi-application
  * projects (e.g. chained `deploy:*` scripts) need manual workflow
@@ -23,7 +23,7 @@ export function renderDeploy(params: DeployParams): string {
   const { workspaceName, workspaceRegion, organizationId, folderId, workingDirectory } = params;
 
   const workingDirectoryLine = workingDirectory
-    ? `      working-directory: ${workingDirectory}\n`
+    ? `          working-directory: ${workingDirectory}\n`
     : "";
 
   return deployTemplate
