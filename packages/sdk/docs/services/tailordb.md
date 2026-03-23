@@ -499,7 +499,6 @@ Available options:
 | Option     | Effect                                |
 | ---------- | ------------------------------------- |
 | `optional` | Makes the selected fields optional    |
-| `required` | Makes the selected fields required    |
 | `array`    | Makes the selected fields array types |
 
 #### `omitFields(keys)`
