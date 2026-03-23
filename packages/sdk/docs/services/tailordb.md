@@ -103,6 +103,33 @@ db.object({
 });
 ```
 
+### Custom Type Name (`typeName`)
+
+Enum and nested object fields generate internal type names automatically (e.g., `{TypeName}{FieldName}` for protobuf). Use `typeName()` to override this with a custom name:
+
+```typescript
+db.enum(["active", "inactive"]).typeName("UserStatus");
+
+db.object({
+  street: db.string(),
+  city: db.string(),
+}).typeName("Address");
+```
+
+**Constraints:**
+
+- Only available on `enum()` and `object()` fields — calling on scalar types is a compile error
+- Cannot be called twice on the same field
+- Can be chained with other modifiers like `description()`
+
+```typescript
+db.enum(["active", "inactive"])
+  .description("Account status")
+  .typeName("AccountStatus");
+```
+
+**Why use it:** When the same enum or nested structure is used in multiple contexts (e.g., resolvers, executors), specifying a `typeName` gives it a stable, human-readable name instead of the auto-generated one. This is especially useful when the field appears in Resolver/Executor input/output schemas, as the generated protobuf type name becomes predictable and consistent.
+
 ## Field Modifiers
 
 ### Description
@@ -448,6 +475,79 @@ db.type("User", {
      publishEvents: false, // Explicitly disable
    });
    ```
+
+### Field Extraction (`pickFields` / `omitFields`)
+
+Extract subsets of fields from a `TailorDBType` for reuse in resolvers, executors, seed schemas, etc.
+
+#### `pickFields(keys, options)`
+
+Select specific fields and optionally modify their properties:
+
+```typescript
+const user = db.type("User", {
+  id: db.uuid(),
+  name: db.string(),
+  email: db.string().unique(),
+  ...db.fields.timestamps(),
+});
+
+// Pick id and createdAt, making them optional
+user.pickFields(["id", "createdAt"], { optional: true });
+```
+
+Available options:
+
+| Option     | Effect                                |
+| ---------- | ------------------------------------- |
+| `optional` | Makes the selected fields optional    |
+| `required` | Makes the selected fields required    |
+| `array`    | Makes the selected fields array types |
+
+#### `omitFields(keys)`
+
+Return all fields except the specified ones:
+
+```typescript
+// All fields except id and createdAt
+user.omitFields(["id", "createdAt"]);
+```
+
+#### Common Pattern: Input Schema Composition
+
+The typical use case is combining `pickFields` and `omitFields` with spread syntax to build input schemas where identifiers are optional but other fields remain required:
+
+```typescript
+import { createResolver, t } from "@tailor-platform/sdk";
+import { user } from "../tailordb/user";
+
+export default createResolver({
+  name: "createUser",
+  operation: "mutation",
+  input: {
+    // id/createdAt are optional (auto-generated), other fields are required
+    ...user.pickFields(["id", "createdAt"], { optional: true }),
+    ...user.omitFields(["id", "createdAt"]),
+  },
+  output: t.object({ id: t.uuid() }),
+  body: async (context) => {
+    // ...
+    return { id: "..." };
+  },
+});
+```
+
+This is also used in seed data schemas:
+
+```typescript
+import { t } from "@tailor-platform/sdk";
+import { invoice } from "../../tailordb/invoice";
+
+const schemaType = t.object({
+  ...invoice.pickFields(["id", "createdAt"], { optional: true }),
+  ...invoice.omitFields(["id", "createdAt", "invoiceNumber", "sequentialId"]),
+});
+```
 
 ### Permissions
 

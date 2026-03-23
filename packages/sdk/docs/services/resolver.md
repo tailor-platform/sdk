@@ -120,6 +120,36 @@ createResolver({
 });
 ```
 
+### Custom Type Name (`typeName`)
+
+Enum and nested object fields in input/output schemas generate protobuf type names automatically (e.g., `{ResolverName}{FieldName}`). Use `typeName()` to set a custom name:
+
+```typescript
+createResolver({
+  name: "stepChain",
+  operation: "query",
+  input: {
+    user: t
+      .object({
+        name: t.string(),
+        activatedAt: t.datetime({ optional: true }),
+      })
+      .typeName("StepChainUser")
+      .description("User information"),
+    status: t.enum(["active", "inactive"]).typeName("UserStatus"),
+  },
+  // ...
+});
+```
+
+**Constraints:**
+
+- Only available on `enum()` and `object()` fields — calling on scalar types is a compile error
+- Cannot be called twice on the same field
+- Can be chained with `description()`
+
+This is useful when the same logical type appears in multiple resolvers or when you want a predictable, human-readable name in the generated GraphQL schema.
+
 ## Input Validation
 
 Add validation rules to input fields using the `validate` method:
