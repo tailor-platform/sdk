@@ -641,6 +641,9 @@ importers:
       rolldown:
         specifier: 1.0.0-rc.9
         version: 1.0.0-rc.9
+      semver:
+        specifier: 7.7.4
+        version: 7.7.4
       serve:
         specifier: 14.2.6
         version: 14.2.6
@@ -684,6 +687,9 @@ importers:
       '@types/node':
         specifier: 24.12.0
         version: 24.12.0
+      '@types/semver':
+        specifier: 7.7.1
+        version: 7.7.1
       '@typescript/native-preview':
         specifier: 7.0.0-dev.20260308.1
         version: 7.0.0-dev.20260308.1
@@ -2517,6 +2523,9 @@ packages:
 
   '@types/node@24.12.0':
     resolution: {integrity: sha512-GYDxsZi3ChgmckRT9HPU0WEhKLP08ev/Yfcq2AstjrDASOYCSXeyjDsHg4v5t4jOj7cyDX3vmprafKlWIG9MXQ==}
+
+  '@types/semver@7.7.1':
+    resolution: {integrity: sha512-FmgJfu+MOcQ370SD0ev7EI8TlCAfKYU+B4m5T3yXc1CiRN94g/SZPtsCkk506aUDtlMnFZvasDwHHUcZUEaYuA==}
 
   '@types/tinycolor2@1.4.6':
     resolution: {integrity: sha512-iEN8J0BoMnsWBqjVbWH/c0G0Hh7O21lpR2/+PrvAVgWdzL7eexIFm4JN/Wn10PTcmNdtS6U67r499mlWMXOxNw==}
@@ -7030,6 +7039,8 @@ snapshots:
   '@types/node@24.12.0':
     dependencies:
       undici-types: 7.16.0
+
+  '@types/semver@7.7.1': {}
 
   '@types/tinycolor2@1.4.6': {}
 
