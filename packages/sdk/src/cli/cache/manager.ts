@@ -41,7 +41,7 @@ function createCacheManager(options: CacheManagerOptions): CacheManager {
       enabled: false,
       bundleCache: {
         tryRestore() {
-          return false;
+          return undefined;
         },
         save() {
           // no-op

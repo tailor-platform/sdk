@@ -202,6 +202,17 @@ describe("TailorDBField enum field tests", () => {
     }>();
   });
 
+  it("accepts as const readonly array", () => {
+    const STATUSES = ["active", "inactive", "pending"] as const;
+    const enumField = db.enum(STATUSES);
+    expectTypeOf<output<typeof enumField>>().toEqualTypeOf<"active" | "inactive" | "pending">();
+    expect(enumField.metadata.allowedValues).toEqual([
+      { value: "active", description: "" },
+      { value: "inactive", description: "" },
+      { value: "pending", description: "" },
+    ]);
+  });
+
   it("enum array works correctly", () => {
     const _enumArrayType = db.type("Test", {
       categories: db.enum(["a", "b", "c"], { array: true }),

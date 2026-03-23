@@ -193,6 +193,30 @@ export const confirmationArgs = {
   }),
 } satisfies ArgsShape;
 
+/**
+ * Arguments for commands that require organization context
+ */
+export const organizationArgs = {
+  "organization-id": arg(z.string(), {
+    alias: "o",
+    description: "Organization ID",
+    env: "TAILOR_PLATFORM_ORGANIZATION_ID",
+    completion: { type: "none" },
+  }),
+} satisfies ArgsShape;
+
+/**
+ * Arguments for commands that require folder context
+ */
+export const folderArgs = {
+  "folder-id": arg(z.string(), {
+    alias: "f",
+    description: "Folder ID",
+    env: "TAILOR_PLATFORM_FOLDER_ID",
+    completion: { type: "none" },
+  }),
+} satisfies ArgsShape;
+
 export type CommonArgsType = z.infer<z.ZodObject<typeof commonArgs>>;
 
 // Tracks verbose mode for use in global error handler (cleanup)

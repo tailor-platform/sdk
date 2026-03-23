@@ -2,4 +2,4 @@
 "@tailor-platform/sdk": patch
 ---
 
-fix(deps): update oxlint monorepo
+chore(deps): lock file maintenance
