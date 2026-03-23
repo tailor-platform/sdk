@@ -1,5 +1,17 @@
 # @tailor-platform/sdk
 
+## 1.30.0
+
+### Minor Changes
+
+- [#765](https://github.com/tailor-platform/sdk/pull/765) [`afe6f6f`](https://github.com/tailor-platform/sdk/commit/afe6f6fb968271d5bb7f2aff7317c089b9f7fd6e) Thanks [@toiroakr](https://github.com/toiroakr)! - Add organization and folder management CLI commands: `organization list/get/update/tree` and `organization folder list/get/create/update/delete` with programmatic API exports
+
+### Patch Changes
+
+- [#800](https://github.com/tailor-platform/sdk/pull/800) [`3c60fdf`](https://github.com/tailor-platform/sdk/commit/3c60fdf63212a307be3380b63a9fd29582419919) Thanks [@dqn](https://github.com/dqn)! - Use rolldown `write: false` to keep bundle output in memory, eliminating unnecessary disk I/O in all bundlers
+
+- [#804](https://github.com/tailor-platform/sdk/pull/804) [`ee915c1`](https://github.com/tailor-platform/sdk/commit/ee915c121b25b7c14794fccb2fd6de79d0c3f604) Thanks [@toiroakr](https://github.com/toiroakr)! - Allow `as const` readonly arrays to be passed directly to `db.enum()` and `t.enum()` without requiring a spread workaround
+
 ## 1.29.0
 
 ### Minor Changes
