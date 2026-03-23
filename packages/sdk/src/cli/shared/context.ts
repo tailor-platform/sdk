@@ -16,6 +16,16 @@ import {
   deleteKeyringTokens,
 } from "./token-store";
 
+function semverLessThan(a: string, b: string): boolean {
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] ?? 0) < (pb[i] ?? 0)) return true;
+    if ((pa[i] ?? 0) > (pb[i] ?? 0)) return false;
+  }
+  return false;
+}
+
 const pfProfileSchema = z.object({
   user: z.string(),
   workspace_id: z.string(),
@@ -164,7 +174,7 @@ export async function readPlatformConfig(): Promise<PfConfig> {
     if (v2Result.data.latest_min_sdk_version) {
       const packageJson = await readPackageJson();
       const sdkVersion = packageJson.version ?? "0.0.0";
-      if (sdkVersion < v2Result.data.latest_min_sdk_version) {
+      if (semverLessThan(sdkVersion, v2Result.data.latest_min_sdk_version)) {
         logger.warn(ml`
           A newer config version (${String(v2Result.data.latest_version)}) is available.
           Please update your SDK to >= ${v2Result.data.latest_min_sdk_version}: pnpm update @tailor-platform/sdk
@@ -197,11 +207,14 @@ function toV1ForDisk(config: PfConfig): PfConfigV1 {
       token_expires_at: entry.token_expires_at,
     };
   }
+  // Clear current_user if the referenced user was dropped (keyring-only)
+  const currentUser =
+    config.current_user && users[config.current_user] ? config.current_user : null;
   return {
     version: 1,
     users,
     profiles: config.profiles,
-    current_user: config.current_user,
+    current_user: currentUser,
   };
 }
 
