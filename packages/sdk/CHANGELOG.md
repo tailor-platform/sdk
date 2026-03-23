@@ -1,5 +1,23 @@
 # @tailor-platform/sdk
 
+## 1.29.0
+
+### Minor Changes
+
+- [#702](https://github.com/tailor-platform/sdk/pull/702) [`9b25f08`](https://github.com/tailor-platform/sdk/commit/9b25f084abfcb05262aece4f4624111c3d18ebdb) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `login --machineuser` flag for platform machine user authentication. Token is stored in platform config for automatic use by subsequent commands. Supports `--client-id` and `--client-secret` options with environment variable fallback (`TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID` / `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET`). Client secret is prompted securely when omitted.
+
+### Patch Changes
+
+- [#781](https://github.com/tailor-platform/sdk/pull/781) [`2de7b3e`](https://github.com/tailor-platform/sdk/commit/2de7b3ef369870a96c2d20696168f5267aa3de9b) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update anthropics/claude-code-action action to v1.0.75
+
+- [#786](https://github.com/tailor-platform/sdk/pull/786) [`38ef630`](https://github.com/tailor-platform/sdk/commit/38ef6309e257fc2fa0c831b2c3b9bff7dd797c74) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency p-limit to v7.3.0
+
+- [#788](https://github.com/tailor-platform/sdk/pull/788) [`bbeaf1e`](https://github.com/tailor-platform/sdk/commit/bbeaf1e1ff4ed6838e1edf35e366f531aebb1c2b) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update oxlint monorepo
+
+- [#796](https://github.com/tailor-platform/sdk/pull/796) [`17808f4`](https://github.com/tailor-platform/sdk/commit/17808f4b11fc59aa714eb92cea7955bc559b4178) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency kysely to v0.28.14 [security]
+
+- [#779](https://github.com/tailor-platform/sdk/pull/779) [`b234487`](https://github.com/tailor-platform/sdk/commit/b234487f5787f540035657d11aa2759847de4177) Thanks [@dragon3](https://github.com/dragon3)! - Use typed event configs for executor triggers instead of deprecated eventType/condition fields
+
 ## 1.28.0
 
 ### Minor Changes

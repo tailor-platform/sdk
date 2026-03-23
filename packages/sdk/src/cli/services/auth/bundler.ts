@@ -32,14 +32,17 @@ export interface BundleAuthHooksOptions {
 }
 
 /**
- * Bundle a single auth hook handler into dist/auth-hooks/.
+ * Bundle a single auth hook handler.
  *
  * Follows the same pattern as the executor bundler:
  * 1. Generate an entry file that re-exports the handler as `main`
  * 2. Bundle with rolldown + tree-shaking
  * @param options - Bundle options
+ * @returns Map of function name to bundled code
  */
-export async function bundleAuthHooks(options: BundleAuthHooksOptions): Promise<void> {
+export async function bundleAuthHooks(
+  options: BundleAuthHooksOptions,
+): Promise<Map<string, string>> {
   const { configPath, authName, handlerAccessPath, triggerContext, cache, inlineSourcemap } =
     options;
 
@@ -59,7 +62,6 @@ export async function bundleAuthHooks(options: BundleAuthHooksOptions): Promise<
   }
 
   const functionName = `auth-hook--${authName}--before-login`;
-  const outputPath = path.join(outputDir, `${functionName}.js`);
   const absoluteConfigPath = path.resolve(configPath);
 
   const serializedTriggerContext = serializeTriggerContext(triggerContext);
@@ -70,12 +72,11 @@ export async function bundleAuthHooks(options: BundleAuthHooksOptions): Promise<
     inlineSourcemap,
   });
 
-  await withCache({
+  const code = await withCache({
     cache,
     kind: "auth-hook",
     name: functionName,
     sourceFile: absoluteConfigPath,
-    outputPath,
     contextHash,
     async build(cachePlugins) {
       const entryPath = path.join(outputDir, `${functionName}.entry.js`);
@@ -91,34 +92,38 @@ export async function bundleAuthHooks(options: BundleAuthHooksOptions): Promise<
       const plugins: rolldown.Plugin[] = triggerPlugin ? [triggerPlugin] : [];
       plugins.push(...cachePlugins);
 
-      await rolldown.build(
-        rolldown.defineConfig({
-          input: entryPath,
-          output: {
-            file: outputPath,
-            format: "esm",
-            sourcemap: inlineSourcemap ? "inline" : true,
-            minify: inlineSourcemap
-              ? {
-                  mangle: {
-                    keepNames: true,
-                  },
-                }
-              : true,
-            codeSplitting: false,
-          },
-          tsconfig,
-          plugins,
-          treeshake: {
-            moduleSideEffects: false,
-            annotations: true,
-            unknownGlobalSideEffects: false,
-          },
-          logLevel: "silent",
-        }) as rolldown.BuildOptions,
-      );
+      const result = await rolldown.build({
+        input: entryPath,
+        write: false,
+        output: {
+          format: "esm",
+          sourcemap: inlineSourcemap ? "inline" : true,
+          minify: inlineSourcemap
+            ? {
+                mangle: {
+                  keepNames: true,
+                },
+              }
+            : true,
+          codeSplitting: false,
+        },
+        tsconfig,
+        plugins,
+        treeshake: {
+          moduleSideEffects: false,
+          annotations: true,
+          unknownGlobalSideEffects: false,
+        },
+        logLevel: "silent",
+      } as rolldown.BuildOptions);
+
+      return result.output[0].code;
     },
   });
 
   logger.log(`${styles.success("Bundled")} auth hook for ${styles.info(`"${authName}"`)}`);
+
+  const bundledCode = new Map<string, string>();
+  bundledCode.set(functionName, code);
+  return bundledCode;
 }

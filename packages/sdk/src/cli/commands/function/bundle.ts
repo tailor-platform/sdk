@@ -66,7 +66,6 @@ export async function bundleForTestRun(
   const baseName = `test-run--${detected.name}`;
   const scriptName = `${baseName}.js`;
   const entryPath = path.join(outputDir, `${baseName}.entry.js`);
-  const outputPath = path.join(outputDir, scriptName);
 
   const entryContent = generateEntry(detected, sourceFile, env, machineUser, workspaceId);
   fs.writeFileSync(entryPath, entryContent);
@@ -78,33 +77,31 @@ export async function bundleForTestRun(
     tsconfig = undefined;
   }
 
-  await rolldown.build(
-    rolldown.defineConfig({
-      input: entryPath,
-      output: {
-        file: outputPath,
-        format: "esm",
-        sourcemap: inlineSourcemap ? "inline" : true,
-        minify: inlineSourcemap
-          ? {
-              mangle: {
-                keepNames: true,
-              },
-            }
-          : true,
-        codeSplitting: false,
-      },
-      tsconfig,
-      treeshake: {
-        moduleSideEffects: false,
-        annotations: true,
-        unknownGlobalSideEffects: false,
-      },
-      logLevel: "silent",
-    }) as rolldown.BuildOptions,
-  );
+  const buildResult = await rolldown.build({
+    input: entryPath,
+    write: false,
+    output: {
+      format: "esm",
+      sourcemap: inlineSourcemap ? "inline" : true,
+      minify: inlineSourcemap
+        ? {
+            mangle: {
+              keepNames: true,
+            },
+          }
+        : true,
+      codeSplitting: false,
+    },
+    tsconfig,
+    treeshake: {
+      moduleSideEffects: false,
+      annotations: true,
+      unknownGlobalSideEffects: false,
+    },
+    logLevel: "silent",
+  } as rolldown.BuildOptions);
 
-  const bundledCode = fs.readFileSync(outputPath, "utf-8");
+  const bundledCode = buildResult.output[0].code;
 
   return { bundledCode, scriptName };
 }

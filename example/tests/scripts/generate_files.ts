@@ -98,12 +98,30 @@ export async function generateCompatFiles(): Promise<void> {
   await generate({ configPath: "./tests/tailor.config.generators-compat.ts" });
   await generate({ configPath: "./tests/tailor.config.plugins-compat.ts" });
 
-  // Also run apply --buildOnly for plugins-compat (used by apply_command tests)
+  // Also run apply --buildOnly for plugins-compat (used by bundled_execution tests)
   process.env.TAILOR_SDK_OUTPUT_DIR = pluginsCompatDir;
-  await apply({
+  const result = await apply({
     configPath: "./tests/tailor.config.plugins-compat.ts",
     buildOnly: true,
   });
+
+  // Write in-memory bundled scripts to disk for test consumption
+  if (result?.bundledScripts) {
+    const kindDirMap: Record<string, string> = {
+      resolvers: path.join(pluginsCompatDir, "resolvers"),
+      executors: path.join(pluginsCompatDir, "executors"),
+      workflowJobs: path.join(pluginsCompatDir, "workflow-jobs"),
+      authHooks: path.join(pluginsCompatDir, "auth-hooks"),
+    };
+    for (const [kind, dirPath] of Object.entries(kindDirMap)) {
+      const scripts = result.bundledScripts[kind as keyof typeof result.bundledScripts];
+      if (scripts.size === 0) continue;
+      fs.mkdirSync(dirPath, { recursive: true });
+      for (const [name, code] of scripts) {
+        fs.writeFileSync(path.join(dirPath, `${name}.js`), code);
+      }
+    }
+  }
   replaceAbsolutePaths(pluginsCompatDir);
 }
 
