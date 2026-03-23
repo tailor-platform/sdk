@@ -162,13 +162,10 @@ function generateEntry(
             });
 
             if (result.issues) {
-              const errorMessages = result.issues
-                .map(issue => {
-                  const path = issue.path ? issue.path.join('.') : '';
-                  return path ? \`  \${path}: \${issue.message}\` : issue.message;
-                })
-                .join('\\n');
-              throw new Error(\`Failed to input validation:\\n\${errorMessages}\`);
+              throw new TailorErrors(result.issues.map(issue => ({
+                message: issue.message,
+                path: issue.path ?? [],
+              })));
             }
           }
 
