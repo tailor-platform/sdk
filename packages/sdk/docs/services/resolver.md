@@ -126,17 +126,17 @@ Enum and nested object fields in input/output schemas generate protobuf type nam
 
 ```typescript
 createResolver({
-  name: "stepChain",
-  operation: "query",
+  name: "createOrder",
+  operation: "mutation",
   input: {
-    user: t
+    address: t
       .object({
-        name: t.string(),
-        activatedAt: t.datetime({ optional: true }),
+        street: t.string(),
+        city: t.string(),
+        zip: t.string(),
       })
-      .typeName("StepChainUser")
-      .description("User information"),
-    status: t.enum(["active", "inactive"]).typeName("UserStatus"),
+      .typeName("ShippingAddress"),
+    status: t.enum(["pending", "confirmed", "shipped"]).typeName("OrderStatus"),
   },
   // ...
 });
