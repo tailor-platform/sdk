@@ -2,6 +2,7 @@ import { describe, it, expect, expectTypeOf } from "vitest";
 import { t } from "./type";
 import type { output } from "./helpers";
 import type { TailorUser } from "./user";
+import type { AllowedValues } from "./field";
 
 describe("TailorType basic field type tests", () => {
   it("string field outputs string type correctly", () => {
@@ -183,6 +184,24 @@ describe("TailorField enum field tests", () => {
     expectTypeOf<output<typeof _optionalEnumType>>().toEqualTypeOf<{
       priority?: "high" | "medium" | "low" | null;
     }>();
+  });
+
+  it("accepts as const readonly array", () => {
+    const STATUSES = ["active", "inactive", "pending"] as const;
+    const enumField = t.enum(STATUSES);
+    expectTypeOf<output<typeof enumField>>().toEqualTypeOf<"active" | "inactive" | "pending">();
+    expect(enumField.metadata.allowedValues).toEqual([
+      { value: "active", description: "" },
+      { value: "inactive", description: "" },
+      { value: "pending", description: "" },
+    ]);
+  });
+
+  it("AllowedValues type accepts readonly arrays", () => {
+    const STATUSES = ["active", "inactive"] as const;
+    // Verify that readonly arrays are assignable to AllowedValues
+    const _values: AllowedValues = STATUSES;
+    expect(_values).toEqual(STATUSES);
   });
 
   it("enum array works correctly", () => {
