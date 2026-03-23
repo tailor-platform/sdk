@@ -268,10 +268,10 @@ export const customer = db
   });
 ```
 
-**⚠️ Important:** Field-level and type-level hooks cannot coexist on the same field. TypeScript will prevent this at compile time:
+**Important:** Field-level and type-level hooks cannot coexist on the same field. TypeScript will prevent this at compile time:
 
 ```typescript
-// ❌ Compile error - cannot set hooks on the same field twice
+// Compile error - cannot set hooks on the same field twice
 export const user = db
   .type("User", {
     name: db.string().hooks({ create: ({ data }) => data.firstName }), // Field-level
@@ -280,7 +280,7 @@ export const user = db
     name: { create: ({ data }) => data.lastName }, // Type-level - ERROR
   });
 
-// ✅ Correct - set hooks on different fields
+// OK - set hooks on different fields
 export const user = db
   .type("User", {
     firstName: db.string().hooks({ create: () => "John" }), // Field-level on firstName
@@ -331,10 +331,10 @@ export const user = db
   });
 ```
 
-**⚠️ Important:** Field-level and type-level validation cannot coexist on the same field. TypeScript will prevent this at compile time:
+**Important:** Field-level and type-level validation cannot coexist on the same field. TypeScript will prevent this at compile time:
 
 ```typescript
-// ❌ Compile error - cannot set validation on the same field twice
+// Compile error - cannot set validation on the same field twice
 export const user = db
   .type("User", {
     name: db.string().validate(({ value }) => value.length > 0), // Field-level
@@ -343,7 +343,7 @@ export const user = db
     name: [({ value }) => value.length < 100, "Too long"], // Type-level - ERROR
   });
 
-// ✅ Correct - set validation on different fields
+// OK - set validation on different fields
 export const user = db
   .type("User", {
     name: db.string().validate(({ value }) => value.length > 0), // Field-level on name
