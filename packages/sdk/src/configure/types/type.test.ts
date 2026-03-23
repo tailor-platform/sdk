@@ -1,8 +1,8 @@
 import { describe, it, expect, expectTypeOf } from "vitest";
 import { t } from "./type";
+import type { AllowedValues } from "./field";
 import type { output } from "./helpers";
 import type { TailorUser } from "./user";
-import type { AllowedValues } from "./field";
 
 describe("TailorType basic field type tests", () => {
   it("string field outputs string type correctly", () => {
