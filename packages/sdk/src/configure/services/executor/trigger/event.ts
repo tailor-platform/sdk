@@ -285,19 +285,13 @@ export function authAccessTokenRevokedTrigger(): AuthAccessTokenTrigger<AuthAcce
 // ---------------------------------------------------------------------------
 
 // Record multi-event trigger
-type RecordEventKind = "created" | "updated" | "deleted";
-
-type RecordKindMap = {
-  created: "recordCreated";
-  updated: "recordUpdated";
-  deleted: "recordDeleted";
-};
-
-const recordKindMap: RecordKindMap = {
+const recordKindMap = {
   created: "recordCreated",
   updated: "recordUpdated",
   deleted: "recordDeleted",
-};
+} as const;
+type RecordKindMap = typeof recordKindMap;
+type RecordEventKind = keyof RecordKindMap;
 
 type RecordArgsMap<T extends TailorDBType> = {
   created: RecordCreatedArgs<T>;
@@ -342,19 +336,13 @@ export function recordTrigger<
 }
 
 // IdP User multi-event trigger
-type IdpUserEventKind = "created" | "updated" | "deleted";
-
-type IdpUserKindMap = {
-  created: "idpUserCreated";
-  updated: "idpUserUpdated";
-  deleted: "idpUserDeleted";
-};
-
-const idpUserKindMap: IdpUserKindMap = {
+const idpUserKindMap = {
   created: "idpUserCreated",
   updated: "idpUserUpdated",
   deleted: "idpUserDeleted",
-};
+} as const;
+type IdpUserKindMap = typeof idpUserKindMap;
+type IdpUserEventKind = keyof IdpUserKindMap;
 
 type IdpUserArgsMap = {
   created: IdpUserCreatedArgs;
@@ -390,19 +378,13 @@ export function idpUserTrigger<const K extends [IdpUserEventKind, ...IdpUserEven
 }
 
 // Auth Access Token multi-event trigger
-type AuthAccessTokenEventKind = "issued" | "refreshed" | "revoked";
-
-type AuthAccessTokenKindMap = {
-  issued: "authAccessTokenIssued";
-  refreshed: "authAccessTokenRefreshed";
-  revoked: "authAccessTokenRevoked";
-};
-
-const authAccessTokenKindMap: AuthAccessTokenKindMap = {
+const authAccessTokenKindMap = {
   issued: "authAccessTokenIssued",
   refreshed: "authAccessTokenRefreshed",
   revoked: "authAccessTokenRevoked",
-};
+} as const;
+type AuthAccessTokenKindMap = typeof authAccessTokenKindMap;
+type AuthAccessTokenEventKind = keyof AuthAccessTokenKindMap;
 
 type AuthAccessTokenArgsMap = {
   issued: AuthAccessTokenIssuedArgs;
