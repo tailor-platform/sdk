@@ -48,7 +48,7 @@ const files: Record<string, FileConfig> = {
     render: defaultRender,
   },
   "docs/cli/auth.md": {
-    commands: ["machineuser", "oauth2client"],
+    commands: ["authconnection", "machineuser", "oauth2client"],
     render: defaultRender,
   },
   "docs/cli/workflow.md": {

@@ -1,6 +1,169 @@
 # Auth Resource Commands
 
-Commands for managing Auth service resources (machine users and OAuth2 clients).
+Commands for managing Auth service resources (auth connections, machine users, and OAuth2 clients).
+
+<!-- politty:command:authconnection:heading:start -->
+
+## authconnection
+
+<!-- politty:command:authconnection:heading:end -->
+
+<!-- politty:command:authconnection:description:start -->
+
+Manage auth connections.
+
+<!-- politty:command:authconnection:description:end -->
+
+<!-- politty:command:authconnection:usage:start -->
+
+**Usage**
+
+```
+tailor-sdk authconnection [command]
+```
+
+<!-- politty:command:authconnection:usage:end -->
+
+<!-- politty:command:authconnection:subcommands:start -->
+
+**Commands**
+
+| Command                                           | Description                |
+| ------------------------------------------------- | -------------------------- |
+| [`authconnection create`](#authconnection-create) | Create an auth connection. |
+| [`authconnection list`](#authconnection-list)     | List all auth connections. |
+| [`authconnection revoke`](#authconnection-revoke) | Revoke an auth connection. |
+
+<!-- politty:command:authconnection:subcommands:end -->
+
+<!-- politty:command:authconnection:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:authconnection:global-options-link:end -->
+<!-- politty:command:authconnection create:heading:start -->
+
+### authconnection create
+
+<!-- politty:command:authconnection create:heading:end -->
+
+<!-- politty:command:authconnection create:description:start -->
+
+Create an auth connection.
+
+<!-- politty:command:authconnection create:description:end -->
+
+<!-- politty:command:authconnection create:usage:start -->
+
+**Usage**
+
+```
+tailor-sdk authconnection create [options]
+```
+
+<!-- politty:command:authconnection create:usage:end -->
+
+<!-- politty:command:authconnection create:options:start -->
+
+**Options**
+
+| Option                            | Alias | Description                            | Required | Default | Env                            |
+| --------------------------------- | ----- | -------------------------------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>`   | `-w`  | Workspace ID                           | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`             | `-p`  | Workspace profile                      | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| `--name <NAME>`                   | `-n`  | Auth connection name                   | Yes      | -       | -                              |
+| `--provider-url <PROVIDER_URL>`   | -     | OAuth2 provider URL                    | Yes      | -       | -                              |
+| `--issuer-url <ISSUER_URL>`       | -     | OAuth2 issuer URL                      | Yes      | -       | -                              |
+| `--client-id <CLIENT_ID>`         | -     | OAuth2 client ID                       | Yes      | -       | -                              |
+| `--client-secret <CLIENT_SECRET>` | -     | OAuth2 client secret                   | Yes      | -       | -                              |
+| `--auth-url <AUTH_URL>`           | -     | OAuth2 authorization endpoint override | No       | -       | -                              |
+| `--token-url <TOKEN_URL>`         | -     | OAuth2 token endpoint override         | No       | -       | -                              |
+
+<!-- politty:command:authconnection create:options:end -->
+
+<!-- politty:command:authconnection create:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:authconnection create:global-options-link:end -->
+<!-- politty:command:authconnection list:heading:start -->
+
+### authconnection list
+
+<!-- politty:command:authconnection list:heading:end -->
+
+<!-- politty:command:authconnection list:description:start -->
+
+List all auth connections.
+
+<!-- politty:command:authconnection list:description:end -->
+
+<!-- politty:command:authconnection list:usage:start -->
+
+**Usage**
+
+```
+tailor-sdk authconnection list [options]
+```
+
+<!-- politty:command:authconnection list:usage:end -->
+
+<!-- politty:command:authconnection list:options:start -->
+
+**Options**
+
+| Option                          | Alias | Description       | Required | Default | Env                            |
+| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+
+<!-- politty:command:authconnection list:options:end -->
+
+<!-- politty:command:authconnection list:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:authconnection list:global-options-link:end -->
+<!-- politty:command:authconnection revoke:heading:start -->
+
+### authconnection revoke
+
+<!-- politty:command:authconnection revoke:heading:end -->
+
+<!-- politty:command:authconnection revoke:description:start -->
+
+Revoke an auth connection.
+
+<!-- politty:command:authconnection revoke:description:end -->
+
+<!-- politty:command:authconnection revoke:usage:start -->
+
+**Usage**
+
+```
+tailor-sdk authconnection revoke [options]
+```
+
+<!-- politty:command:authconnection revoke:usage:end -->
+
+<!-- politty:command:authconnection revoke:options:start -->
+
+**Options**
+
+| Option                          | Alias | Description               | Required | Default | Env                            |
+| ------------------------------- | ----- | ------------------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID              | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile         | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| `--name <NAME>`                 | `-n`  | Auth connection name      | Yes      | -       | -                              |
+| `--yes`                         | `-y`  | Skip confirmation prompts | No       | `false` | -                              |
+
+<!-- politty:command:authconnection revoke:options:end -->
+
+<!-- politty:command:authconnection revoke:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:authconnection revoke:global-options-link:end -->
 
 <!-- politty:command:machineuser:heading:start -->
 
