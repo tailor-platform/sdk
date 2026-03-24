@@ -246,6 +246,26 @@ export async function planAuthConnections(
   return { changeSet, conflicts, unmanaged, resourceOwners };
 }
 
+/**
+ * Attempt to set metadata, silently ignoring InvalidArgument errors
+ * when the platform does not yet support auth-connection TRNs.
+ * @param client - Operator client instance
+ * @param metaRequest - Metadata request to send
+ */
+async function trySetMetadata(
+  client: OperatorClient,
+  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>,
+): Promise<void> {
+  try {
+    await client.setMetadata(metaRequest);
+  } catch (error) {
+    if (error instanceof ConnectError && error.code === Code.InvalidArgument) {
+      return;
+    }
+    throw error;
+  }
+}
+
 function extractOAuth2Config(
   connection: MessageInitShape<typeof CreateAuthConnectionRequestSchema>["connection"],
 ): AuthConnectionConfig | undefined {
@@ -283,7 +303,7 @@ export async function applyAuthConnections(
       changeSet.creates.map(async (create) => {
         await client.createAuthConnection(create.request);
         if (create.metaRequest) {
-          await client.setMetadata(create.metaRequest);
+          await trySetMetadata(client, create.metaRequest);
         }
       }),
     );
@@ -293,7 +313,7 @@ export async function applyAuthConnections(
       await client.revokeAuthConnection(replace.revokeRequest);
       await client.createAuthConnection(replace.createRequest);
       if (replace.metaRequest) {
-        await client.setMetadata(replace.metaRequest);
+        await trySetMetadata(client, replace.metaRequest);
       }
     }
 
