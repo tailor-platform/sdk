@@ -1402,12 +1402,14 @@ async function planOAuth2Clients(
             grantTypes: existingClient.grantTypes,
             redirectUris: existingClient.redirectUris,
             clientType: existingClient.clientType,
-            accessTokenLifetime: existingClient.accessTokenLifetime?.seconds != null
-              ? Number(existingClient.accessTokenLifetime.seconds)
-              : undefined,
-            refreshTokenLifetime: existingClient.refreshTokenLifetime?.seconds != null
-              ? Number(existingClient.refreshTokenLifetime.seconds)
-              : undefined,
+            accessTokenLifetime:
+              existingClient.accessTokenLifetime?.seconds != null
+                ? Number(existingClient.accessTokenLifetime.seconds)
+                : undefined,
+            refreshTokenLifetime:
+              existingClient.refreshTokenLifetime?.seconds != null
+                ? Number(existingClient.refreshTokenLifetime.seconds)
+                : undefined,
             requireDpop: existingClient.requireDpop,
           };
           if (areOAuth2ClientsEqual(existingComparable, desiredComparable)) {
