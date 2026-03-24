@@ -2,6 +2,7 @@ import { type TailorDBInstance } from "../tailordb/schema";
 import type { TailorField } from "@/configure/types/type";
 import type { DefinedFieldMetadata, FieldMetadata, TailorFieldType } from "@/configure/types/types";
 import type {
+  AuthConnectionTokenRef,
   AuthDefinitionBrand,
   AuthServiceInput,
   DefinedAuth,
@@ -76,6 +77,7 @@ export type {
   UserAttributeKey,
   UserAttributeListKey,
   UserAttributeMap,
+  AuthConnectionTokenRef,
   AuthServiceInput,
   AuthConfig,
   AuthExternalConfig,
@@ -149,12 +151,16 @@ export function defineAuth<
     invoker<M extends MachineUserNames>(machineUser: M) {
       return { namespace: name, machineUserName: machineUser } as const;
     },
+    getConnectionToken<C extends string>(connectionName: C) {
+      return { namespace: name, connectionName } as AuthConnectionTokenRef<C>;
+    },
   } as const satisfies (
     | UserProfileAuthInput<User, AttributeMap, AttributeList, MachineUserNames>
     | MachineUserOnlyAuthInput<MachineUserNames, MachineUserAttributes>
   ) & {
     name: string;
     invoker<M extends MachineUserNames>(machineUser: M): AuthInvoker<M>;
+    getConnectionToken<C extends string>(connectionName: C): AuthConnectionTokenRef<C>;
   };
 
   validateAuthConfig(result);

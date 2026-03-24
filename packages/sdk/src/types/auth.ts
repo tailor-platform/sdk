@@ -22,6 +22,11 @@ export type AuthInvokerWithName<M extends string> = Omit<AuthInvoker, "machineUs
   machineUserName: M;
 };
 
+export type AuthConnectionTokenRef<C extends string> = {
+  namespace: string;
+  connectionName: C;
+};
+
 // Helper types for ValueOperand
 export type ValueOperand = string | boolean | string[] | boolean[];
 export type AuthAttributeValue = ValueOperand | null | undefined;
@@ -263,9 +268,16 @@ export type AuthServiceInput<
 declare const authDefinitionBrand: unique symbol;
 export type AuthDefinitionBrand = { readonly [authDefinitionBrand]: true };
 
+type ConnectionNames<Config> = Config extends { connections?: Record<infer K, unknown> }
+  ? K & string
+  : never;
+
 export type DefinedAuth<Name extends string, Config, MachineUserNames extends string> = Config & {
   name: Name;
   invoker<M extends MachineUserNames>(machineUser: M): AuthInvokerWithName<M>;
+  getConnectionToken<C extends ConnectionNames<Config>>(
+    connectionName: C,
+  ): AuthConnectionTokenRef<C>;
 } & AuthDefinitionBrand;
 
 export type AuthExternalConfig = { name: string; external: true };

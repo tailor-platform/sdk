@@ -403,9 +403,24 @@ export const auth = defineAuth("my-auth", {
 
 The SDK uses hash-based change detection for connection configs. Only connections whose configuration has changed since the last `apply` are updated (revoked and recreated). Deleting the `.tailor-sdk/` directory forces all connections to be re-sent.
 
+### Type-Safe Connection References
+
+`auth.getConnectionToken()` provides a type-safe reference to a defined connection, similar to `auth.invoker()` for machine users. The connection name is constrained to names defined in the `connections` config:
+
+```typescript
+import { auth } from "../tailor.config";
+
+// Type-safe: only accepts connection names defined in auth.connections
+const tokenRef = auth.getConnectionToken("google-connection");
+// tokenRef: { namespace: "my-auth", connectionName: "google-connection" }
+
+// Type error: "unknown-connection" is not a defined connection name
+// auth.getConnectionToken("unknown-connection");
+```
+
 ### Using Tokens in Functions
 
-Access connection tokens from resolvers, executors, or workflows:
+At runtime in resolvers, executors, or workflows, use the platform built-in interface to retrieve connection tokens:
 
 ```typescript
 const tokens = await tailor.authconnection.getConnectionToken("google-connection");
@@ -413,6 +428,8 @@ const response = await fetch("https://www.googleapis.com/...", {
   headers: { Authorization: `Bearer ${tokens.access_token}` },
 });
 ```
+
+See [Built-in Interfaces](https://docs.tailor.tech/guides/function/builtin-interfaces.html#auth-connection) for the full runtime API.
 
 ### CLI Management
 
