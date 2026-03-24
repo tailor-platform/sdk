@@ -105,6 +105,12 @@ export interface TailorDBField<Defined extends DefinedDBFieldMetadata, Output> e
   TailorField<Defined, Output, DBFieldMetadata, Defined["type"]>,
   "description" | "validate"
 > {
+  /**
+   * typeName is not available on TailorDB fields.
+   * Use typeName on pipeline fields (t.enum / t.object) instead.
+   */
+  typeName(this: never, typeName: string): never;
+
   /** Returns a shallow copy of the raw relation config if set */
   readonly rawRelation: Readonly<RawRelationConfig> | undefined;
 
@@ -561,10 +567,8 @@ function createTailorDBField<
       return cloneWith({ description }) as any;
     },
 
-    typeName(typeName: string) {
-      // oxlint-disable-next-line no-explicit-any
-      return cloneWith({ typeName }) as any;
-    },
+    // oxlint-disable-next-line no-explicit-any
+    typeName: ((typeName: string) => cloneWith({ typeName })) as any,
 
     validate(...validateInputs: FieldValidateInput<FieldOutput<OutputBase, TOptions>>[]) {
       // oxlint-disable-next-line no-explicit-any
@@ -932,6 +936,7 @@ export interface TailorDBType<
   /**
    * Pick specific fields from the type
    */
+  pickFields<K extends keyof Fields>(keys: K[]): Pick<Fields, K>;
   pickFields<K extends keyof Fields, const Opt extends FieldOptions>(
     keys: K[],
     options: Opt,
@@ -1112,7 +1117,7 @@ function createTailorDBType<
       return this;
     },
 
-    pickFields<K extends keyof Fields, const Opt extends FieldOptions>(keys: K[], options: Opt) {
+    pickFields<K extends keyof Fields, const Opt extends FieldOptions>(keys: K[], options?: Opt) {
       const result = {} as Record<K, TailorAnyDBField>;
       for (const key of keys) {
         if (options) {
@@ -1121,16 +1126,8 @@ function createTailorDBType<
           result[key] = this.fields[key];
         }
       }
-      return result as {
-        [P in K]: Fields[P] extends TailorDBField<infer D, infer _O>
-          ? TailorDBField<
-              Omit<D, "array"> & {
-                array: Opt extends { array: true } ? true : D["array"];
-              },
-              FieldOutput<TailorToTs[D["type"]], Opt>
-            >
-          : never;
-      };
+      // oxlint-disable-next-line no-explicit-any
+      return result as any;
     },
 
     omitFields<K extends keyof Fields>(keys: K[]): Omit<Fields, K> {

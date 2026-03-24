@@ -521,38 +521,6 @@ const schemaType = t.object({
 });
 ```
 
-#### Custom Type Name (`typeName`) for Resolver/Executor Schemas
-
-Enum and nested object fields on TailorDB types also support `typeName()`. This has **no effect on TailorDB itself**, but when the field is passed to a Resolver or Executor input/output schema (via `pickFields` / `omitFields`), `typeName` controls the generated protobuf type name:
-
-```typescript
-const user = db.type("User", {
-  status: db.enum(["active", "inactive"]).typeName("UserStatus"),
-  address: db
-    .object({
-      street: db.string(),
-      city: db.string(),
-    })
-    .typeName("Address"),
-  ...db.fields.timestamps(),
-});
-
-// When used in a resolver, the typeName is reflected in the generated schema
-export default createResolver({
-  name: "getUser",
-  operation: "query",
-  input: {
-    ...user.pickFields(["status"], {}), // "UserStatus" is used as the protobuf type name
-  },
-  output: t.object({ id: t.uuid() }),
-  body: async (context) => {
-    return { id: "..." };
-  },
-});
-```
-
-Without `typeName`, the generated name defaults to `{TypeName}{FieldName}` (e.g., `UserStatus` for a `status` field on `User`). Use `typeName` when the auto-generated name would be ambiguous or when the same enum/object is shared across multiple resolver/executor schemas.
-
 ### Permissions
 
 Configure Permission and GQLPermission. For details, see the [TailorDB Permission documentation](https://docs.tailor.tech/guides/tailordb/permission).
