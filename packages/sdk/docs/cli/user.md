@@ -30,6 +30,10 @@ tailor-sdk login [options]
 
 > One of the following option groups is required:
 
+**User Login:**
+
+_no options_
+
 **Machine User Login:**
 
 | Option                            | Alias | Description                       | Required | Default | Env                                          |
