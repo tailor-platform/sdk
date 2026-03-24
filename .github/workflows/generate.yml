@@ -44,14 +44,24 @@ jobs:
           commit_message: "chore: run generate"
           files: ${{ steps.changes.outputs.files }}
 
-  generate-windows:
-    runs-on: windows-latest
+  generate-cross-platform:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: Windows
+          - os: macos-latest
+            name: macOS
+    runs-on: ${{ matrix.os }}
+    name: Generate consistency (${{ matrix.name }})
     timeout-minutes: 15
     permissions:
       contents: read
 
     steps:
       - name: Configure git for Windows
+        if: runner.os == 'Windows'
         run: git config --global core.autocrlf false
 
       - name: Checkout
@@ -69,7 +79,7 @@ jobs:
         shell: bash
         run: |
           if [ -n "$(git status --porcelain)" ]; then
-            echo "::error::Generated files differ between Windows and committed files"
+            echo "::error::Generated files differ between ${{ matrix.name }} and committed files"
             echo ""
             echo "Changed files:"
             git status --porcelain
@@ -79,3 +89,22 @@ jobs:
             exit 1
           fi
           echo "No differences found - generate output is consistent across platforms"
+
+  generate-summary:
+    needs: [generate, generate-cross-platform]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions: {}
+    timeout-minutes: 5
+    steps:
+      - name: Check result
+        run: |
+          if [[ "${{ needs.generate.result }}" != "success" ]]; then
+            echo "Generate job failed"
+            exit 1
+          fi
+          if [[ "${{ needs.generate-cross-platform.result }}" != "success" ]]; then
+            echo "Cross-platform generate jobs failed"
+            exit 1
+          fi
+          echo "All generate jobs succeeded"

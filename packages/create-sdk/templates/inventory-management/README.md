@@ -14,6 +14,7 @@ npx tailor-sdk workspace create --name <workspace-name> --region <workspace-regi
 npx tailor-sdk workspace list
 # For yarn: yarn tailor-sdk <command>
 # For pnpm: pnpm tailor-sdk <command>
+# For bun: bun tailor-sdk <command>
 
 # OR
 # Create a new workspace using Tailor Platform Console
@@ -26,6 +27,7 @@ npx tailor-sdk workspace list
 npm run deploy -- --workspace-id <your-workspace-id>
 # For yarn: yarn run deploy --workspace-id <your-workspace-id>
 # For pnpm: pnpm run deploy --workspace-id <your-workspace-id>
+# For bun: bun run deploy --workspace-id <your-workspace-id>
 ```
 
 3. Open [Tailor Platform Console](https://console.tailor.tech/) and open GraphQL Playground.
