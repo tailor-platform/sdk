@@ -403,32 +403,27 @@ export const auth = defineAuth("my-auth", {
 
 The SDK uses hash-based change detection for connection configs. Only connections whose configuration has changed since the last `apply` are updated (revoked and recreated). Deleting the `.tailor-sdk/` directory forces all connections to be re-sent.
 
-### Type-Safe Connection References
+### `auth.getConnectionToken()`
 
-`auth.getConnectionToken()` provides a type-safe reference to a defined connection, similar to `auth.invoker()` for machine users:
+`auth.getConnectionToken()` returns a reference to a connection by name. When `connections` is defined in `defineAuth()`, the connection name is type-checked against the defined keys:
 
 ```typescript
 import { auth } from "../tailor.config";
 
-// Type-safe: only accepts connection names defined in auth.connections
-const tokenRef = auth.getConnectionToken("google-connection");
-// tokenRef: { namespace: "my-auth", connectionName: "google-connection" }
+auth.getConnectionToken("google-connection");
+// => { namespace: "my-auth", connectionName: "google-connection" }
 
-// Type error: "unknown-connection" is not a defined connection name
-// auth.getConnectionToken("unknown-connection");
+// auth.getConnectionToken("unknown"); // Type error
 ```
 
-When `connections` is **not defined** in `defineAuth()`, `getConnectionToken()` accepts any string. This allows using connections that are managed solely via the CLI without declaring them in the config:
+When `connections` is not defined, `getConnectionToken()` accepts any string. This supports connections managed entirely via the CLI:
 
 ```typescript
-// No connections defined → any string is accepted
 const auth = defineAuth("my-auth", {
   machineUsers: { ... },
 });
 auth.getConnectionToken("cli-managed-connection"); // OK
 ```
-
-If you want type safety, define `connections` in the config. If you manage connections entirely via the CLI, you can omit `connections` and still use `getConnectionToken()` freely.
 
 ### Using Tokens in Functions
 
