@@ -746,8 +746,11 @@ describe("recordTrigger (multi-event)", () => {
       type: user,
       events: ["created", "updated"],
     });
-    expect(trigger.kind).toBe("record");
-    expect(trigger.events).toEqual(["recordCreated", "recordUpdated"]);
+    expect(trigger.kind).toBe("tailordb");
+    expect(trigger.events).toEqual([
+      "tailordb.type_record.created",
+      "tailordb.type_record.updated",
+    ]);
     expect(trigger.typeName).toBe("User");
   });
 
@@ -845,7 +848,7 @@ describe("idpUserTrigger (multi-event)", () => {
   test("can specify multiple events", () => {
     const trigger = idpUserTrigger({ events: ["created", "deleted"] });
     expect(trigger.kind).toBe("idpUser");
-    expect(trigger.events).toEqual(["idpUserCreated", "idpUserDeleted"]);
+    expect(trigger.events).toEqual(["idp.user.created", "idp.user.deleted"]);
   });
 
   test("args have kind discriminant", () => {
@@ -874,7 +877,7 @@ describe("authAccessTokenTrigger (multi-event)", () => {
   test("can specify multiple events", () => {
     const trigger = authAccessTokenTrigger({ events: ["issued", "revoked"] });
     expect(trigger.kind).toBe("authAccessToken");
-    expect(trigger.events).toEqual(["authAccessTokenIssued", "authAccessTokenRevoked"]);
+    expect(trigger.events).toEqual(["auth.access_token.issued", "auth.access_token.revoked"]);
   });
 
   test("args have kind discriminant", () => {

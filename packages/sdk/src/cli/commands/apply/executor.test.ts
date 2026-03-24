@@ -596,7 +596,8 @@ describe("planExecutor", () => {
         description: "test",
         disabled: false,
         trigger: {
-          kind: "recordCreated",
+          kind: "tailordb",
+          events: ["tailordb.type_record.created"],
           typeName: "User",
         },
         operation: { kind: "function", body: () => {} },
@@ -629,7 +630,8 @@ describe("planExecutor", () => {
         description: "test",
         disabled: false,
         trigger: {
-          kind: "recordCreated",
+          kind: "tailordb",
+          events: ["tailordb.type_record.created"],
           typeName: "User",
           condition: ({ newRecord }: { newRecord: { active: boolean } }) => newRecord.active,
         },
@@ -691,7 +693,7 @@ describe("planExecutor", () => {
         name: "on-idp-user-created",
         description: "test",
         disabled: false,
-        trigger: { kind: "idpUserCreated" },
+        trigger: { kind: "idpUser", events: ["idp.user.created"] },
         operation: { kind: "function", body: () => {} },
       };
       const application = createMockApplication([executor], {
@@ -718,7 +720,7 @@ describe("planExecutor", () => {
         name: "on-auth-token-issued",
         description: "test",
         disabled: false,
-        trigger: { kind: "authAccessTokenIssued" },
+        trigger: { kind: "authAccessToken", events: ["auth.access_token.issued"] },
         operation: { kind: "function", body: () => {} },
       };
       const application = createMockApplication([executor], {
@@ -745,7 +747,11 @@ describe("planExecutor", () => {
         name: "on-record-created",
         description: "test",
         disabled: false,
-        trigger: { kind: "recordCreated", typeName: "Unknown" },
+        trigger: {
+          kind: "tailordb",
+          events: ["tailordb.type_record.created"],
+          typeName: "Unknown",
+        },
         operation: { kind: "function", body: () => {} },
       };
       const application = createMockApplication([executor], {
@@ -781,7 +787,7 @@ describe("planExecutor", () => {
         name: "on-idp-user-created",
         description: "test",
         disabled: false,
-        trigger: { kind: "idpUserCreated" },
+        trigger: { kind: "idpUser", events: ["idp.user.created"] },
         operation: { kind: "function", body: () => {} },
       };
       const application = createMockApplication([executor]);
@@ -797,7 +803,7 @@ describe("planExecutor", () => {
         name: "on-auth-token-issued",
         description: "test",
         disabled: false,
-        trigger: { kind: "authAccessTokenIssued" },
+        trigger: { kind: "authAccessToken", events: ["auth.access_token.issued"] },
         operation: { kind: "function", body: () => {} },
       };
       const application = createMockApplication([executor]);
@@ -814,8 +820,8 @@ describe("planExecutor", () => {
         description: "test",
         disabled: false,
         trigger: {
-          kind: "record",
-          events: ["recordCreated", "recordUpdated"],
+          kind: "tailordb",
+          events: ["tailordb.type_record.created", "tailordb.type_record.updated"],
           typeName: "User",
         },
         operation: { kind: "function", body: () => {} },
@@ -851,7 +857,7 @@ describe("planExecutor", () => {
         disabled: false,
         trigger: {
           kind: "idpUser",
-          events: ["idpUserCreated", "idpUserDeleted"],
+          events: ["idp.user.created", "idp.user.deleted"],
         },
         operation: { kind: "function", body: () => {} },
       };
@@ -881,7 +887,7 @@ describe("planExecutor", () => {
         disabled: false,
         trigger: {
           kind: "authAccessToken",
-          events: ["authAccessTokenIssued", "authAccessTokenRevoked"],
+          events: ["auth.access_token.issued", "auth.access_token.revoked"],
         },
         operation: { kind: "function", body: () => {} },
       };
@@ -913,8 +919,12 @@ describe("planExecutor", () => {
         description: "test",
         disabled: false,
         trigger: {
-          kind: "record",
-          events: ["recordCreated", "recordUpdated", "recordDeleted"],
+          kind: "tailordb",
+          events: [
+            "tailordb.type_record.created",
+            "tailordb.type_record.updated",
+            "tailordb.type_record.deleted",
+          ],
           typeName: "User",
           condition: ({ typeName }: { typeName: string }) => typeName === "User",
         },

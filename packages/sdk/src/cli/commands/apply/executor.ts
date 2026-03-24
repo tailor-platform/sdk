@@ -23,7 +23,7 @@ import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
 import type { Application } from "@/cli/services/application";
-import type { Executor, Trigger } from "@/types/executor.generated";
+import type { Executor } from "@/types/executor.generated";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
 /**
@@ -234,23 +234,6 @@ function protoExecutor(
 
   const argsExpr = buildExecutorArgsExpr(trigger.kind, env);
 
-  type EventTriggerKind = Exclude<
-    Trigger["kind"],
-    "schedule" | "incomingWebhook" | "record" | "idpUser" | "authAccessToken"
-  >;
-  const eventType: Record<EventTriggerKind, string> = {
-    recordCreated: "tailordb.type_record.created",
-    recordUpdated: "tailordb.type_record.updated",
-    recordDeleted: "tailordb.type_record.deleted",
-    resolverExecuted: "pipeline.resolver.executed",
-    idpUserCreated: "idp.user.created",
-    idpUserUpdated: "idp.user.updated",
-    idpUserDeleted: "idp.user.deleted",
-    authAccessTokenIssued: "auth.access_token.issued",
-    authAccessTokenRefreshed: "auth.access_token.refreshed",
-    authAccessTokenRevoked: "auth.access_token.revoked",
-  };
-
   function typedEventTrigger(
     typedConfig: MessageInitShape<typeof ExecutorTriggerEventConfigSchema>["typedConfig"],
   ): MessageInitShape<typeof ExecutorTriggerConfigSchema> {
@@ -270,14 +253,12 @@ function protoExecutor(
         },
       };
       break;
-    case "recordCreated":
-    case "recordUpdated":
-    case "recordDeleted":
+    case "tailordb":
       triggerType = ExecutorTriggerType.EVENT;
       triggerConfig = typedEventTrigger({
         case: "tailordb",
         value: {
-          eventTypes: [eventType[trigger.kind]],
+          eventTypes: trigger.events,
           namespaceName: resolveTailorDBNamespace(application, trigger.typeName),
           typeName: trigger.typeName,
           ...(trigger.condition
@@ -291,7 +272,7 @@ function protoExecutor(
       triggerConfig = typedEventTrigger({
         case: "pipeline",
         value: {
-          eventTypes: [eventType[trigger.kind]],
+          eventTypes: ["pipeline.resolver.executed"],
           namespaceName: resolveResolverNamespace(application, trigger.resolverName),
           resolverName: trigger.resolverName,
           ...(trigger.condition
@@ -309,50 +290,12 @@ function protoExecutor(
         },
       };
       break;
-    case "idpUserCreated":
-    case "idpUserUpdated":
-    case "idpUserDeleted":
-      triggerType = ExecutorTriggerType.EVENT;
-      triggerConfig = typedEventTrigger({
-        case: "idp",
-        value: {
-          eventTypes: [eventType[trigger.kind]],
-          namespaceName: resolveIdpNamespace(application),
-        },
-      });
-      break;
-    case "authAccessTokenIssued":
-    case "authAccessTokenRefreshed":
-    case "authAccessTokenRevoked":
-      triggerType = ExecutorTriggerType.EVENT;
-      triggerConfig = typedEventTrigger({
-        case: "auth",
-        value: {
-          eventTypes: [eventType[trigger.kind]],
-          namespaceName: resolveAuthNamespace(application),
-        },
-      });
-      break;
-    case "record":
-      triggerType = ExecutorTriggerType.EVENT;
-      triggerConfig = typedEventTrigger({
-        case: "tailordb",
-        value: {
-          eventTypes: trigger.events.map((k) => eventType[k]),
-          namespaceName: resolveTailorDBNamespace(application, trigger.typeName),
-          typeName: trigger.typeName,
-          ...(trigger.condition
-            ? { condition: { expr: `(${stringifyFunction(trigger.condition)})(${argsExpr})` } }
-            : {}),
-        },
-      });
-      break;
     case "idpUser":
       triggerType = ExecutorTriggerType.EVENT;
       triggerConfig = typedEventTrigger({
         case: "idp",
         value: {
-          eventTypes: trigger.events.map((k) => eventType[k]),
+          eventTypes: trigger.events,
           namespaceName: resolveIdpNamespace(application),
         },
       });
@@ -362,7 +305,7 @@ function protoExecutor(
       triggerConfig = typedEventTrigger({
         case: "auth",
         value: {
-          eventTypes: trigger.events.map((k) => eventType[k]),
+          eventTypes: trigger.events,
           namespaceName: resolveAuthNamespace(application),
         },
       });

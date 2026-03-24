@@ -355,11 +355,10 @@ function generateInjectDeclarations(inject: PluginInjectMap | undefined): string
  */
 function generateTriggerCode(trigger: PluginTriggerConfig): string {
   switch (trigger.kind) {
-    case "recordCreated":
-    case "recordUpdated":
-    case "recordDeleted":
+    case "tailordb":
       return `{
     kind: ${JSON.stringify(trigger.kind)},
+    events: ${JSON.stringify(trigger.events)},
     typeName: ${JSON.stringify(trigger.typeName)},
   }`;
 

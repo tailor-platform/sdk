@@ -4,13 +4,10 @@ import type { TailorActor } from "@/configure/types/actor";
 import type { TailorEnv } from "@/configure/types/env";
 import type { output } from "@/configure/types/helpers";
 import type {
-  RecordTrigger as ParserRecordTrigger,
+  TailorDBTrigger as ParserTailorDBTrigger,
   ResolverExecutedTrigger as ParserResolverExecutedTrigger,
   IdpUserTrigger as ParserIdpUserTrigger,
   AuthAccessTokenTrigger as ParserAuthAccessTokenTrigger,
-  MultiRecordTrigger as ParserMultiRecordTrigger,
-  MultiIdpUserTrigger as ParserMultiIdpUserTrigger,
-  MultiAuthAccessTokenTrigger as ParserMultiAuthAccessTokenTrigger,
 } from "@/types/executor.generated";
 
 interface EventArgs {
@@ -74,7 +71,81 @@ export type ResolverExecutedArgs<R extends ResolverConfig> = EventArgs & {
       }
   );
 
-export type RecordTrigger<Args> = ParserRecordTrigger & {
+// IdP User Event Args
+export interface IdpUserCreatedArgs extends EventArgs {
+  kind: "created";
+  rawKind: "idp.user.created";
+  namespaceName: string;
+  userId: string;
+}
+
+export interface IdpUserUpdatedArgs extends EventArgs {
+  kind: "updated";
+  rawKind: "idp.user.updated";
+  namespaceName: string;
+  userId: string;
+}
+
+export interface IdpUserDeletedArgs extends EventArgs {
+  kind: "deleted";
+  rawKind: "idp.user.deleted";
+  namespaceName: string;
+  userId: string;
+}
+
+export type IdpUserArgs = IdpUserCreatedArgs | IdpUserUpdatedArgs | IdpUserDeletedArgs;
+
+// Auth Access Token Event Args
+export interface AuthAccessTokenIssuedArgs extends EventArgs {
+  kind: "issued";
+  rawKind: "auth.access_token.issued";
+  namespaceName: string;
+  userId: string;
+}
+
+export interface AuthAccessTokenRefreshedArgs extends EventArgs {
+  kind: "refreshed";
+  rawKind: "auth.access_token.refreshed";
+  namespaceName: string;
+  userId: string;
+}
+
+export interface AuthAccessTokenRevokedArgs extends EventArgs {
+  kind: "revoked";
+  rawKind: "auth.access_token.revoked";
+  namespaceName: string;
+  userId: string;
+}
+
+export type AuthAccessTokenArgs =
+  | AuthAccessTokenIssuedArgs
+  | AuthAccessTokenRefreshedArgs
+  | AuthAccessTokenRevokedArgs;
+
+// ---------------------------------------------------------------------------
+// TailorDB trigger types and factories
+// ---------------------------------------------------------------------------
+
+const recordEventMap = {
+  created: "tailordb.type_record.created",
+  updated: "tailordb.type_record.updated",
+  deleted: "tailordb.type_record.deleted",
+} as const;
+type RecordEventMap = typeof recordEventMap;
+type RecordEventKind = keyof RecordEventMap;
+
+type RecordArgsMap<T extends TailorDBType> = {
+  created: RecordCreatedArgs<T>;
+  updated: RecordUpdatedArgs<T>;
+  deleted: RecordDeletedArgs<T>;
+};
+
+type RecordMultiArgs<
+  T extends TailorDBType,
+  K extends RecordEventKind[],
+> = RecordArgsMap<T>[K[number]];
+
+export type TailorDBTrigger<Args> = ParserTailorDBTrigger & {
   __args: Args;
 };
 
@@ -91,10 +162,11 @@ type RecordTriggerOptions<T extends TailorDBType, Args> = {
  */
 export function recordCreatedTrigger<T extends TailorDBType>(
   options: RecordTriggerOptions<T, RecordCreatedArgs<T>>,
-): RecordTrigger<RecordCreatedArgs<T>> {
+): TailorDBTrigger<RecordCreatedArgs<T>> {
   const { type, condition } = options;
   return {
-    kind: "recordCreated",
+    kind: "tailordb",
+    events: ["tailordb.type_record.created"],
     typeName: type.name,
     condition,
     __args: {} as RecordCreatedArgs<T>,
@@ -109,10 +181,11 @@ export function recordCreatedTrigger<T extends TailorDBType>(
  */
 export function recordUpdatedTrigger<T extends TailorDBType>(
   options: RecordTriggerOptions<T, RecordUpdatedArgs<T>>,
-): RecordTrigger<RecordUpdatedArgs<T>> {
+): TailorDBTrigger<RecordUpdatedArgs<T>> {
   const { type, condition } = options;
   return {
-    kind: "recordUpdated",
+    kind: "tailordb",
+    events: ["tailordb.type_record.updated"],
     typeName: type.name,
     condition,
     __args: {} as RecordUpdatedArgs<T>,
@@ -127,15 +200,47 @@ export function recordUpdatedTrigger<T extends TailorDBType>(
  */
 export function recordDeletedTrigger<T extends TailorDBType>(
   options: RecordTriggerOptions<T, RecordDeletedArgs<T>>,
-): RecordTrigger<RecordDeletedArgs<T>> {
+): TailorDBTrigger<RecordDeletedArgs<T>> {
   const { type, condition } = options;
   return {
-    kind: "recordDeleted",
+    kind: "tailordb",
+    events: ["tailordb.type_record.deleted"],
     typeName: type.name,
     condition,
     __args: {} as RecordDeletedArgs<T>,
   };
 }
+
+type RecordTriggerMultiOptions<T extends TailorDBType, K extends RecordEventKind[]> = {
+  type: T;
+  events: K;
+  condition?: (args: RecordMultiArgs<T, K>) => boolean;
+};
+
+/**
+ * Create a trigger that fires on multiple TailorDB record event types.
+ * @template T
+ * @template K
+ * @param options - Trigger options with events array
+ * @returns TailorDB record trigger
+ */
+export function recordTrigger<
+  T extends TailorDBType,
+  const K extends [RecordEventKind, ...RecordEventKind[]],
+>(options: RecordTriggerMultiOptions<T, K>): TailorDBTrigger<RecordMultiArgs<T, K>> {
+  const { type, events, condition } = options;
+  return {
+    kind: "tailordb",
+    events: events.map((k) => recordEventMap[k]),
+    typeName: type.name,
+    condition,
+    __args: {} as RecordMultiArgs<T, K>,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Resolver trigger
+// ---------------------------------------------------------------------------
 
 export type ResolverExecutedTrigger<Args> = ParserResolverExecutedTrigger & {
   __args: Args;
@@ -164,29 +269,25 @@ export function resolverExecutedTrigger<R extends ResolverConfig>(
   };
 }
 
-// IdP User Event Triggers
-export interface IdpUserCreatedArgs extends EventArgs {
-  kind: "created";
-  rawKind: "idp.user.created";
-  namespaceName: string;
-  userId: string;
-}
+// ---------------------------------------------------------------------------
+// IdP User trigger types and factories
+// ---------------------------------------------------------------------------
 
-export interface IdpUserUpdatedArgs extends EventArgs {
-  kind: "updated";
-  rawKind: "idp.user.updated";
-  namespaceName: string;
-  userId: string;
-}
+const idpUserEventMap = {
+  created: "idp.user.created",
+  updated: "idp.user.updated",
+  deleted: "idp.user.deleted",
+} as const;
+type IdpUserEventMap = typeof idpUserEventMap;
+type IdpUserEventKind = keyof IdpUserEventMap;
 
-export interface IdpUserDeletedArgs extends EventArgs {
-  kind: "deleted";
-  rawKind: "idp.user.deleted";
-  namespaceName: string;
-  userId: string;
-}
+type IdpUserArgsMap = {
+  created: IdpUserCreatedArgs;
+  updated: IdpUserUpdatedArgs;
+  deleted: IdpUserDeletedArgs;
+};
 
-export type IdpUserArgs = IdpUserCreatedArgs | IdpUserUpdatedArgs | IdpUserDeletedArgs;
+type IdpUserMultiArgs<K extends IdpUserEventKind[]> = IdpUserArgsMap[K[number]];
 
 export type IdpUserTrigger<Args> = ParserIdpUserTrigger & {
   __args: Args;
@@ -198,7 +299,8 @@ export type IdpUserTrigger<Args> = ParserIdpUserTrigger & {
  */
 export function idpUserCreatedTrigger(): IdpUserTrigger<IdpUserCreatedArgs> {
   return {
-    kind: "idpUserCreated",
+    kind: "idpUser",
+    events: ["idp.user.created"],
     __args: {} as IdpUserCreatedArgs,
   };
 }
@@ -209,7 +311,8 @@ export function idpUserCreatedTrigger(): IdpUserTrigger<IdpUserCreatedArgs> {
  */
 export function idpUserUpdatedTrigger(): IdpUserTrigger<IdpUserUpdatedArgs> {
   return {
-    kind: "idpUserUpdated",
+    kind: "idpUser",
+    events: ["idp.user.updated"],
     __args: {} as IdpUserUpdatedArgs,
   };
 }
@@ -220,37 +323,53 @@ export function idpUserUpdatedTrigger(): IdpUserTrigger<IdpUserUpdatedArgs> {
  */
 export function idpUserDeletedTrigger(): IdpUserTrigger<IdpUserDeletedArgs> {
   return {
-    kind: "idpUserDeleted",
+    kind: "idpUser",
+    events: ["idp.user.deleted"],
     __args: {} as IdpUserDeletedArgs,
   };
 }
 
-// Auth Access Token Event Triggers
-export interface AuthAccessTokenIssuedArgs extends EventArgs {
-  kind: "issued";
-  rawKind: "auth.access_token.issued";
-  namespaceName: string;
-  userId: string;
+type IdpUserTriggerOptions<K extends IdpUserEventKind[]> = {
+  events: K;
+};
+
+/**
+ * Create a trigger that fires on multiple IdP user event types.
+ * @template K
+ * @param options - Trigger options with events array
+ * @returns IdP user trigger
+ */
+export function idpUserTrigger<const K extends [IdpUserEventKind, ...IdpUserEventKind[]]>(
+  options: IdpUserTriggerOptions<K>,
+): IdpUserTrigger<IdpUserMultiArgs<K>> {
+  const { events } = options;
+  return {
+    kind: "idpUser",
+    events: events.map((k) => idpUserEventMap[k]),
+    __args: {} as IdpUserMultiArgs<K>,
+  };
 }
 
-export interface AuthAccessTokenRefreshedArgs extends EventArgs {
-  kind: "refreshed";
-  rawKind: "auth.access_token.refreshed";
-  namespaceName: string;
-  userId: string;
-}
+// ---------------------------------------------------------------------------
+// Auth Access Token trigger types and factories
+// ---------------------------------------------------------------------------
 
-export interface AuthAccessTokenRevokedArgs extends EventArgs {
-  kind: "revoked";
-  rawKind: "auth.access_token.revoked";
-  namespaceName: string;
-  userId: string;
-}
+const authAccessTokenEventMap = {
+  issued: "auth.access_token.issued",
+  refreshed: "auth.access_token.refreshed",
+  revoked: "auth.access_token.revoked",
+} as const;
+type AuthAccessTokenEventMap = typeof authAccessTokenEventMap;
+type AuthAccessTokenEventKind = keyof AuthAccessTokenEventMap;
 
-export type AuthAccessTokenArgs =
-  | AuthAccessTokenIssuedArgs
-  | AuthAccessTokenRefreshedArgs
-  | AuthAccessTokenRevokedArgs;
+type AuthAccessTokenArgsMap = {
+  issued: AuthAccessTokenIssuedArgs;
+  refreshed: AuthAccessTokenRefreshedArgs;
+  revoked: AuthAccessTokenRevokedArgs;
+};
+
+type AuthAccessTokenMultiArgs<K extends AuthAccessTokenEventKind[]> =
+  AuthAccessTokenArgsMap[K[number]];
 
 export type AuthAccessTokenTrigger<Args> = ParserAuthAccessTokenTrigger & {
   __args: Args;
@@ -262,7 +381,8 @@ export type AuthAccessTokenTrigger<Args> = ParserAuthAccessTokenTrigger & {
  */
 export function authAccessTokenIssuedTrigger(): AuthAccessTokenTrigger<AuthAccessTokenIssuedArgs> {
   return {
-    kind: "authAccessTokenIssued",
+    kind: "authAccessToken",
+    events: ["auth.access_token.issued"],
     __args: {} as AuthAccessTokenIssuedArgs,
   };
 }
@@ -273,7 +393,8 @@ export function authAccessTokenIssuedTrigger(): AuthAccessTokenTrigger<AuthAcces
  */
 export function authAccessTokenRefreshedTrigger(): AuthAccessTokenTrigger<AuthAccessTokenRefreshedArgs> {
   return {
-    kind: "authAccessTokenRefreshed",
+    kind: "authAccessToken",
+    events: ["auth.access_token.refreshed"],
     __args: {} as AuthAccessTokenRefreshedArgs,
   };
 }
@@ -284,129 +405,11 @@ export function authAccessTokenRefreshedTrigger(): AuthAccessTokenTrigger<AuthAc
  */
 export function authAccessTokenRevokedTrigger(): AuthAccessTokenTrigger<AuthAccessTokenRevokedArgs> {
   return {
-    kind: "authAccessTokenRevoked",
+    kind: "authAccessToken",
+    events: ["auth.access_token.revoked"],
     __args: {} as AuthAccessTokenRevokedArgs,
   };
 }
-
-// ---------------------------------------------------------------------------
-// Multi-event trigger factories
-// ---------------------------------------------------------------------------
-
-// Record multi-event trigger
-const recordKindMap = {
-  created: "recordCreated",
-  updated: "recordUpdated",
-  deleted: "recordDeleted",
-} as const;
-type RecordKindMap = typeof recordKindMap;
-type RecordEventKind = keyof RecordKindMap;
-
-type RecordArgsMap<T extends TailorDBType> = {
-  created: RecordCreatedArgs<T>;
-  updated: RecordUpdatedArgs<T>;
-  deleted: RecordDeletedArgs<T>;
-};
-
-type RecordMultiArgs<
-  T extends TailorDBType,
-  K extends RecordEventKind[],
-> = RecordArgsMap<T>[K[number]];
-
-export type MultiRecordTrigger<Args> = ParserMultiRecordTrigger & {
-  __args: Args;
-};
-
-type RecordTriggerMultiOptions<T extends TailorDBType, K extends RecordEventKind[]> = {
-  type: T;
-  events: K;
-  condition?: (args: RecordMultiArgs<T, K>) => boolean;
-};
-
-/**
- * Create a trigger that fires on multiple record event types.
- * @template T
- * @template K
- * @param options - Trigger options with events array
- * @returns Multi-event record trigger
- */
-export function recordTrigger<
-  T extends TailorDBType,
-  const K extends [RecordEventKind, ...RecordEventKind[]],
->(options: RecordTriggerMultiOptions<T, K>): MultiRecordTrigger<RecordMultiArgs<T, K>> {
-  const { type, events, condition } = options;
-  return {
-    kind: "record",
-    events: events.map((k) => recordKindMap[k]),
-    typeName: type.name,
-    condition,
-    __args: {} as RecordMultiArgs<T, K>,
-  };
-}
-
-// IdP User multi-event trigger
-const idpUserKindMap = {
-  created: "idpUserCreated",
-  updated: "idpUserUpdated",
-  deleted: "idpUserDeleted",
-} as const;
-type IdpUserKindMap = typeof idpUserKindMap;
-type IdpUserEventKind = keyof IdpUserKindMap;
-
-type IdpUserArgsMap = {
-  created: IdpUserCreatedArgs;
-  updated: IdpUserUpdatedArgs;
-  deleted: IdpUserDeletedArgs;
-};
-
-type IdpUserMultiArgs<K extends IdpUserEventKind[]> = IdpUserArgsMap[K[number]];
-
-export type MultiIdpUserTrigger<Args> = ParserMultiIdpUserTrigger & {
-  __args: Args;
-};
-
-type IdpUserTriggerOptions<K extends IdpUserEventKind[]> = {
-  events: K;
-};
-
-/**
- * Create a trigger that fires on multiple IdP user event types.
- * @template K
- * @param options - Trigger options with events array
- * @returns Multi-event IdP user trigger
- */
-export function idpUserTrigger<const K extends [IdpUserEventKind, ...IdpUserEventKind[]]>(
-  options: IdpUserTriggerOptions<K>,
-): MultiIdpUserTrigger<IdpUserMultiArgs<K>> {
-  const { events } = options;
-  return {
-    kind: "idpUser",
-    events: events.map((k) => idpUserKindMap[k]),
-    __args: {} as IdpUserMultiArgs<K>,
-  };
-}
-
-// Auth Access Token multi-event trigger
-const authAccessTokenKindMap = {
-  issued: "authAccessTokenIssued",
-  refreshed: "authAccessTokenRefreshed",
-  revoked: "authAccessTokenRevoked",
-} as const;
-type AuthAccessTokenKindMap = typeof authAccessTokenKindMap;
-type AuthAccessTokenEventKind = keyof AuthAccessTokenKindMap;
-
-type AuthAccessTokenArgsMap = {
-  issued: AuthAccessTokenIssuedArgs;
-  refreshed: AuthAccessTokenRefreshedArgs;
-  revoked: AuthAccessTokenRevokedArgs;
-};
-
-type AuthAccessTokenMultiArgs<K extends AuthAccessTokenEventKind[]> =
-  AuthAccessTokenArgsMap[K[number]];
-
-export type MultiAuthAccessTokenTrigger<Args> = ParserMultiAuthAccessTokenTrigger & {
-  __args: Args;
-};
 
 type AuthAccessTokenTriggerOptions<K extends AuthAccessTokenEventKind[]> = {
   events: K;
@@ -416,17 +419,15 @@ type AuthAccessTokenTriggerOptions<K extends AuthAccessTokenEventKind[]> = {
  * Create a trigger that fires on multiple auth access token event types.
  * @template K
  * @param options - Trigger options with events array
- * @returns Multi-event auth access token trigger
+ * @returns Auth access token trigger
  */
 export function authAccessTokenTrigger<
   const K extends [AuthAccessTokenEventKind, ...AuthAccessTokenEventKind[]],
->(
-  options: AuthAccessTokenTriggerOptions<K>,
-): MultiAuthAccessTokenTrigger<AuthAccessTokenMultiArgs<K>> {
+>(options: AuthAccessTokenTriggerOptions<K>): AuthAccessTokenTrigger<AuthAccessTokenMultiArgs<K>> {
   const { events } = options;
   return {
     kind: "authAccessToken",
-    events: events.map((k) => authAccessTokenKindMap[k]),
+    events: events.map((k) => authAccessTokenEventMap[k]),
     __args: {} as AuthAccessTokenMultiArgs<K>,
   };
 }

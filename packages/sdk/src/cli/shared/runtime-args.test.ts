@@ -5,18 +5,7 @@ describe("buildExecutorArgsExpr", () => {
   const env = { API_URL: "https://example.com", DEBUG: true };
 
   describe("event triggers (with actor)", () => {
-    const eventTriggerKinds = [
-      "schedule",
-      "recordCreated",
-      "recordUpdated",
-      "recordDeleted",
-      "idpUserCreated",
-      "idpUserUpdated",
-      "idpUserDeleted",
-      "authAccessTokenIssued",
-      "authAccessTokenRefreshed",
-      "authAccessTokenRevoked",
-    ] as const;
+    const eventTriggerKinds = ["schedule", "tailordb", "idpUser", "authAccessToken"] as const;
 
     for (const kind of eventTriggerKinds) {
       test(`${kind} includes appNamespace, actor transform, and env`, () => {
@@ -31,17 +20,7 @@ describe("buildExecutorArgsExpr", () => {
     }
 
     test("event triggers inject kind and rawKind from args.eventType", () => {
-      const eventKinds = [
-        "recordCreated",
-        "recordUpdated",
-        "recordDeleted",
-        "idpUserCreated",
-        "idpUserUpdated",
-        "idpUserDeleted",
-        "authAccessTokenIssued",
-        "authAccessTokenRefreshed",
-        "authAccessTokenRevoked",
-      ] as const;
+      const eventKinds = ["tailordb", "idpUser", "authAccessToken"] as const;
       for (const kind of eventKinds) {
         const expr = buildExecutorArgsExpr(kind, env);
         expect(expr).toContain('kind: args.eventType?.split(".").pop()');
@@ -53,22 +32,6 @@ describe("buildExecutorArgsExpr", () => {
       const expr = buildExecutorArgsExpr("schedule", env);
       expect(expr).not.toContain("kind:");
     });
-  });
-
-  describe("multi-event triggers", () => {
-    const multiEventKinds = ["record", "idpUser", "authAccessToken"] as const;
-
-    for (const kind of multiEventKinds) {
-      test(`${kind} includes appNamespace, actor transform, env, kind, and rawKind`, () => {
-        const expr = buildExecutorArgsExpr(kind, env);
-        expect(expr).toContain("...args");
-        expect(expr).toContain("appNamespace: args.namespaceName");
-        expect(expr).toContain("actor: args.actor");
-        expect(expr).toContain(`env: ${JSON.stringify(env)}`);
-        expect(expr).toContain('kind: args.eventType?.split(".").pop()');
-        expect(expr).toContain("rawKind: args.eventType");
-      });
-    }
   });
 
   describe("resolverExecuted trigger", () => {
