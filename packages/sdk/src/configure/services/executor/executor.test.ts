@@ -773,14 +773,14 @@ describe("recordTrigger (multi-event)", () => {
           }>();
 
           // Can narrow by kind
-          if (args.kind === "recordCreated") {
+          if (args.kind === "tailordb.type_record.created") {
             expectTypeOf(args.newRecord).toExtend<{
               id: string;
               name: string;
               age: number;
             }>();
           }
-          if (args.kind === "recordUpdated") {
+          if (args.kind === "tailordb.type_record.updated") {
             expectTypeOf(args.newRecord).toExtend<{
               id: string;
               name: string;
@@ -806,7 +806,7 @@ describe("recordTrigger (multi-event)", () => {
       type: user,
       kinds: ["created", "deleted"],
       condition: (args) => {
-        if (args.kind === "recordCreated") {
+        if (args.kind === "tailordb.type_record.created") {
           return args.newRecord.age >= 18;
         }
         return true;
@@ -828,7 +828,7 @@ describe("recordTrigger (multi-event)", () => {
       operation: {
         kind: "function",
         body: (args) => {
-          if (args.kind === "recordDeleted") {
+          if (args.kind === "tailordb.type_record.deleted") {
             expectTypeOf(args.oldRecord).toExtend<{
               id: string;
               name: string;
@@ -861,8 +861,8 @@ describe("idpUserTrigger (multi-event)", () => {
             namespaceName: string;
             userId: string;
           }>();
-          if (args.kind === "idpUserCreated") {
-            expectTypeOf(args.kind).toEqualTypeOf<"idpUserCreated">();
+          if (args.kind === "idp.user.created") {
+            expectTypeOf(args.kind).toEqualTypeOf<"idp.user.created">();
           }
         },
       },
@@ -890,8 +890,8 @@ describe("authAccessTokenTrigger (multi-event)", () => {
             namespaceName: string;
             userId: string;
           }>();
-          if (args.kind === "authAccessTokenIssued") {
-            expectTypeOf(args.kind).toEqualTypeOf<"authAccessTokenIssued">();
+          if (args.kind === "auth.access_token.issued") {
+            expectTypeOf(args.kind).toEqualTypeOf<"auth.access_token.issued">();
           }
         },
       },

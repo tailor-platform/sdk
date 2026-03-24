@@ -30,21 +30,24 @@ describe("buildExecutorArgsExpr", () => {
       });
     }
 
-    test("single-event triggers inject static kind", () => {
-      const singleEventKinds = [
-        "recordCreated",
-        "recordUpdated",
-        "recordDeleted",
-        "idpUserCreated",
-        "idpUserUpdated",
-        "idpUserDeleted",
-        "authAccessTokenIssued",
-        "authAccessTokenRefreshed",
-        "authAccessTokenRevoked",
-      ] as const;
-      for (const kind of singleEventKinds) {
-        const expr = buildExecutorArgsExpr(kind, env);
-        expect(expr).toContain(`kind: "${kind}"`);
+    test("single-event triggers inject static kind as event type string", () => {
+      const expected: Record<string, string> = {
+        recordCreated: "tailordb.type_record.created",
+        recordUpdated: "tailordb.type_record.updated",
+        recordDeleted: "tailordb.type_record.deleted",
+        idpUserCreated: "idp.user.created",
+        idpUserUpdated: "idp.user.updated",
+        idpUserDeleted: "idp.user.deleted",
+        authAccessTokenIssued: "auth.access_token.issued",
+        authAccessTokenRefreshed: "auth.access_token.refreshed",
+        authAccessTokenRevoked: "auth.access_token.revoked",
+      };
+      for (const [kind, eventType] of Object.entries(expected)) {
+        const expr = buildExecutorArgsExpr(
+          kind as Parameters<typeof buildExecutorArgsExpr>[0],
+          env,
+        );
+        expect(expr).toContain(`kind: "${eventType}"`);
       }
     });
 

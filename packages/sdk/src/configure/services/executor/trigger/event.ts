@@ -25,18 +25,18 @@ interface RecordArgs extends EventArgs {
 }
 
 export interface RecordCreatedArgs<T extends TailorDBType> extends RecordArgs {
-  kind: "recordCreated";
+  kind: "tailordb.type_record.created";
   newRecord: output<T>;
 }
 
 export interface RecordUpdatedArgs<T extends TailorDBType> extends RecordArgs {
-  kind: "recordUpdated";
+  kind: "tailordb.type_record.updated";
   newRecord: output<T>;
   oldRecord: output<T>;
 }
 
 export interface RecordDeletedArgs<T extends TailorDBType> extends RecordArgs {
-  kind: "recordDeleted";
+  kind: "tailordb.type_record.deleted";
   oldRecord: output<T>;
 }
 
@@ -163,19 +163,19 @@ export function resolverExecutedTrigger<R extends ResolverConfig>(
 
 // IdP User Event Triggers
 export interface IdpUserCreatedArgs extends EventArgs {
-  kind: "idpUserCreated";
+  kind: "idp.user.created";
   namespaceName: string;
   userId: string;
 }
 
 export interface IdpUserUpdatedArgs extends EventArgs {
-  kind: "idpUserUpdated";
+  kind: "idp.user.updated";
   namespaceName: string;
   userId: string;
 }
 
 export interface IdpUserDeletedArgs extends EventArgs {
-  kind: "idpUserDeleted";
+  kind: "idp.user.deleted";
   namespaceName: string;
   userId: string;
 }
@@ -221,19 +221,19 @@ export function idpUserDeletedTrigger(): IdpUserTrigger<IdpUserDeletedArgs> {
 
 // Auth Access Token Event Triggers
 export interface AuthAccessTokenIssuedArgs extends EventArgs {
-  kind: "authAccessTokenIssued";
+  kind: "auth.access_token.issued";
   namespaceName: string;
   userId: string;
 }
 
 export interface AuthAccessTokenRefreshedArgs extends EventArgs {
-  kind: "authAccessTokenRefreshed";
+  kind: "auth.access_token.refreshed";
   namespaceName: string;
   userId: string;
 }
 
 export interface AuthAccessTokenRevokedArgs extends EventArgs {
-  kind: "authAccessTokenRevoked";
+  kind: "auth.access_token.revoked";
   namespaceName: string;
   userId: string;
 }

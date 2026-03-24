@@ -11,10 +11,10 @@ export default createExecutor({
   operation: {
     kind: "function",
     body: async (args) => {
-      if (args.kind === "recordCreated") {
+      if (args.kind === "tailordb.type_record.created") {
         console.log("User created:", args.newRecord.name);
       }
-      if (args.kind === "recordUpdated") {
+      if (args.kind === "tailordb.type_record.updated") {
         console.log("User updated:", args.oldRecord.name, "->", args.newRecord.name);
       }
     },
