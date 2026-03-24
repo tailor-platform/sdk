@@ -30,24 +30,21 @@ describe("buildExecutorArgsExpr", () => {
       });
     }
 
-    test("single-event triggers inject static kind as event type string", () => {
-      const expected: Record<string, string> = {
-        recordCreated: "tailordb.type_record.created",
-        recordUpdated: "tailordb.type_record.updated",
-        recordDeleted: "tailordb.type_record.deleted",
-        idpUserCreated: "idp.user.created",
-        idpUserUpdated: "idp.user.updated",
-        idpUserDeleted: "idp.user.deleted",
-        authAccessTokenIssued: "auth.access_token.issued",
-        authAccessTokenRefreshed: "auth.access_token.refreshed",
-        authAccessTokenRevoked: "auth.access_token.revoked",
-      };
-      for (const [kind, eventType] of Object.entries(expected)) {
-        const expr = buildExecutorArgsExpr(
-          kind as Parameters<typeof buildExecutorArgsExpr>[0],
-          env,
-        );
-        expect(expr).toContain(`kind: "${eventType}"`);
+    test("event triggers inject kind from args.eventType", () => {
+      const eventKinds = [
+        "recordCreated",
+        "recordUpdated",
+        "recordDeleted",
+        "idpUserCreated",
+        "idpUserUpdated",
+        "idpUserDeleted",
+        "authAccessTokenIssued",
+        "authAccessTokenRefreshed",
+        "authAccessTokenRevoked",
+      ] as const;
+      for (const kind of eventKinds) {
+        const expr = buildExecutorArgsExpr(kind, env);
+        expect(expr).toContain("kind: args.eventType");
       }
     });
 
@@ -67,7 +64,7 @@ describe("buildExecutorArgsExpr", () => {
         expect(expr).toContain("appNamespace: args.namespaceName");
         expect(expr).toContain("actor: args.actor");
         expect(expr).toContain(`env: ${JSON.stringify(env)}`);
-        expect(expr).toContain("args.eventType");
+        expect(expr).toContain("kind: args.eventType");
       });
     }
   });

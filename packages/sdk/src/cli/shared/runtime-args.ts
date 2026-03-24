@@ -16,22 +16,6 @@ import type { Trigger } from "@/types/executor.generated";
 // ---------------------------------------------------------------------------
 
 /**
- * Mapping from trigger kind to server event type string.
- * Used to inject the `kind` discriminant into args at runtime.
- */
-const EVENT_TYPE: Record<string, string> = {
-  recordCreated: "tailordb.type_record.created",
-  recordUpdated: "tailordb.type_record.updated",
-  recordDeleted: "tailordb.type_record.deleted",
-  idpUserCreated: "idp.user.created",
-  idpUserUpdated: "idp.user.updated",
-  idpUserDeleted: "idp.user.deleted",
-  authAccessTokenIssued: "auth.access_token.issued",
-  authAccessTokenRefreshed: "auth.access_token.refreshed",
-  authAccessTokenRevoked: "auth.access_token.revoked",
-};
-
-/**
  * Actor field transformation expression.
  *
  * Transforms the server's actor object to match the SDK's TailorActor type:
@@ -63,38 +47,18 @@ export function buildExecutorArgsExpr(
   const envExpr = `env: ${JSON.stringify(env)}`;
 
   switch (triggerKind) {
-    // Event triggers with actor + standard field mapping
     case "schedule":
       return `({ ...args, appNamespace: args.namespaceName, ${ACTOR_TRANSFORM_EXPR}, ${envExpr} })`;
 
-    // Single-event triggers: inject static kind as event type string
-    case "recordCreated":
-    case "recordUpdated":
-    case "recordDeleted":
-    case "idpUserCreated":
-    case "idpUserUpdated":
-    case "idpUserDeleted":
-    case "authAccessTokenIssued":
-    case "authAccessTokenRefreshed":
-    case "authAccessTokenRevoked":
-      return `({ ...args, kind: "${EVENT_TYPE[triggerKind]}", appNamespace: args.namespaceName, ${ACTOR_TRANSFORM_EXPR}, ${envExpr} })`;
-
-    // Multi-event triggers: inject kind from server-side eventType
-    case "record":
-    case "idpUser":
-    case "authAccessToken":
-      return `({ ...args, kind: args.eventType, appNamespace: args.namespaceName, ${ACTOR_TRANSFORM_EXPR}, ${envExpr} })`;
-
-    // resolverExecuted: actor + success/result/error mapping
     case "resolverExecuted":
       return `({ ...args, appNamespace: args.namespaceName, ${ACTOR_TRANSFORM_EXPR}, success: !!args.succeeded, result: args.succeeded?.result.resolver, error: args.failed?.error, ${envExpr} })`;
 
-    // incomingWebhook: rawBody mapping, no actor
     case "incomingWebhook":
       return `({ ...args, appNamespace: args.namespaceName, rawBody: args.raw_body, ${envExpr} })`;
 
     default:
-      throw new Error(`Unknown trigger kind for args expression: ${triggerKind satisfies never}`);
+      // All event triggers: inject kind from server-side eventType
+      return `({ ...args, kind: args.eventType, appNamespace: args.namespaceName, ${ACTOR_TRANSFORM_EXPR}, ${envExpr} })`;
   }
 }
 
