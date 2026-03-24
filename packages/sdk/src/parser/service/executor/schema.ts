@@ -2,10 +2,6 @@ import { z } from "zod";
 import { AuthInvokerSchema } from "../auth";
 import { functionSchema } from "../common";
 
-function dedup<T>(arr: T[]): T[] {
-  return [...new Set(arr)];
-}
-
 export const RecordTriggerSchema = z.object({
   kind: z.enum(["recordCreated", "recordUpdated", "recordDeleted"]).describe("Record event type"),
   typeName: z.string().describe("TailorDB type name to watch for events"),
@@ -49,7 +45,7 @@ export const MultiRecordTriggerSchema = z.object({
   events: z
     .array(z.enum(["recordCreated", "recordUpdated", "recordDeleted"]))
     .min(1)
-    .transform(dedup)
+    .transform((arr) => [...new Set(arr)])
     .describe("Record event types to trigger on"),
   typeName: z.string().describe("TailorDB type name to watch for events"),
   condition: functionSchema.optional().describe("Condition function to filter events"),
@@ -60,7 +56,7 @@ export const MultiIdpUserTriggerSchema = z.object({
   events: z
     .array(z.enum(["idpUserCreated", "idpUserUpdated", "idpUserDeleted"]))
     .min(1)
-    .transform(dedup)
+    .transform((arr) => [...new Set(arr)])
     .describe("IdP user event types to trigger on"),
 });
 
@@ -69,7 +65,7 @@ export const MultiAuthAccessTokenTriggerSchema = z.object({
   events: z
     .array(z.enum(["authAccessTokenIssued", "authAccessTokenRefreshed", "authAccessTokenRevoked"]))
     .min(1)
-    .transform(dedup)
+    .transform((arr) => [...new Set(arr)])
     .describe("Auth access token event types to trigger on"),
 });
 
