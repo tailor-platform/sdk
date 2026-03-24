@@ -542,7 +542,7 @@ export default createResolver({
   name: "getUser",
   operation: "query",
   input: {
-    ...user.pickFields(["status"]), // "UserStatus" is used as the protobuf type name
+    ...user.pickFields(["status"], {}), // "UserStatus" is used as the protobuf type name
   },
   output: t.object({ id: t.uuid() }),
   body: async (context) => {
