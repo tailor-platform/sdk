@@ -16,7 +16,7 @@ function listFilesRecursive(dir: string, base: string = dir): string[] {
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (entry.name === "node_modules" || entry.name === ".git") {
+      if (entry.name === "node_modules" || entry.name === ".git" || entry.name === ".sdk") {
         continue;
       }
       files.push(...listFilesRecursive(fullPath, base));
@@ -223,10 +223,8 @@ function truncateErrorOutput(output: string, maxLength = 5000): string {
   return priorityBlock ? `${priorityBlock}\n${otherBlock}` : otherBlock;
 }
 
-const claudeSettingsPath = path.join(import.meta.dirname, "claude-settings.json");
-
 const solveAdapters: Record<SolveAgent, SolveAdapter> = {
-  claude: createClaudeAdapter(claudeSettingsPath),
+  claude: createClaudeAdapter(),
   codex: createCodexAdapter(),
 };
 

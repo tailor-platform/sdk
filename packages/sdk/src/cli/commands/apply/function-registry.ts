@@ -1,9 +1,6 @@
 import * as crypto from "node:crypto";
-import * as fs from "node:fs";
 import { Code, ConnectError } from "@connectrpc/connect";
-import * as path from "pathe";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
-import { getDistDir } from "@/cli/shared/dist-dir";
 import { logger } from "@/cli/shared/logger";
 import { createChangeSet } from "./change-set";
 import { collectDiffLines } from "./compare";
@@ -98,34 +95,44 @@ export function authHookFunctionName(authName: string, hookPoint: string): strin
 }
 
 /**
- * Collect all function entries from bundled scripts for all services.
+ * In-memory bundled scripts organized by kind.
+ */
+export type BundledScripts = {
+  resolvers: Map<string, string>;
+  executors: Map<string, string>;
+  workflowJobs: Map<string, string>;
+  authHooks: Map<string, string>;
+};
+
+/**
+ * Collect all function entries from in-memory bundled scripts for all services.
  * @param application - Application definition
  * @param workflowJobs - Collected workflow jobs from config
+ * @param bundledScripts - In-memory bundled code organized by kind
  * @returns Array of function entries to register
  */
 export function collectFunctionEntries(
   application: Readonly<Application>,
   workflowJobs: CollectedJob[],
+  bundledScripts: BundledScripts,
 ): FunctionEntry[] {
   const entries: FunctionEntry[] = [];
-  const distDir = getDistDir();
 
   // Resolvers
   for (const app of application.applications) {
     for (const pipeline of app.resolverServices) {
       for (const resolver of Object.values(pipeline.resolvers)) {
-        const scriptPath = path.join(distDir, "resolvers", `${resolver.name}.js`);
-        try {
-          const content = fs.readFileSync(scriptPath, "utf-8");
-          entries.push({
-            name: resolverFunctionName(pipeline.namespace, resolver.name),
-            scriptContent: content,
-            contentHash: computeContentHash(content),
-            description: `Resolver: ${pipeline.namespace}/${resolver.name}`,
-          });
-        } catch {
-          logger.warn(`Function file not found: ${scriptPath}`);
+        const content = bundledScripts.resolvers.get(resolver.name);
+        if (!content) {
+          logger.warn(`Bundled code not found for resolver: ${resolver.name}`);
+          continue;
         }
+        entries.push({
+          name: resolverFunctionName(pipeline.namespace, resolver.name),
+          scriptContent: content,
+          contentHash: computeContentHash(content),
+          description: `Resolver: ${pipeline.namespace}/${resolver.name}`,
+        });
       }
     }
   }
@@ -135,36 +142,34 @@ export function collectFunctionEntries(
     const executors = application.executorService.executors;
     for (const executor of Object.values(executors)) {
       if (executor.operation.kind === "function" || executor.operation.kind === "jobFunction") {
-        const scriptPath = path.join(distDir, "executors", `${executor.name}.js`);
-        try {
-          const content = fs.readFileSync(scriptPath, "utf-8");
-          entries.push({
-            name: executorFunctionName(executor.name),
-            scriptContent: content,
-            contentHash: computeContentHash(content),
-            description: `Executor: ${executor.name}`,
-          });
-        } catch {
-          logger.warn(`Function file not found: ${scriptPath}`);
+        const content = bundledScripts.executors.get(executor.name);
+        if (!content) {
+          logger.warn(`Bundled code not found for executor: ${executor.name}`);
+          continue;
         }
+        entries.push({
+          name: executorFunctionName(executor.name),
+          scriptContent: content,
+          contentHash: computeContentHash(content),
+          description: `Executor: ${executor.name}`,
+        });
       }
     }
   }
 
   // Workflow jobs
   for (const job of workflowJobs) {
-    const scriptPath = path.join(distDir, "workflow-jobs", `${job.name}.js`);
-    try {
-      const content = fs.readFileSync(scriptPath, "utf-8");
-      entries.push({
-        name: workflowJobFunctionName(job.name),
-        scriptContent: content,
-        contentHash: computeContentHash(content),
-        description: `Workflow job: ${job.name}`,
-      });
-    } catch {
-      logger.warn(`Function file not found: ${scriptPath}`);
+    const content = bundledScripts.workflowJobs.get(job.name);
+    if (!content) {
+      logger.warn(`Bundled code not found for workflow job: ${job.name}`);
+      continue;
     }
+    entries.push({
+      name: workflowJobFunctionName(job.name),
+      scriptContent: content,
+      contentHash: computeContentHash(content),
+      description: `Workflow job: ${job.name}`,
+    });
   }
 
   // Auth hooks
@@ -172,18 +177,17 @@ export function collectFunctionEntries(
     if (app.authService?.config.hooks?.beforeLogin) {
       const authName = app.authService.config.name;
       const funcName = authHookFunctionName(authName, "before-login");
-      const scriptPath = path.join(distDir, "auth-hooks", `${funcName}.js`);
-      try {
-        const content = fs.readFileSync(scriptPath, "utf-8");
-        entries.push({
-          name: funcName,
-          scriptContent: content,
-          contentHash: computeContentHash(content),
-          description: `Auth hook: ${authName}/before-login`,
-        });
-      } catch {
-        logger.warn(`Function file not found: ${scriptPath}`);
+      const content = bundledScripts.authHooks.get(funcName);
+      if (!content) {
+        logger.warn(`Bundled code not found for auth hook: ${funcName}`);
+        continue;
       }
+      entries.push({
+        name: funcName,
+        scriptContent: content,
+        contentHash: computeContentHash(content),
+        description: `Auth hook: ${authName}/before-login`,
+      });
     }
   }
 

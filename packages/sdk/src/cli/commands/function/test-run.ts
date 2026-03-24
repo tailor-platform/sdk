@@ -63,7 +63,7 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
       desc: "Run a specific workflow job by name",
     },
     {
-      cmd: '.tailor-sdk/resolvers/add.js --arg \'{"input":{"a":1,"b":2}}\'',
+      cmd: 'build/resolvers/add.js --arg \'{"input":{"a":1,"b":2}}\'',
       desc: "Run a pre-bundled .js file directly",
     },
   ],
@@ -108,7 +108,7 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
     let functionName: string | undefined;
 
     if (isPreBundled) {
-      // Pre-bundled .js file (e.g., from .tailor-sdk/resolvers/add.js)
+      // Pre-bundled .js file
       scriptName = path.basename(filePath);
       bundledCode = fs.readFileSync(filePath, "utf-8");
       logger.info(`Using pre-bundled script ${styles.bold(scriptName)}`);

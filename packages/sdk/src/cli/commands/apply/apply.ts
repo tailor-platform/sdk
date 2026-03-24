@@ -111,14 +111,14 @@ function printPlanSummary(results: {
 /**
  * Apply the configured application to the Tailor platform.
  * @param options - Options for apply execution
- * @returns Promise that resolves when apply completes
+ * @returns Promise that resolves to `{ bundledScripts }` when `buildOnly` is true, otherwise void
  */
 export async function apply(options?: ApplyOptions) {
   return withSpan("apply", async (rootSpan) => {
     rootSpan.setAttribute("apply.dry_run", options?.dryRun ?? false);
 
     // Phase 0: Build
-    const { config, application, workflowBuildResult, buildOnly } = await withSpan(
+    const { config, application, workflowBuildResult, bundledScripts, buildOnly } = await withSpan(
       "build",
       async () => {
         const { config, plugins } = await withSpan("build.loadConfig", () =>
@@ -161,22 +161,39 @@ export async function apply(options?: ApplyOptions) {
 
         let application: Application;
         let workflowBuildResult: Awaited<ReturnType<typeof loadApplication>>["workflowBuildResult"];
+        let bundledScripts: Awaited<ReturnType<typeof loadApplication>>["bundledScripts"];
         try {
           const result = await withSpan("build.loadApplication", () =>
             loadApplication({ config, pluginManager, bundleCache: cacheManager.bundleCache }),
           );
           application = result.application;
           workflowBuildResult = result.workflowBuildResult;
+          bundledScripts = result.bundledScripts;
         } finally {
           // Persist even on partial failure: successfully built bundles
           // are cached so the next run only rebuilds what failed.
           cacheManager.finalize();
         }
 
-        return { config, plugins, application, workflowBuildResult, dryRun, buildOnly };
+        return {
+          config,
+          plugins,
+          application,
+          workflowBuildResult,
+          bundledScripts,
+          dryRun,
+          buildOnly,
+        };
       },
     );
-    if (buildOnly) return;
+    if (buildOnly) {
+      return { bundledScripts };
+    }
+
+    // Note: the normal apply path intentionally skips writing bundle files to
+    // .tailor-sdk/. Bundles are kept in memory and uploaded directly to the
+    // function registry. To test a function locally, use `function test-run`
+    // with a .ts source file instead of a pre-bundled .js file.
 
     // Initialize client
     const accessToken = await loadAccessToken({
@@ -192,13 +209,17 @@ export async function apply(options?: ApplyOptions) {
     rootSpan.setAttribute("app.name", application.name);
     rootSpan.setAttribute("workspace.id", workspaceId);
 
-    // Collect function entries from bundled scripts (after build, before plan)
+    // Collect function entries from in-memory bundled scripts (after build, before plan)
     const workflowService = application.workflowService;
     const bundledWorkflowJobs = filterBundledWorkflowJobs(
       workflowService?.jobs ?? [],
       workflowBuildResult?.usedJobNames ?? [],
     );
-    const functionEntries = collectFunctionEntries(application, bundledWorkflowJobs);
+    const functionEntries = collectFunctionEntries(
+      application,
+      bundledWorkflowJobs,
+      bundledScripts,
+    );
 
     const dryRun = options?.dryRun ?? false;
     const yes = options?.yes ?? false;

@@ -32,7 +32,7 @@ interface ResolverInfo {
  * @param triggerContext - Trigger context for workflow/job transformations
  * @param cache - Optional bundle cache for skipping unchanged builds
  * @param inlineSourcemap - Whether to enable inline sourcemaps
- * @returns Promise that resolves when bundling completes
+ * @returns Map of resolver name to bundled code
  */
 export async function bundleResolvers(
   namespace: string,
@@ -40,11 +40,12 @@ export async function bundleResolvers(
   triggerContext?: TriggerContext,
   cache?: BundleCache,
   inlineSourcemap?: boolean,
-): Promise<void> {
+): Promise<Map<string, string>> {
+  const bundledCode = new Map<string, string>();
   const files = loadFilesWithIgnores(config);
   if (files.length === 0) {
     logger.warn(`No resolver files found for patterns: ${config.files?.join(", ") ?? "(none)"}`);
-    return;
+    return bundledCode;
   }
 
   logger.newline();
@@ -83,13 +84,19 @@ export async function bundleResolvers(
   }
 
   // Process each resolver
-  await Promise.all(
+  const results = await Promise.all(
     resolvers.map((resolver) =>
       bundleSingleResolver(resolver, outputDir, tsconfig, triggerContext, cache, inlineSourcemap),
     ),
   );
 
+  for (const [name, code] of results) {
+    bundledCode.set(name, code);
+  }
+
   logger.log(`${styles.success("Bundled")} ${styles.info(`"${namespace}"`)}`);
+
+  return bundledCode;
 }
 
 async function bundleSingleResolver(
@@ -99,8 +106,7 @@ async function bundleSingleResolver(
   triggerContext?: TriggerContext,
   cache?: BundleCache,
   inlineSourcemap?: boolean,
-): Promise<void> {
-  const outputPath = path.join(outputDir, `${resolver.name}.js`);
+): Promise<[string, string]> {
   const serializedTriggerContext = serializeTriggerContext(triggerContext);
 
   const contextHash = computeBundlerContextHash({
@@ -110,12 +116,11 @@ async function bundleSingleResolver(
     inlineSourcemap,
   });
 
-  await withCache({
+  const code = await withCache({
     cache,
     kind: "resolver",
     name: resolver.name,
     sourceFile: resolver.sourceFile,
-    outputPath,
     contextHash,
     async build(cachePlugins) {
       // Step 1: Create entry file that imports from the original source
@@ -152,37 +157,39 @@ async function bundleSingleResolver(
       `;
       fs.writeFileSync(entryPath, entryContent);
 
-      // Step 2: Bundle with tree-shaking
+      // Step 2: Bundle with tree-shaking (write: false to avoid unnecessary disk I/O)
       const triggerPlugin = createTriggerTransformPlugin(triggerContext);
       const plugins: rolldown.Plugin[] = triggerPlugin ? [triggerPlugin] : [];
       plugins.push(...cachePlugins);
 
-      await rolldown.build(
-        rolldown.defineConfig({
-          input: entryPath,
-          output: {
-            file: outputPath,
-            format: "esm",
-            sourcemap: inlineSourcemap ? "inline" : true,
-            minify: inlineSourcemap
-              ? {
-                  mangle: {
-                    keepNames: true,
-                  },
-                }
-              : true,
-            codeSplitting: false,
-          },
-          tsconfig,
-          plugins,
-          treeshake: {
-            moduleSideEffects: false,
-            annotations: true,
-            unknownGlobalSideEffects: false,
-          },
-          logLevel: "silent",
-        }) as rolldown.BuildOptions,
-      );
+      const result = await rolldown.build({
+        input: entryPath,
+        write: false,
+        output: {
+          format: "esm",
+          sourcemap: inlineSourcemap ? "inline" : true,
+          minify: inlineSourcemap
+            ? {
+                mangle: {
+                  keepNames: true,
+                },
+              }
+            : true,
+          codeSplitting: false,
+        },
+        tsconfig,
+        plugins,
+        treeshake: {
+          moduleSideEffects: false,
+          annotations: true,
+          unknownGlobalSideEffects: false,
+        },
+        logLevel: "silent",
+      } as rolldown.BuildOptions);
+
+      return result.output[0].code;
     },
   });
+
+  return [resolver.name, code];
 }

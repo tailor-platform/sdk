@@ -1,13 +1,17 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import {
   applyFunctionRegistry,
+  authHookFunctionName,
+  collectFunctionEntries,
   executorFunctionName,
   planFunctionRegistry,
   resolverFunctionName,
   workflowJobFunctionName,
 } from "./function-registry";
 import { sdkNameLabelKey } from "./label";
-import type { FunctionEntry } from "./function-registry";
+import type { BundledScripts, FunctionEntry } from "./function-registry";
+import type { Application } from "@/cli/services/application";
+import type { CollectedJob } from "@/cli/services/workflow/service";
 import type { OperatorClient } from "@/cli/shared/client";
 
 // Mock label.ts
@@ -384,5 +388,154 @@ describe("applyFunctionRegistry phase separation", () => {
     expect(client.createFunctionRegistry).not.toHaveBeenCalled();
     expect(client.updateFunctionRegistry).not.toHaveBeenCalled();
     expect(client.setMetadata).not.toHaveBeenCalled();
+  });
+});
+
+describe("collectFunctionEntries", () => {
+  function createBundledScripts(overrides?: Partial<BundledScripts>): BundledScripts {
+    return {
+      resolvers: overrides?.resolvers ?? new Map(),
+      executors: overrides?.executors ?? new Map(),
+      workflowJobs: overrides?.workflowJobs ?? new Map(),
+      authHooks: overrides?.authHooks ?? new Map(),
+    };
+  }
+
+  function createMockApplication(overrides?: {
+    resolverServices?: Array<{ namespace: string; resolvers: Record<string, { name: string }> }>;
+    executorService?: {
+      executors: Record<string, { name: string; operation: { kind: string } }>;
+    };
+    authService?: { config: { name: string; hooks?: { beforeLogin?: unknown } } };
+  }): Application {
+    const app = {
+      name: "test-app",
+      config: {} as Application["config"],
+      subgraphs: [],
+      tailorDBServices: [],
+      externalTailorDBNamespaces: [],
+      resolverServices: overrides?.resolverServices ?? [],
+      idpServices: [],
+      authService: overrides?.authService,
+      executorService: overrides?.executorService,
+      workflowService: undefined,
+      staticWebsiteServices: [],
+      secrets: [],
+      env: {},
+      applications: [] as Application[],
+    } as unknown as Application;
+    // Self-reference for applications array
+    (app as unknown as { applications: Application[] }).applications = [app];
+    return app;
+  }
+
+  test("collects resolver entries with correct names and hashes", () => {
+    const scripts = createBundledScripts({
+      resolvers: new Map([
+        ["getUser", "// getUser code"],
+        ["listUsers", "// listUsers code"],
+      ]),
+    });
+
+    const app = createMockApplication({
+      resolverServices: [
+        {
+          namespace: "my-ns",
+          resolvers: {
+            getUser: { name: "getUser" },
+            listUsers: { name: "listUsers" },
+          },
+        },
+      ],
+    });
+
+    const entries = collectFunctionEntries(app, [], scripts);
+
+    expect(entries).toHaveLength(2);
+    expect(entries[0].name).toBe(resolverFunctionName("my-ns", "getUser"));
+    expect(entries[0].scriptContent).toBe("// getUser code");
+    expect(entries[0].contentHash).toBeTruthy();
+    expect(entries[0].description).toBe("Resolver: my-ns/getUser");
+    expect(entries[1].name).toBe(resolverFunctionName("my-ns", "listUsers"));
+  });
+
+  test("collects executor entries only for function/jobFunction kinds", () => {
+    const scripts = createBundledScripts({
+      executors: new Map([
+        ["on-created", "// executor code"],
+        ["gql-exec", "// gql code"],
+      ]),
+    });
+
+    const app = createMockApplication({
+      executorService: {
+        executors: {
+          "on-created": { name: "on-created", operation: { kind: "function" } },
+          "gql-exec": { name: "gql-exec", operation: { kind: "graphql" } },
+        },
+      },
+    });
+
+    const entries = collectFunctionEntries(app, [], scripts);
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0].name).toBe(executorFunctionName("on-created"));
+    expect(entries[0].scriptContent).toBe("// executor code");
+  });
+
+  test("collects workflow job entries", () => {
+    const scripts = createBundledScripts({
+      workflowJobs: new Map([["process-order", "// job code"]]),
+    });
+
+    const jobs: CollectedJob[] = [
+      { name: "process-order", exportName: "processOrder", sourceFile: "workflows/order.ts" },
+    ];
+
+    const entries = collectFunctionEntries(createMockApplication(), jobs, scripts);
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0].name).toBe(workflowJobFunctionName("process-order"));
+    expect(entries[0].scriptContent).toBe("// job code");
+  });
+
+  test("collects auth hook entries", () => {
+    const authName = "my-auth";
+    const funcName = authHookFunctionName(authName, "before-login");
+    const scripts = createBundledScripts({
+      authHooks: new Map([[funcName, "// auth hook code"]]),
+    });
+
+    const app = createMockApplication({
+      authService: {
+        config: { name: authName, hooks: { beforeLogin: {} } },
+      },
+    });
+
+    const entries = collectFunctionEntries(app, [], scripts);
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0].name).toBe(funcName);
+    expect(entries[0].description).toBe(`Auth hook: ${authName}/before-login`);
+  });
+
+  test("skips entries with missing bundled code and warns", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const scripts = createBundledScripts(); // empty maps
+
+    const app = createMockApplication({
+      resolverServices: [{ namespace: "ns", resolvers: { missing: { name: "missing" } } }],
+    });
+
+    const entries = collectFunctionEntries(app, [], scripts);
+
+    expect(entries).toHaveLength(0);
+    warnSpy.mockRestore();
+  });
+
+  test("returns empty array when application has no services", () => {
+    const scripts = createBundledScripts();
+    const entries = collectFunctionEntries(createMockApplication(), [], scripts);
+    expect(entries).toHaveLength(0);
   });
 });

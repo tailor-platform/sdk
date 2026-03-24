@@ -36,10 +36,9 @@ describe("createCacheManager", () => {
       const result = manager.bundleCache.tryRestore({
         kind: "resolver",
         name: "test",
-        outputPath: "/tmp/out.js",
       });
 
-      expect(result).toBe(false);
+      expect(result).toBeUndefined();
     });
 
     test("bundleCache.save is a no-op", () => {
@@ -54,7 +53,7 @@ describe("createCacheManager", () => {
         kind: "resolver",
         name: "test",
         sourceFile: "/tmp/src.ts",
-        outputPath: "/tmp/out.js",
+        content: "bundled output",
         dependencyPaths: [],
       });
     });
@@ -152,7 +151,7 @@ describe("createCacheManager", () => {
         kind: "resolver",
         name: "myResolver",
         sourceFile,
-        outputPath: outputFile,
+        content: "var x = 1;",
         dependencyPaths: [sourceFile],
       });
 

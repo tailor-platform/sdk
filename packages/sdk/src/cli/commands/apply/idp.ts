@@ -482,7 +482,7 @@ async function planClients(
         });
       }
     }
-    existingNameMap.forEach((name) => {
+    existingNameMap.forEach((_clientSecret, name) => {
       changeSet.deletes.push({
         name,
         request: {
