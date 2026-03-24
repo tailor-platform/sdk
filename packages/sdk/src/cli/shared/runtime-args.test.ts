@@ -30,7 +30,7 @@ describe("buildExecutorArgsExpr", () => {
       });
     }
 
-    test("event triggers inject kind from args.eventType", () => {
+    test("event triggers inject kind and rawKind from args.eventType", () => {
       const eventKinds = [
         "recordCreated",
         "recordUpdated",
@@ -44,7 +44,8 @@ describe("buildExecutorArgsExpr", () => {
       ] as const;
       for (const kind of eventKinds) {
         const expr = buildExecutorArgsExpr(kind, env);
-        expect(expr).toContain("kind: args.eventType");
+        expect(expr).toContain('kind: args.eventType?.split(".").pop()');
+        expect(expr).toContain("rawKind: args.eventType");
       }
     });
 
@@ -58,13 +59,14 @@ describe("buildExecutorArgsExpr", () => {
     const multiEventKinds = ["record", "idpUser", "authAccessToken"] as const;
 
     for (const kind of multiEventKinds) {
-      test(`${kind} includes appNamespace, actor transform, env, and dynamic kind`, () => {
+      test(`${kind} includes appNamespace, actor transform, env, kind, and rawKind`, () => {
         const expr = buildExecutorArgsExpr(kind, env);
         expect(expr).toContain("...args");
         expect(expr).toContain("appNamespace: args.namespaceName");
         expect(expr).toContain("actor: args.actor");
         expect(expr).toContain(`env: ${JSON.stringify(env)}`);
-        expect(expr).toContain("kind: args.eventType");
+        expect(expr).toContain('kind: args.eventType?.split(".").pop()');
+        expect(expr).toContain("rawKind: args.eventType");
       });
     }
   });

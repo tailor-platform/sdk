@@ -25,18 +25,21 @@ interface RecordArgs extends EventArgs {
 }
 
 export interface RecordCreatedArgs<T extends TailorDBType> extends RecordArgs {
-  kind: "tailordb.type_record.created";
+  kind: "created";
+  rawKind: "tailordb.type_record.created";
   newRecord: output<T>;
 }
 
 export interface RecordUpdatedArgs<T extends TailorDBType> extends RecordArgs {
-  kind: "tailordb.type_record.updated";
+  kind: "updated";
+  rawKind: "tailordb.type_record.updated";
   newRecord: output<T>;
   oldRecord: output<T>;
 }
 
 export interface RecordDeletedArgs<T extends TailorDBType> extends RecordArgs {
-  kind: "tailordb.type_record.deleted";
+  kind: "deleted";
+  rawKind: "tailordb.type_record.deleted";
   oldRecord: output<T>;
 }
 
@@ -163,19 +166,22 @@ export function resolverExecutedTrigger<R extends ResolverConfig>(
 
 // IdP User Event Triggers
 export interface IdpUserCreatedArgs extends EventArgs {
-  kind: "idp.user.created";
+  kind: "created";
+  rawKind: "idp.user.created";
   namespaceName: string;
   userId: string;
 }
 
 export interface IdpUserUpdatedArgs extends EventArgs {
-  kind: "idp.user.updated";
+  kind: "updated";
+  rawKind: "idp.user.updated";
   namespaceName: string;
   userId: string;
 }
 
 export interface IdpUserDeletedArgs extends EventArgs {
-  kind: "idp.user.deleted";
+  kind: "deleted";
+  rawKind: "idp.user.deleted";
   namespaceName: string;
   userId: string;
 }
@@ -221,19 +227,22 @@ export function idpUserDeletedTrigger(): IdpUserTrigger<IdpUserDeletedArgs> {
 
 // Auth Access Token Event Triggers
 export interface AuthAccessTokenIssuedArgs extends EventArgs {
-  kind: "auth.access_token.issued";
+  kind: "issued";
+  rawKind: "auth.access_token.issued";
   namespaceName: string;
   userId: string;
 }
 
 export interface AuthAccessTokenRefreshedArgs extends EventArgs {
-  kind: "auth.access_token.refreshed";
+  kind: "refreshed";
+  rawKind: "auth.access_token.refreshed";
   namespaceName: string;
   userId: string;
 }
 
 export interface AuthAccessTokenRevokedArgs extends EventArgs {
-  kind: "auth.access_token.revoked";
+  kind: "revoked";
+  rawKind: "auth.access_token.revoked";
   namespaceName: string;
   userId: string;
 }
