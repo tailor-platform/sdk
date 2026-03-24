@@ -639,8 +639,8 @@ importers:
         specifier: 0.4.12
         version: 0.4.12(zod@4.3.6)
       rolldown:
-        specifier: 1.0.0-rc.9
-        version: 1.0.0-rc.9
+        specifier: 1.0.0-rc.10
+        version: 1.0.0-rc.10
       serve:
         specifier: 14.2.6
         version: 14.2.6
