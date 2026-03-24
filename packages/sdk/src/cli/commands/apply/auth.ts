@@ -1273,14 +1273,36 @@ function normalizeComparableOAuth2Client(
         requireDpop?: boolean;
       },
 ) {
+  const accessTokenLifetime = oauth2LifetimeToSeconds(client.accessTokenLifetime);
+  const refreshTokenLifetime = oauth2LifetimeToSeconds(client.refreshTokenLifetime);
+
   return normalizeProtoConfig({
     ...client,
     redirectUris: normalizeStringArray(client.redirectUris),
     grantTypes: [...(client.grantTypes ?? [])].sort((left, right) => left - right),
-    accessTokenLifetime: client.accessTokenLifetime ?? 86400,
-    refreshTokenLifetime: client.refreshTokenLifetime ?? 604800,
+    accessTokenLifetime: accessTokenLifetime ?? 86400,
+    refreshTokenLifetime: refreshTokenLifetime ?? 604800,
     requireDpop: client.requireDpop ?? false,
   });
+}
+
+function oauth2LifetimeToSeconds(
+  lifetime:
+    | number
+    | {
+        seconds?: bigint;
+      }
+    | undefined,
+) {
+  if (typeof lifetime === "number") {
+    return lifetime;
+  }
+
+  if (lifetime?.seconds != null) {
+    return Number(lifetime.seconds);
+  }
+
+  return undefined;
 }
 
 function areOAuth2ClientsEqual(
@@ -1294,7 +1316,18 @@ function areOAuth2ClientsEqual(
     refreshTokenLifetime?: number;
     requireDpop?: boolean;
   },
-  desired: MessageInitShape<typeof AuthOAuth2ClientSchema>,
+  desired:
+    | MessageInitShape<typeof AuthOAuth2ClientSchema>
+    | {
+        name?: string;
+        description?: string;
+        grantTypes?: readonly AuthOAuth2Client_GrantType[];
+        redirectUris?: readonly string[];
+        clientType?: AuthOAuth2Client_ClientType;
+        accessTokenLifetime?: number;
+        refreshTokenLifetime?: number;
+        requireDpop?: boolean;
+      },
 ) {
   return areNormalizedEqual(
     normalizeComparableOAuth2Client(existing),
@@ -1395,6 +1428,8 @@ async function planOAuth2Clients(
           const desiredComparable = {
             ...newOAuth2Client,
             redirectUris: resolvedRedirectUris,
+            accessTokenLifetime: oauth2LifetimeToSeconds(newOAuth2Client.accessTokenLifetime),
+            refreshTokenLifetime: oauth2LifetimeToSeconds(newOAuth2Client.refreshTokenLifetime),
           };
           const existingComparable = {
             name: existingClient.name,
@@ -1402,14 +1437,8 @@ async function planOAuth2Clients(
             grantTypes: existingClient.grantTypes,
             redirectUris: existingClient.redirectUris,
             clientType: existingClient.clientType,
-            accessTokenLifetime:
-              existingClient.accessTokenLifetime?.seconds != null
-                ? Number(existingClient.accessTokenLifetime.seconds)
-                : undefined,
-            refreshTokenLifetime:
-              existingClient.refreshTokenLifetime?.seconds != null
-                ? Number(existingClient.refreshTokenLifetime.seconds)
-                : undefined,
+            accessTokenLifetime: oauth2LifetimeToSeconds(existingClient.accessTokenLifetime),
+            refreshTokenLifetime: oauth2LifetimeToSeconds(existingClient.refreshTokenLifetime),
             requireDpop: existingClient.requireDpop,
           };
           if (areOAuth2ClientsEqual(existingComparable, desiredComparable)) {

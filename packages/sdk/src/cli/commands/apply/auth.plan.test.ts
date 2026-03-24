@@ -74,6 +74,30 @@ function createMockApplication(): Application {
   } as unknown as Application;
 }
 
+function createMockApplicationWithCustomOAuth2Lifetimes(): Application {
+  return {
+    name: appName,
+    authService: {
+      resolveNamespaces: vi.fn().mockResolvedValue(undefined),
+      parsedConfig: {
+        name: "auth-a",
+        oauth2Clients: {
+          sample: {
+            description: "Sample client",
+            grantTypes: ["authorization_code", "refresh_token"],
+            redirectURIs: ["https://b.example.com/callback", "https://a.example.com/callback"],
+            clientType: "confidential",
+            accessTokenLifetimeSeconds: 3600,
+            refreshTokenLifetimeSeconds: 7200,
+            requireDpop: false,
+          },
+        },
+      },
+      userProfile: undefined,
+    },
+  } as unknown as Application;
+}
+
 function createMockApplicationWithBuiltInIdP(): Application {
   return {
     name: appName,
@@ -186,6 +210,16 @@ function createBuiltInIdPContext(client: OperatorClient): PlanContext {
   };
 }
 
+function createCustomOAuth2LifetimeContext(client: OperatorClient): PlanContext {
+  return {
+    client,
+    workspaceId,
+    application: createMockApplicationWithCustomOAuth2Lifetimes(),
+    forRemoval: false,
+    config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
+  };
+}
+
 describe("planAuth", () => {
   test("marks auth service, machine user, and oauth2 client unchanged when remote matches", async () => {
     const client = createMockClient({
@@ -224,6 +258,33 @@ describe("planAuth", () => {
     expect(result.changeSet.oauth2Client.unchanged).toHaveLength(1);
     expect(result.changeSet.service.updates).toHaveLength(0);
     expect(result.changeSet.machineUser.updates).toHaveLength(0);
+    expect(result.changeSet.oauth2Client.updates).toHaveLength(0);
+  });
+
+  test("marks oauth2 client unchanged when custom token lifetimes match remote values", async () => {
+    const client = createMockClient({
+      authServices: [{ name: "auth-a", publishSessionEvents: false, label: appName }],
+      oauth2Clients: [
+        {
+          name: "sample",
+          description: "Sample client",
+          grantTypes: [
+            AuthOAuth2Client_GrantType.AUTHORIZATION_CODE,
+            AuthOAuth2Client_GrantType.REFRESH_TOKEN,
+          ],
+          redirectUris: ["https://a.example.com/callback", "https://b.example.com/callback"],
+          clientType: AuthOAuth2Client_ClientType.CONFIDENTIAL,
+          accessTokenLifetime: { seconds: 3600n },
+          refreshTokenLifetime: { seconds: 7200n },
+          requireDpop: false,
+        },
+      ],
+    });
+
+    const result = await planAuth(createCustomOAuth2LifetimeContext(client));
+
+    expect(result.changeSet.oauth2Client.unchanged).toHaveLength(1);
+    expect(result.changeSet.oauth2Client.unchanged[0]?.name).toBe("sample");
     expect(result.changeSet.oauth2Client.updates).toHaveLength(0);
   });
 

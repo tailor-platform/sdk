@@ -121,7 +121,7 @@ async function registerJobFunctions(
   const jobFunctionVersions: { [key: string]: bigint } = {};
 
   // Get workspaceId from the first workflow
-  const firstWorkflow = changeSet.creates[0] || changeSet.updates[0];
+  const firstWorkflow = changeSet.creates[0] || changeSet.updates[0] || changeSet.deletes[0];
   if (!firstWorkflow) {
     return jobFunctionVersions;
   }
@@ -148,35 +148,37 @@ async function registerJobFunctions(
   });
   const existingJobNamesSet = new Set(existingJobFunctions);
 
-  // Register job functions in parallel
-  // Use create for new jobs, update for existing jobs
-  const results = await Promise.all(
-    Array.from(allUsedJobNames).map(async (jobName) => {
-      const isExisting = existingJobNamesSet.has(jobName);
-      const response = isExisting
-        ? await client.updateWorkflowJobFunction({
-            workspaceId,
-            jobFunctionName: jobName,
-            scriptRef: workflowJobFunctionName(jobName),
-          })
-        : await client.createWorkflowJobFunction({
-            workspaceId,
-            jobFunctionName: jobName,
-            scriptRef: workflowJobFunctionName(jobName),
-          });
+  if (changeSet.creates.length > 0 || changeSet.updates.length > 0) {
+    // Register job functions in parallel
+    // Use create for new jobs, update for existing jobs
+    const results = await Promise.all(
+      Array.from(allUsedJobNames).map(async (jobName) => {
+        const isExisting = existingJobNamesSet.has(jobName);
+        const response = isExisting
+          ? await client.updateWorkflowJobFunction({
+              workspaceId,
+              jobFunctionName: jobName,
+              scriptRef: workflowJobFunctionName(jobName),
+            })
+          : await client.createWorkflowJobFunction({
+              workspaceId,
+              jobFunctionName: jobName,
+              scriptRef: workflowJobFunctionName(jobName),
+            });
 
-      // Set metadata to mark this JobFunction as owned by this app
-      await client.setMetadata(
-        await buildMetaRequest(jobFunctionTrn(workspaceId, jobName), appName),
-      );
+        // Set metadata to mark this JobFunction as owned by this app
+        await client.setMetadata(
+          await buildMetaRequest(jobFunctionTrn(workspaceId, jobName), appName),
+        );
 
-      return { jobName, version: response.jobFunction?.version };
-    }),
-  );
+        return { jobName, version: response.jobFunction?.version };
+      }),
+    );
 
-  for (const { jobName, version } of results) {
-    if (version) {
-      jobFunctionVersions[jobName] = version;
+    for (const { jobName, version } of results) {
+      if (version) {
+        jobFunctionVersions[jobName] = version;
+      }
     }
   }
 

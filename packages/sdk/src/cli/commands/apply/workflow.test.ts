@@ -1,6 +1,6 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { sdkNameLabelKey } from "./label";
-import { planWorkflow } from "./workflow";
+import { applyWorkflow, planWorkflow } from "./workflow";
 import type { OperatorClient } from "@/cli/shared/client";
 import type { Workflow, WorkflowJob } from "@/types/workflow.generated";
 
@@ -291,6 +291,72 @@ describe("planWorkflow", () => {
       expect(result.changeSet.unchanged).toHaveLength(1);
       expect(result.changeSet.unchanged[0].name).toBe("order-processing");
       expect(result.changeSet.updates).toHaveLength(0);
+    });
+
+    test("removes metadata from orphaned job functions even when remaining workflows are unchanged", async () => {
+      const listWorkflowJobFunctions = vi.fn().mockResolvedValue({
+        jobFunctions: [{ name: "keep-job" }, { name: "orphaned-job" }],
+        nextPageToken: "",
+      });
+      const getMetadata = vi.fn().mockImplementation(({ trn }: { trn: string }) => {
+        const jobName = trn.split(":").pop();
+        return {
+          metadata: {
+            labels:
+              jobName === "orphaned-job"
+                ? { [sdkNameLabelKey]: appName }
+                : { [sdkNameLabelKey]: "other-app" },
+          },
+        };
+      });
+      const setMetadata = vi.fn().mockResolvedValue(undefined);
+
+      const client = {
+        listWorkflowJobFunctions,
+        getMetadata,
+        setMetadata,
+        createWorkflowJobFunction: vi.fn(),
+        updateWorkflowJobFunction: vi.fn(),
+      } as unknown as OperatorClient;
+
+      await applyWorkflow(
+        client,
+        {
+          changeSet: {
+            title: "Workflows",
+            creates: [],
+            updates: [],
+            deletes: [
+              {
+                name: "removed-workflow",
+                workspaceId,
+                workflowId: "workflow-1",
+              },
+            ],
+            replaces: [],
+            unchanged: [{ name: "kept-workflow" }],
+            isEmpty: () => false,
+            print: () => {},
+          },
+          conflicts: [],
+          unmanaged: [],
+          resourceOwners: new Set<string>(),
+          appName,
+          unchangedWorkflowJobNames: new Set(["keep-job"]),
+        },
+        "create-update",
+      );
+
+      expect(listWorkflowJobFunctions).toHaveBeenCalledWith({
+        workspaceId,
+        pageToken: "",
+        pageSize: 1000,
+      });
+      expect(setMetadata).toHaveBeenCalledTimes(1);
+      expect(setMetadata).toHaveBeenCalledWith({
+        trn: `trn:v1:workspace:${workspaceId}:workflow_job_function:orphaned-job`,
+        labels: { [sdkNameLabelKey]: "" },
+      });
     });
   });
 });
