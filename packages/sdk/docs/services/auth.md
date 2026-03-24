@@ -357,6 +357,15 @@ Auth connections enable OAuth2 authentication with external providers (Google, M
 
 For the official Tailor Platform documentation, see [AuthConnection Guide](https://docs.tailor.tech/guides/auth/authconnection).
 
+### Setup Flow
+
+Setting up an auth connection requires two steps:
+
+1. **Create** the connection (registers the OAuth2 provider credentials)
+2. **Authorize** the connection (runs the OAuth2 flow to obtain and store tokens)
+
+Both steps are needed regardless of whether you manage connections via config or CLI.
+
 ### Configuration
 
 Define connections in `defineAuth()`:
@@ -374,17 +383,14 @@ export const auth = defineAuth("my-auth", {
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     },
-    "quickbooks-connection": {
-      type: "oauth2",
-      providerUrl: "https://appcenter.intuit.com",
-      issuerUrl: "https://oauth.platform.intuit.com",
-      clientId: process.env.QB_CLIENT_ID!,
-      clientSecret: process.env.QB_CLIENT_SECRET!,
-      authUrl: "https://appcenter.intuit.com/connect/oauth2",
-      tokenUrl: "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer",
-    },
   },
 });
+```
+
+After `tailor-sdk apply`, authorize the connection:
+
+```bash
+tailor-sdk authconnection authorize --name google-connection --scopes "openid,profile,email"
 ```
 
 ### Connection Config Fields
@@ -416,14 +422,7 @@ auth.getConnectionToken("google-connection");
 // auth.getConnectionToken("unknown"); // Type error
 ```
 
-When `connections` is not defined, `getConnectionToken()` accepts any string. This supports connections managed entirely via the CLI:
-
-```typescript
-const auth = defineAuth("my-auth", {
-  machineUsers: { ... },
-});
-auth.getConnectionToken("cli-managed-connection"); // OK
-```
+When `connections` is not defined, `getConnectionToken()` accepts any string. This supports connections managed entirely via the CLI.
 
 ### Using Tokens in Functions
 
@@ -440,12 +439,9 @@ See [Built-in Interfaces](https://docs.tailor.tech/guides/function/builtin-inter
 
 ### CLI Management
 
-Auth connections can also be managed directly via the CLI, without defining them in `defineAuth()`. This is useful for managing secrets outside of the codebase:
+Auth connections can also be managed entirely via the CLI:
 
 ```bash
-# List all auth connections
-tailor-sdk authconnection list
-
 # Create a connection
 tailor-sdk authconnection create \
   --name google-connection \
@@ -453,6 +449,12 @@ tailor-sdk authconnection create \
   --issuer-url https://accounts.google.com \
   --client-id $GOOGLE_CLIENT_ID \
   --client-secret $GOOGLE_CLIENT_SECRET
+
+# Authorize (opens browser for OAuth2 flow)
+tailor-sdk authconnection authorize --name google-connection
+
+# List all connections
+tailor-sdk authconnection list
 
 # Revoke a connection
 tailor-sdk authconnection revoke --name google-connection
@@ -498,13 +500,10 @@ export const auth = defineAuth("my-auth", {
 Manage Auth resources using the CLI:
 
 ```bash
-# List auth connections
-tailor-sdk authconnection list
-
-# Create an auth connection
+# Auth connections
 tailor-sdk authconnection create --name <name> --provider-url <url> ...
-
-# Revoke an auth connection
+tailor-sdk authconnection authorize --name <name>
+tailor-sdk authconnection list
 tailor-sdk authconnection revoke --name <name>
 
 # List machine users

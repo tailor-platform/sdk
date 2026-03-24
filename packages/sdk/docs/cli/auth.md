@@ -28,11 +28,12 @@ tailor-sdk authconnection [command]
 
 **Commands**
 
-| Command                                           | Description                |
-| ------------------------------------------------- | -------------------------- |
-| [`authconnection create`](#authconnection-create) | Create an auth connection. |
-| [`authconnection list`](#authconnection-list)     | List all auth connections. |
-| [`authconnection revoke`](#authconnection-revoke) | Revoke an auth connection. |
+| Command                                                 | Description                                   |
+| ------------------------------------------------------- | --------------------------------------------- |
+| [`authconnection authorize`](#authconnection-authorize) | Authorize an auth connection via OAuth2 flow. |
+| [`authconnection create`](#authconnection-create)       | Create an auth connection.                    |
+| [`authconnection list`](#authconnection-list)           | List all auth connections.                    |
+| [`authconnection revoke`](#authconnection-revoke)       | Revoke an auth connection.                    |
 
 <!-- politty:command:authconnection:subcommands:end -->
 
@@ -41,6 +42,49 @@ tailor-sdk authconnection [command]
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 <!-- politty:command:authconnection:global-options-link:end -->
+<!-- politty:command:authconnection authorize:heading:start -->
+
+### authconnection authorize
+
+<!-- politty:command:authconnection authorize:heading:end -->
+
+<!-- politty:command:authconnection authorize:description:start -->
+
+Authorize an auth connection via OAuth2 flow.
+
+<!-- politty:command:authconnection authorize:description:end -->
+
+<!-- politty:command:authconnection authorize:usage:start -->
+
+**Usage**
+
+```
+tailor-sdk authconnection authorize [options]
+```
+
+<!-- politty:command:authconnection authorize:usage:end -->
+
+<!-- politty:command:authconnection authorize:options:start -->
+
+**Options**
+
+| Option                          | Alias | Description                                | Required | Default                  | Env                            |
+| ------------------------------- | ----- | ------------------------------------------ | -------- | ------------------------ | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                               | No       | -                        | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                          | No       | -                        | `TAILOR_PLATFORM_PROFILE`      |
+| `--name <NAME>`                 | `-n`  | Auth connection name                       | Yes      | -                        | -                              |
+| `--scopes <SCOPES>`             | -     | OAuth2 scopes to request (comma-separated) | No       | `"openid,profile,email"` | -                              |
+| `--port <PORT>`                 | -     | Local callback server port                 | No       | `8085`                   | -                              |
+| `--no-browser`                  | -     | Don't open browser automatically           | No       | `false`                  | -                              |
+
+<!-- politty:command:authconnection authorize:options:end -->
+
+<!-- politty:command:authconnection authorize:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:authconnection authorize:global-options-link:end -->
+
 <!-- politty:command:authconnection create:heading:start -->
 
 ### authconnection create
