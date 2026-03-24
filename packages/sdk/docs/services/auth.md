@@ -405,7 +405,7 @@ The SDK uses hash-based change detection for connection configs. Only connection
 
 ### Type-Safe Connection References
 
-`auth.getConnectionToken()` provides a type-safe reference to a defined connection, similar to `auth.invoker()` for machine users. The connection name is constrained to names defined in the `connections` config:
+`auth.getConnectionToken()` provides a type-safe reference to a defined connection, similar to `auth.invoker()` for machine users:
 
 ```typescript
 import { auth } from "../tailor.config";
@@ -417,6 +417,18 @@ const tokenRef = auth.getConnectionToken("google-connection");
 // Type error: "unknown-connection" is not a defined connection name
 // auth.getConnectionToken("unknown-connection");
 ```
+
+When `connections` is **not defined** in `defineAuth()`, `getConnectionToken()` accepts any string. This allows using connections that are managed solely via the CLI without declaring them in the config:
+
+```typescript
+// No connections defined → any string is accepted
+const auth = defineAuth("my-auth", {
+  machineUsers: { ... },
+});
+auth.getConnectionToken("cli-managed-connection"); // OK
+```
+
+If you want type safety, define `connections` in the config. If you manage connections entirely via the CLI, you can omit `connections` and still use `getConnectionToken()` freely.
 
 ### Using Tokens in Functions
 
@@ -433,7 +445,7 @@ See [Built-in Interfaces](https://docs.tailor.tech/guides/function/builtin-inter
 
 ### CLI Management
 
-Auth connections can also be managed directly via the CLI:
+Auth connections can also be managed directly via the CLI, without defining them in `defineAuth()`. This is useful for managing secrets outside of the codebase:
 
 ```bash
 # List all auth connections

@@ -268,9 +268,9 @@ export type AuthServiceInput<
 declare const authDefinitionBrand: unique symbol;
 export type AuthDefinitionBrand = { readonly [authDefinitionBrand]: true };
 
-type ConnectionNames<Config> = Config extends { connections?: Record<infer K, unknown> }
+type ConnectionNames<Config> = Config extends { connections: Record<infer K, unknown> }
   ? K & string
-  : never;
+  : string;
 
 export type DefinedAuth<Name extends string, Config, MachineUserNames extends string> = Config & {
   name: Name;
