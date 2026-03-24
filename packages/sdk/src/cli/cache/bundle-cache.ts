@@ -1,4 +1,3 @@
-import * as fs from "node:fs";
 import * as path from "pathe";
 import { logger, styles } from "@/cli/shared/logger";
 import { createDepCollectorPlugin } from "./dep-collector-plugin";
@@ -11,7 +10,6 @@ type BundleKind = "resolver" | "executor" | "workflow-job" | "auth-hook";
 type BundleCacheRestoreParams = {
   kind: BundleKind;
   name: string;
-  outputPath: string;
   /** Optional hash of non-file context (e.g., env variables) to include in cache validation. */
   contextHash?: string;
 };
@@ -20,7 +18,7 @@ type BundleCacheSaveParams = {
   kind: BundleKind;
   name: string;
   sourceFile: string;
-  outputPath: string;
+  content: string;
   dependencyPaths: string[];
   /** Optional hash of non-file context (e.g., env variables) to include in cache key computation. */
   contextHash?: string;
@@ -31,9 +29,9 @@ type BundleCacheSaveParams = {
  * restored from cache or needs rebuilding.
  */
 type BundleCache = {
-  /** Attempt to restore a cached bundle. Returns true if the cache was valid and output was restored. */
-  tryRestore(params: BundleCacheRestoreParams): boolean;
-  /** Save a bundle output and its metadata to the cache. */
+  /** Attempt to restore cached bundle content. Returns the code string if cache is valid, undefined otherwise. */
+  tryRestore(params: BundleCacheRestoreParams): string | undefined;
+  /** Save bundle content and its metadata to the cache. */
   save(params: BundleCacheSaveParams): void;
 };
 
@@ -79,9 +77,8 @@ type WithCacheParams = {
   kind: BundleKind;
   name: string;
   sourceFile: string;
-  outputPath: string;
   contextHash: string | undefined;
-  build: (plugins: Plugin[]) => Promise<void>;
+  build: (plugins: Plugin[]) => Promise<string>;
 };
 
 /**
@@ -89,25 +86,27 @@ type WithCacheParams = {
  * When caching is active, attempts to restore from cache first,
  * and saves the build result (with collected dependencies) on a cache miss.
  * @param params - Cache and build parameters
+ * @returns The bundled code string
  */
-async function withCache(params: WithCacheParams): Promise<void> {
-  const { cache, kind, name, sourceFile, outputPath, contextHash, build } = params;
+async function withCache(params: WithCacheParams): Promise<string> {
+  const { cache, kind, name, sourceFile, contextHash, build } = params;
 
   if (!cache) {
-    await build([]);
-    return;
+    return await build([]);
   }
 
-  const restored = cache.tryRestore({ kind, name, outputPath, contextHash });
-  if (restored) {
+  const content = cache.tryRestore({ kind, name, contextHash });
+  if (content !== undefined) {
     logger.debug(`  ${styles.dim("cached")}: ${name}`);
-    return;
+    return content;
   }
 
   const { plugin, getResult } = createDepCollectorPlugin();
-  await build([plugin]);
+  const code = await build([plugin]);
 
-  cache.save({ kind, name, sourceFile, outputPath, dependencyPaths: getResult(), contextHash });
+  cache.save({ kind, name, sourceFile, content: code, dependencyPaths: getResult(), contextHash });
+
+  return code;
 }
 
 /**
@@ -116,12 +115,12 @@ async function withCache(params: WithCacheParams): Promise<void> {
  * @returns A BundleCache instance
  */
 function createBundleCache(store: CacheStore): BundleCache {
-  function tryRestore(params: BundleCacheRestoreParams): boolean {
+  function tryRestore(params: BundleCacheRestoreParams): string | undefined {
     const cacheKey = buildCacheKey(params.kind, params.name);
     const entry = store.getEntry(cacheKey);
 
     if (!entry) {
-      return false;
+      return undefined;
     }
 
     // Recompute hash of all stored dependency paths.
@@ -130,18 +129,18 @@ function createBundleCache(store: CacheStore): BundleCache {
     try {
       currentHash = combineHash(hashFiles(entry.dependencyPaths), params.contextHash);
     } catch {
-      return false;
+      return undefined;
     }
 
     if (currentHash !== entry.inputHash) {
-      return false;
+      return undefined;
     }
 
-    return store.restoreBundleOutput(cacheKey, params.outputPath);
+    return store.restoreBundleContent(cacheKey);
   }
 
   function save(params: BundleCacheSaveParams): void {
-    const { kind, name, sourceFile, outputPath, dependencyPaths, contextHash } = params;
+    const { kind, name, sourceFile, content, dependencyPaths, contextHash } = params;
     const cacheKey = buildCacheKey(kind, name);
     // Always include sourceFile in dependency paths so that changes to the
     // source file itself are detected even when dep-collector only finds
@@ -150,22 +149,15 @@ function createBundleCache(store: CacheStore): BundleCache {
       ? dependencyPaths
       : [sourceFile, ...dependencyPaths];
     const inputHash = combineHash(hashFiles(allDeps), contextHash);
-    // Stored for future integrity verification (detect corrupted cache files)
-    const contentHash = hashFile(outputPath);
+    const contentHash = hashContent(content);
 
-    store.storeBundleOutput(cacheKey, outputPath);
-
-    const outputFiles = [{ outputPath, contentHash }];
-    const mapPath = `${outputPath}.map`;
-    if (fs.existsSync(mapPath)) {
-      outputFiles.push({ outputPath: mapPath, contentHash: hashFile(mapPath) });
-    }
+    store.storeBundleContent(cacheKey, content);
 
     store.setEntry(cacheKey, {
       kind: "bundle",
       inputHash,
       dependencyPaths: allDeps,
-      outputFiles,
+      outputFiles: [{ outputPath: cacheKey, contentHash }],
       createdAt: new Date().toISOString(),
     });
   }

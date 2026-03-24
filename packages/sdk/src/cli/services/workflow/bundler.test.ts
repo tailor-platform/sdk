@@ -6,6 +6,7 @@ describe("bundleWorkflowJobs", () => {
     await expect(bundleWorkflowJobs([], [], {})).resolves.toEqual({
       mainJobDeps: {},
       usedJobNames: [],
+      bundledCode: new Map(),
     });
   });
 });
