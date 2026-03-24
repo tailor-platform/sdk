@@ -103,31 +103,6 @@ db.object({
 });
 ```
 
-### Custom Type Name (`typeName`)
-
-Enum and nested object fields generate internal type names automatically (e.g., `{TypeName}{FieldName}` for protobuf). Use `typeName()` to override this with a custom name:
-
-```typescript
-db.enum(["active", "inactive"]).typeName("UserStatus");
-
-db.object({
-  street: db.string(),
-  city: db.string(),
-}).typeName("Address");
-```
-
-**Constraints:**
-
-- Only available on `enum()` and `object()` fields — calling on scalar types is a compile error
-- Cannot be called twice on the same field
-- Can be chained with other modifiers like `description()`
-
-```typescript
-db.enum(["active", "inactive"]).description("Account status").typeName("AccountStatus");
-```
-
-**Why use it:** When the same enum or nested structure is used in multiple contexts (e.g., resolvers, executors), specifying a `typeName` gives it a stable, human-readable name instead of the auto-generated one. This is especially useful when the field appears in Resolver/Executor input/output schemas, as the generated protobuf type name becomes predictable and consistent.
-
 ## Field Modifiers
 
 ### Description
@@ -545,6 +520,38 @@ const schemaType = t.object({
   ...invoice.omitFields(["id", "createdAt", "invoiceNumber", "sequentialId"]),
 });
 ```
+
+#### Custom Type Name (`typeName`) for Resolver/Executor Schemas
+
+Enum and nested object fields on TailorDB types also support `typeName()`. This has **no effect on TailorDB itself**, but when the field is passed to a Resolver or Executor input/output schema (via `pickFields` / `omitFields`), `typeName` controls the generated protobuf type name:
+
+```typescript
+const user = db.type("User", {
+  status: db.enum(["active", "inactive"]).typeName("UserStatus"),
+  address: db
+    .object({
+      street: db.string(),
+      city: db.string(),
+    })
+    .typeName("Address"),
+  ...db.fields.timestamps(),
+});
+
+// When used in a resolver, the typeName is reflected in the generated schema
+export default createResolver({
+  name: "getUser",
+  operation: "query",
+  input: {
+    ...user.pickFields(["status"]), // "UserStatus" is used as the protobuf type name
+  },
+  output: t.object({ id: t.uuid() }),
+  body: async (context) => {
+    return { id: "..." };
+  },
+});
+```
+
+Without `typeName`, the generated name defaults to `{TypeName}{FieldName}` (e.g., `UserStatus` for a `status` field on `User`). Use `typeName` when the auto-generated name would be ambiguous or when the same enum/object is shared across multiple resolver/executor schemas.
 
 ### Permissions
 
