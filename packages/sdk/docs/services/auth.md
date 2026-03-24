@@ -10,6 +10,7 @@ Auth provides:
 - Machine users for service-to-service authentication
 - OAuth 2.0 client configuration
 - Identity provider integration
+- Auth connections for external OAuth2 provider integration
 
 For the official Tailor Platform documentation, see [Auth Guide](https://docs.tailor.tech/guides/auth/overview).
 
@@ -45,6 +46,15 @@ const auth = defineAuth("my-auth", {
     "my-oauth2-client": {
       redirectURIs: ["https://example.com/callback"],
       grantTypes: ["authorization_code", "refresh_token"],
+    },
+  },
+  connections: {
+    "google-connection": {
+      type: "oauth2",
+      providerUrl: "https://accounts.google.com",
+      issuerUrl: "https://accounts.google.com",
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     },
   },
   idProvider: idp.provider("my-provider", "my-client"),
@@ -341,6 +351,91 @@ idProvider: idp.provider("my-provider", "my-client"),
 
 See [IdP](./idp.md) for configuring identity providers.
 
+## Auth Connections
+
+Auth connections enable OAuth2 authentication with external providers (Google, Microsoft 365, QuickBooks, etc.) for application-to-application flows. Functions can access connection tokens at runtime via `tailor.authconnection.getConnectionToken()`.
+
+For the official Tailor Platform documentation, see [AuthConnection Guide](https://docs.tailor.tech/guides/auth/authconnection).
+
+### Configuration
+
+Define connections in `defineAuth()`:
+
+```typescript
+import { defineAuth } from "@tailor-platform/sdk";
+
+export const auth = defineAuth("my-auth", {
+  // ... other auth config
+  connections: {
+    "google-connection": {
+      type: "oauth2",
+      providerUrl: "https://accounts.google.com",
+      issuerUrl: "https://accounts.google.com",
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    },
+    "quickbooks-connection": {
+      type: "oauth2",
+      providerUrl: "https://appcenter.intuit.com",
+      issuerUrl: "https://oauth.platform.intuit.com",
+      clientId: process.env.QB_CLIENT_ID!,
+      clientSecret: process.env.QB_CLIENT_SECRET!,
+      authUrl: "https://appcenter.intuit.com/connect/oauth2",
+      tokenUrl: "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer",
+    },
+  },
+});
+```
+
+### Connection Config Fields
+
+| Field          | Type     | Required | Description                                 |
+| -------------- | -------- | -------- | ------------------------------------------- |
+| `type`         | `string` | Yes      | Connection type. Currently only `"oauth2"`. |
+| `providerUrl`  | `string` | Yes      | OAuth2 provider URL.                        |
+| `issuerUrl`    | `string` | Yes      | OAuth2 issuer URL for JWT validation.       |
+| `clientId`     | `string` | Yes      | OAuth2 client ID.                           |
+| `clientSecret` | `string` | Yes      | OAuth2 client secret.                       |
+| `authUrl`      | `string` | No       | Override for the authorization endpoint.    |
+| `tokenUrl`     | `string` | No       | Override for the token endpoint.            |
+
+### Change Detection
+
+The SDK uses hash-based change detection for connection configs. Only connections whose configuration has changed since the last `apply` are updated (revoked and recreated). Deleting the `.tailor-sdk/` directory forces all connections to be re-sent.
+
+### Using Tokens in Functions
+
+Access connection tokens from resolvers, executors, or workflows:
+
+```typescript
+const tokens = await tailor.authconnection.getConnectionToken("google-connection");
+const response = await fetch("https://www.googleapis.com/...", {
+  headers: { Authorization: `Bearer ${tokens.access_token}` },
+});
+```
+
+### CLI Management
+
+Auth connections can also be managed directly via the CLI:
+
+```bash
+# List all auth connections
+tailor-sdk authconnection list
+
+# Create a connection
+tailor-sdk authconnection create \
+  --name google-connection \
+  --provider-url https://accounts.google.com \
+  --issuer-url https://accounts.google.com \
+  --client-id $GOOGLE_CLIENT_ID \
+  --client-secret $GOOGLE_CLIENT_SECRET
+
+# Revoke a connection
+tailor-sdk authconnection revoke --name google-connection
+```
+
+See [Auth Resource Commands](../cli/auth.md) for full CLI documentation.
+
 ## Before Login Hook
 
 Run custom logic before a user logs in. This is useful for JIT (Just-In-Time) user provisioning — automatically creating or updating user records when a user authenticates for the first time.
@@ -379,6 +474,15 @@ export const auth = defineAuth("my-auth", {
 Manage Auth resources using the CLI:
 
 ```bash
+# List auth connections
+tailor-sdk authconnection list
+
+# Create an auth connection
+tailor-sdk authconnection create --name <name> --provider-url <url> ...
+
+# Revoke an auth connection
+tailor-sdk authconnection revoke --name <name>
+
 # List machine users
 tailor-sdk machineuser list
 
