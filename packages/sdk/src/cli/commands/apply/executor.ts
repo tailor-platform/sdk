@@ -234,7 +234,10 @@ function protoExecutor(
 
   const argsExpr = buildExecutorArgsExpr(trigger.kind, env);
 
-  type EventTriggerKind = Exclude<Trigger["kind"], "schedule" | "incomingWebhook">;
+  type EventTriggerKind = Exclude<
+    Trigger["kind"],
+    "schedule" | "incomingWebhook" | "record" | "idpUser" | "authAccessToken"
+  >;
   const eventType: Record<EventTriggerKind, string> = {
     recordCreated: "tailordb.type_record.created",
     recordUpdated: "tailordb.type_record.updated",
@@ -326,6 +329,40 @@ function protoExecutor(
         case: "auth",
         value: {
           eventTypes: [eventType[trigger.kind]],
+          namespaceName: resolveAuthNamespace(application),
+        },
+      });
+      break;
+    case "record":
+      triggerType = ExecutorTriggerType.EVENT;
+      triggerConfig = typedEventTrigger({
+        case: "tailordb",
+        value: {
+          eventTypes: trigger.kinds.map((k) => eventType[k]),
+          namespaceName: resolveTailorDBNamespace(application, trigger.typeName),
+          typeName: trigger.typeName,
+          ...(trigger.condition
+            ? { condition: { expr: `(${stringifyFunction(trigger.condition)})(${argsExpr})` } }
+            : {}),
+        },
+      });
+      break;
+    case "idpUser":
+      triggerType = ExecutorTriggerType.EVENT;
+      triggerConfig = typedEventTrigger({
+        case: "idp",
+        value: {
+          eventTypes: trigger.kinds.map((k) => eventType[k]),
+          namespaceName: resolveIdpNamespace(application),
+        },
+      });
+      break;
+    case "authAccessToken":
+      triggerType = ExecutorTriggerType.EVENT;
+      triggerConfig = typedEventTrigger({
+        case: "auth",
+        value: {
+          eventTypes: trigger.kinds.map((k) => eventType[k]),
           namespaceName: resolveAuthNamespace(application),
         },
       });

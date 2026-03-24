@@ -8,7 +8,10 @@ import {
   recordCreatedTrigger,
   recordDeletedTrigger,
   recordUpdatedTrigger,
+  recordTrigger,
   resolverExecutedTrigger,
+  idpUserTrigger,
+  authAccessTokenTrigger,
 } from "./trigger/event";
 import { scheduleTrigger } from "./trigger/schedule";
 import { incomingWebhookTrigger } from "./trigger/webhook";
@@ -728,6 +731,169 @@ describe("resolverExecutedTrigger", () => {
       operation: {
         kind: "function",
         body: () => {},
+      },
+    });
+  });
+});
+
+describe("recordTrigger (multi-event)", () => {
+  test("can specify multiple kinds", () => {
+    const user = db.type("User", {
+      name: db.string(),
+      age: db.int(),
+    });
+    const trigger = recordTrigger({
+      type: user,
+      kinds: ["created", "updated"],
+    });
+    expect(trigger.kind).toBe("record");
+    expect(trigger.kinds).toEqual(["recordCreated", "recordUpdated"]);
+    expect(trigger.typeName).toBe("User");
+  });
+
+  test("args are a union of selected kinds with kind discriminant", () => {
+    const user = db.type("User", {
+      name: db.string(),
+      age: db.int(),
+    });
+    createExecutor({
+      name: "test",
+      trigger: recordTrigger({
+        type: user,
+        kinds: ["created", "updated"],
+      }),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          // Args should be a union of RecordCreatedArgs and RecordUpdatedArgs
+          expectTypeOf(args).toExtend<{
+            workspaceId: string;
+            appNamespace: string;
+            typeName: string;
+          }>();
+
+          // Can narrow by kind
+          if (args.kind === "recordCreated") {
+            expectTypeOf(args.newRecord).toExtend<{
+              id: string;
+              name: string;
+              age: number;
+            }>();
+          }
+          if (args.kind === "recordUpdated") {
+            expectTypeOf(args.newRecord).toExtend<{
+              id: string;
+              name: string;
+              age: number;
+            }>();
+            expectTypeOf(args.oldRecord).toExtend<{
+              id: string;
+              name: string;
+              age: number;
+            }>();
+          }
+        },
+      },
+    });
+  });
+
+  test("condition args are union type", () => {
+    const user = db.type("User", {
+      name: db.string(),
+      age: db.int(),
+    });
+    recordTrigger({
+      type: user,
+      kinds: ["created", "deleted"],
+      condition: (args) => {
+        if (args.kind === "recordCreated") {
+          return args.newRecord.age >= 18;
+        }
+        return true;
+      },
+    });
+  });
+
+  test("all three kinds produce full union", () => {
+    const user = db.type("User", {
+      name: db.string(),
+      age: db.int(),
+    });
+    createExecutor({
+      name: "test",
+      trigger: recordTrigger({
+        type: user,
+        kinds: ["created", "updated", "deleted"],
+      }),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          if (args.kind === "recordDeleted") {
+            expectTypeOf(args.oldRecord).toExtend<{
+              id: string;
+              name: string;
+              age: number;
+            }>();
+          }
+        },
+      },
+    });
+  });
+});
+
+describe("idpUserTrigger (multi-event)", () => {
+  test("can specify multiple kinds", () => {
+    const trigger = idpUserTrigger({ kinds: ["created", "deleted"] });
+    expect(trigger.kind).toBe("idpUser");
+    expect(trigger.kinds).toEqual(["idpUserCreated", "idpUserDeleted"]);
+  });
+
+  test("args have kind discriminant", () => {
+    createExecutor({
+      name: "test",
+      trigger: idpUserTrigger({ kinds: ["created", "updated"] }),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          expectTypeOf(args).toExtend<{
+            workspaceId: string;
+            appNamespace: string;
+            namespaceName: string;
+            userId: string;
+          }>();
+          if (args.kind === "idpUserCreated") {
+            expectTypeOf(args.kind).toEqualTypeOf<"idpUserCreated">();
+          }
+        },
+      },
+    });
+  });
+});
+
+describe("authAccessTokenTrigger (multi-event)", () => {
+  test("can specify multiple kinds", () => {
+    const trigger = authAccessTokenTrigger({ kinds: ["issued", "revoked"] });
+    expect(trigger.kind).toBe("authAccessToken");
+    expect(trigger.kinds).toEqual(["authAccessTokenIssued", "authAccessTokenRevoked"]);
+  });
+
+  test("args have kind discriminant", () => {
+    createExecutor({
+      name: "test",
+      trigger: authAccessTokenTrigger({ kinds: ["issued", "refreshed", "revoked"] }),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          expectTypeOf(args).toExtend<{
+            workspaceId: string;
+            appNamespace: string;
+            namespaceName: string;
+            userId: string;
+          }>();
+          if (args.kind === "authAccessTokenIssued") {
+            expectTypeOf(args.kind).toEqualTypeOf<"authAccessTokenIssued">();
+          }
+        },
       },
     });
   });

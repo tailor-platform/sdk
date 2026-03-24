@@ -7,6 +7,9 @@ import type {
   ResolverExecutedTrigger,
   IdpUserTrigger,
   AuthAccessTokenTrigger,
+  MultiRecordTrigger,
+  MultiIdpUserTrigger,
+  MultiAuthAccessTokenTrigger,
 } from "./event";
 import type { ScheduleTrigger } from "./schedule";
 import type { IncomingWebhookTrigger } from "./webhook";
@@ -17,4 +20,7 @@ export type Trigger<Args> =
   | ScheduleTrigger<Args>
   | IncomingWebhookTrigger<Args>
   | IdpUserTrigger<Args>
-  | AuthAccessTokenTrigger<Args>;
+  | AuthAccessTokenTrigger<Args>
+  | MultiRecordTrigger<Args>
+  | MultiIdpUserTrigger<Args>
+  | MultiAuthAccessTokenTrigger<Args>;

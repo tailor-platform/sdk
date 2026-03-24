@@ -30,11 +30,43 @@ describe("buildExecutorArgsExpr", () => {
       });
     }
 
-    test("all event triggers produce identical expressions", () => {
-      const exprs = eventTriggerKinds.map((kind) => buildExecutorArgsExpr(kind, env));
-      const unique = new Set(exprs);
-      expect(unique.size).toBe(1);
+    test("single-event triggers inject static kind", () => {
+      const singleEventKinds = [
+        "recordCreated",
+        "recordUpdated",
+        "recordDeleted",
+        "idpUserCreated",
+        "idpUserUpdated",
+        "idpUserDeleted",
+        "authAccessTokenIssued",
+        "authAccessTokenRefreshed",
+        "authAccessTokenRevoked",
+      ] as const;
+      for (const kind of singleEventKinds) {
+        const expr = buildExecutorArgsExpr(kind, env);
+        expect(expr).toContain(`kind: "${kind}"`);
+      }
     });
+
+    test("schedule trigger does not inject kind", () => {
+      const expr = buildExecutorArgsExpr("schedule", env);
+      expect(expr).not.toContain("kind:");
+    });
+  });
+
+  describe("multi-event triggers", () => {
+    const multiEventKinds = ["record", "idpUser", "authAccessToken"] as const;
+
+    for (const kind of multiEventKinds) {
+      test(`${kind} includes appNamespace, actor transform, env, and dynamic kind`, () => {
+        const expr = buildExecutorArgsExpr(kind, env);
+        expect(expr).toContain("...args");
+        expect(expr).toContain("appNamespace: args.namespaceName");
+        expect(expr).toContain("actor: args.actor");
+        expect(expr).toContain(`env: ${JSON.stringify(env)}`);
+        expect(expr).toContain("args.eventType");
+      });
+    }
   });
 
   describe("resolverExecuted trigger", () => {

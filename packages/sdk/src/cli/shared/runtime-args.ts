@@ -24,6 +24,22 @@ import type { Trigger } from "@/types/executor.generated";
  *   other fields           → passed through
  *   null/undefined actor   → null
  */
+/**
+ * Reverse mapping from server event type strings to SDK trigger kind names.
+ * Used in multi-event triggers to inject the `kind` discriminant at runtime.
+ */
+const EVENT_TYPE_TO_KIND: Record<string, string> = {
+  "tailordb.type_record.created": "recordCreated",
+  "tailordb.type_record.updated": "recordUpdated",
+  "tailordb.type_record.deleted": "recordDeleted",
+  "idp.user.created": "idpUserCreated",
+  "idp.user.updated": "idpUserUpdated",
+  "idp.user.deleted": "idpUserDeleted",
+  "auth.access_token.issued": "authAccessTokenIssued",
+  "auth.access_token.refreshed": "authAccessTokenRefreshed",
+  "auth.access_token.revoked": "authAccessTokenRevoked",
+};
+
 const ACTOR_TRANSFORM_EXPR =
   `actor: args.actor ? (({ attributeMap, attributes: attrList, ...rest }) => ` +
   `({ ...rest, attributes: attributeMap, attributeList: attrList }))(args.actor) : null`;
@@ -46,19 +62,33 @@ export function buildExecutorArgsExpr(
 ): string {
   const envExpr = `env: ${JSON.stringify(env)}`;
 
+  const eventKindExpr = `kind: args.eventType ? (${JSON.stringify(EVENT_TYPE_TO_KIND)})[args.eventType] : undefined`;
+
   switch (triggerKind) {
     // Event triggers with actor + standard field mapping
     case "schedule":
+      return `({ ...args, appNamespace: args.namespaceName, ${ACTOR_TRANSFORM_EXPR}, ${envExpr} })`;
+
     case "recordCreated":
     case "recordUpdated":
     case "recordDeleted":
+      return `({ ...args, kind: "${triggerKind}", appNamespace: args.namespaceName, ${ACTOR_TRANSFORM_EXPR}, ${envExpr} })`;
+
     case "idpUserCreated":
     case "idpUserUpdated":
     case "idpUserDeleted":
+      return `({ ...args, kind: "${triggerKind}", appNamespace: args.namespaceName, ${ACTOR_TRANSFORM_EXPR}, ${envExpr} })`;
+
     case "authAccessTokenIssued":
     case "authAccessTokenRefreshed":
     case "authAccessTokenRevoked":
-      return `({ ...args, appNamespace: args.namespaceName, ${ACTOR_TRANSFORM_EXPR}, ${envExpr} })`;
+      return `({ ...args, kind: "${triggerKind}", appNamespace: args.namespaceName, ${ACTOR_TRANSFORM_EXPR}, ${envExpr} })`;
+
+    // Multi-event triggers: inject kind from server-side eventType
+    case "record":
+    case "idpUser":
+    case "authAccessToken":
+      return `({ ...args, ${eventKindExpr}, appNamespace: args.namespaceName, ${ACTOR_TRANSFORM_EXPR}, ${envExpr} })`;
 
     // resolverExecuted: actor + success/result/error mapping
     case "resolverExecuted":

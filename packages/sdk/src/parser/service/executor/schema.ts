@@ -40,6 +40,32 @@ export const AuthAccessTokenTriggerSchema = z.object({
     .describe("Auth access token event type"),
 });
 
+export const MultiRecordTriggerSchema = z.object({
+  kind: z.literal("record").describe("Multi-event record trigger"),
+  kinds: z
+    .array(z.enum(["recordCreated", "recordUpdated", "recordDeleted"]))
+    .min(1)
+    .describe("Record event types to trigger on"),
+  typeName: z.string().describe("TailorDB type name to watch for events"),
+  condition: functionSchema.optional().describe("Condition function to filter events"),
+});
+
+export const MultiIdpUserTriggerSchema = z.object({
+  kind: z.literal("idpUser").describe("Multi-event IdP user trigger"),
+  kinds: z
+    .array(z.enum(["idpUserCreated", "idpUserUpdated", "idpUserDeleted"]))
+    .min(1)
+    .describe("IdP user event types to trigger on"),
+});
+
+export const MultiAuthAccessTokenTriggerSchema = z.object({
+  kind: z.literal("authAccessToken").describe("Multi-event auth access token trigger"),
+  kinds: z
+    .array(z.enum(["authAccessTokenIssued", "authAccessTokenRefreshed", "authAccessTokenRevoked"]))
+    .min(1)
+    .describe("Auth access token event types to trigger on"),
+});
+
 export const TriggerSchema = z.discriminatedUnion("kind", [
   RecordTriggerSchema,
   ResolverExecutedTriggerSchema,
@@ -47,6 +73,9 @@ export const TriggerSchema = z.discriminatedUnion("kind", [
   IncomingWebhookTriggerSchema,
   IdpUserTriggerSchema,
   AuthAccessTokenTriggerSchema,
+  MultiRecordTriggerSchema,
+  MultiIdpUserTriggerSchema,
+  MultiAuthAccessTokenTriggerSchema,
 ]);
 
 export const FunctionOperationSchema = z.object({

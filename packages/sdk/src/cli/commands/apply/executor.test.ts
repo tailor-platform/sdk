@@ -806,5 +806,140 @@ describe("planExecutor", () => {
         planExecutor({ client, workspaceId, application, forRemoval: false, config: mockConfig }),
       ).rejects.toThrow("No Auth service configured");
     });
+
+    test("multi-event record trigger emits multiple eventTypes", async () => {
+      const client = createMockClient([]);
+      const executor: Executor = {
+        name: "on-record-change",
+        description: "test",
+        disabled: false,
+        trigger: {
+          kind: "record",
+          kinds: ["recordCreated", "recordUpdated"],
+          typeName: "User",
+        },
+        operation: { kind: "function", body: () => {} },
+      };
+      const application = createMockApplication([executor], {
+        tailorDBTypes: { User: "my-tailordb" },
+      });
+
+      const result = await planExecutor({
+        client,
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: mockConfig,
+      });
+
+      expect(result.changeSet.creates).toHaveLength(1);
+      const typedConfig = getEventConfig(result);
+      expect(typedConfig.case).toBe("tailordb");
+      expect(typedConfig.value.eventTypes).toEqual([
+        "tailordb.type_record.created",
+        "tailordb.type_record.updated",
+      ]);
+      expect(typedConfig.value.namespaceName).toBe("my-tailordb");
+      expect(typedConfig.value.typeName).toBe("User");
+    });
+
+    test("multi-event idpUser trigger emits multiple eventTypes", async () => {
+      const client = createMockClient([]);
+      const executor: Executor = {
+        name: "on-idp-user-change",
+        description: "test",
+        disabled: false,
+        trigger: {
+          kind: "idpUser",
+          kinds: ["idpUserCreated", "idpUserDeleted"],
+        },
+        operation: { kind: "function", body: () => {} },
+      };
+      const application = createMockApplication([executor], {
+        idpName: "my-idp",
+      });
+
+      const result = await planExecutor({
+        client,
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: mockConfig,
+      });
+
+      const typedConfig = getEventConfig(result);
+      expect(typedConfig.case).toBe("idp");
+      expect(typedConfig.value.eventTypes).toEqual(["idp.user.created", "idp.user.deleted"]);
+      expect(typedConfig.value.namespaceName).toBe("my-idp");
+    });
+
+    test("multi-event authAccessToken trigger emits multiple eventTypes", async () => {
+      const client = createMockClient([]);
+      const executor: Executor = {
+        name: "on-auth-token-change",
+        description: "test",
+        disabled: false,
+        trigger: {
+          kind: "authAccessToken",
+          kinds: ["authAccessTokenIssued", "authAccessTokenRevoked"],
+        },
+        operation: { kind: "function", body: () => {} },
+      };
+      const application = createMockApplication([executor], {
+        authName: "my-auth",
+      });
+
+      const result = await planExecutor({
+        client,
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: mockConfig,
+      });
+
+      const typedConfig = getEventConfig(result);
+      expect(typedConfig.case).toBe("auth");
+      expect(typedConfig.value.eventTypes).toEqual([
+        "auth.access_token.issued",
+        "auth.access_token.revoked",
+      ]);
+      expect(typedConfig.value.namespaceName).toBe("my-auth");
+    });
+
+    test("multi-event record trigger with condition emits condition", async () => {
+      const client = createMockClient([]);
+      const executor: Executor = {
+        name: "on-record-change-cond",
+        description: "test",
+        disabled: false,
+        trigger: {
+          kind: "record",
+          kinds: ["recordCreated", "recordUpdated", "recordDeleted"],
+          typeName: "User",
+          condition: ({ typeName }: { typeName: string }) => typeName === "User",
+        },
+        operation: { kind: "function", body: () => {} },
+      };
+      const application = createMockApplication([executor], {
+        tailorDBTypes: { User: "my-tailordb" },
+      });
+
+      const result = await planExecutor({
+        client,
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: mockConfig,
+      });
+
+      const typedConfig = getEventConfig(result);
+      expect(typedConfig.case).toBe("tailordb");
+      expect(typedConfig.value.eventTypes).toEqual([
+        "tailordb.type_record.created",
+        "tailordb.type_record.updated",
+        "tailordb.type_record.deleted",
+      ]);
+      expect(typedConfig.value.condition).toBeDefined();
+    });
   });
 });
