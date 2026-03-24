@@ -540,8 +540,8 @@ importers:
         specifier: 11.1.5
         version: 11.1.5(@types/node@24.12.0)
       '@inquirer/prompts':
-        specifier: 8.3.0
-        version: 8.3.0(@types/node@24.12.0)
+        specifier: 8.3.2
+        version: 8.3.2(@types/node@24.12.0)
       '@liam-hq/cli':
         specifier: 0.7.24
         version: 0.7.24(@types/node@24.12.0)(typescript@5.9.3)
@@ -1320,8 +1320,8 @@ packages:
       '@types/node':
         optional: true
 
-  '@inquirer/prompts@8.3.0':
-    resolution: {integrity: sha512-JAj66kjdH/F1+B7LCigjARbwstt3SNUOSzMdjpsvwJmzunK88gJeXmcm95L9nw1KynvFVuY4SzXh/3Y0lvtgSg==}
+  '@inquirer/prompts@8.3.2':
+    resolution: {integrity: sha512-yFroiSj2iiBFlm59amdTvAcQFvWS6ph5oKESls/uqPBect7rTU2GbjyZO2DqxMGuIwVA8z0P4K6ViPcd/cp+0w==}
     engines: {node: '>=23.5.0 || ^22.13.0 || ^21.7.0 || ^20.12.0'}
     peerDependencies:
       '@types/node': '>=18'
@@ -6252,7 +6252,7 @@ snapshots:
     optionalDependencies:
       '@types/node': 24.12.0
 
-  '@inquirer/prompts@8.3.0(@types/node@24.12.0)':
+  '@inquirer/prompts@8.3.2(@types/node@24.12.0)':
     dependencies:
       '@inquirer/checkbox': 5.1.2(@types/node@24.12.0)
       '@inquirer/confirm': 6.0.10(@types/node@24.12.0)
