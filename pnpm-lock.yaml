@@ -79,8 +79,8 @@ importers:
         specifier: 2.1.1
         version: 2.1.1(@bufbuild/protobuf@2.11.0)(@connectrpc/connect@2.1.1(@bufbuild/protobuf@2.11.0))
       '@tailor-platform/function-types':
-        specifier: 0.8.2
-        version: 0.8.2
+        specifier: 0.8.3
+        version: 0.8.3
       '@types/node':
         specifier: 24.12.0
         version: 24.12.0
@@ -119,8 +119,8 @@ importers:
         version: link:../packages/sdk
     devDependencies:
       '@tailor-platform/function-types':
-        specifier: 0.8.2
-        version: 0.8.2
+        specifier: 0.8.3
+        version: 0.8.3
       '@types/node':
         specifier: 24.12.0
         version: 24.12.0
@@ -186,8 +186,8 @@ importers:
         specifier: 9.39.4
         version: 9.39.4
       '@tailor-platform/function-types':
-        specifier: 0.8.2
-        version: 0.8.2
+        specifier: 0.8.3
+        version: 0.8.3
       '@tailor-platform/sdk':
         specifier: workspace:^
         version: link:../../../sdk
@@ -225,8 +225,8 @@ importers:
         specifier: 9.39.4
         version: 9.39.4
       '@tailor-platform/function-types':
-        specifier: 0.8.2
-        version: 0.8.2
+        specifier: 0.8.3
+        version: 0.8.3
       '@tailor-platform/sdk':
         specifier: workspace:^
         version: link:../../../sdk
@@ -297,8 +297,8 @@ importers:
         specifier: 9.39.4
         version: 9.39.4
       '@tailor-platform/function-types':
-        specifier: 0.8.2
-        version: 0.8.2
+        specifier: 0.8.3
+        version: 0.8.3
       '@tailor-platform/sdk':
         specifier: workspace:^
         version: link:../../../sdk
@@ -366,8 +366,8 @@ importers:
         specifier: 9.39.4
         version: 9.39.4
       '@tailor-platform/function-types':
-        specifier: 0.8.2
-        version: 0.8.2
+        specifier: 0.8.3
+        version: 0.8.3
       '@tailor-platform/sdk':
         specifier: workspace:^
         version: link:../../../sdk
@@ -405,8 +405,8 @@ importers:
         specifier: 9.39.4
         version: 9.39.4
       '@tailor-platform/function-types':
-        specifier: 0.8.2
-        version: 0.8.2
+        specifier: 0.8.3
+        version: 0.8.3
       '@tailor-platform/sdk':
         specifier: workspace:^
         version: link:../../../sdk
@@ -441,8 +441,8 @@ importers:
         specifier: 9.39.4
         version: 9.39.4
       '@tailor-platform/function-types':
-        specifier: 0.8.2
-        version: 0.8.2
+        specifier: 0.8.3
+        version: 0.8.3
       '@tailor-platform/sdk':
         specifier: workspace:^
         version: link:../../../sdk
@@ -480,8 +480,8 @@ importers:
         specifier: 9.39.4
         version: 9.39.4
       '@tailor-platform/function-types':
-        specifier: 0.8.2
-        version: 0.8.2
+        specifier: 0.8.3
+        version: 0.8.3
       '@tailor-platform/sdk':
         specifier: workspace:^
         version: link:../../../sdk
@@ -670,8 +670,8 @@ importers:
         specifier: 2.6.0
         version: 2.6.0(@opentelemetry/api@1.9.0)
       '@tailor-platform/function-types':
-        specifier: 0.8.2
-        version: 0.8.2
+        specifier: 0.8.3
+        version: 0.8.3
       '@types/madge':
         specifier: 5.0.3
         version: 5.0.3
@@ -2483,8 +2483,8 @@ packages:
     peerDependencies:
       kysely: '>= 0.24.0 < 1'
 
-  '@tailor-platform/function-types@0.8.2':
-    resolution: {integrity: sha512-i/wBogAPoPJ3eOOeUmglh1D0skNM5GDoX5t+N5Bt8OR/8PqfNHDYX90GJF7NaNiu8nc+uqm5Y8IKKZ3H7Mtgdg==}
+  '@tailor-platform/function-types@0.8.3':
+    resolution: {integrity: sha512-dSObI4z8OvcLbqeWE8napvPRk402eYVkyLu2u12povraQNzA0xTD5/9k3W4NbTwAcmMT5MxZRtBRN4xw2jAPsw==}
 
   '@toiroakr/lines-db@0.9.0':
     resolution: {integrity: sha512-l0KG3/m9XMWQM+XZ+iNzucm0zhozl5iu2dnt21/exZZjWdvjakp8VL+tvUeFljjxN2VUC42kxjgfHE0fFGVpFw==}
@@ -7086,7 +7086,7 @@ snapshots:
     dependencies:
       kysely: 0.28.14
 
-  '@tailor-platform/function-types@0.8.2': {}
+  '@tailor-platform/function-types@0.8.3': {}
 
   '@toiroakr/lines-db@0.9.0(valibot@1.1.0(typescript@5.9.3))':
     dependencies:
