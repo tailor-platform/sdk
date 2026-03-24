@@ -67,6 +67,10 @@ export type {
 } from "@/types/auth.generated";
 export type { OAuth2ClientGrantType, SCIMAttributeType, BeforeLoginHookArgs } from "@/types/auth";
 export type {
+  AuthConnectionOAuth2Config,
+  AuthConnectionConfig,
+} from "@/types/auth-connection.generated";
+export type {
   ValueOperand,
   UsernameFieldKey,
   UserAttributeKey,

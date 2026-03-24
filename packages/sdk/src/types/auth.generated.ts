@@ -401,6 +401,19 @@ export type AuthConfigInput =
             signatureField: string;
           }
         | undefined;
+      connections?:
+        | {
+            [x: string]: {
+              type: "oauth2";
+              providerUrl: string;
+              issuerUrl: string;
+              clientId: string;
+              clientSecret: string;
+              authUrl?: string | undefined;
+              tokenUrl?: string | undefined;
+            };
+          }
+        | undefined;
       publishSessionEvents?: boolean | undefined;
       userProfile?: undefined;
       machineUserAttributes?: undefined;
@@ -546,6 +559,19 @@ export type AuthConfigInput =
             namespace: string;
             type: string;
             signatureField: string;
+          }
+        | undefined;
+      connections?:
+        | {
+            [x: string]: {
+              type: "oauth2";
+              providerUrl: string;
+              issuerUrl: string;
+              clientId: string;
+              clientSecret: string;
+              authUrl?: string | undefined;
+              tokenUrl?: string | undefined;
+            };
           }
         | undefined;
       publishSessionEvents?: boolean | undefined;
@@ -705,6 +731,19 @@ export type AuthConfigInput =
             namespace: string;
             type: string;
             signatureField: string;
+          }
+        | undefined;
+      connections?:
+        | {
+            [x: string]: {
+              type: "oauth2";
+              providerUrl: string;
+              issuerUrl: string;
+              clientId: string;
+              clientSecret: string;
+              authUrl?: string | undefined;
+              tokenUrl?: string | undefined;
+            };
           }
         | undefined;
       publishSessionEvents?: boolean | undefined;
@@ -843,6 +882,19 @@ export type AuthConfig =
             signatureField: string;
           }
         | undefined;
+      connections?:
+        | {
+            [x: string]: {
+              type: "oauth2";
+              providerUrl: string;
+              issuerUrl: string;
+              clientId: string;
+              clientSecret: string;
+              authUrl?: string | undefined;
+              tokenUrl?: string | undefined;
+            };
+          }
+        | undefined;
       publishSessionEvents?: boolean | undefined;
       userProfile?: undefined;
       machineUserAttributes?: undefined;
@@ -998,6 +1050,19 @@ export type AuthConfig =
             namespace: string;
             type: string;
             signatureField: string;
+          }
+        | undefined;
+      connections?:
+        | {
+            [x: string]: {
+              type: "oauth2";
+              providerUrl: string;
+              issuerUrl: string;
+              clientId: string;
+              clientSecret: string;
+              authUrl?: string | undefined;
+              tokenUrl?: string | undefined;
+            };
           }
         | undefined;
       publishSessionEvents?: boolean | undefined;
@@ -1167,6 +1232,19 @@ export type AuthConfig =
             namespace: string;
             type: string;
             signatureField: string;
+          }
+        | undefined;
+      connections?:
+        | {
+            [x: string]: {
+              type: "oauth2";
+              providerUrl: string;
+              issuerUrl: string;
+              clientId: string;
+              clientSecret: string;
+              authUrl?: string | undefined;
+              tokenUrl?: string | undefined;
+            };
           }
         | undefined;
       publishSessionEvents?: boolean | undefined;

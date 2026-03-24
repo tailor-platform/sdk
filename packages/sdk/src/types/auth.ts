@@ -1,3 +1,4 @@
+import type { AuthConnectionConfig } from "./auth-connection.generated";
 import type {
   AuthInvoker,
   IdProvider as IdProviderConfig,
@@ -255,6 +256,7 @@ export type AuthServiceInput<
   idProvider?: IdProviderConfig;
   scim?: SCIMConfig;
   tenantProvider?: TenantProviderConfig;
+  connections?: Record<string, AuthConnectionConfig>;
   publishSessionEvents?: boolean;
 };
 

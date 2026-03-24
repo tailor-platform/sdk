@@ -1,6 +1,8 @@
 import { type TailorDBService } from "@/cli/services/tailordb/service";
 import { IdProviderSchema } from "@/parser/service/auth";
+import { AuthConnectionConfigSchema } from "@/parser/service/auth-connection";
 import type { AuthOwnConfig } from "@/types/auth";
+import type { AuthConnectionConfig } from "@/types/auth-connection.generated";
 import type { IdProvider as IdProviderConfig } from "@/types/auth.generated";
 
 type UserProfile = AuthOwnConfig["userProfile"] & {
@@ -12,6 +14,7 @@ export type AuthService = {
   readonly tailorDBServices: ReadonlyArray<TailorDBService>;
   readonly externalTailorDBNamespaces: ReadonlyArray<string>;
   readonly parsedConfig: AuthOwnConfig & { idProvider?: IdProviderConfig };
+  readonly connections: Readonly<Record<string, AuthConnectionConfig>>;
   readonly userProfile: UserProfile | undefined;
   resolveNamespaces: () => Promise<void>;
 };
@@ -33,6 +36,13 @@ export function createAuthService(
     idProvider: IdProviderSchema.optional().parse(config.idProvider),
   };
 
+  const connections: Record<string, AuthConnectionConfig> = {};
+  if (config.connections) {
+    for (const [name, connConfig] of Object.entries(config.connections)) {
+      connections[name] = AuthConnectionConfigSchema.parse(connConfig);
+    }
+  }
+
   let userProfile: UserProfile | undefined;
 
   return {
@@ -40,6 +50,7 @@ export function createAuthService(
     tailorDBServices,
     externalTailorDBNamespaces,
     parsedConfig,
+    connections,
     get userProfile() {
       return userProfile;
     },
