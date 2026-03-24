@@ -815,7 +815,7 @@ describe("planExecutor", () => {
         disabled: false,
         trigger: {
           kind: "record",
-          kinds: ["recordCreated", "recordUpdated"],
+          events: ["recordCreated", "recordUpdated"],
           typeName: "User",
         },
         operation: { kind: "function", body: () => {} },
@@ -851,7 +851,7 @@ describe("planExecutor", () => {
         disabled: false,
         trigger: {
           kind: "idpUser",
-          kinds: ["idpUserCreated", "idpUserDeleted"],
+          events: ["idpUserCreated", "idpUserDeleted"],
         },
         operation: { kind: "function", body: () => {} },
       };
@@ -881,7 +881,7 @@ describe("planExecutor", () => {
         disabled: false,
         trigger: {
           kind: "authAccessToken",
-          kinds: ["authAccessTokenIssued", "authAccessTokenRevoked"],
+          events: ["authAccessTokenIssued", "authAccessTokenRevoked"],
         },
         operation: { kind: "function", body: () => {} },
       };
@@ -914,7 +914,7 @@ describe("planExecutor", () => {
         disabled: false,
         trigger: {
           kind: "record",
-          kinds: ["recordCreated", "recordUpdated", "recordDeleted"],
+          events: ["recordCreated", "recordUpdated", "recordDeleted"],
           typeName: "User",
           condition: ({ typeName }: { typeName: string }) => typeName === "User",
         },

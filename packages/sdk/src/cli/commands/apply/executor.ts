@@ -338,7 +338,7 @@ function protoExecutor(
       triggerConfig = typedEventTrigger({
         case: "tailordb",
         value: {
-          eventTypes: trigger.kinds.map((k) => eventType[k]),
+          eventTypes: trigger.events.map((k) => eventType[k]),
           namespaceName: resolveTailorDBNamespace(application, trigger.typeName),
           typeName: trigger.typeName,
           ...(trigger.condition
@@ -352,7 +352,7 @@ function protoExecutor(
       triggerConfig = typedEventTrigger({
         case: "idp",
         value: {
-          eventTypes: trigger.kinds.map((k) => eventType[k]),
+          eventTypes: trigger.events.map((k) => eventType[k]),
           namespaceName: resolveIdpNamespace(application),
         },
       });
@@ -362,7 +362,7 @@ function protoExecutor(
       triggerConfig = typedEventTrigger({
         case: "auth",
         value: {
-          eventTypes: trigger.kinds.map((k) => eventType[k]),
+          eventTypes: trigger.events.map((k) => eventType[k]),
           namespaceName: resolveAuthNamespace(application),
         },
       });

@@ -6,7 +6,7 @@ export default createExecutor({
   description: "Triggered when a user is created or updated",
   trigger: recordTrigger({
     type: user,
-    kinds: ["created", "updated"],
+    events: ["created", "updated"],
   }),
   operation: {
     kind: "function",

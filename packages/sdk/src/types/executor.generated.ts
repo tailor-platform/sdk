@@ -56,7 +56,7 @@ export type MultiRecordTrigger = {
   /** Multi-event record trigger */
   kind: "record";
   /** Record event types to trigger on */
-  kinds: ("recordCreated" | "recordUpdated" | "recordDeleted")[];
+  events: ("recordCreated" | "recordUpdated" | "recordDeleted")[];
   /** TailorDB type name to watch for events */
   typeName: string;
   /** Condition function to filter events */
@@ -68,7 +68,7 @@ export type MultiIdpUserTrigger = {
   /** Multi-event IdP user trigger */
   kind: "idpUser";
   /** IdP user event types to trigger on */
-  kinds: ("idpUserCreated" | "idpUserUpdated" | "idpUserDeleted")[];
+  events: ("idpUserCreated" | "idpUserUpdated" | "idpUserDeleted")[];
 };
 export type MultiIdpUserTriggerInput = MultiIdpUserTrigger;
 
@@ -76,7 +76,7 @@ export type MultiAuthAccessTokenTrigger = {
   /** Multi-event auth access token trigger */
   kind: "authAccessToken";
   /** Auth access token event types to trigger on */
-  kinds: ("authAccessTokenIssued" | "authAccessTokenRefreshed" | "authAccessTokenRevoked")[];
+  events: ("authAccessTokenIssued" | "authAccessTokenRefreshed" | "authAccessTokenRevoked")[];
 };
 export type MultiAuthAccessTokenTriggerInput = MultiAuthAccessTokenTrigger;
 
@@ -218,17 +218,17 @@ export type ExecutorInput = {
       }
     | {
         kind: "record";
-        kinds: ("recordCreated" | "recordUpdated" | "recordDeleted")[];
+        events: ("recordCreated" | "recordUpdated" | "recordDeleted")[];
         typeName: string;
         condition?: Function | undefined;
       }
     | {
         kind: "idpUser";
-        kinds: ("idpUserCreated" | "idpUserUpdated" | "idpUserDeleted")[];
+        events: ("idpUserCreated" | "idpUserUpdated" | "idpUserDeleted")[];
       }
     | {
         kind: "authAccessToken";
-        kinds: ("authAccessTokenIssued" | "authAccessTokenRefreshed" | "authAccessTokenRevoked")[];
+        events: ("authAccessTokenIssued" | "authAccessTokenRefreshed" | "authAccessTokenRevoked")[];
       };
   /** Operation to execute when triggered */
   operation: unknown;
@@ -271,17 +271,17 @@ export type Executor = {
       }
     | {
         kind: "record";
-        kinds: ("recordCreated" | "recordUpdated" | "recordDeleted")[];
+        events: ("recordCreated" | "recordUpdated" | "recordDeleted")[];
         typeName: string;
         condition?: Function | undefined;
       }
     | {
         kind: "idpUser";
-        kinds: ("idpUserCreated" | "idpUserUpdated" | "idpUserDeleted")[];
+        events: ("idpUserCreated" | "idpUserUpdated" | "idpUserDeleted")[];
       }
     | {
         kind: "authAccessToken";
-        kinds: ("authAccessTokenIssued" | "authAccessTokenRefreshed" | "authAccessTokenRevoked")[];
+        events: ("authAccessTokenIssued" | "authAccessTokenRefreshed" | "authAccessTokenRevoked")[];
       };
   /** Operation to execute when triggered */
   operation:

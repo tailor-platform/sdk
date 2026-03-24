@@ -319,7 +319,7 @@ export type MultiRecordTrigger<Args> = ParserMultiRecordTrigger & {
 
 type RecordTriggerMultiOptions<T extends TailorDBType, K extends RecordEventKind[]> = {
   type: T;
-  kinds: K;
+  events: K;
   condition?: (args: RecordMultiArgs<T, K>) => boolean;
 };
 
@@ -327,17 +327,17 @@ type RecordTriggerMultiOptions<T extends TailorDBType, K extends RecordEventKind
  * Create a trigger that fires on multiple record event types.
  * @template T
  * @template K
- * @param options - Trigger options with kinds array
+ * @param options - Trigger options with events array
  * @returns Multi-event record trigger
  */
 export function recordTrigger<
   T extends TailorDBType,
   const K extends [RecordEventKind, ...RecordEventKind[]],
 >(options: RecordTriggerMultiOptions<T, K>): MultiRecordTrigger<RecordMultiArgs<T, K>> {
-  const { type, kinds, condition } = options;
+  const { type, events, condition } = options;
   return {
     kind: "record",
-    kinds: kinds.map((k) => recordKindMap[k]),
+    events: events.map((k) => recordKindMap[k]),
     typeName: type.name,
     condition,
     __args: {} as RecordMultiArgs<T, K>,
@@ -366,22 +366,22 @@ export type MultiIdpUserTrigger<Args> = ParserMultiIdpUserTrigger & {
 };
 
 type IdpUserTriggerOptions<K extends IdpUserEventKind[]> = {
-  kinds: K;
+  events: K;
 };
 
 /**
  * Create a trigger that fires on multiple IdP user event types.
  * @template K
- * @param options - Trigger options with kinds array
+ * @param options - Trigger options with events array
  * @returns Multi-event IdP user trigger
  */
 export function idpUserTrigger<const K extends [IdpUserEventKind, ...IdpUserEventKind[]]>(
   options: IdpUserTriggerOptions<K>,
 ): MultiIdpUserTrigger<IdpUserMultiArgs<K>> {
-  const { kinds } = options;
+  const { events } = options;
   return {
     kind: "idpUser",
-    kinds: kinds.map((k) => idpUserKindMap[k]),
+    events: events.map((k) => idpUserKindMap[k]),
     __args: {} as IdpUserMultiArgs<K>,
   };
 }
@@ -409,13 +409,13 @@ export type MultiAuthAccessTokenTrigger<Args> = ParserMultiAuthAccessTokenTrigge
 };
 
 type AuthAccessTokenTriggerOptions<K extends AuthAccessTokenEventKind[]> = {
-  kinds: K;
+  events: K;
 };
 
 /**
  * Create a trigger that fires on multiple auth access token event types.
  * @template K
- * @param options - Trigger options with kinds array
+ * @param options - Trigger options with events array
  * @returns Multi-event auth access token trigger
  */
 export function authAccessTokenTrigger<
@@ -423,10 +423,10 @@ export function authAccessTokenTrigger<
 >(
   options: AuthAccessTokenTriggerOptions<K>,
 ): MultiAuthAccessTokenTrigger<AuthAccessTokenMultiArgs<K>> {
-  const { kinds } = options;
+  const { events } = options;
   return {
     kind: "authAccessToken",
-    kinds: kinds.map((k) => authAccessTokenKindMap[k]),
+    events: events.map((k) => authAccessTokenKindMap[k]),
     __args: {} as AuthAccessTokenMultiArgs<K>,
   };
 }

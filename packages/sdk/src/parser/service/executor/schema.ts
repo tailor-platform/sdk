@@ -42,7 +42,7 @@ export const AuthAccessTokenTriggerSchema = z.object({
 
 export const MultiRecordTriggerSchema = z.object({
   kind: z.literal("record").describe("Multi-event record trigger"),
-  kinds: z
+  events: z
     .array(z.enum(["recordCreated", "recordUpdated", "recordDeleted"]))
     .min(1)
     .describe("Record event types to trigger on"),
@@ -52,7 +52,7 @@ export const MultiRecordTriggerSchema = z.object({
 
 export const MultiIdpUserTriggerSchema = z.object({
   kind: z.literal("idpUser").describe("Multi-event IdP user trigger"),
-  kinds: z
+  events: z
     .array(z.enum(["idpUserCreated", "idpUserUpdated", "idpUserDeleted"]))
     .min(1)
     .describe("IdP user event types to trigger on"),
@@ -60,7 +60,7 @@ export const MultiIdpUserTriggerSchema = z.object({
 
 export const MultiAuthAccessTokenTriggerSchema = z.object({
   kind: z.literal("authAccessToken").describe("Multi-event auth access token trigger"),
-  kinds: z
+  events: z
     .array(z.enum(["authAccessTokenIssued", "authAccessTokenRefreshed", "authAccessTokenRevoked"]))
     .min(1)
     .describe("Auth access token event types to trigger on"),

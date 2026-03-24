@@ -737,21 +737,21 @@ describe("resolverExecutedTrigger", () => {
 });
 
 describe("recordTrigger (multi-event)", () => {
-  test("can specify multiple kinds", () => {
+  test("can specify multiple events", () => {
     const user = db.type("User", {
       name: db.string(),
       age: db.int(),
     });
     const trigger = recordTrigger({
       type: user,
-      kinds: ["created", "updated"],
+      events: ["created", "updated"],
     });
     expect(trigger.kind).toBe("record");
-    expect(trigger.kinds).toEqual(["recordCreated", "recordUpdated"]);
+    expect(trigger.events).toEqual(["recordCreated", "recordUpdated"]);
     expect(trigger.typeName).toBe("User");
   });
 
-  test("args are a union of selected kinds with kind discriminant", () => {
+  test("args are a union of selected events with kind discriminant", () => {
     const user = db.type("User", {
       name: db.string(),
       age: db.int(),
@@ -760,7 +760,7 @@ describe("recordTrigger (multi-event)", () => {
       name: "test",
       trigger: recordTrigger({
         type: user,
-        kinds: ["created", "updated"],
+        events: ["created", "updated"],
       }),
       operation: {
         kind: "function",
@@ -804,7 +804,7 @@ describe("recordTrigger (multi-event)", () => {
     });
     recordTrigger({
       type: user,
-      kinds: ["created", "deleted"],
+      events: ["created", "deleted"],
       condition: (args) => {
         if (args.kind === "created") {
           return args.newRecord.age >= 18;
@@ -814,7 +814,7 @@ describe("recordTrigger (multi-event)", () => {
     });
   });
 
-  test("all three kinds produce full union", () => {
+  test("all three events produce full union", () => {
     const user = db.type("User", {
       name: db.string(),
       age: db.int(),
@@ -823,7 +823,7 @@ describe("recordTrigger (multi-event)", () => {
       name: "test",
       trigger: recordTrigger({
         type: user,
-        kinds: ["created", "updated", "deleted"],
+        events: ["created", "updated", "deleted"],
       }),
       operation: {
         kind: "function",
@@ -842,16 +842,16 @@ describe("recordTrigger (multi-event)", () => {
 });
 
 describe("idpUserTrigger (multi-event)", () => {
-  test("can specify multiple kinds", () => {
-    const trigger = idpUserTrigger({ kinds: ["created", "deleted"] });
+  test("can specify multiple events", () => {
+    const trigger = idpUserTrigger({ events: ["created", "deleted"] });
     expect(trigger.kind).toBe("idpUser");
-    expect(trigger.kinds).toEqual(["idpUserCreated", "idpUserDeleted"]);
+    expect(trigger.events).toEqual(["idpUserCreated", "idpUserDeleted"]);
   });
 
   test("args have kind discriminant", () => {
     createExecutor({
       name: "test",
-      trigger: idpUserTrigger({ kinds: ["created", "updated"] }),
+      trigger: idpUserTrigger({ events: ["created", "updated"] }),
       operation: {
         kind: "function",
         body: (args) => {
@@ -871,16 +871,16 @@ describe("idpUserTrigger (multi-event)", () => {
 });
 
 describe("authAccessTokenTrigger (multi-event)", () => {
-  test("can specify multiple kinds", () => {
-    const trigger = authAccessTokenTrigger({ kinds: ["issued", "revoked"] });
+  test("can specify multiple events", () => {
+    const trigger = authAccessTokenTrigger({ events: ["issued", "revoked"] });
     expect(trigger.kind).toBe("authAccessToken");
-    expect(trigger.kinds).toEqual(["authAccessTokenIssued", "authAccessTokenRevoked"]);
+    expect(trigger.events).toEqual(["authAccessTokenIssued", "authAccessTokenRevoked"]);
   });
 
   test("args have kind discriminant", () => {
     createExecutor({
       name: "test",
-      trigger: authAccessTokenTrigger({ kinds: ["issued", "refreshed", "revoked"] }),
+      trigger: authAccessTokenTrigger({ events: ["issued", "refreshed", "revoked"] }),
       operation: {
         kind: "function",
         body: (args) => {
