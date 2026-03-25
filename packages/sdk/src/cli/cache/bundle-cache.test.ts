@@ -26,33 +26,30 @@ describe("createBundleCache", () => {
   }
 
   describe("tryRestore", () => {
-    test("returns false when no cache entry exists", () => {
+    test("returns undefined when no cache entry exists", () => {
       const store = createCacheStore({ cacheDir });
       const cache = createBundleCache(store);
-      const outputPath = path.join(tmpDir, "dist", "resolver.js");
 
       const result = cache.tryRestore({
         kind: "resolver",
         name: "myResolver",
-        outputPath,
       });
 
-      expect(result).toBe(false);
+      expect(result).toBeUndefined();
     });
 
-    test("returns false when input hash does not match (dependency changed)", () => {
+    test("returns undefined when input hash does not match (dependency changed)", () => {
       const store = createCacheStore({ cacheDir });
       const cache = createBundleCache(store);
       const sourceFile = writeFile("src/resolver.ts", "export default {}");
       const depFile = writeFile("src/utils.ts", "export const x = 1;");
-      const outputPath = writeFile("dist/resolver.js", "bundled output");
 
       // Save initial cache
       cache.save({
         kind: "resolver",
         name: "myResolver",
         sourceFile,
-        outputPath,
+        content: "bundled output",
         dependencyPaths: [sourceFile, depFile],
       });
 
@@ -62,56 +59,45 @@ describe("createBundleCache", () => {
       const result = cache.tryRestore({
         kind: "resolver",
         name: "myResolver",
-        outputPath,
       });
 
-      expect(result).toBe(false);
+      expect(result).toBeUndefined();
     });
 
-    test("returns true and restores output when cache is valid", () => {
+    test("returns content string when cache is valid", () => {
       const store = createCacheStore({ cacheDir });
       const cache = createBundleCache(store);
       const sourceFile = writeFile("src/resolver.ts", "export default {}");
       const depFile = writeFile("src/utils.ts", "export const x = 1;");
-      const outputPath = writeFile("dist/resolver.js", "bundled output");
 
       // Save to cache
       cache.save({
         kind: "resolver",
         name: "myResolver",
         sourceFile,
-        outputPath,
+        content: "bundled output",
         dependencyPaths: [sourceFile, depFile],
       });
-
-      // Remove the output file to simulate a clean build directory
-      fs.unlinkSync(outputPath);
-      expect(fs.existsSync(outputPath)).toBe(false);
 
       const result = cache.tryRestore({
         kind: "resolver",
         name: "myResolver",
-        outputPath,
       });
 
-      expect(result).toBe(true);
-      // Output should be restored from cache
-      expect(fs.existsSync(outputPath)).toBe(true);
-      expect(fs.readFileSync(outputPath, "utf-8")).toBe("bundled output");
+      expect(result).toBe("bundled output");
     });
 
-    test("returns false when restoreBundleOutput fails", () => {
+    test("returns undefined when cached bundle file is missing", () => {
       const store = createCacheStore({ cacheDir });
       const cache = createBundleCache(store);
       const sourceFile = writeFile("src/resolver.ts", "export default {}");
-      const outputPath = writeFile("dist/resolver.js", "bundled output");
 
       // Save to cache
       cache.save({
         kind: "resolver",
         name: "myResolver",
         sourceFile,
-        outputPath,
+        content: "bundled output",
         dependencyPaths: [sourceFile],
       });
 
@@ -122,25 +108,23 @@ describe("createBundleCache", () => {
       const result = cache.tryRestore({
         kind: "resolver",
         name: "myResolver",
-        outputPath,
       });
 
-      expect(result).toBe(false);
+      expect(result).toBeUndefined();
     });
 
-    test("returns false when a dependency file no longer exists", () => {
+    test("returns undefined when a dependency file no longer exists", () => {
       const store = createCacheStore({ cacheDir });
       const cache = createBundleCache(store);
       const sourceFile = writeFile("src/resolver.ts", "export default {}");
       const depFile = writeFile("src/utils.ts", "export const x = 1;");
-      const outputPath = writeFile("dist/resolver.js", "bundled output");
 
       // Save to cache
       cache.save({
         kind: "resolver",
         name: "myResolver",
         sourceFile,
-        outputPath,
+        content: "bundled output",
         dependencyPaths: [sourceFile, depFile],
       });
 
@@ -150,23 +134,21 @@ describe("createBundleCache", () => {
       const result = cache.tryRestore({
         kind: "resolver",
         name: "myResolver",
-        outputPath,
       });
 
-      expect(result).toBe(false);
+      expect(result).toBeUndefined();
     });
 
-    test("returns false when contextHash changes", () => {
+    test("returns undefined when contextHash changes", () => {
       const store = createCacheStore({ cacheDir });
       const cache = createBundleCache(store);
       const sourceFile = writeFile("src/workflow.ts", "export default {}");
-      const outputPath = writeFile("dist/workflow.js", "bundled output");
 
       cache.save({
         kind: "workflow-job",
         name: "myJob",
         sourceFile,
-        outputPath,
+        content: "bundled output",
         dependencyPaths: [sourceFile],
         contextHash: "env-hash-a",
       });
@@ -174,109 +156,70 @@ describe("createBundleCache", () => {
       const result = cache.tryRestore({
         kind: "workflow-job",
         name: "myJob",
-        outputPath,
         contextHash: "env-hash-b",
       });
 
-      expect(result).toBe(false);
+      expect(result).toBeUndefined();
     });
 
-    test("returns false when contextHash is added after save without one", () => {
+    test("returns undefined when contextHash is added after save without one", () => {
       const store = createCacheStore({ cacheDir });
       const cache = createBundleCache(store);
       const sourceFile = writeFile("src/workflow.ts", "export default {}");
-      const outputPath = writeFile("dist/workflow.js", "bundled output");
 
       cache.save({
         kind: "workflow-job",
         name: "myJob",
         sourceFile,
-        outputPath,
+        content: "bundled output",
         dependencyPaths: [sourceFile],
       });
 
       const result = cache.tryRestore({
         kind: "workflow-job",
         name: "myJob",
-        outputPath,
         contextHash: "env-hash-a",
       });
 
-      expect(result).toBe(false);
+      expect(result).toBeUndefined();
     });
 
-    test("returns true when contextHash matches", () => {
+    test("returns content when contextHash matches", () => {
       const store = createCacheStore({ cacheDir });
       const cache = createBundleCache(store);
       const sourceFile = writeFile("src/workflow.ts", "export default {}");
-      const outputPath = writeFile("dist/workflow.js", "bundled output");
 
       cache.save({
         kind: "workflow-job",
         name: "myJob",
         sourceFile,
-        outputPath,
+        content: "bundled output",
         dependencyPaths: [sourceFile],
         contextHash: "env-hash-a",
       });
-
-      fs.unlinkSync(outputPath);
 
       const result = cache.tryRestore({
         kind: "workflow-job",
         name: "myJob",
-        outputPath,
         contextHash: "env-hash-a",
       });
 
-      expect(result).toBe(true);
-      expect(fs.existsSync(outputPath)).toBe(true);
-    });
-
-    test("restores companion .map file on cache hit", () => {
-      const store = createCacheStore({ cacheDir });
-      const cache = createBundleCache(store);
-      const sourceFile = writeFile("src/resolver.ts", "export default {}");
-      const outputPath = writeFile("dist/resolver.js", "bundled output");
-      writeFile("dist/resolver.js.map", '{"mappings":"AAAA"}');
-
-      cache.save({
-        kind: "resolver",
-        name: "myResolver",
-        sourceFile,
-        outputPath,
-        dependencyPaths: [sourceFile],
-      });
-
-      // Remove both output files to simulate clean build directory
-      fs.unlinkSync(outputPath);
-      fs.unlinkSync(`${outputPath}.map`);
-
-      const result = cache.tryRestore({
-        kind: "resolver",
-        name: "myResolver",
-        outputPath,
-      });
-
-      expect(result).toBe(true);
-      expect(fs.readFileSync(outputPath, "utf-8")).toBe("bundled output");
-      expect(fs.readFileSync(`${outputPath}.map`, "utf-8")).toBe('{"mappings":"AAAA"}');
+      expect(result).toBe("bundled output");
     });
   });
 
   describe("save", () => {
-    test("stores bundle output and creates cache entry", () => {
+    test("stores bundle content and creates cache entry", () => {
       const store = createCacheStore({ cacheDir });
       const cache = createBundleCache(store);
       const sourceFile = writeFile("src/executor.ts", "export default {}");
       const depFile = writeFile("src/helper.ts", "export function help() {}");
-      const outputPath = writeFile("dist/executor.js", "bundled executor");
 
       cache.save({
         kind: "executor",
         name: "myExecutor",
         sourceFile,
-        outputPath,
+        content: "bundled executor",
         dependencyPaths: [sourceFile, depFile],
       });
 
@@ -289,7 +232,7 @@ describe("createBundleCache", () => {
       expect(entry?.outputFiles).toHaveLength(1);
       expect(entry?.outputFiles[0]?.contentHash).toMatch(/^[0-9a-f]{64}$/);
 
-      // Verify bundle output is stored in cache (colon replaced with underscore in filename)
+      // Verify bundle content is stored in cache (colon replaced with underscore in filename)
       const cachedBundlePath = path.join(cacheDir, "bundles", "executor_myExecutor.js");
       expect(fs.existsSync(cachedBundlePath)).toBe(true);
       expect(fs.readFileSync(cachedBundlePath, "utf-8")).toBe("bundled executor");
@@ -299,14 +242,13 @@ describe("createBundleCache", () => {
       const store = createCacheStore({ cacheDir });
       const cache = createBundleCache(store);
       const sourceFile = writeFile("src/workflow.ts", "export default {}");
-      const outputPath = writeFile("dist/workflow.js", "bundled v1");
 
       // First save
       cache.save({
         kind: "workflow-job",
         name: "myJob",
         sourceFile,
-        outputPath,
+        content: "bundled v1",
         dependencyPaths: [sourceFile],
       });
 
@@ -314,16 +256,15 @@ describe("createBundleCache", () => {
       expect(firstEntry).toBeDefined();
       const firstInputHash = firstEntry?.inputHash;
 
-      // Modify source and output
+      // Modify source
       fs.writeFileSync(sourceFile, "export default { updated: true }");
-      fs.writeFileSync(outputPath, "bundled v2");
 
-      // Re-save
+      // Re-save with new content
       cache.save({
         kind: "workflow-job",
         name: "myJob",
         sourceFile,
-        outputPath,
+        content: "bundled v2",
         dependencyPaths: [sourceFile],
       });
 
@@ -339,13 +280,12 @@ describe("createBundleCache", () => {
       const store = createCacheStore({ cacheDir });
       const cache = createBundleCache(store);
       const sourceFile = writeFile("src/resolver.ts", "export default {}");
-      const outputPath = writeFile("dist/resolver.js", "bundled");
 
       cache.save({
         kind: "resolver",
         name: "getUser",
         sourceFile,
-        outputPath,
+        content: "bundled",
         dependencyPaths: [sourceFile],
       });
 
@@ -378,68 +318,61 @@ describe("withCache", () => {
   }
 
   test("calls build directly when cache is undefined", async () => {
-    const build = vi.fn();
-    await withCache({
+    const build = vi.fn(async () => "built output");
+    const result = await withCache({
       cache: undefined,
       kind: "resolver",
       name: "myResolver",
       sourceFile: "/tmp/src.ts",
-      outputPath: "/tmp/out.js",
       contextHash: undefined,
       build,
     });
 
     expect(build).toHaveBeenCalledOnce();
     expect(build).toHaveBeenCalledWith([]);
+    expect(result).toBe("built output");
   });
 
   test("skips build when cache restores successfully", async () => {
     const store = createCacheStore({ cacheDir });
     const cache = createBundleCache(store);
     const sourceFile = writeFile("src/resolver.ts", "export default {}");
-    const outputPath = writeFile("dist/resolver.js", "bundled output");
 
     // Pre-populate cache
     cache.save({
       kind: "resolver",
       name: "myResolver",
       sourceFile,
-      outputPath,
+      content: "bundled output",
       dependencyPaths: [sourceFile],
     });
 
-    const build = vi.fn();
-    await withCache({
+    const build = vi.fn(async () => "should not be called");
+    const result = await withCache({
       cache,
       kind: "resolver",
       name: "myResolver",
       sourceFile,
-      outputPath,
       contextHash: undefined,
       build,
     });
 
     expect(build).not.toHaveBeenCalled();
+    expect(result).toBe("bundled output");
   });
 
   test("calls build and saves to cache on cache miss", async () => {
     const store = createCacheStore({ cacheDir });
     const cache = createBundleCache(store);
     const sourceFile = writeFile("src/resolver.ts", "export default {}");
-    const outputPath = path.join(tmpDir, "dist", "resolver.js");
 
-    const build = vi.fn(async () => {
-      // Simulate build producing an output file
-      fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-      fs.writeFileSync(outputPath, "built output");
-    });
+    const build = vi.fn(async () => "built output");
 
-    await withCache({
+    const result = await withCache({
       cache,
       kind: "resolver",
       name: "myResolver",
       sourceFile,
-      outputPath,
       contextHash: undefined,
       build,
     });
@@ -450,18 +383,15 @@ describe("withCache", () => {
     expect(firstCallArgs?.[0]).toHaveLength(1);
     // Cache entry should exist after save
     expect(store.getEntry("resolver:myResolver")).toBeDefined();
+    expect(result).toBe("built output");
   });
 
   test("passes contextHash through to tryRestore and save", async () => {
     const store = createCacheStore({ cacheDir });
     const cache = createBundleCache(store);
     const sourceFile = writeFile("src/job.ts", "export default {}");
-    const outputPath = path.join(tmpDir, "dist", "job.js");
 
-    const build = vi.fn(async () => {
-      fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-      fs.writeFileSync(outputPath, "built output");
-    });
+    const build = vi.fn(async () => "built output");
 
     // First call: cache miss, should build and save with contextHash
     await withCache({
@@ -469,7 +399,6 @@ describe("withCache", () => {
       kind: "workflow-job",
       name: "myJob",
       sourceFile,
-      outputPath,
       contextHash: "hash-a",
       build,
     });
@@ -477,28 +406,25 @@ describe("withCache", () => {
 
     // Second call with same contextHash: should hit cache
     build.mockClear();
-    await withCache({
+    const result = await withCache({
       cache,
       kind: "workflow-job",
       name: "myJob",
       sourceFile,
-      outputPath,
       contextHash: "hash-a",
       build,
     });
     expect(build).not.toHaveBeenCalled();
+    expect(result).toBe("built output");
 
     // Third call with different contextHash: should miss cache
     build.mockClear();
-    build.mockImplementation(async () => {
-      fs.writeFileSync(outputPath, "rebuilt output");
-    });
+    build.mockImplementation(async () => "rebuilt output");
     await withCache({
       cache,
       kind: "workflow-job",
       name: "myJob",
       sourceFile,
-      outputPath,
       contextHash: "hash-b",
       build,
     });

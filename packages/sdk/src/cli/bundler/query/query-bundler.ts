@@ -86,7 +86,6 @@ export async function bundleQueryScript(engine: QueryEngine): Promise<string> {
   fs.mkdirSync(outputDir, { recursive: true });
 
   const entryPath = path.join(outputDir, `query_${engine}.entry.ts`);
-  const outputPath = path.join(outputDir, `query_${engine}.js`);
   const entryContent = engine === "sql" ? createSqlEntry() : createGqlEntry();
   fs.writeFileSync(entryPath, entryContent);
 
@@ -97,32 +96,30 @@ export async function bundleQueryScript(engine: QueryEngine): Promise<string> {
     tsconfig = undefined;
   }
 
-  await rolldown.build(
-    rolldown.defineConfig({
-      input: entryPath,
-      output: {
-        file: outputPath,
-        format: "esm",
-        sourcemap: false,
-        minify: false,
-        codeSplitting: false,
-        globals: {
-          tailordb: "tailordb",
-        },
+  const result = await rolldown.build({
+    input: entryPath,
+    write: false,
+    output: {
+      format: "esm",
+      sourcemap: false,
+      minify: false,
+      codeSplitting: false,
+      globals: {
+        tailordb: "tailordb",
       },
-      external: engine === "sql" ? ["tailordb"] : [],
-      resolve: {
-        conditionNames: ["node", "import"],
-      },
-      tsconfig,
-      treeshake: {
-        moduleSideEffects: false,
-        annotations: true,
-        unknownGlobalSideEffects: false,
-      },
-      logLevel: "silent",
-    }) as rolldown.BuildOptions,
-  );
+    },
+    external: engine === "sql" ? ["tailordb"] : [],
+    resolve: {
+      conditionNames: ["node", "import"],
+    },
+    tsconfig,
+    treeshake: {
+      moduleSideEffects: false,
+      annotations: true,
+      unknownGlobalSideEffects: false,
+    },
+    logLevel: "silent",
+  } as rolldown.BuildOptions);
 
-  return fs.readFileSync(outputPath, "utf-8");
+  return result.output[0].code;
 }

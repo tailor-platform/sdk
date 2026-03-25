@@ -1,9 +1,6 @@
 import { spawn } from "node:child_process";
-import crypto from "node:crypto";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { cleanEnv, detectInfraFailure } from "./shared";
+import { CONTAINER_WORK_DIR, buildContainerRunArgs, ensureImage } from "./container";
+import { detectInfraFailure } from "./shared";
 import type { AuthCheckResult, SolveAdapter, SolveResult, SolveRunOptions } from "./types";
 
 type CodexJsonlEvent = {
@@ -45,54 +42,6 @@ const APPROX_OUTPUT_USD_PER_MILLION = 10;
 // exists as of 2025-06).
 const OUTPUT_BUDGET_RATIO = 0.8;
 const MIN_MODEL_MAX_OUTPUT_TOKENS = 32;
-
-const codexDenylistRuleJustification = "Benchmark artifact access is forbidden.";
-const codexDenylistRuleFile = path.join(".codex", "rules", "llm-challenge-denylist.rules");
-
-// Broad file-discovery commands to block (prevents locating challenge root).
-// Includes the current user's home directory so that `find /Users/<username>`
-// is blocked (it would otherwise bypass the `find /Users` rule since
-// prefix_rule requires exact token match). Deeper subpaths like
-// `find $HOME/ghq` are NOT blocked — blocking `find` entirely would prevent
-// the model from using `find` within its workspace. This is an accepted
-// limitation; the primary defense is path obfuscation (tarball + env scrub).
-//
-// Note: `find -L /` has tokens ["find", "-L", "/"], which bypasses
-// ["find", "/"] since the second token differs. We add common leading
-// options (-L, -H, -P) to cover these variants.
-const homeDir = os.homedir().replaceAll(path.sep, "/");
-// Common absolute paths for discovery commands on macOS/Linux.
-// Models can bypass bare command rules (e.g. ["find", "/"]) by using
-// absolute paths (e.g. ["/usr/bin/find", "/"]). We duplicate rules for
-// the most common binary locations.
-const findPaths = ["find", "/usr/bin/find", "/bin/find"];
-const fdPaths = ["fd", "/usr/bin/fd", "/usr/local/bin/fd", "/opt/homebrew/bin/fd"];
-const locatePaths = ["locate", "/usr/bin/locate"];
-const mdfindPaths = ["mdfind", "/usr/bin/mdfind"];
-
-const broadScanTargets = ["/", "/Users", "/home", "/tmp", "/var", "/private", homeDir];
-const findLeadingOptions = ["-L", "-H", "-P"];
-
-const discoveryCommandPrefixes: string[][] = [
-  // find and absolute-path variants
-  ...findPaths.flatMap((cmd) => [
-    ...broadScanTargets.map((target) => [cmd, target]),
-    ...findLeadingOptions.map((opt) => [cmd, opt]),
-  ]),
-  // fd and absolute-path variants
-  ...fdPaths.flatMap((cmd) => [
-    [cmd, "/"],
-    [cmd, "/Users"],
-    [cmd, "/home"],
-    [cmd, "/tmp"],
-    [cmd, "--base-directory", "/"],
-    [cmd, "--hidden"],
-    [cmd, "--no-ignore"],
-  ]),
-  // locate and mdfind (no arguments needed — bare command is enough)
-  ...locatePaths.map((cmd) => [cmd]),
-  ...mdfindPaths.map((cmd) => [cmd]),
-];
 
 type CodexJsonlParseResult = {
   success: boolean;
@@ -267,160 +216,20 @@ export function interpretCodexAuthStatus(input: CodexAuthStatusInput): AuthCheck
   };
 }
 
-/**
- * Build a minimal denylist ruleset that blocks broad file-discovery commands.
- *
- * This replaces the previous approach of exhaustively enumerating every
- * possible read command for every sensitive file path (~500+ rules).
- * The primary defense is now path-leak prevention (tarball install, env scrub,
- * tmpdir obfuscation) so these rules are a secondary safety net.
- *
- * Why a denylist instead of OS-level isolation (containers/chroot):
- * Codex's `workspace-write` sandbox already restricts writes to the
- * workspace directory. Read access outside the workspace is allowed by
- * design (the model needs to read system libraries, toolchains, etc.).
- * Full OS-level path isolation would require running inside a container
- * or mount namespace, which is a significant infrastructure change
- * beyond the scope of the Codex CLI's sandbox model. The denylist
- * targets the specific reconnaissance commands (find/fd/locate/mdfind)
- * that could scan the filesystem broadly enough to discover the
- * obfuscated challenge root. Relative-path traversal (`find ../../`)
- * and interpreter-based exploration (`python -c "os.walk(...)"`) are
- * not blocked, but they require the model to already know or guess
- * a path prefix, which the obfuscation layer is designed to prevent.
- *
- * IMPORTANT: The rules file must NOT embed the challenge root absolute path.
- * Codex can read `.codex/rules/` files in its workspace, so including the
- * path would leak the primary secret and undermine the obfuscation defense.
- *
- * Why we do NOT add explicit shell-wrapper rules:
- * Codex's execpolicy engine has built-in shell script parsing that
- * automatically splits `/bin/zsh -lc 'find /'` (and bash/sh variants with
- * -c or -lc) into individual commands and applies prefix_rule matching to
- * each one separately. This means our `["find", "/"]` rule already blocks
- * `find /` even when invoked through a shell wrapper. Adding manual
- * wrapper-token patterns (e.g. `["/bin/zsh", "-lc", ...]`) would be
- * redundant and overly broad (blocking all shell-invoked commands).
- * See: https://developers.openai.com/codex/exec-policy
- */
-export function buildCodexDenylistRules(): string {
-  const justification = JSON.stringify(codexDenylistRuleJustification);
-  const lines: string[] = [
-    "# Auto-generated by llm-challenge codex runner.",
-    "# Blocks broad file-discovery commands to prevent locating benchmark artifacts.",
-  ];
+async function runCodex(options: SolveRunOptions): Promise<SolveResult> {
+  await ensureImage();
 
-  // Block discovery commands that scan filesystem broadly.
-  // Shell-wrapped invocations (e.g. `/bin/zsh -lc 'find /'`) are handled
-  // automatically by execpolicy's built-in shell script parsing.
-  for (const prefix of discoveryCommandPrefixes) {
-    const pattern = prefix.map((token) => JSON.stringify(token)).join(", ");
-    lines.push(
-      `prefix_rule(pattern = [${pattern}], decision = "forbidden", justification = ${justification})`,
-    );
-  }
-
-  return `${lines.join("\n")}\n`;
-}
-
-/**
- * Ensure that `target` is a real directory (not a symlink, file, or other
- * non-directory node). If the path exists but is not a directory, it is
- * removed and recreated.
- *
- * This prevents the runner from following symlinks or writing into
- * non-directory nodes that a previous Codex run may have planted.
- */
-function ensureRealDirectory(target: string): void {
-  try {
-    const stat = fs.lstatSync(target);
-    if (stat.isDirectory()) {
-      return;
-    }
-    // Remove non-directory node (symlink, file, etc.)
-    fs.rmSync(target, { recursive: true });
-  } catch {
-    // Path does not exist — will be created below.
-  }
-  fs.mkdirSync(target, { recursive: true });
-}
-
-export function ensureCodexDenylistRules(workDir: string): void {
-  const resolvedWorkDir = path.resolve(workDir);
-  const rulesPath = path.join(resolvedWorkDir, codexDenylistRuleFile);
-
-  // Always regenerate: a previous Codex attempt may have tampered with
-  // or removed the rules file, so retries must enforce fresh constraints.
-  //
-  // Guard against link attacks: Codex (workspace-write) can replace
-  // directories or files with symlinks, hard links, or regular files
-  // pointing outside the workspace. If we blindly write to them, the
-  // runner would overwrite arbitrary external files on retry.
-  //
-  // For directories: ensure they are real directories (not symlinks/files).
-  // For the rules file: write to a temp file and atomically rename to
-  // avoid TOCTOU races (a concurrent process planting a symlink between
-  // unlink and write).
-  const codexDir = path.join(resolvedWorkDir, ".codex");
-  const rulesDir = path.join(codexDir, "rules");
-
-  ensureRealDirectory(codexDir);
-  ensureRealDirectory(rulesDir);
-
-  // Write rules to a temp file in the same directory, then atomically
-  // rename to the target path. renameSync on the same filesystem is
-  // atomic and replaces the target entry itself (not following symlinks
-  // or hard links), eliminating both TOCTOU races and link attacks.
-  //
-  // The temp file name is randomized (UUID) to prevent a previous Codex
-  // run from planting a symlink/hard link at a predictable path. O_EXCL
-  // ensures the open fails if a file already exists at the chosen name.
-  const tmpPath = path.join(rulesDir, `.rules-${crypto.randomUUID()}.tmp`);
-  const fd = fs.openSync(
-    tmpPath,
-    fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_WRONLY,
-  );
-  try {
-    fs.writeSync(fd, buildCodexDenylistRules(), null, "utf-8");
-  } finally {
-    fs.closeSync(fd);
-  }
-  // Guard against rulesPath being replaced with a directory (or symlink to a
-  // directory) by a prior Codex run. renameSync fails with EISDIR/ENOTEMPTY
-  // when the target is a directory, so remove non-file nodes first.
-  try {
-    const stat = fs.lstatSync(rulesPath);
-    if (!stat.isFile() || stat.isSymbolicLink()) {
-      fs.rmSync(rulesPath, { recursive: true });
-    }
-  } catch {
-    // Path does not exist — rename will create it.
-  }
-  try {
-    fs.renameSync(tmpPath, rulesPath);
-  } catch (err) {
-    // Clean up the temp file to avoid leaking it on rename failure.
-    try {
-      fs.unlinkSync(tmpPath);
-    } catch {
-      // Best-effort cleanup.
-    }
-    throw err;
-  }
-}
-
-function runCodex(options: SolveRunOptions): Promise<SolveResult> {
   const { prompt, workDir, model, maxBudget } = options;
-  ensureCodexDenylistRules(workDir);
   const modelMaxOutputTokens = estimateCodexMaxOutputTokens(maxBudget);
-  const args = [
+  const cliArgs = [
     "exec",
     "--json",
-    "--full-auto",
-    "--sandbox",
-    "workspace-write",
+    // Bypass Codex's bubblewrap sandbox: it cannot create mount namespaces
+    // inside a rootless Podman container. The container itself provides
+    // filesystem isolation, so the internal sandbox is redundant.
+    "--dangerously-bypass-approvals-and-sandbox",
     "--cd",
-    workDir,
+    CONTAINER_WORK_DIR,
     "--skip-git-repo-check",
     "-c",
     `model_max_output_tokens=${String(modelMaxOutputTokens)}`,
@@ -432,15 +241,13 @@ function runCodex(options: SolveRunOptions): Promise<SolveResult> {
     "-",
   ];
 
-  const env = cleanEnv();
+  const containerArgs = buildContainerRunArgs("codex", cliArgs, { workDir, stdin: true });
   const startTime = Date.now();
-  const timeout = 600_000; // 10 minutes
+  const timeout = 1_200_000; // 20 minutes
 
   return new Promise<SolveResult>((resolve) => {
-    const proc = spawn("codex", args, {
-      cwd: workDir,
+    const proc = spawn("podman", containerArgs, {
       stdio: ["pipe", "pipe", "pipe"],
-      env,
     });
 
     const stdoutChunks: Buffer[] = [];
@@ -507,19 +314,15 @@ function runCodex(options: SolveRunOptions): Promise<SolveResult> {
   });
 }
 
-function checkCodexAuthStatus(model?: string): Promise<AuthCheckResult> {
-  // Run auth check in an empty temp directory to prevent the model from
-  // reading repository files during the lightweight "Reply ok" prompt.
-  const authDir = fs.mkdtempSync(path.join(os.tmpdir(), "codex-auth-"));
+async function checkCodexAuthStatus(model?: string): Promise<AuthCheckResult> {
+  await ensureImage();
 
-  const args = [
+  const cliArgs = [
     "exec",
     "--json",
-    "--full-auto",
-    "--sandbox",
-    "read-only",
+    "--dangerously-bypass-approvals-and-sandbox",
     "--cd",
-    authDir,
+    "/tmp",
     "--skip-git-repo-check",
     "-c",
     "model_reasoning_effort=high",
@@ -527,14 +330,12 @@ function checkCodexAuthStatus(model?: string): Promise<AuthCheckResult> {
     "Reply with exactly: ok",
   ];
 
-  const env = cleanEnv();
+  const containerArgs = buildContainerRunArgs("codex", cliArgs);
   const timeout = 30_000;
 
   return new Promise<AuthCheckResult>((resolve) => {
-    const proc = spawn("codex", args, {
-      cwd: authDir,
+    const proc = spawn("podman", containerArgs, {
       stdio: ["ignore", "pipe", "pipe"],
-      env,
     });
 
     const stdoutChunks: Buffer[] = [];
@@ -547,20 +348,14 @@ function checkCodexAuthStatus(model?: string): Promise<AuthCheckResult> {
       proc.kill("SIGTERM");
     }, timeout);
 
-    const cleanup = () => {
-      fs.rmSync(authDir, { recursive: true, force: true });
-    };
-
     proc.on("error", (err) => {
       clearTimeout(timer);
-      cleanup();
       const stderr = Buffer.concat(stderrChunks).toString("utf-8");
       resolve({ ok: false, error: stderr || err.message });
     });
 
     proc.on("close", (code) => {
       clearTimeout(timer);
-      cleanup();
       const stdout = Buffer.concat(stdoutChunks).toString("utf-8");
       const stderr = Buffer.concat(stderrChunks).toString("utf-8");
       resolve(interpretCodexAuthStatus({ code, stdout, stderr }));

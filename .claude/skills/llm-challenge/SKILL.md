@@ -16,9 +16,19 @@ Read `llm-challenge/README.md` for commands, scoring, and verification details.
 
 When AI fails a challenge, **improve the SDK** (JSDoc, error messages, types, CLAUDE.md) — NEVER add hints to `problem.md`.
 
-## Prerequisite
+## Prerequisites
 
-ALWAYS build SDK before running: `pnpm -C packages/sdk build`
+- ALWAYS build SDK before running: `pnpm -C packages/sdk build`
+- ALWAYS run `pnpm install` before benchmarks (stale dependencies break the verify pipeline)
+
+### Solve Mode (Podman)
+
+Solve runs inside a Podman container for filesystem isolation.
+
+- **Podman required**: `podman machine start` on macOS
+- **Claude auth**: `claude setup-token` then `export CLAUDE_CODE_OAUTH_TOKEN=<token>`
+- **Codex auth**: `codex login` (stores credentials in `~/.codex/auth.json`, mounted into the container)
+- Container image auto-builds on first run (`llm-challenge-runner`)
 
 ## Problem Conventions
 

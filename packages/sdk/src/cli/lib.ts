@@ -1,11 +1,16 @@
 // CLI API exports for programmatic usage
-import { register } from "node:module";
+import { isNativeTypeScriptRuntime } from "./shared/runtime";
 
-// Register tsx to handle TypeScript files when using CLI API programmatically
-register("tsx", import.meta.url, { data: {} });
+// Register tsx to handle TypeScript files when using CLI API programmatically.
+// Bun and Deno handle TypeScript natively, so registration is skipped.
+if (!isNativeTypeScriptRuntime()) {
+  const { register } = await import("node:module");
+  register("tsx", import.meta.url, { data: {} });
+}
 
 export { apply } from "./commands/apply/apply";
 export type { ApplyOptions } from "./commands/apply/apply";
+export type { BundledScripts } from "./commands/apply/function-registry";
 export { generate } from "./commands/generate/service";
 export type { GenerateOptions } from "./commands/generate/options";
 export { loadConfig, type LoadedConfig } from "./shared/config-loader";
@@ -141,6 +146,21 @@ export type {
   ExecutorListInfo,
   ExecutorInfo,
 } from "./commands/executor/transform";
+export { listOrganizations, type ListOrganizationsOptions } from "./commands/organization/list";
+export { getOrganization, type GetOrganizationOptions } from "./commands/organization/get";
+export { updateOrganization, type UpdateOrganizationOptions } from "./commands/organization/update";
+export { organizationTree, type OrganizationTreeOptions } from "./commands/organization/tree";
+export type {
+  UserOrganizationInfo,
+  OrganizationInfo,
+  FolderListInfo,
+  FolderInfo,
+} from "./commands/organization/transform";
+export { listFolders, type ListFoldersOptions } from "./commands/organization/folder/list";
+export { getFolder, type GetFolderOptions } from "./commands/organization/folder/get";
+export { createFolder, type CreateFolderOptions } from "./commands/organization/folder/create";
+export { updateFolder, type UpdateFolderOptions } from "./commands/organization/folder/update";
+export { deleteFolder, type DeleteFolderOptions } from "./commands/organization/folder/delete";
 export { loadAccessToken, loadWorkspaceId } from "./shared/context";
 export { apiCall, type ApiCallOptions, type ApiCallResult } from "./commands/api";
 export { query } from "./query";

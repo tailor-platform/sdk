@@ -14,12 +14,18 @@ Contact us [here](https://www.tailor.tech/demo) to get started.
 
 The SDK requires Node.js 22 or later. Install Node.js via your package manager by following the official Node.js instructions.
 
+Alternatively, you can use [Bun](https://bun.sh/) as the runtime.
+
+> **Note:** Bun has a known issue with HTTP/2 connections that may cause intermittent failures during `apply` or `generate` commands ([bun#14249](https://github.com/oven-sh/bun/issues/14249), [bun#26719](https://github.com/oven-sh/bun/issues/26719)). If you encounter a connection error, retry the command.
+
 ### Create an Example App
 
 The following command creates a new project with the required configuration files and example code.
 
 ```bash
 npm create @tailor-platform/sdk -- --template hello-world example-app
+# Or with Bun:
+# bun create @tailor-platform/sdk --template hello-world example-app
 ```
 
 Before deploying your app, you need to create a workspace:
@@ -28,6 +34,10 @@ Before deploying your app, you need to create a workspace:
 npx tailor-sdk login
 npx tailor-sdk workspace create --name <workspace-name> --region <workspace-region>
 npx tailor-sdk workspace list
+
+# Or with Bun:
+# bunx tailor-sdk login
+# bunx tailor-sdk workspace create --name <workspace-name> --region <workspace-region>
 
 # OR
 # Create a new workspace using Tailor Platform Console
@@ -41,6 +51,8 @@ Run the apply command to deploy your project:
 ```bash
 cd example-app
 npm run deploy -- --workspace-id <your-workspace-id>
+# Or with Bun:
+# bun run deploy --workspace-id <your-workspace-id>
 ```
 
 You can now open the GraphQL Playground and execute the `hello` query:

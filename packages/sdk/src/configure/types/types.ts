@@ -32,11 +32,7 @@ export type TailorToTs = {
 export interface FieldMetadata {
   description?: string;
   required?: boolean;
-  /**
-   * Marks a field as explicitly required.
-   * Used for plugin config schemas where fields are optional by default.
-   */
-  requiredExplicit?: boolean;
+
   array?: boolean;
   allowedValues?: AllowedValue[];
   // Validation supports any field output type (the field itself remains typed elsewhere).
@@ -55,7 +51,6 @@ export interface DefinedFieldMetadata {
 
 export type FieldOptions = {
   optional?: boolean;
-  required?: boolean;
   array?: boolean;
 };
 

@@ -62,16 +62,19 @@ describe("query-bundler", () => {
       expect(gqlBundle).not.toContain("tailordb.Client");
     });
 
-    it("writes bundled files to query output directory", async () => {
+    it("writes entry files to query output directory (bundle output is in-memory only)", async () => {
       const outputDir = path.join(process.env.TAILOR_SDK_OUTPUT_DIR!, "query");
 
       await bundleQueryScript("sql");
       await bundleQueryScript("gql");
 
+      // Entry files are still written to disk (rolldown input)
       expect(fs.existsSync(path.join(outputDir, "query_sql.entry.ts"))).toBe(true);
-      expect(fs.existsSync(path.join(outputDir, "query_sql.js"))).toBe(true);
       expect(fs.existsSync(path.join(outputDir, "query_gql.entry.ts"))).toBe(true);
-      expect(fs.existsSync(path.join(outputDir, "query_gql.js"))).toBe(true);
+
+      // Bundle output files are NOT written (write: false)
+      expect(fs.existsSync(path.join(outputDir, "query_sql.js"))).toBe(false);
+      expect(fs.existsSync(path.join(outputDir, "query_gql.js"))).toBe(false);
 
       const sqlEntry = fs.readFileSync(path.join(outputDir, "query_sql.entry.ts"), "utf-8");
       const gqlEntry = fs.readFileSync(path.join(outputDir, "query_gql.entry.ts"), "utf-8");

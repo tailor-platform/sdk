@@ -1,5 +1,32 @@
-import { describe, test, expect, vi } from "vitest";
-import { fetchAll, formatRequestParams, MAX_PAGE_SIZE, parseMethodName } from "./client";
+import { afterEach, describe, test, expect, vi } from "vitest";
+import {
+  createTransport,
+  fetchAll,
+  formatRequestParams,
+  MAX_PAGE_SIZE,
+  parseMethodName,
+} from "./client";
+
+vi.mock("@connectrpc/connect-node", () => ({
+  createConnectTransport: vi.fn(() => ({ type: "node-transport" })),
+}));
+
+describe("createTransport", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  test("uses connect-node transport with HTTP/2", async () => {
+    const transport = await createTransport("https://example.com", []);
+    const connectNode = await import("@connectrpc/connect-node");
+    expect(connectNode.createConnectTransport).toHaveBeenCalledWith({
+      httpVersion: "2",
+      baseUrl: "https://example.com",
+      interceptors: [],
+    });
+    expect(transport).toEqual({ type: "node-transport" });
+  });
+});
 
 describe("fetchAll", () => {
   test("passes MAX_PAGE_SIZE to callback", async () => {

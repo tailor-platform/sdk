@@ -6,7 +6,7 @@ import { logger } from "@/cli/shared/logger";
 import { readPackageJson } from "@/cli/shared/package-json";
 
 const detectPackageManager = () => {
-  const availablePMs = ["npm", "yarn", "pnpm"];
+  const availablePMs = ["npm", "yarn", "pnpm", "bun"];
   const userAgent = process.env.npm_config_user_agent;
   if (!userAgent) return;
   const [name] = userAgent.split("/");

@@ -11,7 +11,12 @@ concurrency:
 
 jobs:
   test:
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
     runs-on: ubuntu-latest
+    name: Test (Node ${{ matrix.node }})
     timeout-minutes: 10
     permissions:
       contents: read
@@ -24,6 +29,8 @@ jobs:
 
       - name: Install deps
         uses: ./.github/actions/install-deps
+        with:
+          node-version: ${{ matrix.node }}
 
       - name: Login as machine user
         run: pnpm tailor-sdk login --machineuser
@@ -33,3 +40,18 @@ jobs:
 
       - name: Run tests
         run: pnpm exec turbo run test -- --project unit
+
+  test-summary:
+    needs: [test]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions: {}
+    timeout-minutes: 5
+    steps:
+      - name: Check result
+        run: |
+          if [[ "${{ needs.test.result }}" != "success" ]]; then
+            echo "Test jobs failed"
+            exit 1
+          fi
+          echo "All test jobs succeeded"

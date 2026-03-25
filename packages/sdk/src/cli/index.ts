@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import { register } from "node:module";
 import { defineCommand, runMain } from "politty";
 import { withCompletionCommand } from "politty/completion";
 import { z } from "zod";
@@ -16,6 +15,7 @@ import { logoutCommand } from "./commands/logout";
 import { machineuserCommand } from "./commands/machineuser";
 import { oauth2clientCommand } from "./commands/oauth2client";
 import { openCommand } from "./commands/open";
+import { organizationCommand } from "./commands/organization";
 import { profileCommand } from "./commands/profile";
 import { removeCommand } from "./commands/remove";
 import { secretCommand } from "./commands/secret";
@@ -32,8 +32,14 @@ import { commonArgs, isVerbose } from "./shared/args";
 import { isCLIError } from "./shared/errors";
 import { logger } from "./shared/logger";
 import { readPackageJson } from "./shared/package-json";
+import { isNativeTypeScriptRuntime } from "./shared/runtime";
 
-register("tsx", import.meta.url, { data: {} });
+// Register tsx for TypeScript loading on Node.js.
+// Bun and Deno handle TypeScript natively, so registration is skipped.
+if (!isNativeTypeScriptRuntime()) {
+  const { register } = await import("node:module");
+  register("tsx", import.meta.url, { data: {} });
+}
 
 // Runs before globalArgs effects load --env-file, so env file overrides for
 // TAILOR_CRASH_REPORTS_* are not available for early startup failures.
@@ -62,6 +68,7 @@ export const mainCommand = withCompletionCommand(
       machineuser: machineuserCommand,
       oauth2client: oauth2clientCommand,
       open: openCommand,
+      organization: organizationCommand,
       profile: profileCommand,
       query: queryCommand,
       remove: removeCommand,
@@ -80,6 +87,7 @@ export const mainCommand = withCompletionCommand(
 runMain(mainCommand, {
   version: packageJson.version,
   globalArgs: z.object(commonArgs),
+  displayErrors: false,
   cleanup: async ({ error }) => {
     if (error) {
       if (isCLIError(error)) {

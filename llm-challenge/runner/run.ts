@@ -21,6 +21,7 @@ import {
   formatReportTable,
   isInfraFailure,
 } from "./score";
+import { checkPodmanAvailability } from "./solver/container";
 import type { ChallengeReport, ProblemResult, ScaffoldChange, StageResult } from "./score";
 import {
   formatSolveModelLabel,
@@ -151,7 +152,7 @@ function parseArgs(): {
     solve,
     agent,
     agentExplicit,
-    model: model ?? (agent === "claude" ? "sonnet" : "gpt-5.1-codex-mini"),
+    model: model ?? (agent === "claude" ? "sonnet" : "gpt-5.4"),
     modelExplicit,
     maxBudget,
     clean,
@@ -217,20 +218,6 @@ function setupWorkDir(problemDir: string, implDir?: string, useTmpDir?: boolean)
     copyDir(implDir, workDir);
   }
 
-  // 4. Place AGENTS.md in solve mode to guide agent behavior
-  if (useTmpDir) {
-    fs.writeFileSync(
-      path.join(workDir, "AGENTS.md"),
-      [
-        "You are solving an SDK implementation task.",
-        "Work ONLY within the current workspace directory.",
-        "Do NOT search for or read files outside this directory.",
-        "Do NOT attempt to find test files, solution files, or any benchmark artifacts.",
-        "",
-      ].join("\n"),
-    );
-  }
-
   return workDir;
 }
 
@@ -256,7 +243,14 @@ function rewriteWorkspaceRefs(workDir: string, tarballPath?: string): void {
 
   let ref: string;
   if (tarballPath) {
-    ref = `file:${tarballPath.replace(/\\/g, "/")}`;
+    // Copy the tarball into workDir so it remains accessible inside the Podman container.
+    // The host tarball path is not mounted in the container, but workDir is mounted at
+    // CONTAINER_WORK_DIR. Using a relative file: reference resolves correctly on both the
+    // host (during the initial pnpm install) and inside the container (if the agent reruns it).
+    const sdkDir = path.join(workDir, ".sdk");
+    fs.mkdirSync(sdkDir, { recursive: true });
+    fs.copyFileSync(tarballPath, path.join(sdkDir, "sdk.tgz"));
+    ref = "file:./.sdk/sdk.tgz";
   } else {
     const sdkPath = path.resolve(challengeRoot, "..", "packages", "sdk");
     ref = `link:${sdkPath.replace(/\\/g, "/")}`;
@@ -769,6 +763,13 @@ async function ensureAuthenticated(agent: SolveAgent, targetModel?: string): Pro
     } else {
       console.error(`Please check your ${tool} setup and try again.`);
     }
+    if (agent === "claude") {
+      console.error(
+        'Hint: Run "claude setup-token" and set CLAUDE_CODE_OAUTH_TOKEN in your environment.',
+      );
+    } else {
+      console.error('Hint: Run "codex login" to store credentials in ~/.codex/auth.json.');
+    }
     process.exit(1);
   }
   console.log("Authentication: ok");
@@ -826,6 +827,7 @@ async function main(): Promise<void> {
     console.error(
       "  tsx runner/run.ts --rerun-infra --solve [--agent claude|codex] [--model sonnet] [--clean]",
     );
+    console.error("\nNote: --solve requires Podman. On macOS, run 'podman machine start' first.");
     process.exit(1);
   }
 
@@ -843,6 +845,15 @@ async function main(): Promise<void> {
   const resultsDir = path.join(challengeRoot, "results");
   const verbose = concurrency === 1;
   const solveModelLabel = solve ? formatSolveModelLabel(agent, model) : undefined;
+
+  // Podman is required for all solve paths (including rerun-infra)
+  if (solve || rerunInfra) {
+    const podmanStatus = checkPodmanAvailability();
+    if (!podmanStatus.available) {
+      console.error(`Error: ${podmanStatus.error}`);
+      process.exit(1);
+    }
+  }
 
   // Auth pre-check for solve mode (skip when rerun-infra -- deferred until targets are known)
   if (solve && !rerunInfra) {
