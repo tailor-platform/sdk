@@ -56,12 +56,13 @@ type ExchangeCodeParams = {
   code: string;
   redirectUri: string;
   clientId: string;
+  clientSecret?: string;
   codeVerifier: string;
 };
 
 /**
  * Exchange authorization code for tokens at the token endpoint.
- * Uses PKCE without client_secret (public client pattern).
+ * Uses PKCE, and includes client_secret when provided (required by some providers like Google).
  * @param params - Token exchange parameters
  * @returns Token response from the provider
  */
@@ -73,6 +74,9 @@ async function exchangeCodeForTokens(params: ExchangeCodeParams): Promise<TokenR
     redirect_uri: params.redirectUri,
     code_verifier: params.codeVerifier,
   });
+  if (params.clientSecret) {
+    body.set("client_secret", params.clientSecret);
+  }
 
   const response = await fetch(params.tokenEndpoint, {
     method: "POST",
@@ -105,6 +109,10 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
         .optional()
         .default(defaultPort)
         .describe("Local callback server port"),
+      "client-secret": z
+        .string()
+        .optional()
+        .describe("OAuth2 client secret (required by some providers for token exchange)"),
       "no-browser": z
         .boolean()
         .optional()
@@ -197,12 +205,13 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
             throw new Error("No authorization code received.");
           }
 
-          // Exchange code for tokens (client-side, no client_secret)
+          // Exchange code for tokens
           const tokens = await exchangeCodeForTokens({
             tokenEndpoint,
             code,
             redirectUri,
             clientId: oauth2Config.clientId,
+            clientSecret: args["client-secret"],
             codeVerifier,
           });
 
