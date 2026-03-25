@@ -118,7 +118,7 @@ tailor-sdk authconnection create [options]
 | `--profile <PROFILE>`             | `-p`  | Workspace profile                      | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
 | `--name <NAME>`                   | `-n`  | Auth connection name                   | Yes      | -       | -                              |
 | `--provider-url <PROVIDER_URL>`   | -     | OAuth2 provider URL                    | Yes      | -       | -                              |
-| `--issuer-url <ISSUER_URL>`       | -     | OAuth2 issuer URL                      | No       | -       | -                              |
+| `--issuer-url <ISSUER_URL>`       | -     | OAuth2 issuer URL                      | Yes      | -       | -                              |
 | `--client-id <CLIENT_ID>`         | -     | OAuth2 client ID                       | Yes      | -       | -                              |
 | `--client-secret <CLIENT_SECRET>` | -     | OAuth2 client secret                   | Yes      | -       | -                              |
 | `--auth-url <AUTH_URL>`           | -     | OAuth2 authorization endpoint override | No       | -       | -                              |

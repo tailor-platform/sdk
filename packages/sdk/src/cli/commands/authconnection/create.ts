@@ -38,7 +38,7 @@ export const createAuthConnectionCommand = defineAppCommand({
             case: "oauth2",
             value: {
               providerUrl: args["provider-url"],
-              issuerUrl: args["issuer-url"] ?? "",
+              issuerUrl: args["issuer-url"],
               clientId: args["client-id"],
               clientSecret: args["client-secret"],
               authUrl: args["auth-url"] ?? "",
