@@ -1,5 +1,57 @@
 # @tailor-platform/sdk
 
+## 1.31.0
+
+### Minor Changes
+
+- [#793](https://github.com/tailor-platform/sdk/pull/793) [`517ed78`](https://github.com/tailor-platform/sdk/commit/517ed782e1c4705b981822422cdd97541bddeeef) Thanks [@dqn](https://github.com/dqn)! - Add Bun runtime support for CLI and expand CI test matrix
+
+  - Detect Bun/Deno runtimes and skip tsx registration for native TypeScript execution
+  - Use dynamic import for connect-node transport to support Bun runtime
+  - Expand CI smoke tests across OS, Node version, package manager, and runtime combinations
+
+- [#746](https://github.com/tailor-platform/sdk/pull/746) [`b9113a0`](https://github.com/tailor-platform/sdk/commit/b9113a08698edcd03deae0bf7354701a59f4d76d) Thanks [@toiroakr](https://github.com/toiroakr)! - Add opt-in secure token storage via OS keyring (macOS Keychain, Windows Credential Manager, Linux Secret Service). Set `TAILOR_USE_KEYRING=1` to enable. Default behavior remains unchanged (file-based V1 config) for backward compatibility with older SDK versions.
+
+### Patch Changes
+
+- [#806](https://github.com/tailor-platform/sdk/pull/806) [`cfe2c4b`](https://github.com/tailor-platform/sdk/commit/cfe2c4b194acf8bae674e8c1030a40cf2cb29ba9) Thanks [@toiroakr](https://github.com/toiroakr)! - Add documentation for `typeName` on enum/object fields and `pickFields`/`omitFields` on TailorDBType
+
+- [#807](https://github.com/tailor-platform/sdk/pull/807) [`13ad5cd`](https://github.com/tailor-platform/sdk/commit/13ad5cd4027c4fc5925a8934050b68d1a51cb41c) Thanks [@toiroakr](https://github.com/toiroakr)! - Remove unused `required` option from `FieldOptions` and dead `requiredExplicit` field from `FieldMetadata`
+
+- [#744](https://github.com/tailor-platform/sdk/pull/744) [`5d2ab24`](https://github.com/tailor-platform/sdk/commit/5d2ab24393507b7333cfd3e4cdd2ec10e34abd44) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @typescript/native-preview to v7.0.0-dev.20260320.1
+
+- [#768](https://github.com/tailor-platform/sdk/pull/768) [`2d984a3`](https://github.com/tailor-platform/sdk/commit/2d984a3b798cd14bf9958eb89ad229a70b2c45c4) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @bufbuild/protobuf to v2.11.0
+
+- [#774](https://github.com/tailor-platform/sdk/pull/774) [`a9160f4`](https://github.com/tailor-platform/sdk/commit/a9160f42dea8a8f62247e3bb4b2ffc307f50f33e) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @opentelemetry/exporter-trace-otlp-proto to v0.213.0
+
+- [#777](https://github.com/tailor-platform/sdk/pull/777) [`cea90ef`](https://github.com/tailor-platform/sdk/commit/cea90ef1485fdcbc9e605cb34e48cdb55ef2a558) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency globals to v17.4.0
+
+- [#783](https://github.com/tailor-platform/sdk/pull/783) [`858316f`](https://github.com/tailor-platform/sdk/commit/858316fa565031c77ea8e98890313c41d4c43d13) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency pkg-pr-new to v0.0.66
+
+- [#785](https://github.com/tailor-platform/sdk/pull/785) [`8dcaac5`](https://github.com/tailor-platform/sdk/commit/8dcaac5420aec0cc7f193019cac80faaf0994c1b) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency ora to v9.3.0
+
+- [#797](https://github.com/tailor-platform/sdk/pull/797) [`4863518`](https://github.com/tailor-platform/sdk/commit/4863518cb4b465aa8d8a794d3e333c8cf86da529) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency tsdown to v0.21.4
+
+- [#798](https://github.com/tailor-platform/sdk/pull/798) [`e95f0a3`](https://github.com/tailor-platform/sdk/commit/e95f0a311732908191671942dab3ccd2be8319bb) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency typescript-eslint to v8.57.1
+
+- [#801](https://github.com/tailor-platform/sdk/pull/801) [`030539d`](https://github.com/tailor-platform/sdk/commit/030539d0f568c5b5c0a4c7acafe303ea2d5a56dd) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): lock file maintenance
+
+- [#802](https://github.com/tailor-platform/sdk/pull/802) [`27f2908`](https://github.com/tailor-platform/sdk/commit/27f2908536a540e3707af983c7fef49cb4a4dcc8) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update anthropics/claude-code-action action to v1.0.77
+
+- [#810](https://github.com/tailor-platform/sdk/pull/810) [`c16d87c`](https://github.com/tailor-platform/sdk/commit/c16d87cc7d9ef210230cb3e366bd6569e8f646a7) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @tailor-platform/function-types to v0.8.3
+
+- [#811](https://github.com/tailor-platform/sdk/pull/811) [`5fc6e4b`](https://github.com/tailor-platform/sdk/commit/5fc6e4b32736828cea7453d0cc2b66dec9808946) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency aquaproj/aqua to v2.57.1
+
+- [#812](https://github.com/tailor-platform/sdk/pull/812) [`1af673e`](https://github.com/tailor-platform/sdk/commit/1af673e978cd2642d6c9a8ef8c075dfc1098cb3c) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency turbo to v2.8.20
+
+- [#815](https://github.com/tailor-platform/sdk/pull/815) [`d1b6d92`](https://github.com/tailor-platform/sdk/commit/d1b6d929f1317790b7fa4d7e2ea73580042c92f5) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @inquirer/prompts to v8.3.2
+
+- [#816](https://github.com/tailor-platform/sdk/pull/816) [`dc3fc6e`](https://github.com/tailor-platform/sdk/commit/dc3fc6e99b11252232c9960cca705cd213cec11b) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency rolldown to v1.0.0-rc.10
+
+- [#817](https://github.com/tailor-platform/sdk/pull/817) [`951ec13`](https://github.com/tailor-platform/sdk/commit/951ec13ea44ef3545a76e84e3e46779601ee5871) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency aquaproj/aqua-registry to v4.487.0
+
+- [#818](https://github.com/tailor-platform/sdk/pull/818) [`25bbd17`](https://github.com/tailor-platform/sdk/commit/25bbd178609c7a102301c847c067483addcbf5df) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency knip to v5.88.1
+
 ## 1.30.0
 
 ### Minor Changes
