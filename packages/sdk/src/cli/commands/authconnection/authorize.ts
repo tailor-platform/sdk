@@ -173,13 +173,13 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
 
     await new Promise<void>((resolve, reject) => {
       const server = http.createServer(async (req, res) => {
-        try {
-          if (!req.url?.startsWith("/callback")) {
-            res.writeHead(404);
-            res.end("Not found");
-            return;
-          }
+        if (!req.url?.startsWith("/callback")) {
+          res.writeHead(404);
+          res.end("Not found");
+          return;
+        }
 
+        try {
           const url = new URL(req.url, `http://localhost:${args.port}`);
           const code = url.searchParams.get("code");
           const returnedState = url.searchParams.get("state");
@@ -225,15 +225,13 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
           res.end(
             "<html><body><h1>Authorization successful</h1><p>You can close this window.</p></body></html>",
           );
+          server.close();
           resolve();
         } catch (err) {
-          res.writeHead(400, { "Content-Type": "text/html" });
-          res.end(
-            `<html><body><h1>Authorization failed</h1><p>${err instanceof Error ? err.message : "Unknown error"}</p></body></html>`,
-          );
-          reject(err);
-        } finally {
+          res.writeHead(400, { "Content-Type": "text/plain" });
+          res.end(`Authorization failed: ${err instanceof Error ? err.message : "Unknown error"}`);
           server.close();
+          reject(err);
         }
       });
 
