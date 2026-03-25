@@ -216,6 +216,19 @@ You can specify validation as:
 - A tuple of `[function, errorMessage]` for custom error messages
 - Multiple validators (pass multiple arguments to `validate`)
 
+Validation runs automatically before the `body` function executes. When validation fails, individual errors are returned in the GraphQL `errors` array with field-level paths:
+
+```json
+{
+  "errors": [
+    {
+      "message": "Value must be non-negative",
+      "path": ["createUser", "age"]
+    }
+  ]
+}
+```
+
 ## Body Function
 
 Define actual resolver logic in the `body` function. Function arguments include:

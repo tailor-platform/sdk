@@ -3,8 +3,8 @@ import ml from "multiline-ts";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
-import { computeBundlerContextHash, withCache, type BundleCache } from "@/cli/cache/bundle-cache";
-import { loadFilesWithIgnores, type FileLoadConfig } from "@/cli/services/file-loader";
+import { type BundleCache, computeBundlerContextHash, withCache } from "@/cli/cache/bundle-cache";
+import { type FileLoadConfig, loadFilesWithIgnores } from "@/cli/services/file-loader";
 import { removeStaleEntryFiles } from "@/cli/services/stale-cleanup";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { logger, styles } from "@/cli/shared/logger";
@@ -50,7 +50,9 @@ export async function bundleResolvers(
 
   logger.newline();
   logger.log(
-    `Bundling ${styles.highlight(files.length.toString())} files for ${styles.info(`"${namespace}"`)}`,
+    `Bundling ${styles.highlight(files.length.toString())} files for ${styles.info(
+      `"${namespace}"`,
+    )}`,
   );
 
   // Load all resolvers to get their names
@@ -140,13 +142,10 @@ async function bundleSingleResolver(
             });
 
             if (result.issues) {
-              const errorMessages = result.issues
-                .map(issue => {
-                  const path = issue.path ? issue.path.join('.') : '';
-                  return path ? \`  \${path}: \${issue.message}\` : issue.message;
-                })
-                .join('\\n');
-              throw new Error(\`Failed to input validation:\\n\${errorMessages}\`);
+              throw new TailorErrors(result.issues.map(issue => ({
+                message: issue.message,
+                path: issue.path ?? [],
+              })));
             }
           }
 
