@@ -116,7 +116,7 @@ export const createCommand = defineAppCommand({
     let profileInfo: ProfileInfo | undefined;
     const profileName = args["profile-name"];
     if (profileName) {
-      const config = readPlatformConfig();
+      const config = await readPlatformConfig();
       if (config.profiles[profileName]) {
         throw new Error(`Profile "${profileName}" already exists.`);
       }

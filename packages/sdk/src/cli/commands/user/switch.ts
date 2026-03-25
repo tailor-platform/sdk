@@ -17,7 +17,7 @@ export const switchCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    const config = readPlatformConfig();
+    const config = await readPlatformConfig();
 
     // Check if user exists
     if (!config.users[args.user]) {

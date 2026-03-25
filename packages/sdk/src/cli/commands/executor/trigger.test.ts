@@ -19,7 +19,7 @@ describe("triggerExecutor runtime overload", () => {
     vi.clearAllMocks();
 
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
-    vi.mocked(loadWorkspaceId).mockReturnValue("workspace-1");
+    vi.mocked(loadWorkspaceId).mockResolvedValue("workspace-1");
 
     triggerExecutorMock = vi.fn().mockResolvedValue({
       jobId: "job-1",

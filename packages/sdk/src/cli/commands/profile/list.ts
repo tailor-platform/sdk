@@ -10,7 +10,7 @@ export const listCommand = defineAppCommand({
   description: "List all profiles.",
   args: z.object({}).strict(),
   run: async () => {
-    const config = readPlatformConfig();
+    const config = await readPlatformConfig();
 
     const profiles = Object.entries(config.profiles);
     if (profiles.length === 0) {

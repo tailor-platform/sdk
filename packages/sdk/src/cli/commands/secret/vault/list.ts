@@ -37,7 +37,7 @@ async function vaultList(options?: VaultListOptions): Promise<VaultInfo[]> {
     profile: options?.profile,
   });
   const client = await initOperatorClient(accessToken);
-  const workspaceId = loadWorkspaceId({
+  const workspaceId = await loadWorkspaceId({
     workspaceId: options?.workspaceId,
     profile: options?.profile,
   });

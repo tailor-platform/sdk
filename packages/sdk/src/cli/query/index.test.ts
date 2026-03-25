@@ -93,7 +93,7 @@ describe("query", () => {
     vi.mocked(getEditorCommand).mockReturnValue("vim");
     vi.mocked(openInEditor).mockResolvedValue(true);
     vi.mocked(loadAccessToken).mockResolvedValue("access-token");
-    vi.mocked(loadWorkspaceId).mockReturnValue("workspace-1");
+    vi.mocked(loadWorkspaceId).mockResolvedValue("workspace-1");
     vi.mocked(initOperatorClient).mockResolvedValue(mockClient as never);
     vi.mocked(loadConfig).mockResolvedValue({
       config: {

@@ -252,7 +252,7 @@ export const deployCommand = defineAppCommand({
 
     const name = args.name;
     const dir = path.resolve(process.cwd(), args.dir);
-    const workspaceId = loadWorkspaceId({
+    const workspaceId = await loadWorkspaceId({
       workspaceId: args["workspace-id"],
       profile: args.profile,
     });

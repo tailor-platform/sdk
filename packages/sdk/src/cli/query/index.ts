@@ -143,7 +143,7 @@ async function loadOptions(options: QueryBaseOptions) {
     profile: result.data.profile,
   });
   const client = await initOperatorClient(accessToken);
-  const workspaceId = loadWorkspaceId({
+  const workspaceId = await loadWorkspaceId({
     workspaceId: result.data.workspaceId,
     profile: result.data.profile,
   });

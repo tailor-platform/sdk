@@ -35,7 +35,7 @@ async function loadOptions(options?: RemoveOptions) {
     profile: options?.profile,
   });
   const client = await initOperatorClient(accessToken);
-  const workspaceId = loadWorkspaceId({
+  const workspaceId = await loadWorkspaceId({
     workspaceId: options?.workspaceId,
     profile: options?.profile,
   });
