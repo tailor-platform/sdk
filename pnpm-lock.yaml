@@ -264,8 +264,8 @@ importers:
         specifier: 9.39.4
         version: 9.39.4
       '@tailor-platform/function-types':
-        specifier: 0.8.2
-        version: 0.8.2
+        specifier: 0.8.3
+        version: 0.8.3
       '@tailor-platform/sdk':
         specifier: workspace:^
         version: link:../../../sdk
