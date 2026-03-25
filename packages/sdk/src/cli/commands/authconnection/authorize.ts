@@ -11,7 +11,7 @@ import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { connectionNameArgs } from "./args";
 
-const defaultPort = 8085;
+const defaultPort = 8080;
 const defaultScopes = "openid,profile,email";
 
 /**

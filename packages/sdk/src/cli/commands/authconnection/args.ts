@@ -19,7 +19,7 @@ export const oauth2ConnectionArgs = {
   "provider-url": arg(z.string(), {
     description: "OAuth2 provider URL",
   }),
-  "issuer-url": arg(z.string(), {
+  "issuer-url": arg(z.string().optional(), {
     description: "OAuth2 issuer URL",
   }),
   "client-id": arg(z.string(), {

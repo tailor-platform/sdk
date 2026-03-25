@@ -390,8 +390,12 @@ export const auth = defineAuth("my-auth", {
 After `tailor-sdk apply`, authorize the connection:
 
 ```bash
-tailor-sdk authconnection authorize --name google-connection --scopes "openid,profile,email"
+tailor-sdk authconnection authorize --name google-connection \
+  --scopes "openid,profile,email" \
+  --client-secret $GOOGLE_CLIENT_SECRET
 ```
+
+The `--client-secret` option is required by providers like Google that require a client secret for the token exchange. Providers that support PKCE-only (public clients) can omit it.
 
 ### Connection Config Fields
 
@@ -451,7 +455,8 @@ tailor-sdk authconnection create \
   --client-secret $GOOGLE_CLIENT_SECRET
 
 # Authorize (opens browser for OAuth2 flow)
-tailor-sdk authconnection authorize --name google-connection
+tailor-sdk authconnection authorize --name google-connection \
+  --client-secret $GOOGLE_CLIENT_SECRET
 
 # List all connections
 tailor-sdk authconnection list
