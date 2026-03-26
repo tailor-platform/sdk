@@ -135,6 +135,7 @@ describe("Kysely TypeProcessor", () => {
       expect(result.name).toBe("SimpleUser");
       expect(result.typeDef).toContain("SimpleUser: ");
       expect(result.typeDef).toContain("profile:");
+      expect(result.typeDef).toContain("ObjectColumnType<");
       expect(result.typeDef).toContain("name: string");
       expect(result.typeDef).toContain("email?: string | null");
     });

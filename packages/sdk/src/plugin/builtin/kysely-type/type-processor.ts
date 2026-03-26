@@ -62,7 +62,8 @@ function getNestedType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
   const fieldTypes = fieldResults.map((r) => r.fieldType);
   const obj = `{\n  ${fieldTypes.join(";\n  ")}${fieldTypes.length > 0 ? ";" : ""}\n}`;
 
-  if (aggregatedUtilityTypes.Timestamp) {
+  const hasOptionalFields = Object.values(fields).some((config) => config.required !== true);
+  if (aggregatedUtilityTypes.Timestamp || hasOptionalFields) {
     return { type: `ObjectColumnType<${obj}>`, usedUtilityTypes: aggregatedUtilityTypes };
   }
   return { type: obj, usedUtilityTypes: aggregatedUtilityTypes };
@@ -236,8 +237,13 @@ export function generateUnifiedKyselyTypes(namespaceData: KyselyNamespaceMetadat
     ns.types.some((t) => t.typeDef.includes("ObjectColumnType<")),
   );
   if (hasObjectColumnType) {
-    utilityTypeImports.push("type NestedTimestamp");
     utilityTypeImports.push("type ObjectColumnType");
+  }
+  const hasNestedTimestamp = namespaceData.some((ns) =>
+    ns.types.some((t) => t.typeDef.includes("NestedTimestamp")),
+  );
+  if (hasNestedTimestamp) {
+    utilityTypeImports.push("type NestedTimestamp");
   }
   if (globalUsedUtilityTypes.Serial) {
     utilityTypeImports.push("type Serial");

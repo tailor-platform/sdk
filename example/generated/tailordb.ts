@@ -2,8 +2,8 @@ import {
   createGetDB,
   type Generated,
   type Timestamp,
-  type NestedTimestamp,
   type ObjectColumnType,
+  type NestedTimestamp,
   type Serial,
   type NamespaceDB,
   type NamespaceInsertable,
@@ -44,13 +44,13 @@ export interface Namespace {
 
     NestedProfile: {
       id: Generated<string>;
-      userInfo: {
+      userInfo: ObjectColumnType<{
         name: string;
         age?: number | null;
         bio?: string | null;
         email: string;
         phone?: string | null;
-      };
+      }>;
       metadata: ObjectColumnType<{
         created: NestedTimestamp;
         lastUpdated?: NestedTimestamp | null;
