@@ -81,10 +81,9 @@ describe("RuleRegistry", () => {
       // Migrating from 1.30.0 to 2.0.0: should get v2 rules only
       expect(registry.getApplicableRules("1.30.0", "2.0.0")).toEqual([rule1, rule3]);
 
-      // Migrating from 1.30.0 to 3.0.0: should get both v2 and v3 rules
-      // (v2 rules: source 1.30.0 is in [1.0.0, 2.0.0), target 3.0.0 >= 2.0.0)
-      // (v3 rule: source 1.30.0 is NOT in [2.0.0, 3.0.0), so excluded)
-      expect(registry.getApplicableRules("1.30.0", "3.0.0")).toEqual([rule1, rule3]);
+      // Migrating from 1.30.0 to 3.0.0: should get v2 AND v3 rules
+      // (v2 rules run first and transform code to v2 patterns, then v3 rule matches)
+      expect(registry.getApplicableRules("1.30.0", "3.0.0")).toEqual([rule1, rule2, rule3]);
 
       // Migrating from 2.0.0 to 3.0.0: should get v3 rule only
       expect(registry.getApplicableRules("2.0.0", "3.0.0")).toEqual([rule2]);

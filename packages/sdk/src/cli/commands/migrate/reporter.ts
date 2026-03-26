@@ -47,11 +47,11 @@ export function printMigrationSummary(summary: MigrationSummary, dryRun: boolean
     }
   }
 
-  // AI skill hint
+  // Manual attention hint
   if (summary.warnings.length > 0) {
     logger.log("");
     logger.info(
-      `Some changes require manual attention. Use the ${styles.highlight("/tailor-sdk-migrate")} AI skill for assisted migration.`,
+      "Some changes require manual attention. Review the warnings above and update your code accordingly.",
     );
   }
 }

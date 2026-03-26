@@ -60,9 +60,12 @@ export class RuleRegistry {
     }
 
     return this.rules.filter((rule) => {
-      const sourceInRange = satisfies(fromVersion, `>=${rule.since} <${rule.until}`);
+      // A rule applies when its version boundary (until) falls within the migration range.
+      // This ensures multi-version migrations (e.g., 1.30 -> 3.0) pick up all intermediate
+      // rules, since earlier rules transform the code to match later rules' patterns.
+      const notYetCrossed = satisfies(fromVersion, `<${rule.until}`);
       const targetPastBreakingChange = satisfies(toVersion, `>=${rule.until}`);
-      return sourceInRange && targetPastBreakingChange;
+      return notYetCrossed && targetPastBreakingChange;
     });
   }
 }
