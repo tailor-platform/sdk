@@ -136,7 +136,7 @@ describe("Kysely TypeProcessor", () => {
       expect(result.typeDef).toContain("SimpleUser: ");
       expect(result.typeDef).toContain("profile:");
       expect(result.typeDef).toContain("name: string");
-      expect(result.typeDef).toContain("email: string | null");
+      expect(result.typeDef).toContain("email?: string | null");
     });
 
     it("should handle multi-level nested objects", async () => {
@@ -162,10 +162,33 @@ describe("Kysely TypeProcessor", () => {
       expect(result.typeDef).toContain("address:");
       expect(result.typeDef).toContain("street: string");
       expect(result.typeDef).toContain("city: string");
-      expect(result.typeDef).toContain("zipCode: string | null");
+      expect(result.typeDef).toContain("zipCode?: string | null");
       expect(result.typeDef).toContain("contact:");
       expect(result.typeDef).toContain("email: string");
-      expect(result.typeDef).toContain("phone: string | null");
+      expect(result.typeDef).toContain("phone?: string | null");
+    });
+
+    it("should use Date | string instead of Timestamp for date fields inside nested objects", async () => {
+      const type = db.type("Receipt", {
+        receiptDate: db.date(),
+        dueSchedule: db.object({
+          dueDate: db.date(),
+          reminderAt: db.datetime({ optional: true }),
+        }),
+      });
+
+      const result = await processKyselyType(parseTailorDBType(toSchemaOutput(type)));
+
+      expect(result.typeDef).toContain("receiptDate: Timestamp;");
+      // Nested object with datetime is wrapped in ColumnType<SelectObj, InsertObj, InsertObj>
+      expect(result.typeDef).toContain("ColumnType<");
+      // Select type: datetime → string
+      expect(result.typeDef).toContain("dueDate: string");
+      // Insert type: datetime → Date | string
+      expect(result.typeDef).toContain("dueDate: Date | string");
+      expect(result.typeDef).toContain("reminderAt?: string | null");
+      expect(result.typeDef).toContain("reminderAt?: Date | string | null");
+      expect(result.usedUtilityTypes.Timestamp).toBe(true);
     });
 
     it("should handle optional nested objects", async () => {

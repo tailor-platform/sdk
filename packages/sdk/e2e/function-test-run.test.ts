@@ -219,6 +219,16 @@ describe.sequential("E2E: function test-run", () => {
       expect(typeof parsed.result.summary[2]).toBe("string");
     });
 
+    test("inserts nested object with Date into NestedProfile", async () => {
+      const result = await runTestRun("resolvers/insertNestedProfileWithDate.ts", {
+        arg: '{"input":{"name":"Test User","email":"test@example.com"}}',
+      });
+
+      expect(result.success).toBe(true);
+      const id = JSON.parse(result.result);
+      expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    });
+
     test("reports validation errors for invalid input", async () => {
       const result = await runTestRun("resolvers/add.ts", {
         arg: '{"input":{"a":100,"b":2}}',

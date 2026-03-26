@@ -42,14 +42,22 @@ function getNestedType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
     };
   }
 
-  const fieldResults = Object.entries(fields).map(([fieldName, nestedOperatorFieldConfig]) => ({
-    fieldName,
-    ...generateFieldType(nestedOperatorFieldConfig),
-  }));
+  const entries = Object.entries(fields);
+  let hasDatetime = false;
 
-  const fieldTypes = fieldResults.map((result) => `${result.fieldName}: ${result.type}`);
+  const fieldInfos = entries.map(([fieldName, config]) => {
+    const selectResult = generateFieldType(config, { nested: "select" });
+    const insertResult = generateFieldType(config, { nested: "insert" });
+    const optional = config.required !== true ? "?" : "";
+    if (selectResult.type !== insertResult.type) hasDatetime = true;
+    return {
+      selectField: `${fieldName}${optional}: ${selectResult.type}`,
+      insertField: `${fieldName}${optional}: ${insertResult.type}`,
+      usedUtilityTypes: selectResult.usedUtilityTypes,
+    };
+  });
 
-  const aggregatedUtilityTypes = fieldResults.reduce(
+  const aggregatedUtilityTypes = fieldInfos.reduce(
     (acc, result) => ({
       Timestamp: acc.Timestamp || result.usedUtilityTypes.Timestamp,
       Serial: acc.Serial || result.usedUtilityTypes.Serial,
@@ -57,16 +65,31 @@ function getNestedType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
     { Timestamp: false, Serial: false },
   );
 
-  const type = `{\n  ${fieldTypes.join(";\n  ")}${fieldTypes.length > 0 ? ";" : ""}\n}`;
+  const formatObj = (fields: string[]) =>
+    `{\n  ${fields.join(";\n  ")}${fields.length > 0 ? ";" : ""}\n}`;
+
+  if (hasDatetime) {
+    const selectObj = formatObj(fieldInfos.map((f) => f.selectField));
+    const insertObj = formatObj(fieldInfos.map((f) => f.insertField));
+    const type = `ColumnType<${selectObj}, ${insertObj}, ${insertObj}>`;
+    return { type, usedUtilityTypes: aggregatedUtilityTypes };
+  }
+
+  const type = formatObj(fieldInfos.map((f) => f.selectField));
   return { type, usedUtilityTypes: aggregatedUtilityTypes };
 }
 
 /**
  * Get the base Kysely type for a field (without array/null modifiers).
  * @param fieldConfig - The field configuration
+ * @param options
+ * @param options.nested
  * @returns The base type with used utility types
  */
-function getBaseType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
+function getBaseType(
+  fieldConfig: OperatorFieldConfig,
+  options?: { nested?: "select" | "insert" },
+): FieldTypeResult {
   const fieldType = fieldConfig.type;
   const usedUtilityTypes = { Timestamp: false, Serial: false };
 
@@ -83,8 +106,14 @@ function getBaseType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
       break;
     case "date":
     case "datetime":
-      usedUtilityTypes.Timestamp = true;
-      type = "Timestamp";
+      if (options?.nested === "select") {
+        type = "string";
+      } else if (options?.nested === "insert") {
+        type = "Date | string";
+      } else {
+        usedUtilityTypes.Timestamp = true;
+        type = "Timestamp";
+      }
       break;
     case "bool":
     case "boolean":
@@ -108,10 +137,15 @@ function getBaseType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
 /**
  * Generate the complete field type including array and null modifiers.
  * @param fieldConfig - The field configuration
+ * @param options
+ * @param options.nested
  * @returns The complete field type with used utility types
  */
-function generateFieldType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
-  const baseTypeResult = getBaseType(fieldConfig);
+function generateFieldType(
+  fieldConfig: OperatorFieldConfig,
+  options?: { nested?: "select" | "insert" },
+): FieldTypeResult {
+  const baseTypeResult = getBaseType(fieldConfig, options);
   const usedUtilityTypes = { ...baseTypeResult.usedUtilityTypes };
 
   const isArray = fieldConfig.array === true;
@@ -162,6 +196,7 @@ function generateTableInterface(type: TailorDBType): {
   const aggregatedUtilityTypes = fieldResults.reduce(
     (acc, result) => ({
       Timestamp: acc.Timestamp || result.usedUtilityTypes.Timestamp,
+
       Serial: acc.Serial || result.usedUtilityTypes.Serial,
     }),
     { Timestamp: false, Serial: false },
@@ -213,6 +248,12 @@ export function generateUnifiedKyselyTypes(namespaceData: KyselyNamespaceMetadat
   const utilityTypeImports: string[] = ["type Generated"];
   if (globalUsedUtilityTypes.Timestamp) {
     utilityTypeImports.push("type Timestamp");
+  }
+  const hasNestedColumnType = namespaceData.some((ns) =>
+    ns.types.some((t) => t.typeDef.includes("ColumnType<")),
+  );
+  if (hasNestedColumnType) {
+    utilityTypeImports.push("type ColumnType");
   }
   if (globalUsedUtilityTypes.Serial) {
     utilityTypeImports.push("type Serial");

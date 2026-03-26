@@ -2,6 +2,7 @@ import {
   createGetDB,
   type Generated,
   type Timestamp,
+  type ColumnType,
   type NamespaceDB,
   type NamespaceInsertable,
   type NamespaceSelectable,
@@ -25,11 +26,19 @@ export interface Namespace {
       body: string;
       taskId: string;
       authorId: string;
-      metadata: {
+      metadata: ColumnType<{
         source: string;
-        editedAt: Timestamp | null;
+        editedAt?: string | null;
         isInternal: boolean;
-      };
+      }, {
+        source: string;
+        editedAt?: Date | string | null;
+        isInternal: boolean;
+      }, {
+        source: string;
+        editedAt?: Date | string | null;
+        isInternal: boolean;
+      }>;
       createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
     }

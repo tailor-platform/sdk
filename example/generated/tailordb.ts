@@ -2,6 +2,7 @@ import {
   createGetDB,
   type Generated,
   type Timestamp,
+  type ColumnType,
   type Serial,
   type NamespaceDB,
   type NamespaceInsertable,
@@ -44,16 +45,24 @@ export interface Namespace {
       id: Generated<string>;
       userInfo: {
         name: string;
-        age: number | null;
-        bio: string | null;
+        age?: number | null;
+        bio?: string | null;
         email: string;
-        phone: string | null;
+        phone?: string | null;
       };
-      metadata: {
-        created: Timestamp;
-        lastUpdated: Timestamp | null;
+      metadata: ColumnType<{
+        created: string;
+        lastUpdated?: string | null;
         version: number;
-      };
+      }, {
+        created: Date | string;
+        lastUpdated?: Date | string | null;
+        version: number;
+      }, {
+        created: Date | string;
+        lastUpdated?: Date | string | null;
+        version: number;
+      }>;
       archived: boolean | null;
       createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
