@@ -1,5 +1,29 @@
 # @tailor-platform/sdk
 
+## 1.32.1
+
+### Patch Changes
+
+- [#826](https://github.com/tailor-platform/sdk/pull/826) [`72c2842`](https://github.com/tailor-platform/sdk/commit/72c2842046b2841571e095e10187339fdf66acd5) Thanks [@toiroakr](https://github.com/toiroakr)! - Bundle `@tailor-platform/function-types` as a dependency of `@tailor-platform/sdk`. Users no longer need to install `@tailor-platform/function-types` separately or add it to their `tsconfig.json` types array. The ambient types are automatically available when importing from `@tailor-platform/sdk`.
+
+- [#824](https://github.com/tailor-platform/sdk/pull/824) [`f4794c4`](https://github.com/tailor-platform/sdk/commit/f4794c4fed2cf1bec9e472d1ff29ca7748b78881) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency type-fest to v5.5.0
+
+- [#825](https://github.com/tailor-platform/sdk/pull/825) [`9e0dc71`](https://github.com/tailor-platform/sdk/commit/9e0dc71bf094ea123f6484a31fb7929579896294) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update oxlint monorepo
+
+- [#827](https://github.com/tailor-platform/sdk/pull/827) [`b13e31c`](https://github.com/tailor-platform/sdk/commit/b13e31c981fe368d1bec664c320a02c20e4eb083) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update actions/create-github-app-token action to v3
+
+- [#829](https://github.com/tailor-platform/sdk/pull/829) [`e0f68c0`](https://github.com/tailor-platform/sdk/commit/e0f68c054b248086060dd2e22ef8e6af10ef5e95) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dorny/paths-filter action to v4
+
+- [#830](https://github.com/tailor-platform/sdk/pull/830) [`cb0c357`](https://github.com/tailor-platform/sdk/commit/cb0c357432bd121c7bb9ebbfc8f711a18b6a4f25) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update eslint monorepo to v10 (major)
+
+- [#831](https://github.com/tailor-platform/sdk/pull/831) [`a567c70`](https://github.com/tailor-platform/sdk/commit/a567c70dc22661536e3a2314c6839899cb72a391) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update anthropics/claude-code-action action to v1.0.79
+
+- [#836](https://github.com/tailor-platform/sdk/pull/836) [`77cdf5e`](https://github.com/tailor-platform/sdk/commit/77cdf5ed8de3cef96df7587c689c83a6b627381e) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update github artifact actions (major)
+
+- [#837](https://github.com/tailor-platform/sdk/pull/837) [`47b3e56`](https://github.com/tailor-platform/sdk/commit/47b3e56300c6df2c1eccbaafa4e320f13d176194) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update pnpm/action-setup action to v5
+
+- [#841](https://github.com/tailor-platform/sdk/pull/841) [`c8a9ed6`](https://github.com/tailor-platform/sdk/commit/c8a9ed67bd102caacf155b8a107e468d007c81ab) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency std-env to v4
+
 ## 1.32.0
 
 ### Minor Changes

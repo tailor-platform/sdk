@@ -1,5 +1,11 @@
 # @tailor-platform/create-sdk
 
+## 1.32.1
+
+### Patch Changes
+
+- [#826](https://github.com/tailor-platform/sdk/pull/826) [`72c2842`](https://github.com/tailor-platform/sdk/commit/72c2842046b2841571e095e10187339fdf66acd5) Thanks [@toiroakr](https://github.com/toiroakr)! - Bundle `@tailor-platform/function-types` as a dependency of `@tailor-platform/sdk`. Users no longer need to install `@tailor-platform/function-types` separately or add it to their `tsconfig.json` types array. The ambient types are automatically available when importing from `@tailor-platform/sdk`.
+
 ## 1.32.0
 
 ## 1.31.0
