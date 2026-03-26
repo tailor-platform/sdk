@@ -46,6 +46,7 @@ tailor.d.ts
 .claude/skills/*
 !.claude/skills/llm-challenge/
 !.claude/skills/docs-check/
+!.claude/skills/add-migration-rule/
 CLAUDE.local.md
 
 # LLM Challenge
