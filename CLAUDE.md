@@ -58,7 +58,7 @@ Available triggers beyond record CRUD (`recordCreatedTrigger`, `recordUpdatedTri
 
 ### Generators
 
-`defineGenerators()` takes tuples as rest arguments (see `example/tailor.config.ts`). `@tailor-platform/kysely-type` is required for `getDB()` in resolvers/executors/workflows. Requires `@tailor-platform/function-types` as devDependency.
+`defineGenerators()` takes tuples as rest arguments (see `example/tailor.config.ts`). The `@tailor-platform/kysely-type` generator (built into the SDK) is required for `getDB()` in resolvers/executors/workflows.
 
 ### Configuration
 

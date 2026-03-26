@@ -16,14 +16,6 @@ Generates Kysely type definitions and the `getDB()` function for type-safe datab
 | ---------- | -------- | --------------------------- |
 | `distPath` | `string` | Output file path (required) |
 
-### Prerequisites
-
-Install the required dev dependency for type definitions:
-
-```bash
-pnpm add -D @tailor-platform/function-types
-```
-
 ### Output
 
 Generates a TypeScript file containing:

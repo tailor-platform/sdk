@@ -5,7 +5,7 @@
     "outDir": "dist",
     "incremental": true,
     "tsBuildInfoFile": "./.tsbuildinfo",
-    "types": ["node", "@tailor-platform/function-types"]
+    "types": ["node"]
   },
   "include": ["**/*.ts"],
   "exclude": [

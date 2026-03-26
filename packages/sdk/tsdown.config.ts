@@ -40,6 +40,9 @@ export default defineConfig({
     js: ".mjs",
     dts: ".d.mts",
   }),
+  banner: {
+    dts: '/// <reference types="@tailor-platform/function-types" />',
+  },
   sourcemap: true,
   plugins: [
     yamlText(),
