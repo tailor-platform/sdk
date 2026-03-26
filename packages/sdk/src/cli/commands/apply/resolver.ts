@@ -405,7 +405,6 @@ function processResolver(
       operationHook: {
         expr: buildResolverOperationHookExpr(env),
       },
-      postScript: `args.body`,
       invoker: resolver.authInvoker,
     },
   ];
