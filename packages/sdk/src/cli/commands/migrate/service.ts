@@ -93,11 +93,9 @@ export async function migrate(options: MigrateOptions): Promise<void> {
       }
       warnings.push(...result.warnings);
     } catch (error) {
-      errors.push({
-        ruleId: rule.id,
-        error: error instanceof Error ? error : new Error(String(error)),
-      });
-      logger.error(`  Failed: ${error instanceof Error ? error.message : String(error)}`);
+      const normalizedError = error instanceof Error ? error : new Error(String(error));
+      errors.push({ ruleId: rule.id, error: normalizedError });
+      logger.error(`  Failed: ${normalizedError.message}`);
     }
   }
 
