@@ -50,14 +50,16 @@ interface Edit {
  * @param source - Original source code
  * @param pattern - ast-grep pattern to match
  * @param replacer - Function that takes a matched node and returns replacement text
+ * @param lang - Language to parse as (defaults to TypeScript; use Lang.Tsx for .tsx files)
  * @returns Object with the new source and count of replacements made
  */
 export function applyPatternReplace(
   source: string,
   pattern: string,
   replacer: (node: SgNode) => string,
+  lang?: Lang,
 ): { output: string; count: number } {
-  const root = parseTypeScript(source);
+  const root = parseTypeScript(source, lang);
   const matches = root.root().findAll(pattern);
   if (matches.length === 0) {
     return { output: source, count: 0 };
