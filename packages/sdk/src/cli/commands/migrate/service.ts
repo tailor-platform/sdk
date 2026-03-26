@@ -66,13 +66,10 @@ export async function migrate(options: MigrateOptions): Promise<void> {
 
   // Step 4: Execute each rule
   const modifiedFiles = new Set<string>();
-  const summary: MigrationSummary = {
-    rulesApplied: 0,
-    rulesSkipped: 0,
-    filesModified: [],
-    warnings: [],
-    errors: [],
-  };
+  const warnings: string[] = [];
+  const errors: MigrationSummary["errors"] = [];
+  let rulesApplied = 0;
+  let rulesSkipped = 0;
 
   for (const rule of rules) {
     logger.info(`Running: ${styles.bold(rule.name)} - ${rule.description}`);
@@ -85,25 +82,32 @@ export async function migrate(options: MigrateOptions): Promise<void> {
       });
 
       if (result.changed) {
-        summary.rulesApplied++;
+        rulesApplied++;
         for (const file of result.filesModified) {
           modifiedFiles.add(file);
         }
         logger.success(`  ${result.filesModified.length} file(s) modified`);
       } else {
-        summary.rulesSkipped++;
+        rulesSkipped++;
         logger.log(`  ${styles.dim("No changes needed")}`);
       }
-      summary.warnings.push(...result.warnings);
+      warnings.push(...result.warnings);
     } catch (error) {
-      summary.errors.push({
+      errors.push({
         ruleId: rule.id,
         error: error instanceof Error ? error : new Error(String(error)),
       });
       logger.error(`  Failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
-  summary.filesModified = [...modifiedFiles];
+
+  const summary: MigrationSummary = {
+    rulesApplied,
+    rulesSkipped,
+    filesModified: [...modifiedFiles],
+    warnings,
+    errors,
+  };
 
   logger.log("");
 

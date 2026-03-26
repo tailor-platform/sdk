@@ -41,12 +41,12 @@ export class RuleRegistry {
   /**
    * Get rules applicable to a specific version migration.
    *
-   * A rule is applicable when:
-   * - The source version satisfies `>= rule.since` AND `< rule.until`
-   * - The target version satisfies `>= rule.until`
+   * A rule is applicable when its breaking-change boundary (`until`) falls
+   * within the migration range: `fromVersion < rule.until <= toVersion`.
    *
-   * This ensures rules are only applied when migrating across the version
-   * boundary where the breaking change was introduced.
+   * `rule.since` is intentionally not checked. In chained migrations, earlier
+   * rules transform the code so later rules' patterns match. If the source
+   * predates `rule.since`, the rule simply finds no matches (harmless no-op).
    * @param fromVersion - The current SDK version (e.g., "1.30.0")
    * @param toVersion - The target SDK version (e.g., "2.0.0")
    * @returns Filtered list of applicable migration rules
@@ -60,11 +60,6 @@ export class RuleRegistry {
     }
 
     return this.rules.filter((rule) => {
-      // A rule applies when its breaking-change boundary (until) falls within the
-      // migration range: source has not yet crossed it, and target is at or past it.
-      // rule.since is intentionally not checked; in chained migrations, earlier rules
-      // transform the code so later rules' patterns match. If the source predates
-      // rule.since, the rule simply finds no matches (harmless no-op).
       return lt(fromVersion, rule.until) && gte(toVersion, rule.until);
     });
   }
