@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { logBetaWarning } from "@/cli/shared/beta";
 import { logger, styles } from "@/cli/shared/logger";
-import { renderDeploy } from "./templates";
+import { detectPackageManager, renderDeploy } from "./templates";
 
 export type SetupGitHubOptions = {
   workspaceName: string;
@@ -30,6 +30,7 @@ type WriteResult = {
  */
 export function buildFiles(options: SetupGitHubOptions): GeneratedFile[] {
   const githubDir = path.join(options.outputDir, ".github");
+  const projectDir = path.resolve(options.outputDir, options.dir);
 
   return [
     {
@@ -40,6 +41,7 @@ export function buildFiles(options: SetupGitHubOptions): GeneratedFile[] {
         organizationId: options.organizationId,
         folderId: options.folderId,
         workingDirectory: options.dir !== "." ? options.dir : undefined,
+        packageManager: detectPackageManager(projectDir),
       }),
     },
   ];

@@ -1,1 +1,1 @@
-export { renderDeploy } from "./template-deploy";
+export { detectPackageManager, renderDeploy } from "./template-deploy";
