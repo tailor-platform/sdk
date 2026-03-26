@@ -1,5 +1,17 @@
 # @tailor-platform/sdk
 
+## 1.32.0
+
+### Minor Changes
+
+- [#805](https://github.com/tailor-platform/sdk/pull/805) [`d283a78`](https://github.com/tailor-platform/sdk/commit/d283a7802e2a0aaa6fc31c4ac2c7c3d4dc9654e6) Thanks [@toiroakr](https://github.com/toiroakr)! - Use TailorErrors for resolver input validation errors instead of generic Error, enabling the PF runtime to expand validation issues into individual GraphQL errors with field-level paths.
+
+### Patch Changes
+
+- [#813](https://github.com/tailor-platform/sdk/pull/813) [`34b525f`](https://github.com/tailor-platform/sdk/commit/34b525f69b1929394a2b246e4252308710032ee7) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @inquirer/core to v11.1.7
+
+- [#828](https://github.com/tailor-platform/sdk/pull/828) [`d42bd97`](https://github.com/tailor-platform/sdk/commit/d42bd979085c800e3a46d73e76cc7c7e8251ecbb) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency knip to v6
+
 ## 1.31.0
 
 ### Minor Changes
