@@ -319,6 +319,7 @@ export async function planAuth(context: PlanContext) {
   oauth2ClientChangeSet.print();
   scimChangeSet.print();
   scimResourceChangeSet.print();
+  connectionResult.changeSet.print();
   return {
     changeSet: {
       service: serviceChangeSet,

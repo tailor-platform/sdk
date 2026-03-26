@@ -242,7 +242,6 @@ export async function planAuthConnections(
     }
   }
 
-  changeSet.print();
   return { changeSet, conflicts, unmanaged, resourceOwners };
 }
 
