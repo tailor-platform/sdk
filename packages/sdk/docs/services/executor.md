@@ -142,10 +142,10 @@ export default createExecutor({
   operation: {
     kind: "function",
     body: async (args) => {
-      if (args.kind === "created") {
+      if (args.event === "created") {
         console.log("User created:", args.newRecord.name);
       }
-      if (args.kind === "updated") {
+      if (args.event === "updated") {
         console.log("User updated:", args.oldRecord.name, "->", args.newRecord.name);
       }
     },
@@ -165,7 +165,7 @@ idpUserTrigger({ events: ["created", "deleted"] });
 authAccessTokenTrigger({ events: ["issued", "revoked"] });
 ```
 
-The `kind` field on args matches the short event name (e.g., `"created"`, `"updated"`, `"deleted"`, `"issued"`, `"refreshed"`, `"revoked"`), enabling type narrowing. The `rawKind` field contains the full event type string (e.g., `"tailordb.type_record.created"`).
+The `event` field on args matches the short event name (e.g., `"created"`, `"updated"`, `"deleted"`, `"issued"`, `"refreshed"`, `"revoked"`), enabling type narrowing. The `rawEvent` field contains the full event type string (e.g., `"tailordb.type_record.created"`).
 
 ## Operation Types
 
@@ -331,8 +331,8 @@ Record triggers receive context based on the operation type:
 
 ```typescript
 interface RecordCreatedContext<T> {
-  kind: "created"; // Short event name for type narrowing
-  rawKind: "tailordb.type_record.created"; // Full event type string
+  event: "created"; // Short event name for type narrowing
+  rawEvent: "tailordb.type_record.created"; // Full event type string
   workspaceId: string; // Workspace identifier
   appNamespace: string; // Application/namespace name
   typeName: string; // TailorDB type name
@@ -345,7 +345,7 @@ interface RecordCreatedContext<T> {
 ```typescript
 interface RecordUpdatedContext<T> {
   kind: "updated";
-  rawKind: "tailordb.type_record.updated";
+  rawEvent: "tailordb.type_record.updated";
   workspaceId: string;
   appNamespace: string;
   typeName: string;
@@ -359,7 +359,7 @@ interface RecordUpdatedContext<T> {
 ```typescript
 interface RecordDeletedContext<T> {
   kind: "deleted";
-  rawKind: "tailordb.type_record.deleted";
+  rawEvent: "tailordb.type_record.deleted";
   workspaceId: string;
   appNamespace: string;
   typeName: string;
@@ -482,8 +482,8 @@ IdP user triggers receive user context:
 
 ```typescript
 interface IdpUserContext {
-  kind: "created" | "updated" | "deleted"; // Short event name
-  rawKind: string; // Full event type (e.g., "idp.user.created")
+  event: "created" | "updated" | "deleted"; // Short event name
+  rawEvent: string; // Full event type (e.g., "idp.user.created")
   namespaceName: string; // IdP namespace name
   userId: string; // The affected user ID
 }
@@ -495,8 +495,8 @@ Auth access token triggers receive token context:
 
 ```typescript
 interface AuthAccessTokenContext {
-  kind: "issued" | "refreshed" | "revoked"; // Short event name
-  rawKind: string; // Full event type (e.g., "auth.access_token.issued")
+  event: "issued" | "refreshed" | "revoked"; // Short event name
+  rawEvent: string; // Full event type (e.g., "auth.access_token.issued")
   namespaceName: string; // Auth namespace name
   userId: string; // The user associated with the token
 }

@@ -57,8 +57,8 @@ export function buildExecutorArgsExpr(
       return `({ ...args, appNamespace: args.namespaceName, rawBody: args.raw_body, ${envExpr} })`;
 
     default:
-      // All event triggers: inject kind (short name) and rawKind (full event type) from server-side eventType
-      return `({ ...args, kind: args.eventType?.split(".").pop(), rawKind: args.eventType, appNamespace: args.namespaceName, ${ACTOR_TRANSFORM_EXPR}, ${envExpr} })`;
+      // All event triggers: inject event (short name) and rawEvent (full event type) from server-side eventType
+      return `({ ...args, event: args.eventType?.split(".").pop(), rawEvent: args.eventType, appNamespace: args.namespaceName, ${ACTOR_TRANSFORM_EXPR}, ${envExpr} })`;
   }
 }
 

@@ -776,14 +776,14 @@ describe("recordTrigger (multi-event)", () => {
           }>();
 
           // Can narrow by kind
-          if (args.kind === "created") {
+          if (args.event === "created") {
             expectTypeOf(args.newRecord).toExtend<{
               id: string;
               name: string;
               age: number;
             }>();
           }
-          if (args.kind === "updated") {
+          if (args.event === "updated") {
             expectTypeOf(args.newRecord).toExtend<{
               id: string;
               name: string;
@@ -809,7 +809,7 @@ describe("recordTrigger (multi-event)", () => {
       type: user,
       events: ["created", "deleted"],
       condition: (args) => {
-        if (args.kind === "created") {
+        if (args.event === "created") {
           return args.newRecord.age >= 18;
         }
         return true;
@@ -831,7 +831,7 @@ describe("recordTrigger (multi-event)", () => {
       operation: {
         kind: "function",
         body: (args) => {
-          if (args.kind === "deleted") {
+          if (args.event === "deleted") {
             expectTypeOf(args.oldRecord).toExtend<{
               id: string;
               name: string;
@@ -864,8 +864,8 @@ describe("idpUserTrigger (multi-event)", () => {
             namespaceName: string;
             userId: string;
           }>();
-          if (args.kind === "created") {
-            expectTypeOf(args.kind).toEqualTypeOf<"created">();
+          if (args.event === "created") {
+            expectTypeOf(args.event).toEqualTypeOf<"created">();
           }
         },
       },
@@ -893,8 +893,8 @@ describe("authAccessTokenTrigger (multi-event)", () => {
             namespaceName: string;
             userId: string;
           }>();
-          if (args.kind === "issued") {
-            expectTypeOf(args.kind).toEqualTypeOf<"issued">();
+          if (args.event === "issued") {
+            expectTypeOf(args.event).toEqualTypeOf<"issued">();
           }
         },
       },

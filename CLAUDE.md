@@ -62,7 +62,7 @@ Multi-event trigger variants handle multiple events in one executor:
 - `idpUserTrigger({ events: ["created", "deleted"] })` - Multiple IdP user events
 - `authAccessTokenTrigger({ events: ["issued", "revoked"] })` - Multiple auth token events
 
-Args include `kind` (short name like `"created"`) and `rawKind` (full event type like `"tailordb.type_record.created"`) for runtime type narrowing.
+Args include `event` (short name like `"created"`) and `rawEvent` (full event type like `"tailordb.type_record.created"`) for runtime type narrowing.
 
 ### Generators
 

@@ -22,21 +22,21 @@ interface RecordArgs extends EventArgs {
 }
 
 export interface RecordCreatedArgs<T extends TailorDBType> extends RecordArgs {
-  kind: "created";
-  rawKind: "tailordb.type_record.created";
+  event: "created";
+  rawEvent: "tailordb.type_record.created";
   newRecord: output<T>;
 }
 
 export interface RecordUpdatedArgs<T extends TailorDBType> extends RecordArgs {
-  kind: "updated";
-  rawKind: "tailordb.type_record.updated";
+  event: "updated";
+  rawEvent: "tailordb.type_record.updated";
   newRecord: output<T>;
   oldRecord: output<T>;
 }
 
 export interface RecordDeletedArgs<T extends TailorDBType> extends RecordArgs {
-  kind: "deleted";
-  rawKind: "tailordb.type_record.deleted";
+  event: "deleted";
+  rawEvent: "tailordb.type_record.deleted";
   oldRecord: output<T>;
 }
 
@@ -73,22 +73,22 @@ export type ResolverExecutedArgs<R extends ResolverConfig> = EventArgs & {
 
 // IdP User Event Args
 export interface IdpUserCreatedArgs extends EventArgs {
-  kind: "created";
-  rawKind: "idp.user.created";
+  event: "created";
+  rawEvent: "idp.user.created";
   namespaceName: string;
   userId: string;
 }
 
 export interface IdpUserUpdatedArgs extends EventArgs {
-  kind: "updated";
-  rawKind: "idp.user.updated";
+  event: "updated";
+  rawEvent: "idp.user.updated";
   namespaceName: string;
   userId: string;
 }
 
 export interface IdpUserDeletedArgs extends EventArgs {
-  kind: "deleted";
-  rawKind: "idp.user.deleted";
+  event: "deleted";
+  rawEvent: "idp.user.deleted";
   namespaceName: string;
   userId: string;
 }
@@ -97,22 +97,22 @@ export type IdpUserArgs = IdpUserCreatedArgs | IdpUserUpdatedArgs | IdpUserDelet
 
 // Auth Access Token Event Args
 export interface AuthAccessTokenIssuedArgs extends EventArgs {
-  kind: "issued";
-  rawKind: "auth.access_token.issued";
+  event: "issued";
+  rawEvent: "auth.access_token.issued";
   namespaceName: string;
   userId: string;
 }
 
 export interface AuthAccessTokenRefreshedArgs extends EventArgs {
-  kind: "refreshed";
-  rawKind: "auth.access_token.refreshed";
+  event: "refreshed";
+  rawEvent: "auth.access_token.refreshed";
   namespaceName: string;
   userId: string;
 }
 
 export interface AuthAccessTokenRevokedArgs extends EventArgs {
-  kind: "revoked";
-  rawKind: "auth.access_token.revoked";
+  event: "revoked";
+  rawEvent: "auth.access_token.revoked";
   namespaceName: string;
   userId: string;
 }

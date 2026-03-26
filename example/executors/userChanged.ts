@@ -11,10 +11,10 @@ export default createExecutor({
   operation: {
     kind: "function",
     body: async (args) => {
-      if (args.kind === "created") {
+      if (args.event === "created") {
         console.log("User created:", args.newRecord.name);
       }
-      if (args.kind === "updated") {
+      if (args.event === "updated") {
         console.log("User updated:", args.oldRecord.name, "->", args.newRecord.name);
       }
     },

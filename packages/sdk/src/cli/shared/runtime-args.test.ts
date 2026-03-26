@@ -23,14 +23,14 @@ describe("buildExecutorArgsExpr", () => {
       const eventKinds = ["tailordb", "idpUser", "authAccessToken"] as const;
       for (const kind of eventKinds) {
         const expr = buildExecutorArgsExpr(kind, env);
-        expect(expr).toContain('kind: args.eventType?.split(".").pop()');
-        expect(expr).toContain("rawKind: args.eventType");
+        expect(expr).toContain('event: args.eventType?.split(".").pop()');
+        expect(expr).toContain("rawEvent: args.eventType");
       }
     });
 
-    test("schedule trigger does not inject kind", () => {
+    test("schedule trigger does not inject event", () => {
       const expr = buildExecutorArgsExpr("schedule", env);
-      expect(expr).not.toContain("kind:");
+      expect(expr).not.toContain("event:");
     });
   });
 
