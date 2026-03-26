@@ -12,7 +12,7 @@ type DeployParams = {
  * Render the deploy caller workflow YAML.
  *
  * Generates a thin workflow that calls the composite deploy action
- * from tailor-platform/sdk. Targets single-application scaffolds
+ * from tailor-platform/actions. Targets single-application scaffolds
  * (those with `generate` and `deploy` scripts). Multi-application
  * projects (e.g. chained `deploy:*` scripts) need manual workflow
  * customization.

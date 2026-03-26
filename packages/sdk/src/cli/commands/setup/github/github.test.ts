@@ -28,7 +28,15 @@ describe("buildFiles", () => {
 
   it("references the composite action", () => {
     const content = getDeployContent();
-    expect(content).toContain("uses: tailor-platform/sdk@actions/v1");
+    expect(content).toContain("uses: tailor-platform/actions/deploy@v1");
+  });
+
+  it("includes checkout step before action", () => {
+    const content = getDeployContent();
+    const checkoutIndex = content.indexOf("uses: actions/checkout@v4");
+    const actionIndex = content.indexOf("uses: tailor-platform/actions/deploy@v1");
+    expect(checkoutIndex).toBeGreaterThan(-1);
+    expect(checkoutIndex).toBeLessThan(actionIndex);
   });
 
   it("passes workspace inputs", () => {

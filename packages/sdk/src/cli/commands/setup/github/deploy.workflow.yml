@@ -16,7 +16,8 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: tailor-platform/sdk@actions/v1
+      - uses: actions/checkout@v4
+      - uses: tailor-platform/actions/deploy@v1
         with:
           workspace-name: __WORKSPACE_NAME__
           workspace-region: __WORKSPACE_REGION__
