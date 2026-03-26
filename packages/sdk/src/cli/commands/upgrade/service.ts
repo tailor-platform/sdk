@@ -6,22 +6,22 @@ import { createDefaultRegistry } from "./rules";
 import { detectInstalledVersion } from "./version-detector";
 import type { MigrationSummary } from "./types";
 
-interface MigrateOptions {
+interface UpgradeOptions {
   to: string;
   dryRun: boolean;
   path: string;
 }
 
 /**
- * Run the migration pipeline:
+ * Run the upgrade pipeline:
  * 1. Detect current SDK version
  * 2. Select applicable rules
  * 3. Collect target files
  * 4. Execute each rule
  * 5. Print summary
- * @param options - Migration options including target version, dry-run flag, and project path
+ * @param options - Upgrade options including target version, dry-run flag, and project path
  */
-export async function migrate(options: MigrateOptions): Promise<void> {
+export async function upgrade(options: UpgradeOptions): Promise<void> {
   const projectRoot = options.path;
 
   // Step 1: Detect current SDK version
@@ -31,7 +31,7 @@ export async function migrate(options: MigrateOptions): Promise<void> {
       message: `Could not detect installed @tailor-platform/sdk version in ${projectRoot}`,
       suggestion:
         "Ensure @tailor-platform/sdk is installed. Run 'pnpm install' or 'npm install' first.",
-      command: "migrate",
+      command: "upgrade",
     });
   }
 
@@ -116,7 +116,7 @@ export async function migrate(options: MigrateOptions): Promise<void> {
     throw CLIError({
       message: `Migration completed with ${summary.errors.length} error(s)`,
       suggestion: "Review the errors above and re-run the migration after fixing the issues.",
-      command: "migrate",
+      command: "upgrade",
     });
   }
 }

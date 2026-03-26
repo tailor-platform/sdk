@@ -13,7 +13,6 @@ import { initCommand } from "./commands/init";
 import { loginCommand } from "./commands/login";
 import { logoutCommand } from "./commands/logout";
 import { machineuserCommand } from "./commands/machineuser";
-import { migrateCommand } from "./commands/migrate";
 import { oauth2clientCommand } from "./commands/oauth2client";
 import { openCommand } from "./commands/open";
 import { organizationCommand } from "./commands/organization";
@@ -24,6 +23,7 @@ import { setupCommand } from "./commands/setup";
 import { showCommand } from "./commands/show";
 import { staticwebsiteCommand } from "./commands/staticwebsite";
 import { tailordbCommand } from "./commands/tailordb";
+import { upgradeCommand } from "./commands/upgrade";
 import { userCommand } from "./commands/user";
 import { workflowCommand } from "./commands/workflow";
 import { workspaceCommand } from "./commands/workspace";
@@ -66,7 +66,7 @@ export const mainCommand = withCompletionCommand(
       init: initCommand,
       login: loginCommand,
       logout: logoutCommand,
-      migrate: migrateCommand,
+      upgrade: upgradeCommand,
       machineuser: machineuserCommand,
       oauth2client: oauth2clientCommand,
       open: openCommand,
