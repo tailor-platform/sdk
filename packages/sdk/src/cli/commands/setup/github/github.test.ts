@@ -67,17 +67,24 @@ describe("renderDeploy", () => {
 
   it("includes setup steps in correct order", () => {
     const content = renderDeploy(baseParams);
-    const checkoutIndex = content.indexOf("uses: actions/checkout@v4");
-    const setupIndex = content.indexOf("uses: pnpm/action-setup@v4");
+    const checkoutIndex = content.indexOf("uses: actions/checkout@");
+    const setupIndex = content.indexOf("uses: pnpm/action-setup@");
     const actionIndex = content.indexOf("uses: tailor-platform/actions/deploy@v1");
     expect(checkoutIndex).toBeGreaterThan(-1);
     expect(setupIndex).toBeGreaterThan(checkoutIndex);
     expect(actionIndex).toBeGreaterThan(setupIndex);
   });
 
+  it("pins action versions with SHA and version comment", () => {
+    const content = renderDeploy(baseParams);
+    expect(content).toMatch(/uses: actions\/checkout@[a-f0-9]+ # v\d+\.\d+\.\d+/);
+    expect(content).toMatch(/uses: pnpm\/action-setup@[a-f0-9]+ # v\d+\.\d+\.\d+/);
+    expect(content).toMatch(/uses: actions\/setup-node@[a-f0-9]+ # v\d+\.\d+\.\d+/);
+  });
+
   it("generates pnpm setup steps", () => {
     const content = renderDeploy({ ...baseParams, packageManager: "pnpm" });
-    expect(content).toContain("uses: pnpm/action-setup@v4");
+    expect(content).toContain("pnpm/action-setup@");
     expect(content).toContain("cache: pnpm");
     expect(content).toContain("pnpm install --frozen-lockfile");
   });
@@ -101,8 +108,8 @@ describe("renderDeploy", () => {
     const content = renderDeploy({ ...baseParams, packageManager: "bun" });
     expect(content).not.toContain("pnpm");
     expect(content).not.toContain("yarn");
-    expect(content).not.toContain("npm");
-    expect(content).toContain("oven-sh/setup-bun@v2");
+    expect(content).not.toContain("npm ci");
+    expect(content).toContain("oven-sh/setup-bun@");
     expect(content).toContain("bun install --frozen-lockfile");
   });
 

@@ -1,6 +1,10 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import deployTemplate from "./deploy.workflow.yml";
+import setupBun from "./setup-bun.yml";
+import setupNpm from "./setup-npm.yml";
+import setupPnpm from "./setup-pnpm.yml";
+import setupYarn from "./setup-yarn.yml";
 
 type PackageManager = "pnpm" | "yarn" | "npm" | "bun";
 
@@ -14,32 +18,20 @@ type DeployParams = {
 };
 
 const setupSteps: Record<PackageManager, string> = {
-  pnpm: [
-    "      - uses: pnpm/action-setup@v4",
-    "      - uses: actions/setup-node@v4",
-    "        with:",
-    "          node-version-file: package.json",
-    "          cache: pnpm",
-    "      - run: pnpm install --frozen-lockfile",
-  ].join("\n"),
-  yarn: [
-    "      - uses: actions/setup-node@v4",
-    "        with:",
-    "          node-version-file: package.json",
-    "          cache: yarn",
-    "      - run: yarn install --frozen-lockfile",
-  ].join("\n"),
-  npm: [
-    "      - uses: actions/setup-node@v4",
-    "        with:",
-    "          node-version-file: package.json",
-    "          cache: npm",
-    "      - run: npm ci",
-  ].join("\n"),
-  bun: ["      - uses: oven-sh/setup-bun@v2", "      - run: bun install --frozen-lockfile"].join(
-    "\n",
-  ),
+  pnpm: setupPnpm,
+  yarn: setupYarn,
+  npm: setupNpm,
+  bun: setupBun,
 };
+
+function indentSnippet(snippet: string, spaces: number): string {
+  const indent = " ".repeat(spaces);
+  return snippet
+    .trimEnd()
+    .split("\n")
+    .map((line) => indent + line)
+    .join("\n");
+}
 
 /**
  * Detect the package manager used in a project directory by checking for lockfiles.
@@ -84,5 +76,5 @@ export function renderDeploy(params: DeployParams): string {
     .replace("__ORGANIZATION_ID__", () => organizationId)
     .replace("__FOLDER_ID__", () => folderId)
     .replace(/ *# __WORKING_DIRECTORY__\n/, () => workingDirectoryLine)
-    .replace(/^ *# __SETUP_STEPS__$/m, () => setupSteps[packageManager]);
+    .replace(/^ *# __SETUP_STEPS__$/m, () => indentSnippet(setupSteps[packageManager], 6));
 }
