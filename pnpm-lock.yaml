@@ -627,8 +627,8 @@ importers:
         specifier: 14.2.6
         version: 14.2.6
       std-env:
-        specifier: 3.10.0
-        version: 3.10.0
+        specifier: 4.0.0
+        version: 4.0.0
       table:
         specifier: 6.9.0
         version: 6.9.0
@@ -5067,9 +5067,6 @@ packages:
 
   stackback@0.0.2:
     resolution: {integrity: sha512-1XMJE5fQo1jGH6Y/7ebnwPOBEkIEnT4QF32d5R1+VXdXveM0IBMJt8zfaxX1P3QhVwrYe+576+jkANtSS2mBbw==}
-
-  std-env@3.10.0:
-    resolution: {integrity: sha512-5GS12FdOZNliM5mAOxFRg7Ir0pWz8MdpYm6AY6VPkGpbA7ZzmbzNcBJQ0GPvvyWgcY7QAhCgf9Uy89I03faLkg==}
 
   std-env@4.0.0:
     resolution: {integrity: sha512-zUMPtQ/HBY3/50VbpkupYHbRroTRZJPRLvreamgErJVys0ceuzMkD44J/QjqhHjOzK42GQ3QZIeFG1OYfOtKqQ==}
@@ -9558,8 +9555,6 @@ snapshots:
       escape-string-regexp: 2.0.0
 
   stackback@0.0.2: {}
-
-  std-env@3.10.0: {}
 
   std-env@4.0.0: {}
 
