@@ -34,6 +34,16 @@ describe("detectPackageManager", () => {
     expect(detectPackageManager(testDir)).toBe("npm");
   });
 
+  it("detects bun from bun.lockb", () => {
+    fs.writeFileSync(path.join(testDir, "bun.lockb"), "");
+    expect(detectPackageManager(testDir)).toBe("bun");
+  });
+
+  it("detects bun from bun.lock", () => {
+    fs.writeFileSync(path.join(testDir, "bun.lock"), "");
+    expect(detectPackageManager(testDir)).toBe("bun");
+  });
+
   it("prefers pnpm when multiple lockfiles exist", () => {
     fs.writeFileSync(path.join(testDir, "pnpm-lock.yaml"), "");
     fs.writeFileSync(path.join(testDir, "yarn.lock"), "");
@@ -85,6 +95,15 @@ describe("renderDeploy", () => {
     expect(content).not.toContain("yarn");
     expect(content).toContain("cache: npm");
     expect(content).toContain("npm ci");
+  });
+
+  it("generates bun setup steps", () => {
+    const content = renderDeploy({ ...baseParams, packageManager: "bun" });
+    expect(content).not.toContain("pnpm");
+    expect(content).not.toContain("yarn");
+    expect(content).not.toContain("npm");
+    expect(content).toContain("oven-sh/setup-bun@v2");
+    expect(content).toContain("bun install --frozen-lockfile");
   });
 
   it("passes workspace inputs", () => {

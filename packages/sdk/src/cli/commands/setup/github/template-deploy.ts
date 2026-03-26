@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import deployTemplate from "./deploy.workflow.yml";
 
-type PackageManager = "pnpm" | "yarn" | "npm";
+type PackageManager = "pnpm" | "yarn" | "npm" | "bun";
 
 type DeployParams = {
   workspaceName: string;
@@ -36,6 +36,9 @@ const setupSteps: Record<PackageManager, string> = {
     "          cache: npm",
     "      - run: npm ci",
   ].join("\n"),
+  bun: ["      - uses: oven-sh/setup-bun@v2", "      - run: bun install --frozen-lockfile"].join(
+    "\n",
+  ),
 };
 
 /**
@@ -46,6 +49,8 @@ const setupSteps: Record<PackageManager, string> = {
 export function detectPackageManager(dir: string): PackageManager {
   if (fs.existsSync(path.join(dir, "pnpm-lock.yaml"))) return "pnpm";
   if (fs.existsSync(path.join(dir, "yarn.lock"))) return "yarn";
+  if (fs.existsSync(path.join(dir, "bun.lockb")) || fs.existsSync(path.join(dir, "bun.lock")))
+    return "bun";
   return "npm";
 }
 
