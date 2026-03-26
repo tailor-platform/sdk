@@ -2,8 +2,7 @@
 "@tailor-platform/sdk": patch
 ---
 
-Fix Kysely type generation for date/datetime fields inside nested objects (db.object()).
+Fix Kysely type generation for date/datetime fields inside nested objects (`db.object()`).
 
-- Nested date/datetime fields now generate `string` instead of `Timestamp` (ColumnType), matching the actual runtime behavior where the server returns and accepts ISO 8601 strings for nested datetime fields.
+- Nested objects containing date/datetime fields are now wrapped in `ColumnType<SelectObj, InsertObj, UpdateObj>`, so that `Insertable` accepts `Date | string` while `Selectable` returns `string` — matching actual server behavior.
 - Nullable fields inside nested objects are now optional (`?`), consistent with how Kysely's `Insertable` treats nullable top-level fields.
-- Added `DeepResolveColumnType` to `NamespaceInsertable`/`NamespaceSelectable`/`NamespaceUpdateable` to recursively resolve any `ColumnType` in nested objects as a safety net.
