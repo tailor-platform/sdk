@@ -6,6 +6,7 @@
     "scripts/**",
     "e2e/fixtures/**",
     "src/cli/commands/apply/__test_fixtures__/**",
+    "src/cli/commands/migrate/__test_fixtures__/**",
     "src/types/*.ts",
     "zinfer.config.ts"
   ],

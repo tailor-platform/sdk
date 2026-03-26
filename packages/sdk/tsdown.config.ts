@@ -43,6 +43,7 @@ export default defineConfig({
   banner: {
     dts: '/// <reference types="@tailor-platform/function-types" />',
   },
+  external: ["@ast-grep/napi"],
   sourcemap: true,
   plugins: [
     yamlText(),

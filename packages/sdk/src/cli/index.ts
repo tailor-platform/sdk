@@ -13,6 +13,7 @@ import { initCommand } from "./commands/init";
 import { loginCommand } from "./commands/login";
 import { logoutCommand } from "./commands/logout";
 import { machineuserCommand } from "./commands/machineuser";
+import { migrateCommand } from "./commands/migrate";
 import { oauth2clientCommand } from "./commands/oauth2client";
 import { openCommand } from "./commands/open";
 import { organizationCommand } from "./commands/organization";
@@ -65,6 +66,7 @@ export const mainCommand = withCompletionCommand(
       init: initCommand,
       login: loginCommand,
       logout: logoutCommand,
+      migrate: migrateCommand,
       machineuser: machineuserCommand,
       oauth2client: oauth2clientCommand,
       open: openCommand,
