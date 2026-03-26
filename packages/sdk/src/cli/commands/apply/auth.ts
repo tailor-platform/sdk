@@ -627,6 +627,7 @@ async function protoBuiltinIdPConfig(
     if (error instanceof ConnectError && error.code === Code.NotFound) {
       throw new Error(
         `Built-in IdP "${builtinIdPConfig.namespace}" not found. Please ensure that idp is configured correctly.`,
+        { cause: error },
       );
     }
     throw error;

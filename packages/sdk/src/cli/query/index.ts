@@ -326,6 +326,7 @@ async function resolveEditedQueryInput(engine: QueryEngine): Promise<QueryComman
     } catch (error) {
       throw new Error(
         `Failed to open query editor "${editor}": ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error },
       );
     }
 

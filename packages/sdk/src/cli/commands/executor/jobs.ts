@@ -184,7 +184,7 @@ export async function listExecutorJobs<E extends ExecutorLike>(
     return jobs.map(toExecutorJobListInfo);
   } catch (error) {
     if (error instanceof ConnectError && error.code === Code.NotFound) {
-      throw new Error(`Executor '${executorName}' not found.`);
+      throw new Error(`Executor '${executorName}' not found.`, { cause: error });
     }
     throw error;
   }
@@ -250,7 +250,9 @@ export async function getExecutorJob<E extends ExecutorLike>(
     return jobInfo;
   } catch (error) {
     if (error instanceof ConnectError && error.code === Code.NotFound) {
-      throw new Error(`Job '${options.jobId}' not found for executor '${executorName}'.`);
+      throw new Error(`Job '${options.jobId}' not found for executor '${executorName}'.`, {
+        cause: error,
+      });
     }
     throw error;
   }

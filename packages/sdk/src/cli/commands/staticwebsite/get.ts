@@ -55,7 +55,7 @@ export const getCommand = defineAppCommand({
       logger.out(info);
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
-        throw new Error(notFoundErrorMessage);
+        throw new Error(notFoundErrorMessage, { cause: error });
       }
       throw error;
     }
