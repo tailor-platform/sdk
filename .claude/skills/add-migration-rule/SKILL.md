@@ -131,6 +131,10 @@ Find AST pattern matches and replace them. Returns `{ output, count }`.
   extract captured values.
 - `lang`: optional, defaults to `Lang.TypeScript`. Use `Lang.Tsx` for `.tsx` files.
 
+**Important:** `$$$NAME` captures include comma separator nodes. Always filter
+them out: `.filter((n) => n.kind() !== ",")` before `.map()`. Failing to do
+this produces `"a, ,, b"` instead of `"a, b"`.
+
 ### `transformFile(filePath, transformFn, dryRun)`
 
 Read file, apply `transformFn(source)`, write back if changed. Returns boolean.
@@ -163,40 +167,39 @@ Example: `since: "1.0.0", until: "2.0.0"` applies when upgrading from any 1.x to
 
 ## Common Patterns
 
-### Rename a function call
+### Simple identifier rename (recommended for renames)
+
+When the old and new names are unique identifiers (no risk of false matches
+in strings or comments), use `findPattern` to confirm AST-level presence,
+then `replaceAll` to preserve formatting:
 
 ```typescript
-applyPatternReplace(source, "oldName($$$ARGS)", (node) => {
+const matches = findPattern(source, "oldName");
+if (matches.length === 0) return null;
+return source.replaceAll("oldName", "newName");
+```
+
+This handles both imports and call sites in one pass without losing
+semicolons, indentation, or trailing commas.
+
+### Restructure function call arguments
+
+When you need to transform arguments (not just rename):
+
+```typescript
+applyPatternReplace(source, "oldFn($$$ARGS)", (node) => {
   const args = node
     .getMultipleMatches("ARGS")
-    .map((n) => n.text())
-    .join(", ");
-  return `newName(${args})`;
+    .filter((n) => n.kind() !== ",") // IMPORTANT: filter comma nodes
+    .map((n) => n.text());
+  return `newFn(${args.join(", ")})`;
 });
 ```
 
-### Rename an import specifier
-
-```typescript
-// Replace: import { oldName } from "@tailor-platform/sdk"
-// With:    import { newName } from "@tailor-platform/sdk"
-applyPatternReplace(
-  source,
-  'import { $$$BEFORE, oldName, $$$AFTER } from "@tailor-platform/sdk"',
-  (node) => {
-    const before = node
-      .getMultipleMatches("BEFORE")
-      .map((n) => n.text())
-      .join(", ");
-    const after = node
-      .getMultipleMatches("AFTER")
-      .map((n) => n.text())
-      .join(", ");
-    const specifiers = [before, "newName", after].filter(Boolean).join(", ");
-    return `import { ${specifiers} } from "@tailor-platform/sdk"`;
-  },
-);
-```
+**Note:** `applyPatternReplace` replaces the matched AST range with the
+returned string. Surrounding code (semicolons, trailing commas) outside the
+match is preserved, but content inside (indentation, line breaks) is lost.
+For formatting-sensitive transforms, prefer the simple rename pattern above.
 
 ### Add a warning for manual attention
 
@@ -205,6 +208,8 @@ When a pattern cannot be fully auto-migrated:
 ```typescript
 const matches = findPattern(source, "<pattern>");
 if (matches.length > 0) {
-  warnings.push(`${file}: Found <N> occurrences of <X> that require manual migration`);
+  warnings.push(
+    `${file}: Found ${matches.length} occurrences of <X> that require manual migration`,
+  );
 }
 ```
