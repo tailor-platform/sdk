@@ -66,6 +66,10 @@ export function applyPatternReplace(
   // Collect edits, filtering out nested matches to avoid overlapping rewrites.
   // When findAll returns both an outer and inner match (e.g., foo(foo(1))),
   // applying both edits would corrupt offsets. Keep only outermost matches.
+  // Inner occurrences are left unchanged intentionally; running the codemod
+  // again will catch them once the outer layer has been rewritten. Iterative
+  // rewriting within a single pass risks infinite loops when the replacement
+  // still matches the pattern.
   const allEdits: Edit[] = matches.map((match) => {
     const range = match.range();
     return {

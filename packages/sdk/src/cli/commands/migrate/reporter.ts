@@ -13,7 +13,7 @@ export function printMigrationSummary(summary: MigrationSummary, dryRun: boolean
   }
 
   // Rules summary
-  const totalRules = summary.rulesApplied + summary.rulesSkipped;
+  const totalRules = summary.rulesApplied + summary.rulesSkipped + summary.errors.length;
   logger.info(
     `Migration complete: ${styles.success(`${summary.rulesApplied} applied`)}, ${styles.dim(`${summary.rulesSkipped} skipped`)} (${totalRules} total rules)`,
   );
