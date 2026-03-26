@@ -1,8 +1,9 @@
 import {
   createGetDB,
   type Generated,
-  type ColumnType,
   type Timestamp,
+  type NestedTimestamp,
+  type ObjectColumnType,
   type Serial,
   type NamespaceDB,
   type NamespaceInsertable,
@@ -50,17 +51,9 @@ export interface Namespace {
         email: string;
         phone?: string | null;
       };
-      metadata: ColumnType<{
-        created: string;
-        lastUpdated?: string | null;
-        version: number;
-      }, {
-        created: Date | string;
-        lastUpdated?: Date | string | null;
-        version: number;
-      }, {
-        created: Date | string;
-        lastUpdated?: Date | string | null;
+      metadata: ObjectColumnType<{
+        created: NestedTimestamp;
+        lastUpdated?: NestedTimestamp | null;
         version: number;
       }>;
       archived: boolean | null;

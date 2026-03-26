@@ -2,7 +2,8 @@ import {
   createGetDB,
   type Generated,
   type Timestamp,
-  type ColumnType,
+  type NestedTimestamp,
+  type ObjectColumnType,
   type NamespaceDB,
   type NamespaceInsertable,
   type NamespaceSelectable,
@@ -26,17 +27,9 @@ export interface Namespace {
       body: string;
       taskId: string;
       authorId: string;
-      metadata: ColumnType<{
+      metadata: ObjectColumnType<{
         source: string;
-        editedAt?: string | null;
-        isInternal: boolean;
-      }, {
-        source: string;
-        editedAt?: Date | string | null;
-        isInternal: boolean;
-      }, {
-        source: string;
-        editedAt?: Date | string | null;
+        editedAt?: NestedTimestamp | null;
         isInternal: boolean;
       }>;
       createdAt: Generated<Timestamp>;

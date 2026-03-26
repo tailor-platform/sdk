@@ -42,22 +42,16 @@ function getNestedType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
     };
   }
 
-  const entries = Object.entries(fields);
-  let hasDatetime = false;
-
-  const fieldInfos = entries.map(([fieldName, config]) => {
-    const selectResult = generateFieldType(config, { nested: "select" });
-    const insertResult = generateFieldType(config, { nested: "insert" });
+  const fieldResults = Object.entries(fields).map(([fieldName, config]) => {
+    const result = generateFieldType(config, { nested: true });
     const optional = config.required !== true ? "?" : "";
-    if (selectResult.type !== insertResult.type) hasDatetime = true;
     return {
-      selectField: `${fieldName}${optional}: ${selectResult.type}`,
-      insertField: `${fieldName}${optional}: ${insertResult.type}`,
-      usedUtilityTypes: selectResult.usedUtilityTypes,
+      fieldType: `${fieldName}${optional}: ${result.type}`,
+      usedUtilityTypes: result.usedUtilityTypes,
     };
   });
 
-  const aggregatedUtilityTypes = fieldInfos.reduce(
+  const aggregatedUtilityTypes = fieldResults.reduce(
     (acc, result) => ({
       Timestamp: acc.Timestamp || result.usedUtilityTypes.Timestamp,
       Serial: acc.Serial || result.usedUtilityTypes.Serial,
@@ -65,18 +59,13 @@ function getNestedType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
     { Timestamp: false, Serial: false },
   );
 
-  const formatObj = (fields: string[]) =>
-    `{\n  ${fields.join(";\n  ")}${fields.length > 0 ? ";" : ""}\n}`;
+  const fieldTypes = fieldResults.map((r) => r.fieldType);
+  const obj = `{\n  ${fieldTypes.join(";\n  ")}${fieldTypes.length > 0 ? ";" : ""}\n}`;
 
-  if (hasDatetime) {
-    const selectObj = formatObj(fieldInfos.map((f) => f.selectField));
-    const insertObj = formatObj(fieldInfos.map((f) => f.insertField));
-    const type = `ColumnType<${selectObj}, ${insertObj}, ${insertObj}>`;
-    return { type, usedUtilityTypes: aggregatedUtilityTypes };
+  if (aggregatedUtilityTypes.Timestamp) {
+    return { type: `ObjectColumnType<${obj}>`, usedUtilityTypes: aggregatedUtilityTypes };
   }
-
-  const type = formatObj(fieldInfos.map((f) => f.selectField));
-  return { type, usedUtilityTypes: aggregatedUtilityTypes };
+  return { type: obj, usedUtilityTypes: aggregatedUtilityTypes };
 }
 
 /**
@@ -88,7 +77,7 @@ function getNestedType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
  */
 function getBaseType(
   fieldConfig: OperatorFieldConfig,
-  options?: { nested?: "select" | "insert" },
+  options?: { nested?: boolean },
 ): FieldTypeResult {
   const fieldType = fieldConfig.type;
   const usedUtilityTypes = { Timestamp: false, Serial: false };
@@ -106,14 +95,8 @@ function getBaseType(
       break;
     case "date":
     case "datetime":
-      if (options?.nested === "select") {
-        type = "string";
-      } else if (options?.nested === "insert") {
-        type = "Date | string";
-      } else {
-        usedUtilityTypes.Timestamp = true;
-        type = "Timestamp";
-      }
+      usedUtilityTypes.Timestamp = true;
+      type = options?.nested ? "NestedTimestamp" : "Timestamp";
       break;
     case "bool":
     case "boolean":
@@ -143,7 +126,7 @@ function getBaseType(
  */
 function generateFieldType(
   fieldConfig: OperatorFieldConfig,
-  options?: { nested?: "select" | "insert" },
+  options?: { nested?: boolean },
 ): FieldTypeResult {
   const baseTypeResult = getBaseType(fieldConfig, options);
   const usedUtilityTypes = { ...baseTypeResult.usedUtilityTypes };
@@ -249,11 +232,12 @@ export function generateUnifiedKyselyTypes(namespaceData: KyselyNamespaceMetadat
   if (globalUsedUtilityTypes.Timestamp) {
     utilityTypeImports.push("type Timestamp");
   }
-  const hasNestedColumnType = namespaceData.some((ns) =>
-    ns.types.some((t) => t.typeDef.includes("ColumnType<")),
+  const hasObjectColumnType = namespaceData.some((ns) =>
+    ns.types.some((t) => t.typeDef.includes("ObjectColumnType<")),
   );
-  if (hasNestedColumnType) {
-    utilityTypeImports.push("type ColumnType");
+  if (hasObjectColumnType) {
+    utilityTypeImports.push("type NestedTimestamp");
+    utilityTypeImports.push("type ObjectColumnType");
   }
   if (globalUsedUtilityTypes.Serial) {
     utilityTypeImports.push("type Serial");

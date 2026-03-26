@@ -1,7 +1,8 @@
 import { describe, it, assertType, expectTypeOf } from "vitest";
 import type {
-  ColumnType,
   Generated,
+  NestedTimestamp,
+  ObjectColumnType,
   Timestamp,
   NamespaceInsertable,
   NamespaceSelectable,
@@ -15,17 +16,16 @@ describe("typecheck sanity", () => {
   });
 });
 
-// Matches actual generated types: nested object with datetime is wrapped in ColumnType
+// Matches actual generated types
 type TestNamespace = {
   testNs: {
     Receipt: {
       id: Generated<string>;
       receiptDate: Timestamp;
-      dueSchedule: ColumnType<
-        { dueDate: string; reminderAt?: string | null },
-        { dueDate: Date | string; reminderAt?: Date | string | null },
-        { dueDate: Date | string; reminderAt?: Date | string | null }
-      >;
+      dueSchedule: ObjectColumnType<{
+        dueDate: NestedTimestamp;
+        reminderAt?: NestedTimestamp | null;
+      }>;
     };
   };
 };
