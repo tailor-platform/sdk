@@ -90,12 +90,12 @@ export async function migrate(options: MigrateOptions): Promise<void> {
             summary.filesModified.push(file);
           }
         }
-        summary.warnings.push(...result.warnings);
         logger.success(`  ${result.filesModified.length} file(s) modified`);
       } else {
         summary.rulesSkipped++;
         logger.log(`  ${styles.dim("No changes needed")}`);
       }
+      summary.warnings.push(...result.warnings);
     } catch (error) {
       summary.errors.push({
         ruleId: rule.id,
@@ -109,4 +109,12 @@ export async function migrate(options: MigrateOptions): Promise<void> {
 
   // Step 5: Print summary
   printMigrationSummary(summary, options.dryRun);
+
+  if (summary.errors.length > 0) {
+    throw CLIError({
+      message: `Migration completed with ${summary.errors.length} error(s)`,
+      suggestion: "Review the errors above and re-run the migration after fixing the issues.",
+      command: "migrate",
+    });
+  }
 }

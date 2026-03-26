@@ -5,12 +5,22 @@ export type { SgNode, SgRoot };
 export { Lang };
 
 /**
- * Parse a TypeScript source string into an ast-grep root node.
+ * Parse a TypeScript or TSX source string into an ast-grep root node.
  * @param source - TypeScript source code string
+ * @param lang - Language to parse as (defaults to TypeScript)
  * @returns Parsed ast-grep root node
  */
-export function parseTypeScript(source: string): SgRoot {
-  return parse(Lang.TypeScript, source);
+export function parseTypeScript(source: string, lang: Lang = Lang.TypeScript): SgRoot {
+  return parse(lang, source);
+}
+
+/**
+ * Determine the ast-grep language for a file path.
+ * @param filePath - File path to check
+ * @returns Lang.Tsx for .tsx files, Lang.TypeScript otherwise
+ */
+export function langForFile(filePath: string): Lang {
+  return filePath.endsWith(".tsx") ? Lang.Tsx : Lang.TypeScript;
 }
 
 /**
@@ -53,8 +63,10 @@ export function applyPatternReplace(
     return { output: source, count: 0 };
   }
 
-  // Collect edits
-  const edits: Edit[] = matches.map((match) => {
+  // Collect edits, filtering out nested matches to avoid overlapping rewrites.
+  // When findAll returns both an outer and inner match (e.g., foo(foo(1))),
+  // applying both edits would corrupt offsets. Keep only outermost matches.
+  const allEdits: Edit[] = matches.map((match) => {
     const range = match.range();
     return {
       startIndex: range.start.index,
@@ -63,6 +75,18 @@ export function applyPatternReplace(
     };
   });
 
+  // Sort by startIndex ascending, then by span length descending (outermost first)
+  allEdits.sort((a, b) => a.startIndex - b.startIndex || b.endIndex - a.endIndex);
+  const edits: Edit[] = [];
+  let lastEnd = -1;
+  for (const edit of allEdits) {
+    if (edit.startIndex >= lastEnd) {
+      edits.push(edit);
+      lastEnd = edit.endIndex;
+    }
+    // else: nested inside the previous match, skip
+  }
+
   // Apply edits in reverse order to preserve offsets
   edits.sort((a, b) => b.startIndex - a.startIndex);
   let output = source;
@@ -70,7 +94,7 @@ export function applyPatternReplace(
     output = output.slice(0, edit.startIndex) + edit.newText + output.slice(edit.endIndex);
   }
 
-  return { output, count: matches.length };
+  return { output, count: edits.length };
 }
 
 /**

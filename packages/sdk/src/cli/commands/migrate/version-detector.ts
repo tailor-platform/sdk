@@ -11,6 +11,9 @@ const SDK_PACKAGE_NAME = "@tailor-platform/sdk";
  */
 export async function detectInstalledVersion(projectRoot: string): Promise<string | null> {
   try {
+    // Looks only in the project's own node_modules. Hoisted monorepo dependencies
+    // (e.g., pnpm workspace root) are not resolved yet; this is acceptable for MVP
+    // since the migrate command targets project roots with a direct SDK dependency.
     const sdkPath = path.join(projectRoot, "node_modules", SDK_PACKAGE_NAME);
     const pkg = await readPackageJSON(sdkPath);
     return pkg.version ?? null;

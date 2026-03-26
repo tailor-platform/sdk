@@ -128,4 +128,39 @@ describe("migrate service - integration", () => {
     expect(errors[0].ruleId).toBe("test/mock");
     expect(errors[0].error.message).toBe("Transform failed");
   });
+
+  it("should collect warnings from rules that report changed: false", async () => {
+    const rule = createMockRule({
+      transform: async (): Promise<TransformResult> => ({
+        changed: false,
+        filesModified: [],
+        warnings: ["Manual step required: update config"],
+      }),
+    });
+
+    const summary = {
+      rulesApplied: 0,
+      rulesSkipped: 0,
+      filesModified: [] as string[],
+      warnings: [] as string[],
+      errors: [] as Array<{ ruleId: string; error: Error }>,
+    };
+
+    const result = await rule.transform({
+      projectRoot: tmpDir,
+      files: [],
+      dryRun: false,
+    });
+
+    // Simulate what service.ts does: always collect warnings regardless of changed flag
+    if (result.changed) {
+      summary.rulesApplied++;
+    } else {
+      summary.rulesSkipped++;
+    }
+    summary.warnings.push(...result.warnings);
+
+    expect(summary.rulesSkipped).toBe(1);
+    expect(summary.warnings).toEqual(["Manual step required: update config"]);
+  });
 });

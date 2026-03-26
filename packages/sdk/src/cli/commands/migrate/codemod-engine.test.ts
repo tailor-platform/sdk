@@ -1,8 +1,15 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { Lang } from "@ast-grep/napi";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { applyPatternReplace, findPattern, parseTypeScript, transformFile } from "./codemod-engine";
+import {
+  applyPatternReplace,
+  findPattern,
+  langForFile,
+  parseTypeScript,
+  transformFile,
+} from "./codemod-engine";
 
 describe("codemod-engine", () => {
   describe("parseTypeScript", () => {
@@ -16,6 +23,22 @@ describe("codemod-engine", () => {
       const source = `import { defineConfig } from "@tailor-platform/sdk";\nexport default defineConfig({ name: "test" });`;
       const root = parseTypeScript(source);
       expect(root.root().kind()).toBe("program");
+    });
+
+    it("should parse TSX source when Lang.Tsx is specified", () => {
+      const source = `const App = () => <div className="test">hello</div>;`;
+      const root = parseTypeScript(source, Lang.Tsx);
+      expect(root.root().kind()).toBe("program");
+    });
+  });
+
+  describe("langForFile", () => {
+    it("should return Lang.Tsx for .tsx files", () => {
+      expect(langForFile("src/App.tsx")).toBe(Lang.Tsx);
+    });
+
+    it("should return Lang.TypeScript for .ts files", () => {
+      expect(langForFile("src/index.ts")).toBe(Lang.TypeScript);
     });
   });
 
@@ -73,6 +96,17 @@ describe("codemod-engine", () => {
       });
       expect(result.output).toBe("bar(1);\nbar(2);\nbar(3);");
       expect(result.count).toBe(3);
+    });
+
+    it("should handle nested matches by keeping only outermost", () => {
+      const source = `wrap(wrap(1))`;
+      const result = applyPatternReplace(source, "wrap($A)", (node) => {
+        const a = node.getMatch("A")!.text();
+        return `wrapped(${a})`;
+      });
+      // Only the outer match should be replaced; inner is nested and skipped
+      expect(result.output).toBe("wrapped(wrap(1))");
+      expect(result.count).toBe(1);
     });
 
     it("should preserve surrounding code", () => {
