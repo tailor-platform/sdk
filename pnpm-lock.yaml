@@ -678,6 +678,9 @@ importers:
       eslint-plugin-oxlint:
         specifier: 1.55.0
         version: 1.55.0
+      oxfmt:
+        specifier: 0.40.0
+        version: 0.40.0
       oxlint:
         specifier: 1.55.0
         version: 1.55.0(oxlint-tsgolint@0.16.0)

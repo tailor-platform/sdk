@@ -160,6 +160,7 @@
     "eslint": "9.39.4",
     "eslint-plugin-jsdoc": "62.8.0",
     "eslint-plugin-oxlint": "1.55.0",
+    "oxfmt": "0.40.0",
     "oxlint": "1.55.0",
     "oxlint-tsgolint": "0.16.0",
     "sonda": "0.11.1",
