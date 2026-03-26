@@ -344,7 +344,7 @@ interface RecordCreatedContext<T> {
 
 ```typescript
 interface RecordUpdatedContext<T> {
-  kind: "updated";
+  event: "updated";
   rawEvent: "tailordb.type_record.updated";
   workspaceId: string;
   appNamespace: string;
@@ -358,7 +358,7 @@ interface RecordUpdatedContext<T> {
 
 ```typescript
 interface RecordDeletedContext<T> {
-  kind: "deleted";
+  event: "deleted";
   rawEvent: "tailordb.type_record.deleted";
   workspaceId: string;
   appNamespace: string;
