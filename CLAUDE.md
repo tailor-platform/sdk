@@ -56,6 +56,14 @@ Available triggers beyond record CRUD (`recordCreatedTrigger`, `recordUpdatedTri
 - `scheduleTrigger` - CRON schedule
 - `incomingWebhookTrigger` - Webhook
 
+### TailorDB / Kysely Types
+
+- Top-level `db.date()`/`db.datetime()` fields use the `Timestamp` utility type
+- Nested objects (`db.object()`) containing date/datetime fields are wrapped in `ObjectColumnType<...>`:
+  - Insert/Update: datetime accepts `Date | string`
+  - Select: datetime returns `string` (ISO 8601 from server)
+- Nullable fields inside `db.object()` are optional (`field?: type | null`) for inserts, required for selects
+
 ### Generators
 
 `defineGenerators()` takes tuples as rest arguments (see `example/tailor.config.ts`). `@tailor-platform/kysely-type` is required for `getDB()` in resolvers/executors/workflows. Requires `@tailor-platform/function-types` as devDependency.

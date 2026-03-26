@@ -103,6 +103,30 @@ db.object({
 });
 ```
 
+When an object contains `db.date()` or `db.datetime()` fields, the generated Kysely type is wrapped in `ObjectColumnType` to provide different types for insert vs select:
+
+```typescript
+metadata: db.object({
+  created: db.datetime(),
+  lastUpdated: db.datetime({ optional: true }),
+  version: db.int(),
+});
+```
+
+Generated type:
+
+```typescript
+metadata: ObjectColumnType<{
+  created: NestedTimestamp;
+  lastUpdated?: NestedTimestamp | null;
+  version: number;
+}>;
+// Insert/Update: created accepts Date | string
+// Select: created returns string (ISO 8601)
+```
+
+Nullable fields inside objects are optional (`?`) for inserts, matching how top-level nullable fields behave with Kysely's `Insertable`.
+
 ## Field Modifiers
 
 ### Description
