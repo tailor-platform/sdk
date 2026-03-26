@@ -31,12 +31,18 @@ describe("buildFiles", () => {
     expect(content).toContain("uses: tailor-platform/actions/deploy@v1");
   });
 
-  it("includes checkout step before action", () => {
+  it("includes setup steps before action", () => {
     const content = getDeployContent();
     const checkoutIndex = content.indexOf("uses: actions/checkout@v4");
+    const pnpmIndex = content.indexOf("uses: pnpm/action-setup@v4");
+    const nodeIndex = content.indexOf("uses: actions/setup-node@v4");
+    const installIndex = content.indexOf("pnpm install --frozen-lockfile");
     const actionIndex = content.indexOf("uses: tailor-platform/actions/deploy@v1");
     expect(checkoutIndex).toBeGreaterThan(-1);
-    expect(checkoutIndex).toBeLessThan(actionIndex);
+    expect(pnpmIndex).toBeGreaterThan(checkoutIndex);
+    expect(nodeIndex).toBeGreaterThan(pnpmIndex);
+    expect(installIndex).toBeGreaterThan(nodeIndex);
+    expect(actionIndex).toBeGreaterThan(installIndex);
   });
 
   it("passes workspace inputs", () => {
