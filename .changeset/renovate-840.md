@@ -2,4 +2,4 @@
 "@tailor-platform/sdk": patch
 ---
 
-fix(deps): update dependency @clack/prompts to v1
+Update @clack/prompts to v1, adjusting validate callback signatures for the new API
