@@ -65,24 +65,20 @@ export function applyPatternReplace(
     return { output: source, count: 0 };
   }
 
-  // Collect edits, filtering out nested matches to avoid overlapping rewrites.
-  // When findAll returns both an outer and inner match (e.g., foo(foo(1))),
-  // applying both edits would corrupt offsets. Keep only outermost matches.
-  // Inner occurrences are left unchanged intentionally; running the codemod
-  // again will catch them once the outer layer has been rewritten. Iterative
-  // rewriting within a single pass risks infinite loops when the replacement
-  // still matches the pattern.
-  const allEdits: Edit[] = matches.map((match) => {
-    const range = match.range();
-    return {
-      startIndex: range.start.index,
-      endIndex: range.end.index,
-      newText: replacer(match),
-    };
-  });
+  // Build edits from matches, keeping only outermost when matches are nested
+  // (e.g., foo(foo(1)) produces both outer and inner matches).
+  const allEdits: Edit[] = matches
+    .map((match) => {
+      const range = match.range();
+      return {
+        startIndex: range.start.index,
+        endIndex: range.end.index,
+        newText: replacer(match),
+      };
+    })
+    .sort((a, b) => a.startIndex - b.startIndex || b.endIndex - a.endIndex);
 
-  // Sort by startIndex ascending, then by span length descending (outermost first)
-  allEdits.sort((a, b) => a.startIndex - b.startIndex || b.endIndex - a.endIndex);
+  // Forward pass: keep only non-overlapping outermost matches
   const edits: Edit[] = [];
   let lastEnd = -1;
   for (const edit of allEdits) {
@@ -90,13 +86,12 @@ export function applyPatternReplace(
       edits.push(edit);
       lastEnd = edit.endIndex;
     }
-    // else: nested inside the previous match, skip
   }
 
-  // Apply edits in reverse order to preserve offsets
-  edits.sort((a, b) => b.startIndex - a.startIndex);
+  // Apply in reverse to preserve character offsets
   let output = source;
-  for (const edit of edits) {
+  for (let i = edits.length - 1; i >= 0; i--) {
+    const edit = edits[i];
     output = output.slice(0, edit.startIndex) + edit.newText + output.slice(edit.endIndex);
   }
 

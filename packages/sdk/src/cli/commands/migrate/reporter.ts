@@ -46,12 +46,4 @@ export function printMigrationSummary(summary: MigrationSummary, dryRun: boolean
       logger.log(`  ${styles.error(ruleId)}: ${error.message}`);
     }
   }
-
-  // Manual attention hint
-  if (summary.warnings.length > 0) {
-    logger.log("");
-    logger.info(
-      "Some changes require manual attention. Review the warnings above and update your code accordingly.",
-    );
-  }
 }

@@ -4,7 +4,7 @@ import { collectFiles } from "./file-collector";
 import { printMigrationSummary } from "./reporter";
 import { createDefaultRegistry } from "./rules";
 import { detectInstalledVersion } from "./version-detector";
-import type { MigrationSummary, TransformResult } from "./types";
+import type { MigrationSummary } from "./types";
 
 interface MigrateOptions {
   to: string;
@@ -65,6 +65,7 @@ export async function migrate(options: MigrateOptions): Promise<void> {
   logger.log("");
 
   // Step 4: Execute each rule
+  const modifiedFiles = new Set<string>();
   const summary: MigrationSummary = {
     rulesApplied: 0,
     rulesSkipped: 0,
@@ -77,7 +78,7 @@ export async function migrate(options: MigrateOptions): Promise<void> {
     logger.info(`Running: ${styles.bold(rule.name)} - ${rule.description}`);
 
     try {
-      const result: TransformResult = await rule.transform({
+      const result = await rule.transform({
         projectRoot,
         files,
         dryRun: options.dryRun,
@@ -86,9 +87,7 @@ export async function migrate(options: MigrateOptions): Promise<void> {
       if (result.changed) {
         summary.rulesApplied++;
         for (const file of result.filesModified) {
-          if (!summary.filesModified.includes(file)) {
-            summary.filesModified.push(file);
-          }
+          modifiedFiles.add(file);
         }
         logger.success(`  ${result.filesModified.length} file(s) modified`);
       } else {
@@ -104,6 +103,7 @@ export async function migrate(options: MigrateOptions): Promise<void> {
       logger.error(`  Failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
+  summary.filesModified = [...modifiedFiles];
 
   logger.log("");
 

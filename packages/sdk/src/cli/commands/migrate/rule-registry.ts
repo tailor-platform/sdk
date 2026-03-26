@@ -1,4 +1,4 @@
-import { satisfies, valid } from "semver";
+import { gte, lt, valid } from "semver";
 import type { MigrationRule } from "./types";
 
 /**
@@ -60,15 +60,12 @@ export class RuleRegistry {
     }
 
     return this.rules.filter((rule) => {
-      // A rule applies when its version boundary (until) falls within the migration range.
-      // This ensures multi-version migrations (e.g., 1.30 -> 3.0) pick up all intermediate
-      // rules, since earlier rules transform the code to match later rules' patterns.
-      // Note: rule.since is intentionally NOT checked as a lower bound here. In chained
-      // migrations, earlier rules transform the code so later rules' patterns will match.
-      // If the source predates rule.since, the rule simply finds no matches (harmless no-op).
-      const notYetCrossed = satisfies(fromVersion, `<${rule.until}`);
-      const targetPastBreakingChange = satisfies(toVersion, `>=${rule.until}`);
-      return notYetCrossed && targetPastBreakingChange;
+      // A rule applies when its breaking-change boundary (until) falls within the
+      // migration range: source has not yet crossed it, and target is at or past it.
+      // rule.since is intentionally not checked; in chained migrations, earlier rules
+      // transform the code so later rules' patterns match. If the source predates
+      // rule.since, the rule simply finds no matches (harmless no-op).
+      return lt(fromVersion, rule.until) && gte(toVersion, rule.until);
     });
   }
 }
