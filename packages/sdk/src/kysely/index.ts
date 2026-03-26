@@ -37,7 +37,7 @@ type ResolveSelect<T> = T extends ColumnType<infer S, unknown, unknown> ? S : T;
 type ResolveInsert<T> = T extends ColumnType<unknown, infer I, unknown> ? I : T;
 type ResolveUpdate<T> = T extends ColumnType<unknown, unknown, infer U> ? U : T;
 export type ObjectColumnType<T> = ColumnType<
-  { [K in keyof T]: ResolveSelect<T[K]> },
+  { [K in keyof T]-?: Exclude<ResolveSelect<T[K]>, undefined> },
   { [K in keyof T]: ResolveInsert<T[K]> },
   { [K in keyof T]: ResolveUpdate<T[K]> }
 >;

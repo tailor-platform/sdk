@@ -56,5 +56,7 @@ describe("NamespaceSelectable", () => {
 
     expectTypeOf<ReceiptSelectable["receiptDate"]>().toEqualTypeOf<Date>();
     expectTypeOf<ReceiptSelectable["dueSchedule"]["dueDate"]>().toEqualTypeOf<string>();
+    // Nullable nested fields should be required (not optional) in select — DB always returns all fields
+    expectTypeOf<ReceiptSelectable["dueSchedule"]["reminderAt"]>().toEqualTypeOf<string | null>();
   });
 });
