@@ -263,7 +263,7 @@ async function startWorkflowCore(
     };
   } catch (error) {
     if (error instanceof ConnectError && error.code === Code.NotFound) {
-      throw new Error(`Workflow '${workflowName}' not found.`);
+      throw new Error(`Workflow '${workflowName}' not found.`, { cause: error });
     }
     throw error;
   }

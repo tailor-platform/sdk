@@ -52,7 +52,9 @@ export const deleteSecretCommand = defineAppCommand({
       });
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
-        throw new Error(`Secret "${args.name}" not found in vault "${args["vault-name"]}".`);
+        throw new Error(`Secret "${args.name}" not found in vault "${args["vault-name"]}".`, {
+          cause: error,
+        });
       }
       throw error;
     }

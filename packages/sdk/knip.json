@@ -13,11 +13,11 @@
     "undici",
     "@liam-hq/cli",
     "@typescript/native-preview",
-    "eslint-plugin-import",
+    "eslint-import-resolver-typescript",
+    "eslint-plugin-import-x",
     "oxlint",
     "oxlint-tsgolint",
     "serve",
-    "tsx",
     "zinfer"
   ],
   "ignoreBinaries": [

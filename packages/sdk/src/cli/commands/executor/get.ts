@@ -85,7 +85,7 @@ export async function getExecutor<E extends ExecutorLike>(
     return toExecutorInfo(executor);
   } catch (error) {
     if (error instanceof ConnectError && error.code === Code.NotFound) {
-      throw new Error(`Executor '${name}' not found.`);
+      throw new Error(`Executor '${name}' not found.`, { cause: error });
     }
     throw error;
   }

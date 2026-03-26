@@ -7,9 +7,9 @@ type TailorOutput<T> = helperTypes.output<T>;
 export type infer<T> = TailorOutput<T>;
 export type output<T> = TailorOutput<T>;
 
-// eslint-disable-next-line import/export
+// eslint-disable-next-line import-x/export
 export const t = { ..._t };
-// eslint-disable-next-line @typescript-eslint/no-namespace, import/export
+// eslint-disable-next-line @typescript-eslint/no-namespace, import-x/export
 export namespace t {
   export type output<T> = TailorOutput<T>;
   export type infer<T> = TailorOutput<T>;

@@ -111,10 +111,10 @@ async function triggerExecutorByName(
     return { jobId: response.jobId };
   } catch (error) {
     if (error instanceof ConnectError && error.code === Code.NotFound) {
-      throw new Error(`Executor '${options.executorName}' not found.`);
+      throw new Error(`Executor '${options.executorName}' not found.`, { cause: error });
     }
     if (error instanceof ConnectError && error.code === Code.InvalidArgument) {
-      throw new Error(`Invalid argument: ${error.message}`);
+      throw new Error(`Invalid argument: ${error.message}`, { cause: error });
     }
     throw error;
   }

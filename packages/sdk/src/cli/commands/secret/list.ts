@@ -77,7 +77,7 @@ export const listSecretCommand = defineAppCommand({
       logger.out(secrets);
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
-        throw new Error(`Vault "${args["vault-name"]}" not found.`);
+        throw new Error(`Vault "${args["vault-name"]}" not found.`, { cause: error });
       }
       throw error;
     }

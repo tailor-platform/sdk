@@ -13,6 +13,7 @@ export function extractTypeNamesFromSql(query: string): string[] {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(
       `SQL parse error: ${message}\nIf your table name is a reserved keyword (e.g. User), wrap it in double quotes: SELECT * FROM "User"`,
+      { cause: error },
     );
   }
   const typeNames = new Set<string>();
