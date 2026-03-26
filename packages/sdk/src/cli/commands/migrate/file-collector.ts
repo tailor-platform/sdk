@@ -1,8 +1,15 @@
 import { glob } from "node:fs/promises";
 import * as path from "pathe";
 
-const DEFAULT_PATTERN = "**/*.{ts,tsx}";
-const DEFAULT_EXCLUDE = ["**/node_modules/**", "**/dist/**", "**/.git/**"];
+const DEFAULT_PATTERN = "**/*.{ts,tsx,mts,cts}";
+const DEFAULT_EXCLUDE = [
+  "**/node_modules/**",
+  "**/dist/**",
+  "**/.git/**",
+  "**/*.d.ts",
+  "**/*.d.mts",
+  "**/*.d.cts",
+];
 
 /**
  * Collect TypeScript files from a project directory for migration.

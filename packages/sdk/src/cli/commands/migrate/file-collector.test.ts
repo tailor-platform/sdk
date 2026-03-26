@@ -79,6 +79,27 @@ describe("collectFiles", () => {
     expect(files).toHaveLength(0);
   });
 
+  it("should collect .mts and .cts files", async () => {
+    await fs.promises.writeFile(path.join(tmpDir, "module.mts"), "export const x = 1;");
+    await fs.promises.writeFile(path.join(tmpDir, "common.cts"), "module.exports = {};");
+
+    const files = await collectFiles(tmpDir);
+    expect(files).toHaveLength(2);
+    expect(files.some((f) => f.endsWith(".mts"))).toBe(true);
+    expect(files.some((f) => f.endsWith(".cts"))).toBe(true);
+  });
+
+  it("should exclude declaration files (.d.ts, .d.mts, .d.cts)", async () => {
+    await fs.promises.writeFile(path.join(tmpDir, "config.ts"), "export default {};");
+    await fs.promises.writeFile(path.join(tmpDir, "types.d.ts"), "declare const x: number;");
+    await fs.promises.writeFile(path.join(tmpDir, "module.d.mts"), "declare const y: string;");
+    await fs.promises.writeFile(path.join(tmpDir, "common.d.cts"), "declare const z: boolean;");
+
+    const files = await collectFiles(tmpDir);
+    expect(files).toHaveLength(1);
+    expect(files[0]).toContain("config.ts");
+  });
+
   it("should return sorted file paths", async () => {
     await fs.promises.writeFile(path.join(tmpDir, "z.ts"), "");
     await fs.promises.writeFile(path.join(tmpDir, "a.ts"), "");

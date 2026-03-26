@@ -63,6 +63,9 @@ export class RuleRegistry {
       // A rule applies when its version boundary (until) falls within the migration range.
       // This ensures multi-version migrations (e.g., 1.30 -> 3.0) pick up all intermediate
       // rules, since earlier rules transform the code to match later rules' patterns.
+      // Note: rule.since is intentionally NOT checked as a lower bound here. In chained
+      // migrations, earlier rules transform the code so later rules' patterns will match.
+      // If the source predates rule.since, the rule simply finds no matches (harmless no-op).
       const notYetCrossed = satisfies(fromVersion, `<${rule.until}`);
       const targetPastBreakingChange = satisfies(toVersion, `>=${rule.until}`);
       return notYetCrossed && targetPastBreakingChange;
