@@ -166,7 +166,7 @@
     "sonda": "0.11.1",
     "tsdown": "0.21.4",
     "typescript": "5.9.3",
-    "typescript-eslint": "8.57.1",
+    "typescript-eslint": "8.57.2",
     "vitest": "4.1.0",
     "zinfer": "0.1.7"
   }
