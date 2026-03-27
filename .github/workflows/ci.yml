@@ -58,4 +58,4 @@ jobs:
         run: pnpm run publint
 
       - name: Check public API documentation
-        run: pnpm run lint:public-api
+        run: pnpm --filter @tailor-platform/sdk run lint:public-api

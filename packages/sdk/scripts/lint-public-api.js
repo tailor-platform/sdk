@@ -10,6 +10,8 @@ import { readFileSync } from "node:fs";
 import { resolve, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
+// Only value-level symbols are checked, matching the scope of the former
+// jsdoc/require-jsdoc ESLint rule. Type aliases and interfaces are excluded.
 const REQUIRED_KINDS = new Set([
   "Enum",
   "EnumMember",
