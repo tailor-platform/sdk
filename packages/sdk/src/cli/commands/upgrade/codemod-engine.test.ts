@@ -606,6 +606,20 @@ describe("codemod-engine", () => {
         // Should remove the direct alpha: 2, not the nested alpha: 1
         expect(output).toBe(`setup({ nested: { alpha: 1 } });`);
       });
+
+      it("should preserve shorthand properties when removing the only pair", () => {
+        const source = `setup({ foo, alpha: 1 });`;
+        const { output, count } = removeProperty(source, "setup($$$ARGS)", "alpha");
+        expect(count).toBe(1);
+        expect(output).toBe(`setup({ foo });`);
+      });
+
+      it("should preserve spread elements when removing the only pair", () => {
+        const source = `setup({ ...defaults, alpha: 1 });`;
+        const { output, count } = removeProperty(source, "setup($$$ARGS)", "alpha");
+        expect(count).toBe(1);
+        expect(output).toBe(`setup({ ...defaults });`);
+      });
     });
 
     describe("addProperty", () => {

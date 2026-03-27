@@ -602,9 +602,12 @@ export function removeProperty(
       const matchingPair = findDirectPair(obj, propertyName);
       if (!matchingPair) return text;
 
-      const directPairs = obj.children().filter((c) => c.kind() === "pair");
-      if (directPairs.length === 1) {
-        // Only pair in this object - replace entire object with empty `{}`
+      const allProperties = obj.children().filter((c) => {
+        const k = c.kind();
+        return k === "pair" || k === "shorthand_property_identifier" || k === "spread_element";
+      });
+      if (allProperties.length === 1) {
+        // Only the target pair in this object - replace entire object with empty `{}`
         const objRange = obj.range();
         return text.slice(0, objRange.start.index) + "{}" + text.slice(objRange.end.index);
       }
