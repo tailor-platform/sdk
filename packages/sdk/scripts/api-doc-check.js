@@ -1,0 +1,135 @@
+/**
+ * Validate that public API symbols have JSDoc documentation.
+ *
+ * Uses the TypeScript Compiler API to resolve exports from entry points
+ * derived from package.json#exports, and verifies that value symbols
+ * (functions, classes, enums, variables, methods, accessors) are documented.
+ */
+import ts from "typescript";
+import { readFileSync } from "node:fs";
+import { resolve, dirname, relative } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const sdkRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+// Derive source entry points from package.json exports
+const pkg = JSON.parse(readFileSync(resolve(sdkRoot, "package.json"), "utf8"));
+const entryPoints = Object.values(pkg.exports)
+  .map((exp) => exp.types)
+  .filter(Boolean)
+  .map((p) => resolve(sdkRoot, p.replace(/^\.\/dist\//, "./src/").replace(/\.d\.mts$/, ".ts")));
+
+// Symbol kinds that require JSDoc documentation
+const REQUIRED_KINDS = new Set([
+  "Enum",
+  "EnumMember",
+  "Variable",
+  "Function",
+  "Class",
+  "Method",
+  "Accessor",
+]);
+
+// Create TypeScript program
+const tsConfigPath = resolve(sdkRoot, "tsconfig.json");
+const { config } = ts.readConfigFile(tsConfigPath, ts.sys.readFile);
+const { options } = ts.parseJsonConfigFileContent(config, ts.sys, sdkRoot);
+const program = ts.createProgram(entryPoints, options);
+const checker = program.getTypeChecker();
+
+function getKind(symbol) {
+  const f = symbol.flags;
+  if (f & ts.SymbolFlags.EnumMember) return "EnumMember";
+  if (f & ts.SymbolFlags.Enum) return "Enum";
+  if (f & ts.SymbolFlags.Function) return "Function";
+  if (f & ts.SymbolFlags.Class) return "Class";
+  if (f & ts.SymbolFlags.Method) return "Method";
+  if (f & ts.SymbolFlags.GetAccessor || f & ts.SymbolFlags.SetAccessor) return "Accessor";
+  if (f & ts.SymbolFlags.Variable) return "Variable";
+  return null;
+}
+
+function hasDoc(symbol) {
+  return (
+    symbol.getDocumentationComment(checker).length > 0 || symbol.getJsDocTags(checker).length > 0
+  );
+}
+
+function isExternal(symbol) {
+  const decls = symbol.getDeclarations();
+  if (!decls?.length) return true;
+  return decls[0].getSourceFile().fileName.includes("/node_modules/");
+}
+
+function formatLocation(symbol) {
+  const decls = symbol.getDeclarations();
+  if (!decls?.length) return "unknown";
+  const sf = decls[0].getSourceFile();
+  const { line } = sf.getLineAndCharacterOfPosition(decls[0].getStart());
+  return `${relative(sdkRoot, sf.fileName)}:${line + 1}`;
+}
+
+const failures = [];
+
+for (const ep of entryPoints) {
+  const sf = program.getSourceFile(ep);
+  if (!sf) {
+    console.error(`Source file not found: ${ep}`);
+    continue;
+  }
+  const mod = checker.getSymbolAtLocation(sf);
+  if (!mod) continue;
+
+  for (const sym of checker.getExportsOfModule(mod)) {
+    const resolved = sym.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(sym) : sym;
+    const kind = getKind(resolved);
+
+    // Skip symbols declared in external packages
+    if (isExternal(resolved)) continue;
+
+    // Check top-level export
+    if (kind && REQUIRED_KINDS.has(kind) && !hasDoc(sym) && !hasDoc(resolved)) {
+      failures.push({ name: sym.getName(), kind, location: formatLocation(resolved) });
+    }
+
+    // Check class members (instance + static)
+    if (kind === "Class") {
+      for (const members of [resolved.members, resolved.exports]) {
+        members?.forEach((member) => {
+          if (member.getName() === "prototype") return;
+          const mk = getKind(member);
+          if (mk && REQUIRED_KINDS.has(mk) && !hasDoc(member)) {
+            failures.push({
+              name: `${sym.getName()}.${member.getName()}`,
+              kind: mk,
+              location: formatLocation(member),
+            });
+          }
+        });
+      }
+    }
+
+    // Check enum members
+    if (kind === "Enum") {
+      resolved.exports?.forEach((member) => {
+        if (!hasDoc(member)) {
+          failures.push({
+            name: `${sym.getName()}.${member.getName()}`,
+            kind: "EnumMember",
+            location: formatLocation(member),
+          });
+        }
+      });
+    }
+  }
+}
+
+if (failures.length > 0) {
+  console.error(`Found ${failures.length} public API symbols without documentation:\n`);
+  for (const { name, kind, location } of failures) {
+    console.error(`  ${name} (${kind}) at ${location}`);
+  }
+  process.exit(1);
+}
+
+console.log("All public API symbols are documented.");

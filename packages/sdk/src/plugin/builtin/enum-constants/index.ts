@@ -4,6 +4,7 @@ import type { EnumDefinition } from "./types";
 import type { Plugin } from "@/types/plugin";
 import type { GeneratorResult, TailorDBReadyContext } from "@/types/plugin-generation";
 
+/** Generator ID for the enum constants plugin. */
 export const EnumConstantsGeneratorID = "@tailor-platform/enum-constants";
 
 type EnumConstantsPluginOptions = {
