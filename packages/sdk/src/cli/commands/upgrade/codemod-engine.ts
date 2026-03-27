@@ -162,6 +162,21 @@ interface TextEdit {
 }
 
 /**
+ * Apply text edits to a source string in reverse order to preserve character offsets.
+ * @param source - Source string to apply edits to
+ * @param edits - Text edits sorted by position
+ * @returns Source string with all edits applied
+ */
+function applyEdits(source: string, edits: readonly TextEdit[]): string {
+  let output = source;
+  for (let i = edits.length - 1; i >= 0; i--) {
+    const edit = edits[i];
+    output = output.slice(0, edit.startIndex) + edit.newText + output.slice(edit.endIndex);
+  }
+  return output;
+}
+
+/**
  * Apply a pattern-based replacement to source code.
  *
  * Uses ast-grep to find matches and applies a replacer function that receives
@@ -209,14 +224,7 @@ export function applyPatternReplace(
     }
   }
 
-  // Apply in reverse to preserve character offsets
-  let output = source;
-  for (let i = edits.length - 1; i >= 0; i--) {
-    const edit = edits[i];
-    output = output.slice(0, edit.startIndex) + edit.newText + output.slice(edit.endIndex);
-  }
-
-  return { output, count: edits.length };
+  return { output: applyEdits(source, edits), count: edits.length };
 }
 
 export interface TransformFileResult {
@@ -333,13 +341,7 @@ export function renameImportSpecifier(
 
   if (edits.length === 0) return { output: source, count: 0 };
 
-  let output = source;
-  for (let i = edits.length - 1; i >= 0; i--) {
-    const edit = edits[i];
-    output = output.slice(0, edit.startIndex) + edit.newText + output.slice(edit.endIndex);
-  }
-
-  return { output, count: edits.length };
+  return { output: applyEdits(source, edits), count: edits.length };
 }
 
 /**
@@ -414,13 +416,7 @@ export function removeImportSpecifier(
 
   if (edits.length === 0) return { output: source, count: 0 };
 
-  let output = source;
-  for (let i = edits.length - 1; i >= 0; i--) {
-    const edit = edits[i];
-    output = output.slice(0, edit.startIndex) + edit.newText + output.slice(edit.endIndex);
-  }
-
-  return { output, count: edits.length };
+  return { output: applyEdits(source, edits), count: edits.length };
 }
 
 /**
@@ -553,6 +549,34 @@ export function renamePropertyInPattern(
 // ---------------------------------------------------------------------------
 
 /**
+ * Find the first (outermost) object node in parsed source.
+ * @param root - Parsed ast-grep root
+ * @returns The first object node, or undefined if none found
+ */
+function findOutermostObject(root: SgRoot): SgNode | undefined {
+  const objects = root
+    .root()
+    .findAll({ rule: { kind: "object" } } as Parameters<SgNode["findAll"]>[0]);
+  return objects[0];
+}
+
+/**
+ * Find a direct-child pair whose key matches the given property name.
+ * @param obj - Object AST node to search
+ * @param propertyName - Property name to match
+ * @returns The matching pair node, or undefined if not found
+ */
+function findDirectPair(obj: SgNode, propertyName: string): SgNode | undefined {
+  return obj
+    .children()
+    .filter((c) => c.kind() === "pair")
+    .find((pair) => {
+      const key = pair.children().find((c) => c.kind() === "property_identifier");
+      return key?.text() === propertyName;
+    });
+}
+
+/**
  * Remove a property (key-value pair) from objects within pattern matches.
  * @param source - Source code to transform
  * @param objectPattern - ast-grep pattern to match (e.g., "setup($$$ARGS)")
@@ -572,23 +596,13 @@ export function removeProperty(
     (node) => {
       const text = node.text();
       const innerRoot = parseTypeScript(text, lang);
+      const obj = findOutermostObject(innerRoot);
+      if (!obj) return text;
 
-      // Find the first (outermost) object and search only its direct children
-      // to avoid matching properties in nested objects with the same name.
-      const objects = innerRoot
-        .root()
-        .findAll({ rule: { kind: "object" } } as Parameters<SgNode["findAll"]>[0]);
-      if (objects.length === 0) return text;
-      const obj = objects[0];
-
-      const directPairs = obj.children().filter((c) => c.kind() === "pair");
-      const matchingPair = directPairs.find((pair) => {
-        const key = pair.children().find((c) => c.kind() === "property_identifier");
-        return key?.text() === propertyName;
-      });
-
+      const matchingPair = findDirectPair(obj, propertyName);
       if (!matchingPair) return text;
 
+      const directPairs = obj.children().filter((c) => c.kind() === "pair");
       if (directPairs.length === 1) {
         // Only pair in this object - replace entire object with empty `{}`
         const objRange = obj.range();
@@ -643,28 +657,17 @@ export function addProperty(
     (node) => {
       const text = node.text();
       const innerRoot = parseTypeScript(text, lang);
+      const obj = findOutermostObject(innerRoot);
+      if (!obj) return text;
 
-      const objects = innerRoot
-        .root()
-        .findAll({ rule: { kind: "object" } } as Parameters<SgNode["findAll"]>[0]);
-
-      if (objects.length === 0) return text;
-
-      // Use the first (outermost) object
-      const obj = objects[0];
       const objRange = obj.range();
       const objText = obj.text();
 
       // Check if property already exists in direct children (not nested objects).
       // Check both pair nodes (key: value) and shorthand properties ({ key }).
-      const directChildren = obj.children();
-      const pairExists = directChildren
-        .filter((c) => c.kind() === "pair")
-        .some((p) => {
-          const key = p.children().find((c) => c.kind() === "property_identifier");
-          return key?.text() === propertyName;
-        });
-      const shorthandExists = directChildren
+      const pairExists = !!findDirectPair(obj, propertyName);
+      const shorthandExists = obj
+        .children()
         .filter((c) => c.kind() === "shorthand_property_identifier")
         .some((c) => c.text() === propertyName);
       if (pairExists || shorthandExists) return text;
@@ -757,20 +760,10 @@ export function replacePropertyValue(
     (node) => {
       const text = node.text();
       const innerRoot = parseTypeScript(text, lang);
+      const obj = findOutermostObject(innerRoot);
+      if (!obj) return text;
 
-      // Find the first (outermost) object and search only its direct children
-      // to avoid matching properties in nested objects with the same name.
-      const objects = innerRoot
-        .root()
-        .findAll({ rule: { kind: "object" } } as Parameters<SgNode["findAll"]>[0]);
-      if (objects.length === 0) return text;
-
-      const directPairs = objects[0].children().filter((c) => c.kind() === "pair");
-      const matchingPair = directPairs.find((pair) => {
-        const key = pair.children().find((c) => c.kind() === "property_identifier");
-        return key?.text() === propertyName;
-      });
-
+      const matchingPair = findDirectPair(obj, propertyName);
       if (!matchingPair) return text;
 
       // The value is the last meaningful child of the pair (after the key and colon)
@@ -860,41 +853,23 @@ export function renamePropertyAtPath(
       const innerRoot = parseTypeScript(text, lang);
       const segments = propertyPath === "" ? [] : propertyPath.split(".");
 
-      // Start from the root object(s)
-      const currentObjects = innerRoot
-        .root()
-        .findAll({ rule: { kind: "object" } } as Parameters<SgNode["findAll"]>[0]);
-
-      if (currentObjects.length === 0) return text;
-
-      // Take the outermost object as starting point
-      let targetObject = currentObjects[0];
+      let targetObject = findOutermostObject(innerRoot);
+      if (!targetObject) return text;
 
       // Navigate through path segments
       for (const segment of segments) {
-        const pairs = targetObject.children().filter((c) => c.kind() === "pair");
-        const matchingPair = pairs.find((pair) => {
-          const key = pair.children().find((c) => c.kind() === "property_identifier");
-          return key?.text() === segment;
-        });
-
+        const matchingPair = findDirectPair(targetObject, segment);
         if (!matchingPair) return text; // Path not found
 
         // Find the nested object value
         const nestedObj = matchingPair.children().find((c) => c.kind() === "object");
-
         if (!nestedObj) return text; // Value is not an object
 
         targetObject = nestedObj;
       }
 
       // At the target level, find and rename the property
-      const pairs = targetObject.children().filter((c) => c.kind() === "pair");
-      const targetPair = pairs.find((pair) => {
-        const key = pair.children().find((c) => c.kind() === "property_identifier");
-        return key?.text() === oldName;
-      });
-
+      const targetPair = findDirectPair(targetObject, oldName);
       if (!targetPair) return text;
 
       const key = targetPair.children().find((c) => c.kind() === "property_identifier");
