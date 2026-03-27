@@ -15,9 +15,10 @@ migrate their projects across breaking SDK changes.
 
 ```
 packages/sdk/src/cli/commands/upgrade/
-  codemod-engine.ts        # ast-grep/napi wrapper (parseTypeScript, applyPatternReplace, transformFile)
+  codemod-engine.ts        # ast-grep/napi wrapper + high-level helpers
+  rule-helpers.ts          # createRule() / SourceRule - reduces rule boilerplate
   rule-registry.ts         # Version-gated rule selection
-  types.ts                 # MigrationRule, TransformContext, TransformResult interfaces
+  types.ts                 # MigrationRule, TransformContext, TransformResult, FileDiff
   rules/
     index.ts               # Creates default registry, registers all version rule sets
     v2/index.ts            # V2 rules array
@@ -29,59 +30,64 @@ packages/sdk/src/cli/commands/upgrade/
       output.ts            # Expected code after migration
 ```
 
+## Naming Conventions
+
+- **Rule file**: `<rule-name>.ts` (kebab-case, matching the rule id suffix)
+- **Exported rule variable**: `<camelCase>Rule` suffix
+  (e.g., `defineGeneratorsRule`, `triggerRenameRule`, `dbTypeToModelRule`)
+- **Rule id**: `v<N>/<rule-name>` (e.g., `v2/trigger-rename`)
+
 ## Step-by-Step
 
 ### 1. Create the rule file
 
+For most rules, use `createRule` to eliminate boilerplate:
+
 `packages/sdk/src/cli/commands/upgrade/rules/v2/<rule-name>.ts`:
 
 ```typescript
-import { applyPatternReplace, transformFile } from "../../codemod-engine";
-import type { MigrationRule } from "../../types";
+import { renameIdentifiers } from "../../codemod-engine";
+import { createRule } from "../../rule-helpers";
 
-export const myRule: MigrationRule = {
-  id: "v2/<rule-name>",
-  name: "Human-readable name",
-  description: "What this rule migrates and why.",
-  since: "1.0.0", // Minimum source version (inclusive)
-  until: "2.0.0", // Version where the breaking change lands (exclusive for source)
-  async transform(ctx) {
-    const filesModified: string[] = [];
-    const warnings: string[] = [];
-
-    for (const file of ctx.files) {
-      const changed = await transformFile(
-        file,
-        (source) => {
-          const result = applyPatternReplace(source, "<ast-grep pattern>", (node) => {
-            // Use node.getMatch("NAME") for single captures ($NAME)
-            // Use node.getMultipleMatches("NAME") for variadic captures ($$$NAME)
-            return "<replacement string>";
-          });
-          return result.count > 0 ? result.output : null;
-        },
-        ctx.dryRun,
-      );
-      if (changed) filesModified.push(file);
-    }
-
-    return { changed: filesModified.length > 0, filesModified, warnings };
+export const myRenameRule = createRule(
+  {
+    id: "v2/<rule-name>",
+    name: "Human-readable name",
+    description: "What this rule migrates and why.",
+    since: "1.0.0",
+    until: "2.0.0",
   },
-};
+  (source) => {
+    const { output, count } = renameIdentifiers(source, "oldName", "newName");
+    return count > 0 ? output : null;
+  },
+);
 ```
+
+`createRule` handles the file iteration loop, `transformFile` calls, and
+diff collection automatically. You only provide the source-level transform.
+The returned `SourceRule` exposes `transformSource` for direct use in tests.
+
+For complex rules that need per-file warnings, implement `MigrationRule`
+directly (see "Advanced: manual rule" below).
 
 ### 2. Register the rule
 
-Add to `rules/v2/index.ts`:
+Add the import and rule to `rules/v2/index.ts`. Append new rules to the
+**end** of the array (independent rules can be in any order, but appending
+keeps diffs minimal):
 
 ```typescript
-import { myRule } from "./<rule-name>";
+import { myRenameRule } from "./<rule-name>";
 
 export const v2Rules: MigrationRule[] = [
-  myRule,
-  // other rules...
+  // ... existing rules ...
+  myRenameRule,
 ];
 ```
+
+Before adding, scan the existing array for potential interactions (e.g.,
+rule A renames an identifier that rule B also references).
 
 ### 3. Add test fixtures
 
@@ -90,33 +96,36 @@ representative before/after code. These files are excluded from typecheck
 and eslint (wildcard `v*/` patterns), so they can contain intentionally
 invalid V1 code.
 
-**Important:** `replaceAll` transforms comments and string literals too.
-If `input.ts` contains the target identifier in a comment (e.g.,
+**Important:** `renameIdentifiers` and `batchRename` use `replaceAll`
+internally, which also transforms comments and string literals. If
+`input.ts` contains the target identifier in a comment (e.g.,
 `// Uses retryPolicy`), the `output.ts` must reflect the replacement
 (e.g., `// Uses retry`). Mismatched comments are the most common cause
 of fixture test failures.
 
 ### 4. Write the test
 
+Import the rule and use its `transformSource` property directly --
+do **not** duplicate the transform logic in the test file:
+
 `rules/v2/<rule-name>.test.ts`:
 
 ```typescript
 import { describe, it } from "vitest";
 import { runFixtureTest } from "../../__test_fixtures__/fixture-helper";
-import { applyPatternReplace } from "../../codemod-engine";
+import { myRenameRule } from "./<rule-name>";
 
 describe("<rule-name> rule", () => {
   it("should transform <description>", async () => {
-    await runFixtureTest("v2/<rule-name>", (source) => {
-      // Replicate the transform logic from the rule
-      const result = applyPatternReplace(source, "<pattern>", (node) => {
-        return "<replacement>";
-      });
-      return result.count > 0 ? result.output : null;
-    });
+    await runFixtureTest("v2/<rule-name>", myRenameRule.transformSource);
   });
 });
 ```
+
+`createRule` returns a `SourceRule` that exposes `transformSource`, so
+tests can call `rule.transformSource` instead of re-implementing the
+transform. This keeps the test as a pure fixture assertion with zero
+logic duplication.
 
 ### 5. Verify
 
@@ -126,36 +135,94 @@ pnpm -C packages/sdk test:unit -- src/cli/commands/upgrade/
 
 ## Codemod Engine API
 
-### `applyPatternReplace(source, pattern, replacer, lang?)`
+### High-level helpers (preferred)
+
+#### `renameIdentifiers(source, oldName, newName, lang?)`
+
+Rename all occurrences of an identifier. Works for both `identifier` nodes
+(function names, variables, imports) and `property_identifier` nodes (object
+property keys). Returns `{ output, count }`.
+
+Uses AST-aware detection via `findIdentifiers`, then `replaceAll` for
+replacement. The `replaceAll` step intentionally renames occurrences in
+comments too (desirable for migration).
+
+```typescript
+const { output, count } = renameIdentifiers(source, "publishEvents", "emitEvents");
+return count > 0 ? output : null;
+```
+
+#### `batchRename(source, renames, lang?)`
+
+Rename multiple identifiers in one pass. Automatically sorts by key length
+(longest first) to prevent substring conflicts. Returns `{ output, count }`.
+
+```typescript
+const renames = new Map([
+  ["createWorkflowJob", "defineWorkflowJob"],
+  ["createWorkflow", "defineWorkflow"],
+]);
+const { output, count } = batchRename(source, renames);
+return count > 0 ? output : null;
+```
+
+No need to worry about ordering -- `batchRename` sorts automatically.
+
+#### `getArgs(node, name)`
+
+Extract argument nodes from a variadic capture (`$$$NAME`), filtering out
+comma separator nodes automatically.
+
+```typescript
+const args = getArgs(node, "ARGS").map((n) => n.text());
+// Instead of: node.getMultipleMatches("ARGS").filter((n) => n.kind() !== ",").map(...)
+```
+
+#### `findIdentifiers(source, name, lang?)`
+
+Find all `identifier` and `property_identifier` nodes matching an exact
+name. Unlike `findPattern`, this also matches object property keys.
+
+```typescript
+const matches = findIdentifiers(source, "publishEvents");
+// Returns matches in both: import { publishEvents } and { publishEvents: true }
+```
+
+### Low-level API
+
+#### `findPattern(source, pattern, lang?)`
+
+Search-only variant using ast-grep pattern syntax. Returns array of matched
+`SgNode`. Accepts optional `lang` parameter (defaults to TypeScript).
+
+**Note:** `findPattern` matches `identifier` nodes but NOT
+`property_identifier` nodes. For property keys, use `findIdentifiers`
+instead.
+
+#### `applyPatternReplace(source, pattern, replacer, lang?)`
 
 Find AST pattern matches and replace them. Returns `{ output, count }`.
 
 - `pattern`: ast-grep pattern syntax. `$NAME` captures a single node,
   `$$$NAME` captures variadic (zero or more) nodes.
 - `replacer(node)`: receives matched `SgNode`, returns replacement string.
-  Use `node.getMatch("NAME")` or `node.getMultipleMatches("NAME")` to
-  extract captured values.
-- `lang`: optional, defaults to `Lang.TypeScript`. Use `Lang.Tsx` for `.tsx` files.
+  Use `node.getMatch("NAME")` or `getArgs(node, "NAME")` to extract values.
+- `lang`: optional, defaults to `Lang.TypeScript`.
 
-**Important:** `$$$NAME` captures include comma separator nodes. Always filter
-them out: `.filter((n) => n.kind() !== ",")` before `.map()`. Failing to do
-this produces `"a, ,, b"` instead of `"a, b"`.
+#### `transformFile(filePath, transformFn, dryRun)`
 
-### `transformFile(filePath, transformFn, dryRun)`
+Read file, apply `transformFn(source)`, write back if changed. Returns
+`{ changed, before?, after? }`. The `before`/`after` fields are populated
+only in dry-run mode (for diff display).
 
-Read file, apply `transformFn(source)`, write back if changed. Returns boolean.
-`transformFn` should return `null` or the original source if no changes.
+### `createRule(meta, transformSource)` (from rule-helpers.ts)
 
-### `findPattern(source, pattern, lang?)`
+Wraps a source-level transform function into a full `SourceRule` (which
+extends `MigrationRule`). Handles file iteration, `transformFile` calls,
+diff collection, and result aggregation. Most rules should use this.
 
-Search-only variant. Returns array of matched `SgNode` without modification.
-
-**Caveat:** `findPattern` matches `identifier` AST nodes but NOT
-`property_identifier` nodes. Object property keys like `publishEvents` in
-`{ publishEvents: true }` are `property_identifier` in the TypeScript AST,
-so `findPattern(source, "publishEvents")` returns zero matches. Use
-`source.includes("publishEvents")` instead for property-name detection
-(see "Object property rename" pattern below).
+The returned `SourceRule` exposes `transformSource` so tests can call it
+directly without duplicating the transform logic.
 
 ## Version Gating
 
@@ -182,217 +249,227 @@ Example: `since: "1.0.0", until: "2.0.0"` applies when upgrading from any 1.x to
 
 Use this to choose the right transformation strategy:
 
-1. **Is the target an identifier** (function name, variable, import specifier)?
-   - Yes, and it is **unique/domain-specific** (e.g. `defineGenerators`) →
-     Simple identifier rename (`findPattern` + `replaceAll`)
-   - Yes, but it is **ambiguous** (e.g. `type` as a method name) →
-     Receiver-guarded method rename (`applyPatternReplace` with guard)
-2. **Is the target an object property key** (e.g. `{ retryPolicy: ... }`)?
-   - Yes → Object property rename (`source.includes` + `replaceAll`)
-3. **Does the migration involve both identifiers AND property keys?**
-   - Yes → Hybrid pattern (AST pass + string pass)
+1. **Is the target an identifier or property key rename?**
+   - Single rename → `renameIdentifiers` (handles both `identifier` and
+     `property_identifier` nodes)
+   - Multiple related renames → `batchRename` (auto-sorts by length)
+2. **Is the target an ambiguous method name** (e.g. `type` on a specific object)?
+   - Yes → `applyPatternReplace` with receiver guard + `getArgs`
+3. **Does the migration involve both a method rename AND a property rename?**
+   - Yes → Hybrid: `applyPatternReplace` for method + `renameIdentifiers` for property
 4. **Do function arguments need restructuring?**
-   - Yes → Argument restructuring (`applyPatternReplace` with `$$$ARGS`)
+   - Yes → `applyPatternReplace` with `$$$ARGS` + `getArgs`
+5. **Is the target a string literal** (e.g. import path)?
+   - Yes → `source.includes()` + `replaceAll` (AST helpers don't match strings)
 
 ## Common Patterns
 
-### Simple identifier rename (recommended for function/variable renames)
+### Simple identifier/property rename (most common)
 
-When the old and new names are unique identifiers used as function names,
-variable names, or import specifiers (i.e., `identifier` AST nodes), use
-`findPattern` to confirm AST-level presence, then `replaceAll` to preserve
-formatting:
+Use `renameIdentifiers` with `createRule`. Works for function names,
+variables, import specifiers, and object property keys:
 
 ```typescript
-const matches = findPattern(source, "oldName");
-if (matches.length === 0) return null;
-return source.replaceAll("oldName", "newName");
+import { renameIdentifiers } from "../../codemod-engine";
+import { createRule } from "../../rule-helpers";
+
+export const myRenameRule = createRule(
+  { id: "v2/my-rule", name: "...", description: "...", since: "1.0.0", until: "2.0.0" },
+  (source) => {
+    const { output, count } = renameIdentifiers(source, "oldName", "newName");
+    return count > 0 ? output : null;
+  },
+);
 ```
 
-This handles both imports and call sites in one pass without losing
-semicolons, indentation, or trailing commas.
+### Batch rename (multiple related renames)
 
-### Batch identifier rename (multiple renames in one rule)
-
-When several related identifiers are renamed together (e.g., a family of
-trigger functions), use a `Map` and loop instead of writing separate rules:
+Use `batchRename` with `createRule`. No need to worry about substring
+ordering -- it sorts automatically:
 
 ```typescript
+import { batchRename } from "../../codemod-engine";
+import { createRule } from "../../rule-helpers";
+
 const renames = new Map([
-  ["oldNameA", "newNameA"],
-  ["oldNameB", "newNameB"],
-  ["oldNameC", "newNameC"],
+  ["recordCreatedTrigger", "onRecordCreated"],
+  ["scheduleTrigger", "onSchedule"],
 ]);
 
-(source) => {
-  let result = source;
-  let totalChanged = 0;
-
-  for (const [oldName, newName] of renames) {
-    const matches = findPattern(result, oldName);
-    if (matches.length > 0) {
-      result = result.replaceAll(oldName, newName);
-      totalChanged += matches.length;
-    }
-  }
-
-  return totalChanged > 0 ? result : null;
-};
+export const triggerRenameRule = createRule(
+  { id: "v2/my-rule", name: "...", description: "...", since: "1.0.0", until: "2.0.0" },
+  (source) => {
+    const { output, count } = batchRename(source, renames);
+    return count > 0 ? output : null;
+  },
+);
 ```
-
-Each iteration re-parses the updated source, so later renames see the
-result of earlier ones. This is safe as long as no old name is a substring
-of another old name or of a new name. When substring conflicts exist,
-order Map entries with **longer names first** to prevent partial matches:
-
-```typescript
-// WRONG: "createWorkflow" matches inside "createWorkflowJob"
-new Map([
-  ["createWorkflow", "defineWorkflow"], // ← replaces part of createWorkflowJob
-  ["createWorkflowJob", "defineWorkflowJob"], // ← never matches (already corrupted)
-]);
-
-// CORRECT: process longer name first
-new Map([
-  ["createWorkflowJob", "defineWorkflowJob"], // ← exact match first
-  ["createWorkflow", "defineWorkflow"], // ← safe, no substring left
-]);
-```
-
-### Object property rename
-
-When renaming an object property key (e.g., `publishEvents` in
-`{ publishEvents: true }`), `findPattern` does NOT work because property
-keys are `property_identifier` nodes in the AST, not `identifier` nodes.
-Use `source.includes()` as the guard instead:
-
-```typescript
-if (!source.includes("oldProp")) return null;
-return source.replaceAll("oldProp", "newProp");
-```
-
-This is safe when the property name is sufficiently unique (no false matches
-in unrelated code). For ambiguous names, combine with `applyPatternReplace`
-using a member-access or call-expression pattern to narrow the scope.
 
 ### Receiver-guarded method rename
 
 When renaming a method on a specific object (e.g., `db.type()` to
-`db.model()`) but the pattern `$OBJ.type($$$ARGS)` could also match
-unrelated objects, add a receiver guard in the replacer:
+`db.model()`) and the method name is ambiguous, use `applyPatternReplace`
+with a guard:
 
 ```typescript
-applyPatternReplace(source, "$OBJ.type($$$ARGS)", (node) => {
-  const obj = node.getMatch("OBJ")!.text();
-  // Only transform calls on "db", skip anything else
-  if (obj !== "db") return node.text();
-  const args = node
-    .getMultipleMatches("ARGS")
-    .filter((n) => n.kind() !== ",")
-    .map((n) => n.text());
-  return `${obj}.model(${args.join(", ")})`;
-});
+import { applyPatternReplace, getArgs } from "../../codemod-engine";
+import { createRule } from "../../rule-helpers";
+
+export const dbTypeToModelRule = createRule(
+  { id: "v2/my-rule", name: "...", description: "...", since: "1.0.0", until: "2.0.0" },
+  (source) => {
+    const result = applyPatternReplace(source, "$OBJ.type($$$ARGS)", (node) => {
+      const obj = node.getMatch("OBJ")!.text();
+      if (obj !== "db") return node.text(); // guard: skip non-db receivers
+      const args = getArgs(node, "ARGS").map((n) => n.text());
+      return `${obj}.model(${args.join(", ")})`;
+    });
+    return result.count > 0 ? result.output : null;
+  },
+);
 ```
 
-Returning `node.text()` (the original text) when the guard fails produces
-zero net change for that match, so `count` still increments but the output
-is unchanged. This is harmless because the file-level `changed` check
-compares the final output to the original source.
+### Hybrid: method rename + property rename
 
-### Restructure function call arguments
-
-When you need to transform arguments (not just rename):
+When both a method call and a property key need renaming, combine
+`applyPatternReplace` with `renameIdentifiers`:
 
 ```typescript
-applyPatternReplace(source, "oldFn($$$ARGS)", (node) => {
-  const args = node
-    .getMultipleMatches("ARGS")
-    .filter((n) => n.kind() !== ",") // IMPORTANT: filter comma nodes
-    .map((n) => n.text());
-  return `newFn(${args.join(", ")})`;
-});
+import { applyPatternReplace, getArgs, renameIdentifiers } from "../../codemod-engine";
+import { createRule } from "../../rule-helpers";
+
+export const authInvokerRenameRule = createRule(
+  { id: "v2/my-rule", name: "...", description: "...", since: "1.0.0", until: "2.0.0" },
+  (source) => {
+    let result = source;
+    let totalChanged = 0;
+
+    // Pass 1: Rename method calls using AST matching
+    const pass1 = applyPatternReplace(result, "$OBJ.invoker($$$ARGS)", (node) => {
+      const obj = node.getMatch("OBJ")!.text();
+      const args = getArgs(node, "ARGS").map((n) => n.text());
+      return `${obj}.machineUser(${args.join(", ")})`;
+    });
+    result = pass1.output;
+    totalChanged += pass1.count;
+
+    // Pass 2: Rename property key using AST-aware detection
+    const pass2 = renameIdentifiers(result, "authInvoker", "invoker");
+    if (pass2.count > 0) {
+      result = pass2.output;
+      totalChanged += pass2.count;
+    }
+
+    return totalChanged > 0 ? result : null;
+  },
+);
 ```
 
-**Note:** `applyPatternReplace` replaces the matched AST range with the
-returned string. Surrounding code (semicolons, trailing commas) outside the
-match is preserved, but content inside (indentation, line breaks) is lost.
-For formatting-sensitive transforms, prefer the simple rename pattern above.
+### Import path rename (string literal)
 
-### Hybrid: AST method rename + string property rename
-
-When a migration involves both a method call rename (AST-matchable) and a
-property key rename (not AST-matchable), combine both approaches in a
-two-pass transform:
+For import path changes, AST helpers don't match string literals. Use
+`source.includes()` + `replaceAll`:
 
 ```typescript
-(source) => {
-  let result = source;
-  let totalChanged = 0;
+import { createRule } from "../../rule-helpers";
 
-  // Pass 1: Rename method calls using AST matching
-  const pass1 = applyPatternReplace(result, "$OBJ.oldMethod($$$ARGS)", (node) => {
-    const obj = node.getMatch("OBJ")!.text();
-    const args = node
-      .getMultipleMatches("ARGS")
-      .filter((n) => n.kind() !== ",")
-      .map((n) => n.text());
-    return `${obj}.newMethod(${args.join(", ")})`;
-  });
-  result = pass1.output;
-  totalChanged += pass1.count;
+export const importPathRule = createRule(
+  { id: "v2/my-rule", name: "...", description: "...", since: "1.0.0", until: "2.0.0" },
+  (source) => {
+    if (!source.includes("@tailor-platform/sdk/tailordb")) return null;
+    return source.replaceAll("@tailor-platform/sdk/tailordb", "@tailor-platform/sdk/schema");
+  },
+);
+```
 
-  // Pass 2: Rename property key using string matching
-  if (result.includes("oldProp")) {
-    result = result.replaceAll("oldProp", "newProp");
-    totalChanged++;
-  }
+### Advanced: manual rule (when `createRule` is not enough)
 
-  return totalChanged > 0 ? result : null;
+Use this only when you need per-file warnings or custom result handling.
+Implement `MigrationRule` directly with `transformFile`:
+
+```typescript
+import { transformFile, renameIdentifiers } from "../../codemod-engine";
+import type { FileDiff, MigrationRule } from "../../types";
+
+export const myManualRule: MigrationRule = {
+  id: "v2/my-rule",
+  name: "...",
+  description: "...",
+  since: "1.0.0",
+  until: "2.0.0",
+  async transform(ctx) {
+    const filesModified: string[] = [];
+    const warnings: string[] = [];
+    const diffs: FileDiff[] = [];
+
+    for (const file of ctx.files) {
+      const result = await transformFile(
+        file,
+        (source) => {
+          // custom transform logic here
+          return null;
+        },
+        ctx.dryRun,
+      );
+
+      if (result.changed) {
+        filesModified.push(file);
+        if (result.before !== undefined && result.after !== undefined) {
+          diffs.push({ file, before: result.before, after: result.after });
+        }
+      }
+    }
+
+    return {
+      changed: filesModified.length > 0,
+      filesModified,
+      warnings,
+      diffs: diffs.length > 0 ? diffs : undefined,
+    };
+  },
 };
 ```
 
+**Note:** Manual rules do not expose `transformSource`, so tests must
+duplicate the transform logic or extract it into a shared function.
+
 ### Add a warning for manual attention
 
-When a pattern cannot be fully auto-migrated:
-
 ```typescript
-const matches = findPattern(source, "<pattern>");
+const matches = findIdentifiers(source, "deprecatedApi");
 if (matches.length > 0) {
   warnings.push(
-    `${file}: Found ${matches.length} occurrences of <X> that require manual migration`,
+    `${file}: Found ${matches.length} occurrences of deprecatedApi that require manual migration`,
   );
 }
 ```
 
 ## False Positive Risk
 
-`replaceAll` operates on raw strings, so it can match inside string
-literals, comments, and unrelated identifiers. Assess the risk before
-choosing a strategy:
+`renameIdentifiers` and `batchRename` use AST-aware detection (only
+matching actual identifier/property nodes), then `replaceAll` for
+replacement. This means:
 
-| Risk level | Name characteristics                                                    | Strategy                                                                         |
-| ---------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Low        | Long, domain-specific (e.g. `recordCreatedTrigger`, `defineGenerators`) | `findPattern` guard + `replaceAll` is safe                                       |
-| Medium     | Short but scoped to a context (e.g. `type` as a method name)            | Use `applyPatternReplace` with a receiver guard                                  |
-| High       | Common word that appears in many contexts (e.g. `name`, `value`)        | Use `applyPatternReplace` with a narrow AST pattern; avoid `replaceAll` entirely |
+- **Detection is AST-safe**: won't trigger on identifiers inside string
+  literals or comments. If `publishEvents` only appears in a comment,
+  the rule correctly skips the file.
+- **Replacement covers comments**: if the identifier exists in both code
+  and a comment, both are renamed. This is desirable for migration.
 
-When in doubt, search the `example/` directory for occurrences of the old
-name to estimate false positive frequency.
+| Risk level | Name characteristics                                                    | Strategy                                                          |
+| ---------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Low        | Long, domain-specific (e.g. `recordCreatedTrigger`, `defineGenerators`) | `renameIdentifiers` or `batchRename`                              |
+| Medium     | Short but scoped to a context (e.g. `type` as a method name)            | `applyPatternReplace` with receiver guard                         |
+| High       | Common word that appears in many contexts (e.g. `name`, `value`)        | `applyPatternReplace` with narrow AST pattern; avoid `replaceAll` |
 
 ## Rule Ordering
 
 Rules within a version array execute sequentially in registration order.
-Keep these guidelines in mind:
 
 - **Independent rules** (touching different identifiers/properties) can be
-  in any order.
-- **Overlapping rules** (targeting the same files or related identifiers)
-  should be ordered so that earlier rules do not interfere with later ones.
-  For example, if rule A renames `db.type()` to `db.model()` and rule B
-  renames the import path `@tailor-platform/sdk/tailordb`, the order does
-  not matter because they touch different parts of the source. But if rule A
-  renames `foo` to `bar` and rule B renames `fooBar` to `bazBar`, rule A
-  must run second (or use AST matching instead of `replaceAll`) to avoid
-  corrupting `fooBar` into `barBar`.
+  in any order. Append new rules to the end of the array for minimal diffs.
+- **`batchRename` handles substring conflicts internally** by sorting
+  longest-first, so ordering within a batch is automatic.
 - When adding a new rule, check existing rules in the version array for
-  substring conflicts with your old/new names.
+  potential interactions (e.g., rule A renames an identifier that rule B
+  also references). If rule B depends on rule A's output, place A first.
