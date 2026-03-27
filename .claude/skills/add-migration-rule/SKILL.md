@@ -20,15 +20,15 @@ packages/sdk/src/cli/commands/upgrade/
   types.ts                 # MigrationRule, TransformContext, TransformResult, FileDiff
   rules/
     index.ts               # Creates default registry, registers all version rule sets
-    v2/index.ts            # V2 rules array
-    v2/<rule-name>.ts      # Individual rule implementations
+    v2/index.ts            # V2 rules array (version-prefixed convention)
+    <group>/<rule-name>.ts # Individual rule implementations (group can be any name)
   __test_fixtures__/
     fixture-helper.ts      # runFixtureTest() helper
-    v2/<rule-name>/
+    <group>/<rule-name>/
       input.ts / output.ts # Before/after fixtures
 ```
 
-**Naming**: File `<rule-name>.ts` (kebab-case), export `<camelCase>Rule`, id `v<N>/<rule-name>`.
+**Naming**: File `<rule-name>.ts` (kebab-case), export `<camelCase>Rule`, id `<group>/<rule-name>` (group is typically a version like `v2`, but can be any identifier).
 
 ## Workflow
 
@@ -71,7 +71,7 @@ export const v2Rules: MigrationRule[] = [, /* existing */ myRenameRule];
 
 ### 3. Write tests
 
-Fixture files are excluded from typecheck/eslint (wildcard `v*/` patterns).
+Fixture files are excluded from typecheck/eslint (wildcard `*/` patterns under `__test_fixtures__`).
 
 **Fixture test** (primary): Create `__test_fixtures__/v2/<rule-name>/input.ts` and `output.ts`:
 
@@ -150,7 +150,7 @@ All helpers accept optional `lang?` param (defaults to TypeScript).
 
 Rules use `since`/`until` semver. A rule applies when source is in `[since, until)` and target is `>= until`.
 
-**New version** (v3, etc.): Create `rules/v3/index.ts` with `v3Rules` array, register in `rules/index.ts`. Wildcard `v*/` patterns cover it automatically.
+**New rule group**: Create `rules/<group>/index.ts` with a rules array, register in `rules/index.ts`. Group name can be any identifier (e.g., `v3`, `auth-refactor`). Wildcard `*/` patterns in eslint/tsconfig cover fixture directories automatically.
 
 ## Pattern Selection
 
