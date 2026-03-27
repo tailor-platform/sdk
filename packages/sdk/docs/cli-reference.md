@@ -165,12 +165,16 @@ Commands for managing workspaces, profiles, organizations, and folders.
 
 Commands for managing Auth service resources.
 
-| Command                                              | Description                   |
-| ---------------------------------------------------- | ----------------------------- |
-| [machineuser list](./cli/auth.md#machineuser-list)   | List machine users            |
-| [machineuser token](./cli/auth.md#machineuser-token) | Get machine user access token |
-| [oauth2client list](./cli/auth.md#oauth2client-list) | List OAuth2 clients           |
-| [oauth2client get](./cli/auth.md#oauth2client-get)   | Get OAuth2 client credentials |
+| Command                                                            | Description                   |
+| ------------------------------------------------------------------ | ----------------------------- |
+| [authconnection create](./cli/auth.md#authconnection-create)       | Create an auth connection     |
+| [authconnection authorize](./cli/auth.md#authconnection-authorize) | Authorize an auth connection  |
+| [authconnection list](./cli/auth.md#authconnection-list)           | List all auth connections     |
+| [authconnection revoke](./cli/auth.md#authconnection-revoke)       | Revoke an auth connection     |
+| [machineuser list](./cli/auth.md#machineuser-list)                 | List machine users            |
+| [machineuser token](./cli/auth.md#machineuser-token)               | Get machine user access token |
+| [oauth2client list](./cli/auth.md#oauth2client-list)               | List OAuth2 clients           |
+| [oauth2client get](./cli/auth.md#oauth2client-get)                 | Get OAuth2 client credentials |
 
 ### [Workflow Commands](./cli/workflow.md)
 
