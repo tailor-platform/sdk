@@ -90,6 +90,12 @@ representative before/after code. These files are excluded from typecheck
 and eslint (wildcard `v*/` patterns), so they can contain intentionally
 invalid V1 code.
 
+**Important:** `replaceAll` transforms comments and string literals too.
+If `input.ts` contains the target identifier in a comment (e.g.,
+`// Uses retryPolicy`), the `output.ts` must reflect the replacement
+(e.g., `// Uses retry`). Mismatched comments are the most common cause
+of fixture test failures.
+
 ### 4. Write the test
 
 `rules/v2/<rule-name>.test.ts`:
@@ -172,6 +178,22 @@ Example: `since: "1.0.0", until: "2.0.0"` applies when upgrading from any 1.x to
 3. Create `__test_fixtures__/v3/` directory for fixtures
 4. No config changes needed (wildcard `v*/` patterns cover new versions)
 
+## Pattern Selection Flowchart
+
+Use this to choose the right transformation strategy:
+
+1. **Is the target an identifier** (function name, variable, import specifier)?
+   - Yes, and it is **unique/domain-specific** (e.g. `defineGenerators`) →
+     Simple identifier rename (`findPattern` + `replaceAll`)
+   - Yes, but it is **ambiguous** (e.g. `type` as a method name) →
+     Receiver-guarded method rename (`applyPatternReplace` with guard)
+2. **Is the target an object property key** (e.g. `{ retryPolicy: ... }`)?
+   - Yes → Object property rename (`source.includes` + `replaceAll`)
+3. **Does the migration involve both identifiers AND property keys?**
+   - Yes → Hybrid pattern (AST pass + string pass)
+4. **Do function arguments need restructuring?**
+   - Yes → Argument restructuring (`applyPatternReplace` with `$$$ARGS`)
+
 ## Common Patterns
 
 ### Simple identifier rename (recommended for function/variable renames)
@@ -220,7 +242,22 @@ const renames = new Map([
 
 Each iteration re-parses the updated source, so later renames see the
 result of earlier ones. This is safe as long as no old name is a substring
-of another old name or of a new name.
+of another old name or of a new name. When substring conflicts exist,
+order Map entries with **longer names first** to prevent partial matches:
+
+```typescript
+// WRONG: "createWorkflow" matches inside "createWorkflowJob"
+new Map([
+  ["createWorkflow", "defineWorkflow"], // ← replaces part of createWorkflowJob
+  ["createWorkflowJob", "defineWorkflowJob"], // ← never matches (already corrupted)
+]);
+
+// CORRECT: process longer name first
+new Map([
+  ["createWorkflowJob", "defineWorkflowJob"], // ← exact match first
+  ["createWorkflow", "defineWorkflow"], // ← safe, no substring left
+]);
+```
 
 ### Object property rename
 
