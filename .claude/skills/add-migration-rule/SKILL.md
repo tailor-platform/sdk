@@ -89,29 +89,24 @@ export const v2Rules: MigrationRule[] = [
 Before adding, scan the existing array for potential interactions (e.g.,
 rule A renames an identifier that rule B also references).
 
-### 3. Add test fixtures
+### 3. Write tests
+
+Every migration rule needs at minimum two test categories:
+
+1. **Positive test**: code that should be transformed (before/after)
+2. **Negative test**: code that should NOT be transformed (no false positives)
+
+#### Fixture-based test (primary pattern)
 
 Create `__test_fixtures__/v2/<rule-name>/input.ts` and `output.ts` with
 representative before/after code. These files are excluded from typecheck
 and eslint (wildcard `v*/` patterns), so they can contain intentionally
 invalid V1 code.
 
-**Important:** `renameIdentifiers` and `batchRename` use `replaceAll`
-internally, which also transforms comments and string literals. If
-`input.ts` contains the target identifier in a comment (e.g.,
-`// Uses retryPolicy`), the `output.ts` must reflect the replacement
-(e.g., `// Uses retry`). Mismatched comments are the most common cause
-of fixture test failures.
-
-### 4. Write the test
-
-Import the rule and use its `transformSource` property directly --
-do **not** duplicate the transform logic in the test file:
-
 `rules/v2/<rule-name>.test.ts`:
 
 ```typescript
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { runFixtureTest } from "../../__test_fixtures__/fixture-helper";
 import { myRenameRule } from "./<rule-name>";
 
@@ -124,14 +119,191 @@ describe("<rule-name> rule", () => {
 
 `createRule` returns a `SourceRule` that exposes `transformSource`, so
 tests can call `rule.transformSource` instead of re-implementing the
-transform. This keeps the test as a pure fixture assertion with zero
-logic duplication.
+transform.
+
+**Important:** `renameIdentifiers` and `batchRename` use `replaceAll`
+internally, which also transforms comments and string literals. If
+`input.ts` contains the target identifier in a comment (e.g.,
+`// Uses retryPolicy`), the `output.ts` must reflect the replacement
+(e.g., `// Uses retry`). Mismatched comments are the most common cause
+of fixture test failures.
+
+#### No-op test (false positive prevention)
+
+Always test that the rule returns `null` for code it should NOT transform:
+
+```typescript
+it("should not transform unrelated code", () => {
+  const source = `const attributes = getAttributes();`;
+  expect(myRule.transformSource(source)).toBeNull();
+});
+
+it("should not transform code on a different receiver", () => {
+  const source = `const x = element.attributes;`;
+  expect(myRule.transformSource(source)).toBeNull();
+});
+```
+
+For rules with high false-positive risk (common names like `attributes`,
+`type`, `name`), add multiple no-op cases covering likely collisions.
+
+#### Inline test (edge cases without fixtures)
+
+For edge cases that don't warrant a full fixture directory, test
+`transformSource` directly with inline strings:
+
+```typescript
+it("should handle optional chaining", () => {
+  const input = `const x = context.user.attributes?.role;`;
+  const expected = `const x = context.user.map?.role;`;
+  expect(myRule.transformSource(input)).toBe(expected);
+});
+
+it("should handle multiple occurrences", () => {
+  const input = `const a = ctx.user.attributes;\nconst b = ctx.user.attributes?.x;`;
+  const result = myRule.transformSource(input);
+  expect(result).not.toContain("attributes");
+  expect(result).toContain("map");
+});
+```
+
+#### Warning rule test
+
+`createWarningRule` returns a `WarningRule` that exposes `scanSource`.
+Test it by checking warning messages:
+
+```typescript
+import { myWarningRule } from "./<rule-name>";
+
+it("should warn when timestamps is used", () => {
+  const source = `const user = db.type("User", { ...db.fields.timestamps() });`;
+  const result = myWarningRule.scanSource(source, "tailordb/user.ts");
+  expect(result).toContain("updatedAt");
+});
+
+it("should not warn when timestamps is absent", () => {
+  const source = `const item = db.type("Item", { name: db.string() });`;
+  const result = myWarningRule.scanSource(source, "tailordb/item.ts");
+  expect(result).toBeNull();
+});
+```
+
+`scanSource` returns `string | string[] | null`. Check the type when
+a rule can emit multiple warnings per file.
+
+#### JSON rule test
+
+For rules using `transformJsonFile`, create `input.json` / `output.json`
+fixtures and test the mutator function directly:
+
+```typescript
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { transformJsonFile } from "../../codemod-engine";
+
+describe("package-json rule", () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "rule-test-"));
+  });
+
+  afterEach(async () => {
+    await fs.promises.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it("should rename script commands", async () => {
+    const filePath = path.join(tmpDir, "package.json");
+    await fs.promises.writeFile(
+      filePath,
+      JSON.stringify({ scripts: { apply: "tailor-sdk apply" } }, null, 2) + "\n",
+    );
+
+    const result = await transformJsonFile(filePath, myMutator, false);
+    expect(result.changed).toBe(true);
+
+    const content = JSON.parse(await fs.promises.readFile(filePath, "utf-8"));
+    expect(content.scripts.deploy).toBe("tailor-sdk deploy");
+    expect(content.scripts.apply).toBeUndefined();
+  });
+
+  it("should not modify unrelated package.json", async () => {
+    const filePath = path.join(tmpDir, "package.json");
+    await fs.promises.writeFile(
+      filePath,
+      JSON.stringify({ scripts: { test: "vitest" } }, null, 2) + "\n",
+    );
+
+    const result = await transformJsonFile(filePath, myMutator, false);
+    expect(result.changed).toBe(false);
+  });
+});
+```
+
+#### Multi-pass rule test (intermediate state verification)
+
+For rules that chain multiple helpers, test each pass independently
+to isolate failures:
+
+```typescript
+it("should transform tuple args in first pass", () => {
+  const source = `defineGenerators(["@tailor-platform/kysely-type", { distPath: "./db.ts" }])`;
+  const result = transformTupleArgsToCall(source, "defineGenerators", mappings);
+  expect(result.output).toContain("kyselyTypePlugin");
+  expect(result.imports).toHaveLength(1);
+});
+
+it("should rename function in second pass", () => {
+  const source = `defineGenerators(kyselyTypePlugin({ distPath: "./db.ts" }))`;
+  const { output } = renameIdentifiers(source, "defineGenerators", "definePlugins");
+  expect(output).toContain("definePlugins");
+});
+
+it("should produce correct final output end-to-end", () => {
+  const source = `defineGenerators(["@tailor-platform/kysely-type", { distPath: "./db.ts" }])`;
+  const result = myRule.transformSource(source);
+  expect(result).toContain("definePlugins");
+  expect(result).toContain("kyselyTypePlugin");
+});
+```
+
+### 4. Register the rule
+
+Add the import and rule to `rules/v2/index.ts`. Append new rules to the
+**end** of the array (independent rules can be in any order, but appending
+keeps diffs minimal):
+
+```typescript
+import { myRenameRule } from "./<rule-name>";
+
+export const v2Rules: MigrationRule[] = [
+  // ... existing rules ...
+  myRenameRule,
+];
+```
+
+Before adding, scan the existing array for potential interactions (e.g.,
+rule A renames an identifier that rule B also references).
 
 ### 5. Verify
 
 ```bash
 pnpm -C packages/sdk test:unit -- src/cli/commands/upgrade/
 ```
+
+### Test checklist
+
+Before marking a rule complete, verify:
+
+- [ ] Fixture test passes (input.ts -> output.ts)
+- [ ] No-op test: unrelated code returns `null`
+- [ ] No-op test: similar names on different receivers return `null`
+- [ ] Edge cases: optional chaining, multiline, multiple occurrences
+- [ ] Comments/strings: if `replaceAll`-based, fixtures reflect comment changes
+- [ ] For warning rules: both positive and negative scan cases
+- [ ] For JSON rules: mutation and no-op cases with real file I/O
 
 ## Codemod Engine API
 
