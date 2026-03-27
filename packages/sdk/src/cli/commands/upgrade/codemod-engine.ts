@@ -543,6 +543,13 @@ export function renamePropertyInPattern(
 
 // ---------------------------------------------------------------------------
 // Structural change helpers
+//
+// These helpers (removeProperty, addProperty, replacePropertyValue, etc.)
+// operate on the first (outermost) object within the pattern match. This is
+// by design for SDK migration patterns where function calls take a single
+// config object argument. For patterns with multiple object arguments (e.g.,
+// `setup({ a: 1 }, { b: 2 })`), use applyPatternReplace with a custom
+// replacer that targets the correct argument via getArgs/getMultipleMatches.
 // ---------------------------------------------------------------------------
 
 /**

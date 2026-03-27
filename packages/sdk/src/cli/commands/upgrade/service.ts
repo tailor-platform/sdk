@@ -116,6 +116,10 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
         fileOverrides,
       });
 
+      // Note: interactive mode requires diffs to function (it forces dryRun=true
+      // to get diffs, then prompts the user). Rules created via createRule always
+      // produce diffs. Custom MigrationRule implementations must also populate
+      // diffs when dryRun is true, otherwise interactive mode skips the prompt.
       if (result.changed) {
         if (options.interactive && !options.dryRun && result.diffs) {
           // Show diff preview for each file
