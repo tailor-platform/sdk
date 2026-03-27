@@ -53,4 +53,3 @@ CLAUDE.local.md
 llm-challenge/results/
 llm-challenge/problems/*/work
 .claude/tmp/
-.agent/tmp/
