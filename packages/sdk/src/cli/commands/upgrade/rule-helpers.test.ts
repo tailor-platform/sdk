@@ -2,8 +2,111 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createWarningRule } from "./rule-helpers";
+import { createRule, createWarningRule } from "./rule-helpers";
 import type { TransformContext } from "./types";
+
+describe("createRule", () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "create-rule-test-"));
+  });
+
+  afterEach(async () => {
+    await fs.promises.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  function makeContext(
+    files: string[],
+    dryRun = false,
+    fileOverrides?: Map<string, string>,
+  ): TransformContext {
+    return { projectRoot: tmpDir, files, dryRun, fileOverrides };
+  }
+
+  const meta = {
+    id: "test/rule",
+    name: "Test",
+    description: "desc",
+    since: "0.0.0",
+    until: "1.0.0",
+  };
+
+  it("should apply transform and write file", async () => {
+    const filePath = path.join(tmpDir, "a.ts");
+    await fs.promises.writeFile(filePath, "const old = 1;", "utf-8");
+
+    const rule = createRule(meta, (source) => source.replace("old", "new"));
+    const result = await rule.transform(makeContext([filePath]));
+
+    expect(result.changed).toBe(true);
+    expect(result.filesModified).toEqual([filePath]);
+    expect(result.diffs).toBeUndefined();
+    const content = await fs.promises.readFile(filePath, "utf-8");
+    expect(content).toBe("const new = 1;");
+  });
+
+  it("should populate diffs and not write in dry-run mode", async () => {
+    const filePath = path.join(tmpDir, "b.ts");
+    await fs.promises.writeFile(filePath, "const old = 1;", "utf-8");
+
+    const rule = createRule(meta, (source) => source.replace("old", "new"));
+    const result = await rule.transform(makeContext([filePath], true));
+
+    expect(result.changed).toBe(true);
+    expect(result.diffs).toHaveLength(1);
+    expect(result.diffs![0].before).toBe("const old = 1;");
+    expect(result.diffs![0].after).toBe("const new = 1;");
+    const content = await fs.promises.readFile(filePath, "utf-8");
+    expect(content).toBe("const old = 1;");
+  });
+
+  it("should skip files where transformSource returns null", async () => {
+    const filePath = path.join(tmpDir, "c.ts");
+    await fs.promises.writeFile(filePath, "const x = 1;", "utf-8");
+
+    const rule = createRule(meta, () => null);
+    const result = await rule.transform(makeContext([filePath]));
+
+    expect(result.changed).toBe(false);
+    expect(result.filesModified).toEqual([]);
+  });
+
+  it("should handle multiple files", async () => {
+    const fileA = path.join(tmpDir, "d.ts");
+    const fileB = path.join(tmpDir, "e.ts");
+    await fs.promises.writeFile(fileA, "const old = 1;", "utf-8");
+    await fs.promises.writeFile(fileB, "const x = 1;", "utf-8");
+
+    const rule = createRule(meta, (source) =>
+      source.includes("old") ? source.replace("old", "new") : null,
+    );
+    const result = await rule.transform(makeContext([fileA, fileB]));
+
+    expect(result.changed).toBe(true);
+    expect(result.filesModified).toEqual([fileA]);
+  });
+
+  it("should expose transformSource for direct testing", () => {
+    const fn = (source: string) => source.replace("a", "b");
+    const rule = createRule(meta, fn);
+    expect(rule.transformSource).toBe(fn);
+    expect(rule.transformSource("abc")).toBe("bbc");
+  });
+
+  it("should use fileOverrides instead of reading from disk in dry-run", async () => {
+    const filePath = path.join(tmpDir, "f.ts");
+    await fs.promises.writeFile(filePath, "disk content", "utf-8");
+    const overrides = new Map([[filePath, "override content"]]);
+
+    const rule = createRule(meta, (source) => source.replace("override", "replaced"));
+    const result = await rule.transform(makeContext([filePath], true, overrides));
+
+    expect(result.changed).toBe(true);
+    expect(result.diffs![0].before).toBe("override content");
+    expect(result.diffs![0].after).toBe("replaced content");
+  });
+});
 
 describe("createWarningRule", () => {
   let tmpDir: string;
