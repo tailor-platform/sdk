@@ -92,7 +92,7 @@
     "prepublish": "pnpm run build",
     "postinstall": "node postinstall.mjs",
     "measure:bundle": "node ../../scripts/measure-bundle-size-sonda.js",
-    "docs:api-check": "node scripts/api-doc-check.js",
+    "lint:public-api": "node scripts/lint-public-api.js",
     "knip": "knip",
     "publint": "publint --strict",
     "generate": "zinfer && node -e \"const f=require('fs').readdirSync('src/types').filter(f=>f.endsWith('.generated.ts')).map(f=>'src/types/'+f);if(f.length)require('child_process').execSync('pnpm oxfmt --write '+f.join(' '),{stdio:'inherit'})\""

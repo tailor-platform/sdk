@@ -35,7 +35,7 @@
       "dependsOn": ["format", "lint:fix", "typecheck:go", "knip", "publint"],
       "cache": false
     },
-    "docs:api-check": {
+    "lint:public-api": {
       "cache": true
     },
     "knip": {

@@ -30,7 +30,7 @@ pre-commit:
     checks:
       glob: "*.{ts,js}"
       run: >-
-        pnpm exec turbo run build lint typecheck:go knip docs:api-check
+        pnpm exec turbo run build lint typecheck:go knip lint:public-api
         --filter=@tailor-platform/sdk --filter=example
         --no-update-notifier --output-logs=errors-only
         && pnpm exec turbo run lint

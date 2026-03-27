@@ -35,7 +35,7 @@ export default defineConfig([
       "jsdoc/require-returns-type": "off",
       "jsdoc/tag-lines": "error",
       "jsdoc/check-param-names": "error",
-      // Existence enforcement handled by scripts/api-doc-check.js (validates only public API via package.json exports).
+      // Existence enforcement handled by scripts/lint-public-api.js (validates only public API via package.json exports).
       // require-param and require-returns remain: they only fire when JSDoc exists.
       "jsdoc/require-jsdoc": "off",
       "jsdoc/require-param": "error",
