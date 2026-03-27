@@ -229,7 +229,7 @@ function normalizeComparableDisableGqlOperations(
   };
 }
 
-function normalizeComparableIdPServiceShape(
+function normalizeComparableIdPService(
   input: Pick<
     ComparableIdPService,
     "authorization" | "lang" | "userAuthPolicy" | "publishUserEvents" | "disableGqlOperations"
@@ -242,15 +242,6 @@ function normalizeComparableIdPServiceShape(
     publishUserEvents: input.publishUserEvents,
     disableGqlOperations: input.disableGqlOperations,
   };
-}
-
-function normalizeComparableIdPService(
-  input: Pick<
-    ComparableIdPService,
-    "authorization" | "lang" | "userAuthPolicy" | "publishUserEvents" | "disableGqlOperations"
-  >,
-): ComparableIdPService {
-  return normalizeComparableIdPServiceShape(input);
 }
 
 function areIdPServicesEqual(existing: ProtoIdPService, desired: ComparableIdPService): boolean {

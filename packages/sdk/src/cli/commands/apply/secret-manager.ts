@@ -45,14 +45,6 @@ type DeleteSecret = {
   vaultName: string;
 };
 
-function isManagedVaultUnchanged(
-  existing: { resource: { name: string }; label?: string },
-  applicationName: string,
-  vaultName: string,
-): boolean {
-  return existing.label === applicationName && existing.resource.name === vaultName;
-}
-
 /**
  * Plan secret manager changes based on current and desired state.
  * @param context - Planning context
@@ -122,7 +114,7 @@ export async function planSecretManager(context: PlanContext) {
             currentOwner: existing.label,
           });
         }
-        if (isManagedVaultUnchanged(existing, application.name, vaultName)) {
+        if (existing.label === application.name) {
           vaultChangeSet.unchanged.push({ name: vaultName });
         } else {
           vaultChangeSet.updates.push({
