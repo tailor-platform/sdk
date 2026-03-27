@@ -7,6 +7,7 @@ import type { OperatorClient } from "@/cli/shared/client";
 
 const mockLoadSecretsState = vi.fn();
 const mockSaveSecretsState = vi.fn();
+const sdkVersion = "v1-0-0";
 
 vi.mock("./secrets-state", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
@@ -27,6 +28,20 @@ vi.mock("@/cli/shared/client", async (importOriginal) => {
       const [items] = await fn("", 100);
       return items;
     },
+  };
+});
+
+vi.mock("./label", async (importOriginal) => {
+  const original = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...original,
+    buildMetaRequest: vi.fn().mockImplementation(async (trn: string, appName: string) => ({
+      trn,
+      labels: {
+        "sdk-name": appName,
+        "sdk-version": "v1-0-0",
+      },
+    })),
   };
 });
 
@@ -188,7 +203,7 @@ describe("planSecretManager hash-based diff", () => {
         nextPageToken: "",
       }),
       getMetadata: vi.fn().mockResolvedValue({
-        metadata: { labels: { "sdk-name": "test-app" } },
+        metadata: { labels: { "sdk-name": "test-app", "sdk-version": sdkVersion } },
       }),
       listSecretManagerSecrets: vi.fn().mockResolvedValue({
         secrets: existingSecrets.map((name) => ({ name })),
@@ -308,7 +323,7 @@ describe("planSecretManager vault metadata and deletion", () => {
         nextPageToken: "",
       }),
       getMetadata: vi.fn().mockResolvedValue({
-        metadata: { labels: { "sdk-name": "my-app" } },
+        metadata: { labels: { "sdk-name": "my-app", "sdk-version": sdkVersion } },
       }),
       listSecretManagerSecrets: vi.fn().mockResolvedValue({
         secrets: [{ name: "secret-in-removed" }],
@@ -342,7 +357,7 @@ describe("planSecretManager vault metadata and deletion", () => {
         nextPageToken: "",
       }),
       getMetadata: vi.fn().mockResolvedValue({
-        metadata: { labels: { "sdk-name": "other-app" } },
+        metadata: { labels: { "sdk-name": "other-app", "sdk-version": sdkVersion } },
       }),
       listSecretManagerSecrets: vi.fn().mockResolvedValue({
         secrets: [],
@@ -365,7 +380,7 @@ describe("planSecretManager vault metadata and deletion", () => {
         nextPageToken: "",
       }),
       getMetadata: vi.fn().mockResolvedValue({
-        metadata: { labels: { "sdk-name": "my-app" } },
+        metadata: { labels: { "sdk-name": "my-app", "sdk-version": sdkVersion } },
       }),
       listSecretManagerSecrets: vi.fn().mockResolvedValue({
         secrets: [],
@@ -417,7 +432,7 @@ describe("planSecretManager vault metadata and deletion", () => {
         nextPageToken: "",
       }),
       getMetadata: vi.fn().mockResolvedValue({
-        metadata: { labels: { "sdk-name": "other-app" } },
+        metadata: { labels: { "sdk-name": "other-app", "sdk-version": sdkVersion } },
       }),
       listSecretManagerSecrets: vi.fn().mockResolvedValue({
         secrets: [],

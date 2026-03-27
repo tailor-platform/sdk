@@ -41,6 +41,7 @@ vi.mock("./change-set", async (importOriginal) => {
 
 const workspaceId = "test-workspace";
 const appName = "test-app";
+const sdkVersion = "v1-0-0";
 
 function createMockApplication(): Application {
   return {
@@ -122,7 +123,11 @@ function notFound(): never {
 }
 
 function createMockClient(opts?: {
-  authServices?: Array<{ name: string; publishSessionEvents: boolean; label?: string }>;
+  authServices?: Array<{
+    name: string;
+    publishSessionEvents: boolean;
+    label?: string;
+  }>;
   authIdPConfigs?: Array<{
     name: string;
     authType?: number;
@@ -162,7 +167,7 @@ function createMockClient(opts?: {
       const service = authServices.find((entry) => entry.name === name);
       return {
         metadata: {
-          labels: service?.label ? { "sdk-name": service.label } : {},
+          labels: service?.label ? { "sdk-name": service.label, "sdk-version": sdkVersion } : {},
         },
       };
     }),

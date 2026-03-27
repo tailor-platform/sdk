@@ -35,6 +35,7 @@ vi.mock("./change-set", async (importOriginal) => {
 
 const workspaceId = "test-workspace";
 const appName = "test-app";
+const sdkVersion = "v1-0-0";
 
 function createMockApplication(): Application {
   return {
@@ -108,7 +109,7 @@ function createMockClient(opts?: {
       const service = services.find((entry) => entry.name === name);
       return {
         metadata: {
-          labels: service?.label ? { "sdk-name": service.label } : {},
+          labels: service?.label ? { "sdk-name": service.label, "sdk-version": sdkVersion } : {},
         },
       };
     }),
