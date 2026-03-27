@@ -16,7 +16,7 @@ import { processSeedTypeInfo } from "./seed-type-processor";
 import type { Plugin } from "@/types/plugin";
 import type { GeneratorResult, TailorDBReadyContext } from "@/types/plugin-generation";
 
-/** @internal */
+/** Unique identifier for the seed generator plugin. */
 export const SeedGeneratorID = "@tailor-platform/seed";
 
 type SeedPluginOptions = {

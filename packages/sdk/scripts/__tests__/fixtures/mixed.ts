@@ -3,9 +3,6 @@ export const docVar = 1;
 
 export const undocVar = 2;
 
-/** @internal */
-export const internalVar = 3;
-
 export type OnlyType = string;
 
 /** Documented enum. */

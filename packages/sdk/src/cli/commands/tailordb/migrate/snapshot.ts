@@ -32,11 +32,11 @@ export const INITIAL_SCHEMA_NUMBER = 0;
  * Migration file names (used within migration directories)
  */
 export const SCHEMA_FILE_NAME = "schema.json";
-/** @internal */
+/** File name for migration diff metadata. */
 export const DIFF_FILE_NAME = "diff.json";
-/** @internal */
+/** File name for migration script. */
 export const MIGRATE_FILE_NAME = "migrate.ts";
-/** @internal */
+/** File name for generated DB type definitions. */
 export const DB_TYPES_FILE_NAME = "db.ts";
 
 /**

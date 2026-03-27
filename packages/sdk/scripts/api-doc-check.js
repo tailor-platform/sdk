@@ -49,10 +49,6 @@ export function findUndocumentedSymbols(entryPoints, tsCompilerOptions, baseDir)
     );
   }
 
-  function isInternal(symbol) {
-    return symbol.getJsDocTags(checker).some((tag) => tag.name === "internal");
-  }
-
   function isExternal(symbol) {
     const decls = symbol.getDeclarations();
     if (!decls?.length) return true;
@@ -80,7 +76,6 @@ export function findUndocumentedSymbols(entryPoints, tsCompilerOptions, baseDir)
       const kind = getKind(resolved);
 
       if (isExternal(resolved)) continue;
-      if (isInternal(sym) || isInternal(resolved)) continue;
 
       if (kind && REQUIRED_KINDS.has(kind) && !hasDoc(sym) && !hasDoc(resolved)) {
         failures.push({ name: sym.getName(), kind, location: formatLocation(resolved) });

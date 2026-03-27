@@ -64,10 +64,6 @@ describe("api-doc-check", () => {
     expect(names(result)).toContain("UndocumentedEnum.Y");
   });
 
-  test("@internal symbols are skipped", () => {
-    expect(check("internal.ts")).toEqual([]);
-  });
-
   test("type-only exports are skipped", () => {
     expect(check("type-only.ts")).toEqual([]);
   });
@@ -86,13 +82,12 @@ describe("api-doc-check", () => {
     expect(check("external-re-export.ts")).toEqual([]);
   });
 
-  test("mixed file: only undocumented non-internal value symbols are detected", () => {
+  test("mixed file: only undocumented value symbols are detected", () => {
     const result = check("mixed.ts");
     const detected = names(result);
     expect(detected).toContain("undocVar");
     expect(detected).toContain("Status.Inactive");
     expect(detected).not.toContain("docVar");
-    expect(detected).not.toContain("internalVar");
     expect(detected).not.toContain("OnlyType");
     expect(detected).not.toContain("Status.Active");
   });
