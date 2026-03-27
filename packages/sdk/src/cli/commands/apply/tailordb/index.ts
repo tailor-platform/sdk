@@ -1182,11 +1182,7 @@ async function planTypes(
 
   const executorUsedTypes = new Set<string>();
   for (const executor of executors) {
-    if (
-      executor.trigger.kind === "recordCreated" ||
-      executor.trigger.kind === "recordUpdated" ||
-      executor.trigger.kind === "recordDeleted"
-    ) {
+    if (executor.trigger.kind === "tailordb") {
       executorUsedTypes.add(executor.trigger.typeName);
     }
   }

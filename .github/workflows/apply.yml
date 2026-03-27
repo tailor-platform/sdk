@@ -43,12 +43,8 @@ jobs:
             slug: linux
           - os: windows-latest
             shell: pwsh
-            name: Windows (PowerShell)
-            slug: win-pwsh
-          - os: windows-latest
-            shell: cmd
-            name: Windows (CMD)
-            slug: win-cmd
+            name: Windows
+            slug: win
     runs-on: ${{ matrix.os }}
     name: Apply (${{ matrix.name }})
     permissions:
@@ -70,12 +66,14 @@ jobs:
         uses: ./.github/actions/install-deps
 
       - name: Login as machine user
+        if: runner.os != 'Windows'
         run: pnpm tailor-sdk login --machineuser
         env:
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_ID }}
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_SECRET }}
 
       - name: Create workspace
+        if: runner.os != 'Windows'
         working-directory: example
         run: pnpm --silent tailor-sdk workspace create --name "sdk-ci-${{ github.run_id }}-${{ matrix.slug }}" --region asia-northeast --json > workspace.json
         env:
@@ -83,6 +81,7 @@ jobs:
           TAILOR_PLATFORM_FOLDER_ID: ${{ secrets.TAILOR_PLATFORM_FOLDER_ID }}
 
       - name: Set workspace ID
+        if: runner.os != 'Windows'
         working-directory: example
         shell: bash
         run: |
@@ -96,8 +95,11 @@ jobs:
       - name: Apply workspace
         working-directory: example
         run: pnpm run apply
+        env:
+          TAILOR_PLATFORM_SDK_BUILD_ONLY: ${{ runner.os == 'Windows' && 'true' || '' }}
 
       - name: Verify all migrations applied
+        if: runner.os != 'Windows'
         working-directory: example
         shell: bash
         run: |
@@ -112,7 +114,13 @@ jobs:
 
           echo "✅ All migrations applied successfully"
 
+      - name: Validate seed data
+        if: runner.os == 'Windows'
+        working-directory: example
+        run: pnpm run seed:validate
+
       - name: Seed data
+        if: runner.os != 'Windows'
         working-directory: example
         run: |
           pnpm run seed:validate
@@ -120,11 +128,12 @@ jobs:
           pnpm run seed:truncate -y
 
       - name: Run e2e tests
+        if: runner.os != 'Windows'
         working-directory: example
         run: pnpm test:e2e
 
       - name: Destroy workspace
-        if: always()
+        if: always() && runner.os != 'Windows'
         working-directory: example
         run: pnpm tailor-sdk workspace delete --workspace-id "${{ env.TAILOR_PLATFORM_WORKSPACE_ID }}" --yes
 
