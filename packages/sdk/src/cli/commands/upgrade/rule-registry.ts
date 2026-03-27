@@ -1,32 +1,40 @@
 import { gte, lt, valid } from "semver";
 import type { MigrationRule } from "./types";
 
+interface RuleRegistry {
+  register(rule: MigrationRule): void;
+  registerAll(rules: MigrationRule[]): void;
+  getAllRules(): readonly MigrationRule[];
+  getApplicableRules(fromVersion: string, toVersion: string): MigrationRule[];
+}
+
 /**
  * Registry for migration rules with version-gated filtering.
- * Rules are registered once and filtered per migration run based on
- * the source and target version range.
+ * Rules are registered once into a closure and filtered per migration run
+ * based on the source and target version range.
+ * @returns A rule registry backed by function closures
  */
-export class RuleRegistry {
-  private readonly rules: MigrationRule[] = [];
+export function createRuleRegistry(): RuleRegistry {
+  const rules: MigrationRule[] = [];
 
   /**
    * Register a single migration rule.
    * @param rule - The migration rule to register
    */
-  register(rule: MigrationRule): void {
-    if (this.rules.some((r) => r.id === rule.id)) {
+  function register(rule: MigrationRule): void {
+    if (rules.some((registeredRule) => registeredRule.id === rule.id)) {
       throw new Error(`Duplicate migration rule ID: ${rule.id}`);
     }
-    this.rules.push(rule);
+    rules.push(rule);
   }
 
   /**
    * Register multiple migration rules at once.
-   * @param rules - Array of migration rules to register
+   * @param nextRules - Array of migration rules to register
    */
-  registerAll(rules: MigrationRule[]): void {
-    for (const rule of rules) {
-      this.register(rule);
+  function registerAll(nextRules: MigrationRule[]): void {
+    for (const rule of nextRules) {
+      register(rule);
     }
   }
 
@@ -34,8 +42,8 @@ export class RuleRegistry {
    * Get all registered rules (unfiltered).
    * @returns All registered migration rules
    */
-  getAllRules(): readonly MigrationRule[] {
-    return this.rules;
+  function getAllRules(): readonly MigrationRule[] {
+    return rules;
   }
 
   /**
@@ -51,7 +59,7 @@ export class RuleRegistry {
    * @param toVersion - The target SDK version (e.g., "2.0.0")
    * @returns Filtered list of applicable migration rules
    */
-  getApplicableRules(fromVersion: string, toVersion: string): MigrationRule[] {
+  function getApplicableRules(fromVersion: string, toVersion: string): MigrationRule[] {
     if (!valid(fromVersion)) {
       throw new Error(`Invalid source version: ${fromVersion}`);
     }
@@ -59,8 +67,15 @@ export class RuleRegistry {
       throw new Error(`Invalid target version: ${toVersion}`);
     }
 
-    return this.rules.filter((rule) => {
+    return rules.filter((rule) => {
       return lt(fromVersion, rule.until) && gte(toVersion, rule.until);
     });
   }
+
+  return {
+    register,
+    registerAll,
+    getAllRules,
+    getApplicableRules,
+  };
 }

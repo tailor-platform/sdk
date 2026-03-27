@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { RuleRegistry } from "./rule-registry";
+import { createRuleRegistry } from "./rule-registry";
 import type { MigrationRule, TransformContext, TransformResult } from "./types";
 
 function createTestRule(overrides: Partial<MigrationRule> = {}): MigrationRule {
@@ -18,17 +18,17 @@ function createTestRule(overrides: Partial<MigrationRule> = {}): MigrationRule {
   };
 }
 
-describe("RuleRegistry", () => {
+describe("createRuleRegistry", () => {
   describe("register", () => {
     it("should register a rule", () => {
-      const registry = new RuleRegistry();
+      const registry = createRuleRegistry();
       const rule = createTestRule();
       registry.register(rule);
       expect(registry.getAllRules()).toEqual([rule]);
     });
 
     it("should reject duplicate rule IDs", () => {
-      const registry = new RuleRegistry();
+      const registry = createRuleRegistry();
       registry.register(createTestRule({ id: "test/dup" }));
       expect(() => registry.register(createTestRule({ id: "test/dup" }))).toThrow(
         "Duplicate migration rule ID: test/dup",
@@ -38,7 +38,7 @@ describe("RuleRegistry", () => {
 
   describe("registerAll", () => {
     it("should register multiple rules", () => {
-      const registry = new RuleRegistry();
+      const registry = createRuleRegistry();
       const rules = [createTestRule({ id: "test/a" }), createTestRule({ id: "test/b" })];
       registry.registerAll(rules);
       expect(registry.getAllRules()).toHaveLength(2);
@@ -47,7 +47,7 @@ describe("RuleRegistry", () => {
 
   describe("getApplicableRules", () => {
     it("should return rules applicable to the version range", () => {
-      const registry = new RuleRegistry();
+      const registry = createRuleRegistry();
       const rule = createTestRule({ since: "1.0.0", until: "2.0.0" });
       registry.register(rule);
 
@@ -56,7 +56,7 @@ describe("RuleRegistry", () => {
     });
 
     it("should exclude rules when source version is already past the breaking change", () => {
-      const registry = new RuleRegistry();
+      const registry = createRuleRegistry();
       registry.register(createTestRule({ since: "1.0.0", until: "2.0.0" }));
 
       const applicable = registry.getApplicableRules("2.0.0", "3.0.0");
@@ -64,7 +64,7 @@ describe("RuleRegistry", () => {
     });
 
     it("should exclude rules when target version is before the breaking change", () => {
-      const registry = new RuleRegistry();
+      const registry = createRuleRegistry();
       registry.register(createTestRule({ since: "1.0.0", until: "2.0.0" }));
 
       const applicable = registry.getApplicableRules("1.5.0", "1.9.0");
@@ -72,7 +72,7 @@ describe("RuleRegistry", () => {
     });
 
     it("should handle multiple rules with different version ranges", () => {
-      const registry = new RuleRegistry();
+      const registry = createRuleRegistry();
       const rule1 = createTestRule({ id: "test/v2", since: "1.0.0", until: "2.0.0" });
       const rule2 = createTestRule({ id: "test/v3", since: "2.0.0", until: "3.0.0" });
       const rule3 = createTestRule({ id: "test/v2-late", since: "1.20.0", until: "2.0.0" });
@@ -90,7 +90,7 @@ describe("RuleRegistry", () => {
     });
 
     it("should handle patch versions correctly", () => {
-      const registry = new RuleRegistry();
+      const registry = createRuleRegistry();
       const rule = createTestRule({ since: "1.0.0", until: "2.0.0" });
       registry.register(rule);
 
@@ -99,7 +99,7 @@ describe("RuleRegistry", () => {
     });
 
     it("should throw on invalid version strings", () => {
-      const registry = new RuleRegistry();
+      const registry = createRuleRegistry();
       expect(() => registry.getApplicableRules("invalid", "2.0.0")).toThrow(
         "Invalid source version",
       );

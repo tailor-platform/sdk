@@ -1,12 +1,12 @@
-import { RuleRegistry } from "../rule-registry";
+import { createRuleRegistry } from "../rule-registry";
 import { v2Rules } from "./v2";
 
 /**
  * Create and populate the default rule registry with all known migration rules.
- * @returns A populated RuleRegistry instance
+ * @returns A populated rule registry
  */
-export function createDefaultRegistry(): RuleRegistry {
-  const registry = new RuleRegistry();
+export function createDefaultRegistry(): ReturnType<typeof createRuleRegistry> {
+  const registry = createRuleRegistry();
   registry.registerAll(v2Rules);
   return registry;
 }

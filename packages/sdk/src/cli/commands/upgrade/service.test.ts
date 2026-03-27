@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { RuleRegistry } from "./rule-registry";
+import { createRuleRegistry } from "./rule-registry";
 import type { MigrationRule, TransformContext, TransformResult } from "./types";
 
 // Mock the modules that have side effects (logger, telemetry)
@@ -66,7 +66,7 @@ describe("migrate service - integration", () => {
   }
 
   it("should register and filter rules correctly for a version migration", () => {
-    const registry = new RuleRegistry();
+    const registry = createRuleRegistry();
     const applicableRule = createMockRule({
       id: "test/applicable",
       since: "1.0.0",
