@@ -12,16 +12,7 @@ import { fileURLToPath } from "node:url";
 
 // Only value-level symbols are checked, matching the scope of the former
 // jsdoc/require-jsdoc ESLint rule. Type aliases and interfaces are excluded.
-const REQUIRED_KINDS = new Set([
-  "Enum",
-  "EnumMember",
-  "Variable",
-  "Function",
-  "Class",
-  "Method",
-  "Accessor",
-]);
-
+// getKind returns null for anything not in scope, so a truthy check suffices.
 function getKind(symbol) {
   const f = symbol.flags;
   if (f & ts.SymbolFlags.EnumMember) return "EnumMember";
@@ -81,7 +72,7 @@ export function findUndocumentedSymbols(entryPoints, tsCompilerOptions, baseDir)
 
       if (isExternal(resolved)) continue;
 
-      if (kind && REQUIRED_KINDS.has(kind) && !hasDoc(sym) && !hasDoc(resolved)) {
+      if (kind && !hasDoc(sym) && !hasDoc(resolved)) {
         failures.push({ name: sym.getName(), kind, location: formatLocation(resolved) });
       }
 
@@ -90,7 +81,7 @@ export function findUndocumentedSymbols(entryPoints, tsCompilerOptions, baseDir)
           members?.forEach((member) => {
             if (member.getName() === "prototype") return;
             const mk = getKind(member);
-            if (mk && REQUIRED_KINDS.has(mk) && !hasDoc(member)) {
+            if (mk && !hasDoc(member)) {
               failures.push({
                 name: `${sym.getName()}.${member.getName()}`,
                 kind: mk,
