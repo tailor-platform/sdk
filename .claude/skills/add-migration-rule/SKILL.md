@@ -144,6 +144,13 @@ Read file, apply `transformFn(source)`, write back if changed. Returns boolean.
 
 Search-only variant. Returns array of matched `SgNode` without modification.
 
+**Caveat:** `findPattern` matches `identifier` AST nodes but NOT
+`property_identifier` nodes. Object property keys like `publishEvents` in
+`{ publishEvents: true }` are `property_identifier` in the TypeScript AST,
+so `findPattern(source, "publishEvents")` returns zero matches. Use
+`source.includes("publishEvents")` instead for property-name detection
+(see "Object property rename" pattern below).
+
 ## Version Gating
 
 Rules use `since` / `until` semver fields:
@@ -167,11 +174,12 @@ Example: `since: "1.0.0", until: "2.0.0"` applies when upgrading from any 1.x to
 
 ## Common Patterns
 
-### Simple identifier rename (recommended for renames)
+### Simple identifier rename (recommended for function/variable renames)
 
-When the old and new names are unique identifiers (no risk of false matches
-in strings or comments), use `findPattern` to confirm AST-level presence,
-then `replaceAll` to preserve formatting:
+When the old and new names are unique identifiers used as function names,
+variable names, or import specifiers (i.e., `identifier` AST nodes), use
+`findPattern` to confirm AST-level presence, then `replaceAll` to preserve
+formatting:
 
 ```typescript
 const matches = findPattern(source, "oldName");
@@ -181,6 +189,22 @@ return source.replaceAll("oldName", "newName");
 
 This handles both imports and call sites in one pass without losing
 semicolons, indentation, or trailing commas.
+
+### Object property rename
+
+When renaming an object property key (e.g., `publishEvents` in
+`{ publishEvents: true }`), `findPattern` does NOT work because property
+keys are `property_identifier` nodes in the AST, not `identifier` nodes.
+Use `source.includes()` as the guard instead:
+
+```typescript
+if (!source.includes("oldProp")) return null;
+return source.replaceAll("oldProp", "newProp");
+```
+
+This is safe when the property name is sufficiently unique (no false matches
+in unrelated code). For ambiguous names, combine with `applyPatternReplace`
+using a member-access or call-expression pattern to narrow the scope.
 
 ### Restructure function call arguments
 
@@ -200,6 +224,39 @@ applyPatternReplace(source, "oldFn($$$ARGS)", (node) => {
 returned string. Surrounding code (semicolons, trailing commas) outside the
 match is preserved, but content inside (indentation, line breaks) is lost.
 For formatting-sensitive transforms, prefer the simple rename pattern above.
+
+### Hybrid: AST method rename + string property rename
+
+When a migration involves both a method call rename (AST-matchable) and a
+property key rename (not AST-matchable), combine both approaches in a
+two-pass transform:
+
+```typescript
+(source) => {
+  let result = source;
+  let totalChanged = 0;
+
+  // Pass 1: Rename method calls using AST matching
+  const pass1 = applyPatternReplace(result, "$OBJ.oldMethod($$$ARGS)", (node) => {
+    const obj = node.getMatch("OBJ")!.text();
+    const args = node
+      .getMultipleMatches("ARGS")
+      .filter((n) => n.kind() !== ",")
+      .map((n) => n.text());
+    return `${obj}.newMethod(${args.join(", ")})`;
+  });
+  result = pass1.output;
+  totalChanged += pass1.count;
+
+  // Pass 2: Rename property key using string matching
+  if (result.includes("oldProp")) {
+    result = result.replaceAll("oldProp", "newProp");
+    totalChanged++;
+  }
+
+  return totalChanged > 0 ? result : null;
+};
+```
 
 ### Add a warning for manual attention
 
