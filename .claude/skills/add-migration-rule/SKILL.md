@@ -190,6 +190,38 @@ return source.replaceAll("oldName", "newName");
 This handles both imports and call sites in one pass without losing
 semicolons, indentation, or trailing commas.
 
+### Batch identifier rename (multiple renames in one rule)
+
+When several related identifiers are renamed together (e.g., a family of
+trigger functions), use a `Map` and loop instead of writing separate rules:
+
+```typescript
+const renames = new Map([
+  ["oldNameA", "newNameA"],
+  ["oldNameB", "newNameB"],
+  ["oldNameC", "newNameC"],
+]);
+
+(source) => {
+  let result = source;
+  let totalChanged = 0;
+
+  for (const [oldName, newName] of renames) {
+    const matches = findPattern(result, oldName);
+    if (matches.length > 0) {
+      result = result.replaceAll(oldName, newName);
+      totalChanged += matches.length;
+    }
+  }
+
+  return totalChanged > 0 ? result : null;
+};
+```
+
+Each iteration re-parses the updated source, so later renames see the
+result of earlier ones. This is safe as long as no old name is a substring
+of another old name or of a new name.
+
 ### Object property rename
 
 When renaming an object property key (e.g., `publishEvents` in
@@ -205,6 +237,30 @@ return source.replaceAll("oldProp", "newProp");
 This is safe when the property name is sufficiently unique (no false matches
 in unrelated code). For ambiguous names, combine with `applyPatternReplace`
 using a member-access or call-expression pattern to narrow the scope.
+
+### Receiver-guarded method rename
+
+When renaming a method on a specific object (e.g., `db.type()` to
+`db.model()`) but the pattern `$OBJ.type($$$ARGS)` could also match
+unrelated objects, add a receiver guard in the replacer:
+
+```typescript
+applyPatternReplace(source, "$OBJ.type($$$ARGS)", (node) => {
+  const obj = node.getMatch("OBJ")!.text();
+  // Only transform calls on "db", skip anything else
+  if (obj !== "db") return node.text();
+  const args = node
+    .getMultipleMatches("ARGS")
+    .filter((n) => n.kind() !== ",")
+    .map((n) => n.text());
+  return `${obj}.model(${args.join(", ")})`;
+});
+```
+
+Returning `node.text()` (the original text) when the guard fails produces
+zero net change for that match, so `count` still increments but the output
+is unchanged. This is harmless because the file-level `changed` check
+compares the final output to the original source.
 
 ### Restructure function call arguments
 
@@ -270,3 +326,36 @@ if (matches.length > 0) {
   );
 }
 ```
+
+## False Positive Risk
+
+`replaceAll` operates on raw strings, so it can match inside string
+literals, comments, and unrelated identifiers. Assess the risk before
+choosing a strategy:
+
+| Risk level | Name characteristics                                                    | Strategy                                                                         |
+| ---------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Low        | Long, domain-specific (e.g. `recordCreatedTrigger`, `defineGenerators`) | `findPattern` guard + `replaceAll` is safe                                       |
+| Medium     | Short but scoped to a context (e.g. `type` as a method name)            | Use `applyPatternReplace` with a receiver guard                                  |
+| High       | Common word that appears in many contexts (e.g. `name`, `value`)        | Use `applyPatternReplace` with a narrow AST pattern; avoid `replaceAll` entirely |
+
+When in doubt, search the `example/` directory for occurrences of the old
+name to estimate false positive frequency.
+
+## Rule Ordering
+
+Rules within a version array execute sequentially in registration order.
+Keep these guidelines in mind:
+
+- **Independent rules** (touching different identifiers/properties) can be
+  in any order.
+- **Overlapping rules** (targeting the same files or related identifiers)
+  should be ordered so that earlier rules do not interfere with later ones.
+  For example, if rule A renames `db.type()` to `db.model()` and rule B
+  renames the import path `@tailor-platform/sdk/tailordb`, the order does
+  not matter because they touch different parts of the source. But if rule A
+  renames `foo` to `bar` and rule B renames `fooBar` to `bazBar`, rule A
+  must run second (or use AST matching instead of `replaceAll`) to avoid
+  corrupting `fooBar` into `barBar`.
+- When adding a new rule, check existing rules in the version array for
+  substring conflicts with your old/new names.
