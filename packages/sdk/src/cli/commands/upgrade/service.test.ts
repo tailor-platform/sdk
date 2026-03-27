@@ -210,6 +210,60 @@ describe("migrate service - integration", () => {
     expect(summary.rulesSkipped).toBe(1);
     expect(summary.warnings).toEqual(["Manual step required: update config"]);
   });
+
+  it("should chain intermediate results between rules in dry-run mode via createRule", async () => {
+    // Rule A renames "oldName" to "midName", Rule B renames "midName" to "newName".
+    // In dry-run without fileOverrides, Rule B would see the original file and skip.
+    // With fileOverrides, Rule B sees Rule A's output and matches "midName".
+    const { createRule } = await import("./rule-helpers");
+
+    const filePath = path.join(tmpDir, "chain.ts");
+    await fs.promises.writeFile(filePath, 'const oldName = "hello";');
+
+    const ruleA = createRule(
+      { id: "test/chain-a", name: "A", description: "d", since: "0.0.0", until: "1.0.0" },
+      (source) => {
+        if (!source.includes("oldName")) return null;
+        return source.replace(/\boldName\b/g, "midName");
+      },
+    );
+
+    const ruleB = createRule(
+      { id: "test/chain-b", name: "B", description: "d", since: "0.0.0", until: "1.0.0" },
+      (source) => {
+        if (!source.includes("midName")) return null;
+        return source.replace(/\bmidName\b/g, "newName");
+      },
+    );
+
+    // Simulate what service.ts does: maintain fileOverrides across rules
+    const fileOverrides = new Map<string, string>();
+    let rulesApplied = 0;
+    let lastAfter = "";
+
+    for (const rule of [ruleA, ruleB]) {
+      const result = await rule.transform({
+        projectRoot: tmpDir,
+        files: [filePath],
+        dryRun: true,
+        fileOverrides,
+      });
+      if (result.changed && result.diffs) {
+        rulesApplied++;
+        for (const diff of result.diffs) {
+          fileOverrides.set(diff.file, diff.after);
+          lastAfter = diff.after;
+        }
+      }
+    }
+
+    // Both rules should have applied (Rule B sees Rule A's output via fileOverrides)
+    expect(rulesApplied).toBe(2);
+    expect(lastAfter).toBe('const newName = "hello";');
+    // Original file should be unchanged (dry-run)
+    const onDisk = await fs.promises.readFile(filePath, "utf-8");
+    expect(onDisk).toBe('const oldName = "hello";');
+  });
 });
 
 describe("upgrade - interactive mode", () => {

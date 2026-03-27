@@ -29,6 +29,13 @@ export interface TransformContext {
   files: string[];
   /** Whether to only preview changes without writing */
   dryRun: boolean;
+  /**
+   * In-memory file content overrides from previous rules.
+   * When present, rules should read from this map instead of disk for files
+   * that have been modified by earlier rules in the same pipeline run.
+   * This ensures dry-run mode correctly chains intermediate results.
+   */
+  fileOverrides?: ReadonlyMap<string, string>;
 }
 
 /**

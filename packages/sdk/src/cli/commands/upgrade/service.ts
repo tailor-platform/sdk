@@ -94,6 +94,9 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
   const warnings: string[] = [];
   const errors: MigrationSummary["errors"] = [];
   const allDiffs: FileDiff[] = [];
+  // Track intermediate file contents so dry-run and interactive modes can
+  // chain results between rules without writing to disk.
+  const fileOverrides = new Map<string, string>();
   let rulesApplied = 0;
   let rulesSkipped = 0;
 
@@ -110,7 +113,15 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
         projectRoot,
         files,
         dryRun: effectiveDryRun,
+        fileOverrides,
       });
+
+      // Update fileOverrides so subsequent rules see this rule's output
+      if (result.diffs) {
+        for (const diff of result.diffs) {
+          fileOverrides.set(diff.file, diff.after);
+        }
+      }
 
       if (result.changed) {
         if (options.interactive && !options.dryRun && result.diffs) {

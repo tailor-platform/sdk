@@ -49,7 +49,8 @@ export function createRule(
       const diffs: FileDiff[] = [];
 
       for (const file of ctx.files) {
-        const result = await transformFile(file, transformSource, ctx.dryRun);
+        const sourceOverride = ctx.fileOverrides?.get(file);
+        const result = await transformFile(file, transformSource, ctx.dryRun, sourceOverride);
         if (result.changed) {
           filesModified.push(file);
           if (result.before !== undefined && result.after !== undefined) {
@@ -94,7 +95,7 @@ export function createWarningRule(
       const warnings: string[] = [];
 
       for (const file of ctx.files) {
-        const source = await fs.promises.readFile(file, "utf-8");
+        const source = ctx.fileOverrides?.get(file) ?? (await fs.promises.readFile(file, "utf-8"));
         const result = scanSource(source, file);
         if (result !== null) {
           if (Array.isArray(result)) {

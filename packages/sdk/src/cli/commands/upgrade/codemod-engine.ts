@@ -107,7 +107,10 @@ export function renameIdentifiers(
 ): { output: string; count: number } {
   const matches = findIdentifiers(source, oldName, lang);
   if (matches.length === 0) return { output: source, count: 0 };
-  return { output: source.replaceAll(oldName, newName), count: matches.length };
+  // Use word-boundary regex instead of replaceAll to avoid corrupting longer
+  // identifiers that contain the renamed name as a substring.
+  const pattern = new RegExp(`\\b${escapeRegExp(oldName)}\\b`, "g");
+  return { output: source.replace(pattern, newName), count: matches.length };
 }
 
 /**
@@ -223,14 +226,16 @@ export interface TransformFileResult {
  * @param filePath - Path to the file to transform
  * @param transform - Function that takes source and returns transformed source (or null if no change)
  * @param dryRun - If true, do not write the file
+ * @param sourceOverride - Pre-loaded source content (from a previous rule's dry-run output)
  * @returns Result with changed flag and optional before/after content (dry-run only)
  */
 export async function transformFile(
   filePath: string,
   transform: (source: string) => string | null,
   dryRun: boolean,
+  sourceOverride?: string,
 ): Promise<TransformFileResult> {
-  const source = await fs.promises.readFile(filePath, "utf-8");
+  const source = sourceOverride ?? (await fs.promises.readFile(filePath, "utf-8"));
   const result = transform(source);
   if (result === null || result === source) {
     return { changed: false };
@@ -555,36 +560,26 @@ export function removeProperty(
       const text = node.text();
       const innerRoot = parseTypeScript(text, lang);
 
-      const pairs = innerRoot
+      // Find the first (outermost) object and search only its direct children
+      // to avoid matching properties in nested objects with the same name.
+      const objects = innerRoot
         .root()
-        .findAll({ rule: { kind: "pair" } } as Parameters<SgNode["findAll"]>[0]);
+        .findAll({ rule: { kind: "object" } } as Parameters<SgNode["findAll"]>[0]);
+      if (objects.length === 0) return text;
+      const obj = objects[0];
 
-      const matchingPair = pairs.find((pair) => {
+      const directPairs = obj.children().filter((c) => c.kind() === "pair");
+      const matchingPair = directPairs.find((pair) => {
         const key = pair.children().find((c) => c.kind() === "property_identifier");
         return key?.text() === propertyName;
       });
 
       if (!matchingPair) return text;
 
-      // Find the parent object to check if this is the only pair
-      const objects = innerRoot
-        .root()
-        .findAll({ rule: { kind: "object" } } as Parameters<SgNode["findAll"]>[0]);
-      const parentObj = objects.find((obj) => {
-        const objPairs = obj.children().filter((c) => c.kind() === "pair");
-        return objPairs.some((p) => {
-          const key = p.children().find((c) => c.kind() === "property_identifier");
-          return key?.text() === propertyName;
-        });
-      });
-
-      if (parentObj) {
-        const directPairs = parentObj.children().filter((c) => c.kind() === "pair");
-        if (directPairs.length === 1) {
-          // Only pair in this object - replace entire object with empty `{}`
-          const objRange = parentObj.range();
-          return text.slice(0, objRange.start.index) + "{}" + text.slice(objRange.end.index);
-        }
+      if (directPairs.length === 1) {
+        // Only pair in this object - replace entire object with empty `{}`
+        const objRange = obj.range();
+        return text.slice(0, objRange.start.index) + "{}" + text.slice(objRange.end.index);
       }
 
       const pairRange = matchingPair.range();
@@ -647,8 +642,8 @@ export function addProperty(
       const objRange = obj.range();
       const objText = obj.text();
 
-      // Check if property already exists
-      const pairs = obj.findAll({ rule: { kind: "pair" } } as Parameters<SgNode["findAll"]>[0]);
+      // Check if property already exists in direct children (not nested objects)
+      const pairs = obj.children().filter((c) => c.kind() === "pair");
       const alreadyExists = pairs.some((p) => {
         const key = p.children().find((c) => c.kind() === "property_identifier");
         return key?.text() === propertyName;
@@ -734,11 +729,15 @@ export function replacePropertyValue(
       const text = node.text();
       const innerRoot = parseTypeScript(text, lang);
 
-      const pairs = innerRoot
+      // Find the first (outermost) object and search only its direct children
+      // to avoid matching properties in nested objects with the same name.
+      const objects = innerRoot
         .root()
-        .findAll({ rule: { kind: "pair" } } as Parameters<SgNode["findAll"]>[0]);
+        .findAll({ rule: { kind: "object" } } as Parameters<SgNode["findAll"]>[0]);
+      if (objects.length === 0) return text;
 
-      const matchingPair = pairs.find((pair) => {
+      const directPairs = objects[0].children().filter((c) => c.kind() === "pair");
+      const matchingPair = directPairs.find((pair) => {
         const key = pair.children().find((c) => c.kind() === "property_identifier");
         return key?.text() === propertyName;
       });

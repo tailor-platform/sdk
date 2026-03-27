@@ -179,6 +179,16 @@ describe("codemod-engine", () => {
       expect(output).toContain("// Uses emitEvents");
       expect(output).toContain("emitEvents: true");
     });
+
+    it("should not corrupt longer identifiers that contain the renamed name as a substring", () => {
+      const source = `import { publish, publishEvents } from "sdk";\npublish();\npublishEvents();`;
+      const { output } = renameIdentifiers(source, "publish", "emit");
+      expect(output).toContain("emit,");
+      expect(output).toContain("emit()");
+      // publishEvents must NOT become emitEvents
+      expect(output).toContain("publishEvents");
+      expect(output).not.toContain("emitEvents");
+    });
   });
 
   describe("batchRename", () => {
@@ -572,6 +582,14 @@ describe("codemod-engine", () => {
         expect(count).toBe(1);
         expect(output).toBe(`setup({ a: 1, c: 3 });`);
       });
+
+      it("should remove direct property, not nested one with same name", () => {
+        const source = `setup({ nested: { alpha: 1 }, alpha: 2 });`;
+        const { output, count } = removeProperty(source, "setup($$$ARGS)", "alpha");
+        expect(count).toBe(1);
+        // Should remove the direct alpha: 2, not the nested alpha: 1
+        expect(output).toBe(`setup({ nested: { alpha: 1 } });`);
+      });
     });
 
     describe("addProperty", () => {
@@ -587,6 +605,14 @@ describe("codemod-engine", () => {
         const { output, count } = addProperty(source, "setup($$$ARGS)", "alpha", "2");
         expect(count).toBe(1);
         expect(output).toBe(source);
+      });
+
+      it("should add property even when nested object has same name", () => {
+        const source = `setup({ nested: { beta: 1 } });`;
+        const { output, count } = addProperty(source, "setup($$$ARGS)", "beta", "2");
+        expect(count).toBe(1);
+        // beta exists only in the nested object, so it should be added to the outer object
+        expect(output).toBe(`setup({ nested: { beta: 1 }, beta: 2 });`);
       });
 
       it("should add to empty object", () => {
@@ -702,6 +728,19 @@ describe("codemod-engine", () => {
         );
         expect(count).toBe(1);
         expect(output).toBe(`config({ handler: createHandler("new") });`);
+      });
+
+      it("should replace direct property value, not nested one with same name", () => {
+        const source = `setup({ nested: { val: "inner" }, val: "outer" });`;
+        const { output, count } = replacePropertyValue(
+          source,
+          "setup($$$ARGS)",
+          "val",
+          () => `"replaced"`,
+        );
+        expect(count).toBe(1);
+        // Should replace the direct val, not the nested one
+        expect(output).toBe(`setup({ nested: { val: "inner" }, val: "replaced" });`);
       });
     });
 
