@@ -253,6 +253,55 @@ const { output, count } = replacePropertyValue(
 );
 ```
 
+#### `renamePropertyAccess(source, receiverPattern, oldProp, newProp, lang?)`
+
+Rename a property in member access expressions, handling both `.` and `?.`
+access. Matches `receiverPattern.oldProp` and `receiverPattern?.oldProp`
+patterns and renames only the property identifier. Returns `{ output, count }`.
+
+```typescript
+// Renames context.user.attributes and context.user.attributes?.role
+// but NOT element.attributes
+const { output, count } = renamePropertyAccess(
+  source,
+  "$A.user", // receiver pattern
+  "attributes", // old property name
+  "map", // new property name
+);
+return count > 0 ? output : null;
+```
+
+**Note:** The receiver pattern must match the exact access operator.
+`$A.user` matches `context.user` (dot) but not `context?.user` (optional chain).
+To match both, apply twice with different receiver patterns, or use a broad
+pattern like `$A`.
+
+#### `transformTupleArgsToCall(source, callName, mappings, lang?)`
+
+Transform tuple arguments in function calls to individual function calls
+using a mapping table. Converts `["pkg-name", config]` to `fnName(config)`.
+Returns `{ output, count, imports }` where `imports` lists the functions
+used (for adding import statements via `addImportSpecifier`).
+
+```typescript
+const { output, count, imports } = transformTupleArgsToCall(source, "defineGenerators", [
+  {
+    packageName: "@tailor-platform/kysely-type",
+    functionName: "kyselyTypePlugin",
+    importPath: "@tailor-platform/sdk/plugin/kysely-type",
+  },
+  {
+    packageName: "@tailor-platform/enum-constants",
+    functionName: "enumConstantsPlugin",
+    importPath: "@tailor-platform/sdk/plugin/enum-constants",
+  },
+]);
+// imports: [{ specifier: "kyselyTypePlugin", path: "..." }, ...]
+// Use addImportSpecifier() to add the required imports
+```
+
+Unknown packages and non-array arguments are preserved as-is.
+
 #### `transformCallArguments(source, functionName, transformer, lang?)`
 
 Transform the arguments of function calls matching a name pattern. The
@@ -260,22 +309,6 @@ Transform the arguments of function calls matching a name pattern. The
 filtered out) and returns the new arguments string. The function name is
 preserved; use `renameIdentifiers` separately to change it.
 Returns `{ output, count }`.
-
-```typescript
-const { output, count } = transformCallArguments(source, "defineGenerators", (args) => {
-  return args
-    .map((arg) => {
-      // Convert tuple ["pkg", opts] to plugin function call
-      const text = arg.text();
-      const match = text.match(/\["@tailor-platform\/(.+?)"(?:,\s*(.+))?\]/s);
-      if (!match) return text;
-      const [, pkgName, opts] = match;
-      const fnName = pkgName.replace(/-(\w)/g, (_, c) => c.toUpperCase()) + "Plugin";
-      return opts ? `${fnName}(${opts.trim()})` : `${fnName}()`;
-    })
-    .join(", ");
-});
-```
 
 Supports receiver patterns too: `transformCallArguments(source, "$OBJ.method", ...)`.
 
@@ -400,29 +433,32 @@ Use this to choose the right transformation strategy:
    - Yes → `renamePropertyInPattern` (renames only within pattern matches)
 4. **Does the migration involve both a method rename AND a property rename?**
    - Yes → Hybrid: `applyPatternReplace` for method + `renameIdentifiers` for property
-5. **Do function arguments need restructuring?**
-   - Yes → `transformCallArguments` (receives parsed args, returns new arg string)
+5. **Is the target a property access in a chain** (e.g., `context.user.attributes`)?
+   - Yes → `renamePropertyAccess` (handles both `.` and `?.` access)
+6. **Do function arguments need restructuring?**
+   - Tuple-to-call conversion → `transformTupleArgsToCall` (mapping table + auto import list)
+   - Other restructuring → `transformCallArguments` (receives parsed args, returns new arg string)
    - Complex cases → `applyPatternReplace` with `$$$ARGS` + `getArgs`
-6. **Does a property value need to be replaced (not the key)?**
+7. **Does a property value need to be replaced (not the key)?**
    - Yes → `replacePropertyValue` with replacer function
-7. **Does a nested property need renaming at a specific path?**
+8. **Does a nested property need renaming at a specific path?**
    - Yes → `renamePropertyAtPath` (dot-separated path to target)
-8. **Does a property need to be added to or removed from an object?**
+9. **Does a property need to be added to or removed from an object?**
    - Add → `addProperty` with pattern match
    - Remove → `removeProperty` with pattern match
-9. **Does an expression need to be wrapped?**
-   - Yes → `wrapExpression` with `$EXPR` placeholder
-10. **Does an import specifier need to be added, removed, or renamed?**
+10. **Does an expression need to be wrapped?**
+    - Yes → `wrapExpression` with `$EXPR` placeholder
+11. **Does an import specifier need to be added, removed, or renamed?**
     - Add → `addImportSpecifier`
     - Remove → `removeImportSpecifier`
     - Rename (import only, not body) → `renameImportSpecifier`
-11. **Is the target a string literal** (e.g. import path)?
+12. **Is the target a string literal** (e.g. import path)?
     - Yes → `source.includes()` + `replaceAll` (AST helpers don't match strings)
-12. **Is the change behavior-only (no code fix, just warn)?**
+13. **Is the change behavior-only (no code fix, just warn)?**
     - Yes → `createWarningRule` (emits warnings without modifying files)
-13. **Does the rule need to scan non-TypeScript files?**
+14. **Does the rule need to scan non-TypeScript files?**
     - Yes → Set `filePatterns` on the rule metadata
-14. **Does the rule need to transform JSON files** (e.g., package.json)?
+15. **Does the rule need to transform JSON files** (e.g., package.json)?
     - Yes → Use `transformJsonFile` in a manual rule (JSON is not AST-parsed)
 
 ## Common Patterns
@@ -749,15 +785,62 @@ export const updatedAtDefaultRule = createWarningRule(
 The scan function can return a single string, an array of strings, or
 null. The returned `WarningRule` exposes `scanSource` for direct testing.
 
-### Function argument restructuring
+### Property access rename (dot and optional chain)
 
-Use `transformCallArguments` when function call arguments need structural
-changes (e.g., tuple to function call conversion). The transformer receives
-parsed argument nodes and returns the new arguments string:
+Use `renamePropertyAccess` to rename a property in member access chains,
+handling both `.prop` and `?.prop` access. Scoped by receiver pattern:
 
 ```typescript
-import { transformCallArguments, renameIdentifiers } from "../../codemod-engine";
+import { renamePropertyAccess } from "../../codemod-engine";
 import { createRule } from "../../rule-helpers";
+
+export const contextAttributesRule = createRule(
+  {
+    id: "v2/my-rule",
+    name: "...",
+    description: "...",
+    since: "1.0.0",
+    until: "2.0.0",
+  },
+  (source) => {
+    // Renames context.user.attributes and context.user.attributes?.role
+    // but NOT element.attributes
+    const { output, count } = renamePropertyAccess(
+      source,
+      "$A.user", // receiver pattern
+      "attributes", // old property name
+      "map", // new property name
+    );
+    return count > 0 ? output : null;
+  },
+);
+```
+
+### Tuple-to-call argument transformation (generator to plugin)
+
+Use `transformTupleArgsToCall` with `addImportSpecifier` for converting
+tuple-based arguments to function calls using a mapping table:
+
+```typescript
+import {
+  addImportSpecifier,
+  renameIdentifiers,
+  transformTupleArgsToCall,
+} from "../../codemod-engine";
+import { createRule } from "../../rule-helpers";
+
+const pluginMappings = [
+  {
+    packageName: "@tailor-platform/kysely-type",
+    functionName: "kyselyTypePlugin",
+    importPath: "@tailor-platform/sdk/plugin/kysely-type",
+  },
+  {
+    packageName: "@tailor-platform/enum-constants",
+    functionName: "enumConstantsPlugin",
+    importPath: "@tailor-platform/sdk/plugin/enum-constants",
+  },
+];
 
 export const generatorsToPluginsRule = createRule(
   {
@@ -771,25 +854,20 @@ export const generatorsToPluginsRule = createRule(
     let result = source;
     let changed = false;
 
-    // Transform arguments from tuples to plugin calls
-    const r1 = transformCallArguments(result, "defineGenerators", (args) => {
-      return args
-        .map((arg) => {
-          const text = arg.text();
-          const match = text.match(/\["@tailor-platform\/(.+?)"(?:,\s*(.+))?\]/s);
-          if (!match) return text;
-          const [, pkgName, opts] = match;
-          const fnName = pkgName.replace(/-(\w)/g, (_, c: string) => c.toUpperCase()) + "Plugin";
-          return opts ? `${fnName}(${opts.trim()})` : `${fnName}()`;
-        })
-        .join(", ");
-    });
+    // Transform tuple arguments to function calls
+    const r1 = transformTupleArgsToCall(result, "defineGenerators", pluginMappings);
     if (r1.count > 0) {
       result = r1.output;
       changed = true;
+
+      // Add required imports
+      for (const imp of r1.imports) {
+        const r = addImportSpecifier(result, imp.specifier, imp.path);
+        result = r.output;
+      }
     }
 
-    // Rename the function itself
+    // Rename the function and variable
     const r2 = renameIdentifiers(result, "defineGenerators", "definePlugins");
     if (r2.count > 0) {
       result = r2.output;
@@ -800,6 +878,10 @@ export const generatorsToPluginsRule = createRule(
   },
 );
 ```
+
+### Function argument restructuring (general)
+
+Use `transformCallArguments` for custom argument restructuring logic:
 
 ### Property value replacement
 
@@ -1016,7 +1098,8 @@ replacement. This means:
 | ---------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
 | Low        | Long, domain-specific (e.g. `recordCreatedTrigger`, `defineGenerators`) | `renameIdentifiers` or `batchRename`                                             |
 | Medium     | Short but scoped to a context (e.g. `type` as a method name)            | `applyPatternReplace` with receiver guard                                        |
-| High       | Common word scoped to specific calls (e.g. `attributes` in auth)        | `renamePropertyInPattern` (scopes rename to pattern matches only)                |
+| High       | Common word in property access (e.g. `attributes` in `context.user`)    | `renamePropertyAccess` with receiver pattern                                     |
+| High       | Common word scoped to specific calls (e.g. `attributes` in auth config) | `renamePropertyInPattern` (scopes rename to pattern matches only)                |
 | Very High  | Common word in many contexts (e.g. `name`, `value`)                     | `applyPatternReplace` with narrow AST pattern + manual replacer; avoid any `All` |
 
 ## Rule Ordering
