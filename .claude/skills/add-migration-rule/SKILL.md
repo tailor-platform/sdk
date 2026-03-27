@@ -188,6 +188,62 @@ const matches = findIdentifiers(source, "publishEvents");
 // Returns matches in both: import { publishEvents } and { publishEvents: true }
 ```
 
+#### `renamePropertyInPattern(source, pattern, oldProp, newProp, lang?)`
+
+Rename identifiers only within AST matches of a pattern. Prevents false
+positives by scoping the rename to matching contexts only. Internally uses
+`applyPatternReplace` + `renameIdentifiers` on the matched subtext.
+
+```typescript
+const { output, count } = renamePropertyInPattern(
+  source,
+  "defineAuth($$$ARGS)",
+  "attributes",
+  "map",
+);
+return count > 0 && output !== source ? output : null;
+```
+
+**Note:** `count` is the number of pattern matches processed (not individual
+identifier renames). Check `output !== source` to determine if anything
+actually changed.
+
+#### `renameImportSpecifier(source, oldName, newName, moduleSpecifier?, lang?)`
+
+Rename a named import specifier within import declarations only. Does not
+affect code body usage. Returns `{ output, count }`.
+
+#### `removeImportSpecifier(source, specifierName, moduleSpecifier?, lang?)`
+
+Remove a named import specifier. Removes the entire import statement if
+it was the last specifier. Returns `{ output, count }`.
+
+#### `addImportSpecifier(source, specifierName, moduleSpecifier, lang?)`
+
+Add a named import to an existing import statement, or create a new one.
+Detects duplicates (returns count 0 if already present). Returns `{ output, count }`.
+
+#### `removeProperty(source, objectPattern, propertyName, lang?)`
+
+Remove a key-value pair from objects within pattern matches. Handles
+comma cleanup. Returns `{ output, count }`.
+
+#### `addProperty(source, objectPattern, propertyName, propertyValue, lang?)`
+
+Add a property to objects within pattern matches. Detects duplicates.
+Returns `{ output, count }`.
+
+#### `wrapExpression(source, pattern, wrapperTemplate, lang?)`
+
+Wrap matched expressions using a template with `$EXPR` placeholder.
+Returns `{ output, count }`.
+
+### `createWarningRule(meta, scanSource)` (from rule-helpers.ts)
+
+Create a rule that scans files and emits warnings without modifying them.
+The scan function receives `(source, file)` and returns `string`, `string[]`,
+or `null`. The returned `WarningRule` exposes `scanSource` for testing.
+
 ### Low-level API
 
 #### `findPattern(source, pattern, lang?)`
@@ -255,12 +311,27 @@ Use this to choose the right transformation strategy:
    - Multiple related renames → `batchRename` (auto-sorts by length)
 2. **Is the target an ambiguous method name** (e.g. `type` on a specific object)?
    - Yes → `applyPatternReplace` with receiver guard + `getArgs`
-3. **Does the migration involve both a method rename AND a property rename?**
+3. **Is the target a common property name that must be scoped to a specific context?**
+   - Yes → `renamePropertyInPattern` (renames only within pattern matches)
+4. **Does the migration involve both a method rename AND a property rename?**
    - Yes → Hybrid: `applyPatternReplace` for method + `renameIdentifiers` for property
-4. **Do function arguments need restructuring?**
+5. **Do function arguments need restructuring?**
    - Yes → `applyPatternReplace` with `$$$ARGS` + `getArgs`
-5. **Is the target a string literal** (e.g. import path)?
+6. **Does a property need to be added to or removed from an object?**
+   - Add → `addProperty` with pattern match
+   - Remove → `removeProperty` with pattern match
+7. **Does an expression need to be wrapped?**
+   - Yes → `wrapExpression` with `$EXPR` placeholder
+8. **Does an import specifier need to be added, removed, or renamed?**
+   - Add → `addImportSpecifier`
+   - Remove → `removeImportSpecifier`
+   - Rename (import only, not body) → `renameImportSpecifier`
+9. **Is the target a string literal** (e.g. import path)?
    - Yes → `source.includes()` + `replaceAll` (AST helpers don't match strings)
+10. **Is the change behavior-only (no code fix, just warn)?**
+    - Yes → `createWarningRule` (emits warnings without modifying files)
+11. **Does the rule need to scan non-TypeScript files?**
+    - Yes → Set `filePatterns` on the rule metadata
 
 ## Common Patterns
 
@@ -274,7 +345,13 @@ import { renameIdentifiers } from "../../codemod-engine";
 import { createRule } from "../../rule-helpers";
 
 export const myRenameRule = createRule(
-  { id: "v2/my-rule", name: "...", description: "...", since: "1.0.0", until: "2.0.0" },
+  {
+    id: "v2/my-rule",
+    name: "...",
+    description: "...",
+    since: "1.0.0",
+    until: "2.0.0",
+  },
   (source) => {
     const { output, count } = renameIdentifiers(source, "oldName", "newName");
     return count > 0 ? output : null;
@@ -297,7 +374,13 @@ const renames = new Map([
 ]);
 
 export const triggerRenameRule = createRule(
-  { id: "v2/my-rule", name: "...", description: "...", since: "1.0.0", until: "2.0.0" },
+  {
+    id: "v2/my-rule",
+    name: "...",
+    description: "...",
+    since: "1.0.0",
+    until: "2.0.0",
+  },
   (source) => {
     const { output, count } = batchRename(source, renames);
     return count > 0 ? output : null;
@@ -316,7 +399,13 @@ import { applyPatternReplace, getArgs } from "../../codemod-engine";
 import { createRule } from "../../rule-helpers";
 
 export const dbTypeToModelRule = createRule(
-  { id: "v2/my-rule", name: "...", description: "...", since: "1.0.0", until: "2.0.0" },
+  {
+    id: "v2/my-rule",
+    name: "...",
+    description: "...",
+    since: "1.0.0",
+    until: "2.0.0",
+  },
   (source) => {
     const result = applyPatternReplace(source, "$OBJ.type($$$ARGS)", (node) => {
       const obj = node.getMatch("OBJ")!.text();
@@ -339,7 +428,13 @@ import { applyPatternReplace, getArgs, renameIdentifiers } from "../../codemod-e
 import { createRule } from "../../rule-helpers";
 
 export const authInvokerRenameRule = createRule(
-  { id: "v2/my-rule", name: "...", description: "...", since: "1.0.0", until: "2.0.0" },
+  {
+    id: "v2/my-rule",
+    name: "...",
+    description: "...",
+    since: "1.0.0",
+    until: "2.0.0",
+  },
   (source) => {
     let result = source;
     let totalChanged = 0;
@@ -365,6 +460,150 @@ export const authInvokerRenameRule = createRule(
 );
 ```
 
+### Context-limited property rename (high false-positive names)
+
+When a property name like `attributes` is too common for global rename,
+use `renamePropertyInPattern` to scope the rename to a specific call:
+
+```typescript
+import { renamePropertyInPattern } from "../../codemod-engine";
+import { createRule } from "../../rule-helpers";
+
+export const authAttributesRule = createRule(
+  {
+    id: "v2/my-rule",
+    name: "...",
+    description: "...",
+    since: "1.0.0",
+    until: "2.0.0",
+  },
+  (source) => {
+    const { output, count } = renamePropertyInPattern(
+      source,
+      "defineAuth($$$ARGS)",
+      "attributes",
+      "map",
+    );
+    return count > 0 && output !== source ? output : null;
+  },
+);
+```
+
+This renames `attributes` only inside `defineAuth(...)` calls, leaving
+global `attributes` variables untouched.
+
+### Import specifier manipulation
+
+Use `renameImportSpecifier`, `removeImportSpecifier`, and
+`addImportSpecifier` to modify import statements precisely.
+
+```typescript
+import { addImportSpecifier, removeImportSpecifier } from "../../codemod-engine";
+import { createRule } from "../../rule-helpers";
+
+export const migrateImportsRule = createRule(
+  {
+    id: "v2/my-rule",
+    name: "...",
+    description: "...",
+    since: "1.0.0",
+    until: "2.0.0",
+  },
+  (source) => {
+    let result = source;
+    let changed = false;
+
+    // Remove old import
+    const r1 = removeImportSpecifier(result, "defineGenerators", "@tailor-platform/sdk");
+    if (r1.count > 0) {
+      result = r1.output;
+      changed = true;
+    }
+
+    // Add new import
+    const r2 = addImportSpecifier(result, "definePlugins", "@tailor-platform/sdk");
+    if (r2.count > 0) {
+      result = r2.output;
+      changed = true;
+    }
+
+    return changed ? result : null;
+  },
+);
+```
+
+`renameImportSpecifier(source, oldName, newName, moduleSpecifier?)` renames
+a specifier only within import declarations (not in code body). Useful when
+the import name changes but usage is handled by a separate rename pass.
+
+### Structural changes (add/remove object properties)
+
+Use `removeProperty` and `addProperty` for object restructuring within
+pattern matches:
+
+```typescript
+import { addProperty, removeProperty } from "../../codemod-engine";
+import { createRule } from "../../rule-helpers";
+
+export const configMigrationRule = createRule(
+  {
+    id: "v2/my-rule",
+    name: "...",
+    description: "...",
+    since: "1.0.0",
+    until: "2.0.0",
+  },
+  (source) => {
+    let result = source;
+    let changed = false;
+
+    // Remove deprecated property
+    const r1 = removeProperty(result, "defineConfig($$$ARGS)", "legacyOption");
+    if (r1.count > 0 && r1.output !== result) {
+      result = r1.output;
+      changed = true;
+    }
+
+    // Add new required property
+    const r2 = addProperty(result, "defineConfig($$$ARGS)", "newOption", "true");
+    if (r2.count > 0 && r2.output !== result) {
+      result = r2.output;
+      changed = true;
+    }
+
+    return changed ? result : null;
+  },
+);
+```
+
+### Expression wrapping
+
+Use `wrapExpression` to wrap matched expressions in a template.
+`$EXPR` in the template is replaced with the matched text:
+
+```typescript
+import { wrapExpression } from "../../codemod-engine";
+import { createRule } from "../../rule-helpers";
+
+export const wrapWithMiddlewareRule = createRule(
+  {
+    id: "v2/my-rule",
+    name: "...",
+    description: "...",
+    since: "1.0.0",
+    until: "2.0.0",
+  },
+  (source) => {
+    const { output, count } = wrapExpression(
+      source,
+      "createResolver($$$ARGS)",
+      "withMiddleware($EXPR)",
+    );
+    return count > 0 ? output : null;
+  },
+);
+```
+
 ### Import path rename (string literal)
 
 For import path changes, AST helpers don't match string literals. Use
@@ -374,13 +613,75 @@ For import path changes, AST helpers don't match string literals. Use
 import { createRule } from "../../rule-helpers";
 
 export const importPathRule = createRule(
-  { id: "v2/my-rule", name: "...", description: "...", since: "1.0.0", until: "2.0.0" },
+  {
+    id: "v2/my-rule",
+    name: "...",
+    description: "...",
+    since: "1.0.0",
+    until: "2.0.0",
+  },
   (source) => {
     if (!source.includes("@tailor-platform/sdk/tailordb")) return null;
     return source.replaceAll("@tailor-platform/sdk/tailordb", "@tailor-platform/sdk/schema");
   },
 );
 ```
+
+### Warning-only rule (behavior changes, deprecation notices)
+
+For changes that cannot be automated but need user attention, use
+`createWarningRule`. It scans files without modifying them:
+
+```typescript
+import { findIdentifiers } from "../../codemod-engine";
+import { createWarningRule } from "../../rule-helpers";
+
+export const updatedAtDefaultRule = createWarningRule(
+  {
+    id: "v2/my-rule",
+    name: "...",
+    description: "...",
+    since: "1.0.0",
+    until: "2.0.0",
+  },
+  (source, file) => {
+    const matches = findIdentifiers(source, "timestamps");
+    if (matches.length > 0) {
+      return `${file}: updatedAt now defaults to current time on creation. Review timestamp behavior.`;
+    }
+    return null; // no warning for this file
+  },
+);
+```
+
+The scan function can return a single string, an array of strings, or
+null. The returned `WarningRule` exposes `scanSource` for direct testing.
+
+### Non-TypeScript file rules (scripts, JSON, CI configs)
+
+Rules that need to scan non-TypeScript files set `filePatterns`:
+
+```typescript
+import { createRule } from "../../rule-helpers";
+
+export const cliCommandRenameRule = createRule(
+  {
+    id: "v2/my-rule",
+    name: "...",
+    description: "...",
+    since: "1.0.0",
+    until: "2.0.0",
+    filePatterns: ["**/*.sh", "**/*.yml", "**/*.yaml", "**/package.json"],
+  },
+  (source) => {
+    if (!source.includes("tailor-sdk apply")) return null;
+    return source.replaceAll("tailor-sdk apply", "tailor-sdk deploy");
+  },
+);
+```
+
+Default patterns (`**/*.{ts,tsx,mts,cts}`) apply when `filePatterns` is
+omitted. The `node_modules`, `dist`, and `.git` exclusions always apply.
 
 ### Advanced: manual rule (when `createRule` is not enough)
 
@@ -456,11 +757,12 @@ replacement. This means:
 - **Replacement covers comments**: if the identifier exists in both code
   and a comment, both are renamed. This is desirable for migration.
 
-| Risk level | Name characteristics                                                    | Strategy                                                          |
-| ---------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| Low        | Long, domain-specific (e.g. `recordCreatedTrigger`, `defineGenerators`) | `renameIdentifiers` or `batchRename`                              |
-| Medium     | Short but scoped to a context (e.g. `type` as a method name)            | `applyPatternReplace` with receiver guard                         |
-| High       | Common word that appears in many contexts (e.g. `name`, `value`)        | `applyPatternReplace` with narrow AST pattern; avoid `replaceAll` |
+| Risk level | Name characteristics                                                    | Strategy                                                                         |
+| ---------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Low        | Long, domain-specific (e.g. `recordCreatedTrigger`, `defineGenerators`) | `renameIdentifiers` or `batchRename`                                             |
+| Medium     | Short but scoped to a context (e.g. `type` as a method name)            | `applyPatternReplace` with receiver guard                                        |
+| High       | Common word scoped to specific calls (e.g. `attributes` in auth)        | `renamePropertyInPattern` (scopes rename to pattern matches only)                |
+| Very High  | Common word in many contexts (e.g. `name`, `value`)                     | `applyPatternReplace` with narrow AST pattern + manual replacer; avoid any `All` |
 
 ## Rule Ordering
 
