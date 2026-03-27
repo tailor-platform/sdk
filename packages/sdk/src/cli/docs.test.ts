@@ -87,6 +87,10 @@ const files: Record<string, FileConfig> = {
     commands: ["organization"],
     render: defaultRender,
   },
+  "docs/cli/upgrade.md": {
+    commands: ["upgrade"],
+    render: defaultRender,
+  },
 };
 
 // Auto-generate targetCommands from files
