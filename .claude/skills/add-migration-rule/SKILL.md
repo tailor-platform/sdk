@@ -97,7 +97,12 @@ describe("<rule-name> rule", () => {
 
 **Multi-pass test**: Test each helper pass independently, then end-to-end.
 
-**Important**: `renameIdentifiers`/`batchRename` use `replaceAll` internally — transforms comments/strings too. Fixtures must reflect comment changes.
+**Important — comment/string transformation scope**: Helpers differ in how they handle comments and strings outside the matched AST node:
+
+- **Source-wide** (`renameIdentifiers`, `batchRename`): Apply `replaceAll` across the entire source. Comments and strings everywhere are renamed.
+- **Pattern-scoped** (`renamePropertyInPattern`, `renamePropertyAccess`, `applyPatternReplace`): Only transform text within matched AST nodes. Comments and strings **outside** the pattern match are **NOT** renamed.
+
+When writing fixtures for pattern-scoped helpers, comments outside the matched call/expression must remain unchanged in `output.ts`. For multi-pass rules mixing both types, track which comments each pass can reach.
 
 ### 4. Verify
 
@@ -113,24 +118,24 @@ All helpers accept optional `lang?` param (defaults to TypeScript).
 
 ### High-level (preferred)
 
-| Helper                     | Signature                                     | Returns                    | Notes                                                                                     |
-| -------------------------- | --------------------------------------------- | -------------------------- | ----------------------------------------------------------------------------------------- |
-| `renameIdentifiers`        | `(source, old, new)`                          | `{output, count}`          | AST-detects `identifier` + `property_identifier`, then `replaceAll` (includes comments)   |
-| `batchRename`              | `(source, Map<old,new>)`                      | `{output, count}`          | Auto-sorts longest-first to prevent substring conflicts                                   |
-| `findIdentifiers`          | `(source, name)`                              | `SgNode[]`                 | Finds `identifier` and `property_identifier` nodes                                        |
-| `getArgs`                  | `(node, name)`                                | `SgNode[]`                 | Extracts args from `$$$NAME` capture, filters comma separators                            |
-| `renamePropertyInPattern`  | `(source, pattern, oldProp, newProp)`         | `{output, count}`          | Renames only within pattern matches. `count` = pattern matches, check `output !== source` |
-| `renameImportSpecifier`    | `(source, old, new, module?)`                 | `{output, count}`          | Import declarations only, not code body                                                   |
-| `removeImportSpecifier`    | `(source, name, module?)`                     | `{output, count}`          | Removes entire import if last specifier                                                   |
-| `addImportSpecifier`       | `(source, name, module)`                      | `{output, count}`          | Creates import if needed, deduplicates                                                    |
-| `removeProperty`           | `(source, objectPattern, prop)`               | `{output, count}`          | Handles comma cleanup                                                                     |
-| `addProperty`              | `(source, objectPattern, prop, value)`        | `{output, count}`          | Deduplicates                                                                              |
-| `wrapExpression`           | `(source, pattern, template)`                 | `{output, count}`          | `$EXPR` placeholder in template                                                           |
-| `replacePropertyValue`     | `(source, objectPattern, prop, replacer)`     | `{output, count}`          | `replacer(valueNode) => string`                                                           |
-| `renamePropertyAccess`     | `(source, receiverPattern, oldProp, newProp)` | `{output, count}`          | Handles `.` and `?.`. Pattern must match exact operator                                   |
-| `transformTupleArgsToCall` | `(source, callName, mappings)`                | `{output, count, imports}` | Converts `["pkg", config]` to `fn(config)`. Use `addImportSpecifier` for `imports`        |
-| `transformCallArguments`   | `(source, fnName, transformer)`               | `{output, count}`          | `transformer(argNodes[]) => string`. Supports `$OBJ.method` patterns                      |
-| `renamePropertyAtPath`     | `(source, rootPattern, dotPath, old, new)`    | `{output, count}`          | Dot-separated path (e.g. `"userProfile"`). Empty string for root                          |
+| Helper                     | Signature                                     | Returns                    | Notes                                                                                                      |
+| -------------------------- | --------------------------------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `renameIdentifiers`        | `(source, old, new)`                          | `{output, count}`          | AST-detects `identifier` + `property_identifier`, then `replaceAll` (includes comments)                    |
+| `batchRename`              | `(source, Map<old,new>)`                      | `{output, count}`          | Auto-sorts longest-first to prevent substring conflicts                                                    |
+| `findIdentifiers`          | `(source, name)`                              | `SgNode[]`                 | Finds `identifier` and `property_identifier` nodes                                                         |
+| `getArgs`                  | `(node, name)`                                | `SgNode[]`                 | Extracts args from `$$$NAME` capture, filters comma separators                                             |
+| `renamePropertyInPattern`  | `(source, pattern, oldProp, newProp)`         | `{output, count}`          | Renames only within pattern matches (pattern-scoped). `count` = pattern matches, check `output !== source` |
+| `renameImportSpecifier`    | `(source, old, new, module?)`                 | `{output, count}`          | Import declarations only, not code body                                                                    |
+| `removeImportSpecifier`    | `(source, name, module?)`                     | `{output, count}`          | Removes entire import if last specifier                                                                    |
+| `addImportSpecifier`       | `(source, name, module)`                      | `{output, count}`          | Creates import if needed, deduplicates                                                                     |
+| `removeProperty`           | `(source, objectPattern, prop)`               | `{output, count}`          | Handles comma cleanup                                                                                      |
+| `addProperty`              | `(source, objectPattern, prop, value)`        | `{output, count}`          | Deduplicates                                                                                               |
+| `wrapExpression`           | `(source, pattern, template)`                 | `{output, count}`          | `$EXPR` placeholder in template                                                                            |
+| `replacePropertyValue`     | `(source, objectPattern, prop, replacer)`     | `{output, count}`          | `replacer(valueNode) => string`                                                                            |
+| `renamePropertyAccess`     | `(source, receiverPattern, oldProp, newProp)` | `{output, count}`          | Handles `.` and `?.` (pattern-scoped). Pattern must match exact operator                                   |
+| `transformTupleArgsToCall` | `(source, callName, mappings)`                | `{output, count, imports}` | Converts `["pkg", config]` to `fn(config)`. Use `addImportSpecifier` for `imports`                         |
+| `transformCallArguments`   | `(source, fnName, transformer)`               | `{output, count}`          | `transformer(argNodes[]) => string`. Supports `$OBJ.method` patterns                                       |
+| `renamePropertyAtPath`     | `(source, rootPattern, dotPath, old, new)`    | `{output, count}`          | Dot-separated path (e.g. `"userProfile"`). Empty string for root                                           |
 
 ### Low-level
 
