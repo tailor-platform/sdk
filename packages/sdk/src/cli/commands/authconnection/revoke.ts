@@ -47,7 +47,7 @@ export const revokeAuthConnectionCommand = defineAppCommand({
       });
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
-        throw new Error(`Auth connection "${args.name}" not found.`);
+        throw new Error(`Auth connection "${args.name}" not found.`, { cause: error });
       }
       throw error;
     }
