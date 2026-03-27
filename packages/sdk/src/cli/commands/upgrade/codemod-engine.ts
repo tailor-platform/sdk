@@ -880,6 +880,140 @@ export function renamePropertyAtPath(
 }
 
 // ---------------------------------------------------------------------------
+// Property access rename (dot and optional chain)
+// ---------------------------------------------------------------------------
+
+/**
+ * Rename a property in member access expressions, handling both `.` and `?.` access.
+ *
+ * Matches `receiverPattern.oldProp` and `receiverPattern?.oldProp` patterns and
+ * renames only the property identifier. This is useful for renaming properties in
+ * access chains like `context.user.attributes` without affecting unrelated identifiers.
+ * @param source - Source code to transform
+ * @param receiverPattern - ast-grep pattern for the object receiver (e.g., "$A.user" or "$A")
+ * @param oldProp - Current property name to rename
+ * @param newProp - New property name
+ * @param lang - Language to parse as (defaults to TypeScript)
+ * @returns Object with the new source and count of renames made
+ */
+export function renamePropertyAccess(
+  source: string,
+  receiverPattern: string,
+  oldProp: string,
+  newProp: string,
+  lang: Lang = Lang.TypeScript,
+): { output: string; count: number } {
+  const replacer = (node: SgNode): string => {
+    const text = node.text();
+    // The property name is at the very end of the member expression text
+    if (text.endsWith(oldProp)) {
+      return text.slice(0, text.length - oldProp.length) + newProp;
+    }
+    return text;
+  };
+
+  // Match regular dot access: receiver.oldProp
+  const dotResult = applyPatternReplace(source, `${receiverPattern}.${oldProp}`, replacer, lang);
+
+  // Match optional chain access: receiver?.oldProp
+  const chainResult = applyPatternReplace(
+    dotResult.output,
+    `${receiverPattern}?.${oldProp}`,
+    replacer,
+    lang,
+  );
+
+  return {
+    output: chainResult.output,
+    count: dotResult.count + chainResult.count,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Tuple-to-call argument transformation
+// ---------------------------------------------------------------------------
+
+/**
+ * Mapping entry for transforming a tuple argument into a function call.
+ */
+export interface TupleToCallMapping {
+  /** Package name string in the tuple (e.g., "@tailor-platform/kysely-type") */
+  packageName: string;
+  /** Function name to call (e.g., "kyselyTypePlugin") */
+  functionName: string;
+  /** Import path for the function (e.g., "@tailor-platform/sdk/plugin/kysely-type") */
+  importPath: string;
+}
+
+/**
+ * Transform tuple arguments in function calls to individual function calls using a mapping table.
+ *
+ * Converts patterns like `callName(["pkg-name", config])` to `callName(fnName(config))`.
+ * Each tuple's first element (string literal) is looked up in the mappings. If found, the
+ * tuple is replaced with a function call. Unknown packages and non-array arguments are
+ * preserved as-is.
+ *
+ * The `imports` field in the return value lists which functions were used, so the caller
+ * can add the necessary import statements via `addImportSpecifier`.
+ * @param source - Source code to transform
+ * @param callName - Function name pattern to match (e.g., "defineGenerators")
+ * @param mappings - Array of package-to-function mappings
+ * @param lang - Language to parse as (defaults to TypeScript)
+ * @returns Object with the new source, count of calls transformed, and required imports
+ */
+export function transformTupleArgsToCall(
+  source: string,
+  callName: string,
+  mappings: readonly TupleToCallMapping[],
+  lang: Lang = Lang.TypeScript,
+): { output: string; count: number; imports: Array<{ specifier: string; path: string }> } {
+  const mappingLookup = new Map(mappings.map((m) => [m.packageName, m]));
+  const usedImports: Array<{ specifier: string; path: string }> = [];
+
+  const { output, count } = transformCallArguments(
+    source,
+    callName,
+    (args) => {
+      return args
+        .map((arg) => {
+          if (arg.kind() !== "array") return arg.text();
+
+          const elements = arg
+            .children()
+            .filter((c) => c.kind() !== "," && c.kind() !== "[" && c.kind() !== "]");
+          if (elements.length === 0) return arg.text();
+
+          // First element should be a string literal (package name)
+          const packageNode = elements[0];
+          if (packageNode.kind() !== "string") return arg.text();
+
+          const fragment = packageNode.children().find((c) => c.kind() === "string_fragment");
+          if (!fragment) return arg.text();
+
+          const packageName = fragment.text();
+          const mapping = mappingLookup.get(packageName);
+          if (!mapping) return arg.text();
+
+          usedImports.push({ specifier: mapping.functionName, path: mapping.importPath });
+
+          // Remaining elements are the config/options
+          const configParts = elements.slice(1);
+          if (configParts.length === 0) {
+            return `${mapping.functionName}()`;
+          }
+
+          const configText = configParts.map((c) => c.text()).join(", ");
+          return `${mapping.functionName}(${configText})`;
+        })
+        .join(", ");
+    },
+    lang,
+  );
+
+  return { output, count, imports: usedImports };
+}
+
+// ---------------------------------------------------------------------------
 // JSON file transformation
 // ---------------------------------------------------------------------------
 

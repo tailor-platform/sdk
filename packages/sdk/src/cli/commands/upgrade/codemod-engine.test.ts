@@ -17,12 +17,14 @@ import {
   removeProperty,
   renameIdentifiers,
   renameImportSpecifier,
+  renamePropertyAccess,
   renamePropertyAtPath,
   renamePropertyInPattern,
   replacePropertyValue,
   transformCallArguments,
   transformFile,
   transformJsonFile,
+  transformTupleArgsToCall,
   wrapExpression,
 } from "./codemod-engine";
 
@@ -873,6 +875,198 @@ describe("codemod-engine", () => {
         // Only a.target should be renamed, not b.target
         expect(output).toBe(`config({ a: { renamed: 1 }, b: { target: 2 } });`);
       });
+    });
+  });
+
+  describe("renamePropertyAccess", () => {
+    it("should rename dot access property with receiver pattern", () => {
+      const source = `const role = context.user.attributes.role;`;
+      const { output, count } = renamePropertyAccess(source, "$A.user", "attributes", "map");
+      expect(count).toBe(1);
+      expect(output).toBe(`const role = context.user.map.role;`);
+    });
+
+    it("should rename optional chain access property", () => {
+      const source = `const role = context.user.attributes?.role;`;
+      const { output, count } = renamePropertyAccess(source, "$A.user", "attributes", "map");
+      expect(count).toBe(1);
+      expect(output).toBe(`const role = context.user.map?.role;`);
+    });
+
+    it("should rename standalone property access (no further chaining)", () => {
+      const source = `const attrs = context.user.attributes;`;
+      const { output, count } = renamePropertyAccess(source, "$A.user", "attributes", "map");
+      expect(count).toBe(1);
+      expect(output).toBe(`const attrs = context.user.map;`);
+    });
+
+    it("should not rename property on different receiver", () => {
+      const source = `const x = element.attributes;`;
+      const { output, count } = renamePropertyAccess(source, "$A.user", "attributes", "map");
+      expect(count).toBe(0);
+      expect(output).toBe(source);
+    });
+
+    it("should handle both dot and optional chain in same source", () => {
+      const source = `const a = context.user.attributes.role;\nconst b = context.user.attributes?.name;`;
+      const { output, count } = renamePropertyAccess(source, "$A.user", "attributes", "map");
+      expect(count).toBe(2);
+      expect(output).toBe(`const a = context.user.map.role;\nconst b = context.user.map?.name;`);
+    });
+
+    it("should handle optional chain between receiver and property", () => {
+      // $A.user matches context.user (dot access), then ?.attributes is caught by the chain pattern
+      const source = `const role = context.user?.attributes?.role;`;
+      const { output, count } = renamePropertyAccess(source, "$A.user", "attributes", "map");
+      expect(count).toBe(1);
+      expect(output).toBe(`const role = context.user?.map?.role;`);
+    });
+
+    it("should match optional chain receiver when pattern uses optional chain", () => {
+      // context?.user uses ?. so $A?.user is needed to match
+      const source = `const role = context?.user?.attributes?.role;`;
+      const { output, count } = renamePropertyAccess(source, "$A?.user", "attributes", "map");
+      expect(count).toBe(1);
+      expect(output).toBe(`const role = context?.user?.map?.role;`);
+    });
+
+    it("should handle wildcard receiver pattern", () => {
+      const source = `const a = foo.attributes;\nconst b = bar.attributes?.x;`;
+      const { output, count } = renamePropertyAccess(source, "$A", "attributes", "map");
+      expect(count).toBe(2);
+      expect(output).toBe(`const a = foo.map;\nconst b = bar.map?.x;`);
+    });
+
+    it("should not rename identifiers outside property access", () => {
+      const source = `const attributes = getAttributes();\nconst x = context.user.attributes;`;
+      const { output, count } = renamePropertyAccess(source, "$A.user", "attributes", "map");
+      expect(count).toBe(1);
+      // Only the property access should be renamed, not the variable declaration
+      expect(output).toBe(`const attributes = getAttributes();\nconst x = context.user.map;`);
+    });
+
+    it("should handle multiple receivers", () => {
+      const source = `const a = ctx.user.attributes;\nconst b = other.user.attributes?.x;`;
+      const { output, count } = renamePropertyAccess(source, "$A.user", "attributes", "map");
+      expect(count).toBe(2);
+      expect(output).toBe(`const a = ctx.user.map;\nconst b = other.user.map?.x;`);
+    });
+
+    it("should handle deeply nested property access", () => {
+      const source = `const x = a.b.c.target.d;`;
+      const { output, count } = renamePropertyAccess(source, "$A.b.c", "target", "renamed");
+      expect(count).toBe(1);
+      expect(output).toBe(`const x = a.b.c.renamed.d;`);
+    });
+  });
+
+  describe("transformTupleArgsToCall", () => {
+    it("should transform single tuple argument", () => {
+      const source = `defineGenerators(["@tailor-platform/kysely-type", { distPath: "./db.ts" }])`;
+      const { output, count, imports } = transformTupleArgsToCall(source, "defineGenerators", [
+        {
+          packageName: "@tailor-platform/kysely-type",
+          functionName: "kyselyTypePlugin",
+          importPath: "@tailor-platform/sdk/plugin/kysely-type",
+        },
+      ]);
+      expect(count).toBe(1);
+      expect(output).toBe(`defineGenerators(kyselyTypePlugin({ distPath: "./db.ts" }))`);
+      expect(imports).toEqual([
+        { specifier: "kyselyTypePlugin", path: "@tailor-platform/sdk/plugin/kysely-type" },
+      ]);
+    });
+
+    it("should transform multiple tuple arguments", () => {
+      const source = `defineGenerators(\n  ["@tailor-platform/kysely-type", { distPath: "./db.ts" }],\n  ["@tailor-platform/enum-constants", { distPath: "./enums.ts" }],\n)`;
+      const mappings = [
+        {
+          packageName: "@tailor-platform/kysely-type",
+          functionName: "kyselyTypePlugin",
+          importPath: "@tailor-platform/sdk/plugin/kysely-type",
+        },
+        {
+          packageName: "@tailor-platform/enum-constants",
+          functionName: "enumConstantsPlugin",
+          importPath: "@tailor-platform/sdk/plugin/enum-constants",
+        },
+      ];
+      const { output, count, imports } = transformTupleArgsToCall(
+        source,
+        "defineGenerators",
+        mappings,
+      );
+      expect(count).toBe(1);
+      expect(output).toContain('kyselyTypePlugin({ distPath: "./db.ts" })');
+      expect(output).toContain('enumConstantsPlugin({ distPath: "./enums.ts" })');
+      expect(imports).toHaveLength(2);
+    });
+
+    it("should leave unknown packages unchanged", () => {
+      const source = `defineGenerators(["unknown-pkg", { opt: true }])`;
+      const { output, count, imports } = transformTupleArgsToCall(source, "defineGenerators", [
+        {
+          packageName: "@tailor-platform/kysely-type",
+          functionName: "kyselyTypePlugin",
+          importPath: "@tailor-platform/sdk/plugin/kysely-type",
+        },
+      ]);
+      expect(count).toBe(1);
+      // Unknown package tuple is preserved as-is
+      expect(output).toBe(`defineGenerators(["unknown-pkg", { opt: true }])`);
+      expect(imports).toHaveLength(0);
+    });
+
+    it("should handle tuple without config argument", () => {
+      const source = `defineGenerators(["@tailor-platform/kysely-type"])`;
+      const { output, count } = transformTupleArgsToCall(source, "defineGenerators", [
+        {
+          packageName: "@tailor-platform/kysely-type",
+          functionName: "kyselyTypePlugin",
+          importPath: "@tailor-platform/sdk/plugin/kysely-type",
+        },
+      ]);
+      expect(count).toBe(1);
+      expect(output).toBe(`defineGenerators(kyselyTypePlugin())`);
+    });
+
+    it("should return unchanged when no matching calls", () => {
+      const source = `definePlugins(kyselyTypePlugin())`;
+      const { output, count, imports } = transformTupleArgsToCall(source, "defineGenerators", []);
+      expect(count).toBe(0);
+      expect(output).toBe(source);
+      expect(imports).toHaveLength(0);
+    });
+
+    it("should handle non-array arguments (pass through unchanged)", () => {
+      const source = `defineGenerators(someVariable)`;
+      const { output, count } = transformTupleArgsToCall(source, "defineGenerators", [
+        {
+          packageName: "@tailor-platform/kysely-type",
+          functionName: "kyselyTypePlugin",
+          importPath: "@tailor-platform/sdk/plugin/kysely-type",
+        },
+      ]);
+      expect(count).toBe(1);
+      // Non-array argument is preserved as-is
+      expect(output).toBe(`defineGenerators(someVariable)`);
+    });
+
+    it("should deduplicate import entries", () => {
+      const source = `defineGenerators(\n  ["@tailor-platform/kysely-type", { a: 1 }],\n)\ndefineFoo(\n  ["@tailor-platform/kysely-type", { b: 2 }],\n)`;
+      const mappings = [
+        {
+          packageName: "@tailor-platform/kysely-type",
+          functionName: "kyselyTypePlugin",
+          importPath: "@tailor-platform/sdk/plugin/kysely-type",
+        },
+      ];
+      // Apply to both calls
+      const result1 = transformTupleArgsToCall(source, "defineGenerators", mappings);
+      const result2 = transformTupleArgsToCall(result1.output, "defineFoo", mappings);
+      // Imports from both calls
+      const allImports = [...result1.imports, ...result2.imports];
+      expect(allImports).toHaveLength(2); // Two occurrences, dedup is caller responsibility
     });
   });
 
