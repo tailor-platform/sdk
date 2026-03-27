@@ -1,3 +1,4 @@
+import * as fs from "node:fs";
 import { transformFile } from "./codemod-engine";
 import type { FileDiff, MigrationRule, TransformResult } from "./types";
 
@@ -8,6 +9,17 @@ import type { FileDiff, MigrationRule, TransformResult } from "./types";
 export interface SourceRule extends MigrationRule {
   /** The source-level transform function (exposed for fixture tests). */
   transformSource: (source: string) => string | null;
+}
+
+/** Scan function for warning-only rules. */
+export type WarningScanFn = (source: string, file: string) => string | string[] | null;
+
+/**
+ * A warning-only migration rule with the scan function exposed for testing.
+ */
+export interface WarningRule extends MigrationRule {
+  /** The scan function that produces warnings (exposed for direct testing). */
+  scanSource: WarningScanFn;
 }
 
 /**
@@ -51,6 +63,53 @@ export function createRule(
         filesModified,
         warnings: [],
         diffs: diffs.length > 0 ? diffs : undefined,
+      };
+    },
+  };
+}
+
+/**
+ * Create a warning-only migration rule that scans files without modifying them.
+ *
+ * Iterates over each file in the context, reads its content, and calls the
+ * scan function to collect warnings. Files are never written to. This is
+ * useful for detecting patterns that require manual intervention.
+ *
+ * The returned rule exposes `scanSource` so tests can call it directly.
+ * @param meta - Rule metadata (id, name, description, since, until)
+ * @param scanSource - Function that scans a single file's source code.
+ *   Return a warning string, an array of warning strings, or `null` if
+ *   no warnings are found.
+ * @returns A WarningRule with the transform function and exposed scanSource
+ * @public
+ */
+export function createWarningRule(
+  meta: Omit<MigrationRule, "transform">,
+  scanSource: WarningScanFn,
+): WarningRule {
+  return {
+    ...meta,
+    scanSource,
+    async transform(ctx): Promise<TransformResult> {
+      const warnings: string[] = [];
+
+      for (const file of ctx.files) {
+        const source = await fs.promises.readFile(file, "utf-8");
+        const result = scanSource(source, file);
+        if (result !== null) {
+          if (Array.isArray(result)) {
+            warnings.push(...result);
+          } else {
+            warnings.push(result);
+          }
+        }
+      }
+
+      return {
+        changed: false,
+        filesModified: [],
+        warnings,
+        diffs: undefined,
       };
     },
   };
