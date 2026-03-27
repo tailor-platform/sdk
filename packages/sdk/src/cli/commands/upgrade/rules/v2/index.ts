@@ -1,3 +1,6 @@
+import { authInvokerRenameRule } from "./auth-invoker-rename";
+import { defineGeneratorsRule } from "./define-generators";
+import { publishEventsRenameRule } from "./publish-events-rename";
 import type { MigrationRule } from "../../types";
 
 /**
@@ -5,8 +8,7 @@ import type { MigrationRule } from "../../types";
  * Add new rules to this array as breaking changes are finalized.
  */
 export const v2Rules: MigrationRule[] = [
-  // Rules will be added here as V2 breaking changes are finalized.
-  // Example:
-  // defineGeneratorsRule,
-  // attributesRenameRule,
+  defineGeneratorsRule,
+  publishEventsRenameRule,
+  authInvokerRenameRule,
 ];
