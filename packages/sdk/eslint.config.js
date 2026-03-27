@@ -26,8 +26,6 @@ export default defineConfig([
     "plugin-defined.d.ts",
     "**/__test_fixtures__/dist/",
     "**/__test_fixtures__/*-compat-out/",
-    "eslint-rules/__tests__/fixtures/",
-    "eslint-rules/*.d.ts",
   ]),
   eslint.configs.recommended,
   tseslint.configs.recommended,
