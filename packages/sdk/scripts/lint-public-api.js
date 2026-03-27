@@ -49,6 +49,8 @@ export function findUndocumentedSymbols(entryPoints, tsCompilerOptions, baseDir)
     );
   }
 
+  // TS Compiler API normalizes SourceFile.fileName to forward slashes on all
+  // platforms, so "/" is the correct separator here.
   function isExternal(symbol) {
     const decls = symbol.getDeclarations();
     if (!decls?.length) return true;

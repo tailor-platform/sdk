@@ -56,3 +56,6 @@ jobs:
 
       - name: Check package exports (publint)
         run: pnpm run publint
+
+      - name: Check public API documentation
+        run: pnpm run lint:public-api
