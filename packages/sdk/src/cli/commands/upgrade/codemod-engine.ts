@@ -648,13 +648,19 @@ export function addProperty(
       const objRange = obj.range();
       const objText = obj.text();
 
-      // Check if property already exists in direct children (not nested objects)
-      const pairs = obj.children().filter((c) => c.kind() === "pair");
-      const alreadyExists = pairs.some((p) => {
-        const key = p.children().find((c) => c.kind() === "property_identifier");
-        return key?.text() === propertyName;
-      });
-      if (alreadyExists) return text;
+      // Check if property already exists in direct children (not nested objects).
+      // Check both pair nodes (key: value) and shorthand properties ({ key }).
+      const directChildren = obj.children();
+      const pairExists = directChildren
+        .filter((c) => c.kind() === "pair")
+        .some((p) => {
+          const key = p.children().find((c) => c.kind() === "property_identifier");
+          return key?.text() === propertyName;
+        });
+      const shorthandExists = directChildren
+        .filter((c) => c.kind() === "shorthand_property_identifier")
+        .some((c) => c.text() === propertyName);
+      if (pairExists || shorthandExists) return text;
 
       const newProp = `${propertyName}: ${propertyValue}`;
       const closeBraceIdx = objText.lastIndexOf("}");
@@ -667,6 +673,16 @@ export function addProperty(
       if (trimmedBefore === "{") {
         // Empty object: `{}` -> `{ prop: val }`
         modified = `{ ${newProp} }`;
+      } else if (trimmedBefore.match(/\/\/[^\n]*$/)) {
+        // Last line ends with a // comment: add new property on a new line
+        // to avoid commenting it out.
+        const indent = objText.match(/\n(\s*)\S/)?.[1] ?? "  ";
+        const hasTrailingComma = trimmedBefore
+          .replace(/\/\/[^\n]*$/, "")
+          .trimEnd()
+          .endsWith(",");
+        const comma = hasTrailingComma ? "" : ",";
+        modified = trimmedBefore + comma + "\n" + indent + newProp + "\n}";
       } else {
         // Non-empty: add after last content with comma
         const hasTrailingComma = trimmedBefore.endsWith(",");
@@ -1033,14 +1049,16 @@ export function transformTupleArgsToCall(
  * @param filePath - Path to the JSON file to transform
  * @param mutator - Function that takes parsed JSON and returns modified value (or null if no change)
  * @param dryRun - If true, do not write the file
+ * @param sourceOverride - Pre-loaded source content (from a previous rule's dry-run output)
  * @returns Result with changed flag and optional before/after content (dry-run only)
  */
 export async function transformJsonFile(
   filePath: string,
   mutator: (parsed: unknown) => unknown | null,
   dryRun: boolean,
+  sourceOverride?: string,
 ): Promise<TransformFileResult> {
-  const source = await fs.promises.readFile(filePath, "utf-8");
+  const source = sourceOverride ?? (await fs.promises.readFile(filePath, "utf-8"));
   const parsed = JSON.parse(source);
   const result = mutator(parsed);
 

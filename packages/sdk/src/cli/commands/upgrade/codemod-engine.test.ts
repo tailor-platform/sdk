@@ -623,6 +623,23 @@ describe("codemod-engine", () => {
         expect(output).toBe(source);
       });
 
+      it("should not add duplicate when property exists as shorthand", () => {
+        const source = `setup({ authInvoker });`;
+        const { output, count } = addProperty(source, "setup($$$ARGS)", "authInvoker", "true");
+        expect(count).toBe(1);
+        // authInvoker already exists as a shorthand property, should not add
+        expect(output).toBe(source);
+      });
+
+      it("should handle trailing comment on last property in multiline object", () => {
+        const source = `setup({\n  foo: true, // keep\n})`;
+        const { output, count } = addProperty(source, "setup($$$ARGS)", "bar", "1");
+        expect(count).toBe(1);
+        // New property should be on its own line, not appended after the comment
+        expect(output).toContain("bar: 1");
+        expect(output).not.toContain("// keep, bar");
+      });
+
       it("should add property even when nested object has same name", () => {
         const source = `setup({ nested: { beta: 1 } });`;
         const { output, count } = addProperty(source, "setup($$$ARGS)", "beta", "2");
@@ -1220,6 +1237,29 @@ describe("codemod-engine", () => {
       expect(content.scripts.deploy).toBe("tailor deploy");
       expect(content.scripts.apply).toBeUndefined();
       expect(content.scripts.test).toBe("vitest");
+    });
+
+    it("should use sourceOverride instead of reading from disk", async () => {
+      const filePath = path.join(tmpDir, "package.json");
+      await fs.promises.writeFile(filePath, JSON.stringify({ name: "disk" }, null, 2) + "\n");
+      const override = JSON.stringify({ name: "override" }, null, 2) + "\n";
+
+      const result = await transformJsonFile(
+        filePath,
+        (parsed) => {
+          const obj = parsed as Record<string, unknown>;
+          return { ...obj, added: true };
+        },
+        true,
+        override,
+      );
+
+      expect(result.changed).toBe(true);
+      // Should have transformed the override content, not the disk content
+      expect(result.before).toBe(override);
+      const after = JSON.parse(result.after!);
+      expect(after.name).toBe("override");
+      expect(after.added).toBe(true);
     });
   });
 });
