@@ -95,4 +95,26 @@ describe("printMigrationSummary", () => {
 
     expect(mockedLogger.error).toHaveBeenCalledWith(expect.stringContaining("Failed rules"));
   });
+
+  it("should merge diffs from multiple rules showing original before and final after", () => {
+    const summary = createSummary({
+      rulesApplied: 2,
+      filesModified: ["/project/config.ts"],
+      diffs: [
+        { file: "/project/config.ts", before: "const oldName = 1;", after: "const midName = 1;" },
+        { file: "/project/config.ts", before: "const midName = 1;", after: "const newName = 1;" },
+      ],
+    });
+
+    printMigrationSummary(summary, true);
+
+    // The diff should show original → final, i.e., oldName → newName
+    const logCalls = mockedLogger.log.mock.calls.flat() as string[];
+    // Should show removal of original line (oldName)
+    expect(logCalls.some((c: string) => c.includes("oldName"))).toBe(true);
+    // Should show addition of final line (newName)
+    expect(logCalls.some((c: string) => c.includes("newName"))).toBe(true);
+    // Should NOT show intermediate midName as removed
+    expect(logCalls.some((c: string) => c.includes("-") && c.includes("midName"))).toBe(false);
+  });
 });

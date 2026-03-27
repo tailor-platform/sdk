@@ -148,6 +148,14 @@ describe("codemod-engine", () => {
       const matches = findIdentifiers(source, "authInvoker");
       expect(matches).toHaveLength(2);
     });
+
+    it("should find shorthand_property_identifier nodes", () => {
+      const source = `const config = { oldName };`;
+      const matches = findIdentifiers(source, "oldName");
+      // Should find both the variable reference and the shorthand property
+      expect(matches.length).toBeGreaterThanOrEqual(1);
+      expect(matches.some((m) => m.kind() === "shorthand_property_identifier")).toBe(true);
+    });
   });
 
   describe("renameIdentifiers", () => {
@@ -178,6 +186,14 @@ describe("codemod-engine", () => {
       const { output } = renameIdentifiers(source, "publishEvents", "emitEvents");
       expect(output).toContain("// Uses emitEvents");
       expect(output).toContain("emitEvents: true");
+    });
+
+    it("should rename shorthand property identifiers", () => {
+      const source = `const config = { oldName };`;
+      const { output, count } = renameIdentifiers(source, "oldName", "newName");
+      expect(count).toBeGreaterThanOrEqual(1);
+      expect(output).toContain("newName");
+      expect(output).not.toContain("oldName");
     });
 
     it("should not corrupt longer identifiers that contain the renamed name as a substring", () => {

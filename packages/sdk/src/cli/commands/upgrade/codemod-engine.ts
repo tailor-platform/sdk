@@ -75,12 +75,14 @@ export function findIdentifiers(
 ): SgNode[] {
   const root = parseTypeScript(source, lang);
   const escapedName = escapeRegExp(name);
-  // Use rule-based query to match both identifier and property_identifier node kinds
+  // Match identifier, property_identifier, and shorthand_property_identifier nodes.
+  // Shorthand properties like `{ oldName }` use a distinct AST node kind.
   return root.root().findAll({
     rule: {
       any: [
         { kind: "identifier", regex: `^${escapedName}$` },
         { kind: "property_identifier", regex: `^${escapedName}$` },
+        { kind: "shorthand_property_identifier", regex: `^${escapedName}$` },
       ],
     },
   } as Parameters<SgNode["findAll"]>[0]);
@@ -117,11 +119,15 @@ export function renameIdentifiers(
  * Rename multiple identifiers in a single pass over the source.
  *
  * Automatically sorts renames by key length (longest first) to prevent substring
- * conflicts when using `replaceAll`. For example, `createWorkflowJob` is processed
- * before `createWorkflow` so the shorter name doesn't corrupt the longer one.
+ * conflicts. For example, `createWorkflowJob` is processed before `createWorkflow`
+ * so the shorter name doesn't corrupt the longer one.
  *
- * Uses `findIdentifiers` for detection, so both `identifier` and `property_identifier`
- * nodes are matched.
+ * **Limitation**: Renames are applied sequentially, so overlapping rename sets where
+ * a new name equals another old name (e.g., `{ foo -> bar, bar -> baz }`) will
+ * cascade incorrectly. Ensure rename maps do not have such overlaps.
+ *
+ * Uses `findIdentifiers` for detection, so `identifier`, `property_identifier`,
+ * and `shorthand_property_identifier` nodes are matched.
  * @param source - Source code to transform
  * @param renames - Map of old names to new names
  * @param lang - Language to parse as (defaults to TypeScript)

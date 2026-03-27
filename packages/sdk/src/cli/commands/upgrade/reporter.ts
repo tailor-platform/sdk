@@ -33,11 +33,17 @@ function formatLineDiff(before: string, after: string): string[] {
  * @param projectRoot - Project root for relative path display
  */
 function printDiffs(diffs: FileDiff[], projectRoot?: string): void {
-  // Group diffs by file (multiple rules may touch the same file)
+  // Group diffs by file (multiple rules may touch the same file).
+  // Keep the original 'before' from the first diff and the latest 'after'
+  // so the preview shows the complete transformation, not just the last step.
   const byFile = new Map<string, FileDiff>();
   for (const diff of diffs) {
-    // Keep the last diff for each file (it has the cumulative changes)
-    byFile.set(diff.file, diff);
+    const existing = byFile.get(diff.file);
+    if (existing) {
+      byFile.set(diff.file, { file: diff.file, before: existing.before, after: diff.after });
+    } else {
+      byFile.set(diff.file, diff);
+    }
   }
 
   for (const [file, diff] of byFile) {

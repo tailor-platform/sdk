@@ -116,13 +116,6 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
         fileOverrides,
       });
 
-      // Update fileOverrides so subsequent rules see this rule's output
-      if (result.diffs) {
-        for (const diff of result.diffs) {
-          fileOverrides.set(diff.file, diff.after);
-        }
-      }
-
       if (result.changed) {
         if (options.interactive && !options.dryRun && result.diffs) {
           // Show diff preview for each file
@@ -136,9 +129,10 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
           const accepted = await promptConfirm(`  Apply changes from "${rule.name}"?`);
 
           if (accepted) {
-            // Write the changes
+            // Write the changes and update overrides for subsequent rules
             for (const diff of result.diffs) {
               await fs.promises.writeFile(diff.file, diff.after, "utf-8");
+              fileOverrides.set(diff.file, diff.after);
             }
             rulesApplied++;
             for (const file of result.filesModified) {
@@ -150,13 +144,16 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
             logger.log(`  ${styles.dim("Skipped by user")}`);
           }
         } else {
-          // Normal (non-interactive) flow
+          // Normal (non-interactive) and dry-run flow: always chain results
+          if (result.diffs) {
+            for (const diff of result.diffs) {
+              fileOverrides.set(diff.file, diff.after);
+            }
+            allDiffs.push(...result.diffs);
+          }
           rulesApplied++;
           for (const file of result.filesModified) {
             modifiedFiles.add(file);
-          }
-          if (result.diffs) {
-            allDiffs.push(...result.diffs);
           }
           logger.success(`  ${result.filesModified.length} file(s) modified`);
         }
