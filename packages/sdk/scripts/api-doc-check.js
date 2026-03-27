@@ -55,6 +55,10 @@ function hasDoc(symbol) {
   );
 }
 
+function isInternal(symbol) {
+  return symbol.getJsDocTags(checker).some((tag) => tag.name === "internal");
+}
+
 function isExternal(symbol) {
   const decls = symbol.getDeclarations();
   if (!decls?.length) return true;
@@ -84,8 +88,9 @@ for (const ep of entryPoints) {
     const resolved = sym.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(sym) : sym;
     const kind = getKind(resolved);
 
-    // Skip symbols declared in external packages
+    // Skip symbols declared in external packages or marked @internal
     if (isExternal(resolved)) continue;
+    if (isInternal(sym) || isInternal(resolved)) continue;
 
     // Check top-level export
     if (kind && REQUIRED_KINDS.has(kind) && !hasDoc(sym) && !hasDoc(resolved)) {

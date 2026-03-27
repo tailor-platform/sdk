@@ -3,7 +3,7 @@ import type { KyselyTypeMetadata, KyselyNamespaceMetadata } from "./types";
 import type { Plugin } from "@/types/plugin";
 import type { GeneratorResult, TailorDBReadyContext } from "@/types/plugin-generation";
 
-/** Generator ID for the Kysely type plugin. */
+/** @internal */
 export const KyselyGeneratorID = "@tailor-platform/kysely-type";
 
 type KyselyTypePluginOptions = {

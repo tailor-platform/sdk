@@ -4,7 +4,7 @@ import type { FileUtilMetadata } from "./types";
 import type { Plugin } from "@/types/plugin";
 import type { GeneratorResult, TailorDBReadyContext } from "@/types/plugin-generation";
 
-/** Generator ID for the file utilities plugin. */
+/** @internal */
 export const FileUtilsGeneratorID = "@tailor-platform/file-utils";
 
 type FileUtilsPluginOptions = {
