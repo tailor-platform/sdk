@@ -414,6 +414,48 @@ describe("upgrade - interactive mode", () => {
     expect(logCalls.some((c) => typeof c === "string" && c.includes("Skipped by user"))).toBe(true);
   });
 
+  it("should skip interactive custom rules that do not provide diffs", async () => {
+    const filePath = path.join(tmpDir, "test.ts");
+    const originalContent = await fs.promises.readFile(filePath, "utf-8");
+    const { logger } = await import("@/cli/shared/logger");
+    vi.mocked(logger.log).mockClear();
+    vi.mocked(logger.success).mockClear();
+
+    vi.doMock("./rules", () => ({
+      createDefaultRegistry: () => ({
+        getApplicableRules: () => [
+          {
+            id: "test/no-diff-interactive",
+            name: "No Diff Interactive Rule",
+            description: "Reports changed without diff output",
+            since: "1.0.0",
+            until: "2.0.0",
+            transform: async (): Promise<TransformResult> => ({
+              changed: true,
+              filesModified: [filePath],
+              warnings: [],
+            }),
+          },
+        ],
+      }),
+    }));
+
+    const { upgrade } = await import("./service");
+    await upgrade({ to: "2.0.0", dryRun: false, path: tmpDir, interactive: true });
+
+    const written = await fs.promises.readFile(filePath, "utf-8");
+    expect(written).toBe(originalContent);
+
+    const logCalls = vi.mocked(logger.log).mock.calls.flat();
+    expect(
+      logCalls.some(
+        (c) =>
+          typeof c === "string" && c.includes("Skipped (no diff available for interactive review)"),
+      ),
+    ).toBe(true);
+    expect(vi.mocked(logger.success)).not.toHaveBeenCalledWith("  1 file(s) modified");
+  });
+
   it("should fall back to dry-run when both dryRun and interactive are set", async () => {
     // dryRun takes precedence - no prompt should be shown
     const filePath = path.join(tmpDir, "test.ts");

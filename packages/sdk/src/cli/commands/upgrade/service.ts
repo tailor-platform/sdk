@@ -106,7 +106,7 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
       // Note: interactive mode requires diffs to function (it forces dryRun=true
       // to get diffs, then prompts the user). Rules created via createRule always
       // produce diffs. Custom MigrationRule implementations must also populate
-      // diffs when dryRun is true, otherwise interactive mode skips the prompt.
+      // diffs when dryRun is true, otherwise interactive mode treats the rule as skipped.
       if (result.changed) {
         if (options.interactive && !options.dryRun && result.diffs) {
           // Show diff preview for each file
@@ -136,6 +136,9 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
             rulesSkipped++;
             logger.log(`  ${styles.dim("Skipped by user")}`);
           }
+        } else if (options.interactive && !options.dryRun) {
+          rulesSkipped++;
+          logger.log(`  ${styles.dim("Skipped (no diff available for interactive review)")}`);
         } else {
           // Normal (non-interactive) and dry-run flow: always chain results
           if (result.diffs) {
