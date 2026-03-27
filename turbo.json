@@ -35,6 +35,9 @@
       "dependsOn": ["format", "lint:fix", "typecheck:go", "knip", "publint"],
       "cache": false
     },
+    "docs:api-check": {
+      "cache": true
+    },
     "knip": {
       "cache": true
     },
