@@ -1,4 +1,12 @@
+import * as fs from "node:fs";
+import * as path from "pathe";
 import deployTemplate from "./deploy.workflow.yml";
+import setupBun from "./setup-bun.yml";
+import setupNpm from "./setup-npm.yml";
+import setupPnpm from "./setup-pnpm.yml";
+import setupYarn from "./setup-yarn.yml";
+
+type PackageManager = "pnpm" | "yarn" | "npm" | "bun";
 
 type DeployParams = {
   workspaceName: string;
@@ -6,23 +14,60 @@ type DeployParams = {
   organizationId: string;
   folderId: string;
   workingDirectory?: string;
+  packageManager: PackageManager;
 };
 
+const setupSteps: Record<PackageManager, string> = {
+  pnpm: setupPnpm,
+  yarn: setupYarn,
+  npm: setupNpm,
+  bun: setupBun,
+};
+
+function indentSnippet(snippet: string, spaces: number): string {
+  const indent = " ".repeat(spaces);
+  return snippet
+    .trimEnd()
+    .split("\n")
+    .map((line) => indent + line)
+    .join("\n");
+}
+
 /**
- * Render the deploy workflow YAML.
+ * Detect the package manager used in a project directory by checking for lockfiles.
+ * @param dir - Project directory to inspect
+ * @returns Detected package manager, defaults to npm
+ */
+export function detectPackageManager(dir: string): PackageManager {
+  if (fs.existsSync(path.join(dir, "pnpm-lock.yaml"))) return "pnpm";
+  if (fs.existsSync(path.join(dir, "yarn.lock"))) return "yarn";
+  if (fs.existsSync(path.join(dir, "bun.lockb")) || fs.existsSync(path.join(dir, "bun.lock")))
+    return "bun";
+  return "npm";
+}
+
+/**
+ * Render the deploy caller workflow YAML.
  *
- * Targets single-application scaffolds (those with `generate` and `deploy` scripts).
- * Multi-application projects (e.g. chained `deploy:*` scripts) need manual workflow customization.
+ * Generates a thin workflow that calls the composite deploy action
+ * from tailor-platform/actions. The environment setup steps (Node.js,
+ * package manager, dependency install) are generated based on the
+ * detected package manager.
  * @param params - Workspace and deployment configuration
  * @returns Workflow YAML content
  */
 export function renderDeploy(params: DeployParams): string {
-  const { workspaceName, workspaceRegion, organizationId, folderId, workingDirectory } = params;
+  const {
+    workspaceName,
+    workspaceRegion,
+    organizationId,
+    folderId,
+    workingDirectory,
+    packageManager,
+  } = params;
 
-  // --dir sets working-directory for all run steps. Assumes the target directory
-  // is a pnpm workspace member with its own package.json (standard monorepo layout).
-  const defaultsBlock = workingDirectory
-    ? `\ndefaults:\n  run:\n    working-directory: ${workingDirectory}\n`
+  const workingDirectoryLine = workingDirectory
+    ? `          working-directory: ${workingDirectory}\n`
     : "";
 
   return deployTemplate
@@ -30,5 +75,6 @@ export function renderDeploy(params: DeployParams): string {
     .replace("__WORKSPACE_REGION__", () => workspaceRegion)
     .replace("__ORGANIZATION_ID__", () => organizationId)
     .replace("__FOLDER_ID__", () => folderId)
-    .replace("# __DEFAULTS_BLOCK__\n", () => defaultsBlock);
+    .replace(/ *# __WORKING_DIRECTORY__\n/, () => workingDirectoryLine)
+    .replace(/^ *# __SETUP_STEPS__$/m, () => indentSnippet(setupSteps[packageManager], 6));
 }
