@@ -1243,8 +1243,7 @@ async function planTypes(
 
   for (const tailordb of tailordbs) {
     const existingTypes = await fetchTypes(tailordb.namespace);
-    const existingNameSet = new Set<string>();
-    existingTypes.forEach((type) => existingNameSet.add(type.name));
+    const existingTypesMap = new Map(existingTypes.map((type) => [type.name, type]));
 
     // Use filtered types if provided, otherwise use local types
     const types = filteredTypesByNamespace?.get(tailordb.namespace) ?? tailordb.types;
@@ -1255,15 +1254,11 @@ async function planTypes(
         executorUsedTypes,
         tailordb.config.gqlOperations,
       );
-      if (existingNameSet.has(typeName)) {
-        const existingType = await client.getTailorDBType({
-          workspaceId,
-          namespaceName: tailordb.namespace,
-          tailordbTypeName: typeName,
-        });
+      const existingType = existingTypesMap.get(typeName);
+      if (existingType) {
         if (
           areNormalizedEqual(
-            normalizeComparableTailorDBType(existingType.tailordbType),
+            normalizeComparableTailorDBType(existingType),
             normalizeComparableTailorDBType(tailordbType),
           )
         ) {
@@ -1278,7 +1273,7 @@ async function planTypes(
             },
           });
         }
-        existingNameSet.delete(typeName);
+        existingTypesMap.delete(typeName);
       } else {
         changeSet.creates.push({
           name: typeName,
@@ -1290,7 +1285,7 @@ async function planTypes(
         });
       }
     }
-    existingNameSet.forEach((name) => {
+    existingTypesMap.forEach((_type, name) => {
       changeSet.deletes.push({
         name,
         request: {

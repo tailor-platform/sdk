@@ -330,10 +330,7 @@ async function planResolvers(
 
   for (const pipeline of pipelines) {
     const existingResolvers = await fetchResolvers(pipeline.namespace);
-    const existingNameSet = new Set<string>();
-    existingResolvers.forEach((resolver) => {
-      existingNameSet.add(resolver.name);
-    });
+    const existingResolversMap = new Map(existingResolvers.map((resolver) => [resolver.name, resolver]));
     for (const resolver of Object.values(pipeline.resolvers)) {
       const desiredResolver = processResolver(
         pipeline.namespace,
@@ -341,13 +338,8 @@ async function planResolvers(
         executorUsedResolvers,
         env,
       );
-      if (existingNameSet.has(resolver.name)) {
-        const existingResolverResponse = await client.getPipelineResolver({
-          workspaceId,
-          namespaceName: pipeline.namespace,
-          resolverName: resolver.name,
-        });
-        const existingResolver = existingResolverResponse.pipelineResolver;
+      const existingResolver = existingResolversMap.get(resolver.name);
+      if (existingResolver) {
         if (existingResolver && areResolversEqual(existingResolver, desiredResolver)) {
           changeSet.unchanged.push({ name: resolver.name });
         } else {
@@ -360,7 +352,7 @@ async function planResolvers(
             },
           });
         }
-        existingNameSet.delete(resolver.name);
+        existingResolversMap.delete(resolver.name);
       } else {
         changeSet.creates.push({
           name: resolver.name,
@@ -372,7 +364,7 @@ async function planResolvers(
         });
       }
     }
-    existingNameSet.forEach((name) => {
+    existingResolversMap.forEach((_resolver, name) => {
       changeSet.deletes.push({
         name,
         request: {
