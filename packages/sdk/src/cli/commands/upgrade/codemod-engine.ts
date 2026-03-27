@@ -812,10 +812,13 @@ export function transformCallArguments(
     (node) => {
       const args = getArgs(node, "ARGS");
       const newArgs = transformer(args);
-      // Reconstruct the call: extract the function name part from the matched text
+      // Reconstruct the call from the AST arguments node so receiver expressions
+      // like `getObj().method(...)` are preserved correctly.
       const fullText = node.text();
-      const parenIdx = fullText.indexOf("(");
-      const fnPart = fullText.slice(0, parenIdx);
+      const argsNode = node.children().find((child) => child.kind() === "arguments");
+      const fnPart = argsNode
+        ? fullText.slice(0, argsNode.range().start.index - node.range().start.index)
+        : fullText;
       return `${fnPart}(${newArgs})`;
     },
     lang,

@@ -866,6 +866,15 @@ describe("codemod-engine", () => {
         expect(count).toBe(1);
         expect(output).toBe(`obj.method(a + b)`);
       });
+
+      it("should preserve receivers containing parentheses", () => {
+        const source = `getObj().method(a, b)`;
+        const { output, count } = transformCallArguments(source, "$OBJ.method", (args) => {
+          return args.map((a) => a.text()).join(" + ");
+        });
+        expect(count).toBe(1);
+        expect(output).toBe(`getObj().method(a + b)`);
+      });
     });
 
     describe("renamePropertyAtPath", () => {
