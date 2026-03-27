@@ -32,7 +32,7 @@
       "cache": false
     },
     "check": {
-      "dependsOn": ["format", "lint:fix", "typecheck:go", "knip", "publint"],
+      "dependsOn": ["format", "lint:fix", "typecheck:go", "knip", "publint", "lint:public-api"],
       "cache": false
     },
     "lint:public-api": {
