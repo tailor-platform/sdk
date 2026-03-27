@@ -82,6 +82,7 @@ See [docs/](docs/README.md) for developer and contributor documentation.
 - [Testing](docs/testing.md) - Test strategy and conventions
 - [Changeset Conventions](docs/changeset.md) - Version bump level guidelines
 - [Telemetry / Performance Profiling](docs/telemetry.md) - OTLP tracing for CLI performance analysis
+- Adding migration rules to the `upgrade` command - Use the `/add-migration-rule` skill
 
 ## Platform Documentation
 
