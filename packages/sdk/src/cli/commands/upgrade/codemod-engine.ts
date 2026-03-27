@@ -702,3 +702,225 @@ export function wrapExpression(
     lang,
   );
 }
+
+// ---------------------------------------------------------------------------
+// Property value replacement
+// ---------------------------------------------------------------------------
+
+/**
+ * Replace the value of a specific property within objects matching a pattern.
+ *
+ * Finds objects matching the pattern, locates the named property, and applies
+ * the replacer function to its value node. Useful for migrating property values
+ * without changing the property name.
+ * @param source - Source code to transform
+ * @param objectPattern - ast-grep pattern to match (e.g., "config($$$ARGS)")
+ * @param propertyName - Property name whose value should be replaced
+ * @param replacer - Function that takes the value node and returns replacement text
+ * @param lang - Language to parse as (defaults to TypeScript)
+ * @returns Object with the new source and count of pattern matches processed
+ */
+export function replacePropertyValue(
+  source: string,
+  objectPattern: string,
+  propertyName: string,
+  replacer: (valueNode: SgNode) => string,
+  lang: Lang = Lang.TypeScript,
+): { output: string; count: number } {
+  return applyPatternReplace(
+    source,
+    objectPattern,
+    (node) => {
+      const text = node.text();
+      const innerRoot = parseTypeScript(text, lang);
+
+      const pairs = innerRoot
+        .root()
+        .findAll({ rule: { kind: "pair" } } as Parameters<SgNode["findAll"]>[0]);
+
+      const matchingPair = pairs.find((pair) => {
+        const key = pair.children().find((c) => c.kind() === "property_identifier");
+        return key?.text() === propertyName;
+      });
+
+      if (!matchingPair) return text;
+
+      // The value is the last meaningful child of the pair (after the key and colon)
+      const children = matchingPair.children();
+      const valueNode = children[children.length - 1];
+      if (!valueNode) return text;
+
+      const newValue = replacer(valueNode);
+      const valueRange = valueNode.range();
+      return text.slice(0, valueRange.start.index) + newValue + text.slice(valueRange.end.index);
+    },
+    lang,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Function call argument transformation
+// ---------------------------------------------------------------------------
+
+/**
+ * Transform the arguments of function calls matching a name pattern.
+ *
+ * Matches calls like `functionName(args...)` and passes the argument nodes
+ * (with comma separators filtered out) to a transformer function that returns
+ * the new argument string. The function name itself is preserved; use
+ * `renameIdentifiers` separately to change it.
+ * @param source - Source code to transform
+ * @param functionName - Function name pattern to match (e.g., "defineGenerators" or "$OBJ.method")
+ * @param transformer - Function that receives argument nodes and returns new arguments string
+ * @param lang - Language to parse as (defaults to TypeScript)
+ * @returns Object with the new source and count of calls transformed
+ */
+export function transformCallArguments(
+  source: string,
+  functionName: string,
+  transformer: (args: SgNode[]) => string,
+  lang: Lang = Lang.TypeScript,
+): { output: string; count: number } {
+  const pattern = `${functionName}($$$ARGS)`;
+  return applyPatternReplace(
+    source,
+    pattern,
+    (node) => {
+      const args = getArgs(node, "ARGS");
+      const newArgs = transformer(args);
+      // Reconstruct the call: extract the function name part from the matched text
+      const fullText = node.text();
+      const parenIdx = fullText.indexOf("(");
+      const fnPart = fullText.slice(0, parenIdx);
+      return `${fnPart}(${newArgs})`;
+    },
+    lang,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Nested property path rename
+// ---------------------------------------------------------------------------
+
+/**
+ * Rename a property at a specific nested path within objects matching a pattern.
+ *
+ * Navigates through nested object levels following the dot-separated path,
+ * then renames only the target property at that exact location. Properties
+ * with the same name at other nesting levels are not affected.
+ * @param source - Source code to transform
+ * @param rootPattern - ast-grep pattern to match (e.g., "config($$$ARGS)")
+ * @param propertyPath - Dot-separated path to navigate (e.g., "userProfile.attributes"). Empty string for root level.
+ * @param oldName - Current property name to rename
+ * @param newName - New property name
+ * @param lang - Language to parse as (defaults to TypeScript)
+ * @returns Object with the new source and count of pattern matches processed
+ */
+export function renamePropertyAtPath(
+  source: string,
+  rootPattern: string,
+  propertyPath: string,
+  oldName: string,
+  newName: string,
+  lang: Lang = Lang.TypeScript,
+): { output: string; count: number } {
+  return applyPatternReplace(
+    source,
+    rootPattern,
+    (node) => {
+      const text = node.text();
+      const innerRoot = parseTypeScript(text, lang);
+      const segments = propertyPath === "" ? [] : propertyPath.split(".");
+
+      // Start from the root object(s)
+      const currentObjects = innerRoot
+        .root()
+        .findAll({ rule: { kind: "object" } } as Parameters<SgNode["findAll"]>[0]);
+
+      if (currentObjects.length === 0) return text;
+
+      // Take the outermost object as starting point
+      let targetObject = currentObjects[0];
+
+      // Navigate through path segments
+      for (const segment of segments) {
+        const pairs = targetObject.children().filter((c) => c.kind() === "pair");
+        const matchingPair = pairs.find((pair) => {
+          const key = pair.children().find((c) => c.kind() === "property_identifier");
+          return key?.text() === segment;
+        });
+
+        if (!matchingPair) return text; // Path not found
+
+        // Find the nested object value
+        const nestedObj = matchingPair.children().find((c) => c.kind() === "object");
+
+        if (!nestedObj) return text; // Value is not an object
+
+        targetObject = nestedObj;
+      }
+
+      // At the target level, find and rename the property
+      const pairs = targetObject.children().filter((c) => c.kind() === "pair");
+      const targetPair = pairs.find((pair) => {
+        const key = pair.children().find((c) => c.kind() === "property_identifier");
+        return key?.text() === oldName;
+      });
+
+      if (!targetPair) return text;
+
+      const key = targetPair.children().find((c) => c.kind() === "property_identifier");
+      if (!key) return text;
+
+      const keyRange = key.range();
+      return text.slice(0, keyRange.start.index) + newName + text.slice(keyRange.end.index);
+    },
+    lang,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// JSON file transformation
+// ---------------------------------------------------------------------------
+
+/**
+ * Read a JSON file, apply a mutator function, and optionally write back.
+ *
+ * Unlike `transformFile` which works with raw source strings, this helper parses
+ * the JSON and passes the parsed value to the mutator. Output is formatted with
+ * 2-space indentation and trailing newline.
+ *
+ * In dry-run mode, the `before` and `after` fields are populated for diff display.
+ * @param filePath - Path to the JSON file to transform
+ * @param mutator - Function that takes parsed JSON and returns modified value (or null if no change)
+ * @param dryRun - If true, do not write the file
+ * @returns Result with changed flag and optional before/after content (dry-run only)
+ */
+export async function transformJsonFile(
+  filePath: string,
+  mutator: (parsed: unknown) => unknown | null,
+  dryRun: boolean,
+): Promise<TransformFileResult> {
+  const source = await fs.promises.readFile(filePath, "utf-8");
+  const parsed = JSON.parse(source);
+  const result = mutator(parsed);
+
+  if (result === null) {
+    return { changed: false };
+  }
+
+  const output = JSON.stringify(result, null, 2) + "\n";
+  if (output === source) {
+    return { changed: false };
+  }
+
+  if (!dryRun) {
+    await fs.promises.writeFile(filePath, output, "utf-8");
+  }
+
+  return {
+    changed: true,
+    before: dryRun ? source : undefined,
+    after: dryRun ? output : undefined,
+  };
+}

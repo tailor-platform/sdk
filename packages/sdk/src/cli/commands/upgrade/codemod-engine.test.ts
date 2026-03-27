@@ -17,8 +17,12 @@ import {
   removeProperty,
   renameIdentifiers,
   renameImportSpecifier,
+  renamePropertyAtPath,
   renamePropertyInPattern,
+  replacePropertyValue,
+  transformCallArguments,
   transformFile,
+  transformJsonFile,
   wrapExpression,
 } from "./codemod-engine";
 
@@ -623,6 +627,350 @@ describe("codemod-engine", () => {
         expect(count).toBe(1);
         expect(output).toBe(`wrapResolver(createResolver({ name: "test" }));`);
       });
+    });
+
+    describe("replacePropertyValue", () => {
+      it("should replace a property value in matched object", () => {
+        const source = `setup({ name: "old" });`;
+        const { output, count } = replacePropertyValue(
+          source,
+          "setup($$$ARGS)",
+          "name",
+          () => `"new"`,
+        );
+        expect(count).toBe(1);
+        expect(output).toBe(`setup({ name: "new" });`);
+      });
+
+      it("should return unchanged when property not found", () => {
+        const source = `setup({ name: "old" });`;
+        const { output, count } = replacePropertyValue(
+          source,
+          "setup($$$ARGS)",
+          "missing",
+          () => `"new"`,
+        );
+        expect(count).toBe(1);
+        expect(output).toBe(source);
+      });
+
+      it("should return unchanged when pattern does not match", () => {
+        const source = `other({ name: "old" });`;
+        const { output, count } = replacePropertyValue(
+          source,
+          "setup($$$ARGS)",
+          "name",
+          () => `"new"`,
+        );
+        expect(count).toBe(0);
+        expect(output).toBe(source);
+      });
+
+      it("should handle multiple pattern matches", () => {
+        const source = `setup({ val: 1 });\nsetup({ val: 2 });`;
+        const { output, count } = replacePropertyValue(
+          source,
+          "setup($$$ARGS)",
+          "val",
+          (node) => `${Number(node.text()) * 10}`,
+        );
+        expect(count).toBe(2);
+        expect(output).toBe(`setup({ val: 10 });\nsetup({ val: 20 });`);
+      });
+
+      it("should replace object value", () => {
+        const source = `config({ options: { a: 1, b: 2 } });`;
+        const { output, count } = replacePropertyValue(
+          source,
+          "config($$$ARGS)",
+          "options",
+          () => `{ c: 3 }`,
+        );
+        expect(count).toBe(1);
+        expect(output).toBe(`config({ options: { c: 3 } });`);
+      });
+
+      it("should replace function call value", () => {
+        const source = `config({ handler: createHandler("old") });`;
+        const { output, count } = replacePropertyValue(
+          source,
+          "config($$$ARGS)",
+          "handler",
+          () => `createHandler("new")`,
+        );
+        expect(count).toBe(1);
+        expect(output).toBe(`config({ handler: createHandler("new") });`);
+      });
+    });
+
+    describe("transformCallArguments", () => {
+      it("should transform function call arguments", () => {
+        const source = `foo(a, b)`;
+        const { output, count } = transformCallArguments(source, "foo", (args) => {
+          return args
+            .reverse()
+            .map((a) => a.text())
+            .join(", ");
+        });
+        expect(count).toBe(1);
+        expect(output).toBe(`foo(b, a)`);
+      });
+
+      it("should return unchanged when no matches", () => {
+        const source = `bar(1)`;
+        const { output, count } = transformCallArguments(source, "foo", () => "x");
+        expect(count).toBe(0);
+        expect(output).toBe(source);
+      });
+
+      it("should handle multiple matches", () => {
+        const source = `foo(1);\nfoo(2);`;
+        const { output, count } = transformCallArguments(source, "foo", (args) => {
+          const val = args[0].text();
+          return `${val}, ${val}`;
+        });
+        expect(count).toBe(2);
+        expect(output).toBe(`foo(1, 1);\nfoo(2, 2);`);
+      });
+
+      it("should handle no-argument calls", () => {
+        const source = `foo()`;
+        const { output, count } = transformCallArguments(source, "foo", () => "1");
+        expect(count).toBe(1);
+        expect(output).toBe(`foo(1)`);
+      });
+
+      it("should handle nested function calls in arguments", () => {
+        const source = `foo(bar(1), baz(2))`;
+        const { output, count } = transformCallArguments(source, "foo", (args) => {
+          return args.map((a) => `wrap(${a.text()})`).join(", ");
+        });
+        expect(count).toBe(1);
+        expect(output).toBe(`foo(wrap(bar(1)), wrap(baz(2)))`);
+      });
+
+      it("should handle real-world generator-to-plugin migration", () => {
+        const source = `defineGenerators(["@tailor-platform/kysely-type", { distPath: "./db.ts" }])`;
+        const { output, count } = transformCallArguments(source, "defineGenerators", (args) => {
+          // Each arg is an array literal like ["pkg", opts]
+          return args
+            .map((arg) => {
+              const text = arg.text();
+              // Extract package name and options from array literal
+              const match = text.match(/\["@tailor-platform\/(.+?)"(?:,\s*(.+))?\]/s);
+              if (!match) return text;
+              const [, pkgName, opts] = match;
+              const fnName =
+                pkgName.replace(/-(\w)/g, (_, c: string) => c.toUpperCase()) + "Plugin";
+              return opts ? `${fnName}(${opts.trim()})` : `${fnName}()`;
+            })
+            .join(", ");
+        });
+        expect(count).toBe(1);
+        expect(output).toBe(`defineGenerators(kyselyTypePlugin({ distPath: "./db.ts" }))`);
+      });
+
+      it("should handle method calls with receiver pattern", () => {
+        const source = `obj.method(a, b)`;
+        const { output, count } = transformCallArguments(source, "$OBJ.method", (args) => {
+          return args.map((a) => a.text()).join(" + ");
+        });
+        expect(count).toBe(1);
+        expect(output).toBe(`obj.method(a + b)`);
+      });
+    });
+
+    describe("renamePropertyAtPath", () => {
+      it("should rename property at single-level path", () => {
+        const source = `config({ userProfile: { attributes: { role: true } } });`;
+        const { output, count } = renamePropertyAtPath(
+          source,
+          "config($$$ARGS)",
+          "userProfile",
+          "attributes",
+          "map",
+        );
+        expect(count).toBe(1);
+        expect(output).toBe(`config({ userProfile: { map: { role: true } } });`);
+      });
+
+      it("should rename property at multi-level path", () => {
+        const source = `config({ a: { b: { target: 1 } } });`;
+        const { output, count } = renamePropertyAtPath(
+          source,
+          "config($$$ARGS)",
+          "a.b",
+          "target",
+          "renamed",
+        );
+        expect(count).toBe(1);
+        expect(output).toBe(`config({ a: { b: { renamed: 1 } } });`);
+      });
+
+      it("should rename property at root level (empty path)", () => {
+        const source = `config({ name: 1, label: 2 });`;
+        const { output, count } = renamePropertyAtPath(
+          source,
+          "config($$$ARGS)",
+          "",
+          "name",
+          "title",
+        );
+        expect(count).toBe(1);
+        expect(output).toBe(`config({ title: 1, label: 2 });`);
+      });
+
+      it("should not rename when path does not exist", () => {
+        const source = `config({ other: { name: 1 } });`;
+        const { output, count } = renamePropertyAtPath(
+          source,
+          "config($$$ARGS)",
+          "missing",
+          "name",
+          "title",
+        );
+        expect(count).toBe(1);
+        expect(output).toBe(source);
+      });
+
+      it("should not rename when property not at target path", () => {
+        const source = `config({ attributes: 1, userProfile: { name: "x" } });`;
+        const { output, count } = renamePropertyAtPath(
+          source,
+          "config($$$ARGS)",
+          "userProfile",
+          "attributes",
+          "map",
+        );
+        expect(count).toBe(1);
+        // attributes at root level should NOT be renamed
+        expect(output).toBe(source);
+      });
+
+      it("should handle multiple pattern matches", () => {
+        const source = `setup({ inner: { old: 1 } });\nsetup({ inner: { old: 2 } });`;
+        const { output, count } = renamePropertyAtPath(
+          source,
+          "setup($$$ARGS)",
+          "inner",
+          "old",
+          "new",
+        );
+        expect(count).toBe(2);
+        expect(output).toBe(`setup({ inner: { new: 1 } });\nsetup({ inner: { new: 2 } });`);
+      });
+
+      it("should rename only at the exact path, not at sibling paths", () => {
+        const source = `config({ a: { target: 1 }, b: { target: 2 } });`;
+        const { output, count } = renamePropertyAtPath(
+          source,
+          "config($$$ARGS)",
+          "a",
+          "target",
+          "renamed",
+        );
+        expect(count).toBe(1);
+        // Only a.target should be renamed, not b.target
+        expect(output).toBe(`config({ a: { renamed: 1 }, b: { target: 2 } });`);
+      });
+    });
+  });
+
+  describe("transformJsonFile", () => {
+    let tmpDir: string;
+
+    beforeEach(async () => {
+      tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "codemod-json-test-"));
+    });
+
+    afterEach(async () => {
+      await fs.promises.rm(tmpDir, { recursive: true, force: true });
+    });
+
+    it("should transform and write JSON file", async () => {
+      const filePath = path.join(tmpDir, "package.json");
+      await fs.promises.writeFile(filePath, JSON.stringify({ name: "old" }, null, 2) + "\n");
+
+      const result = await transformJsonFile(
+        filePath,
+        (parsed) => {
+          const obj = parsed as Record<string, unknown>;
+          return { ...obj, name: "new" };
+        },
+        false,
+      );
+
+      expect(result.changed).toBe(true);
+      const content = await fs.promises.readFile(filePath, "utf-8");
+      expect(JSON.parse(content)).toEqual({ name: "new" });
+      expect(content.endsWith("\n")).toBe(true);
+    });
+
+    it("should not write file in dry-run mode", async () => {
+      const filePath = path.join(tmpDir, "package.json");
+      const original = JSON.stringify({ name: "old" }, null, 2) + "\n";
+      await fs.promises.writeFile(filePath, original);
+
+      const result = await transformJsonFile(
+        filePath,
+        (parsed) => {
+          const obj = parsed as Record<string, unknown>;
+          return { ...obj, name: "new" };
+        },
+        true,
+      );
+
+      expect(result.changed).toBe(true);
+      expect(result.before).toBe(original);
+      expect(result.after).toContain('"new"');
+      const content = await fs.promises.readFile(filePath, "utf-8");
+      expect(content).toBe(original);
+    });
+
+    it("should return unchanged when mutator returns null", async () => {
+      const filePath = path.join(tmpDir, "package.json");
+      await fs.promises.writeFile(filePath, JSON.stringify({ name: "old" }, null, 2) + "\n");
+
+      const result = await transformJsonFile(filePath, () => null, false);
+      expect(result.changed).toBe(false);
+    });
+
+    it("should return unchanged when result is identical", async () => {
+      const filePath = path.join(tmpDir, "package.json");
+      await fs.promises.writeFile(filePath, JSON.stringify({ name: "same" }, null, 2) + "\n");
+
+      const result = await transformJsonFile(
+        filePath,
+        (parsed) => parsed, // return same object
+        false,
+      );
+      expect(result.changed).toBe(false);
+    });
+
+    it("should handle nested JSON transformations", async () => {
+      const filePath = path.join(tmpDir, "package.json");
+      const original = { scripts: { apply: "tailor apply", test: "vitest" } };
+      await fs.promises.writeFile(filePath, JSON.stringify(original, null, 2) + "\n");
+
+      const result = await transformJsonFile(
+        filePath,
+        (parsed) => {
+          const obj = parsed as Record<string, Record<string, string>>;
+          const scripts = { ...obj.scripts };
+          if (scripts.apply) {
+            scripts.deploy = scripts.apply.replace("apply", "deploy");
+            delete scripts.apply;
+          }
+          return { ...obj, scripts };
+        },
+        false,
+      );
+
+      expect(result.changed).toBe(true);
+      const content = JSON.parse(await fs.promises.readFile(filePath, "utf-8"));
+      expect(content.scripts.deploy).toBe("tailor deploy");
+      expect(content.scripts.apply).toBeUndefined();
+      expect(content.scripts.test).toBe("vitest");
     });
   });
 });
