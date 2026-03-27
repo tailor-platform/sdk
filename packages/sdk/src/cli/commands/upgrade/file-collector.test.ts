@@ -109,4 +109,66 @@ describe("collectFiles", () => {
     const basenames = files.map((f) => path.basename(f));
     expect(basenames).toEqual(["a.ts", "m.ts", "z.ts"]);
   });
+
+  describe("custom file patterns", () => {
+    it("should collect only JSON files with custom pattern", async () => {
+      await fs.promises.writeFile(path.join(tmpDir, "config.ts"), "export default {};");
+      await fs.promises.writeFile(path.join(tmpDir, "data.json"), "{}");
+      await fs.promises.writeFile(path.join(tmpDir, "schema.json"), '{"type": "object"}');
+
+      const files = await collectFiles(tmpDir, ["**/*.json"]);
+      expect(files).toHaveLength(2);
+      expect(files.every((f) => f.endsWith(".json"))).toBe(true);
+    });
+
+    it("should collect files from multiple patterns", async () => {
+      await fs.promises.writeFile(path.join(tmpDir, "config.ts"), "export default {};");
+      await fs.promises.writeFile(path.join(tmpDir, "data.json"), "{}");
+      await fs.promises.writeFile(path.join(tmpDir, "script.sh"), "#!/bin/bash");
+
+      const files = await collectFiles(tmpDir, ["**/*.ts", "**/*.json"]);
+      expect(files).toHaveLength(2);
+      expect(files.some((f) => f.endsWith(".ts"))).toBe(true);
+      expect(files.some((f) => f.endsWith(".json"))).toBe(true);
+      expect(files.some((f) => f.endsWith(".sh"))).toBe(false);
+    });
+
+    it("should deduplicate files matched by overlapping patterns", async () => {
+      await fs.promises.writeFile(path.join(tmpDir, "config.ts"), "export default {};");
+
+      const files = await collectFiles(tmpDir, ["**/*.ts", "**/*.{ts,tsx}"]);
+      expect(files).toHaveLength(1);
+      expect(files[0]).toContain("config.ts");
+    });
+
+    it("should still exclude node_modules with custom patterns", async () => {
+      const nmDir = path.join(tmpDir, "node_modules", "some-pkg");
+      await fs.promises.mkdir(nmDir, { recursive: true });
+      await fs.promises.writeFile(path.join(nmDir, "package.json"), "{}");
+      await fs.promises.writeFile(path.join(tmpDir, "data.json"), "{}");
+
+      const files = await collectFiles(tmpDir, ["**/*.json"]);
+      expect(files).toHaveLength(1);
+      expect(files[0]).toContain("data.json");
+    });
+
+    it("should return sorted results with custom patterns", async () => {
+      await fs.promises.writeFile(path.join(tmpDir, "z.json"), "{}");
+      await fs.promises.writeFile(path.join(tmpDir, "a.json"), "{}");
+      await fs.promises.writeFile(path.join(tmpDir, "m.json"), "{}");
+
+      const files = await collectFiles(tmpDir, ["**/*.json"]);
+      const basenames = files.map((f) => path.basename(f));
+      expect(basenames).toEqual(["a.json", "m.json", "z.json"]);
+    });
+
+    it("should use default TS patterns when patterns parameter is omitted", async () => {
+      await fs.promises.writeFile(path.join(tmpDir, "config.ts"), "export default {};");
+      await fs.promises.writeFile(path.join(tmpDir, "data.json"), "{}");
+
+      const files = await collectFiles(tmpDir);
+      expect(files).toHaveLength(1);
+      expect(files[0]).toContain("config.ts");
+    });
+  });
 });

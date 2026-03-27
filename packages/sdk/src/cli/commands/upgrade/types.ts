@@ -13,6 +13,8 @@ export interface MigrationRule {
   since: string;
   /** Maximum source version this rule applies to (semver, exclusive) */
   until: string;
+  /** Custom file glob patterns. Defaults to TypeScript patterns when omitted. */
+  filePatterns?: string[];
   /** The codemod transformation function */
   transform: (context: TransformContext) => Promise<TransformResult>;
 }
@@ -30,6 +32,15 @@ export interface TransformContext {
 }
 
 /**
+ * Before/after content of a single file transformation (for dry-run diff).
+ */
+export interface FileDiff {
+  file: string;
+  before: string;
+  after: string;
+}
+
+/**
  * Result of applying a single migration rule.
  */
 export interface TransformResult {
@@ -39,6 +50,8 @@ export interface TransformResult {
   filesModified: string[];
   /** Warnings about manual intervention needed */
   warnings: string[];
+  /** Before/after content for changed files (populated in dry-run mode) */
+  diffs?: FileDiff[];
 }
 
 /**
@@ -55,4 +68,6 @@ export interface MigrationSummary {
   warnings: string[];
   /** Rules that had errors during execution */
   errors: Array<{ ruleId: string; error: Error }>;
+  /** Before/after content for changed files (populated in dry-run mode) */
+  diffs?: FileDiff[];
 }

@@ -4,7 +4,7 @@ import { collectFiles } from "./file-collector";
 import { printMigrationSummary } from "./reporter";
 import { createDefaultRegistry } from "./rules";
 import { detectInstalledVersion } from "./version-detector";
-import type { MigrationSummary } from "./types";
+import type { FileDiff, MigrationSummary } from "./types";
 
 interface UpgradeOptions {
   to: string;
@@ -49,14 +49,18 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
 
   logger.info(`Found ${styles.bold(String(rules.length))} applicable migration rule(s)`);
 
-  // Step 3: Collect target files
-  const files = await collectFiles(projectRoot);
-  if (files.length === 0) {
+  // Step 3: Collect default target files (used by rules without custom patterns)
+  const defaultFiles = await collectFiles(projectRoot);
+
+  const hasCustomPatterns = rules.some((r) => r.filePatterns);
+  if (defaultFiles.length === 0 && !hasCustomPatterns) {
     logger.warn("No TypeScript files found in the project directory.");
     return;
   }
 
-  logger.info(`Scanning ${styles.bold(String(files.length))} TypeScript file(s)...`);
+  if (defaultFiles.length > 0) {
+    logger.info(`Scanning ${styles.bold(String(defaultFiles.length))} TypeScript file(s)...`);
+  }
 
   if (options.dryRun) {
     logger.info(`${styles.bold("[Dry Run]")} Changes will be previewed but not applied.`);
@@ -68,6 +72,7 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
   const modifiedFiles = new Set<string>();
   const warnings: string[] = [];
   const errors: MigrationSummary["errors"] = [];
+  const allDiffs: FileDiff[] = [];
   let rulesApplied = 0;
   let rulesSkipped = 0;
 
@@ -75,6 +80,9 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
     logger.info(`Running: ${styles.bold(rule.name)} - ${rule.description}`);
 
     try {
+      const files = rule.filePatterns
+        ? await collectFiles(projectRoot, rule.filePatterns)
+        : defaultFiles;
       const result = await rule.transform({
         projectRoot,
         files,
@@ -85,6 +93,9 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
         rulesApplied++;
         for (const file of result.filesModified) {
           modifiedFiles.add(file);
+        }
+        if (result.diffs) {
+          allDiffs.push(...result.diffs);
         }
         logger.success(`  ${result.filesModified.length} file(s) modified`);
       } else {
@@ -105,6 +116,7 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
     filesModified: [...modifiedFiles],
     warnings,
     errors,
+    diffs: allDiffs.length > 0 ? allDiffs : undefined,
   };
 
   logger.log("");

@@ -129,6 +129,50 @@ describe("migrate service - integration", () => {
     expect(errors[0].error.message).toBe("Transform failed");
   });
 
+  it("should pass custom files to rules with filePatterns", async () => {
+    // Create both TS and JSON files in the temp directory
+    await fs.promises.writeFile(path.join(tmpDir, "config.ts"), "export default {};");
+    await fs.promises.writeFile(path.join(tmpDir, "data.json"), "{}");
+
+    const receivedFiles: string[][] = [];
+
+    const ruleWithPatterns = createMockRule({
+      id: "test/json-rule",
+      filePatterns: ["**/*.json"],
+      transform: async (ctx: TransformContext): Promise<TransformResult> => {
+        receivedFiles.push([...ctx.files]);
+        return { changed: false, filesModified: [], warnings: [] };
+      },
+    });
+
+    const ruleWithoutPatterns = createMockRule({
+      id: "test/ts-rule",
+      transform: async (ctx: TransformContext): Promise<TransformResult> => {
+        receivedFiles.push([...ctx.files]);
+        return { changed: false, filesModified: [], warnings: [] };
+      },
+    });
+
+    // Simulate what service.ts does with filePatterns
+    const { collectFiles } = await import("./file-collector");
+    const defaultFiles = await collectFiles(tmpDir);
+
+    for (const rule of [ruleWithPatterns, ruleWithoutPatterns]) {
+      const files = rule.filePatterns
+        ? await collectFiles(tmpDir, rule.filePatterns)
+        : defaultFiles;
+      await rule.transform({ projectRoot: tmpDir, files, dryRun: false });
+    }
+
+    // Rule with filePatterns should receive only JSON files
+    expect(receivedFiles[0]).toHaveLength(1);
+    expect(receivedFiles[0][0]).toContain("data.json");
+
+    // Rule without filePatterns should receive only TS files (default)
+    expect(receivedFiles[1]).toHaveLength(1);
+    expect(receivedFiles[1][0]).toContain("config.ts");
+  });
+
   it("should collect warnings from rules that report changed: false", async () => {
     const rule = createMockRule({
       transform: async (): Promise<TransformResult> => ({

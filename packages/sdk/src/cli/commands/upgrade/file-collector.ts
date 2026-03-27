@@ -12,14 +12,18 @@ const DEFAULT_EXCLUDE = [
 ];
 
 /**
- * Collect TypeScript files from a project directory for migration.
+ * Collect files from a project directory for migration.
  * @param projectRoot - The project root directory
+ * @param patterns - Custom file glob patterns. Defaults to TypeScript patterns when omitted.
  * @returns Array of absolute file paths
  */
-export async function collectFiles(projectRoot: string): Promise<string[]> {
-  const files: string[] = [];
-  for await (const file of glob(DEFAULT_PATTERN, { cwd: projectRoot, exclude: DEFAULT_EXCLUDE })) {
-    files.push(path.resolve(projectRoot, file));
+export async function collectFiles(projectRoot: string, patterns?: string[]): Promise<string[]> {
+  const filePatterns = patterns ?? [DEFAULT_PATTERN];
+  const fileSet = new Set<string>();
+  for (const pattern of filePatterns) {
+    for await (const file of glob(pattern, { cwd: projectRoot, exclude: DEFAULT_EXCLUDE })) {
+      fileSet.add(path.resolve(projectRoot, file));
+    }
   }
-  return files.sort();
+  return [...fileSet].sort();
 }
