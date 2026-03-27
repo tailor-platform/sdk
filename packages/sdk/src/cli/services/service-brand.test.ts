@@ -77,7 +77,10 @@ describe("service brand-based error categorization", () => {
 
     test("executor-branded value is skipped by type loader", () => {
       const executor = brandValue(
-        { name: "onUserCreated", trigger: { kind: "recordCreated" } },
+        {
+          name: "onUserCreated",
+          trigger: { kind: "tailordb", events: ["tailordb.type_record.created"] },
+        },
         "executor",
       );
       expect(simulateServiceLoad(TailorDBTypeSchema, executor, "tailordb-type")).toBe("skipped");
@@ -128,7 +131,8 @@ describe("service brand-based error categorization", () => {
     const validExecutor = {
       name: "onUserCreated",
       trigger: {
-        kind: "recordCreated",
+        kind: "tailordb",
+        events: ["tailordb.type_record.created"],
         typeName: "User",
       },
       operation: {

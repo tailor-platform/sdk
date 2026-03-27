@@ -34,7 +34,10 @@ const templateHints: Record<string, string | undefined> = {
   generators: "Built-in generators: kysely, enums, files, seed",
 };
 
-const validateName = (name: string) => {
+const validateName = (name: string | undefined) => {
+  if (!name) {
+    return "Project name is required.";
+  }
   if (name.length < 3 || name.length > 30) {
     return "Project name must be between 3 and 30 characters long.";
   }

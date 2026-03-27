@@ -11,7 +11,7 @@ describe("controlplane", async () => {
 
   test("executor applied", async () => {
     const { executors } = await client.listExecutorExecutors({ workspaceId });
-    expect(executors.length).toBe(5);
+    expect(executors.length).toBe(6);
 
     const salesOrderCreated = executors.find((e) => e.name === "sales-order-created");
     expect(salesOrderCreated).toMatchObject({
@@ -99,6 +99,30 @@ describe("controlplane", async () => {
           },
         },
       },
+    });
+
+    const userChanged = executors.find((e) => e.name === "user-changed");
+    expect(userChanged).toMatchObject({
+      name: "user-changed",
+      description: "Triggered when a user is created or updated",
+      disabled: false,
+      triggerType: ExecutorTriggerType.EVENT,
+      triggerConfig: {
+        config: {
+          case: "event",
+          value: {
+            typedConfig: {
+              case: "tailordb",
+              value: {
+                eventTypes: ["tailordb.type_record.created", "tailordb.type_record.updated"],
+                namespaceName: "tailordb",
+                typeName: "User",
+              },
+            },
+          },
+        },
+      },
+      targetType: ExecutorTargetType.FUNCTION,
     });
 
     const userCreated = executors.find((e) => e.name === "user-created");

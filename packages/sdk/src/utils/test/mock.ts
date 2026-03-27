@@ -23,7 +23,16 @@ interface TailordbGlobal {
   };
 }
 
-const GlobalThis = globalThis as TailordbGlobal;
+interface TailorErrorItem {
+  message: string;
+  path: (string | number)[];
+}
+
+interface TailorErrorsGlobal {
+  TailorErrors?: new (errors: TailorErrorItem[]) => Error;
+}
+
+const GlobalThis = globalThis as TailordbGlobal & TailorErrorsGlobal;
 
 /**
  * Sets up a mock for `globalThis.tailordb.Client` used in bundled resolver/executor tests.
@@ -87,6 +96,22 @@ export function setupWorkflowMock(handler: JobHandler): {
   } as typeof GlobalThis.tailor;
 
   return { triggeredJobs };
+}
+
+/**
+ * Sets up a mock for `globalThis.TailorErrors` used in bundled resolver tests.
+ * Mimics the PF runtime's TailorErrors class that serializes errors with the `TailorErrors: ` prefix.
+ */
+export function setupTailorErrorsMock(): void {
+  GlobalThis.TailorErrors = class TailorErrors extends Error {
+    errors: TailorErrorItem[];
+
+    constructor(errors: TailorErrorItem[]) {
+      super(`TailorErrors: ${JSON.stringify({ errors })}`);
+      this.name = "TailorErrors";
+      this.errors = errors;
+    }
+  };
 }
 
 /**

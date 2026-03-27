@@ -50,7 +50,7 @@ export const deleteCommand = defineAppCommand({
       });
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
-        throw new Error(`Vault "${args.name}" not found.`);
+        throw new Error(`Vault "${args.name}" not found.`, { cause: error });
       }
       throw error;
     }

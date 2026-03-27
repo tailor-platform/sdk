@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
-import { setupTailordbMock } from "@/utils/test/mock";
+import { setupTailordbMock, setupTailorErrorsMock } from "@/utils/test/mock";
 import { prepareFixtures } from "./prepare";
 import type { BundledScripts } from "@/cli/commands/apply/function-registry";
 
@@ -53,6 +53,7 @@ describe("apply command integration tests", () => {
     vi.useFakeTimers();
     vi.setSystemTime(fixedSystemTime);
     setupTailordbMock();
+    setupTailorErrorsMock();
     const result = await prepareFixtures();
     outputDir = result.outputDir;
     bundledScripts = result.bundledScripts;
@@ -101,66 +102,88 @@ describe("apply command integration tests", () => {
       await expect(main({ input: { a: 4, b: 6 } })).resolves.not.toThrow();
     });
 
-    test("resolvers/add validates input correctly - negative value throws error", async () => {
+    test("resolvers/add validates input correctly - negative value throws TailorErrors", async () => {
       const code = bundledScripts.resolvers.get("add");
       expect(code).toBeDefined();
       const main = await importFromCode(code!, "resolvers/add");
-      await expect(main({ input: { a: -1, b: 5 } })).rejects.toThrow(
-        "a: Value must be non-negative",
-      );
+      await expect(main({ input: { a: -1, b: 5 } })).rejects.toSatisfy((error: Error) => {
+        const parsed = JSON.parse(error.message.replace("TailorErrors: ", ""));
+        expect(parsed.errors).toContainEqual({
+          message: "Value must be non-negative",
+          path: ["a"],
+        });
+        return true;
+      });
     });
 
-    test("resolvers/add validates input correctly - value >= 10 throws error", async () => {
+    test("resolvers/add validates input correctly - value >= 10 throws TailorErrors", async () => {
       const code = bundledScripts.resolvers.get("add");
       expect(code).toBeDefined();
       const main = await importFromCode(code!, "resolvers/add");
-      await expect(main({ input: { a: 10, b: 5 } })).rejects.toThrow(
-        "a: Value must be less than 10",
-      );
+      await expect(main({ input: { a: 10, b: 5 } })).rejects.toSatisfy((error: Error) => {
+        const parsed = JSON.parse(error.message.replace("TailorErrors: ", ""));
+        expect(parsed.errors).toContainEqual({
+          message: "Value must be less than 10",
+          path: ["a"],
+        });
+        return true;
+      });
     });
 
-    test("resolvers/add validates input correctly - b negative throws error", async () => {
+    test("resolvers/add validates input correctly - b negative throws TailorErrors", async () => {
       const code = bundledScripts.resolvers.get("add");
       expect(code).toBeDefined();
       const main = await importFromCode(code!, "resolvers/add");
-      await expect(main({ input: { a: 5, b: -2 } })).rejects.toThrow(
-        "b: Value must be non-negative",
-      );
+      await expect(main({ input: { a: 5, b: -2 } })).rejects.toSatisfy((error: Error) => {
+        const parsed = JSON.parse(error.message.replace("TailorErrors: ", ""));
+        expect(parsed.errors).toContainEqual({
+          message: "Value must be non-negative",
+          path: ["b"],
+        });
+        return true;
+      });
     });
 
-    test("resolvers/add validates input correctly - b >= 10 throws error", async () => {
+    test("resolvers/add validates input correctly - b >= 10 throws TailorErrors", async () => {
       const code = bundledScripts.resolvers.get("add");
       expect(code).toBeDefined();
       const main = await importFromCode(code!, "resolvers/add");
-      await expect(main({ input: { a: 5, b: 15 } })).rejects.toThrow(
-        "b: Value must be less than 10",
-      );
+      await expect(main({ input: { a: 5, b: 15 } })).rejects.toSatisfy((error: Error) => {
+        const parsed = JSON.parse(error.message.replace("TailorErrors: ", ""));
+        expect(parsed.errors).toContainEqual({
+          message: "Value must be less than 10",
+          path: ["b"],
+        });
+        return true;
+      });
     });
 
     test("resolvers/add validates input correctly - multiple errors", async () => {
       const code = bundledScripts.resolvers.get("add");
       expect(code).toBeDefined();
       const main = await importFromCode(code!, "resolvers/add");
-      await expect(main({ input: { a: -1, b: -2 } })).rejects.toThrow(
-        [
-          "Failed to input validation:",
-          "  a: Value must be non-negative",
-          "  b: Value must be non-negative",
-        ].join("\n"),
-      );
+      await expect(main({ input: { a: -1, b: -2 } })).rejects.toSatisfy((error: Error) => {
+        const parsed = JSON.parse(error.message.replace("TailorErrors: ", ""));
+        expect(parsed.errors).toEqual([
+          { message: "Value must be non-negative", path: ["a"] },
+          { message: "Value must be non-negative", path: ["b"] },
+        ]);
+        return true;
+      });
     });
 
     test("resolvers/add validates input correctly - both >= 10", async () => {
       const code = bundledScripts.resolvers.get("add");
       expect(code).toBeDefined();
       const main = await importFromCode(code!, "resolvers/add");
-      await expect(main({ input: { a: 10, b: 15 } })).rejects.toThrow(
-        [
-          "Failed to input validation:",
-          "  a: Value must be less than 10",
-          "  b: Value must be less than 10",
-        ].join("\n"),
-      );
+      await expect(main({ input: { a: 10, b: 15 } })).rejects.toSatisfy((error: Error) => {
+        const parsed = JSON.parse(error.message.replace("TailorErrors: ", ""));
+        expect(parsed.errors).toEqual([
+          { message: "Value must be less than 10", path: ["a"] },
+          { message: "Value must be less than 10", path: ["b"] },
+        ]);
+        return true;
+      });
     });
   });
 });

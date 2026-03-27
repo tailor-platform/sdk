@@ -2,8 +2,19 @@ import { z } from "zod";
 import { AuthInvokerSchema } from "../auth";
 import { functionSchema } from "../common";
 
-export const RecordTriggerSchema = z.object({
-  kind: z.enum(["recordCreated", "recordUpdated", "recordDeleted"]).describe("Record event type"),
+export const TailorDBTriggerSchema = z.object({
+  kind: z.literal("tailordb").describe("TailorDB record event trigger"),
+  events: z
+    .array(
+      z.enum([
+        "tailordb.type_record.created",
+        "tailordb.type_record.updated",
+        "tailordb.type_record.deleted",
+      ]),
+    )
+    .min(1)
+    .transform((arr) => [...new Set(arr)])
+    .describe("TailorDB event types to trigger on"),
   typeName: z.string().describe("TailorDB type name to watch for events"),
   condition: functionSchema.optional().describe("Condition function to filter events"),
 });
@@ -29,19 +40,31 @@ export const IncomingWebhookTriggerSchema = z.object({
 });
 
 export const IdpUserTriggerSchema = z.object({
-  kind: z
-    .enum(["idpUserCreated", "idpUserUpdated", "idpUserDeleted"])
-    .describe("IdP user event type"),
+  kind: z.literal("idpUser").describe("IdP user event trigger"),
+  events: z
+    .array(z.enum(["idp.user.created", "idp.user.updated", "idp.user.deleted"]))
+    .min(1)
+    .transform((arr) => [...new Set(arr)])
+    .describe("IdP user event types to trigger on"),
 });
 
 export const AuthAccessTokenTriggerSchema = z.object({
-  kind: z
-    .enum(["authAccessTokenIssued", "authAccessTokenRefreshed", "authAccessTokenRevoked"])
-    .describe("Auth access token event type"),
+  kind: z.literal("authAccessToken").describe("Auth access token event trigger"),
+  events: z
+    .array(
+      z.enum([
+        "auth.access_token.issued",
+        "auth.access_token.refreshed",
+        "auth.access_token.revoked",
+      ]),
+    )
+    .min(1)
+    .transform((arr) => [...new Set(arr)])
+    .describe("Auth access token event types to trigger on"),
 });
 
 export const TriggerSchema = z.discriminatedUnion("kind", [
-  RecordTriggerSchema,
+  TailorDBTriggerSchema,
   ResolverExecutedTriggerSchema,
   ScheduleTriggerSchema,
   IncomingWebhookTriggerSchema,
