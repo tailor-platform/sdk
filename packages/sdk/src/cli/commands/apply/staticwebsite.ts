@@ -8,7 +8,7 @@ import {
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
-import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
+import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
@@ -144,6 +144,7 @@ export async function planStaticWebsite(context: PlanContext) {
       existingWebsites[resource.name] = {
         resource,
         label: metadata?.labels[sdkNameLabelKey],
+        allLabels: metadata?.labels,
       };
     }),
   );
@@ -181,6 +182,7 @@ export async function planStaticWebsite(context: PlanContext) {
 
       if (
         isManagedByApp &&
+        hasMatchingSdkVersion(existing.allLabels, metaRequest.labels) &&
         areStaticWebsitesEqual(existing.resource as ProtoStaticWebsite, desired)
       ) {
         changeSet.unchanged.push({ name });

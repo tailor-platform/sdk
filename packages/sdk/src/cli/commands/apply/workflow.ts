@@ -4,7 +4,7 @@ import { type OperatorClient, fetchAll } from "@/cli/shared/client";
 import { createChangeSet, type ChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import { workflowJobFunctionName } from "./function-registry";
-import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
+import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { Workflow, RetryPolicy } from "@/types/workflow.generated";
 import type { MessageInitShape } from "@bufbuild/protobuf";
@@ -294,6 +294,7 @@ export async function planWorkflow(
       existingWorkflows[resource.name] = {
         resource,
         label: metadata?.labels[sdkNameLabelKey],
+        allLabels: metadata?.labels,
       };
     }),
   );
@@ -330,6 +331,7 @@ export async function planWorkflow(
 
       if (
         existing.label === appName &&
+        hasMatchingSdkVersion(existing.allLabels, metaRequest.labels) &&
         canTreatWorkflowAsUnchanged(
           existing.resource,
           workflow,

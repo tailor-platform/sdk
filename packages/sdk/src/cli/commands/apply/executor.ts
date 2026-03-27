@@ -20,7 +20,7 @@ import { stringifyFunction } from "@/parser/service/tailordb";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual, normalizeProtoConfig } from "./compare";
 import { executorFunctionName } from "./function-registry";
-import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
+import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
 import type { Application } from "@/cli/services/application";
@@ -116,6 +116,7 @@ export async function planExecutor(context: PlanContext) {
       existingExecutors[resource.name] = {
         resource,
         label: metadata?.labels[sdkNameLabelKey],
+        allLabels: metadata?.labels,
       };
     }),
   );
@@ -141,6 +142,7 @@ export async function planExecutor(context: PlanContext) {
 
       if (
         existing.label === application.name &&
+        hasMatchingSdkVersion(existing.allLabels, metaRequest.labels) &&
         areExecutorsEqual(existing.resource, desiredExecutor)
       ) {
         changeSet.unchanged.push({ name: executor.name });

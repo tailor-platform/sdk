@@ -3,7 +3,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { logger } from "@/cli/shared/logger";
 import { createChangeSet } from "./change-set";
-import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
+import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase } from "@/cli/commands/apply/apply";
 import type { Application } from "@/cli/services/application";
@@ -267,6 +267,7 @@ export async function planFunctionRegistry(
       existingMap[func.name] = {
         resource: func,
         label: metadata?.labels[sdkNameLabelKey],
+        allLabels: metadata?.labels,
       };
     }),
   );
@@ -294,7 +295,11 @@ export async function planFunctionRegistry(
         });
       }
 
-      if (existing.resource.contentHash === entry.contentHash && isManagedByApp) {
+      if (
+        existing.resource.contentHash === entry.contentHash &&
+        isManagedByApp &&
+        hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)
+      ) {
         changeSet.unchanged.push({
           name: entry.name,
         });

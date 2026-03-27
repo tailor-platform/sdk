@@ -22,7 +22,7 @@ import { buildResolverOperationHookExpr } from "@/cli/shared/runtime-args";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual, normalizeProtoConfig } from "./compare";
 import { resolverFunctionName } from "./function-registry";
-import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
+import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
 import type { Executor } from "@/types/executor.generated";
@@ -198,6 +198,7 @@ async function planServices(
       existingServices[resource.namespace.name] = {
         resource,
         label: metadata?.labels[sdkNameLabelKey],
+        allLabels: metadata?.labels,
       };
     }),
   );
@@ -219,7 +220,10 @@ async function planServices(
         });
       }
 
-      if (existing.label === appName) {
+      if (
+        existing.label === appName &&
+        hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)
+      ) {
         changeSet.unchanged.push({ name: pipeline.namespace });
       } else {
         changeSet.updates.push({
@@ -330,7 +334,9 @@ async function planResolvers(
 
   for (const pipeline of pipelines) {
     const existingResolvers = await fetchResolvers(pipeline.namespace);
-    const existingResolversMap = new Map(existingResolvers.map((resolver) => [resolver.name, resolver]));
+    const existingResolversMap = new Map(
+      existingResolvers.map((resolver) => [resolver.name, resolver]),
+    );
     for (const resolver of Object.values(pipeline.resolvers)) {
       const desiredResolver = processResolver(
         pipeline.namespace,

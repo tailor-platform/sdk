@@ -14,7 +14,7 @@ import {
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
-import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
+import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
 import type { IdP, IdPLang as IdPLangInput } from "@/types/idp.generated";
@@ -295,6 +295,7 @@ async function planServices(
       existingServices[resource.namespace.name] = {
         resource,
         label: metadata?.labels[sdkNameLabelKey],
+        allLabels: metadata?.labels,
       };
     }),
   );
@@ -352,7 +353,11 @@ async function planServices(
           currentOwner: existing.label,
         });
       }
-      if (isManagedByApp && areIdPServicesEqual(existing.resource, desired)) {
+      if (
+        isManagedByApp &&
+        hasMatchingSdkVersion(existing.allLabels, metaRequest.labels) &&
+        areIdPServicesEqual(existing.resource, desired)
+      ) {
         changeSet.unchanged.push({ name: namespaceName });
       } else {
         changeSet.updates.push({

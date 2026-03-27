@@ -61,6 +61,7 @@ describe("planWorkflow", () => {
       name: string;
       label?: string;
       resource?: Record<string, unknown>;
+      sdkVersion?: string;
     }>,
   ): OperatorClient {
     return {
@@ -73,7 +74,12 @@ describe("planWorkflow", () => {
         const workflow = existingWorkflows.find((w) => w.name === name);
         return {
           metadata: {
-            labels: workflow?.label ? { [sdkNameLabelKey]: workflow.label } : {},
+            labels: workflow?.label
+              ? {
+                  [sdkNameLabelKey]: workflow.label,
+                  "sdk-version": workflow.sdkVersion ?? "v1-0-0",
+                }
+              : {},
           },
         };
       }),
@@ -304,8 +310,8 @@ describe("planWorkflow", () => {
           metadata: {
             labels:
               jobName === "orphaned-job"
-                ? { [sdkNameLabelKey]: appName }
-                : { [sdkNameLabelKey]: "other-app" },
+                ? { [sdkNameLabelKey]: appName, "sdk-version": "v1-0-0" }
+                : { [sdkNameLabelKey]: "other-app", "sdk-version": "v1-0-0" },
           },
         };
       });

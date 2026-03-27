@@ -93,7 +93,12 @@ describe("planExecutor", () => {
 
   // Helper to create mock client
   function createMockClient(
-    existingExecutors: Array<{ name: string; label?: string; resource?: Record<string, unknown> }>,
+    existingExecutors: Array<{
+      name: string;
+      label?: string;
+      resource?: Record<string, unknown>;
+      sdkVersion?: string;
+    }>,
   ): OperatorClient {
     return {
       listExecutorExecutors: vi.fn().mockResolvedValue({
@@ -105,7 +110,12 @@ describe("planExecutor", () => {
         const executor = existingExecutors.find((e) => e.name === name);
         return {
           metadata: {
-            labels: executor?.label ? { [sdkNameLabelKey]: executor.label } : {},
+            labels: executor?.label
+              ? {
+                  [sdkNameLabelKey]: executor.label,
+                  "sdk-version": executor.sdkVersion ?? "v1-0-0",
+                }
+              : {},
           },
         };
       }),

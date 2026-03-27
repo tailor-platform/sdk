@@ -65,7 +65,11 @@ describe("planPipeline (resolver service level)", () => {
 
   // Helper to create mock client
   function createMockClient(
-    existingServices: Array<{ name: string; label?: string }>,
+    existingServices: Array<{
+      name: string;
+      label?: string;
+      sdkVersion?: string;
+    }>,
     existingResolvers: Record<string, Array<Record<string, unknown>>> = {},
   ): OperatorClient {
     return {
@@ -95,7 +99,12 @@ describe("planPipeline (resolver service level)", () => {
         const service = existingServices.find((s) => s.name === name);
         return {
           metadata: {
-            labels: service?.label ? { [sdkNameLabelKey]: service.label } : {},
+            labels: service?.label
+              ? {
+                  [sdkNameLabelKey]: service.label,
+                  "sdk-version": service.sdkVersion ?? "v1-0-0",
+                }
+              : {},
           },
         };
       }),
@@ -262,6 +271,27 @@ describe("planPipeline (resolver service level)", () => {
       expect(result.changeSet.service.deletes[0].name).toBe("my-resolver");
       expect(result.resourceOwners.has("other-app")).toBe(true);
     });
+
+    test("service is updated when sdk version differs", async () => {
+      const client = createMockClient([
+        { name: "resolver-a", label: appName, sdkVersion: "v0-9-0" },
+      ]);
+
+      const application = createMockApplication([createMockResolverService("resolver-a")]);
+
+      const ctx: PlanContext = {
+        client,
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: mockConfig,
+      };
+
+      const result = await planPipeline(ctx);
+
+      expect(result.changeSet.service.updates).toHaveLength(1);
+      expect(result.changeSet.service.unchanged).toHaveLength(0);
+    });
   });
 
   describe("resolver no-op detection", () => {
@@ -362,7 +392,11 @@ describe("processResolver authInvoker mapping", () => {
   const appName = "test-app";
 
   function createMockClient(
-    existingServices: Array<{ name: string; label?: string }>,
+    existingServices: Array<{
+      name: string;
+      label?: string;
+      sdkVersion?: string;
+    }>,
     existingResolvers: Record<string, Array<{ name: string }>> = {},
   ): OperatorClient {
     return {
@@ -383,7 +417,12 @@ describe("processResolver authInvoker mapping", () => {
         const service = existingServices.find((s) => s.name === name);
         return {
           metadata: {
-            labels: service?.label ? { [sdkNameLabelKey]: service.label } : {},
+            labels: service?.label
+              ? {
+                  [sdkNameLabelKey]: service.label,
+                  "sdk-version": service.sdkVersion ?? "v1-0-0",
+                }
+              : {},
           },
         };
       }),

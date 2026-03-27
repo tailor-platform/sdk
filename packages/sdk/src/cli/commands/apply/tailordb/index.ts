@@ -59,7 +59,13 @@ import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { logger } from "@/cli/shared/logger";
 import { createChangeSet } from "../change-set";
 import { areNormalizedEqual, normalizeProtoConfig } from "../compare";
-import { buildMetaRequest, sdkNameLabelKey, trnPrefix, type WithLabel } from "../label";
+import {
+  buildMetaRequest,
+  hasMatchingSdkVersion,
+  sdkNameLabelKey,
+  trnPrefix,
+  type WithLabel,
+} from "../label";
 import {
   executeMigrations,
   detectPendingMigrations,
@@ -1128,7 +1134,11 @@ async function planServices(
         });
       }
 
-      if (existing.label === appName && areTailorDBServicesEqual(existing.resource, tailordb)) {
+      if (
+        existing.label === appName &&
+        hasMatchingSdkVersion(existing.allLabels, metaRequest.labels) &&
+        areTailorDBServicesEqual(existing.resource, tailordb)
+      ) {
         changeSet.unchanged.push({ name: tailordb.namespace });
       } else {
         changeSet.updates.push({
@@ -1670,7 +1680,9 @@ function processNestedFields(
         vector: false,
         ...toProtoFieldHooks(nestedFieldConfig),
         fields: deepNestedFields,
-        ...(nestedFieldConfig.scale !== undefined && { scale: nestedFieldConfig.scale }),
+        ...(nestedFieldConfig.scale !== undefined && {
+          scale: nestedFieldConfig.scale,
+        }),
       };
     } else {
       nestedFields[nestedFieldName] = {
@@ -1696,7 +1708,9 @@ function processNestedFields(
             }),
           },
         }),
-        ...(nestedFieldConfig.scale !== undefined && { scale: nestedFieldConfig.scale }),
+        ...(nestedFieldConfig.scale !== undefined && {
+          scale: nestedFieldConfig.scale,
+        }),
       };
     }
   });

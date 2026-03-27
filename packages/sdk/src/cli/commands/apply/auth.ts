@@ -28,7 +28,7 @@ import { createChangeSet } from "./change-set";
 import { areNormalizedEqual, normalizeProtoConfig, normalizeStringArray } from "./compare";
 import { authHookFunctionName } from "./function-registry";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
-import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
+import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
 import type { AuthAttributeValue } from "@/types/auth";
@@ -375,6 +375,7 @@ async function planServices(
       existingServices[resource.namespace.name] = {
         resource,
         label: metadata?.labels[sdkNameLabelKey],
+        allLabels: metadata?.labels,
       };
     }),
   );
@@ -405,7 +406,8 @@ async function planServices(
 
       if (
         existing.resource.publishSessionEvents === (config.publishSessionEvents ?? false) &&
-        isManagedByApp
+        isManagedByApp &&
+        hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)
       ) {
         changeSet.unchanged.push({ name: config.name });
       } else {

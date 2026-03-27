@@ -64,7 +64,11 @@ describe("planTailorDB (service level)", () => {
   }
 
   function createMockClient(
-    existingServices: Array<{ name: string; label?: string }>,
+    existingServices: Array<{
+      name: string;
+      label?: string;
+      sdkVersion?: string;
+    }>,
   ): OperatorClient {
     return {
       listTailorDBServices: vi.fn().mockResolvedValue({
@@ -86,7 +90,12 @@ describe("planTailorDB (service level)", () => {
         const service = existingServices.find((s) => s.name === name);
         return {
           metadata: {
-            labels: service?.label ? { [sdkNameLabelKey]: service.label } : {},
+            labels: service?.label
+              ? {
+                  [sdkNameLabelKey]: service.label,
+                  "sdk-version": service.sdkVersion ?? "v1-0-0",
+                }
+              : {},
           },
         };
       }),
@@ -449,7 +458,7 @@ describe("planTailorDB (service level)", () => {
         }),
         getMetadata: vi.fn().mockResolvedValue({
           metadata: {
-            labels: { [sdkNameLabelKey]: appName },
+            labels: { [sdkNameLabelKey]: appName, "sdk-version": "v1-0-0" },
           },
         }),
         listTailorDBGQLPermissions: vi.fn().mockResolvedValue({

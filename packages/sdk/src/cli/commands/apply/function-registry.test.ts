@@ -71,7 +71,12 @@ describe("planFunctionRegistry", () => {
   }
 
   function createMockClient(
-    existingFunctions: Array<{ name: string; contentHash: string; label?: string }>,
+    existingFunctions: Array<{
+      name: string;
+      contentHash: string;
+      label?: string;
+      sdkVersion?: string;
+    }>,
   ): OperatorClient {
     return {
       listFunctionRegistries: vi.fn().mockResolvedValue({
@@ -89,7 +94,12 @@ describe("planFunctionRegistry", () => {
         const func = existingFunctions.find((f) => f.name === name);
         return {
           metadata: {
-            labels: func?.label ? { [sdkNameLabelKey]: func.label } : {},
+            labels: func?.label
+              ? {
+                  [sdkNameLabelKey]: func.label,
+                  "sdk-version": func.sdkVersion ?? "v1-0-0",
+                }
+              : {},
           },
         };
       }),
@@ -199,6 +209,23 @@ describe("planFunctionRegistry", () => {
       expect(result.changeSet.updates).toHaveLength(1);
       expect(result.changeSet.unchanged).toHaveLength(0);
       expect(result.conflicts).toHaveLength(1);
+    });
+
+    test("matching function content is updated when sdk version differs", async () => {
+      const entry = createEntry("resolver/ns/getUser");
+      const client = createMockClient([
+        {
+          name: "resolver/ns/getUser",
+          contentHash: entry.contentHash,
+          label: appName,
+          sdkVersion: "v0-9-0",
+        },
+      ]);
+
+      const result = await planFunctionRegistry(client, workspaceId, appName, [entry]);
+
+      expect(result.changeSet.updates).toHaveLength(1);
+      expect(result.changeSet.unchanged).toHaveLength(0);
     });
   });
 

@@ -69,6 +69,7 @@ function createMockClient(
     disableIntrospection?: boolean;
     disabled?: boolean;
     subgraphs?: Array<{ serviceType: number; serviceNamespace: string }>;
+    sdkVersion?: string;
   }>,
 ): OperatorClient {
   return {
@@ -79,6 +80,20 @@ function createMockClient(
     listAuthIDPConfigs: vi.fn().mockResolvedValue({
       idpConfigs: [],
       nextPageToken: "",
+    }),
+    getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
+      const name = trn.split(":").pop();
+      const application = applications.find((app) => app.name === name);
+      return {
+        metadata: {
+          labels: application
+            ? {
+                "sdk-name": appName,
+                "sdk-version": application.sdkVersion ?? "v1-0-0",
+              }
+            : {},
+        },
+      };
     }),
   } as unknown as OperatorClient;
 }
@@ -132,6 +147,37 @@ describe("planApplication", () => {
           { serviceType: Subgraph_ServiceType.TAILORDB, serviceNamespace: "tailordb-a" },
           { serviceType: Subgraph_ServiceType.PIPELINE, serviceNamespace: "pipeline-a" },
         ],
+      },
+    ]);
+
+    const result = await planApplication(createContext(client));
+
+    expect(result.updates).toHaveLength(1);
+    expect(result.updates[0].name).toBe(appName);
+    expect(result.unchanged).toHaveLength(0);
+  });
+
+  test("marks application updated when sdk version differs", async () => {
+    const client = createMockClient([
+      {
+        name: appName,
+        authNamespace: "auth-a",
+        authIdpConfigName: "idp-a",
+        cors: ["https://a.example.com", "https://b.example.com"],
+        allowedIpAddresses: ["1.1.1.1", "2.2.2.2"],
+        disableIntrospection: true,
+        disabled: false,
+        subgraphs: [
+          {
+            serviceType: Subgraph_ServiceType.TAILORDB,
+            serviceNamespace: "tailordb-a",
+          },
+          {
+            serviceType: Subgraph_ServiceType.PIPELINE,
+            serviceNamespace: "pipeline-a",
+          },
+        ],
+        sdkVersion: "v0-9-0",
       },
     ]);
 

@@ -1,5 +1,5 @@
-import { format } from "date-fns";
 import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+import { format } from "date-fns";
 
 export const fetchDetails = createWorkflowJob({
   name: "fetch-details",
