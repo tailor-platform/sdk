@@ -746,6 +746,10 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
       const files: GeneratorResult["files"] = [];
       const namespaceConfigs: NamespaceConfig[] = [];
 
+      // Process IdP user early so we can add reverse FK to the user profile type
+      const idpUser = ctx.auth ? (processIdpUser(ctx.auth) ?? null) : null;
+      const hasIdpUser = idpUser !== null;
+
       for (const ns of ctx.tailordb) {
         const types: string[] = [];
         const dependencies: Record<string, string[]> = {};
@@ -755,6 +759,17 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
           const source = ns.sourceInfo.get(typeName)!;
           const typeInfo = processSeedTypeInfo(type, ns.namespace);
           const linesDb = processLinesDb(type, source);
+
+          // Add reverse FK from userProfile type to _User
+          if (idpUser && typeName === idpUser.schema.userTypeName) {
+            linesDb.foreignKeys.push({
+              column: idpUser.schema.usernameField,
+              references: {
+                table: "_User",
+                column: "name",
+              },
+            });
+          }
 
           types.push(typeInfo.name);
           dependencies[typeInfo.name] = typeInfo.dependencies;
@@ -825,10 +840,6 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
           selfRefTypes,
         });
       }
-
-      // Process IdP user if configured
-      const idpUser = ctx.auth ? (processIdpUser(ctx.auth) ?? null) : null;
-      const hasIdpUser = idpUser !== null;
 
       if (idpUser) {
         // Generate empty JSONL data file
