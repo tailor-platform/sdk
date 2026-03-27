@@ -443,17 +443,9 @@ See [Built-in Interfaces](https://docs.tailor.tech/guides/function/builtin-inter
 
 ### CLI Management
 
-Auth connections can also be managed entirely via the CLI:
+Auth connections can also be managed via the CLI:
 
 ```bash
-# Create a connection
-tailor-sdk authconnection create \
-  --name google-connection \
-  --provider-url https://accounts.google.com \
-  --issuer-url https://accounts.google.com \
-  --client-id $GOOGLE_CLIENT_ID \
-  --client-secret $GOOGLE_CLIENT_SECRET
-
 # Authorize (opens browser for OAuth2 flow)
 tailor-sdk authconnection authorize --name google-connection \
   --client-secret $GOOGLE_CLIENT_SECRET
@@ -464,6 +456,8 @@ tailor-sdk authconnection list
 # Revoke a connection
 tailor-sdk authconnection revoke --name google-connection
 ```
+
+Connection creation is handled by `tailor-sdk apply` via the config.
 
 See [Auth Resource Commands](../cli/auth.md) for full CLI documentation.
 
@@ -506,7 +500,6 @@ Manage Auth resources using the CLI:
 
 ```bash
 # Auth connections
-tailor-sdk authconnection create --name <name> --provider-url <url> ...
 tailor-sdk authconnection authorize --name <name>
 tailor-sdk authconnection list
 tailor-sdk authconnection revoke --name <name>

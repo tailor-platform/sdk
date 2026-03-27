@@ -167,7 +167,6 @@ Commands for managing Auth service resources.
 
 | Command                                                            | Description                   |
 | ------------------------------------------------------------------ | ----------------------------- |
-| [authconnection create](./cli/auth.md#authconnection-create)       | Create an auth connection     |
 | [authconnection authorize](./cli/auth.md#authconnection-authorize) | Authorize an auth connection  |
 | [authconnection list](./cli/auth.md#authconnection-list)           | List all auth connections     |
 | [authconnection revoke](./cli/auth.md#authconnection-revoke)       | Revoke an auth connection     |
