@@ -238,6 +238,91 @@ Returns `{ output, count }`.
 Wrap matched expressions using a template with `$EXPR` placeholder.
 Returns `{ output, count }`.
 
+#### `replacePropertyValue(source, objectPattern, propertyName, replacer, lang?)`
+
+Replace the value of a specific property within objects matching a pattern.
+The `replacer` function receives the value `SgNode` and returns the new
+value text. Returns `{ output, count }`.
+
+```typescript
+const { output, count } = replacePropertyValue(
+  source,
+  "config($$$ARGS)",
+  "handler",
+  (valueNode) => `newHandler(${valueNode.text()})`,
+);
+```
+
+#### `transformCallArguments(source, functionName, transformer, lang?)`
+
+Transform the arguments of function calls matching a name pattern. The
+`transformer` receives an array of argument `SgNode`s (comma separators
+filtered out) and returns the new arguments string. The function name is
+preserved; use `renameIdentifiers` separately to change it.
+Returns `{ output, count }`.
+
+```typescript
+const { output, count } = transformCallArguments(source, "defineGenerators", (args) => {
+  return args
+    .map((arg) => {
+      // Convert tuple ["pkg", opts] to plugin function call
+      const text = arg.text();
+      const match = text.match(/\["@tailor-platform\/(.+?)"(?:,\s*(.+))?\]/s);
+      if (!match) return text;
+      const [, pkgName, opts] = match;
+      const fnName = pkgName.replace(/-(\w)/g, (_, c) => c.toUpperCase()) + "Plugin";
+      return opts ? `${fnName}(${opts.trim()})` : `${fnName}()`;
+    })
+    .join(", ");
+});
+```
+
+Supports receiver patterns too: `transformCallArguments(source, "$OBJ.method", ...)`.
+
+#### `renamePropertyAtPath(source, rootPattern, propertyPath, oldName, newName, lang?)`
+
+Rename a property at a specific nested path within objects matching a
+pattern. The `propertyPath` is dot-separated (e.g., `"userProfile.attributes"`).
+Use empty string `""` for root-level properties. Properties with the same
+name at other nesting levels are not affected. Returns `{ output, count }`.
+
+```typescript
+const { output, count } = renamePropertyAtPath(
+  source,
+  "defineAuth($$$ARGS)",
+  "userProfile", // navigate to userProfile first
+  "attributes", // then rename this property
+  "map",
+);
+// { userProfile: { attributes: {...} } } → { userProfile: { map: {...} } }
+// Root-level `attributes` is untouched
+```
+
+#### `transformJsonFile(filePath, mutator, dryRun)` (async)
+
+Read a JSON file, apply a mutator function to the parsed value, and
+optionally write back. Output is formatted with 2-space indentation and
+trailing newline. Returns `TransformFileResult` (same as `transformFile`).
+
+```typescript
+const result = await transformJsonFile(
+  "package.json",
+  (parsed) => {
+    const pkg = parsed as Record<string, unknown>;
+    const scripts = { ...(pkg.scripts as Record<string, string>) };
+    if (scripts.apply) {
+      scripts.deploy = scripts.apply.replace("apply", "deploy");
+      delete scripts.apply;
+    }
+    return { ...pkg, scripts };
+  },
+  ctx.dryRun,
+);
+```
+
+The mutator returns `null` to signal no change. If the serialized output
+matches the original file content, `changed` is `false`.
+
 ### `createWarningRule(meta, scanSource)` (from rule-helpers.ts)
 
 Create a rule that scans files and emits warnings without modifying them.
@@ -316,22 +401,29 @@ Use this to choose the right transformation strategy:
 4. **Does the migration involve both a method rename AND a property rename?**
    - Yes → Hybrid: `applyPatternReplace` for method + `renameIdentifiers` for property
 5. **Do function arguments need restructuring?**
-   - Yes → `applyPatternReplace` with `$$$ARGS` + `getArgs`
-6. **Does a property need to be added to or removed from an object?**
+   - Yes → `transformCallArguments` (receives parsed args, returns new arg string)
+   - Complex cases → `applyPatternReplace` with `$$$ARGS` + `getArgs`
+6. **Does a property value need to be replaced (not the key)?**
+   - Yes → `replacePropertyValue` with replacer function
+7. **Does a nested property need renaming at a specific path?**
+   - Yes → `renamePropertyAtPath` (dot-separated path to target)
+8. **Does a property need to be added to or removed from an object?**
    - Add → `addProperty` with pattern match
    - Remove → `removeProperty` with pattern match
-7. **Does an expression need to be wrapped?**
+9. **Does an expression need to be wrapped?**
    - Yes → `wrapExpression` with `$EXPR` placeholder
-8. **Does an import specifier need to be added, removed, or renamed?**
-   - Add → `addImportSpecifier`
-   - Remove → `removeImportSpecifier`
-   - Rename (import only, not body) → `renameImportSpecifier`
-9. **Is the target a string literal** (e.g. import path)?
-   - Yes → `source.includes()` + `replaceAll` (AST helpers don't match strings)
-10. **Is the change behavior-only (no code fix, just warn)?**
+10. **Does an import specifier need to be added, removed, or renamed?**
+    - Add → `addImportSpecifier`
+    - Remove → `removeImportSpecifier`
+    - Rename (import only, not body) → `renameImportSpecifier`
+11. **Is the target a string literal** (e.g. import path)?
+    - Yes → `source.includes()` + `replaceAll` (AST helpers don't match strings)
+12. **Is the change behavior-only (no code fix, just warn)?**
     - Yes → `createWarningRule` (emits warnings without modifying files)
-11. **Does the rule need to scan non-TypeScript files?**
+13. **Does the rule need to scan non-TypeScript files?**
     - Yes → Set `filePatterns` on the rule metadata
+14. **Does the rule need to transform JSON files** (e.g., package.json)?
+    - Yes → Use `transformJsonFile` in a manual rule (JSON is not AST-parsed)
 
 ## Common Patterns
 
@@ -657,7 +749,170 @@ export const updatedAtDefaultRule = createWarningRule(
 The scan function can return a single string, an array of strings, or
 null. The returned `WarningRule` exposes `scanSource` for direct testing.
 
-### Non-TypeScript file rules (scripts, JSON, CI configs)
+### Function argument restructuring
+
+Use `transformCallArguments` when function call arguments need structural
+changes (e.g., tuple to function call conversion). The transformer receives
+parsed argument nodes and returns the new arguments string:
+
+```typescript
+import { transformCallArguments, renameIdentifiers } from "../../codemod-engine";
+import { createRule } from "../../rule-helpers";
+
+export const generatorsToPluginsRule = createRule(
+  {
+    id: "v2/my-rule",
+    name: "...",
+    description: "...",
+    since: "1.0.0",
+    until: "2.0.0",
+  },
+  (source) => {
+    let result = source;
+    let changed = false;
+
+    // Transform arguments from tuples to plugin calls
+    const r1 = transformCallArguments(result, "defineGenerators", (args) => {
+      return args
+        .map((arg) => {
+          const text = arg.text();
+          const match = text.match(/\["@tailor-platform\/(.+?)"(?:,\s*(.+))?\]/s);
+          if (!match) return text;
+          const [, pkgName, opts] = match;
+          const fnName = pkgName.replace(/-(\w)/g, (_, c: string) => c.toUpperCase()) + "Plugin";
+          return opts ? `${fnName}(${opts.trim()})` : `${fnName}()`;
+        })
+        .join(", ");
+    });
+    if (r1.count > 0) {
+      result = r1.output;
+      changed = true;
+    }
+
+    // Rename the function itself
+    const r2 = renameIdentifiers(result, "defineGenerators", "definePlugins");
+    if (r2.count > 0) {
+      result = r2.output;
+      changed = true;
+    }
+
+    return changed ? result : null;
+  },
+);
+```
+
+### Property value replacement
+
+Use `replacePropertyValue` when a property value needs to change but the
+key stays the same:
+
+```typescript
+import { replacePropertyValue } from "../../codemod-engine";
+import { createRule } from "../../rule-helpers";
+
+export const handlerMigrationRule = createRule(
+  {
+    id: "v2/my-rule",
+    name: "...",
+    description: "...",
+    since: "1.0.0",
+    until: "2.0.0",
+  },
+  (source) => {
+    const { output, count } = replacePropertyValue(
+      source,
+      "config($$$ARGS)",
+      "handler",
+      (valueNode) => `wrapHandler(${valueNode.text()})`,
+    );
+    return count > 0 && output !== source ? output : null;
+  },
+);
+```
+
+### Nested property rename (path-targeted)
+
+Use `renamePropertyAtPath` when a property rename must be scoped to a
+specific nesting path to avoid false positives:
+
+```typescript
+import { renamePropertyAtPath } from "../../codemod-engine";
+import { createRule } from "../../rule-helpers";
+
+export const authAttributesRule = createRule(
+  {
+    id: "v2/my-rule",
+    name: "...",
+    description: "...",
+    since: "1.0.0",
+    until: "2.0.0",
+  },
+  (source) => {
+    const { output, count } = renamePropertyAtPath(
+      source,
+      "defineAuth($$$ARGS)",
+      "userProfile", // navigate to userProfile first
+      "attributes", // then rename this property
+      "map",
+    );
+    return count > 0 && output !== source ? output : null;
+  },
+);
+```
+
+### JSON file transformation (package.json, etc.)
+
+Use `transformJsonFile` in a manual rule for JSON file changes. Since JSON
+isn't AST-parsed, this uses `JSON.parse`/`JSON.stringify`:
+
+```typescript
+import { transformJsonFile } from "../../codemod-engine";
+import type { FileDiff, MigrationRule } from "../../types";
+
+export const packageJsonRule: MigrationRule = {
+  id: "v2/my-rule",
+  name: "...",
+  description: "...",
+  since: "1.0.0",
+  until: "2.0.0",
+  filePatterns: ["**/package.json"],
+  async transform(ctx) {
+    const filesModified: string[] = [];
+    const diffs: FileDiff[] = [];
+
+    for (const file of ctx.files) {
+      const result = await transformJsonFile(
+        file,
+        (parsed) => {
+          const pkg = parsed as Record<string, unknown>;
+          const scripts = { ...(pkg.scripts as Record<string, string> | undefined) };
+          if (!scripts?.apply) return null;
+          scripts.deploy = scripts.apply.replace("apply", "deploy");
+          delete scripts.apply;
+          return { ...pkg, scripts };
+        },
+        ctx.dryRun,
+      );
+
+      if (result.changed) {
+        filesModified.push(file);
+        if (result.before && result.after) {
+          diffs.push({ file, before: result.before, after: result.after });
+        }
+      }
+    }
+
+    return {
+      changed: filesModified.length > 0,
+      filesModified,
+      warnings: [],
+      diffs: diffs.length > 0 ? diffs : undefined,
+    };
+  },
+};
+```
+
+### Non-TypeScript file rules (scripts, CI configs)
 
 Rules that need to scan non-TypeScript files set `filePatterns`:
 
@@ -671,7 +926,7 @@ export const cliCommandRenameRule = createRule(
     description: "...",
     since: "1.0.0",
     until: "2.0.0",
-    filePatterns: ["**/*.sh", "**/*.yml", "**/*.yaml", "**/package.json"],
+    filePatterns: ["**/*.sh", "**/*.yml", "**/*.yaml"],
   },
   (source) => {
     if (!source.includes("tailor-sdk apply")) return null;
