@@ -1,4 +1,4 @@
-/* eslint-disable import/order */
+/* eslint-disable import-x/order */
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "pathe";

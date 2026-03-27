@@ -1,5 +1,5 @@
-import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { format } from "oxfmt";
 import { assertDocMatch, createCommandRenderer } from "politty/docs";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -8,15 +8,13 @@ import { mainCommand } from "./index";
 import type { FileConfig } from "politty/docs";
 
 /**
- * Format markdown content using oxfmt
+ * Format markdown content using oxfmt JS API
  * @param content - Markdown content to format
  * @returns Formatted markdown content
  */
-function mdFormatter(content: string): string {
-  return execSync("pnpm oxfmt --stdin-filepath=file.md", {
-    input: content,
-    encoding: "utf-8",
-  });
+async function mdFormatter(content: string): Promise<string> {
+  const result = await format("file.md", content);
+  return result.code;
 }
 
 vi.mock("node:module", async () => {

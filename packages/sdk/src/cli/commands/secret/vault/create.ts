@@ -22,7 +22,7 @@ export const createCommand = defineAppCommand({
       profile: args.profile,
     });
     const client = await initOperatorClient(accessToken);
-    const workspaceId = loadWorkspaceId({
+    const workspaceId = await loadWorkspaceId({
       workspaceId: args["workspace-id"],
       profile: args.profile,
     });
@@ -34,7 +34,7 @@ export const createCommand = defineAppCommand({
       });
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.AlreadyExists) {
-        throw new Error(`Vault "${args.name}" already exists.`);
+        throw new Error(`Vault "${args.name}" already exists.`, { cause: error });
       }
       throw error;
     }

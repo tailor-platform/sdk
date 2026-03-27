@@ -11,7 +11,7 @@ import {
   initOAuth2Client,
 } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
-import { readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
+import { readPlatformConfig, saveUserTokens, writePlatformConfig } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { prompt } from "@/cli/shared/prompt";
 
@@ -43,15 +43,16 @@ const startAuthServer = async () => {
         );
         const userInfo = await fetchUserInfo(tokens.accessToken);
 
-        const pfConfig = readPlatformConfig();
-        pfConfig.users = {
-          ...pfConfig.users,
-          [userInfo.email]: {
-            access_token: tokens.accessToken,
-            refresh_token: tokens.refreshToken!,
-            token_expires_at: new Date(tokens.expiresAt!).toISOString(),
+        const pfConfig = await readPlatformConfig();
+        await saveUserTokens(
+          pfConfig,
+          userInfo.email,
+          {
+            accessToken: tokens.accessToken,
+            refreshToken: tokens.refreshToken ?? undefined,
           },
-        };
+          new Date(tokens.expiresAt!).toISOString(),
+        );
         pfConfig.current_user = userInfo.email;
         writePlatformConfig(pfConfig);
 
@@ -110,14 +111,13 @@ async function loginAsMachineUser(args: { clientId: string; clientSecret?: strin
   const clientSecret = args.clientSecret ?? (await prompt.password({ message: "Client secret" }));
   const tokens = await fetchPlatformMachineUserToken(args.clientId, clientSecret);
 
-  const pfConfig = readPlatformConfig();
-  pfConfig.users = {
-    ...pfConfig.users,
-    [args.clientId]: {
-      access_token: tokens.accessToken,
-      token_expires_at: new Date(tokens.expiresAt!).toISOString(),
-    },
-  };
+  const pfConfig = await readPlatformConfig();
+  await saveUserTokens(
+    pfConfig,
+    args.clientId,
+    { accessToken: tokens.accessToken },
+    new Date(tokens.expiresAt!).toISOString(),
+  );
   pfConfig.current_user = args.clientId;
   writePlatformConfig(pfConfig);
 }

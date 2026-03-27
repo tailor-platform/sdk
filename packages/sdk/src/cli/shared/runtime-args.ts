@@ -47,29 +47,18 @@ export function buildExecutorArgsExpr(
   const envExpr = `env: ${JSON.stringify(env)}`;
 
   switch (triggerKind) {
-    // Event triggers with actor + standard field mapping
     case "schedule":
-    case "recordCreated":
-    case "recordUpdated":
-    case "recordDeleted":
-    case "idpUserCreated":
-    case "idpUserUpdated":
-    case "idpUserDeleted":
-    case "authAccessTokenIssued":
-    case "authAccessTokenRefreshed":
-    case "authAccessTokenRevoked":
       return `({ ...args, appNamespace: args.namespaceName, ${ACTOR_TRANSFORM_EXPR}, ${envExpr} })`;
 
-    // resolverExecuted: actor + success/result/error mapping
     case "resolverExecuted":
       return `({ ...args, appNamespace: args.namespaceName, ${ACTOR_TRANSFORM_EXPR}, success: !!args.succeeded, result: args.succeeded?.result.resolver, error: args.failed?.error, ${envExpr} })`;
 
-    // incomingWebhook: rawBody mapping, no actor
     case "incomingWebhook":
       return `({ ...args, appNamespace: args.namespaceName, rawBody: args.raw_body, ${envExpr} })`;
 
     default:
-      throw new Error(`Unknown trigger kind for args expression: ${triggerKind satisfies never}`);
+      // All event triggers: inject event (short name) and rawEvent (full event type) from server-side eventType
+      return `({ ...args, event: args.eventType?.split(".").pop(), rawEvent: args.eventType, appNamespace: args.namespaceName, ${ACTOR_TRANSFORM_EXPR}, ${envExpr} })`;
   }
 }
 

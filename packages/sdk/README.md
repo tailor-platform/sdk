@@ -30,6 +30,8 @@ npm install @tailor-platform/sdk
 yarn add @tailor-platform/sdk
 # OR
 pnpm add @tailor-platform/sdk
+# OR
+bun add @tailor-platform/sdk
 ```
 
 ## Quick Start
@@ -95,5 +97,5 @@ See [Create Tailor Platform SDK](https://github.com/tailor-platform/sdk/tree/mai
 
 ## Requirements
 
-- Node.js 22 or later
+- Node.js 22 or later (or Bun)
 - A Tailor Platform account ([request access](https://www.tailor.tech/demo))

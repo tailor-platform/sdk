@@ -56,9 +56,17 @@ Available triggers beyond record CRUD (`recordCreatedTrigger`, `recordUpdatedTri
 - `scheduleTrigger` - CRON schedule
 - `incomingWebhookTrigger` - Webhook
 
+Multi-event trigger variants handle multiple events in one executor:
+
+- `recordTrigger({ type, events: ["created", "updated"] })` - Multiple record events
+- `idpUserTrigger({ events: ["created", "deleted"] })` - Multiple IdP user events
+- `authAccessTokenTrigger({ events: ["issued", "revoked"] })` - Multiple auth token events
+
+Args include `event` (short name like `"created"`) and `rawEvent` (full event type like `"tailordb.type_record.created"`) for runtime type narrowing.
+
 ### Generators
 
-`defineGenerators()` takes tuples as rest arguments (see `example/tailor.config.ts`). `@tailor-platform/kysely-type` is required for `getDB()` in resolvers/executors/workflows. Requires `@tailor-platform/function-types` as devDependency.
+`defineGenerators()` takes tuples as rest arguments (see `example/tailor.config.ts`). The `@tailor-platform/kysely-type` generator (built into the SDK) is required for `getDB()` in resolvers/executors/workflows.
 
 ### Configuration
 

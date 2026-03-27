@@ -1,17 +1,23 @@
 name: Install deps
 description: Install dependencies
 
+inputs:
+  node-version:
+    description: "Node.js major version to install"
+    required: false
+    default: "24"
+
 runs:
   using: composite
   steps:
-    - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+    - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
       name: Install pnpm
       with:
         standalone: true
         run_install: false
 
     - name: Install Node.js
-      run: pnpm env use --global 24
+      run: pnpm env use --global ${{ inputs.node-version }}
       shell: bash
 
     - name: Install dependencies

@@ -150,7 +150,7 @@ export async function listExecutorJobs<E extends ExecutorLike>(
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);
-  const workspaceId = loadWorkspaceId({
+  const workspaceId = await loadWorkspaceId({
     workspaceId: options.workspaceId,
     profile: options.profile,
   });
@@ -184,7 +184,7 @@ export async function listExecutorJobs<E extends ExecutorLike>(
     return jobs.map(toExecutorJobListInfo);
   } catch (error) {
     if (error instanceof ConnectError && error.code === Code.NotFound) {
-      throw new Error(`Executor '${executorName}' not found.`);
+      throw new Error(`Executor '${executorName}' not found.`, { cause: error });
     }
     throw error;
   }
@@ -211,7 +211,7 @@ export async function getExecutorJob<E extends ExecutorLike>(
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);
-  const workspaceId = loadWorkspaceId({
+  const workspaceId = await loadWorkspaceId({
     workspaceId: options.workspaceId,
     profile: options.profile,
   });
@@ -250,7 +250,9 @@ export async function getExecutorJob<E extends ExecutorLike>(
     return jobInfo;
   } catch (error) {
     if (error instanceof ConnectError && error.code === Code.NotFound) {
-      throw new Error(`Job '${options.jobId}' not found for executor '${executorName}'.`);
+      throw new Error(`Job '${options.jobId}' not found for executor '${executorName}'.`, {
+        cause: error,
+      });
     }
     throw error;
   }
@@ -277,7 +279,7 @@ export async function watchExecutorJob<E extends ExecutorLike>(
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);
-  const workspaceId = loadWorkspaceId({
+  const workspaceId = await loadWorkspaceId({
     workspaceId: options.workspaceId,
     profile: options.profile,
   });

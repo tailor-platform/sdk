@@ -89,7 +89,7 @@ export const deleteCommand = defineAppCommand({
     });
 
     // Remove profiles associated with the deleted workspace
-    const pfConfig = readPlatformConfig();
+    const pfConfig = await readPlatformConfig();
     const profilesToDelete = Object.entries(pfConfig.profiles).filter(
       ([, profile]) => profile?.workspace_id === workspaceId,
     );

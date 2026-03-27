@@ -384,8 +384,6 @@ export async function applyTailorDB(
   const { changeSet, context: migrationContext } = result;
 
   if (phase === "create-update") {
-    let pendingMigrations: PendingMigration[] = [];
-
     // Validate and detect migrations
     // Build types by namespace map
     const typesByNamespace = new Map<string, Record<string, TailorDBType>>();
@@ -396,7 +394,7 @@ export async function applyTailorDB(
       }
     }
 
-    pendingMigrations = await validateAndDetectMigrations(
+    const pendingMigrations = await validateAndDetectMigrations(
       client,
       migrationContext.workspaceId,
       typesByNamespace,
@@ -1218,11 +1216,7 @@ async function planTypes(
 
   const executorUsedTypes = new Set<string>();
   for (const executor of executors) {
-    if (
-      executor.trigger.kind === "recordCreated" ||
-      executor.trigger.kind === "recordUpdated" ||
-      executor.trigger.kind === "recordDeleted"
-    ) {
+    if (executor.trigger.kind === "tailordb") {
       executorUsedTypes.add(executor.trigger.typeName);
     }
   }

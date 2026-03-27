@@ -29,7 +29,7 @@ export async function getOAuth2Client(
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);
-  const workspaceId = loadWorkspaceId({
+  const workspaceId = await loadWorkspaceId({
     workspaceId: options.workspaceId,
     profile: options.profile,
   });
@@ -53,7 +53,7 @@ export async function getOAuth2Client(
     return toOAuth2ClientCredentials(oauth2Client!);
   } catch (error) {
     if (error instanceof ConnectError && error.code === Code.NotFound) {
-      throw new Error(`OAuth2 client '${options.name}' not found.`);
+      throw new Error(`OAuth2 client '${options.name}' not found.`, { cause: error });
     }
     throw error;
   }

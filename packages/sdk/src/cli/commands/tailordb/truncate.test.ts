@@ -4,7 +4,7 @@ import { truncate } from "./truncate";
 // Mock dependencies
 vi.mock("@/cli/shared/context", () => ({
   loadAccessToken: vi.fn().mockResolvedValue("mock-token"),
-  loadWorkspaceId: vi.fn().mockReturnValue("mock-workspace-id"),
+  loadWorkspaceId: vi.fn().mockResolvedValue("mock-workspace-id"),
 }));
 
 vi.mock("@/cli/shared/client", () => ({

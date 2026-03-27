@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import { register } from "node:module";
 import { defineCommand, runMain } from "politty";
 import { withCompletionCommand } from "politty/completion";
 import { z } from "zod";
@@ -33,8 +32,14 @@ import { commonArgs, isVerbose } from "./shared/args";
 import { isCLIError } from "./shared/errors";
 import { logger } from "./shared/logger";
 import { readPackageJson } from "./shared/package-json";
+import { isNativeTypeScriptRuntime } from "./shared/runtime";
 
-register("tsx", import.meta.url, { data: {} });
+// Register tsx for TypeScript loading on Node.js.
+// Bun and Deno handle TypeScript natively, so registration is skipped.
+if (!isNativeTypeScriptRuntime()) {
+  const { register } = await import("node:module");
+  register("tsx", import.meta.url, { data: {} });
+}
 
 // Runs before globalArgs effects load --env-file, so env file overrides for
 // TAILOR_CRASH_REPORTS_* are not available for early startup failures.

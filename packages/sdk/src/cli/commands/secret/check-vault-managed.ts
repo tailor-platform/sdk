@@ -28,7 +28,7 @@ export async function checkVaultManaged(
   const notManaged = { isManaged: false, trn, existingLabels: {} };
 
   let owner: string | undefined;
-  let allLabels: Record<string, string> = {};
+  let allLabels: Record<string, string>;
   try {
     const { metadata } = await client.getMetadata({ trn });
     allLabels = metadata?.labels ?? {};

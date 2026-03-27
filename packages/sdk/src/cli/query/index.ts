@@ -143,7 +143,7 @@ async function loadOptions(options: QueryBaseOptions) {
     profile: result.data.profile,
   });
   const client = await initOperatorClient(accessToken);
-  const workspaceId = loadWorkspaceId({
+  const workspaceId = await loadWorkspaceId({
     workspaceId: result.data.workspaceId,
     profile: result.data.profile,
   });
@@ -326,6 +326,7 @@ async function resolveEditedQueryInput(engine: QueryEngine): Promise<QueryComman
     } catch (error) {
       throw new Error(
         `Failed to open query editor "${editor}": ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error },
       );
     }
 

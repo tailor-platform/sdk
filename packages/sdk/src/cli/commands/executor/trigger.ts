@@ -96,7 +96,7 @@ async function triggerExecutorByName(
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);
-  const workspaceId = loadWorkspaceId({
+  const workspaceId = await loadWorkspaceId({
     workspaceId: options.workspaceId,
     profile: options.profile,
   });
@@ -111,10 +111,10 @@ async function triggerExecutorByName(
     return { jobId: response.jobId };
   } catch (error) {
     if (error instanceof ConnectError && error.code === Code.NotFound) {
-      throw new Error(`Executor '${options.executorName}' not found.`);
+      throw new Error(`Executor '${options.executorName}' not found.`, { cause: error });
     }
     if (error instanceof ConnectError && error.code === Code.InvalidArgument) {
-      throw new Error(`Invalid argument: ${error.message}`);
+      throw new Error(`Invalid argument: ${error.message}`, { cause: error });
     }
     throw error;
   }
@@ -222,7 +222,7 @@ The \`--logs\` option displays logs from the downstream execution when available
       profile: args.profile,
     });
     const client = await initOperatorClient(accessToken);
-    const workspaceId = loadWorkspaceId({
+    const workspaceId = await loadWorkspaceId({
       workspaceId: args["workspace-id"],
       profile: args.profile,
     });

@@ -1,8 +1,12 @@
 // CLI API exports for programmatic usage
-import { register } from "node:module";
+import { isNativeTypeScriptRuntime } from "./shared/runtime";
 
-// Register tsx to handle TypeScript files when using CLI API programmatically
-register("tsx", import.meta.url, { data: {} });
+// Register tsx to handle TypeScript files when using CLI API programmatically.
+// Bun and Deno handle TypeScript natively, so registration is skipped.
+if (!isNativeTypeScriptRuntime()) {
+  const { register } = await import("node:module");
+  register("tsx", import.meta.url, { data: {} });
+}
 
 export { apply } from "./commands/apply/apply";
 export type { ApplyOptions } from "./commands/apply/apply";

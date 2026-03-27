@@ -36,7 +36,7 @@ export async function resumeWorkflow(
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);
-  const workspaceId = loadWorkspaceId({
+  const workspaceId = await loadWorkspaceId({
     workspaceId: options.workspaceId,
     profile: options.profile,
   });
@@ -61,10 +61,12 @@ export async function resumeWorkflow(
   } catch (error) {
     if (error instanceof ConnectError) {
       if (error.code === Code.NotFound) {
-        throw new Error(`Execution '${options.executionId}' not found.`);
+        throw new Error(`Execution '${options.executionId}' not found.`, { cause: error });
       }
       if (error.code === Code.FailedPrecondition) {
-        throw new Error(`Execution '${options.executionId}' is not in a resumable state.`);
+        throw new Error(`Execution '${options.executionId}' is not in a resumable state.`, {
+          cause: error,
+        });
       }
     }
     throw error;

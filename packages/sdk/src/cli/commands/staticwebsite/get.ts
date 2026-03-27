@@ -25,7 +25,7 @@ export const getCommand = defineAppCommand({
       profile: args.profile,
     });
     const client = await initOperatorClient(accessToken);
-    const workspaceId = loadWorkspaceId({
+    const workspaceId = await loadWorkspaceId({
       workspaceId: args["workspace-id"],
       profile: args.profile,
     });
@@ -55,7 +55,7 @@ export const getCommand = defineAppCommand({
       logger.out(info);
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
-        throw new Error(notFoundErrorMessage);
+        throw new Error(notFoundErrorMessage, { cause: error });
       }
       throw error;
     }

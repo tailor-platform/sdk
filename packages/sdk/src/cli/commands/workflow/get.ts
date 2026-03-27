@@ -70,7 +70,7 @@ export async function getWorkflow<W extends WorkflowLike>(
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);
-  const workspaceId = loadWorkspaceId({
+  const workspaceId = await loadWorkspaceId({
     workspaceId: options.workspaceId,
     profile: options.profile,
   });
@@ -80,7 +80,7 @@ export async function getWorkflow<W extends WorkflowLike>(
     return toWorkflowInfo(workflow);
   } catch (error) {
     if (error instanceof ConnectError && error.code === Code.NotFound) {
-      throw new Error(`Workflow '${name}' not found.`);
+      throw new Error(`Workflow '${name}' not found.`, { cause: error });
     }
     throw error;
   }

@@ -66,7 +66,12 @@ export interface PluginGeneratedResolver {
 }
 
 export interface PluginRecordTriggerConfig {
-  kind: "recordCreated" | "recordUpdated" | "recordDeleted";
+  kind: "tailordb";
+  events: (
+    | "tailordb.type_record.created"
+    | "tailordb.type_record.updated"
+    | "tailordb.type_record.deleted"
+  )[];
   typeName: string;
 }
 

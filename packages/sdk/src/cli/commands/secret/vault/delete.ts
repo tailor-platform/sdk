@@ -25,7 +25,7 @@ export const deleteCommand = defineAppCommand({
       profile: args.profile,
     });
     const client = await initOperatorClient(accessToken);
-    const workspaceId = loadWorkspaceId({
+    const workspaceId = await loadWorkspaceId({
       workspaceId: args["workspace-id"],
       profile: args.profile,
     });
@@ -50,7 +50,7 @@ export const deleteCommand = defineAppCommand({
       });
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
-        throw new Error(`Vault "${args.name}" not found.`);
+        throw new Error(`Vault "${args.name}" not found.`, { cause: error });
       }
       throw error;
     }

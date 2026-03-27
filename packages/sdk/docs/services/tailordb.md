@@ -243,10 +243,10 @@ export const customer = db
   });
 ```
 
-**⚠️ Important:** Field-level and type-level hooks cannot coexist on the same field. TypeScript will prevent this at compile time:
+**Important:** Field-level and type-level hooks cannot coexist on the same field. TypeScript will prevent this at compile time:
 
 ```typescript
-// ❌ Compile error - cannot set hooks on the same field twice
+// Compile error - cannot set hooks on the same field twice
 export const user = db
   .type("User", {
     name: db.string().hooks({ create: ({ data }) => data.firstName }), // Field-level
@@ -255,7 +255,7 @@ export const user = db
     name: { create: ({ data }) => data.lastName }, // Type-level - ERROR
   });
 
-// ✅ Correct - set hooks on different fields
+// OK - set hooks on different fields
 export const user = db
   .type("User", {
     firstName: db.string().hooks({ create: () => "John" }), // Field-level on firstName
@@ -306,10 +306,10 @@ export const user = db
   });
 ```
 
-**⚠️ Important:** Field-level and type-level validation cannot coexist on the same field. TypeScript will prevent this at compile time:
+**Important:** Field-level and type-level validation cannot coexist on the same field. TypeScript will prevent this at compile time:
 
 ```typescript
-// ❌ Compile error - cannot set validation on the same field twice
+// Compile error - cannot set validation on the same field twice
 export const user = db
   .type("User", {
     name: db.string().validate(({ value }) => value.length > 0), // Field-level
@@ -318,7 +318,7 @@ export const user = db
     name: [({ value }) => value.length < 100, "Too long"], // Type-level - ERROR
   });
 
-// ✅ Correct - set validation on different fields
+// OK - set validation on different fields
 export const user = db
   .type("User", {
     name: db.string().validate(({ value }) => value.length > 0), // Field-level on name
@@ -448,6 +448,78 @@ db.type("User", {
      publishEvents: false, // Explicitly disable
    });
    ```
+
+### Field Extraction (`pickFields` / `omitFields`)
+
+Extract subsets of fields from a `TailorDBType` for reuse in resolvers, executors, seed schemas, etc.
+
+#### `pickFields(keys, options)`
+
+Select specific fields and optionally modify their properties:
+
+```typescript
+const user = db.type("User", {
+  id: db.uuid(),
+  name: db.string(),
+  email: db.string().unique(),
+  ...db.fields.timestamps(),
+});
+
+// Pick id and createdAt, making them optional
+user.pickFields(["id", "createdAt"], { optional: true });
+```
+
+Available options:
+
+| Option     | Effect                                |
+| ---------- | ------------------------------------- |
+| `optional` | Makes the selected fields optional    |
+| `array`    | Makes the selected fields array types |
+
+#### `omitFields(keys)`
+
+Return all fields except the specified ones:
+
+```typescript
+// All fields except id and createdAt
+user.omitFields(["id", "createdAt"]);
+```
+
+#### Common Pattern: Input Schema Composition
+
+The typical use case is combining `pickFields` and `omitFields` with spread syntax to build input schemas where identifiers are optional but other fields remain required:
+
+```typescript
+import { createResolver, t } from "@tailor-platform/sdk";
+import { user } from "../tailordb/user";
+
+export default createResolver({
+  name: "createUser",
+  operation: "mutation",
+  input: {
+    // id/createdAt are optional (auto-generated), other fields are required
+    ...user.pickFields(["id", "createdAt"], { optional: true }),
+    ...user.omitFields(["id", "createdAt"]),
+  },
+  output: t.object({ id: t.uuid() }),
+  body: async (context) => {
+    // ...
+    return { id: "..." };
+  },
+});
+```
+
+This is also used in seed data schemas:
+
+```typescript
+import { t } from "@tailor-platform/sdk";
+import { invoice } from "../../tailordb/invoice";
+
+const schemaType = t.object({
+  ...invoice.pickFields(["id", "createdAt"], { optional: true }),
+  ...invoice.omitFields(["id", "createdAt", "invoiceNumber", "sequentialId"]),
+});
+```
 
 ### Permissions
 

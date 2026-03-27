@@ -40,7 +40,7 @@ async function secretList(options: SecretListOptions): Promise<SecretInfo[]> {
     profile: options.profile,
   });
   const client = await initOperatorClient(accessToken);
-  const workspaceId = loadWorkspaceId({
+  const workspaceId = await loadWorkspaceId({
     workspaceId: options.workspaceId,
     profile: options.profile,
   });
@@ -77,7 +77,7 @@ export const listSecretCommand = defineAppCommand({
       logger.out(secrets);
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
-        throw new Error(`Vault "${args["vault-name"]}" not found.`);
+        throw new Error(`Vault "${args["vault-name"]}" not found.`, { cause: error });
       }
       throw error;
     }

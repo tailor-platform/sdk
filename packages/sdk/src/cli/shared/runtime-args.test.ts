@@ -5,18 +5,7 @@ describe("buildExecutorArgsExpr", () => {
   const env = { API_URL: "https://example.com", DEBUG: true };
 
   describe("event triggers (with actor)", () => {
-    const eventTriggerKinds = [
-      "schedule",
-      "recordCreated",
-      "recordUpdated",
-      "recordDeleted",
-      "idpUserCreated",
-      "idpUserUpdated",
-      "idpUserDeleted",
-      "authAccessTokenIssued",
-      "authAccessTokenRefreshed",
-      "authAccessTokenRevoked",
-    ] as const;
+    const eventTriggerKinds = ["schedule", "tailordb", "idpUser", "authAccessToken"] as const;
 
     for (const kind of eventTriggerKinds) {
       test(`${kind} includes appNamespace, actor transform, and env`, () => {
@@ -30,10 +19,18 @@ describe("buildExecutorArgsExpr", () => {
       });
     }
 
-    test("all event triggers produce identical expressions", () => {
-      const exprs = eventTriggerKinds.map((kind) => buildExecutorArgsExpr(kind, env));
-      const unique = new Set(exprs);
-      expect(unique.size).toBe(1);
+    test("event triggers inject kind and rawKind from args.eventType", () => {
+      const eventKinds = ["tailordb", "idpUser", "authAccessToken"] as const;
+      for (const kind of eventKinds) {
+        const expr = buildExecutorArgsExpr(kind, env);
+        expect(expr).toContain('event: args.eventType?.split(".").pop()');
+        expect(expr).toContain("rawEvent: args.eventType");
+      }
+    });
+
+    test("schedule trigger does not inject event", () => {
+      const expr = buildExecutorArgsExpr("schedule", env);
+      expect(expr).not.toContain("event:");
     });
   });
 

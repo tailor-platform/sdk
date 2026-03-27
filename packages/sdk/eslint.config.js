@@ -2,7 +2,8 @@ import eslint from "@eslint/js";
 import { defineConfig, globalIgnores } from "eslint/config";
 import globals from "globals";
 import tseslint from "typescript-eslint";
-import importPlugin from "eslint-plugin-import";
+import { createTypeScriptImportResolver } from "eslint-import-resolver-typescript";
+import importPlugin from "eslint-plugin-import-x";
 import jsdocPlugin from "eslint-plugin-jsdoc";
 import oxlint from "eslint-plugin-oxlint";
 
@@ -19,7 +20,11 @@ export default defineConfig([
   eslint.configs.recommended,
   tseslint.configs.recommended,
   importPlugin.flatConfigs.recommended,
-  importPlugin.flatConfigs.typescript,
+  {
+    settings: {
+      "import-x/resolver-next": [createTypeScriptImportResolver()],
+    },
+  },
   jsdocPlugin.configs["flat/recommended"],
   {
     linterOptions: {
@@ -55,9 +60,9 @@ export default defineConfig([
         "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
-      "import/no-cycle": ["error", { maxDepth: Infinity }],
-      "import/no-unresolved": "off",
-      "import/order": [
+      "import-x/no-cycle": ["error", { maxDepth: Infinity }],
+      "import-x/no-unresolved": "off",
+      "import-x/order": [
         "error",
         {
           groups: ["builtin", "external", "internal", "parent", "sibling", "index", "type"],
@@ -311,7 +316,7 @@ export default defineConfig([
   {
     files: ["e2e/**/*.ts"],
     rules: {
-      "import/no-unresolved": "off",
+      "import-x/no-unresolved": "off",
     },
   },
   {
@@ -323,7 +328,7 @@ export default defineConfig([
       },
     },
     rules: {
-      "import/no-unresolved": "off",
+      "import-x/no-unresolved": "off",
     },
   },
   ...oxlint.buildFromOxlintConfigFile("./.oxlintrc.json"),

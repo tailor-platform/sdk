@@ -25,7 +25,7 @@ export const createSecretCommand = defineAppCommand({
       profile: args.profile,
     });
     const client = await initOperatorClient(accessToken);
-    const workspaceId = loadWorkspaceId({
+    const workspaceId = await loadWorkspaceId({
       workspaceId: args["workspace-id"],
       profile: args.profile,
     });
@@ -52,10 +52,10 @@ export const createSecretCommand = defineAppCommand({
     } catch (error) {
       if (error instanceof ConnectError) {
         if (error.code === Code.NotFound) {
-          throw new Error(`Vault "${args["vault-name"]}" not found.`);
+          throw new Error(`Vault "${args["vault-name"]}" not found.`, { cause: error });
         }
         if (error.code === Code.AlreadyExists) {
-          throw new Error(`Secret "${args.name}" already exists.`);
+          throw new Error(`Secret "${args.name}" already exists.`, { cause: error });
         }
       }
       throw error;
