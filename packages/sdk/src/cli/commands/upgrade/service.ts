@@ -1,3 +1,6 @@
+import * as fs from "node:fs";
+import * as readline from "node:readline";
+import * as path from "pathe";
 import { CLIError } from "@/cli/shared/errors";
 import { logger, styles } from "@/cli/shared/logger";
 import { collectFiles } from "./file-collector";
@@ -10,6 +13,20 @@ interface UpgradeOptions {
   to: string;
   dryRun: boolean;
   path: string;
+  interactive?: boolean;
+}
+
+async function promptConfirm(message: string): Promise<boolean> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stderr,
+  });
+  return new Promise((resolve) => {
+    rl.question(`${message} (y/n) `, (answer) => {
+      rl.close();
+      resolve(answer.toLowerCase().startsWith("y"));
+    });
+  });
 }
 
 /**
@@ -64,6 +81,10 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
 
   if (options.dryRun) {
     logger.info(`${styles.bold("[Dry Run]")} Changes will be previewed but not applied.`);
+  } else if (options.interactive) {
+    logger.info(
+      `${styles.bold("[Interactive]")} You will be prompted to accept or skip each rule.`,
+    );
   }
 
   logger.log("");
@@ -80,24 +101,54 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
     logger.info(`Running: ${styles.bold(rule.name)} - ${rule.description}`);
 
     try {
+      // In interactive mode, always run with dryRun to get diffs first
+      const effectiveDryRun = options.interactive || options.dryRun;
       const files = rule.filePatterns
         ? await collectFiles(projectRoot, rule.filePatterns)
         : defaultFiles;
       const result = await rule.transform({
         projectRoot,
         files,
-        dryRun: options.dryRun,
+        dryRun: effectiveDryRun,
       });
 
       if (result.changed) {
-        rulesApplied++;
-        for (const file of result.filesModified) {
-          modifiedFiles.add(file);
+        if (options.interactive && !options.dryRun && result.diffs) {
+          // Show diff preview for each file
+          for (const diff of result.diffs) {
+            const displayPath = path.relative(projectRoot, diff.file);
+            logger.log(`  ${styles.bold(displayPath)}`);
+            const lines = diff.before.split("\n").length;
+            logger.log(`    ${styles.dim(`${lines} line(s) affected`)}`);
+          }
+
+          const accepted = await promptConfirm(`  Apply changes from "${rule.name}"?`);
+
+          if (accepted) {
+            // Write the changes
+            for (const diff of result.diffs) {
+              await fs.promises.writeFile(diff.file, diff.after, "utf-8");
+            }
+            rulesApplied++;
+            for (const file of result.filesModified) {
+              modifiedFiles.add(file);
+            }
+            logger.success(`  ${result.filesModified.length} file(s) modified`);
+          } else {
+            rulesSkipped++;
+            logger.log(`  ${styles.dim("Skipped by user")}`);
+          }
+        } else {
+          // Normal (non-interactive) flow
+          rulesApplied++;
+          for (const file of result.filesModified) {
+            modifiedFiles.add(file);
+          }
+          if (result.diffs) {
+            allDiffs.push(...result.diffs);
+          }
+          logger.success(`  ${result.filesModified.length} file(s) modified`);
         }
-        if (result.diffs) {
-          allDiffs.push(...result.diffs);
-        }
-        logger.success(`  ${result.filesModified.length} file(s) modified`);
       } else {
         rulesSkipped++;
         logger.log(`  ${styles.dim("No changes needed")}`);

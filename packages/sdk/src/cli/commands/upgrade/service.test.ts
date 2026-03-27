@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import * as readline from "node:readline";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RuleRegistry } from "./rule-registry";
 import type { MigrationRule, TransformContext, TransformResult } from "./types";
@@ -27,6 +28,8 @@ vi.mock("@/cli/shared/logger", () => ({
     path: (s: string) => s,
   },
 }));
+
+vi.mock("node:readline");
 
 /**
  * Test the migration pipeline logic by importing individual components
@@ -206,5 +209,183 @@ describe("migrate service - integration", () => {
 
     expect(summary.rulesSkipped).toBe(1);
     expect(summary.warnings).toEqual(["Manual step required: update config"]);
+  });
+});
+
+describe("upgrade - interactive mode", () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    vi.resetModules();
+    tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "migrate-interactive-test-"));
+    // Create a package.json with SDK dependency so version detection works
+    await fs.promises.writeFile(
+      path.join(tmpDir, "package.json"),
+      JSON.stringify({
+        dependencies: { "@tailor-platform/sdk": "1.0.0" },
+      }),
+    );
+    // Create node_modules structure for installed version detection
+    const sdkDir = path.join(tmpDir, "node_modules", "@tailor-platform", "sdk");
+    await fs.promises.mkdir(sdkDir, { recursive: true });
+    await fs.promises.writeFile(
+      path.join(sdkDir, "package.json"),
+      JSON.stringify({ name: "@tailor-platform/sdk", version: "1.0.0" }),
+    );
+    // Create a target TS file
+    await fs.promises.writeFile(path.join(tmpDir, "test.ts"), 'const x = "before";');
+  });
+
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    await fs.promises.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  function mockReadlineAnswer(answer: string): void {
+    const mockRl = {
+      question: vi.fn((_query: string, cb: (answer: string) => void) => {
+        cb(answer);
+      }),
+      close: vi.fn(),
+    };
+    vi.mocked(readline.createInterface).mockReturnValue(mockRl as unknown as readline.Interface);
+  }
+
+  function createChangingRule(id: string, filePath: string, afterContent: string): MigrationRule {
+    return {
+      id,
+      name: `Rule ${id}`,
+      description: `Test rule ${id}`,
+      since: "1.0.0",
+      until: "2.0.0",
+      transform: async (ctx: TransformContext): Promise<TransformResult> => {
+        const beforeContent = await fs.promises.readFile(filePath, "utf-8");
+        if (!ctx.dryRun) {
+          await fs.promises.writeFile(filePath, afterContent, "utf-8");
+        }
+        return {
+          changed: true,
+          filesModified: [filePath],
+          warnings: [],
+          diffs: [{ file: filePath, before: beforeContent, after: afterContent }],
+        };
+      },
+    };
+  }
+
+  it("should pass dryRun=true to rules when interactive mode is enabled", async () => {
+    const receivedDryRun: boolean[] = [];
+
+    vi.doMock("./rules", () => ({
+      createDefaultRegistry: () => ({
+        getApplicableRules: () => [
+          {
+            id: "test/spy",
+            name: "Spy Rule",
+            description: "Captures dryRun flag",
+            since: "1.0.0",
+            until: "2.0.0",
+            transform: async (ctx: TransformContext): Promise<TransformResult> => {
+              receivedDryRun.push(ctx.dryRun);
+              return { changed: false, filesModified: [], warnings: [] };
+            },
+          },
+        ],
+      }),
+    }));
+
+    const { upgrade } = await import("./service");
+    await upgrade({ to: "2.0.0", dryRun: false, path: tmpDir, interactive: true });
+
+    expect(receivedDryRun).toEqual([true]);
+  });
+
+  it("should write files when user accepts changes in interactive mode", async () => {
+    mockReadlineAnswer("y");
+
+    const filePath = path.join(tmpDir, "test.ts");
+    const afterContent = 'const x = "after";';
+
+    vi.doMock("./rules", () => ({
+      createDefaultRegistry: () => ({
+        getApplicableRules: () => [createChangingRule("test/accept", filePath, afterContent)],
+      }),
+    }));
+
+    const { upgrade } = await import("./service");
+    await upgrade({ to: "2.0.0", dryRun: false, path: tmpDir, interactive: true });
+
+    const written = await fs.promises.readFile(filePath, "utf-8");
+    expect(written).toBe(afterContent);
+  });
+
+  it("should not write files when user rejects changes in interactive mode", async () => {
+    mockReadlineAnswer("n");
+
+    const filePath = path.join(tmpDir, "test.ts");
+    const originalContent = await fs.promises.readFile(filePath, "utf-8");
+
+    vi.doMock("./rules", () => ({
+      createDefaultRegistry: () => ({
+        getApplicableRules: () => [
+          createChangingRule("test/reject", filePath, 'const x = "changed";'),
+        ],
+      }),
+    }));
+
+    const { upgrade } = await import("./service");
+    await upgrade({ to: "2.0.0", dryRun: false, path: tmpDir, interactive: true });
+
+    const written = await fs.promises.readFile(filePath, "utf-8");
+    expect(written).toBe(originalContent);
+  });
+
+  it("should count rejected rules as skipped", async () => {
+    mockReadlineAnswer("n");
+
+    const filePath = path.join(tmpDir, "test.ts");
+
+    vi.doMock("./rules", () => ({
+      createDefaultRegistry: () => ({
+        getApplicableRules: () => [
+          createChangingRule("test/skip", filePath, 'const x = "changed";'),
+        ],
+      }),
+    }));
+
+    const { upgrade } = await import("./service");
+    await upgrade({ to: "2.0.0", dryRun: false, path: tmpDir, interactive: true });
+
+    // "Skipped by user" should appear in the log calls
+    const { logger } = await import("@/cli/shared/logger");
+    const logCalls = vi.mocked(logger.log).mock.calls.flat();
+    expect(logCalls.some((c) => typeof c === "string" && c.includes("Skipped by user"))).toBe(true);
+  });
+
+  it("should fall back to dry-run when both dryRun and interactive are set", async () => {
+    // dryRun takes precedence - no prompt should be shown
+    const filePath = path.join(tmpDir, "test.ts");
+    const originalContent = await fs.promises.readFile(filePath, "utf-8");
+
+    vi.doMock("./rules", () => ({
+      createDefaultRegistry: () => ({
+        getApplicableRules: () => [
+          createChangingRule("test/dryrun-priority", filePath, 'const x = "changed";'),
+        ],
+      }),
+    }));
+
+    // Clear any prior call counts before this test's assertion
+    vi.mocked(readline.createInterface).mockClear();
+
+    const { upgrade } = await import("./service");
+    await upgrade({ to: "2.0.0", dryRun: true, path: tmpDir, interactive: true });
+
+    // File should not be modified (dry-run takes precedence)
+    const written = await fs.promises.readFile(filePath, "utf-8");
+    expect(written).toBe(originalContent);
+
+    // readline should not have been called during this test
+    expect(readline.createInterface).not.toHaveBeenCalled();
   });
 });

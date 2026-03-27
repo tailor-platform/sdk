@@ -15,6 +15,10 @@ export const upgradeCommand = defineAppCommand({
         alias: "d",
         description: "Preview changes without modifying files",
       }),
+      interactive: arg(z.boolean().default(false), {
+        alias: "i",
+        description: "Interactively accept or skip each rule's changes",
+      }),
       path: arg(z.string().default("."), {
         description: "Project directory to upgrade",
         completion: { type: "directory" },
@@ -29,6 +33,7 @@ export const upgradeCommand = defineAppCommand({
     await upgrade({
       to: args.to,
       dryRun: args["dry-run"],
+      interactive: args.interactive,
       path: path.resolve(args.path),
     });
   },
