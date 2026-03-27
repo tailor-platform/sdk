@@ -112,7 +112,7 @@ export function renameIdentifiers(
   // Use word-boundary regex instead of replaceAll to avoid corrupting longer
   // identifiers that contain the renamed name as a substring.
   const pattern = new RegExp(`\\b${escapeRegExp(oldName)}\\b`, "g");
-  return { output: source.replace(pattern, newName), count: matches.length };
+  return { output: source.replace(pattern, () => newName), count: matches.length };
 }
 
 /**
