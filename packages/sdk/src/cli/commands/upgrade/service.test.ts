@@ -1,7 +1,6 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import * as readline from "node:readline";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RuleRegistry } from "./rule-registry";
 import type { MigrationRule, TransformContext, TransformResult } from "./types";
@@ -29,7 +28,11 @@ vi.mock("@/cli/shared/logger", () => ({
   },
 }));
 
-vi.mock("node:readline");
+vi.mock("@/cli/shared/prompt", () => ({
+  prompt: {
+    confirm: vi.fn(),
+  },
+}));
 
 /**
  * Test the migration pipeline logic by importing individual components
@@ -295,14 +298,9 @@ describe("upgrade - interactive mode", () => {
     await fs.promises.rm(tmpDir, { recursive: true, force: true });
   });
 
-  function mockReadlineAnswer(answer: string): void {
-    const mockRl = {
-      question: vi.fn((_query: string, cb: (answer: string) => void) => {
-        cb(answer);
-      }),
-      close: vi.fn(),
-    };
-    vi.mocked(readline.createInterface).mockReturnValue(mockRl as unknown as readline.Interface);
+  async function mockPromptConfirm(answer: boolean): Promise<void> {
+    const { prompt } = await import("@/cli/shared/prompt");
+    vi.mocked(prompt.confirm).mockResolvedValue(answer);
   }
 
   function createChangingRule(id: string, filePath: string, afterContent: string): MigrationRule {
@@ -355,7 +353,7 @@ describe("upgrade - interactive mode", () => {
   });
 
   it("should write files when user accepts changes in interactive mode", async () => {
-    mockReadlineAnswer("y");
+    await mockPromptConfirm(true);
 
     const filePath = path.join(tmpDir, "test.ts");
     const afterContent = 'const x = "after";';
@@ -374,7 +372,7 @@ describe("upgrade - interactive mode", () => {
   });
 
   it("should not write files when user rejects changes in interactive mode", async () => {
-    mockReadlineAnswer("n");
+    await mockPromptConfirm(false);
 
     const filePath = path.join(tmpDir, "test.ts");
     const originalContent = await fs.promises.readFile(filePath, "utf-8");
@@ -395,7 +393,7 @@ describe("upgrade - interactive mode", () => {
   });
 
   it("should count rejected rules as skipped", async () => {
-    mockReadlineAnswer("n");
+    await mockPromptConfirm(false);
 
     const filePath = path.join(tmpDir, "test.ts");
 
@@ -429,8 +427,8 @@ describe("upgrade - interactive mode", () => {
       }),
     }));
 
-    // Clear any prior call counts before this test's assertion
-    vi.mocked(readline.createInterface).mockClear();
+    const { prompt } = await import("@/cli/shared/prompt");
+    vi.mocked(prompt.confirm).mockClear();
 
     const { upgrade } = await import("./service");
     await upgrade({ to: "2.0.0", dryRun: true, path: tmpDir, interactive: true });
@@ -439,7 +437,7 @@ describe("upgrade - interactive mode", () => {
     const written = await fs.promises.readFile(filePath, "utf-8");
     expect(written).toBe(originalContent);
 
-    // readline should not have been called during this test
-    expect(readline.createInterface).not.toHaveBeenCalled();
+    // prompt.confirm should not have been called (dry-run skips interactive prompt)
+    expect(prompt.confirm).not.toHaveBeenCalled();
   });
 });

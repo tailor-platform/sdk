@@ -1,8 +1,8 @@
 import * as fs from "node:fs";
-import * as readline from "node:readline";
 import * as path from "pathe";
 import { CLIError } from "@/cli/shared/errors";
 import { logger, styles } from "@/cli/shared/logger";
+import { prompt } from "@/cli/shared/prompt";
 import { collectFiles } from "./file-collector";
 import { printMigrationSummary } from "./reporter";
 import { createDefaultRegistry } from "./rules";
@@ -14,19 +14,6 @@ interface UpgradeOptions {
   dryRun: boolean;
   path: string;
   interactive?: boolean;
-}
-
-async function promptConfirm(message: string): Promise<boolean> {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stderr,
-  });
-  return new Promise((resolve) => {
-    rl.question(`${message} (y/n) `, (answer) => {
-      rl.close();
-      resolve(answer.toLowerCase().startsWith("y"));
-    });
-  });
 }
 
 /**
@@ -130,7 +117,9 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
             logger.log(`    ${styles.dim(`${lines} line(s) affected`)}`);
           }
 
-          const accepted = await promptConfirm(`  Apply changes from "${rule.name}"?`);
+          const accepted = await prompt.confirm({
+            message: `Apply changes from "${rule.name}"?`,
+          });
 
           if (accepted) {
             // Write the changes and update overrides for subsequent rules
