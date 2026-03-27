@@ -1,6 +1,9 @@
 import { authInvokerRenameRule } from "./auth-invoker-rename";
+import { dbTypeToModelRule } from "./db-type-to-model";
 import { defineGeneratorsRule } from "./define-generators";
 import { publishEventsRenameRule } from "./publish-events-rename";
+import { tailordbImportPathRule } from "./tailordb-import-path";
+import { triggerRenameRule } from "./trigger-rename";
 import type { MigrationRule } from "../../types";
 
 /**
@@ -11,4 +14,7 @@ export const v2Rules: MigrationRule[] = [
   defineGeneratorsRule,
   publishEventsRenameRule,
   authInvokerRenameRule,
+  triggerRenameRule,
+  dbTypeToModelRule,
+  tailordbImportPathRule,
 ];
