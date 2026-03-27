@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import { describe, expect, test } from "vitest";
-import { findUndocumentedSymbols } from "../lint-public-api.js";
+import { findUndocumentedSymbols } from "../require-public-api-jsdoc.js";
 
 const fixturesDir = resolve(import.meta.dirname, "fixtures");
 
@@ -13,7 +13,7 @@ function names(failures: { name: string }[]) {
   return failures.map((f) => f.name).sort();
 }
 
-describe("lint-public-api", () => {
+describe("require-public-api-jsdoc", () => {
   test("fully documented symbols produce no failures", () => {
     expect(check("documented.ts")).toEqual([]);
   });

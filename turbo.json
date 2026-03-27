@@ -32,11 +32,8 @@
       "cache": false
     },
     "check": {
-      "dependsOn": ["format", "lint:fix", "typecheck:go", "knip", "publint", "lint:public-api"],
+      "dependsOn": ["format", "lint:fix", "typecheck:go", "knip", "publint"],
       "cache": false
-    },
-    "lint:public-api": {
-      "cache": true
     },
     "knip": {
       "cache": true
