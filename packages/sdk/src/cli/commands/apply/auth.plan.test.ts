@@ -266,6 +266,49 @@ describe("planAuth", () => {
     expect(result.changeSet.oauth2Client.updates).toHaveLength(0);
   });
 
+  test("marks auth child resources updated when forceApplyAll is enabled", async () => {
+    const client = createMockClient({
+      authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
+      machineUsers: [
+        {
+          name: "manager-machine-user",
+          attributes: ["role", "department"],
+          attributeMap: {
+            department: fromJson(ValueSchema, "sales"),
+            role: fromJson(ValueSchema, "manager"),
+          },
+        },
+      ],
+      oauth2Clients: [
+        {
+          name: "sample",
+          description: "Sample client",
+          grantTypes: [
+            AuthOAuth2Client_GrantType.AUTHORIZATION_CODE,
+            AuthOAuth2Client_GrantType.REFRESH_TOKEN,
+          ],
+          redirectUris: ["https://a.example.com/callback", "https://b.example.com/callback"],
+          clientType: AuthOAuth2Client_ClientType.CONFIDENTIAL,
+          accessTokenLifetime: { seconds: 86400n },
+          refreshTokenLifetime: { seconds: 604800n },
+          requireDpop: false,
+        },
+      ],
+    });
+
+    const result = await planAuth({
+      ...createContext(client),
+      forceApplyAll: true,
+    });
+
+    expect(result.changeSet.service.updates).toHaveLength(1);
+    expect(result.changeSet.service.unchanged).toHaveLength(0);
+    expect(result.changeSet.machineUser.updates).toHaveLength(1);
+    expect(result.changeSet.machineUser.unchanged).toHaveLength(0);
+    expect(result.changeSet.oauth2Client.updates).toHaveLength(1);
+    expect(result.changeSet.oauth2Client.unchanged).toHaveLength(0);
+  });
+
   test("marks oauth2 client unchanged when custom token lifetimes match remote values", async () => {
     const client = createMockClient({
       authServices: [{ name: "auth-a", publishSessionEvents: false, label: appName }],

@@ -96,7 +96,7 @@ export async function applyPipeline(
  * @returns Planned changes
  */
 export async function planPipeline(context: PlanContext) {
-  const { client, workspaceId, application, forRemoval } = context;
+  const { client, workspaceId, application, forRemoval, forceApplyAll = false } = context;
   const pipelines: Readonly<ResolverService>[] = [];
   if (!forRemoval) {
     for (const pipeline of application.resolverServices) {
@@ -122,6 +122,7 @@ export async function planPipeline(context: PlanContext) {
     executors,
     deletedServices,
     application.env,
+    forceApplyAll,
   );
 
   serviceChangeSet.print();
@@ -289,6 +290,7 @@ async function planResolvers(
   executors: ReadonlyArray<Executor>,
   deletedServices: ReadonlyArray<string>,
   env: Record<string, string | number | boolean>,
+  forceApplyAll = false,
 ) {
   const changeSet = createChangeSet<CreateResolver, UpdateResolver, DeleteResolver>(
     "Pipeline resolvers",
@@ -346,7 +348,11 @@ async function planResolvers(
       );
       const existingResolver = existingResolversMap.get(resolver.name);
       if (existingResolver) {
-        if (existingResolver && areResolversEqual(existingResolver, desiredResolver)) {
+        if (
+          !forceApplyAll &&
+          existingResolver &&
+          areResolversEqual(existingResolver, desiredResolver)
+        ) {
           changeSet.unchanged.push({ name: resolver.name });
         } else {
           changeSet.updates.push({

@@ -145,7 +145,7 @@ export async function applyIdP(
  * @returns Planned changes and metadata
  */
 export async function planIdP(context: PlanContext) {
-  const { client, workspaceId, application, forRemoval } = context;
+  const { client, workspaceId, application, forRemoval, forceApplyAll = false } = context;
   const idps = forRemoval ? [] : application.idpServices;
   const {
     changeSet: serviceChangeSet,
@@ -154,7 +154,13 @@ export async function planIdP(context: PlanContext) {
     resourceOwners,
   } = await planServices(client, workspaceId, application.name, idps);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
-  const clientChangeSet = await planClients(client, workspaceId, idps, deletedServices);
+  const clientChangeSet = await planClients(
+    client,
+    workspaceId,
+    idps,
+    deletedServices,
+    forceApplyAll,
+  );
 
   serviceChangeSet.print();
   clientChangeSet.print();
@@ -417,6 +423,7 @@ async function planClients(
   workspaceId: string,
   idps: ReadonlyArray<IdP>,
   deletedServices: string[],
+  forceApplyAll = false,
 ) {
   const changeSet = createChangeSet<CreateClient, UpdateClient, DeleteClient>("IdP clients");
 
@@ -450,9 +457,18 @@ async function planClients(
     });
     for (const name of idp.clients) {
       if (existingNameMap.has(name)) {
-        changeSet.unchanged.push({
-          name,
-        });
+        if (forceApplyAll) {
+          changeSet.updates.push({
+            name,
+            workspaceId,
+            namespaceName,
+            clientSecret: existingNameMap.get(name) ?? "",
+          });
+        } else {
+          changeSet.unchanged.push({
+            name,
+          });
+        }
         existingNameMap.delete(name);
       } else {
         changeSet.creates.push({

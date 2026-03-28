@@ -172,6 +172,54 @@ describe("planIdP", () => {
     expect(result.changeSet.client.updates).toHaveLength(0);
   });
 
+  test("marks idp service and client updated when forceApplyAll is enabled", async () => {
+    const client = createMockClient({
+      services: [
+        {
+          name: "idp-a",
+          authorization: "user != null && size(user.id) > 0",
+          lang: IdPLang.JA,
+          publishUserEvents: true,
+          userAuthPolicy: {
+            useNonEmailIdentifier: false,
+            allowSelfPasswordReset: true,
+            passwordRequireUppercase: true,
+            passwordRequireLowercase: true,
+            passwordRequireNonAlphanumeric: false,
+            passwordRequireNumeric: true,
+            passwordMinLength: 8,
+            passwordMaxLength: 64,
+            allowedEmailDomains: ["a.example.com", "b.example.com"],
+            allowGoogleOauth: false,
+            disablePasswordAuth: false,
+            allowMicrosoftOauth: false,
+          },
+          disableGqlOperations: {
+            create: false,
+            update: false,
+            delete: false,
+            read: false,
+            sendPasswordResetEmail: false,
+          },
+          label: appName,
+        },
+      ],
+      clients: {
+        "idp-a": [{ name: "default-idp-client", clientSecret: "secret" }],
+      },
+    });
+
+    const result = await planIdP({
+      ...createContext(client),
+      forceApplyAll: true,
+    });
+
+    expect(result.changeSet.service.updates).toHaveLength(0);
+    expect(result.changeSet.service.unchanged).toHaveLength(1);
+    expect(result.changeSet.client.updates).toHaveLength(1);
+    expect(result.changeSet.client.unchanged).toHaveLength(0);
+  });
+
   test("marks idp service updated when remote state differs", async () => {
     const client = createMockClient({
       services: [

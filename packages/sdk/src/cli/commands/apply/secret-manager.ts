@@ -51,7 +51,7 @@ type DeleteSecret = {
  * @returns Planned changes for vaults and secrets
  */
 export async function planSecretManager(context: PlanContext) {
-  const { client, workspaceId, application, forRemoval } = context;
+  const { client, workspaceId, application, forRemoval, forceApplyAll = false } = context;
   const secretVaults = forRemoval ? [] : application.secrets;
 
   const vaultChangeSet = createChangeSet<CreateVault, ExistingVault, DeleteVault>(
@@ -167,7 +167,7 @@ export async function planSecretManager(context: PlanContext) {
         if (existingSet.has(secret.name)) {
           const currentHash = hashValue(secret.value);
           const storedHash = state.vaults[vaultName]?.[secret.name];
-          if (currentHash !== storedHash) {
+          if (forceApplyAll || currentHash !== storedHash) {
             secretChangeSet.updates.push({
               name: `${vaultName}/${secret.name}`,
               secretName: secret.name,

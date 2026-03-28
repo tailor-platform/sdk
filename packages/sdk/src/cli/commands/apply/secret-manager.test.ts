@@ -255,6 +255,31 @@ describe("planSecretManager hash-based diff", () => {
     expect(result.secretChangeSet.updates).toHaveLength(0);
   });
 
+  test("includes update when forceApplyAll is enabled even if hash matches", async () => {
+    const secretValue = "my-secret-value";
+    mockLoadSecretsState.mockReturnValue({
+      vaults: {
+        "my-vault": {
+          "existing-secret": hashValue(secretValue),
+        },
+      },
+    });
+
+    const client = createMockPlanClient(["existing-secret"]);
+    const ctx = {
+      ...createPlanContext(client, [
+        {
+          vaultName: "my-vault",
+          secrets: [{ name: "existing-secret", value: secretValue }],
+        },
+      ]),
+      forceApplyAll: true,
+    };
+
+    const result = await planSecretManager(ctx);
+    expect(result.secretChangeSet.updates).toHaveLength(1);
+  });
+
   test("includes update when hash does not match", async () => {
     mockLoadSecretsState.mockReturnValue({
       vaults: {
@@ -397,6 +422,34 @@ describe("planSecretManager vault metadata and deletion", () => {
     expect(result.vaultChangeSet.unchanged).toHaveLength(1);
     expect(result.vaultChangeSet.unchanged[0].name).toBe("my-vault");
     expect(result.vaultChangeSet.creates).toHaveLength(0);
+  });
+
+  test("updates matching managed vault when forceApplyAll is enabled", async () => {
+    const client = {
+      listSecretManagerVaults: vi.fn().mockResolvedValue({
+        vaults: [{ name: "my-vault" }],
+        nextPageToken: "",
+      }),
+      getMetadata: vi.fn().mockResolvedValue({
+        metadata: { labels: { "sdk-name": "my-app", "sdk-version": sdkVersion } },
+      }),
+      listSecretManagerSecrets: vi.fn().mockResolvedValue({
+        secrets: [],
+        nextPageToken: "",
+      }),
+    } as unknown as OperatorClient;
+
+    const ctx = {
+      ...createPlanContext(client, [
+        { vaultName: "my-vault", secrets: [{ name: "app-key", value: "val" }] },
+      ]),
+      forceApplyAll: true,
+    };
+
+    const result = await planSecretManager(ctx);
+
+    expect(result.vaultChangeSet.updates).toHaveLength(0);
+    expect(result.vaultChangeSet.unchanged).toHaveLength(1);
   });
 
   test("detects unmanaged vault without metadata label", async () => {

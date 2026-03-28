@@ -28,7 +28,7 @@ import { createChangeSet } from "./change-set";
 import { areNormalizedEqual, normalizeProtoConfig, normalizeStringArray } from "./compare";
 import { authHookFunctionName } from "./function-registry";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
-import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
+import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
 import type { AuthAttributeValue } from "@/types/auth";
@@ -256,7 +256,7 @@ export async function applyAuth(
  * @returns Planned auth changes and metadata
  */
 export async function planAuth(context: PlanContext) {
-  const { client, workspaceId, application, forRemoval } = context;
+  const { client, workspaceId, application, forRemoval, forceApplyAll = false } = context;
   const auths: Readonly<AuthService>[] = [];
   if (!forRemoval && application.authService) {
     await application.authService.resolveNamespaces();
@@ -267,7 +267,7 @@ export async function planAuth(context: PlanContext) {
     conflicts,
     unmanaged,
     resourceOwners,
-  } = await planServices(client, workspaceId, application.name, auths);
+  } = await planServices(client, workspaceId, application.name, auths, forceApplyAll);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
   const [
     idpConfigChangeSet,
@@ -279,12 +279,12 @@ export async function planAuth(context: PlanContext) {
     scimChangeSet,
     scimResourceChangeSet,
   ] = await Promise.all([
-    planIdPConfigs(client, workspaceId, auths, deletedServices),
-    planUserProfileConfigs(client, workspaceId, auths, deletedServices),
-    planTenantConfigs(client, workspaceId, auths, deletedServices),
-    planMachineUsers(client, workspaceId, auths, deletedServices),
+    planIdPConfigs(client, workspaceId, auths, deletedServices, forceApplyAll),
+    planUserProfileConfigs(client, workspaceId, auths, deletedServices, forceApplyAll),
+    planTenantConfigs(client, workspaceId, auths, deletedServices, forceApplyAll),
+    planMachineUsers(client, workspaceId, auths, deletedServices, forceApplyAll),
     planAuthHooks(client, workspaceId, auths, deletedServices),
-    planOAuth2Clients(client, workspaceId, auths, deletedServices),
+    planOAuth2Clients(client, workspaceId, auths, deletedServices, forceApplyAll),
     planSCIMConfigs(client, workspaceId, auths, deletedServices),
     planSCIMResources(client, workspaceId, auths, deletedServices),
   ]);
@@ -342,6 +342,7 @@ async function planServices(
   workspaceId: string,
   appName: string,
   auths: ReadonlyArray<Readonly<AuthService>>,
+  forceApplyAll = false,
 ) {
   const changeSet = createChangeSet<CreateService, UpdateService, DeleteService>("Auth services");
   const conflicts: OwnerConflict[] = [];
@@ -375,7 +376,6 @@ async function planServices(
       existingServices[resource.namespace.name] = {
         resource,
         label: metadata?.labels[sdkNameLabelKey],
-        allLabels: metadata?.labels,
       };
     }),
   );
@@ -405,9 +405,9 @@ async function planServices(
       }
 
       if (
+        !forceApplyAll &&
         existing.resource.publishSessionEvents === (config.publishSessionEvents ?? false) &&
-        isManagedByApp &&
-        hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)
+        isManagedByApp
       ) {
         changeSet.unchanged.push({ name: config.name });
       } else {
@@ -468,6 +468,7 @@ async function planIdPConfigs(
   workspaceId: string,
   auths: ReadonlyArray<Readonly<AuthService>>,
   deletedServices: ReadonlyArray<string>,
+  forceApplyAll = false,
 ) {
   const changeSet = createChangeSet<CreateIdPConfig, UpdateIdPConfig, DeleteIdPConfig>(
     "Auth idpConfigs",
@@ -523,7 +524,7 @@ async function planIdPConfigs(
           existingMap.delete(idpConfig.name);
           continue;
         }
-        if (areAuthIdPConfigsEqual(existing, desiredComparable)) {
+        if (!forceApplyAll && areAuthIdPConfigsEqual(existing, desiredComparable)) {
           changeSet.unchanged.push({ name: idpConfig.name });
         } else {
           changeSet.updates.push({
@@ -810,6 +811,7 @@ async function planUserProfileConfigs(
   workspaceId: string,
   auths: ReadonlyArray<Readonly<AuthService>>,
   deletedServices: ReadonlyArray<string>,
+  forceApplyAll = false,
 ) {
   const changeSet = createChangeSet<
     CreateUserProfileConfig,
@@ -828,7 +830,10 @@ async function planUserProfileConfigs(
       const userProfileForUpdate = auth.userProfile;
       if (userProfileForUpdate) {
         const desired = protoUserProfileConfig(userProfileForUpdate);
-        if (areUserProfileConfigsEqual(userProfileProviderConfig ?? {}, desired)) {
+        if (
+          !forceApplyAll &&
+          areUserProfileConfigsEqual(userProfileProviderConfig ?? {}, desired)
+        ) {
           changeSet.unchanged.push({ name });
         } else {
           changeSet.updates.push({
@@ -938,6 +943,7 @@ async function planTenantConfigs(
   workspaceId: string,
   auths: ReadonlyArray<Readonly<AuthService>>,
   deletedServices: ReadonlyArray<string>,
+  forceApplyAll = false,
 ) {
   const changeSet = createChangeSet<CreateTenantConfig, UpdateTenantConfig, DeleteTenantConfig>(
     "Auth tenantConfigs",
@@ -953,7 +959,7 @@ async function planTenantConfigs(
       });
       if (config.tenantProvider) {
         const desired = protoTenantConfig(config.tenantProvider);
-        if (areTenantProviderConfigsEqual(tenantProviderConfig, desired)) {
+        if (!forceApplyAll && areTenantProviderConfigsEqual(tenantProviderConfig, desired)) {
           changeSet.unchanged.push({ name });
         } else {
           changeSet.updates.push({
@@ -1053,6 +1059,7 @@ async function planMachineUsers(
   workspaceId: string,
   auths: ReadonlyArray<Readonly<AuthService>>,
   deletedServices: ReadonlyArray<string>,
+  forceApplyAll = false,
 ) {
   const changeSet = createChangeSet<CreateMachineUser, UpdateMachineUser, DeleteMachineUser>(
     "Auth machineUsers",
@@ -1097,7 +1104,7 @@ async function planMachineUsers(
       };
       const existing = existingMap.get(machineUsername);
       if (existing) {
-        if (areMachineUsersEqual(existing, desiredMachineUser)) {
+        if (!forceApplyAll && areMachineUsersEqual(existing, desiredMachineUser)) {
           changeSet.unchanged.push({ name: machineUsername });
         } else {
           changeSet.updates.push({
@@ -1363,6 +1370,7 @@ async function planOAuth2Clients(
   workspaceId: string,
   auths: ReadonlyArray<Readonly<AuthService>>,
   deletedServices: ReadonlyArray<string>,
+  forceApplyAll = false,
 ) {
   const changeSet = createChangeSet<
     CreateOAuth2Clients,
@@ -1443,7 +1451,7 @@ async function planOAuth2Clients(
             refreshTokenLifetime: oauth2LifetimeToSeconds(existingClient.refreshTokenLifetime),
             requireDpop: existingClient.requireDpop,
           };
-          if (areOAuth2ClientsEqual(existingComparable, desiredComparable)) {
+          if (!forceApplyAll && areOAuth2ClientsEqual(existingComparable, desiredComparable)) {
             changeSet.unchanged.push({ name: oauth2ClientName });
           } else {
             changeSet.updates.push({

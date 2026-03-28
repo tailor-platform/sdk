@@ -973,7 +973,15 @@ async function executeSingleMigrationPostPhase(
  * @returns Planned changes
  */
 export async function planTailorDB(context: PlanContext) {
-  const { client, workspaceId, application, forRemoval, config, noSchemaCheck } = context;
+  const {
+    client,
+    workspaceId,
+    application,
+    forRemoval,
+    config,
+    noSchemaCheck,
+    forceApplyAll = false,
+  } = context;
   const tailordbs: TailorDBService[] = [];
   if (!forRemoval) {
     for (const tailordb of application.tailorDBServices) {
@@ -993,8 +1001,8 @@ export async function planTailorDB(context: PlanContext) {
   } = await planServices(client, workspaceId, application.name, tailordbs);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
   const [typeChangeSet, gqlPermissionChangeSet] = await Promise.all([
-    planTypes(client, workspaceId, tailordbs, executors, deletedServices),
-    planGqlPermissions(client, workspaceId, tailordbs, deletedServices),
+    planTypes(client, workspaceId, tailordbs, executors, deletedServices, undefined, forceApplyAll),
+    planGqlPermissions(client, workspaceId, tailordbs, deletedServices, forceApplyAll),
   ]);
 
   serviceChangeSet.print();
@@ -1202,6 +1210,7 @@ async function planTypes(
   executors: ReadonlyArray<Executor>,
   deletedServices: ReadonlyArray<string>,
   filteredTypesByNamespace?: Map<string, Record<string, TailorDBType>>,
+  forceApplyAll = false,
 ) {
   const changeSet = createChangeSet<CreateType, UpdateType, DeleteType>("TailorDB types");
 
@@ -1261,6 +1270,7 @@ async function planTypes(
       const existingType = existingTypesMap.get(typeName);
       if (existingType) {
         if (
+          !forceApplyAll &&
           areNormalizedEqual(
             normalizeComparableTailorDBType(existingType),
             normalizeComparableTailorDBType(tailordbType),
@@ -1851,6 +1861,7 @@ async function planGqlPermissions(
   workspaceId: string,
   tailordbs: ReadonlyArray<TailorDBService>,
   deletedServices: ReadonlyArray<string>,
+  forceApplyAll = false,
 ) {
   const changeSet = createChangeSet<CreateGqlPermission, UpdateGqlPermission, DeleteGqlPermission>(
     "TailorDB gqlPermissions",
@@ -1894,6 +1905,7 @@ async function planGqlPermissions(
       );
       if (existingNameSet.has(typeName)) {
         if (
+          !forceApplyAll &&
           existingPermission &&
           areNormalizedEqual(
             normalizeComparableGqlPermission(existingPermission.permission),

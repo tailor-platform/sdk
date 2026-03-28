@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import { Code, ConnectError } from "@connectrpc/connect";
 import { findUpSync } from "find-up-simple";
 import * as path from "pathe";
 import { hashFile } from "@/cli/cache/hasher";
@@ -32,6 +33,7 @@ import {
   planFunctionRegistry,
 } from "./function-registry";
 import { applyIdP, planIdP } from "./idp";
+import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey } from "./label";
 import { applyPipeline, planPipeline } from "./resolver";
 import { applySecretManager, planSecretManager } from "./secret-manager";
 import { applyStaticWebsite, planStaticWebsite } from "./staticwebsite";
@@ -61,9 +63,112 @@ export interface PlanContext {
   forRemoval: boolean;
   config: LoadedConfig;
   noSchemaCheck?: boolean;
+  forceApplyAll?: boolean;
 }
 
 export type ApplyPhase = "create-update" | "delete" | "delete-resources" | "delete-services";
+
+function applicationTrn(workspaceId: string, name: string) {
+  return `trn:v1:workspace:${workspaceId}:application:${name}`;
+}
+
+function functionRegistryTrn(workspaceId: string, name: string) {
+  return `trn:v1:workspace:${workspaceId}:function_registry:${name}`;
+}
+
+function pipelineTrn(workspaceId: string, name: string) {
+  return `trn:v1:workspace:${workspaceId}:pipeline:${name}`;
+}
+
+function idpTrn(workspaceId: string, name: string) {
+  return `trn:v1:workspace:${workspaceId}:idp:${name}`;
+}
+
+function authTrn(workspaceId: string, name: string) {
+  return `trn:v1:workspace:${workspaceId}:auth:${name}`;
+}
+
+function executorTrn(workspaceId: string, name: string) {
+  return `trn:v1:workspace:${workspaceId}:executor:${name}`;
+}
+
+function workflowTrn(workspaceId: string, name: string) {
+  return `trn:v1:workspace:${workspaceId}:workflow:${name}`;
+}
+
+function staticWebsiteTrn(workspaceId: string, name: string) {
+  return `trn:v1:workspace:${workspaceId}:staticwebsite:${name}`;
+}
+
+function tailorDBTrn(workspaceId: string, name: string) {
+  return `trn:v1:workspace:${workspaceId}:tailordb:${name}`;
+}
+
+function vaultTrn(workspaceId: string, name: string) {
+  return `trn:v1:workspace:${workspaceId}:vault:${name}`;
+}
+
+async function shouldForceApplyAll(
+  client: OperatorClient,
+  workspaceId: string,
+  application: Readonly<Application>,
+  functionEntries: ReadonlyArray<{ name: string }>,
+) {
+  const desiredLabels = (
+    await buildMetaRequest(applicationTrn(workspaceId, application.name), application.name)
+  ).labels;
+  const candidateTrns = new Set<string>();
+
+  if (application.subgraphs.length > 0) {
+    candidateTrns.add(applicationTrn(workspaceId, application.name));
+  }
+  application.staticWebsiteServices.forEach((website) => {
+    candidateTrns.add(staticWebsiteTrn(workspaceId, website.name));
+  });
+  application.resolverServices.forEach((pipeline) => {
+    candidateTrns.add(pipelineTrn(workspaceId, pipeline.namespace));
+  });
+  application.idpServices.forEach((idp) => {
+    candidateTrns.add(idpTrn(workspaceId, idp.name));
+  });
+  if (application.authService) {
+    candidateTrns.add(authTrn(workspaceId, application.authService.config.name));
+  }
+  Object.values(application.executorService?.executors ?? {}).forEach((executor) => {
+    candidateTrns.add(executorTrn(workspaceId, executor.name));
+  });
+  Object.values(application.workflowService?.workflows ?? {}).forEach((workflow) => {
+    candidateTrns.add(workflowTrn(workspaceId, workflow.name));
+  });
+  application.tailorDBServices.forEach((service) => {
+    candidateTrns.add(tailorDBTrn(workspaceId, service.namespace));
+  });
+  application.secrets.forEach((vault) => {
+    candidateTrns.add(vaultTrn(workspaceId, vault.vaultName));
+  });
+  functionEntries.forEach((entry) => {
+    candidateTrns.add(functionRegistryTrn(workspaceId, entry.name));
+  });
+
+  for (const trn of candidateTrns) {
+    try {
+      const { metadata } = await client.getMetadata({ trn });
+      if (metadata?.labels?.[sdkNameLabelKey] !== application.name) {
+        continue;
+      }
+      if (!hasMatchingSdkVersion(metadata.labels, desiredLabels)) {
+        return true;
+      }
+    } catch (error) {
+      if (error instanceof ConnectError && error.code === Code.NotFound) {
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  return false;
+}
 
 function printPlanSummary(results: {
   functionRegistry: Awaited<ReturnType<typeof planFunctionRegistry>>;
@@ -221,6 +326,9 @@ export async function apply(options?: ApplyOptions) {
 
     const dryRun = options?.dryRun ?? false;
     const yes = options?.yes ?? false;
+    const forceApplyAll = await withSpan("plan.detectSdkVersionChange", () =>
+      shouldForceApplyAll(client, workspaceId, application, functionEntries),
+    );
 
     // Phase 1: Plan
     const {
@@ -242,6 +350,7 @@ export async function apply(options?: ApplyOptions) {
         forRemoval: false,
         config,
         noSchemaCheck: options?.noSchemaCheck,
+        forceApplyAll,
       };
       const functionRegistry = await withSpan("plan.functionRegistry", () =>
         planFunctionRegistry(client, workspaceId, application.name, functionEntries),
