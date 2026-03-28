@@ -36,6 +36,57 @@ function isExternal(symbol) {
 }
 
 /**
+ * Walk module exports and invoke `onUndocumented` for each value-level symbol
+ * missing JSDoc. Handles alias resolution, class members, and enum members.
+ * @param {import('typescript').TypeChecker} checker - TypeScript type checker instance
+ * @param {import('typescript').Symbol} mod - Module symbol for the source file
+ * @param {(name: string, kind: string, resolved: import('typescript').Symbol) => void} onUndocumented - Callback invoked for each undocumented symbol
+ */
+function walkUndocumentedExports(checker, mod, onUndocumented) {
+  /**
+   * @param symbol
+   * @returns {boolean} Whether the symbol has JSDoc documentation
+   */
+  function hasDoc(symbol) {
+    return (
+      symbol.getDocumentationComment(checker).length > 0 || symbol.getJsDocTags(checker).length > 0
+    );
+  }
+
+  for (const sym of checker.getExportsOfModule(mod)) {
+    const resolved = sym.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(sym) : sym;
+    const kind = getKind(resolved);
+
+    if (isExternal(resolved)) continue;
+
+    if (kind && !hasDoc(sym) && !hasDoc(resolved)) {
+      onUndocumented(sym.getName(), kind, resolved);
+    }
+
+    if (kind === "Class") {
+      for (const members of [resolved.members, resolved.exports]) {
+        members?.forEach((member) => {
+          if (member.getName() === "prototype") return;
+          if (isNonPublicMember(member)) return;
+          const mk = getKind(member);
+          if (mk && !hasDoc(member)) {
+            onUndocumented(`${sym.getName()}.${member.getName()}`, mk, member);
+          }
+        });
+      }
+    }
+
+    if (kind === "Enum") {
+      resolved.exports?.forEach((member) => {
+        if (!hasDoc(member)) {
+          onUndocumented(`${sym.getName()}.${member.getName()}`, "EnumMember", member);
+        }
+      });
+    }
+  }
+}
+
+/**
  * Find undocumented public API symbols in the given entry points.
  * Creates a standalone TypeScript program -- used for testing and CLI.
  * @param {string[]} entryPoints - Absolute paths to entry point source files
@@ -46,12 +97,6 @@ function isExternal(symbol) {
 export function findUndocumentedSymbols(entryPoints, tsCompilerOptions, baseDir) {
   const program = ts.createProgram(entryPoints, tsCompilerOptions);
   const checker = program.getTypeChecker();
-
-  function hasDoc(symbol) {
-    return (
-      symbol.getDocumentationComment(checker).length > 0 || symbol.getJsDocTags(checker).length > 0
-    );
-  }
 
   function formatLocation(symbol) {
     const decls = symbol.getDeclarations();
@@ -69,45 +114,9 @@ export function findUndocumentedSymbols(entryPoints, tsCompilerOptions, baseDir)
     const mod = checker.getSymbolAtLocation(sf);
     if (!mod) continue;
 
-    for (const sym of checker.getExportsOfModule(mod)) {
-      const resolved = sym.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(sym) : sym;
-      const kind = getKind(resolved);
-
-      if (isExternal(resolved)) continue;
-
-      if (kind && !hasDoc(sym) && !hasDoc(resolved)) {
-        failures.push({ name: sym.getName(), kind, location: formatLocation(resolved) });
-      }
-
-      if (kind === "Class") {
-        for (const members of [resolved.members, resolved.exports]) {
-          members?.forEach((member) => {
-            if (member.getName() === "prototype") return;
-            if (isNonPublicMember(member)) return;
-            const mk = getKind(member);
-            if (mk && !hasDoc(member)) {
-              failures.push({
-                name: `${sym.getName()}.${member.getName()}`,
-                kind: mk,
-                location: formatLocation(member),
-              });
-            }
-          });
-        }
-      }
-
-      if (kind === "Enum") {
-        resolved.exports?.forEach((member) => {
-          if (!hasDoc(member)) {
-            failures.push({
-              name: `${sym.getName()}.${member.getName()}`,
-              kind: "EnumMember",
-              location: formatLocation(member),
-            });
-          }
-        });
-      }
-    }
+    walkUndocumentedExports(checker, mod, (name, kind, resolved) => {
+      failures.push({ name, kind, location: formatLocation(resolved) });
+    });
   }
 
   return failures;
@@ -129,13 +138,6 @@ export const rule = {
     const parserServices = context.sourceCode.parserServices;
     if (!parserServices?.program) return {};
     const checker = parserServices.program.getTypeChecker();
-
-    function hasDoc(symbol) {
-      return (
-        symbol.getDocumentationComment(checker).length > 0 ||
-        symbol.getJsDocTags(checker).length > 0
-      );
-    }
 
     // Collect export AST nodes for precise error reporting locations
     const exportNodeMap = new Map();
@@ -175,58 +177,15 @@ export const rule = {
         const mod = checker.getSymbolAtLocation(sf);
         if (!mod) return;
 
-        for (const sym of checker.getExportsOfModule(mod)) {
-          const resolved = sym.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(sym) : sym;
-          const kind = getKind(resolved);
-          if (!kind) continue;
-          if (isExternal(resolved)) continue;
-
-          const reportNode = exportNodeMap.get(sym.getName()) || starExportNodes[0];
-          if (!reportNode) continue;
-
-          if (!hasDoc(sym) && !hasDoc(resolved)) {
-            context.report({
-              node: reportNode,
-              messageId: "missingJsdoc",
-              data: { name: sym.getName(), kind },
-            });
-          }
-
-          if (kind === "Class") {
-            for (const members of [resolved.members, resolved.exports]) {
-              members?.forEach((member) => {
-                if (member.getName() === "prototype") return;
-                if (isNonPublicMember(member)) return;
-                const mk = getKind(member);
-                if (mk && !hasDoc(member)) {
-                  context.report({
-                    node: reportNode,
-                    messageId: "missingJsdoc",
-                    data: {
-                      name: `${sym.getName()}.${member.getName()}`,
-                      kind: mk,
-                    },
-                  });
-                }
-              });
-            }
-          }
-
-          if (kind === "Enum") {
-            resolved.exports?.forEach((member) => {
-              if (!hasDoc(member)) {
-                context.report({
-                  node: reportNode,
-                  messageId: "missingJsdoc",
-                  data: {
-                    name: `${sym.getName()}.${member.getName()}`,
-                    kind: "EnumMember",
-                  },
-                });
-              }
-            });
-          }
-        }
+        walkUndocumentedExports(checker, mod, (name, kind) => {
+          const reportNode = exportNodeMap.get(name.split(".")[0]) || starExportNodes[0];
+          if (!reportNode) return;
+          context.report({
+            node: reportNode,
+            messageId: "missingJsdoc",
+            data: { name, kind },
+          });
+        });
       },
     };
   },
