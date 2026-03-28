@@ -56,9 +56,10 @@ import {
 } from "@/cli/commands/tailordb/migrate/snapshot";
 import { type TailorDBService } from "@/cli/services/tailordb/service";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
-import { logger } from "@/cli/shared/logger";
-import { createChangeSet } from "../change-set";
+import { logger, styles } from "@/cli/shared/logger";
+import { createChangeSet, type HasName, type ChangeSet } from "../change-set";
 import { areNormalizedEqual, normalizeProtoConfig } from "../compare";
+import { actionSymbol, type DisplayAction, type GroupedDisplayEntry } from "../grouped-display";
 import {
   buildMetaRequest,
   hasMatchingSdkVersion,
@@ -1006,8 +1007,7 @@ export async function planTailorDB(context: PlanContext) {
   ]);
 
   serviceChangeSet.print();
-  typeChangeSet.print();
-  gqlPermissionChangeSet.print();
+  printTailorDBResourceChanges(typeChangeSet, gqlPermissionChangeSet);
 
   return {
     changeSet: {
@@ -1025,6 +1025,88 @@ export async function planTailorDB(context: PlanContext) {
       noSchemaCheck: noSchemaCheck ?? false,
     },
   };
+}
+
+type TailorDBDisplayEntry = GroupedDisplayEntry;
+
+function collectTailorDBDisplayEntries(
+  action: DisplayAction,
+  typeItems: ReadonlyArray<HasName>,
+  gqlPermissionItems: ReadonlyArray<HasName>,
+): TailorDBDisplayEntry[] {
+  const typeNames = new Set(typeItems.map((item) => item.name));
+  const gqlPermissionNames = new Set(gqlPermissionItems.map((item) => item.name));
+  const typeEntries = typeItems.map((item) => ({
+    action,
+    symbol: actionSymbol(action),
+    name: item.name,
+    labels: gqlPermissionNames.has(item.name) ? ["type", "gqlPermission"] : ["type"],
+  }));
+  const gqlPermissionOnlyEntries = gqlPermissionItems
+    .filter((gqlPermission) => !typeNames.has(gqlPermission.name))
+    .map((item) => ({
+      action,
+      symbol: actionSymbol(action),
+      name: item.name,
+      labels: ["gqlPermission"],
+    }));
+
+  return [...typeEntries, ...gqlPermissionOnlyEntries];
+}
+
+/**
+ * Format TailorDB type and gqlPermission changes as grouped dry-run entries.
+ * @param typeChangeSet - TailorDB type changes
+ * @param gqlPermissionChangeSet - TailorDB gqlPermission changes
+ * @returns Display entries for TailorDB resource output
+ */
+export function formatTailorDBResourceChangeEntries(
+  typeChangeSet: Pick<
+    ChangeSet<HasName, HasName, HasName>,
+    "creates" | "updates" | "deletes" | "replaces"
+  >,
+  gqlPermissionChangeSet: Pick<
+    ChangeSet<HasName, HasName, HasName>,
+    "creates" | "updates" | "deletes" | "replaces"
+  >,
+): TailorDBDisplayEntry[] {
+  return [
+    ...collectTailorDBDisplayEntries(
+      "create",
+      typeChangeSet.creates,
+      gqlPermissionChangeSet.creates,
+    ),
+    ...collectTailorDBDisplayEntries(
+      "delete",
+      typeChangeSet.deletes,
+      gqlPermissionChangeSet.deletes,
+    ),
+    ...collectTailorDBDisplayEntries(
+      "update",
+      typeChangeSet.updates,
+      gqlPermissionChangeSet.updates,
+    ),
+    ...collectTailorDBDisplayEntries(
+      "replace",
+      typeChangeSet.replaces,
+      gqlPermissionChangeSet.replaces,
+    ),
+  ];
+}
+
+function printTailorDBResourceChanges(
+  typeChangeSet: ChangeSet<HasName, HasName, HasName>,
+  gqlPermissionChangeSet: ChangeSet<HasName, HasName, HasName>,
+) {
+  const entries = formatTailorDBResourceChangeEntries(typeChangeSet, gqlPermissionChangeSet);
+  if (entries.length === 0) {
+    return;
+  }
+
+  logger.log(styles.bold("TailorDB resources:"));
+  for (const entry of entries) {
+    logger.log(`  ${entry.symbol} ${entry.name} (${entry.labels.join(", ")})`);
+  }
 }
 
 type CreateService = {

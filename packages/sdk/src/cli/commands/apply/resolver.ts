@@ -18,10 +18,19 @@ import {
 import * as inflection from "inflection";
 import { type ResolverService } from "@/cli/services/resolver/service";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
+import { logger, styles } from "@/cli/shared/logger";
 import { buildResolverOperationHookExpr } from "@/cli/shared/runtime-args";
-import { createChangeSet } from "./change-set";
+import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
 import { areNormalizedEqual, normalizeProtoConfig } from "./compare";
 import { resolverFunctionName } from "./function-registry";
+import {
+  actionSymbol,
+  buildRemainingFunctionRegistryEntries,
+  createRelatedFunctionRegistryNameSets,
+  type GroupedDisplayEntry,
+  type RelatedFunctionRegistryNameSets,
+  type RelatedFunctionRegistryChanges,
+} from "./grouped-display";
 import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
@@ -93,9 +102,13 @@ export async function applyPipeline(
 /**
  * Plan resolver pipeline changes based on current and desired state.
  * @param context - Planning context
+ * @param functionRegistryResolverChanges - Related function registry changes for resolvers
  * @returns Planned changes
  */
-export async function planPipeline(context: PlanContext) {
+export async function planPipeline(
+  context: PlanContext,
+  functionRegistryResolverChanges?: RelatedFunctionRegistryChanges,
+) {
   const { client, workspaceId, application, forRemoval, forceApplyAll = false } = context;
   const pipelines: Readonly<ResolverService>[] = [];
   if (!forRemoval) {
@@ -126,7 +139,7 @@ export async function planPipeline(context: PlanContext) {
   );
 
   serviceChangeSet.print();
-  resolverChangeSet.print();
+  printResolverChanges(resolverChangeSet, functionRegistryResolverChanges);
   return {
     changeSet: {
       service: serviceChangeSet,
@@ -407,6 +420,113 @@ async function planResolvers(
     });
   }
   return changeSet;
+}
+
+type ResolverDisplayEntry = GroupedDisplayEntry;
+
+function formatResolverFunctionName(namespace: string | undefined, resolverName: string) {
+  return namespace ? resolverFunctionName(namespace, resolverName) : undefined;
+}
+
+/**
+ * Format resolver changes for grouped dry-run display.
+ * @param changeSet - Resolver changes
+ * @param resolverFunctionChanges - Related function registry changes for resolvers
+ * @param resolverFunctionChanges.creates - Function registry creations
+ * @param resolverFunctionChanges.updates - Function registry updates
+ * @param resolverFunctionChanges.deletes - Function registry deletions
+ * @param resolverFunctionChanges.replaces - Function registry replacements
+ * @returns Display entries for resolver output
+ */
+export function formatResolverChangeEntries(
+  changeSet: Pick<
+    ChangeSet<CreateResolver, UpdateResolver, DeleteResolver>,
+    "creates" | "updates" | "deletes" | "replaces"
+  >,
+  resolverFunctionChanges?: RelatedFunctionRegistryChanges,
+): ResolverDisplayEntry[] {
+  const functionNames = createRelatedFunctionRegistryNameSets(resolverFunctionChanges);
+  const consumed: RelatedFunctionRegistryNameSets = createRelatedFunctionRegistryNameSets();
+
+  const createEntries = changeSet.creates.map((item) => {
+    const functionName = formatResolverFunctionName(item.request.namespaceName, item.name);
+    const hasFunctionRegistryChange = Boolean(
+      functionName && functionNames.creates.has(functionName),
+    );
+    if (functionName && hasFunctionRegistryChange) {
+      consumed.creates.add(functionName);
+    }
+    return {
+      action: "create" as const,
+      symbol: actionSymbol("create"),
+      name: item.name,
+      labels: hasFunctionRegistryChange ? ["resolver", "functionRegistry"] : ["resolver"],
+    };
+  });
+  const deleteEntries = changeSet.deletes.map((item) => {
+    const functionName = formatResolverFunctionName(item.request.namespaceName, item.name);
+    const hasFunctionRegistryChange = Boolean(
+      functionName && functionNames.deletes.has(functionName),
+    );
+    if (functionName && hasFunctionRegistryChange) {
+      consumed.deletes.add(functionName);
+    }
+    return {
+      action: "delete" as const,
+      symbol: actionSymbol("delete"),
+      name: item.name,
+      labels: hasFunctionRegistryChange ? ["resolver", "functionRegistry"] : ["resolver"],
+    };
+  });
+  const updateEntries = changeSet.updates.map((item) => {
+    const functionName = formatResolverFunctionName(item.request.namespaceName, item.name);
+    const hasFunctionRegistryChange = Boolean(
+      functionName && functionNames.updates.has(functionName),
+    );
+    if (functionName && hasFunctionRegistryChange) {
+      consumed.updates.add(functionName);
+    }
+    return {
+      action: "update" as const,
+      symbol: actionSymbol("update"),
+      name: item.name,
+      labels: hasFunctionRegistryChange ? ["resolver", "functionRegistry"] : ["resolver"],
+    };
+  });
+  const replaceEntries = (changeSet.replaces as ReadonlyArray<HasName>).map((item) => ({
+    action: "replace" as const,
+    symbol: actionSymbol("replace"),
+    name: item.name,
+    labels: ["resolver"],
+  }));
+
+  return [
+    ...createEntries,
+    ...deleteEntries,
+    ...updateEntries,
+    ...replaceEntries,
+    ...buildRemainingFunctionRegistryEntries(functionNames, consumed),
+  ];
+}
+
+function printResolverChanges(
+  changeSet: ChangeSet<CreateResolver, UpdateResolver, DeleteResolver>,
+  resolverFunctionChanges?: {
+    creates: ReadonlyArray<HasName>;
+    updates: ReadonlyArray<HasName>;
+    deletes: ReadonlyArray<HasName>;
+    replaces: ReadonlyArray<HasName>;
+  },
+) {
+  const entries = formatResolverChangeEntries(changeSet, resolverFunctionChanges);
+  if (entries.length === 0) {
+    return;
+  }
+
+  logger.log(styles.bold("Pipeline resolvers:"));
+  for (const entry of entries) {
+    logger.log(`  ${entry.symbol} ${entry.name} (${entry.labels.join(", ")})`);
+  }
 }
 
 function normalizeComparableResolver(resolver: MessageInitShape<typeof PipelineResolverSchema>) {

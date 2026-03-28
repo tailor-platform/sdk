@@ -6,6 +6,7 @@ import {
   executorFunctionName,
   planFunctionRegistry,
   resolverFunctionName,
+  splitFunctionRegistryChanges,
   workflowJobFunctionName,
 } from "./function-registry";
 import { sdkNameLabelKey } from "./label";
@@ -328,6 +329,42 @@ describe("planFunctionRegistry", () => {
       expect(result.conflicts[0].resourceName).toBe("resolver/ns/getUser");
       expect(result.conflicts[0].currentOwner).toBe("other-app");
     });
+  });
+});
+
+describe("splitFunctionRegistryChanges", () => {
+  test("separates workflow and resolver functions from other function registry entries", () => {
+    const {
+      workflowJobChanges,
+      resolverFunctionChanges,
+      executorFunctionChanges,
+      authHookFunctionChanges,
+      otherChanges,
+    } = splitFunctionRegistryChanges({
+      title: "Function registry",
+      creates: [
+        { name: "workflow--process-order" },
+        { name: "resolver--my-resolver--add" },
+        { name: "executor--new-function" },
+        { name: "auth-hook--my-auth--before-login" },
+      ],
+      updates: [{ name: "workflow--send-notification" }],
+      deletes: [],
+      replaces: [],
+      unchanged: [{ name: "workflow--check-inventory" }, { name: "executor--user-created" }],
+      isEmpty: () => false,
+      print: () => {},
+    });
+
+    expect(workflowJobChanges.creates).toEqual([{ name: "workflow--process-order" }]);
+    expect(workflowJobChanges.updates).toEqual([{ name: "workflow--send-notification" }]);
+    expect(workflowJobChanges.unchanged).toEqual([{ name: "workflow--check-inventory" }]);
+    expect(resolverFunctionChanges.creates).toEqual([{ name: "resolver--my-resolver--add" }]);
+    expect(executorFunctionChanges.creates).toEqual([{ name: "executor--new-function" }]);
+    expect(authHookFunctionChanges.creates).toEqual([{ name: "auth-hook--my-auth--before-login" }]);
+    expect(otherChanges.creates).toEqual([]);
+    expect(executorFunctionChanges.unchanged).toEqual([{ name: "executor--user-created" }]);
+    expect(otherChanges.unchanged).toEqual([]);
   });
 });
 
