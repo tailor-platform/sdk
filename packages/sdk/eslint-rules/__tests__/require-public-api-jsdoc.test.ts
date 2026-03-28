@@ -1,8 +1,13 @@
 import { resolve } from "node:path";
+import { type Linter, ESLint } from "eslint";
+import tseslint from "typescript-eslint";
 import { describe, expect, test } from "vitest";
+// @ts-expect-error -- JS-only plugin entry with no declaration file
+import localPlugin from "../index.js";
 import { findUndocumentedSymbols } from "../require-public-api-jsdoc.js";
 
 const fixturesDir = resolve(import.meta.dirname, "fixtures");
+const sdkDir = resolve(import.meta.dirname, "../..");
 
 function check(...files: string[]) {
   const entryPoints = files.map((f) => resolve(fixturesDir, f));
@@ -97,5 +102,66 @@ describe("require-public-api-jsdoc", () => {
     expect(detected).not.toContain("docVar");
     expect(detected).not.toContain("OnlyType");
     expect(detected).not.toContain("Status.Active");
+  });
+});
+
+describe("ESLint rule integration", () => {
+  function createEslint(fixtureGlob: string) {
+    return new ESLint({
+      cwd: sdkDir,
+      overrideConfig: [
+        ...tseslint.configs.recommended,
+        {
+          languageOptions: {
+            parserOptions: { projectService: true, tsconfigRootDir: sdkDir },
+          },
+        },
+        {
+          files: [fixtureGlob],
+          plugins: { local: localPlugin },
+          rules: { "local/require-public-api-jsdoc": "error" },
+        },
+      ],
+      overrideConfigFile: true,
+    });
+  }
+
+  function messageNames(messages: Linter.LintMessage[]) {
+    return messages
+      .map((m) => {
+        const match = m.message.match(/Public API \w+ '(.+?)'/);
+        return match?.[1];
+      })
+      .filter(Boolean)
+      .sort();
+  }
+
+  test("reports undocumented symbols via ESLint", async () => {
+    const eslint = createEslint("eslint-rules/__tests__/fixtures/undocumented.ts");
+    const [result] = await eslint.lintFiles([resolve(fixturesDir, "undocumented.ts")]);
+    const detected = messageNames(result.messages);
+    expect(detected).toContain("undocumentedVar");
+    expect(detected).toContain("undocumentedFunc");
+    expect(detected).toContain("UndocumentedClass");
+    expect(detected).toContain("UndocumentedClass.undocumentedMethod");
+    expect(detected).toContain("UndocumentedClass.undocumentedAccessor");
+    expect(detected).toContain("UndocumentedEnum");
+  });
+
+  test("reports no errors for documented symbols", async () => {
+    const eslint = createEslint("eslint-rules/__tests__/fixtures/documented.ts");
+    const [result] = await eslint.lintFiles([resolve(fixturesDir, "documented.ts")]);
+    const ruleMessages = result.messages.filter(
+      (m) => m.ruleId === "local/require-public-api-jsdoc",
+    );
+    expect(ruleMessages).toEqual([]);
+  });
+
+  test("resolves re-exported symbols through source files", async () => {
+    const eslint = createEslint("eslint-rules/__tests__/fixtures/re-export-entry.ts");
+    const [result] = await eslint.lintFiles([resolve(fixturesDir, "re-export-entry.ts")]);
+    const detected = messageNames(result.messages);
+    expect(detected).toContain("undocumentedAtSource");
+    expect(detected).not.toContain("documentedAtSource");
   });
 });
