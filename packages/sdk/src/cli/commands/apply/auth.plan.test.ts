@@ -69,6 +69,12 @@ function createMockApplication(): Application {
             },
           },
         },
+        hooks: {
+          beforeLogin: {
+            handler: async () => undefined,
+            invoker: "manager-machine-user",
+          },
+        },
       },
       userProfile: undefined,
     },
@@ -148,11 +154,19 @@ function createMockClient(opts?: {
     refreshTokenLifetime?: { seconds: bigint };
     requireDpop: boolean;
   }>;
+  authHook?: {
+    scriptRef: string;
+    invoker?: {
+      namespace: string;
+      machineUserName: string;
+    };
+  };
 }): OperatorClient {
   const authServices = opts?.authServices ?? [];
   const authIdPConfigs = opts?.authIdPConfigs ?? [];
   const machineUsers = opts?.machineUsers ?? [];
   const oauth2Clients = opts?.oauth2Clients ?? [];
+  const authHook = opts?.authHook;
 
   return {
     listAuthServices: vi.fn().mockResolvedValue({
@@ -187,7 +201,18 @@ function createMockClient(opts?: {
       oauth2Clients,
       nextPageToken: "",
     }),
-    getAuthHook: vi.fn().mockImplementation(notFound),
+    getAuthHook: vi.fn().mockImplementation(() => {
+      if (!authHook) {
+        return notFound();
+      }
+      return {
+        hook: {
+          hookPoint: 1,
+          scriptRef: authHook.scriptRef,
+          invoker: authHook.invoker,
+        },
+      };
+    }),
     getAuthSCIMConfig: vi.fn().mockImplementation(notFound),
     getAuthSCIMResources: vi.fn().mockResolvedValue({
       scimResources: [],
@@ -264,6 +289,25 @@ describe("planAuth", () => {
     expect(result.changeSet.service.updates).toHaveLength(0);
     expect(result.changeSet.machineUser.updates).toHaveLength(0);
     expect(result.changeSet.oauth2Client.updates).toHaveLength(0);
+  });
+
+  test("marks auth hook unchanged when remote definition matches", async () => {
+    const client = createMockClient({
+      authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
+      authHook: {
+        scriptRef: "auth-hook--auth-a--before-login",
+        invoker: {
+          namespace: "auth-a",
+          machineUserName: "manager-machine-user",
+        },
+      },
+    });
+
+    const result = await planAuth(createContext(client));
+
+    expect(result.changeSet.authHook.unchanged).toHaveLength(1);
+    expect(result.changeSet.authHook.unchanged[0].name).toBe("auth-a/before-login");
+    expect(result.changeSet.authHook.updates).toHaveLength(0);
   });
 
   test("marks auth child resources updated when forceApplyAll is enabled", async () => {

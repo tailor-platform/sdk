@@ -1855,6 +1855,44 @@ type DeleteAuthHook = {
   request: MessageInitShape<typeof DeleteAuthHookRequestSchema>;
 };
 
+function areAuthHooksEqual(
+  existing: {
+    scriptRef?: string;
+    invoker?: {
+      namespace?: string;
+      machineUserName?: string;
+    };
+  },
+  desired: {
+    scriptRef?: string;
+    invoker?: {
+      namespace?: string;
+      machineUserName?: string;
+    };
+  },
+): boolean {
+  return areNormalizedEqual(
+    {
+      scriptRef: existing.scriptRef ?? "",
+      invoker: existing.invoker
+        ? {
+            namespace: existing.invoker.namespace ?? "",
+            machineUserName: existing.invoker.machineUserName ?? "",
+          }
+        : undefined,
+    },
+    {
+      scriptRef: desired.scriptRef ?? "",
+      invoker: desired.invoker
+        ? {
+            namespace: desired.invoker.namespace ?? "",
+            machineUserName: desired.invoker.machineUserName ?? "",
+          }
+        : undefined,
+    },
+  );
+}
+
 async function planAuthHooks(
   client: OperatorClient,
   workspaceId: string,
@@ -1898,10 +1936,21 @@ async function planAuthHooks(
       };
 
       if (existingHook) {
-        changeSet.updates.push({
-          name: `${config.name}/before-login`,
-          request: hookRequest,
+        const { hook } = await client.getAuthHook({
+          workspaceId,
+          namespaceName: config.name,
+          hookPoint: AuthHookPoint.BEFORE_LOGIN,
         });
+        if (hook && areAuthHooksEqual(hook, hookRequest.hook)) {
+          changeSet.unchanged.push({
+            name: `${config.name}/before-login`,
+          });
+        } else {
+          changeSet.updates.push({
+            name: `${config.name}/before-login`,
+            request: hookRequest,
+          });
+        }
       } else {
         changeSet.creates.push({
           name: `${config.name}/before-login`,

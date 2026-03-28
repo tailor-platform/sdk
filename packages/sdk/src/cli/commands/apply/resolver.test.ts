@@ -71,6 +71,7 @@ describe("planPipeline (resolver service level)", () => {
       sdkVersion?: string;
     }>,
     existingResolvers: Record<string, Array<Record<string, unknown>>> = {},
+    resolverDetails: Record<string, Record<string, unknown>> = {},
   ): OperatorClient {
     return {
       listPipelineServices: vi.fn().mockResolvedValue({
@@ -89,9 +90,11 @@ describe("planPipeline (resolver service level)", () => {
         .fn()
         .mockImplementation(
           ({ namespaceName, resolverName }: { namespaceName: string; resolverName: string }) => ({
-            pipelineResolver: (existingResolvers[namespaceName] || []).find(
-              (resolver) => resolver.name === resolverName,
-            ),
+            pipelineResolver:
+              resolverDetails[`${namespaceName}:${resolverName}`] ??
+              (existingResolvers[namespaceName] || []).find(
+                (resolver) => resolver.name === resolverName,
+              ),
           }),
         ),
       getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
@@ -324,6 +327,55 @@ describe("planPipeline (resolver service level)", () => {
       const client = createMockClient([{ name: "my-resolver", label: appName }], {
         "my-resolver": [desiredResolver as Record<string, unknown>],
       });
+      const result = await planPipeline({
+        client,
+        workspaceId,
+        application: createMockApplication([pipeline]),
+        forRemoval: false,
+        config: mockConfig,
+      });
+
+      expect(result.changeSet.resolver.unchanged).toHaveLength(1);
+      expect(result.changeSet.resolver.unchanged[0].name).toBe("test-resolver");
+      expect(result.changeSet.resolver.updates).toHaveLength(0);
+    });
+
+    test("resolver is unchanged when list response is summary-only but get returns full definition", async () => {
+      const resolver = {
+        name: "test-resolver",
+        operation: 0,
+        body: () => "hello",
+        output: {
+          type: "string",
+          metadata: {},
+        },
+      };
+      const pipeline = {
+        namespace: "my-resolver",
+        config: {},
+        resolvers: { [resolver.name]: resolver },
+        loadResolvers: vi.fn().mockResolvedValue(undefined),
+      } as unknown as ResolverService;
+
+      const createClient = createMockClient([]);
+      const createResult = await planPipeline({
+        client: createClient,
+        workspaceId,
+        application: createMockApplication([pipeline]),
+        forRemoval: false,
+        config: mockConfig,
+      });
+      const desiredResolver = createResult.changeSet.resolver.creates[0].request.pipelineResolver;
+
+      const client = createMockClient(
+        [{ name: "my-resolver", label: appName }],
+        {
+          "my-resolver": [{ name: "test-resolver" }],
+        },
+        {
+          "my-resolver:test-resolver": desiredResolver as Record<string, unknown>,
+        },
+      );
       const result = await planPipeline({
         client,
         workspaceId,

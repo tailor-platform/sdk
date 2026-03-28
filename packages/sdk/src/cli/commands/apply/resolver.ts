@@ -348,10 +348,15 @@ async function planResolvers(
       );
       const existingResolver = existingResolversMap.get(resolver.name);
       if (existingResolver) {
+        const { pipelineResolver: existingResolverDetail } = await client.getPipelineResolver({
+          workspaceId,
+          namespaceName: pipeline.namespace,
+          resolverName: resolver.name,
+        });
         if (
           !forceApplyAll &&
-          existingResolver &&
-          areResolversEqual(existingResolver, desiredResolver)
+          existingResolverDetail &&
+          areResolversEqual(existingResolverDetail, desiredResolver)
         ) {
           changeSet.unchanged.push({ name: resolver.name });
         } else {

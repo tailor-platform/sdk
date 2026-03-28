@@ -197,21 +197,34 @@ function normalizeComparableExecutor(executor: MessageInitShape<typeof ExecutorE
           (left.key ?? "").localeCompare(right.key ?? ""),
         )
       : undefined;
+  const triggerConfig =
+    normalized.triggerConfig?.config?.case === "incomingWebhook"
+      ? {
+          ...normalized.triggerConfig,
+          config: {
+            ...normalized.triggerConfig.config,
+            value: {},
+          },
+        }
+      : normalized.triggerConfig?.config?.case === "event"
+        ? {
+            ...normalized.triggerConfig,
+            config: {
+              ...normalized.triggerConfig.config,
+              value: {
+                ...normalized.triggerConfig.config.value,
+                // The platform fills this field in responses even though the SDK never sets it.
+                eventType: undefined,
+              },
+            },
+          }
+        : normalized.triggerConfig;
   return {
     name: normalized.name,
     description: normalized.description ?? "",
     disabled: normalized.disabled ?? false,
     triggerType: normalized.triggerType,
-    triggerConfig:
-      normalized.triggerConfig?.config?.case === "incomingWebhook"
-        ? {
-            ...normalized.triggerConfig,
-            config: {
-              ...normalized.triggerConfig.config,
-              value: {},
-            },
-          }
-        : normalized.triggerConfig,
+    triggerConfig,
     targetType: normalized.targetType,
     targetConfig:
       normalized.targetConfig?.config?.case === "webhook"
