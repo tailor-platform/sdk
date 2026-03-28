@@ -29,6 +29,9 @@ export class DocumentedClass {
   static create(): DocumentedClass {
     return new DocumentedClass();
   }
+
+  private internalHelper(): void {}
+  protected onEvent(): void {}
 }
 
 /** Documented enum. */

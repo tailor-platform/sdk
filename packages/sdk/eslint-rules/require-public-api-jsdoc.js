@@ -20,6 +20,13 @@ function getKind(symbol) {
   return null;
 }
 
+function isNonPublicMember(symbol) {
+  const decls = symbol.getDeclarations();
+  if (!decls?.length) return false;
+  const flags = ts.getCombinedModifierFlags(decls[0]);
+  return !!(flags & (ts.ModifierFlags.Private | ts.ModifierFlags.Protected));
+}
+
 // TS Compiler API normalizes SourceFile.fileName to forward slashes on all
 // platforms, so "/" is the correct separator here.
 function isExternal(symbol) {
@@ -76,6 +83,7 @@ export function findUndocumentedSymbols(entryPoints, tsCompilerOptions, baseDir)
         for (const members of [resolved.members, resolved.exports]) {
           members?.forEach((member) => {
             if (member.getName() === "prototype") return;
+            if (isNonPublicMember(member)) return;
             const mk = getKind(member);
             if (mk && !hasDoc(member)) {
               failures.push({
@@ -188,6 +196,7 @@ export const rule = {
             for (const members of [resolved.members, resolved.exports]) {
               members?.forEach((member) => {
                 if (member.getName() === "prototype") return;
+                if (isNonPublicMember(member)) return;
                 const mk = getKind(member);
                 if (mk && !hasDoc(member)) {
                   context.report({

@@ -64,6 +64,13 @@ describe("require-public-api-jsdoc", () => {
     expect(names(result)).toContain("UndocumentedEnum.Y");
   });
 
+  test("private and protected class members are skipped", () => {
+    const result = check("documented.ts");
+    const detected = names(result);
+    expect(detected).not.toContain("DocumentedClass.internalHelper");
+    expect(detected).not.toContain("DocumentedClass.onEvent");
+  });
+
   test("type-only exports are skipped", () => {
     expect(check("type-only.ts")).toEqual([]);
   });
