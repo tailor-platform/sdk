@@ -333,6 +333,11 @@ export default defineConfig([
     },
   },
   {
+    // This rule uses the TypeScript type checker to resolve re-exported symbols,
+    // so `eslint --cache` may serve stale results when only a re-export source
+    // file changes (the entry point's mtime stays the same). This is a known
+    // limitation of ESLint's file-level cache with any cross-file type-aware
+    // rule. CI runs on a clean cache, so it always catches violations.
     files: publicApiEntryPoints,
     plugins: { local: localPlugin },
     rules: {
