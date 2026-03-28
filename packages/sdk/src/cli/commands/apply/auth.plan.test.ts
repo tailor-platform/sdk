@@ -310,6 +310,44 @@ describe("planAuth", () => {
     expect(result.changeSet.authHook.updates).toHaveLength(0);
   });
 
+  test("marks auth hook updated when forceApplyAll is enabled", async () => {
+    const client = createMockClient({
+      authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
+      authHook: {
+        scriptRef: "auth-hook--auth-a--before-login",
+        invoker: {
+          namespace: "auth-a",
+          machineUserName: "manager-machine-user",
+        },
+      },
+    });
+
+    const result = await planAuth({
+      ...createContext(client),
+      forceApplyAll: true,
+    });
+
+    expect(result.changeSet.authHook.updates).toHaveLength(1);
+    expect(result.changeSet.authHook.unchanged).toHaveLength(0);
+  });
+
+  test("reuses auth hook payload from existence check instead of fetching twice", async () => {
+    const client = createMockClient({
+      authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
+      authHook: {
+        scriptRef: "auth-hook--auth-a--before-login",
+        invoker: {
+          namespace: "auth-a",
+          machineUserName: "manager-machine-user",
+        },
+      },
+    });
+
+    await planAuth(createContext(client));
+
+    expect(client.getAuthHook).toHaveBeenCalledTimes(1);
+  });
+
   test("marks auth child resources updated when forceApplyAll is enabled", async () => {
     const client = createMockClient({
       authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],

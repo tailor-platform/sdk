@@ -70,6 +70,7 @@ function createMockClient(
     disabled?: boolean;
     subgraphs?: Array<{ serviceType: number; serviceNamespace: string }>;
     sdkVersion?: string;
+    label?: string;
   }>,
 ): OperatorClient {
   return {
@@ -88,7 +89,7 @@ function createMockClient(
         metadata: {
           labels: application
             ? {
-                "sdk-name": appName,
+                "sdk-name": application.label ?? appName,
                 "sdk-version": application.sdkVersion ?? "v1-0-0",
               }
             : {},
@@ -131,6 +132,30 @@ describe("planApplication", () => {
     expect(result.unchanged).toHaveLength(1);
     expect(result.unchanged[0].name).toBe(appName);
     expect(result.updates).toHaveLength(0);
+  });
+
+  test("marks application updated when remote state matches but ownership differs", async () => {
+    const client = createMockClient([
+      {
+        name: appName,
+        authNamespace: "auth-a",
+        authIdpConfigName: "idp-a",
+        cors: ["https://a.example.com", "https://b.example.com"],
+        allowedIpAddresses: ["1.1.1.1", "2.2.2.2"],
+        disableIntrospection: true,
+        disabled: false,
+        label: "other-app",
+        subgraphs: [
+          { serviceType: Subgraph_ServiceType.TAILORDB, serviceNamespace: "tailordb-a" },
+          { serviceType: Subgraph_ServiceType.PIPELINE, serviceNamespace: "pipeline-a" },
+        ],
+      },
+    ]);
+
+    const result = await planApplication(createContext(client));
+
+    expect(result.updates).toHaveLength(1);
+    expect(result.unchanged).toHaveLength(0);
   });
 
   test("marks application updated when remote state differs", async () => {

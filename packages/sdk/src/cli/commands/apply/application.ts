@@ -8,7 +8,7 @@ import {
 import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "@/cli/shared/client";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
-import { buildMetaRequest, hasMatchingSdkVersion } from "./label";
+import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey } from "./label";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
 import type { Application } from "@/cli/services/application";
 import type {
@@ -282,6 +282,7 @@ export async function planApplication(context: PlanContext) {
       trn: trn(workspaceId, application.name),
     });
     if (
+      metadata?.labels?.[sdkNameLabelKey] === application.name &&
       hasMatchingSdkVersion(metadata?.labels, metaRequest.labels) &&
       areApplicationsEqual(existing, desired)
     ) {

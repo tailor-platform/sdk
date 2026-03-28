@@ -283,7 +283,7 @@ export async function planAuth(context: PlanContext) {
     planUserProfileConfigs(client, workspaceId, auths, deletedServices, forceApplyAll),
     planTenantConfigs(client, workspaceId, auths, deletedServices, forceApplyAll),
     planMachineUsers(client, workspaceId, auths, deletedServices, forceApplyAll),
-    planAuthHooks(client, workspaceId, auths, deletedServices),
+    planAuthHooks(client, workspaceId, auths, deletedServices, forceApplyAll),
     planOAuth2Clients(client, workspaceId, auths, deletedServices, forceApplyAll),
     planSCIMConfigs(client, workspaceId, auths, deletedServices),
     planSCIMResources(client, workspaceId, auths, deletedServices),
@@ -1898,6 +1898,7 @@ async function planAuthHooks(
   workspaceId: string,
   auths: ReadonlyArray<Readonly<AuthService>>,
   deletedServices: ReadonlyArray<string>,
+  forceApplyAll = false,
 ) {
   const changeSet = createChangeSet<CreateAuthHook, UpdateAuthHook, DeleteAuthHook>("Auth hooks");
 
@@ -1905,17 +1906,25 @@ async function planAuthHooks(
     const { parsedConfig: config } = auth;
     const beforeLogin = config.hooks?.beforeLogin;
 
-    let existingHook: boolean;
+    let existingHook:
+      | {
+          scriptRef?: string;
+          invoker?: {
+            namespace?: string;
+            machineUserName?: string;
+          };
+        }
+      | undefined;
     try {
-      await client.getAuthHook({
+      const { hook } = await client.getAuthHook({
         workspaceId,
         namespaceName: config.name,
         hookPoint: AuthHookPoint.BEFORE_LOGIN,
       });
-      existingHook = true;
+      existingHook = hook;
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
-        existingHook = false;
+        existingHook = undefined;
       } else {
         throw error;
       }
@@ -1936,12 +1945,7 @@ async function planAuthHooks(
       };
 
       if (existingHook) {
-        const { hook } = await client.getAuthHook({
-          workspaceId,
-          namespaceName: config.name,
-          hookPoint: AuthHookPoint.BEFORE_LOGIN,
-        });
-        if (hook && areAuthHooksEqual(hook, hookRequest.hook)) {
+        if (!forceApplyAll && areAuthHooksEqual(existingHook, hookRequest.hook)) {
           changeSet.unchanged.push({
             name: `${config.name}/before-login`,
           });
