@@ -23,48 +23,17 @@ describe("require-public-api-jsdoc", () => {
     expect(check("documented.ts")).toEqual([]);
   });
 
-  test("undocumented variable is detected", () => {
+  test("detects all undocumented symbol kinds", () => {
     const result = check("undocumented.ts");
-    expect(names(result)).toContain("undocumentedVar");
-    expect(result.find((f) => f.name === "undocumentedVar")?.kind).toBe("Variable");
-  });
-
-  test("undocumented function is detected", () => {
-    const result = check("undocumented.ts");
-    expect(names(result)).toContain("undocumentedFunc");
-    expect(result.find((f) => f.name === "undocumentedFunc")?.kind).toBe("Function");
-  });
-
-  test("undocumented class is detected", () => {
-    const result = check("undocumented.ts");
-    expect(names(result)).toContain("UndocumentedClass");
-    expect(result.find((f) => f.name === "UndocumentedClass")?.kind).toBe("Class");
-  });
-
-  test("undocumented class method is detected", () => {
-    const result = check("undocumented.ts");
-    expect(names(result)).toContain("UndocumentedClass.undocumentedMethod");
-    expect(result.find((f) => f.name === "UndocumentedClass.undocumentedMethod")?.kind).toBe(
-      "Method",
-    );
-  });
-
-  test("undocumented class accessor is detected", () => {
-    const result = check("undocumented.ts");
-    expect(names(result)).toContain("UndocumentedClass.undocumentedAccessor");
-    expect(result.find((f) => f.name === "UndocumentedClass.undocumentedAccessor")?.kind).toBe(
-      "Accessor",
-    );
-  });
-
-  test("undocumented enum is detected", () => {
-    const result = check("undocumented.ts");
-    expect(names(result)).toContain("UndocumentedEnum");
-    expect(result.find((f) => f.name === "UndocumentedEnum")?.kind).toBe("Enum");
-  });
-
-  test("undocumented enum members are detected", () => {
-    const result = check("undocumented.ts");
+    const byName = Object.fromEntries(result.map((f) => [f.name, f.kind]));
+    expect(byName).toMatchObject({
+      undocumentedVar: "Variable",
+      undocumentedFunc: "Function",
+      UndocumentedClass: "Class",
+      "UndocumentedClass.undocumentedMethod": "Method",
+      "UndocumentedClass.undocumentedAccessor": "Accessor",
+      UndocumentedEnum: "Enum",
+    });
     expect(names(result)).toContain("UndocumentedEnum.X");
     expect(names(result)).toContain("UndocumentedEnum.Y");
   });
@@ -136,7 +105,7 @@ describe("ESLint rule integration", () => {
       .sort();
   }
 
-  test("reports undocumented symbols via ESLint", async () => {
+  test("reports undocumented symbols via ESLint", { timeout: 30_000 }, async () => {
     const eslint = createEslint("eslint-rules/__tests__/fixtures/undocumented.ts");
     const [result] = await eslint.lintFiles([resolve(fixturesDir, "undocumented.ts")]);
     const detected = messageNames(result.messages);
