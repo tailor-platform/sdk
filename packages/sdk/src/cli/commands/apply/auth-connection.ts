@@ -128,8 +128,10 @@ export async function planAuthConnections(
   // Collect all desired connections from auth services
   const desiredConnections: Record<string, AuthConnectionConfig> = {};
   for (const auth of auths) {
-    for (const [name, config] of Object.entries(auth.connections)) {
-      desiredConnections[name] = config;
+    if (auth.connections) {
+      for (const [name, config] of Object.entries(auth.connections)) {
+        desiredConnections[name] = config;
+      }
     }
   }
 
@@ -215,6 +217,8 @@ export async function planAuthConnections(
           createRequest: buildConnectionRequest(workspaceId, name, config),
           metaRequest,
         });
+      } else {
+        changeSet.unchanged.push({ name });
       }
       delete existingConnections[name];
     } else {

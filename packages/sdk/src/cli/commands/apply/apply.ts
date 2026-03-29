@@ -199,6 +199,7 @@ function printPlanSummary(results: {
     results.auth.changeSet.authHook,
     results.auth.changeSet.scim,
     results.auth.changeSet.scimResource,
+    ...(results.auth.changeSet.connection ? [results.auth.changeSet.connection] : []),
     results.pipeline.changeSet.service,
     results.pipeline.changeSet.resolver,
     results.app,
