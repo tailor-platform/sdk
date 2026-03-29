@@ -1,5 +1,42 @@
 # @tailor-platform/sdk
 
+## 1.33.0
+
+### Minor Changes
+
+- [#814](https://github.com/tailor-platform/sdk/pull/814) [`d5b2702`](https://github.com/tailor-platform/sdk/commit/d5b2702162a7344f1c53d373219d8482acac142d) Thanks [@toiroakr](https://github.com/toiroakr)! - Add multi-event executor trigger support with `recordTrigger`, `idpUserTrigger`, and `authAccessTokenTrigger` factory functions that accept an `events` array to handle multiple event types in a single executor. Args include `event` (short name) and `rawEvent` (full event type string) for runtime type narrowing.
+
+- [#769](https://github.com/tailor-platform/sdk/pull/769) [`85e3053`](https://github.com/tailor-platform/sdk/commit/85e30538c981bd666680ce52cb2f986d94780593) Thanks [@r253hmdryou](https://github.com/r253hmdryou)! - Improve apply planning by adding stable no-op detection and plan summaries.
+
+  - Mark resources as `unchanged` when requested configuration already matches remote state, and keep update/create/delete behavior unchanged for drift, ownership mismatch, or missing resources.
+  - Add a consolidated plan summary line (create/update/delete/replace/unchanged) to `apply` output and include unchanged counts in plan reporting.
+
+### Patch Changes
+
+- [#844](https://github.com/tailor-platform/sdk/pull/844) [`4f62742`](https://github.com/tailor-platform/sdk/commit/4f62742bea1d9de3e181af80a2fc14b78ac6ea21) Thanks [@toiroakr](https://github.com/toiroakr)! - fix: add bidirectional foreign key between IDP user and userProfile type in seed schema
+
+  When auth.userProfile is configured, the seed plugin now generates a foreign key from the userProfile type back to `_User`, ensuring seed data validation catches mismatches in both directions. Also bumps @toiroakr/lines-db to 0.9.1 which supports circular FK validation.
+
+- [#857](https://github.com/tailor-platform/sdk/pull/857) [`8ed7e2a`](https://github.com/tailor-platform/sdk/commit/8ed7e2a2b23112c35f844f915f0f6eca6bef2c72) Thanks [@dqn](https://github.com/dqn)! - Add JSDoc documentation to previously undocumented public API exports for improved IDE intellisense.
+
+- [#822](https://github.com/tailor-platform/sdk/pull/822) [`52f72bb`](https://github.com/tailor-platform/sdk/commit/52f72bb8a82f6e32889505d934ad0918391cd52e) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency oxlint-tsgolint to v0.17.2
+
+- [#833](https://github.com/tailor-platform/sdk/pull/833) [`dfc7216`](https://github.com/tailor-platform/sdk/commit/dfc7216a7e6d639610d9e68ae422b08f15857bb7) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @typescript/native-preview to v7.0.0-dev.20260325.1
+
+- [#834](https://github.com/tailor-platform/sdk/pull/834) [`fecd40b`](https://github.com/tailor-platform/sdk/commit/fecd40bed724c39d5e4b12a219a3733693b06cd4) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency knip to v6.0.3
+
+- [#840](https://github.com/tailor-platform/sdk/pull/840) [`3dfb55f`](https://github.com/tailor-platform/sdk/commit/3dfb55f96aab68e355f10ccd993cc21141441724) Thanks [@renovate](https://github.com/apps/renovate)! - Update @clack/prompts to v1, adjusting validate callback signatures for the new API
+
+- [#845](https://github.com/tailor-platform/sdk/pull/845) [`7976c0a`](https://github.com/tailor-platform/sdk/commit/7976c0a516cc09b3a4f1f183ab98360eefd449b2) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update anthropics/claude-code-action action to v1.0.81
+
+- [#846](https://github.com/tailor-platform/sdk/pull/846) [`ab16815`](https://github.com/tailor-platform/sdk/commit/ab16815674196d50b1f14b37935e1c7ade255d14) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency knip to v6.0.6
+
+- [#847](https://github.com/tailor-platform/sdk/pull/847) [`9b60ae2`](https://github.com/tailor-platform/sdk/commit/9b60ae2a3b3ccc10839867ba7a49ef59e649287e) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency typescript-eslint to v8.57.2
+
+- [#848](https://github.com/tailor-platform/sdk/pull/848) [`0c8aeac`](https://github.com/tailor-platform/sdk/commit/0c8aeac85680352e9e9f0c560e37c2e22b1ee1cc) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update vitest monorepo to v4.1.1
+
+- [#849](https://github.com/tailor-platform/sdk/pull/849) [`b1c9814`](https://github.com/tailor-platform/sdk/commit/b1c981432a4753d3868d482123931921a0e9bf74) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency rolldown to v1.0.0-rc.12
+
 ## 1.32.1
 
 ### Patch Changes
