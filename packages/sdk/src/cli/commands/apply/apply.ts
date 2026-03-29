@@ -241,14 +241,27 @@ function summarizeDisplayEntries(
   return summary;
 }
 
-function countDistinctNames(...groups: ReadonlyArray<ReadonlyArray<HasName>>): number {
-  const names = new Set<string>();
-  for (const group of groups) {
+function countUnchangedNamesExcludingChanged(
+  unchangedGroups: ReadonlyArray<ReadonlyArray<HasName>>,
+  changedGroups: ReadonlyArray<ReadonlyArray<HasName>>,
+): number {
+  const changedNames = new Set<string>();
+  for (const group of changedGroups) {
     for (const item of group) {
-      names.add(item.name);
+      changedNames.add(item.name);
     }
   }
-  return names.size;
+
+  const unchangedNames = new Set<string>();
+  for (const group of unchangedGroups) {
+    for (const item of group) {
+      if (!changedNames.has(item.name)) {
+        unchangedNames.add(item.name);
+      }
+    }
+  }
+
+  return unchangedNames.size;
 }
 
 /**
@@ -317,9 +330,21 @@ export function summarizePlanResultsForDisplay(results: {
         results.tailorDB.changeSet.type,
         results.tailorDB.changeSet.gqlPermission,
       ),
-      countDistinctNames(
-        results.tailorDB.changeSet.type.unchanged,
-        results.tailorDB.changeSet.gqlPermission.unchanged,
+      countUnchangedNamesExcludingChanged(
+        [
+          results.tailorDB.changeSet.type.unchanged,
+          results.tailorDB.changeSet.gqlPermission.unchanged,
+        ],
+        [
+          results.tailorDB.changeSet.type.creates,
+          results.tailorDB.changeSet.type.updates,
+          results.tailorDB.changeSet.type.deletes,
+          results.tailorDB.changeSet.type.replaces,
+          results.tailorDB.changeSet.gqlPermission.creates,
+          results.tailorDB.changeSet.gqlPermission.updates,
+          results.tailorDB.changeSet.gqlPermission.deletes,
+          results.tailorDB.changeSet.gqlPermission.replaces,
+        ],
       ),
     ),
   );

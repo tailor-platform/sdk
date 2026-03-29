@@ -28,6 +28,7 @@ type SecretChangeSet = SummaryPlanResults["secretManager"]["secretChangeSet"];
 type FunctionRegistryUpdate = FunctionRegistryChangeSet["updates"][number];
 type TailorDBTypeCreate = TailorDBTypeChangeSet["creates"][number];
 type TailorDBGqlPermissionCreate = TailorDBGqlPermissionChangeSet["creates"][number];
+type TailorDBGqlPermissionUpdate = TailorDBGqlPermissionChangeSet["updates"][number];
 type AuthHookUpdate = AuthHookChangeSet["updates"][number];
 type WorkflowJobFunctionUpdate =
   SummaryPlanResults["functionRegistry"]["workflowJobChanges"]["updates"][number];
@@ -247,6 +248,145 @@ describe("summarizePlanResultsForDisplay", () => {
       delete: 0,
       replace: 0,
       unchanged: 0,
+    });
+  });
+
+  test("does not count TailorDB unchanged names when the same grouped row has changes", () => {
+    const results = {
+      functionRegistry: {
+        changeSet: createFixtureChangeSet<FunctionRegistryChangeSet>(),
+        workflowJobChanges: {
+          creates: [],
+          updates: [],
+          deletes: [],
+          replaces: [],
+          unchanged: [],
+        },
+        resolverFunctionChanges: {
+          creates: [],
+          updates: [],
+          deletes: [],
+          replaces: [],
+          unchanged: [],
+        },
+        executorFunctionChanges: {
+          creates: [],
+          updates: [],
+          deletes: [],
+          replaces: [],
+          unchanged: [],
+        },
+        authHookFunctionChanges: {
+          creates: [],
+          updates: [],
+          deletes: [],
+          replaces: [],
+          unchanged: [],
+        },
+        conflicts: [],
+        unmanaged: [],
+        resourceOwners: new Set<string>(),
+      },
+      tailorDB: {
+        changeSet: {
+          service: createFixtureChangeSet<TailorDBServiceChangeSet>(),
+          type: {
+            ...createFixtureChangeSet<TailorDBTypeChangeSet>(),
+            unchanged: [{ name: "Project" }],
+          },
+          gqlPermission: {
+            ...createFixtureChangeSet<TailorDBGqlPermissionChangeSet>(),
+            updates: [
+              {
+                name: "Project",
+                request: {} as TailorDBGqlPermissionUpdate["request"],
+              } satisfies TailorDBGqlPermissionUpdate,
+            ],
+            unchanged: [{ name: "OtherProject" }],
+          },
+        },
+        conflicts: [],
+        unmanaged: [],
+        resourceOwners: new Set<string>(),
+        context: {
+          workspaceId: "ws",
+          application: {} as SummaryPlanResults["tailorDB"]["context"]["application"],
+          config: {} as SummaryPlanResults["tailorDB"]["context"]["config"],
+          noSchemaCheck: false,
+        },
+      },
+      staticWebsite: {
+        changeSet: createFixtureChangeSet<StaticWebsiteChangeSet>(),
+        conflicts: [],
+        unmanaged: [],
+        resourceOwners: new Set<string>(),
+      },
+      idp: {
+        changeSet: {
+          service: createFixtureChangeSet<IdPServiceChangeSet>(),
+          client: createFixtureChangeSet<IdPClientChangeSet>(),
+        },
+        conflicts: [],
+        unmanaged: [],
+        resourceOwners: new Set<string>(),
+      },
+      auth: {
+        changeSet: {
+          service: createFixtureChangeSet<AuthServiceChangeSet>(),
+          idpConfig: createFixtureChangeSet<AuthIdpConfigChangeSet>(),
+          userProfileConfig: createFixtureChangeSet<AuthUserProfileConfigChangeSet>(),
+          tenantConfig: createFixtureChangeSet<AuthTenantConfigChangeSet>(),
+          machineUser: createFixtureChangeSet<AuthMachineUserChangeSet>(),
+          oauth2Client: createFixtureChangeSet<AuthOauth2ClientChangeSet>(),
+          authHook: createFixtureChangeSet<AuthHookChangeSet>(),
+          scim: createFixtureChangeSet<AuthScimChangeSet>(),
+          scimResource: createFixtureChangeSet<AuthScimResourceChangeSet>(),
+        },
+        conflicts: [],
+        unmanaged: [],
+        resourceOwners: new Set<string>(),
+      },
+      pipeline: {
+        changeSet: {
+          service: createFixtureChangeSet<PipelineServiceChangeSet>(),
+          resolver: createFixtureChangeSet<ResolverChangeSet>(),
+        },
+        conflicts: [],
+        unmanaged: [],
+        resourceOwners: new Set<string>(),
+      },
+      app: createFixtureChangeSet<AppChangeSet>(),
+      executor: {
+        changeSet: createFixtureChangeSet<ExecutorChangeSet>(),
+        conflicts: [],
+        unmanaged: [],
+        resourceOwners: new Set<string>(),
+      },
+      workflow: {
+        changeSet: createFixtureChangeSet<WorkflowChangeSet>(),
+        unchangedWorkflowJobNames: new Set<string>(),
+        conflicts: [],
+        unmanaged: [],
+        resourceOwners: new Set<string>(),
+        appName: "my-app",
+      },
+      secretManager: {
+        vaultChangeSet: createFixtureChangeSet<VaultChangeSet>(),
+        secretChangeSet: createFixtureChangeSet<SecretChangeSet>(),
+        conflicts: [],
+        unmanaged: [],
+        resourceOwners: new Set<string>(),
+      },
+    } satisfies SummaryPlanResults;
+
+    const summary = summarizePlanResultsForDisplay(results);
+
+    expect(summary).toEqual({
+      create: 0,
+      update: 1,
+      delete: 0,
+      replace: 0,
+      unchanged: 1,
     });
   });
 });
