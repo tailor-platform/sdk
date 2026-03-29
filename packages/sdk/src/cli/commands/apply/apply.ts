@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import { Code, ConnectError } from "@connectrpc/connect";
 import { findUpSync } from "find-up-simple";
 import * as path from "pathe";
 import { hashFile } from "@/cli/cache/hasher";
@@ -15,6 +16,7 @@ import { withSpan } from "@/cli/telemetry";
 import { PluginManager } from "@/plugin/manager";
 import { applyApplication, planApplication } from "./application";
 import { applyAuth, planAuth } from "./auth";
+import { formatPlanSummary, summarizeChangeSets } from "./change-set";
 import {
   confirmImportantResourceDeletion,
   confirmOwnerConflict,
@@ -27,9 +29,11 @@ import { applyExecutor, planExecutor } from "./executor";
 import {
   applyFunctionRegistry,
   collectFunctionEntries,
+  filterBundledWorkflowJobs,
   planFunctionRegistry,
 } from "./function-registry";
 import { applyIdP, planIdP } from "./idp";
+import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey } from "./label";
 import { applyPipeline, planPipeline } from "./resolver";
 import { applySecretManager, planSecretManager } from "./secret-manager";
 import { applyStaticWebsite, planStaticWebsite } from "./staticwebsite";
@@ -59,9 +63,153 @@ export interface PlanContext {
   forRemoval: boolean;
   config: LoadedConfig;
   noSchemaCheck?: boolean;
+  forceApplyAll?: boolean;
 }
 
 export type ApplyPhase = "create-update" | "delete" | "delete-resources" | "delete-services";
+
+function applicationTrn(workspaceId: string, name: string) {
+  return `trn:v1:workspace:${workspaceId}:application:${name}`;
+}
+
+function functionRegistryTrn(workspaceId: string, name: string) {
+  return `trn:v1:workspace:${workspaceId}:function_registry:${name}`;
+}
+
+function pipelineTrn(workspaceId: string, name: string) {
+  return `trn:v1:workspace:${workspaceId}:pipeline:${name}`;
+}
+
+function idpTrn(workspaceId: string, name: string) {
+  return `trn:v1:workspace:${workspaceId}:idp:${name}`;
+}
+
+function authTrn(workspaceId: string, name: string) {
+  return `trn:v1:workspace:${workspaceId}:auth:${name}`;
+}
+
+function executorTrn(workspaceId: string, name: string) {
+  return `trn:v1:workspace:${workspaceId}:executor:${name}`;
+}
+
+function workflowTrn(workspaceId: string, name: string) {
+  return `trn:v1:workspace:${workspaceId}:workflow:${name}`;
+}
+
+function staticWebsiteTrn(workspaceId: string, name: string) {
+  return `trn:v1:workspace:${workspaceId}:staticwebsite:${name}`;
+}
+
+function tailorDBTrn(workspaceId: string, name: string) {
+  return `trn:v1:workspace:${workspaceId}:tailordb:${name}`;
+}
+
+function vaultTrn(workspaceId: string, name: string) {
+  return `trn:v1:workspace:${workspaceId}:vault:${name}`;
+}
+
+async function shouldForceApplyAll(
+  client: OperatorClient,
+  workspaceId: string,
+  application: Readonly<Application>,
+  functionEntries: ReadonlyArray<{ name: string }>,
+) {
+  const desiredLabels = (
+    await buildMetaRequest(applicationTrn(workspaceId, application.name), application.name)
+  ).labels;
+  const candidateTrns = new Set<string>();
+
+  if (application.subgraphs.length > 0) {
+    candidateTrns.add(applicationTrn(workspaceId, application.name));
+  }
+  application.staticWebsiteServices.forEach((website) => {
+    candidateTrns.add(staticWebsiteTrn(workspaceId, website.name));
+  });
+  application.resolverServices.forEach((pipeline) => {
+    candidateTrns.add(pipelineTrn(workspaceId, pipeline.namespace));
+  });
+  application.idpServices.forEach((idp) => {
+    candidateTrns.add(idpTrn(workspaceId, idp.name));
+  });
+  if (application.authService) {
+    candidateTrns.add(authTrn(workspaceId, application.authService.config.name));
+  }
+  Object.values(application.executorService?.executors ?? {}).forEach((executor) => {
+    candidateTrns.add(executorTrn(workspaceId, executor.name));
+  });
+  Object.values(application.workflowService?.workflows ?? {}).forEach((workflow) => {
+    candidateTrns.add(workflowTrn(workspaceId, workflow.name));
+  });
+  application.tailorDBServices.forEach((service) => {
+    candidateTrns.add(tailorDBTrn(workspaceId, service.namespace));
+  });
+  application.secrets.forEach((vault) => {
+    candidateTrns.add(vaultTrn(workspaceId, vault.vaultName));
+  });
+  functionEntries.forEach((entry) => {
+    candidateTrns.add(functionRegistryTrn(workspaceId, entry.name));
+  });
+
+  for (const trn of candidateTrns) {
+    try {
+      const { metadata } = await client.getMetadata({ trn });
+      if (metadata?.labels?.[sdkNameLabelKey] !== application.name) {
+        continue;
+      }
+      if (!hasMatchingSdkVersion(metadata.labels, desiredLabels)) {
+        return true;
+      }
+    } catch (error) {
+      if (error instanceof ConnectError && error.code === Code.NotFound) {
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  return false;
+}
+
+function printPlanSummary(results: {
+  functionRegistry: Awaited<ReturnType<typeof planFunctionRegistry>>;
+  tailorDB: Awaited<ReturnType<typeof planTailorDB>>;
+  staticWebsite: Awaited<ReturnType<typeof planStaticWebsite>>;
+  idp: Awaited<ReturnType<typeof planIdP>>;
+  auth: Awaited<ReturnType<typeof planAuth>>;
+  pipeline: Awaited<ReturnType<typeof planPipeline>>;
+  app: Awaited<ReturnType<typeof planApplication>>;
+  executor: Awaited<ReturnType<typeof planExecutor>>;
+  workflow: Awaited<ReturnType<typeof planWorkflow>>;
+  secretManager: Awaited<ReturnType<typeof planSecretManager>>;
+}) {
+  const summary = summarizeChangeSets([
+    results.functionRegistry.changeSet,
+    results.tailorDB.changeSet.service,
+    results.tailorDB.changeSet.type,
+    results.tailorDB.changeSet.gqlPermission,
+    results.staticWebsite.changeSet,
+    results.idp.changeSet.service,
+    results.idp.changeSet.client,
+    results.auth.changeSet.service,
+    results.auth.changeSet.idpConfig,
+    results.auth.changeSet.userProfileConfig,
+    results.auth.changeSet.tenantConfig,
+    results.auth.changeSet.machineUser,
+    results.auth.changeSet.oauth2Client,
+    results.auth.changeSet.authHook,
+    results.auth.changeSet.scim,
+    results.auth.changeSet.scimResource,
+    results.pipeline.changeSet.service,
+    results.pipeline.changeSet.resolver,
+    results.app,
+    results.executor.changeSet,
+    results.workflow.changeSet,
+    results.secretManager.vaultChangeSet,
+    results.secretManager.secretChangeSet,
+  ]);
+
+  logger.log(formatPlanSummary(summary));
+}
 
 /**
  * Apply the configured application to the Tailor platform.
@@ -166,14 +314,21 @@ export async function apply(options?: ApplyOptions) {
 
     // Collect function entries from in-memory bundled scripts (after build, before plan)
     const workflowService = application.workflowService;
+    const bundledWorkflowJobs = filterBundledWorkflowJobs(
+      workflowService?.jobs ?? [],
+      workflowBuildResult?.usedJobNames ?? [],
+    );
     const functionEntries = collectFunctionEntries(
       application,
-      workflowService?.jobs ?? [],
+      bundledWorkflowJobs,
       bundledScripts,
     );
 
     const dryRun = options?.dryRun ?? false;
     const yes = options?.yes ?? false;
+    const forceApplyAll = await withSpan("plan.detectSdkVersionChange", () =>
+      shouldForceApplyAll(client, workspaceId, application, functionEntries),
+    );
 
     // Phase 1: Plan
     const {
@@ -195,40 +350,38 @@ export async function apply(options?: ApplyOptions) {
         forRemoval: false,
         config,
         noSchemaCheck: options?.noSchemaCheck,
+        forceApplyAll,
       };
-      const [
-        functionRegistry,
-        tailorDB,
-        staticWebsite,
-        idp,
-        auth,
-        pipeline,
-        app,
-        executor,
-        workflow,
-        secretManager,
-      ] = await Promise.all([
-        withSpan("plan.functionRegistry", () =>
-          planFunctionRegistry(client, workspaceId, application.name, functionEntries),
-        ),
-        withSpan("plan.tailorDB", () => planTailorDB(ctx)),
-        withSpan("plan.staticWebsite", () => planStaticWebsite(ctx)),
-        withSpan("plan.idp", () => planIdP(ctx)),
-        withSpan("plan.auth", () => planAuth(ctx)),
-        withSpan("plan.pipeline", () => planPipeline(ctx)),
-        withSpan("plan.application", () => planApplication(ctx)),
-        withSpan("plan.executor", () => planExecutor(ctx)),
-        withSpan("plan.workflow", () =>
-          planWorkflow(
-            client,
-            workspaceId,
-            application.name,
-            workflowService?.workflows ?? {},
-            workflowBuildResult?.mainJobDeps ?? {},
+      const functionRegistry = await withSpan("plan.functionRegistry", () =>
+        planFunctionRegistry(client, workspaceId, application.name, functionEntries),
+      );
+      const unchangedWorkflowJobs = new Set(
+        functionRegistry.changeSet.unchanged
+          .map((entry) => entry.name)
+          .filter((name) => name.startsWith("workflow--"))
+          .map((name) => name.slice("workflow--".length)),
+      );
+      const [tailorDB, staticWebsite, idp, auth, pipeline, app, executor, workflow, secretManager] =
+        await Promise.all([
+          withSpan("plan.tailorDB", () => planTailorDB(ctx)),
+          withSpan("plan.staticWebsite", () => planStaticWebsite(ctx)),
+          withSpan("plan.idp", () => planIdP(ctx)),
+          withSpan("plan.auth", () => planAuth(ctx)),
+          withSpan("plan.pipeline", () => planPipeline(ctx)),
+          withSpan("plan.application", () => planApplication(ctx)),
+          withSpan("plan.executor", () => planExecutor(ctx)),
+          withSpan("plan.workflow", () =>
+            planWorkflow(
+              client,
+              workspaceId,
+              application.name,
+              workflowService?.workflows ?? {},
+              workflowBuildResult?.mainJobDeps ?? {},
+              unchangedWorkflowJobs,
+            ),
           ),
-        ),
-        withSpan("plan.secretManager", () => planSecretManager(ctx)),
-      ]);
+          withSpan("plan.secretManager", () => planSecretManager(ctx)),
+        ]);
       return {
         functionRegistry,
         tailorDB,
@@ -333,6 +486,19 @@ export async function apply(options?: ApplyOptions) {
           },
         });
       }
+    });
+
+    printPlanSummary({
+      functionRegistry,
+      tailorDB,
+      staticWebsite,
+      idp,
+      auth,
+      pipeline,
+      app,
+      executor,
+      workflow,
+      secretManager,
     });
 
     if (dryRun) {

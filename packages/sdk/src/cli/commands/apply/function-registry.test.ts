@@ -71,7 +71,12 @@ describe("planFunctionRegistry", () => {
   }
 
   function createMockClient(
-    existingFunctions: Array<{ name: string; contentHash: string; label?: string }>,
+    existingFunctions: Array<{
+      name: string;
+      contentHash: string;
+      label?: string;
+      sdkVersion?: string;
+    }>,
   ): OperatorClient {
     return {
       listFunctionRegistries: vi.fn().mockResolvedValue({
@@ -89,7 +94,12 @@ describe("planFunctionRegistry", () => {
         const func = existingFunctions.find((f) => f.name === name);
         return {
           metadata: {
-            labels: func?.label ? { [sdkNameLabelKey]: func.label } : {},
+            labels: func?.label
+              ? {
+                  [sdkNameLabelKey]: func.label,
+                  "sdk-version": func.sdkVersion ?? "v1-0-0",
+                }
+              : {},
           },
         };
       }),
@@ -168,27 +178,73 @@ describe("planFunctionRegistry", () => {
 
       const result = await planFunctionRegistry(client, workspaceId, appName, [entry]);
 
-      // Always update — server deduplicates content by hash
-      expect(result.changeSet.updates).toHaveLength(1);
-      expect(result.changeSet.updates[0].name).toBe("resolver/ns/getUser");
+      expect(result.changeSet.updates).toHaveLength(0);
+      expect(result.changeSet.unchanged).toHaveLength(1);
+      expect(result.changeSet.unchanged[0].name).toBe("resolver/ns/getUser");
       expect(result.changeSet.creates).toHaveLength(0);
       expect(result.changeSet.deletes).toHaveLength(0);
+    });
+
+    test("matching function content is updated when ownership metadata is missing", async () => {
+      const entry = createEntry("resolver/ns/getUser");
+      const client = createMockClient([
+        { name: "resolver/ns/getUser", contentHash: entry.contentHash },
+      ]);
+
+      const result = await planFunctionRegistry(client, workspaceId, appName, [entry]);
+
+      expect(result.changeSet.updates).toHaveLength(1);
+      expect(result.changeSet.unchanged).toHaveLength(0);
+      expect(result.unmanaged).toHaveLength(1);
+    });
+
+    test("matching function content is updated when owned by another app", async () => {
+      const entry = createEntry("resolver/ns/getUser");
+      const client = createMockClient([
+        { name: "resolver/ns/getUser", contentHash: entry.contentHash, label: "other-app" },
+      ]);
+
+      const result = await planFunctionRegistry(client, workspaceId, appName, [entry]);
+
+      expect(result.changeSet.updates).toHaveLength(1);
+      expect(result.changeSet.unchanged).toHaveLength(0);
+      expect(result.conflicts).toHaveLength(1);
+    });
+
+    test("matching function content is updated when sdk version differs", async () => {
+      const entry = createEntry("resolver/ns/getUser");
+      const client = createMockClient([
+        {
+          name: "resolver/ns/getUser",
+          contentHash: entry.contentHash,
+          label: appName,
+          sdkVersion: "v0-9-0",
+        },
+      ]);
+
+      const result = await planFunctionRegistry(client, workspaceId, appName, [entry]);
+
+      expect(result.changeSet.updates).toHaveLength(1);
+      expect(result.changeSet.unchanged).toHaveLength(0);
     });
   });
 
   describe("delete scenarios", () => {
     test("function is deleted when removed from entries", async () => {
+      const existingEntry = createEntry("resolver/ns/getUser");
       const client = createMockClient([
-        { name: "resolver/ns/getUser", contentHash: "hash", label: appName },
+        { name: "resolver/ns/getUser", contentHash: existingEntry.contentHash, label: appName },
         { name: "resolver/ns/listUsers", contentHash: "hash", label: appName },
       ]);
 
       // Only getUser in entries (listUsers removed)
-      const entries = [createEntry("resolver/ns/getUser")];
+      const entries = [existingEntry];
 
       const result = await planFunctionRegistry(client, workspaceId, appName, entries);
 
-      expect(result.changeSet.updates).toHaveLength(1);
+      expect(result.changeSet.updates).toHaveLength(0);
+      expect(result.changeSet.unchanged).toHaveLength(1);
+      expect(result.changeSet.unchanged[0].name).toBe("resolver/ns/getUser");
       expect(result.changeSet.deletes).toHaveLength(1);
       expect(result.changeSet.deletes[0].name).toBe("resolver/ns/listUsers");
     });
@@ -314,6 +370,7 @@ describe("applyFunctionRegistry phase separation", () => {
             workspaceId: "test-workspace",
           },
         ],
+        unchanged: [],
         title: "Function registry",
         isEmpty: () => false,
         print: () => {},

@@ -2,8 +2,9 @@ import { type ApplyPhase } from "@/cli/commands/apply/apply";
 import { parseDuration } from "@/cli/shared/args";
 import { type OperatorClient, fetchAll } from "@/cli/shared/client";
 import { createChangeSet, type ChangeSet } from "./change-set";
+import { areNormalizedEqual } from "./compare";
 import { workflowJobFunctionName } from "./function-registry";
-import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
+import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { Workflow, RetryPolicy } from "@/types/workflow.generated";
 import type { MessageInitShape } from "@bufbuild/protobuf";
@@ -25,7 +26,12 @@ export async function applyWorkflow(
   const { changeSet, appName } = result;
   if (phase === "create-update") {
     // Register job functions used by any workflow, returns map of job name to version
-    const jobFunctionVersions = await registerJobFunctions(client, changeSet, appName);
+    const jobFunctionVersions = await registerJobFunctions(
+      client,
+      changeSet,
+      appName,
+      result.unchangedWorkflowJobNames,
+    );
 
     // Create and update workflows in parallel
     // Each workflow only gets the job function versions it actually uses
@@ -103,17 +109,19 @@ function filterJobFunctionVersions(
  * @param client - Operator client instance
  * @param changeSet - Workflow change set
  * @param appName - Application name
+ * @param unchangedWorkflowJobNames - Job function names used by unchanged workflows
  * @returns Map of job function names to versions
  */
 async function registerJobFunctions(
   client: OperatorClient,
   changeSet: ChangeSet<CreateWorkflow, UpdateWorkflow, DeleteWorkflow>,
   appName: string,
+  unchangedWorkflowJobNames: ReadonlySet<string> = new Set(),
 ): Promise<{ [key: string]: bigint }> {
   const jobFunctionVersions: { [key: string]: bigint } = {};
 
   // Get workspaceId from the first workflow
-  const firstWorkflow = changeSet.creates[0] || changeSet.updates[0];
+  const firstWorkflow = changeSet.creates[0] || changeSet.updates[0] || changeSet.deletes[0];
   if (!firstWorkflow) {
     return jobFunctionVersions;
   }
@@ -122,6 +130,7 @@ async function registerJobFunctions(
 
   // Collect all job names used by any workflow
   const allUsedJobNames = new Set<string>();
+  unchangedWorkflowJobNames.forEach((jobName) => allUsedJobNames.add(jobName));
   for (const item of [...changeSet.creates, ...changeSet.updates]) {
     for (const jobName of item.usedJobNames) {
       allUsedJobNames.add(jobName);
@@ -139,35 +148,37 @@ async function registerJobFunctions(
   });
   const existingJobNamesSet = new Set(existingJobFunctions);
 
-  // Register job functions in parallel
-  // Use create for new jobs, update for existing jobs
-  const results = await Promise.all(
-    Array.from(allUsedJobNames).map(async (jobName) => {
-      const isExisting = existingJobNamesSet.has(jobName);
-      const response = isExisting
-        ? await client.updateWorkflowJobFunction({
-            workspaceId,
-            jobFunctionName: jobName,
-            scriptRef: workflowJobFunctionName(jobName),
-          })
-        : await client.createWorkflowJobFunction({
-            workspaceId,
-            jobFunctionName: jobName,
-            scriptRef: workflowJobFunctionName(jobName),
-          });
+  if (changeSet.creates.length > 0 || changeSet.updates.length > 0) {
+    // Register job functions in parallel
+    // Use create for new jobs, update for existing jobs
+    const results = await Promise.all(
+      Array.from(allUsedJobNames).map(async (jobName) => {
+        const isExisting = existingJobNamesSet.has(jobName);
+        const response = isExisting
+          ? await client.updateWorkflowJobFunction({
+              workspaceId,
+              jobFunctionName: jobName,
+              scriptRef: workflowJobFunctionName(jobName),
+            })
+          : await client.createWorkflowJobFunction({
+              workspaceId,
+              jobFunctionName: jobName,
+              scriptRef: workflowJobFunctionName(jobName),
+            });
 
-      // Set metadata to mark this JobFunction as owned by this app
-      await client.setMetadata(
-        await buildMetaRequest(jobFunctionTrn(workspaceId, jobName), appName),
-      );
+        // Set metadata to mark this JobFunction as owned by this app
+        await client.setMetadata(
+          await buildMetaRequest(jobFunctionTrn(workspaceId, jobName), appName),
+        );
 
-      return { jobName, version: response.jobFunction?.version };
-    }),
-  );
+        return { jobName, version: response.jobFunction?.version };
+      }),
+    );
 
-  for (const { jobName, version } of results) {
-    if (version) {
-      jobFunctionVersions[jobName] = version;
+    for (const { jobName, version } of results) {
+      if (version) {
+        jobFunctionVersions[jobName] = version;
+      }
     }
   }
 
@@ -248,6 +259,7 @@ function jobFunctionTrn(workspaceId: string, name: string) {
  * @param appName - Application name
  * @param workflows - Parsed workflows
  * @param mainJobDeps - Main job dependencies by workflow
+ * @param unchangedJobFunctions - Job functions already proven unchanged by function registry plan
  * @returns Planned workflow changes
  */
 export async function planWorkflow(
@@ -256,11 +268,13 @@ export async function planWorkflow(
   appName: string,
   workflows: Record<string, Workflow>,
   mainJobDeps: Record<string, string[]>,
+  unchangedJobFunctions: ReadonlySet<string> = new Set<string>(),
 ) {
   const changeSet = createChangeSet<CreateWorkflow, UpdateWorkflow, DeleteWorkflow>("Workflows");
   const conflicts: OwnerConflict[] = [];
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
+  const unchangedWorkflowJobNames = new Set<string>();
 
   // Fetch existing workflows from API
   const withoutLabel = await fetchAll(async (pageToken, maxPageSize) => {
@@ -269,7 +283,7 @@ export async function planWorkflow(
       pageToken,
       pageSize: maxPageSize,
     });
-    return [response.workflows.map((w) => ({ id: w.id, name: w.name })), response.nextPageToken];
+    return [response.workflows, response.nextPageToken];
   });
   const existingWorkflows: WithLabel<(typeof withoutLabel)[number]> = {};
   await Promise.all(
@@ -280,6 +294,7 @@ export async function planWorkflow(
       existingWorkflows[resource.name] = {
         resource,
         label: metadata?.labels[sdkNameLabelKey],
+        allLabels: metadata?.labels,
       };
     }),
   );
@@ -314,13 +329,29 @@ export async function planWorkflow(
         });
       }
 
-      changeSet.updates.push({
-        name: workflow.name,
-        workspaceId,
-        workflow,
-        usedJobNames,
-        metaRequest,
-      });
+      if (
+        existing.label === appName &&
+        hasMatchingSdkVersion(existing.allLabels, metaRequest.labels) &&
+        canTreatWorkflowAsUnchanged(
+          existing.resource,
+          workflow,
+          usedJobNames,
+          unchangedJobFunctions,
+        )
+      ) {
+        changeSet.unchanged.push({ name: workflow.name });
+        for (const jobName of usedJobNames) {
+          unchangedWorkflowJobNames.add(jobName);
+        }
+      } else {
+        changeSet.updates.push({
+          name: workflow.name,
+          workspaceId,
+          workflow,
+          usedJobNames,
+          metaRequest,
+        });
+      }
       delete existingWorkflows[workflow.name];
     } else {
       changeSet.creates.push({
@@ -349,5 +380,129 @@ export async function planWorkflow(
   });
 
   changeSet.print();
-  return { changeSet, conflicts, unmanaged, resourceOwners, appName };
+  return {
+    changeSet,
+    conflicts,
+    unmanaged,
+    resourceOwners,
+    appName,
+    unchangedWorkflowJobNames,
+  };
+}
+
+function canTreatWorkflowAsUnchanged(
+  existing: {
+    mainJobFunctionName?: string;
+    retryPolicy?: {
+      maxRetries?: number;
+      backoffMultiplier?: number;
+      initialBackoff?: { seconds?: bigint; nanos?: number };
+      maxBackoff?: { seconds?: bigint; nanos?: number };
+    };
+    jobFunctions?: Record<string, string | bigint>;
+  },
+  workflow: Workflow,
+  usedJobNames: string[],
+  unchangedJobFunctions: ReadonlySet<string>,
+) {
+  if (!usedJobNames.every((jobName) => unchangedJobFunctions.has(jobName))) {
+    return false;
+  }
+  return areWorkflowsEqual(existing, workflow, usedJobNames);
+}
+
+function areWorkflowsEqual(
+  existing: {
+    mainJobFunctionName?: string;
+    retryPolicy?: {
+      maxRetries?: number;
+      backoffMultiplier?: number;
+      initialBackoff?: { seconds?: bigint; nanos?: number };
+      maxBackoff?: { seconds?: bigint; nanos?: number };
+    };
+    jobFunctions?: Record<string, string | bigint>;
+  },
+  workflow: Workflow,
+  usedJobNames: readonly string[],
+) {
+  return (
+    existing.mainJobFunctionName === workflow.mainJob.name &&
+    areNormalizedEqual(
+      normalizeComparableExistingWorkflowRetryPolicy(existing.retryPolicy),
+      normalizeComparableWorkflowRetryPolicy(workflow.retryPolicy),
+    ) &&
+    areNormalizedEqual(
+      normalizeComparableWorkflowJobNames(existing.jobFunctions),
+      normalizeComparableWorkflowJobNames(usedJobNames),
+    )
+  );
+}
+
+function normalizeComparableExistingWorkflowRetryPolicy(
+  policy:
+    | {
+        maxRetries?: number;
+        backoffMultiplier?: number;
+        initialBackoff?: { seconds?: bigint; nanos?: number };
+        maxBackoff?: { seconds?: bigint; nanos?: number };
+      }
+    | undefined,
+) {
+  if (!policy) {
+    return undefined;
+  }
+
+  return normalizeRetryPolicyForCompare({
+    maxRetries: policy.maxRetries ?? 0,
+    backoffMultiplier: policy.backoffMultiplier ?? 0,
+    initialBackoff: {
+      seconds: policy.initialBackoff?.seconds ?? 0n,
+      nanos: policy.initialBackoff?.nanos ?? 0,
+    },
+    maxBackoff: {
+      seconds: policy.maxBackoff?.seconds ?? 0n,
+      nanos: policy.maxBackoff?.nanos ?? 0,
+    },
+  });
+}
+
+function normalizeComparableWorkflowRetryPolicy(policy: RetryPolicy | undefined) {
+  if (!policy) {
+    return undefined;
+  }
+
+  return normalizeRetryPolicyForCompare({
+    maxRetries: policy.maxRetries,
+    backoffMultiplier: policy.backoffMultiplier,
+    initialBackoff: parseDurationToProto(policy.initialBackoff),
+    maxBackoff: parseDurationToProto(policy.maxBackoff),
+  });
+}
+
+function normalizeComparableWorkflowJobNames(
+  jobFunctions: Record<string, string | bigint> | readonly string[] | undefined,
+) {
+  return Array.isArray(jobFunctions)
+    ? [...jobFunctions].sort()
+    : Object.keys(jobFunctions ?? {}).sort();
+}
+
+function normalizeRetryPolicyForCompare(policy: {
+  maxRetries: number;
+  backoffMultiplier: number;
+  initialBackoff: { seconds: bigint | number; nanos: number };
+  maxBackoff: { seconds: bigint | number; nanos: number };
+}) {
+  return {
+    maxRetries: policy.maxRetries,
+    backoffMultiplier: policy.backoffMultiplier,
+    initialBackoff: {
+      seconds: String(policy.initialBackoff.seconds),
+      nanos: policy.initialBackoff.nanos,
+    },
+    maxBackoff: {
+      seconds: String(policy.maxBackoff.seconds),
+      nanos: policy.maxBackoff.nanos,
+    },
+  };
 }

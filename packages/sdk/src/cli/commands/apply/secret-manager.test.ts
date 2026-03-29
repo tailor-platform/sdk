@@ -7,6 +7,7 @@ import type { OperatorClient } from "@/cli/shared/client";
 
 const mockLoadSecretsState = vi.fn();
 const mockSaveSecretsState = vi.fn();
+const sdkVersion = "v1-0-0";
 
 vi.mock("./secrets-state", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
@@ -27,6 +28,20 @@ vi.mock("@/cli/shared/client", async (importOriginal) => {
       const [items] = await fn("", 100);
       return items;
     },
+  };
+});
+
+vi.mock("./label", async (importOriginal) => {
+  const original = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...original,
+    buildMetaRequest: vi.fn().mockImplementation(async (trn: string, appName: string) => ({
+      trn,
+      labels: {
+        "sdk-name": appName,
+        "sdk-version": "v1-0-0",
+      },
+    })),
   };
 });
 
@@ -188,7 +203,7 @@ describe("planSecretManager hash-based diff", () => {
         nextPageToken: "",
       }),
       getMetadata: vi.fn().mockResolvedValue({
-        metadata: { labels: { "sdk-name": "test-app" } },
+        metadata: { labels: { "sdk-name": "test-app", "sdk-version": sdkVersion } },
       }),
       listSecretManagerSecrets: vi.fn().mockResolvedValue({
         secrets: existingSecrets.map((name) => ({ name })),
@@ -238,6 +253,31 @@ describe("planSecretManager hash-based diff", () => {
 
     const result = await planSecretManager(ctx);
     expect(result.secretChangeSet.updates).toHaveLength(0);
+  });
+
+  test("includes update when forceApplyAll is enabled even if hash matches", async () => {
+    const secretValue = "my-secret-value";
+    mockLoadSecretsState.mockReturnValue({
+      vaults: {
+        "my-vault": {
+          "existing-secret": hashValue(secretValue),
+        },
+      },
+    });
+
+    const client = createMockPlanClient(["existing-secret"]);
+    const ctx = {
+      ...createPlanContext(client, [
+        {
+          vaultName: "my-vault",
+          secrets: [{ name: "existing-secret", value: secretValue }],
+        },
+      ]),
+      forceApplyAll: true,
+    };
+
+    const result = await planSecretManager(ctx);
+    expect(result.secretChangeSet.updates).toHaveLength(1);
   });
 
   test("includes update when hash does not match", async () => {
@@ -308,7 +348,7 @@ describe("planSecretManager vault metadata and deletion", () => {
         nextPageToken: "",
       }),
       getMetadata: vi.fn().mockResolvedValue({
-        metadata: { labels: { "sdk-name": "my-app" } },
+        metadata: { labels: { "sdk-name": "my-app", "sdk-version": sdkVersion } },
       }),
       listSecretManagerSecrets: vi.fn().mockResolvedValue({
         secrets: [{ name: "secret-in-removed" }],
@@ -342,7 +382,7 @@ describe("planSecretManager vault metadata and deletion", () => {
         nextPageToken: "",
       }),
       getMetadata: vi.fn().mockResolvedValue({
-        metadata: { labels: { "sdk-name": "other-app" } },
+        metadata: { labels: { "sdk-name": "other-app", "sdk-version": sdkVersion } },
       }),
       listSecretManagerSecrets: vi.fn().mockResolvedValue({
         secrets: [],
@@ -358,14 +398,14 @@ describe("planSecretManager vault metadata and deletion", () => {
     expect(result.resourceOwners).toContain("other-app");
   });
 
-  test("tracks existing vault as update for metadata refresh", async () => {
+  test("treats matching managed vault as unchanged", async () => {
     const client = {
       listSecretManagerVaults: vi.fn().mockResolvedValue({
         vaults: [{ name: "my-vault" }],
         nextPageToken: "",
       }),
       getMetadata: vi.fn().mockResolvedValue({
-        metadata: { labels: { "sdk-name": "my-app" } },
+        metadata: { labels: { "sdk-name": "my-app", "sdk-version": sdkVersion } },
       }),
       listSecretManagerSecrets: vi.fn().mockResolvedValue({
         secrets: [],
@@ -379,9 +419,37 @@ describe("planSecretManager vault metadata and deletion", () => {
 
     const result = await planSecretManager(ctx);
 
-    expect(result.vaultChangeSet.updates).toHaveLength(1);
-    expect(result.vaultChangeSet.updates[0].name).toBe("my-vault");
+    expect(result.vaultChangeSet.unchanged).toHaveLength(1);
+    expect(result.vaultChangeSet.unchanged[0].name).toBe("my-vault");
     expect(result.vaultChangeSet.creates).toHaveLength(0);
+  });
+
+  test("updates matching managed vault when forceApplyAll is enabled", async () => {
+    const client = {
+      listSecretManagerVaults: vi.fn().mockResolvedValue({
+        vaults: [{ name: "my-vault" }],
+        nextPageToken: "",
+      }),
+      getMetadata: vi.fn().mockResolvedValue({
+        metadata: { labels: { "sdk-name": "my-app", "sdk-version": sdkVersion } },
+      }),
+      listSecretManagerSecrets: vi.fn().mockResolvedValue({
+        secrets: [],
+        nextPageToken: "",
+      }),
+    } as unknown as OperatorClient;
+
+    const ctx = {
+      ...createPlanContext(client, [
+        { vaultName: "my-vault", secrets: [{ name: "app-key", value: "val" }] },
+      ]),
+      forceApplyAll: true,
+    };
+
+    const result = await planSecretManager(ctx);
+
+    expect(result.vaultChangeSet.updates).toHaveLength(0);
+    expect(result.vaultChangeSet.unchanged).toHaveLength(1);
   });
 
   test("detects unmanaged vault without metadata label", async () => {
@@ -417,7 +485,7 @@ describe("planSecretManager vault metadata and deletion", () => {
         nextPageToken: "",
       }),
       getMetadata: vi.fn().mockResolvedValue({
-        metadata: { labels: { "sdk-name": "other-app" } },
+        metadata: { labels: { "sdk-name": "other-app", "sdk-version": sdkVersion } },
       }),
       listSecretManagerSecrets: vi.fn().mockResolvedValue({
         secrets: [],

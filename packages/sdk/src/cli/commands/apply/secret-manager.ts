@@ -1,7 +1,7 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { createChangeSet } from "./change-set";
-import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
+import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
 import { hashValue, loadSecretsState, saveSecretsState } from "./secrets-state";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
@@ -51,7 +51,7 @@ type DeleteSecret = {
  * @returns Planned changes for vaults and secrets
  */
 export async function planSecretManager(context: PlanContext) {
-  const { client, workspaceId, application, forRemoval } = context;
+  const { client, workspaceId, application, forRemoval, forceApplyAll = false } = context;
   const secretVaults = forRemoval ? [] : application.secrets;
 
   const vaultChangeSet = createChangeSet<CreateVault, ExistingVault, DeleteVault>(
@@ -90,6 +90,7 @@ export async function planSecretManager(context: PlanContext) {
       existingVaults[resource.name] = {
         resource,
         label: metadata?.labels[sdkNameLabelKey],
+        allLabels: metadata?.labels,
       };
     }),
   );
@@ -102,6 +103,10 @@ export async function planSecretManager(context: PlanContext) {
       const existing = existingVaults[vaultName];
 
       if (existing) {
+        const metaRequest = await buildMetaRequest(
+          vaultTrn(workspaceId, vaultName),
+          application.name,
+        );
         if (!existing.label) {
           unmanaged.push({
             resourceType: "Secret Manager vault",
@@ -114,11 +119,17 @@ export async function planSecretManager(context: PlanContext) {
             currentOwner: existing.label,
           });
         }
-        // Track existing vault for metadata update
-        vaultChangeSet.updates.push({
-          name: vaultName,
-          workspaceId,
-        });
+        if (
+          existing.label === application.name &&
+          hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)
+        ) {
+          vaultChangeSet.unchanged.push({ name: vaultName });
+        } else {
+          vaultChangeSet.updates.push({
+            name: vaultName,
+            workspaceId,
+          });
+        }
         delete existingVaults[vaultName];
       } else {
         vaultChangeSet.creates.push({
@@ -156,7 +167,7 @@ export async function planSecretManager(context: PlanContext) {
         if (existingSet.has(secret.name)) {
           const currentHash = hashValue(secret.value);
           const storedHash = state.vaults[vaultName]?.[secret.name];
-          if (currentHash !== storedHash) {
+          if (forceApplyAll || currentHash !== storedHash) {
             secretChangeSet.updates.push({
               name: `${vaultName}/${secret.name}`,
               secretName: secret.name,

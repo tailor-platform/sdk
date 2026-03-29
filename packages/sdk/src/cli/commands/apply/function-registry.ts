@@ -3,7 +3,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { logger } from "@/cli/shared/logger";
 import { createChangeSet } from "./change-set";
-import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
+import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase } from "@/cli/commands/apply/apply";
 import type { Application } from "@/cli/services/application";
@@ -192,6 +192,20 @@ export function collectFunctionEntries(
   return entries;
 }
 
+/**
+ * Filter collected workflow jobs down to the ones actually bundled.
+ * @param jobs - All collected workflow jobs
+ * @param usedJobNames - Job names that were bundled
+ * @returns Bundled workflow jobs only
+ */
+export function filterBundledWorkflowJobs(
+  jobs: CollectedJob[],
+  usedJobNames: readonly string[],
+): CollectedJob[] {
+  const used = new Set(usedJobNames);
+  return jobs.filter((job) => used.has(job.name));
+}
+
 type ExistingFunction = {
   name: string;
   contentHash: string;
@@ -253,6 +267,7 @@ export async function planFunctionRegistry(
       existingMap[func.name] = {
         resource: func,
         label: metadata?.labels[sdkNameLabelKey],
+        allLabels: metadata?.labels,
       };
     }),
   );
@@ -266,6 +281,7 @@ export async function planFunctionRegistry(
     );
 
     if (existing) {
+      const isManagedByApp = existing.label === appName;
       if (!existing.label) {
         unmanaged.push({
           resourceType: "Function registry",
@@ -279,11 +295,21 @@ export async function planFunctionRegistry(
         });
       }
 
-      changeSet.updates.push({
-        name: entry.name,
-        entry,
-        metaRequest,
-      });
+      if (
+        existing.resource.contentHash === entry.contentHash &&
+        isManagedByApp &&
+        hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)
+      ) {
+        changeSet.unchanged.push({
+          name: entry.name,
+        });
+      } else {
+        changeSet.updates.push({
+          name: entry.name,
+          entry,
+          metaRequest,
+        });
+      }
       delete existingMap[entry.name];
     } else {
       changeSet.creates.push({
