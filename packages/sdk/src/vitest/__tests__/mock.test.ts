@@ -43,9 +43,11 @@ describe("mock", () => {
     });
 
     test("enqueueResult provides order-based responses", async () => {
-      tailordbMock.enqueueResult([]); // BEGIN
-      tailordbMock.enqueueResult([{ age: 30 }]); // SELECT
-      tailordbMock.enqueueResult([]); // COMMIT
+      tailordbMock.enqueueResult(
+        [], // BEGIN
+        [{ age: 30 }], // SELECT
+        [], // COMMIT
+      );
 
       const client = new (globalThis as any).tailordb.Client({});
       const r1 = await client.queryObject("BEGIN");
@@ -121,8 +123,7 @@ describe("mock", () => {
     });
 
     test("enqueueResult provides order-based responses", () => {
-      workflowMock.enqueueResult({ step: 1 });
-      workflowMock.enqueueResult({ step: 2 });
+      workflowMock.enqueueResult({ step: 1 }, { step: 2 });
 
       const trigger = (globalThis as any).tailor.workflow.triggerJobFunction;
       expect(trigger("job1", {})).toEqual({ step: 1 });

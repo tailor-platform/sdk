@@ -89,9 +89,11 @@ function createDefaultState(): MockState {
  * });
  *
  * test("order-based", () => {
- *   tailordbMock.enqueueResult([]);           // BEGIN
- *   tailordbMock.enqueueResult([{ age: 30 }]); // SELECT
- *   tailordbMock.enqueueResult([]);           // COMMIT
+ *   tailordbMock.enqueueResult(
+ *     [],           // BEGIN
+ *     [{ age: 30 }], // SELECT
+ *     [],           // COMMIT
+ *   );
  * });
  * ```
  */
@@ -105,12 +107,15 @@ export const tailordbMock = {
   },
 
   /**
-   * Enqueue a result to be returned by the next `queryObject` call.
-   * Results are consumed in FIFO order before falling back to the query resolver.
-   * @param rows
+   * Enqueue results to be returned by subsequent `queryObject` calls.
+   * Each argument becomes one response, consumed in FIFO order before falling back to the query resolver.
+   * @param results - One or more row arrays to enqueue
    */
-  enqueueResult(rows: unknown[]): void {
-    getState().queryResultQueue.push(rows);
+  enqueueResult(...results: unknown[][]): void {
+    const queue = getState().queryResultQueue;
+    for (const rows of results) {
+      queue.push(rows);
+    }
   },
 
   /**
@@ -161,8 +166,7 @@ export const tailordbMock = {
  * });
  *
  * test("ordered results", () => {
- *   workflowMock.enqueueResult({ valid: true });
- *   workflowMock.enqueueResult({ txnId: "txn-1" });
+ *   workflowMock.enqueueResult({ valid: true }, { txnId: "txn-1" });
  * });
  * ```
  */
@@ -176,12 +180,15 @@ export const workflowMock = {
   },
 
   /**
-   * Enqueue a result to be returned by the next `triggerJobFunction` call.
-   * Results are consumed in FIFO order before falling back to the job handler.
-   * @param result
+   * Enqueue results to be returned by subsequent `triggerJobFunction` calls.
+   * Each argument becomes one response, consumed in FIFO order before falling back to the job handler.
+   * @param results - One or more results to enqueue
    */
-  enqueueResult(result: unknown): void {
-    getState().jobResultQueue.push(result);
+  enqueueResult(...results: unknown[]): void {
+    const queue = getState().jobResultQueue;
+    for (const result of results) {
+      queue.push(result);
+    }
   },
 
   /**
