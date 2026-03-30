@@ -7,7 +7,6 @@ import type { Plugin, ResolvedConfig } from "vite";
 const DEFAULT_TEST_INCLUDE = ["**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}"];
 
 // Matches static import/export declarations with string specifiers.
-// Captures: the full statement (for replacement) and the specifier.
 const IMPORT_RE = /\b(?:import|export)\s+(?:[\s\S]*?\s+from\s+)?["']([^"']+)["']/g;
 
 /**
@@ -17,6 +16,7 @@ const IMPORT_RE = /\b(?:import|export)\s+(?:[\s\S]*?\s+from\s+)?["']([^"']+)["']
  * and replaces them with code that throws a helpful error at runtime.
  * Vitest treats `node:*` as external SSR modules (skipping `resolveId`), so
  * source-level transformation is the only reliable interception point.
+ * Other Node.js globals (`Buffer`, `global`, `setImmediate`) are removed by the environment.
  * Test file patterns are read from the resolved Vitest config (`test.include`).
  * @returns Vite plugin
  */
@@ -41,6 +41,7 @@ export function createBlockPlugin(): Plugin {
       if (id.includes("node_modules")) return undefined;
 
       let hasBlocked = false;
+
       const transformed = code.replace(IMPORT_RE, (match, specifier: string) => {
         if (isBlockedModule(specifier)) {
           hasBlocked = true;

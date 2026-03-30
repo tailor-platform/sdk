@@ -25,15 +25,9 @@ function runVitest(testFile: string): { exitCode: number; output: string } {
 }
 
 describe("tailor-runtime integration", () => {
-  test("production code importing node:crypto is blocked", () => {
-    const { output } = runVitest("should-fail.test.ts");
-    expect(output).toContain("1 passed");
-    expect(output).not.toContain("failed");
-  });
-
-  test("web crypto and test-file node:crypto imports work", () => {
-    const { output } = runVitest("should-pass.test.ts");
-    expect(output).toContain("2 passed");
+  test("blocked imports and globals are caught, allowed APIs work", () => {
+    const { output } = runVitest("");
+    expect(output).toContain("5 passed");
     expect(output).not.toContain("failed");
   });
 });
