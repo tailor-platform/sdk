@@ -61,6 +61,32 @@ export function actionSymbol(action: DisplayAction): string {
   }
 }
 
+function formatFunctionRegistryDisplayName(name: string): string {
+  if (name.startsWith("resolver--")) {
+    const [, namespace, resolverName] = name.split("--");
+    if (namespace && resolverName) {
+      return `${namespace}.${resolverName}`;
+    }
+  }
+
+  if (name.startsWith("workflow--")) {
+    return name.slice("workflow--".length);
+  }
+
+  if (name.startsWith("executor--")) {
+    return name.slice("executor--".length);
+  }
+
+  if (name.startsWith("auth-hook--")) {
+    const [, namespace, hookPoint] = name.split("--");
+    if (namespace && hookPoint) {
+      return `${namespace}/${hookPoint}`;
+    }
+  }
+
+  return name;
+}
+
 /**
  * Format a detail line for a changed script-like field.
  * @param label - Field label to display
