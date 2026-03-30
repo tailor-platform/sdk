@@ -89,11 +89,9 @@ function createDefaultState(): MockState {
  * });
  *
  * test("order-based", () => {
- *   tailordbMock.enqueueResult(
- *     [],           // BEGIN
- *     [{ age: 30 }], // SELECT
- *     [],           // COMMIT
- *   );
+ *   tailordbMock.enqueueResult();           // BEGIN (empty result)
+ *   tailordbMock.enqueueResult({ age: 30 }); // SELECT (one row)
+ *   tailordbMock.enqueueResult();           // COMMIT (empty result)
  * });
  * ```
  */
@@ -107,15 +105,13 @@ export const tailordbMock = {
   },
 
   /**
-   * Enqueue results to be returned by subsequent `queryObject` calls.
-   * Each argument becomes one response, consumed in FIFO order before falling back to the query resolver.
-   * @param results - One or more row arrays to enqueue
+   * Enqueue a single query response. Arguments are the row objects returned by `queryObject`.
+   * Call with no arguments for an empty result. Consumed in FIFO order; when the queue is
+   * exhausted, subsequent calls fall back to `setQueryResolver` (default: empty rows).
+   * @param rows - Row objects to return from the next `queryObject` call
    */
-  enqueueResult(...results: unknown[][]): void {
-    const queue = getState().queryResultQueue;
-    for (const rows of results) {
-      queue.push(rows);
-    }
+  enqueueResult(...rows: unknown[]): void {
+    getState().queryResultQueue.push(rows);
   },
 
   /**

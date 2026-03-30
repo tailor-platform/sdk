@@ -8,7 +8,7 @@ describe("createAuditLog", () => {
   });
 
   test("inserts audit log record", async () => {
-    tailordbMock.enqueueResult([]);
+    tailordbMock.enqueueResult();
 
     await createAuditLog({
       action: "USER_CREATED",

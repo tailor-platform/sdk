@@ -9,8 +9,10 @@ describe("incrementUserAge resolver", () => {
   });
 
   test("increments user age", async () => {
-    // 1: BEGIN, 2: SELECT, 3: UPDATE, 4: COMMIT
-    tailordbMock.enqueueResult([], [{ age: 30 }], [], []);
+    tailordbMock.enqueueResult(); // BEGIN
+    tailordbMock.enqueueResult({ age: 30 }); // SELECT
+    tailordbMock.enqueueResult(); // UPDATE
+    tailordbMock.enqueueResult(); // COMMIT
 
     const result = await resolver.body({
       input: { email: "test@example.com" },
@@ -22,8 +24,9 @@ describe("incrementUserAge resolver", () => {
   });
 
   test("throws when user not found", async () => {
-    // 1: BEGIN, 2: SELECT (empty), 3: ROLLBACK
-    tailordbMock.enqueueResult([], [], []);
+    tailordbMock.enqueueResult(); // BEGIN
+    tailordbMock.enqueueResult(); // SELECT (empty)
+    tailordbMock.enqueueResult(); // ROLLBACK
 
     const result = resolver.body({
       input: { email: "test@example.com" },

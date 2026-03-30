@@ -43,11 +43,9 @@ describe("mock", () => {
     });
 
     test("enqueueResult provides order-based responses", async () => {
-      tailordbMock.enqueueResult(
-        [], // BEGIN
-        [{ age: 30 }], // SELECT
-        [], // COMMIT
-      );
+      tailordbMock.enqueueResult(); // BEGIN (empty)
+      tailordbMock.enqueueResult({ age: 30 }); // SELECT (one row)
+      tailordbMock.enqueueResult(); // COMMIT (empty)
 
       const client = new (globalThis as any).tailordb.Client({});
       const r1 = await client.queryObject("BEGIN");
@@ -61,7 +59,7 @@ describe("mock", () => {
 
     test("enqueueResult takes priority over queryResolver", async () => {
       tailordbMock.setQueryResolver(() => [{ fallback: true }]);
-      tailordbMock.enqueueResult([{ queued: true }]);
+      tailordbMock.enqueueResult({ queued: true });
 
       const client = new (globalThis as any).tailordb.Client({});
 
@@ -73,7 +71,7 @@ describe("mock", () => {
     });
 
     test("reset clears all state", async () => {
-      tailordbMock.enqueueResult([{ data: true }]);
+      tailordbMock.enqueueResult({ data: true });
       const client = new (globalThis as any).tailordb.Client({});
       await client.queryObject("test");
 
@@ -84,7 +82,7 @@ describe("mock", () => {
     });
 
     test("createTransaction works", async () => {
-      tailordbMock.enqueueResult([]); // transaction query
+      tailordbMock.enqueueResult(); // transaction query (empty result)
 
       const client = new (globalThis as any).tailordb.Client({});
       await client.connect();
