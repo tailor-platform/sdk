@@ -1,4 +1,4 @@
-import { symbols } from "@/cli/shared/logger";
+import { styles, symbols } from "@/cli/shared/logger";
 import type { HasName } from "./change-set";
 
 export type DisplayAction = "create" | "update" | "delete" | "replace";
@@ -8,6 +8,7 @@ export type GroupedDisplayEntry = {
   symbol: string;
   name: string;
   labels: string[];
+  detailLines?: string[];
 };
 
 export type RelatedFunctionRegistryChanges = {
@@ -61,6 +62,72 @@ export function actionSymbol(action: DisplayAction): string {
 }
 
 /**
+ * Format a detail line for a changed script-like field.
+ * @param label - Field label to display
+ * @returns Styled detail line
+ */
+export function formatScriptChangedLine(label = "script"): string {
+  return styles.update(`${symbols.update} ${label} -> (changed)`);
+}
+
+/**
+ * Format a detail line for an added script-like field.
+ * @param label - Field label to display
+ * @returns Styled detail line
+ */
+export function formatScriptAddedLine(label = "script"): string {
+  return styles.create(`${symbols.create} ${label} -> (added)`);
+}
+
+/**
+ * Format a detail line for a create, update, or delete action.
+ * @param action - Change action
+ * @param text - Human-readable change text
+ * @returns Styled detail line
+ */
+export function formatActionDetailLine(
+  action: "create" | "update" | "delete",
+  text: string,
+): string {
+  switch (action) {
+    case "create":
+      return styles.create(`${symbols.create} ${text}`);
+    case "update":
+      return styles.update(`${symbols.update} ${text}`);
+    case "delete":
+      return styles.delete(`${symbols.delete} ${text}`);
+    default:
+      throw new Error(`Unknown action type: ${action satisfies never}`);
+  }
+}
+
+function formatFunctionRegistryDisplayName(name: string): string {
+  if (name.startsWith("resolver--")) {
+    const [, namespace, resolverName] = name.split("--");
+    if (namespace && resolverName) {
+      return `${namespace}.${resolverName}`;
+    }
+  }
+
+  if (name.startsWith("workflow--")) {
+    return name.slice("workflow--".length);
+  }
+
+  if (name.startsWith("executor--")) {
+    return name.slice("executor--".length);
+  }
+
+  if (name.startsWith("auth-hook--")) {
+    const [, namespace, hookPoint] = name.split("--");
+    if (namespace && hookPoint) {
+      return `${namespace}/${hookPoint}`;
+    }
+  }
+
+  return name;
+}
+
+/**
  * Build function-registry-only entries that were not grouped with a parent resource.
  * @param names - Related function registry names keyed by action
  * @param consumed - Function registry names already grouped with parent resources
@@ -76,7 +143,7 @@ export function buildRemainingFunctionRegistryEntries(
       .map((name) => ({
         action: "create" as const,
         symbol: actionSymbol("create"),
-        name,
+        name: formatFunctionRegistryDisplayName(name),
         labels: ["functionRegistry"],
       })),
     ...[...names.deletes]
@@ -84,7 +151,7 @@ export function buildRemainingFunctionRegistryEntries(
       .map((name) => ({
         action: "delete" as const,
         symbol: actionSymbol("delete"),
-        name,
+        name: formatFunctionRegistryDisplayName(name),
         labels: ["functionRegistry"],
       })),
     ...[...names.updates]
@@ -92,7 +159,7 @@ export function buildRemainingFunctionRegistryEntries(
       .map((name) => ({
         action: "update" as const,
         symbol: actionSymbol("update"),
-        name,
+        name: formatFunctionRegistryDisplayName(name),
         labels: ["functionRegistry"],
       })),
     ...[...names.replaces]
@@ -100,7 +167,7 @@ export function buildRemainingFunctionRegistryEntries(
       .map((name) => ({
         action: "replace" as const,
         symbol: actionSymbol("replace"),
-        name,
+        name: formatFunctionRegistryDisplayName(name),
         labels: ["functionRegistry"],
       })),
   ];

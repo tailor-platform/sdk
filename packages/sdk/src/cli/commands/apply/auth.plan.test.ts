@@ -508,6 +508,7 @@ describe("formatAuthHookChangeEntries", () => {
         symbol: "~",
         name: "my-auth/before-login",
         labels: ["authHook", "functionRegistry"],
+        detailLines: ["~ handler -> (changed)"],
       },
     ]);
   });

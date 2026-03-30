@@ -654,6 +654,7 @@ describe("formatResolverChangeEntries", () => {
         symbol: "~",
         name: "add",
         labels: ["resolver", "functionRegistry"],
+        detailLines: ["~ script -> (changed)"],
       },
     ]);
   });

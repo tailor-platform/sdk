@@ -15,6 +15,9 @@ export const applyCommand = defineAppCommand({
         alias: "d",
         description: "Run the command without making any changes",
       }),
+      "detail-plan": arg(z.boolean().optional(), {
+        description: "Show detailed planned resource changes",
+      }),
       "no-schema-check": arg(z.boolean().optional(), {
         description: "Skip schema diff check against migration snapshots",
       }),
@@ -34,6 +37,7 @@ export const applyCommand = defineAppCommand({
       profile: args.profile,
       configPath: args.config,
       dryRun: args["dry-run"],
+      detailPlan: args["detail-plan"],
       yes: args.yes,
       noSchemaCheck: args["no-schema-check"],
       noCache: args["no-cache"],

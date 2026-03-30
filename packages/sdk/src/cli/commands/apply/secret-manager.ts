@@ -48,9 +48,10 @@ type DeleteSecret = {
 /**
  * Plan secret manager changes based on current and desired state.
  * @param context - Planning context
+ * @param detailPlan - Whether to print detailed property-level changes
  * @returns Planned changes for vaults and secrets
  */
-export async function planSecretManager(context: PlanContext) {
+export async function planSecretManager(context: PlanContext, detailPlan = false) {
   const { client, workspaceId, application, forRemoval, forceApplyAll = false } = context;
   const secretVaults = forRemoval ? [] : application.secrets;
 
@@ -241,8 +242,8 @@ export async function planSecretManager(context: PlanContext) {
     }
   }
 
-  vaultChangeSet.print();
-  secretChangeSet.print();
+  vaultChangeSet.print(detailPlan);
+  secretChangeSet.print(detailPlan);
   return { vaultChangeSet, secretChangeSet, conflicts, unmanaged, resourceOwners };
 }
 

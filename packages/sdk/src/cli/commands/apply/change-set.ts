@@ -2,6 +2,7 @@ import { logger, styles, symbols } from "@/cli/shared/logger";
 
 export interface HasName {
   name: string;
+  detailLines?: string[];
 }
 
 export type ChangeSet<
@@ -17,7 +18,7 @@ export type ChangeSet<
   readonly replaces: R[];
   readonly unchanged: HasName[];
   isEmpty: () => boolean;
-  print: () => void;
+  print: (detail?: boolean) => void;
 };
 
 export interface PlanSummary {
@@ -56,15 +57,21 @@ export function createChangeSet<
     replaces,
     unchanged,
     isEmpty,
-    print: () => {
+    print: (detail = false) => {
       if (isEmpty()) {
         return;
       }
       logger.log(styles.bold(`${title}:`));
-      creates.forEach((item) => logger.log(`  ${symbols.create} ${item.name}`));
-      deletes.forEach((item) => logger.log(`  ${symbols.delete} ${item.name}`));
-      updates.forEach((item) => logger.log(`  ${symbols.update} ${item.name}`));
-      replaces.forEach((item) => logger.log(`  ${symbols.replace} ${item.name}`));
+      const printItem = (symbol: string, item: HasName) => {
+        logger.log(`  ${symbol} ${item.name}`);
+        if (detail) {
+          item.detailLines?.forEach((line) => logger.log(`    ${line}`));
+        }
+      };
+      creates.forEach((item) => printItem(symbols.create, item));
+      deletes.forEach((item) => printItem(symbols.delete, item));
+      updates.forEach((item) => printItem(symbols.update, item));
+      replaces.forEach((item) => printItem(symbols.replace, item));
     },
   };
 }

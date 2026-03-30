@@ -593,6 +593,242 @@ describe("planTailorDB (service level)", () => {
       expect(result.changeSet.type.updates).toHaveLength(1);
       expect(result.changeSet.type.unchanged).toHaveLength(0);
     });
+
+    test("includes full schema detail lines for created types", async () => {
+      const tailordbType: TailorDBType = {
+        name: "Project",
+        pluralForm: "Projects",
+        description: "Project type",
+        fields: {
+          name: {
+            name: "name",
+            config: {
+              type: "string",
+              required: true,
+              description: "Project name",
+            },
+          },
+        },
+        forwardRelationships: {
+          owner: {
+            name: "owner",
+            targetType: "User",
+            targetField: "projects",
+            sourceField: "ownerId",
+            isArray: false,
+            description: "Project owner",
+          },
+        },
+        backwardRelationships: {},
+        settings: {},
+        permissions: {},
+        indexes: {
+          byName: {
+            fields: ["name"],
+            unique: true,
+          },
+        },
+        files: {
+          image: "public",
+        },
+      };
+
+      const tailorDBService = createMockTailorDBService("test-tailordb");
+      Object.defineProperty(tailorDBService, "types", {
+        value: { [tailordbType.name]: tailordbType },
+      });
+
+      const client = {
+        listTailorDBServices: vi.fn().mockResolvedValue({
+          tailordbServices: [{ namespace: { name: "test-tailordb" } }],
+          nextPageToken: "",
+        }),
+        listTailorDBTypes: vi.fn().mockResolvedValue({
+          tailordbTypes: [],
+          nextPageToken: "",
+        }),
+        getMetadata: vi.fn().mockResolvedValue({
+          metadata: {
+            labels: { [sdkNameLabelKey]: appName, "sdk-version": "v1-0-0" },
+          },
+        }),
+        listTailorDBGQLPermissions: vi.fn().mockResolvedValue({
+          permissions: [],
+          nextPageToken: "",
+        }),
+      } as unknown as OperatorClient;
+
+      const application = createMockApplication([tailorDBService]);
+      const ctx: PlanContext = {
+        client,
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: mockConfig,
+        noSchemaCheck: true,
+      };
+
+      const result = await planTailorDB(ctx);
+
+      expect(result.changeSet.type.creates).toHaveLength(1);
+      expect(result.changeSet.type.creates[0]?.detailLines).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining('description: "Project type"'),
+          expect.stringContaining("fields: name"),
+          expect.stringContaining("relationships: owner"),
+          expect.stringContaining("indexes: byName"),
+          expect.stringContaining("files: image(public)"),
+        ]),
+      );
+    });
+
+    test("includes full schema detail lines for type updates", async () => {
+      const tailordbType: TailorDBType = {
+        name: "Project",
+        pluralForm: "Projects",
+        description: "Project type v2",
+        fields: {
+          name: {
+            name: "name",
+            config: {
+              type: "string",
+              required: true,
+              description: "Project display name",
+            },
+          },
+        },
+        forwardRelationships: {
+          owner: {
+            name: "owner",
+            targetType: "Member",
+            targetField: "projects",
+            sourceField: "ownerId",
+            isArray: false,
+            description: "Project owner",
+          },
+        },
+        backwardRelationships: {},
+        settings: {},
+        permissions: {},
+        indexes: {
+          byName: {
+            fields: ["name"],
+            unique: true,
+          },
+        },
+        files: {
+          image: "private",
+        },
+      };
+
+      const tailorDBService = createMockTailorDBService("test-tailordb");
+      Object.defineProperty(tailorDBService, "types", {
+        value: { [tailordbType.name]: tailordbType },
+      });
+
+      const client = {
+        listTailorDBServices: vi.fn().mockResolvedValue({
+          tailordbServices: [{ namespace: { name: "test-tailordb" } }],
+          nextPageToken: "",
+        }),
+        listTailorDBTypes: vi.fn().mockResolvedValue({
+          tailordbTypes: [
+            {
+              name: "Project",
+              schema: {
+                description: "Project type",
+                fields: {
+                  name: {
+                    type: "string",
+                    required: true,
+                    description: "Project name",
+                    allowedValues: [],
+                    validate: [],
+                    array: false,
+                    index: false,
+                    unique: false,
+                    foreignKey: false,
+                    vector: false,
+                    fields: {},
+                  },
+                },
+                relationships: {
+                  owner: {
+                    targetType: "User",
+                    targetField: "projects",
+                    sourceField: "ownerId",
+                    isArray: false,
+                    description: "Project owner",
+                  },
+                },
+                settings: {
+                  aggregation: false,
+                  bulkUpsert: false,
+                  draft: false,
+                  defaultQueryLimitSize: "100",
+                  maxBulkUpsertSize: "1000",
+                  pluralForm: "projects",
+                  publishRecordEvents: false,
+                  disableGqlOperations: {
+                    create: false,
+                    update: false,
+                    delete: false,
+                    read: false,
+                  },
+                },
+                extends: false,
+                directives: [],
+                indexes: {},
+                files: {
+                  image: "public",
+                },
+                permission: {
+                  create: [],
+                  read: [],
+                  update: [],
+                  delete: [],
+                },
+              },
+            },
+          ],
+          nextPageToken: "",
+        }),
+        getMetadata: vi.fn().mockResolvedValue({
+          metadata: {
+            labels: { [sdkNameLabelKey]: appName, "sdk-version": "v1-0-0" },
+          },
+        }),
+        listTailorDBGQLPermissions: vi.fn().mockResolvedValue({
+          permissions: [],
+          nextPageToken: "",
+        }),
+      } as unknown as OperatorClient;
+
+      const application = createMockApplication([tailorDBService]);
+      const ctx: PlanContext = {
+        client,
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: mockConfig,
+        noSchemaCheck: true,
+      };
+
+      const result = await planTailorDB(ctx);
+
+      expect(result.changeSet.type.updates).toHaveLength(1);
+      expect(result.changeSet.type.updates[0]?.detailLines).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining('description: "Project type" -> "Project type v2"'),
+          expect.stringContaining(
+            'fields.name.description: "Project name" -> "Project display name"',
+          ),
+          expect.stringContaining('relationships.owner.refType: "Member"'),
+          expect.stringContaining("indexes.byName"),
+          expect.stringContaining('files.image: "public" -> {"description":"private"}'),
+        ]),
+      );
+    });
   });
 });
 

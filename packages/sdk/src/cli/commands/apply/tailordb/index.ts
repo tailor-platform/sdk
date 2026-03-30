@@ -58,8 +58,18 @@ import { type TailorDBService } from "@/cli/services/tailordb/service";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { logger, styles } from "@/cli/shared/logger";
 import { createChangeSet, type HasName, type ChangeSet } from "../change-set";
-import { areNormalizedEqual, normalizeProtoConfig } from "../compare";
-import { actionSymbol, type DisplayAction, type GroupedDisplayEntry } from "../grouped-display";
+import {
+  areNormalizedEqual,
+  formatPropertyDiffLines,
+  isPlainObject,
+  normalizeProtoConfig,
+} from "../compare";
+import {
+  actionSymbol,
+  formatActionDetailLine,
+  type DisplayAction,
+  type GroupedDisplayEntry,
+} from "../grouped-display";
 import {
   buildMetaRequest,
   hasMatchingSdkVersion,
@@ -971,9 +981,10 @@ async function executeSingleMigrationPostPhase(
 /**
  * Plan TailorDB-related changes based on current and desired state.
  * @param context - Planning context
+ * @param detailPlan - Whether to print detailed property-level changes
  * @returns Planned changes
  */
-export async function planTailorDB(context: PlanContext) {
+export async function planTailorDB(context: PlanContext, detailPlan = false) {
   const {
     client,
     workspaceId,
@@ -1006,8 +1017,8 @@ export async function planTailorDB(context: PlanContext) {
     planGqlPermissions(client, workspaceId, tailordbs, deletedServices, forceApplyAll),
   ]);
 
-  serviceChangeSet.print();
-  printTailorDBResourceChanges(typeChangeSet, gqlPermissionChangeSet);
+  serviceChangeSet.print(detailPlan);
+  printTailorDBResourceChanges(typeChangeSet, gqlPermissionChangeSet, detailPlan);
 
   return {
     changeSet: {
@@ -1041,6 +1052,7 @@ function collectTailorDBDisplayEntries(
     symbol: actionSymbol(action),
     name: item.name,
     labels: gqlPermissionNames.has(item.name) ? ["type", "gqlPermission"] : ["type"],
+    detailLines: item.detailLines,
   }));
   const gqlPermissionOnlyEntries = gqlPermissionItems
     .filter((gqlPermission) => !typeNames.has(gqlPermission.name))
@@ -1049,6 +1061,7 @@ function collectTailorDBDisplayEntries(
       symbol: actionSymbol(action),
       name: item.name,
       labels: ["gqlPermission"],
+      detailLines: item.detailLines,
     }));
 
   return [...typeEntries, ...gqlPermissionOnlyEntries];
@@ -1097,6 +1110,7 @@ export function formatTailorDBResourceChangeEntries(
 function printTailorDBResourceChanges(
   typeChangeSet: ChangeSet<HasName, HasName, HasName>,
   gqlPermissionChangeSet: ChangeSet<HasName, HasName, HasName>,
+  detail = false,
 ) {
   const entries = formatTailorDBResourceChangeEntries(typeChangeSet, gqlPermissionChangeSet);
   if (entries.length === 0) {
@@ -1106,7 +1120,90 @@ function printTailorDBResourceChanges(
   logger.log(styles.bold("TailorDB resources:"));
   for (const entry of entries) {
     logger.log(`  ${entry.symbol} ${entry.name} (${entry.labels.join(", ")})`);
+    if (detail) {
+      entry.detailLines?.forEach((line) => logger.log(`    ${line}`));
+    }
   }
+}
+
+type TailorDBDisplaySchema = {
+  description?: string;
+  fields?: Record<string, unknown>;
+  relationships?: Record<string, unknown>;
+  settings?: Record<string, unknown>;
+  indexes?: Record<string, unknown>;
+  files?: Record<string, unknown>;
+  permission?: Record<string, unknown>;
+};
+
+type TailorDBDisplayType = {
+  name?: string;
+  schema?: TailorDBDisplaySchema;
+};
+
+function asTailorDBDisplayType(value: unknown): TailorDBDisplayType | undefined {
+  return isPlainObject(value) ? (value as TailorDBDisplayType) : undefined;
+}
+
+function getTailorDBDisplaySchema(value: unknown): TailorDBDisplaySchema {
+  return asTailorDBDisplayType(value)?.schema ?? {};
+}
+
+function getTailorDBDisplayFields(value: unknown): Record<string, unknown> {
+  return getTailorDBDisplaySchema(value).fields ?? {};
+}
+
+function getTailorDBFieldHooks(field: unknown): Record<string, unknown> {
+  return isPlainObject(field) && isPlainObject(field.hooks) ? field.hooks : {};
+}
+
+function formatTailorDBTypeCreateLines(typeConfig: unknown): string[] {
+  const schema = getTailorDBDisplaySchema(typeConfig);
+  const fields = Object.keys(getTailorDBDisplayFields(typeConfig)).sort();
+  const hooks = Object.entries(getTailorDBDisplayFields(typeConfig))
+    .flatMap(([fieldName, fieldConfig]) =>
+      Object.keys(getTailorDBFieldHooks(fieldConfig)).map((hookName) => `${fieldName}.${hookName}`),
+    )
+    .sort();
+  const relationships = Object.keys(schema.relationships ?? {}).sort();
+  const indexes = Object.keys(schema.indexes ?? {}).sort();
+  const files = Object.entries(schema.files ?? {})
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([name, config]) =>
+      isPlainObject(config) && typeof config.description === "string"
+        ? `${name}(${config.description})`
+        : name,
+    );
+  const permissions = Object.entries(schema.permission ?? {})
+    .filter(([, rules]) => Array.isArray(rules) && rules.length > 0)
+    .map(([action]) => action)
+    .sort();
+
+  const lines: string[] = [];
+  if (schema.description) {
+    lines.push(
+      formatActionDetailLine("create", `description: ${JSON.stringify(schema.description)}`),
+    );
+  }
+  if (fields.length > 0) {
+    lines.push(formatActionDetailLine("create", `fields: ${fields.join(", ")}`));
+  }
+  if (hooks.length > 0) {
+    lines.push(formatActionDetailLine("create", `hooks: ${hooks.join(", ")}`));
+  }
+  if (relationships.length > 0) {
+    lines.push(formatActionDetailLine("create", `relationships: ${relationships.join(", ")}`));
+  }
+  if (indexes.length > 0) {
+    lines.push(formatActionDetailLine("create", `indexes: ${indexes.join(", ")}`));
+  }
+  if (files.length > 0) {
+    lines.push(formatActionDetailLine("create", `files: ${files.join(", ")}`));
+  }
+  if (permissions.length > 0) {
+    lines.push(formatActionDetailLine("create", `permissions: ${permissions.join(", ")}`));
+  }
+  return lines;
 }
 
 type CreateService = {
@@ -1272,11 +1369,13 @@ async function planServices(
 
 type CreateType = {
   name: string;
+  detailLines?: string[];
   request: MessageInitShape<typeof CreateTailorDBTypeRequestSchema>;
 };
 
 type UpdateType = {
   name: string;
+  detailLines?: string[];
   request: MessageInitShape<typeof UpdateTailorDBTypeRequestSchema>;
 };
 
@@ -1351,17 +1450,14 @@ async function planTypes(
       );
       const existingType = existingTypesMap.get(typeName);
       if (existingType) {
-        if (
-          !forceApplyAll &&
-          areNormalizedEqual(
-            normalizeComparableTailorDBType(existingType),
-            normalizeComparableTailorDBType(tailordbType),
-          )
-        ) {
+        const existingComparable = normalizeComparableTailorDBType(existingType);
+        const desiredComparable = normalizeComparableTailorDBType(tailordbType);
+        if (!forceApplyAll && areNormalizedEqual(existingComparable, desiredComparable)) {
           changeSet.unchanged.push({ name: typeName });
         } else {
           changeSet.updates.push({
             name: typeName,
+            detailLines: formatPropertyDiffLines(existingComparable, desiredComparable),
             request: {
               workspaceId,
               namespaceName: tailordb.namespace,
@@ -1373,6 +1469,7 @@ async function planTypes(
       } else {
         changeSet.creates.push({
           name: typeName,
+          detailLines: formatTailorDBTypeCreateLines(normalizeComparableTailorDBType(tailordbType)),
           request: {
             workspaceId,
             namespaceName: tailordb.namespace,
@@ -1408,10 +1505,6 @@ async function planTypes(
   return changeSet;
 }
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 const tailordbCompareKnownDefaults = {
   /**
    * Platform returns this object with explicit false flags even when the SDK omitted
@@ -1441,29 +1534,19 @@ const tailordbCompareKnownDefaults = {
 } as const;
 
 function normalizeComparableTailorDBType(type: unknown) {
-  const normalized = normalizeProtoConfig(type) as {
-    name?: string;
-    schema?: {
-      description?: string;
-      fields?: Record<string, unknown>;
-      relationships?: Record<string, unknown>;
-      settings?: Record<string, unknown>;
-      indexes?: Record<string, unknown>;
-      files?: Record<string, unknown>;
-      permission?: Record<string, unknown>;
-    };
-  } | null;
+  const normalized = (normalizeProtoConfig(type) as TailorDBDisplayType | null) ?? undefined;
+  const schema = normalized?.schema ?? {};
   return normalizeTailorDBCompareValue(
     {
       name: normalized?.name ?? "",
       schema: {
-        description: normalized?.schema?.description ?? "",
-        fields: normalized?.schema?.fields ?? {},
-        relationships: normalized?.schema?.relationships ?? {},
-        settings: normalized?.schema?.settings ?? {},
-        indexes: normalized?.schema?.indexes ?? {},
-        files: normalized?.schema?.files ?? {},
-        permission: normalized?.schema?.permission ?? {},
+        description: schema.description ?? "",
+        fields: schema.fields ?? {},
+        relationships: schema.relationships ?? {},
+        settings: schema.settings ?? {},
+        indexes: schema.indexes ?? {},
+        files: schema.files ?? {},
+        permission: schema.permission ?? {},
       },
     },
     [],

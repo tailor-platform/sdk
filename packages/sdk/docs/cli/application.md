@@ -122,6 +122,7 @@ tailor-sdk apply [options]
 | `--config <CONFIG>`             | `-c`  | Path to SDK config file                            | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
 | `--yes`                         | `-y`  | Skip confirmation prompts                          | No       | `false`              | -                                 |
 | `--dry-run`                     | `-d`  | Run the command without making any changes         | No       | -                    | -                                 |
+| `--detail-plan`                 | -     | Show detailed planned resource changes             | No       | -                    | -                                 |
 | `--no-schema-check`             | -     | Skip schema diff check against migration snapshots | No       | -                    | -                                 |
 | `--no-cache`                    | -     | Disable bundle caching for this run                | No       | -                    | -                                 |
 | `--clean-cache`                 | -     | Clean the bundle cache before building             | No       | -                    | -                                 |
@@ -158,14 +159,16 @@ Use `--no-schema-check` to skip both verifications (not recommended for producti
 
 **Plan Output:**
 
-Before applying changes, `apply` shows a preview of the planned resource changes.
+Before applying changes, `apply` shows a preview summary of the planned resource changes.
 
 - `+` means the resource will be created
 - `~` means the resource will be updated
 - `-` means the resource will be deleted
 - `±` means the resource will be replaced
 
-After the detailed list, a summary line is printed:
+Use `--detail-plan` to show the detailed list of planned changes.
+
+A summary line is always printed:
 
 ```text
 Plan: 5 to create, 3 to update, 1 to delete, 25 unchanged

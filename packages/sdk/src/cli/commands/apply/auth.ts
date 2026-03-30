@@ -26,12 +26,20 @@ import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "@/cli/s
 import { logger, styles } from "@/cli/shared/logger";
 import { OAuth2ClientSchema } from "@/parser/service/auth";
 import { createChangeSet, type HasName } from "./change-set";
-import { areNormalizedEqual, normalizeProtoConfig, normalizeStringArray } from "./compare";
+import {
+  areNormalizedEqual,
+  formatPropertyDiffLines,
+  normalizeProtoConfig,
+  normalizeStringArray,
+} from "./compare";
 import { authHookFunctionName } from "./function-registry";
 import {
   actionSymbol,
   buildRemainingFunctionRegistryEntries,
   createRelatedFunctionRegistryNameSets,
+  formatActionDetailLine,
+  formatScriptAddedLine,
+  formatScriptChangedLine,
   type GroupedDisplayEntry,
   type RelatedFunctionRegistryNameSets,
   type RelatedFunctionRegistryChanges,
@@ -263,11 +271,13 @@ export async function applyAuth(
  * Plan auth-related changes based on current and desired state.
  * @param context - Planning context
  * @param functionRegistryAuthHookChanges - Related function registry changes for auth hooks
+ * @param detailPlan - Whether to print detailed property-level changes
  * @returns Planned auth changes and metadata
  */
 export async function planAuth(
   context: PlanContext,
   functionRegistryAuthHookChanges?: RelatedFunctionRegistryChanges,
+  detailPlan = false,
 ) {
   const { client, workspaceId, application, forRemoval, forceApplyAll = false } = context;
   const auths: Readonly<AuthService>[] = [];
@@ -302,15 +312,15 @@ export async function planAuth(
     planSCIMResources(client, workspaceId, auths, deletedServices),
   ]);
 
-  serviceChangeSet.print();
-  idpConfigChangeSet.print();
-  userProfileConfigChangeSet.print();
-  tenantConfigChangeSet.print();
-  machineUserChangeSet.print();
-  printAuthHookChanges(authHookChangeSet, functionRegistryAuthHookChanges);
-  oauth2ClientChangeSet.print();
-  scimChangeSet.print();
-  scimResourceChangeSet.print();
+  serviceChangeSet.print(detailPlan);
+  idpConfigChangeSet.print(detailPlan);
+  userProfileConfigChangeSet.print(detailPlan);
+  tenantConfigChangeSet.print(detailPlan);
+  machineUserChangeSet.print(detailPlan);
+  printAuthHookChanges(authHookChangeSet, functionRegistryAuthHookChanges, detailPlan);
+  oauth2ClientChangeSet.print(detailPlan);
+  scimChangeSet.print(detailPlan);
+  scimResourceChangeSet.print(detailPlan);
   return {
     changeSet: {
       service: serviceChangeSet,
@@ -1054,11 +1064,13 @@ function protoTenantConfig(
 
 type CreateMachineUser = {
   name: string;
+  detailLines?: string[];
   request: MessageInitShape<typeof CreateAuthMachineUserRequestSchema>;
 };
 
 type UpdateMachineUser = {
   name: string;
+  detailLines?: string[];
   request: MessageInitShape<typeof UpdateAuthMachineUserRequestSchema>;
 };
 
@@ -1120,8 +1132,11 @@ async function planMachineUsers(
         if (!forceApplyAll && areMachineUsersEqual(existing, desiredMachineUser)) {
           changeSet.unchanged.push({ name: machineUsername });
         } else {
+          const existingComparable = normalizeComparableMachineUser(existing);
+          const desiredComparable = normalizeComparableMachineUser(desiredMachineUser);
           changeSet.updates.push({
             name: machineUsername,
+            detailLines: formatPropertyDiffLines(existingComparable, desiredComparable),
             request: {
               workspaceId,
               authNamespace: config.name,
@@ -1135,6 +1150,7 @@ async function planMachineUsers(
       } else {
         changeSet.creates.push({
           name: machineUsername,
+          detailLines: formatMachineUserCreateDetailLines(desiredMachineUser),
           request: {
             workspaceId,
             authNamespace: config.name,
@@ -1281,6 +1297,43 @@ function areMachineUsersEqual(
   );
 }
 
+function formatMachineUserCreateDetailLines(input: {
+  attributes?: readonly string[];
+  attributeMap?: Record<string, MessageInitShape<typeof ValueSchema>>;
+}): string[] {
+  const normalized = normalizeComparableMachineUser(input);
+  const lines: string[] = [];
+
+  for (const [key, value] of Object.entries(normalized.attributeMap ?? {}).sort(([left], [right]) =>
+    left.localeCompare(right),
+  )) {
+    lines.push(
+      formatActionDetailLine(
+        "create",
+        `attributes.${key}: ${formatMachineUserAttributeValue(value)}`,
+      ),
+    );
+  }
+
+  if ((normalized.attributes ?? []).length > 0) {
+    lines.push(
+      formatActionDetailLine("create", `scopes: ${JSON.stringify(normalized.attributes)}`),
+    );
+  }
+
+  return lines;
+}
+
+function formatMachineUserAttributeValue(value: unknown): string {
+  if (value && typeof value === "object" && "kind" in value) {
+    const kind = (value as { kind?: { case?: string; value?: unknown } }).kind;
+    if (kind?.case) {
+      return JSON.stringify(kind.value);
+    }
+  }
+  return JSON.stringify(value);
+}
+
 function normalizeComparableOAuth2Client(
   client:
     | MessageInitShape<typeof AuthOAuth2ClientSchema>
@@ -1357,13 +1410,106 @@ function areOAuth2ClientsEqual(
   );
 }
 
+function formatOAuth2ClientCreateDetailLines(
+  client:
+    | MessageInitShape<typeof AuthOAuth2ClientSchema>
+    | {
+        name?: string;
+        description?: string;
+        grantTypes?: readonly AuthOAuth2Client_GrantType[];
+        redirectUris?: readonly string[];
+        clientType?: AuthOAuth2Client_ClientType;
+        accessTokenLifetime?: number;
+        refreshTokenLifetime?: number;
+        requireDpop?: boolean;
+      },
+): string[] {
+  const normalized = normalizeComparableOAuth2Client(client);
+  const lines: string[] = [];
+
+  if (normalized.description) {
+    lines.push(
+      formatActionDetailLine("create", `description: ${JSON.stringify(normalized.description)}`),
+    );
+  }
+
+  if (
+    normalized.clientType != null &&
+    normalized.clientType !== AuthOAuth2Client_ClientType.CONFIDENTIAL
+  ) {
+    lines.push(
+      formatActionDetailLine(
+        "create",
+        `clientType: ${JSON.stringify(formatOAuth2ClientType(normalized.clientType))}`,
+      ),
+    );
+  }
+
+  if ((normalized.grantTypes ?? []).length > 0) {
+    lines.push(
+      formatActionDetailLine(
+        "create",
+        `grantTypes: ${JSON.stringify((normalized.grantTypes ?? []).map(formatOAuth2GrantType))}`,
+      ),
+    );
+  }
+
+  (normalized.redirectUris ?? []).forEach((uri, index) => {
+    lines.push(formatActionDetailLine("create", `redirectUris[${index}]: ${JSON.stringify(uri)}`));
+  });
+
+  if (normalized.requireDpop) {
+    lines.push(formatActionDetailLine("create", "requireDpop: true"));
+  }
+
+  if (normalized.accessTokenLifetime != null && normalized.accessTokenLifetime !== 86400) {
+    lines.push(
+      formatActionDetailLine("create", `accessTokenLifetime: ${normalized.accessTokenLifetime}`),
+    );
+  }
+
+  if (normalized.refreshTokenLifetime != null && normalized.refreshTokenLifetime !== 604800) {
+    lines.push(
+      formatActionDetailLine("create", `refreshTokenLifetime: ${normalized.refreshTokenLifetime}`),
+    );
+  }
+
+  return lines;
+}
+
+function formatOAuth2GrantType(grantType: AuthOAuth2Client_GrantType) {
+  switch (grantType) {
+    case AuthOAuth2Client_GrantType.AUTHORIZATION_CODE:
+      return "authorization_code";
+    case AuthOAuth2Client_GrantType.REFRESH_TOKEN:
+      return "refresh_token";
+    default:
+      return String(grantType);
+  }
+}
+
+function formatOAuth2ClientType(clientType: AuthOAuth2Client_ClientType) {
+  switch (clientType) {
+    case AuthOAuth2Client_ClientType.CONFIDENTIAL:
+      return "confidential";
+    case AuthOAuth2Client_ClientType.PUBLIC:
+      return "public";
+    case AuthOAuth2Client_ClientType.BROWSER:
+      return "browser";
+    default:
+      return String(clientType);
+  }
+}
+
 type CreateOAuth2Clients = {
   name: string;
+  detailLines?: string[];
   request: MessageInitShape<typeof CreateAuthOAuth2ClientRequestSchema>;
 };
 
 type UpdateOAuth2Client = {
   name: string;
+  detailLines?: string[];
   request: MessageInitShape<typeof UpdateAuthOAuth2ClientRequestSchema>;
 };
 
@@ -1469,6 +1615,10 @@ async function planOAuth2Clients(
           } else {
             changeSet.updates.push({
               name: oauth2ClientName,
+              detailLines: formatPropertyDiffLines(
+                normalizeComparableOAuth2Client(existingComparable),
+                normalizeComparableOAuth2Client(desiredComparable),
+              ),
               request: {
                 workspaceId,
                 namespaceName: config.name,
@@ -1481,6 +1631,12 @@ async function planOAuth2Clients(
       } else {
         changeSet.creates.push({
           name: oauth2ClientName,
+          detailLines: formatOAuth2ClientCreateDetailLines({
+            ...newOAuth2Client,
+            redirectUris: resolvedRedirectUris,
+            accessTokenLifetime: oauth2LifetimeToSeconds(newOAuth2Client.accessTokenLifetime),
+            refreshTokenLifetime: oauth2LifetimeToSeconds(newOAuth2Client.refreshTokenLifetime),
+          }),
           request: {
             workspaceId,
             namespaceName: config.name,
@@ -1855,11 +2011,13 @@ function protoSCIMAttribute(attr: SCIMAttribute): MessageInitShape<typeof AuthSC
 
 type CreateAuthHook = {
   name: string;
+  detailLines?: string[];
   request: MessageInitShape<typeof CreateAuthHookRequestSchema>;
 };
 
 type UpdateAuthHook = {
   name: string;
+  detailLines?: string[];
   request: MessageInitShape<typeof UpdateAuthHookRequestSchema>;
 };
 
@@ -1956,6 +2114,9 @@ export function formatAuthHookChangeEntries(
       symbol: actionSymbol("create"),
       name: item.name,
       labels: hasFunctionRegistryChange ? ["authHook", "functionRegistry"] : ["authHook"],
+      detailLines: hasFunctionRegistryChange
+        ? [...(item.detailLines ?? []), formatScriptAddedLine("handler")]
+        : item.detailLines,
     };
   });
   const deleteEntries = changeSet.deletes.map((item) => {
@@ -1986,6 +2147,9 @@ export function formatAuthHookChangeEntries(
       symbol: actionSymbol("update"),
       name: item.name,
       labels: hasFunctionRegistryChange ? ["authHook", "functionRegistry"] : ["authHook"],
+      detailLines: hasFunctionRegistryChange
+        ? [...(item.detailLines ?? []), formatScriptChangedLine("handler")]
+        : item.detailLines,
     };
   });
   const replaceEntries = changeSet.replaces.map((item) => ({
@@ -2012,6 +2176,7 @@ function printAuthHookChanges(
     deletes: ReadonlyArray<HasName>;
     replaces: ReadonlyArray<HasName>;
   },
+  detail = false,
 ) {
   const entries = formatAuthHookChangeEntries(changeSet, functionRegistryAuthHookChanges);
   if (entries.length === 0) {
@@ -2021,6 +2186,9 @@ function printAuthHookChanges(
   logger.log(styles.bold("Auth hooks:"));
   for (const entry of entries) {
     logger.log(`  ${entry.symbol} ${entry.name} (${entry.labels.join(", ")})`);
+    if (detail) {
+      entry.detailLines?.forEach((line) => logger.log(`    ${line}`));
+    }
   }
 }
 
@@ -2081,14 +2249,33 @@ async function planAuthHooks(
             name: `${config.name}/before-login`,
           });
         } else {
+          const existingComparable = normalizeProtoConfig({
+            invoker: {
+              namespace: existingHook.invoker?.namespace ?? "",
+              machineUserName: existingHook.invoker?.machineUserName ?? "",
+            },
+          });
+          const desiredComparable = normalizeProtoConfig({
+            invoker: {
+              namespace: hookRequest.hook.invoker?.namespace ?? "",
+              machineUserName: hookRequest.hook.invoker?.machineUserName ?? "",
+            },
+          });
           changeSet.updates.push({
             name: `${config.name}/before-login`,
+            detailLines: formatPropertyDiffLines(existingComparable, desiredComparable),
             request: hookRequest,
           });
         }
       } else {
         changeSet.creates.push({
           name: `${config.name}/before-login`,
+          detailLines: [
+            formatActionDetailLine(
+              "create",
+              `invoker.machineUserName: ${JSON.stringify(beforeLogin.invoker)}`,
+            ),
+          ],
           request: hookRequest,
         });
       }

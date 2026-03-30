@@ -3,12 +3,14 @@ import { parseDuration } from "@/cli/shared/args";
 import { type OperatorClient, fetchAll } from "@/cli/shared/client";
 import { logger, styles } from "@/cli/shared/logger";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
-import { areNormalizedEqual } from "./compare";
+import { areNormalizedEqual, formatAddedPropertyLines, formatPropertyDiffLines } from "./compare";
 import { workflowJobFunctionName } from "./function-registry";
 import {
   actionSymbol,
   buildRemainingFunctionRegistryEntries,
   createRelatedFunctionRegistryNameSets,
+  formatScriptAddedLine,
+  formatScriptChangedLine,
   type DisplayAction,
   type GroupedDisplayEntry,
   type RelatedFunctionRegistryNameSets,
@@ -218,6 +220,7 @@ async function registerJobFunctions(
 
 type CreateWorkflow = {
   name: string;
+  detailLines?: string[];
   workspaceId: string;
   workflow: Workflow;
   usedJobNames: string[];
@@ -226,6 +229,7 @@ type CreateWorkflow = {
 
 type UpdateWorkflow = {
   name: string;
+  detailLines?: string[];
   workspaceId: string;
   workflow: Workflow;
   usedJobNames: string[];
@@ -277,6 +281,7 @@ function jobFunctionTrn(workspaceId: string, name: string) {
  * @param workflowJobFunctionChanges.deletes - Function registry deletions
  * @param workflowJobFunctionChanges.replaces - Function registry replacements
  * @param workflowJobFunctionChanges.unchanged - Function registry unchanged entries
+ * @param detailPlan - Whether to print detailed property-level changes
  * @returns Planned workflow changes
  */
 export async function planWorkflow(
@@ -293,6 +298,7 @@ export async function planWorkflow(
     replaces: ReadonlyArray<HasName>;
     unchanged: ReadonlyArray<HasName>;
   },
+  detailPlan = false,
 ) {
   const changeSet = createChangeSet<CreateWorkflow, UpdateWorkflow, DeleteWorkflow>("Workflows");
   const conflicts: OwnerConflict[] = [];
@@ -368,8 +374,21 @@ export async function planWorkflow(
           unchangedWorkflowJobNames.add(jobName);
         }
       } else {
+        const existingComparable = {
+          mainJobFunctionName: existing.resource.mainJobFunctionName,
+          retryPolicy: normalizeComparableExistingWorkflowRetryPolicy(
+            existing.resource.retryPolicy,
+          ),
+          jobFunctions: normalizeComparableWorkflowJobNames(existing.resource.jobFunctions),
+        };
+        const desiredComparable = {
+          mainJobFunctionName: workflow.mainJob.name,
+          retryPolicy: normalizeComparableWorkflowRetryPolicy(workflow.retryPolicy),
+          jobFunctions: normalizeComparableWorkflowJobNames(usedJobNames),
+        };
         changeSet.updates.push({
           name: workflow.name,
+          detailLines: formatPropertyDiffLines(existingComparable, desiredComparable),
           workspaceId,
           workflow,
           usedJobNames,
@@ -378,8 +397,14 @@ export async function planWorkflow(
       }
       delete existingWorkflows[workflow.name];
     } else {
+      const desiredComparable = {
+        mainJobFunctionName: workflow.mainJob.name,
+        retryPolicy: normalizeComparableWorkflowRetryPolicy(workflow.retryPolicy),
+        jobFunctions: normalizeComparableWorkflowJobNames(usedJobNames),
+      };
       changeSet.creates.push({
         name: workflow.name,
+        detailLines: formatAddedPropertyLines(desiredComparable),
         workspaceId,
         workflow,
         usedJobNames,
@@ -407,7 +432,7 @@ export async function planWorkflow(
     }
   });
 
-  printWorkflowChanges(changeSet, workflowJobFunctionChanges);
+  printWorkflowChanges(changeSet, workflowJobFunctionChanges, detailPlan);
   return {
     changeSet,
     conflicts,
@@ -421,7 +446,9 @@ export async function planWorkflow(
 type WorkflowDisplayEntry = GroupedDisplayEntry;
 
 function collectWorkflowDisplayEntries<
-  T extends Pick<CreateWorkflow | UpdateWorkflow, "name" | "usedJobNames">,
+  T extends Pick<CreateWorkflow | UpdateWorkflow, "name" | "usedJobNames"> & {
+    detailLines?: string[];
+  },
 >(
   action: DisplayAction,
   workflowItems: ReadonlyArray<T>,
@@ -439,11 +466,23 @@ function collectWorkflowDisplayEntries<
     for (const functionName of matchingFunctionNames) {
       consumedWorkflowJobFunctionNames.add(functionName);
     }
+    const detailLines =
+      matchingFunctionNames.size > 0
+        ? [
+            ...(item.detailLines ?? []),
+            action === "create"
+              ? formatScriptAddedLine()
+              : action === "update"
+                ? formatScriptChangedLine()
+                : undefined,
+          ].filter((line): line is string => line != null)
+        : item.detailLines;
     return {
       action,
       symbol: actionSymbol(action),
       name: item.name,
       labels: matchingFunctionNames.size > 0 ? ["workflow", "functionRegistry"] : ["workflow"],
+      detailLines: detailLines != null && detailLines.length > 0 ? detailLines : undefined,
     };
   });
 }
@@ -493,7 +532,15 @@ export function formatWorkflowChangeEntries(
       name: item.name,
       labels: ["workflow"],
     })),
-    ...buildRemainingFunctionRegistryEntries(functionNames, consumed),
+    ...buildRemainingFunctionRegistryEntries(functionNames, consumed).map((entry) => ({
+      ...entry,
+      detailLines:
+        entry.action === "create"
+          ? [formatScriptAddedLine()]
+          : entry.action === "update"
+            ? [formatScriptChangedLine()]
+            : entry.detailLines,
+    })),
   ];
   return entries;
 }
@@ -506,6 +553,7 @@ function printWorkflowChanges(
     deletes: ReadonlyArray<HasName>;
     replaces: ReadonlyArray<HasName>;
   },
+  detail = false,
 ) {
   const entries = formatWorkflowChangeEntries(changeSet, workflowJobFunctionChanges);
   if (entries.length === 0) {
@@ -515,6 +563,9 @@ function printWorkflowChanges(
   logger.log(styles.bold("Workflows:"));
   for (const entry of entries) {
     logger.log(`  ${entry.symbol} ${entry.name} (${entry.labels.join(", ")})`);
+    if (detail) {
+      entry.detailLines?.forEach((line) => logger.log(`    ${line}`));
+    }
   }
 }
 

@@ -108,9 +108,10 @@ function areStaticWebsitesEqual(
 /**
  * Plan static website changes based on current and desired state.
  * @param context - Planning context
+ * @param detailPlan - Whether to print detailed property-level changes
  * @returns Planned changes
  */
-export async function planStaticWebsite(context: PlanContext) {
+export async function planStaticWebsite(context: PlanContext, detailPlan = false) {
   const { client, workspaceId, application, forRemoval } = context;
   const changeSet = createChangeSet<CreateStaticWebsite, UpdateStaticWebsite, DeleteStaticWebsite>(
     "StaticWebsites",
@@ -219,6 +220,6 @@ export async function planStaticWebsite(context: PlanContext) {
     }
   });
 
-  changeSet.print();
+  changeSet.print(detailPlan);
   return { changeSet, conflicts, unmanaged, resourceOwners };
 }

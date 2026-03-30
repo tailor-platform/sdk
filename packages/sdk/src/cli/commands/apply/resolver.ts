@@ -21,12 +21,15 @@ import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { logger, styles } from "@/cli/shared/logger";
 import { buildResolverOperationHookExpr } from "@/cli/shared/runtime-args";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
-import { areNormalizedEqual, normalizeProtoConfig } from "./compare";
+import { areNormalizedEqual, formatPropertyDiffLines, normalizeProtoConfig } from "./compare";
 import { resolverFunctionName } from "./function-registry";
 import {
   actionSymbol,
   buildRemainingFunctionRegistryEntries,
   createRelatedFunctionRegistryNameSets,
+  formatActionDetailLine,
+  formatScriptAddedLine,
+  formatScriptChangedLine,
   type GroupedDisplayEntry,
   type RelatedFunctionRegistryNameSets,
   type RelatedFunctionRegistryChanges,
@@ -103,11 +106,13 @@ export async function applyPipeline(
  * Plan resolver pipeline changes based on current and desired state.
  * @param context - Planning context
  * @param functionRegistryResolverChanges - Related function registry changes for resolvers
+ * @param detailPlan - Whether to print detailed property-level changes
  * @returns Planned changes
  */
 export async function planPipeline(
   context: PlanContext,
   functionRegistryResolverChanges?: RelatedFunctionRegistryChanges,
+  detailPlan = false,
 ) {
   const { client, workspaceId, application, forRemoval, forceApplyAll = false } = context;
   const pipelines: Readonly<ResolverService>[] = [];
@@ -138,8 +143,8 @@ export async function planPipeline(
     forceApplyAll,
   );
 
-  serviceChangeSet.print();
-  printResolverChanges(resolverChangeSet, functionRegistryResolverChanges);
+  serviceChangeSet.print(detailPlan);
+  printResolverChanges(resolverChangeSet, functionRegistryResolverChanges, detailPlan);
   return {
     changeSet: {
       service: serviceChangeSet,
@@ -283,11 +288,13 @@ async function planServices(
 
 type CreateResolver = {
   name: string;
+  detailLines?: string[];
   request: MessageInitShape<typeof CreatePipelineResolverRequestSchema>;
 };
 
 type UpdateResolver = {
   name: string;
+  detailLines?: string[];
   request: MessageInitShape<typeof UpdatePipelineResolverRequestSchema>;
 };
 
@@ -375,6 +382,13 @@ async function planResolvers(
         } else {
           changeSet.updates.push({
             name: resolver.name,
+            detailLines:
+              existingResolverDetail == null
+                ? undefined
+                : formatPropertyDiffLines(
+                    normalizeComparableResolver(existingResolverDetail),
+                    normalizeComparableResolver(desiredResolver),
+                  ),
             request: {
               workspaceId,
               namespaceName: pipeline.namespace,
@@ -386,6 +400,7 @@ async function planResolvers(
       } else {
         changeSet.creates.push({
           name: resolver.name,
+          detailLines: formatResolverCreateDetailLines(desiredResolver, resolver.operation),
           request: {
             workspaceId,
             namespaceName: pipeline.namespace,
@@ -461,6 +476,9 @@ export function formatResolverChangeEntries(
       symbol: actionSymbol("create"),
       name: item.name,
       labels: hasFunctionRegistryChange ? ["resolver", "functionRegistry"] : ["resolver"],
+      detailLines: hasFunctionRegistryChange
+        ? [...(item.detailLines ?? []), formatScriptAddedLine()]
+        : item.detailLines,
     };
   });
   const deleteEntries = changeSet.deletes.map((item) => {
@@ -491,6 +509,9 @@ export function formatResolverChangeEntries(
       symbol: actionSymbol("update"),
       name: item.name,
       labels: hasFunctionRegistryChange ? ["resolver", "functionRegistry"] : ["resolver"],
+      detailLines: hasFunctionRegistryChange
+        ? [...(item.detailLines ?? []), formatScriptChangedLine()]
+        : item.detailLines,
     };
   });
   const replaceEntries = (changeSet.replaces as ReadonlyArray<HasName>).map((item) => ({
@@ -505,7 +526,15 @@ export function formatResolverChangeEntries(
     ...deleteEntries,
     ...updateEntries,
     ...replaceEntries,
-    ...buildRemainingFunctionRegistryEntries(functionNames, consumed),
+    ...buildRemainingFunctionRegistryEntries(functionNames, consumed).map((entry) => ({
+      ...entry,
+      detailLines:
+        entry.action === "create"
+          ? [formatScriptAddedLine()]
+          : entry.action === "update"
+            ? [formatScriptChangedLine()]
+            : entry.detailLines,
+    })),
   ];
 }
 
@@ -517,6 +546,7 @@ function printResolverChanges(
     deletes: ReadonlyArray<HasName>;
     replaces: ReadonlyArray<HasName>;
   },
+  detail = false,
 ) {
   const entries = formatResolverChangeEntries(changeSet, resolverFunctionChanges);
   if (entries.length === 0) {
@@ -526,6 +556,9 @@ function printResolverChanges(
   logger.log(styles.bold("Pipeline resolvers:"));
   for (const entry of entries) {
     logger.log(`  ${entry.symbol} ${entry.name} (${entry.labels.join(", ")})`);
+    if (detail) {
+      entry.detailLines?.forEach((line) => logger.log(`    ${line}`));
+    }
   }
 }
 
@@ -535,7 +568,7 @@ function normalizeComparableResolver(resolver: MessageInitShape<typeof PipelineR
     name: normalized.name,
     description: normalized.description ?? "",
     authorization: normalized.authorization ?? "",
-    operationType: normalized.operationType,
+    operationType: normalized.operationType ?? "",
     publishExecutionEvents: normalized.publishExecutionEvents ?? false,
     inputs: normalizeComparableFields(normalized.inputs),
     response: normalizeComparableField(normalized.response),
@@ -553,13 +586,84 @@ function areResolversEqual(
   );
 }
 
+function formatResolverCreateDetailLines(
+  resolver: MessageInitShape<typeof PipelineResolverSchema>,
+  operation: Resolver["operation"] | number,
+): string[] {
+  const normalized = normalizeComparableResolver(resolver);
+  const lines: string[] = [];
+
+  if (normalized.description) {
+    lines.push(
+      formatActionDetailLine("create", `description: ${JSON.stringify(normalized.description)}`),
+    );
+  }
+
+  lines.push(
+    formatActionDetailLine("create", `operation: ${normalizeResolverOperation(operation)}`),
+  );
+
+  if (normalized.authorization && normalized.authorization !== "true==true") {
+    lines.push(
+      formatActionDetailLine(
+        "create",
+        `authorization: ${JSON.stringify(normalized.authorization)}`,
+      ),
+    );
+  }
+
+  if (normalized.inputs.length > 0) {
+    lines.push(
+      formatActionDetailLine(
+        "create",
+        `inputs: ${normalized.inputs
+          .map((field) => field?.name)
+          .filter(Boolean)
+          .join(", ")}`,
+      ),
+    );
+  }
+
+  const outputFields = normalized.response?.type?.fields
+    ?.map((field) => field?.name)
+    .filter((name): name is string => Boolean(name));
+  if (outputFields && outputFields.length > 0) {
+    lines.push(formatActionDetailLine("create", `output: ${outputFields.join(", ")}`));
+  }
+
+  const pipelineNames = normalized.pipelines
+    .map((pipeline) => pipeline.name)
+    .filter((name) => name.length > 0);
+  if (pipelineNames.length > 0) {
+    lines.push(formatActionDetailLine("create", `pipelines: ${pipelineNames.join(", ")}`));
+  }
+
+  if (normalized.publishExecutionEvents) {
+    lines.push(formatActionDetailLine("create", "publishEvents: true"));
+  }
+
+  return lines;
+}
+
+function normalizeResolverOperation(
+  operation: Resolver["operation"] | number,
+): "query" | "mutation" {
+  if (operation === "query" || operation === 0) {
+    return "query";
+  }
+  if (operation === "mutation" || operation === 1) {
+    return "mutation";
+  }
+  throw new Error(`Unknown resolver operation: ${String(operation)}`);
+}
+
 function normalizeComparablePipelines(
   pipelines: MessageInitShape<typeof PipelineResolverSchema>["pipelines"],
 ): Array<{
   name: string;
   operationName: string;
   description: string;
-  operationType: PipelineResolver_OperationType | undefined;
+  operationType: string;
   operationSourceRef: string;
   operationHook: string;
   postScript: string;
@@ -572,7 +676,7 @@ function normalizeComparablePipelines(
     name: pipeline.name ?? "",
     operationName: pipeline.operationName ?? "",
     description: pipeline.description ?? "",
-    operationType: pipeline.operationType,
+    operationType: String(pipeline.operationType ?? ""),
     operationSourceRef: pipeline.operationSourceRef ?? "",
     operationHook: pipeline.operationHook?.expr ?? "",
     postScript: pipeline.postScript ?? "",
@@ -692,7 +796,7 @@ function processResolver(
     description: combinedDescription,
     inputs,
     name: resolver.name,
-    operationType: resolver.operation,
+    operationType: normalizeResolverOperation(resolver.operation),
     response,
     pipelines,
     publishExecutionEvents,

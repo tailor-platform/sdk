@@ -59,6 +59,7 @@ export interface ApplyOptions {
   profile?: string;
   configPath?: string;
   dryRun?: boolean;
+  detailPlan?: boolean;
   yes?: boolean;
   noSchemaCheck?: boolean;
   noCache?: boolean;
@@ -511,6 +512,7 @@ export async function apply(options?: ApplyOptions) {
     );
 
     const dryRun = options?.dryRun ?? false;
+    const detailPlan = options?.detailPlan ?? false;
     const yes = options?.yes ?? false;
     const forceApplyAll = await withSpan("plan.detectSdkVersionChange", () =>
       shouldForceApplyAll(client, workspaceId, application, functionEntries),
@@ -549,16 +551,18 @@ export async function apply(options?: ApplyOptions) {
       );
       const [tailorDB, staticWebsite, idp, auth, pipeline, app, executor, workflow, secretManager] =
         await Promise.all([
-          withSpan("plan.tailorDB", () => planTailorDB(ctx)),
-          withSpan("plan.staticWebsite", () => planStaticWebsite(ctx)),
-          withSpan("plan.idp", () => planIdP(ctx)),
-          withSpan("plan.auth", () => planAuth(ctx, functionRegistry.authHookFunctionChanges)),
-          withSpan("plan.pipeline", () =>
-            planPipeline(ctx, functionRegistry.resolverFunctionChanges),
+          withSpan("plan.tailorDB", () => planTailorDB(ctx, detailPlan)),
+          withSpan("plan.staticWebsite", () => planStaticWebsite(ctx, detailPlan)),
+          withSpan("plan.idp", () => planIdP(ctx, detailPlan)),
+          withSpan("plan.auth", () =>
+            planAuth(ctx, functionRegistry.authHookFunctionChanges, detailPlan),
           ),
-          withSpan("plan.application", () => planApplication(ctx)),
+          withSpan("plan.pipeline", () =>
+            planPipeline(ctx, functionRegistry.resolverFunctionChanges, detailPlan),
+          ),
+          withSpan("plan.application", () => planApplication(ctx, detailPlan)),
           withSpan("plan.executor", () =>
-            planExecutor(ctx, functionRegistry.executorFunctionChanges),
+            planExecutor(ctx, functionRegistry.executorFunctionChanges, detailPlan),
           ),
           withSpan("plan.workflow", () =>
             planWorkflow(
@@ -569,9 +573,10 @@ export async function apply(options?: ApplyOptions) {
               workflowBuildResult?.mainJobDeps ?? {},
               unchangedWorkflowJobs,
               functionRegistry.workflowJobChanges,
+              detailPlan,
             ),
           ),
-          withSpan("plan.secretManager", () => planSecretManager(ctx)),
+          withSpan("plan.secretManager", () => planSecretManager(ctx, detailPlan)),
         ]);
       return {
         functionRegistry,

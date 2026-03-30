@@ -1089,6 +1089,7 @@ describe("formatExecutorChangeEntries", () => {
         symbol: "~",
         name: "user-created",
         labels: ["executor", "functionRegistry"],
+        detailLines: ["~ script -> (changed)"],
       },
     ]);
   });

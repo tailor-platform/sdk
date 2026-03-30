@@ -142,9 +142,10 @@ export async function applyIdP(
 /**
  * Plan IdP-related changes based on current and desired state.
  * @param context - Planning context
+ * @param detailPlan - Whether to print detailed property-level changes
  * @returns Planned changes and metadata
  */
-export async function planIdP(context: PlanContext) {
+export async function planIdP(context: PlanContext, detailPlan = false) {
   const { client, workspaceId, application, forRemoval, forceApplyAll = false } = context;
   const idps = forRemoval ? [] : application.idpServices;
   const {
@@ -162,8 +163,8 @@ export async function planIdP(context: PlanContext) {
     forceApplyAll,
   );
 
-  serviceChangeSet.print();
-  clientChangeSet.print();
+  serviceChangeSet.print(detailPlan);
+  clientChangeSet.print(detailPlan);
   return {
     changeSet: {
       service: serviceChangeSet,

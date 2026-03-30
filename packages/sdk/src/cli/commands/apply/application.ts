@@ -175,9 +175,10 @@ function areApplicationsEqual(existing: ProtoApplication, desired: ComparableApp
 /**
  * Plan application changes based on current and desired state.
  * @param context - Planning context
+ * @param detailPlan - Whether to print detailed property-level changes
  * @returns Planned changes
  */
-export async function planApplication(context: PlanContext) {
+export async function planApplication(context: PlanContext, detailPlan = false) {
   const { client, workspaceId, application, forRemoval } = context;
   const changeSet = createChangeSet<CreateApplication, UpdateApplication, DeleteApplication>(
     "Applications",
@@ -209,14 +210,14 @@ export async function planApplication(context: PlanContext) {
         },
       });
     }
-    changeSet.print();
+    changeSet.print(detailPlan);
     return changeSet;
   }
 
   // Skip application create/update when there are no subgraphs
   // (e.g. deploying only static web hosting)
   if (application.subgraphs.length === 0) {
-    changeSet.print();
+    changeSet.print(detailPlan);
     return changeSet;
   }
 
@@ -304,7 +305,7 @@ export async function planApplication(context: PlanContext) {
     });
   }
 
-  changeSet.print();
+  changeSet.print(detailPlan);
   return changeSet;
 }
 

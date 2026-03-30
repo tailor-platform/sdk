@@ -19,12 +19,15 @@ import { logger, styles } from "@/cli/shared/logger";
 import { buildExecutorArgsExpr } from "@/cli/shared/runtime-args";
 import { stringifyFunction } from "@/parser/service/tailordb";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
-import { areNormalizedEqual, normalizeProtoConfig } from "./compare";
+import { areNormalizedEqual, formatPropertyDiffLines, normalizeProtoConfig } from "./compare";
 import { executorFunctionName } from "./function-registry";
 import {
   actionSymbol,
   buildRemainingFunctionRegistryEntries,
   createRelatedFunctionRegistryNameSets,
+  formatActionDetailLine,
+  formatScriptAddedLine,
+  formatScriptChangedLine,
   type GroupedDisplayEntry,
   type RelatedFunctionRegistryNameSets,
   type RelatedFunctionRegistryChanges,
@@ -70,12 +73,14 @@ export async function applyExecutor(
 
 type CreateExecutor = {
   name: string;
+  detailLines?: string[];
   request: MessageInitShape<typeof CreateExecutorExecutorRequestSchema>;
   metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
 
 type UpdateExecutor = {
   name: string;
+  detailLines?: string[];
   request: MessageInitShape<typeof UpdateExecutorExecutorRequestSchema>;
   metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
 };
@@ -93,11 +98,13 @@ function trn(workspaceId: string, name: string) {
  * Plan executor-related changes based on current and desired state.
  * @param context - Planning context
  * @param functionRegistryExecutorChanges - Related function registry changes for executors
+ * @param detailPlan - Whether to print detailed property-level changes
  * @returns Planned changes
  */
 export async function planExecutor(
   context: PlanContext,
   functionRegistryExecutorChanges?: RelatedFunctionRegistryChanges,
+  detailPlan = false,
 ) {
   const { client, workspaceId, application, forRemoval } = context;
   const changeSet = createChangeSet<CreateExecutor, UpdateExecutor, DeleteExecutor>("Executors");
@@ -162,6 +169,10 @@ export async function planExecutor(
       } else {
         changeSet.updates.push({
           name: executor.name,
+          detailLines: formatPropertyDiffLines(
+            normalizeComparableExecutor(existing.resource),
+            normalizeComparableExecutor(desiredExecutor),
+          ),
           request: {
             workspaceId,
             executor: desiredExecutor,
@@ -173,6 +184,7 @@ export async function planExecutor(
     } else {
       changeSet.creates.push({
         name: executor.name,
+        detailLines: formatExecutorCreateDetailLines(desiredExecutor),
         request: {
           workspaceId,
           executor: desiredExecutor,
@@ -198,7 +210,7 @@ export async function planExecutor(
     }
   });
 
-  printExecutorChanges(changeSet, functionRegistryExecutorChanges);
+  printExecutorChanges(changeSet, functionRegistryExecutorChanges, detailPlan);
   return { changeSet, conflicts, unmanaged, resourceOwners };
 }
 
@@ -261,6 +273,9 @@ export function formatExecutorChangeEntries(
       symbol: actionSymbol("create"),
       name: item.name,
       labels: hasFunctionRegistryChange ? ["executor", "functionRegistry"] : ["executor"],
+      detailLines: hasFunctionRegistryChange
+        ? [...(item.detailLines ?? []), formatScriptAddedLine()]
+        : item.detailLines,
     };
   });
   const deleteEntries = changeSet.deletes.map((item) => {
@@ -289,6 +304,9 @@ export function formatExecutorChangeEntries(
       symbol: actionSymbol("update"),
       name: item.name,
       labels: hasFunctionRegistryChange ? ["executor", "functionRegistry"] : ["executor"],
+      detailLines: hasFunctionRegistryChange
+        ? [...(item.detailLines ?? []), formatScriptChangedLine()]
+        : item.detailLines,
     };
   });
   const replaceEntries = (changeSet.replaces as ReadonlyArray<HasName>).map((item) => ({
@@ -303,7 +321,15 @@ export function formatExecutorChangeEntries(
     ...deleteEntries,
     ...updateEntries,
     ...replaceEntries,
-    ...buildRemainingFunctionRegistryEntries(functionNames, consumed),
+    ...buildRemainingFunctionRegistryEntries(functionNames, consumed).map((entry) => ({
+      ...entry,
+      detailLines:
+        entry.action === "create"
+          ? [formatScriptAddedLine()]
+          : entry.action === "update"
+            ? [formatScriptChangedLine()]
+            : entry.detailLines,
+    })),
   ];
 }
 
@@ -315,6 +341,7 @@ function printExecutorChanges(
     deletes: ReadonlyArray<HasName>;
     replaces: ReadonlyArray<HasName>;
   },
+  detail = false,
 ) {
   const entries = formatExecutorChangeEntries(
     changeSet,
@@ -328,6 +355,9 @@ function printExecutorChanges(
   logger.log(styles.bold("Executors:"));
   for (const entry of entries) {
     logger.log(`  ${entry.symbol} ${entry.name} (${entry.labels.join(", ")})`);
+    if (detail) {
+      entry.detailLines?.forEach((line) => logger.log(`    ${line}`));
+    }
   }
 }
 
@@ -393,6 +423,75 @@ function normalizeComparableExecutor(executor: MessageInitShape<typeof ExecutorE
             }
           : normalized.targetConfig,
   };
+}
+
+function formatExecutorCreateDetailLines(
+  executor: MessageInitShape<typeof ExecutorExecutorSchema>,
+): string[] {
+  const normalized = normalizeComparableExecutor(executor);
+  const lines: string[] = [];
+
+  if (normalized.description) {
+    lines.push(
+      formatActionDetailLine("create", `description: ${JSON.stringify(normalized.description)}`),
+    );
+  }
+
+  lines.push(
+    formatActionDetailLine("create", `trigger: ${formatExecutorTrigger(normalized.triggerType)}`),
+  );
+
+  const triggerConfig = normalized.triggerConfig?.config;
+  if (triggerConfig?.case === "schedule") {
+    lines.push(
+      formatActionDetailLine(
+        "create",
+        `cron: ${JSON.stringify(triggerConfig.value?.frequency ?? "")}`,
+      ),
+    );
+    const timezone = triggerConfig.value?.timezone;
+    if (timezone && timezone !== "UTC") {
+      lines.push(formatActionDetailLine("create", `timezone: ${JSON.stringify(timezone)}`));
+    }
+  }
+
+  lines.push(
+    formatActionDetailLine("create", `operation: ${formatExecutorTarget(normalized.targetType)}`),
+  );
+
+  if (normalized.disabled) {
+    lines.push(formatActionDetailLine("create", "disabled: true"));
+  }
+
+  return lines;
+}
+
+function formatExecutorTrigger(triggerType: ExecutorTriggerType | undefined) {
+  switch (triggerType) {
+    case ExecutorTriggerType.SCHEDULE:
+      return "schedule";
+    case ExecutorTriggerType.EVENT:
+      return "event";
+    case ExecutorTriggerType.INCOMING_WEBHOOK:
+      return "incomingWebhook";
+    default:
+      return "unknown";
+  }
+}
+
+function formatExecutorTarget(targetType: ExecutorTargetType | undefined) {
+  switch (targetType) {
+    case ExecutorTargetType.FUNCTION:
+      return "function";
+    case ExecutorTargetType.JOB_FUNCTION:
+      return "jobFunction";
+    case ExecutorTargetType.WEBHOOK:
+      return "webhook";
+    case ExecutorTargetType.WORKFLOW:
+      return "workflow";
+    default:
+      return "unknown";
+  }
 }
 
 function areExecutorsEqual(
