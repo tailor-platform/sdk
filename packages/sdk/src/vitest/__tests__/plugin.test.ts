@@ -1,14 +1,22 @@
-import { describe, expect, test } from "vitest";
+import { beforeAll, describe, expect, test } from "vitest";
 import { createBlockPlugin } from "../plugin";
+import type { ResolvedConfig } from "vite";
 
 describe("createBlockPlugin", () => {
   const plugin = createBlockPlugin();
-  // resolveId is a function on the plugin object
+  const configResolved = plugin.configResolved as (config: ResolvedConfig) => void;
   const resolveId = plugin.resolveId as (
     source: string,
     importer: string | undefined,
   ) => string | undefined;
   const load = plugin.load as (id: string) => string | undefined;
+
+  beforeAll(() => {
+    // Simulate Vitest config resolution with test.include patterns
+    configResolved({
+      test: { include: ["**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}"] },
+    } as unknown as ResolvedConfig);
+  });
 
   describe("resolveId", () => {
     test("blocks node:* imports from production code", () => {
