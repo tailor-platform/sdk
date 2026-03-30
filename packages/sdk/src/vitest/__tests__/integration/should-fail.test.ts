@@ -13,3 +13,7 @@ test("Buffer is not available as a global", () => {
 test("setImmediate is not available as a global", () => {
   expect(typeof setImmediate).toBe("undefined");
 });
+
+test("performance is not available as a global", () => {
+  expect(typeof performance).toBe("undefined");
+});

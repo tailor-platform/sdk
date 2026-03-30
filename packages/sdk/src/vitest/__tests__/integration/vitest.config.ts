@@ -21,6 +21,7 @@ export default defineConfig({
   test: {
     watch: false,
     environment: "tailor-runtime",
+    setupFiles: [resolve(__dirname, "../../setup.ts")],
     include: ["./**/*.test.ts"],
     root: __dirname,
   },

@@ -121,6 +121,8 @@ const ALLOWED_GLOBALS = new Set([
   "crypto",
   "Crypto",
   "SubtleCrypto",
+  // `performance` is kept here because Vitest needs it during environment setup.
+  // It is removed per-test via setup.ts beforeEach/afterEach so user code cannot access it.
   "performance",
 
   // --- Platform APIs (injected by mock.ts) ---

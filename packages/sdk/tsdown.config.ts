@@ -29,6 +29,7 @@ export default defineConfig({
     "src/seed/index.ts",
     "src/vitest/index.ts",
     "src/vitest/environment.ts",
+    "src/vitest/setup.ts",
   ],
   format: ["esm"],
   target: "node18",

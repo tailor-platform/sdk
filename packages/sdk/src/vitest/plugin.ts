@@ -67,12 +67,16 @@ export function createBlockPlugin(): Plugin {
 export function createEnvironmentPlugin(): Plugin {
   const currentDir = dirname(fileURLToPath(import.meta.url));
   const environmentPath = resolve(currentDir, "environment.mjs");
+  const setupPath = resolve(currentDir, "setup.mjs");
 
   return {
     name: "tailor-runtime-environment",
 
     config() {
       return {
+        test: {
+          setupFiles: [setupPath],
+        },
         resolve: {
           alias: {
             "vitest-environment-tailor-runtime": environmentPath,
