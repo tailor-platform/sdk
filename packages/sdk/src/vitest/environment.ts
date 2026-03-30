@@ -2,7 +2,7 @@ import { injectMocks, cleanupMocks } from "./mock";
 
 export default {
   name: "tailor-runtime",
-  transformMode: "ssr",
+  viteEnvironment: "ssr",
 
   async setup(global: typeof globalThis) {
     // Save original values to restore in teardown

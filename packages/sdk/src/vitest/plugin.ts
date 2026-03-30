@@ -4,15 +4,19 @@ import { createFilter } from "vite";
 import { isBlockedModule, getBlockedMessage } from "./blocked-modules";
 import type { Plugin, ResolvedConfig } from "vite";
 
-const VIRTUAL_PREFIX = "\0tailor-blocked:";
 const DEFAULT_TEST_INCLUDE = ["**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}"];
+
+// Matches static import/export declarations with string specifiers.
+// Captures: the full statement (for replacement) and the specifier.
+const IMPORT_RE = /\b(?:import|export)\s+(?:[\s\S]*?\s+from\s+)?["']([^"']+)["']/g;
 
 /**
  * Vite plugin that blocks Node.js built-in module imports from production code.
  *
- * When production code (non-test files) imports a `node:*` module (or bare Node.js builtin),
- * the import is resolved to a virtual module that throws an error at runtime
- * with a helpful message suggesting the Web Standard API alternative.
+ * Uses the `transform` hook to scan non-test source files for `node:*` imports
+ * and replaces them with code that throws a helpful error at runtime.
+ * Vitest treats `node:*` as external SSR modules (skipping `resolveId`), so
+ * source-level transformation is the only reliable interception point.
  * Test file patterns are read from the resolved Vitest config (`test.include`).
  * @returns Vite plugin
  */
@@ -30,20 +34,23 @@ export function createBlockPlugin(): Plugin {
       isTestFile = (id: string) => filter(id);
     },
 
-    resolveId(source, importer) {
-      if (isBlockedModule(source) && importer && !isTestFile(importer)) {
-        return `${VIRTUAL_PREFIX}${source}`;
-      }
-      return undefined;
-    },
+    transform(code, id) {
+      // Skip test files — they may freely use node:* modules
+      if (isTestFile(id)) return undefined;
+      // Skip node_modules
+      if (id.includes("node_modules")) return undefined;
 
-    load(id) {
-      if (id.startsWith(VIRTUAL_PREFIX)) {
-        const specifier = id.slice(VIRTUAL_PREFIX.length);
-        const message = getBlockedMessage(specifier).replace(/"/g, '\\"');
-        return `throw new Error("${message}");`;
-      }
-      return undefined;
+      let hasBlocked = false;
+      const transformed = code.replace(IMPORT_RE, (match, specifier: string) => {
+        if (isBlockedModule(specifier)) {
+          hasBlocked = true;
+          const message = getBlockedMessage(specifier).replace(/"/g, '\\"');
+          return `throw new Error("${message}")`;
+        }
+        return match;
+      });
+
+      return hasBlocked ? { code: transformed, map: null } : undefined;
     },
   };
 }

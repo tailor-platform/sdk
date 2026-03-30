@@ -23,6 +23,7 @@ export default defineConfig({
             "e2e/**",
             "**/__test_fixtures__/**",
             "src/plugin/compat.test.ts",
+            "src/vitest/__tests__/integration/**",
           ],
         },
       },
