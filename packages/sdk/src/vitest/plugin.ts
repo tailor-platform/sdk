@@ -4,13 +4,15 @@ import { isBlockedModule, getBlockedMessage } from "./blocked-modules";
 import type { Plugin } from "vite";
 
 const VIRTUAL_PREFIX = "\0tailor-blocked:";
+const TEST_FILE_RE = /\.(?:test|spec)\.[cm]?[jt]sx?$/;
 
 /**
- * Vite plugin that blocks Node.js built-in module imports.
+ * Vite plugin that blocks Node.js built-in module imports from production code.
  *
- * When a test file imports a `node:*` module (or bare Node.js builtin),
+ * When production code (non-test files) imports a `node:*` module (or bare Node.js builtin),
  * the import is resolved to a virtual module that throws an error at runtime
  * with a helpful message suggesting the Web Standard API alternative.
+ * Imports from test files (*.test.ts, *.spec.ts) are allowed through.
  * @returns Vite plugin
  */
 export function createBlockPlugin(): Plugin {
@@ -18,8 +20,8 @@ export function createBlockPlugin(): Plugin {
     name: "tailor-runtime-block-node",
     enforce: "pre",
 
-    resolveId(source) {
-      if (isBlockedModule(source)) {
+    resolveId(source, importer) {
+      if (isBlockedModule(source) && importer && !TEST_FILE_RE.test(importer)) {
         return `${VIRTUAL_PREFIX}${source}`;
       }
       return undefined;
