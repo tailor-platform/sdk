@@ -389,4 +389,153 @@ describe("summarizePlanResultsForDisplay", () => {
       unchanged: 1,
     });
   });
+
+  test("does not count unchanged grouped resources when only related function registry changes", () => {
+    const results = {
+      functionRegistry: {
+        changeSet: createFixtureChangeSet<FunctionRegistryChangeSet>(),
+        workflowJobChanges: {
+          creates: [],
+          updates: [{ name: "workflow--process-order" } as WorkflowJobFunctionUpdate],
+          deletes: [],
+          replaces: [],
+          unchanged: [],
+        },
+        resolverFunctionChanges: {
+          creates: [],
+          updates: [{ name: "resolver--my-resolver--add" } as ResolverFunctionUpdate],
+          deletes: [],
+          replaces: [],
+          unchanged: [],
+        },
+        executorFunctionChanges: {
+          creates: [],
+          updates: [{ name: "executor--user-created" } as ExecutorFunctionUpdate],
+          deletes: [],
+          replaces: [],
+          unchanged: [],
+        },
+        authHookFunctionChanges: {
+          creates: [],
+          updates: [{ name: "auth-hook--my-auth--before-login" } as AuthHookFunctionUpdate],
+          deletes: [],
+          replaces: [],
+          unchanged: [],
+        },
+        conflicts: [],
+        unmanaged: [],
+        resourceOwners: new Set<string>(),
+      },
+      tailorDB: {
+        changeSet: {
+          service: createFixtureChangeSet<TailorDBServiceChangeSet>(),
+          type: createFixtureChangeSet<TailorDBTypeChangeSet>(),
+          gqlPermission: createFixtureChangeSet<TailorDBGqlPermissionChangeSet>(),
+        },
+        conflicts: [],
+        unmanaged: [],
+        resourceOwners: new Set<string>(),
+        context: {
+          workspaceId: "ws",
+          application: {} as SummaryPlanResults["tailorDB"]["context"]["application"],
+          config: {} as SummaryPlanResults["tailorDB"]["context"]["config"],
+          noSchemaCheck: false,
+        },
+      },
+      staticWebsite: {
+        changeSet: createFixtureChangeSet<StaticWebsiteChangeSet>(),
+        conflicts: [],
+        unmanaged: [],
+        resourceOwners: new Set<string>(),
+      },
+      idp: {
+        changeSet: {
+          service: createFixtureChangeSet<IdPServiceChangeSet>(),
+          client: createFixtureChangeSet<IdPClientChangeSet>(),
+        },
+        conflicts: [],
+        unmanaged: [],
+        resourceOwners: new Set<string>(),
+      },
+      auth: {
+        changeSet: {
+          service: createFixtureChangeSet<AuthServiceChangeSet>(),
+          idpConfig: createFixtureChangeSet<AuthIdpConfigChangeSet>(),
+          userProfileConfig: createFixtureChangeSet<AuthUserProfileConfigChangeSet>(),
+          tenantConfig: createFixtureChangeSet<AuthTenantConfigChangeSet>(),
+          machineUser: createFixtureChangeSet<AuthMachineUserChangeSet>(),
+          oauth2Client: createFixtureChangeSet<AuthOauth2ClientChangeSet>(),
+          authHook: {
+            ...createFixtureChangeSet<AuthHookChangeSet>(),
+            unchanged: [{ name: "my-auth/before-login" }],
+          },
+          scim: createFixtureChangeSet<AuthScimChangeSet>(),
+          scimResource: createFixtureChangeSet<AuthScimResourceChangeSet>(),
+        },
+        conflicts: [],
+        unmanaged: [],
+        resourceOwners: new Set<string>(),
+      },
+      pipeline: {
+        changeSet: {
+          service: createFixtureChangeSet<PipelineServiceChangeSet>(),
+          resolver: {
+            ...createFixtureChangeSet<ResolverChangeSet>(),
+            unchanged: [
+              { name: "add", namespaceName: "my-resolver" } as {
+                name: string;
+                namespaceName: string;
+              },
+            ],
+          },
+        },
+        conflicts: [],
+        unmanaged: [],
+        resourceOwners: new Set<string>(),
+      },
+      app: createFixtureChangeSet<AppChangeSet>(),
+      executor: {
+        changeSet: {
+          ...createFixtureChangeSet<ExecutorChangeSet>(),
+          unchanged: [{ name: "user-created" }],
+        },
+        conflicts: [],
+        unmanaged: [],
+        resourceOwners: new Set<string>(),
+      },
+      workflow: {
+        changeSet: {
+          ...createFixtureChangeSet<WorkflowChangeSet>(),
+          unchanged: [
+            { name: "order-processing", usedJobNames: ["process-order"] } as {
+              name: string;
+              usedJobNames: string[];
+            },
+          ],
+        },
+        unchangedWorkflowJobNames: new Set(["process-order"]),
+        conflicts: [],
+        unmanaged: [],
+        resourceOwners: new Set<string>(),
+        appName: "my-app",
+      },
+      secretManager: {
+        vaultChangeSet: createFixtureChangeSet<VaultChangeSet>(),
+        secretChangeSet: createFixtureChangeSet<SecretChangeSet>(),
+        conflicts: [],
+        unmanaged: [],
+        resourceOwners: new Set<string>(),
+      },
+    } satisfies SummaryPlanResults;
+
+    const summary = summarizePlanResultsForDisplay(results);
+
+    expect(summary).toEqual({
+      create: 0,
+      update: 4,
+      delete: 0,
+      replace: 0,
+      unchanged: 0,
+    });
+  });
 });

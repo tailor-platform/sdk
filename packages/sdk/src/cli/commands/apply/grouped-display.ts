@@ -60,6 +60,32 @@ export function actionSymbol(action: DisplayAction): string {
   }
 }
 
+function formatFunctionRegistryDisplayName(name: string): string {
+  if (name.startsWith("resolver--")) {
+    const [, namespace, resolverName] = name.split("--");
+    if (namespace && resolverName) {
+      return `${namespace}.${resolverName}`;
+    }
+  }
+
+  if (name.startsWith("workflow--")) {
+    return name.slice("workflow--".length);
+  }
+
+  if (name.startsWith("executor--")) {
+    return name.slice("executor--".length);
+  }
+
+  if (name.startsWith("auth-hook--")) {
+    const [, namespace, hookPoint] = name.split("--");
+    if (namespace && hookPoint) {
+      return `${namespace}/${hookPoint}`;
+    }
+  }
+
+  return name;
+}
+
 /**
  * Build function-registry-only entries that were not grouped with a parent resource.
  * @param names - Related function registry names keyed by action
@@ -76,7 +102,7 @@ export function buildRemainingFunctionRegistryEntries(
       .map((name) => ({
         action: "create" as const,
         symbol: actionSymbol("create"),
-        name,
+        name: formatFunctionRegistryDisplayName(name),
         labels: ["functionRegistry"],
       })),
     ...[...names.deletes]
@@ -84,7 +110,7 @@ export function buildRemainingFunctionRegistryEntries(
       .map((name) => ({
         action: "delete" as const,
         symbol: actionSymbol("delete"),
-        name,
+        name: formatFunctionRegistryDisplayName(name),
         labels: ["functionRegistry"],
       })),
     ...[...names.updates]
@@ -92,7 +118,7 @@ export function buildRemainingFunctionRegistryEntries(
       .map((name) => ({
         action: "update" as const,
         symbol: actionSymbol("update"),
-        name,
+        name: formatFunctionRegistryDisplayName(name),
         labels: ["functionRegistry"],
       })),
     ...[...names.replaces]
@@ -100,7 +126,7 @@ export function buildRemainingFunctionRegistryEntries(
       .map((name) => ({
         action: "replace" as const,
         symbol: actionSymbol("replace"),
-        name,
+        name: formatFunctionRegistryDisplayName(name),
         labels: ["functionRegistry"],
       })),
   ];

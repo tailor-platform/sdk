@@ -371,7 +371,10 @@ async function planResolvers(
           existingResolverDetail &&
           areResolversEqual(existingResolverDetail, desiredResolver)
         ) {
-          changeSet.unchanged.push({ name: resolver.name });
+          changeSet.unchanged.push({
+            name: resolver.name,
+            namespaceName: pipeline.namespace,
+          } as HasName & { namespaceName: string });
         } else {
           changeSet.updates.push({
             name: resolver.name,

@@ -264,6 +264,28 @@ function countUnchangedNamesExcludingChanged(
   return unchangedNames.size;
 }
 
+function countUnchangedItemsWithoutChangedRelations<T extends HasName>(
+  unchangedItems: ReadonlyArray<T>,
+  changedGroups: ReadonlyArray<ReadonlyArray<HasName>>,
+  getRelatedChangedNames: (item: T) => ReadonlyArray<string>,
+): number {
+  const changedNames = new Set<string>();
+  for (const group of changedGroups) {
+    for (const item of group) {
+      changedNames.add(item.name);
+    }
+  }
+
+  let count = 0;
+  for (const item of unchangedItems) {
+    if (!getRelatedChangedNames(item).some((name) => changedNames.has(name))) {
+      count += 1;
+    }
+  }
+
+  return count;
+}
+
 /**
  * Summarize plan counts using the same grouped units shown in dry-run output.
  * @param results - Planned apply results
@@ -356,7 +378,19 @@ export function summarizePlanResultsForDisplay(results: {
         results.pipeline.changeSet.resolver,
         results.functionRegistry.resolverFunctionChanges,
       ),
-      results.pipeline.changeSet.resolver.unchanged.length,
+      countUnchangedItemsWithoutChangedRelations(
+        results.pipeline.changeSet.resolver.unchanged as ReadonlyArray<
+          HasName & { namespaceName?: string }
+        >,
+        [
+          results.functionRegistry.resolverFunctionChanges.creates,
+          results.functionRegistry.resolverFunctionChanges.updates,
+          results.functionRegistry.resolverFunctionChanges.deletes,
+          results.functionRegistry.resolverFunctionChanges.replaces,
+        ],
+        (item) =>
+          item.namespaceName ? [buildResolverFunctionName(item.namespaceName, item.name)] : [],
+      ),
     ),
   );
 
@@ -368,7 +402,16 @@ export function summarizePlanResultsForDisplay(results: {
         buildPlannedExecutorsByName(results.executor.changeSet),
         results.functionRegistry.executorFunctionChanges,
       ),
-      results.executor.changeSet.unchanged.length,
+      countUnchangedItemsWithoutChangedRelations(
+        results.executor.changeSet.unchanged,
+        [
+          results.functionRegistry.executorFunctionChanges.creates,
+          results.functionRegistry.executorFunctionChanges.updates,
+          results.functionRegistry.executorFunctionChanges.deletes,
+          results.functionRegistry.executorFunctionChanges.replaces,
+        ],
+        (item) => [buildExecutorFunctionName(item.name)],
+      ),
     ),
   );
 
@@ -379,7 +422,18 @@ export function summarizePlanResultsForDisplay(results: {
         results.workflow.changeSet,
         results.functionRegistry.workflowJobChanges,
       ),
-      results.workflow.changeSet.unchanged.length,
+      countUnchangedItemsWithoutChangedRelations(
+        results.workflow.changeSet.unchanged as ReadonlyArray<
+          HasName & { usedJobNames?: string[] }
+        >,
+        [
+          results.functionRegistry.workflowJobChanges.creates,
+          results.functionRegistry.workflowJobChanges.updates,
+          results.functionRegistry.workflowJobChanges.deletes,
+          results.functionRegistry.workflowJobChanges.replaces,
+        ],
+        (item) => item.usedJobNames?.map((name) => buildWorkflowJobFunctionName(name)) ?? [],
+      ),
     ),
   );
 
@@ -390,11 +444,41 @@ export function summarizePlanResultsForDisplay(results: {
         results.auth.changeSet.authHook,
         results.functionRegistry.authHookFunctionChanges,
       ),
-      results.auth.changeSet.authHook.unchanged.length,
+      countUnchangedItemsWithoutChangedRelations(
+        results.auth.changeSet.authHook.unchanged,
+        [
+          results.functionRegistry.authHookFunctionChanges.creates,
+          results.functionRegistry.authHookFunctionChanges.updates,
+          results.functionRegistry.authHookFunctionChanges.deletes,
+          results.functionRegistry.authHookFunctionChanges.replaces,
+        ],
+        (item) => {
+          const [namespaceName, hookPoint] = item.name.split("/");
+          return namespaceName && hookPoint
+            ? [buildAuthHookFunctionName(namespaceName, hookPoint)]
+            : [];
+        },
+      ),
     ),
   );
 
   return summary;
+}
+
+function buildResolverFunctionName(namespaceName: string, resolverName: string) {
+  return `resolver--${namespaceName}--${resolverName}`;
+}
+
+function buildExecutorFunctionName(executorName: string) {
+  return `executor--${executorName}`;
+}
+
+function buildWorkflowJobFunctionName(jobName: string) {
+  return `workflow--${jobName}`;
+}
+
+function buildAuthHookFunctionName(namespaceName: string, hookPoint: string) {
+  return `auth-hook--${namespaceName}--${hookPoint}`;
 }
 
 /**

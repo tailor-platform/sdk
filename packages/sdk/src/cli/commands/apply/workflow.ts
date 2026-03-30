@@ -363,7 +363,9 @@ export async function planWorkflow(
           unchangedJobFunctions,
         )
       ) {
-        changeSet.unchanged.push({ name: workflow.name });
+        changeSet.unchanged.push({ name: workflow.name, usedJobNames } as HasName & {
+          usedJobNames: string[];
+        });
         for (const jobName of usedJobNames) {
           unchangedWorkflowJobNames.add(jobName);
         }
