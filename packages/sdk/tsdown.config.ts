@@ -27,6 +27,8 @@ export default defineConfig({
     "src/plugin/builtin/file-utils/index.ts",
     "src/plugin/builtin/seed/index.ts",
     "src/seed/index.ts",
+    "src/vitest/index.ts",
+    "src/vitest/environment.ts",
   ],
   format: ["esm"],
   target: "node18",

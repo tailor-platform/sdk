@@ -36,6 +36,7 @@ const GlobalThis = globalThis as TailordbGlobal & TailorErrorsGlobal;
 
 /**
  * Sets up a mock for `globalThis.tailordb.Client` used in bundled resolver/executor tests.
+ * @deprecated Use `tailordbMock` from `@tailor-platform/sdk/vitest` with the `tailor-runtime` environment instead.
  * @param resolver - Optional function to resolve query results. Defaults to returning empty arrays.
  * @returns Object containing arrays of executed queries and created clients for assertions.
  */
@@ -77,6 +78,7 @@ export function setupTailordbMock(resolver: QueryResolver = () => []): {
 
 /**
  * Sets up a mock for `globalThis.tailor.workflow.triggerJobFunction` used in bundled workflow tests.
+ * @deprecated Use `workflowMock` from `@tailor-platform/sdk/vitest` with the `tailor-runtime` environment instead.
  * @param handler - Function that handles triggered job calls and returns results.
  * @returns Object containing an array of triggered jobs for assertions.
  */
@@ -101,6 +103,7 @@ export function setupWorkflowMock(handler: JobHandler): {
 /**
  * Sets up a mock for `globalThis.TailorErrors` used in bundled resolver tests.
  * Mimics the PF runtime's TailorErrors class that serializes errors with the `TailorErrors: ` prefix.
+ * @deprecated Use the `tailor-runtime` environment from `@tailor-platform/sdk/vitest` which auto-injects TailorErrors.
  */
 export function setupTailorErrorsMock(): void {
   GlobalThis.TailorErrors = class TailorErrors extends Error {

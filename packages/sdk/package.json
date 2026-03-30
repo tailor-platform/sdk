@@ -73,6 +73,11 @@
       "types": "./dist/seed/index.d.mts",
       "import": "./dist/seed/index.mjs",
       "default": "./dist/seed/index.mjs"
+    },
+    "./vitest": {
+      "types": "./dist/vitest/index.d.mts",
+      "import": "./dist/vitest/index.mjs",
+      "default": "./dist/vitest/index.mjs"
     }
   },
   "scripts": {

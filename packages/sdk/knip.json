@@ -10,6 +10,7 @@
     "zinfer.config.ts"
   ],
   "ignoreDependencies": [
+    "vite",
     "undici",
     "@liam-hq/cli",
     "@typescript/native-preview",
