@@ -54,12 +54,14 @@ export function createBlockPlugin(): Plugin {
   };
 }
 
+const ENVIRONMENT_NAME = "tailor-runtime";
+
 /**
  * Vite plugin that registers the tailor-runtime custom environment.
  *
- * Vitest resolves custom environments by looking for a package named
- * `vitest-environment-<name>`. This plugin aliases that resolution to
- * the environment module bundled within the SDK.
+ * Vitest resolves environments starting with "." or "/" as file paths.
+ * This plugin rewrites `environment: "tailor-runtime"` to the absolute path
+ * of the bundled environment module, both at the top-level and per-project.
  * @returns Vite plugin
  */
 export function createEnvironmentPlugin(): Plugin {
@@ -70,15 +72,29 @@ export function createEnvironmentPlugin(): Plugin {
   return {
     name: "tailor-runtime-environment",
 
-    config() {
+    config(config) {
+      const testConfig = config.test as
+        | (Record<string, unknown> & { projects?: Record<string, unknown>[] })
+        | undefined;
+
+      // Rewrite environment name to absolute path at top-level
+      if (testConfig?.environment === ENVIRONMENT_NAME) {
+        testConfig.environment = environmentPath;
+      }
+
+      // Rewrite in each project config
+      if (testConfig?.projects) {
+        for (const project of testConfig.projects) {
+          const projectTest = project.test as Record<string, unknown> | undefined;
+          if (projectTest?.environment === ENVIRONMENT_NAME) {
+            projectTest.environment = environmentPath;
+          }
+        }
+      }
+
       return {
         test: {
           setupFiles: [setupPath],
-        },
-        resolve: {
-          alias: {
-            "vitest-environment-tailor-runtime": environmentPath,
-          },
         },
       };
     },
