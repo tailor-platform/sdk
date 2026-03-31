@@ -46,7 +46,6 @@ export default defineConfig({
   banner: {
     dts: '/// <reference types="@tailor-platform/function-types" />',
   },
-  external: ["vite", "vitest"],
   sourcemap: true,
   plugins: [
     yamlText(),

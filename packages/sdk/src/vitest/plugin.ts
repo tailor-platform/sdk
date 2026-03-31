@@ -1,6 +1,5 @@
-import { dirname, resolve } from "node:path";
+import { dirname, matchesGlob, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createFilter } from "vite";
 import { isBlockedModule, getBlockedMessage } from "./blocked-modules";
 import type { Plugin, ResolvedConfig } from "vite";
 
@@ -30,8 +29,7 @@ export function createBlockPlugin(): Plugin {
     configResolved(config: ResolvedConfig) {
       const testConfig = (config as ResolvedConfig & { test?: { include?: string[] } }).test;
       const patterns = testConfig?.include ?? DEFAULT_TEST_INCLUDE;
-      const filter = createFilter(patterns);
-      isTestFile = (id: string) => filter(id);
+      isTestFile = (id: string) => patterns.some((pattern) => matchesGlob(id, pattern));
     },
 
     transform(code, id) {
