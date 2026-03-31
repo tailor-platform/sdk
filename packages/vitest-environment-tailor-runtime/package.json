@@ -10,8 +10,14 @@
   "type": "module",
   "main": "./index.js",
   "types": "./index.d.ts",
+  "scripts": {
+    "test": "vitest run"
+  },
   "dependencies": {
     "@tailor-platform/sdk": "workspace:^"
+  },
+  "devDependencies": {
+    "vitest": "4.1.2"
   },
   "peerDependencies": {
     "vitest": ">=4"
