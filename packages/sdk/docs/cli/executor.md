@@ -30,10 +30,10 @@ tailor-sdk executor [command]
 
 | Command                                 | Description                   |
 | --------------------------------------- | ----------------------------- |
+| [`executor trigger`](#executor-trigger) | Trigger an executor manually. |
+| [`executor jobs`](#executor-jobs)       | List or get executor jobs.    |
 | [`executor list`](#executor-list)       | List all executors            |
 | [`executor get`](#executor-get)         | Get executor details          |
-| [`executor jobs`](#executor-jobs)       | List or get executor jobs.    |
-| [`executor trigger`](#executor-trigger) | Trigger an executor manually. |
 | [`executor webhook`](#executor-webhook) | Manage executor webhooks      |
 
 <!-- politty:command:executor:subcommands:end -->

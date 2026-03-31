@@ -23,6 +23,20 @@ export function trnPrefix(workspaceId: string): string {
 }
 
 export const sdkNameLabelKey = "sdk-name";
+export const sdkVersionLabelKey = "sdk-version";
+
+/**
+ * Check whether existing metadata was produced by the current SDK version.
+ * @param existingLabels - Labels currently stored on the remote resource
+ * @param desiredLabels - Labels that will be written by the current apply run
+ * @returns True when sdk-version matches
+ */
+export function hasMatchingSdkVersion(
+  existingLabels: Record<string, string> | undefined,
+  desiredLabels: Record<string, string> | undefined,
+): boolean {
+  return existingLabels?.[sdkVersionLabelKey] === desiredLabels?.[sdkVersionLabelKey];
+}
 
 /**
  * Build metadata request with SDK labels.
@@ -47,7 +61,7 @@ export async function buildMetaRequest(
     labels: {
       ...(existingLabels ?? {}),
       [sdkNameLabelKey]: appName,
-      "sdk-version": sdkVersion,
+      [sdkVersionLabelKey]: sdkVersion,
     },
   };
 }

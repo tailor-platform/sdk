@@ -10,8 +10,8 @@ export const userCommand = defineCommand({
   subCommands: {
     current: currentCommand,
     list: listCommand,
-    pat: patCommand,
     switch: switchCommand,
+    pat: patCommand,
   },
   async run() {
     await runCommand(listCommand, []);
