@@ -3,24 +3,10 @@ import { defineConfig } from "vitest/config";
 import { createBlockPlugin } from "../../plugin";
 
 export default defineConfig({
-  plugins: [
-    createBlockPlugin(),
-    {
-      name: "tailor-runtime-environment-dev",
-      config() {
-        return {
-          resolve: {
-            alias: {
-              "vitest-environment-tailor-runtime": resolve(__dirname, "../../environment.ts"),
-            },
-          },
-        };
-      },
-    },
-  ],
+  plugins: [createBlockPlugin()],
   test: {
     watch: false,
-    environment: "tailor-runtime",
+    environment: resolve(__dirname, "../../environment.ts"),
     setupFiles: [resolve(__dirname, "../../setup.ts")],
     include: ["./**/*.test.ts"],
     root: __dirname,

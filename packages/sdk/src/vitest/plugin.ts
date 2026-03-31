@@ -54,44 +54,18 @@ export function createBlockPlugin(): Plugin {
   };
 }
 
-const ENVIRONMENT_NAME = "tailor-runtime";
-
 /**
- * Vite plugin that registers the tailor-runtime custom environment.
- *
- * Vitest resolves environments starting with "." or "/" as file paths.
- * This plugin rewrites `environment: "tailor-runtime"` to the absolute path
- * of the bundled environment module, both at the top-level and per-project.
+ * Vite plugin that injects the setup file for the tailor-runtime environment.
  * @returns Vite plugin
  */
-export function createEnvironmentPlugin(): Plugin {
+export function createSetupPlugin(): Plugin {
   const currentDir = dirname(fileURLToPath(import.meta.url));
-  const environmentPath = resolve(currentDir, "environment.mjs");
   const setupPath = resolve(currentDir, "setup.mjs");
 
   return {
-    name: "tailor-runtime-environment",
+    name: "tailor-runtime-setup",
 
-    config(config) {
-      const testConfig = config.test as
-        | (Record<string, unknown> & { projects?: Record<string, unknown>[] })
-        | undefined;
-
-      // Rewrite environment name to absolute path at top-level
-      if (testConfig?.environment === ENVIRONMENT_NAME) {
-        testConfig.environment = environmentPath;
-      }
-
-      // Rewrite in each project config
-      if (testConfig?.projects) {
-        for (const project of testConfig.projects) {
-          const projectTest = project.test as Record<string, unknown> | undefined;
-          if (projectTest?.environment === ENVIRONMENT_NAME) {
-            projectTest.environment = environmentPath;
-          }
-        }
-      }
-
+    config() {
       return {
         test: {
           setupFiles: [setupPath],
@@ -100,3 +74,12 @@ export function createEnvironmentPlugin(): Plugin {
     },
   };
 }
+
+/**
+ * Absolute path to the tailor-runtime environment module.
+ * Vitest resolves paths starting with "/" directly as file paths.
+ */
+export const environmentPath: string = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  "environment.mjs",
+);
