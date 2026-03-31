@@ -615,8 +615,8 @@ importers:
         specifier: 2.3.0
         version: 2.3.0
       politty:
-        specifier: 0.4.12
-        version: 0.4.12(zod@4.3.6)
+        specifier: 0.4.13
+        version: 0.4.13(@clack/prompts@1.1.0)(@inquirer/prompts@8.3.2(@types/node@24.12.0))(zod@4.3.6)
       rolldown:
         specifier: 1.0.0-rc.12
         version: 1.0.0-rc.12
@@ -4752,6 +4752,19 @@ packages:
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^4.2.1
+
+  politty@0.4.13:
+    resolution: {integrity: sha512-XfjkE0uMnTPJ4Qq9pvncgd0vSMmEJGCgAL+jvILCPkOzHq7CKjRO8A5xMSALUFUDFm/ZhgMlPzgijE6OJwJUIQ==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      '@clack/prompts': ^0.10.0 || ^0.11.0 || ^1.0.0
+      '@inquirer/prompts': ^8.3.2
+      zod: ^4.2.1
+    peerDependenciesMeta:
+      '@clack/prompts':
+        optional: true
+      '@inquirer/prompts':
+        optional: true
 
   postcss-values-parser@6.0.2:
     resolution: {integrity: sha512-YLJpK0N1brcNJrs9WatuJFtHaV9q5aAOj+S4DI5S7jgHlRfm0PIbDCAFRYMQD5SHq7Fy6xsDhyutgS0QOAs0qw==}
@@ -9184,6 +9197,14 @@ snapshots:
     dependencies:
       string-width: 8.2.0
       zod: 4.3.6
+
+  politty@0.4.13(@clack/prompts@1.1.0)(@inquirer/prompts@8.3.2(@types/node@24.12.0))(zod@4.3.6):
+    dependencies:
+      string-width: 8.2.0
+      zod: 4.3.6
+    optionalDependencies:
+      '@clack/prompts': 1.1.0
+      '@inquirer/prompts': 8.3.2(@types/node@24.12.0)
 
   postcss-values-parser@6.0.2(postcss@8.5.8):
     dependencies:

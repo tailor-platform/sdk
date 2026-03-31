@@ -9,11 +9,11 @@ export const secretCommand = defineCommand({
   name: "secret",
   description: "Manage Secret Manager vaults and secrets.",
   subCommands: {
-    create: createSecretCommand,
-    delete: deleteSecretCommand,
-    list: listSecretCommand,
-    update: updateSecretCommand,
     vault: vaultCommand,
+    create: createSecretCommand,
+    update: updateSecretCommand,
+    list: listSecretCommand,
+    delete: deleteSecretCommand,
   },
   async run() {
     await runCommand(vaultCommand, []);
