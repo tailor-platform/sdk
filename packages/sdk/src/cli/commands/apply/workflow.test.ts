@@ -1,6 +1,6 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { sdkNameLabelKey } from "./label";
-import { planWorkflow } from "./workflow";
+import { applyWorkflow, planWorkflow } from "./workflow";
 import type { OperatorClient } from "@/cli/shared/client";
 import type { Workflow, WorkflowJob } from "@/types/workflow.generated";
 
@@ -56,11 +56,17 @@ describe("planWorkflow", () => {
 
   // Helper to create mock client
   function createMockClient(
-    existingWorkflows: Array<{ id: string; name: string; label?: string }>,
+    existingWorkflows: Array<{
+      id: string;
+      name: string;
+      label?: string;
+      resource?: Record<string, unknown>;
+      sdkVersion?: string;
+    }>,
   ): OperatorClient {
     return {
       listWorkflows: vi.fn().mockResolvedValue({
-        workflows: existingWorkflows.map((w) => ({ id: w.id, name: w.name })),
+        workflows: existingWorkflows.map((w) => w.resource ?? { id: w.id, name: w.name }),
         nextPageToken: "",
       }),
       getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
@@ -68,7 +74,12 @@ describe("planWorkflow", () => {
         const workflow = existingWorkflows.find((w) => w.name === name);
         return {
           metadata: {
-            labels: workflow?.label ? { [sdkNameLabelKey]: workflow.label } : {},
+            labels: workflow?.label
+              ? {
+                  [sdkNameLabelKey]: workflow.label,
+                  "sdk-version": workflow.sdkVersion ?? "v1-0-0",
+                }
+              : {},
           },
         };
       }),
@@ -184,6 +195,174 @@ describe("planWorkflow", () => {
       expect(result.changeSet.deletes).toHaveLength(1);
       expect(result.changeSet.deletes[0].name).toBe("my-workflow");
       expect(result.resourceOwners.has("other-app")).toBe(true);
+    });
+  });
+
+  describe("no-op detection", () => {
+    test("workflow is unchanged when definition and job functions match unchanged registry entries", async () => {
+      const client = createMockClient([
+        {
+          id: "1",
+          name: "sample-workflow",
+          label: appName,
+          resource: {
+            id: "1",
+            name: "sample-workflow",
+            mainJobFunctionName: "validate-order",
+            jobFunctions: {
+              "check-inventory": "5",
+              "process-payment": "5",
+              "validate-order": "5",
+            },
+          },
+        },
+      ]);
+
+      const workflows = {
+        "sample-workflow": createMockWorkflow("sample-workflow", "validate-order"),
+      };
+      const mainJobDeps = {
+        "validate-order": ["validate-order", "check-inventory", "process-payment"],
+      };
+
+      const result = await planWorkflow(
+        client,
+        workspaceId,
+        appName,
+        workflows,
+        mainJobDeps,
+        new Set(["validate-order", "check-inventory", "process-payment"]),
+      );
+
+      expect(result.changeSet.unchanged).toHaveLength(1);
+      expect(result.changeSet.unchanged[0].name).toBe("sample-workflow");
+      expect(result.changeSet.updates).toHaveLength(0);
+    });
+
+    test("workflow with retryPolicy is unchanged when remote bigint durations match local parsed durations", async () => {
+      const client = createMockClient([
+        {
+          id: "1",
+          name: "order-processing",
+          label: appName,
+          resource: {
+            id: "1",
+            name: "order-processing",
+            mainJobFunctionName: "process-order",
+            jobFunctions: {
+              "fetch-customer": "5",
+              "send-notification": "5",
+              "process-order": "5",
+            },
+            retryPolicy: {
+              maxRetries: 3,
+              backoffMultiplier: 2,
+              initialBackoff: {
+                seconds: 1n,
+                nanos: 0,
+              },
+              maxBackoff: {
+                seconds: 30n,
+                nanos: 0,
+              },
+            },
+          },
+        },
+      ]);
+
+      const workflow = createMockWorkflow("order-processing", "process-order");
+      workflow.retryPolicy = {
+        maxRetries: 3,
+        initialBackoff: "1s",
+        maxBackoff: "30s",
+        backoffMultiplier: 2,
+      };
+
+      const workflows = {
+        "order-processing": workflow,
+      };
+      const mainJobDeps = {
+        "process-order": ["process-order", "fetch-customer", "send-notification"],
+      };
+
+      const result = await planWorkflow(
+        client,
+        workspaceId,
+        appName,
+        workflows,
+        mainJobDeps,
+        new Set(["process-order", "fetch-customer", "send-notification"]),
+      );
+
+      expect(result.changeSet.unchanged).toHaveLength(1);
+      expect(result.changeSet.unchanged[0].name).toBe("order-processing");
+      expect(result.changeSet.updates).toHaveLength(0);
+    });
+
+    test("removes metadata from orphaned job functions even when remaining workflows are unchanged", async () => {
+      const listWorkflowJobFunctions = vi.fn().mockResolvedValue({
+        jobFunctions: [{ name: "keep-job" }, { name: "orphaned-job" }],
+        nextPageToken: "",
+      });
+      const getMetadata = vi.fn().mockImplementation(({ trn }: { trn: string }) => {
+        const jobName = trn.split(":").pop();
+        return {
+          metadata: {
+            labels:
+              jobName === "orphaned-job"
+                ? { [sdkNameLabelKey]: appName, "sdk-version": "v1-0-0" }
+                : { [sdkNameLabelKey]: "other-app", "sdk-version": "v1-0-0" },
+          },
+        };
+      });
+      const setMetadata = vi.fn().mockResolvedValue(undefined);
+
+      const client = {
+        listWorkflowJobFunctions,
+        getMetadata,
+        setMetadata,
+        createWorkflowJobFunction: vi.fn(),
+        updateWorkflowJobFunction: vi.fn(),
+      } as unknown as OperatorClient;
+
+      await applyWorkflow(
+        client,
+        {
+          changeSet: {
+            title: "Workflows",
+            creates: [],
+            updates: [],
+            deletes: [
+              {
+                name: "removed-workflow",
+                workspaceId,
+                workflowId: "workflow-1",
+              },
+            ],
+            replaces: [],
+            unchanged: [{ name: "kept-workflow" }],
+            isEmpty: () => false,
+            print: () => {},
+          },
+          conflicts: [],
+          unmanaged: [],
+          resourceOwners: new Set<string>(),
+          appName,
+          unchangedWorkflowJobNames: new Set(["keep-job"]),
+        },
+        "create-update",
+      );
+
+      expect(listWorkflowJobFunctions).toHaveBeenCalledWith({
+        workspaceId,
+        pageToken: "",
+        pageSize: 1000,
+      });
+      expect(setMetadata).toHaveBeenCalledTimes(1);
+      expect(setMetadata).toHaveBeenCalledWith({
+        trn: `trn:v1:workspace:${workspaceId}:workflow_job_function:orphaned-job`,
+        labels: { [sdkNameLabelKey]: "" },
+      });
     });
   });
 });
