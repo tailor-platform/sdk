@@ -54,22 +54,46 @@ export function createBlockPlugin(): Plugin {
   };
 }
 
+const ENVIRONMENT_NAME = "tailor-runtime";
+
 /**
- * Vite plugin that auto-injects the setup file for the tailor-runtime environment.
+ * Vite plugin that resolves the tailor-runtime environment and injects setup files.
  *
- * The setup file removes Vitest-dependent globals (like `performance`) per-test
- * via beforeEach/afterEach hooks. The environment itself is provided by the
- * separate `vitest-environment-tailor-runtime` package.
+ * Vitest resolves environments starting with "." or "/" as file paths.
+ * This plugin rewrites `environment: "tailor-runtime"` to the absolute path
+ * of the bundled environment module, both at the top-level and per-project.
+ * It also injects the setup file that removes Vitest-dependent globals
+ * (like `performance`) per-test via beforeEach/afterEach hooks.
  * @returns Vite plugin
  */
 export function createEnvironmentPlugin(): Plugin {
   const currentDir = dirname(fileURLToPath(import.meta.url));
+  const environmentPath = resolve(currentDir, "environment.mjs");
   const setupPath = resolve(currentDir, "setup.mjs");
 
   return {
     name: "tailor-runtime-environment",
 
-    config() {
+    config(config) {
+      const testConfig = config.test as
+        | (Record<string, unknown> & { projects?: Record<string, unknown>[] })
+        | undefined;
+
+      // Rewrite environment name to absolute path at top-level
+      if (testConfig?.environment === ENVIRONMENT_NAME) {
+        testConfig.environment = environmentPath;
+      }
+
+      // Rewrite in each project config
+      if (testConfig?.projects) {
+        for (const project of testConfig.projects) {
+          const projectTest = project.test as Record<string, unknown> | undefined;
+          if (projectTest?.environment === ENVIRONMENT_NAME) {
+            projectTest.environment = environmentPath;
+          }
+        }
+      }
+
       return {
         test: {
           setupFiles: [setupPath],
