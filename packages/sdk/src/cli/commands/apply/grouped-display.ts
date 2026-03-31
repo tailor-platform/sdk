@@ -1,5 +1,9 @@
-import { styles, symbols } from "@/cli/shared/logger";
+import { logger, styles, symbols } from "@/cli/shared/logger";
 import type { HasName } from "./change-set";
+
+type HasOptionalDetailLines = HasName & {
+  detailLines?: string[];
+};
 
 export type DisplayAction = "create" | "update" | "delete" | "replace";
 
@@ -23,6 +27,14 @@ export type RelatedFunctionRegistryNameSets = {
   updates: Set<string>;
   deletes: Set<string>;
   replaces: Set<string>;
+};
+
+export type PrintableChangeSet = {
+  creates: ReadonlyArray<HasOptionalDetailLines>;
+  updates: ReadonlyArray<HasOptionalDetailLines>;
+  deletes: ReadonlyArray<HasOptionalDetailLines>;
+  replaces: ReadonlyArray<HasOptionalDetailLines>;
+  isEmpty: () => boolean;
 };
 
 /**
@@ -99,6 +111,84 @@ export function formatActionDetailLine(
     default:
       throw new Error(`Unknown action type: ${action satisfies never}`);
   }
+}
+
+/**
+ * Convert a plain change set into grouped display entries.
+ * @param changeSet - Change set to convert
+ * @param labels - Labels to attach to each entry
+ * @returns Display entries in CLI print order
+ */
+export function formatChangeSetEntries(
+  changeSet: Pick<PrintableChangeSet, "creates" | "updates" | "deletes" | "replaces">,
+  labels: string[] = [],
+): GroupedDisplayEntry[] {
+  return [
+    ...changeSet.creates.map((item) => ({
+      action: "create" as const,
+      symbol: actionSymbol("create"),
+      name: item.name,
+      labels,
+      detailLines: item.detailLines,
+    })),
+    ...changeSet.deletes.map((item) => ({
+      action: "delete" as const,
+      symbol: actionSymbol("delete"),
+      name: item.name,
+      labels,
+      detailLines: item.detailLines,
+    })),
+    ...changeSet.updates.map((item) => ({
+      action: "update" as const,
+      symbol: actionSymbol("update"),
+      name: item.name,
+      labels,
+      detailLines: item.detailLines,
+    })),
+    ...changeSet.replaces.map((item) => ({
+      action: "replace" as const,
+      symbol: actionSymbol("replace"),
+      name: item.name,
+      labels,
+      detailLines: item.detailLines,
+    })),
+  ];
+}
+
+function formatGroupedDisplayLine(entry: GroupedDisplayEntry) {
+  return entry.labels.length > 0
+    ? `${entry.symbol} ${entry.name} (${entry.labels.join(", ")})`
+    : `${entry.symbol} ${entry.name}`;
+}
+
+/**
+ * Print a titled section of grouped display entries.
+ * @param title - Section title
+ * @param entries - Entries to print
+ * @param indent - Leading spaces before the title
+ * @param detail - Whether to print entry detail lines
+ * @returns True when any entries were printed
+ */
+export function printGroupedDisplaySection(
+  title: string,
+  entries: ReadonlyArray<GroupedDisplayEntry>,
+  indent = 0,
+  detail = false,
+) {
+  if (entries.length === 0) {
+    return false;
+  }
+
+  logger.log(styles.bold(`${" ".repeat(indent)}${title}:`));
+  const entryIndent = " ".repeat(indent + 2);
+  const detailIndent = " ".repeat(indent + 4);
+  for (const entry of entries) {
+    logger.log(`${entryIndent}${formatGroupedDisplayLine(entry)}`);
+    if (detail) {
+      entry.detailLines?.forEach((line) => logger.log(`${detailIndent}${line}`));
+    }
+  }
+  return true;
 }
 
 function formatFunctionRegistryDisplayName(name: string): string {

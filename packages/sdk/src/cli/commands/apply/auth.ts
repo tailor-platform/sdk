@@ -23,7 +23,6 @@ import {
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import { type AuthService } from "@/cli/services/auth/service";
 import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "@/cli/shared/client";
-import { logger, styles } from "@/cli/shared/logger";
 import { OAuth2ClientSchema } from "@/parser/service/auth";
 import { createChangeSet, type HasName } from "./change-set";
 import {
@@ -38,9 +37,12 @@ import {
   buildRemainingFunctionRegistryEntries,
   createRelatedFunctionRegistryNameSets,
   formatActionDetailLine,
+  formatChangeSetEntries,
   formatScriptAddedLine,
   formatScriptChangedLine,
   type GroupedDisplayEntry,
+  printGroupedDisplaySection,
+  type PrintableChangeSet,
   type RelatedFunctionRegistryNameSets,
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
@@ -312,15 +314,21 @@ export async function planAuth(
     planSCIMResources(client, workspaceId, auths, deletedServices),
   ]);
 
-  serviceChangeSet.print(detailPlan);
-  idpConfigChangeSet.print(detailPlan);
-  userProfileConfigChangeSet.print(detailPlan);
-  tenantConfigChangeSet.print(detailPlan);
-  machineUserChangeSet.print(detailPlan);
-  printAuthHookChanges(authHookChangeSet, functionRegistryAuthHookChanges, detailPlan);
-  oauth2ClientChangeSet.print(detailPlan);
-  scimChangeSet.print(detailPlan);
-  scimResourceChangeSet.print(detailPlan);
+  printAuthChanges(
+    {
+      service: serviceChangeSet,
+      idpConfig: idpConfigChangeSet,
+      userProfileConfig: userProfileConfigChangeSet,
+      tenantConfig: tenantConfigChangeSet,
+      machineUser: machineUserChangeSet,
+      authHook: authHookChangeSet,
+      oauth2Client: oauth2ClientChangeSet,
+      scim: scimChangeSet,
+      scimResource: scimResourceChangeSet,
+    },
+    functionRegistryAuthHookChanges,
+    detailPlan,
+  );
   return {
     changeSet: {
       service: serviceChangeSet,
@@ -337,6 +345,40 @@ export async function planAuth(
     unmanaged,
     resourceOwners,
   };
+}
+
+function printAuthChanges(
+  changeSet: {
+    service: PrintableChangeSet;
+    idpConfig: PrintableChangeSet;
+    userProfileConfig: PrintableChangeSet;
+    tenantConfig: PrintableChangeSet;
+    machineUser: PrintableChangeSet;
+    authHook: AuthHookChangeSet;
+    oauth2Client: PrintableChangeSet;
+    scim: PrintableChangeSet;
+    scimResource: PrintableChangeSet;
+  },
+  functionRegistryAuthHookChanges?: RelatedFunctionRegistryChanges,
+  detail = false,
+) {
+  const authHookEntries = formatAuthHookChangeEntries(
+    changeSet.authHook,
+    functionRegistryAuthHookChanges,
+  );
+  const entries: GroupedDisplayEntry[] = [
+    ...formatChangeSetEntries(changeSet.service, ["service"]),
+    ...formatChangeSetEntries(changeSet.idpConfig, ["idpConfig"]),
+    ...formatChangeSetEntries(changeSet.userProfileConfig, ["userProfileConfig"]),
+    ...formatChangeSetEntries(changeSet.tenantConfig, ["tenantConfig"]),
+    ...formatChangeSetEntries(changeSet.machineUser, ["machineUser"]),
+    ...authHookEntries,
+    ...formatChangeSetEntries(changeSet.oauth2Client, ["oauth2Client"]),
+    ...formatChangeSetEntries(changeSet.scim, ["scimConfig"]),
+    ...formatChangeSetEntries(changeSet.scimResource, ["scimResource"]),
+  ];
+
+  printGroupedDisplaySection("Auth", entries, 0, detail);
 }
 
 type CreateService = {
@@ -2166,30 +2208,6 @@ export function formatAuthHookChangeEntries(
     ...replaceEntries,
     ...buildRemainingFunctionRegistryEntries(functionNames, consumed),
   ];
-}
-
-function printAuthHookChanges(
-  changeSet: AuthHookChangeSet,
-  functionRegistryAuthHookChanges?: {
-    creates: ReadonlyArray<HasName>;
-    updates: ReadonlyArray<HasName>;
-    deletes: ReadonlyArray<HasName>;
-    replaces: ReadonlyArray<HasName>;
-  },
-  detail = false,
-) {
-  const entries = formatAuthHookChangeEntries(changeSet, functionRegistryAuthHookChanges);
-  if (entries.length === 0) {
-    return;
-  }
-
-  logger.log(styles.bold("Auth hooks:"));
-  for (const entry of entries) {
-    logger.log(`  ${entry.symbol} ${entry.name} (${entry.labels.join(", ")})`);
-    if (detail) {
-      entry.detailLines?.forEach((line) => logger.log(`    ${line}`));
-    }
-  }
 }
 
 async function planAuthHooks(
