@@ -46,7 +46,7 @@ export default defineConfig({
   banner: {
     dts: '/// <reference types="@tailor-platform/function-types" />',
   },
-  external: ["vite", "vitest"], // available at test runtime (vitest depends on vite)
+  external: ["vite", "vitest"], // peer dependencies: prevent bundling, resolve at runtime
   sourcemap: true,
   plugins: [
     yamlText(),
