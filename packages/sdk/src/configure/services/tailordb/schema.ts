@@ -1231,6 +1231,7 @@ function dbType<const F extends { id?: never } & Record<string, TailorAnyDBField
   ) as DBType<F>;
 }
 
+/** TailorDB schema builder utilities for defining types and fields. */
 export const db = {
   type: dbType,
   uuid,

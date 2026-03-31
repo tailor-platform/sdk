@@ -156,6 +156,23 @@ If remote schema drift is detected, the apply will fail with an error showing th
 
 Use `--no-schema-check` to skip both verifications (not recommended for production).
 
+**Plan Output:**
+
+Before applying changes, `apply` shows a preview of the planned resource changes.
+
+- `+` means the resource will be created
+- `~` means the resource will be updated
+- `-` means the resource will be deleted
+- `±` means the resource will be replaced
+
+After the detailed list, a summary line is printed:
+
+```text
+Plan: 5 to create, 3 to update, 1 to delete, 25 unchanged
+```
+
+Use `--dry-run` to preview the plan without applying anything.
+
 <!-- politty:command:remove:heading:start -->
 
 ## remove

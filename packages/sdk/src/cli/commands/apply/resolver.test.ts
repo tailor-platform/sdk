@@ -65,8 +65,13 @@ describe("planPipeline (resolver service level)", () => {
 
   // Helper to create mock client
   function createMockClient(
-    existingServices: Array<{ name: string; label?: string }>,
-    existingResolvers: Record<string, Array<{ name: string }>> = {},
+    existingServices: Array<{
+      name: string;
+      label?: string;
+      sdkVersion?: string;
+    }>,
+    existingResolvers: Record<string, Array<Record<string, unknown>>> = {},
+    resolverDetails: Record<string, Record<string, unknown>> = {},
   ): OperatorClient {
     return {
       listPipelineServices: vi.fn().mockResolvedValue({
@@ -81,12 +86,28 @@ describe("planPipeline (resolver service level)", () => {
           pipelineResolvers: existingResolvers[namespaceName] || [],
           nextPageToken: "",
         })),
+      getPipelineResolver: vi
+        .fn()
+        .mockImplementation(
+          ({ namespaceName, resolverName }: { namespaceName: string; resolverName: string }) => ({
+            pipelineResolver:
+              resolverDetails[`${namespaceName}:${resolverName}`] ??
+              (existingResolvers[namespaceName] || []).find(
+                (resolver) => resolver.name === resolverName,
+              ),
+          }),
+        ),
       getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
         const name = trn.split(":").pop();
         const service = existingServices.find((s) => s.name === name);
         return {
           metadata: {
-            labels: service?.label ? { [sdkNameLabelKey]: service.label } : {},
+            labels: service?.label
+              ? {
+                  [sdkNameLabelKey]: service.label,
+                  "sdk-version": service.sdkVersion ?? "v1-0-0",
+                }
+              : {},
           },
         };
       }),
@@ -155,9 +176,9 @@ describe("planPipeline (resolver service level)", () => {
 
       const result = await planPipeline(ctx);
 
-      // "resolver-a" should be updated
-      expect(result.changeSet.service.updates).toHaveLength(1);
-      expect(result.changeSet.service.updates[0].name).toBe("resolver-a");
+      // "resolver-a" should be unchanged
+      expect(result.changeSet.service.unchanged).toHaveLength(1);
+      expect(result.changeSet.service.unchanged[0].name).toBe("resolver-a");
 
       // "resolver-b" should be deleted
       expect(result.changeSet.service.deletes).toHaveLength(1);
@@ -253,6 +274,211 @@ describe("planPipeline (resolver service level)", () => {
       expect(result.changeSet.service.deletes[0].name).toBe("my-resolver");
       expect(result.resourceOwners.has("other-app")).toBe(true);
     });
+
+    test("service is updated when sdk version differs", async () => {
+      const client = createMockClient([
+        { name: "resolver-a", label: appName, sdkVersion: "v0-9-0" },
+      ]);
+
+      const application = createMockApplication([createMockResolverService("resolver-a")]);
+
+      const ctx: PlanContext = {
+        client,
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: mockConfig,
+      };
+
+      const result = await planPipeline(ctx);
+
+      expect(result.changeSet.service.updates).toHaveLength(1);
+      expect(result.changeSet.service.unchanged).toHaveLength(0);
+    });
+  });
+
+  describe("resolver no-op detection", () => {
+    test("resolver is unchanged when remote definition matches desired definition", async () => {
+      const resolver = {
+        name: "test-resolver",
+        operation: 0,
+        output: {
+          type: "string",
+          metadata: {},
+        },
+      };
+      const pipeline = {
+        namespace: "my-resolver",
+        config: {},
+        resolvers: { [resolver.name]: resolver },
+        loadResolvers: vi.fn().mockResolvedValue(undefined),
+      } as unknown as ResolverService;
+
+      const createClient = createMockClient([]);
+      const createResult = await planPipeline({
+        client: createClient,
+        workspaceId,
+        application: createMockApplication([pipeline]),
+        forRemoval: false,
+        config: mockConfig,
+      });
+      const desiredResolver = createResult.changeSet.resolver.creates[0].request.pipelineResolver;
+
+      const client = createMockClient([{ name: "my-resolver", label: appName }], {
+        "my-resolver": [desiredResolver as Record<string, unknown>],
+      });
+      const result = await planPipeline({
+        client,
+        workspaceId,
+        application: createMockApplication([pipeline]),
+        forRemoval: false,
+        config: mockConfig,
+      });
+
+      expect(result.changeSet.resolver.unchanged).toHaveLength(1);
+      expect(result.changeSet.resolver.unchanged[0].name).toBe("test-resolver");
+      expect(result.changeSet.resolver.updates).toHaveLength(0);
+    });
+
+    test("resolver is unchanged when list response is summary-only but get returns full definition", async () => {
+      const resolver = {
+        name: "test-resolver",
+        operation: 0,
+        body: () => "hello",
+        output: {
+          type: "string",
+          metadata: {},
+        },
+      };
+      const pipeline = {
+        namespace: "my-resolver",
+        config: {},
+        resolvers: { [resolver.name]: resolver },
+        loadResolvers: vi.fn().mockResolvedValue(undefined),
+      } as unknown as ResolverService;
+
+      const createClient = createMockClient([]);
+      const createResult = await planPipeline({
+        client: createClient,
+        workspaceId,
+        application: createMockApplication([pipeline]),
+        forRemoval: false,
+        config: mockConfig,
+      });
+      const desiredResolver = createResult.changeSet.resolver.creates[0].request.pipelineResolver;
+
+      const client = createMockClient(
+        [{ name: "my-resolver", label: appName }],
+        {
+          "my-resolver": [{ name: "test-resolver" }],
+        },
+        {
+          "my-resolver:test-resolver": desiredResolver as Record<string, unknown>,
+        },
+      );
+      const result = await planPipeline({
+        client,
+        workspaceId,
+        application: createMockApplication([pipeline]),
+        forRemoval: false,
+        config: mockConfig,
+      });
+
+      expect(result.changeSet.resolver.unchanged).toHaveLength(1);
+      expect(result.changeSet.resolver.unchanged[0].name).toBe("test-resolver");
+      expect(result.changeSet.resolver.updates).toHaveLength(0);
+    });
+
+    test("resolver is updated when forceApplyAll is enabled", async () => {
+      const resolver = {
+        name: "test-resolver",
+        operation: 0,
+        body: () => "hello",
+        output: {
+          type: "string",
+          metadata: {},
+        },
+      };
+      const pipeline = {
+        namespace: "my-resolver",
+        config: {},
+        resolvers: { [resolver.name]: resolver },
+        loadResolvers: vi.fn().mockResolvedValue(undefined),
+      } as unknown as ResolverService;
+
+      const createClient = createMockClient([]);
+      const createResult = await planPipeline({
+        client: createClient,
+        workspaceId,
+        application: createMockApplication([pipeline]),
+        forRemoval: false,
+        config: mockConfig,
+      });
+      const desiredResolver = createResult.changeSet.resolver.creates[0].request.pipelineResolver;
+
+      const client = createMockClient([{ name: "my-resolver", label: appName }], {
+        "my-resolver": [desiredResolver as Record<string, unknown>],
+      });
+      const result = await planPipeline({
+        client,
+        workspaceId,
+        application: createMockApplication([pipeline]),
+        forRemoval: false,
+        config: mockConfig,
+        forceApplyAll: true,
+      });
+
+      expect(result.changeSet.resolver.updates).toHaveLength(1);
+      expect(result.changeSet.resolver.unchanged).toHaveLength(0);
+    });
+
+    test("resolver is updated when authInvoker differs", async () => {
+      const resolver = {
+        name: "test-resolver",
+        operation: 0,
+        body: () => "hello",
+        output: {
+          type: "string",
+          metadata: {},
+        },
+        authInvoker: { namespace: "my-auth", machineUserName: "batch-user" },
+      };
+      const pipeline = {
+        namespace: "my-resolver",
+        config: {},
+        resolvers: { [resolver.name]: resolver },
+        loadResolvers: vi.fn().mockResolvedValue(undefined),
+      } as unknown as ResolverService;
+
+      const createClient = createMockClient([]);
+      const createResult = await planPipeline({
+        client: createClient,
+        workspaceId,
+        application: createMockApplication([pipeline]),
+        forRemoval: false,
+        config: mockConfig,
+      });
+      const desiredResolver = structuredClone(
+        createResult.changeSet.resolver.creates[0]!.request.pipelineResolver,
+      );
+      expect(desiredResolver).toBeDefined();
+      delete desiredResolver!.pipelines?.[0]?.invoker;
+
+      const client = createMockClient([{ name: "my-resolver", label: appName }], {
+        "my-resolver": [desiredResolver as Record<string, unknown>],
+      });
+      const result = await planPipeline({
+        client,
+        workspaceId,
+        application: createMockApplication([pipeline]),
+        forRemoval: false,
+        config: mockConfig,
+      });
+
+      expect(result.changeSet.resolver.updates).toHaveLength(1);
+      expect(result.changeSet.resolver.updates[0].name).toBe("test-resolver");
+      expect(result.changeSet.resolver.unchanged).toHaveLength(0);
+    });
   });
 });
 
@@ -261,7 +487,11 @@ describe("processResolver authInvoker mapping", () => {
   const appName = "test-app";
 
   function createMockClient(
-    existingServices: Array<{ name: string; label?: string }>,
+    existingServices: Array<{
+      name: string;
+      label?: string;
+      sdkVersion?: string;
+    }>,
     existingResolvers: Record<string, Array<{ name: string }>> = {},
   ): OperatorClient {
     return {
@@ -282,7 +512,12 @@ describe("processResolver authInvoker mapping", () => {
         const service = existingServices.find((s) => s.name === name);
         return {
           metadata: {
-            labels: service?.label ? { [sdkNameLabelKey]: service.label } : {},
+            labels: service?.label
+              ? {
+                  [sdkNameLabelKey]: service.label,
+                  "sdk-version": service.sdkVersion ?? "v1-0-0",
+                }
+              : {},
           },
         };
       }),

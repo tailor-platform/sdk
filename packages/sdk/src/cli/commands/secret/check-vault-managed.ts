@@ -53,9 +53,9 @@ export async function checkVaultManaged(
  * Release ownership of a managed vault by removing SDK labels from metadata.
  * Call this after the user has confirmed they want to proceed with a CLI operation on a managed vault.
  * @param params - Client, TRN, and existing labels from checkVaultManaged result
- * @param params.client
- * @param params.trn
- * @param params.existingLabels
+ * @param params.client - Operator client used to update vault metadata
+ * @param params.trn - TRN of the vault resource
+ * @param params.existingLabels - Existing metadata labels on the vault before release
  */
 export async function releaseVaultOwnership(params: {
   client: OperatorClient;
