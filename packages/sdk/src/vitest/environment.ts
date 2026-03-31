@@ -64,6 +64,7 @@ const ALLOWED_GLOBALS = new Set([
   "eval",
   "Iterator",
   "AsyncIterator",
+  "WebAssembly",
 
   // --- Web Standard APIs (from bootstrap.js) ---
   "console",
