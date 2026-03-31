@@ -540,8 +540,8 @@ importers:
         specifier: 1.40.0
         version: 1.40.0
       '@oxc-project/types':
-        specifier: 0.121.0
-        version: 0.121.0
+        specifier: 0.122.0
+        version: 0.122.0
       '@standard-schema/spec':
         specifier: 1.1.0
         version: 1.1.0
