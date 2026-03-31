@@ -31,8 +31,8 @@ tailor-sdk staticwebsite [command]
 | Command                                         | Description                                           |
 | ----------------------------------------------- | ----------------------------------------------------- |
 | [`staticwebsite deploy`](#staticwebsite-deploy) | Deploy a static website from a local build directory. |
-| [`staticwebsite get`](#staticwebsite-get)       | Get details of a specific static website.             |
 | [`staticwebsite list`](#staticwebsite-list)     | List all static websites in a workspace.              |
+| [`staticwebsite get`](#staticwebsite-get)       | Get details of a specific static website.             |
 
 <!-- politty:command:staticwebsite:subcommands:end -->
 

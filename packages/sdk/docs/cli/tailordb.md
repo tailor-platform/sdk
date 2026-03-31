@@ -30,9 +30,9 @@ tailor-sdk tailordb [command]
 
 | Command                                     | Description                                                           |
 | ------------------------------------------- | --------------------------------------------------------------------- |
-| [`tailordb erd`](#tailordb-erd)             | Generate ERD artifacts for TailorDB namespaces using Liam ERD. (beta) |
-| [`tailordb migration`](#tailordb-migration) | Manage TailorDB schema migrations.                                    |
 | [`tailordb truncate`](#tailordb-truncate)   | Truncate (delete all records from) TailorDB tables.                   |
+| [`tailordb migration`](#tailordb-migration) | Manage TailorDB schema migrations.                                    |
+| [`tailordb erd`](#tailordb-erd)             | Generate ERD artifacts for TailorDB namespaces using Liam ERD. (beta) |
 
 <!-- politty:command:tailordb:subcommands:end -->
 

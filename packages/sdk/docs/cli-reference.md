@@ -109,13 +109,13 @@ Commands for managing TailorDB tables, data, and schema migrations.
 
 | Command                                                                      | Description                                                                                                               |
 | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| [tailordb erd export](./cli/tailordb.md#tailordb-erd-export)                 | Export Liam ERD dist from applied TailorDB schema.                                                                        |
-| [tailordb erd serve](./cli/tailordb.md#tailordb-erd-serve)                   | Generate and serve ERD locally (liam build + serve dist). (beta)                                                          |
-| [tailordb erd deploy](./cli/tailordb.md#tailordb-erd-deploy)                 | Deploy ERD static website for TailorDB namespace(s).                                                                      |
+| [tailordb truncate](./cli/tailordb.md#tailordb-truncate)                     | Truncate (delete all records from) TailorDB tables.                                                                       |
 | [tailordb migration generate](./cli/tailordb.md#tailordb-migration-generate) | Generate migration files by detecting schema differences between current local types and the previous migration snapshot. |
 | [tailordb migration set](./cli/tailordb.md#tailordb-migration-set)           | Set migration checkpoint to a specific number.                                                                            |
 | [tailordb migration status](./cli/tailordb.md#tailordb-migration-status)     | Show the current migration status for TailorDB namespaces, including applied and pending migrations.                      |
-| [tailordb truncate](./cli/tailordb.md#tailordb-truncate)                     | Truncate (delete all records from) TailorDB tables.                                                                       |
+| [tailordb erd export](./cli/tailordb.md#tailordb-erd-export)                 | Export Liam ERD dist from applied TailorDB schema.                                                                        |
+| [tailordb erd serve](./cli/tailordb.md#tailordb-erd-serve)                   | Generate and serve ERD locally (liam build + serve dist). (beta)                                                          |
+| [tailordb erd deploy](./cli/tailordb.md#tailordb-erd-deploy)                 | Deploy ERD static website for TailorDB namespace(s).                                                                      |
 
 ### [User & Auth Commands](./cli/user.md)
 
@@ -127,11 +127,11 @@ Commands for authentication and user management.
 | [logout](./cli/user.md#logout)                   | Logout from Tailor Platform.                          |
 | [user current](./cli/user.md#user-current)       | Show current user.                                    |
 | [user list](./cli/user.md#user-list)             | List all users.                                       |
+| [user switch](./cli/user.md#user-switch)         | Set current user.                                     |
+| [user pat list](./cli/user.md#user-pat-list)     | List all personal access tokens.                      |
 | [user pat create](./cli/user.md#user-pat-create) | Create a new personal access token.                   |
 | [user pat delete](./cli/user.md#user-pat-delete) | Delete a personal access token.                       |
-| [user pat list](./cli/user.md#user-pat-list)     | List all personal access tokens.                      |
 | [user pat update](./cli/user.md#user-pat-update) | Update a personal access token (delete and recreate). |
-| [user switch](./cli/user.md#user-switch)         | Set current user.                                     |
 
 ### [Organization Commands](./cli/organization.md)
 
@@ -179,8 +179,8 @@ Commands for managing Auth service resources.
 | ---------------------------------------------------- | -------------------------------------------------------- |
 | [machineuser list](./cli/auth.md#machineuser-list)   | List all machine users in the application.               |
 | [machineuser token](./cli/auth.md#machineuser-token) | Get an access token for a machine user.                  |
-| [oauth2client get](./cli/auth.md#oauth2client-get)   | Get OAuth2 client credentials (including client secret). |
 | [oauth2client list](./cli/auth.md#oauth2client-list) | List all OAuth2 clients in the application.              |
+| [oauth2client get](./cli/auth.md#oauth2client-get)   | Get OAuth2 client credentials (including client secret). |
 
 ### [Workflow Commands](./cli/workflow.md)
 
@@ -209,10 +209,10 @@ Commands for managing executors and executor jobs.
 
 | Command                                                          | Description                                   |
 | ---------------------------------------------------------------- | --------------------------------------------- |
+| [executor trigger](./cli/executor.md#executor-trigger)           | Trigger an executor manually.                 |
+| [executor jobs](./cli/executor.md#executor-jobs)                 | List or get executor jobs.                    |
 | [executor list](./cli/executor.md#executor-list)                 | List all executors                            |
 | [executor get](./cli/executor.md#executor-get)                   | Get executor details                          |
-| [executor jobs](./cli/executor.md#executor-jobs)                 | List or get executor jobs.                    |
-| [executor trigger](./cli/executor.md#executor-trigger)           | Trigger an executor manually.                 |
 | [executor webhook list](./cli/executor.md#executor-webhook-list) | List executors with incoming webhook triggers |
 
 ### [Secret Commands](./cli/secret.md)
@@ -221,13 +221,13 @@ Commands for managing secrets and vaults.
 
 | Command                                                    | Description                                      |
 | ---------------------------------------------------------- | ------------------------------------------------ |
-| [secret create](./cli/secret.md#secret-create)             | Create a secret in a vault.                      |
-| [secret delete](./cli/secret.md#secret-delete)             | Delete a secret in a vault.                      |
-| [secret list](./cli/secret.md#secret-list)                 | List all secrets in a vault.                     |
-| [secret update](./cli/secret.md#secret-update)             | Update a secret in a vault.                      |
 | [secret vault create](./cli/secret.md#secret-vault-create) | Create a new Secret Manager vault.               |
 | [secret vault delete](./cli/secret.md#secret-vault-delete) | Delete a Secret Manager vault.                   |
 | [secret vault list](./cli/secret.md#secret-vault-list)     | List all Secret Manager vaults in the workspace. |
+| [secret create](./cli/secret.md#secret-create)             | Create a secret in a vault.                      |
+| [secret update](./cli/secret.md#secret-update)             | Update a secret in a vault.                      |
+| [secret list](./cli/secret.md#secret-list)                 | List all secrets in a vault.                     |
+| [secret delete](./cli/secret.md#secret-delete)             | Delete a secret in a vault.                      |
 
 ### [Static Website Commands](./cli/staticwebsite.md)
 
@@ -236,8 +236,8 @@ Commands for managing and deploying static websites.
 | Command                                                             | Description                                           |
 | ------------------------------------------------------------------- | ----------------------------------------------------- |
 | [staticwebsite deploy](./cli/staticwebsite.md#staticwebsite-deploy) | Deploy a static website from a local build directory. |
-| [staticwebsite get](./cli/staticwebsite.md#staticwebsite-get)       | Get details of a specific static website.             |
 | [staticwebsite list](./cli/staticwebsite.md#staticwebsite-list)     | List all static websites in a workspace.              |
+| [staticwebsite get](./cli/staticwebsite.md#staticwebsite-get)       | Get details of a specific static website.             |
 
 ### [Crash Report Commands](./cli/crash-report.md)
 
@@ -245,8 +245,8 @@ Commands for managing crash reports.
 
 | Command                                                      | Description                                    |
 | ------------------------------------------------------------ | ---------------------------------------------- |
-| [crash-report send](./cli/crash-report.md#crash-report-send) | Submit a crash report to help improve the SDK. |
 | [crash-report list](./cli/crash-report.md#crash-report-list) | List local crash report files.                 |
+| [crash-report send](./cli/crash-report.md#crash-report-send) | Submit a crash report to help improve the SDK. |
 
 ### [Setup Commands](./cli/setup.md)
 
