@@ -78,6 +78,11 @@
       "types": "./dist/vitest/index.d.mts",
       "import": "./dist/vitest/index.mjs",
       "default": "./dist/vitest/index.mjs"
+    },
+    "./vitest/environment": {
+      "types": "./dist/vitest/environment.d.mts",
+      "import": "./dist/vitest/environment.mjs",
+      "default": "./dist/vitest/environment.mjs"
     }
   },
   "scripts": {

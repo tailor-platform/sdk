@@ -55,15 +55,19 @@ export function createBlockPlugin(): Plugin {
 }
 
 /**
- * Vite plugin that injects the setup file for the tailor-runtime environment.
+ * Vite plugin that auto-injects the setup file for the tailor-runtime environment.
+ *
+ * The setup file removes Vitest-dependent globals (like `performance`) per-test
+ * via beforeEach/afterEach hooks. The environment itself is provided by the
+ * separate `vitest-environment-tailor-runtime` package.
  * @returns Vite plugin
  */
-export function createSetupPlugin(): Plugin {
+export function createEnvironmentPlugin(): Plugin {
   const currentDir = dirname(fileURLToPath(import.meta.url));
   const setupPath = resolve(currentDir, "setup.mjs");
 
   return {
-    name: "tailor-runtime-setup",
+    name: "tailor-runtime-environment",
 
     config() {
       return {
@@ -74,12 +78,3 @@ export function createSetupPlugin(): Plugin {
     },
   };
 }
-
-/**
- * Absolute path to the tailor-runtime environment module.
- * Vitest resolves paths starting with "/" directly as file paths.
- */
-export const environmentPath: string = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  "environment.mjs",
-);

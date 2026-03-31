@@ -1,5 +1,5 @@
 import { defineConfig } from "vitest/config";
-import { tailorRuntime, tailorRuntimeEnvironment } from "@tailor-platform/sdk/vitest";
+import { tailorRuntime } from "@tailor-platform/sdk/vitest";
 
 export default defineConfig({
   plugins: [tailorRuntime()],
@@ -9,7 +9,7 @@ export default defineConfig({
       {
         test: {
           name: { label: "unit", color: "blue" },
-          environment: tailorRuntimeEnvironment,
+          environment: "tailor-runtime",
           include: ["src/**/*.test.ts"],
         },
       },

@@ -46,7 +46,7 @@ export default defineConfig({
   banner: {
     dts: '/// <reference types="@tailor-platform/function-types" />',
   },
-  external: ["vitest"],
+  external: ["vitest"], // vitest is used in setup.ts (beforeEach/afterEach), available at test runtime
   sourcemap: true,
   plugins: [
     yamlText(),

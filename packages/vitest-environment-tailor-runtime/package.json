@@ -1,0 +1,19 @@
+{
+  "name": "vitest-environment-tailor-runtime",
+  "version": "0.0.0",
+  "description": "Vitest environment that emulates the Tailor Platform function runtime",
+  "license": "MIT",
+  "files": [
+    "index.js",
+    "index.d.ts"
+  ],
+  "type": "module",
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "dependencies": {
+    "@tailor-platform/sdk": "workspace:^"
+  },
+  "peerDependencies": {
+    "vitest": ">=4"
+  }
+}
