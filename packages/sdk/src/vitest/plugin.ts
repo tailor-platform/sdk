@@ -15,7 +15,7 @@ const IMPORT_RE = /\b(?:import|export)\s+(?:[\s\S]*?\s+from\s+)?["']([^"']+)["']
  * and replaces them with code that throws a helpful error at runtime.
  * Vitest treats `node:*` as external SSR modules (skipping `resolveId`), so
  * source-level transformation is the only reliable interception point.
- * Other Node.js globals (`Buffer`, `global`, `setImmediate`) are removed by the environment.
+ * Node.js globals not in the platform runtime are removed by the environment (whitelist-based).
  * Test file patterns are read from the resolved Vitest config (`test.include`).
  * @returns Vite plugin
  */
