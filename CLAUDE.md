@@ -69,7 +69,7 @@ Args include `event` (short name like `"created"`) and `rawEvent` (full event ty
 - Top-level `db.date()`/`db.datetime()` fields use the `Timestamp` utility type
 - Nested objects (`db.object()`) containing date/datetime fields are wrapped in `ObjectColumnType<...>`:
   - Insert/Update: datetime accepts `Date | string`
-  - Select: datetime returns `string` (ISO 8601 from server)
+  - Select: datetime returns `Date`
 - Nullable fields inside `db.object()` are optional (`field?: type | null`) for inserts, required for selects
 
 ### Generators

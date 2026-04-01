@@ -117,12 +117,12 @@ Generated type:
 
 ```typescript
 metadata: ObjectColumnType<{
-  created: NestedTimestamp;
-  lastUpdated?: NestedTimestamp | null;
+  created: Timestamp;
+  lastUpdated?: Timestamp | null;
   version: number;
 }>;
 // Insert/Update: created accepts Date | string
-// Select: created returns string (ISO 8601)
+// Select: created returns Date
 ```
 
 Nullable fields inside objects are optional (`?`) for inserts, matching how top-level nullable fields behave with Kysely's `Insertable`.

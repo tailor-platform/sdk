@@ -20,7 +20,7 @@ export default createResolver({
           email: input.email,
         },
         metadata: {
-          created: new Date().toISOString(),
+          created: new Date(),
           version: 1,
         },
       })

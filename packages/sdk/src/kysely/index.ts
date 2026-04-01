@@ -32,7 +32,6 @@ export {
 export { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
-export type NestedTimestamp = ColumnType<string, Date | string, Date | string>;
 type ResolveSelect<T> = T extends ColumnType<infer S, unknown, unknown> ? S : T;
 type ResolveInsert<T> = T extends ColumnType<unknown, infer I, unknown> ? I : T;
 type ResolveUpdate<T> = T extends ColumnType<unknown, unknown, infer U> ? U : T;

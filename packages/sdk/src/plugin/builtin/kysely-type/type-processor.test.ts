@@ -181,10 +181,10 @@ describe("Kysely TypeProcessor", () => {
       const result = await processKyselyType(parseTailorDBType(toSchemaOutput(type)));
 
       expect(result.typeDef).toContain("receiptDate: Timestamp;");
-      // Nested object with datetime is wrapped in ObjectColumnType with NestedTimestamp
+      // Nested object with datetime is wrapped in ObjectColumnType
       expect(result.typeDef).toContain("ObjectColumnType<");
-      expect(result.typeDef).toContain("dueDate: NestedTimestamp");
-      expect(result.typeDef).toContain("reminderAt?: NestedTimestamp | null");
+      expect(result.typeDef).toContain("dueDate: Timestamp");
+      expect(result.typeDef).toContain("reminderAt?: Timestamp | null");
       expect(result.usedUtilityTypes.Timestamp).toBe(true);
     });
 

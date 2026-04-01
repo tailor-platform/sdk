@@ -3,7 +3,6 @@ import {
   type Generated,
   type Timestamp,
   type ObjectColumnType,
-  type NestedTimestamp,
   type NamespaceDB,
   type NamespaceInsertable,
   type NamespaceSelectable,
@@ -29,7 +28,7 @@ export interface Namespace {
       authorId: string;
       metadata: ObjectColumnType<{
         source: string;
-        editedAt?: NestedTimestamp | null;
+        editedAt?: Timestamp | null;
         isInternal: boolean;
       }>;
       createdAt: Generated<Timestamp>;

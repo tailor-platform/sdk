@@ -43,7 +43,7 @@ function getNestedType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
   }
 
   const fieldResults = Object.entries(fields).map(([fieldName, config]) => {
-    const result = generateFieldType(config, { nested: true });
+    const result = generateFieldType(config);
     const optional = config.required !== true ? "?" : "";
     return {
       fieldType: `${fieldName}${optional}: ${result.type}`,
@@ -72,14 +72,9 @@ function getNestedType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
 /**
  * Get the base Kysely type for a field (without array/null modifiers).
  * @param fieldConfig - The field configuration
- * @param options
- * @param options.nested
  * @returns The base type with used utility types
  */
-function getBaseType(
-  fieldConfig: OperatorFieldConfig,
-  options?: { nested?: boolean },
-): FieldTypeResult {
+function getBaseType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
   const fieldType = fieldConfig.type;
   const usedUtilityTypes = { Timestamp: false, Serial: false };
 
@@ -97,7 +92,7 @@ function getBaseType(
     case "date":
     case "datetime":
       usedUtilityTypes.Timestamp = true;
-      type = options?.nested ? "NestedTimestamp" : "Timestamp";
+      type = "Timestamp";
       break;
     case "bool":
     case "boolean":
@@ -121,15 +116,10 @@ function getBaseType(
 /**
  * Generate the complete field type including array and null modifiers.
  * @param fieldConfig - The field configuration
- * @param options
- * @param options.nested
  * @returns The complete field type with used utility types
  */
-function generateFieldType(
-  fieldConfig: OperatorFieldConfig,
-  options?: { nested?: boolean },
-): FieldTypeResult {
-  const baseTypeResult = getBaseType(fieldConfig, options);
+function generateFieldType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
+  const baseTypeResult = getBaseType(fieldConfig);
   const usedUtilityTypes = { ...baseTypeResult.usedUtilityTypes };
 
   const isArray = fieldConfig.array === true;
@@ -238,12 +228,6 @@ export function generateUnifiedKyselyTypes(namespaceData: KyselyNamespaceMetadat
   );
   if (hasObjectColumnType) {
     utilityTypeImports.push("type ObjectColumnType");
-  }
-  const hasNestedTimestamp = namespaceData.some((ns) =>
-    ns.types.some((t) => t.typeDef.includes("NestedTimestamp")),
-  );
-  if (hasNestedTimestamp) {
-    utilityTypeImports.push("type NestedTimestamp");
   }
   if (globalUsedUtilityTypes.Serial) {
     utilityTypeImports.push("type Serial");

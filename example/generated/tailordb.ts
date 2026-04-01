@@ -3,7 +3,6 @@ import {
   type Generated,
   type Timestamp,
   type ObjectColumnType,
-  type NestedTimestamp,
   type Serial,
   type NamespaceDB,
   type NamespaceInsertable,
@@ -52,8 +51,8 @@ export interface Namespace {
         phone?: string | null;
       }>;
       metadata: ObjectColumnType<{
-        created: NestedTimestamp;
-        lastUpdated?: NestedTimestamp | null;
+        created: Timestamp;
+        lastUpdated?: Timestamp | null;
         version: number;
       }>;
       archived: boolean | null;

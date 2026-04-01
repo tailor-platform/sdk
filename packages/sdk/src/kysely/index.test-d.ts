@@ -1,7 +1,6 @@
 import { describe, it, assertType, expectTypeOf } from "vitest";
 import type {
   Generated,
-  NestedTimestamp,
   ObjectColumnType,
   Timestamp,
   NamespaceInsertable,
@@ -23,8 +22,8 @@ type TestNamespace = {
       id: Generated<string>;
       receiptDate: Timestamp;
       dueSchedule: ObjectColumnType<{
-        dueDate: NestedTimestamp;
-        reminderAt?: NestedTimestamp | null;
+        dueDate: Timestamp;
+        reminderAt?: Timestamp | null;
       }>;
     };
   };
@@ -51,12 +50,12 @@ describe("NamespaceInsertable", () => {
 });
 
 describe("NamespaceSelectable", () => {
-  it("should return Date for top-level Timestamp and string for nested datetime", () => {
+  it("should return Date for both top-level and nested datetime", () => {
     type ReceiptSelectable = NamespaceSelectable<TestNamespace, "Receipt">;
 
     expectTypeOf<ReceiptSelectable["receiptDate"]>().toEqualTypeOf<Date>();
-    expectTypeOf<ReceiptSelectable["dueSchedule"]["dueDate"]>().toEqualTypeOf<string>();
-    // Nullable nested fields should be required (not optional) in select — DB always returns all fields
-    expectTypeOf<ReceiptSelectable["dueSchedule"]["reminderAt"]>().toEqualTypeOf<string | null>();
+    expectTypeOf<ReceiptSelectable["dueSchedule"]["dueDate"]>().toEqualTypeOf<Date>();
+    // Nullable nested fields should be required in select
+    expectTypeOf<ReceiptSelectable["dueSchedule"]["reminderAt"]>().toEqualTypeOf<Date | null>();
   });
 });
