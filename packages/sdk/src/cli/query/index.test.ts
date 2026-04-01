@@ -1,11 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import {
-  query,
-  queryCommand,
-  resolveQueryCommandInput,
-  resolveReplCommand,
-  resolveReplInterruptAction,
-} from "./index";
+import { query, queryCommand, resolveQueryCommandInput, resolveReplCommand } from "./index";
 
 vi.mock("node:fs/promises", () => ({
   readFile: vi.fn(),
@@ -760,19 +754,5 @@ describe("queryCommand args", () => {
     expect(result.error.issues[0]?.message).toBe(
       "Pass only one of --edit, -q/--query, or -f/--file.",
     );
-  });
-});
-
-describe("resolveReplInterruptAction", () => {
-  test("exits when there is no buffered input", () => {
-    expect(resolveReplInterruptAction([], "")).toBe("exit");
-  });
-
-  test("clears when buffered lines exist", () => {
-    expect(resolveReplInterruptAction(["select *"], "")).toBe("clear");
-  });
-
-  test("clears when the current line has input", () => {
-    expect(resolveReplInterruptAction([], "select *")).toBe("clear");
   });
 });
