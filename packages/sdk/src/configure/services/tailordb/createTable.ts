@@ -382,6 +382,9 @@ function buildField(descriptor: FieldDescriptor): TailorAnyDBField {
   }
 
   if (descriptor.kind === "decimal" && descriptor.scale !== undefined) {
+    if (!Number.isInteger(descriptor.scale) || descriptor.scale < 0 || descriptor.scale > 12) {
+      throw new Error("scale must be an integer between 0 and 12");
+    }
     // oxlint-disable-next-line no-explicit-any -- decimal scale is set via internal metadata
     (field as any)._metadata.scale = descriptor.scale;
   }

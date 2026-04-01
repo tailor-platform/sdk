@@ -115,13 +115,17 @@ export type ResolvedResolverFieldMap<M extends Record<string, ResolverFieldEntry
 // --- Runtime conversion ---
 
 function isPassthroughField(entry: ResolverFieldEntry): entry is TailorAnyField {
-  return !("kind" in entry);
+  return !isResolverFieldDescriptor(entry);
 }
 
 export function isResolverFieldDescriptor(
   entry: ResolverFieldEntry,
 ): entry is ResolverFieldDescriptor {
-  return "kind" in entry;
+  return (
+    "kind" in entry &&
+    typeof (entry as { kind: unknown }).kind === "string" &&
+    (entry as { kind: string }).kind in kindToFieldType
+  );
 }
 
 function isValidateConfig(v: unknown): v is ValidateConfig<unknown> {

@@ -226,6 +226,18 @@ describe("createTable runtime metadata tests", () => {
     });
     expect(result.fields.amount.metadata.scale).toBe(4);
   });
+
+  it("decimal scale rejects out-of-range values", () => {
+    expect(() => createTable("Test", { amount: { kind: "decimal", scale: -1 } })).toThrow(
+      "scale must be an integer between 0 and 12",
+    );
+    expect(() => createTable("Test", { amount: { kind: "decimal", scale: 13 } })).toThrow(
+      "scale must be an integer between 0 and 12",
+    );
+    expect(() => createTable("Test", { amount: { kind: "decimal", scale: 1.5 } })).toThrow(
+      "scale must be an integer between 0 and 12",
+    );
+  });
 });
 
 describe("createTable relation tests", () => {

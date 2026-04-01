@@ -926,5 +926,19 @@ describe("createResolver", () => {
       });
       expectTypeOf(resolver).toExtend<ResolverInput>();
     });
+
+    test("record output with a field named 'kind' is not confused with a descriptor", () => {
+      const resolver = createResolver({
+        name: "withKindField",
+        operation: "query",
+        output: {
+          kind: t.string(),
+          name: t.string(),
+        },
+        body: () => ({ kind: "category", name: "test" }),
+      });
+
+      expect(resolver.output.type).toBe("nested");
+    });
   });
 });
