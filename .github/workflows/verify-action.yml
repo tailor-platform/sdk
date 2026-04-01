@@ -1,7 +1,9 @@
 name: Verify external action resolution
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - feat/setup-github-external-action
 
 jobs:
   verify:
