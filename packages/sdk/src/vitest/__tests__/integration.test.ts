@@ -25,7 +25,7 @@ function runVitest(): string {
 describe("tailor-runtime integration", () => {
   test("blocked imports, globals removal, and allowed APIs all work", () => {
     const output = runVitest();
-    expect(output).toContain("6 passed");
+    expect(output).toContain("7 passed");
     expect(output).not.toContain("failed");
   });
 });
