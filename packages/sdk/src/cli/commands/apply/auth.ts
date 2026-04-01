@@ -29,8 +29,10 @@ import { areNormalizedEqual, normalizeProtoConfig, normalizeStringArray } from "
 import { authHookFunctionName } from "./function-registry";
 import {
   formatChangeEntriesWithFunctionRegistry,
+  formatChangeSetEntries,
   type GroupedDisplayEntry,
   printGroupedDisplaySection,
+  type PrintableChangeSet,
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
@@ -299,15 +301,20 @@ export async function planAuth(
     planSCIMResources(client, workspaceId, auths, deletedServices),
   ]);
 
-  serviceChangeSet.print();
-  idpConfigChangeSet.print();
-  userProfileConfigChangeSet.print();
-  tenantConfigChangeSet.print();
-  machineUserChangeSet.print();
-  printAuthHookChanges(authHookChangeSet, functionRegistryAuthHookChanges);
-  oauth2ClientChangeSet.print();
-  scimChangeSet.print();
-  scimResourceChangeSet.print();
+  printAuthChanges(
+    {
+      service: serviceChangeSet,
+      idpConfig: idpConfigChangeSet,
+      userProfileConfig: userProfileConfigChangeSet,
+      tenantConfig: tenantConfigChangeSet,
+      machineUser: machineUserChangeSet,
+      authHook: authHookChangeSet,
+      oauth2Client: oauth2ClientChangeSet,
+      scim: scimChangeSet,
+      scimResource: scimResourceChangeSet,
+    },
+    functionRegistryAuthHookChanges,
+  );
   return {
     changeSet: {
       service: serviceChangeSet,
@@ -324,6 +331,39 @@ export async function planAuth(
     unmanaged,
     resourceOwners,
   };
+}
+
+function printAuthChanges(
+  changeSet: {
+    service: PrintableChangeSet;
+    idpConfig: PrintableChangeSet;
+    userProfileConfig: PrintableChangeSet;
+    tenantConfig: PrintableChangeSet;
+    machineUser: PrintableChangeSet;
+    authHook: AuthHookChangeSet;
+    oauth2Client: PrintableChangeSet;
+    scim: PrintableChangeSet;
+    scimResource: PrintableChangeSet;
+  },
+  functionRegistryAuthHookChanges?: RelatedFunctionRegistryChanges,
+) {
+  const authHookEntries = formatAuthHookChangeEntries(
+    changeSet.authHook,
+    functionRegistryAuthHookChanges,
+  );
+  const entries: GroupedDisplayEntry[] = [
+    ...formatChangeSetEntries(changeSet.service, ["service"]),
+    ...formatChangeSetEntries(changeSet.idpConfig, ["idpConfig"]),
+    ...formatChangeSetEntries(changeSet.userProfileConfig, ["userProfileConfig"]),
+    ...formatChangeSetEntries(changeSet.tenantConfig, ["tenantConfig"]),
+    ...formatChangeSetEntries(changeSet.machineUser, ["machineUser"]),
+    ...authHookEntries,
+    ...formatChangeSetEntries(changeSet.oauth2Client, ["oauth2Client"]),
+    ...formatChangeSetEntries(changeSet.scim, ["scimConfig"]),
+    ...formatChangeSetEntries(changeSet.scimResource, ["scimResource"]),
+  ];
+
+  printGroupedDisplaySection("Auth", entries);
 }
 
 type CreateService = {
@@ -1935,14 +1975,6 @@ export function formatAuthHookChangeEntries(
       return namespace && hookPoint ? [authHookFunctionName(namespace, hookPoint)] : [];
     },
   );
-}
-
-function printAuthHookChanges(
-  changeSet: AuthHookChangeSet,
-  functionRegistryAuthHookChanges?: RelatedFunctionRegistryChanges,
-) {
-  const entries = formatAuthHookChangeEntries(changeSet, functionRegistryAuthHookChanges);
-  printGroupedDisplaySection("Auth hooks", entries);
 }
 
 async function planAuthHooks(

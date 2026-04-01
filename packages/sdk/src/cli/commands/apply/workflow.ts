@@ -1,7 +1,7 @@
 import { type ApplyPhase } from "@/cli/commands/apply/apply";
 import { parseDuration } from "@/cli/shared/args";
 import { type OperatorClient, fetchAll } from "@/cli/shared/client";
-import { createChangeSet, type ChangeSet } from "./change-set";
+import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import { workflowJobFunctionName } from "./function-registry";
 import {
@@ -353,7 +353,9 @@ export async function planWorkflow(
           unchangedJobFunctions,
         )
       ) {
-        changeSet.unchanged.push({ name: workflow.name });
+        changeSet.unchanged.push({ name: workflow.name, usedJobNames } as HasName & {
+          usedJobNames: string[];
+        });
         for (const jobName of usedJobNames) {
           unchangedWorkflowJobNames.add(jobName);
         }

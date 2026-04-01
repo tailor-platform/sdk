@@ -1,5 +1,5 @@
 import { logger, styles, symbols } from "@/cli/shared/logger";
-import type { HasName } from "./change-set";
+import type { ChangeSet, HasName } from "./change-set";
 
 export type DisplayAction = "create" | "update" | "delete" | "replace";
 
@@ -23,6 +23,11 @@ export type RelatedFunctionRegistryNameSets = {
   deletes: Set<string>;
   replaces: Set<string>;
 };
+
+export type PrintableChangeSet = Pick<
+  ChangeSet<HasName, HasName, HasName, HasName>,
+  "creates" | "updates" | "deletes" | "replaces" | "isEmpty"
+>;
 
 /**
  * Convert grouped function registry changes into mutable name sets.
@@ -61,6 +66,76 @@ export function actionSymbol(action: DisplayAction): string {
 }
 
 /**
+ * Convert a plain change set into grouped display entries.
+ * @param changeSet - Change set to convert
+ * @param labels - Labels to attach to each entry
+ * @returns Display entries in CLI print order
+ */
+export function formatChangeSetEntries(
+  changeSet: Pick<PrintableChangeSet, "creates" | "updates" | "deletes" | "replaces">,
+  labels: string[] = [],
+): GroupedDisplayEntry[] {
+  return [
+    ...changeSet.creates.map((item) => ({
+      action: "create" as const,
+      symbol: actionSymbol("create"),
+      name: item.name,
+      labels,
+    })),
+    ...changeSet.deletes.map((item) => ({
+      action: "delete" as const,
+      symbol: actionSymbol("delete"),
+      name: item.name,
+      labels,
+    })),
+    ...changeSet.updates.map((item) => ({
+      action: "update" as const,
+      symbol: actionSymbol("update"),
+      name: item.name,
+      labels,
+    })),
+    ...changeSet.replaces.map((item) => ({
+      action: "replace" as const,
+      symbol: actionSymbol("replace"),
+      name: item.name,
+      labels,
+    })),
+  ];
+}
+
+function formatGroupedDisplayLine(entry: GroupedDisplayEntry) {
+  return entry.labels.length > 0
+    ? `${entry.symbol} ${entry.name} (${entry.labels.join(", ")})`
+    : `${entry.symbol} ${entry.name}`;
+}
+
+function formatFunctionRegistryDisplayName(name: string): string {
+  if (name.startsWith("resolver--")) {
+    const [, namespace, resolverName] = name.split("--");
+    if (namespace && resolverName) {
+      return `${namespace}.${resolverName}`;
+    }
+  }
+
+  if (name.startsWith("workflow--")) {
+    return name.slice("workflow--".length);
+  }
+
+  if (name.startsWith("executor--")) {
+    return name.slice("executor--".length);
+  }
+
+  if (name.startsWith("auth-hook--")) {
+    const [, namespace, hookPoint] = name.split("--");
+    if (namespace && hookPoint) {
+      return `${namespace}/${hookPoint}`;
+    }
+  }
+
+  return name;
+}
+
+/**
  * Build function-registry-only entries that were not grouped with a parent resource.
  * @param names - Related function registry names keyed by action
  * @param consumed - Function registry names already grouped with parent resources
@@ -83,7 +158,7 @@ export function buildRemainingFunctionRegistryEntries(
       .map((name) => ({
         action,
         symbol: actionSymbol(action),
-        name,
+        name: formatFunctionRegistryDisplayName(name),
         labels: ["functionRegistry"],
       })),
   );
@@ -167,21 +242,22 @@ export function formatChangeEntriesWithFunctionRegistry<
  * Print a titled section of grouped display entries.
  * @param title - Section title
  * @param entries - Entries to print
+ * @param indent - Leading spaces before the title
+ * @returns True when any entries were printed
  */
 export function printGroupedDisplaySection(
   title: string,
   entries: ReadonlyArray<GroupedDisplayEntry>,
+  indent = 0,
 ) {
   if (entries.length === 0) {
-    return;
+    return false;
   }
 
-  logger.log(styles.bold(`${title}:`));
+  logger.log(styles.bold(`${" ".repeat(indent)}${title}:`));
+  const entryIndent = " ".repeat(indent + 2);
   for (const entry of entries) {
-    const line =
-      entry.labels.length > 0
-        ? `  ${entry.symbol} ${entry.name} (${entry.labels.join(", ")})`
-        : `  ${entry.symbol} ${entry.name}`;
-    logger.log(line);
+    logger.log(`${entryIndent}${formatGroupedDisplayLine(entry)}`);
   }
+  return true;
 }

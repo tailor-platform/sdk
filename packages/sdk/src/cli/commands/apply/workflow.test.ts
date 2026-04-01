@@ -484,7 +484,7 @@ describe("formatWorkflowChangeEntries", () => {
       {
         action: "update",
         symbol: "~",
-        name: "workflow--process-order",
+        name: "process-order",
         labels: ["functionRegistry"],
       },
     ]);
@@ -556,7 +556,7 @@ describe("formatWorkflowChangeEntries", () => {
       {
         action: "delete",
         symbol: "-",
-        name: "workflow--send-notification",
+        name: "send-notification",
         labels: ["functionRegistry"],
       },
     ]);

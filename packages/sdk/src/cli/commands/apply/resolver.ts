@@ -19,7 +19,7 @@ import * as inflection from "inflection";
 import { type ResolverService } from "@/cli/services/resolver/service";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { buildResolverOperationHookExpr } from "@/cli/shared/runtime-args";
-import { createChangeSet, type ChangeSet } from "./change-set";
+import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
 import { areNormalizedEqual, normalizeProtoConfig } from "./compare";
 import { resolverFunctionName } from "./function-registry";
 import {
@@ -368,7 +368,10 @@ async function planResolvers(
           existingResolverDetail &&
           areResolversEqual(existingResolverDetail, desiredResolver)
         ) {
-          changeSet.unchanged.push({ name: resolver.name });
+          changeSet.unchanged.push({
+            name: resolver.name,
+            namespaceName: pipeline.namespace,
+          } as HasName & { namespaceName: string });
         } else {
           changeSet.updates.push({
             name: resolver.name,
