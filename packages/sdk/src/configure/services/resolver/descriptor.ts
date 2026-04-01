@@ -24,7 +24,7 @@ const kindToFieldType = {
   object: "nested",
 } as const satisfies Record<string, TailorFieldType>;
 
-type KindToFieldType = typeof kindToFieldType;
+export type KindToFieldType = typeof kindToFieldType;
 
 type KindToTsType = {
   [K in keyof KindToFieldType as K extends "enum" | "object"
@@ -142,14 +142,17 @@ export function resolveResolverField(entry: ResolverFieldEntry): TailorAnyField 
 export function resolveResolverFieldMap(
   entries: Record<string, ResolverFieldEntry>,
 ): Record<string, TailorAnyField> {
-  // Fast path: if no descriptors are present, return the original object as-is
-  const hasDescriptors = Object.values(entries).some(isResolverFieldDescriptor);
-  if (!hasDescriptors) {
-    return entries as Record<string, TailorAnyField>;
+  let hasDescriptor = false;
+  const resolved: Record<string, TailorAnyField> = {};
+  for (const [key, entry] of Object.entries(entries)) {
+    if (isPassthroughField(entry)) {
+      resolved[key] = entry;
+    } else {
+      hasDescriptor = true;
+      resolved[key] = buildResolverField(entry);
+    }
   }
-  return Object.fromEntries(
-    Object.entries(entries).map(([key, entry]) => [key, resolveResolverField(entry)]),
-  );
+  return hasDescriptor ? resolved : (entries as Record<string, TailorAnyField>);
 }
 
 function buildResolverField(descriptor: ResolverFieldDescriptor): TailorAnyField {

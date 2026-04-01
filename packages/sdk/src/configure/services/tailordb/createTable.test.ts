@@ -238,6 +238,14 @@ describe("createTable runtime metadata tests", () => {
       "scale must be an integer between 0 and 12",
     );
   });
+
+  it("decimal scale accepts boundary values 0 and 12", () => {
+    const low = createTable("Test", { amount: { kind: "decimal", scale: 0 } });
+    expect(low.fields.amount.metadata.scale).toBe(0);
+
+    const high = createTable("Test", { amount: { kind: "decimal", scale: 12 } });
+    expect(high.fields.amount.metadata.scale).toBe(12);
+  });
 });
 
 describe("createTable relation tests", () => {

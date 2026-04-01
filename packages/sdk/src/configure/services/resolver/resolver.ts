@@ -5,6 +5,7 @@ import {
   type ResolverFieldDescriptor,
   type ResolvedResolverFieldMap,
   type ResolverDescriptorOutput,
+  type KindToFieldType,
   isResolverFieldDescriptor,
   resolveResolverFieldMap,
   resolveResolverField,
@@ -41,20 +42,6 @@ type OutputType<O> = O extends TailorAnyField
  * - If Output is a descriptor, resolve it to a TailorField
  * - If Output is a Record of fields, wrap it as a nested TailorField
  */
-type KindToFieldType = {
-  string: "string";
-  int: "integer";
-  float: "float";
-  bool: "boolean";
-  uuid: "uuid";
-  decimal: "decimal";
-  date: "date";
-  datetime: "datetime";
-  time: "time";
-  enum: "enum";
-  object: "nested";
-};
-
 type NormalizedOutput<Output> = Output extends TailorAnyField
   ? Output
   : Output extends ResolverFieldDescriptor
@@ -159,26 +146,27 @@ export function createResolver<
   );
 }
 
-function resolveOutput(
-  output: TailorAnyField | ResolverFieldDescriptor | Record<string, ResolverFieldEntry>,
-): TailorAnyField {
-  // Check if it's a descriptor (has `kind` property but not a TailorField)
-  if (isResolverFieldDescriptor(output as ResolverFieldEntry)) {
-    return resolveResolverField(output as ResolverFieldDescriptor);
-  }
-
-  // Check if it's already a TailorField (has `type` as string for field type)
-  const isTailorField = (obj: unknown): obj is TailorAnyField =>
+function isTailorField(obj: unknown): obj is TailorAnyField {
+  return (
     typeof obj === "object" &&
     obj !== null &&
     "type" in obj &&
-    typeof (obj as { type: unknown }).type === "string";
+    typeof (obj as { type: unknown }).type === "string"
+  );
+}
+
+function resolveOutput(
+  output: TailorAnyField | ResolverFieldDescriptor | Record<string, ResolverFieldEntry>,
+): TailorAnyField {
+  if (isResolverFieldDescriptor(output as ResolverFieldEntry)) {
+    return resolveResolverField(output as ResolverFieldDescriptor);
+  }
 
   if (isTailorField(output)) {
     return output;
   }
 
-  // Otherwise it's a Record of fields - resolve each and wrap in t.object()
+  // Record of fields - resolve each and wrap in t.object()
   const resolvedFields = resolveResolverFieldMap(output as Record<string, ResolverFieldEntry>);
   return t.object(resolvedFields);
 }
