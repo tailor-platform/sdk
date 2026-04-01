@@ -1050,7 +1050,7 @@ export async function transformJsonFile(
   const parsed = JSON.parse(source);
   const result = mutator(parsed);
 
-  if (result === null) {
+  if (result == null) {
     return { changed: false };
   }
 

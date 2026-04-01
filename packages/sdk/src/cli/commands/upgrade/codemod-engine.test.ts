@@ -1224,6 +1224,18 @@ describe("codemod-engine", () => {
       expect(result.changed).toBe(false);
     });
 
+    it("should return unchanged when mutator returns undefined", async () => {
+      const filePath = path.join(tmpDir, "package.json");
+      const original = JSON.stringify({ name: "old" }, null, 2) + "\n";
+      await fs.promises.writeFile(filePath, original);
+
+      const result = await transformJsonFile(filePath, () => undefined as unknown as null, false);
+      expect(result.changed).toBe(false);
+
+      const content = await fs.promises.readFile(filePath, "utf-8");
+      expect(content).toBe(original);
+    });
+
     it("should return unchanged when result is identical", async () => {
       const filePath = path.join(tmpDir, "package.json");
       await fs.promises.writeFile(filePath, JSON.stringify({ name: "same" }, null, 2) + "\n");
