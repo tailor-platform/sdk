@@ -7,8 +7,8 @@ export const tailordbCommand = defineCommand({
   name: "tailordb",
   description: "Manage TailorDB tables and data.",
   subCommands: {
-    erd: erdCommand,
-    migration: migrationCommand,
     truncate: truncateCommand,
+    migration: migrationCommand,
+    erd: erdCommand,
   },
 });

@@ -8,9 +8,9 @@ export const patCommand = defineCommand({
   name: "pat",
   description: "Manage personal access tokens.",
   subCommands: {
+    list: listCommand,
     create: createCommand,
     delete: deleteCommand,
-    list: listCommand,
     update: updateCommand,
   },
   async run() {

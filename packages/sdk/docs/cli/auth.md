@@ -317,8 +317,8 @@ tailor-sdk oauth2client [command]
 
 | Command                                   | Description                                              |
 | ----------------------------------------- | -------------------------------------------------------- |
-| [`oauth2client get`](#oauth2client-get)   | Get OAuth2 client credentials (including client secret). |
 | [`oauth2client list`](#oauth2client-list) | List all OAuth2 clients in the application.              |
+| [`oauth2client get`](#oauth2client-get)   | Get OAuth2 client credentials (including client secret). |
 
 <!-- politty:command:oauth2client:subcommands:end -->
 

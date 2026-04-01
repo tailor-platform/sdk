@@ -24,7 +24,7 @@ jobs:
           persist-credentials: false
 
       - name: Check docs-implementation consistency
-        uses: anthropics/claude-code-action@e7b588b6eaa5263c2e7c6c7b34a29e190d32ee68 # v1.0.81
+        uses: anthropics/claude-code-action@bee87b3258c251f9279e5371b0cc3660f37f3f77 # v1.0.83
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |

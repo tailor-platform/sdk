@@ -42,12 +42,14 @@ function getNestedType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
     };
   }
 
-  const fieldResults = Object.entries(fields).map(([fieldName, nestedOperatorFieldConfig]) => ({
-    fieldName,
-    ...generateFieldType(nestedOperatorFieldConfig),
-  }));
-
-  const fieldTypes = fieldResults.map((result) => `${result.fieldName}: ${result.type}`);
+  const fieldResults = Object.entries(fields).map(([fieldName, config]) => {
+    const result = generateFieldType(config);
+    const optional = config.required !== true ? "?" : "";
+    return {
+      fieldType: `${fieldName}${optional}: ${result.type}`,
+      usedUtilityTypes: result.usedUtilityTypes,
+    };
+  });
 
   const aggregatedUtilityTypes = fieldResults.reduce(
     (acc, result) => ({
@@ -57,8 +59,14 @@ function getNestedType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
     { Timestamp: false, Serial: false },
   );
 
-  const type = `{\n  ${fieldTypes.join(";\n  ")}${fieldTypes.length > 0 ? ";" : ""}\n}`;
-  return { type, usedUtilityTypes: aggregatedUtilityTypes };
+  const fieldTypes = fieldResults.map((r) => r.fieldType);
+  const obj = `{\n  ${fieldTypes.join(";\n  ")}${fieldTypes.length > 0 ? ";" : ""}\n}`;
+
+  const hasOptionalFields = Object.values(fields).some((config) => config.required !== true);
+  if (aggregatedUtilityTypes.Timestamp || hasOptionalFields) {
+    return { type: `ObjectColumnType<${obj}>`, usedUtilityTypes: aggregatedUtilityTypes };
+  }
+  return { type: obj, usedUtilityTypes: aggregatedUtilityTypes };
 }
 
 /**
@@ -162,6 +170,7 @@ function generateTableInterface(type: TailorDBType): {
   const aggregatedUtilityTypes = fieldResults.reduce(
     (acc, result) => ({
       Timestamp: acc.Timestamp || result.usedUtilityTypes.Timestamp,
+
       Serial: acc.Serial || result.usedUtilityTypes.Serial,
     }),
     { Timestamp: false, Serial: false },
@@ -213,6 +222,12 @@ export function generateUnifiedKyselyTypes(namespaceData: KyselyNamespaceMetadat
   const utilityTypeImports: string[] = ["type Generated"];
   if (globalUsedUtilityTypes.Timestamp) {
     utilityTypeImports.push("type Timestamp");
+  }
+  const hasObjectColumnType = namespaceData.some((ns) =>
+    ns.types.some((t) => t.typeDef.includes("ObjectColumnType<")),
+  );
+  if (hasObjectColumnType) {
+    utilityTypeImports.push("type ObjectColumnType");
   }
   if (globalUsedUtilityTypes.Serial) {
     utilityTypeImports.push("type Serial");
