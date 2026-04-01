@@ -13,7 +13,7 @@ import { afterEach, beforeEach } from "vitest";
 
 // Globals that Vitest internals depend on but don't exist in the platform runtime.
 // Removed before each test, restored after.
-const VITEST_ONLY_GLOBALS = ["performance"] as const;
+const BLOCKED_GLOBALS = ["performance"] as const;
 
 const STATE_KEY = "__tailorMockState";
 
@@ -29,7 +29,7 @@ beforeEach(() => {
   if (!isTailorRuntime()) return;
   const g = globalThis as Record<string, unknown>;
   saved = {};
-  for (const key of VITEST_ONLY_GLOBALS) {
+  for (const key of BLOCKED_GLOBALS) {
     saved[key] = Object.getOwnPropertyDescriptor(g, key);
     delete g[key];
   }

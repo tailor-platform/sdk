@@ -1,7 +1,7 @@
 /**
  * Blocked Node.js built-in modules and their Web Standard API alternatives.
  *
- * The Tailor Platform runtime (Deno Core) only provides Web Standard APIs.
+ * The Tailor Platform runtime only provides Web Standard APIs.
  * These Node.js modules are not available and should be replaced with
  * the suggested alternatives.
  */

@@ -8,6 +8,154 @@ For a complete working example with full test code, use the `testing` template:
 npm create @tailor-platform/sdk -- --template testing <your-project-name>
 ```
 
+## Runtime Environment Emulation
+
+The Tailor Platform function runtime only provides Web Standard APIs. Node.js built-in modules like `node:crypto` and globals like `Buffer` are not available. The `tailor-runtime` Vitest environment catches these incompatibilities locally before deployment.
+
+### Setup
+
+```typescript
+// vitest.config.ts
+import { defineConfig } from "vitest/config";
+import { tailorRuntime } from "@tailor-platform/sdk/vitest";
+
+export default defineConfig({
+  plugins: [tailorRuntime()],
+  test: {
+    environment: "tailor-runtime",
+  },
+});
+```
+
+`tailorRuntime()` provides:
+
+1. **Node.js module blocking** — `import { randomBytes } from "node:crypto"` in production code throws an error with a suggestion for the Web Standard API alternative (`globalThis.crypto`). Test files (`*.test.ts`, `*.spec.ts`) are exempt.
+2. **Node.js globals removal** — Only globals available in the platform runtime are kept (whitelist). `Buffer`, `global`, `setImmediate`, `__dirname`, `__filename`, `performance`, and others are removed.
+3. **Platform API mocks** — `globalThis.tailordb`, `globalThis.tailor`, `TailorErrors`, `TailorErrorMessage`, `TailorDBFileError` are auto-injected. Use `tailordbMock` and `workflowMock` to configure mock responses.
+
+### TailorDB Mock
+
+The environment auto-injects a mock `tailordb.Client`. Use `tailordbMock` to configure responses and assert on executed queries:
+
+```typescript
+import { tailordbMock } from "@tailor-platform/sdk/vitest";
+
+beforeEach(() => {
+  tailordbMock.reset();
+});
+
+test("resolver queries the database", async () => {
+  // Order-based: each call enqueues one query response
+  tailordbMock.enqueueResult(); // BEGIN (empty result)
+  tailordbMock.enqueueResult({ age: 30 }); // SELECT (one row)
+  tailordbMock.enqueueResult(); // COMMIT
+
+  const result = await resolver.body({ input: { email: "test@example.com" } });
+
+  expect(result).toEqual({ oldAge: 30, newAge: 31 });
+  expect(tailordbMock.executedQueries).toHaveLength(3);
+  expect(tailordbMock.createdClients).toMatchObject([{ namespace: "tailordb" }]);
+});
+```
+
+Two response modes:
+
+- **`enqueueResult(...rows)`** — Order-based. Each call enqueues one query response. Arguments are row objects (`enqueueResult()` for empty, `enqueueResult({ id: "1" })` for one row, `enqueueResult({ a: 1 }, { a: 2 })` for multiple rows). Consumed in FIFO order.
+- **`setQueryResolver((query, params) => rows)`** — Content-based fallback. Called when the queue is empty.
+
+```typescript
+test("content-based mock", async () => {
+  tailordbMock.setQueryResolver((query) => {
+    if (query.includes("SELECT")) return [{ id: "1", name: "test" }];
+    return [];
+  });
+
+  const result = await resolver.body({ input: { userId: "1" } });
+
+  expect(tailordbMock.executedQueries[0].query).toContain("SELECT");
+});
+```
+
+### Workflow Mock
+
+The environment auto-injects `tailor.workflow.triggerJobFunction`. Use `workflowMock` to configure job responses:
+
+```typescript
+import { workflowMock } from "@tailor-platform/sdk/vitest";
+
+beforeEach(() => {
+  workflowMock.reset();
+});
+
+test("workflow triggers jobs", async () => {
+  workflowMock.setJobHandler((jobName, args) => {
+    if (jobName === "validate-order") return { valid: true };
+    if (jobName === "process-payment") return { txnId: "txn-1" };
+    return null;
+  });
+
+  const result = await main({ input: { orderId: "o-1" } });
+
+  expect(workflowMock.triggeredJobs).toEqual([
+    { jobName: "validate-order", args: { orderId: "o-1" } },
+    { jobName: "process-payment", args: { orderId: "o-1" } },
+  ]);
+});
+```
+
+`workflowMock` also supports `enqueueResult()`:
+
+```typescript
+workflowMock.enqueueResult({ valid: true }, { txnId: "txn-1" });
+```
+
+### Per-Project Configuration
+
+Apply the runtime environment only to unit tests while keeping other test projects (bundled, e2e) in the default Node.js environment:
+
+```typescript
+export default defineConfig({
+  plugins: [tailorRuntime()],
+  test: {
+    projects: [
+      {
+        test: {
+          name: "unit",
+          environment: "tailor-runtime",
+          include: ["src/**/*.test.ts"],
+        },
+      },
+      {
+        test: {
+          name: "e2e",
+          include: ["e2e/**/*.test.ts"],
+          globalSetup: "e2e/globalSetup.ts",
+        },
+      },
+    ],
+  },
+});
+```
+
+### Known Limitations
+
+- **`process` and `require`** are not removed or blocked. Vitest's internal runner depends on them extensively. On the real platform runtime, they do not exist.
+- **Dynamic `import()`** of bundled files (via `createImportMain()`) bypasses the transform hook since those files are loaded through the Node.js native loader.
+- **Platform APIs not fully mocked** — Only `tailordb.Client` and `tailor.workflow.triggerJobFunction` have built-in mock implementations. Other platform APIs (`tailor.secretmanager`, `tailor.authconnection`, `tailor.idp`, `tailor.iconv`, `tailordb.file`) throw "not implemented" errors by default. If your code uses them, mock them in your test:
+
+```typescript
+beforeEach(() => {
+  // Mock secretmanager for tests that use tailor.secretmanager.getSecret()
+  (globalThis as Record<string, unknown>).tailor = {
+    ...globalThis.tailor,
+    secretmanager: {
+      getSecret: vi.fn().mockResolvedValue("my-secret-value"),
+      getSecrets: vi.fn().mockResolvedValue({ API_KEY: "test-key" }),
+    },
+  };
+});
+```
+
 ## Unit Tests
 
 Unit tests verify resolver logic without requiring deployment.
@@ -37,6 +185,8 @@ describe("add resolver", () => {
 - **Best for:** Calculations, data transformations without database dependencies
 
 ### Mock TailorDB Client
+
+> **Note:** If you are using the `tailor-runtime` environment (recommended), `tailordb.Client` is auto-injected. Use `tailordbMock` from `@tailor-platform/sdk/vitest` instead of `vi.stubGlobal()`. See [TailorDB Mock](#tailordb-mock) above.
 
 Mock the global `tailordb.Client` using `vi.stubGlobal()` to simulate database operations and control responses for each query.
 
