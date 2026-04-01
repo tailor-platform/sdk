@@ -493,7 +493,7 @@ async function runRepl(
     const [value, error] = await prompt(`${options.engine}> `);
 
     if (error?.kind === "cancel") {
-      if (value.trim().length === 0) {
+      if (value.length === 0) {
         return;
       }
       continue;
@@ -560,9 +560,8 @@ function printReplHelp(engine: QueryEngine): void {
   logger.log("  \\q, \\quit                  Exit REPL");
   logger.log("  \\clear, \\c                 Clear the screen");
   logger.log("");
-  logger.log("Key bindings:");
-  logger.log("  Enter                      Insert newline");
-  logger.log("  Shift/Ctrl/Alt+Enter       Submit query");
+  logger.log("Key bindings (see footer for terminal-specific submit/newline keys):");
+  logger.log("  Ctrl+J                     Insert newline (always available)");
   logger.log("  Ctrl+C                     Cancel current input");
   logger.log("  Ctrl+D                     Exit REPL (on empty input)");
   logger.log("  Ctrl+Z / Ctrl+Y            Undo / Redo");
