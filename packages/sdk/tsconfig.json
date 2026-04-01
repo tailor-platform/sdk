@@ -15,6 +15,7 @@
   "include": [
     "./src/**/*.ts",
     "./scripts/**/*.ts",
+    "./eslint-rules/**/*.ts",
     "./e2e/**/*.ts",
     "./tsdown.config.ts",
     "./vitest.config.ts",

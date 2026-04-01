@@ -9,10 +9,10 @@ export const executorCommand = defineCommand({
   name: "executor",
   description: "Manage executors",
   subCommands: {
+    trigger: triggerCommand,
+    jobs: jobsCommand,
     list: listCommand,
     get: getCommand,
-    jobs: jobsCommand,
-    trigger: triggerCommand,
     webhook: webhookCommand,
   },
   async run() {

@@ -108,8 +108,8 @@ tailor-sdk user [command]
 | ------------------------------- | ------------------------------ |
 | [`user current`](#user-current) | Show current user.             |
 | [`user list`](#user-list)       | List all users.                |
-| [`user pat`](#user-pat)         | Manage personal access tokens. |
 | [`user switch`](#user-switch)   | Set current user.              |
+| [`user pat`](#user-pat)         | Manage personal access tokens. |
 
 <!-- politty:command:user:subcommands:end -->
 
@@ -243,9 +243,9 @@ tailor-sdk user pat [command]
 
 | Command                               | Description                                           |
 | ------------------------------------- | ----------------------------------------------------- |
+| [`user pat list`](#user-pat-list)     | List all personal access tokens.                      |
 | [`user pat create`](#user-pat-create) | Create a new personal access token.                   |
 | [`user pat delete`](#user-pat-delete) | Delete a personal access token.                       |
-| [`user pat list`](#user-pat-list)     | List all personal access tokens.                      |
 | [`user pat update`](#user-pat-update) | Update a personal access token (delete and recreate). |
 
 <!-- politty:command:user pat:subcommands:end -->

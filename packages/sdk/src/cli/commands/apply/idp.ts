@@ -7,10 +7,14 @@ import {
   type DeleteIdPServiceRequestSchema,
   type UpdateIdPServiceRequestSchema,
 } from "@tailor-proto/tailor/v1/idp_pb";
-import { IdPLang } from "@tailor-proto/tailor/v1/idp_resource_pb";
+import {
+  IdPLang,
+  type IdPService as ProtoIdPService,
+} from "@tailor-proto/tailor/v1/idp_resource_pb";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { createChangeSet } from "./change-set";
-import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
+import { areNormalizedEqual } from "./compare";
+import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
 import type { IdP, IdPLang as IdPLangInput } from "@/types/idp.generated";
@@ -141,7 +145,7 @@ export async function applyIdP(
  * @returns Planned changes and metadata
  */
 export async function planIdP(context: PlanContext) {
-  const { client, workspaceId, application, forRemoval } = context;
+  const { client, workspaceId, application, forRemoval, forceApplyAll = false } = context;
   const idps = forRemoval ? [] : application.idpServices;
   const {
     changeSet: serviceChangeSet,
@@ -150,7 +154,13 @@ export async function planIdP(context: PlanContext) {
     resourceOwners,
   } = await planServices(client, workspaceId, application.name, idps);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
-  const clientChangeSet = await planClients(client, workspaceId, idps, deletedServices);
+  const clientChangeSet = await planClients(
+    client,
+    workspaceId,
+    idps,
+    deletedServices,
+    forceApplyAll,
+  );
 
   serviceChangeSet.print();
   clientChangeSet.print();
@@ -184,6 +194,73 @@ type DeleteService = {
 
 function trn(workspaceId: string, name: string) {
   return `trn:v1:workspace:${workspaceId}:idp:${name}`;
+}
+
+type ComparableIdPService = {
+  authorization: string;
+  lang: IdPLang;
+  userAuthPolicy: Record<string, unknown> | undefined;
+  publishUserEvents: boolean;
+  disableGqlOperations: Record<string, boolean> | undefined;
+};
+
+function normalizeComparableUserAuthPolicy(
+  policy: ProtoIdPService["userAuthPolicy"] | IdP["userAuthPolicy"] | undefined,
+): Record<string, unknown> | undefined {
+  return {
+    useNonEmailIdentifier: policy?.useNonEmailIdentifier ?? false,
+    allowSelfPasswordReset: policy?.allowSelfPasswordReset ?? false,
+    passwordRequireUppercase: policy?.passwordRequireUppercase ?? false,
+    passwordRequireLowercase: policy?.passwordRequireLowercase ?? false,
+    passwordRequireNonAlphanumeric: policy?.passwordRequireNonAlphanumeric ?? false,
+    passwordRequireNumeric: policy?.passwordRequireNumeric ?? false,
+    passwordMinLength: policy?.passwordMinLength ?? 0,
+    passwordMaxLength: policy?.passwordMaxLength ?? 0,
+    allowedEmailDomains: [...(policy?.allowedEmailDomains ?? [])].sort(),
+    allowGoogleOauth: policy?.allowGoogleOauth ?? false,
+    disablePasswordAuth: policy?.disablePasswordAuth ?? false,
+    allowMicrosoftOauth: policy?.allowMicrosoftOauth ?? false,
+  };
+}
+
+function normalizeComparableDisableGqlOperations(
+  value: ProtoIdPService["disableGqlOperations"] | Record<string, boolean> | undefined,
+): Record<string, boolean> | undefined {
+  return {
+    create: value?.create ?? false,
+    update: value?.update ?? false,
+    delete: value?.delete ?? false,
+    read: value?.read ?? false,
+    sendPasswordResetEmail: value?.sendPasswordResetEmail ?? false,
+  };
+}
+
+function normalizeComparableIdPService(
+  input: Pick<
+    ComparableIdPService,
+    "authorization" | "lang" | "userAuthPolicy" | "publishUserEvents" | "disableGqlOperations"
+  >,
+): ComparableIdPService {
+  return {
+    authorization: input.authorization,
+    lang: input.lang === IdPLang.UNSPECIFIED ? IdPLang.EN : input.lang,
+    userAuthPolicy: input.userAuthPolicy,
+    publishUserEvents: input.publishUserEvents,
+    disableGqlOperations: input.disableGqlOperations,
+  };
+}
+
+function areIdPServicesEqual(existing: ProtoIdPService, desired: ComparableIdPService): boolean {
+  return areNormalizedEqual(
+    normalizeComparableIdPService({
+      authorization: existing.authorization,
+      lang: existing.lang,
+      userAuthPolicy: normalizeComparableUserAuthPolicy(existing.userAuthPolicy),
+      publishUserEvents: existing.publishUserEvents,
+      disableGqlOperations: normalizeComparableDisableGqlOperations(existing.disableGqlOperations),
+    }),
+    desired,
+  );
 }
 
 async function planServices(
@@ -224,6 +301,7 @@ async function planServices(
       existingServices[resource.namespace.name] = {
         resource,
         label: metadata?.labels[sdkNameLabelKey],
+        allLabels: metadata?.labels,
       };
     }),
   );
@@ -247,8 +325,28 @@ async function planServices(
 
     const lang = convertLang(idp.lang);
     const userAuthPolicy = idp.userAuthPolicy;
+    const publishUserEvents = idp.publishUserEvents ?? false;
+    const desired = normalizeComparableIdPService({
+      authorization,
+      lang,
+      userAuthPolicy: normalizeComparableUserAuthPolicy(userAuthPolicy),
+      publishUserEvents,
+      disableGqlOperations: normalizeComparableDisableGqlOperations(
+        convertGqlOperationsToDisable(idp.gqlOperations),
+      ),
+    });
+    const request = {
+      workspaceId,
+      namespaceName,
+      authorization,
+      lang,
+      userAuthPolicy,
+      publishUserEvents,
+      disableGqlOperations: convertGqlOperationsToDisable(idp.gqlOperations),
+    };
 
     if (existing) {
+      const isManagedByApp = existing.label === appName;
       if (!existing.label) {
         unmanaged.push({
           resourceType: "IdP service",
@@ -261,33 +359,24 @@ async function planServices(
           currentOwner: existing.label,
         });
       }
-
-      changeSet.updates.push({
-        name: namespaceName,
-        request: {
-          workspaceId,
-          namespaceName,
-          authorization,
-          lang,
-          userAuthPolicy,
-          publishUserEvents: idp.publishUserEvents,
-          disableGqlOperations: convertGqlOperationsToDisable(idp.gqlOperations),
-        },
-        metaRequest,
-      });
+      if (
+        isManagedByApp &&
+        hasMatchingSdkVersion(existing.allLabels, metaRequest.labels) &&
+        areIdPServicesEqual(existing.resource, desired)
+      ) {
+        changeSet.unchanged.push({ name: namespaceName });
+      } else {
+        changeSet.updates.push({
+          name: namespaceName,
+          request,
+          metaRequest,
+        });
+      }
       delete existingServices[namespaceName];
     } else {
       changeSet.creates.push({
         name: namespaceName,
-        request: {
-          workspaceId,
-          namespaceName,
-          authorization,
-          lang,
-          userAuthPolicy,
-          publishUserEvents: idp.publishUserEvents,
-          disableGqlOperations: convertGqlOperationsToDisable(idp.gqlOperations),
-        },
+        request,
         metaRequest,
       });
     }
@@ -334,6 +423,7 @@ async function planClients(
   workspaceId: string,
   idps: ReadonlyArray<IdP>,
   deletedServices: string[],
+  forceApplyAll = false,
 ) {
   const changeSet = createChangeSet<CreateClient, UpdateClient, DeleteClient>("IdP clients");
 
@@ -367,12 +457,18 @@ async function planClients(
     });
     for (const name of idp.clients) {
       if (existingNameMap.has(name)) {
-        changeSet.updates.push({
-          name,
-          workspaceId,
-          namespaceName,
-          clientSecret: existingNameMap.get(name)!,
-        });
+        if (forceApplyAll) {
+          changeSet.updates.push({
+            name,
+            workspaceId,
+            namespaceName,
+            clientSecret: existingNameMap.get(name) ?? "",
+          });
+        } else {
+          changeSet.unchanged.push({
+            name,
+          });
+        }
         existingNameMap.delete(name);
       } else {
         changeSet.creates.push({
@@ -387,7 +483,7 @@ async function planClients(
         });
       }
     }
-    existingNameMap.forEach((name) => {
+    existingNameMap.forEach((_clientSecret, name) => {
       changeSet.deletes.push({
         name,
         request: {
