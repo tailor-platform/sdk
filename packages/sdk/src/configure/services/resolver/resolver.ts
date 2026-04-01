@@ -1,42 +1,82 @@
 import { t } from "@/configure/types/type";
 import { brandValue } from "@/utils/brand";
+import {
+  type ResolverFieldEntry,
+  type ResolverFieldDescriptor,
+  type ResolvedResolverFieldMap,
+  type ResolverDescriptorOutput,
+  isResolverFieldDescriptor,
+  resolveResolverFieldMap,
+  resolveResolverField,
+} from "./descriptor";
 import type { TailorAnyField, TailorUser } from "@/configure/types";
 import type { TailorEnv } from "@/configure/types/env";
 import type { InferFieldsOutput, output } from "@/configure/types/helpers";
 import type { TailorField } from "@/configure/types/type";
+import type { TailorFieldType } from "@/configure/types/types";
 import type { ResolverInput } from "@/types/resolver.generated";
 
-type Context<Input extends Record<string, TailorAnyField> | undefined> = {
-  input: Input extends Record<string, TailorAnyField> ? InferFieldsOutput<Input> : never;
+type ResolvedInput<Input> =
+  Input extends Record<string, ResolverFieldEntry> ? ResolvedResolverFieldMap<Input> : undefined;
+
+type Context<Input> = {
+  input: Input extends Record<string, ResolverFieldEntry>
+    ? InferFieldsOutput<ResolvedResolverFieldMap<Input>>
+    : never;
   user: TailorUser;
   env: TailorEnv;
 };
 
 type OutputType<O> = O extends TailorAnyField
   ? output<O>
-  : O extends Record<string, TailorAnyField>
-    ? InferFieldsOutput<O>
-    : never;
+  : O extends ResolverFieldDescriptor
+    ? ResolverDescriptorOutput<O>
+    : O extends Record<string, ResolverFieldEntry>
+      ? InferFieldsOutput<ResolvedResolverFieldMap<O>>
+      : never;
 
 /**
  * Normalized output type that preserves generic type information.
  * - If Output is already a TailorField, use it as-is
+ * - If Output is a descriptor, resolve it to a TailorField
  * - If Output is a Record of fields, wrap it as a nested TailorField
  */
-type NormalizedOutput<Output extends TailorAnyField | Record<string, TailorAnyField>> =
-  Output extends TailorAnyField
-    ? Output
+type KindToFieldType = {
+  string: "string";
+  int: "integer";
+  float: "float";
+  bool: "boolean";
+  uuid: "uuid";
+  decimal: "decimal";
+  date: "date";
+  datetime: "datetime";
+  time: "time";
+  enum: "enum";
+  object: "nested";
+};
+
+type NormalizedOutput<Output> = Output extends TailorAnyField
+  ? Output
+  : Output extends ResolverFieldDescriptor
+    ? TailorField<
+        {
+          type: Output["kind"] extends keyof KindToFieldType
+            ? KindToFieldType[Output["kind"]]
+            : TailorFieldType;
+          array: Output extends { array: true } ? true : false;
+        },
+        ResolverDescriptorOutput<Output>
+      >
     : TailorField<
         { type: "nested"; array: false },
-        InferFieldsOutput<Extract<Output, Record<string, TailorAnyField>>>
+        InferFieldsOutput<
+          ResolvedResolverFieldMap<Extract<Output, Record<string, ResolverFieldEntry>>>
+        >
       >;
 
-type ResolverReturn<
-  Input extends Record<string, TailorAnyField> | undefined,
-  Output extends TailorAnyField | Record<string, TailorAnyField>,
-> = Omit<ResolverInput, "input" | "output" | "body"> &
+type ResolverReturn<Input, Output> = Omit<ResolverInput, "input" | "output" | "body"> &
   Readonly<{
-    input?: Input;
+    input?: ResolvedInput<Input>;
     output: NormalizedOutput<Output>;
     body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>>;
   }>;
@@ -48,8 +88,11 @@ type ResolverReturn<
  * `user` (TailorUser with id, type, workspaceId, attributes, attributeList), and `env` (TailorEnv).
  * The return value of `body` must match the `output` type.
  *
- * `output` accepts either a single TailorField (e.g. `t.string()`) or a
- * Record of fields (e.g. `{ name: t.string(), age: t.int() }`).
+ * `input` and `output` fields accept either fluent API fields (e.g. `t.string()`)
+ * or object-literal descriptors (e.g. `{ kind: "string" }`). Both styles can be mixed.
+ *
+ * `output` accepts either a single field (fluent or descriptor), or a
+ * Record of fields (e.g. `{ name: t.string(), age: { kind: "int" } }`).
  *
  * `publishEvents` enables publishing execution events for this resolver.
  * If not specified, this is automatically set to true when an executor uses this resolver
@@ -62,26 +105,34 @@ type ResolverReturn<
  * @example
  * import { createResolver, t } from "@tailor-platform/sdk";
  *
+ * // Fluent API style
  * export default createResolver({
  *   name: "getUser",
  *   operation: "query",
  *   input: {
  *     id: t.string(),
  *   },
- *   body: async ({ input, user }) => {
- *     const db = getDB("tailordb");
- *     const result = await db.selectFrom("User").selectAll().where("id", "=", input.id).executeTakeFirst();
- *     return { name: result?.name ?? "", email: result?.email ?? "" };
+ *   body: async ({ input }) => ({ name: "Alice" }),
+ *   output: t.object({ name: t.string() }),
+ * });
+ *
+ * // Object-literal descriptor style
+ * export default createResolver({
+ *   name: "add",
+ *   operation: "query",
+ *   input: {
+ *     a: { kind: "int", description: "First number" },
+ *     b: { kind: "int", description: "Second number" },
  *   },
- *   output: t.object({
- *     name: t.string(),
- *     email: t.string(),
- *   }),
+ *   body: ({ input }) => input.a + input.b,
+ *   output: { kind: "int", description: "Sum" },
  * });
  */
 export function createResolver<
-  Input extends Record<string, TailorAnyField> | undefined = undefined,
-  Output extends TailorAnyField | Record<string, TailorAnyField> = TailorAnyField,
+  Input extends Record<string, ResolverFieldEntry> | undefined = undefined,
+  Output extends TailorAnyField | ResolverFieldDescriptor | Record<string, ResolverFieldEntry> =
+    | TailorAnyField
+    | ResolverFieldDescriptor,
 >(
   config: Omit<ResolverInput, "input" | "output" | "body"> &
     Readonly<{
@@ -90,24 +141,46 @@ export function createResolver<
       body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>>;
     }>,
 ): ResolverReturn<Input, Output> {
-  // Check if output is already a TailorField using duck typing.
-  // TailorField has `type: string` (e.g., "uuid", "string"), while
-  // Record<string, TailorField> either lacks `type` or has TailorField as value.
+  // Resolve input fields: convert descriptors to TailorField instances
+  const resolvedInput = config.input
+    ? resolveResolverFieldMap(config.input as Record<string, ResolverFieldEntry>)
+    : undefined;
+
+  // Resolve output: handle TailorField, descriptor, or Record<string, ResolverFieldEntry>
+  const normalizedOutput = resolveOutput(config.output);
+
+  return brandValue(
+    {
+      ...config,
+      input: resolvedInput,
+      output: normalizedOutput,
+    } as ResolverReturn<Input, Output>,
+    "resolver",
+  );
+}
+
+function resolveOutput(
+  output: TailorAnyField | ResolverFieldDescriptor | Record<string, ResolverFieldEntry>,
+): TailorAnyField {
+  // Check if it's a descriptor (has `kind` property but not a TailorField)
+  if (isResolverFieldDescriptor(output as ResolverFieldEntry)) {
+    return resolveResolverField(output as ResolverFieldDescriptor);
+  }
+
+  // Check if it's already a TailorField (has `type` as string for field type)
   const isTailorField = (obj: unknown): obj is TailorAnyField =>
     typeof obj === "object" &&
     obj !== null &&
     "type" in obj &&
     typeof (obj as { type: unknown }).type === "string";
 
-  const normalizedOutput = isTailorField(config.output) ? config.output : t.object(config.output);
+  if (isTailorField(output)) {
+    return output;
+  }
 
-  return brandValue(
-    {
-      ...config,
-      output: normalizedOutput,
-    } as ResolverReturn<Input, Output>,
-    "resolver",
-  );
+  // Otherwise it's a Record of fields - resolve each and wrap in t.object()
+  const resolvedFields = resolveResolverFieldMap(output as Record<string, ResolverFieldEntry>);
+  return t.object(resolvedFields);
 }
 
 // A loose config alias for userland use-cases

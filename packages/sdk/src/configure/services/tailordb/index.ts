@@ -6,6 +6,7 @@ export {
   type TailorDBType,
 } from "./schema";
 export type { TailorDBInstance } from "./schema";
+export { createTable, timestampFields } from "./createTable";
 export {
   unsafeAllowAllTypePermission,
   unsafeAllowAllGqlPermission,

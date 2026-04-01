@@ -127,13 +127,14 @@ export interface TailorField<
 
 /**
  * Creates a new TailorField instance.
+ * @internal
  * @param type - Field type
  * @param options - Field options
  * @param fields - Nested fields for object-like types
  * @param values - Allowed values for enum-like fields
  * @returns A new TailorField
  */
-function createTailorField<
+export function createTailorField<
   const T extends TailorFieldType,
   const TOptions extends FieldOptions,
   const OutputBase = TailorToTs[T],

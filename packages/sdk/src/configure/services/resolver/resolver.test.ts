@@ -732,4 +732,199 @@ describe("createResolver", () => {
       expect(resolver.description).toBeUndefined();
     });
   });
+
+  describe("descriptor-based fields", () => {
+    test("descriptor input fields infer correct types", () => {
+      const resolver = createResolver({
+        name: "descriptorInput",
+        operation: "query",
+        input: {
+          name: { kind: "string" },
+          age: { kind: "int", optional: true },
+        },
+        output: t.bool(),
+        body: () => true,
+      });
+      expect(resolver.input!.name.type).toBe("string");
+      expect(resolver.input!.name.metadata.required).toBe(true);
+      expect(resolver.input!.age.type).toBe("integer");
+      expect(resolver.input!.age.metadata.required).toBe(false);
+    });
+
+    test("descriptor output field infers correct return type", () => {
+      createResolver({
+        name: "descriptorOutput",
+        operation: "query",
+        input: {
+          a: { kind: "int" },
+          b: { kind: "int" },
+        },
+        output: { kind: "int", description: "Sum" },
+        body: ({ input }) => {
+          expectTypeOf(input.a).toEqualTypeOf<number>();
+          return input.a + input.b;
+        },
+      });
+    });
+
+    test("descriptor output Record infers correct return type", () => {
+      createResolver({
+        name: "descriptorRecordOutput",
+        operation: "mutation",
+        input: {
+          id: { kind: "uuid" },
+        },
+        output: {
+          success: { kind: "bool" },
+          message: { kind: "string" },
+        },
+        body: ({ input }) => {
+          expectTypeOf(input.id).toEqualTypeOf<string>();
+          return { success: true, message: "done" };
+        },
+      });
+    });
+
+    test("mixed fluent and descriptor fields work together", () => {
+      createResolver({
+        name: "mixed",
+        operation: "query",
+        input: {
+          a: { kind: "int" },
+          b: t.int(),
+        },
+        output: t.int(),
+        body: ({ input }) => {
+          expectTypeOf(input.a).toEqualTypeOf<number>();
+          expectTypeOf(input.b).toEqualTypeOf<number>();
+          return input.a + input.b;
+        },
+      });
+    });
+
+    test("enum descriptor infers literal union type", () => {
+      const resolver = createResolver({
+        name: "enumDesc",
+        operation: "query",
+        input: {
+          role: { kind: "enum", values: ["ADMIN", "USER"] },
+        },
+        output: { kind: "string" },
+        body: ({ input }) => input.role,
+      });
+      expect(resolver.input!.role.type).toBe("enum");
+      expect(resolver.input!.role.metadata.allowedValues).toEqual([
+        { value: "ADMIN", description: "" },
+        { value: "USER", description: "" },
+      ]);
+    });
+
+    test("object descriptor infers nested type", () => {
+      const resolver = createResolver({
+        name: "objectDesc",
+        operation: "query",
+        input: {
+          user: {
+            kind: "object",
+            fields: {
+              name: { kind: "string" },
+              age: { kind: "int", optional: true },
+            },
+          },
+        },
+        output: { kind: "string" },
+        body: ({ input }) => input.user.name,
+      });
+      expect(resolver.input!.user.type).toBe("nested");
+      const nestedFields = resolver.input!.user.fields;
+      expect(nestedFields.name.type).toBe("string");
+      expect(nestedFields.age.type).toBe("integer");
+      expect(nestedFields.age.metadata.required).toBe(false);
+    });
+
+    test("array descriptor infers array type", () => {
+      createResolver({
+        name: "arrayDesc",
+        operation: "query",
+        input: {
+          tags: { kind: "string", array: true },
+        },
+        output: { kind: "int" },
+        body: ({ input }) => {
+          expectTypeOf(input.tags).toEqualTypeOf<string[]>();
+          return input.tags.length;
+        },
+      });
+    });
+
+    test("descriptor input resolves to TailorField at runtime", () => {
+      const resolver = createResolver({
+        name: "runtimeCheck",
+        operation: "query",
+        input: {
+          name: { kind: "string", description: "User name" },
+          count: { kind: "int" },
+        },
+        output: { kind: "bool" },
+        body: () => true,
+      });
+      expect(resolver.input).toBeDefined();
+      expect(resolver.input!.name.type).toBe("string");
+      expect(resolver.input!.name.metadata.description).toBe("User name");
+      expect(resolver.input!.count.type).toBe("integer");
+      expect(resolver.output.type).toBe("boolean");
+    });
+
+    test("descriptor with validate sets metadata correctly", () => {
+      const validate: [({ value }: { value: number }) => boolean, string] = [
+        ({ value }) => value >= 0,
+        "Must be non-negative",
+      ];
+      const resolver = createResolver({
+        name: "validateCheck",
+        operation: "query",
+        input: {
+          age: {
+            kind: "int",
+            validate,
+          },
+        },
+        output: { kind: "bool" },
+        body: () => true,
+      });
+      expect(resolver.input!.age.metadata.validate).toBeDefined();
+      expect(resolver.input!.age.metadata.validate!.length).toBe(1);
+    });
+
+    test("decimal descriptor outputs string type", () => {
+      createResolver({
+        name: "decimalDesc",
+        operation: "query",
+        input: {
+          amount: { kind: "decimal" },
+        },
+        output: { kind: "decimal" },
+        body: ({ input }) => {
+          expectTypeOf(input.amount).toEqualTypeOf<string>();
+          return input.amount;
+        },
+      });
+    });
+
+    test("all-descriptor resolver is compatible with ResolverInput", () => {
+      const resolver = createResolver({
+        name: "allDescriptor",
+        operation: "query",
+        input: {
+          id: { kind: "uuid" },
+          name: { kind: "string" },
+        },
+        output: {
+          found: { kind: "bool" },
+        },
+        body: () => ({ found: true }),
+      });
+      expectTypeOf(resolver).toExtend<ResolverInput>();
+    });
+  });
 });

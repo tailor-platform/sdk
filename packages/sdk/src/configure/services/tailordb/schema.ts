@@ -284,7 +284,7 @@ export interface TailorDBField<Defined extends DefinedDBFieldMetadata, Output> e
  * @param values - Allowed values for enum-like fields
  * @returns A new TailorDBField
  */
-function createTailorDBField<
+export function createTailorDBField<
   const T extends TailorFieldType,
   const TOptions extends FieldOptions,
   const OutputBase = TailorToTs[T],
@@ -980,7 +980,7 @@ export interface TailorDBType<
  * @param options.description - Optional description
  * @returns A new TailorDBType
  */
-function createTailorDBType<
+export function createTailorDBType<
   // oxlint-disable-next-line no-explicit-any
   const Fields extends Record<string, TailorAnyDBField> = any,
   User extends object = InferredAttributeMap,
