@@ -62,14 +62,16 @@ describe("renderDeploy", () => {
 
   it("references the composite action", () => {
     const content = renderDeploy(baseParams);
-    expect(content).toContain("uses: tailor-platform/actions/deploy@v1");
+    expect(content).toContain(
+      "uses: tailor-platform/actions/deploy@980aeba08963f4322b2b48ca7a920f4e14876842 # v1.0.0",
+    );
   });
 
   it("includes setup steps in correct order", () => {
     const content = renderDeploy(baseParams);
     const checkoutIndex = content.indexOf("uses: actions/checkout@");
     const setupIndex = content.indexOf("uses: pnpm/action-setup@");
-    const actionIndex = content.indexOf("uses: tailor-platform/actions/deploy@v1");
+    const actionIndex = content.indexOf("uses: tailor-platform/actions/deploy@");
     expect(checkoutIndex).toBeGreaterThan(-1);
     expect(setupIndex).toBeGreaterThan(checkoutIndex);
     expect(actionIndex).toBeGreaterThan(setupIndex);
