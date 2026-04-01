@@ -18,9 +18,11 @@ import type { Plugin } from "vite";
  *    `__dirname`, `__filename`, etc.) are removed. `performance` is removed per-test
  *    via beforeEach/afterEach since Vitest needs it during initialization.
  *
- * 3. **Platform API mocks** (environment) — `globalThis.tailordb`, `globalThis.tailor`,
- *    `TailorErrors`, `TailorErrorMessage`, `TailorDBFileError` are auto-injected.
- *    Use `tailordbMock` and `workflowMock` to configure mock responses.
+ * 3. **Platform API mocks** (environment) — All platform APIs are auto-injected:
+ *    `tailordb.Client`, `tailordb.file`, `tailor.secretmanager`, `tailor.authconnection`,
+ *    `tailor.workflow`, `tailor.idp`, `tailor.iconv`, `TailorErrors`, `TailorErrorMessage`,
+ *    `TailorDBFileError`. Use `tailordbMock` and `workflowMock` to configure responses
+ *    for `tailordb.Client` and `tailor.workflow.triggerJobFunction`.
  *
  * 4. **Environment resolution** — Rewrites `environment: "tailor-runtime"` to the
  *    absolute path of the bundled environment module via the config hook.

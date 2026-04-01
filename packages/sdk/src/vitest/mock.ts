@@ -287,18 +287,244 @@ function resolveQuery(query: string, params: unknown[]): MockQueryResult {
 }
 
 // ---------------------------------------------------------------------------
-// Mock triggerJobFunction (injected as globalThis.tailor.workflow.triggerJobFunction)
+// Mock: tailor.workflow
 // ---------------------------------------------------------------------------
 
-function mockTriggerJobFunction(jobName: string, args: unknown): unknown {
+function mockTriggerJobFunction(jobName: string, args?: unknown): unknown {
   const state = getState();
   state.triggeredJobs.push({ jobName, args });
-
-  if (state.jobResultQueue.length > 0) {
-    return state.jobResultQueue.shift();
-  }
+  if (state.jobResultQueue.length > 0) return state.jobResultQueue.shift();
   return state.jobHandler(jobName, args);
 }
+
+async function mockTriggerWorkflow(
+  _workflowName: string,
+  _args?: unknown,
+  _options?: { authInvoker?: { namespace: string; machineUserName: string } },
+): Promise<string> {
+  return "mock-execution-id";
+}
+
+function mockWait(_key: string, _payload?: unknown): unknown {
+  return null;
+}
+
+async function mockResolve(
+  _executionId: string,
+  _key: string,
+  _callback: (payload: unknown) => unknown | Promise<unknown>,
+): Promise<void> {
+  /* noop */
+}
+
+// ---------------------------------------------------------------------------
+// Mock: tailor.secretmanager
+// ---------------------------------------------------------------------------
+
+async function mockGetSecrets<const T extends readonly string[]>(
+  _vault: string,
+  _names: T,
+): Promise<Partial<Record<T[number], string>>> {
+  return {} as Partial<Record<T[number], string>>;
+}
+
+async function mockGetSecret(_vault: string, _name: string): Promise<string | undefined> {
+  return undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Mock: tailor.authconnection
+// ---------------------------------------------------------------------------
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function mockGetConnectionToken(_connectionName: string): Promise<any> {
+  return { access_token: "mock-token" };
+}
+
+// ---------------------------------------------------------------------------
+// Mock: tailor.idp
+// ---------------------------------------------------------------------------
+
+class MockIdpClient {
+  constructor(_config: { namespace: string }) {}
+
+  async users(_options?: {
+    first?: number;
+    after?: string;
+    query?: { ids?: string[]; names?: string[] };
+  }): Promise<{ users: tailor.idp.User[]; nextPageToken: string | null; totalCount: number }> {
+    return { users: [], nextPageToken: null, totalCount: 0 };
+  }
+
+  async user(_userId: string): Promise<tailor.idp.User> {
+    return { id: "mock-id", name: "mock-user", disabled: false };
+  }
+
+  async userByName(_name: string): Promise<tailor.idp.User> {
+    return { id: "mock-id", name: "mock-user", disabled: false };
+  }
+
+  async createUser(_input: {
+    name: string;
+    password?: string;
+    disabled?: boolean;
+  }): Promise<tailor.idp.User> {
+    return { id: "mock-id", name: "mock-user", disabled: false };
+  }
+
+  async updateUser(_input: {
+    id: string;
+    name?: string;
+    password?: string;
+    clearPassword?: boolean;
+    disabled?: boolean;
+  }): Promise<tailor.idp.User> {
+    return { id: "mock-id", name: "mock-user", disabled: false };
+  }
+
+  async deleteUser(_userId: string): Promise<boolean> {
+    return true;
+  }
+
+  async sendPasswordResetEmail(_input: { userId: string; redirectUri: string }): Promise<boolean> {
+    return true;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Mock: tailor.iconv
+// ---------------------------------------------------------------------------
+
+function mockConvert<T extends string>(
+  _str: string | Uint8Array | ArrayBuffer,
+  _fromEncoding: string,
+  _toEncoding: T,
+): T extends "UTF8" | "UTF-8" ? string : Uint8Array {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return "" as any;
+}
+
+function mockConvertBuffer<T extends string>(
+  _buffer: Uint8Array | ArrayBuffer,
+  _fromEncoding: string,
+  _toEncoding: T,
+): T extends "UTF8" | "UTF-8" ? string : Uint8Array {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return "" as any;
+}
+
+function mockDecode(_buffer: Uint8Array | ArrayBuffer, _encoding: string): string {
+  return "";
+}
+
+function mockEncode<T extends string>(
+  _str: string,
+  _encoding: T,
+): T extends "UTF8" | "UTF-8" ? string : Uint8Array {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return "" as any;
+}
+
+function mockEncodings(): string[] {
+  return [];
+}
+
+class MockIconv {
+  constructor(_fromEncoding: string, _toEncoding: string) {}
+
+  convert(_input: string | Uint8Array | ArrayBuffer): string | Uint8Array {
+    return "";
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Mock: tailordb.file
+// ---------------------------------------------------------------------------
+
+const mockTailordbFile = {
+  async upload(
+    _namespace: string,
+    _typeName: string,
+    _fieldName: string,
+    _recordId: string,
+    _data: string | ArrayBuffer | Uint8Array | number[],
+    _options?: { contentType?: string },
+  ): Promise<{ metadata: { fileSize: number; sha256sum: string } }> {
+    return { metadata: { fileSize: 0, sha256sum: "" } };
+  },
+
+  async download(
+    _namespace: string,
+    _typeName: string,
+    _fieldName: string,
+    _recordId: string,
+  ): Promise<{
+    data: Uint8Array;
+    metadata: { contentType: string; fileSize: number; sha256sum: string; lastUploadedAt: string };
+  }> {
+    return {
+      data: new Uint8Array(),
+      metadata: { contentType: "", fileSize: 0, sha256sum: "", lastUploadedAt: "" },
+    };
+  },
+
+  async downloadAsBase64(
+    _namespace: string,
+    _typeName: string,
+    _fieldName: string,
+    _recordId: string,
+  ): Promise<{
+    data: string;
+    metadata: { contentType: string; fileSize: number; sha256sum: string; lastUploadedAt: string };
+  }> {
+    return {
+      data: "",
+      metadata: { contentType: "", fileSize: 0, sha256sum: "", lastUploadedAt: "" },
+    };
+  },
+
+  async delete(
+    _namespace: string,
+    _typeName: string,
+    _fieldName: string,
+    _recordId: string,
+  ): Promise<void> {
+    /* noop */
+  },
+
+  async getMetadata(
+    _namespace: string,
+    _typeName: string,
+    _fieldName: string,
+    _recordId: string,
+  ): Promise<{
+    contentType: string;
+    fileSize: number;
+    sha256sum: string;
+    urlPath: string;
+    lastUploadedAt?: string;
+  }> {
+    return { contentType: "", fileSize: 0, sha256sum: "", urlPath: "" };
+  },
+
+  openDownloadStream(
+    _namespace: string,
+    _typeName: string,
+    _fieldName: string,
+    _recordId: string,
+  ): Promise<AsyncIterableIterator<unknown> & { close(): Promise<void> }> {
+    const iterator: AsyncIterableIterator<unknown> & { close(): Promise<void> } = {
+      async next() {
+        return { done: true as const, value: undefined };
+      },
+      async close() {},
+      [Symbol.asyncIterator]() {
+        return iterator;
+      },
+    };
+    return Promise.resolve(iterator);
+  },
+};
 
 // ---------------------------------------------------------------------------
 // Error class mocks
@@ -339,31 +565,15 @@ class TailorErrorMessageMock extends Error {
 }
 
 class TailorDBFileErrorMock extends Error {
-  code: string;
-  override cause: Error | undefined;
+  code?: string;
+  override cause: unknown;
 
-  constructor(message: string, code: string, cause?: Error) {
+  constructor(message: string, code?: string, cause?: unknown) {
     super(message);
     this.name = "TailorDBFileError";
     this.code = code;
     this.cause = cause;
   }
-}
-
-// ---------------------------------------------------------------------------
-// Proxy for unimplemented platform APIs
-// ---------------------------------------------------------------------------
-
-function notImplementedProxy(name: string): unknown {
-  return new Proxy(
-    {},
-    {
-      get(_target, prop) {
-        if (typeof prop === "symbol") return undefined;
-        throw new Error(`${name}.${prop} is not implemented in the test environment.`);
-      },
-    },
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -383,20 +593,32 @@ export function injectMocks(global: typeof globalThis): void {
 
   g.tailordb = {
     Client: MockTailordbClient,
-    file: notImplementedProxy("tailordb.file"),
+    file: mockTailordbFile,
   };
 
   g.tailor = {
-    secretmanager: notImplementedProxy("tailor.secretmanager"),
-    authconnection: notImplementedProxy("tailor.authconnection"),
+    secretmanager: {
+      getSecrets: mockGetSecrets,
+      getSecret: mockGetSecret,
+    },
+    authconnection: {
+      getConnectionToken: mockGetConnectionToken,
+    },
     workflow: {
       triggerJobFunction: mockTriggerJobFunction,
-      triggerWorkflow: notImplementedProxy("tailor.workflow.triggerWorkflow"),
-      wait: notImplementedProxy("tailor.workflow.wait"),
-      resolve: notImplementedProxy("tailor.workflow.resolve"),
+      triggerWorkflow: mockTriggerWorkflow,
+      wait: mockWait,
+      resolve: mockResolve,
     },
-    idp: { Client: notImplementedProxy("tailor.idp.Client") },
-    iconv: notImplementedProxy("tailor.iconv"),
+    idp: { Client: MockIdpClient },
+    iconv: {
+      convert: mockConvert,
+      convertBuffer: mockConvertBuffer,
+      decode: mockDecode,
+      encode: mockEncode,
+      encodings: mockEncodings,
+      Iconv: MockIconv,
+    },
   };
 
   g.TailorErrors = TailorErrorsMock;

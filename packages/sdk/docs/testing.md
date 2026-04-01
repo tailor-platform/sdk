@@ -141,18 +141,11 @@ export default defineConfig({
 
 - **`process` and `require`** are not removed or blocked. Vitest's internal runner depends on them extensively. On the real platform runtime, they do not exist.
 - **Dynamic `import()`** of bundled files (via `createImportMain()`) bypasses the transform hook since those files are loaded through the Node.js native loader.
-- **Platform APIs not fully mocked** — Only `tailordb.Client` and `tailor.workflow.triggerJobFunction` have built-in mock implementations. Other platform APIs (`tailor.secretmanager`, `tailor.authconnection`, `tailor.idp`, `tailor.iconv`, `tailordb.file`) throw "not implemented" errors by default. If your code uses them, mock them in your test:
+- **Platform API mocks return default values** — All platform APIs (`tailor.secretmanager`, `tailor.authconnection`, `tailor.idp`, `tailor.iconv`, `tailordb.file`, `tailor.workflow`) are mocked with default return values (empty strings, empty arrays, etc.). For `tailordb.Client` and `tailor.workflow.triggerJobFunction`, use `tailordbMock` and `workflowMock` to configure responses. For other APIs, override with `vi.fn()` if you need custom behavior:
 
 ```typescript
 beforeEach(() => {
-  // Mock secretmanager for tests that use tailor.secretmanager.getSecret()
-  (globalThis as Record<string, unknown>).tailor = {
-    ...globalThis.tailor,
-    secretmanager: {
-      getSecret: vi.fn().mockResolvedValue("my-secret-value"),
-      getSecrets: vi.fn().mockResolvedValue({ API_KEY: "test-key" }),
-    },
-  };
+  tailor.secretmanager.getSecret = vi.fn().mockResolvedValue("my-secret-value");
 });
 ```
 

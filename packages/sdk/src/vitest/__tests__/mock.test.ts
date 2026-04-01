@@ -175,17 +175,30 @@ describe("mock", () => {
     });
   });
 
-  describe("unimplemented APIs", () => {
-    test("tailor.secretmanager throws", () => {
-      expect(() => (globalThis as any).tailor.secretmanager.getSecret).toThrow("not implemented");
+  describe("platform APIs are available", () => {
+    test("tailor.secretmanager", () => {
+      expect((globalThis as any).tailor.secretmanager.getSecret).toBeTypeOf("function");
+      expect((globalThis as any).tailor.secretmanager.getSecrets).toBeTypeOf("function");
     });
 
-    test("tailor.iconv throws", () => {
-      expect(() => (globalThis as any).tailor.iconv.convert).toThrow("not implemented");
+    test("tailor.authconnection", () => {
+      expect((globalThis as any).tailor.authconnection.getConnectionToken).toBeTypeOf("function");
     });
 
-    test("tailordb.file throws", () => {
-      expect(() => (globalThis as any).tailordb.file.upload).toThrow("not implemented");
+    test("tailor.idp.Client", () => {
+      expect((globalThis as any).tailor.idp.Client).toBeTypeOf("function");
+    });
+
+    test("tailor.iconv", () => {
+      expect((globalThis as any).tailor.iconv.convert).toBeTypeOf("function");
+      expect((globalThis as any).tailor.iconv.encodings).toBeTypeOf("function");
+      expect((globalThis as any).tailor.iconv.Iconv).toBeTypeOf("function");
+    });
+
+    test("tailordb.file", () => {
+      expect((globalThis as any).tailordb.file.upload).toBeTypeOf("function");
+      expect((globalThis as any).tailordb.file.download).toBeTypeOf("function");
+      expect((globalThis as any).tailordb.file.delete).toBeTypeOf("function");
     });
   });
 
