@@ -25,70 +25,10 @@ const SUGGESTIONS: Record<string, string> = {
   string_decoder: "Use TextDecoder instead.",
 };
 
-/**
- * All Node.js built-in modules that should be blocked.
- * Includes both `node:` prefixed and bare specifier forms.
- */
-const NODE_BUILTINS = [
-  "assert",
-  "assert/strict",
-  "async_hooks",
-  "buffer",
-  "child_process",
-  "cluster",
-  "console",
-  "constants",
-  "crypto",
-  "dgram",
-  "diagnostics_channel",
-  "dns",
-  "dns/promises",
-  "domain",
-  "events",
-  "fs",
-  "fs/promises",
-  "http",
-  "http2",
-  "https",
-  "inspector",
-  "inspector/promises",
-  "module",
-  "net",
-  "os",
-  "path",
-  "path/posix",
-  "path/win32",
-  "perf_hooks",
-  "process",
-  "punycode",
-  "querystring",
-  "readline",
-  "readline/promises",
-  "repl",
-  "stream",
-  "stream/consumers",
-  "stream/promises",
-  "stream/web",
-  "string_decoder",
-  "sys",
-  "test",
-  "timers",
-  "timers/promises",
-  "tls",
-  "trace_events",
-  "tty",
-  "url",
-  "util",
-  "util/types",
-  "v8",
-  "vm",
-  "wasi",
-  "worker_threads",
-  "zlib",
-];
+import { builtinModules } from "node:module";
 
 const BLOCKED_MODULES = new Set<string>();
-for (const mod of NODE_BUILTINS) {
+for (const mod of builtinModules) {
   BLOCKED_MODULES.add(mod);
   BLOCKED_MODULES.add(`node:${mod}`);
 }
