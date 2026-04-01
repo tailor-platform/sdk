@@ -1,5 +1,6 @@
-import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+// eslint-disable-next-line import-x/order -- resolution differs between local (internal) and CI (external)
 import { format } from "date-fns";
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
 
 export const fetchDetails = createWorkflowJob({
   name: "fetch-details",
