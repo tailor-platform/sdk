@@ -44,7 +44,7 @@ interface MockState {
 // State management (shared via globalThis for environment/test interop)
 // ---------------------------------------------------------------------------
 
-const STATE_KEY = "__tailorMockState";
+export const STATE_KEY = "__tailorMockState";
 
 function getState(): MockState {
   const g = globalThis as Record<string, unknown>;
