@@ -44,7 +44,7 @@ function isExternal(symbol) {
  */
 function walkUndocumentedExports(checker, mod, onUndocumented) {
   /**
-   * @param symbol
+   * @param {import('typescript').Symbol} symbol - The symbol to check for documentation
    * @returns {boolean} Whether the symbol has JSDoc documentation
    */
   function hasDoc(symbol) {
