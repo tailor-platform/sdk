@@ -64,14 +64,6 @@ Multi-event trigger variants handle multiple events in one executor:
 
 Args include `event` (short name like `"created"`) and `rawEvent` (full event type like `"tailordb.type_record.created"`) for runtime type narrowing.
 
-### TailorDB / Kysely Types
-
-- Top-level `db.date()`/`db.datetime()` fields use the `Timestamp` utility type
-- Nested objects (`db.object()`) containing date/datetime fields are wrapped in `ObjectColumnType<...>`:
-  - Insert/Update: datetime accepts `Date | string`
-  - Select: datetime returns `Date`
-- Nullable fields inside `db.object()` are optional (`field?: type | null`) for inserts, required for selects
-
 ### Generators
 
 `defineGenerators()` takes tuples as rest arguments (see `example/tailor.config.ts`). The `@tailor-platform/kysely-type` generator (built into the SDK) is required for `getDB()` in resolvers/executors/workflows.
