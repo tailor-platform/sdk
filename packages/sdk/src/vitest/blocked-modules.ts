@@ -6,35 +6,22 @@
  * the suggested alternatives.
  */
 
+// Suggestions keyed by bare specifier. Lookup also checks with "node:" prefix stripped.
 const SUGGESTIONS: Record<string, string> = {
-  "node:crypto": "Use the Web Crypto API (globalThis.crypto) instead.",
   crypto: "Use the Web Crypto API (globalThis.crypto) instead.",
-  "node:buffer": "Use Uint8Array or ArrayBuffer instead.",
   buffer: "Use Uint8Array or ArrayBuffer instead.",
-  "node:fs": "File system access is not available in the Tailor Platform runtime.",
   fs: "File system access is not available in the Tailor Platform runtime.",
-  "node:fs/promises": "File system access is not available in the Tailor Platform runtime.",
-  "node:path": "Use URL or URLPattern for path manipulation.",
+  "fs/promises": "File system access is not available in the Tailor Platform runtime.",
   path: "Use URL or URLPattern for path manipulation.",
-  "node:http": "Use the Fetch API (globalThis.fetch) for HTTP requests instead.",
   http: "Use the Fetch API (globalThis.fetch) for HTTP requests instead.",
-  "node:https": "Use the Fetch API (globalThis.fetch) for HTTPS requests instead.",
   https: "Use the Fetch API (globalThis.fetch) for HTTPS requests instead.",
-  "node:url": "Use the URL and URLSearchParams Web APIs instead.",
   url: "Use the URL and URLSearchParams Web APIs instead.",
-  "node:util": "Use Web Standard APIs instead.",
   util: "Use Web Standard APIs instead.",
-  "node:stream": "Use Web Streams API (ReadableStream, WritableStream, TransformStream) instead.",
   stream: "Use Web Streams API (ReadableStream, WritableStream, TransformStream) instead.",
-  "node:stream/web":
-    "Use Web Streams API (ReadableStream, WritableStream, TransformStream) instead.",
-  "node:events": "Use EventTarget instead.",
+  "stream/web": "Use Web Streams API (ReadableStream, WritableStream, TransformStream) instead.",
   events: "Use EventTarget instead.",
-  "node:zlib": "Use CompressionStream and DecompressionStream Web APIs instead.",
   zlib: "Use CompressionStream and DecompressionStream Web APIs instead.",
-  "node:querystring": "Use URLSearchParams instead.",
   querystring: "Use URLSearchParams instead.",
-  "node:string_decoder": "Use TextDecoder instead.",
   string_decoder: "Use TextDecoder instead.",
 };
 
@@ -121,7 +108,8 @@ export function isBlockedModule(specifier: string): boolean {
  * @returns Error message with optional suggestion for the Web Standard API alternative
  */
 export function getBlockedMessage(specifier: string): string {
-  const suggestion = SUGGESTIONS[specifier];
+  const bare = specifier.startsWith("node:") ? specifier.slice(5) : specifier;
+  const suggestion = SUGGESTIONS[bare];
   const base = `"${specifier}" is not available in the Tailor Platform runtime.`;
   return suggestion ? `${base} ${suggestion}` : base;
 }
