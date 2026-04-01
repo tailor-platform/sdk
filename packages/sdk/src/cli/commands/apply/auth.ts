@@ -23,17 +23,14 @@ import {
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import { type AuthService } from "@/cli/services/auth/service";
 import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "@/cli/shared/client";
-import { logger, styles } from "@/cli/shared/logger";
 import { OAuth2ClientSchema } from "@/parser/service/auth";
 import { createChangeSet, type HasName } from "./change-set";
 import { areNormalizedEqual, normalizeProtoConfig, normalizeStringArray } from "./compare";
 import { authHookFunctionName } from "./function-registry";
 import {
-  actionSymbol,
-  buildRemainingFunctionRegistryEntries,
-  createRelatedFunctionRegistryNameSets,
+  formatChangeEntriesWithFunctionRegistry,
   type GroupedDisplayEntry,
-  type RelatedFunctionRegistryNameSets,
+  printGroupedDisplaySection,
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
@@ -267,7 +264,7 @@ export async function applyAuth(
  */
 export async function planAuth(
   context: PlanContext,
-  functionRegistryAuthHookChanges?: RelatedFunctionRegistryChanges,
+  functionRegistryAuthHookChanges: RelatedFunctionRegistryChanges,
 ) {
   const { client, workspaceId, application, forRemoval, forceApplyAll = false } = context;
   const auths: Readonly<AuthService>[] = [];
@@ -1910,13 +1907,6 @@ function areAuthHooksEqual(
   );
 }
 
-type AuthHookDisplayEntry = GroupedDisplayEntry;
-
-function authHookFunctionNameFromDisplayName(name: string) {
-  const [namespace, hookPoint] = name.split("/");
-  return namespace && hookPoint ? authHookFunctionName(namespace, hookPoint) : undefined;
-}
-
 /**
  * Format auth hook changes for grouped dry-run display.
  * @param changeSet - Auth hook changes
@@ -1925,10 +1915,6 @@ function authHookFunctionNameFromDisplayName(name: string) {
  * @param changeSet.deletes - Auth hook deletions
  * @param changeSet.replaces - Auth hook replacements
  * @param functionRegistryAuthHookChanges - Related function registry changes for auth hooks
- * @param functionRegistryAuthHookChanges.creates - Function registry creations
- * @param functionRegistryAuthHookChanges.updates - Function registry updates
- * @param functionRegistryAuthHookChanges.deletes - Function registry deletions
- * @param functionRegistryAuthHookChanges.replaces - Function registry replacements
  * @returns Display entries for auth hook output
  */
 export function formatAuthHookChangeEntries(
@@ -1939,89 +1925,24 @@ export function formatAuthHookChangeEntries(
     replaces: ReadonlyArray<HasName>;
   },
   functionRegistryAuthHookChanges?: RelatedFunctionRegistryChanges,
-): AuthHookDisplayEntry[] {
-  const functionNames = createRelatedFunctionRegistryNameSets(functionRegistryAuthHookChanges);
-  const consumed: RelatedFunctionRegistryNameSets = createRelatedFunctionRegistryNameSets();
-
-  const createEntries = changeSet.creates.map((item) => {
-    const functionName = authHookFunctionNameFromDisplayName(item.name);
-    const hasFunctionRegistryChange = Boolean(
-      functionName && functionNames.creates.has(functionName),
-    );
-    if (functionName && hasFunctionRegistryChange) {
-      consumed.creates.add(functionName);
-    }
-    return {
-      action: "create" as const,
-      symbol: actionSymbol("create"),
-      name: item.name,
-      labels: hasFunctionRegistryChange ? ["authHook", "functionRegistry"] : ["authHook"],
-    };
-  });
-  const deleteEntries = changeSet.deletes.map((item) => {
-    const functionName = authHookFunctionNameFromDisplayName(item.name);
-    const hasFunctionRegistryChange = Boolean(
-      functionName && functionNames.deletes.has(functionName),
-    );
-    if (functionName && hasFunctionRegistryChange) {
-      consumed.deletes.add(functionName);
-    }
-    return {
-      action: "delete" as const,
-      symbol: actionSymbol("delete"),
-      name: item.name,
-      labels: hasFunctionRegistryChange ? ["authHook", "functionRegistry"] : ["authHook"],
-    };
-  });
-  const updateEntries = changeSet.updates.map((item) => {
-    const functionName = authHookFunctionNameFromDisplayName(item.name);
-    const hasFunctionRegistryChange = Boolean(
-      functionName && functionNames.updates.has(functionName),
-    );
-    if (functionName && hasFunctionRegistryChange) {
-      consumed.updates.add(functionName);
-    }
-    return {
-      action: "update" as const,
-      symbol: actionSymbol("update"),
-      name: item.name,
-      labels: hasFunctionRegistryChange ? ["authHook", "functionRegistry"] : ["authHook"],
-    };
-  });
-  const replaceEntries = changeSet.replaces.map((item) => ({
-    action: "replace" as const,
-    symbol: actionSymbol("replace"),
-    name: item.name,
-    labels: ["authHook"],
-  }));
-
-  return [
-    ...createEntries,
-    ...deleteEntries,
-    ...updateEntries,
-    ...replaceEntries,
-    ...buildRemainingFunctionRegistryEntries(functionNames, consumed),
-  ];
+): GroupedDisplayEntry[] {
+  return formatChangeEntriesWithFunctionRegistry(
+    "authHook",
+    changeSet,
+    functionRegistryAuthHookChanges,
+    (item) => {
+      const [namespace, hookPoint] = item.name.split("/");
+      return namespace && hookPoint ? [authHookFunctionName(namespace, hookPoint)] : [];
+    },
+  );
 }
 
 function printAuthHookChanges(
   changeSet: AuthHookChangeSet,
-  functionRegistryAuthHookChanges?: {
-    creates: ReadonlyArray<HasName>;
-    updates: ReadonlyArray<HasName>;
-    deletes: ReadonlyArray<HasName>;
-    replaces: ReadonlyArray<HasName>;
-  },
+  functionRegistryAuthHookChanges?: RelatedFunctionRegistryChanges,
 ) {
   const entries = formatAuthHookChangeEntries(changeSet, functionRegistryAuthHookChanges);
-  if (entries.length === 0) {
-    return;
-  }
-
-  logger.log(styles.bold("Auth hooks:"));
-  for (const entry of entries) {
-    logger.log(`  ${entry.symbol} ${entry.name} (${entry.labels.join(", ")})`);
-  }
+  printGroupedDisplaySection("Auth hooks", entries);
 }
 
 async function planAuthHooks(

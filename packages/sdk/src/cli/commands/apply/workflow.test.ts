@@ -1,8 +1,16 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { sdkNameLabelKey } from "./label";
 import { applyWorkflow, formatWorkflowChangeEntries, planWorkflow } from "./workflow";
+import type { RelatedFunctionRegistryChanges } from "./grouped-display";
 import type { OperatorClient } from "@/cli/shared/client";
 import type { Workflow, WorkflowJob } from "@/types/workflow.generated";
+
+const emptyFunctionRegistryChanges: RelatedFunctionRegistryChanges = {
+  creates: [],
+  updates: [],
+  deletes: [],
+  replaces: [],
+};
 
 // Mock label.ts
 vi.mock("./label", async (importOriginal) => {
@@ -108,7 +116,15 @@ describe("planWorkflow", () => {
         "main-job": ["main-job"],
       };
 
-      const result = await planWorkflow(client, workspaceId, appName, workflows, mainJobDeps);
+      const result = await planWorkflow(
+        client,
+        workspaceId,
+        appName,
+        workflows,
+        mainJobDeps,
+        new Set(),
+        emptyFunctionRegistryChanges,
+      );
 
       // "new-workflow" should be created
       expect(result.changeSet.creates).toHaveLength(1);
@@ -136,7 +152,15 @@ describe("planWorkflow", () => {
         "job-a": ["job-a"],
       };
 
-      const result = await planWorkflow(client, workspaceId, appName, workflows, mainJobDeps);
+      const result = await planWorkflow(
+        client,
+        workspaceId,
+        appName,
+        workflows,
+        mainJobDeps,
+        new Set(),
+        emptyFunctionRegistryChanges,
+      );
 
       // "workflow-a" should be updated
       expect(result.changeSet.updates).toHaveLength(1);
@@ -153,7 +177,15 @@ describe("planWorkflow", () => {
         { id: "2", name: "workflow-2", label: appName },
       ]);
 
-      const result = await planWorkflow(client, workspaceId, appName, {}, {});
+      const result = await planWorkflow(
+        client,
+        workspaceId,
+        appName,
+        {},
+        {},
+        new Set(),
+        emptyFunctionRegistryChanges,
+      );
 
       expect(result.changeSet.deletes).toHaveLength(2);
       expect(result.changeSet.deletes.map((d) => d.name).sort()).toEqual([
@@ -169,7 +201,15 @@ describe("planWorkflow", () => {
         { id: "1", name: "unmanaged-workflow" }, // No label
       ]);
 
-      const result = await planWorkflow(client, workspaceId, appName, {}, {});
+      const result = await planWorkflow(
+        client,
+        workspaceId,
+        appName,
+        {},
+        {},
+        new Set(),
+        emptyFunctionRegistryChanges,
+      );
 
       expect(result.changeSet.deletes).toHaveLength(0);
     });
@@ -177,7 +217,15 @@ describe("planWorkflow", () => {
     test("workflow owned by different app is NOT deleted", async () => {
       const client = createMockClient([{ id: "1", name: "other-workflow", label: "other-app" }]);
 
-      const result = await planWorkflow(client, workspaceId, appName, {}, {});
+      const result = await planWorkflow(
+        client,
+        workspaceId,
+        appName,
+        {},
+        {},
+        new Set(),
+        emptyFunctionRegistryChanges,
+      );
 
       expect(result.changeSet.deletes).toHaveLength(0);
       expect(result.resourceOwners.has("other-app")).toBe(true);
@@ -190,7 +238,15 @@ describe("planWorkflow", () => {
         { id: "3", name: "unmanaged-workflow" }, // No label
       ]);
 
-      const result = await planWorkflow(client, workspaceId, appName, {}, {});
+      const result = await planWorkflow(
+        client,
+        workspaceId,
+        appName,
+        {},
+        {},
+        new Set(),
+        emptyFunctionRegistryChanges,
+      );
 
       expect(result.changeSet.deletes).toHaveLength(1);
       expect(result.changeSet.deletes[0].name).toBe("my-workflow");
@@ -232,6 +288,7 @@ describe("planWorkflow", () => {
         workflows,
         mainJobDeps,
         new Set(["validate-order", "check-inventory", "process-payment"]),
+        emptyFunctionRegistryChanges,
       );
 
       expect(result.changeSet.unchanged).toHaveLength(1);
@@ -292,6 +349,7 @@ describe("planWorkflow", () => {
         workflows,
         mainJobDeps,
         new Set(["process-order", "fetch-customer", "send-notification"]),
+        emptyFunctionRegistryChanges,
       );
 
       expect(result.changeSet.unchanged).toHaveLength(1);

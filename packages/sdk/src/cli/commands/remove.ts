@@ -22,6 +22,7 @@ import { loadConfig, type LoadedConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { prompt } from "@/cli/shared/prompt";
+import type { RelatedFunctionRegistryChanges } from "@/cli/commands/apply/grouped-display";
 
 export interface RemoveOptions {
   workspaceId?: string;
@@ -67,11 +68,25 @@ async function execRemove(
   const tailorDB = await planTailorDB(ctx);
   const staticWebsite = await planStaticWebsite(ctx);
   const idp = await planIdP(ctx);
-  const auth = await planAuth(ctx);
-  const pipeline = await planPipeline(ctx);
+  const emptyChanges: RelatedFunctionRegistryChanges = {
+    creates: [],
+    updates: [],
+    deletes: [],
+    replaces: [],
+  };
+  const auth = await planAuth(ctx, emptyChanges);
+  const pipeline = await planPipeline(ctx, emptyChanges);
   const app = await planApplication(ctx);
-  const executor = await planExecutor(ctx);
-  const workflow = await planWorkflow(client, workspaceId, application.name, {}, {});
+  const executor = await planExecutor(ctx, emptyChanges);
+  const workflow = await planWorkflow(
+    client,
+    workspaceId,
+    application.name,
+    {},
+    {},
+    new Set(),
+    emptyChanges,
+  );
   const functionRegistry = await planFunctionRegistry(client, workspaceId, application.name, []);
   const secretManager = await planSecretManager(ctx);
 

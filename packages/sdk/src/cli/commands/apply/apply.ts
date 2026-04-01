@@ -40,6 +40,7 @@ import {
   applyFunctionRegistry,
   collectFunctionEntries,
   filterBundledWorkflowJobs,
+  isWorkflowJobFunctionName,
   planFunctionRegistry,
   splitFunctionRegistryChanges,
 } from "./function-registry";
@@ -543,9 +544,8 @@ export async function apply(options?: ApplyOptions) {
       );
       const unchangedWorkflowJobs = new Set(
         functionRegistry.changeSet.unchanged
-          .map((entry) => entry.name)
-          .filter((name) => name.startsWith("workflow--"))
-          .map((name) => name.slice("workflow--".length)),
+          .filter((entry) => isWorkflowJobFunctionName(entry.name))
+          .map((entry) => entry.name.slice("workflow--".length)),
       );
       const [tailorDB, staticWebsite, idp, auth, pipeline, app, executor, workflow, secretManager] =
         await Promise.all([

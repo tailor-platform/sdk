@@ -2,11 +2,19 @@ import { describe, test, expect, vi, beforeEach } from "vitest";
 import { formatExecutorChangeEntries, planExecutor } from "./executor";
 import { sdkNameLabelKey } from "./label";
 import type { PlanContext } from "./apply";
+import type { RelatedFunctionRegistryChanges } from "./grouped-display";
 import type { Application } from "@/cli/services/application";
 import type { ExecutorService } from "@/cli/services/executor/service";
 import type { OperatorClient } from "@/cli/shared/client";
 import type { LoadedConfig } from "@/cli/shared/config-loader";
 import type { Executor } from "@/types/executor.generated";
+
+const emptyFunctionRegistryChanges: RelatedFunctionRegistryChanges = {
+  creates: [],
+  updates: [],
+  deletes: [],
+  replaces: [],
+};
 
 // Mock node:fs to avoid file system access
 vi.mock("node:fs", () => ({
@@ -187,7 +195,7 @@ describe("planExecutor", () => {
         config: mockConfig,
       };
 
-      const result = await planExecutor(ctx);
+      const result = await planExecutor(ctx, emptyFunctionRegistryChanges);
 
       // "new-executor" should be created
       expect(result.changeSet.creates).toHaveLength(1);
@@ -222,7 +230,7 @@ describe("planExecutor", () => {
         config: mockConfig,
       };
 
-      const result = await planExecutor(ctx);
+      const result = await planExecutor(ctx, emptyFunctionRegistryChanges);
 
       // "executor-a-renamed" should be created
       expect(result.changeSet.creates).toHaveLength(1);
@@ -257,7 +265,7 @@ describe("planExecutor", () => {
         config: mockConfig,
       };
 
-      const result = await planExecutor(ctx);
+      const result = await planExecutor(ctx, emptyFunctionRegistryChanges);
 
       // "executor-a" should be updated
       expect(result.changeSet.updates).toHaveLength(1);
@@ -290,7 +298,7 @@ describe("planExecutor", () => {
         config: mockConfig,
       };
 
-      const result = await planExecutor(ctx);
+      const result = await planExecutor(ctx, emptyFunctionRegistryChanges);
 
       // All should be deleted
       expect(result.changeSet.deletes).toHaveLength(3);
@@ -324,7 +332,7 @@ describe("planExecutor", () => {
         config: mockConfig,
       };
 
-      const result = await planExecutor(ctx);
+      const result = await planExecutor(ctx, emptyFunctionRegistryChanges);
 
       // Should NOT be deleted (no label means not managed by SDK)
       expect(result.changeSet.deletes).toHaveLength(0);
@@ -345,7 +353,7 @@ describe("planExecutor", () => {
         config: mockConfig,
       };
 
-      const result = await planExecutor(ctx);
+      const result = await planExecutor(ctx, emptyFunctionRegistryChanges);
 
       // Should NOT be deleted (owned by different app)
       expect(result.changeSet.deletes).toHaveLength(0);
@@ -372,7 +380,7 @@ describe("planExecutor", () => {
         config: mockConfig,
       };
 
-      const result = await planExecutor(ctx);
+      const result = await planExecutor(ctx, emptyFunctionRegistryChanges);
 
       // Only own executor should be deleted
       expect(result.changeSet.deletes).toHaveLength(1);
@@ -399,7 +407,7 @@ describe("planExecutor", () => {
         config: mockConfig,
       };
 
-      const result = await planExecutor(ctx);
+      const result = await planExecutor(ctx, emptyFunctionRegistryChanges);
 
       // Should be created
       expect(result.changeSet.creates).toHaveLength(1);
@@ -427,7 +435,7 @@ describe("planExecutor", () => {
         config: mockConfig,
       };
 
-      const result = await planExecutor(ctx);
+      const result = await planExecutor(ctx, emptyFunctionRegistryChanges);
 
       // Should be updated
       expect(result.changeSet.updates).toHaveLength(1);
@@ -441,13 +449,16 @@ describe("planExecutor", () => {
     test("existing executor is unchanged when remote definition matches desired definition", async () => {
       const executor = createMockExecutor("existing-executor");
       const createClient = createMockClient([]);
-      const createResult = await planExecutor({
-        client: createClient,
-        workspaceId,
-        application: createMockApplication([executor]),
-        forRemoval: false,
-        config: mockConfig,
-      });
+      const createResult = await planExecutor(
+        {
+          client: createClient,
+          workspaceId,
+          application: createMockApplication([executor]),
+          forRemoval: false,
+          config: mockConfig,
+        },
+        emptyFunctionRegistryChanges,
+      );
       const desiredExecutor = createResult.changeSet.creates[0].request.executor;
 
       const client = createMockClient([
@@ -458,13 +469,16 @@ describe("planExecutor", () => {
         },
       ]);
 
-      const result = await planExecutor({
-        client,
-        workspaceId,
-        application: createMockApplication([executor]),
-        forRemoval: false,
-        config: mockConfig,
-      });
+      const result = await planExecutor(
+        {
+          client,
+          workspaceId,
+          application: createMockApplication([executor]),
+          forRemoval: false,
+          config: mockConfig,
+        },
+        emptyFunctionRegistryChanges,
+      );
 
       expect(result.changeSet.unchanged).toHaveLength(1);
       expect(result.changeSet.unchanged[0].name).toBe("existing-executor");
@@ -487,13 +501,16 @@ describe("planExecutor", () => {
         },
       };
       const createClient = createMockClient([]);
-      const createResult = await planExecutor({
-        client: createClient,
-        workspaceId,
-        application: createMockApplication([executor], { tailorDBTypes: { User: "tailordb" } }),
-        forRemoval: false,
-        config: mockConfig,
-      });
+      const createResult = await planExecutor(
+        {
+          client: createClient,
+          workspaceId,
+          application: createMockApplication([executor], { tailorDBTypes: { User: "tailordb" } }),
+          forRemoval: false,
+          config: mockConfig,
+        },
+        emptyFunctionRegistryChanges,
+      );
       const desiredExecutor = structuredClone(createResult.changeSet.creates[0].request.executor);
       const eventConfig = desiredExecutor?.triggerConfig?.config;
       if (eventConfig?.case !== "event") {
@@ -509,13 +526,16 @@ describe("planExecutor", () => {
         },
       ]);
 
-      const result = await planExecutor({
-        client,
-        workspaceId,
-        application: createMockApplication([executor], { tailorDBTypes: { User: "tailordb" } }),
-        forRemoval: false,
-        config: mockConfig,
-      });
+      const result = await planExecutor(
+        {
+          client,
+          workspaceId,
+          application: createMockApplication([executor], { tailorDBTypes: { User: "tailordb" } }),
+          forRemoval: false,
+          config: mockConfig,
+        },
+        emptyFunctionRegistryChanges,
+      );
 
       expect(result.changeSet.unchanged).toHaveLength(1);
       expect(result.changeSet.unchanged[0].name).toBe("existing-executor");
@@ -540,7 +560,7 @@ describe("planExecutor", () => {
         config: mockConfig,
       };
 
-      const result = await planExecutor(ctx);
+      const result = await planExecutor(ctx, emptyFunctionRegistryChanges);
 
       // Should detect unmanaged resource
       expect(result.unmanaged).toHaveLength(1);
@@ -561,7 +581,7 @@ describe("planExecutor", () => {
         config: mockConfig,
       };
 
-      const result = await planExecutor(ctx);
+      const result = await planExecutor(ctx, emptyFunctionRegistryChanges);
 
       // Should detect conflict
       expect(result.conflicts).toHaveLength(1);
@@ -592,7 +612,7 @@ describe("planExecutor", () => {
         config: mockConfig,
       };
 
-      const result = await planExecutor(ctx);
+      const result = await planExecutor(ctx, emptyFunctionRegistryChanges);
 
       // loadExecutors should NOT be called
       expect(loadExecutors).not.toHaveBeenCalled();
@@ -618,7 +638,7 @@ describe("planExecutor", () => {
         config: mockConfig,
       };
 
-      const result = await planExecutor(ctx);
+      const result = await planExecutor(ctx, emptyFunctionRegistryChanges);
 
       expect(result.changeSet.creates).toHaveLength(1);
       const create = result.changeSet.creates[0];
@@ -655,7 +675,7 @@ describe("planExecutor", () => {
         config: mockConfig,
       };
 
-      const result = await planExecutor(ctx);
+      const result = await planExecutor(ctx, emptyFunctionRegistryChanges);
 
       expect(result.changeSet.creates).toHaveLength(1);
       const create = result.changeSet.creates[0];
@@ -700,13 +720,16 @@ describe("planExecutor", () => {
         tailorDBTypes: { User: "my-tailordb" },
       });
 
-      const result = await planExecutor({
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      });
+      const result = await planExecutor(
+        {
+          client,
+          workspaceId,
+          application,
+          forRemoval: false,
+          config: mockConfig,
+        },
+        emptyFunctionRegistryChanges,
+      );
 
       expect(result.changeSet.creates).toHaveLength(1);
       const typedConfig = getEventConfig(result);
@@ -735,13 +758,16 @@ describe("planExecutor", () => {
         tailorDBTypes: { User: "my-tailordb" },
       });
 
-      const result = await planExecutor({
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      });
+      const result = await planExecutor(
+        {
+          client,
+          workspaceId,
+          application,
+          forRemoval: false,
+          config: mockConfig,
+        },
+        emptyFunctionRegistryChanges,
+      );
 
       const typedConfig = getEventConfig(result);
       expect(typedConfig.case).toBe("tailordb");
@@ -765,13 +791,16 @@ describe("planExecutor", () => {
         resolverNames: { myResolver: "my-pipeline" },
       });
 
-      const result = await planExecutor({
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      });
+      const result = await planExecutor(
+        {
+          client,
+          workspaceId,
+          application,
+          forRemoval: false,
+          config: mockConfig,
+        },
+        emptyFunctionRegistryChanges,
+      );
 
       const typedConfig = getEventConfig(result);
       expect(typedConfig.case).toBe("pipeline");
@@ -794,13 +823,16 @@ describe("planExecutor", () => {
         idpName: "my-idp",
       });
 
-      const result = await planExecutor({
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      });
+      const result = await planExecutor(
+        {
+          client,
+          workspaceId,
+          application,
+          forRemoval: false,
+          config: mockConfig,
+        },
+        emptyFunctionRegistryChanges,
+      );
 
       const typedConfig = getEventConfig(result);
       expect(typedConfig.case).toBe("idp");
@@ -821,13 +853,16 @@ describe("planExecutor", () => {
         authName: "my-auth",
       });
 
-      const result = await planExecutor({
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      });
+      const result = await planExecutor(
+        {
+          client,
+          workspaceId,
+          application,
+          forRemoval: false,
+          config: mockConfig,
+        },
+        emptyFunctionRegistryChanges,
+      );
 
       const typedConfig = getEventConfig(result);
       expect(typedConfig.case).toBe("auth");
@@ -853,7 +888,10 @@ describe("planExecutor", () => {
       });
 
       await expect(
-        planExecutor({ client, workspaceId, application, forRemoval: false, config: mockConfig }),
+        planExecutor(
+          { client, workspaceId, application, forRemoval: false, config: mockConfig },
+          emptyFunctionRegistryChanges,
+        ),
       ).rejects.toThrow('TailorDB type "Unknown" not found in any namespace');
     });
 
@@ -871,7 +909,10 @@ describe("planExecutor", () => {
       });
 
       await expect(
-        planExecutor({ client, workspaceId, application, forRemoval: false, config: mockConfig }),
+        planExecutor(
+          { client, workspaceId, application, forRemoval: false, config: mockConfig },
+          emptyFunctionRegistryChanges,
+        ),
       ).rejects.toThrow('Resolver "unknown" not found in any namespace');
     });
 
@@ -887,7 +928,10 @@ describe("planExecutor", () => {
       const application = createMockApplication([executor]);
 
       await expect(
-        planExecutor({ client, workspaceId, application, forRemoval: false, config: mockConfig }),
+        planExecutor(
+          { client, workspaceId, application, forRemoval: false, config: mockConfig },
+          emptyFunctionRegistryChanges,
+        ),
       ).rejects.toThrow("No IdP service configured");
     });
 
@@ -903,7 +947,10 @@ describe("planExecutor", () => {
       const application = createMockApplication([executor]);
 
       await expect(
-        planExecutor({ client, workspaceId, application, forRemoval: false, config: mockConfig }),
+        planExecutor(
+          { client, workspaceId, application, forRemoval: false, config: mockConfig },
+          emptyFunctionRegistryChanges,
+        ),
       ).rejects.toThrow("No Auth service configured");
     });
 
@@ -924,13 +971,16 @@ describe("planExecutor", () => {
         tailorDBTypes: { User: "my-tailordb" },
       });
 
-      const result = await planExecutor({
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      });
+      const result = await planExecutor(
+        {
+          client,
+          workspaceId,
+          application,
+          forRemoval: false,
+          config: mockConfig,
+        },
+        emptyFunctionRegistryChanges,
+      );
 
       expect(result.changeSet.creates).toHaveLength(1);
       const typedConfig = getEventConfig(result);
@@ -959,13 +1009,16 @@ describe("planExecutor", () => {
         idpName: "my-idp",
       });
 
-      const result = await planExecutor({
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      });
+      const result = await planExecutor(
+        {
+          client,
+          workspaceId,
+          application,
+          forRemoval: false,
+          config: mockConfig,
+        },
+        emptyFunctionRegistryChanges,
+      );
 
       const typedConfig = getEventConfig(result);
       expect(typedConfig.case).toBe("idp");
@@ -989,13 +1042,16 @@ describe("planExecutor", () => {
         authName: "my-auth",
       });
 
-      const result = await planExecutor({
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      });
+      const result = await planExecutor(
+        {
+          client,
+          workspaceId,
+          application,
+          forRemoval: false,
+          config: mockConfig,
+        },
+        emptyFunctionRegistryChanges,
+      );
 
       const typedConfig = getEventConfig(result);
       expect(typedConfig.case).toBe("auth");
@@ -1028,13 +1084,16 @@ describe("planExecutor", () => {
         tailorDBTypes: { User: "my-tailordb" },
       });
 
-      const result = await planExecutor({
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      });
+      const result = await planExecutor(
+        {
+          client,
+          workspaceId,
+          application,
+          forRemoval: false,
+          config: mockConfig,
+        },
+        emptyFunctionRegistryChanges,
+      );
 
       const typedConfig = getEventConfig(result);
       expect(typedConfig.case).toBe("tailordb");
