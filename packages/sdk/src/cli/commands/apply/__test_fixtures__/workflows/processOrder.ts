@@ -1,5 +1,7 @@
-import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+/* eslint-disable import-x/order */
 import { format } from "date-fns";
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+/* eslint-enable import-x/order */
 
 export const fetchDetails = createWorkflowJob({
   name: "fetch-details",
