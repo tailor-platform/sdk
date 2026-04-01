@@ -192,6 +192,20 @@ describe("buildFiles", () => {
     });
     expect(files[0]!.content).toContain("pnpm/action-setup");
   });
+
+  it("detects package manager from repo root when dir is a subdirectory", () => {
+    const subDir = path.join(testDir, "apps/foo");
+    fs.mkdirSync(subDir, { recursive: true });
+    const files = buildFiles({
+      workspaceName: "my-app",
+      workspaceRegion: "asia-northeast",
+      organizationId: "org-123",
+      folderId: "folder-456",
+      dir: "apps/foo",
+      outputDir: testDir,
+    });
+    expect(files[0]!.content).toContain("pnpm/action-setup");
+  });
 });
 
 describe("writeFiles", () => {

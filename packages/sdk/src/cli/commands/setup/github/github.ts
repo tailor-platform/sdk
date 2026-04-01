@@ -30,8 +30,6 @@ type WriteResult = {
  */
 export function buildFiles(options: SetupGitHubOptions): GeneratedFile[] {
   const githubDir = path.join(options.outputDir, ".github");
-  const projectDir = path.resolve(options.outputDir, options.dir);
-
   return [
     {
       path: path.join(githubDir, `workflows/deploy-${options.workspaceName}.yml`),
@@ -41,7 +39,7 @@ export function buildFiles(options: SetupGitHubOptions): GeneratedFile[] {
         organizationId: options.organizationId,
         folderId: options.folderId,
         workingDirectory: options.dir !== "." ? options.dir : undefined,
-        packageManager: detectPackageManager(projectDir),
+        packageManager: detectPackageManager(options.outputDir),
       }),
     },
   ];
