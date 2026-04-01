@@ -113,8 +113,14 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
           for (const diff of result.diffs) {
             const displayPath = path.relative(projectRoot, diff.file);
             logger.log(`  ${styles.bold(displayPath)}`);
-            const lines = diff.before.split("\n").length;
-            logger.log(`    ${styles.dim(`${lines} line(s) affected`)}`);
+            const beforeLines = diff.before.split("\n");
+            const afterLines = diff.after.split("\n");
+            const maxLen = Math.max(beforeLines.length, afterLines.length);
+            let changedCount = 0;
+            for (let i = 0; i < maxLen; i++) {
+              if (beforeLines[i] !== afterLines[i]) changedCount++;
+            }
+            logger.log(`    ${styles.dim(`${changedCount} line(s) affected`)}`);
           }
 
           const accepted = await prompt.confirm({

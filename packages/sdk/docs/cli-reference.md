@@ -256,14 +256,6 @@ Commands for setting up project infrastructure.
 | ------------------------------------------- | ------------------------------------------------------- |
 | [setup github](./cli/setup.md#setup-github) | Generate GitHub Actions workflow for deployment. (beta) |
 
-### [Upgrade Commands](./cli/upgrade.md)
-
-Commands for upgrading SDK versions with automated codemods.
-
-| Command                             | Description                                                 |
-| ----------------------------------- | ----------------------------------------------------------- |
-| [upgrade](./cli/upgrade.md#upgrade) | Run codemods to upgrade your project to a newer SDK version |
-
 ### [Completion](./cli/completion.md)
 
 Generate shell completion scripts for bash, zsh, and fish.
@@ -271,5 +263,13 @@ Generate shell completion scripts for bash, zsh, and fish.
 | Command                                      | Description                      |
 | -------------------------------------------- | -------------------------------- |
 | [completion](./cli/completion.md#completion) | Generate shell completion script |
+
+### [Upgrade Commands](./cli/upgrade.md)
+
+Commands for upgrading SDK versions with automated code migration.
+
+| Command                             | Description                                                  |
+| ----------------------------------- | ------------------------------------------------------------ |
+| [upgrade](./cli/upgrade.md#upgrade) | Run codemods to upgrade your project to a newer SDK version. |
 
 <!-- politty:index:docs/cli-reference.md:end -->

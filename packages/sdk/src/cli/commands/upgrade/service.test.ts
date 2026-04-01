@@ -456,6 +456,63 @@ describe("upgrade - interactive mode", () => {
     expect(vi.mocked(logger.success)).not.toHaveBeenCalledWith("  1 file(s) modified");
   });
 
+  it("should display the count of changed lines, not total file lines", async () => {
+    await mockPromptConfirm(true);
+
+    const filePath = path.join(tmpDir, "test.ts");
+    const multiLineBefore = [
+      "const a = 1;",
+      "const b = 2;",
+      "const c = 3;",
+      "const d = 4;",
+      "const e = 5;",
+    ].join("\n");
+    const multiLineAfter = [
+      "const a = 1;",
+      "const b = 999;",
+      "const c = 3;",
+      "const d = 4;",
+      "const e = 5;",
+    ].join("\n");
+    await fs.promises.writeFile(filePath, multiLineBefore);
+
+    vi.doMock("./rules", () => ({
+      createDefaultRegistry: () => ({
+        getApplicableRules: () => [
+          {
+            id: "test/line-count",
+            name: "Line Count Rule",
+            description: "Changes one line in a multi-line file",
+            since: "1.0.0",
+            until: "2.0.0",
+            transform: async (_ctx: TransformContext): Promise<TransformResult> => {
+              const content = await fs.promises.readFile(filePath, "utf-8");
+              return {
+                changed: true,
+                filesModified: [filePath],
+                warnings: [],
+                diffs: [{ file: filePath, before: content, after: multiLineAfter }],
+              };
+            },
+          },
+        ],
+      }),
+    }));
+
+    const { upgrade } = await import("./service");
+    await upgrade({ to: "2.0.0", dryRun: false, path: tmpDir, interactive: true });
+
+    const { logger } = await import("@/cli/shared/logger");
+    const logCalls = vi.mocked(logger.log).mock.calls.flat();
+    // Should show 1 changed line, not 5 (total file lines)
+    expect(logCalls.some((c) => typeof c === "string" && c.includes("1 line(s) affected"))).toBe(
+      true,
+    );
+    expect(logCalls.some((c) => typeof c === "string" && c.includes("5 line(s) affected"))).toBe(
+      false,
+    );
+  });
+
   it("should fall back to dry-run when both dryRun and interactive are set", async () => {
     // dryRun takes precedence - no prompt should be shown
     const filePath = path.join(tmpDir, "test.ts");
