@@ -2,4 +2,4 @@
 "@tailor-platform/sdk": minor
 ---
 
-Distribute deploy workflow as a reusable GitHub Actions workflow instead of generating composite actions locally
+Delegate deploy logic to a shared composite action (tailor-platform/actions/deploy) instead of generating local composite actions
