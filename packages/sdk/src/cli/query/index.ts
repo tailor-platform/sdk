@@ -568,13 +568,12 @@ function printReplHelp(engine: QueryEngine): void {
   logger.log("  Ctrl+D                     Exit REPL (on empty input)");
   logger.log("  Ctrl+Z / Ctrl+Y            Undo / Redo");
   logger.log("  Up/Down at boundary        Navigate history");
-  if (engine === "sql") {
-    logger.log("");
-    logger.log("Submit executes when input ends with ';'.");
-    return;
-  }
   logger.log("");
-  logger.log("Submit executes when input is a complete GraphQL document.");
+  logger.log(
+    engine === "sql"
+      ? "Submit executes when input ends with ';'."
+      : "Submit executes when input is a complete GraphQL document.",
+  );
 }
 
 /**
