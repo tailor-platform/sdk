@@ -536,20 +536,12 @@ async function runRepl(
     }
 
     try {
-      if (options.engine === "sql") {
-        const result = await execute(trimmed);
-        if (result.engine !== "sql") {
-          throw new Error(`Expected sql engine result but got: ${result.engine}`);
-        }
-        printSqlResult(result, { json: options.json });
-        continue;
-      }
-
       const result = await execute(trimmed);
-      if (result.engine !== "gql") {
-        throw new Error(`Expected gql engine result but got: ${result.engine}`);
+      if (result.engine === "sql") {
+        printSqlResult(result, { json: options.json });
+      } else {
+        printGqlResult(result, { json: options.json });
       }
-      printGqlResult(result, { json: options.json });
     } catch (error) {
       if (isCLIError(error)) {
         logger.log(error.format());
