@@ -1,12 +1,8 @@
 import { z } from "zod";
-// oxlint-disable-next-line eslint-plugin-import(no-cycle) -- Runtime cycle is safe: resolver/schema.ts defers AuthInvokerSchema access via getter
 import { TailorFieldSchema } from "@/parser/service/resolver/schema";
 import type { ValueOperand } from "@/types/auth";
 
-export const AuthInvokerSchema = z.object({
-  namespace: z.string().describe("Auth namespace"),
-  machineUserName: z.string().describe("Machine user name for authentication"),
-});
+export { AuthInvokerSchema } from "@/parser/service/auth-invoker/schema";
 
 const secretValueSchema = z.object({
   vaultName: z.string().describe("Vault name containing the secret"),

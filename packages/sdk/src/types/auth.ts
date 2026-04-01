@@ -1,5 +1,5 @@
+import type { AuthInvoker } from "./auth-invoker.generated";
 import type {
-  AuthInvoker,
   IdProvider as IdProviderConfig,
   OAuth2Client,
   OAuth2ClientInput,

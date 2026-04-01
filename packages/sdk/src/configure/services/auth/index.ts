@@ -8,7 +8,7 @@ import type {
   UserAttributeListKey,
   UserAttributeMap,
 } from "@/types/auth";
-import type { AuthInvoker as ParserAuthInvoker } from "@/types/auth.generated";
+import type { AuthInvoker as ParserAuthInvoker } from "@/types/auth-invoker.generated";
 
 type MachineUserAttributeFields = Record<
   string,
