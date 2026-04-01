@@ -43,12 +43,12 @@
       "cache": true
     },
     "lint": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["build"],
       "outputs": [".eslintcache"],
       "cache": true
     },
     "lint:fix": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["build"],
       "outputs": [".eslintcache"],
       "cache": true
     },
