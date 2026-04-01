@@ -30,11 +30,11 @@ tailor-sdk secret [command]
 
 | Command                           | Description                   |
 | --------------------------------- | ----------------------------- |
-| [`secret create`](#secret-create) | Create a secret in a vault.   |
-| [`secret delete`](#secret-delete) | Delete a secret in a vault.   |
-| [`secret list`](#secret-list)     | List all secrets in a vault.  |
-| [`secret update`](#secret-update) | Update a secret in a vault.   |
 | [`secret vault`](#secret-vault)   | Manage Secret Manager vaults. |
+| [`secret create`](#secret-create) | Create a secret in a vault.   |
+| [`secret update`](#secret-update) | Update a secret in a vault.   |
+| [`secret list`](#secret-list)     | List all secrets in a vault.  |
+| [`secret delete`](#secret-delete) | Delete a secret in a vault.   |
 
 <!-- politty:command:secret:subcommands:end -->
 

@@ -36,8 +36,8 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 | Command                                   | Description                                    |
 | ----------------------------------------- | ---------------------------------------------- |
-| [`crash-report send`](#crash-report-send) | Submit a crash report to help improve the SDK. |
 | [`crash-report list`](#crash-report-list) | List local crash report files.                 |
+| [`crash-report send`](#crash-report-send) | Submit a crash report to help improve the SDK. |
 
 <!-- politty:command:crash-report:subcommands:end -->
 <!-- politty:command:crash-report list:heading:start -->

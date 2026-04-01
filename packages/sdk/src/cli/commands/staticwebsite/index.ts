@@ -8,8 +8,8 @@ export const staticwebsiteCommand = defineCommand({
   description: "Manage static websites in your workspace.",
   subCommands: {
     deploy: deployCommand,
-    get: getCommand,
     list: listCommand,
+    get: getCommand,
   },
   async run() {
     await runCommand(listCommand, []);
