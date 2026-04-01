@@ -391,11 +391,10 @@ After `tailor-sdk apply`, authorize the connection:
 
 ```bash
 tailor-sdk authconnection authorize --name google-connection \
-  --scopes "openid,profile,email" \
-  --client-secret $GOOGLE_CLIENT_SECRET
+  --scopes "openid,profile,email"
 ```
 
-The `--client-secret` option is required by providers like Google that require a client secret for the token exchange. Providers that support PKCE-only (public clients) can omit it.
+The authorize command opens a browser for the OAuth2 flow. The authorization code is sent to the platform, which exchanges it for tokens using the client secret registered in the connection config.
 
 ### Connection Config Fields
 
@@ -415,29 +414,21 @@ The SDK uses hash-based change detection for connection configs. Only connection
 
 ### `auth.getConnectionToken()`
 
-`auth.getConnectionToken()` returns a reference to a connection by name. When `connections` is defined in `defineAuth()`, the connection name is type-checked against the defined keys:
+`auth.getConnectionToken()` retrieves connection tokens at runtime by calling `tailor.authconnection.getConnectionToken()` internally. When `connections` is defined in `defineAuth()`, the connection name is type-checked and autocompleted against the defined keys:
 
 ```typescript
 import { auth } from "../tailor.config";
 
-auth.getConnectionToken("google-connection");
-// => { namespace: "my-auth", connectionName: "google-connection" }
-
-// auth.getConnectionToken("unknown"); // Type error
-```
-
-When `connections` is not defined, `getConnectionToken()` accepts any string. This supports connections managed entirely via the CLI.
-
-### Using Tokens in Functions
-
-At runtime in resolvers, executors, or workflows, use the platform built-in interface to retrieve connection tokens:
-
-```typescript
-const tokens = await tailor.authconnection.getConnectionToken("google-connection");
+// In a resolver, executor, or workflow:
+const tokens = await auth.getConnectionToken("google-connection");
 const response = await fetch("https://www.googleapis.com/...", {
   headers: { Authorization: `Bearer ${tokens.access_token}` },
 });
+
+// auth.getConnectionToken("unknown"); // Type error — only "google-connection" is allowed
 ```
+
+When `connections` is not defined, `getConnectionToken()` accepts any string. This supports connections managed entirely via the CLI.
 
 See [Built-in Interfaces](https://docs.tailor.tech/guides/function/builtin-interfaces.html#auth-connection) for the full runtime API.
 
@@ -447,8 +438,7 @@ Auth connections can also be managed via the CLI:
 
 ```bash
 # Authorize (opens browser for OAuth2 flow)
-tailor-sdk authconnection authorize --name google-connection \
-  --client-secret $GOOGLE_CLIENT_SECRET
+tailor-sdk authconnection authorize --name google-connection
 
 # List all connections
 tailor-sdk authconnection list

@@ -22,9 +22,12 @@ export type AuthInvokerWithName<M extends string> = Omit<AuthInvoker, "machineUs
   machineUserName: M;
 };
 
-export type AuthConnectionTokenRef<C extends string> = {
-  namespace: string;
-  connectionName: C;
+/** Result of retrieving a connection token at runtime. */
+export type AuthConnectionTokenResult = {
+  access_token: string;
+  refresh_token?: string;
+  token_type?: string;
+  expiry?: string;
 };
 
 // Helper types for ValueOperand
@@ -249,6 +252,7 @@ export type AuthServiceInput<
   MachineUserAttributes extends MachineUserAttributeFields | undefined =
     | MachineUserAttributeFields
     | undefined,
+  ConnectionNames extends string = string,
 > = {
   hooks?: AuthHooks<MachineUserNames>;
   userProfile?: UserProfile<User, AttributeMap, AttributeList>;
@@ -261,14 +265,14 @@ export type AuthServiceInput<
   idProvider?: IdProviderConfig;
   scim?: SCIMConfig;
   tenantProvider?: TenantProviderConfig;
-  connections?: Record<string, AuthConnectionConfig>;
+  connections?: Record<ConnectionNames, AuthConnectionConfig>;
   publishSessionEvents?: boolean;
 };
 
 declare const authDefinitionBrand: unique symbol;
 export type AuthDefinitionBrand = { readonly [authDefinitionBrand]: true };
 
-type ConnectionNames<Config> = Config extends { connections: Record<infer K, unknown> }
+type ConnectionNames<Config> = Config extends { connections?: Record<infer K, unknown> }
   ? K & string
   : string;
 
@@ -277,7 +281,7 @@ export type DefinedAuth<Name extends string, Config, MachineUserNames extends st
   invoker<M extends MachineUserNames>(machineUser: M): AuthInvokerWithName<M>;
   getConnectionToken<C extends ConnectionNames<Config>>(
     connectionName: C,
-  ): AuthConnectionTokenRef<C>;
+  ): Promise<AuthConnectionTokenResult>;
 } & AuthDefinitionBrand;
 
 export type AuthExternalConfig = { name: string; external: true };

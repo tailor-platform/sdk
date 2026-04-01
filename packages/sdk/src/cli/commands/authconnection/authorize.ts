@@ -1,7 +1,5 @@
 import * as crypto from "node:crypto";
 import * as http from "node:http";
-import { create } from "@bufbuild/protobuf";
-import { TimestampSchema } from "@bufbuild/protobuf/wkt";
 import open from "open";
 import { z } from "zod";
 import { workspaceArgs } from "@/cli/shared/args";
@@ -17,11 +15,11 @@ const defaultScopes = "openid,profile,email";
 /**
  * Fetch the OpenID Connect discovery document from a provider URL.
  * @param providerUrl - OAuth2 provider base URL
- * @returns Discovery document with authorization_endpoint and token_endpoint
+ * @returns Discovery document with authorization_endpoint
  */
 async function fetchOIDCDiscovery(
   providerUrl: string,
-): Promise<{ authorization_endpoint: string; token_endpoint: string }> {
+): Promise<{ authorization_endpoint: string }> {
   const url = providerUrl.replace(/\/$/, "") + "/.well-known/openid-configuration";
   const response = await fetch(url);
   if (!response.ok) {
@@ -29,67 +27,11 @@ async function fetchOIDCDiscovery(
   }
   return response.json() as Promise<{
     authorization_endpoint: string;
-    token_endpoint: string;
   }>;
 }
 
 function randomState() {
   return crypto.randomBytes(32).toString("base64url");
-}
-
-function generateCodeVerifier() {
-  return crypto.randomBytes(32).toString("base64url");
-}
-
-function generateCodeChallenge(verifier: string) {
-  return crypto.createHash("sha256").update(verifier).digest("base64url");
-}
-
-interface TokenResponse {
-  access_token: string;
-  refresh_token?: string;
-  expires_in?: number;
-}
-
-type ExchangeCodeParams = {
-  tokenEndpoint: string;
-  code: string;
-  redirectUri: string;
-  clientId: string;
-  clientSecret?: string;
-  codeVerifier: string;
-};
-
-/**
- * Exchange authorization code for tokens at the token endpoint.
- * Uses PKCE, and includes client_secret when provided (required by some providers like Google).
- * @param params - Token exchange parameters
- * @returns Token response from the provider
- */
-async function exchangeCodeForTokens(params: ExchangeCodeParams): Promise<TokenResponse> {
-  const body = new URLSearchParams({
-    grant_type: "authorization_code",
-    client_id: params.clientId,
-    code: params.code,
-    redirect_uri: params.redirectUri,
-    code_verifier: params.codeVerifier,
-  });
-  if (params.clientSecret) {
-    body.set("client_secret", params.clientSecret);
-  }
-
-  const response = await fetch(params.tokenEndpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: body.toString(),
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Token exchange failed (${response.status}): ${text}`);
-  }
-
-  return response.json() as Promise<TokenResponse>;
 }
 
 export const authorizeAuthConnectionCommand = defineAppCommand({
@@ -109,10 +51,6 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
         .optional()
         .default(defaultPort)
         .describe("Local callback server port"),
-      "client-secret": z
-        .string()
-        .optional()
-        .describe("OAuth2 client secret (required by some providers for token exchange)"),
       "no-browser": z
         .boolean()
         .optional()
@@ -153,30 +91,23 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
     const oauth2Config = connection.config.value;
     const redirectUri = `http://localhost:${args.port}/callback`;
     const state = randomState();
-    const codeVerifier = generateCodeVerifier();
-    const codeChallenge = generateCodeChallenge(codeVerifier);
 
-    // Resolve endpoints from discovery or explicit config
+    // Resolve authorization endpoint from discovery or explicit config
     let authorizationEndpoint: string;
-    let tokenEndpoint: string;
-    if (oauth2Config.authUrl && oauth2Config.tokenUrl) {
+    if (oauth2Config.authUrl) {
       authorizationEndpoint = oauth2Config.authUrl;
-      tokenEndpoint = oauth2Config.tokenUrl;
     } else {
       const discovery = await fetchOIDCDiscovery(oauth2Config.providerUrl);
-      authorizationEndpoint = oauth2Config.authUrl || discovery.authorization_endpoint;
-      tokenEndpoint = oauth2Config.tokenUrl || discovery.token_endpoint;
+      authorizationEndpoint = discovery.authorization_endpoint;
     }
 
-    // Build authorization URL with PKCE
+    // Build authorization URL
     const authUrl = new URL(authorizationEndpoint);
     authUrl.searchParams.set("client_id", oauth2Config.clientId);
     authUrl.searchParams.set("redirect_uri", redirectUri);
     authUrl.searchParams.set("response_type", "code");
     authUrl.searchParams.set("scope", args.scopes.replace(/,/g, " "));
     authUrl.searchParams.set("state", state);
-    authUrl.searchParams.set("code_challenge", codeChallenge);
-    authUrl.searchParams.set("code_challenge_method", "S256");
     authUrl.searchParams.set("access_type", "offline");
 
     await new Promise<void>((resolve, reject) => {
@@ -205,29 +136,12 @@ export const authorizeAuthConnectionCommand = defineAppCommand({
             throw new Error("No authorization code received.");
           }
 
-          // Exchange code for tokens
-          const tokens = await exchangeCodeForTokens({
-            tokenEndpoint,
-            code,
-            redirectUri,
-            clientId: oauth2Config.clientId,
-            clientSecret: args["client-secret"],
-            codeVerifier,
-          });
-
-          // Register tokens on the platform
-          const expiresAt = tokens.expires_in
-            ? create(TimestampSchema, {
-                seconds: BigInt(Math.floor(Date.now() / 1000) + tokens.expires_in),
-              })
-            : undefined;
-
-          await client.registerAuthConnectionSession({
+          // Send authorization code to the platform for server-side token exchange
+          await client.exchangeAuthConnectionAuthorizationCode({
             workspaceId,
             connectionName: args.name,
-            accessToken: tokens.access_token,
-            refreshToken: tokens.refresh_token ?? "",
-            expiresAt,
+            authorizationCode: code,
+            redirectUri,
           });
 
           res.writeHead(200, { "Content-Type": "text/html" });

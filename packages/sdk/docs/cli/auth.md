@@ -67,15 +67,14 @@ tailor-sdk authconnection authorize [options]
 
 **Options**
 
-| Option                            | Alias | Description                                                          | Required | Default                  | Env                            |
-| --------------------------------- | ----- | -------------------------------------------------------------------- | -------- | ------------------------ | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>`   | `-w`  | Workspace ID                                                         | No       | -                        | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`             | `-p`  | Workspace profile                                                    | No       | -                        | `TAILOR_PLATFORM_PROFILE`      |
-| `--name <NAME>`                   | `-n`  | Auth connection name                                                 | Yes      | -                        | -                              |
-| `--scopes <SCOPES>`               | -     | OAuth2 scopes to request (comma-separated)                           | No       | `"openid,profile,email"` | -                              |
-| `--port <PORT>`                   | -     | Local callback server port                                           | No       | `8080`                   | -                              |
-| `--client-secret <CLIENT_SECRET>` | -     | OAuth2 client secret (required by some providers for token exchange) | No       | -                        | -                              |
-| `--no-browser`                    | -     | Don't open browser automatically                                     | No       | `false`                  | -                              |
+| Option                          | Alias | Description                                | Required | Default                  | Env                            |
+| ------------------------------- | ----- | ------------------------------------------ | -------- | ------------------------ | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                               | No       | -                        | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                          | No       | -                        | `TAILOR_PLATFORM_PROFILE`      |
+| `--name <NAME>`                 | `-n`  | Auth connection name                       | Yes      | -                        | -                              |
+| `--scopes <SCOPES>`             | -     | OAuth2 scopes to request (comma-separated) | No       | `"openid,profile,email"` | -                              |
+| `--port <PORT>`                 | -     | Local callback server port                 | No       | `8080`                   | -                              |
+| `--no-browser`                  | -     | Don't open browser automatically           | No       | `false`                  | -                              |
 
 <!-- politty:command:authconnection authorize:options:end -->
 
