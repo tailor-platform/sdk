@@ -3,16 +3,23 @@ import { getDB } from "../generated/tailordb";
 
 export default createResolver({
   name: "insertNestedProfileWithDate",
-  description: "Create a NestedProfile with Date in nested object",
+  description: "Insert a NestedProfile with Date in nested object and verify round-trip",
   operation: "mutation",
   input: {
     name: t.string().description("User's name"),
     email: t.string().description("User's email"),
   },
-  output: t.string().description("Created profile ID"),
+  output: t
+    .object({
+      id: t.string(),
+      metadataCreated: t.string(),
+    })
+    .description("Inserted profile ID and metadata.created value from select"),
   body: async ({ input }) => {
     const db = getDB("tailordb");
-    const result = await db
+
+    // Insert with Date object in nested field
+    const inserted = await db
       .insertInto("NestedProfile")
       .values({
         userInfo: {
@@ -27,6 +34,16 @@ export default createResolver({
       .returning("id")
       .executeTakeFirstOrThrow();
 
-    return result.id;
+    // Read back to verify the nested datetime was stored and returned correctly
+    const selected = await db
+      .selectFrom("NestedProfile")
+      .selectAll()
+      .where("id", "=", inserted.id)
+      .executeTakeFirstOrThrow();
+
+    return {
+      id: selected.id,
+      metadataCreated: String(selected.metadata.created),
+    };
   },
 });

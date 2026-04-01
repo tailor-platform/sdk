@@ -219,14 +219,17 @@ describe.sequential("E2E: function test-run", () => {
       expect(typeof parsed.result.summary[2]).toBe("string");
     });
 
-    test("inserts nested object with Date into NestedProfile", async () => {
+    test("inserts nested object with Date and verifies round-trip", async () => {
       const result = await runTestRun("resolvers/insertNestedProfileWithDate.ts", {
         arg: '{"input":{"name":"Test User","email":"test@example.com"}}',
       });
 
       expect(result.success).toBe(true);
-      const id = JSON.parse(result.result);
-      expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+      const parsed = JSON.parse(result.result);
+      expect(parsed.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+      // Verify nested datetime was stored and returned (should be a non-empty date string)
+      expect(parsed.metadataCreated).toBeTruthy();
+      expect(new Date(parsed.metadataCreated).getFullYear()).toBeGreaterThanOrEqual(2026);
     });
 
     test("reports validation errors for invalid input", async () => {
