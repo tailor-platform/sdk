@@ -168,8 +168,8 @@ importers:
         specifier: 1.56.0
         version: 1.56.0(oxlint-tsgolint@0.18.1)
       tsdown:
-        specifier: 0.21.6
-        version: 0.21.6(@typescript/native-preview@7.0.0-dev.20260326.1)(oxc-resolver@11.19.1)(publint@0.3.18)(typescript@5.9.3)
+        specifier: 0.21.7
+        version: 0.21.7(@typescript/native-preview@7.0.0-dev.20260326.1)(oxc-resolver@11.19.1)(publint@0.3.18)(typescript@5.9.3)
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -694,8 +694,8 @@ importers:
         specifier: 0.11.1
         version: 0.11.1
       tsdown:
-        specifier: 0.21.6
-        version: 0.21.6(@typescript/native-preview@7.0.0-dev.20260326.1)(oxc-resolver@11.19.1)(publint@0.3.18)(typescript@5.9.3)
+        specifier: 0.21.7
+        version: 0.21.7(@typescript/native-preview@7.0.0-dev.20260326.1)(oxc-resolver@11.19.1)(publint@0.3.18)(typescript@5.9.3)
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -4618,8 +4618,8 @@ packages:
     resolution: {integrity: sha512-g6QUff04oZpHs0eG5p83rFLhHeV00ug/Yf9nZM6fLeUrPguBTkTQOdpAWWspMh55TZfVQDPaN3NQJfbVRAxdIw==}
     engines: {iojs: '>=1.0.0', node: '>=0.10.0'}
 
-  rolldown-plugin-dts@0.23.0:
-    resolution: {integrity: sha512-TQwrD3PEkDOnJWaE3+MWEocSWbLn4BRV0KOW9abn9UPj+NlVCimHGVkNVYKy684VqSJLumLMuFq+hyYo10GWTA==}
+  rolldown-plugin-dts@0.23.2:
+    resolution: {integrity: sha512-PbSqLawLgZBGcOGT3yqWBGn4cX+wh2nt5FuBGdcMHyOhoukmjbhYAl8NT9sE4U38Cm9tqLOIQeOrvzeayM0DLQ==}
     engines: {node: '>=20.19.0'}
     peerDependencies:
       '@ts-macro/tsc': ^0.3.6
@@ -4928,14 +4928,14 @@ packages:
     resolution: {integrity: sha512-NoZ4roiN7LnbKn9QqE1amc9DJfzvZXxF4xDavcOWt1BPkdx+m+0gJuPM+S0vCe7zTJMYUP0R8pO2XMr+Y8oLIg==}
     engines: {node: '>=6'}
 
-  tsdown@0.21.6:
-    resolution: {integrity: sha512-YsgPuWczqxPkXiJwMPrv3eOiqx4KPhOdksqubVCDhS7lChK3RYlWsEGhZixc0+lqN3fmBYEnETaujEWDpMPZmA==}
+  tsdown@0.21.7:
+    resolution: {integrity: sha512-ukKIxKQzngkWvOYJAyptudclkm4VQqbjq+9HF5K5qDO8GJsYtMh8gIRwicbnZEnvFPr6mquFwYAVZ8JKt3rY2g==}
     engines: {node: '>=20.19.0'}
     hasBin: true
     peerDependencies:
       '@arethetypeswrong/core': ^0.18.1
-      '@tsdown/css': 0.21.6
-      '@tsdown/exe': 0.21.6
+      '@tsdown/css': 0.21.7
+      '@tsdown/exe': 0.21.7
       '@vitejs/devtools': '*'
       publint: ^0.3.0
       typescript: ^5.0.0 || ^6.0.0
@@ -8877,7 +8877,7 @@ snapshots:
 
   reusify@1.1.0: {}
 
-  rolldown-plugin-dts@0.23.0(@typescript/native-preview@7.0.0-dev.20260326.1)(oxc-resolver@11.19.1)(rolldown@1.0.0-rc.12)(typescript@5.9.3):
+  rolldown-plugin-dts@0.23.2(@typescript/native-preview@7.0.0-dev.20260326.1)(oxc-resolver@11.19.1)(rolldown@1.0.0-rc.12)(typescript@5.9.3):
     dependencies:
       '@babel/generator': 8.0.0-rc.3
       '@babel/helper-validator-identifier': 8.0.0-rc.3
@@ -8888,6 +8888,7 @@ snapshots:
       dts-resolver: 2.1.3(oxc-resolver@11.19.1)
       get-tsconfig: 4.13.7
       obug: 2.1.1
+      picomatch: 4.0.4
       rolldown: 1.0.0-rc.12
     optionalDependencies:
       '@typescript/native-preview': 7.0.0-dev.20260326.1
@@ -9187,7 +9188,7 @@ snapshots:
       minimist: 1.2.8
       strip-bom: 3.0.0
 
-  tsdown@0.21.6(@typescript/native-preview@7.0.0-dev.20260326.1)(oxc-resolver@11.19.1)(publint@0.3.18)(typescript@5.9.3):
+  tsdown@0.21.7(@typescript/native-preview@7.0.0-dev.20260326.1)(oxc-resolver@11.19.1)(publint@0.3.18)(typescript@5.9.3):
     dependencies:
       ansis: 4.2.0
       cac: 7.0.0
@@ -9198,7 +9199,7 @@ snapshots:
       obug: 2.1.1
       picomatch: 4.0.4
       rolldown: 1.0.0-rc.12
-      rolldown-plugin-dts: 0.23.0(@typescript/native-preview@7.0.0-dev.20260326.1)(oxc-resolver@11.19.1)(rolldown@1.0.0-rc.12)(typescript@5.9.3)
+      rolldown-plugin-dts: 0.23.2(@typescript/native-preview@7.0.0-dev.20260326.1)(oxc-resolver@11.19.1)(rolldown@1.0.0-rc.12)(typescript@5.9.3)
       semver: 7.7.4
       tinyexec: 1.0.4
       tinyglobby: 0.2.15
