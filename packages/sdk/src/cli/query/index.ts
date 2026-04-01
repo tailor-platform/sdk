@@ -484,6 +484,11 @@ async function runRepl(
   const historyPath = getReplHistoryPath(options.engine);
   const validate = createReplValidator(options.engine);
 
+  // NOTE: Each prompt() call reloads history from the file synchronously while the
+  // previous call's async save may still be in-flight. In practice the race window
+  // is only visible on fast paths (\help, \clear) whose entries are already non-ideal
+  // for history (see createReplValidator TODO). Actual queries include network latency
+  // that closes the window. A clean fix requires the library to export history utilities.
   const prompt = createPrompt({
     preferNewlineOnEnter: true,
     validate,
