@@ -5,7 +5,7 @@ import { injectMocks, cleanupMocks } from "./mock";
 // - globals.es2025: ECMAScript standard globals
 // - globals.browser: Web Standard APIs (covers everything from bootstrap.js)
 // - Platform APIs: injected by mock.ts
-// - Vitest internals: must keep for test runner to work
+// - Used by Vitest internally: not in the platform runtime, but required for the test runner
 const ALLOWED_GLOBALS = new Set([
   ...Object.keys(globals.es2025),
   ...Object.keys(globals.browser),
@@ -17,7 +17,7 @@ const ALLOWED_GLOBALS = new Set([
   "TailorErrorMessage",
   "TailorDBFileError",
 
-  // Vitest internals (must keep for test runner to work)
+  // Used by Vitest internally — not in the platform runtime, but removing breaks the test runner
   "process",
   "require",
   "module",
