@@ -1,4 +1,5 @@
 import { z } from "zod";
+// oxlint-disable-next-line eslint-plugin-import(no-cycle) -- Runtime cycle is safe: resolver/schema.ts defers AuthInvokerSchema access via getter
 import { TailorFieldSchema } from "@/parser/service/resolver/schema";
 import type { ValueOperand } from "@/types/auth";
 

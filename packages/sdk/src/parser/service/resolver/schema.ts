@@ -1,4 +1,5 @@
 import { z } from "zod";
+// oxlint-disable-next-line eslint-plugin-import(no-cycle) -- Runtime cycle is safe: AuthInvokerSchema is only accessed via getter
 import { AuthInvokerSchema } from "@/parser/service/auth/schema";
 import { functionSchema } from "../common";
 
