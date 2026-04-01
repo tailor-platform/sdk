@@ -440,6 +440,8 @@ function clearReplScreen(): void {
   process.stdout.write("\u001Bc");
 }
 
+// TODO: History is shared across all workspaces/profiles. Consider scoping by
+// workspace or profile to avoid replaying statements against the wrong environment.
 function getReplHistoryPath(engine: QueryEngine): string | undefined {
   if (!xdgConfig) {
     return undefined;
@@ -448,6 +450,9 @@ function getReplHistoryPath(engine: QueryEngine): string | undefined {
   return path.join(xdgConfig, "tailor-platform", filename);
 }
 
+// TODO: Empty input and REPL commands (e.g. \help, \q) are treated as valid by
+// the validator, so read-multiline saves them to history on submit. The library
+// does not expose a history filter hook; a clean fix requires upstream support.
 function createReplValidator(engine: QueryEngine): (value: string) => string | undefined {
   return (value: string) => {
     const trimmed = value.trim();
