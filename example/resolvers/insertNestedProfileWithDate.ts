@@ -12,7 +12,7 @@ export default createResolver({
   output: t
     .object({
       id: t.string(),
-      metadataCreated: t.string(),
+      metadataCreated: t.datetime(),
     })
     .description("Inserted profile ID and metadata.created value from select"),
   body: async ({ input }) => {
@@ -41,9 +41,11 @@ export default createResolver({
       .where("id", "=", inserted.id)
       .executeTakeFirstOrThrow();
 
+    console.log(`typeof metadata.created: ${typeof selected.metadata.created}`);
+
     return {
       id: selected.id,
-      metadataCreated: String(selected.metadata.created),
+      metadataCreated: selected.metadata.created,
     };
   },
 });

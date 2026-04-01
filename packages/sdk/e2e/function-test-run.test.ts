@@ -225,9 +225,11 @@ describe.sequential("E2E: function test-run", () => {
       });
 
       expect(result.success).toBe(true);
+      // Log should contain typeof info from the resolver
+      expect(result.logs).toContain("typeof metadata.created:");
       const parsed = JSON.parse(result.result);
       expect(parsed.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
-      // Verify nested datetime was stored and returned (should be a non-empty date string)
+      // Verify nested datetime was stored and returned as a valid date
       expect(parsed.metadataCreated).toBeTruthy();
       expect(new Date(parsed.metadataCreated).getFullYear()).toBeGreaterThanOrEqual(2026);
     });
