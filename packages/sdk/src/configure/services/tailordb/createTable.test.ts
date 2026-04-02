@@ -813,6 +813,15 @@ describe("createTable unknown descriptor kind", () => {
       }),
     ).toThrow('Unknown field descriptor kind: "strng"');
   });
+
+  it("throws on enum descriptor without values", () => {
+    expect(() =>
+      createTable("Test", {
+        // @ts-expect-error testing runtime behavior with missing values
+        status: { kind: "enum" },
+      }),
+    ).toThrow('Enum field descriptor requires a non-empty "values" array');
+  });
 });
 
 describe("createTable mixed fluent and descriptor fields", () => {

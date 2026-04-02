@@ -942,6 +942,21 @@ describe("createResolver", () => {
       ).toThrow('Unknown resolver field descriptor kind: "strng"');
     });
 
+    test("enum descriptor without values throws an error", () => {
+      expect(() =>
+        createResolver({
+          name: "enumNoValues",
+          operation: "query",
+          input: {
+            // @ts-expect-error testing runtime behavior with missing values
+            status: { kind: "enum" },
+          },
+          output: { kind: "bool" },
+          body: () => true,
+        }),
+      ).toThrow('Enum field descriptor requires a non-empty "values" array');
+    });
+
     test("record output with a field named 'kind' is not confused with a descriptor", () => {
       const resolver = createResolver({
         name: "withKindField",

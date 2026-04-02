@@ -44,6 +44,10 @@ type KindToTsType = {
     : K]: TailorToTs[KindToFieldType[K]];
 };
 
+// Hook and validate callbacks receive the base scalar type (e.g. `string`, `number`), not the
+// final output type adjusted for `optional`/`array`. Computing the exact output type from
+// descriptor flags would require a combinatorial explosion of type variants per kind; the fluent
+// API achieves this through method chaining instead. Use `db.*()` when precise hook typing matters.
 type IndexableOptions<O = unknown> = {
   unique?: boolean;
   index?: boolean;
@@ -331,6 +335,9 @@ function buildField(descriptor: FieldDescriptor): TailorAnyDBField {
     ...(descriptor.array === true && { array: true as const }),
   };
   const values = descriptor.kind === "enum" ? descriptor.values : undefined;
+  if (descriptor.kind === "enum" && (!Array.isArray(values) || values.length === 0)) {
+    throw new Error('Enum field descriptor requires a non-empty "values" array');
+  }
   const nestedFields =
     descriptor.kind === "object" ? resolveFieldMap(descriptor.fields) : undefined;
 

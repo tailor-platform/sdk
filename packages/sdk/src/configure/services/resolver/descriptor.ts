@@ -170,6 +170,9 @@ function buildResolverField(descriptor: ResolverFieldDescriptor): TailorAnyField
     ...(descriptor.array === true && { array: true as const }),
   };
   const values = descriptor.kind === "enum" ? descriptor.values : undefined;
+  if (descriptor.kind === "enum" && (!Array.isArray(values) || values.length === 0)) {
+    throw new Error('Enum field descriptor requires a non-empty "values" array');
+  }
   const nestedFields =
     descriptor.kind === "object" ? resolveResolverFieldMap(descriptor.fields) : undefined;
 
