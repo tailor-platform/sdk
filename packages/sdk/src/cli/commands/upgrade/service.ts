@@ -54,7 +54,11 @@ async function runCodemod(
   const args = ["codemod", "jssg", "run", bundledPath, "--language", language, "-t", options.path];
 
   if (options.dryRun) {
-    args.push("--dry-run", "--no-color");
+    args.push("--dry-run");
+    // Match parent process color support: if styles produce no ANSI codes, disable color
+    if (styles.bold("x") === "x") {
+      args.push("--no-color");
+    }
   }
 
   if (!options.interactive) {
@@ -179,20 +183,12 @@ function printUpgradeSummary(summary: UpgradeSummary, dryRun: boolean): void {
     }
   }
 
-  // Show diff preview in dry-run mode
+  // Show diff preview in dry-run mode (passthrough codemod CLI's colored output)
   if (dryRun && summary.diffOutput) {
     logger.log("");
     logger.info("Changes preview:");
     logger.log("");
-    for (const line of summary.diffOutput.split("\n")) {
-      if (line.startsWith("+") && !line.startsWith("+++")) {
-        logger.log(`  ${styles.success(line)}`);
-      } else if (line.startsWith("-") && !line.startsWith("---")) {
-        logger.log(`  ${styles.error(line)}`);
-      } else {
-        logger.log(`  ${line}`);
-      }
-    }
+    logger.log(summary.diffOutput);
   }
 
   if (summary.warnings.length > 0) {
