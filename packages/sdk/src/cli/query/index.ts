@@ -490,6 +490,7 @@ async function runRepl(
   // for history (see createReplValidator TODO). Actual queries include network latency
   // that closes the window. A clean fix requires the library to export history utilities.
   const prompt = createPrompt({
+    prefix: "",
     preferNewlineOnEnter: true,
     validate,
     history: historyPath ? { filePath: historyPath, maxEntries: 100 } : [],
