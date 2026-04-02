@@ -159,17 +159,9 @@ export function resolveResolverFieldMap(
   let hasDescriptor = false;
   const resolved: Record<string, TailorAnyField> = {};
   for (const [key, entry] of Object.entries(entries)) {
-    if (isPassthroughField(entry)) {
-      const cast = entry as { type?: unknown; metadata?: unknown };
-      if (typeof cast.type !== "string" || typeof cast.metadata !== "object" || !cast.metadata) {
-        throw new Error(
-          `Expected a field descriptor (with \`kind\`) or a t.*() field instance (with \`type\`) for key "${key}"`,
-        );
-      }
-      resolved[key] = entry;
-    } else {
+    resolved[key] = resolveResolverField(entry);
+    if (!hasDescriptor && isResolverFieldDescriptor(entry)) {
       hasDescriptor = true;
-      resolved[key] = buildResolverField(entry);
     }
   }
   return hasDescriptor ? resolved : (entries as Record<string, TailorAnyField>);

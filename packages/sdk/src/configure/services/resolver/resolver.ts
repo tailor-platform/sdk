@@ -128,12 +128,9 @@ export function createResolver<
       body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>>;
     }>,
 ): ResolverReturn<Input, Output> {
-  // Resolve input fields: convert descriptors to TailorField instances
   const resolvedInput = config.input
     ? resolveResolverFieldMap(config.input as Record<string, ResolverFieldEntry>)
     : undefined;
-
-  // Resolve output: handle TailorField, descriptor, or Record<string, ResolverFieldEntry>
   const normalizedOutput = resolveOutput(config.output);
 
   return brandValue(
@@ -166,7 +163,6 @@ function resolveOutput(
     return output;
   }
 
-  // Record of fields - resolve each and wrap in t.object()
   const resolvedFields = resolveResolverFieldMap(output as Record<string, ResolverFieldEntry>);
   return t.object(resolvedFields);
 }
