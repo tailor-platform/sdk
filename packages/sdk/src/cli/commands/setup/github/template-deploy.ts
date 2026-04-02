@@ -29,7 +29,7 @@ function indentSnippet(snippet: string, spaces: number): string {
   return snippet
     .trimEnd()
     .split("\n")
-    .map((line) => indent + line)
+    .map((line) => (line ? indent + line : line))
     .join("\n");
 }
 
