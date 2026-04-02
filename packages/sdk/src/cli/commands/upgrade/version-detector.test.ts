@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { detectInstalledVersion } from "./version-detector";
+import { detectDeclaredVersion, detectInstalledVersion } from "./version-detector";
 
 describe("version-detector", () => {
   let tmpDir: string;
@@ -50,6 +50,52 @@ describe("version-detector", () => {
 
     it("should return null for nonexistent directory", async () => {
       const version = await detectInstalledVersion(path.join(tmpDir, "nonexistent"));
+      expect(version).toBeNull();
+    });
+  });
+
+  describe("detectDeclaredVersion", () => {
+    it("should detect version from dependencies", async () => {
+      await fs.promises.writeFile(
+        path.join(tmpDir, "package.json"),
+        JSON.stringify({
+          name: "test-project",
+          dependencies: { "@tailor-platform/sdk": "^2.0.0" },
+        }),
+      );
+
+      const version = await detectDeclaredVersion(tmpDir);
+      expect(version).toBe("^2.0.0");
+    });
+
+    it("should detect version from devDependencies", async () => {
+      await fs.promises.writeFile(
+        path.join(tmpDir, "package.json"),
+        JSON.stringify({
+          name: "test-project",
+          devDependencies: { "@tailor-platform/sdk": "~2.1.0" },
+        }),
+      );
+
+      const version = await detectDeclaredVersion(tmpDir);
+      expect(version).toBe("~2.1.0");
+    });
+
+    it("should return null when SDK is not a dependency", async () => {
+      await fs.promises.writeFile(
+        path.join(tmpDir, "package.json"),
+        JSON.stringify({
+          name: "test-project",
+          dependencies: { "some-other-package": "1.0.0" },
+        }),
+      );
+
+      const version = await detectDeclaredVersion(tmpDir);
+      expect(version).toBeNull();
+    });
+
+    it("should return null when package.json does not exist", async () => {
+      const version = await detectDeclaredVersion(path.join(tmpDir, "nonexistent"));
       expect(version).toBeNull();
     });
   });
