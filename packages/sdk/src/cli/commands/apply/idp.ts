@@ -202,6 +202,7 @@ type ComparableIdPService = {
   userAuthPolicy: Record<string, unknown> | undefined;
   publishUserEvents: boolean;
   disableGqlOperations: Record<string, boolean> | undefined;
+  emailConfig: Record<string, string> | undefined;
 };
 
 function normalizeComparableUserAuthPolicy(
@@ -235,10 +236,24 @@ function normalizeComparableDisableGqlOperations(
   };
 }
 
+function normalizeComparableEmailConfig(
+  value: ProtoIdPService["emailConfig"] | Record<string, string> | undefined,
+): Record<string, string> | undefined {
+  return {
+    fromName: value?.fromName ?? "",
+    passwordResetSubject: value?.passwordResetSubject ?? "",
+  };
+}
+
 function normalizeComparableIdPService(
   input: Pick<
     ComparableIdPService,
-    "authorization" | "lang" | "userAuthPolicy" | "publishUserEvents" | "disableGqlOperations"
+    | "authorization"
+    | "lang"
+    | "userAuthPolicy"
+    | "publishUserEvents"
+    | "disableGqlOperations"
+    | "emailConfig"
   >,
 ): ComparableIdPService {
   return {
@@ -247,6 +262,7 @@ function normalizeComparableIdPService(
     userAuthPolicy: input.userAuthPolicy,
     publishUserEvents: input.publishUserEvents,
     disableGqlOperations: input.disableGqlOperations,
+    emailConfig: input.emailConfig,
   };
 }
 
@@ -258,6 +274,7 @@ function areIdPServicesEqual(existing: ProtoIdPService, desired: ComparableIdPSe
       userAuthPolicy: normalizeComparableUserAuthPolicy(existing.userAuthPolicy),
       publishUserEvents: existing.publishUserEvents,
       disableGqlOperations: normalizeComparableDisableGqlOperations(existing.disableGqlOperations),
+      emailConfig: normalizeComparableEmailConfig(existing.emailConfig),
     }),
     desired,
   );
@@ -326,6 +343,7 @@ async function planServices(
     const lang = convertLang(idp.lang);
     const userAuthPolicy = idp.userAuthPolicy;
     const publishUserEvents = idp.publishUserEvents ?? false;
+    const emailConfig = idp.emailConfig;
     const desired = normalizeComparableIdPService({
       authorization,
       lang,
@@ -334,6 +352,7 @@ async function planServices(
       disableGqlOperations: normalizeComparableDisableGqlOperations(
         convertGqlOperationsToDisable(idp.gqlOperations),
       ),
+      emailConfig: normalizeComparableEmailConfig(emailConfig),
     });
     const request = {
       workspaceId,
@@ -343,6 +362,7 @@ async function planServices(
       userAuthPolicy,
       publishUserEvents,
       disableGqlOperations: convertGqlOperationsToDisable(idp.gqlOperations),
+      emailConfig,
     };
 
     if (existing) {

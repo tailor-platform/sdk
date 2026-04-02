@@ -54,6 +54,11 @@ export declare type IdPService = Message<"tailor.v1.IdPService"> & {
    * @generated from field: tailor.v1.IdPDisableGqlOperations disable_gql_operations = 7;
    */
   disableGqlOperations?: IdPDisableGqlOperations;
+
+  /**
+   * @generated from field: tailor.v1.IdPEmailConfig email_config = 8;
+   */
+  emailConfig?: IdPEmailConfig;
 };
 
 /**
@@ -109,6 +114,33 @@ export declare type IdPDisableGqlOperations = Message<"tailor.v1.IdPDisableGqlOp
  * Use `create(IdPDisableGqlOperationsSchema)` to create a new message.
  */
 export declare const IdPDisableGqlOperationsSchema: GenMessage<IdPDisableGqlOperations>;
+
+/**
+ * IdPEmailConfig holds namespace-level email configuration defaults.
+ *
+ * @generated from message tailor.v1.IdPEmailConfig
+ */
+export declare type IdPEmailConfig = Message<"tailor.v1.IdPEmailConfig"> & {
+  /**
+   * from_name is the default sender display name for emails. Empty means use mailer default.
+   *
+   * @generated from field: string from_name = 1;
+   */
+  fromName: string;
+
+  /**
+   * password_reset_subject is the default subject for password reset emails. Empty means use localized default.
+   *
+   * @generated from field: string password_reset_subject = 2;
+   */
+  passwordResetSubject: string;
+};
+
+/**
+ * Describes the message tailor.v1.IdPEmailConfig.
+ * Use `create(IdPEmailConfigSchema)` to create a new message.
+ */
+export declare const IdPEmailConfigSchema: GenMessage<IdPEmailConfig>;
 
 /**
  * @generated from message tailor.v1.IdPClient
