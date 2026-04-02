@@ -115,7 +115,15 @@ export type ResolvedResolverFieldMap<M extends Record<string, ResolverFieldEntry
 // --- Runtime conversion ---
 
 function isPassthroughField(entry: ResolverFieldEntry): entry is TailorAnyField {
-  return !isResolverFieldDescriptor(entry);
+  if ("kind" in entry) {
+    if (!isResolverFieldDescriptor(entry)) {
+      throw new Error(
+        `Unknown resolver field descriptor kind: "${String((entry as { kind: unknown }).kind)}"`,
+      );
+    }
+    return false;
+  }
+  return true;
 }
 
 export function isResolverFieldDescriptor(

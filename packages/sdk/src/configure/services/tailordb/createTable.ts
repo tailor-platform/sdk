@@ -322,6 +322,9 @@ function isValidateConfig(v: unknown): v is ValidateConfig<unknown> {
 }
 
 function buildField(descriptor: FieldDescriptor): TailorAnyDBField {
+  if (!(descriptor.kind in kindToFieldType)) {
+    throw new Error(`Unknown field descriptor kind: "${String(descriptor.kind)}"`);
+  }
   const fieldType = kindToFieldType[descriptor.kind];
   const options = {
     ...(descriptor.optional === true && { optional: true as const }),

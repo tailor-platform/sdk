@@ -804,6 +804,17 @@ describe("createTable descriptor-level validate value typing", () => {
   });
 });
 
+describe("createTable unknown descriptor kind", () => {
+  it("throws on unknown kind value", () => {
+    expect(() =>
+      createTable("Test", {
+        // @ts-expect-error testing runtime behavior with unknown kind
+        name: { kind: "strng" },
+      }),
+    ).toThrow('Unknown field descriptor kind: "strng"');
+  });
+});
+
 describe("createTable mixed fluent and descriptor fields", () => {
   it("accepts both db.field() and descriptor in the same type", () => {
     const result = createTable("Test", {

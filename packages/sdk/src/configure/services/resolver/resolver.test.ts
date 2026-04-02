@@ -927,6 +927,21 @@ describe("createResolver", () => {
       expectTypeOf(resolver).toExtend<ResolverInput>();
     });
 
+    test("unknown kind in input throws an error", () => {
+      expect(() =>
+        createResolver({
+          name: "unknownKind",
+          operation: "query",
+          input: {
+            // @ts-expect-error testing runtime behavior with unknown kind
+            name: { kind: "strng" },
+          },
+          output: { kind: "bool" },
+          body: () => true,
+        }),
+      ).toThrow('Unknown resolver field descriptor kind: "strng"');
+    });
+
     test("record output with a field named 'kind' is not confused with a descriptor", () => {
       const resolver = createResolver({
         name: "withKindField",
