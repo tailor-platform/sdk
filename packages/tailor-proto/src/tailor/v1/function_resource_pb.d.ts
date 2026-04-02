@@ -85,6 +85,11 @@ export declare type FunctionExecution = Message<"tailor.v1.FunctionExecution"> &
    * @generated from field: tailor.v1.FunctionErrorInfo error = 10;
    */
   error?: FunctionErrorInfo;
+
+  /**
+   * @generated from field: tailor.v1.FunctionErrorKind error_kind = 11;
+   */
+  errorKind: FunctionErrorKind;
 };
 
 /**
@@ -147,4 +152,39 @@ export enum FunctionExecution_Type {
  * Describes the enum tailor.v1.FunctionExecution.Type.
  */
 export declare const FunctionExecution_TypeSchema: GenEnum<FunctionExecution_Type>;
+
+/**
+ * @generated from enum tailor.v1.FunctionErrorKind
+ */
+export enum FunctionErrorKind {
+  /**
+   * @generated from enum value: FUNCTION_ERROR_KIND_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: FUNCTION_ERROR_KIND_NONE = 1;
+   */
+  NONE = 1,
+
+  /**
+   * @generated from enum value: FUNCTION_ERROR_KIND_USER_RUNTIME = 2;
+   */
+  USER_RUNTIME = 2,
+
+  /**
+   * @generated from enum value: FUNCTION_ERROR_KIND_USER_NON_RUNTIME = 3;
+   */
+  USER_NON_RUNTIME = 3,
+
+  /**
+   * @generated from enum value: FUNCTION_ERROR_KIND_PLATFORM = 4;
+   */
+  PLATFORM = 4,
+}
+
+/**
+ * Describes the enum tailor.v1.FunctionErrorKind.
+ */
+export declare const FunctionErrorKindSchema: GenEnum<FunctionErrorKind>;
 

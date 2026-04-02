@@ -174,6 +174,20 @@ export const IdPUserAuthPolicySchema = z
     path: ["disablePasswordAuth"],
   });
 
+const emailFieldSchema = z
+  .string()
+  .max(200, "must be 200 characters or less")
+  .regex(/^[^\r\n]*$/, "must not contain newline characters");
+
+export const IdPEmailConfigSchema = z
+  .object({
+    fromName: emailFieldSchema.optional().describe("Default sender display name for emails"),
+    passwordResetSubject: emailFieldSchema
+      .optional()
+      .describe("Default subject for password reset emails"),
+  })
+  .describe("Namespace-level email configuration defaults");
+
 export const IdPSchema = z
   .object({
     name: z.string().describe("IdP service name"),
@@ -190,6 +204,9 @@ export const IdPSchema = z
     publishUserEvents: z.boolean().optional().describe("Enable publishing user lifecycle events"),
     gqlOperations: IdPGqlOperationsSchema.optional().describe(
       "Configure which GraphQL operations are enabled",
+    ),
+    emailConfig: IdPEmailConfigSchema.optional().describe(
+      "Namespace-level email configuration defaults",
     ),
   })
   .brand("IdPConfig");
