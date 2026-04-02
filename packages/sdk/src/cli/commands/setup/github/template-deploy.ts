@@ -73,9 +73,9 @@ export function renderDeploy(params: DeployParams): string {
 
   return deployTemplate
     .replaceAll("__WORKSPACE_NAME__", () => workspaceName)
-    .replace("__WORKSPACE_REGION__", () => workspaceRegion)
-    .replace("__ORGANIZATION_ID__", () => organizationId)
-    .replace("__FOLDER_ID__", () => folderId)
+    .replaceAll("__WORKSPACE_REGION__", () => workspaceRegion)
+    .replaceAll("__ORGANIZATION_ID__", () => organizationId)
+    .replaceAll("__FOLDER_ID__", () => folderId)
     .replace(/ *# __WORKING_DIRECTORY__\n/, () => workingDirectoryLine)
     .replace(/^ *# __SETUP_STEPS__$/m, () => indentSnippet(setupSteps[packageManager], 6));
 }
