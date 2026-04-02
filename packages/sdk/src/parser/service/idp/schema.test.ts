@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { IdPUserAuthPolicySchema, IdPSchema, IdPGqlOperationsSchema } from "./schema";
+import {
+  IdPUserAuthPolicySchema,
+  IdPSchema,
+  IdPGqlOperationsSchema,
+  IdPEmailConfigSchema,
+} from "./schema";
 
 describe("IdPUserAuthPolicySchema validation", () => {
   it("accepts valid password policy configuration", () => {
@@ -588,6 +593,103 @@ describe("IdPGqlOperationsSchema validation", () => {
     expect(result.delete).toBe(false);
     expect(result.read).toBe(true);
     expect(result.sendPasswordResetEmail).toBe(false);
+  });
+});
+
+describe("IdPEmailConfigSchema validation", () => {
+  it("accepts valid email config", () => {
+    const result = IdPEmailConfigSchema.parse({
+      fromName: "My App",
+      passwordResetSubject: "Reset your password",
+    });
+    expect(result.fromName).toBe("My App");
+    expect(result.passwordResetSubject).toBe("Reset your password");
+  });
+
+  it("accepts partial config", () => {
+    const result = IdPEmailConfigSchema.parse({ fromName: "My App" });
+    expect(result.fromName).toBe("My App");
+    expect(result.passwordResetSubject).toBeUndefined();
+  });
+
+  it("accepts empty object", () => {
+    const result = IdPEmailConfigSchema.parse({});
+    expect(result.fromName).toBeUndefined();
+    expect(result.passwordResetSubject).toBeUndefined();
+  });
+
+  it("rejects fromName exceeding 200 characters", () => {
+    expect(() => IdPEmailConfigSchema.parse({ fromName: "a".repeat(201) })).toThrow(
+      "200 characters or less",
+    );
+  });
+
+  it("rejects passwordResetSubject exceeding 200 characters", () => {
+    expect(() => IdPEmailConfigSchema.parse({ passwordResetSubject: "a".repeat(201) })).toThrow(
+      "200 characters or less",
+    );
+  });
+
+  it("rejects fromName containing newline characters", () => {
+    expect(() => IdPEmailConfigSchema.parse({ fromName: "My\nApp" })).toThrow(
+      "must not contain newline characters",
+    );
+    expect(() => IdPEmailConfigSchema.parse({ fromName: "My\rApp" })).toThrow(
+      "must not contain newline characters",
+    );
+  });
+
+  it("rejects passwordResetSubject containing newline characters", () => {
+    expect(() =>
+      IdPEmailConfigSchema.parse({ passwordResetSubject: "Reset\nyour password" }),
+    ).toThrow("must not contain newline characters");
+  });
+
+  it("accepts fromName at exactly 200 characters", () => {
+    const result = IdPEmailConfigSchema.parse({ fromName: "a".repeat(200) });
+    expect(result.fromName).toHaveLength(200);
+  });
+});
+
+describe("IdPSchema emailConfig tests", () => {
+  it("accepts emailConfig in IdPSchema", () => {
+    const config = {
+      name: "test-idp",
+      authorization: "loggedIn" as const,
+      clients: ["client-1"],
+      emailConfig: {
+        fromName: "My App",
+        passwordResetSubject: "Reset your password",
+      },
+    };
+
+    const result = IdPSchema.parse(config);
+    expect(result.emailConfig?.fromName).toBe("My App");
+    expect(result.emailConfig?.passwordResetSubject).toBe("Reset your password");
+  });
+
+  it("accepts missing emailConfig", () => {
+    const config = {
+      name: "test-idp",
+      authorization: "loggedIn" as const,
+      clients: ["client-1"],
+    };
+
+    const result = IdPSchema.parse(config);
+    expect(result.emailConfig).toBeUndefined();
+  });
+
+  it("rejects invalid emailConfig in IdPSchema", () => {
+    const config = {
+      name: "test-idp",
+      authorization: "loggedIn" as const,
+      clients: ["client-1"],
+      emailConfig: {
+        fromName: "a".repeat(201),
+      },
+    };
+
+    expect(() => IdPSchema.parse(config)).toThrow("200 characters or less");
   });
 });
 
