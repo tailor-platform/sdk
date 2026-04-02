@@ -1,5 +1,5 @@
 ---
-"@tailor-platform/sdk": minor
+"@tailor-platform/sdk": patch
 ---
 
 Add `emailConfig` option to `defineIdp()` for namespace-level email defaults.
