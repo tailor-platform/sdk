@@ -7,8 +7,8 @@ checksum:
   require_checksum: true
 registries:
   - type: standard
-    ref: v4.487.0 # renovate: depName=aquaproj/aqua-registry
+    ref: v4.491.0 # renovate: depName=aquaproj/aqua-registry
 packages:
   - name: rhysd/actionlint@v1.7.12
   - name: suzuki-shunsuke/ghalint@v1.5.5
-  - name: bufbuild/buf@v1.66.1
+  - name: bufbuild/buf@v1.67.0

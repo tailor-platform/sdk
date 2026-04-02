@@ -2,6 +2,7 @@ import {
   createGetDB,
   type Generated,
   type Timestamp,
+  type ObjectColumnType,
   type NamespaceDB,
   type NamespaceInsertable,
   type NamespaceSelectable,
@@ -25,11 +26,11 @@ export interface Namespace {
       body: string;
       taskId: string;
       authorId: string;
-      metadata: {
+      metadata: ObjectColumnType<{
         source: string;
-        editedAt: Timestamp | null;
+        editedAt?: Timestamp | null;
         isInternal: boolean;
-      };
+      }>;
       createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
     }

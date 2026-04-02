@@ -354,6 +354,38 @@ describe("defineIdp", () => {
     expect(idpWithQueryAlias.gqlOperations).toBe("query");
   });
 
+  it("should preserve emailConfig", () => {
+    const idpWithEmailConfig = defineIdp("idp-with-email-config", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      emailConfig: {
+        fromName: "My App",
+        passwordResetSubject: "Reset your password",
+      },
+    });
+    expect(idpWithEmailConfig.emailConfig).toEqual({
+      fromName: "My App",
+      passwordResetSubject: "Reset your password",
+    });
+
+    const idpWithPartialEmailConfig = defineIdp("idp-with-partial-email-config", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      emailConfig: {
+        fromName: "My App",
+      },
+    });
+    expect(idpWithPartialEmailConfig.emailConfig).toEqual({
+      fromName: "My App",
+    });
+
+    const idpNoEmailConfig = defineIdp("idp-no-email-config", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+    });
+    expect(idpNoEmailConfig.emailConfig).toBeUndefined();
+  });
+
   it("gqlOperations: 'query' works with other config options", () => {
     const idpWithQueryAndOtherOptions = defineIdp("idp-with-query-and-options", {
       authorization: "loggedIn",

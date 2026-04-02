@@ -77,6 +77,28 @@ defineIdp("my-idp", {
 });
 ```
 
+### emailConfig
+
+Namespace-level email configuration defaults. Per-request values take priority over these defaults.
+
+```typescript
+defineIdp("my-idp", {
+  authorization: "loggedIn",
+  clients: ["my-client"],
+  emailConfig: {
+    fromName: "My App",
+    passwordResetSubject: "Reset your password",
+  },
+});
+```
+
+**Fields:**
+
+- `fromName` - Default sender display name for emails. Empty means use mailer default.
+- `passwordResetSubject` - Default subject for password reset emails. Empty means use localized default.
+
+**Validation:** Each field must be 200 characters or less and must not contain newline characters.
+
 ## Using idp.provider()
 
 The `idp.provider()` method creates a type-safe reference to the IdP for use in Auth configuration. The client name is validated at compile time against the clients defined in the IdP.
