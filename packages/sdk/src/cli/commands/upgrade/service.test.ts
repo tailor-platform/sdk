@@ -25,6 +25,7 @@ vi.mock("@/cli/shared/logger", () => ({
 
 vi.mock("./version-detector", () => ({
   detectInstalledVersion: vi.fn(),
+  detectDeclaredVersion: vi.fn(),
 }));
 
 vi.mock("./codemod-registry", () => ({
@@ -230,6 +231,32 @@ describe("upgrade service", () => {
 
     const { logger } = await import("@/cli/shared/logger");
     expect(vi.mocked(logger.success)).toHaveBeenCalled();
+  });
+
+  it("should resolve target version from package.json when --to is omitted", async () => {
+    const { detectInstalledVersion, detectDeclaredVersion } = await import("./version-detector");
+    vi.mocked(detectInstalledVersion).mockResolvedValue("1.33.0");
+    vi.mocked(detectDeclaredVersion).mockResolvedValue("^2.0.0");
+
+    const { getApplicableCodemods } = await import("./codemod-registry");
+    vi.mocked(getApplicableCodemods).mockReturnValue([]);
+
+    const { upgrade } = await import("./service");
+    await upgrade({ dryRun: false, path: "/test" });
+
+    // Should have called getApplicableCodemods with coerced version "2.0.0"
+    expect(getApplicableCodemods).toHaveBeenCalledWith("1.33.0", "2.0.0");
+  });
+
+  it("should throw when --to is omitted and package.json has no SDK dependency", async () => {
+    const { detectInstalledVersion, detectDeclaredVersion } = await import("./version-detector");
+    vi.mocked(detectInstalledVersion).mockResolvedValue("1.33.0");
+    vi.mocked(detectDeclaredVersion).mockResolvedValue(null);
+
+    const { upgrade } = await import("./service");
+    await expect(upgrade({ dryRun: false, path: "/test" })).rejects.toThrow(
+      "Could not detect target SDK version",
+    );
   });
 
   it("should display diff preview in dry-run mode", async () => {

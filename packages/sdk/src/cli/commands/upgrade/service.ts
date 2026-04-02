@@ -3,19 +3,19 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import { promisify } from "node:util";
 import * as path from "pathe";
+import { coerce } from "semver";
 import { CLIError } from "@/cli/shared/errors";
 import { logger, styles } from "@/cli/shared/logger";
 import { getApplicableCodemods, resolveCodemodScript } from "./codemod-registry";
-import { detectInstalledVersion } from "./version-detector";
+import { detectDeclaredVersion, detectInstalledVersion } from "./version-detector";
 import type { CodemodPackage, CodemodResult, UpgradeSummary } from "./types";
 
 const execFileAsync = promisify(execFile);
 
 interface UpgradeOptions {
-  to: string;
+  to?: string;
   dryRun: boolean;
   path: string;
-  interactive?: boolean;
 }
 
 /**
@@ -51,7 +51,18 @@ async function runCodemod(
   // Bundle TS → JS for the jssg runtime
   const bundledPath = await bundleCodemod(scriptPath);
 
-  const args = ["codemod", "jssg", "run", bundledPath, "--language", language, "-t", options.path];
+  const args = [
+    "codemod",
+    "jssg",
+    "run",
+    bundledPath,
+    "--language",
+    language,
+    "-t",
+    options.path,
+    "--no-interactive",
+    "--allow-dirty",
+  ];
 
   if (options.dryRun) {
     args.push("--dry-run");
@@ -60,12 +71,6 @@ async function runCodemod(
       args.push("--no-color");
     }
   }
-
-  if (!options.interactive) {
-    args.push("--no-interactive");
-  }
-
-  args.push("--allow-dirty");
 
   try {
     const { stdout, stderr } = await execFileAsync("npx", args, {
@@ -209,8 +214,42 @@ function printUpgradeSummary(summary: UpgradeSummary, dryRun: boolean): void {
 }
 
 /**
+ * Resolve the target version from --to flag or package.json declaration.
+ * @param projectRoot - The project root directory
+ * @param explicitTo - Explicit --to value, if provided
+ * @returns Resolved semver version string
+ */
+async function resolveTargetVersion(projectRoot: string, explicitTo?: string): Promise<string> {
+  if (explicitTo) {
+    return explicitTo;
+  }
+
+  const declared = await detectDeclaredVersion(projectRoot);
+  if (!declared) {
+    throw CLIError({
+      message: "Could not detect target SDK version",
+      suggestion:
+        "Specify the target version with --to, or ensure @tailor-platform/sdk is listed in package.json dependencies.",
+      command: "upgrade",
+    });
+  }
+
+  // coerce handles ranges like "^2.0.0" or "~2.1.0" → "2.0.0" or "2.1.0"
+  const version = coerce(declared);
+  if (!version) {
+    throw CLIError({
+      message: `Could not parse version from "${declared}"`,
+      suggestion: "Specify the target version explicitly with --to (e.g., --to 2.0.0).",
+      command: "upgrade",
+    });
+  }
+
+  return version.version;
+}
+
+/**
  * Run the upgrade pipeline:
- * 1. Detect current SDK version
+ * 1. Detect current SDK version and resolve target version
  * 2. Select applicable codemods
  * 3. Execute each codemod via codemod CLI
  * 4. Print summary
@@ -219,7 +258,7 @@ function printUpgradeSummary(summary: UpgradeSummary, dryRun: boolean): void {
 export async function upgrade(options: UpgradeOptions): Promise<void> {
   const projectRoot = options.path;
 
-  // Step 1: Detect current SDK version
+  // Step 1: Detect current SDK version and resolve target
   const currentVersion = await detectInstalledVersion(projectRoot);
   if (!currentVersion) {
     throw CLIError({
@@ -230,11 +269,13 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
     });
   }
 
+  const targetVersion = await resolveTargetVersion(projectRoot, options.to);
+
   logger.info(`Detected SDK version: ${styles.highlight(currentVersion)}`);
-  logger.info(`Target version: ${styles.highlight(options.to)}`);
+  logger.info(`Target version: ${styles.highlight(targetVersion)}`);
 
   // Step 2: Select applicable codemods
-  const codemods = getApplicableCodemods(currentVersion, options.to);
+  const codemods = getApplicableCodemods(currentVersion, targetVersion);
 
   if (codemods.length === 0) {
     logger.success("No codemods applicable for this version range.");
@@ -245,10 +286,6 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
 
   if (options.dryRun) {
     logger.info(`${styles.bold("[Dry Run]")} Changes will be previewed but not applied.`);
-  } else if (options.interactive) {
-    logger.info(
-      `${styles.bold("[Interactive]")} You will be prompted to accept or skip each codemod.`,
-    );
   }
 
   logger.log("");
