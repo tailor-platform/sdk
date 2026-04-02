@@ -5,7 +5,9 @@ import type { CodemodPackage } from "./types";
 
 /**
  * Resolve the SDK package root directory.
- * Works both in development (source) and production (bundled dist/).
+ * Uses createRequire to locate the SDK's package.json, which works in both
+ * source (development) and bundled (production) environments.
+ * Requires "./package.json" to be listed in the SDK's package.json exports.
  * @returns Absolute path to the SDK package root
  */
 function getSdkPackageRoot(): string {
