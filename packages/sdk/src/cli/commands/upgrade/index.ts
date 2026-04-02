@@ -8,9 +8,8 @@ export const upgradeCommand = defineAppCommand({
   description: "Run codemods to upgrade your project to a newer SDK version.",
   args: z
     .object({
-      to: arg(z.string().optional(), {
-        description:
-          "Target SDK version to upgrade to. Defaults to the version declared in package.json.",
+      from: arg(z.string(), {
+        description: "SDK version before the upgrade (e.g., 1.33.0)",
       }),
       "dry-run": arg(z.boolean().default(false), {
         alias: "d",
@@ -28,7 +27,7 @@ export const upgradeCommand = defineAppCommand({
 
     const { upgrade } = await import("./service");
     await upgrade({
-      to: args.to,
+      from: args.from,
       dryRun: args["dry-run"],
       path: path.resolve(args.path),
     });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getApplicableCodemods } from "./codemod-registry";
+import { getApplicableCodemods } from "./registry";
 
 describe("getApplicableCodemods", () => {
   it("returns codemods when upgrading across their version boundary", () => {
@@ -8,19 +8,16 @@ describe("getApplicableCodemods", () => {
     expect(codemods[0]!.id).toBe("v2/define-generators-to-plugins");
   });
 
-  it("returns empty when from and to are both before the codemod boundary", () => {
-    const codemods = getApplicableCodemods("1.0.0", "1.5.0");
-    expect(codemods).toEqual([]);
+  it("returns empty when both versions are before the codemod boundary", () => {
+    expect(getApplicableCodemods("1.0.0", "1.5.0")).toEqual([]);
   });
 
-  it("returns empty when from and to are both after the codemod boundary", () => {
-    const codemods = getApplicableCodemods("2.0.0", "3.0.0");
-    expect(codemods).toEqual([]);
+  it("returns empty when both versions are after the codemod boundary", () => {
+    expect(getApplicableCodemods("2.0.0", "3.0.0")).toEqual([]);
   });
 
   it("returns empty when from is already at the codemod boundary", () => {
-    const codemods = getApplicableCodemods("2.0.0", "2.1.0");
-    expect(codemods).toEqual([]);
+    expect(getApplicableCodemods("2.0.0", "2.1.0")).toEqual([]);
   });
 
   it("throws for invalid semver versions", () => {

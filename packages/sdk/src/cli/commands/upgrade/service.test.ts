@@ -1,5 +1,5 @@
-import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { RunOutput } from "./types";
 
 vi.mock("@/cli/shared/logger", () => ({
   logger: {
@@ -25,51 +25,26 @@ vi.mock("@/cli/shared/logger", () => ({
 
 vi.mock("./version-detector", () => ({
   detectInstalledVersion: vi.fn(),
-  detectDeclaredVersion: vi.fn(),
 }));
 
-vi.mock("./codemod-registry", () => ({
-  getApplicableCodemods: vi.fn(),
-  resolveCodemodScript: vi.fn((p: string) => `/resolved/${p}`),
+vi.mock("@/cli/shared/package-json", () => ({
+  readPackageJson: vi.fn().mockResolvedValue({ version: "2.0.0" }),
 }));
 
-// Mock execFile with promisify.custom so that promisify(execFile) uses our mock
-const mockExecFileAsync = vi.fn();
-vi.mock("node:child_process", () => {
-  const fn = vi.fn() as ReturnType<typeof vi.fn> & {
-    [key: symbol]: ReturnType<typeof vi.fn>;
-  };
-  fn[promisify.custom] = mockExecFileAsync;
-  return { execFile: fn };
-});
+vi.mock("node:child_process", () => ({
+  spawnSync: vi.fn(),
+}));
 
-// Mock fs.promises.mkdtemp and rm for bundleCodemod
-vi.mock("node:fs", async () => {
-  const actual = await vi.importActual("node:fs");
-  const actualObj = actual as { promises: Record<string, unknown> };
+function makeOutput(overrides: Partial<RunOutput> = {}): RunOutput {
   return {
-    ...actual,
-    promises: {
-      ...actualObj.promises,
-      mkdtemp: vi.fn().mockResolvedValue("/tmp/codemod-bundle-mock"),
-      rm: vi.fn().mockResolvedValue(undefined),
-    },
+    codemodsApplied: 0,
+    codemodsSkipped: 0,
+    filesModified: [],
+    warnings: [],
+    errors: [],
+    ...overrides,
   };
-});
-
-// Mock glob from node:fs/promises (used for file snapshot in non-dry-run mode)
-// glob returns an AsyncIterable, so we return an async generator
-vi.mock("node:fs/promises", async () => {
-  const actual = await vi.importActual("node:fs/promises");
-  return {
-    ...actual,
-    glob: vi.fn().mockReturnValue(
-      (async function* () {
-        // yields nothing by default
-      })(),
-    ),
-  };
-});
+}
 
 describe("upgrade service", () => {
   beforeEach(() => {
@@ -85,238 +60,161 @@ describe("upgrade service", () => {
     vi.mocked(detectInstalledVersion).mockResolvedValue(null);
 
     const { upgrade } = await import("./service");
-
-    await expect(upgrade({ to: "2.0.0", dryRun: false, path: "/test" })).rejects.toThrow(
+    await expect(upgrade({ from: "1.33.0", dryRun: false, path: "/test" })).rejects.toThrow(
       "Could not detect installed @tailor-platform/sdk version",
     );
   });
 
-  it("should return early when no codemods are applicable", async () => {
+  it("should invoke sdk-codemod with correct arguments", async () => {
     const { detectInstalledVersion } = await import("./version-detector");
-    vi.mocked(detectInstalledVersion).mockResolvedValue("1.33.0");
+    vi.mocked(detectInstalledVersion).mockResolvedValue("2.0.0");
 
-    const { getApplicableCodemods } = await import("./codemod-registry");
-    vi.mocked(getApplicableCodemods).mockReturnValue([]);
+    const { spawnSync } = await import("node:child_process");
+    vi.mocked(spawnSync).mockReturnValue({
+      stdout: JSON.stringify(makeOutput()),
+      stderr: "",
+      status: 0,
+      signal: null,
+      pid: 0,
+      output: [],
+      error: undefined,
+    });
 
     const { upgrade } = await import("./service");
-    await upgrade({ to: "2.0.0", dryRun: false, path: "/test" });
+    await upgrade({ from: "1.33.0", dryRun: false, path: "/test" });
 
-    const { logger } = await import("@/cli/shared/logger");
-    expect(vi.mocked(logger.success)).toHaveBeenCalledWith(
-      "No codemods applicable for this version range.",
+    expect(spawnSync).toHaveBeenCalledWith(
+      "npx",
+      expect.arrayContaining([
+        expect.stringContaining("@tailor-platform/sdk-codemod@"),
+        "--from",
+        "1.33.0",
+        "--to",
+        "2.0.0",
+        "--target",
+        "/test",
+      ]),
+      expect.objectContaining({ encoding: "utf-8" }),
     );
   });
 
-  it("should log detected and target versions", async () => {
+  it("should pass --dry-run to sdk-codemod", async () => {
     const { detectInstalledVersion } = await import("./version-detector");
-    vi.mocked(detectInstalledVersion).mockResolvedValue("1.33.0");
+    vi.mocked(detectInstalledVersion).mockResolvedValue("2.0.0");
 
-    const { getApplicableCodemods } = await import("./codemod-registry");
-    vi.mocked(getApplicableCodemods).mockReturnValue([]);
+    const { spawnSync } = await import("node:child_process");
+    vi.mocked(spawnSync).mockReturnValue({
+      stdout: JSON.stringify(makeOutput()),
+      stderr: "",
+      status: 0,
+      signal: null,
+      pid: 0,
+      output: [],
+      error: undefined,
+    });
 
     const { upgrade } = await import("./service");
-    await upgrade({ to: "2.0.0", dryRun: false, path: "/test" });
+    await upgrade({ from: "1.33.0", dryRun: true, path: "/test" });
+
+    expect(spawnSync).toHaveBeenCalledWith(
+      "npx",
+      expect.arrayContaining(["--dry-run"]),
+      expect.anything(),
+    );
+  });
+
+  it("should display summary from sdk-codemod output", async () => {
+    const { detectInstalledVersion } = await import("./version-detector");
+    vi.mocked(detectInstalledVersion).mockResolvedValue("2.0.0");
+
+    const { spawnSync } = await import("node:child_process");
+    vi.mocked(spawnSync).mockReturnValue({
+      stdout: JSON.stringify(
+        makeOutput({
+          codemodsApplied: 1,
+          filesModified: ["/test/config.ts"],
+        }),
+      ),
+      stderr: "",
+      status: 0,
+      signal: null,
+      pid: 0,
+      output: [],
+      error: undefined,
+    });
+
+    const { upgrade } = await import("./service");
+    await upgrade({ from: "1.33.0", dryRun: false, path: "/test" });
 
     const { logger } = await import("@/cli/shared/logger");
     const infoCalls = vi.mocked(logger.info).mock.calls.map((c) => c[0]);
-    expect(infoCalls.some((c) => c.includes("1.33.0"))).toBe(true);
-    expect(infoCalls.some((c) => c.includes("2.0.0"))).toBe(true);
+    expect(infoCalls.some((c) => c.includes("1 applied"))).toBe(true);
   });
 
-  it("should log dry-run banner when dryRun is true", async () => {
+  it("should throw CLIError when sdk-codemod returns errors", async () => {
     const { detectInstalledVersion } = await import("./version-detector");
-    vi.mocked(detectInstalledVersion).mockResolvedValue("1.33.0");
+    vi.mocked(detectInstalledVersion).mockResolvedValue("2.0.0");
 
-    const { getApplicableCodemods } = await import("./codemod-registry");
-    vi.mocked(getApplicableCodemods).mockReturnValue([
-      {
-        id: "test/mock",
-        name: "Mock",
-        description: "Mock codemod",
-        since: "1.0.0",
-        until: "2.0.0",
-        scriptPath: "v2/mock/scripts/transform.ts",
-      },
-    ]);
-
-    // bundle call succeeds, run call returns no changes
-    mockExecFileAsync
-      .mockResolvedValueOnce({ stdout: "", stderr: "" }) // bundle
-      .mockResolvedValueOnce({ stdout: "✨ Done in 0.01s\n", stderr: "" }); // run
+    const { spawnSync } = await import("node:child_process");
+    vi.mocked(spawnSync).mockReturnValue({
+      stdout: JSON.stringify(
+        makeOutput({
+          errors: [{ codemodId: "test/fail", message: "transform failed" }],
+        }),
+      ),
+      stderr: "",
+      status: 1,
+      signal: null,
+      pid: 0,
+      output: [],
+      error: undefined,
+    });
 
     const { upgrade } = await import("./service");
-    await upgrade({ to: "2.0.0", dryRun: true, path: "/test" });
-
-    const { logger } = await import("@/cli/shared/logger");
-    const infoCalls = vi.mocked(logger.info).mock.calls.map((c) => c[0]);
-    expect(infoCalls.some((c) => c.includes("[Dry Run]"))).toBe(true);
-  });
-
-  it("should handle codemod execution errors gracefully", async () => {
-    const { detectInstalledVersion } = await import("./version-detector");
-    vi.mocked(detectInstalledVersion).mockResolvedValue("1.33.0");
-
-    const { getApplicableCodemods } = await import("./codemod-registry");
-    vi.mocked(getApplicableCodemods).mockReturnValue([
-      {
-        id: "test/failing",
-        name: "Failing",
-        description: "Fails",
-        since: "1.0.0",
-        until: "2.0.0",
-        scriptPath: "v2/failing/scripts/transform.ts",
-      },
-    ]);
-
-    // bundle call fails
-    mockExecFileAsync.mockRejectedValueOnce(new Error("bundle failed"));
-
-    const { upgrade } = await import("./service");
-    await expect(upgrade({ to: "2.0.0", dryRun: false, path: "/test" })).rejects.toThrow(
+    await expect(upgrade({ from: "1.33.0", dryRun: false, path: "/test" })).rejects.toThrow(
       "Upgrade completed with 1 error(s)",
     );
-
-    const { logger } = await import("@/cli/shared/logger");
-    expect(vi.mocked(logger.error)).toHaveBeenCalled();
   });
 
-  it("should count codemods as skipped when no changes are detected", async () => {
+  it("should throw CLIError when spawning fails", async () => {
     const { detectInstalledVersion } = await import("./version-detector");
-    vi.mocked(detectInstalledVersion).mockResolvedValue("1.33.0");
+    vi.mocked(detectInstalledVersion).mockResolvedValue("2.0.0");
 
-    const { getApplicableCodemods } = await import("./codemod-registry");
-    vi.mocked(getApplicableCodemods).mockReturnValue([
-      {
-        id: "test/noop",
-        name: "No-op",
-        description: "No changes",
-        since: "1.0.0",
-        until: "2.0.0",
-        scriptPath: "v2/noop/scripts/transform.ts",
-      },
-    ]);
-
-    // bundle succeeds, run returns no changes
-    mockExecFileAsync
-      .mockResolvedValueOnce({ stdout: "", stderr: "" }) // bundle
-      .mockResolvedValueOnce({ stdout: "✨ Done in 0.01s\n", stderr: "" }); // run
+    const { spawnSync } = await import("node:child_process");
+    vi.mocked(spawnSync).mockReturnValue({
+      stdout: "",
+      stderr: "",
+      status: null,
+      signal: null,
+      pid: 0,
+      output: [],
+      error: new Error("ENOENT"),
+    });
 
     const { upgrade } = await import("./service");
-    await upgrade({ to: "2.0.0", dryRun: false, path: "/test" });
-
-    const { logger } = await import("@/cli/shared/logger");
-    const logCalls = vi.mocked(logger.log).mock.calls.map((c) => c[0]);
-    expect(logCalls.some((c) => c.includes("No changes needed"))).toBe(true);
-  });
-
-  it("should report modified files when codemod makes changes", async () => {
-    const { detectInstalledVersion } = await import("./version-detector");
-    vi.mocked(detectInstalledVersion).mockResolvedValue("1.33.0");
-
-    const { getApplicableCodemods } = await import("./codemod-registry");
-    vi.mocked(getApplicableCodemods).mockReturnValue([
-      {
-        id: "test/changes",
-        name: "Changes",
-        description: "Makes changes",
-        since: "1.0.0",
-        until: "2.0.0",
-        scriptPath: "v2/changes/scripts/transform.ts",
-      },
-    ]);
-
-    // bundle succeeds, run returns changes with diff output
-    const dryRunOutput = [
-      "============================================================",
-      "File: /test/config.ts",
-      "============================================================",
-      "--- [before] /test/config.ts",
-      "+++ [after]  /test/config.ts",
-      "+2 additions, -1 deletions",
-      "✨ Done in 0.05s",
-    ].join("\n");
-
-    mockExecFileAsync
-      .mockResolvedValueOnce({ stdout: "", stderr: "" }) // bundle
-      .mockResolvedValueOnce({ stdout: dryRunOutput, stderr: "" }); // run
-
-    const { upgrade } = await import("./service");
-    await upgrade({ to: "2.0.0", dryRun: true, path: "/test" });
-
-    const { logger } = await import("@/cli/shared/logger");
-    expect(vi.mocked(logger.success)).toHaveBeenCalled();
-  });
-
-  it("should resolve target version from package.json when --to is omitted", async () => {
-    const { detectInstalledVersion, detectDeclaredVersion } = await import("./version-detector");
-    vi.mocked(detectInstalledVersion).mockResolvedValue("1.33.0");
-    vi.mocked(detectDeclaredVersion).mockResolvedValue("^2.0.0");
-
-    const { getApplicableCodemods } = await import("./codemod-registry");
-    vi.mocked(getApplicableCodemods).mockReturnValue([]);
-
-    const { upgrade } = await import("./service");
-    await upgrade({ dryRun: false, path: "/test" });
-
-    // Should have called getApplicableCodemods with coerced version "2.0.0"
-    expect(getApplicableCodemods).toHaveBeenCalledWith("1.33.0", "2.0.0");
-  });
-
-  it("should throw when --to is omitted and package.json has no SDK dependency", async () => {
-    const { detectInstalledVersion, detectDeclaredVersion } = await import("./version-detector");
-    vi.mocked(detectInstalledVersion).mockResolvedValue("1.33.0");
-    vi.mocked(detectDeclaredVersion).mockResolvedValue(null);
-
-    const { upgrade } = await import("./service");
-    await expect(upgrade({ dryRun: false, path: "/test" })).rejects.toThrow(
-      "Could not detect target SDK version",
+    await expect(upgrade({ from: "1.33.0", dryRun: false, path: "/test" })).rejects.toThrow(
+      "Failed to run @tailor-platform/sdk-codemod",
     );
   });
 
-  it("should display diff preview in dry-run mode", async () => {
+  it("should throw CLIError when stdout is not valid JSON", async () => {
     const { detectInstalledVersion } = await import("./version-detector");
-    vi.mocked(detectInstalledVersion).mockResolvedValue("1.33.0");
+    vi.mocked(detectInstalledVersion).mockResolvedValue("2.0.0");
 
-    const { getApplicableCodemods } = await import("./codemod-registry");
-    vi.mocked(getApplicableCodemods).mockReturnValue([
-      {
-        id: "test/diff",
-        name: "Diff",
-        description: "Shows diff",
-        since: "1.0.0",
-        until: "2.0.0",
-        scriptPath: "v2/diff/scripts/transform.ts",
-      },
-    ]);
-
-    const dryRunOutput = [
-      "============================================================",
-      "File: /test/config.ts",
-      "============================================================",
-      "--- [before] /test/config.ts",
-      "+++ [after]  /test/config.ts",
-      '-import { defineGenerators } from "@tailor-platform/sdk";',
-      '+import { definePlugins } from "@tailor-platform/sdk";',
-      "+2 additions, -1 deletions",
-      "✨ Done in 0.05s",
-    ].join("\n");
-
-    mockExecFileAsync
-      .mockResolvedValueOnce({ stdout: "", stderr: "" }) // bundle
-      .mockResolvedValueOnce({ stdout: dryRunOutput, stderr: "" }); // run
+    const { spawnSync } = await import("node:child_process");
+    vi.mocked(spawnSync).mockReturnValue({
+      stdout: "not json",
+      stderr: "",
+      status: 0,
+      signal: null,
+      pid: 0,
+      output: [],
+      error: undefined,
+    });
 
     const { upgrade } = await import("./service");
-    await upgrade({ to: "2.0.0", dryRun: true, path: "/test" });
-
-    const { logger } = await import("@/cli/shared/logger");
-    const logCalls = vi.mocked(logger.log).mock.calls.map((c) => c[0]);
-
-    // Should display "Changes preview:" header
-    const infoCalls = vi.mocked(logger.info).mock.calls.map((c) => c[0]);
-    expect(infoCalls.some((c) => c.includes("Changes preview"))).toBe(true);
-
-    // Should contain diff lines (+ and - lines are styled)
-    expect(logCalls.some((c) => c.includes("definePlugins"))).toBe(true);
-    expect(logCalls.some((c) => c.includes("defineGenerators"))).toBe(true);
+    await expect(upgrade({ from: "1.33.0", dryRun: false, path: "/test" })).rejects.toThrow(
+      "Failed to parse output",
+    );
   });
 });

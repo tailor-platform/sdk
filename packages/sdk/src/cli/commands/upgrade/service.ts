@@ -1,307 +1,80 @@
-import { execFile } from "node:child_process";
-import * as fs from "node:fs";
-import { glob } from "node:fs/promises";
-import * as os from "node:os";
-import { promisify } from "node:util";
-import * as path from "pathe";
-import { coerce } from "semver";
+import { spawnSync } from "node:child_process";
 import { CLIError } from "@/cli/shared/errors";
 import { logger, styles } from "@/cli/shared/logger";
-import { getApplicableCodemods, resolveCodemodScript } from "./codemod-registry";
-import { detectDeclaredVersion, detectInstalledVersion } from "./version-detector";
-import type { CodemodPackage, CodemodResult, UpgradeSummary } from "./types";
-
-const execFileAsync = promisify(execFile);
+import { readPackageJson } from "@/cli/shared/package-json";
+import { detectInstalledVersion } from "./version-detector";
+import type { RunOutput } from "./types";
 
 interface UpgradeOptions {
-  to?: string;
+  from: string;
   dryRun: boolean;
   path: string;
 }
 
 /**
- * Bundle a TypeScript codemod script into a JS file that the jssg runtime can execute.
- * @param scriptPath - Absolute path to the TypeScript transform file
- * @returns Path to the bundled JS file in a temp directory
- */
-async function bundleCodemod(scriptPath: string): Promise<string> {
-  const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "codemod-bundle-"));
-  const outputPath = path.join(tmpDir, "transform.js");
-
-  await execFileAsync("npx", ["codemod", "jssg", "bundle", scriptPath, "-o", outputPath], {
-    timeout: 30_000,
-  });
-
-  return outputPath;
-}
-
-/**
- * Run a single codemod via `npx codemod jssg run`.
- * Bundles the TypeScript source first, then executes the bundled JS.
- * @param codemod - The codemod package to run
- * @param options - Upgrade options
- * @returns Result of the codemod execution
- */
-async function runCodemod(
-  codemod: CodemodPackage,
-  options: UpgradeOptions,
-): Promise<CodemodResult> {
-  const scriptPath = resolveCodemodScript(codemod.scriptPath);
-  const language = codemod.language ?? "typescript";
-
-  // Bundle TS → JS for the jssg runtime
-  const bundledPath = await bundleCodemod(scriptPath);
-
-  const args = [
-    "codemod",
-    "jssg",
-    "run",
-    bundledPath,
-    "--language",
-    language,
-    "-t",
-    options.path,
-    "--no-interactive",
-    "--allow-dirty",
-  ];
-
-  if (options.dryRun) {
-    args.push("--dry-run");
-    // Match parent process color support: if styles produce no ANSI codes, disable color
-    if (styles.bold("x") === "x") {
-      args.push("--no-color");
-    }
-  }
-
-  // In non-dry-run mode, snapshot target files before execution to detect changes,
-  // because the codemod CLI does not report modified file names in normal execution.
-  const snapshots = new Map<string, string>();
-  if (!options.dryRun) {
-    const targetFiles = glob("**/*.{ts,tsx,mts,cts}", {
-      cwd: options.path,
-      withFileTypes: false,
-      exclude: ["**/node_modules/**", "**/dist/**", "**/.git/**"],
-    });
-    for await (const relative of targetFiles) {
-      const absolute = path.resolve(options.path, relative);
-      try {
-        snapshots.set(absolute, await fs.promises.readFile(absolute, "utf-8"));
-      } catch {
-        // skip unreadable files
-      }
-    }
-  }
-
-  try {
-    const { stdout, stderr } = await execFileAsync("npx", args, {
-      cwd: options.path,
-      timeout: 120_000,
-    });
-
-    const output = stdout + stderr;
-
-    let filesModified: string[];
-    let changed: boolean;
-    let diffOutput: string | undefined;
-
-    if (options.dryRun) {
-      filesModified = parseModifiedFiles(output);
-      changed = filesModified.length > 0 || hasChanges(output);
-      diffOutput = extractDiffOutput(output);
-    } else {
-      // Compare file contents to detect actual changes
-      filesModified = [];
-      for (const [absolute, before] of snapshots) {
-        try {
-          const after = await fs.promises.readFile(absolute, "utf-8");
-          if (after !== before) {
-            filesModified.push(absolute);
-          }
-        } catch {
-          // skip
-        }
-      }
-      changed = filesModified.length > 0;
-    }
-
-    return {
-      codemod,
-      changed,
-      filesModified,
-      warnings: [],
-      diffOutput,
-    };
-  } catch (error) {
-    throw new Error(
-      `Codemod ${codemod.id} failed: ${error instanceof Error ? error.message : String(error)}`,
-      { cause: error },
-    );
-  } finally {
-    // Clean up bundled file
-    await fs.promises
-      .rm(path.dirname(bundledPath), { recursive: true, force: true })
-      .catch(() => {});
-  }
-}
-
-/**
- * Parse file paths from codemod CLI output.
- * The jssg CLI outputs "File: /path/to/file.ts" lines in dry-run mode.
- * In normal mode, it outputs minimal info. We detect changes by the presence
- * of diff output (additions/deletions line).
- * @param output - The CLI stdout/stderr output
- * @returns Array of modified file paths
- */
-function parseModifiedFiles(output: string): string[] {
-  const files: string[] = [];
-  for (const line of output.split("\n")) {
-    const trimmed = line.trim();
-    // dry-run: "File: /path/to/file.ts"
-    if (trimmed.startsWith("File:")) {
-      files.push(trimmed.slice("File:".length).trim());
-    }
-  }
-  return files;
-}
-
-/**
- * Check if the codemod output indicates changes were made.
- * @param output - The CLI stdout/stderr output
- * @returns true if changes were detected
- */
-function hasChanges(output: string): boolean {
-  // Check for diff output indicators
-  return output.includes("additions") || output.includes("deletions") || output.includes("--- [");
-}
-
-/**
- * Extract diff sections from codemod CLI dry-run output.
- * Strips the trailing "✨ Done" line and leading/trailing blank lines.
- * @param output - The CLI stdout/stderr output
- * @returns Cleaned diff output, or undefined if no diffs found
- */
-function extractDiffOutput(output: string): string | undefined {
-  const lines = output.split("\n");
-  const diffLines: string[] = [];
-  let inDiff = false;
-
-  for (const line of lines) {
-    // Start capturing at the separator line
-    if (line.startsWith("=====")) {
-      inDiff = true;
-    }
-    // Stop at the "Done" summary line
-    if (line.includes("Done in")) {
-      break;
-    }
-    if (inDiff) {
-      diffLines.push(line);
-    }
-  }
-
-  const result = diffLines.join("\n").trim();
-  return result.length > 0 ? result : undefined;
-}
-
-/**
  * Print the upgrade summary to the terminal.
- * @param summary - The upgrade run summary
+ * @param output - The parsed JSON output from sdk-codemod
  * @param dryRun - Whether this was a dry-run
  */
-function printUpgradeSummary(summary: UpgradeSummary, dryRun: boolean): void {
+function printUpgradeSummary(output: RunOutput, dryRun: boolean): void {
   if (dryRun) {
     logger.info(`${styles.bold("[Dry Run]")} No files were modified.`);
     logger.log("");
   }
 
-  const total = summary.codemodsApplied + summary.codemodsSkipped + summary.errors.length;
+  const total = output.codemodsApplied + output.codemodsSkipped + output.errors.length;
   logger.info(
-    `Upgrade complete: ${styles.success(`${summary.codemodsApplied} applied`)}, ${styles.dim(`${summary.codemodsSkipped} skipped`)} (${total} total codemods)`,
+    `Upgrade complete: ${styles.success(`${output.codemodsApplied} applied`)}, ${styles.dim(`${output.codemodsSkipped} skipped`)} (${total} total codemods)`,
   );
 
-  if (summary.filesModified.length > 0) {
+  if (output.filesModified.length > 0) {
     logger.log("");
     logger.info(
-      `${dryRun ? "Files that would be modified" : "Modified files"} (${summary.filesModified.length}):`,
+      `${dryRun ? "Files that would be modified" : "Modified files"} (${output.filesModified.length}):`,
     );
-    for (const file of summary.filesModified) {
+    for (const file of output.filesModified) {
       logger.log(`  ${styles.path(file)}`);
     }
   }
 
   // Show diff preview in dry-run mode (passthrough codemod CLI's colored output)
-  if (dryRun && summary.diffOutput) {
+  if (dryRun && output.diffOutput) {
     logger.log("");
     logger.info("Changes preview:");
     logger.log("");
-    logger.log(summary.diffOutput);
+    logger.log(output.diffOutput);
   }
 
-  if (summary.warnings.length > 0) {
+  if (output.warnings.length > 0) {
     logger.log("");
-    logger.warn(`Manual attention needed (${summary.warnings.length}):`);
-    for (const warning of summary.warnings) {
+    logger.warn(`Manual attention needed (${output.warnings.length}):`);
+    for (const warning of output.warnings) {
       logger.log(`  ${styles.warning("!")} ${warning}`);
     }
   }
 
-  if (summary.errors.length > 0) {
+  if (output.errors.length > 0) {
     logger.log("");
-    logger.error(`Failed codemods (${summary.errors.length}):`);
-    for (const { codemodId, error } of summary.errors) {
-      logger.log(`  ${styles.error(codemodId)}: ${error.message}`);
+    logger.error(`Failed codemods (${output.errors.length}):`);
+    for (const { codemodId, message } of output.errors) {
+      logger.log(`  ${styles.error(codemodId)}: ${message}`);
     }
   }
 }
 
 /**
- * Resolve the target version from --to flag or package.json declaration.
- * @param projectRoot - The project root directory
- * @param explicitTo - Explicit --to value, if provided
- * @returns Resolved semver version string
- */
-async function resolveTargetVersion(projectRoot: string, explicitTo?: string): Promise<string> {
-  if (explicitTo) {
-    return explicitTo;
-  }
-
-  const declared = await detectDeclaredVersion(projectRoot);
-  if (!declared) {
-    throw CLIError({
-      message: "Could not detect target SDK version",
-      suggestion:
-        "Specify the target version with --to, or ensure @tailor-platform/sdk is listed in package.json dependencies.",
-      command: "upgrade",
-    });
-  }
-
-  // coerce handles ranges like "^2.0.0" or "~2.1.0" → "2.0.0" or "2.1.0"
-  const version = coerce(declared);
-  if (!version) {
-    throw CLIError({
-      message: `Could not parse version from "${declared}"`,
-      suggestion: "Specify the target version explicitly with --to (e.g., --to 2.0.0).",
-      command: "upgrade",
-    });
-  }
-
-  return version.version;
-}
-
-/**
  * Run the upgrade pipeline:
- * 1. Detect current SDK version and resolve target version
- * 2. Select applicable codemods
- * 3. Execute each codemod via codemod CLI
- * 4. Print summary
- * @param options - Upgrade options including target version, dry-run flag, and project path
+ * 1. Detect target SDK version from node_modules
+ * 2. Invoke @tailor-platform/sdk-codemod CLI
+ * 3. Parse JSON output and display results
+ * @param options - Upgrade options
  */
 export async function upgrade(options: UpgradeOptions): Promise<void> {
   const projectRoot = options.path;
 
-  // Step 1: Detect current SDK version and resolve target
-  const currentVersion = await detectInstalledVersion(projectRoot);
-  if (!currentVersion) {
+  // Step 1: Detect target SDK version (the newly installed version)
+  const targetVersion = await detectInstalledVersion(projectRoot);
+  if (!targetVersion) {
     throw CLIError({
       message: `Could not detect installed @tailor-platform/sdk version in ${projectRoot}`,
       suggestion:
@@ -310,20 +83,9 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
     });
   }
 
-  const targetVersion = await resolveTargetVersion(projectRoot, options.to);
-
-  logger.info(`Detected SDK version: ${styles.highlight(currentVersion)}`);
-  logger.info(`Target version: ${styles.highlight(targetVersion)}`);
-
-  // Step 2: Select applicable codemods
-  const codemods = getApplicableCodemods(currentVersion, targetVersion);
-
-  if (codemods.length === 0) {
-    logger.success("No codemods applicable for this version range.");
-    return;
-  }
-
-  logger.info(`Found ${styles.bold(String(codemods.length))} applicable codemod(s)`);
+  logger.info(
+    `Upgrading from ${styles.highlight(options.from)} → ${styles.highlight(targetVersion)}`,
+  );
 
   if (options.dryRun) {
     logger.info(`${styles.bold("[Dry Run]")} Changes will be previewed but not applied.`);
@@ -331,60 +93,57 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
 
   logger.log("");
 
-  // Step 3: Execute each codemod
-  const modifiedFiles = new Set<string>();
-  const warnings: string[] = [];
-  const errors: UpgradeSummary["errors"] = [];
-  const diffOutputs: string[] = [];
-  let codemodsApplied = 0;
-  let codemodsSkipped = 0;
+  // Step 2: Invoke sdk-codemod CLI
+  const packageJson = await readPackageJson();
+  const version =
+    packageJson.version && packageJson.version !== "0.0.0" ? packageJson.version : "latest";
 
-  for (const codemod of codemods) {
-    logger.info(`Running: ${styles.bold(codemod.name)} - ${codemod.description}`);
+  const result = spawnSync(
+    "npx",
+    [
+      `@tailor-platform/sdk-codemod@${version}`,
+      "--from",
+      options.from,
+      "--to",
+      targetVersion,
+      "--target",
+      projectRoot,
+      ...(options.dryRun ? ["--dry-run"] : []),
+    ],
+    {
+      stdio: ["ignore", "pipe", "inherit"],
+      encoding: "utf-8",
+      timeout: 300_000,
+    },
+  );
 
-    try {
-      const result = await runCodemod(codemod, options);
-
-      if (result.changed) {
-        codemodsApplied++;
-        for (const file of result.filesModified) {
-          modifiedFiles.add(file);
-        }
-        if (result.diffOutput) {
-          diffOutputs.push(result.diffOutput);
-        }
-        logger.success(`  ${result.filesModified.length} file(s) modified`);
-      } else {
-        codemodsSkipped++;
-        logger.log(`  ${styles.dim("No changes needed")}`);
-      }
-      warnings.push(...result.warnings);
-    } catch (error) {
-      const normalizedError = error instanceof Error ? error : new Error(String(error));
-      errors.push({ codemodId: codemod.id, error: normalizedError });
-      logger.error(`  Failed: ${normalizedError.message}`);
-    }
+  if (result.error) {
+    throw CLIError({
+      message: `Failed to run @tailor-platform/sdk-codemod: ${result.error.message}`,
+      suggestion: "Ensure npx is available and the network is accessible.",
+      command: "upgrade",
+    });
   }
 
-  const combinedDiffOutput = diffOutputs.length > 0 ? diffOutputs.join("\n\n") : undefined;
-
-  const summary: UpgradeSummary = {
-    codemodsApplied,
-    codemodsSkipped,
-    filesModified: [...modifiedFiles],
-    warnings,
-    errors,
-    diffOutput: combinedDiffOutput,
-  };
-
-  logger.log("");
-
-  // Step 4: Print summary
-  printUpgradeSummary(summary, options.dryRun);
-
-  if (summary.errors.length > 0) {
+  // Step 3: Parse JSON output
+  let output: RunOutput;
+  try {
+    output = JSON.parse(result.stdout);
+  } catch {
     throw CLIError({
-      message: `Upgrade completed with ${summary.errors.length} error(s)`,
+      message: "Failed to parse output from @tailor-platform/sdk-codemod",
+      details: result.stdout || "(empty stdout)",
+      suggestion: "This is likely a bug. Please report it.",
+      command: "upgrade",
+    });
+  }
+
+  // Step 4: Display results
+  printUpgradeSummary(output, options.dryRun);
+
+  if (output.errors.length > 0) {
+    throw CLIError({
+      message: `Upgrade completed with ${output.errors.length} error(s)`,
       suggestion: "Review the errors above and re-run the upgrade after fixing the issues.",
       command: "upgrade",
     });
