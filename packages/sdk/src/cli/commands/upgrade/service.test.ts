@@ -57,6 +57,20 @@ vi.mock("node:fs", async () => {
   };
 });
 
+// Mock glob from node:fs/promises (used for file snapshot in non-dry-run mode)
+// glob returns an AsyncIterable, so we return an async generator
+vi.mock("node:fs/promises", async () => {
+  const actual = await vi.importActual("node:fs/promises");
+  return {
+    ...actual,
+    glob: vi.fn().mockReturnValue(
+      (async function* () {
+        // yields nothing by default
+      })(),
+    ),
+  };
+});
+
 describe("upgrade service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
