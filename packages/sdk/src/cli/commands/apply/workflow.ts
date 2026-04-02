@@ -6,7 +6,6 @@ import { areNormalizedEqual } from "./compare";
 import { workflowJobFunctionName } from "./function-registry";
 import {
   formatChangeEntriesWithFunctionRegistry,
-  printGroupedDisplaySection,
   type GroupedDisplayEntry,
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
@@ -267,12 +266,6 @@ function jobFunctionTrn(workspaceId: string, name: string) {
  * @param workflows - Parsed workflows
  * @param mainJobDeps - Main job dependencies by workflow
  * @param unchangedJobFunctions - Job functions already proven unchanged by function registry plan
- * @param workflowJobFunctionChanges - Related function registry changes for workflow jobs
- * @param workflowJobFunctionChanges.creates - Function registry creations
- * @param workflowJobFunctionChanges.updates - Function registry updates
- * @param workflowJobFunctionChanges.deletes - Function registry deletions
- * @param workflowJobFunctionChanges.replaces - Function registry replacements
- * @param workflowJobFunctionChanges.unchanged - Function registry unchanged entries
  * @returns Planned workflow changes
  */
 export async function planWorkflow(
@@ -282,7 +275,6 @@ export async function planWorkflow(
   workflows: Record<string, Workflow>,
   mainJobDeps: Record<string, string[]>,
   unchangedJobFunctions: ReadonlySet<string>,
-  workflowJobFunctionChanges: RelatedFunctionRegistryChanges,
 ) {
   const changeSet = createChangeSet<CreateWorkflow, UpdateWorkflow, DeleteWorkflow>("Workflows");
   const conflicts: OwnerConflict[] = [];
@@ -399,7 +391,6 @@ export async function planWorkflow(
     }
   });
 
-  printWorkflowChanges(changeSet, workflowJobFunctionChanges);
   return {
     changeSet,
     conflicts,
@@ -434,14 +425,6 @@ export function formatWorkflowChangeEntries(
         ? item.usedJobNames.map((jobName) => workflowJobFunctionName(jobName))
         : [],
   );
-}
-
-function printWorkflowChanges(
-  changeSet: ChangeSet<CreateWorkflow, UpdateWorkflow, DeleteWorkflow>,
-  workflowJobFunctionChanges?: RelatedFunctionRegistryChanges,
-) {
-  const entries = formatWorkflowChangeEntries(changeSet, workflowJobFunctionChanges);
-  printGroupedDisplaySection("Workflows", entries);
 }
 
 function canTreatWorkflowAsUnchanged(

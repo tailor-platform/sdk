@@ -2,19 +2,11 @@ import { describe, test, expect, vi, beforeEach } from "vitest";
 import { sdkNameLabelKey } from "./label";
 import { applyPipeline, formatResolverChangeEntries, planPipeline } from "./resolver";
 import type { PlanContext } from "./apply";
-import type { RelatedFunctionRegistryChanges } from "./grouped-display";
 import type { Application } from "@/cli/services/application";
 import type { ExecutorService } from "@/cli/services/executor/service";
 import type { ResolverService } from "@/cli/services/resolver/service";
 import type { OperatorClient } from "@/cli/shared/client";
 import type { LoadedConfig } from "@/cli/shared/config-loader";
-
-const emptyFunctionRegistryChanges: RelatedFunctionRegistryChanges = {
-  creates: [],
-  updates: [],
-  deletes: [],
-  replaces: [],
-};
 
 // Mock config values for tests
 const mockConfig = { path: "/test/tailor.config.ts" } as LoadedConfig;
@@ -152,7 +144,7 @@ describe("planPipeline (resolver service level)", () => {
         config: mockConfig,
       };
 
-      const result = await planPipeline(ctx, emptyFunctionRegistryChanges);
+      const result = await planPipeline(ctx);
 
       // "new-resolver" should be created
       expect(result.changeSet.service.creates).toHaveLength(1);
@@ -182,7 +174,7 @@ describe("planPipeline (resolver service level)", () => {
         config: mockConfig,
       };
 
-      const result = await planPipeline(ctx, emptyFunctionRegistryChanges);
+      const result = await planPipeline(ctx);
 
       // "resolver-a" should be unchanged
       expect(result.changeSet.service.unchanged).toHaveLength(1);
@@ -209,7 +201,7 @@ describe("planPipeline (resolver service level)", () => {
         config: mockConfig,
       };
 
-      const result = await planPipeline(ctx, emptyFunctionRegistryChanges);
+      const result = await planPipeline(ctx);
 
       expect(result.changeSet.service.deletes).toHaveLength(2);
       expect(result.changeSet.service.deletes.map((d) => d.name).sort()).toEqual([
@@ -235,7 +227,7 @@ describe("planPipeline (resolver service level)", () => {
         config: mockConfig,
       };
 
-      const result = await planPipeline(ctx, emptyFunctionRegistryChanges);
+      const result = await planPipeline(ctx);
 
       expect(result.changeSet.service.deletes).toHaveLength(0);
     });
@@ -253,7 +245,7 @@ describe("planPipeline (resolver service level)", () => {
         config: mockConfig,
       };
 
-      const result = await planPipeline(ctx, emptyFunctionRegistryChanges);
+      const result = await planPipeline(ctx);
 
       expect(result.changeSet.service.deletes).toHaveLength(0);
       expect(result.resourceOwners.has("other-app")).toBe(true);
@@ -276,7 +268,7 @@ describe("planPipeline (resolver service level)", () => {
         config: mockConfig,
       };
 
-      const result = await planPipeline(ctx, emptyFunctionRegistryChanges);
+      const result = await planPipeline(ctx);
 
       expect(result.changeSet.service.deletes).toHaveLength(1);
       expect(result.changeSet.service.deletes[0].name).toBe("my-resolver");
@@ -298,7 +290,7 @@ describe("planPipeline (resolver service level)", () => {
         config: mockConfig,
       };
 
-      const result = await planPipeline(ctx, emptyFunctionRegistryChanges);
+      const result = await planPipeline(ctx);
 
       expect(result.changeSet.service.updates).toHaveLength(1);
       expect(result.changeSet.service.unchanged).toHaveLength(0);
@@ -323,31 +315,25 @@ describe("planPipeline (resolver service level)", () => {
       } as unknown as ResolverService;
 
       const createClient = createMockClient([]);
-      const createResult = await planPipeline(
-        {
-          client: createClient,
-          workspaceId,
-          application: createMockApplication([pipeline]),
-          forRemoval: false,
-          config: mockConfig,
-        },
-        emptyFunctionRegistryChanges,
-      );
+      const createResult = await planPipeline({
+        client: createClient,
+        workspaceId,
+        application: createMockApplication([pipeline]),
+        forRemoval: false,
+        config: mockConfig,
+      });
       const desiredResolver = createResult.changeSet.resolver.creates[0].request.pipelineResolver;
 
       const client = createMockClient([{ name: "my-resolver", label: appName }], {
         "my-resolver": [desiredResolver as Record<string, unknown>],
       });
-      const result = await planPipeline(
-        {
-          client,
-          workspaceId,
-          application: createMockApplication([pipeline]),
-          forRemoval: false,
-          config: mockConfig,
-        },
-        emptyFunctionRegistryChanges,
-      );
+      const result = await planPipeline({
+        client,
+        workspaceId,
+        application: createMockApplication([pipeline]),
+        forRemoval: false,
+        config: mockConfig,
+      });
 
       expect(result.changeSet.resolver.unchanged).toHaveLength(1);
       expect(result.changeSet.resolver.unchanged[0].name).toBe("test-resolver");
@@ -372,16 +358,13 @@ describe("planPipeline (resolver service level)", () => {
       } as unknown as ResolverService;
 
       const createClient = createMockClient([]);
-      const createResult = await planPipeline(
-        {
-          client: createClient,
-          workspaceId,
-          application: createMockApplication([pipeline]),
-          forRemoval: false,
-          config: mockConfig,
-        },
-        emptyFunctionRegistryChanges,
-      );
+      const createResult = await planPipeline({
+        client: createClient,
+        workspaceId,
+        application: createMockApplication([pipeline]),
+        forRemoval: false,
+        config: mockConfig,
+      });
       const desiredResolver = createResult.changeSet.resolver.creates[0].request.pipelineResolver;
 
       const client = createMockClient(
@@ -393,16 +376,13 @@ describe("planPipeline (resolver service level)", () => {
           "my-resolver:test-resolver": desiredResolver as Record<string, unknown>,
         },
       );
-      const result = await planPipeline(
-        {
-          client,
-          workspaceId,
-          application: createMockApplication([pipeline]),
-          forRemoval: false,
-          config: mockConfig,
-        },
-        emptyFunctionRegistryChanges,
-      );
+      const result = await planPipeline({
+        client,
+        workspaceId,
+        application: createMockApplication([pipeline]),
+        forRemoval: false,
+        config: mockConfig,
+      });
 
       expect(result.changeSet.resolver.unchanged).toHaveLength(1);
       expect(result.changeSet.resolver.unchanged[0].name).toBe("test-resolver");
@@ -427,32 +407,26 @@ describe("planPipeline (resolver service level)", () => {
       } as unknown as ResolverService;
 
       const createClient = createMockClient([]);
-      const createResult = await planPipeline(
-        {
-          client: createClient,
-          workspaceId,
-          application: createMockApplication([pipeline]),
-          forRemoval: false,
-          config: mockConfig,
-        },
-        emptyFunctionRegistryChanges,
-      );
+      const createResult = await planPipeline({
+        client: createClient,
+        workspaceId,
+        application: createMockApplication([pipeline]),
+        forRemoval: false,
+        config: mockConfig,
+      });
       const desiredResolver = createResult.changeSet.resolver.creates[0].request.pipelineResolver;
 
       const client = createMockClient([{ name: "my-resolver", label: appName }], {
         "my-resolver": [desiredResolver as Record<string, unknown>],
       });
-      const result = await planPipeline(
-        {
-          client,
-          workspaceId,
-          application: createMockApplication([pipeline]),
-          forRemoval: false,
-          config: mockConfig,
-          forceApplyAll: true,
-        },
-        emptyFunctionRegistryChanges,
-      );
+      const result = await planPipeline({
+        client,
+        workspaceId,
+        application: createMockApplication([pipeline]),
+        forRemoval: false,
+        config: mockConfig,
+        forceApplyAll: true,
+      });
 
       expect(result.changeSet.resolver.updates).toHaveLength(1);
       expect(result.changeSet.resolver.unchanged).toHaveLength(0);
@@ -477,16 +451,13 @@ describe("planPipeline (resolver service level)", () => {
       } as unknown as ResolverService;
 
       const createClient = createMockClient([]);
-      const createResult = await planPipeline(
-        {
-          client: createClient,
-          workspaceId,
-          application: createMockApplication([pipeline]),
-          forRemoval: false,
-          config: mockConfig,
-        },
-        emptyFunctionRegistryChanges,
-      );
+      const createResult = await planPipeline({
+        client: createClient,
+        workspaceId,
+        application: createMockApplication([pipeline]),
+        forRemoval: false,
+        config: mockConfig,
+      });
       const desiredResolver = structuredClone(
         createResult.changeSet.resolver.creates[0]!.request.pipelineResolver,
       );
@@ -496,16 +467,13 @@ describe("planPipeline (resolver service level)", () => {
       const client = createMockClient([{ name: "my-resolver", label: appName }], {
         "my-resolver": [desiredResolver as Record<string, unknown>],
       });
-      const result = await planPipeline(
-        {
-          client,
-          workspaceId,
-          application: createMockApplication([pipeline]),
-          forRemoval: false,
-          config: mockConfig,
-        },
-        emptyFunctionRegistryChanges,
-      );
+      const result = await planPipeline({
+        client,
+        workspaceId,
+        application: createMockApplication([pipeline]),
+        forRemoval: false,
+        config: mockConfig,
+      });
 
       expect(result.changeSet.resolver.updates).toHaveLength(1);
       expect(result.changeSet.resolver.updates[0].name).toBe("test-resolver");
@@ -597,7 +565,7 @@ describe("processResolver authInvoker mapping", () => {
       config: { path: "/test/tailor.config.ts" } as LoadedConfig,
     };
 
-    const result = await planPipeline(ctx, emptyFunctionRegistryChanges);
+    const result = await planPipeline(ctx);
 
     const resolverCreate = result.changeSet.resolver.creates[0];
     expect(resolverCreate).toBeDefined();
@@ -645,7 +613,7 @@ describe("processResolver authInvoker mapping", () => {
       config: { path: "/test/tailor.config.ts" } as LoadedConfig,
     };
 
-    const result = await planPipeline(ctx, emptyFunctionRegistryChanges);
+    const result = await planPipeline(ctx);
 
     const resolverCreate = result.changeSet.resolver.creates[0];
     expect(resolverCreate).toBeDefined();

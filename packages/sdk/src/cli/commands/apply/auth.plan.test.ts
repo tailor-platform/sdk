@@ -6,19 +6,10 @@ import {
   AuthOAuth2Client_GrantType,
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import { describe, expect, test, vi } from "vitest";
-import { logger } from "@/cli/shared/logger";
 import { formatAuthHookChangeEntries, planAuth } from "./auth";
 import type { PlanContext } from "./apply";
-import type { RelatedFunctionRegistryChanges } from "./grouped-display";
 import type { Application } from "@/cli/services/application";
 import type { OperatorClient } from "@/cli/shared/client";
-
-const emptyFunctionRegistryChanges: RelatedFunctionRegistryChanges = {
-  creates: [],
-  updates: [],
-  deletes: [],
-  replaces: [],
-};
 
 vi.mock("./label", async (importOriginal) => {
   const original = (await importOriginal()) as Record<string, unknown>;
@@ -290,7 +281,7 @@ describe("planAuth", () => {
       ],
     });
 
-    const result = await planAuth(createContext(client), emptyFunctionRegistryChanges);
+    const result = await planAuth(createContext(client));
 
     expect(result.changeSet.service.unchanged).toHaveLength(1);
     expect(result.changeSet.machineUser.unchanged).toHaveLength(1);
@@ -312,7 +303,7 @@ describe("planAuth", () => {
       },
     });
 
-    const result = await planAuth(createContext(client), emptyFunctionRegistryChanges);
+    const result = await planAuth(createContext(client));
 
     expect(result.changeSet.authHook.unchanged).toHaveLength(1);
     expect(result.changeSet.authHook.unchanged[0].name).toBe("auth-a/before-login");
@@ -331,13 +322,10 @@ describe("planAuth", () => {
       },
     });
 
-    const result = await planAuth(
-      {
-        ...createContext(client),
-        forceApplyAll: true,
-      },
-      emptyFunctionRegistryChanges,
-    );
+    const result = await planAuth({
+      ...createContext(client),
+      forceApplyAll: true,
+    });
 
     expect(result.changeSet.authHook.updates).toHaveLength(1);
     expect(result.changeSet.authHook.unchanged).toHaveLength(0);
@@ -355,7 +343,7 @@ describe("planAuth", () => {
       },
     });
 
-    await planAuth(createContext(client), emptyFunctionRegistryChanges);
+    await planAuth(createContext(client));
 
     expect(client.getAuthHook).toHaveBeenCalledTimes(1);
   });
@@ -390,13 +378,10 @@ describe("planAuth", () => {
       ],
     });
 
-    const result = await planAuth(
-      {
-        ...createContext(client),
-        forceApplyAll: true,
-      },
-      emptyFunctionRegistryChanges,
-    );
+    const result = await planAuth({
+      ...createContext(client),
+      forceApplyAll: true,
+    });
 
     expect(result.changeSet.service.updates).toHaveLength(1);
     expect(result.changeSet.service.unchanged).toHaveLength(0);
@@ -426,10 +411,7 @@ describe("planAuth", () => {
       ],
     });
 
-    const result = await planAuth(
-      createCustomOAuth2LifetimeContext(client),
-      emptyFunctionRegistryChanges,
-    );
+    const result = await planAuth(createCustomOAuth2LifetimeContext(client));
 
     expect(result.changeSet.oauth2Client.unchanged).toHaveLength(1);
     expect(result.changeSet.oauth2Client.unchanged[0]?.name).toBe("sample");
@@ -441,7 +423,7 @@ describe("planAuth", () => {
       authServices: [{ name: "auth-a", publishSessionEvents: false, label: appName }],
     });
 
-    const result = await planAuth(createContext(client), emptyFunctionRegistryChanges);
+    const result = await planAuth(createContext(client));
 
     expect(result.changeSet.service.updates).toHaveLength(1);
     expect(result.changeSet.service.unchanged).toHaveLength(0);
@@ -452,7 +434,7 @@ describe("planAuth", () => {
       authServices: [{ name: "auth-a", publishSessionEvents: true }],
     });
 
-    const result = await planAuth(createContext(client), emptyFunctionRegistryChanges);
+    const result = await planAuth(createContext(client));
 
     expect(result.changeSet.service.updates).toHaveLength(1);
     expect(result.changeSet.service.unchanged).toHaveLength(0);
@@ -464,7 +446,7 @@ describe("planAuth", () => {
       authServices: [{ name: "auth-a", publishSessionEvents: true, label: "other-app" }],
     });
 
-    const result = await planAuth(createContext(client), emptyFunctionRegistryChanges);
+    const result = await planAuth(createContext(client));
 
     expect(result.changeSet.service.updates).toHaveLength(1);
     expect(result.changeSet.service.unchanged).toHaveLength(0);
@@ -476,7 +458,7 @@ describe("planAuth", () => {
       authServices: [{ name: "auth-a", publishSessionEvents: false, label: appName }],
     });
 
-    const result = await planAuth(createBuiltInIdPContext(client), emptyFunctionRegistryChanges);
+    const result = await planAuth(createBuiltInIdPContext(client));
 
     expect(result.changeSet.idpConfig.creates).toHaveLength(1);
     expect(result.changeSet.idpConfig.creates[0]?.name).toBe("default");
@@ -490,27 +472,12 @@ describe("planAuth", () => {
       authIdPConfigs: [{ name: "default" }],
     });
 
-    const result = await planAuth(createBuiltInIdPContext(client), emptyFunctionRegistryChanges);
+    const result = await planAuth(createBuiltInIdPContext(client));
 
     expect(result.changeSet.idpConfig.creates).toHaveLength(0);
     expect(result.changeSet.idpConfig.updates).toHaveLength(1);
     expect(result.changeSet.idpConfig.updates[0]?.name).toBe("default");
     expect(result.changeSet.idpConfig.unchanged).toHaveLength(0);
-  });
-
-  test("prints auth child resources under a single flat Auth section", async () => {
-    const client = createMockClient();
-    const logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
-
-    await planAuth(createContext(client), emptyFunctionRegistryChanges);
-
-    expect(logSpy.mock.calls.map(([message]) => message)).toEqual([
-      "Auth:",
-      "  + auth-a (service)",
-      "  + manager-machine-user (machineUser)",
-      "  + auth-a/before-login (authHook)",
-      "  + sample (oauth2Client)",
-    ]);
   });
 });
 

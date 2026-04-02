@@ -24,7 +24,6 @@ import { areNormalizedEqual, normalizeProtoConfig } from "./compare";
 import { resolverFunctionName } from "./function-registry";
 import {
   formatChangeEntriesWithFunctionRegistry,
-  printGroupedDisplaySection,
   type GroupedDisplayEntry,
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
@@ -99,13 +98,9 @@ export async function applyPipeline(
 /**
  * Plan resolver pipeline changes based on current and desired state.
  * @param context - Planning context
- * @param functionRegistryResolverChanges - Related function registry changes for resolvers
  * @returns Planned changes
  */
-export async function planPipeline(
-  context: PlanContext,
-  functionRegistryResolverChanges: RelatedFunctionRegistryChanges,
-) {
+export async function planPipeline(context: PlanContext) {
   const { client, workspaceId, application, forRemoval, forceApplyAll = false } = context;
   const pipelines: Readonly<ResolverService>[] = [];
   if (!forRemoval) {
@@ -135,8 +130,6 @@ export async function planPipeline(
     forceApplyAll,
   );
 
-  serviceChangeSet.print();
-  printResolverChanges(resolverChangeSet, functionRegistryResolverChanges);
   return {
     changeSet: {
       service: serviceChangeSet,
@@ -446,14 +439,6 @@ export function formatResolverChangeEntries(
       return namespace ? [resolverFunctionName(namespace, item.name)] : [];
     },
   );
-}
-
-function printResolverChanges(
-  changeSet: ChangeSet<CreateResolver, UpdateResolver, DeleteResolver>,
-  resolverFunctionChanges?: RelatedFunctionRegistryChanges,
-) {
-  const entries = formatResolverChangeEntries(changeSet, resolverFunctionChanges);
-  printGroupedDisplaySection("Pipeline resolvers", entries);
 }
 
 function normalizeComparableResolver(resolver: MessageInitShape<typeof PipelineResolverSchema>) {

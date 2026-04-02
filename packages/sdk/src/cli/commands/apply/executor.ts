@@ -22,7 +22,6 @@ import { areNormalizedEqual, normalizeProtoConfig } from "./compare";
 import { executorFunctionName } from "./function-registry";
 import {
   formatChangeEntriesWithFunctionRegistry,
-  printGroupedDisplaySection,
   type GroupedDisplayEntry,
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
@@ -89,13 +88,9 @@ function trn(workspaceId: string, name: string) {
 /**
  * Plan executor-related changes based on current and desired state.
  * @param context - Planning context
- * @param functionRegistryExecutorChanges - Related function registry changes for executors
  * @returns Planned changes
  */
-export async function planExecutor(
-  context: PlanContext,
-  functionRegistryExecutorChanges: RelatedFunctionRegistryChanges,
-) {
+export async function planExecutor(context: PlanContext) {
   const { client, workspaceId, application, forRemoval } = context;
   const changeSet = createChangeSet<CreateExecutor, UpdateExecutor, DeleteExecutor>("Executors");
   const conflicts: OwnerConflict[] = [];
@@ -195,7 +190,6 @@ export async function planExecutor(
     }
   });
 
-  printExecutorChanges(changeSet, functionRegistryExecutorChanges);
   return { changeSet, conflicts, unmanaged, resourceOwners };
 }
 
@@ -252,18 +246,6 @@ export function formatExecutorChangeEntries(
         : [];
     },
   );
-}
-
-function printExecutorChanges(
-  changeSet: ChangeSet<CreateExecutor, UpdateExecutor, DeleteExecutor>,
-  functionRegistryExecutorChanges?: RelatedFunctionRegistryChanges,
-) {
-  const entries = formatExecutorChangeEntries(
-    changeSet,
-    buildPlannedExecutorsByName(changeSet),
-    functionRegistryExecutorChanges,
-  );
-  printGroupedDisplaySection("Executors", entries);
 }
 
 function normalizeComparableExecutor(executor: MessageInitShape<typeof ExecutorExecutorSchema>) {
