@@ -24,12 +24,11 @@ tailor-sdk upgrade [options]
 
 **Options**
 
-| Option          | Alias | Description                                         | Required | Default |
-| --------------- | ----- | --------------------------------------------------- | -------- | ------- |
-| `--to <TO>`     | -     | Target SDK version to upgrade to (e.g., 2.0.0)      | Yes      | -       |
-| `--dry-run`     | `-d`  | Preview changes without modifying files             | No       | `false` |
-| `--interactive` | `-i`  | Interactively accept or skip each codemod's changes | No       | `false` |
-| `--path <PATH>` | -     | Project directory to upgrade                        | No       | `"."`   |
+| Option          | Alias | Description                                                                         | Required | Default |
+| --------------- | ----- | ----------------------------------------------------------------------------------- | -------- | ------- |
+| `--to <TO>`     | -     | Target SDK version to upgrade to. Defaults to the version declared in package.json. | No       | -       |
+| `--dry-run`     | `-d`  | Preview changes without modifying files                                             | No       | `false` |
+| `--path <PATH>` | -     | Project directory to upgrade                                                        | No       | `"."`   |
 
 <!-- politty:command:upgrade:options:end -->
 
