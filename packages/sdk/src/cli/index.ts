@@ -24,6 +24,7 @@ import { setupCommand } from "./commands/setup";
 import { showCommand } from "./commands/show";
 import { staticwebsiteCommand } from "./commands/staticwebsite";
 import { tailordbCommand } from "./commands/tailordb";
+import { upgradeCommand } from "./commands/upgrade";
 import { userCommand } from "./commands/user";
 import { workflowCommand } from "./commands/workflow";
 import { workspaceCommand } from "./commands/workspace";
@@ -79,6 +80,7 @@ export const mainCommand = withCompletionCommand(
       show: showCommand,
       staticwebsite: staticwebsiteCommand,
       tailordb: tailordbCommand,
+      upgrade: upgradeCommand,
       user: userCommand,
       workflow: workflowCommand,
       workspace: workspaceCommand,

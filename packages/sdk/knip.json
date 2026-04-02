@@ -6,6 +6,7 @@
     "scripts/**",
     "e2e/fixtures/**",
     "src/cli/commands/apply/__test_fixtures__/**",
+    "codemods/**",
     "src/types/*.ts",
     "zinfer.config.ts"
   ],
@@ -18,7 +19,9 @@
     "oxlint",
     "oxlint-tsgolint",
     "serve",
-    "zinfer"
+    "zinfer",
+    "codemod",
+    "@codemod.com/jssg-types"
   ],
   "ignoreBinaries": [
     "vitest",
