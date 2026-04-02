@@ -784,6 +784,17 @@ describe("createTable descriptor-level hooks value typing", () => {
       },
     );
   });
+
+  it("array descriptor with hooks does not collapse to never", () => {
+    const hooks: Hook<unknown, string> = {
+      create: ({ value }) => {
+        expectTypeOf(value).toEqualTypeOf<string | null>();
+        return value ?? "";
+      },
+    };
+    const result = createTable("Test", { tags: { kind: "string", array: true, hooks } });
+    expect(result.fields.tags.type).toBe("string");
+  });
 });
 
 describe("createTable descriptor-level validate value typing", () => {
@@ -821,6 +832,15 @@ describe("createTable unknown descriptor kind", () => {
         status: { kind: "enum" },
       }),
     ).toThrow('Enum field descriptor requires a non-empty "values" array');
+  });
+
+  it("throws on plain object without kind or type", () => {
+    expect(() =>
+      createTable("Test", {
+        // @ts-expect-error testing runtime behavior with malformed entry
+        name: { optional: true },
+      }),
+    ).toThrow("Expected a field descriptor (with `kind`) or a db.*() field instance (with `type`)");
   });
 });
 

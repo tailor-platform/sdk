@@ -48,6 +48,8 @@ type KindToTsType = {
 // final output type adjusted for `optional`/`array`. Computing the exact output type from
 // descriptor flags would require a combinatorial explosion of type variants per kind; the fluent
 // API achieves this through method chaining instead. Use `db.*()` when precise hook typing matters.
+// Note: inline validate lambdas may lose contextual typing due to the TS union
+// `FieldValidateInput<O> | FieldValidateInput<O>[]`; hoist the validator if needed.
 type IndexableOptions<O = unknown> = {
   unique?: boolean;
   index?: boolean;
@@ -247,10 +249,12 @@ type RejectNestedInObject<D extends Record<string, FieldEntry>> = {
     : D[K];
 };
 
-// Validates hook return types against the descriptor's output type at the call site.
+// Validates hook return types against the descriptor's base output type (before array/optional)
+// at the call site. Uses DescriptorBaseOutput to stay consistent with IndexableOptions, which
+// types hooks with the base scalar (see comment above IndexableOptions).
 type ValidateHookTypes<D extends Record<string, FieldEntry>> = {
   [K in keyof D]: D[K] extends FieldDescriptor & { hooks: infer H }
-    ? H extends Hook<unknown, DescriptorOutput<D[K] & FieldDescriptor>>
+    ? H extends Hook<unknown, DescriptorBaseOutput<D[K] & FieldDescriptor>>
       ? D[K]
       : never
     : D[K];
@@ -310,6 +314,11 @@ function isPassthroughField(entry: FieldEntry): entry is TailorAnyDBField {
 
 function resolveField(entry: FieldEntry): TailorAnyDBField {
   if (isPassthroughField(entry)) {
+    if (typeof (entry as { type?: unknown }).type !== "string") {
+      throw new Error(
+        "Expected a field descriptor (with `kind`) or a db.*() field instance (with `type`)",
+      );
+    }
     return entry;
   }
   return buildField(entry);
