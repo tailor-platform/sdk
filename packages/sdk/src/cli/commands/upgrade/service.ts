@@ -54,7 +54,7 @@ async function runCodemod(
   const args = ["codemod", "jssg", "run", bundledPath, "--language", language, "-t", options.path];
 
   if (options.dryRun) {
-    args.push("--dry-run");
+    args.push("--dry-run", "--no-color");
   }
 
   if (!options.interactive) {
@@ -72,12 +72,14 @@ async function runCodemod(
     const output = stdout + stderr;
     const filesModified = parseModifiedFiles(output);
     const changed = filesModified.length > 0 || hasChanges(output);
+    const diffOutput = options.dryRun ? extractDiffOutput(output) : undefined;
 
     return {
       codemod,
       changed,
       filesModified,
       warnings: [],
+      diffOutput,
     };
   } catch (error) {
     throw new Error(
@@ -123,6 +125,35 @@ function hasChanges(output: string): boolean {
 }
 
 /**
+ * Extract diff sections from codemod CLI dry-run output.
+ * Strips the trailing "✨ Done" line and leading/trailing blank lines.
+ * @param output - The CLI stdout/stderr output
+ * @returns Cleaned diff output, or undefined if no diffs found
+ */
+function extractDiffOutput(output: string): string | undefined {
+  const lines = output.split("\n");
+  const diffLines: string[] = [];
+  let inDiff = false;
+
+  for (const line of lines) {
+    // Start capturing at the separator line
+    if (line.startsWith("=====")) {
+      inDiff = true;
+    }
+    // Stop at the "Done" summary line
+    if (line.includes("Done in")) {
+      break;
+    }
+    if (inDiff) {
+      diffLines.push(line);
+    }
+  }
+
+  const result = diffLines.join("\n").trim();
+  return result.length > 0 ? result : undefined;
+}
+
+/**
  * Print the upgrade summary to the terminal.
  * @param summary - The upgrade run summary
  * @param dryRun - Whether this was a dry-run
@@ -145,6 +176,22 @@ function printUpgradeSummary(summary: UpgradeSummary, dryRun: boolean): void {
     );
     for (const file of summary.filesModified) {
       logger.log(`  ${styles.path(file)}`);
+    }
+  }
+
+  // Show diff preview in dry-run mode
+  if (dryRun && summary.diffOutput) {
+    logger.log("");
+    logger.info("Changes preview:");
+    logger.log("");
+    for (const line of summary.diffOutput.split("\n")) {
+      if (line.startsWith("+") && !line.startsWith("+++")) {
+        logger.log(`  ${styles.success(line)}`);
+      } else if (line.startsWith("-") && !line.startsWith("---")) {
+        logger.log(`  ${styles.error(line)}`);
+      } else {
+        logger.log(`  ${line}`);
+      }
     }
   }
 
@@ -214,6 +261,7 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
   const modifiedFiles = new Set<string>();
   const warnings: string[] = [];
   const errors: UpgradeSummary["errors"] = [];
+  const diffOutputs: string[] = [];
   let codemodsApplied = 0;
   let codemodsSkipped = 0;
 
@@ -228,6 +276,9 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
         for (const file of result.filesModified) {
           modifiedFiles.add(file);
         }
+        if (result.diffOutput) {
+          diffOutputs.push(result.diffOutput);
+        }
         logger.success(`  ${result.filesModified.length} file(s) modified`);
       } else {
         codemodsSkipped++;
@@ -241,12 +292,15 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
     }
   }
 
+  const combinedDiffOutput = diffOutputs.length > 0 ? diffOutputs.join("\n\n") : undefined;
+
   const summary: UpgradeSummary = {
     codemodsApplied,
     codemodsSkipped,
     filesModified: [...modifiedFiles],
     warnings,
     errors,
+    diffOutput: combinedDiffOutput,
   };
 
   logger.log("");

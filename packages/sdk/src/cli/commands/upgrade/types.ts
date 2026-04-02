@@ -30,6 +30,8 @@ export interface CodemodResult {
   filesModified: string[];
   /** Warnings about manual intervention needed */
   warnings: string[];
+  /** Raw diff output from the codemod CLI (dry-run only) */
+  diffOutput?: string;
 }
 
 /**
@@ -46,4 +48,6 @@ export interface UpgradeSummary {
   warnings: string[];
   /** Codemods that had errors during execution */
   errors: Array<{ codemodId: string; error: Error }>;
+  /** Combined diff output from all codemods (dry-run only) */
+  diffOutput?: string;
 }
