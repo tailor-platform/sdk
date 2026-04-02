@@ -24,11 +24,11 @@ tailor-sdk upgrade [options]
 
 **Options**
 
-| Option          | Alias | Description                                                                         | Required | Default |
-| --------------- | ----- | ----------------------------------------------------------------------------------- | -------- | ------- |
-| `--to <TO>`     | -     | Target SDK version to upgrade to. Defaults to the version declared in package.json. | No       | -       |
-| `--dry-run`     | `-d`  | Preview changes without modifying files                                             | No       | `false` |
-| `--path <PATH>` | -     | Project directory to upgrade                                                        | No       | `"."`   |
+| Option          | Alias | Description                                   | Required | Default |
+| --------------- | ----- | --------------------------------------------- | -------- | ------- |
+| `--from <FROM>` | -     | SDK version before the upgrade (e.g., 1.33.0) | Yes      | -       |
+| `--dry-run`     | `-d`  | Preview changes without modifying files       | No       | `false` |
+| `--path <PATH>` | -     | Project directory to upgrade                  | No       | `"."`   |
 
 <!-- politty:command:upgrade:options:end -->
 

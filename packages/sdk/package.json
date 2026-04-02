@@ -14,7 +14,6 @@
   },
   "files": [
     "CHANGELOG.md",
-    "codemods",
     "dist",
     "docs",
     "postinstall.mjs",
@@ -25,7 +24,6 @@
   "main": "./dist/configure/index.mjs",
   "types": "./dist/configure/index.d.mts",
   "exports": {
-    "./package.json": "./package.json",
     ".": {
       "types": "./dist/configure/index.d.mts",
       "import": "./dist/configure/index.mjs",
@@ -151,7 +149,6 @@
     "zod": "4.3.6"
   },
   "devDependencies": {
-    "@codemod.com/jssg-types": "^1.5.1",
     "@eslint/js": "10.0.1",
     "@opentelemetry/sdk-trace-base": "2.6.1",
     "@types/madge": "5.0.3",
@@ -160,7 +157,6 @@
     "@types/semver": "7.7.1",
     "@typescript/native-preview": "7.0.0-dev.20260329.1",
     "@vitest/coverage-v8": "4.1.2",
-    "codemod": "^1.7.11",
     "eslint": "10.1.0",
     "eslint-plugin-jsdoc": "62.8.1",
     "eslint-plugin-oxlint": "1.57.0",

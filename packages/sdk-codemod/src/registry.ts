@@ -1,24 +1,16 @@
-import { createRequire } from "node:module";
+import * as url from "node:url";
 import * as path from "pathe";
 import { lt, gte, valid } from "semver";
 import type { CodemodPackage } from "./types";
 
-/**
- * Resolve the SDK package root directory.
- * Uses createRequire to locate the SDK's package.json, which works in both
- * source (development) and bundled (production) environments.
- * Requires "./package.json" to be listed in the SDK's package.json exports.
- * @returns Absolute path to the SDK package root
- */
-function getSdkPackageRoot(): string {
-  const require = createRequire(import.meta.url);
-  const pkgJsonPath = require.resolve("@tailor-platform/sdk/package.json");
-  return path.dirname(pkgJsonPath);
-}
+const CODEMODS_ROOT = path.resolve(
+  path.dirname(url.fileURLToPath(import.meta.url)),
+  "..",
+  "codemods",
+);
 
 /**
  * Registry of all available codemod packages.
- * Each entry maps to a codemod package under packages/sdk/codemods/.
  */
 const allCodemods: CodemodPackage[] = [
   {
@@ -38,7 +30,7 @@ const allCodemods: CodemodPackage[] = [
  * @returns Absolute path to the script file
  */
 export function resolveCodemodScript(scriptPath: string): string {
-  return path.resolve(getSdkPackageRoot(), "codemods", scriptPath);
+  return path.resolve(CODEMODS_ROOT, scriptPath);
 }
 
 /**

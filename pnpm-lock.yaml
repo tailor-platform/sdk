@@ -648,9 +648,6 @@ importers:
         specifier: 4.3.6
         version: 4.3.6
     devDependencies:
-      '@codemod.com/jssg-types':
-        specifier: ^1.5.1
-        version: 1.5.1
       '@eslint/js':
         specifier: 10.0.1
         version: 10.0.1(eslint@10.1.0(jiti@2.6.1))
@@ -675,9 +672,6 @@ importers:
       '@vitest/coverage-v8':
         specifier: 4.1.2
         version: 4.1.2(vitest@4.1.2(@opentelemetry/api@1.9.1)(@types/node@24.12.0)(vite@8.0.3(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3)))
-      codemod:
-        specifier: ^1.7.11
-        version: 1.7.11
       eslint:
         specifier: 10.1.0
         version: 10.1.0(jiti@2.6.1)
@@ -714,6 +708,61 @@ importers:
       zinfer:
         specifier: 0.1.7
         version: 0.1.7(typescript@5.9.3)(zod@4.3.6)
+
+  packages/sdk-codemod:
+    dependencies:
+      codemod:
+        specifier: ^1.7.11
+        version: 1.7.11
+      pathe:
+        specifier: 2.0.3
+        version: 2.0.3
+      pkg-types:
+        specifier: 2.3.0
+        version: 2.3.0
+      politty:
+        specifier: 0.4.12
+        version: 0.4.12(zod@4.3.6)
+      semver:
+        specifier: 7.7.4
+        version: 7.7.4
+      zod:
+        specifier: 4.3.6
+        version: 4.3.6
+    devDependencies:
+      '@codemod.com/jssg-types':
+        specifier: ^1.5.1
+        version: 1.5.1
+      '@eslint/js':
+        specifier: 10.0.1
+        version: 10.0.1(eslint@10.1.0(jiti@2.6.1))
+      '@types/node':
+        specifier: 24.12.0
+        version: 24.12.0
+      '@types/semver':
+        specifier: 7.7.1
+        version: 7.7.1
+      eslint:
+        specifier: 10.1.0
+        version: 10.1.0(jiti@2.6.1)
+      eslint-plugin-oxlint:
+        specifier: 1.56.0
+        version: 1.56.0
+      oxlint:
+        specifier: 1.56.0
+        version: 1.56.0(oxlint-tsgolint@0.18.1)
+      tsdown:
+        specifier: 0.21.7
+        version: 0.21.7(@typescript/native-preview@7.0.0-dev.20260329.1)(oxc-resolver@11.19.1)(publint@0.3.18)(typescript@5.9.3)
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      typescript-eslint:
+        specifier: 8.57.2
+        version: 8.57.2(eslint@10.1.0(jiti@2.6.1))(typescript@5.9.3)
+      vitest:
+        specifier: 4.1.2
+        version: 4.1.2(@opentelemetry/api@1.9.1)(@types/node@24.12.0)(vite@8.0.3(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3))
 
   packages/tailor-proto:
     dependencies:

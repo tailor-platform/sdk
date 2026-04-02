@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 const execFileAsync = promisify(execFile);
 
-const CODEMODS_DIR = path.resolve(__dirname, "../../../../codemods");
+const CODEMODS_DIR = path.resolve(__dirname, "../codemods");
 
 /**
  * Bundle a codemod transform and run jssg test against its fixtures.
@@ -23,7 +23,6 @@ async function runCodemodTest(codemodPath: string): Promise<{ passed: boolean; o
     { timeout: 30_000 },
   );
 
-  // Write bundled to temp file
   const fs = await import("node:fs");
   const os = await import("node:os");
   const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "codemod-test-"));
