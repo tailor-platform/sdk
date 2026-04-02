@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import * as fs from "node:fs";
+import { glob } from "node:fs/promises";
 import * as os from "node:os";
 import { promisify } from "node:util";
 import * as path from "pathe";
@@ -72,6 +73,25 @@ async function runCodemod(
     }
   }
 
+  // In non-dry-run mode, snapshot target files before execution to detect changes,
+  // because the codemod CLI does not report modified file names in normal execution.
+  const snapshots = new Map<string, string>();
+  if (!options.dryRun) {
+    const targetFiles = glob("**/*.{ts,tsx,mts,cts}", {
+      cwd: options.path,
+      withFileTypes: false,
+      exclude: ["**/node_modules/**", "**/dist/**", "**/.git/**"],
+    });
+    for await (const relative of targetFiles) {
+      const absolute = path.resolve(options.path, relative);
+      try {
+        snapshots.set(absolute, await fs.promises.readFile(absolute, "utf-8"));
+      } catch {
+        // skip unreadable files
+      }
+    }
+  }
+
   try {
     const { stdout, stderr } = await execFileAsync("npx", args, {
       cwd: options.path,
@@ -79,9 +99,30 @@ async function runCodemod(
     });
 
     const output = stdout + stderr;
-    const filesModified = parseModifiedFiles(output);
-    const changed = filesModified.length > 0 || hasChanges(output);
-    const diffOutput = options.dryRun ? extractDiffOutput(output) : undefined;
+
+    let filesModified: string[];
+    let changed: boolean;
+    let diffOutput: string | undefined;
+
+    if (options.dryRun) {
+      filesModified = parseModifiedFiles(output);
+      changed = filesModified.length > 0 || hasChanges(output);
+      diffOutput = extractDiffOutput(output);
+    } else {
+      // Compare file contents to detect actual changes
+      filesModified = [];
+      for (const [absolute, before] of snapshots) {
+        try {
+          const after = await fs.promises.readFile(absolute, "utf-8");
+          if (after !== before) {
+            filesModified.push(absolute);
+          }
+        } catch {
+          // skip
+        }
+      }
+      changed = filesModified.length > 0;
+    }
 
     return {
       codemod,
