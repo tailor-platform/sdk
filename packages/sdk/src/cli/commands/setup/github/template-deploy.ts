@@ -43,6 +43,7 @@ export function detectPackageManager(dir: string): PackageManager {
   if (fs.existsSync(path.join(dir, "yarn.lock"))) return "yarn";
   if (fs.existsSync(path.join(dir, "bun.lockb")) || fs.existsSync(path.join(dir, "bun.lock")))
     return "bun";
+  if (fs.existsSync(path.join(dir, "package-lock.json"))) return "npm";
   return "npm";
 }
 
