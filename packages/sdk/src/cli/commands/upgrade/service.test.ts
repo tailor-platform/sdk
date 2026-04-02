@@ -231,4 +231,51 @@ describe("upgrade service", () => {
     const { logger } = await import("@/cli/shared/logger");
     expect(vi.mocked(logger.success)).toHaveBeenCalled();
   });
+
+  it("should display diff preview in dry-run mode", async () => {
+    const { detectInstalledVersion } = await import("./version-detector");
+    vi.mocked(detectInstalledVersion).mockResolvedValue("1.33.0");
+
+    const { getApplicableCodemods } = await import("./codemod-registry");
+    vi.mocked(getApplicableCodemods).mockReturnValue([
+      {
+        id: "test/diff",
+        name: "Diff",
+        description: "Shows diff",
+        since: "1.0.0",
+        until: "2.0.0",
+        scriptPath: "v2/diff/scripts/transform.ts",
+      },
+    ]);
+
+    const dryRunOutput = [
+      "============================================================",
+      "File: /test/config.ts",
+      "============================================================",
+      "--- [before] /test/config.ts",
+      "+++ [after]  /test/config.ts",
+      '-import { defineGenerators } from "@tailor-platform/sdk";',
+      '+import { definePlugins } from "@tailor-platform/sdk";',
+      "+2 additions, -1 deletions",
+      "✨ Done in 0.05s",
+    ].join("\n");
+
+    mockExecFileAsync
+      .mockResolvedValueOnce({ stdout: "", stderr: "" }) // bundle
+      .mockResolvedValueOnce({ stdout: dryRunOutput, stderr: "" }); // run
+
+    const { upgrade } = await import("./service");
+    await upgrade({ to: "2.0.0", dryRun: true, path: "/test" });
+
+    const { logger } = await import("@/cli/shared/logger");
+    const logCalls = vi.mocked(logger.log).mock.calls.map((c) => c[0]);
+
+    // Should display "Changes preview:" header
+    const infoCalls = vi.mocked(logger.info).mock.calls.map((c) => c[0]);
+    expect(infoCalls.some((c) => c.includes("Changes preview"))).toBe(true);
+
+    // Should contain diff lines (+ and - lines are styled)
+    expect(logCalls.some((c) => c.includes("definePlugins"))).toBe(true);
+    expect(logCalls.some((c) => c.includes("defineGenerators"))).toBe(true);
+  });
 });
