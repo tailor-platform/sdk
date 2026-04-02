@@ -25,6 +25,7 @@
   "main": "./dist/configure/index.mjs",
   "types": "./dist/configure/index.d.mts",
   "exports": {
+    "./package.json": "./package.json",
     ".": {
       "types": "./dist/configure/index.d.mts",
       "import": "./dist/configure/index.mjs",
