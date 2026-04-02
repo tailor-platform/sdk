@@ -3,8 +3,6 @@ import { AuthInvokerSchema } from "@/parser/service/auth/schema";
 import { TailorFieldSchema } from "@/parser/service/field/schema";
 import { functionSchema } from "../common";
 
-export { TailorFieldSchema };
-
 export const QueryTypeSchema = z
   .union([z.literal("query"), z.literal("mutation")])
   .describe("GraphQL operation type");
