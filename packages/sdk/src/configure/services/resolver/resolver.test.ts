@@ -957,6 +957,21 @@ describe("createResolver", () => {
       ).toThrow('Enum field descriptor requires a non-empty "values" array');
     });
 
+    test("plain object without kind or type throws in input", () => {
+      expect(() =>
+        createResolver({
+          name: "malformed",
+          operation: "query",
+          input: {
+            // @ts-expect-error testing runtime behavior with malformed entry
+            name: { optional: true },
+          },
+          output: { kind: "bool" },
+          body: () => true,
+        }),
+      ).toThrow("Expected a field descriptor");
+    });
+
     test("record output with a field named 'kind' is not confused with a descriptor", () => {
       const resolver = createResolver({
         name: "withKindField",

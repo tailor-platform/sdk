@@ -314,7 +314,8 @@ function isPassthroughField(entry: FieldEntry): entry is TailorAnyDBField {
 
 function resolveField(entry: FieldEntry): TailorAnyDBField {
   if (isPassthroughField(entry)) {
-    if (typeof (entry as { type?: unknown }).type !== "string") {
+    const cast = entry as { type?: unknown; metadata?: unknown };
+    if (typeof cast.type !== "string" || typeof cast.metadata !== "object" || !cast.metadata) {
       throw new Error(
         "Expected a field descriptor (with `kind`) or a db.*() field instance (with `type`)",
       );

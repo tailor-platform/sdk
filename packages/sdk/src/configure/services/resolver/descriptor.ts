@@ -142,6 +142,12 @@ function isValidateConfig(v: unknown): v is ValidateConfig<unknown> {
 
 export function resolveResolverField(entry: ResolverFieldEntry): TailorAnyField {
   if (isPassthroughField(entry)) {
+    const cast = entry as { type?: unknown; metadata?: unknown };
+    if (typeof cast.type !== "string" || typeof cast.metadata !== "object" || !cast.metadata) {
+      throw new Error(
+        "Expected a field descriptor (with `kind`) or a t.*() field instance (with `type`)",
+      );
+    }
     return entry;
   }
   return buildResolverField(entry);
@@ -154,6 +160,12 @@ export function resolveResolverFieldMap(
   const resolved: Record<string, TailorAnyField> = {};
   for (const [key, entry] of Object.entries(entries)) {
     if (isPassthroughField(entry)) {
+      const cast = entry as { type?: unknown; metadata?: unknown };
+      if (typeof cast.type !== "string" || typeof cast.metadata !== "object" || !cast.metadata) {
+        throw new Error(
+          `Expected a field descriptor (with \`kind\`) or a t.*() field instance (with \`type\`) for key "${key}"`,
+        );
+      }
       resolved[key] = entry;
     } else {
       hasDescriptor = true;
