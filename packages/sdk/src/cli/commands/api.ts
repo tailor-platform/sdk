@@ -1,10 +1,13 @@
+import { OperatorService } from "@tailor-proto/tailor/v1/service_pb";
 import { arg } from "politty";
 import { z } from "zod";
-import { workspaceArgs } from "@/cli/shared/args";
+import { configArg, workspaceArgs } from "@/cli/shared/args";
 import { platformBaseUrl, userAgent } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
-import { loadAccessToken } from "@/cli/shared/context";
+import { loadConfig } from "@/cli/shared/config-loader";
+import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
+import type { LoadedConfig } from "@/cli/shared/config-loader";
 
 export interface ApiCallOptions {
   profile?: string;
@@ -64,12 +67,50 @@ export async function apiCall(options: ApiCallOptions): Promise<ApiCallResult> {
   };
 }
 
+function getEndpointFieldNames(methodName: string): string[] {
+  const method = OperatorService.methods.find((m) => m.name === methodName);
+  if (!method) return [];
+  return method.input.fields.map((f) => f.jsonName);
+}
+
+function resolveNamespaceName(methodName: string, config: LoadedConfig): string | undefined {
+  if (/Auth|Tenant|UserProfile/.test(methodName)) {
+    return config.auth?.name;
+  }
+  if (/IdP/.test(methodName)) {
+    if (config.idp?.length === 1) return config.idp[0].name;
+    return undefined;
+  }
+  if (/TailorDB/.test(methodName)) {
+    const keys = Object.keys(config.db ?? {});
+    if (keys.length === 1) return keys[0];
+    return undefined;
+  }
+  if (/Pipeline/.test(methodName)) {
+    const keys = Object.keys(config.resolver ?? {});
+    if (keys.length === 1) return keys[0];
+    return undefined;
+  }
+  return undefined;
+}
+
+function injectFields(body: string, fields: Record<string, string>): string {
+  const parsed = JSON.parse(body) as Record<string, unknown>;
+  for (const [key, value] of Object.entries(fields)) {
+    if (!(key in parsed)) {
+      parsed[key] = value;
+    }
+  }
+  return JSON.stringify(parsed);
+}
+
 export const apiCommand = defineAppCommand({
   name: "api",
   description: "Call Tailor Platform API endpoints directly.",
   args: z
     .object({
       ...workspaceArgs,
+      ...configArg,
       body: arg(z.string().default("{}"), {
         alias: "b",
         description: "Request body as JSON",
@@ -82,16 +123,46 @@ export const apiCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
+    let body = args.body;
+
+    const methodName = args.endpoint.includes("/")
+      ? args.endpoint.split("/").pop()!
+      : (args.endpoint as string);
+
+    const fieldNames = getEndpointFieldNames(methodName);
+    const fieldsToInject: Record<string, string> = {};
+
+    if (fieldNames.includes("workspaceId")) {
+      try {
+        fieldsToInject.workspaceId = await loadWorkspaceId({
+          workspaceId: args["workspace-id"],
+          profile: args.profile,
+        });
+      } catch {
+        // Cannot resolve workspace ID — skip
+      }
+    }
+
+    if (fieldNames.includes("namespaceName")) {
+      try {
+        const { config } = await loadConfig(args.config);
+        const ns = resolveNamespaceName(methodName, config);
+        if (ns) fieldsToInject.namespaceName = ns;
+      } catch {
+        // Config not available — skip
+      }
+    }
+
+    if (Object.keys(fieldsToInject).length > 0) {
+      body = injectFields(body, fieldsToInject);
+    }
+
     const result = await apiCall({
       profile: args.profile,
       endpoint: args.endpoint as string,
-      body: args.body,
+      body,
     });
 
-    if (args.json) {
-      logger.log(JSON.stringify(result.data, null, 2));
-    } else {
-      logger.log(JSON.stringify(result.data, null, 2));
-    }
+    logger.log(JSON.stringify(result.data, null, 2));
   },
 });

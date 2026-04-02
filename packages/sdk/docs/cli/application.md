@@ -330,11 +330,12 @@ tailor-sdk api [options] <endpoint>
 
 **Options**
 
-| Option                          | Alias | Description          | Required | Default | Env                            |
-| ------------------------------- | ----- | -------------------- | -------- | ------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID         | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile    | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
-| `--body <BODY>`                 | `-b`  | Request body as JSON | No       | `"{}"`  | -                              |
+| Option                          | Alias | Description             | Required | Default              | Env                               |
+| ------------------------------- | ----- | ----------------------- | -------- | -------------------- | --------------------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile       | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| `--body <BODY>`                 | `-b`  | Request body as JSON    | No       | `"{}"`               | -                                 |
 
 <!-- politty:command:api:options:end -->
 
