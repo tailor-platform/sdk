@@ -648,6 +648,9 @@ importers:
         specifier: 4.3.6
         version: 4.3.6
     devDependencies:
+      '@codemod.com/jssg-types':
+        specifier: ^1.5.1
+        version: 1.5.1
       '@eslint/js':
         specifier: 10.0.1
         version: 10.0.1(eslint@10.1.0(jiti@2.6.1))
@@ -672,6 +675,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: 4.1.2
         version: 4.1.2(vitest@4.1.2(@opentelemetry/api@1.9.1)(@types/node@24.12.0)(vite@8.0.3(@types/node@24.12.0)(esbuild@0.27.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3)))
+      codemod:
+        specifier: ^1.7.11
+        version: 1.7.11
       eslint:
         specifier: 10.1.0
         version: 10.1.0(jiti@2.6.1)
@@ -863,6 +869,41 @@ packages:
 
   '@clack/prompts@1.1.0':
     resolution: {integrity: sha512-pkqbPGtohJAvm4Dphs2M8xE29ggupihHdy1x84HNojZuMtFsHiUlRvqD24tM2+XmI+61LlfNceM3Wr7U5QES5g==}
+
+  '@codemod.com/cli-darwin-arm64@1.7.11':
+    resolution: {integrity: sha512-dE/cjW0sT5YKR0jwGH0jr17zV3vtBA53vpWObhgK6mBWRPgBrN5bSdYgldLIcleUHkfQiydRu4n+qZdz9FOtgQ==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@codemod.com/cli-darwin-x64@1.7.11':
+    resolution: {integrity: sha512-+lv43KcLQkiq5Ph1ICPpMNBZS+zy71Q2Vs6EvFJogGrMWpQ7inx010sNTbwJRQ4mlf06/OzCJK+K+8pHaOFB5Q==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [darwin]
+
+  '@codemod.com/cli-linux-arm64-gnu@1.7.11':
+    resolution: {integrity: sha512-fwTZ9rdi0K3ltsvt630QEWW1upZGapCCOWngczNHCLUdQ9rr6LCFW40eq97GBvfutZRNAVofrDCks/3q1CbCqw==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@codemod.com/cli-linux-x64-gnu@1.7.11':
+    resolution: {integrity: sha512-3wG8uJlKmEdc+EJcDiuFD8I9qXAgjHYt/sgvcJZgtJem6/NEbJ7qbLhteGHYOat61l+u+cs6iMwOQ7JEDSzJcg==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@codemod.com/cli-win32-x64-msvc@1.7.11':
+    resolution: {integrity: sha512-YXabpaVKrPomfCduIH360NKNVDwpvdB8JZacIlkFvqJdzA3H4hjFDf7VvxVgSTreyVlVGlGycjy2nbnBb8evEQ==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [win32]
+
+  '@codemod.com/jssg-types@1.5.1':
+    resolution: {integrity: sha512-pCngSoz7hpNiMMkoVi+b4uqy7cA2XuJqEaOx52KYN/25bOdzJ7IqU9DEMukOKnWyFt9iy3UBinayit1P1+9wXA==}
 
   '@connectrpc/connect-node@2.1.1':
     resolution: {integrity: sha512-s3TfsI1XF+n+1z6MBS9rTnFsxxR4Rw5wmdEnkQINli81ESGxcsfaEet8duzq8LVuuCupmhUsgpRo0Nv9pZkufg==}
@@ -3046,6 +3087,11 @@ packages:
   code-excerpt@4.0.0:
     resolution: {integrity: sha512-xxodCmBen3iy2i0WtAK8FlFNrRzjUqjRsMfho58xT/wvZU1YTM3fCnRjcy1gJPMepaRlgm/0e6w8SpWHpn3/cA==}
     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
+
+  codemod@1.7.11:
+    resolution: {integrity: sha512-rfbd5HWUugz+27+YJUZ7tqRWVkKhKl+Gtab7L3Oq/9AJvFOFpONEKju6Jkv9UJDWSKwpWjAZ9xupb3MzHxxsRg==}
+    engines: {node: '>= 16.0.0'}
+    hasBin: true
 
   color-convert@2.0.1:
     resolution: {integrity: sha512-RRECPsj7iu/xb5oKYcsFHSppFNnsj/52OVTRKb4zP5onXwVF3zVmmToNcOfGC+CRDpfK/U584fMg38ZHCaElKQ==}
@@ -5517,6 +5563,23 @@ snapshots:
       '@clack/core': 1.1.0
       sisteransi: 1.0.5
 
+  '@codemod.com/cli-darwin-arm64@1.7.11':
+    optional: true
+
+  '@codemod.com/cli-darwin-x64@1.7.11':
+    optional: true
+
+  '@codemod.com/cli-linux-arm64-gnu@1.7.11':
+    optional: true
+
+  '@codemod.com/cli-linux-x64-gnu@1.7.11':
+    optional: true
+
+  '@codemod.com/cli-win32-x64-msvc@1.7.11':
+    optional: true
+
+  '@codemod.com/jssg-types@1.5.1': {}
+
   '@connectrpc/connect-node@2.1.1(@bufbuild/protobuf@2.11.0)(@connectrpc/connect@2.1.1(@bufbuild/protobuf@2.11.0))':
     dependencies:
       '@bufbuild/protobuf': 2.11.0
@@ -7267,6 +7330,16 @@ snapshots:
   code-excerpt@4.0.0:
     dependencies:
       convert-to-spaces: 2.0.1
+
+  codemod@1.7.11:
+    dependencies:
+      detect-libc: 2.1.2
+    optionalDependencies:
+      '@codemod.com/cli-darwin-arm64': 1.7.11
+      '@codemod.com/cli-darwin-x64': 1.7.11
+      '@codemod.com/cli-linux-arm64-gnu': 1.7.11
+      '@codemod.com/cli-linux-x64-gnu': 1.7.11
+      '@codemod.com/cli-win32-x64-msvc': 1.7.11
 
   color-convert@2.0.1:
     dependencies:
