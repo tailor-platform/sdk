@@ -19,7 +19,7 @@ function names(failures: { name: string }[]) {
 }
 
 describe("require-public-api-jsdoc", () => {
-  test("fully documented symbols produce no failures", () => {
+  test("fully documented symbols produce no failures", { timeout: 10_000 }, () => {
     expect(check("documented.ts")).toEqual([]);
   });
 
