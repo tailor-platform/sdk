@@ -1,5 +1,6 @@
 import { describe, it, expectTypeOf, expect } from "vitest";
 import { createTable, timestampFields } from "./createTable";
+import { unsafeAllowAllGqlPermission } from "./permission";
 import { db } from "./schema";
 import type { Hook } from "./types";
 import type { output } from "@/configure/types/helpers";
@@ -901,5 +902,44 @@ describe("createTable type-level hooks/validate exclusion in options", () => {
         },
       },
     );
+  });
+});
+
+describe("createTable type-level options", () => {
+  it("pluralForm via options sets settings.pluralForm", () => {
+    const result = createTable("Person", { name: { kind: "string" } }, { pluralForm: "People" });
+    expect(result.metadata.settings).toEqual({ pluralForm: "People" });
+  });
+
+  it("pluralForm via tuple overload sets settings.pluralForm", () => {
+    const result = createTable(["Person", "People"], { name: { kind: "string" } });
+    expect(result.metadata.settings).toEqual({ pluralForm: "People" });
+  });
+
+  it("type-level description sets metadata.description", () => {
+    const result = createTable(
+      "Employee",
+      { name: { kind: "string" } },
+      { description: "Company employee" },
+    );
+    expect(result.metadata.description).toBe("Company employee");
+  });
+
+  it("features sets metadata.settings", () => {
+    const result = createTable(
+      "Order",
+      { total: { kind: "int" } },
+      { features: { aggregation: true } },
+    );
+    expect(result.metadata.settings).toEqual({ aggregation: true });
+  });
+
+  it("gqlPermission sets metadata.permissions.gql", () => {
+    const result = createTable(
+      "Secret",
+      { value: { kind: "string" } },
+      { gqlPermission: unsafeAllowAllGqlPermission },
+    );
+    expect(result.metadata.permissions.gql).toBeDefined();
   });
 });
