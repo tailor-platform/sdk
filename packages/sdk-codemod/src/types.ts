@@ -27,5 +27,4 @@ export interface RunOutput {
   filesModified: string[];
   warnings: string[];
   errors: Array<{ codemodId: string; message: string }>;
-  diffOutput?: string;
 }

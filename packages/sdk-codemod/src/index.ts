@@ -66,7 +66,6 @@ const main = defineCommand({
       output.codemodsSkipped = result.changed ? 0 : codemods.length;
       output.filesModified = result.filesModified;
       output.warnings = result.warnings;
-      output.diffOutput = result.diffOutput;
 
       if (result.changed) {
         process.stderr.write(`  ${result.filesModified.length} file(s) modified\n`);
