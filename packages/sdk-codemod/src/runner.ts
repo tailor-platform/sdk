@@ -1,15 +1,37 @@
 import * as fs from "node:fs";
 import { glob } from "node:fs/promises";
-import { parse, Lang } from "@ast-grep/napi";
 import chalk from "chalk";
 import { structuredPatch } from "diff";
 import * as path from "pathe";
 import picomatch from "picomatch";
-import type { SgRoot } from "@ast-grep/napi";
 import type { CodemodPackage } from "./types";
 
-/** A transform function that receives a parsed AST root and returns modified source or null. */
-export type TransformFn = (root: SgRoot) => Promise<string | null> | string | null;
+/**
+ * A transform function that receives source text and file path,
+ * and returns modified source or null if no changes are needed.
+ *
+ * For AST-based transforms, use `parseTS`/`parseTSX` from helpers:
+ * ```typescript
+ * import { parseTS } from "@tailor-platform/sdk-codemod/helpers";
+ * export default function transform(source: string): string | null {
+ *   const root = parseTS(source);
+ *   // ... findAll, replace, commitEdits
+ * }
+ * ```
+ *
+ * For text-based transforms (e.g., JSON):
+ * ```typescript
+ * export default function transform(source: string, filePath: string): string | null {
+ *   const json = JSON.parse(source);
+ *   json.key = "newValue";
+ *   return JSON.stringify(json, null, 2);
+ * }
+ * ```
+ */
+export type TransformFn = (
+  source: string,
+  filePath: string,
+) => Promise<string | null> | string | null;
 
 /** Result of running codemods on a project. */
 export interface CodemodRunResult {
@@ -23,15 +45,6 @@ const DEFAULT_FILE_PATTERNS = ["**/*.{ts,tsx,mts,cts}"];
 
 /** Directories always excluded from file scanning. */
 const EXCLUDE_PATTERNS = ["**/node_modules/**", "**/dist/**", "**/.git/**"];
-
-/**
- * Determine the ast-grep language for a file extension.
- * @param filePath - Path to the file
- * @returns The ast-grep Lang enum value
- */
-function langForFile(filePath: string): Lang {
-  return filePath.endsWith(".tsx") ? Lang.Tsx : Lang.TypeScript;
-}
 
 /**
  * Print a colorized unified diff for a single file to stderr.
@@ -117,8 +130,9 @@ export async function runCodemods(
   }
 
   const filesModified: string[] = [];
+  const seen = new Set<string>();
 
-  // Iterate over all matching files
+  // Iterate over all matching files (deduplicate across patterns)
   for (const pattern of allPatterns) {
     const targetFiles = glob(pattern, {
       cwd: targetPath,
@@ -128,6 +142,9 @@ export async function runCodemods(
 
     for await (const relative of targetFiles) {
       const absolute = path.resolve(targetPath, relative);
+      if (seen.has(absolute)) continue;
+      seen.add(absolute);
+
       let original: string;
       try {
         original = await fs.promises.readFile(absolute, "utf-8");
@@ -135,14 +152,11 @@ export async function runCodemods(
         continue;
       }
 
-      const lang = langForFile(absolute);
-
       // Chain only transforms whose filePatterns match this file
       let current = original;
       for (const { transform, matches } of loaded) {
         if (!matches(relative)) continue;
-        const root = parse(lang, current);
-        const result = await transform(root);
+        const result = await transform(current, absolute);
         if (result != null) {
           current = result;
         }
