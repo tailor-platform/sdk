@@ -1,9 +1,10 @@
 import * as fs from "node:fs";
 import { glob } from "node:fs/promises";
 import { parse, Lang } from "@ast-grep/napi";
+import chalk from "chalk";
 import { structuredPatch } from "diff";
 import * as path from "pathe";
-import chalk from "chalk";
+import picomatch from "picomatch";
 import type { SgRoot } from "@ast-grep/napi";
 import type { CodemodPackage } from "./types";
 
@@ -16,6 +17,12 @@ export interface CodemodRunResult {
   filesModified: string[];
   warnings: string[];
 }
+
+/** Default file patterns for TypeScript files. */
+const DEFAULT_FILE_PATTERNS = ["**/*.{ts,tsx,mts,cts}"];
+
+/** Directories always excluded from file scanning. */
+const EXCLUDE_PATTERNS = ["**/node_modules/**", "**/dist/**", "**/.git/**"];
 
 /**
  * Determine the ast-grep language for a file extension.
@@ -69,10 +76,16 @@ async function loadTransform(scriptPath: string): Promise<TransformFn> {
   return mod.default as TransformFn;
 }
 
+/** A loaded transform with its file matcher. */
+interface LoadedTransform {
+  transform: TransformFn;
+  matches: (relativePath: string) => boolean;
+}
+
 /**
  * Run multiple codemods on a project directory using in-memory chaining.
- * Each codemod's transform is applied sequentially per file via reduce(),
- * so later transforms see earlier transforms' output — even in dry-run mode.
+ * Each file is processed through all transforms whose filePatterns match it.
+ * Later transforms see earlier transforms' output — even in dry-run mode.
  *
  * In dry-run mode, colorized diffs are printed to stderr.
  * @param codemods - Codemod packages to run (with resolved script paths)
@@ -85,48 +98,63 @@ export async function runCodemods(
   targetPath: string,
   dryRun: boolean,
 ): Promise<CodemodRunResult> {
-  // Load all transform functions
-  const transforms: TransformFn[] = [];
-  for (const { scriptPath } of codemods) {
-    transforms.push(await loadTransform(scriptPath));
+  // Load all transform functions with their file matchers
+  const loaded: LoadedTransform[] = [];
+  for (const { codemod, scriptPath } of codemods) {
+    const patterns = codemod.filePatterns ?? DEFAULT_FILE_PATTERNS;
+    loaded.push({
+      transform: await loadTransform(scriptPath),
+      matches: picomatch(patterns),
+    });
+  }
+
+  // Collect all unique file patterns for glob scanning
+  const allPatterns = new Set<string>();
+  for (const { codemod } of codemods) {
+    for (const p of codemod.filePatterns ?? DEFAULT_FILE_PATTERNS) {
+      allPatterns.add(p);
+    }
   }
 
   const filesModified: string[] = [];
 
-  // Iterate over all TypeScript files in the target directory
-  const targetFiles = glob("**/*.{ts,tsx,mts,cts}", {
-    cwd: targetPath,
-    withFileTypes: false,
-    exclude: ["**/node_modules/**", "**/dist/**", "**/.git/**"],
-  });
+  // Iterate over all matching files
+  for (const pattern of allPatterns) {
+    const targetFiles = glob(pattern, {
+      cwd: targetPath,
+      withFileTypes: false,
+      exclude: EXCLUDE_PATTERNS,
+    });
 
-  for await (const relative of targetFiles) {
-    const absolute = path.resolve(targetPath, relative);
-    let original: string;
-    try {
-      original = await fs.promises.readFile(absolute, "utf-8");
-    } catch {
-      continue;
-    }
-
-    const lang = langForFile(absolute);
-
-    // Chain all transforms: each receives the previous transform's output
-    let current = original;
-    for (const transform of transforms) {
-      const root = parse(lang, current);
-      const result = await transform(root);
-      if (result != null) {
-        current = result;
+    for await (const relative of targetFiles) {
+      const absolute = path.resolve(targetPath, relative);
+      let original: string;
+      try {
+        original = await fs.promises.readFile(absolute, "utf-8");
+      } catch {
+        continue;
       }
-    }
 
-    if (current !== original) {
-      filesModified.push(absolute);
-      if (dryRun) {
-        printDiff(absolute, original, current);
-      } else {
-        await fs.promises.writeFile(absolute, current, "utf-8");
+      const lang = langForFile(absolute);
+
+      // Chain only transforms whose filePatterns match this file
+      let current = original;
+      for (const { transform, matches } of loaded) {
+        if (!matches(relative)) continue;
+        const root = parse(lang, current);
+        const result = await transform(root);
+        if (result != null) {
+          current = result;
+        }
+      }
+
+      if (current !== original) {
+        filesModified.push(absolute);
+        if (dryRun) {
+          printDiff(absolute, original, current);
+        } else {
+          await fs.promises.writeFile(absolute, current, "utf-8");
+        }
       }
     }
   }
