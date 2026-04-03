@@ -64,9 +64,11 @@ const ENVIRONMENT_NAME = "tailor-runtime";
  * of the bundled environment module, both at the top-level and per-project.
  * It also injects the setup file that removes Vitest-dependent globals
  * (like `performance`) per-test via beforeEach/afterEach hooks.
+ * @param options - Optional configuration
+ * @param options.config - Path to tailor.config.ts to load SecretManager values into mock
  * @returns Vite plugin
  */
-export function createEnvironmentPlugin(): Plugin {
+export function createEnvironmentPlugin(options?: { config?: string }): Plugin {
   const currentDir = dirname(fileURLToPath(import.meta.url));
   const environmentPath = resolve(currentDir, "environment.mjs");
   const setupPath = resolve(currentDir, "setup.mjs");
@@ -92,6 +94,12 @@ export function createEnvironmentPlugin(): Plugin {
             projectTest.environment = environmentPath;
           }
         }
+      }
+
+      // Pass config path to setup.ts via env var (cross-process compatible)
+      if (options?.config) {
+        const configAbsPath = resolve(process.cwd(), options.config);
+        process.env.__TAILOR_RUNTIME_CONFIG = configAbsPath;
       }
 
       return {

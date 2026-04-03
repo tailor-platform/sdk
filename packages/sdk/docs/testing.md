@@ -141,13 +141,30 @@ export default defineConfig({
 
 - **`process` and `require`** are not removed or blocked. Vitest's internal runner depends on them extensively. On the real platform runtime, they do not exist.
 - **Dynamic `import()`** of bundled files (via `createImportMain()`) bypasses the transform hook since those files are loaded through the Node.js native loader.
-- **Platform API mocks return default values** — All platform APIs (`tailor.secretmanager`, `tailor.authconnection`, `tailor.idp`, `tailor.iconv`, `tailordb.file`, `tailor.workflow`) are mocked with default return values (empty strings, empty arrays, etc.). For `tailordb.Client` and `tailor.workflow.triggerJobFunction`, use `tailordbMock` and `workflowMock` to configure responses. For other APIs, override with `vi.fn()` if you need custom behavior:
+- **Platform API mocks return default values** — All platform APIs are mocked with default return values. Use control objects to configure responses:
+
+| Control Object       | API                     | Methods                                                                                               |
+| -------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------- |
+| `tailordbMock`       | `tailordb.Client`       | `setQueryResolver`, `enqueueResult`, `executedQueries`, `createdClients`                              |
+| `workflowMock`       | `tailor.workflow`       | `setJobHandler`, `enqueueResult`, `triggeredJobs`, `setWorkflowExecutionId`, `setWaitResult`, `calls` |
+| `secretmanagerMock`  | `tailor.secretmanager`  | `setSecrets`, `calls`                                                                                 |
+| `authconnectionMock` | `tailor.authconnection` | `setTokens`, `calls`                                                                                  |
+| `idpMock`            | `tailor.idp`            | `setResolver`, `enqueueResult`, `calls`                                                               |
+| `fileMock`           | `tailordb.file`         | `setResolver`, `enqueueResult`, `calls`                                                               |
+| `iconvMock`          | `tailor.iconv`          | `setResolver`, `calls`                                                                                |
+
+### Loading Secrets from Config
+
+Pass a config path to load `defineSecretManager()` values into the mock:
 
 ```typescript
-beforeEach(() => {
-  tailor.secretmanager.getSecret = vi.fn().mockResolvedValue("my-secret-value");
+export default defineConfig({
+  plugins: [tailorRuntime({ config: "./tailor.config.ts" })],
+  test: { environment: "tailor-runtime" },
 });
 ```
+
+This makes `tailor.secretmanager.getSecret("vault", "key")` return the values defined in your config. You can still override with `secretmanagerMock.setSecrets()` in individual tests.
 
 ## Unit Tests
 

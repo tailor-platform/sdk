@@ -1,6 +1,16 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { tailordbMock, workflowMock, injectMocks, cleanupMocks } from "../mock";
+import {
+  tailordbMock,
+  workflowMock,
+  secretmanagerMock,
+  authconnectionMock,
+  idpMock,
+  fileMock,
+  iconvMock,
+  injectMocks,
+  cleanupMocks,
+} from "../mock";
 
 describe("mock", () => {
   beforeEach(() => {
@@ -199,6 +209,241 @@ describe("mock", () => {
       expect((globalThis as any).tailordb.file.upload).toBeTypeOf("function");
       expect((globalThis as any).tailordb.file.download).toBeTypeOf("function");
       expect((globalThis as any).tailordb.file.delete).toBeTypeOf("function");
+    });
+  });
+
+  describe("secretmanagerMock", () => {
+    beforeEach(() => {
+      secretmanagerMock.reset();
+    });
+
+    test("records getSecret calls", async () => {
+      await (globalThis as any).tailor.secretmanager.getSecret("vault", "key");
+      expect(secretmanagerMock.calls).toEqual([
+        { method: "getSecret", vault: "vault", name: "key" },
+      ]);
+    });
+
+    test("records getSecrets calls", async () => {
+      await (globalThis as any).tailor.secretmanager.getSecrets("vault", ["a", "b"]);
+      expect(secretmanagerMock.calls).toEqual([
+        { method: "getSecrets", vault: "vault", names: ["a", "b"] },
+      ]);
+    });
+
+    test("setSecrets provides nested map responses", async () => {
+      secretmanagerMock.setSecrets({
+        "my-vault": { API_KEY: "sk-123", DB_PASS: "secret" },
+      });
+
+      const result = await (globalThis as any).tailor.secretmanager.getSecret(
+        "my-vault",
+        "API_KEY",
+      );
+      expect(result).toBe("sk-123");
+
+      const missing = await (globalThis as any).tailor.secretmanager.getSecret(
+        "my-vault",
+        "UNKNOWN",
+      );
+      expect(missing).toBeUndefined();
+    });
+
+    test("getSecrets returns partial record from store", async () => {
+      secretmanagerMock.setSecrets({ v: { a: "1", b: "2" } });
+
+      const result = await (globalThis as any).tailor.secretmanager.getSecrets("v", ["a", "c"]);
+      expect(result).toEqual({ a: "1" });
+    });
+
+    test("reset clears store and calls", async () => {
+      secretmanagerMock.setSecrets({ v: { k: "val" } });
+      await (globalThis as any).tailor.secretmanager.getSecret("v", "k");
+      secretmanagerMock.reset();
+
+      expect(secretmanagerMock.calls).toHaveLength(0);
+      const result = await (globalThis as any).tailor.secretmanager.getSecret("v", "k");
+      expect(result).toBeUndefined();
+    });
+  });
+
+  describe("authconnectionMock", () => {
+    beforeEach(() => {
+      authconnectionMock.reset();
+    });
+
+    test("records calls", async () => {
+      await (globalThis as any).tailor.authconnection.getConnectionToken("google");
+      expect(authconnectionMock.calls).toEqual([{ connectionName: "google" }]);
+    });
+
+    test("setTokens provides map-based responses", async () => {
+      authconnectionMock.setTokens({
+        google: { access_token: "ya29.xxx", expires_in: 3600 },
+      });
+
+      const result = await (globalThis as any).tailor.authconnection.getConnectionToken("google");
+      expect(result).toEqual({ access_token: "ya29.xxx", expires_in: 3600 });
+    });
+
+    test("returns default token for unknown connection", async () => {
+      const result = await (globalThis as any).tailor.authconnection.getConnectionToken("unknown");
+      expect(result).toEqual({ access_token: "mock-token" });
+    });
+
+    test("reset clears tokens and calls", async () => {
+      authconnectionMock.setTokens({ g: { access_token: "tok" } });
+      await (globalThis as any).tailor.authconnection.getConnectionToken("g");
+      authconnectionMock.reset();
+
+      expect(authconnectionMock.calls).toHaveLength(0);
+      const result = await (globalThis as any).tailor.authconnection.getConnectionToken("g");
+      expect(result).toEqual({ access_token: "mock-token" });
+    });
+  });
+
+  describe("idpMock", () => {
+    beforeEach(() => {
+      idpMock.reset();
+    });
+
+    test("records calls with method, args, namespace", async () => {
+      const client = new (globalThis as any).tailor.idp.Client({ namespace: "ns" });
+      await client.user("u-1");
+      expect(idpMock.calls).toEqual([{ method: "user", args: ["u-1"], namespace: "ns" }]);
+    });
+
+    test("enqueueResult provides ordered responses", async () => {
+      idpMock.enqueueResult({ id: "u-1", name: "alice", disabled: false }, true);
+
+      const client = new (globalThis as any).tailor.idp.Client({ namespace: "ns" });
+      const user = await client.user("u-1");
+      expect(user).toEqual({ id: "u-1", name: "alice", disabled: false });
+
+      const deleted = await client.deleteUser("u-1");
+      expect(deleted).toBe(true);
+    });
+
+    test("setResolver provides content-based responses", async () => {
+      idpMock.setResolver((method) => {
+        if (method === "users")
+          return {
+            users: [{ id: "u-1", name: "bob", disabled: false }],
+            nextPageToken: null,
+            totalCount: 1,
+          };
+        return null;
+      });
+
+      const client = new (globalThis as any).tailor.idp.Client({ namespace: "ns" });
+      const result = await client.users();
+      expect(result.users).toHaveLength(1);
+    });
+
+    test("reset clears state", async () => {
+      const client = new (globalThis as any).tailor.idp.Client({ namespace: "ns" });
+      await client.user("u-1");
+      idpMock.reset();
+      expect(idpMock.calls).toHaveLength(0);
+    });
+  });
+
+  describe("fileMock", () => {
+    beforeEach(() => {
+      fileMock.reset();
+    });
+
+    test("records calls", async () => {
+      await (globalThis as any).tailordb.file.upload("ns", "Doc", "file", "r-1", "data");
+      expect(fileMock.calls).toEqual([
+        {
+          method: "upload",
+          namespace: "ns",
+          typeName: "Doc",
+          fieldName: "file",
+          recordId: "r-1",
+        },
+      ]);
+    });
+
+    test("enqueueResult provides ordered responses", async () => {
+      fileMock.enqueueResult({ metadata: { fileSize: 100, sha256sum: "abc" } });
+      const result = await (globalThis as any).tailordb.file.upload("ns", "T", "f", "r", "data");
+      expect(result.metadata.fileSize).toBe(100);
+    });
+
+    test("setResolver provides content-based responses", async () => {
+      fileMock.setResolver((method) => {
+        if (method === "getMetadata")
+          return { contentType: "image/png", fileSize: 500, sha256sum: "def", urlPath: "/files/x" };
+        return null;
+      });
+      const result = await (globalThis as any).tailordb.file.getMetadata("ns", "T", "f", "r");
+      expect(result.contentType).toBe("image/png");
+    });
+
+    test("reset clears state", async () => {
+      await (globalThis as any).tailordb.file.delete("ns", "T", "f", "r");
+      fileMock.reset();
+      expect(fileMock.calls).toHaveLength(0);
+    });
+  });
+
+  describe("iconvMock", () => {
+    beforeEach(() => {
+      iconvMock.reset();
+    });
+
+    test("records calls", () => {
+      (globalThis as any).tailor.iconv.convert("hello", "UTF-8", "Shift_JIS");
+      expect(iconvMock.calls).toEqual([
+        { method: "convert", args: ["hello", "UTF-8", "Shift_JIS"] },
+      ]);
+    });
+
+    test("setResolver overrides responses", () => {
+      iconvMock.setResolver((method) => {
+        if (method === "decode") return "decoded-text";
+        return null;
+      });
+      const result = (globalThis as any).tailor.iconv.decode(new Uint8Array([0x41]), "ASCII");
+      expect(result).toBe("decoded-text");
+    });
+
+    test("reset clears calls and resolver", () => {
+      (globalThis as any).tailor.iconv.encodings();
+      iconvMock.reset();
+      expect(iconvMock.calls).toHaveLength(0);
+    });
+  });
+
+  describe("workflowMock extended", () => {
+    beforeEach(() => {
+      workflowMock.reset();
+    });
+
+    test("records triggerWorkflow calls", async () => {
+      await (globalThis as any).tailor.workflow.triggerWorkflow("wf-1", { key: "val" });
+      expect(workflowMock.calls).toEqual([
+        { method: "triggerWorkflow", args: ["wf-1", { key: "val" }, undefined] },
+      ]);
+    });
+
+    test("setWorkflowExecutionId controls triggerWorkflow response", async () => {
+      workflowMock.setWorkflowExecutionId("exec-123");
+      const result = await (globalThis as any).tailor.workflow.triggerWorkflow("wf");
+      expect(result).toBe("exec-123");
+    });
+
+    test("records wait calls", () => {
+      (globalThis as any).tailor.workflow.wait("key", { data: 1 });
+      expect(workflowMock.calls).toEqual([{ method: "wait", args: ["key", { data: 1 }] }]);
+    });
+
+    test("setWaitResult controls wait response", () => {
+      workflowMock.setWaitResult({ approved: true });
+      const result = (globalThis as any).tailor.workflow.wait("key");
+      expect(result).toEqual({ approved: true });
     });
   });
 

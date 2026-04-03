@@ -12,6 +12,9 @@
 
 type QueryResolver = (query: string, params: unknown[]) => unknown[];
 type JobHandler = (jobName: string, args: unknown) => unknown;
+type IdpResolver = (method: string, args: unknown[], namespace: string) => unknown;
+type FileResolver = (method: string, call: FileCall) => unknown;
+type IconvResolver = (method: string, args: unknown[]) => unknown;
 
 interface ExecutedQuery {
   query: string;
@@ -28,6 +31,41 @@ interface TriggeredJob {
   args: unknown;
 }
 
+interface SecretCall {
+  method: "getSecret" | "getSecrets";
+  vault: string;
+  name?: string;
+  names?: readonly string[];
+}
+
+interface AuthConnectionCall {
+  connectionName: string;
+}
+
+interface IdpCall {
+  method: string;
+  args: unknown[];
+  namespace: string;
+}
+
+interface FileCall {
+  method: string;
+  namespace: string;
+  typeName: string;
+  fieldName: string;
+  recordId: string;
+}
+
+interface IconvCall {
+  method: string;
+  args: unknown[];
+}
+
+interface WorkflowCall {
+  method: "triggerWorkflow" | "wait" | "resolve";
+  args: unknown[];
+}
+
 interface MockState {
   // TailorDB
   queryResolver: QueryResolver;
@@ -38,6 +76,26 @@ interface MockState {
   jobHandler: JobHandler;
   jobResultQueue: unknown[];
   triggeredJobs: TriggeredJob[];
+  workflowExecutionId: string;
+  waitResult: unknown;
+  workflowCalls: WorkflowCall[];
+  // SecretManager
+  secretStore: Record<string, Record<string, string>>;
+  secretCalls: SecretCall[];
+  // AuthConnection
+  authTokens: Record<string, unknown>;
+  authCalls: AuthConnectionCall[];
+  // IDP
+  idpResolver: IdpResolver;
+  idpResultQueue: unknown[];
+  idpCalls: IdpCall[];
+  // File
+  fileResolver: FileResolver;
+  fileResultQueue: unknown[];
+  fileCalls: FileCall[];
+  // Iconv
+  iconvResolver: IconvResolver | null;
+  iconvCalls: IconvCall[];
 }
 
 // ---------------------------------------------------------------------------
@@ -63,6 +121,21 @@ function createDefaultState(): MockState {
     jobHandler: () => null,
     jobResultQueue: [],
     triggeredJobs: [],
+    workflowExecutionId: "mock-execution-id",
+    waitResult: null,
+    workflowCalls: [],
+    secretStore: {},
+    secretCalls: [],
+    authTokens: {},
+    authCalls: [],
+    idpResolver: () => null,
+    idpResultQueue: [],
+    idpCalls: [],
+    fileResolver: () => null,
+    fileResultQueue: [],
+    fileCalls: [],
+    iconvResolver: null,
+    iconvCalls: [],
   };
 }
 
@@ -195,12 +268,160 @@ export const workflowMock = {
     return getState().triggeredJobs;
   },
 
+  /**
+   * Set the execution ID returned by triggerWorkflow.
+   * @param id
+   */
+  setWorkflowExecutionId(id: string): void {
+    getState().workflowExecutionId = id;
+  },
+
+  /**
+   * Set the result returned by wait.
+   * @param result
+   */
+  setWaitResult(result: unknown): void {
+    getState().waitResult = result;
+  },
+
+  /**
+   * Calls to triggerWorkflow, wait, resolve (not triggerJobFunction — use triggeredJobs).
+   * @returns Workflow calls array
+   */
+  get calls(): WorkflowCall[] {
+    return getState().workflowCalls;
+  },
+
   /** Reset all workflow mock state. Call in `beforeEach`. */
   reset(): void {
     const state = getState();
     state.jobHandler = () => null;
     state.jobResultQueue.length = 0;
     state.triggeredJobs.length = 0;
+    state.workflowExecutionId = "mock-execution-id";
+    state.waitResult = null;
+    state.workflowCalls.length = 0;
+  },
+};
+
+// ---------------------------------------------------------------------------
+// SecretManager Mock
+// ---------------------------------------------------------------------------
+
+/** Mock control for `tailor.secretmanager` — secret store and call recording. */
+export const secretmanagerMock = {
+  setSecrets(secrets: Record<string, Record<string, string>>): void {
+    getState().secretStore = secrets;
+  },
+
+  get calls(): SecretCall[] {
+    return getState().secretCalls;
+  },
+
+  reset(): void {
+    const state = getState();
+    state.secretStore = {};
+    state.secretCalls.length = 0;
+  },
+};
+
+// ---------------------------------------------------------------------------
+// AuthConnection Mock
+// ---------------------------------------------------------------------------
+
+/** Mock control for `tailor.authconnection` — token store and call recording. */
+export const authconnectionMock = {
+  setTokens(tokens: Record<string, unknown>): void {
+    getState().authTokens = tokens;
+  },
+
+  get calls(): AuthConnectionCall[] {
+    return getState().authCalls;
+  },
+
+  reset(): void {
+    const state = getState();
+    state.authTokens = {};
+    state.authCalls.length = 0;
+  },
+};
+
+// ---------------------------------------------------------------------------
+// IDP Mock
+// ---------------------------------------------------------------------------
+
+/** Mock control for `tailor.idp` — IDP client responses and call recording. */
+export const idpMock = {
+  setResolver(resolver: IdpResolver): void {
+    getState().idpResolver = resolver;
+  },
+
+  enqueueResult(...results: unknown[]): void {
+    const queue = getState().idpResultQueue;
+    for (const result of results) {
+      queue.push(result);
+    }
+  },
+
+  get calls(): IdpCall[] {
+    return getState().idpCalls;
+  },
+
+  reset(): void {
+    const state = getState();
+    state.idpResolver = () => null;
+    state.idpResultQueue.length = 0;
+    state.idpCalls.length = 0;
+  },
+};
+
+// ---------------------------------------------------------------------------
+// File Mock
+// ---------------------------------------------------------------------------
+
+/** Mock control for `tailordb.file` — file operation responses and call recording. */
+export const fileMock = {
+  setResolver(resolver: FileResolver): void {
+    getState().fileResolver = resolver;
+  },
+
+  enqueueResult(...results: unknown[]): void {
+    const queue = getState().fileResultQueue;
+    for (const result of results) {
+      queue.push(result);
+    }
+  },
+
+  get calls(): FileCall[] {
+    return getState().fileCalls;
+  },
+
+  reset(): void {
+    const state = getState();
+    state.fileResolver = () => null;
+    state.fileResultQueue.length = 0;
+    state.fileCalls.length = 0;
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Iconv Mock
+// ---------------------------------------------------------------------------
+
+/** Mock control for `tailor.iconv` — encoding call recording. */
+export const iconvMock = {
+  setResolver(resolver: IconvResolver): void {
+    getState().iconvResolver = resolver;
+  },
+
+  get calls(): IconvCall[] {
+    return getState().iconvCalls;
+  },
+
+  reset(): void {
+    const state = getState();
+    state.iconvResolver = null;
+    state.iconvCalls.length = 0;
   },
 };
 
@@ -298,23 +519,28 @@ function mockTriggerJobFunction(jobName: string, args?: unknown): unknown {
 }
 
 async function mockTriggerWorkflow(
-  _workflowName: string,
-  _args?: unknown,
-  _options?: { authInvoker?: { namespace: string; machineUserName: string } },
+  workflowName: string,
+  args?: unknown,
+  options?: { authInvoker?: { namespace: string; machineUserName: string } },
 ): Promise<string> {
-  return "mock-execution-id";
+  const state = getState();
+  state.workflowCalls.push({ method: "triggerWorkflow", args: [workflowName, args, options] });
+  return state.workflowExecutionId;
 }
 
-function mockWait(_key: string, _payload?: unknown): unknown {
-  return null;
+function mockWait(key: string, payload?: unknown): unknown {
+  const state = getState();
+  state.workflowCalls.push({ method: "wait", args: [key, payload] });
+  return state.waitResult;
 }
 
 async function mockResolve(
-  _executionId: string,
-  _key: string,
-  _callback: (payload: unknown) => unknown | Promise<unknown>,
+  executionId: string,
+  key: string,
+  callback: (payload: unknown) => unknown | Promise<unknown>,
 ): Promise<void> {
-  /* noop */
+  const state = getState();
+  state.workflowCalls.push({ method: "resolve", args: [executionId, key, callback] });
 }
 
 // ---------------------------------------------------------------------------
@@ -322,14 +548,25 @@ async function mockResolve(
 // ---------------------------------------------------------------------------
 
 async function mockGetSecrets<const T extends readonly string[]>(
-  _vault: string,
-  _names: T,
+  vault: string,
+  names: T,
 ): Promise<Partial<Record<T[number], string>>> {
-  return {} as Partial<Record<T[number], string>>;
+  const state = getState();
+  state.secretCalls.push({ method: "getSecrets", vault, names });
+  const vaultData = state.secretStore[vault] ?? {};
+  const result: Record<string, string> = {};
+  for (const name of names) {
+    if (name in vaultData) {
+      result[name] = vaultData[name];
+    }
+  }
+  return result as Partial<Record<T[number], string>>;
 }
 
-async function mockGetSecret(_vault: string, _name: string): Promise<string | undefined> {
-  return undefined;
+async function mockGetSecret(vault: string, name: string): Promise<string | undefined> {
+  const state = getState();
+  state.secretCalls.push({ method: "getSecret", vault, name });
+  return state.secretStore[vault]?.[name];
 }
 
 // ---------------------------------------------------------------------------
@@ -337,57 +574,75 @@ async function mockGetSecret(_vault: string, _name: string): Promise<string | un
 // ---------------------------------------------------------------------------
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function mockGetConnectionToken(_connectionName: string): Promise<any> {
-  return { access_token: "mock-token" };
+async function mockGetConnectionToken(connectionName: string): Promise<any> {
+  const state = getState();
+  state.authCalls.push({ connectionName });
+  return state.authTokens[connectionName] ?? { access_token: "mock-token" };
 }
 
 // ---------------------------------------------------------------------------
 // Mock: tailor.idp
 // ---------------------------------------------------------------------------
 
-class MockIdpClient {
-  constructor(_config: { namespace: string }) {}
+const IDP_DEFAULTS: Record<string, unknown> = {
+  users: { users: [], nextPageToken: null, totalCount: 0 },
+  user: { id: "mock-id", name: "mock-user", disabled: false },
+  userByName: { id: "mock-id", name: "mock-user", disabled: false },
+  createUser: { id: "mock-id", name: "mock-user", disabled: false },
+  updateUser: { id: "mock-id", name: "mock-user", disabled: false },
+  deleteUser: true,
+  sendPasswordResetEmail: true,
+};
 
-  async users(_options?: {
+function resolveIdpCall(method: string, args: unknown[], namespace: string): unknown {
+  const state = getState();
+  state.idpCalls.push({ method, args, namespace });
+  if (state.idpResultQueue.length > 0) return state.idpResultQueue.shift();
+  const resolved = state.idpResolver(method, args, namespace);
+  return resolved ?? IDP_DEFAULTS[method];
+}
+
+class MockIdpClient {
+  #namespace: string;
+  constructor(config: { namespace: string }) {
+    this.#namespace = config.namespace;
+  }
+  async users(options?: {
     first?: number;
     after?: string;
     query?: { ids?: string[]; names?: string[] };
   }): Promise<{ users: tailor.idp.User[]; nextPageToken: string | null; totalCount: number }> {
-    return { users: [], nextPageToken: null, totalCount: 0 };
+    return resolveIdpCall("users", [options], this.#namespace) as Awaited<
+      ReturnType<typeof this.users>
+    >;
   }
-
-  async user(_userId: string): Promise<tailor.idp.User> {
-    return { id: "mock-id", name: "mock-user", disabled: false };
+  async user(userId: string): Promise<tailor.idp.User> {
+    return resolveIdpCall("user", [userId], this.#namespace) as tailor.idp.User;
   }
-
-  async userByName(_name: string): Promise<tailor.idp.User> {
-    return { id: "mock-id", name: "mock-user", disabled: false };
+  async userByName(name: string): Promise<tailor.idp.User> {
+    return resolveIdpCall("userByName", [name], this.#namespace) as tailor.idp.User;
   }
-
-  async createUser(_input: {
+  async createUser(input: {
     name: string;
     password?: string;
     disabled?: boolean;
   }): Promise<tailor.idp.User> {
-    return { id: "mock-id", name: "mock-user", disabled: false };
+    return resolveIdpCall("createUser", [input], this.#namespace) as tailor.idp.User;
   }
-
-  async updateUser(_input: {
+  async updateUser(input: {
     id: string;
     name?: string;
     password?: string;
     clearPassword?: boolean;
     disabled?: boolean;
   }): Promise<tailor.idp.User> {
-    return { id: "mock-id", name: "mock-user", disabled: false };
+    return resolveIdpCall("updateUser", [input], this.#namespace) as tailor.idp.User;
   }
-
-  async deleteUser(_userId: string): Promise<boolean> {
-    return true;
+  async deleteUser(userId: string): Promise<boolean> {
+    return resolveIdpCall("deleteUser", [userId], this.#namespace) as boolean;
   }
-
-  async sendPasswordResetEmail(_input: { userId: string; redirectUri: string }): Promise<boolean> {
-    return true;
+  async sendPasswordResetEmail(input: { userId: string; redirectUri: string }): Promise<boolean> {
+    return resolveIdpCall("sendPasswordResetEmail", [input], this.#namespace) as boolean;
   }
 }
 
@@ -395,38 +650,57 @@ class MockIdpClient {
 // Mock: tailor.iconv
 // ---------------------------------------------------------------------------
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const ICONV_DEFAULTS: Record<string, any> = {
+  convert: "",
+  convertBuffer: "",
+  decode: "",
+  encode: "",
+  encodings: [],
+};
+
+function resolveIconvCall(method: string, args: unknown[]): unknown {
+  const state = getState();
+  state.iconvCalls.push({ method, args: [...args] });
+  if (state.iconvResolver) {
+    const result = state.iconvResolver(method, args);
+    if (result !== null) return result;
+  }
+  return ICONV_DEFAULTS[method] ?? "";
+}
+
 function mockConvert<T extends string>(
-  _str: string | Uint8Array | ArrayBuffer,
-  _fromEncoding: string,
-  _toEncoding: T,
+  str: string | Uint8Array | ArrayBuffer,
+  fromEncoding: string,
+  toEncoding: T,
 ): T extends "UTF8" | "UTF-8" ? string : Uint8Array {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return "" as any;
+  return resolveIconvCall("convert", [str, fromEncoding, toEncoding]) as any;
 }
 
 function mockConvertBuffer<T extends string>(
-  _buffer: Uint8Array | ArrayBuffer,
-  _fromEncoding: string,
-  _toEncoding: T,
+  buffer: Uint8Array | ArrayBuffer,
+  fromEncoding: string,
+  toEncoding: T,
 ): T extends "UTF8" | "UTF-8" ? string : Uint8Array {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return "" as any;
+  return resolveIconvCall("convertBuffer", [buffer, fromEncoding, toEncoding]) as any;
 }
 
-function mockDecode(_buffer: Uint8Array | ArrayBuffer, _encoding: string): string {
-  return "";
+function mockDecode(buffer: Uint8Array | ArrayBuffer, encoding: string): string {
+  return resolveIconvCall("decode", [buffer, encoding]) as string;
 }
 
 function mockEncode<T extends string>(
-  _str: string,
-  _encoding: T,
+  str: string,
+  encoding: T,
 ): T extends "UTF8" | "UTF-8" ? string : Uint8Array {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return "" as any;
+  return resolveIconvCall("encode", [str, encoding]) as any;
 }
 
 function mockEncodings(): string[] {
-  return [];
+  return resolveIconvCall("encodings", []) as string[];
 }
 
 class MockIconv {
@@ -441,62 +715,88 @@ class MockIconv {
 // Mock: tailordb.file
 // ---------------------------------------------------------------------------
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const FILE_DEFAULTS: Record<string, any> = {
+  upload: { metadata: { fileSize: 0, sha256sum: "" } },
+  download: {
+    data: new Uint8Array(),
+    metadata: { contentType: "", fileSize: 0, sha256sum: "", lastUploadedAt: "" },
+  },
+  downloadAsBase64: {
+    data: "",
+    metadata: { contentType: "", fileSize: 0, sha256sum: "", lastUploadedAt: "" },
+  },
+  delete: undefined,
+  getMetadata: { contentType: "", fileSize: 0, sha256sum: "", urlPath: "" },
+};
+
+function resolveFileCall(
+  method: string,
+  namespace: string,
+  typeName: string,
+  fieldName: string,
+  recordId: string,
+): unknown {
+  const state = getState();
+  const call: FileCall = { method, namespace, typeName, fieldName, recordId };
+  state.fileCalls.push(call);
+  if (state.fileResultQueue.length > 0) return state.fileResultQueue.shift();
+  const resolved = state.fileResolver(method, call);
+  return resolved ?? FILE_DEFAULTS[method];
+}
+
 const mockTailordbFile = {
   async upload(
-    _namespace: string,
-    _typeName: string,
-    _fieldName: string,
-    _recordId: string,
+    namespace: string,
+    typeName: string,
+    fieldName: string,
+    recordId: string,
     _data: string | ArrayBuffer | Uint8Array | number[],
     _options?: { contentType?: string },
   ): Promise<{ metadata: { fileSize: number; sha256sum: string } }> {
-    return { metadata: { fileSize: 0, sha256sum: "" } };
+    return resolveFileCall("upload", namespace, typeName, fieldName, recordId) as Awaited<
+      ReturnType<typeof this.upload>
+    >;
   },
-
   async download(
-    _namespace: string,
-    _typeName: string,
-    _fieldName: string,
-    _recordId: string,
+    namespace: string,
+    typeName: string,
+    fieldName: string,
+    recordId: string,
   ): Promise<{
     data: Uint8Array;
     metadata: { contentType: string; fileSize: number; sha256sum: string; lastUploadedAt: string };
   }> {
-    return {
-      data: new Uint8Array(),
-      metadata: { contentType: "", fileSize: 0, sha256sum: "", lastUploadedAt: "" },
-    };
+    return resolveFileCall("download", namespace, typeName, fieldName, recordId) as Awaited<
+      ReturnType<typeof this.download>
+    >;
   },
-
   async downloadAsBase64(
-    _namespace: string,
-    _typeName: string,
-    _fieldName: string,
-    _recordId: string,
+    namespace: string,
+    typeName: string,
+    fieldName: string,
+    recordId: string,
   ): Promise<{
     data: string;
     metadata: { contentType: string; fileSize: number; sha256sum: string; lastUploadedAt: string };
   }> {
-    return {
-      data: "",
-      metadata: { contentType: "", fileSize: 0, sha256sum: "", lastUploadedAt: "" },
-    };
+    return resolveFileCall("downloadAsBase64", namespace, typeName, fieldName, recordId) as Awaited<
+      ReturnType<typeof this.downloadAsBase64>
+    >;
   },
-
   async delete(
-    _namespace: string,
-    _typeName: string,
-    _fieldName: string,
-    _recordId: string,
+    namespace: string,
+    typeName: string,
+    fieldName: string,
+    recordId: string,
   ): Promise<void> {
-    /* noop */
+    resolveFileCall("delete", namespace, typeName, fieldName, recordId);
   },
-
   async getMetadata(
-    _namespace: string,
-    _typeName: string,
-    _fieldName: string,
-    _recordId: string,
+    namespace: string,
+    typeName: string,
+    fieldName: string,
+    recordId: string,
   ): Promise<{
     contentType: string;
     fileSize: number;
@@ -504,15 +804,17 @@ const mockTailordbFile = {
     urlPath: string;
     lastUploadedAt?: string;
   }> {
-    return { contentType: "", fileSize: 0, sha256sum: "", urlPath: "" };
+    return resolveFileCall("getMetadata", namespace, typeName, fieldName, recordId) as Awaited<
+      ReturnType<typeof this.getMetadata>
+    >;
   },
-
   openDownloadStream(
-    _namespace: string,
-    _typeName: string,
-    _fieldName: string,
-    _recordId: string,
+    namespace: string,
+    typeName: string,
+    fieldName: string,
+    recordId: string,
   ): Promise<AsyncIterableIterator<unknown> & { close(): Promise<void> }> {
+    resolveFileCall("openDownloadStream", namespace, typeName, fieldName, recordId);
     const iterator: AsyncIterableIterator<unknown> & { close(): Promise<void> } = {
       async next() {
         return { done: true as const, value: undefined };

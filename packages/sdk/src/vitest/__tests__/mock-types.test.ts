@@ -1,5 +1,5 @@
 /**
- * Type-level tests to verify mock implementations match @tailor-platform/function-types.
+ * Type-level tests to verify mock implementations match `@tailor-platform/function-types`.
  *
  * These tests use expectTypeOf (compile-time checks) to ensure mock types
  * stay in sync with the platform's type definitions. If the platform types
