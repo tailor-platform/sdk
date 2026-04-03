@@ -103,7 +103,54 @@ export default createResolver({
 
 ## Input/Output Schemas
 
-Define input/output schemas using methods of `t` object. Basic usage and supported field types are the same as TailorDB. TailorDB-specific options (e.g., index, relation) are not supported.
+Define input/output schemas using methods of `t` object or object-literal descriptors (`{ kind: "..." }`). Both styles can be mixed in the same resolver.
+
+### Fluent API (`t.*()`)
+
+```typescript
+createResolver({
+  input: {
+    name: t.string(),
+    age: t.int(),
+  },
+  output: t.object({ name: t.string(), age: t.int() }),
+  // ...
+});
+```
+
+### Object-Literal Descriptors
+
+Use `{ kind: "..." }` syntax as a concise alternative. Supported options: `optional`, `array`, `description`, `validate`, and `typeName` (for enum/object).
+
+```typescript
+createResolver({
+  name: "addNumbers",
+  operation: "query",
+  input: {
+    a: { kind: "int", description: "First number" },
+    b: { kind: "int", description: "Second number" },
+  },
+  output: { kind: "int", description: "Sum" },
+  body: ({ input }) => input.a + input.b,
+});
+```
+
+### Mixing Styles
+
+Fluent and descriptor fields can be freely combined:
+
+```typescript
+createResolver({
+  input: {
+    name: t.string(),
+    status: { kind: "enum", values: ["active", "inactive"] },
+  },
+  output: t.object({ result: t.bool() }),
+  // ...
+});
+```
+
+### Reusing TailorDB Fields
 
 You can reuse fields defined with `db` object, but note that unsupported options will be ignored:
 

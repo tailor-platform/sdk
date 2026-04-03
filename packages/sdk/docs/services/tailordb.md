@@ -25,6 +25,8 @@ Define TailorDB Types in files matching glob patterns specified in `tailor.confi
 - **Export both value and type**: Always export both the runtime value and TypeScript type
 - **Uniqueness**: Type names must be unique across all TailorDB files
 
+### Fluent API (`db.type()`)
+
 ```typescript
 import { db } from "@tailor-platform/sdk";
 
@@ -43,6 +45,50 @@ export const role = db.type("Role", {
 });
 export type role = typeof role;
 ```
+
+### Object-Literal API (`createTable`)
+
+`createTable` provides an alternative syntax using plain object descriptors instead of method chaining. Each field is described with a `{ kind, ...options }` object.
+
+```typescript
+import { createTable, timestampFields, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
+
+export const order = createTable(
+  "Order",
+  {
+    name: { kind: "string" },
+    quantity: { kind: "int", optional: true, index: true },
+    status: { kind: "enum", values: ["pending", "shipped"] },
+    address: {
+      kind: "object",
+      fields: {
+        city: { kind: "string" },
+        zip: { kind: "string" },
+      },
+    },
+    ...timestampFields(),
+  },
+  {
+    permission: unsafeAllowAllTypePermission,
+  },
+);
+export type order = typeof order;
+```
+
+**Signature:** `createTable(name, descriptors, options?)`
+
+- `name` - Type name (`string`) or `[name, pluralForm]` tuple
+- `descriptors` - Field descriptors as `{ fieldName: { kind, ...options } }`. You can also mix in `db.*()` fields
+- `options` - Optional type-level settings: `description`, `pluralForm`, `features`, `indexes`, `files`, `permission`, `gqlPermission`, `plugins`, `hooks`, `validate`
+
+Descriptor fields support all the same options as the fluent API: `optional`, `array`, `description`, `index`, `unique`, `hooks`, `validate`, `serial`, `vector`, and `relation`.
+
+**`timestampFields()` helper:** Returns `createdAt` (datetime, set on create) and `updatedAt` (optional datetime, set on update) descriptors. Equivalent to `db.fields.timestamps()` for the fluent API.
+
+**When to use which:**
+
+- Use `db.type()` when you need precise hook callback typing (the fluent API infers exact types for `optional`/`array` combinations)
+- Use `createTable` for a more concise, declarative style when hook typing precision is not critical
 
 Specify plural form by passing an array as first argument:
 
