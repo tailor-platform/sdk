@@ -32,6 +32,10 @@ const idp = defineIdp("my-idp", {
     passwordMinLength: 8,
     passwordMaxLength: 128,
   },
+  emailConfig: {
+    fromName: "My App",
+    passwordResetSubject: "Reset your password",
+  },
 });
 
 export const auth = defineAuth("my-auth", {

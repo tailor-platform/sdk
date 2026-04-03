@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { AuthConnectionConfigSchema } from "@/parser/service/auth-connection";
-import { TailorFieldSchema } from "@/parser/service/resolver/schema";
+import { TailorFieldSchema } from "@/parser/service/field/schema";
 import type { ValueOperand } from "@/types/auth";
 
 export const AuthInvokerSchema = z.object({

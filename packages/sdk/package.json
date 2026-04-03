@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/sdk",
-  "version": "1.33.0",
+  "version": "1.33.2",
   "description": "Tailor Platform SDK - The SDK to work with Tailor Platform",
   "license": "MIT",
   "repository": {
@@ -159,9 +159,9 @@
     "@vitest/coverage-v8": "4.1.2",
     "eslint": "10.1.0",
     "eslint-plugin-jsdoc": "62.8.1",
-    "eslint-plugin-oxlint": "1.56.0",
-    "oxfmt": "0.41.0",
-    "oxlint": "1.56.0",
+    "eslint-plugin-oxlint": "1.57.0",
+    "oxfmt": "0.42.0",
+    "oxlint": "1.57.0",
     "oxlint-tsgolint": "0.18.1",
     "sonda": "0.11.1",
     "tsdown": "0.21.7",

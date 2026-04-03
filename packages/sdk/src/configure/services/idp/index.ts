@@ -3,6 +3,7 @@ import type { IdpDefinitionBrand } from "@/types/idp";
 import type { IdPInput } from "@/types/idp.generated";
 
 export type {
+  IdPEmailConfig,
   IdPGqlOperations,
   IdPGqlOperationsInput as IdPGqlOperationsConfig,
 } from "@/types/idp.generated";
