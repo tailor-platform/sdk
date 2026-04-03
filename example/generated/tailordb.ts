@@ -60,6 +60,18 @@ export interface Namespace {
       updatedAt: Timestamp | null;
     }
 
+    Product: {
+      id: Generated<string>;
+      name: string;
+      sku: string;
+      price: number;
+      stock: number;
+      category: "electronics" | "clothing" | "food";
+      supplierId: string;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Timestamp | null;
+    }
+
     PurchaseOrder: {
       id: Generated<string>;
       supplierID: string;
