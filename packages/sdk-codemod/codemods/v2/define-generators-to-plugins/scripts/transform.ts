@@ -1,4 +1,4 @@
-import type { Edit, SgNode, SgRoot, Transform, TypesMap } from "codemod:ast-grep";
+import type { Edit, SgNode, SgRoot } from "@ast-grep/napi";
 
 /**
  * Known plugin mappings from package name to plugin function/import.
@@ -29,9 +29,10 @@ const PLUGIN_MAP: Record<string, { functionName: string; importPath: string }> =
  * 2. Transform tuple arguments `["pkg-name", config]` → `pluginFn(config)`
  * 3. Add plugin imports from their respective SDK paths
  * 4. Rename `generators` variable → `plugins`
+ * @param root - Parsed AST root
  * @returns Transformed source or null if no changes needed
  */
-const transform: Transform<TypesMap> = async (root: SgRoot<TypesMap>) => {
+export default function transform(root: SgRoot): string | null {
   const tree = root.root();
   const source = tree.text();
 
@@ -58,7 +59,7 @@ const transform: Transform<TypesMap> = async (root: SgRoot<TypesMap>) => {
       if (arg.kind() === "array") {
         const children = arg
           .children()
-          .filter((c: SgNode<TypesMap>) => c.isNamed() && c.kind() !== "comment");
+          .filter((c: SgNode) => c.isNamed() && c.kind() !== "comment");
         if (children.length >= 1) {
           const packageNameNode = children[0]!;
           const packageName = packageNameNode.text().replace(/^["']|["']$/g, "");
@@ -69,9 +70,7 @@ const transform: Transform<TypesMap> = async (root: SgRoot<TypesMap>) => {
             // Build replacement: pluginFn(config) or pluginFn() if no config
             const configNodes = children.slice(1);
             const configText =
-              configNodes.length > 0
-                ? configNodes.map((c: SgNode<TypesMap>) => c.text()).join(", ")
-                : "";
+              configNodes.length > 0 ? configNodes.map((c: SgNode) => c.text()).join(", ") : "";
             const replacement = `${mapping.functionName}(${configText})`;
             edits.push(arg.replace(replacement));
           }
@@ -93,7 +92,6 @@ const transform: Transform<TypesMap> = async (root: SgRoot<TypesMap>) => {
   }
 
   // Step 3: Rename `generators` variable to `plugins` (only the export binding)
-  // Find: export const generators = defineGenerators(...)
   const generatorsDecls = tree.findAll({
     rule: {
       kind: "variable_declarator",
@@ -133,7 +131,7 @@ const transform: Transform<TypesMap> = async (root: SgRoot<TypesMap>) => {
   for (const spec of importSpecifiers) {
     const identNode = spec
       .children()
-      .find((c: SgNode<TypesMap>) => c.kind() === "identifier" && c.text() === "defineGenerators");
+      .find((c: SgNode) => c.kind() === "identifier" && c.text() === "defineGenerators");
     if (identNode) {
       edits.push(identNode.replace("definePlugins"));
     }
@@ -148,7 +146,6 @@ const transform: Transform<TypesMap> = async (root: SgRoot<TypesMap>) => {
 
   // Step 5: Add new import statements for plugin functions
   if (importsToAdd.size > 0) {
-    // Find the last import statement to insert after it
     const importLines: string[] = [];
     for (const [importPath, functionName] of importsToAdd) {
       importLines.push(`import { ${functionName} } from "${importPath}";`);
@@ -169,6 +166,4 @@ const transform: Transform<TypesMap> = async (root: SgRoot<TypesMap>) => {
   }
 
   return result;
-};
-
-export default transform;
+}

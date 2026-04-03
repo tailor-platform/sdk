@@ -1,15 +1,14 @@
-import { execFile } from "node:child_process";
 import * as fs from "node:fs";
 import { glob } from "node:fs/promises";
-import * as os from "node:os";
-import { promisify } from "node:util";
+import { parse, Lang } from "@ast-grep/napi";
 import * as path from "pathe";
-import { resolveCodemodScript } from "./registry";
+import type { SgRoot } from "@ast-grep/napi";
 import type { CodemodPackage } from "./types";
 
-const execFileAsync = promisify(execFile);
+/** A transform function that receives a parsed AST root and returns modified source or null. */
+export type TransformFn = (root: SgRoot) => Promise<string | null> | string | null;
 
-/** Result of running a single codemod. */
+/** Result of running codemods on a project. */
 export interface CodemodRunResult {
   changed: boolean;
   filesModified: string[];
@@ -18,164 +17,133 @@ export interface CodemodRunResult {
 }
 
 /**
- * Bundle a TypeScript codemod script into a JS file that the jssg runtime can execute.
- * @param scriptPath - Absolute path to the TypeScript transform file
- * @returns Path to the bundled JS file in a temp directory
+ * Determine the ast-grep language for a file extension.
+ * @param filePath - Path to the file
+ * @returns The ast-grep Lang enum value
  */
-async function bundleCodemod(scriptPath: string): Promise<string> {
-  const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "codemod-bundle-"));
-  const outputPath = path.join(tmpDir, "transform.js");
-
-  await execFileAsync("npx", ["codemod", "jssg", "bundle", scriptPath, "-o", outputPath], {
-    timeout: 30_000,
-  });
-
-  return outputPath;
+function langForFile(filePath: string): Lang {
+  return filePath.endsWith(".tsx") ? Lang.Tsx : Lang.TypeScript;
 }
 
 /**
- * Parse file paths from codemod CLI dry-run output.
- * @param output - The CLI stdout/stderr output
- * @returns Array of modified file paths
+ * Generate a simple unified-diff-style output for a single file.
+ * @param filePath - Absolute path to the file
+ * @param before - Original content
+ * @param after - Transformed content
+ * @returns Formatted diff string
  */
-function parseModifiedFiles(output: string): string[] {
-  const files: string[] = [];
-  for (const line of output.split("\n")) {
-    const trimmed = line.trim();
-    if (trimmed.startsWith("File:")) {
-      files.push(trimmed.slice("File:".length).trim());
-    }
-  }
-  return files;
-}
+function formatDiff(filePath: string, before: string, after: string): string {
+  const lines: string[] = [];
+  lines.push("============================================================");
+  lines.push(`File: ${filePath}`);
+  lines.push("============================================================");
+  lines.push(`--- [before] ${filePath}`);
+  lines.push(`+++ [after]  ${filePath}`);
 
-/**
- * Check if the codemod output indicates changes were made.
- * @param output - The CLI stdout/stderr output
- * @returns true if changes were detected
- */
-function hasChanges(output: string): boolean {
-  return output.includes("additions") || output.includes("deletions") || output.includes("--- [");
-}
+  const beforeLines = before.split("\n");
+  const afterLines = after.split("\n");
+  const maxLen = Math.max(beforeLines.length, afterLines.length);
+  let additions = 0;
+  let deletions = 0;
 
-/**
- * Extract diff sections from codemod CLI dry-run output.
- * @param output - The CLI stdout/stderr output
- * @returns Cleaned diff output, or undefined if no diffs found
- */
-function extractDiffOutput(output: string): string | undefined {
-  const lines = output.split("\n");
-  const diffLines: string[] = [];
-  let inDiff = false;
-
-  for (const line of lines) {
-    if (line.startsWith("=====")) {
-      inDiff = true;
-    }
-    if (line.includes("Done in")) {
-      break;
-    }
-    if (inDiff) {
-      diffLines.push(line);
+  for (let i = 0; i < maxLen; i++) {
+    const b = beforeLines[i];
+    const a = afterLines[i];
+    if (b !== a) {
+      if (b !== undefined) {
+        lines.push(`-${b}`);
+        deletions++;
+      }
+      if (a !== undefined) {
+        lines.push(`+${a}`);
+        additions++;
+      }
     }
   }
 
-  const result = diffLines.join("\n").trim();
-  return result.length > 0 ? result : undefined;
+  lines.push(`+${additions} additions, -${deletions} deletions`);
+  return lines.join("\n");
 }
 
 /**
- * Run a single codemod via `codemod jssg run`.
- * @param codemod - The codemod package to run
+ * Load a transform module from a TypeScript file path.
+ * Expects the module to have a default export that is a TransformFn.
+ * @param scriptPath - Absolute path to the transform script
+ * @returns The transform function
+ */
+async function loadTransform(scriptPath: string): Promise<TransformFn> {
+  const mod = await import(scriptPath);
+  if (typeof mod.default !== "function") {
+    throw new Error(`Transform at ${scriptPath} does not have a default export function`);
+  }
+  return mod.default as TransformFn;
+}
+
+/**
+ * Run multiple codemods on a project directory using in-memory chaining.
+ * Each codemod's transform is applied sequentially per file via reduce(),
+ * so later transforms see earlier transforms' output — even in dry-run mode.
+ * @param codemods - Codemod packages to run (with resolved script paths)
  * @param targetPath - Project directory to transform
  * @param dryRun - Whether to preview changes without writing
- * @returns Result of the codemod execution
+ * @returns Combined result of all codemod executions
  */
-export async function runCodemod(
-  codemod: CodemodPackage,
+export async function runCodemods(
+  codemods: Array<{ codemod: CodemodPackage; scriptPath: string }>,
   targetPath: string,
   dryRun: boolean,
 ): Promise<CodemodRunResult> {
-  const scriptPath = resolveCodemodScript(codemod.scriptPath);
-  const language = codemod.language ?? "typescript";
-
-  const bundledPath = await bundleCodemod(scriptPath);
-
-  const args = [
-    "codemod",
-    "jssg",
-    "run",
-    bundledPath,
-    "--language",
-    language,
-    "-t",
-    targetPath,
-    "--no-interactive",
-    "--allow-dirty",
-  ];
-
-  if (dryRun) {
-    args.push("--dry-run");
+  // Load all transform functions
+  const transforms: TransformFn[] = [];
+  for (const { scriptPath } of codemods) {
+    transforms.push(await loadTransform(scriptPath));
   }
 
-  // Snapshot target files before execution for non-dry-run change detection
-  const snapshots = new Map<string, string>();
-  if (!dryRun) {
-    const targetFiles = glob("**/*.{ts,tsx,mts,cts}", {
-      cwd: targetPath,
-      withFileTypes: false,
-      exclude: ["**/node_modules/**", "**/dist/**", "**/.git/**"],
-    });
-    for await (const relative of targetFiles) {
-      const absolute = path.resolve(targetPath, relative);
-      try {
-        snapshots.set(absolute, await fs.promises.readFile(absolute, "utf-8"));
-      } catch {
-        // skip unreadable files
+  const filesModified: string[] = [];
+  const diffs: string[] = [];
+
+  // Iterate over all TypeScript files in the target directory
+  const targetFiles = glob("**/*.{ts,tsx,mts,cts}", {
+    cwd: targetPath,
+    withFileTypes: false,
+    exclude: ["**/node_modules/**", "**/dist/**", "**/.git/**"],
+  });
+
+  for await (const relative of targetFiles) {
+    const absolute = path.resolve(targetPath, relative);
+    let original: string;
+    try {
+      original = await fs.promises.readFile(absolute, "utf-8");
+    } catch {
+      continue;
+    }
+
+    const lang = langForFile(absolute);
+
+    // Chain all transforms: each receives the previous transform's output
+    let current = original;
+    for (const transform of transforms) {
+      const root = parse(lang, current);
+      const result = await transform(root);
+      if (result != null) {
+        current = result;
+      }
+    }
+
+    if (current !== original) {
+      filesModified.push(absolute);
+      if (dryRun) {
+        diffs.push(formatDiff(absolute, original, current));
+      } else {
+        await fs.promises.writeFile(absolute, current, "utf-8");
       }
     }
   }
 
-  try {
-    const { stdout, stderr } = await execFileAsync("npx", args, {
-      cwd: targetPath,
-      timeout: 120_000,
-    });
-
-    const output = stdout + stderr;
-
-    let filesModified: string[];
-    let changed: boolean;
-    let diffOutput: string | undefined;
-
-    if (dryRun) {
-      filesModified = parseModifiedFiles(output);
-      changed = filesModified.length > 0 || hasChanges(output);
-      diffOutput = extractDiffOutput(output);
-    } else {
-      filesModified = [];
-      for (const [absolute, before] of snapshots) {
-        try {
-          const after = await fs.promises.readFile(absolute, "utf-8");
-          if (after !== before) {
-            filesModified.push(absolute);
-          }
-        } catch {
-          // skip
-        }
-      }
-      changed = filesModified.length > 0;
-    }
-
-    return { changed, filesModified, warnings: [], diffOutput };
-  } catch (error) {
-    throw new Error(
-      `Codemod ${codemod.id} failed: ${error instanceof Error ? error.message : String(error)}`,
-      { cause: error },
-    );
-  } finally {
-    await fs.promises
-      .rm(path.dirname(bundledPath), { recursive: true, force: true })
-      .catch(() => {});
-  }
+  return {
+    changed: filesModified.length > 0,
+    filesModified,
+    warnings: [],
+    diffOutput: diffs.length > 0 ? diffs.join("\n\n") : undefined,
+  };
 }

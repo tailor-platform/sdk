@@ -4,8 +4,8 @@ import * as path from "pathe";
 import { arg, defineCommand, runMain } from "politty";
 import { readPackageJSON } from "pkg-types";
 import { z } from "zod";
-import { getApplicableCodemods } from "./registry";
-import { runCodemod } from "./runner";
+import { getApplicableCodemods, resolveCodemodScript } from "./registry";
+import { runCodemods } from "./runner";
 import type { RunOutput } from "./types";
 
 const packageJson = await readPackageJSON(new URL("../package.json", import.meta.url));
@@ -44,39 +44,39 @@ const main = defineCommand({
       errors: [],
     };
 
-    const allFilesModified = new Set<string>();
-    const diffOutputs: string[] = [];
-
-    for (const codemod of codemods) {
-      process.stderr.write(`Running: ${codemod.name} - ${codemod.description}\n`);
-
-      try {
-        const result = await runCodemod(codemod, targetPath, dryRun);
-
-        if (result.changed) {
-          output.codemodsApplied++;
-          for (const file of result.filesModified) {
-            allFilesModified.add(file);
-          }
-          if (result.diffOutput) {
-            diffOutputs.push(result.diffOutput);
-          }
-          process.stderr.write(`  ${result.filesModified.length} file(s) modified\n`);
-        } else {
-          output.codemodsSkipped++;
-          process.stderr.write("  No changes needed\n");
-        }
-        output.warnings.push(...result.warnings);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        output.errors.push({ codemodId: codemod.id, message });
-        process.stderr.write(`  Failed: ${message}\n`);
-      }
+    if (codemods.length === 0) {
+      process.stdout.write(JSON.stringify(output) + "\n");
+      return;
     }
 
-    output.filesModified = [...allFilesModified];
-    if (diffOutputs.length > 0) {
-      output.diffOutput = diffOutputs.join("\n\n");
+    // Resolve script paths for all applicable codemods
+    const codemodEntries = codemods.map((codemod) => ({
+      codemod,
+      scriptPath: resolveCodemodScript(codemod.scriptPath),
+    }));
+
+    for (const { codemod } of codemodEntries) {
+      process.stderr.write(`Running: ${codemod.name} - ${codemod.description}\n`);
+    }
+
+    try {
+      const result = await runCodemods(codemodEntries, targetPath, dryRun);
+
+      output.codemodsApplied = result.changed ? codemods.length : 0;
+      output.codemodsSkipped = result.changed ? 0 : codemods.length;
+      output.filesModified = result.filesModified;
+      output.warnings = result.warnings;
+      output.diffOutput = result.diffOutput;
+
+      if (result.changed) {
+        process.stderr.write(`  ${result.filesModified.length} file(s) modified\n`);
+      } else {
+        process.stderr.write("  No changes needed\n");
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      output.errors.push({ codemodId: "pipeline", message });
+      process.stderr.write(`  Failed: ${message}\n`);
     }
 
     // Write JSON result to stdout
