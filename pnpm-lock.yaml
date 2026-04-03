@@ -749,11 +749,11 @@ importers:
         specifier: 10.1.0
         version: 10.1.0(jiti@2.6.1)
       eslint-plugin-oxlint:
-        specifier: 1.56.0
-        version: 1.56.0
+        specifier: 1.57.0
+        version: 1.57.0(oxlint@1.57.0(oxlint-tsgolint@0.18.1))
       oxlint:
-        specifier: 1.56.0
-        version: 1.56.0(oxlint-tsgolint@0.18.1)
+        specifier: 1.57.0
+        version: 1.57.0(oxlint-tsgolint@0.18.1)
       tsdown:
         specifier: 0.21.7
         version: 0.21.7(@typescript/native-preview@7.0.0-dev.20260329.1)(oxc-resolver@11.19.1)(publint@0.3.18)(typescript@5.9.3)
