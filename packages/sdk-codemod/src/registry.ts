@@ -18,7 +18,7 @@ const allCodemods: CodemodPackage[] = [
     name: "defineGenerators → definePlugins",
     description:
       "Migrate defineGenerators() tuple syntax to definePlugins() with explicit plugin imports",
-    since: "1.12.0",
+    since: "1.0.0",
     until: "2.0.0",
     scriptPath: "v2/define-generators-to-plugins/scripts/transform.ts",
   },
