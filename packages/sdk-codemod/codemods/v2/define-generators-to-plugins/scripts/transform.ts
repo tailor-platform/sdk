@@ -1,4 +1,5 @@
-import type { Edit, SgNode, SgRoot } from "@ast-grep/napi";
+import { parseTS } from "../../../../src/helpers";
+import type { Edit, SgNode } from "@ast-grep/napi";
 
 /**
  * Known plugin mappings from package name to plugin function/import.
@@ -29,12 +30,11 @@ const PLUGIN_MAP: Record<string, { functionName: string; importPath: string }> =
  * 2. Transform tuple arguments `["pkg-name", config]` → `pluginFn(config)`
  * 3. Add plugin imports from their respective SDK paths
  * 4. Rename `generators` variable → `plugins`
- * @param root - Parsed AST root
+ * @param source - Source code to transform
  * @returns Transformed source or null if no changes needed
  */
-export default function transform(root: SgRoot): string | null {
-  const tree = root.root();
-  const source = tree.text();
+export default function transform(source: string): string | null {
+  const tree = parseTS(source).root();
 
   // Check if this file uses defineGenerators
   if (!source.includes("defineGenerators")) {
