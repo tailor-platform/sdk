@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 1.33.2
+
+### Patch Changes
+
+- [#899](https://github.com/tailor-platform/sdk/pull/899) [`ce19ee7`](https://github.com/tailor-platform/sdk/commit/ce19ee7dbb5bbf45d13ad06b6a02ea770f17435b) Thanks [@remiposo](https://github.com/remiposo)! - Fix SQL query command rewriting user input, which broke INSERT/UPDATE statements and PascalCase table names
+
 ## 1.33.1
 
 ### Patch Changes
