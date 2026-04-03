@@ -16,6 +16,8 @@ export interface CodemodPackage {
   scriptPath: string;
   /** Target language for codemod CLI (default: "typescript") */
   language?: string;
+  /** Custom file glob patterns. Defaults to TypeScript patterns when omitted. */
+  filePatterns?: string[];
 }
 
 /**
