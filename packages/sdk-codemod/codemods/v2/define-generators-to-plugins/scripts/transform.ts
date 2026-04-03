@@ -1,4 +1,4 @@
-import { parseTS } from "../../../../src/helpers";
+import { parse, Lang } from "@ast-grep/napi";
 import type { Edit, SgNode } from "@ast-grep/napi";
 
 /**
@@ -34,7 +34,7 @@ const PLUGIN_MAP: Record<string, { functionName: string; importPath: string }> =
  * @returns Transformed source or null if no changes needed
  */
 export default function transform(source: string): string | null {
-  const tree = parseTS(source).root();
+  const tree = parse(Lang.TypeScript, source).root();
 
   // Check if this file uses defineGenerators
   if (!source.includes("defineGenerators")) {
