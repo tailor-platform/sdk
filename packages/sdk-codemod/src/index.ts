@@ -8,7 +8,7 @@ import { getApplicableCodemods, resolveCodemodScript } from "./registry";
 import { runCodemods } from "./runner";
 import type { RunOutput } from "./types";
 
-const packageJson = await readPackageJSON(new URL("../package.json", import.meta.url));
+const packageJson = await readPackageJSON(new URL("../package.json", import.meta.url).pathname);
 
 const main = defineCommand({
   name: packageJson.name ?? "sdk-codemod",
