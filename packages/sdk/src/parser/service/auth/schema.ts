@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AuthConnectionConfigSchema } from "@/parser/service/auth-connection";
 import { TailorFieldSchema } from "@/parser/service/field/schema";
 import type { ValueOperand } from "@/types/auth";
 
@@ -239,6 +240,10 @@ const AuthConfigBaseSchema = z.object({
   idProvider: IdProviderSchema.optional().describe("Identity provider configuration"),
   scim: SCIMSchema.optional().describe("SCIM provisioning configuration"),
   tenantProvider: TenantProviderSchema.optional().describe("Multi-tenant provider configuration"),
+  connections: z
+    .record(z.string(), AuthConnectionConfigSchema)
+    .optional()
+    .describe("Auth connection definitions for external OAuth2 providers"),
   publishSessionEvents: z.boolean().optional().describe("Enable publishing session events"),
 });
 

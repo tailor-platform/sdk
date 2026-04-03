@@ -217,6 +217,10 @@ function createMockClient(opts?: {
     getAuthSCIMResources: vi.fn().mockResolvedValue({
       scimResources: [],
     }),
+    listAuthConnections: vi.fn().mockResolvedValue({
+      connections: [],
+      nextPageToken: "",
+    }),
   } as unknown as OperatorClient;
 }
 

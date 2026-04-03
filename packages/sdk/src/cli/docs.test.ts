@@ -66,7 +66,7 @@ const files: Record<string, FileConfig> = {
   "docs/cli/auth.md": {
     title: "Auth Resource Commands",
     description: "Commands for managing Auth service resources.",
-    commands: ["machineuser", "oauth2client"],
+    commands: ["authconnection", "machineuser", "oauth2client"],
     render: defaultRender,
   },
   "docs/cli/workflow.md": {

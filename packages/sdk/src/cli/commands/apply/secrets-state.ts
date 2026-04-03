@@ -6,6 +6,7 @@ import { getDistDir } from "@/cli/shared/dist-dir";
 
 const SecretsStateSchema = z.object({
   vaults: z.record(z.string(), z.record(z.string(), z.string())),
+  connections: z.record(z.string(), z.string()).optional(),
 });
 
 export type SecretsState = z.infer<typeof SecretsStateSchema>;
