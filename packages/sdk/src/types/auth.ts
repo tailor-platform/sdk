@@ -1,3 +1,4 @@
+import type { AuthConnectionConfig } from "./auth-connection.generated";
 import type {
   AuthInvoker,
   IdProvider as IdProviderConfig,
@@ -19,6 +20,14 @@ export type SCIMAttributeType = SCIMAttribute["type"];
 
 export type AuthInvokerWithName<M extends string> = Omit<AuthInvoker, "machineUserName"> & {
   machineUserName: M;
+};
+
+/** Result of retrieving a connection token at runtime. */
+export type AuthConnectionTokenResult = {
+  access_token: string;
+  refresh_token?: string;
+  token_type?: string;
+  expiry?: string;
 };
 
 // Helper types for ValueOperand
@@ -243,6 +252,7 @@ export type AuthServiceInput<
   MachineUserAttributes extends MachineUserAttributeFields | undefined =
     | MachineUserAttributeFields
     | undefined,
+  ConnectionNames extends string = string,
 > = {
   hooks?: AuthHooks<MachineUserNames>;
   userProfile?: UserProfile<User, AttributeMap, AttributeList>;
@@ -255,15 +265,23 @@ export type AuthServiceInput<
   idProvider?: IdProviderConfig;
   scim?: SCIMConfig;
   tenantProvider?: TenantProviderConfig;
+  connections?: Record<ConnectionNames, AuthConnectionConfig>;
   publishSessionEvents?: boolean;
 };
 
 declare const authDefinitionBrand: unique symbol;
 export type AuthDefinitionBrand = { readonly [authDefinitionBrand]: true };
 
+type ConnectionNames<Config> = Config extends { connections?: Record<infer K, unknown> }
+  ? K & string
+  : string;
+
 export type DefinedAuth<Name extends string, Config, MachineUserNames extends string> = Config & {
   name: Name;
   invoker<M extends MachineUserNames>(machineUser: M): AuthInvokerWithName<M>;
+  getConnectionToken<C extends ConnectionNames<Config>>(
+    connectionName: C,
+  ): Promise<AuthConnectionTokenResult>;
 } & AuthDefinitionBrand;
 
 export type AuthExternalConfig = { name: string; external: true };

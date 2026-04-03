@@ -1,5 +1,19 @@
 # @tailor-platform/sdk
 
+## 1.34.0
+
+### Minor Changes
+
+- [#819](https://github.com/tailor-platform/sdk/pull/819) [`a63948d`](https://github.com/tailor-platform/sdk/commit/a63948de613f43eab7cc1208d23f92c1e15ae31b) Thanks [@toiroakr](https://github.com/toiroakr)! - Add auth connection support for managing OAuth2 connections with external providers
+
+- [#855](https://github.com/tailor-platform/sdk/pull/855) [`150296e`](https://github.com/tailor-platform/sdk/commit/150296efbadcfa2dfe011c728c29dbbd63eb5634) Thanks [@dqn](https://github.com/dqn)! - Delegate deploy logic to a shared composite action (tailor-platform/actions/deploy) instead of generating local composite actions
+
+## 1.33.2
+
+### Patch Changes
+
+- [#899](https://github.com/tailor-platform/sdk/pull/899) [`ce19ee7`](https://github.com/tailor-platform/sdk/commit/ce19ee7dbb5bbf45d13ad06b6a02ea770f17435b) Thanks [@remiposo](https://github.com/remiposo)! - Fix SQL query command rewriting user input, which broke INSERT/UPDATE statements and PascalCase table names
+
 ## 1.33.1
 
 ### Patch Changes

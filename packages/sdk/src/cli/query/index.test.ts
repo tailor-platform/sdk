@@ -187,24 +187,16 @@ describe("query", () => {
     );
   });
 
-  test("accepts blank SQL query string without schema validation error", async () => {
-    const result = await query({
-      workspaceId: "workspace-1",
-      configPath: "tailor.config.ts",
-      engine: "sql",
-      machineUser: "bot",
-      query: "   ",
-    });
-
-    expect(result).toEqual({
-      engine: "sql",
-      namespace: "tailordb",
-      query: "   ",
-      result: {
-        rows: [{ id: "1" }],
-        rowCount: 1,
-      },
-    });
+  test("rejects blank SQL query string with parse error", async () => {
+    await expect(
+      query({
+        workspaceId: "workspace-1",
+        configPath: "tailor.config.ts",
+        engine: "sql",
+        machineUser: "bot",
+        query: "   ",
+      }),
+    ).rejects.toThrow();
   });
 
   test("throws helpful error when SQL namespace cannot be inferred", async () => {
@@ -241,7 +233,7 @@ describe("query", () => {
         configPath: "tailor.config.ts",
         engine: "sql",
         machineUser: "bot",
-        query: "select from",
+        query: "select 1",
       });
       throw new Error("expected query() to throw");
     } catch (error) {
@@ -271,7 +263,7 @@ describe("query", () => {
 
     const call = vi.mocked(executeScript).mock.calls[0]?.[0];
     const arg = JSON.parse(call?.arg ?? "{}");
-    expect(arg.queries).toEqual(["SELECT (1)", "SELECT (2)"]);
+    expect(arg.queries).toEqual(["SELECT 1; ", "SELECT 2"]);
   });
 
   test("does not split semicolons inside string literals", async () => {

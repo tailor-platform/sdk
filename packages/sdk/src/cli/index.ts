@@ -5,6 +5,7 @@ import { withCompletionCommand } from "politty/completion";
 import { z } from "zod";
 import { apiCommand } from "./commands/api";
 import { applyCommand } from "./commands/apply";
+import { authconnectionCommand } from "./commands/authconnection";
 import { crashReportCommand } from "./commands/crash-report";
 import { executorCommand } from "./commands/executor";
 import { functionCommand } from "./commands/function";
@@ -58,6 +59,7 @@ export const mainCommand = withCompletionCommand(
     subCommands: {
       api: apiCommand,
       apply: applyCommand,
+      authconnection: authconnectionCommand,
       "crash-report": crashReportCommand,
       executor: executorCommand,
       function: functionCommand,

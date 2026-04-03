@@ -72,6 +72,15 @@ export const auth = defineAuth("my-auth", {
     },
   },
   idProvider: idp.provider("sample", "default-idp-client"),
+  // connections: {
+  //   "google-connection": {
+  //     type: "oauth2",
+  //     providerUrl: "https://accounts.google.com",
+  //     issuerUrl: "https://accounts.google.com",
+  //     clientId: process.env.GOOGLE_CLIENT_ID!,
+  //     clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+  //   },
+  // },
 });
 
 export default defineConfig({

@@ -2,79 +2,209 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildFiles, writeFiles } from "./github";
-import { installNodeYaml } from "./templates";
+import { detectPackageManager, renderDeploy } from "./templates";
 
-describe("buildFiles", () => {
-  const baseOptions = {
+describe("detectPackageManager", () => {
+  const testDir = path.join("/tmp", `detect-pm-test-${Date.now()}`);
+
+  beforeEach(() => {
+    fs.mkdirSync(testDir, { recursive: true });
+  });
+
+  afterEach(() => {
+    fs.rmSync(testDir, { recursive: true, force: true });
+  });
+
+  it("detects pnpm from pnpm-lock.yaml", () => {
+    fs.writeFileSync(path.join(testDir, "pnpm-lock.yaml"), "");
+    expect(detectPackageManager(testDir)).toBe("pnpm");
+  });
+
+  it("detects yarn from yarn.lock", () => {
+    fs.writeFileSync(path.join(testDir, "yarn.lock"), "");
+    expect(detectPackageManager(testDir)).toBe("yarn");
+  });
+
+  it("defaults to npm when no lockfile found", () => {
+    expect(detectPackageManager(testDir)).toBe("npm");
+  });
+
+  it("detects npm from package-lock.json", () => {
+    fs.writeFileSync(path.join(testDir, "package-lock.json"), "");
+    expect(detectPackageManager(testDir)).toBe("npm");
+  });
+
+  it("detects bun from bun.lockb", () => {
+    fs.writeFileSync(path.join(testDir, "bun.lockb"), "");
+    expect(detectPackageManager(testDir)).toBe("bun");
+  });
+
+  it("detects bun from bun.lock", () => {
+    fs.writeFileSync(path.join(testDir, "bun.lock"), "");
+    expect(detectPackageManager(testDir)).toBe("bun");
+  });
+
+  it("prefers pnpm when multiple lockfiles exist", () => {
+    fs.writeFileSync(path.join(testDir, "pnpm-lock.yaml"), "");
+    fs.writeFileSync(path.join(testDir, "yarn.lock"), "");
+    expect(detectPackageManager(testDir)).toBe("pnpm");
+  });
+});
+
+describe("renderDeploy", () => {
+  const baseParams = {
     workspaceName: "my-app",
     workspaceRegion: "asia-northeast",
     organizationId: "org-123",
     folderId: "folder-456",
-    dir: ".",
-    outputDir: "/tmp/test-project",
+    packageManager: "pnpm" as const,
   };
 
-  function getDeployContent(options = baseOptions): string {
-    const files = buildFiles(options);
-    return files.find((f) => f.path.includes("workflows/deploy-"))!.content;
-  }
-
-  it("generates correct file paths", () => {
-    const files = buildFiles(baseOptions);
-    const paths = files.map((f) => f.path);
-    expect(paths).toContain(
-      path.join(baseOptions.outputDir, ".github/workflows/deploy-my-app.yml"),
-    );
-    expect(paths).toContain(
-      path.join(baseOptions.outputDir, ".github/actions/fetch-tailor-token/action.yml"),
-    );
-    expect(paths).toContain(
-      path.join(baseOptions.outputDir, ".github/actions/install-node/action.yml"),
+  it("references the composite action", () => {
+    const content = renderDeploy(baseParams);
+    expect(content).toContain(
+      "uses: tailor-platform/actions/deploy@980aeba08963f4322b2b48ca7a920f4e14876842 # v1.0.0",
     );
   });
 
-  it("includes all env vars in deploy.yml", () => {
-    const content = getDeployContent();
-    expect(content).toContain("WORKSPACE_NAME: my-app");
-    expect(content).toContain("WORKSPACE_REGION: asia-northeast");
-    expect(content).toContain("TAILOR_PLATFORM_ORGANIZATION_ID: org-123");
-    expect(content).toContain("TAILOR_PLATFORM_FOLDER_ID: folder-456");
+  it("includes setup steps in correct order", () => {
+    const content = renderDeploy(baseParams);
+    const checkoutIndex = content.indexOf("uses: actions/checkout@");
+    const setupIndex = content.indexOf("uses: pnpm/action-setup@");
+    const actionIndex = content.indexOf("uses: tailor-platform/actions/deploy@");
+    expect(checkoutIndex).toBeGreaterThan(-1);
+    expect(setupIndex).toBeGreaterThan(checkoutIndex);
+    expect(actionIndex).toBeGreaterThan(setupIndex);
   });
 
-  it("does not include working-directory when dir is '.'", () => {
-    expect(getDeployContent()).not.toContain("working-directory");
+  it("pins action versions with SHA and version comment", () => {
+    const content = renderDeploy(baseParams);
+    expect(content).toMatch(/uses: actions\/checkout@[a-f0-9]+ # v\d+\.\d+\.\d+/);
+    expect(content).toMatch(/uses: pnpm\/action-setup@[a-f0-9]+ # v\d+\.\d+\.\d+/);
+    expect(content).toMatch(/uses: actions\/setup-node@[a-f0-9]+ # v\d+\.\d+\.\d+/);
   });
 
-  it("includes working-directory when dir is not '.'", () => {
-    expect(getDeployContent({ ...baseOptions, dir: "apps/foo" })).toContain(
+  it("generates pnpm setup steps", () => {
+    const content = renderDeploy({ ...baseParams, packageManager: "pnpm" });
+    expect(content).toContain("pnpm/action-setup@");
+    expect(content).toContain("cache: pnpm");
+    expect(content).toContain("pnpm install --frozen-lockfile");
+  });
+
+  it("generates yarn setup steps", () => {
+    const content = renderDeploy({ ...baseParams, packageManager: "yarn" });
+    expect(content).not.toContain("pnpm");
+    expect(content).toContain("cache: yarn");
+    expect(content).toContain("yarn install --frozen-lockfile");
+  });
+
+  it("generates npm setup steps", () => {
+    const content = renderDeploy({ ...baseParams, packageManager: "npm" });
+    expect(content).not.toContain("pnpm");
+    expect(content).not.toContain("yarn");
+    expect(content).toContain("cache: npm");
+    expect(content).toContain("npm ci");
+  });
+
+  it("generates bun setup steps", () => {
+    const content = renderDeploy({ ...baseParams, packageManager: "bun" });
+    expect(content).not.toContain("pnpm");
+    expect(content).not.toContain("yarn");
+    expect(content).not.toContain("npm ci");
+    expect(content).toContain("oven-sh/setup-bun@");
+    expect(content).toContain("bun install --frozen-lockfile");
+  });
+
+  it("passes workspace inputs", () => {
+    const content = renderDeploy(baseParams);
+    expect(content).toContain("workspace-name: my-app");
+    expect(content).toContain("workspace-region: asia-northeast");
+    expect(content).toContain("organization-id: org-123");
+    expect(content).toContain("folder-id: folder-456");
+  });
+
+  it("passes secrets as action inputs", () => {
+    const content = renderDeploy(baseParams);
+    expect(content).toContain("platform-client-id: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_ID }}");
+    expect(content).toContain(
+      "platform-client-secret: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_SECRET }}",
+    );
+  });
+
+  it("does not include working-directory when omitted", () => {
+    expect(renderDeploy(baseParams)).not.toContain("working-directory");
+  });
+
+  it("includes working-directory when provided", () => {
+    expect(renderDeploy({ ...baseParams, workingDirectory: "apps/foo" })).toContain(
       "working-directory: apps/foo",
     );
   });
 
-  it("uses pnpm run deploy for the deploy step", () => {
-    const content = getDeployContent();
-    expect(content).toContain("run: pnpm run deploy -- --yes");
-    expect(content).not.toContain("run: pnpm apply");
-  });
-
   it("preserves $ characters in parameter values", () => {
-    const content = getDeployContent({
-      ...baseOptions,
+    const content = renderDeploy({
+      ...baseParams,
       workspaceName: "test$&end",
     });
-    expect(content).toContain("WORKSPACE_NAME: test$&end");
+    expect(content).toContain("workspace-name: test$&end");
   });
 
   it("parameterizes concurrency group with workspace name", () => {
-    const content = getDeployContent();
+    const content = renderDeploy(baseParams);
     expect(content).toContain("group: deploy-my-app");
     expect(content).not.toContain("group: deploy\n");
   });
 });
 
-describe("installNodeYaml", () => {
-  it("pins pnpm version for projects without packageManager field", () => {
-    expect(installNodeYaml).toContain("version: 10");
+describe("buildFiles", () => {
+  const testDir = path.join("/tmp", `build-files-test-${Date.now()}`);
+
+  beforeEach(() => {
+    fs.mkdirSync(testDir, { recursive: true });
+    fs.writeFileSync(path.join(testDir, "pnpm-lock.yaml"), "");
+  });
+
+  afterEach(() => {
+    fs.rmSync(testDir, { recursive: true, force: true });
+  });
+
+  it("generates only the caller workflow file", () => {
+    const files = buildFiles({
+      workspaceName: "my-app",
+      workspaceRegion: "asia-northeast",
+      organizationId: "org-123",
+      folderId: "folder-456",
+      dir: ".",
+      outputDir: testDir,
+    });
+    expect(files).toHaveLength(1);
+    expect(files[0]!.path).toBe(path.join(testDir, ".github/workflows/deploy-my-app.yml"));
+  });
+
+  it("detects package manager from project directory", () => {
+    const files = buildFiles({
+      workspaceName: "my-app",
+      workspaceRegion: "asia-northeast",
+      organizationId: "org-123",
+      folderId: "folder-456",
+      dir: ".",
+      outputDir: testDir,
+    });
+    expect(files[0]!.content).toContain("pnpm/action-setup");
+  });
+
+  it("detects package manager from repo root when dir is a subdirectory", () => {
+    const subDir = path.join(testDir, "apps/foo");
+    fs.mkdirSync(subDir, { recursive: true });
+    const files = buildFiles({
+      workspaceName: "my-app",
+      workspaceRegion: "asia-northeast",
+      organizationId: "org-123",
+      folderId: "folder-456",
+      dir: "apps/foo",
+      outputDir: testDir,
+    });
+    expect(files[0]!.content).toContain("pnpm/action-setup");
   });
 });
 
