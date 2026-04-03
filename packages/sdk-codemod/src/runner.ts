@@ -1,7 +1,9 @@
 import * as fs from "node:fs";
 import { glob } from "node:fs/promises";
 import { parse, Lang } from "@ast-grep/napi";
+import { structuredPatch } from "diff";
 import * as path from "pathe";
+import pc from "picocolors";
 import type { SgRoot } from "@ast-grep/napi";
 import type { CodemodPackage } from "./types";
 
@@ -13,7 +15,6 @@ export interface CodemodRunResult {
   changed: boolean;
   filesModified: string[];
   warnings: string[];
-  diffOutput?: string;
 }
 
 /**
@@ -26,43 +27,32 @@ function langForFile(filePath: string): Lang {
 }
 
 /**
- * Generate a simple unified-diff-style output for a single file.
+ * Print a colorized unified diff for a single file to stderr.
  * @param filePath - Absolute path to the file
  * @param before - Original content
  * @param after - Transformed content
- * @returns Formatted diff string
  */
-function formatDiff(filePath: string, before: string, after: string): string {
-  const lines: string[] = [];
-  lines.push("============================================================");
-  lines.push(`File: ${filePath}`);
-  lines.push("============================================================");
-  lines.push(`--- [before] ${filePath}`);
-  lines.push(`+++ [after]  ${filePath}`);
+function printDiff(filePath: string, before: string, after: string): void {
+  const patch = structuredPatch(filePath, filePath, before, after, "", "", { context: 3 });
+  if (patch.hunks.length === 0) return;
 
-  const beforeLines = before.split("\n");
-  const afterLines = after.split("\n");
-  const maxLen = Math.max(beforeLines.length, afterLines.length);
-  let additions = 0;
-  let deletions = 0;
+  process.stderr.write(`\n${pc.bold(`--- ${filePath}`)}\n`);
+  process.stderr.write(`${pc.bold(`+++ ${filePath}`)}\n`);
 
-  for (let i = 0; i < maxLen; i++) {
-    const b = beforeLines[i];
-    const a = afterLines[i];
-    if (b !== a) {
-      if (b !== undefined) {
-        lines.push(`-${b}`);
-        deletions++;
-      }
-      if (a !== undefined) {
-        lines.push(`+${a}`);
-        additions++;
+  for (const hunk of patch.hunks) {
+    process.stderr.write(
+      pc.cyan(`@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@\n`),
+    );
+    for (const line of hunk.lines) {
+      if (line.startsWith("+")) {
+        process.stderr.write(`${pc.green(line)}\n`);
+      } else if (line.startsWith("-")) {
+        process.stderr.write(`${pc.red(line)}\n`);
+      } else {
+        process.stderr.write(`${line}\n`);
       }
     }
   }
-
-  lines.push(`+${additions} additions, -${deletions} deletions`);
-  return lines.join("\n");
 }
 
 /**
@@ -83,6 +73,8 @@ async function loadTransform(scriptPath: string): Promise<TransformFn> {
  * Run multiple codemods on a project directory using in-memory chaining.
  * Each codemod's transform is applied sequentially per file via reduce(),
  * so later transforms see earlier transforms' output — even in dry-run mode.
+ *
+ * In dry-run mode, colorized diffs are printed to stderr.
  * @param codemods - Codemod packages to run (with resolved script paths)
  * @param targetPath - Project directory to transform
  * @param dryRun - Whether to preview changes without writing
@@ -100,7 +92,6 @@ export async function runCodemods(
   }
 
   const filesModified: string[] = [];
-  const diffs: string[] = [];
 
   // Iterate over all TypeScript files in the target directory
   const targetFiles = glob("**/*.{ts,tsx,mts,cts}", {
@@ -133,7 +124,7 @@ export async function runCodemods(
     if (current !== original) {
       filesModified.push(absolute);
       if (dryRun) {
-        diffs.push(formatDiff(absolute, original, current));
+        printDiff(absolute, original, current);
       } else {
         await fs.promises.writeFile(absolute, current, "utf-8");
       }
@@ -144,6 +135,5 @@ export async function runCodemods(
     changed: filesModified.length > 0,
     filesModified,
     warnings: [],
-    diffOutput: diffs.length > 0 ? diffs.join("\n\n") : undefined,
   };
 }

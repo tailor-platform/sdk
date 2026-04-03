@@ -37,14 +37,6 @@ function printUpgradeSummary(output: RunOutput, dryRun: boolean): void {
     }
   }
 
-  // Show diff preview in dry-run mode (passthrough codemod CLI's colored output)
-  if (dryRun && output.diffOutput) {
-    logger.log("");
-    logger.info("Changes preview:");
-    logger.log("");
-    logger.log(output.diffOutput);
-  }
-
   if (output.warnings.length > 0) {
     logger.log("");
     logger.warn(`Manual attention needed (${output.warnings.length}):`);
