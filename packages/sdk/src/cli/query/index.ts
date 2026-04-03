@@ -881,7 +881,6 @@ function printSingleSqlResult(
 
 function splitSqlStatements(query: string): string[] {
   const statements = parseSql(query, { locationTracking: true });
-  if (statements.length === 0) return [];
   // Extract original SQL text using AST location info instead of re-serializing
   // to preserve the user's original casing and syntax.
   // _location.end is unreliable for INSERT/UPDATE statements (https://github.com/oguimbal/pgsql-ast-parser/issues/135),
