@@ -29,7 +29,6 @@ const PLUGIN_MAP: Record<string, { functionName: string; importPath: string }> =
  * 1. Rename `defineGenerators` → `definePlugins` in import and call
  * 2. Transform tuple arguments `["pkg-name", config]` → `pluginFn(config)`
  * 3. Add plugin imports from their respective SDK paths
- * 4. Rename `generators` variable → `plugins`
  * @param source - Source code to transform
  * @returns Transformed source or null if no changes needed
  */
@@ -104,30 +103,7 @@ export default function transform(source: string): string | null {
     edits.push(id.replace("definePlugins"));
   }
 
-  // Step 3: Rename `generators` variable to `plugins` (only the export binding).
-  // Known limitation: references to `generators` elsewhere in the same file
-  // (e.g. `export default { generators }`) are NOT renamed. The typical usage
-  // pattern is a single `export const generators = defineGenerators(...)` with
-  // no same-file references, so this is acceptable.
-  const generatorsDecls = tree.findAll({
-    rule: {
-      kind: "variable_declarator",
-      has: {
-        kind: "identifier",
-        regex: "^generators$",
-        field: "name",
-      },
-    },
-  });
-
-  for (const decl of generatorsDecls) {
-    const nameNode = decl.field("name");
-    if (nameNode && nameNode.text() === "generators") {
-      edits.push(nameNode.replace("plugins"));
-    }
-  }
-
-  // Step 4: Rename import specifier defineGenerators → definePlugins
+  // Step 3: Rename import specifier defineGenerators → definePlugins
   const importSpecifiers = tree.findAll({
     rule: {
       kind: "import_specifier",
@@ -161,7 +137,7 @@ export default function transform(source: string): string | null {
   // Apply all edits
   let result = tree.commitEdits(edits);
 
-  // Step 5: Add new import statements for plugin functions
+  // Step 4: Add new import statements for plugin functions
   if (importsToAdd.size > 0) {
     const importLines: string[] = [];
     for (const [importPath, functionName] of importsToAdd) {
