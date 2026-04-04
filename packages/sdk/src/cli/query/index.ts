@@ -572,8 +572,8 @@ function printReplHelp(engine: QueryEngine): void {
   logger.log("");
   logger.log(
     engine === "sql"
-      ? "Submit executes when input ends with ';'."
-      : "Submit executes when input is a complete GraphQL document.",
+      ? "Input must end with ';' to submit."
+      : "Input must be a complete GraphQL document to submit.",
   );
 }
 
