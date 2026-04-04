@@ -1,5 +1,4 @@
 import * as fs from "node:fs";
-import { glob } from "node:fs/promises";
 import * as url from "node:url";
 import chalk from "chalk";
 import { structuredPatch } from "diff";
@@ -44,8 +43,34 @@ export interface CodemodRunResult {
 /** Default file patterns for TypeScript files. */
 const DEFAULT_FILE_PATTERNS = ["**/*.{ts,tsx,mts,cts}"];
 
-/** Directories always excluded from file scanning. */
-const EXCLUDE_PATTERNS = ["**/node_modules/**", "**/dist/**", "**/.git/**"];
+/** Directory names always excluded from recursive scanning. */
+const EXCLUDE_DIRS = new Set(["node_modules", "dist", ".git"]);
+
+/**
+ * Recursively walk a directory and collect relative file paths.
+ * Compatible with Node 18+ (does not rely on fs.glob which requires Node 22).
+ * @param root - Root directory to walk
+ * @returns Array of relative file paths (forward-slash separated)
+ */
+async function walkDir(root: string): Promise<string[]> {
+  const results: string[] = [];
+
+  async function walk(dir: string, prefix: string): Promise<void> {
+    const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        if (EXCLUDE_DIRS.has(entry.name)) continue;
+        const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+        await walk(path.join(dir, entry.name), rel);
+      } else if (entry.isFile()) {
+        results.push(prefix ? `${prefix}/${entry.name}` : entry.name);
+      }
+    }
+  }
+
+  await walk(root, "");
+  return results;
+}
 
 /**
  * Print a colorized unified diff for a single file to stderr.
@@ -122,54 +147,47 @@ export async function runCodemods(
     });
   }
 
-  // Collect all unique file patterns for glob scanning
-  const allPatterns = new Set<string>();
+  // Collect all unique file patterns and build a combined matcher
+  const allPatterns: string[] = [];
   for (const { codemod } of codemods) {
     for (const p of codemod.filePatterns ?? DEFAULT_FILE_PATTERNS) {
-      allPatterns.add(p);
+      allPatterns.push(p);
     }
   }
+  const fileMatcher = picomatch(allPatterns);
 
+  // Walk directory once and filter by combined patterns
+  const allFiles = await walkDir(targetPath);
   const filesModified: string[] = [];
-  const seen = new Set<string>();
 
-  // Iterate over all matching files (deduplicate across patterns)
-  for (const pattern of allPatterns) {
-    const targetFiles = glob(pattern, {
-      cwd: targetPath,
-      withFileTypes: false,
-      exclude: EXCLUDE_PATTERNS,
-    });
+  for (const relative of allFiles) {
+    if (!fileMatcher(relative)) continue;
 
-    for await (const relative of targetFiles) {
-      const absolute = path.resolve(targetPath, relative);
-      if (seen.has(absolute)) continue;
-      seen.add(absolute);
+    const absolute = path.resolve(targetPath, relative);
 
-      let original: string;
-      try {
-        original = await fs.promises.readFile(absolute, "utf-8");
-      } catch {
-        continue;
+    let original: string;
+    try {
+      original = await fs.promises.readFile(absolute, "utf-8");
+    } catch {
+      continue;
+    }
+
+    // Chain only transforms whose filePatterns match this file
+    let current = original;
+    for (const { transform, matches } of loaded) {
+      if (!matches(relative)) continue;
+      const result = await transform(current, absolute);
+      if (result != null) {
+        current = result;
       }
+    }
 
-      // Chain only transforms whose filePatterns match this file
-      let current = original;
-      for (const { transform, matches } of loaded) {
-        if (!matches(relative)) continue;
-        const result = await transform(current, absolute);
-        if (result != null) {
-          current = result;
-        }
-      }
-
-      if (current !== original) {
-        filesModified.push(absolute);
-        if (dryRun) {
-          printDiff(absolute, original, current);
-        } else {
-          await fs.promises.writeFile(absolute, current, "utf-8");
-        }
+    if (current !== original) {
+      filesModified.push(absolute);
+      if (dryRun) {
+        printDiff(absolute, original, current);
+      } else {
+        await fs.promises.writeFile(absolute, current, "utf-8");
       }
     }
   }

@@ -35,8 +35,18 @@ const PLUGIN_MAP: Record<string, { functionName: string; importPath: string }> =
 export default function transform(source: string): string | null {
   const tree = parse(Lang.TypeScript, source).root();
 
-  // Check if this file uses defineGenerators
+  // Only process files that import defineGenerators from the SDK.
+  // This prevents modifying unrelated files that happen to contain the identifier.
   if (!source.includes("defineGenerators")) {
+    return null;
+  }
+  if (!source.includes("@tailor-platform/sdk")) {
+    return null;
+  }
+
+  // If definePlugins already exists in the file, skip to avoid producing
+  // duplicate identifiers (e.g. `import { definePlugins, definePlugins }`).
+  if (source.includes("definePlugins")) {
     return null;
   }
 
