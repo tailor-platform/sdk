@@ -3,11 +3,7 @@ import * as path from "pathe";
 import { lt, gte, valid } from "semver";
 import type { CodemodPackage } from "./types";
 
-const CODEMODS_ROOT = path.resolve(
-  path.dirname(url.fileURLToPath(import.meta.url)),
-  "..",
-  "codemods",
-);
+const CODEMODS_ROOT = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), "codemods");
 
 /**
  * Registry of all available codemod packages.
@@ -20,7 +16,7 @@ const allCodemods: CodemodPackage[] = [
       "Migrate defineGenerators() tuple syntax to definePlugins() with explicit plugin imports",
     since: "1.0.0",
     until: "2.0.0",
-    scriptPath: "v2/define-generators-to-plugins/scripts/transform.ts",
+    scriptPath: "v2/define-generators-to-plugins/scripts/transform.js",
   },
 ];
 

@@ -1,7 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { CLIError } from "@/cli/shared/errors";
 import { logger, styles } from "@/cli/shared/logger";
-import { readPackageJson } from "@/cli/shared/package-json";
 import { detectInstalledVersion } from "./version-detector";
 import type { RunOutput } from "./types";
 
@@ -86,14 +85,15 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
   logger.log("");
 
   // Step 2: Invoke sdk-codemod CLI
-  const packageJson = await readPackageJson();
-  const version =
-    packageJson.version && packageJson.version !== "0.0.0" ? packageJson.version : "latest";
+  // Use "latest" because sdk-codemod may not be published at the exact same
+  // version as @tailor-platform/sdk.  Version filtering is handled internally
+  // by sdk-codemod's registry via the --from / --to arguments.
+  const npxCommand = process.platform === "win32" ? "npx.cmd" : "npx";
 
   const result = spawnSync(
-    "npx",
+    npxCommand,
     [
-      `@tailor-platform/sdk-codemod@${version}`,
+      "@tailor-platform/sdk-codemod@latest",
       "--from",
       options.from,
       "--to",
