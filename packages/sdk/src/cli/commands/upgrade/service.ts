@@ -141,8 +141,9 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
   }
 
   // Step 4: Display results
-  // TODO: Support --json flag by emitting logger.out(output) when in JSON mode.
-  // Currently only human-readable summary is printed.
+  // Emit structured data on stdout (honors --json via logger.out) and
+  // human-readable summary on stderr (via printUpgradeSummary).
+  logger.out(output);
   printUpgradeSummary(output, options.dryRun);
 
   if (output.errors.length > 0) {
