@@ -103,7 +103,8 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
       ...(options.dryRun ? ["--dry-run"] : []),
     ],
     {
-      stdio: ["ignore", "pipe", "inherit"],
+      cwd: projectRoot,
+      stdio: ["ignore", "pipe", "pipe"],
       encoding: "utf-8",
       timeout: 300_000,
     },
@@ -121,8 +122,9 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
   if (result.status !== 0 && !result.stdout?.trim()) {
     throw CLIError({
       message: `@tailor-platform/sdk-codemod exited with code ${result.status}`,
-      details: result.stderr || "(no stderr output)",
-      suggestion: "Check your network connection and ensure the package registry is accessible.",
+      details: result.stderr?.trim() || "(no stderr output)",
+      suggestion:
+        "Review the error above. Common causes: invalid version arguments, network issues, or missing package registry access.",
       command: "upgrade",
     });
   }
