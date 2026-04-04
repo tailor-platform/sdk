@@ -195,6 +195,35 @@ describe("upgrade service", () => {
     );
   });
 
+  it("should forward captured stderr to process.stderr in the success path", async () => {
+    const { detectInstalledVersion } = await import("./version-detector");
+    vi.mocked(detectInstalledVersion).mockResolvedValue("2.0.0");
+
+    const { spawnSync } = await import("node:child_process");
+    const stderrPayload = "Running: define-generators-to-plugins\n  1 file(s) modified\n";
+    vi.mocked(spawnSync).mockReturnValue({
+      stdout: JSON.stringify(
+        makeOutput({
+          codemodsApplied: 1,
+          filesModified: ["/test/config.ts"],
+        }),
+      ),
+      stderr: stderrPayload,
+      status: 0,
+      signal: null,
+      pid: 0,
+      output: [],
+      error: undefined,
+    });
+
+    const stderrWrite = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+
+    const { upgrade } = await import("./service");
+    await upgrade({ from: "1.33.0", dryRun: true, path: "/test" });
+
+    expect(stderrWrite).toHaveBeenCalledWith(stderrPayload);
+  });
+
   it("should throw CLIError when stdout is not valid JSON", async () => {
     const { detectInstalledVersion } = await import("./version-detector");
     vi.mocked(detectInstalledVersion).mockResolvedValue("2.0.0");
