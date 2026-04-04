@@ -44,12 +44,6 @@ export default function transform(source: string): string | null {
     return null;
   }
 
-  // If definePlugins already exists in the file, skip to avoid producing
-  // duplicate identifiers (e.g. `import { definePlugins, definePlugins }`).
-  if (source.includes("definePlugins")) {
-    return null;
-  }
-
   const edits: Edit[] = [];
   const importsToAdd: Map<string, string> = new Map(); // importPath -> functionName
 
@@ -101,42 +95,75 @@ export default function transform(source: string): string | null {
     return null;
   }
 
-  // Step 2: Rename defineGenerators → definePlugins in the call expression
-  const identifiers = tree.findAll({
+  // Step 2: Rename defineGenerators → definePlugins in call expressions only.
+  // Import specifiers are handled separately in step 3 to avoid duplicates.
+  const callIdentifiers = tree.findAll({
     rule: {
       pattern: "defineGenerators",
       kind: "identifier",
+      inside: {
+        kind: "call_expression",
+      },
     },
   });
 
-  for (const id of identifiers) {
+  for (const id of callIdentifiers) {
     edits.push(id.replace("definePlugins"));
   }
 
-  // Step 3: Rename import specifier defineGenerators → definePlugins
-  const importSpecifiers = tree.findAll({
+  // Step 3: Handle import specifier for defineGenerators.
+  // If the import already contains definePlugins (mixed config), remove the
+  // defineGenerators specifier instead of renaming it to avoid duplicates.
+  const sdkImportStatements = tree.findAll({
     rule: {
-      kind: "import_specifier",
+      kind: "import_statement",
       has: {
-        kind: "identifier",
-        regex: "^defineGenerators$",
-      },
-      inside: {
-        kind: "import_statement",
-        has: {
-          kind: "string",
-          regex: "@tailor-platform/sdk",
-        },
+        kind: "string",
+        regex: "@tailor-platform/sdk",
       },
     },
   });
 
-  for (const spec of importSpecifiers) {
-    const identNode = spec
-      .children()
-      .find((c: SgNode) => c.kind() === "identifier" && c.text() === "defineGenerators");
-    if (identNode) {
-      edits.push(identNode.replace("definePlugins"));
+  for (const importStmt of sdkImportStatements) {
+    const specifiers = importStmt.findAll({
+      rule: { kind: "import_specifier" },
+    });
+
+    const hasDefinePlugins = specifiers.some((s) =>
+      s.children().some((c: SgNode) => c.kind() === "identifier" && c.text() === "definePlugins"),
+    );
+
+    for (const spec of specifiers) {
+      const identNode = spec
+        .children()
+        .find((c: SgNode) => c.kind() === "identifier" && c.text() === "defineGenerators");
+      if (!identNode) continue;
+
+      if (hasDefinePlugins) {
+        // Remove the entire specifier (including trailing/leading comma+whitespace)
+        // by replacing the specifier text + any adjacent comma
+        const specText = spec.text();
+        const importText = importStmt.text();
+        const idx = importText.indexOf(specText);
+        if (idx !== -1) {
+          // Check for trailing comma+whitespace or leading comma+whitespace
+          const afterSpec = importText.slice(idx + specText.length);
+          const beforeSpec = importText.slice(0, idx);
+          let removeFrom = idx;
+          let removeTo = idx + specText.length;
+
+          if (afterSpec.match(/^\s*,/)) {
+            removeTo = idx + specText.length + (afterSpec.match(/^\s*,\s*/)![0]?.length ?? 0);
+          } else if (beforeSpec.match(/,\s*$/)) {
+            removeFrom = idx - (beforeSpec.match(/,\s*$/)![0]?.length ?? 0);
+          }
+
+          const cleaned = importText.slice(0, removeFrom) + importText.slice(removeTo);
+          edits.push(importStmt.replace(cleaned));
+        }
+      } else {
+        edits.push(identNode.replace("definePlugins"));
+      }
     }
   }
 

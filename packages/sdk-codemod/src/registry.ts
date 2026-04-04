@@ -5,9 +5,6 @@ import type { CodemodPackage } from "./types";
 
 const CODEMODS_ROOT = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), "codemods");
 
-/**
- * Registry of all available codemod packages.
- */
 const allCodemods: CodemodPackage[] = [
   {
     id: "v2/define-generators-to-plugins",

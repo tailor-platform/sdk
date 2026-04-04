@@ -159,6 +159,7 @@ export async function runCodemods(
   // Walk directory once and filter by combined patterns
   const allFiles = await walkDir(targetPath);
   const filesModified: string[] = [];
+  const warnings: string[] = [];
 
   for (const relative of allFiles) {
     if (!fileMatcher(relative)) continue;
@@ -174,8 +175,10 @@ export async function runCodemods(
 
     // Chain only transforms whose filePatterns match this file
     let current = original;
+    let matched = false;
     for (const { transform, matches } of loaded) {
       if (!matches(relative)) continue;
+      matched = true;
       const result = await transform(current, absolute);
       if (result != null) {
         current = result;
@@ -189,12 +192,19 @@ export async function runCodemods(
       } else {
         await fs.promises.writeFile(absolute, current, "utf-8");
       }
+    } else if (matched && original.includes("defineGenerators")) {
+      // File matched a codemod and contains legacy API but was not modified.
+      // This likely means it uses unsupported patterns (custom generators,
+      // aliased imports, etc.) that require manual migration.
+      warnings.push(
+        `${relative}: contains defineGenerators but was not migrated automatically. Manual migration may be needed.`,
+      );
     }
   }
 
   return {
     changed: filesModified.length > 0,
     filesModified,
-    warnings: [],
+    warnings,
   };
 }

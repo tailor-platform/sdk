@@ -117,6 +117,16 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
     });
   }
 
+  // Check for non-zero exit without a launch error (e.g. registry/auth/network failures)
+  if (result.status !== 0 && !result.stdout?.trim()) {
+    throw CLIError({
+      message: `@tailor-platform/sdk-codemod exited with code ${result.status}`,
+      details: result.stderr || "(no stderr output)",
+      suggestion: "Check your network connection and ensure the package registry is accessible.",
+      command: "upgrade",
+    });
+  }
+
   // Step 3: Parse JSON output
   let output: RunOutput;
   try {
