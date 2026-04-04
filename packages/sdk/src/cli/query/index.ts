@@ -483,6 +483,10 @@ async function runRepl(
   const execute = await prepareQueryExecutor(options);
   const historyPath = getReplHistoryPath(options.engine);
   const validate = createReplValidator(options.engine);
+  // Lazy-load the editor module so the `graphql` and `sql-highlight` libs are
+  // only pulled in when the REPL is actually entered, not on every CLI startup.
+  const { highlightSqlLine, highlightGraphqlLine, replTransform } = await import("./repl-editor");
+  const highlight = options.engine === "sql" ? highlightSqlLine : highlightGraphqlLine;
 
   // NOTE: Each prompt() call reloads history from the file synchronously while the
   // previous call's async save may still be in-flight. In practice the race window
@@ -493,6 +497,8 @@ async function runRepl(
     prefix: "",
     preferNewlineOnEnter: true,
     validate,
+    highlight,
+    transform: replTransform,
     history: historyPath ? { filePath: historyPath, maxEntries: 100 } : [],
     helpFooter: { items: ["submit", "newline"], maxLines: 1 },
   });
@@ -569,6 +575,11 @@ function printReplHelp(engine: QueryEngine): void {
   logger.log("  Ctrl+D                     Exit REPL (on empty input)");
   logger.log("  Ctrl+Z / Ctrl+Y            Undo / Redo");
   logger.log("  Up/Down at boundary        Navigate history");
+  logger.log("");
+  logger.log("Editing aids:");
+  logger.log("  Syntax highlighting        Enabled for the current engine");
+  logger.log("  ( [ {                      Auto-inserts the matching closing bracket");
+  logger.log("  Enter after open bracket   Adds one indent level and closes the block");
   logger.log("");
   logger.log(
     engine === "sql"
