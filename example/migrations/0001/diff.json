@@ -1,0 +1,212 @@
+{
+  "version": 1,
+  "namespace": "tailordb",
+  "createdAt": "2026-04-04T23:52:28.003Z",
+  "changes": [
+    {
+      "kind": "type_added",
+      "typeName": "Product",
+      "after": {
+        "name": "Product",
+        "fields": {
+          "id": {
+            "type": "uuid",
+            "required": true
+          },
+          "name": {
+            "type": "string",
+            "required": true,
+            "description": "Product name"
+          },
+          "sku": {
+            "type": "string",
+            "required": true,
+            "index": true,
+            "unique": true,
+            "description": "Stock keeping unit"
+          },
+          "price": {
+            "type": "float",
+            "required": true
+          },
+          "stock": {
+            "type": "integer",
+            "required": true,
+            "index": true
+          },
+          "category": {
+            "type": "enum",
+            "required": true,
+            "allowedValues": [
+              {
+                "value": "electronics"
+              },
+              {
+                "value": "clothing"
+              },
+              {
+                "value": "food"
+              }
+            ]
+          },
+          "supplierId": {
+            "type": "uuid",
+            "required": true,
+            "index": true,
+            "foreignKey": true,
+            "foreignKeyType": "Supplier",
+            "foreignKeyField": "id"
+          },
+          "createdAt": {
+            "type": "datetime",
+            "required": true,
+            "description": "Record creation timestamp",
+            "hooks": {
+              "create": {
+                "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+              }
+            }
+          },
+          "updatedAt": {
+            "type": "datetime",
+            "required": false,
+            "description": "Record last update timestamp",
+            "hooks": {
+              "update": {
+                "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+              }
+            }
+          }
+        },
+        "pluralForm": "Products",
+        "description": "Product catalog entry",
+        "settings": {},
+        "forwardRelationships": {
+          "supplier": {
+            "targetType": "Supplier",
+            "targetField": "supplierId",
+            "sourceField": "id",
+            "isArray": false,
+            "description": ""
+          }
+        },
+        "permissions": {
+          "record": {
+            "create": [
+              {
+                "conditions": [
+                  [
+                    {
+                      "user": "role"
+                    },
+                    "eq",
+                    "MANAGER"
+                  ]
+                ],
+                "permit": "allow"
+              }
+            ],
+            "read": [
+              {
+                "conditions": [
+                  [
+                    {
+                      "user": "role"
+                    },
+                    "eq",
+                    "MANAGER"
+                  ]
+                ],
+                "permit": "allow"
+              },
+              {
+                "conditions": [
+                  [
+                    {
+                      "user": "_loggedIn"
+                    },
+                    "eq",
+                    true
+                  ]
+                ],
+                "permit": "allow"
+              }
+            ],
+            "update": [
+              {
+                "conditions": [
+                  [
+                    {
+                      "user": "role"
+                    },
+                    "eq",
+                    "MANAGER"
+                  ]
+                ],
+                "permit": "allow"
+              }
+            ],
+            "delete": [
+              {
+                "conditions": [
+                  [
+                    {
+                      "user": "role"
+                    },
+                    "eq",
+                    "MANAGER"
+                  ]
+                ],
+                "permit": "allow"
+              }
+            ]
+          },
+          "gql": [
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "role"
+                  },
+                  "eq",
+                  "MANAGER"
+                ]
+              ],
+              "actions": ["create", "read", "update", "delete", "aggregate", "bulkUpsert"],
+              "permit": "allow"
+            },
+            {
+              "conditions": [
+                [
+                  {
+                    "user": "_loggedIn"
+                  },
+                  "eq",
+                  true
+                ]
+              ],
+              "actions": ["read"],
+              "permit": "allow"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "kind": "relationship_added",
+      "typeName": "Supplier",
+      "relationshipName": "products",
+      "relationshipType": "backward",
+      "after": {
+        "targetType": "Product",
+        "targetField": "supplierId",
+        "sourceField": "id",
+        "isArray": true,
+        "description": "Product catalog entry"
+      }
+    }
+  ],
+  "hasBreakingChanges": false,
+  "breakingChanges": [],
+  "requiresMigrationScript": false
+}
