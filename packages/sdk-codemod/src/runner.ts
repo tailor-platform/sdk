@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import { glob } from "node:fs/promises";
+import * as url from "node:url";
 import chalk from "chalk";
 import { structuredPatch } from "diff";
 import * as path from "pathe";
@@ -82,7 +83,7 @@ function printDiff(filePath: string, before: string, after: string): void {
  * @returns The transform function
  */
 async function loadTransform(scriptPath: string): Promise<TransformFn> {
-  const mod = await import(scriptPath);
+  const mod = await import(url.pathToFileURL(scriptPath).href);
   if (typeof mod.default !== "function") {
     throw new Error(`Transform at ${scriptPath} does not have a default export function`);
   }
