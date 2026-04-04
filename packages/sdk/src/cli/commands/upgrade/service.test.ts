@@ -27,10 +27,6 @@ vi.mock("./version-detector", () => ({
   detectInstalledVersion: vi.fn(),
 }));
 
-vi.mock("@/cli/shared/package-json", () => ({
-  readPackageJson: vi.fn().mockResolvedValue({ version: "2.0.0" }),
-}));
-
 vi.mock("node:child_process", () => ({
   spawnSync: vi.fn(),
 }));
@@ -83,10 +79,11 @@ describe("upgrade service", () => {
     const { upgrade } = await import("./service");
     await upgrade({ from: "1.33.0", dryRun: false, path: "/test" });
 
+    const expectedNpx = process.platform === "win32" ? "npx.cmd" : "npx";
     expect(spawnSync).toHaveBeenCalledWith(
-      "npx",
+      expectedNpx,
       expect.arrayContaining([
-        expect.stringContaining("@tailor-platform/sdk-codemod@"),
+        "@tailor-platform/sdk-codemod@latest",
         "--from",
         "1.33.0",
         "--to",
@@ -116,8 +113,9 @@ describe("upgrade service", () => {
     const { upgrade } = await import("./service");
     await upgrade({ from: "1.33.0", dryRun: true, path: "/test" });
 
+    const expectedNpx = process.platform === "win32" ? "npx.cmd" : "npx";
     expect(spawnSync).toHaveBeenCalledWith(
-      "npx",
+      expectedNpx,
       expect.arrayContaining(["--dry-run"]),
       expect.anything(),
     );
