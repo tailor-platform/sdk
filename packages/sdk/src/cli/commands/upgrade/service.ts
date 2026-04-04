@@ -129,6 +129,14 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
     });
   }
 
+  // Forward captured stderr so users see dry-run diffs and progress messages
+  // written by sdk-codemod. stderr is piped (not inherited) so that the error
+  // path above can surface it via CLIError, but on success we still need to
+  // replay it verbatim to keep the colorized unified diff output visible.
+  if (result.stderr) {
+    process.stderr.write(result.stderr);
+  }
+
   // Step 3: Parse JSON output
   let output: RunOutput;
   try {
