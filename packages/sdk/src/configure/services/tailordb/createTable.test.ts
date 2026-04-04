@@ -1035,6 +1035,28 @@ describe("createTable inline hook type auto-resolution", () => {
     );
   });
 
+  // Known TS limitation: inline enum hooks (descriptor-level) cannot narrow
+  // `value` to the literal union. The generic V in EnumDescriptor<V> is not in
+  // a direct inference position when contextual-typing callbacks inside a mapped
+  // object parameter (TS reverse-inference limitation). The widened V causes a
+  // hook return-type mismatch (string vs literal union), making the descriptor
+  // collapse to `never`.
+  //
+  // Workarounds that correctly resolve enum literal types:
+  //   1. Type-level hooks: options.hooks.<field>  (tested below)
+  //   2. Fluent API: db.enum(...).hooks(...)       (tested below)
+
+  it("fluent enum hook value is typed as literal union | null", () => {
+    const role = db.enum(["ADMIN", "USER"]).hooks({
+      create: ({ value }) => {
+        expectTypeOf(value).toEqualTypeOf<"ADMIN" | "USER" | null>();
+        return value ?? "USER";
+      },
+    });
+    const result = createTable("Test", { role });
+    expect(result.fields.role.type).toBe("enum");
+  });
+
   it("type-level hook on enum resolves value as literal union | null", () => {
     createTable(
       "Test",
