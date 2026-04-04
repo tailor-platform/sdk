@@ -51,10 +51,16 @@ export default function transform(source: string): string | null {
     },
   });
 
+  let totalArgs = 0;
+  let migratedArgs = 0;
+
   for (const callNode of callNodes) {
     // Find array/tuple arguments inside the call
     const args = callNode.getMultipleMatches("ARGS");
     for (const arg of args) {
+      if (!arg.isNamed() || arg.kind() === "comment") continue;
+      totalArgs++;
+
       // Match tuple pattern: ["package-name", config]
       if (arg.kind() === "array") {
         const children = arg
@@ -66,6 +72,7 @@ export default function transform(source: string): string | null {
           const mapping = PLUGIN_MAP[packageName];
 
           if (mapping) {
+            migratedArgs++;
             importsToAdd.set(mapping.importPath, mapping.functionName);
             // Build replacement: pluginFn(config) or pluginFn() if no config
             const configNodes = children.slice(1);
@@ -77,6 +84,12 @@ export default function transform(source: string): string | null {
         }
       }
     }
+  }
+
+  // If any arguments could not be migrated, skip the entire transform to avoid
+  // producing invalid code (e.g. mixing tuple syntax with plugin calls).
+  if (totalArgs > 0 && migratedArgs < totalArgs) {
+    return null;
   }
 
   // Step 2: Rename defineGenerators → definePlugins in the call expression
@@ -91,7 +104,11 @@ export default function transform(source: string): string | null {
     edits.push(id.replace("definePlugins"));
   }
 
-  // Step 3: Rename `generators` variable to `plugins` (only the export binding)
+  // Step 3: Rename `generators` variable to `plugins` (only the export binding).
+  // Known limitation: references to `generators` elsewhere in the same file
+  // (e.g. `export default { generators }`) are NOT renamed. The typical usage
+  // pattern is a single `export const generators = defineGenerators(...)` with
+  // no same-file references, so this is acceptable.
   const generatorsDecls = tree.findAll({
     rule: {
       kind: "variable_declarator",
