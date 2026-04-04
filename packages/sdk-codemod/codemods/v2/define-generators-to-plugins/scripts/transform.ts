@@ -174,14 +174,20 @@ export default function transform(source: string): string | null {
   // Apply all edits
   let result = tree.commitEdits(edits);
 
-  // Step 4: Add new import statements for plugin functions
+  // Step 4: Add new import statements for plugin functions (skip already-present ones)
   if (importsToAdd.size > 0) {
     const importLines: string[] = [];
     for (const [importPath, functionName] of importsToAdd) {
-      importLines.push(`import { ${functionName} } from "${importPath}";`);
+      const line = `import { ${functionName} } from "${importPath}";`;
+      // Skip if this import already exists in the file (mixed config scenario)
+      if (result.includes(importPath)) continue;
+      importLines.push(line);
     }
-    // Sort for deterministic output
+    // Sort for deterministic output and skip if all imports already present
     importLines.sort();
+    if (importLines.length === 0) {
+      return result;
+    }
 
     // Find insertion point: after the @tailor-platform/sdk import line
     const sdkImportRegex = /^(import\s+.*from\s+["']@tailor-platform\/sdk["'];?)$/m;
