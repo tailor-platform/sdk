@@ -179,8 +179,14 @@ export default function transform(source: string): string | null {
     const importLines: string[] = [];
     for (const [importPath, functionName] of importsToAdd) {
       const line = `import { ${functionName} } from "${importPath}";`;
-      // Skip if this import already exists in the file (mixed config scenario)
-      if (result.includes(importPath)) continue;
+      // Skip if this function is already imported (mixed config scenario).
+      // Use a targeted regex to match import statements containing the function
+      // name, rather than checking the import path which could match unrelated
+      // imports from the same module (e.g. importing a different symbol).
+      const importExists = new RegExp(`import\\s*\\{[^}]*\\b${functionName}\\b[^}]*\\}`, "m").test(
+        result,
+      );
+      if (importExists) continue;
       importLines.push(line);
     }
     // Sort for deterministic output and skip if all imports already present

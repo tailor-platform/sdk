@@ -28,7 +28,7 @@ export function resolveCodemodScript(scriptPath: string): string {
 
 /**
  * Get codemod packages applicable for a version range.
- * A codemod applies when: fromVersion < codemod.until <= toVersion
+ * A codemod applies when: since <= fromVersion < until <= toVersion
  * @param fromVersion - Current SDK version (semver)
  * @param toVersion - Target SDK version (semver)
  * @returns Array of applicable codemod packages in registration order
@@ -42,6 +42,9 @@ export function getApplicableCodemods(fromVersion: string, toVersion: string): C
   }
 
   return allCodemods.filter(
-    (codemod) => lt(fromVersion, codemod.until) && gte(toVersion, codemod.until),
+    (codemod) =>
+      gte(fromVersion, codemod.since) &&
+      lt(fromVersion, codemod.until) &&
+      gte(toVersion, codemod.until),
   );
 }
