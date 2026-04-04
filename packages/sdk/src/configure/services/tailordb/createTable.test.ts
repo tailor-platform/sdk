@@ -786,15 +786,25 @@ describe("createTable descriptor-level hooks value typing", () => {
     );
   });
 
-  it("array descriptor with hooks does not collapse to never", () => {
-    const hooks: Hook<unknown, string> = {
+  it("array string hooks value is typed as string[] | null", () => {
+    const hooks: Hook<unknown, string[]> = {
       create: ({ value }) => {
-        expectTypeOf(value).toEqualTypeOf<string | null>();
-        return value ?? "";
+        expectTypeOf(value).toEqualTypeOf<string[] | null>();
+        return value ?? [];
       },
     };
     const result = createTable("Test", { tags: { kind: "string", array: true, hooks } });
     expect(result.fields.tags.type).toBe("string");
+  });
+
+  it("array int hooks value is typed as number[] | null", () => {
+    const hooks: Hook<unknown, number[]> = {
+      create: ({ value }) => {
+        expectTypeOf(value).toEqualTypeOf<number[] | null>();
+        return value ?? [];
+      },
+    };
+    createTable("Test", { counts: { kind: "int", array: true, hooks } });
   });
 });
 

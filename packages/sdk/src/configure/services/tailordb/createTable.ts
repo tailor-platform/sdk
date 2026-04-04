@@ -18,7 +18,6 @@ import type { RelationType } from "@/types/tailordb";
 
 type CommonFieldOptions = {
   optional?: boolean;
-  array?: boolean;
   description?: string;
 };
 
@@ -44,34 +43,43 @@ type KindToTsType = {
     : K]: TailorToTs[KindToFieldType[K]];
 };
 
-// Hook and validate callbacks receive the base scalar type (e.g. `string`, `number`), not the
-// final output type adjusted for `optional`/`array`. Computing the exact output type from
-// descriptor flags would require a combinatorial explosion of type variants per kind; the fluent
-// API achieves this through method chaining instead. Use `db.*()` when precise hook typing matters.
-// Note: inline validate lambdas may lose contextual typing due to the TS union
-// `FieldValidateInput<O> | FieldValidateInput<O>[]`; hoist the validator if needed.
-type IndexableOptions<O = unknown> = {
+// Validate callbacks receive the base scalar type (e.g. `string`, `number`)
+// regardless of array/optional flags. Inline validate lambdas may lose
+// contextual typing due to the TS union `FieldValidateInput<O> |
+// FieldValidateInput<O>[]`; hoist the validator if needed.
+type FieldOptions<O = unknown> = {
   unique?: boolean;
   index?: boolean;
-  hooks?: Hook<unknown, O>;
   validate?: FieldValidateInput<O> | FieldValidateInput<O>[];
 };
 
+// Hook callbacks receive the correct output type: base scalar for scalar fields,
+// base scalar[] for array fields. The `optional` modifier does not affect hook
+// typing because hooks always receive `TReturn | null`.
+// Discriminated by `array: true` vs `array?: false` so TypeScript narrows to
+// the correct hook type per field.
+type ScalarOrArrayHooks<O> =
+  | { array?: false; hooks?: Hook<unknown, O> }
+  | { array: true; hooks?: Hook<unknown, O[]> };
+
 type StringDescriptor = CommonFieldOptions &
-  IndexableOptions<string> & {
+  FieldOptions<string> &
+  ScalarOrArrayHooks<string> & {
     kind: "string";
     vector?: boolean;
     serial?: SerialConfig<"string">;
   };
 
 type IntDescriptor = CommonFieldOptions &
-  IndexableOptions<number> & {
+  FieldOptions<number> &
+  ScalarOrArrayHooks<number> & {
     kind: "int";
     serial?: SerialConfig<"integer">;
   };
 
 type SimpleDescriptor<K extends keyof KindToTsType> = CommonFieldOptions &
-  IndexableOptions<KindToTsType[K]> & {
+  FieldOptions<KindToTsType[K]> &
+  ScalarOrArrayHooks<KindToTsType[K]> & {
     kind: K;
   };
 
@@ -81,13 +89,15 @@ type DateDescriptor = SimpleDescriptor<"date">;
 type DatetimeDescriptor = SimpleDescriptor<"datetime">;
 type TimeDescriptor = SimpleDescriptor<"time">;
 type DecimalDescriptor = CommonFieldOptions &
-  IndexableOptions<string> & {
+  FieldOptions<string> &
+  ScalarOrArrayHooks<string> & {
     kind: "decimal";
     scale?: number;
   };
 
 type UuidDescriptor = CommonFieldOptions &
-  IndexableOptions<string> & {
+  FieldOptions<string> &
+  ScalarOrArrayHooks<string> & {
     kind: "uuid";
     relation?: {
       type: RelationType;
@@ -103,7 +113,8 @@ type UuidDescriptor = CommonFieldOptions &
   };
 
 type EnumDescriptor<V extends AllowedValues = AllowedValues> = CommonFieldOptions &
-  IndexableOptions<AllowedValuesOutput<V>> & {
+  FieldOptions<AllowedValuesOutput<V>> &
+  ScalarOrArrayHooks<AllowedValuesOutput<V>> & {
     kind: "enum";
     values: V;
     typeName?: string;
@@ -115,6 +126,7 @@ type EnumDescriptor<V extends AllowedValues = AllowedValues> = CommonFieldOption
 // are caught at deployment time by the platform.
 type ObjectDescriptor = CommonFieldOptions & {
   kind: "object";
+  array?: boolean;
   fields: Record<string, FieldEntry>;
   typeName?: string;
 };
@@ -200,37 +212,6 @@ type ResolvedFieldMap<M extends Record<string, FieldEntry>> = {
   [K in keyof M]: ResolvedField<M[K]>;
 };
 
-// Rejects descriptors that combine array: true with index, unique, vector, or serial
-// (all unsupported by the platform).
-type RejectArrayCombinations<D extends Record<string, FieldEntry>> = {
-  [K in keyof D]: D[K] extends
-    | { array: true; unique: true }
-    | { array: true; index: true }
-    | { array: true; vector: true }
-    | { array: true; serial: object }
-    ? never
-    : D[K];
-};
-
-// Rejects descriptors that combine hooks and serial (mutually exclusive in fluent API).
-// The `kind: string` guard excludes TailorDBField instances whose hooks()/serial() methods extend `object`.
-type RejectHooksWithSerial<D extends Record<string, FieldEntry>> = {
-  [K in keyof D]: D[K] extends { kind: string; hooks: object; serial: object } ? never : D[K];
-};
-
-// Rejects unique: true on non-oneToOne uuid relations (platform rejects unique on n-1 relations).
-type RejectUniqueOnManyRelation<D extends Record<string, FieldEntry>> = {
-  [K in keyof D]: D[K] extends {
-    kind: "uuid";
-    unique: true;
-    relation: { type: infer T };
-  }
-    ? T extends "oneToOne" | "1-1"
-      ? D[K]
-      : never
-    : D[K];
-};
-
 // Rejects nested objects inside object descriptors (matching ExcludeNestedDBFields in fluent API).
 type RejectNestedSubFields<F extends Record<string, FieldEntry>> = {
   [K in keyof F]: F[K] extends
@@ -241,54 +222,65 @@ type RejectNestedSubFields<F extends Record<string, FieldEntry>> = {
     : F[K];
 };
 
-type RejectNestedInObject<D extends Record<string, FieldEntry>> = {
-  [K in keyof D]: D[K] extends { kind: "object"; fields: infer F }
-    ? F extends Record<string, FieldEntry>
-      ? D[K] & { fields: RejectNestedSubFields<F> }
-      : D[K]
-    : D[K];
-};
+// Computes the hook output type from a descriptor's own properties (kind,
+// array), without intersecting with the FieldDescriptor union. This avoids
+// distributive type expansion that would produce a union of base types.
+type DescriptorHookOutput<D> = D extends { array: true }
+  ? D extends { kind: "enum"; values: infer V extends AllowedValues }
+    ? AllowedValuesOutput<V>[]
+    : D extends { kind: infer K extends keyof KindToTsType }
+      ? KindToTsType[K][]
+      : unknown[]
+  : D extends { kind: "enum"; values: infer V extends AllowedValues }
+    ? AllowedValuesOutput<V>
+    : D extends { kind: infer K extends keyof KindToTsType }
+      ? KindToTsType[K]
+      : unknown;
 
-// Validates hook return types against the descriptor's base output type (before array/optional)
-// at the call site. Uses DescriptorBaseOutput to stay consistent with IndexableOptions, which
-// types hooks with the base scalar (see comment above IndexableOptions).
-type ValidateHookTypes<D extends Record<string, FieldEntry>> = {
-  [K in keyof D]: D[K] extends FieldDescriptor & { hooks: infer H }
-    ? H extends Hook<unknown, DescriptorBaseOutput<D[K] & FieldDescriptor>>
-      ? D[K]
-      : never
-    : D[K];
-};
-
-// Validates relation key against the target type's fields at the createTable call site.
-// Every type implicitly has an `id` field, so `"id"` is always a valid key.
-type ValidateRelationKeys<D extends Record<string, FieldEntry>> = {
-  [K in keyof D]: D[K] extends {
-    kind: "uuid";
-    relation: { toward: { type: infer T; key: infer Key } };
-  }
-    ? Key extends string
-      ? T extends TailorAnyDBType
-        ? Key extends (keyof T["fields"] & string) | "id"
+// All descriptor-level validations in a single mapped type to minimize type
+// evaluation passes (avoids combinatorial explosion with union descriptors).
+type ValidatedDescriptors<D extends Record<string, FieldEntry>> = D & {
+  [K in keyof D]: D[K] extends // 1. RejectArrayCombinations: array + index/unique/vector/serial
+    | { array: true; unique: true }
+    | { array: true; index: true }
+    | { array: true; vector: true }
+    | { array: true; serial: object }
+    ? never
+    : // 2. RejectHooksWithSerial: hooks + serial are mutually exclusive
+      D[K] extends { kind: string; hooks: object; serial: object }
+      ? never
+      : // 3. RejectUniqueOnManyRelation: unique only allowed on oneToOne uuid relations
+        D[K] extends { kind: "uuid"; unique: true; relation: { type: infer T } }
+        ? T extends "oneToOne" | "1-1"
           ? D[K]
           : never
-        : T extends "self"
-          ? Key extends (keyof D & string) | "id"
-            ? D[K]
-            : never
-          : D[K]
-      : D[K]
-    : D[K];
+        : // 4. RejectNestedInObject: no nested objects inside object fields
+          D[K] extends { kind: "object"; fields: infer F }
+          ? F extends Record<string, FieldEntry>
+            ? D[K] & { fields: RejectNestedSubFields<F> }
+            : D[K]
+          : // 5. ValidateHookTypes: hook return type matches field output type.
+            //    Infer H from D[K] directly (not via FieldDescriptor intersection)
+            //    to avoid distributive type expansion from ScalarOrArray variants.
+            D[K] extends { kind: string; hooks: infer H }
+            ? H extends Hook<unknown, DescriptorHookOutput<D[K]>>
+              ? D[K]
+              : never
+            : // 6. ValidateRelationKeys: relation key must exist in target type
+              D[K] extends { kind: "uuid"; relation: { toward: { type: infer T; key: infer Key } } }
+              ? Key extends string
+                ? T extends TailorAnyDBType
+                  ? Key extends (keyof T["fields"] & string) | "id"
+                    ? D[K]
+                    : never
+                  : T extends "self"
+                    ? Key extends (keyof D & string) | "id"
+                      ? D[K]
+                      : never
+                    : D[K]
+                : D[K]
+              : D[K];
 };
-
-// Combined constraint: all descriptor-level validations applied at the createTable call site.
-type ValidatedDescriptors<D extends Record<string, FieldEntry>> = D &
-  RejectArrayCombinations<D> &
-  RejectHooksWithSerial<D> &
-  RejectUniqueOnManyRelation<D> &
-  RejectNestedInObject<D> &
-  ValidateHookTypes<D> &
-  ValidateRelationKeys<D>;
 
 type CreateTableOptions<
   FieldNames extends string = string,
