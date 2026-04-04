@@ -124,14 +124,20 @@ export default function transform(source: string): string | null {
     },
   });
 
+  // Check across ALL SDK import statements whether definePlugins is already
+  // imported (may be in a different statement than defineGenerators).
+  const hasDefinePlugins = sdkImportStatements.some((stmt) =>
+    stmt
+      .findAll({ rule: { kind: "import_specifier" } })
+      .some((s) =>
+        s.children().some((c: SgNode) => c.kind() === "identifier" && c.text() === "definePlugins"),
+      ),
+  );
+
   for (const importStmt of sdkImportStatements) {
     const specifiers = importStmt.findAll({
       rule: { kind: "import_specifier" },
     });
-
-    const hasDefinePlugins = specifiers.some((s) =>
-      s.children().some((c: SgNode) => c.kind() === "identifier" && c.text() === "definePlugins"),
-    );
 
     for (const spec of specifiers) {
       const identNode = spec
