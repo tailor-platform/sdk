@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { fileURLToPath } from "node:url";
 import * as path from "pathe";
 import { arg, defineCommand, runMain } from "politty";
 import { readPackageJSON } from "pkg-types";
@@ -8,7 +9,7 @@ import { getApplicableCodemods, resolveCodemodScript } from "./registry";
 import { runCodemods } from "./runner";
 import type { RunOutput } from "./types";
 
-const packageJson = await readPackageJSON(new URL("../package.json", import.meta.url).pathname);
+const packageJson = await readPackageJSON(path.dirname(fileURLToPath(import.meta.url)) + "/..");
 
 const main = defineCommand({
   name: packageJson.name ?? "sdk-codemod",

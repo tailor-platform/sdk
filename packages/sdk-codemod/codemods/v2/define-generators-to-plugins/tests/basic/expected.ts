@@ -9,7 +9,7 @@ const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const outDir = path.join(__dirname, "generators-compat-out");
 
 export default config;
-export const plugins = definePlugins(
+export const generators = definePlugins(
   kyselyTypePlugin({ distPath: path.join(outDir, "db.ts") }),
   enumConstantsPlugin({ distPath: path.join(outDir, "enums.ts") }),
 );
