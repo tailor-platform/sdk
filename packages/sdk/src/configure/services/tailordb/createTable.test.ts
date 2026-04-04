@@ -1,6 +1,6 @@
 import { describe, it, expectTypeOf, expect } from "vitest";
 import { createTable, timestampFields } from "./createTable";
-import { unsafeAllowAllGqlPermission } from "./permission";
+import { unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "./permission";
 import { db } from "./schema";
 import type { Hook } from "./types";
 import type { output } from "@/configure/types/helpers";
@@ -951,5 +951,105 @@ describe("createTable type-level options", () => {
       { gqlPermission: unsafeAllowAllGqlPermission },
     );
     expect(result.metadata.permissions.gql).toBeDefined();
+  });
+});
+
+describe("createTable inline hook type auto-resolution", () => {
+  it("inline scalar string hook value is typed as string | null", () => {
+    createTable("Test", {
+      name: {
+        kind: "string",
+        hooks: {
+          create: ({ value }) => {
+            expectTypeOf(value).toEqualTypeOf<string | null>();
+            return value ?? "default";
+          },
+        },
+      },
+    });
+  });
+
+  it("inline array string hook value is typed as string[] | null", () => {
+    createTable("Test", {
+      tags: {
+        kind: "string",
+        array: true,
+        hooks: {
+          create: ({ value }) => {
+            expectTypeOf(value).toEqualTypeOf<string[] | null>();
+            return value ?? [];
+          },
+        },
+      },
+    });
+  });
+
+  it("inline array int hook value is typed as number[] | null", () => {
+    createTable("Test", {
+      counts: {
+        kind: "int",
+        array: true,
+        hooks: {
+          create: ({ value }) => {
+            expectTypeOf(value).toEqualTypeOf<number[] | null>();
+            return value ?? [];
+          },
+        },
+      },
+    });
+  });
+
+  it("type-level hook on scalar string resolves value as string | null", () => {
+    createTable(
+      "Test",
+      { name: { kind: "string" } },
+      {
+        hooks: {
+          name: {
+            create: ({ value }) => {
+              expectTypeOf(value).toEqualTypeOf<string | null>();
+              return value ?? "default";
+            },
+          },
+        },
+        permission: unsafeAllowAllTypePermission,
+      },
+    );
+  });
+
+  it("type-level hook on array string resolves value as string[] | null", () => {
+    createTable(
+      "Test",
+      { tags: { kind: "string", array: true } },
+      {
+        hooks: {
+          tags: {
+            create: ({ value }) => {
+              expectTypeOf(value).toEqualTypeOf<string[] | null>();
+              return value ?? [];
+            },
+          },
+        },
+        permission: unsafeAllowAllTypePermission,
+      },
+    );
+  });
+
+  it("type-level hook on enum resolves value as literal union | null", () => {
+    createTable(
+      "Test",
+      { role: { kind: "enum", values: ["ADMIN", "USER"] } },
+      {
+        hooks: {
+          role: {
+            create: ({ value }) => {
+              expectTypeOf(value).toEqualTypeOf<"ADMIN" | "USER" | null>();
+              return value ?? "USER";
+            },
+          },
+        },
+        permission: unsafeAllowAllTypePermission,
+      },
+    );
   });
 });

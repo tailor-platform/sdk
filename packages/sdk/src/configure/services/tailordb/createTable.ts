@@ -446,6 +446,18 @@ type AllFields<D extends Record<string, FieldEntry>> = { id: IdField } & Resolve
  * });
  * export type user = typeof user;
  */
+// Overload 1: FieldDescriptor-only (provides full contextual typing for inline hooks)
+export function createTable<const D extends { id?: never } & Record<string, FieldDescriptor>>(
+  name: string | [string, string],
+  descriptors: [D] extends [ValidatedDescriptors<D>] ? D : ValidatedDescriptors<D>,
+  options?: CreateTableOptions<keyof AllFields<D> & string, AllFields<D>>,
+): TailorDBType<AllFields<D>>;
+// Overload 2: mixed FieldDescriptor + TailorAnyDBField (fallback)
+export function createTable<const D extends { id?: never } & Record<string, FieldEntry>>(
+  name: string | [string, string],
+  descriptors: [D] extends [ValidatedDescriptors<D>] ? D : ValidatedDescriptors<D>,
+  options?: CreateTableOptions<keyof AllFields<D> & string, AllFields<D>>,
+): TailorDBType<AllFields<D>>;
 export function createTable<const D extends { id?: never } & Record<string, FieldEntry>>(
   name: string | [string, string],
   descriptors: [D] extends [ValidatedDescriptors<D>] ? D : ValidatedDescriptors<D>,
