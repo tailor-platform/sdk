@@ -56,7 +56,7 @@ import {
 } from "@/cli/commands/tailordb/migrate/snapshot";
 import { type TailorDBService } from "@/cli/services/tailordb/service";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
-import { logger, styles } from "@/cli/shared/logger";
+import { logger } from "@/cli/shared/logger";
 import { createChangeSet, type HasName, type ChangeSet } from "../change-set";
 import { areNormalizedEqual, normalizeProtoConfig } from "../compare";
 import { actionSymbol, type DisplayAction, type GroupedDisplayEntry } from "../grouped-display";
@@ -1006,9 +1006,6 @@ export async function planTailorDB(context: PlanContext) {
     planGqlPermissions(client, workspaceId, tailordbs, deletedServices, forceApplyAll),
   ]);
 
-  serviceChangeSet.print();
-  printTailorDBResourceChanges(typeChangeSet, gqlPermissionChangeSet);
-
   return {
     changeSet: {
       service: serviceChangeSet,
@@ -1092,21 +1089,6 @@ export function formatTailorDBResourceChangeEntries(
       gqlPermissionChangeSet.replaces,
     ),
   ];
-}
-
-function printTailorDBResourceChanges(
-  typeChangeSet: ChangeSet<HasName, HasName, HasName>,
-  gqlPermissionChangeSet: ChangeSet<HasName, HasName, HasName>,
-) {
-  const entries = formatTailorDBResourceChangeEntries(typeChangeSet, gqlPermissionChangeSet);
-  if (entries.length === 0) {
-    return;
-  }
-
-  logger.log(styles.bold("TailorDB resources:"));
-  for (const entry of entries) {
-    logger.log(`  ${entry.symbol} ${entry.name} (${entry.labels.join(", ")})`);
-  }
 }
 
 type CreateService = {

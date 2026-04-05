@@ -109,30 +109,6 @@ function formatGroupedDisplayLine(entry: GroupedDisplayEntry) {
     : `${entry.symbol} ${entry.name}`;
 }
 
-/**
- * Print a titled section of grouped display entries.
- * @param title - Section title
- * @param entries - Entries to print
- * @param indent - Leading spaces before the title
- * @returns True when any entries were printed
- */
-export function printGroupedDisplaySection(
-  title: string,
-  entries: ReadonlyArray<GroupedDisplayEntry>,
-  indent = 0,
-) {
-  if (entries.length === 0) {
-    return false;
-  }
-
-  logger.log(styles.bold(`${" ".repeat(indent)}${title}:`));
-  const entryIndent = " ".repeat(indent + 2);
-  for (const entry of entries) {
-    logger.log(`${entryIndent}${formatGroupedDisplayLine(entry)}`);
-  }
-  return true;
-}
-
 function formatFunctionRegistryDisplayName(name: string): string {
   if (name.startsWith("resolver--")) {
     const [, namespace, resolverName] = name.split("--");
@@ -169,38 +145,119 @@ export function buildRemainingFunctionRegistryEntries(
   names: RelatedFunctionRegistryNameSets,
   consumed: RelatedFunctionRegistryNameSets = createRelatedFunctionRegistryNameSets(),
 ): GroupedDisplayEntry[] {
+  const actions = [
+    ["create", names.creates, consumed.creates],
+    ["delete", names.deletes, consumed.deletes],
+    ["update", names.updates, consumed.updates],
+    ["replace", names.replaces, consumed.replaces],
+  ] as const;
+
+  return actions.flatMap(([action, nameSet, consumedSet]) =>
+    [...nameSet]
+      .filter((name) => !consumedSet.has(name))
+      .map((name) => ({
+        action,
+        symbol: actionSymbol(action),
+        name: formatFunctionRegistryDisplayName(name),
+        labels: ["functionRegistry"],
+      })),
+  );
+}
+
+/**
+ * Format change set entries with function registry grouping.
+ *
+ * For each item in creates/updates/deletes, calls `getFunctionRegistryNames` to
+ * derive zero or more function registry names. When a matching function registry
+ * change exists for the same action, the item is displayed with both the resource
+ * label and "functionRegistry". Ungrouped function registry changes are appended.
+ * @param resourceLabel - Label for the resource kind (e.g. "executor", "resolver")
+ * @param changeSet - Resource change set with creates/updates/deletes/replaces
+ * @param changeSet.creates - Created resources
+ * @param changeSet.updates - Updated resources
+ * @param changeSet.deletes - Deleted resources
+ * @param changeSet.replaces - Replaced resources
+ * @param functionRegistryChanges - Related function registry changes
+ * @param getFunctionRegistryNames - Derives function registry names from a resource item
+ * @returns Display entries for CLI output
+ */
+export function formatChangeEntriesWithFunctionRegistry<
+  C extends HasName,
+  U extends HasName,
+  D extends HasName,
+>(
+  resourceLabel: string,
+  changeSet: {
+    creates: ReadonlyArray<C>;
+    updates: ReadonlyArray<U>;
+    deletes: ReadonlyArray<D>;
+    replaces: ReadonlyArray<HasName>;
+  },
+  functionRegistryChanges: RelatedFunctionRegistryChanges | undefined,
+  getFunctionRegistryNames: (item: C | U | D, action: DisplayAction) => string[],
+): GroupedDisplayEntry[] {
+  const functionNames = createRelatedFunctionRegistryNameSets(functionRegistryChanges);
+  const consumed: RelatedFunctionRegistryNameSets = createRelatedFunctionRegistryNameSets();
+
+  function processItems(
+    items: ReadonlyArray<C | U | D>,
+    action: DisplayAction,
+    fnNameSet: Set<string>,
+    consumedSet: Set<string>,
+  ): GroupedDisplayEntry[] {
+    return items.map((item) => {
+      const names = getFunctionRegistryNames(item, action);
+      const hasMatch = names.some((name) => fnNameSet.has(name));
+      if (hasMatch) {
+        for (const name of names) {
+          if (fnNameSet.has(name)) {
+            consumedSet.add(name);
+          }
+        }
+      }
+      return {
+        action,
+        symbol: actionSymbol(action),
+        name: item.name,
+        labels: hasMatch ? [resourceLabel, "functionRegistry"] : [resourceLabel],
+      };
+    });
+  }
+
   return [
-    ...[...names.creates]
-      .filter((name) => !consumed.creates.has(name))
-      .map((name) => ({
-        action: "create" as const,
-        symbol: actionSymbol("create"),
-        name: formatFunctionRegistryDisplayName(name),
-        labels: ["functionRegistry"],
-      })),
-    ...[...names.deletes]
-      .filter((name) => !consumed.deletes.has(name))
-      .map((name) => ({
-        action: "delete" as const,
-        symbol: actionSymbol("delete"),
-        name: formatFunctionRegistryDisplayName(name),
-        labels: ["functionRegistry"],
-      })),
-    ...[...names.updates]
-      .filter((name) => !consumed.updates.has(name))
-      .map((name) => ({
-        action: "update" as const,
-        symbol: actionSymbol("update"),
-        name: formatFunctionRegistryDisplayName(name),
-        labels: ["functionRegistry"],
-      })),
-    ...[...names.replaces]
-      .filter((name) => !consumed.replaces.has(name))
-      .map((name) => ({
-        action: "replace" as const,
-        symbol: actionSymbol("replace"),
-        name: formatFunctionRegistryDisplayName(name),
-        labels: ["functionRegistry"],
-      })),
+    ...processItems(changeSet.creates, "create", functionNames.creates, consumed.creates),
+    ...processItems(changeSet.deletes, "delete", functionNames.deletes, consumed.deletes),
+    ...processItems(changeSet.updates, "update", functionNames.updates, consumed.updates),
+    ...changeSet.replaces.map((item) => ({
+      action: "replace" as const,
+      symbol: actionSymbol("replace"),
+      name: item.name,
+      labels: [resourceLabel],
+    })),
+    ...buildRemainingFunctionRegistryEntries(functionNames, consumed),
   ];
+}
+
+/**
+ * Print a titled section of grouped display entries.
+ * @param title - Section title
+ * @param entries - Entries to print
+ * @param indent - Leading spaces before the title
+ * @returns True when any entries were printed
+ */
+export function printGroupedDisplaySection(
+  title: string,
+  entries: ReadonlyArray<GroupedDisplayEntry>,
+  indent = 0,
+) {
+  if (entries.length === 0) {
+    return false;
+  }
+
+  logger.log(styles.bold(`${" ".repeat(indent)}${title}:`));
+  const entryIndent = " ".repeat(indent + 2);
+  for (const entry of entries) {
+    logger.log(`${entryIndent}${formatGroupedDisplayLine(entry)}`);
+  }
+  return true;
 }

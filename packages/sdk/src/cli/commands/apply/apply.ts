@@ -40,9 +40,15 @@ import {
   applyFunctionRegistry,
   collectFunctionEntries,
   filterBundledWorkflowJobs,
+  isWorkflowJobFunctionName,
   planFunctionRegistry,
   splitFunctionRegistryChanges,
 } from "./function-registry";
+import {
+  formatChangeSetEntries,
+  printGroupedDisplaySection,
+  type GroupedDisplayEntry,
+} from "./grouped-display";
 import { applyIdP, planIdP } from "./idp";
 import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey } from "./label";
 import { applyPipeline, formatResolverChangeEntries, planPipeline } from "./resolver";
@@ -50,7 +56,6 @@ import { applySecretManager, planSecretManager } from "./secret-manager";
 import { applyStaticWebsite, planStaticWebsite } from "./staticwebsite";
 import { applyTailorDB, formatTailorDBResourceChangeEntries, planTailorDB } from "./tailordb";
 import { applyWorkflow, formatWorkflowChangeEntries, planWorkflow } from "./workflow";
-import type { GroupedDisplayEntry } from "./grouped-display";
 import type { OperatorClient } from "@/cli/shared/client";
 import type { LoadedConfig } from "@/cli/shared/config-loader";
 
@@ -182,7 +187,7 @@ async function shouldForceApplyAll(
   return false;
 }
 
-function printPlanSummary(results: {
+function printPlanResults(results: {
   functionRegistry: Awaited<ReturnType<typeof planFunctionRegistry>>;
   tailorDB: Awaited<ReturnType<typeof planTailorDB>>;
   staticWebsite: Awaited<ReturnType<typeof planStaticWebsite>>;
@@ -194,7 +199,55 @@ function printPlanSummary(results: {
   workflow: Awaited<ReturnType<typeof planWorkflow>>;
   secretManager: Awaited<ReturnType<typeof planSecretManager>>;
 }) {
-  const summary = summarizePlanResultsForDisplay(results);
+  const executorEntries = formatExecutorChangeEntries(
+    results.executor.changeSet,
+    buildPlannedExecutorsByName(results.executor.changeSet),
+    results.functionRegistry.executorFunctionChanges,
+  );
+  const resolverEntries = formatResolverChangeEntries(
+    results.pipeline.changeSet.resolver,
+    results.functionRegistry.resolverFunctionChanges,
+  );
+  const workflowEntries = formatWorkflowChangeEntries(
+    results.workflow.changeSet,
+    results.functionRegistry.workflowJobChanges,
+  );
+  const authHookEntries = formatAuthHookChangeEntries(
+    results.auth.changeSet.authHook,
+    results.functionRegistry.authHookFunctionChanges,
+  );
+  const tailorDBEntries = formatTailorDBResourceChangeEntries(
+    results.tailorDB.changeSet.type,
+    results.tailorDB.changeSet.gqlPermission,
+  );
+  const authEntries: GroupedDisplayEntry[] = [
+    ...formatChangeSetEntries(results.auth.changeSet.service, ["service"]),
+    ...formatChangeSetEntries(results.auth.changeSet.idpConfig, ["idpConfig"]),
+    ...formatChangeSetEntries(results.auth.changeSet.userProfileConfig, ["userProfileConfig"]),
+    ...formatChangeSetEntries(results.auth.changeSet.tenantConfig, ["tenantConfig"]),
+    ...formatChangeSetEntries(results.auth.changeSet.machineUser, ["machineUser"]),
+    ...authHookEntries,
+    ...formatChangeSetEntries(results.auth.changeSet.oauth2Client, ["oauth2Client"]),
+    ...formatChangeSetEntries(results.auth.changeSet.scim, ["scimConfig"]),
+    ...formatChangeSetEntries(results.auth.changeSet.scimResource, ["scimResource"]),
+  ];
+
+  // Print grouped sections
+  printGroupedDisplaySection("Executors", executorEntries);
+  printGroupedDisplaySection("Workflows", workflowEntries);
+  printGroupedDisplaySection("TailorDB resources", tailorDBEntries);
+  printGroupedDisplaySection("Pipeline resolvers", resolverEntries);
+  printGroupedDisplaySection("Auth", authEntries);
+
+  // Compute summary
+  const summary = summarizePlanResultsForDisplay(
+    results,
+    executorEntries,
+    resolverEntries,
+    workflowEntries,
+    authHookEntries,
+    tailorDBEntries,
+  );
 
   logger.log(formatPlanSummary(summary));
 }
@@ -299,20 +352,32 @@ function countUnchangedItemsWithoutChangedRelations<T extends HasName>(
  * @param results.executor - Planned executor changes
  * @param results.workflow - Planned workflow changes
  * @param results.secretManager - Planned secret manager changes
+ * @param executorEntries - Pre-computed executor display entries
+ * @param resolverEntries - Pre-computed resolver display entries
+ * @param workflowEntries - Pre-computed workflow display entries
+ * @param authHookEntries - Pre-computed auth hook display entries
+ * @param tailorDBEntries - Pre-computed TailorDB display entries
  * @returns Aggregated plan summary aligned with grouped display rows
  */
-export function summarizePlanResultsForDisplay(results: {
-  functionRegistry: Awaited<ReturnType<typeof planFunctionRegistry>>;
-  tailorDB: Awaited<ReturnType<typeof planTailorDB>>;
-  staticWebsite: Awaited<ReturnType<typeof planStaticWebsite>>;
-  idp: Awaited<ReturnType<typeof planIdP>>;
-  auth: Awaited<ReturnType<typeof planAuth>>;
-  pipeline: Awaited<ReturnType<typeof planPipeline>>;
-  app: Awaited<ReturnType<typeof planApplication>>;
-  executor: Awaited<ReturnType<typeof planExecutor>>;
-  workflow: Awaited<ReturnType<typeof planWorkflow>>;
-  secretManager: Awaited<ReturnType<typeof planSecretManager>>;
-}): PlanSummary {
+export function summarizePlanResultsForDisplay(
+  results: {
+    functionRegistry: Awaited<ReturnType<typeof planFunctionRegistry>>;
+    tailorDB: Awaited<ReturnType<typeof planTailorDB>>;
+    staticWebsite: Awaited<ReturnType<typeof planStaticWebsite>>;
+    idp: Awaited<ReturnType<typeof planIdP>>;
+    auth: Awaited<ReturnType<typeof planAuth>>;
+    pipeline: Awaited<ReturnType<typeof planPipeline>>;
+    app: Awaited<ReturnType<typeof planApplication>>;
+    executor: Awaited<ReturnType<typeof planExecutor>>;
+    workflow: Awaited<ReturnType<typeof planWorkflow>>;
+    secretManager: Awaited<ReturnType<typeof planSecretManager>>;
+  },
+  executorEntries: ReadonlyArray<GroupedDisplayEntry>,
+  resolverEntries: ReadonlyArray<GroupedDisplayEntry>,
+  workflowEntries: ReadonlyArray<GroupedDisplayEntry>,
+  authHookEntries: ReadonlyArray<GroupedDisplayEntry>,
+  tailorDBEntries: ReadonlyArray<GroupedDisplayEntry>,
+): PlanSummary {
   const summary: PlanSummary = {
     create: 0,
     update: 0,
@@ -348,10 +413,7 @@ export function summarizePlanResultsForDisplay(results: {
   addPlanSummary(
     summary,
     summarizeDisplayEntries(
-      formatTailorDBResourceChangeEntries(
-        results.tailorDB.changeSet.type,
-        results.tailorDB.changeSet.gqlPermission,
-      ),
+      tailorDBEntries,
       countUnchangedNamesExcludingChanged(
         [
           results.tailorDB.changeSet.type.unchanged,
@@ -374,10 +436,7 @@ export function summarizePlanResultsForDisplay(results: {
   addPlanSummary(
     summary,
     summarizeDisplayEntries(
-      formatResolverChangeEntries(
-        results.pipeline.changeSet.resolver,
-        results.functionRegistry.resolverFunctionChanges,
-      ),
+      resolverEntries,
       countUnchangedItemsWithoutChangedRelations(
         results.pipeline.changeSet.resolver.unchanged as ReadonlyArray<
           HasName & { namespaceName?: string }
@@ -397,11 +456,7 @@ export function summarizePlanResultsForDisplay(results: {
   addPlanSummary(
     summary,
     summarizeDisplayEntries(
-      formatExecutorChangeEntries(
-        results.executor.changeSet,
-        buildPlannedExecutorsByName(results.executor.changeSet),
-        results.functionRegistry.executorFunctionChanges,
-      ),
+      executorEntries,
       countUnchangedItemsWithoutChangedRelations(
         results.executor.changeSet.unchanged,
         [
@@ -418,10 +473,7 @@ export function summarizePlanResultsForDisplay(results: {
   addPlanSummary(
     summary,
     summarizeDisplayEntries(
-      formatWorkflowChangeEntries(
-        results.workflow.changeSet,
-        results.functionRegistry.workflowJobChanges,
-      ),
+      workflowEntries,
       countUnchangedItemsWithoutChangedRelations(
         results.workflow.changeSet.unchanged as ReadonlyArray<
           HasName & { usedJobNames?: string[] }
@@ -440,10 +492,7 @@ export function summarizePlanResultsForDisplay(results: {
   addPlanSummary(
     summary,
     summarizeDisplayEntries(
-      formatAuthHookChangeEntries(
-        results.auth.changeSet.authHook,
-        results.functionRegistry.authHookFunctionChanges,
-      ),
+      authHookEntries,
       countUnchangedItemsWithoutChangedRelations(
         results.auth.changeSet.authHook.unchanged,
         [
@@ -627,23 +676,18 @@ export async function apply(options?: ApplyOptions) {
       );
       const unchangedWorkflowJobs = new Set(
         functionRegistry.changeSet.unchanged
-          .map((entry) => entry.name)
-          .filter((name) => name.startsWith("workflow--"))
-          .map((name) => name.slice("workflow--".length)),
+          .filter((entry) => isWorkflowJobFunctionName(entry.name))
+          .map((entry) => entry.name.slice("workflow--".length)),
       );
       const [tailorDB, staticWebsite, idp, auth, pipeline, app, executor, workflow, secretManager] =
         await Promise.all([
           withSpan("plan.tailorDB", () => planTailorDB(ctx)),
           withSpan("plan.staticWebsite", () => planStaticWebsite(ctx)),
           withSpan("plan.idp", () => planIdP(ctx)),
-          withSpan("plan.auth", () => planAuth(ctx, functionRegistry.authHookFunctionChanges)),
-          withSpan("plan.pipeline", () =>
-            planPipeline(ctx, functionRegistry.resolverFunctionChanges),
-          ),
+          withSpan("plan.auth", () => planAuth(ctx)),
+          withSpan("plan.pipeline", () => planPipeline(ctx)),
           withSpan("plan.application", () => planApplication(ctx)),
-          withSpan("plan.executor", () =>
-            planExecutor(ctx, functionRegistry.executorFunctionChanges),
-          ),
+          withSpan("plan.executor", () => planExecutor(ctx)),
           withSpan("plan.workflow", () =>
             planWorkflow(
               client,
@@ -652,7 +696,6 @@ export async function apply(options?: ApplyOptions) {
               workflowService?.workflows ?? {},
               workflowBuildResult?.mainJobDeps ?? {},
               unchangedWorkflowJobs,
-              functionRegistry.workflowJobChanges,
             ),
           ),
           withSpan("plan.secretManager", () => planSecretManager(ctx)),
@@ -763,7 +806,7 @@ export async function apply(options?: ApplyOptions) {
       }
     });
 
-    printPlanSummary({
+    printPlanResults({
       functionRegistry,
       tailorDB,
       staticWebsite,

@@ -1,17 +1,12 @@
 import { type ApplyPhase } from "@/cli/commands/apply/apply";
 import { parseDuration } from "@/cli/shared/args";
 import { type OperatorClient, fetchAll } from "@/cli/shared/client";
-import { logger, styles } from "@/cli/shared/logger";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import { workflowJobFunctionName } from "./function-registry";
 import {
-  actionSymbol,
-  buildRemainingFunctionRegistryEntries,
-  createRelatedFunctionRegistryNameSets,
-  type DisplayAction,
+  formatChangeEntriesWithFunctionRegistry,
   type GroupedDisplayEntry,
-  type RelatedFunctionRegistryNameSets,
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
 import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
@@ -271,12 +266,6 @@ function jobFunctionTrn(workspaceId: string, name: string) {
  * @param workflows - Parsed workflows
  * @param mainJobDeps - Main job dependencies by workflow
  * @param unchangedJobFunctions - Job functions already proven unchanged by function registry plan
- * @param workflowJobFunctionChanges - Related function registry changes for workflow jobs
- * @param workflowJobFunctionChanges.creates - Function registry creations
- * @param workflowJobFunctionChanges.updates - Function registry updates
- * @param workflowJobFunctionChanges.deletes - Function registry deletions
- * @param workflowJobFunctionChanges.replaces - Function registry replacements
- * @param workflowJobFunctionChanges.unchanged - Function registry unchanged entries
  * @returns Planned workflow changes
  */
 export async function planWorkflow(
@@ -285,14 +274,7 @@ export async function planWorkflow(
   appName: string,
   workflows: Record<string, Workflow>,
   mainJobDeps: Record<string, string[]>,
-  unchangedJobFunctions: ReadonlySet<string> = new Set<string>(),
-  workflowJobFunctionChanges?: {
-    creates: ReadonlyArray<HasName>;
-    updates: ReadonlyArray<HasName>;
-    deletes: ReadonlyArray<HasName>;
-    replaces: ReadonlyArray<HasName>;
-    unchanged: ReadonlyArray<HasName>;
-  },
+  unchangedJobFunctions: ReadonlySet<string>,
 ) {
   const changeSet = createChangeSet<CreateWorkflow, UpdateWorkflow, DeleteWorkflow>("Workflows");
   const conflicts: OwnerConflict[] = [];
@@ -409,7 +391,6 @@ export async function planWorkflow(
     }
   });
 
-  printWorkflowChanges(changeSet, workflowJobFunctionChanges);
   return {
     changeSet,
     conflicts,
@@ -422,42 +403,10 @@ export async function planWorkflow(
 
 type WorkflowDisplayEntry = GroupedDisplayEntry;
 
-function collectWorkflowDisplayEntries<
-  T extends Pick<CreateWorkflow | UpdateWorkflow, "name" | "usedJobNames">,
->(
-  action: DisplayAction,
-  workflowItems: ReadonlyArray<T>,
-  workflowJobFunctionNames: ReadonlySet<string>,
-  consumedWorkflowJobFunctionNames: Set<string>,
-) {
-  return workflowItems.map((item) => {
-    const matchingFunctionNames = new Set<string>();
-    for (const jobName of item.usedJobNames) {
-      const functionName = workflowJobFunctionName(jobName);
-      if (workflowJobFunctionNames.has(functionName)) {
-        matchingFunctionNames.add(functionName);
-      }
-    }
-    for (const functionName of matchingFunctionNames) {
-      consumedWorkflowJobFunctionNames.add(functionName);
-    }
-    return {
-      action,
-      symbol: actionSymbol(action),
-      name: item.name,
-      labels: matchingFunctionNames.size > 0 ? ["workflow", "functionRegistry"] : ["workflow"],
-    };
-  });
-}
-
 /**
  * Format workflow changes for grouped dry-run display.
  * @param changeSet - Workflow changes
  * @param workflowJobFunctionChanges - Related function registry changes for workflow jobs
- * @param workflowJobFunctionChanges.creates - Function registry creations
- * @param workflowJobFunctionChanges.updates - Function registry updates
- * @param workflowJobFunctionChanges.deletes - Function registry deletions
- * @param workflowJobFunctionChanges.replaces - Function registry replacements
  * @returns Display entries for workflow output
  */
 export function formatWorkflowChangeEntries(
@@ -467,57 +416,15 @@ export function formatWorkflowChangeEntries(
   >,
   workflowJobFunctionChanges?: RelatedFunctionRegistryChanges,
 ): WorkflowDisplayEntry[] {
-  const functionNames = createRelatedFunctionRegistryNameSets(workflowJobFunctionChanges);
-  const consumed: RelatedFunctionRegistryNameSets = createRelatedFunctionRegistryNameSets();
-
-  const entries = [
-    ...collectWorkflowDisplayEntries(
-      "create",
-      changeSet.creates,
-      functionNames.creates,
-      consumed.creates,
-    ),
-    ...collectWorkflowDisplayEntries(
-      "delete",
-      changeSet.deletes,
-      functionNames.deletes,
-      consumed.deletes,
-    ),
-    ...collectWorkflowDisplayEntries(
-      "update",
-      changeSet.updates,
-      functionNames.updates,
-      consumed.updates,
-    ),
-    ...(changeSet.replaces as ReadonlyArray<HasName>).map((item) => ({
-      action: "replace" as const,
-      symbol: actionSymbol("replace"),
-      name: item.name,
-      labels: ["workflow"],
-    })),
-    ...buildRemainingFunctionRegistryEntries(functionNames, consumed),
-  ];
-  return entries;
-}
-
-function printWorkflowChanges(
-  changeSet: ChangeSet<CreateWorkflow, UpdateWorkflow, DeleteWorkflow>,
-  workflowJobFunctionChanges?: {
-    creates: ReadonlyArray<HasName>;
-    updates: ReadonlyArray<HasName>;
-    deletes: ReadonlyArray<HasName>;
-    replaces: ReadonlyArray<HasName>;
-  },
-) {
-  const entries = formatWorkflowChangeEntries(changeSet, workflowJobFunctionChanges);
-  if (entries.length === 0) {
-    return;
-  }
-
-  logger.log(styles.bold("Workflows:"));
-  for (const entry of entries) {
-    logger.log(`  ${entry.symbol} ${entry.name} (${entry.labels.join(", ")})`);
-  }
+  return formatChangeEntriesWithFunctionRegistry(
+    "workflow",
+    changeSet,
+    workflowJobFunctionChanges,
+    (item) =>
+      "usedJobNames" in item
+        ? item.usedJobNames.map((jobName) => workflowJobFunctionName(jobName))
+        : [],
+  );
 }
 
 function canTreatWorkflowAsUnchanged(

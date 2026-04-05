@@ -15,18 +15,14 @@ import {
   ExecutorTriggerType,
 } from "@tailor-proto/tailor/v1/executor_resource_pb";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
-import { logger, styles } from "@/cli/shared/logger";
 import { buildExecutorArgsExpr } from "@/cli/shared/runtime-args";
 import { stringifyFunction } from "@/parser/service/tailordb";
-import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
+import { createChangeSet, type ChangeSet } from "./change-set";
 import { areNormalizedEqual, normalizeProtoConfig } from "./compare";
 import { executorFunctionName } from "./function-registry";
 import {
-  actionSymbol,
-  buildRemainingFunctionRegistryEntries,
-  createRelatedFunctionRegistryNameSets,
+  formatChangeEntriesWithFunctionRegistry,
   type GroupedDisplayEntry,
-  type RelatedFunctionRegistryNameSets,
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
 import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
@@ -92,13 +88,9 @@ function trn(workspaceId: string, name: string) {
 /**
  * Plan executor-related changes based on current and desired state.
  * @param context - Planning context
- * @param functionRegistryExecutorChanges - Related function registry changes for executors
  * @returns Planned changes
  */
-export async function planExecutor(
-  context: PlanContext,
-  functionRegistryExecutorChanges?: RelatedFunctionRegistryChanges,
-) {
+export async function planExecutor(context: PlanContext) {
   const { client, workspaceId, application, forRemoval } = context;
   const changeSet = createChangeSet<CreateExecutor, UpdateExecutor, DeleteExecutor>("Executors");
   const conflicts: OwnerConflict[] = [];
@@ -198,7 +190,6 @@ export async function planExecutor(
     }
   });
 
-  printExecutorChanges(changeSet, functionRegistryExecutorChanges);
   return { changeSet, conflicts, unmanaged, resourceOwners };
 }
 
@@ -231,10 +222,6 @@ export function buildPlannedExecutorsByName(
  * @param changeSet - Executor changes
  * @param executors - Desired executor configs keyed by name
  * @param functionRegistryExecutorChanges - Related function registry changes for executors
- * @param functionRegistryExecutorChanges.creates - Function registry creations
- * @param functionRegistryExecutorChanges.updates - Function registry updates
- * @param functionRegistryExecutorChanges.deletes - Function registry deletions
- * @param functionRegistryExecutorChanges.replaces - Function registry replacements
  * @returns Display entries for executor output
  */
 export function formatExecutorChangeEntries(
@@ -245,90 +232,20 @@ export function formatExecutorChangeEntries(
   executors: Record<string, MessageInitShape<typeof ExecutorExecutorSchema> | undefined>,
   functionRegistryExecutorChanges?: RelatedFunctionRegistryChanges,
 ): ExecutorDisplayEntry[] {
-  const functionNames = createRelatedFunctionRegistryNameSets(functionRegistryExecutorChanges);
-  const consumed: RelatedFunctionRegistryNameSets = createRelatedFunctionRegistryNameSets();
-
-  const createEntries = changeSet.creates.map((item) => {
-    const executor = executors[item.name];
-    const functionName = executorFunctionName(item.name);
-    const hasFunctionRegistryChange =
-      executor && isFunctionBackedExecutor(executor) && functionNames.creates.has(functionName);
-    if (hasFunctionRegistryChange) {
-      consumed.creates.add(functionName);
-    }
-    return {
-      action: "create" as const,
-      symbol: actionSymbol("create"),
-      name: item.name,
-      labels: hasFunctionRegistryChange ? ["executor", "functionRegistry"] : ["executor"],
-    };
-  });
-  const deleteEntries = changeSet.deletes.map((item) => {
-    const functionName = executorFunctionName(item.name);
-    const hasFunctionRegistryChange = functionNames.deletes.has(functionName);
-    if (hasFunctionRegistryChange) {
-      consumed.deletes.add(functionName);
-    }
-    return {
-      action: "delete" as const,
-      symbol: actionSymbol("delete"),
-      name: item.name,
-      labels: hasFunctionRegistryChange ? ["executor", "functionRegistry"] : ["executor"],
-    };
-  });
-  const updateEntries = changeSet.updates.map((item) => {
-    const executor = executors[item.name];
-    const functionName = executorFunctionName(item.name);
-    const hasFunctionRegistryChange =
-      executor && isFunctionBackedExecutor(executor) && functionNames.updates.has(functionName);
-    if (hasFunctionRegistryChange) {
-      consumed.updates.add(functionName);
-    }
-    return {
-      action: "update" as const,
-      symbol: actionSymbol("update"),
-      name: item.name,
-      labels: hasFunctionRegistryChange ? ["executor", "functionRegistry"] : ["executor"],
-    };
-  });
-  const replaceEntries = (changeSet.replaces as ReadonlyArray<HasName>).map((item) => ({
-    action: "replace" as const,
-    symbol: actionSymbol("replace"),
-    name: item.name,
-    labels: ["executor"],
-  }));
-
-  return [
-    ...createEntries,
-    ...deleteEntries,
-    ...updateEntries,
-    ...replaceEntries,
-    ...buildRemainingFunctionRegistryEntries(functionNames, consumed),
-  ];
-}
-
-function printExecutorChanges(
-  changeSet: ChangeSet<CreateExecutor, UpdateExecutor, DeleteExecutor>,
-  functionRegistryExecutorChanges?: {
-    creates: ReadonlyArray<HasName>;
-    updates: ReadonlyArray<HasName>;
-    deletes: ReadonlyArray<HasName>;
-    replaces: ReadonlyArray<HasName>;
-  },
-) {
-  const entries = formatExecutorChangeEntries(
+  return formatChangeEntriesWithFunctionRegistry(
+    "executor",
     changeSet,
-    buildPlannedExecutorsByName(changeSet),
     functionRegistryExecutorChanges,
+    (item, action) => {
+      if (action === "delete") {
+        return [executorFunctionName(item.name)];
+      }
+      const executor = executors[item.name];
+      return executor && isFunctionBackedExecutor(executor)
+        ? [executorFunctionName(item.name)]
+        : [];
+    },
   );
-  if (entries.length === 0) {
-    return;
-  }
-
-  logger.log(styles.bold("Executors:"));
-  for (const entry of entries) {
-    logger.log(`  ${entry.symbol} ${entry.name} (${entry.labels.join(", ")})`);
-  }
 }
 
 function normalizeComparableExecutor(executor: MessageInitShape<typeof ExecutorExecutorSchema>) {

@@ -71,7 +71,7 @@ async function execRemove(
   const pipeline = await planPipeline(ctx);
   const app = await planApplication(ctx);
   const executor = await planExecutor(ctx);
-  const workflow = await planWorkflow(client, workspaceId, application.name, {}, {});
+  const workflow = await planWorkflow(client, workspaceId, application.name, {}, {}, new Set());
   const functionRegistry = await planFunctionRegistry(client, workspaceId, application.name, []);
   const secretManager = await planSecretManager(ctx);
 

@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest";
 import { summarizePlanResultsForDisplay } from "./apply";
+import { formatAuthHookChangeEntries } from "./auth";
+import { buildPlannedExecutorsByName, formatExecutorChangeEntries } from "./executor";
+import { formatResolverChangeEntries } from "./resolver";
+import { formatTailorDBResourceChangeEntries } from "./tailordb";
+import { formatWorkflowChangeEntries } from "./workflow";
 
 type SummaryPlanResults = Parameters<typeof summarizePlanResultsForDisplay>[0];
 type FunctionRegistryChangeSet = SummaryPlanResults["functionRegistry"]["changeSet"];
@@ -61,6 +66,32 @@ function createFixtureChangeSet<
     isEmpty: () => true,
     print: () => {},
   } as unknown as T;
+}
+
+function computeDisplayEntries(results: SummaryPlanResults) {
+  return {
+    executorEntries: formatExecutorChangeEntries(
+      results.executor.changeSet,
+      buildPlannedExecutorsByName(results.executor.changeSet),
+      results.functionRegistry.executorFunctionChanges,
+    ),
+    resolverEntries: formatResolverChangeEntries(
+      results.pipeline.changeSet.resolver,
+      results.functionRegistry.resolverFunctionChanges,
+    ),
+    workflowEntries: formatWorkflowChangeEntries(
+      results.workflow.changeSet,
+      results.functionRegistry.workflowJobChanges,
+    ),
+    authHookEntries: formatAuthHookChangeEntries(
+      results.auth.changeSet.authHook,
+      results.functionRegistry.authHookFunctionChanges,
+    ),
+    tailorDBEntries: formatTailorDBResourceChangeEntries(
+      results.tailorDB.changeSet.type,
+      results.tailorDB.changeSet.gqlPermission,
+    ),
+  };
 }
 
 describe("summarizePlanResultsForDisplay", () => {
@@ -240,7 +271,16 @@ describe("summarizePlanResultsForDisplay", () => {
       },
     } satisfies SummaryPlanResults;
 
-    const summary = summarizePlanResultsForDisplay(results);
+    const { executorEntries, resolverEntries, workflowEntries, authHookEntries, tailorDBEntries } =
+      computeDisplayEntries(results);
+    const summary = summarizePlanResultsForDisplay(
+      results,
+      executorEntries,
+      resolverEntries,
+      workflowEntries,
+      authHookEntries,
+      tailorDBEntries,
+    );
 
     expect(summary).toEqual({
       create: 1,
@@ -379,7 +419,16 @@ describe("summarizePlanResultsForDisplay", () => {
       },
     } satisfies SummaryPlanResults;
 
-    const summary = summarizePlanResultsForDisplay(results);
+    const { executorEntries, resolverEntries, workflowEntries, authHookEntries, tailorDBEntries } =
+      computeDisplayEntries(results);
+    const summary = summarizePlanResultsForDisplay(
+      results,
+      executorEntries,
+      resolverEntries,
+      workflowEntries,
+      authHookEntries,
+      tailorDBEntries,
+    );
 
     expect(summary).toEqual({
       create: 0,
@@ -528,7 +577,16 @@ describe("summarizePlanResultsForDisplay", () => {
       },
     } satisfies SummaryPlanResults;
 
-    const summary = summarizePlanResultsForDisplay(results);
+    const { executorEntries, resolverEntries, workflowEntries, authHookEntries, tailorDBEntries } =
+      computeDisplayEntries(results);
+    const summary = summarizePlanResultsForDisplay(
+      results,
+      executorEntries,
+      resolverEntries,
+      workflowEntries,
+      authHookEntries,
+      tailorDBEntries,
+    );
 
     expect(summary).toEqual({
       create: 0,

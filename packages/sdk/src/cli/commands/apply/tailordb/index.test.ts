@@ -623,6 +623,38 @@ describe("formatTailorDBResourceChangeEntries", () => {
     ]);
   });
 
+  test("shows separate entries when type and gqlPermission have different actions for the same name", () => {
+    const entries = formatTailorDBResourceChangeEntries(
+      {
+        creates: [{ name: "Project" }],
+        updates: [],
+        deletes: [],
+        replaces: [],
+      },
+      {
+        creates: [],
+        updates: [{ name: "Project" }],
+        deletes: [],
+        replaces: [],
+      },
+    );
+
+    expect(entries).toEqual([
+      {
+        action: "create",
+        symbol: "+",
+        name: "Project",
+        labels: ["type"],
+      },
+      {
+        action: "update",
+        symbol: "~",
+        name: "Project",
+        labels: ["gqlPermission"],
+      },
+    ]);
+  });
+
   test("keeps standalone gqlPermission changes visible", () => {
     const entries = formatTailorDBResourceChangeEntries(
       {

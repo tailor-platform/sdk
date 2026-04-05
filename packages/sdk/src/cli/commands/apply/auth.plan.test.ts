@@ -6,7 +6,6 @@ import {
   AuthOAuth2Client_GrantType,
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import { describe, expect, test, vi } from "vitest";
-import { logger } from "@/cli/shared/logger";
 import { formatAuthHookChangeEntries, planAuth } from "./auth";
 import type { PlanContext } from "./apply";
 import type { Application } from "@/cli/services/application";
@@ -479,21 +478,6 @@ describe("planAuth", () => {
     expect(result.changeSet.idpConfig.updates).toHaveLength(1);
     expect(result.changeSet.idpConfig.updates[0]?.name).toBe("default");
     expect(result.changeSet.idpConfig.unchanged).toHaveLength(0);
-  });
-
-  test("prints auth child resources under a single flat Auth section", async () => {
-    const client = createMockClient();
-    const logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
-
-    await planAuth(createContext(client));
-
-    expect(logSpy.mock.calls.map(([message]) => message)).toEqual([
-      "Auth:",
-      "  + auth-a (service)",
-      "  + manager-machine-user (machineUser)",
-      "  + auth-a/before-login (authHook)",
-      "  + sample (oauth2Client)",
-    ]);
   });
 });
 
