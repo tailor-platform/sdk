@@ -119,7 +119,7 @@ export default function transform(source: string): string | null {
       kind: "import_statement",
       has: {
         kind: "string",
-        regex: "@tailor-platform/sdk",
+        regex: "^[\"']@tailor-platform/sdk[\"']$",
       },
     },
   });
