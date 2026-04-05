@@ -1,5 +1,5 @@
 import { logger, styles, symbols } from "@/cli/shared/logger";
-import type { ChangeSet, HasName } from "./change-set";
+import type { HasName } from "./change-set";
 
 export type DisplayAction = "create" | "update" | "delete" | "replace";
 
@@ -23,11 +23,6 @@ export type RelatedFunctionRegistryNameSets = {
   deletes: Set<string>;
   replaces: Set<string>;
 };
-
-export type PrintableChangeSet = Pick<
-  ChangeSet<HasName, HasName, HasName, HasName>,
-  "creates" | "updates" | "deletes" | "replaces" | "isEmpty"
->;
 
 /**
  * Convert grouped function registry changes into mutable name sets.
@@ -68,11 +63,20 @@ export function actionSymbol(action: DisplayAction): string {
 /**
  * Convert a plain change set into grouped display entries.
  * @param changeSet - Change set to convert
+ * @param changeSet.creates - Created resources
+ * @param changeSet.updates - Updated resources
+ * @param changeSet.deletes - Deleted resources
+ * @param changeSet.replaces - Replaced resources
  * @param labels - Labels to attach to each entry
  * @returns Display entries in CLI print order
  */
 export function formatChangeSetEntries(
-  changeSet: Pick<PrintableChangeSet, "creates" | "updates" | "deletes" | "replaces">,
+  changeSet: {
+    creates: ReadonlyArray<HasName>;
+    updates: ReadonlyArray<HasName>;
+    deletes: ReadonlyArray<HasName>;
+    replaces: ReadonlyArray<HasName>;
+  },
   labels: string[] = [],
 ): GroupedDisplayEntry[] {
   return [
@@ -243,7 +247,6 @@ export function formatChangeEntriesWithFunctionRegistry<
  * @param title - Section title
  * @param entries - Entries to print
  * @param indent - Leading spaces before the title
- * @returns True when any entries were printed
  */
 export function printGroupedDisplaySection(
   title: string,
@@ -251,7 +254,7 @@ export function printGroupedDisplaySection(
   indent = 0,
 ) {
   if (entries.length === 0) {
-    return false;
+    return;
   }
 
   logger.log(styles.bold(`${" ".repeat(indent)}${title}:`));
@@ -259,5 +262,4 @@ export function printGroupedDisplaySection(
   for (const entry of entries) {
     logger.log(`${entryIndent}${formatGroupedDisplayLine(entry)}`);
   }
-  return true;
 }

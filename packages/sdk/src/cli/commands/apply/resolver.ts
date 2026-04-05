@@ -436,7 +436,7 @@ export function formatResolverChangeEntries(
     changeSet,
     resolverFunctionChanges,
     (item) => {
-      const namespace = "request" in item ? item.request.namespaceName : undefined;
+      const namespace = item.request.namespaceName;
       return namespace ? [resolverFunctionName(namespace, item.name)] : [];
     },
   );

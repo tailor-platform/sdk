@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { summarizePlanResultsForDisplay } from "./apply";
 import { formatAuthHookChangeEntries } from "./auth";
+import { createChangeSet } from "./change-set";
 import { buildPlannedExecutorsByName, formatExecutorChangeEntries } from "./executor";
 import { formatResolverChangeEntries } from "./resolver";
 import { formatTailorDBResourceChangeEntries } from "./tailordb";
@@ -44,28 +45,8 @@ type ExecutorFunctionUpdate =
 type AuthHookFunctionUpdate =
   SummaryPlanResults["functionRegistry"]["authHookFunctionChanges"]["updates"][number];
 
-function createFixtureChangeSet<
-  T extends {
-    title: string;
-    creates: Array<{ name: string }>;
-    updates: Array<{ name: string }>;
-    deletes: Array<{ name: string }>;
-    replaces: Array<{ name: string }>;
-    unchanged: Array<{ name: string }>;
-    isEmpty: () => boolean;
-    print: () => void;
-  },
->(): T {
-  return {
-    title: "fixture",
-    creates: [],
-    updates: [],
-    deletes: [],
-    replaces: [],
-    unchanged: [],
-    isEmpty: () => true,
-    print: () => {},
-  } as unknown as T;
+function fixture<T>(title = "fixture"): T {
+  return createChangeSet(title) as unknown as T;
 }
 
 function computeDisplayEntries(results: SummaryPlanResults) {
@@ -96,7 +77,7 @@ function computeDisplayEntries(results: SummaryPlanResults) {
 
 describe("summarizePlanResultsForDisplay", () => {
   test("counts grouped display entries instead of raw internal resources", () => {
-    const functionRegistry = createFixtureChangeSet<FunctionRegistryChangeSet>();
+    const functionRegistry = fixture<FunctionRegistryChangeSet>();
     functionRegistry.updates.push({ name: "workflow--process-order" } as FunctionRegistryUpdate);
     functionRegistry.updates.push({ name: "resolver--my-resolver--add" } as FunctionRegistryUpdate);
     functionRegistry.updates.push({ name: "executor--user-created" } as FunctionRegistryUpdate);
@@ -104,33 +85,33 @@ describe("summarizePlanResultsForDisplay", () => {
       name: "auth-hook--my-auth--before-login",
     } as FunctionRegistryUpdate);
 
-    const tailorDBService = createFixtureChangeSet<TailorDBServiceChangeSet>();
-    const tailorDBType = createFixtureChangeSet<TailorDBTypeChangeSet>();
+    const tailorDBService = fixture<TailorDBServiceChangeSet>();
+    const tailorDBType = fixture<TailorDBTypeChangeSet>();
     tailorDBType.creates.push({ name: "Project" } as TailorDBTypeCreate);
-    const tailorDBGqlPermission = createFixtureChangeSet<TailorDBGqlPermissionChangeSet>();
+    const tailorDBGqlPermission = fixture<TailorDBGqlPermissionChangeSet>();
     tailorDBGqlPermission.creates.push({ name: "Project" } as TailorDBGqlPermissionCreate);
 
-    const staticWebsite = createFixtureChangeSet<StaticWebsiteChangeSet>();
-    const idpService = createFixtureChangeSet<IdPServiceChangeSet>();
-    const idpClient = createFixtureChangeSet<IdPClientChangeSet>();
-    const authService = createFixtureChangeSet<AuthServiceChangeSet>();
-    const authIdpConfig = createFixtureChangeSet<AuthIdpConfigChangeSet>();
-    const authUserProfileConfig = createFixtureChangeSet<AuthUserProfileConfigChangeSet>();
-    const authTenantConfig = createFixtureChangeSet<AuthTenantConfigChangeSet>();
-    const authMachineUser = createFixtureChangeSet<AuthMachineUserChangeSet>();
-    const authOauth2Client = createFixtureChangeSet<AuthOauth2ClientChangeSet>();
-    const authHook = createFixtureChangeSet<AuthHookChangeSet>();
+    const staticWebsite = fixture<StaticWebsiteChangeSet>();
+    const idpService = fixture<IdPServiceChangeSet>();
+    const idpClient = fixture<IdPClientChangeSet>();
+    const authService = fixture<AuthServiceChangeSet>();
+    const authIdpConfig = fixture<AuthIdpConfigChangeSet>();
+    const authUserProfileConfig = fixture<AuthUserProfileConfigChangeSet>();
+    const authTenantConfig = fixture<AuthTenantConfigChangeSet>();
+    const authMachineUser = fixture<AuthMachineUserChangeSet>();
+    const authOauth2Client = fixture<AuthOauth2ClientChangeSet>();
+    const authHook = fixture<AuthHookChangeSet>();
     authHook.updates.push({ name: "my-auth/before-login" } as AuthHookUpdate);
-    const authScim = createFixtureChangeSet<AuthScimChangeSet>();
-    const authScimResource = createFixtureChangeSet<AuthScimResourceChangeSet>();
-    const pipelineService = createFixtureChangeSet<PipelineServiceChangeSet>();
-    const resolver = createFixtureChangeSet<ResolverChangeSet>();
+    const authScim = fixture<AuthScimChangeSet>();
+    const authScimResource = fixture<AuthScimResourceChangeSet>();
+    const pipelineService = fixture<PipelineServiceChangeSet>();
+    const resolver = fixture<ResolverChangeSet>();
     resolver.updates.push({
       name: "add",
       request: { workspaceId: "ws", namespaceName: "my-resolver" },
     });
-    const app = createFixtureChangeSet<AppChangeSet>();
-    const executor = createFixtureChangeSet<ExecutorChangeSet>();
+    const app = fixture<AppChangeSet>();
+    const executor = fixture<ExecutorChangeSet>();
     executor.updates.push({
       name: "user-created",
       request: {
@@ -142,7 +123,7 @@ describe("summarizePlanResultsForDisplay", () => {
       },
       metaRequest: { trn: "trn", labels: {} },
     });
-    const workflow = createFixtureChangeSet<WorkflowChangeSet>();
+    const workflow = fixture<WorkflowChangeSet>();
     workflow.updates.push({
       name: "order-processing",
       workspaceId: "ws",
@@ -153,8 +134,8 @@ describe("summarizePlanResultsForDisplay", () => {
       usedJobNames: ["process-order"],
       metaRequest: { trn: "trn", labels: {} },
     });
-    const vault = createFixtureChangeSet<VaultChangeSet>();
-    const secret = createFixtureChangeSet<SecretChangeSet>();
+    const vault = fixture<VaultChangeSet>();
+    const secret = fixture<SecretChangeSet>();
 
     const results = {
       functionRegistry: {
@@ -295,7 +276,7 @@ describe("summarizePlanResultsForDisplay", () => {
   test("does not count TailorDB unchanged names when the same grouped row has changes", () => {
     const results = {
       functionRegistry: {
-        changeSet: createFixtureChangeSet<FunctionRegistryChangeSet>(),
+        changeSet: fixture<FunctionRegistryChangeSet>(),
         workflowJobChanges: {
           creates: [],
           updates: [],
@@ -330,13 +311,13 @@ describe("summarizePlanResultsForDisplay", () => {
       },
       tailorDB: {
         changeSet: {
-          service: createFixtureChangeSet<TailorDBServiceChangeSet>(),
+          service: fixture<TailorDBServiceChangeSet>(),
           type: {
-            ...createFixtureChangeSet<TailorDBTypeChangeSet>(),
+            ...fixture<TailorDBTypeChangeSet>(),
             unchanged: [{ name: "Project" }],
           },
           gqlPermission: {
-            ...createFixtureChangeSet<TailorDBGqlPermissionChangeSet>(),
+            ...fixture<TailorDBGqlPermissionChangeSet>(),
             updates: [
               {
                 name: "Project",
@@ -357,15 +338,15 @@ describe("summarizePlanResultsForDisplay", () => {
         },
       },
       staticWebsite: {
-        changeSet: createFixtureChangeSet<StaticWebsiteChangeSet>(),
+        changeSet: fixture<StaticWebsiteChangeSet>(),
         conflicts: [],
         unmanaged: [],
         resourceOwners: new Set<string>(),
       },
       idp: {
         changeSet: {
-          service: createFixtureChangeSet<IdPServiceChangeSet>(),
-          client: createFixtureChangeSet<IdPClientChangeSet>(),
+          service: fixture<IdPServiceChangeSet>(),
+          client: fixture<IdPClientChangeSet>(),
         },
         conflicts: [],
         unmanaged: [],
@@ -373,15 +354,15 @@ describe("summarizePlanResultsForDisplay", () => {
       },
       auth: {
         changeSet: {
-          service: createFixtureChangeSet<AuthServiceChangeSet>(),
-          idpConfig: createFixtureChangeSet<AuthIdpConfigChangeSet>(),
-          userProfileConfig: createFixtureChangeSet<AuthUserProfileConfigChangeSet>(),
-          tenantConfig: createFixtureChangeSet<AuthTenantConfigChangeSet>(),
-          machineUser: createFixtureChangeSet<AuthMachineUserChangeSet>(),
-          oauth2Client: createFixtureChangeSet<AuthOauth2ClientChangeSet>(),
-          authHook: createFixtureChangeSet<AuthHookChangeSet>(),
-          scim: createFixtureChangeSet<AuthScimChangeSet>(),
-          scimResource: createFixtureChangeSet<AuthScimResourceChangeSet>(),
+          service: fixture<AuthServiceChangeSet>(),
+          idpConfig: fixture<AuthIdpConfigChangeSet>(),
+          userProfileConfig: fixture<AuthUserProfileConfigChangeSet>(),
+          tenantConfig: fixture<AuthTenantConfigChangeSet>(),
+          machineUser: fixture<AuthMachineUserChangeSet>(),
+          oauth2Client: fixture<AuthOauth2ClientChangeSet>(),
+          authHook: fixture<AuthHookChangeSet>(),
+          scim: fixture<AuthScimChangeSet>(),
+          scimResource: fixture<AuthScimResourceChangeSet>(),
         },
         conflicts: [],
         unmanaged: [],
@@ -389,23 +370,23 @@ describe("summarizePlanResultsForDisplay", () => {
       },
       pipeline: {
         changeSet: {
-          service: createFixtureChangeSet<PipelineServiceChangeSet>(),
-          resolver: createFixtureChangeSet<ResolverChangeSet>(),
+          service: fixture<PipelineServiceChangeSet>(),
+          resolver: fixture<ResolverChangeSet>(),
         },
         resolverNamespaceMap: new Map<string, string>(),
         conflicts: [],
         unmanaged: [],
         resourceOwners: new Set<string>(),
       },
-      app: createFixtureChangeSet<AppChangeSet>(),
+      app: fixture<AppChangeSet>(),
       executor: {
-        changeSet: createFixtureChangeSet<ExecutorChangeSet>(),
+        changeSet: fixture<ExecutorChangeSet>(),
         conflicts: [],
         unmanaged: [],
         resourceOwners: new Set<string>(),
       },
       workflow: {
-        changeSet: createFixtureChangeSet<WorkflowChangeSet>(),
+        changeSet: fixture<WorkflowChangeSet>(),
         unchangedWorkflowJobNames: new Set<string>(),
         unchangedWorkflowJobMap: new Map<string, string[]>(),
         conflicts: [],
@@ -414,8 +395,8 @@ describe("summarizePlanResultsForDisplay", () => {
         appName: "my-app",
       },
       secretManager: {
-        vaultChangeSet: createFixtureChangeSet<VaultChangeSet>(),
-        secretChangeSet: createFixtureChangeSet<SecretChangeSet>(),
+        vaultChangeSet: fixture<VaultChangeSet>(),
+        secretChangeSet: fixture<SecretChangeSet>(),
         conflicts: [],
         unmanaged: [],
         resourceOwners: new Set<string>(),
@@ -444,7 +425,7 @@ describe("summarizePlanResultsForDisplay", () => {
   test("does not count unchanged grouped resources when only related function registry changes", () => {
     const results = {
       functionRegistry: {
-        changeSet: createFixtureChangeSet<FunctionRegistryChangeSet>(),
+        changeSet: fixture<FunctionRegistryChangeSet>(),
         workflowJobChanges: {
           creates: [],
           updates: [{ name: "workflow--process-order" } as WorkflowJobFunctionUpdate],
@@ -479,9 +460,9 @@ describe("summarizePlanResultsForDisplay", () => {
       },
       tailorDB: {
         changeSet: {
-          service: createFixtureChangeSet<TailorDBServiceChangeSet>(),
-          type: createFixtureChangeSet<TailorDBTypeChangeSet>(),
-          gqlPermission: createFixtureChangeSet<TailorDBGqlPermissionChangeSet>(),
+          service: fixture<TailorDBServiceChangeSet>(),
+          type: fixture<TailorDBTypeChangeSet>(),
+          gqlPermission: fixture<TailorDBGqlPermissionChangeSet>(),
         },
         conflicts: [],
         unmanaged: [],
@@ -494,15 +475,15 @@ describe("summarizePlanResultsForDisplay", () => {
         },
       },
       staticWebsite: {
-        changeSet: createFixtureChangeSet<StaticWebsiteChangeSet>(),
+        changeSet: fixture<StaticWebsiteChangeSet>(),
         conflicts: [],
         unmanaged: [],
         resourceOwners: new Set<string>(),
       },
       idp: {
         changeSet: {
-          service: createFixtureChangeSet<IdPServiceChangeSet>(),
-          client: createFixtureChangeSet<IdPClientChangeSet>(),
+          service: fixture<IdPServiceChangeSet>(),
+          client: fixture<IdPClientChangeSet>(),
         },
         conflicts: [],
         unmanaged: [],
@@ -510,18 +491,18 @@ describe("summarizePlanResultsForDisplay", () => {
       },
       auth: {
         changeSet: {
-          service: createFixtureChangeSet<AuthServiceChangeSet>(),
-          idpConfig: createFixtureChangeSet<AuthIdpConfigChangeSet>(),
-          userProfileConfig: createFixtureChangeSet<AuthUserProfileConfigChangeSet>(),
-          tenantConfig: createFixtureChangeSet<AuthTenantConfigChangeSet>(),
-          machineUser: createFixtureChangeSet<AuthMachineUserChangeSet>(),
-          oauth2Client: createFixtureChangeSet<AuthOauth2ClientChangeSet>(),
+          service: fixture<AuthServiceChangeSet>(),
+          idpConfig: fixture<AuthIdpConfigChangeSet>(),
+          userProfileConfig: fixture<AuthUserProfileConfigChangeSet>(),
+          tenantConfig: fixture<AuthTenantConfigChangeSet>(),
+          machineUser: fixture<AuthMachineUserChangeSet>(),
+          oauth2Client: fixture<AuthOauth2ClientChangeSet>(),
           authHook: {
-            ...createFixtureChangeSet<AuthHookChangeSet>(),
+            ...fixture<AuthHookChangeSet>(),
             unchanged: [{ name: "my-auth/before-login" }],
           },
-          scim: createFixtureChangeSet<AuthScimChangeSet>(),
-          scimResource: createFixtureChangeSet<AuthScimResourceChangeSet>(),
+          scim: fixture<AuthScimChangeSet>(),
+          scimResource: fixture<AuthScimResourceChangeSet>(),
         },
         conflicts: [],
         unmanaged: [],
@@ -529,9 +510,9 @@ describe("summarizePlanResultsForDisplay", () => {
       },
       pipeline: {
         changeSet: {
-          service: createFixtureChangeSet<PipelineServiceChangeSet>(),
+          service: fixture<PipelineServiceChangeSet>(),
           resolver: {
-            ...createFixtureChangeSet<ResolverChangeSet>(),
+            ...fixture<ResolverChangeSet>(),
             unchanged: [{ name: "add" }],
           },
         },
@@ -540,10 +521,10 @@ describe("summarizePlanResultsForDisplay", () => {
         unmanaged: [],
         resourceOwners: new Set<string>(),
       },
-      app: createFixtureChangeSet<AppChangeSet>(),
+      app: fixture<AppChangeSet>(),
       executor: {
         changeSet: {
-          ...createFixtureChangeSet<ExecutorChangeSet>(),
+          ...fixture<ExecutorChangeSet>(),
           unchanged: [{ name: "user-created" }],
         },
         conflicts: [],
@@ -552,7 +533,7 @@ describe("summarizePlanResultsForDisplay", () => {
       },
       workflow: {
         changeSet: {
-          ...createFixtureChangeSet<WorkflowChangeSet>(),
+          ...fixture<WorkflowChangeSet>(),
           unchanged: [{ name: "order-processing" }],
         },
         unchangedWorkflowJobNames: new Set(["process-order"]),
@@ -563,8 +544,8 @@ describe("summarizePlanResultsForDisplay", () => {
         appName: "my-app",
       },
       secretManager: {
-        vaultChangeSet: createFixtureChangeSet<VaultChangeSet>(),
-        secretChangeSet: createFixtureChangeSet<SecretChangeSet>(),
+        vaultChangeSet: fixture<VaultChangeSet>(),
+        secretChangeSet: fixture<SecretChangeSet>(),
         conflicts: [],
         unmanaged: [],
         resourceOwners: new Set<string>(),

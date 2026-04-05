@@ -191,7 +191,7 @@ async function shouldForceApplyAll(
   return false;
 }
 
-function printPlanResults(results: {
+type PlanResults = {
   functionRegistry: Awaited<ReturnType<typeof planFunctionRegistry>>;
   tailorDB: Awaited<ReturnType<typeof planTailorDB>>;
   staticWebsite: Awaited<ReturnType<typeof planStaticWebsite>>;
@@ -202,7 +202,9 @@ function printPlanResults(results: {
   executor: Awaited<ReturnType<typeof planExecutor>>;
   workflow: Awaited<ReturnType<typeof planWorkflow>>;
   secretManager: Awaited<ReturnType<typeof planSecretManager>>;
-}) {
+};
+
+function printPlanResults(results: PlanResults) {
   const executorEntries = formatExecutorChangeEntries(
     results.executor.changeSet,
     buildPlannedExecutorsByName(results.executor.changeSet),
@@ -353,37 +355,11 @@ type GroupedDisplayEntries = {
 /**
  * Summarize plan counts using the same grouped units shown in dry-run output.
  * @param results - Planned apply results
- * @param results.functionRegistry - Planned function registry changes
- * @param results.tailorDB - Planned TailorDB changes
- * @param results.staticWebsite - Planned static website changes
- * @param results.idp - Planned IdP changes
- * @param results.auth - Planned auth changes
- * @param results.pipeline - Planned pipeline changes
- * @param results.app - Planned application changes
- * @param results.executor - Planned executor changes
- * @param results.workflow - Planned workflow changes
- * @param results.secretManager - Planned secret manager changes
  * @param displayEntries - Pre-computed grouped display entries for each resource kind
- * @param displayEntries.executorEntries - Executor display entries
- * @param displayEntries.resolverEntries - Resolver display entries
- * @param displayEntries.workflowEntries - Workflow display entries
- * @param displayEntries.authHookEntries - Auth hook display entries
- * @param displayEntries.tailorDBEntries - TailorDB display entries
  * @returns Aggregated plan summary aligned with grouped display rows
  */
 export function summarizePlanResultsForDisplay(
-  results: {
-    functionRegistry: Awaited<ReturnType<typeof planFunctionRegistry>>;
-    tailorDB: Awaited<ReturnType<typeof planTailorDB>>;
-    staticWebsite: Awaited<ReturnType<typeof planStaticWebsite>>;
-    idp: Awaited<ReturnType<typeof planIdP>>;
-    auth: Awaited<ReturnType<typeof planAuth>>;
-    pipeline: Awaited<ReturnType<typeof planPipeline>>;
-    app: Awaited<ReturnType<typeof planApplication>>;
-    executor: Awaited<ReturnType<typeof planExecutor>>;
-    workflow: Awaited<ReturnType<typeof planWorkflow>>;
-    secretManager: Awaited<ReturnType<typeof planSecretManager>>;
-  },
+  results: PlanResults,
   displayEntries: GroupedDisplayEntries,
 ): PlanSummary {
   const { executorEntries, resolverEntries, workflowEntries, authHookEntries, tailorDBEntries } =
