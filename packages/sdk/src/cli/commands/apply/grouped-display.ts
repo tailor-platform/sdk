@@ -80,25 +80,25 @@ export function formatChangeSetEntries(
       action: "create" as const,
       symbol: actionSymbol("create"),
       name: item.name,
-      labels,
+      labels: [...labels],
     })),
     ...changeSet.deletes.map((item) => ({
       action: "delete" as const,
       symbol: actionSymbol("delete"),
       name: item.name,
-      labels,
+      labels: [...labels],
     })),
     ...changeSet.updates.map((item) => ({
       action: "update" as const,
       symbol: actionSymbol("update"),
       name: item.name,
-      labels,
+      labels: [...labels],
     })),
     ...changeSet.replaces.map((item) => ({
       action: "replace" as const,
       symbol: actionSymbol("replace"),
       name: item.name,
-      labels,
+      labels: [...labels],
     })),
   ];
 }

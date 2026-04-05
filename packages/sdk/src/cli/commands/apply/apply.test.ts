@@ -243,6 +243,7 @@ describe("summarizePlanResultsForDisplay", () => {
           service: pipelineService,
           resolver,
         },
+        resolverNamespaceMap: new Map<string, string>(),
         conflicts: [],
         unmanaged: [],
         resourceOwners: new Set<string>(),
@@ -257,6 +258,7 @@ describe("summarizePlanResultsForDisplay", () => {
       workflow: {
         changeSet: workflow,
         unchangedWorkflowJobNames: new Set<string>(),
+        unchangedWorkflowJobMap: new Map<string, string[]>(),
         conflicts: [],
         unmanaged: [],
         resourceOwners: new Set<string>(),
@@ -273,14 +275,13 @@ describe("summarizePlanResultsForDisplay", () => {
 
     const { executorEntries, resolverEntries, workflowEntries, authHookEntries, tailorDBEntries } =
       computeDisplayEntries(results);
-    const summary = summarizePlanResultsForDisplay(
-      results,
+    const summary = summarizePlanResultsForDisplay(results, {
       executorEntries,
       resolverEntries,
       workflowEntries,
       authHookEntries,
       tailorDBEntries,
-    );
+    });
 
     expect(summary).toEqual({
       create: 1,
@@ -391,6 +392,7 @@ describe("summarizePlanResultsForDisplay", () => {
           service: createFixtureChangeSet<PipelineServiceChangeSet>(),
           resolver: createFixtureChangeSet<ResolverChangeSet>(),
         },
+        resolverNamespaceMap: new Map<string, string>(),
         conflicts: [],
         unmanaged: [],
         resourceOwners: new Set<string>(),
@@ -405,6 +407,7 @@ describe("summarizePlanResultsForDisplay", () => {
       workflow: {
         changeSet: createFixtureChangeSet<WorkflowChangeSet>(),
         unchangedWorkflowJobNames: new Set<string>(),
+        unchangedWorkflowJobMap: new Map<string, string[]>(),
         conflicts: [],
         unmanaged: [],
         resourceOwners: new Set<string>(),
@@ -421,14 +424,13 @@ describe("summarizePlanResultsForDisplay", () => {
 
     const { executorEntries, resolverEntries, workflowEntries, authHookEntries, tailorDBEntries } =
       computeDisplayEntries(results);
-    const summary = summarizePlanResultsForDisplay(
-      results,
+    const summary = summarizePlanResultsForDisplay(results, {
       executorEntries,
       resolverEntries,
       workflowEntries,
       authHookEntries,
       tailorDBEntries,
-    );
+    });
 
     expect(summary).toEqual({
       create: 0,
@@ -530,14 +532,10 @@ describe("summarizePlanResultsForDisplay", () => {
           service: createFixtureChangeSet<PipelineServiceChangeSet>(),
           resolver: {
             ...createFixtureChangeSet<ResolverChangeSet>(),
-            unchanged: [
-              { name: "add", namespaceName: "my-resolver" } as {
-                name: string;
-                namespaceName: string;
-              },
-            ],
+            unchanged: [{ name: "add" }],
           },
         },
+        resolverNamespaceMap: new Map([["add", "my-resolver"]]),
         conflicts: [],
         unmanaged: [],
         resourceOwners: new Set<string>(),
@@ -555,14 +553,10 @@ describe("summarizePlanResultsForDisplay", () => {
       workflow: {
         changeSet: {
           ...createFixtureChangeSet<WorkflowChangeSet>(),
-          unchanged: [
-            { name: "order-processing", usedJobNames: ["process-order"] } as {
-              name: string;
-              usedJobNames: string[];
-            },
-          ],
+          unchanged: [{ name: "order-processing" }],
         },
         unchangedWorkflowJobNames: new Set(["process-order"]),
+        unchangedWorkflowJobMap: new Map([["order-processing", ["process-order"]]]),
         conflicts: [],
         unmanaged: [],
         resourceOwners: new Set<string>(),
@@ -579,14 +573,13 @@ describe("summarizePlanResultsForDisplay", () => {
 
     const { executorEntries, resolverEntries, workflowEntries, authHookEntries, tailorDBEntries } =
       computeDisplayEntries(results);
-    const summary = summarizePlanResultsForDisplay(
-      results,
+    const summary = summarizePlanResultsForDisplay(results, {
       executorEntries,
       resolverEntries,
       workflowEntries,
       authHookEntries,
       tailorDBEntries,
-    );
+    });
 
     expect(summary).toEqual({
       create: 0,

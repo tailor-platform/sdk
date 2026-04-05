@@ -1,8 +1,9 @@
 import * as crypto from "node:crypto";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
-import { logger, styles, symbols } from "@/cli/shared/logger";
+import { logger } from "@/cli/shared/logger";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
+import { formatChangeSetEntries, printGroupedDisplaySection } from "./grouped-display";
 import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase } from "@/cli/commands/apply/apply";
@@ -218,22 +219,7 @@ function printOtherFunctionRegistryChanges(
     "title" | "creates" | "updates" | "deletes" | "replaces"
   >,
 ) {
-  if (
-    changeSet.creates.length === 0 &&
-    changeSet.updates.length === 0 &&
-    changeSet.deletes.length === 0 &&
-    changeSet.replaces.length === 0
-  ) {
-    return;
-  }
-
-  logger.log(styles.bold(`${changeSet.title}:`));
-  changeSet.creates.forEach((item) => logger.log(`  ${symbols.create} ${item.name}`));
-  changeSet.deletes.forEach((item) => logger.log(`  ${symbols.delete} ${item.name}`));
-  changeSet.updates.forEach((item) => logger.log(`  ${symbols.update} ${item.name}`));
-  (changeSet.replaces as ReadonlyArray<HasName>).forEach((item) =>
-    logger.log(`  ${symbols.replace} ${item.name}`),
-  );
+  printGroupedDisplaySection(changeSet.title, formatChangeSetEntries(changeSet));
 }
 
 /**

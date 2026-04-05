@@ -38,11 +38,15 @@ import {
 } from "./executor";
 import {
   applyFunctionRegistry,
+  authHookFunctionName,
   collectFunctionEntries,
+  executorFunctionName,
   filterBundledWorkflowJobs,
   isWorkflowJobFunctionName,
   planFunctionRegistry,
+  resolverFunctionName,
   splitFunctionRegistryChanges,
+  workflowJobFunctionName,
 } from "./function-registry";
 import {
   formatChangeSetEntries,
@@ -240,14 +244,13 @@ function printPlanResults(results: {
   printGroupedDisplaySection("Auth", authEntries);
 
   // Compute summary
-  const summary = summarizePlanResultsForDisplay(
-    results,
+  const summary = summarizePlanResultsForDisplay(results, {
     executorEntries,
     resolverEntries,
     workflowEntries,
     authHookEntries,
     tailorDBEntries,
-  );
+  });
 
   logger.log(formatPlanSummary(summary));
 }
@@ -339,6 +342,14 @@ function countUnchangedItemsWithoutChangedRelations<T extends HasName>(
   return count;
 }
 
+type GroupedDisplayEntries = {
+  executorEntries: ReadonlyArray<GroupedDisplayEntry>;
+  resolverEntries: ReadonlyArray<GroupedDisplayEntry>;
+  workflowEntries: ReadonlyArray<GroupedDisplayEntry>;
+  authHookEntries: ReadonlyArray<GroupedDisplayEntry>;
+  tailorDBEntries: ReadonlyArray<GroupedDisplayEntry>;
+};
+
 /**
  * Summarize plan counts using the same grouped units shown in dry-run output.
  * @param results - Planned apply results
@@ -352,11 +363,12 @@ function countUnchangedItemsWithoutChangedRelations<T extends HasName>(
  * @param results.executor - Planned executor changes
  * @param results.workflow - Planned workflow changes
  * @param results.secretManager - Planned secret manager changes
- * @param executorEntries - Pre-computed executor display entries
- * @param resolverEntries - Pre-computed resolver display entries
- * @param workflowEntries - Pre-computed workflow display entries
- * @param authHookEntries - Pre-computed auth hook display entries
- * @param tailorDBEntries - Pre-computed TailorDB display entries
+ * @param displayEntries - Pre-computed grouped display entries for each resource kind
+ * @param displayEntries.executorEntries - Executor display entries
+ * @param displayEntries.resolverEntries - Resolver display entries
+ * @param displayEntries.workflowEntries - Workflow display entries
+ * @param displayEntries.authHookEntries - Auth hook display entries
+ * @param displayEntries.tailorDBEntries - TailorDB display entries
  * @returns Aggregated plan summary aligned with grouped display rows
  */
 export function summarizePlanResultsForDisplay(
@@ -372,12 +384,10 @@ export function summarizePlanResultsForDisplay(
     workflow: Awaited<ReturnType<typeof planWorkflow>>;
     secretManager: Awaited<ReturnType<typeof planSecretManager>>;
   },
-  executorEntries: ReadonlyArray<GroupedDisplayEntry>,
-  resolverEntries: ReadonlyArray<GroupedDisplayEntry>,
-  workflowEntries: ReadonlyArray<GroupedDisplayEntry>,
-  authHookEntries: ReadonlyArray<GroupedDisplayEntry>,
-  tailorDBEntries: ReadonlyArray<GroupedDisplayEntry>,
+  displayEntries: GroupedDisplayEntries,
 ): PlanSummary {
+  const { executorEntries, resolverEntries, workflowEntries, authHookEntries, tailorDBEntries } =
+    displayEntries;
   const summary: PlanSummary = {
     create: 0,
     update: 0,
@@ -438,17 +448,17 @@ export function summarizePlanResultsForDisplay(
     summarizeDisplayEntries(
       resolverEntries,
       countUnchangedItemsWithoutChangedRelations(
-        results.pipeline.changeSet.resolver.unchanged as ReadonlyArray<
-          HasName & { namespaceName?: string }
-        >,
+        results.pipeline.changeSet.resolver.unchanged,
         [
           results.functionRegistry.resolverFunctionChanges.creates,
           results.functionRegistry.resolverFunctionChanges.updates,
           results.functionRegistry.resolverFunctionChanges.deletes,
           results.functionRegistry.resolverFunctionChanges.replaces,
         ],
-        (item) =>
-          item.namespaceName ? [buildResolverFunctionName(item.namespaceName, item.name)] : [],
+        (item) => {
+          const ns = results.pipeline.resolverNamespaceMap.get(item.name);
+          return ns ? [resolverFunctionName(ns, item.name)] : [];
+        },
       ),
     ),
   );
@@ -465,7 +475,7 @@ export function summarizePlanResultsForDisplay(
           results.functionRegistry.executorFunctionChanges.deletes,
           results.functionRegistry.executorFunctionChanges.replaces,
         ],
-        (item) => [buildExecutorFunctionName(item.name)],
+        (item) => [executorFunctionName(item.name)],
       ),
     ),
   );
@@ -475,16 +485,17 @@ export function summarizePlanResultsForDisplay(
     summarizeDisplayEntries(
       workflowEntries,
       countUnchangedItemsWithoutChangedRelations(
-        results.workflow.changeSet.unchanged as ReadonlyArray<
-          HasName & { usedJobNames?: string[] }
-        >,
+        results.workflow.changeSet.unchanged,
         [
           results.functionRegistry.workflowJobChanges.creates,
           results.functionRegistry.workflowJobChanges.updates,
           results.functionRegistry.workflowJobChanges.deletes,
           results.functionRegistry.workflowJobChanges.replaces,
         ],
-        (item) => item.usedJobNames?.map((name) => buildWorkflowJobFunctionName(name)) ?? [],
+        (item) => {
+          const jobNames = results.workflow.unchangedWorkflowJobMap.get(item.name);
+          return jobNames?.map((name) => workflowJobFunctionName(name)) ?? [];
+        },
       ),
     ),
   );
@@ -503,31 +514,13 @@ export function summarizePlanResultsForDisplay(
         ],
         (item) => {
           const [namespaceName, hookPoint] = item.name.split("/");
-          return namespaceName && hookPoint
-            ? [buildAuthHookFunctionName(namespaceName, hookPoint)]
-            : [];
+          return namespaceName && hookPoint ? [authHookFunctionName(namespaceName, hookPoint)] : [];
         },
       ),
     ),
   );
 
   return summary;
-}
-
-function buildResolverFunctionName(namespaceName: string, resolverName: string) {
-  return `resolver--${namespaceName}--${resolverName}`;
-}
-
-function buildExecutorFunctionName(executorName: string) {
-  return `executor--${executorName}`;
-}
-
-function buildWorkflowJobFunctionName(jobName: string) {
-  return `workflow--${jobName}`;
-}
-
-function buildAuthHookFunctionName(namespaceName: string, hookPoint: string) {
-  return `auth-hook--${namespaceName}--${hookPoint}`;
 }
 
 /**

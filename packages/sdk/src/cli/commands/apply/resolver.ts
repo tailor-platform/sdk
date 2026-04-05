@@ -19,7 +19,7 @@ import * as inflection from "inflection";
 import { type ResolverService } from "@/cli/services/resolver/service";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { buildResolverOperationHookExpr } from "@/cli/shared/runtime-args";
-import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
+import { createChangeSet, type ChangeSet } from "./change-set";
 import { areNormalizedEqual, normalizeProtoConfig } from "./compare";
 import { resolverFunctionName } from "./function-registry";
 import {
@@ -120,7 +120,7 @@ export async function planPipeline(context: PlanContext) {
     resourceOwners,
   } = await planServices(client, workspaceId, application.name, pipelines);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
-  const resolverChangeSet = await planResolvers(
+  const { changeSet: resolverChangeSet, resolverNamespaceMap } = await planResolvers(
     client,
     workspaceId,
     pipelines,
@@ -135,6 +135,7 @@ export async function planPipeline(context: PlanContext) {
       service: serviceChangeSet,
       resolver: resolverChangeSet,
     },
+    resolverNamespaceMap,
     conflicts,
     unmanaged,
     resourceOwners,
@@ -337,6 +338,8 @@ async function planResolvers(
     }
   }
 
+  const resolverNamespaceMap = new Map<string, string>();
+
   for (const pipeline of pipelines) {
     const existingResolvers = await fetchResolvers(pipeline.namespace);
     const existingResolversMap = new Map(
@@ -361,10 +364,8 @@ async function planResolvers(
           existingResolverDetail &&
           areResolversEqual(existingResolverDetail, desiredResolver)
         ) {
-          changeSet.unchanged.push({
-            name: resolver.name,
-            namespaceName: pipeline.namespace,
-          } as HasName & { namespaceName: string });
+          changeSet.unchanged.push({ name: resolver.name });
+          resolverNamespaceMap.set(resolver.name, pipeline.namespace);
         } else {
           changeSet.updates.push({
             name: resolver.name,
@@ -412,7 +413,7 @@ async function planResolvers(
       });
     });
   }
-  return changeSet;
+  return { changeSet, resolverNamespaceMap };
 }
 
 type ResolverDisplayEntry = GroupedDisplayEntry;
