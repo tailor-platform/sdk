@@ -75,7 +75,7 @@ export function normalizeIdPActionPermission(permission: unknown): StandardIdPAc
           ? [conditions as PermissionCondition]
           : (conditions as readonly PermissionCondition[]),
       ),
-      permit: permission.permit === false ? "deny" : "allow",
+      permit: permission.permit ? "allow" : "deny",
       description: permission.description,
     };
   }

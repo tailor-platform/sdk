@@ -27,11 +27,11 @@ describe("normalizeIdPActionPermission", () => {
       });
     });
 
-    it("defaults permit to allow when omitted", () => {
+    it("defaults permit to deny when omitted", () => {
       const result = normalizeIdPActionPermission({
         conditions: [[{ user: "role" }, "=", "ADMIN"]],
       });
-      expect(result.permit).toBe("allow");
+      expect(result.permit).toBe("deny");
     });
 
     it("preserves description", () => {
