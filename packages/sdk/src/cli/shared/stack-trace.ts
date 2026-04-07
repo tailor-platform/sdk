@@ -59,7 +59,6 @@ export function parseStackTrace(error: string): ParsedStackTrace {
 
   let errorMessage = messageLines.join("\n");
 
-  // Strip rpc error prefix
   if (errorMessage.startsWith(RPC_ERROR_PREFIX)) {
     errorMessage = errorMessage.slice(RPC_ERROR_PREFIX.length);
   }
@@ -80,21 +79,23 @@ export function parseStackTrace(error: string): ParsedStackTrace {
   return { errorMessage, frames };
 }
 
-// Matches the inline sourcemap comment at the end of bundled code
 const INLINE_SOURCEMAP_REGEX =
   /\/\/[#@]\s*sourceMappingURL=data:application\/json[^,]*;base64,(.+)$/m;
+
+/** Original source position resolved from a sourcemap */
+export interface MappedSourcePosition {
+  source: string;
+  line: number;
+  column: number;
+  name: string | null;
+}
 
 /** A stack frame mapped back to original source */
 export interface MappedStackFrame {
   /** The original parsed frame */
   original: StackFrame;
   /** Mapped source position, or null if mapping failed */
-  mapped: {
-    source: string;
-    line: number;
-    column: number;
-    name: string | null;
-  } | null;
+  mapped: MappedSourcePosition | null;
 }
 
 /**
@@ -156,7 +157,6 @@ export function mapStackFrames(
   });
 }
 
-// Number of context lines to show above and below the error line
 const SNIPPET_CONTEXT_LINES = 2;
 
 /**
@@ -213,7 +213,6 @@ export function formatMappedError(
       const fnName = name ?? frame.original.functionName;
       parts.push(`\n  at ${fnName} (${styles.info(location)})`);
 
-      // Try to get source content for snippet
       if (traceMap) {
         const sourceIndex = traceMap.sources.indexOf(source);
         if (sourceIndex !== -1) {
@@ -224,7 +223,6 @@ export function formatMappedError(
         }
       }
     } else {
-      // Unmapped frame: show original info dimmed
       const file = frame.original.file.replace(/^file:\/\/\//, "");
       const location = `${file}:${frame.original.line}:${frame.original.column}`;
       parts.push(`\n  ${styles.dim(`at ${frame.original.functionName} (${location})`)}`);
@@ -254,13 +252,17 @@ function detectServerLineOffset(
 ): number {
   if (frames.length === 0) return 0;
 
-  // Count actual code lines (before sourcemap comment)
-  const lines = bundledCode.split("\n");
-  let codeLineCount = 0;
-  for (const line of lines) {
-    if (/^\/\/[#@]\s*sourceMappingURL/.test(line)) break;
-    codeLineCount++;
+  // Count code lines before the sourcemap comment without splitting the entire bundle
+  const sourcemapCommentIndex = bundledCode.search(/^\/\/[#@]\s*sourceMappingURL/m);
+  const codeSection =
+    sourcemapCommentIndex !== -1 ? bundledCode.slice(0, sourcemapCommentIndex) : bundledCode;
+  if (codeSection.length === 0) return 0;
+  let codeLineCount = 1;
+  for (let i = 0; i < codeSection.length; i++) {
+    if (codeSection[i] === "\n") codeLineCount++;
   }
+  // Trailing newline before sourcemap comment is a separator, not a code line
+  if (codeSection.endsWith("\n")) codeLineCount--;
   if (codeLineCount === 0) return 0;
 
   // Determine valid offset range where all frame lines land within [1, codeLineCount]
@@ -309,7 +311,6 @@ export function formatErrorWithSourcemap(error: string, bundledCode: string): st
     const traceMap = extractInlineSourcemap(bundledCode);
     if (!traceMap) return null;
 
-    // Detect server wrapper offset (0 if no wrapping) and adjust frame lines
     const offset = detectServerLineOffset(frames, traceMap, bundledCode);
     const adjustedFrames =
       offset > 0 ? frames.map((f) => ({ ...f, line: f.line - offset })) : frames;

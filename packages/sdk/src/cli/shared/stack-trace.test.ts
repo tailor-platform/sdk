@@ -140,7 +140,6 @@ describe("parseStackTrace", () => {
   });
 });
 
-// Helper to create a minimal sourcemap and encode it inline
 function makeInlineSourcemapBundle(sourcemap: object): string {
   const json = JSON.stringify(sourcemap);
   const base64 = Buffer.from(json).toString("base64");
@@ -181,11 +180,7 @@ describe("extractInlineSourcemap", () => {
   });
 });
 
-// Realistic sourcemap: output line 1, col 0 -> original.ts line 3, col 4
-// The VLQ "AAGC" means: (0,0) -> (source 0, line 3 (delta +2 from implicit 0), col 4 (delta +2))
-// Actually let's construct it properly using known VLQ segments:
-// We need: genCol=0, source=0, origLine=2(0-based for line 3), origCol=4, name=0
-// VLQ: genCol=0->A, source=0->A, origLine=2->E, origCol=4->I, name=0->A = "AAEIA"
+// output (1,0) -> source 0, line 4 (0-based: 3), col 2, name "throwError"
 function makeTestSourcemap(): object {
   return {
     version: 3,
