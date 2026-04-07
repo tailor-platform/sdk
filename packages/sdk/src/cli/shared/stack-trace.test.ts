@@ -140,10 +140,13 @@ describe("parseStackTrace", () => {
   });
 });
 
-function makeInlineSourcemapBundle(sourcemap: object): string {
+function makeInlineSourcemapBundle(
+  sourcemap: object,
+  code = 'console.log("bundled code")',
+): string {
   const json = JSON.stringify(sourcemap);
   const base64 = Buffer.from(json).toString("base64");
-  return `console.log("bundled code");\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${base64}`;
+  return `${code}\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${base64}`;
 }
 
 describe("extractInlineSourcemap", () => {
@@ -390,10 +393,10 @@ describe("formatErrorWithSourcemap", () => {
       // output (1,0) -> source 0, line 3 (0-based), col 2, name 0
       mappings: "AAGEA",
     };
-    const code = 'function M(){throw new Error("intentional error")}M();';
-    const json = JSON.stringify(sourcemap);
-    const base64 = Buffer.from(json).toString("base64");
-    return `${code}\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${base64}`;
+    return makeInlineSourcemapBundle(
+      sourcemap,
+      'function M(){throw new Error("intentional error")}M();',
+    );
   }
 
   test("returns formatted error when bundled code has inline sourcemap and error has stack trace", () => {
@@ -470,9 +473,7 @@ describe("formatErrorWithSourcemap", () => {
       "",
       'function M(){throw new Error("intentional error")}',
     ].join("\n");
-    const json = JSON.stringify(sourcemap);
-    const base64 = Buffer.from(json).toString("base64");
-    const bundledCode = `${code}\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${base64}`;
+    const bundledCode = makeInlineSourcemapBundle(sourcemap, code);
 
     // No server wrapping: error at bundle line 3 directly
     const error = [
@@ -510,9 +511,7 @@ describe("formatErrorWithSourcemap", () => {
       'function M(){throw new Error("intentional error")}',
       "wrapper.run = M;",
     ].join("\n");
-    const json = JSON.stringify(sourcemap);
-    const base64 = Buffer.from(json).toString("base64");
-    const bundledCode = `${code}\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${base64}`;
+    const bundledCode = makeInlineSourcemapBundle(sourcemap, code);
 
     const error = [
       "rpc error: code = Aborted desc = Error: intentional error",
