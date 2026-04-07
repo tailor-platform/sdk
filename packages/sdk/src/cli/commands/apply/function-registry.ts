@@ -57,6 +57,15 @@ function functionRegistryTrn(workspaceId: string, name: string) {
   return `trn:v1:workspace:${workspaceId}:function_registry:${name}`;
 }
 
+/** Function registry name prefix for resolver entries. */
+export const RESOLVER_PREFIX = "resolver--";
+/** Function registry name prefix for executor entries. */
+export const EXECUTOR_PREFIX = "executor--";
+/** Function registry name prefix for workflow job entries. */
+export const WORKFLOW_PREFIX = "workflow--";
+/** Function registry name prefix for auth hook entries. */
+export const AUTH_HOOK_PREFIX = "auth-hook--";
+
 /**
  * Build a function registry name for a resolver.
  * @param namespace - Resolver namespace
@@ -64,7 +73,7 @@ function functionRegistryTrn(workspaceId: string, name: string) {
  * @returns Function registry name
  */
 export function resolverFunctionName(namespace: string, resolverName: string): string {
-  return `resolver--${namespace}--${resolverName}`;
+  return `${RESOLVER_PREFIX}${namespace}--${resolverName}`;
 }
 
 /**
@@ -73,7 +82,7 @@ export function resolverFunctionName(namespace: string, resolverName: string): s
  * @returns Function registry name
  */
 export function executorFunctionName(executorName: string): string {
-  return `executor--${executorName}`;
+  return `${EXECUTOR_PREFIX}${executorName}`;
 }
 
 /**
@@ -82,76 +91,11 @@ export function executorFunctionName(executorName: string): string {
  * @returns Function registry name
  */
 export function workflowJobFunctionName(jobName: string): string {
-  return `workflow--${jobName}`;
+  return `${WORKFLOW_PREFIX}${jobName}`;
 }
 
 /**
- * Check whether a function registry entry belongs to a workflow job.
- * @param name - Function registry entry name
- * @returns True when the entry is a workflow job function
- */
-export function isWorkflowJobFunctionName(name: string): boolean {
-  return name.startsWith("workflow--");
-}
-
-/**
- * Check whether a function registry entry belongs to a resolver.
- * @param name - Function registry entry name
- * @returns True when the entry is a resolver function
- */
-export function isResolverFunctionName(name: string): boolean {
-  return name.startsWith("resolver--");
-}
-
-/**
- * Check whether a function registry entry belongs to an executor.
- * @param name - Function registry entry name
- * @returns True when the entry is an executor function
- */
-export function isExecutorFunctionName(name: string): boolean {
-  return name.startsWith("executor--");
-}
-
-/**
- * Check whether a function registry entry belongs to an auth hook.
- * @param name - Function registry entry name
- * @returns True when the entry is an auth hook function
- */
-export function isAuthHookFunctionName(name: string): boolean {
-  return name.startsWith("auth-hook--");
-}
-
-/**
- * Partition function registry entries by known resource-name prefixes.
- * @param items - Function registry entries to partition
- * @returns Partitioned entries by resource kind
- */
-function partitionByPrefix<T extends HasName>(items: ReadonlyArray<T>) {
-  const workflowJob: T[] = [];
-  const resolver: T[] = [];
-  const executor: T[] = [];
-  const authHook: T[] = [];
-  const other: T[] = [];
-
-  for (const item of items) {
-    if (isWorkflowJobFunctionName(item.name)) {
-      workflowJob.push(item);
-    } else if (isResolverFunctionName(item.name)) {
-      resolver.push(item);
-    } else if (isExecutorFunctionName(item.name)) {
-      executor.push(item);
-    } else if (isAuthHookFunctionName(item.name)) {
-      authHook.push(item);
-    } else {
-      other.push(item);
-    }
-  }
-
-  return { workflowJob, resolver, executor, authHook, other };
-}
-
-/**
- * Split function registry changes into grouped buckets for dry-run display.
+ * Split function registry changes into grouped buckets by resource-name prefix.
  * @param changeSet - Function registry change set
  * @returns Grouped function registry changes by resource kind
  */
@@ -161,55 +105,54 @@ export function splitFunctionRegistryChanges<
   D extends HasName,
   R extends HasName,
 >(changeSet: ChangeSet<C, U, D, R>) {
-  const creates = partitionByPrefix(changeSet.creates);
-  const updates = partitionByPrefix(changeSet.updates);
-  const deletes = partitionByPrefix(changeSet.deletes);
-  const replaces = partitionByPrefix(changeSet.replaces);
-  const unchanged = partitionByPrefix(changeSet.unchanged);
-
-  const workflowJobChanges = {
-    creates: creates.workflowJob,
-    updates: updates.workflowJob,
-    deletes: deletes.workflowJob,
-    replaces: replaces.workflowJob,
-    unchanged: unchanged.workflowJob,
-  };
-  const resolverFunctionChanges = {
-    creates: creates.resolver,
-    updates: updates.resolver,
-    deletes: deletes.resolver,
-    replaces: replaces.resolver,
-    unchanged: unchanged.resolver,
-  };
-  const executorFunctionChanges = {
-    creates: creates.executor,
-    updates: updates.executor,
-    deletes: deletes.executor,
-    replaces: replaces.executor,
-    unchanged: unchanged.executor,
-  };
-  const authHookFunctionChanges = {
-    creates: creates.authHook,
-    updates: updates.authHook,
-    deletes: deletes.authHook,
-    replaces: replaces.authHook,
-    unchanged: unchanged.authHook,
+  type Buckets<T> = {
+    workflowJob: T[];
+    resolver: T[];
+    executor: T[];
+    authHook: T[];
+    other: T[];
   };
 
-  const otherChanges = {
-    creates: creates.other,
-    updates: updates.other,
-    deletes: deletes.other,
-    replaces: replaces.other,
-    unchanged: unchanged.other,
-  };
+  function partition<T extends HasName>(items: ReadonlyArray<T>): Buckets<T> {
+    const buckets: Buckets<T> = {
+      workflowJob: [],
+      resolver: [],
+      executor: [],
+      authHook: [],
+      other: [],
+    };
+    for (const item of items) {
+      if (item.name.startsWith(WORKFLOW_PREFIX)) buckets.workflowJob.push(item);
+      else if (item.name.startsWith(RESOLVER_PREFIX)) buckets.resolver.push(item);
+      else if (item.name.startsWith(EXECUTOR_PREFIX)) buckets.executor.push(item);
+      else if (item.name.startsWith(AUTH_HOOK_PREFIX)) buckets.authHook.push(item);
+      else buckets.other.push(item);
+    }
+    return buckets;
+  }
+
+  const creates = partition(changeSet.creates);
+  const updates = partition(changeSet.updates);
+  const deletes = partition(changeSet.deletes);
+  const replaces = partition(changeSet.replaces);
+  const unchanged = partition(changeSet.unchanged);
+
+  function collect<K extends keyof Buckets<unknown>>(key: K) {
+    return {
+      creates: creates[key],
+      updates: updates[key],
+      deletes: deletes[key],
+      replaces: replaces[key],
+      unchanged: unchanged[key],
+    };
+  }
 
   return {
-    workflowJobChanges,
-    resolverFunctionChanges,
-    executorFunctionChanges,
-    authHookFunctionChanges,
-    otherChanges,
+    workflowJobChanges: collect("workflowJob"),
+    resolverFunctionChanges: collect("resolver"),
+    executorFunctionChanges: collect("executor"),
+    authHookFunctionChanges: collect("authHook"),
+    otherChanges: collect("other"),
   };
 }
 
