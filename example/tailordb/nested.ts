@@ -13,14 +13,11 @@ export const nestedProfile = db
       })
       .description("User information"),
     metadata: db
-      .object(
-        {
-          created: db.datetime().description("Creation timestamp"),
-          lastUpdated: db.datetime({ optional: true }).description("Last update timestamp"),
-          version: db.int().description("Version number"),
-        },
-        { array: true },
-      )
+      .object({
+        created: db.datetime().description("Creation timestamp"),
+        lastUpdated: db.datetime({ optional: true }).description("Last update timestamp"),
+        version: db.int().description("Version number"),
+      })
       .description("Profile metadata"),
     archived: db.bool({ optional: true }).description("Archive status"),
     ...db.fields.timestamps(),
