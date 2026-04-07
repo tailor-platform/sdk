@@ -105,6 +105,22 @@ describe("parseStackTrace", () => {
 
     expect(result.errorMessage).toBe("Error: simple error");
   });
+
+  test("preserves multi-line error messages", () => {
+    const error = [
+      "rpc error: code = Aborted desc = Error: validation failed",
+      "  - field 'name' is required",
+      "  - field 'email' must be valid",
+      "    at fn (file:///bundle.js:1:100)",
+    ].join("\n");
+
+    const result = parseStackTrace(error);
+
+    expect(result.errorMessage).toBe(
+      "Error: validation failed\n  - field 'name' is required\n  - field 'email' must be valid",
+    );
+    expect(result.frames).toHaveLength(1);
+  });
 });
 
 // Helper to create a minimal sourcemap and encode it inline
@@ -418,5 +434,44 @@ describe("formatErrorWithSourcemap", () => {
     const plain = stripAnsi(result!);
     expect(plain).toContain("Error: intentional error");
     expect(plain).toContain("resolvers/error-test.ts:4:3");
+  });
+
+  test("handles server line offset with multi-line bundle", () => {
+    // Multi-line bundle where only output line 2 has a sourcemap mapping.
+    // Server adds 3 wrapper lines, so the error at bundle line 2 reports as line 5.
+    const sourceContent = [
+      "function throwError() {",
+      '  throw new Error("intentional error");',
+      "}",
+    ].join("\n");
+
+    const sourcemap = {
+      version: 3,
+      sources: ["resolvers/error-test.ts"],
+      sourcesContent: [sourceContent],
+      names: [],
+      // Only output line 2 has a mapping: genCol:0, source:0, origLine:+1, origCol:0
+      mappings: ";AACA;",
+    };
+    const code = [
+      "var wrapper = {};",
+      'function M(){throw new Error("intentional error")}',
+      "wrapper.run = M;",
+    ].join("\n");
+    const json = JSON.stringify(sourcemap);
+    const base64 = Buffer.from(json).toString("base64");
+    const bundledCode = `${code}\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${base64}`;
+
+    const error = [
+      "rpc error: code = Aborted desc = Error: intentional error",
+      "    at M (file:///test-run--error-test.js:5:1)",
+    ].join("\n");
+
+    const result = formatErrorWithSourcemap(error, bundledCode);
+
+    expect(result).not.toBeNull();
+    const plain = stripAnsi(result!);
+    expect(plain).toContain("Error: intentional error");
+    expect(plain).toContain("resolvers/error-test.ts:2");
   });
 });

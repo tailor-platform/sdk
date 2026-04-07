@@ -46,17 +46,19 @@ const RPC_ERROR_PREFIX = "rpc error: code = Aborted desc = ";
 export function parseStackTrace(error: string): ParsedStackTrace {
   const lines = error.split("\n");
 
-  // Extract and clean the error message (first non-frame line)
-  let errorMessage = "";
+  // Extract error message (all non-frame lines before the first frame)
+  const messageLines: string[] = [];
   const frameLines: string[] = [];
 
   for (const line of lines) {
     if (line.match(/^\s+at\s+/)) {
       frameLines.push(line);
-    } else if (!errorMessage) {
-      errorMessage = line;
+    } else if (frameLines.length === 0) {
+      messageLines.push(line);
     }
   }
+
+  let errorMessage = messageLines.join("\n");
 
   // Strip rpc error prefix
   if (errorMessage.startsWith(RPC_ERROR_PREFIX)) {
@@ -239,8 +241,9 @@ export function formatMappedError(
  *
  * The platform server wraps bundled code with boilerplate lines before execution.
  * Stack traces report absolute line numbers in the wrapped script, not relative
- * to the bundled code. This function finds the offset by trying each possible
- * code line in the bundle as the target for the first frame's reported position.
+ * to the bundled code. This function finds the best offset by trying all valid
+ * offsets that keep frame lines within the bundle's code line range, selecting
+ * the one that maps the most frames successfully.
  * @param frames - Parsed stack frames from the error
  * @param traceMap - TraceMap from inline sourcemap
  * @param bundledCode - Bundled JavaScript code
@@ -260,23 +263,32 @@ function detectServerLineOffset(
     if (/^\/\/[#@]\s*sourceMappingURL/.test(line)) break;
     if (line.trim()) codeLineCount++;
   }
+  if (codeLineCount === 0) return 0;
 
-  const firstFrame = frames[0];
+  // Determine valid offset range where all frame lines land within [1, codeLineCount]
+  const minOffset = Math.max(0, ...frames.map((f) => f.line - codeLineCount));
+  const maxOffset = Math.min(...frames.map((f) => f.line - 1));
+  if (maxOffset < minOffset) return 0;
 
-  // Try mapping the first frame to each possible code line
-  for (let targetLine = 1; targetLine <= codeLineCount; targetLine++) {
-    const offset = firstFrame.line - targetLine;
-    if (offset <= 0) continue;
+  let bestOffset = 0;
+  let bestMappedCount = 0;
 
-    const pos = originalPositionFor(traceMap, {
-      line: targetLine,
-      column: firstFrame.column - 1,
-    });
-
-    if (pos.source != null) return offset;
+  for (let offset = minOffset; offset <= maxOffset; offset++) {
+    let mappedCount = 0;
+    for (const frame of frames) {
+      const pos = originalPositionFor(traceMap, {
+        line: frame.line - offset,
+        column: frame.column - 1,
+      });
+      if (pos.source != null) mappedCount++;
+    }
+    if (mappedCount > bestMappedCount) {
+      bestMappedCount = mappedCount;
+      bestOffset = offset;
+    }
   }
 
-  return 0;
+  return bestOffset;
 }
 
 /**
@@ -298,21 +310,14 @@ export function formatErrorWithSourcemap(error: string, bundledCode: string): st
     const traceMap = extractInlineSourcemap(bundledCode);
     if (!traceMap) return null;
 
-    // Try direct mapping first
-    const mappedFrames = mapStackFrames(frames, traceMap);
+    // Detect server wrapper offset (0 if no wrapping) and adjust frame lines
+    const offset = detectServerLineOffset(frames, traceMap, bundledCode);
+    const adjustedFrames =
+      offset > 0 ? frames.map((f) => ({ ...f, line: f.line - offset })) : frames;
+    const mappedFrames = mapStackFrames(adjustedFrames, traceMap);
+
     if (mappedFrames.some((f) => f.mapped !== null)) {
       return formatMappedError(errorMessage, mappedFrames, traceMap);
-    }
-
-    // The platform server wraps bundled code with boilerplate, shifting line numbers.
-    // Detect and compensate for this offset.
-    const offset = detectServerLineOffset(frames, traceMap, bundledCode);
-    if (offset > 0) {
-      const adjustedFrames = frames.map((f) => ({ ...f, line: f.line - offset }));
-      const adjustedMapped = mapStackFrames(adjustedFrames, traceMap);
-      if (adjustedMapped.some((f) => f.mapped !== null)) {
-        return formatMappedError(errorMessage, adjustedMapped, traceMap);
-      }
     }
 
     return null;
