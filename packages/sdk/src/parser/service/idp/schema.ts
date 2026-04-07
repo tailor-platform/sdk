@@ -206,6 +206,7 @@ const IdPPermissionConditionSchema = z
   .readonly();
 
 const IdPActionPermissionSchema = z.union([
+  // Object format: { conditions, description?, permit? }
   z.object({
     conditions: z.union([
       IdPPermissionConditionSchema,
@@ -214,7 +215,30 @@ const IdPActionPermissionSchema = z.union([
     description: z.string().optional(),
     permit: z.boolean().optional(),
   }),
-  z.array(z.unknown()).readonly(),
+  // Single condition tuple: [operand, operator, operand]
+  z
+    .tuple([IdPPermissionOperandSchema, IdPPermissionOperatorSchema, IdPPermissionOperandSchema])
+    .readonly(),
+  // Single condition tuple with permit: [operand, operator, operand, permit]
+  z
+    .tuple([
+      IdPPermissionOperandSchema,
+      IdPPermissionOperatorSchema,
+      IdPPermissionOperandSchema,
+      z.boolean(),
+    ])
+    .readonly(),
+  // Multiple conditions with optional trailing permit
+  z
+    .array(z.union([IdPPermissionConditionSchema, z.boolean()]))
+    .refine(
+      (arr) => {
+        const boolIndex = arr.findIndex((item) => typeof item === "boolean");
+        return boolIndex === -1 || boolIndex === arr.length - 1;
+      },
+      { message: "Boolean permit flag must only appear at the end" },
+    )
+    .readonly(),
 ]);
 
 export const IdPPermissionSchema = z

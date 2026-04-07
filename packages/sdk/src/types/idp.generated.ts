@@ -72,7 +72,45 @@ export type IdPEmailConfigInput = IdPEmailConfig;
  */
 export type IdPPermission = {
   create: readonly (
-    | readonly unknown[]
+    | readonly (
+        | string
+        | boolean
+        | readonly string[]
+        | readonly boolean[]
+        | {
+            user: string;
+          }
+        | {
+            idpUser: string;
+          }
+        | {
+            oldIdpUser: string;
+          }
+        | {
+            newIdpUser: string;
+          }
+      )[]
+    | readonly (
+        | boolean
+        | readonly (
+            | string
+            | boolean
+            | readonly string[]
+            | readonly boolean[]
+            | {
+                user: string;
+              }
+            | {
+                idpUser: string;
+              }
+            | {
+                oldIdpUser: string;
+              }
+            | {
+                newIdpUser: string;
+              }
+          )[]
+      )[]
     | {
         conditions:
           | readonly (
@@ -116,7 +154,45 @@ export type IdPPermission = {
       }
   )[];
   read: readonly (
-    | readonly unknown[]
+    | readonly (
+        | string
+        | boolean
+        | readonly string[]
+        | readonly boolean[]
+        | {
+            user: string;
+          }
+        | {
+            idpUser: string;
+          }
+        | {
+            oldIdpUser: string;
+          }
+        | {
+            newIdpUser: string;
+          }
+      )[]
+    | readonly (
+        | boolean
+        | readonly (
+            | string
+            | boolean
+            | readonly string[]
+            | readonly boolean[]
+            | {
+                user: string;
+              }
+            | {
+                idpUser: string;
+              }
+            | {
+                oldIdpUser: string;
+              }
+            | {
+                newIdpUser: string;
+              }
+          )[]
+      )[]
     | {
         conditions:
           | readonly (
@@ -160,7 +236,45 @@ export type IdPPermission = {
       }
   )[];
   update: readonly (
-    | readonly unknown[]
+    | readonly (
+        | string
+        | boolean
+        | readonly string[]
+        | readonly boolean[]
+        | {
+            user: string;
+          }
+        | {
+            idpUser: string;
+          }
+        | {
+            oldIdpUser: string;
+          }
+        | {
+            newIdpUser: string;
+          }
+      )[]
+    | readonly (
+        | boolean
+        | readonly (
+            | string
+            | boolean
+            | readonly string[]
+            | readonly boolean[]
+            | {
+                user: string;
+              }
+            | {
+                idpUser: string;
+              }
+            | {
+                oldIdpUser: string;
+              }
+            | {
+                newIdpUser: string;
+              }
+          )[]
+      )[]
     | {
         conditions:
           | readonly (
@@ -204,7 +318,45 @@ export type IdPPermission = {
       }
   )[];
   delete: readonly (
-    | readonly unknown[]
+    | readonly (
+        | string
+        | boolean
+        | readonly string[]
+        | readonly boolean[]
+        | {
+            user: string;
+          }
+        | {
+            idpUser: string;
+          }
+        | {
+            oldIdpUser: string;
+          }
+        | {
+            newIdpUser: string;
+          }
+      )[]
+    | readonly (
+        | boolean
+        | readonly (
+            | string
+            | boolean
+            | readonly string[]
+            | readonly boolean[]
+            | {
+                user: string;
+              }
+            | {
+                idpUser: string;
+              }
+            | {
+                oldIdpUser: string;
+              }
+            | {
+                newIdpUser: string;
+              }
+          )[]
+      )[]
     | {
         conditions:
           | readonly (
@@ -248,7 +400,45 @@ export type IdPPermission = {
       }
   )[];
   sendPasswordResetEmail: readonly (
-    | readonly unknown[]
+    | readonly (
+        | string
+        | boolean
+        | readonly string[]
+        | readonly boolean[]
+        | {
+            user: string;
+          }
+        | {
+            idpUser: string;
+          }
+        | {
+            oldIdpUser: string;
+          }
+        | {
+            newIdpUser: string;
+          }
+      )[]
+    | readonly (
+        | boolean
+        | readonly (
+            | string
+            | boolean
+            | readonly string[]
+            | readonly boolean[]
+            | {
+                user: string;
+              }
+            | {
+                idpUser: string;
+              }
+            | {
+                oldIdpUser: string;
+              }
+            | {
+                newIdpUser: string;
+              }
+          )[]
+      )[]
     | {
         conditions:
           | readonly (
@@ -349,7 +539,45 @@ export type IdPInput = {
   permission?:
     | {
         create: readonly (
-          | readonly unknown[]
+          | readonly (
+              | string
+              | boolean
+              | readonly string[]
+              | readonly boolean[]
+              | {
+                  user: string;
+                }
+              | {
+                  idpUser: string;
+                }
+              | {
+                  oldIdpUser: string;
+                }
+              | {
+                  newIdpUser: string;
+                }
+            )[]
+          | readonly (
+              | boolean
+              | readonly (
+                  | string
+                  | boolean
+                  | readonly string[]
+                  | readonly boolean[]
+                  | {
+                      user: string;
+                    }
+                  | {
+                      idpUser: string;
+                    }
+                  | {
+                      oldIdpUser: string;
+                    }
+                  | {
+                      newIdpUser: string;
+                    }
+                )[]
+            )[]
           | {
               conditions:
                 | readonly (
@@ -393,7 +621,45 @@ export type IdPInput = {
             }
         )[];
         read: readonly (
-          | readonly unknown[]
+          | readonly (
+              | string
+              | boolean
+              | readonly string[]
+              | readonly boolean[]
+              | {
+                  user: string;
+                }
+              | {
+                  idpUser: string;
+                }
+              | {
+                  oldIdpUser: string;
+                }
+              | {
+                  newIdpUser: string;
+                }
+            )[]
+          | readonly (
+              | boolean
+              | readonly (
+                  | string
+                  | boolean
+                  | readonly string[]
+                  | readonly boolean[]
+                  | {
+                      user: string;
+                    }
+                  | {
+                      idpUser: string;
+                    }
+                  | {
+                      oldIdpUser: string;
+                    }
+                  | {
+                      newIdpUser: string;
+                    }
+                )[]
+            )[]
           | {
               conditions:
                 | readonly (
@@ -437,7 +703,45 @@ export type IdPInput = {
             }
         )[];
         update: readonly (
-          | readonly unknown[]
+          | readonly (
+              | string
+              | boolean
+              | readonly string[]
+              | readonly boolean[]
+              | {
+                  user: string;
+                }
+              | {
+                  idpUser: string;
+                }
+              | {
+                  oldIdpUser: string;
+                }
+              | {
+                  newIdpUser: string;
+                }
+            )[]
+          | readonly (
+              | boolean
+              | readonly (
+                  | string
+                  | boolean
+                  | readonly string[]
+                  | readonly boolean[]
+                  | {
+                      user: string;
+                    }
+                  | {
+                      idpUser: string;
+                    }
+                  | {
+                      oldIdpUser: string;
+                    }
+                  | {
+                      newIdpUser: string;
+                    }
+                )[]
+            )[]
           | {
               conditions:
                 | readonly (
@@ -481,7 +785,45 @@ export type IdPInput = {
             }
         )[];
         delete: readonly (
-          | readonly unknown[]
+          | readonly (
+              | string
+              | boolean
+              | readonly string[]
+              | readonly boolean[]
+              | {
+                  user: string;
+                }
+              | {
+                  idpUser: string;
+                }
+              | {
+                  oldIdpUser: string;
+                }
+              | {
+                  newIdpUser: string;
+                }
+            )[]
+          | readonly (
+              | boolean
+              | readonly (
+                  | string
+                  | boolean
+                  | readonly string[]
+                  | readonly boolean[]
+                  | {
+                      user: string;
+                    }
+                  | {
+                      idpUser: string;
+                    }
+                  | {
+                      oldIdpUser: string;
+                    }
+                  | {
+                      newIdpUser: string;
+                    }
+                )[]
+            )[]
           | {
               conditions:
                 | readonly (
@@ -525,7 +867,45 @@ export type IdPInput = {
             }
         )[];
         sendPasswordResetEmail: readonly (
-          | readonly unknown[]
+          | readonly (
+              | string
+              | boolean
+              | readonly string[]
+              | readonly boolean[]
+              | {
+                  user: string;
+                }
+              | {
+                  idpUser: string;
+                }
+              | {
+                  oldIdpUser: string;
+                }
+              | {
+                  newIdpUser: string;
+                }
+            )[]
+          | readonly (
+              | boolean
+              | readonly (
+                  | string
+                  | boolean
+                  | readonly string[]
+                  | readonly boolean[]
+                  | {
+                      user: string;
+                    }
+                  | {
+                      idpUser: string;
+                    }
+                  | {
+                      oldIdpUser: string;
+                    }
+                  | {
+                      newIdpUser: string;
+                    }
+                )[]
+            )[]
           | {
               conditions:
                 | readonly (
@@ -626,7 +1006,45 @@ export type IdP = {
   permission?:
     | {
         create: readonly (
-          | readonly unknown[]
+          | readonly (
+              | string
+              | boolean
+              | readonly string[]
+              | readonly boolean[]
+              | {
+                  user: string;
+                }
+              | {
+                  idpUser: string;
+                }
+              | {
+                  oldIdpUser: string;
+                }
+              | {
+                  newIdpUser: string;
+                }
+            )[]
+          | readonly (
+              | boolean
+              | readonly (
+                  | string
+                  | boolean
+                  | readonly string[]
+                  | readonly boolean[]
+                  | {
+                      user: string;
+                    }
+                  | {
+                      idpUser: string;
+                    }
+                  | {
+                      oldIdpUser: string;
+                    }
+                  | {
+                      newIdpUser: string;
+                    }
+                )[]
+            )[]
           | {
               conditions:
                 | readonly (
@@ -670,7 +1088,45 @@ export type IdP = {
             }
         )[];
         read: readonly (
-          | readonly unknown[]
+          | readonly (
+              | string
+              | boolean
+              | readonly string[]
+              | readonly boolean[]
+              | {
+                  user: string;
+                }
+              | {
+                  idpUser: string;
+                }
+              | {
+                  oldIdpUser: string;
+                }
+              | {
+                  newIdpUser: string;
+                }
+            )[]
+          | readonly (
+              | boolean
+              | readonly (
+                  | string
+                  | boolean
+                  | readonly string[]
+                  | readonly boolean[]
+                  | {
+                      user: string;
+                    }
+                  | {
+                      idpUser: string;
+                    }
+                  | {
+                      oldIdpUser: string;
+                    }
+                  | {
+                      newIdpUser: string;
+                    }
+                )[]
+            )[]
           | {
               conditions:
                 | readonly (
@@ -714,7 +1170,45 @@ export type IdP = {
             }
         )[];
         update: readonly (
-          | readonly unknown[]
+          | readonly (
+              | string
+              | boolean
+              | readonly string[]
+              | readonly boolean[]
+              | {
+                  user: string;
+                }
+              | {
+                  idpUser: string;
+                }
+              | {
+                  oldIdpUser: string;
+                }
+              | {
+                  newIdpUser: string;
+                }
+            )[]
+          | readonly (
+              | boolean
+              | readonly (
+                  | string
+                  | boolean
+                  | readonly string[]
+                  | readonly boolean[]
+                  | {
+                      user: string;
+                    }
+                  | {
+                      idpUser: string;
+                    }
+                  | {
+                      oldIdpUser: string;
+                    }
+                  | {
+                      newIdpUser: string;
+                    }
+                )[]
+            )[]
           | {
               conditions:
                 | readonly (
@@ -758,7 +1252,45 @@ export type IdP = {
             }
         )[];
         delete: readonly (
-          | readonly unknown[]
+          | readonly (
+              | string
+              | boolean
+              | readonly string[]
+              | readonly boolean[]
+              | {
+                  user: string;
+                }
+              | {
+                  idpUser: string;
+                }
+              | {
+                  oldIdpUser: string;
+                }
+              | {
+                  newIdpUser: string;
+                }
+            )[]
+          | readonly (
+              | boolean
+              | readonly (
+                  | string
+                  | boolean
+                  | readonly string[]
+                  | readonly boolean[]
+                  | {
+                      user: string;
+                    }
+                  | {
+                      idpUser: string;
+                    }
+                  | {
+                      oldIdpUser: string;
+                    }
+                  | {
+                      newIdpUser: string;
+                    }
+                )[]
+            )[]
           | {
               conditions:
                 | readonly (
@@ -802,7 +1334,45 @@ export type IdP = {
             }
         )[];
         sendPasswordResetEmail: readonly (
-          | readonly unknown[]
+          | readonly (
+              | string
+              | boolean
+              | readonly string[]
+              | readonly boolean[]
+              | {
+                  user: string;
+                }
+              | {
+                  idpUser: string;
+                }
+              | {
+                  oldIdpUser: string;
+                }
+              | {
+                  newIdpUser: string;
+                }
+            )[]
+          | readonly (
+              | boolean
+              | readonly (
+                  | string
+                  | boolean
+                  | readonly string[]
+                  | readonly boolean[]
+                  | {
+                      user: string;
+                    }
+                  | {
+                      idpUser: string;
+                    }
+                  | {
+                      oldIdpUser: string;
+                    }
+                  | {
+                      newIdpUser: string;
+                    }
+                )[]
+            )[]
           | {
               conditions:
                 | readonly (
