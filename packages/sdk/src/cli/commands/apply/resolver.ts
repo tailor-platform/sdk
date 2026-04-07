@@ -31,7 +31,8 @@ import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabe
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
 import type { Executor } from "@/types/executor.generated";
-import type { Resolver, TailorField } from "@/types/resolver.generated";
+import type { TailorField } from "@/types/field.generated";
+import type { Resolver } from "@/types/resolver.generated";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
 // Scalar type mapping for field type conversion

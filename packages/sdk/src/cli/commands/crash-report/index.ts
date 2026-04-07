@@ -6,8 +6,8 @@ export const crashReportCommand = defineCommand({
   name: "crash-report",
   description: "Manage crash reports.",
   subCommands: {
-    send: sendCommand,
     list: listCommand,
+    send: sendCommand,
   },
   async run() {
     await runCommand(listCommand, []);

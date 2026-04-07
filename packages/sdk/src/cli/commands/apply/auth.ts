@@ -24,6 +24,7 @@ import {
 import { type AuthService } from "@/cli/services/auth/service";
 import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "@/cli/shared/client";
 import { OAuth2ClientSchema } from "@/parser/service/auth";
+import { applyAuthConnections, planAuthConnections } from "./auth-connection";
 import { createChangeSet, type HasName } from "./change-set";
 import { areNormalizedEqual, normalizeProtoConfig, normalizeStringArray } from "./compare";
 import { authHookFunctionName } from "./function-registry";
@@ -102,6 +103,15 @@ export async function applyAuth(
         await client.setMetadata(update.metaRequest);
       }),
     ]);
+
+    // Auth Connections
+    if (changeSet.connection) {
+      await applyAuthConnections(
+        client,
+        { changeSet: changeSet.connection } as Awaited<ReturnType<typeof planAuthConnections>>,
+        "create-update",
+      );
+    }
 
     // IdPConfigs
     await Promise.all([
@@ -247,6 +257,15 @@ export async function applyAuth(
     await Promise.all(
       changeSet.idpConfig.deletes.map((del) => client.deleteAuthIDPConfig(del.request)),
     );
+
+    // Auth Connections
+    if (changeSet.connection) {
+      await applyAuthConnections(
+        client,
+        { changeSet: changeSet.connection } as Awaited<ReturnType<typeof planAuthConnections>>,
+        "delete-resources",
+      );
+    }
   } else if (phase === "delete-services") {
     // Services only
     await Promise.all(
@@ -283,6 +302,7 @@ export async function planAuth(context: PlanContext) {
     oauth2ClientChangeSet,
     scimChangeSet,
     scimResourceChangeSet,
+    connectionResult,
   ] = await Promise.all([
     planIdPConfigs(client, workspaceId, auths, deletedServices, forceApplyAll),
     planUserProfileConfigs(client, workspaceId, auths, deletedServices, forceApplyAll),
@@ -292,6 +312,7 @@ export async function planAuth(context: PlanContext) {
     planOAuth2Clients(client, workspaceId, auths, deletedServices, forceApplyAll),
     planSCIMConfigs(client, workspaceId, auths, deletedServices),
     planSCIMResources(client, workspaceId, auths, deletedServices),
+    planAuthConnections(client, workspaceId, application.name, auths),
   ]);
 
   return {
@@ -305,10 +326,11 @@ export async function planAuth(context: PlanContext) {
       oauth2Client: oauth2ClientChangeSet,
       scim: scimChangeSet,
       scimResource: scimResourceChangeSet,
+      connection: connectionResult.changeSet,
     },
-    conflicts,
-    unmanaged,
-    resourceOwners,
+    conflicts: [...conflicts, ...connectionResult.conflicts],
+    unmanaged: [...unmanaged, ...connectionResult.unmanaged],
+    resourceOwners: new Set([...resourceOwners, ...connectionResult.resourceOwners]),
   };
 }
 

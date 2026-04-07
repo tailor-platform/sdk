@@ -56,6 +56,17 @@ export type IdPUserAuthPolicy = {
 };
 export type IdPUserAuthPolicyInput = IdPUserAuthPolicy;
 
+/**
+ * Namespace-level email configuration defaults
+ */
+export type IdPEmailConfig = {
+  /** Default sender display name for emails */
+  fromName?: string | undefined;
+  /** Default subject for password reset emails */
+  passwordResetSubject?: string | undefined;
+};
+export type IdPEmailConfigInput = IdPEmailConfig;
+
 export type IdPInput = {
   /** IdP service name */
   name: string;
@@ -98,6 +109,13 @@ export type IdPInput = {
         delete?: boolean | undefined;
         read?: boolean | undefined;
         sendPasswordResetEmail?: boolean | undefined;
+      }
+    | undefined;
+  /** Namespace-level email configuration defaults */
+  emailConfig?:
+    | {
+        fromName?: string | undefined;
+        passwordResetSubject?: string | undefined;
       }
     | undefined;
 };
@@ -143,6 +161,13 @@ export type IdP = {
         delete?: boolean | undefined;
         read?: boolean | undefined;
         sendPasswordResetEmail?: boolean | undefined;
+      }
+    | undefined;
+  /** Namespace-level email configuration defaults */
+  emailConfig?:
+    | {
+        fromName?: string | undefined;
+        passwordResetSubject?: string | undefined;
       }
     | undefined;
 };

@@ -204,6 +204,11 @@ export enum WorkflowJobExecution_Status {
    * @generated from enum value: STATUS_FAILED = 4;
    */
   FAILED = 4,
+
+  /**
+   * @generated from enum value: STATUS_WAITING = 5;
+   */
+  WAITING = 5,
 }
 
 /**
@@ -300,6 +305,11 @@ export enum WorkflowExecution_Status {
    * @generated from enum value: STATUS_PENDING_RETRY = 6;
    */
   PENDING_RETRY = 6,
+
+  /**
+   * @generated from enum value: STATUS_WAITING = 7;
+   */
+  WAITING = 7,
 }
 
 /**

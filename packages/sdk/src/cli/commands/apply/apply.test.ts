@@ -24,6 +24,7 @@ type AuthOauth2ClientChangeSet = SummaryPlanResults["auth"]["changeSet"]["oauth2
 type AuthHookChangeSet = SummaryPlanResults["auth"]["changeSet"]["authHook"];
 type AuthScimChangeSet = SummaryPlanResults["auth"]["changeSet"]["scim"];
 type AuthScimResourceChangeSet = SummaryPlanResults["auth"]["changeSet"]["scimResource"];
+type AuthConnectionChangeSet = SummaryPlanResults["auth"]["changeSet"]["connection"];
 type PipelineServiceChangeSet = SummaryPlanResults["pipeline"]["changeSet"]["service"];
 type ResolverChangeSet = SummaryPlanResults["pipeline"]["changeSet"]["resolver"];
 type AppChangeSet = SummaryPlanResults["app"];
@@ -214,6 +215,7 @@ describe("summarizePlanResultsForDisplay", () => {
           authHook,
           scim: authScim,
           scimResource: authScimResource,
+          connection: fixture<AuthConnectionChangeSet>(),
         },
         conflicts: [],
         unmanaged: [],
@@ -363,6 +365,7 @@ describe("summarizePlanResultsForDisplay", () => {
           authHook: fixture<AuthHookChangeSet>(),
           scim: fixture<AuthScimChangeSet>(),
           scimResource: fixture<AuthScimResourceChangeSet>(),
+          connection: fixture<AuthConnectionChangeSet>(),
         },
         conflicts: [],
         unmanaged: [],
@@ -503,6 +506,7 @@ describe("summarizePlanResultsForDisplay", () => {
           },
           scim: fixture<AuthScimChangeSet>(),
           scimResource: fixture<AuthScimResourceChangeSet>(),
+          connection: fixture<AuthConnectionChangeSet>(),
         },
         conflicts: [],
         unmanaged: [],

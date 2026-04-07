@@ -247,6 +247,9 @@ function printPlanResults(results: PlanResults) {
     ...formatChangeSetEntries(results.auth.changeSet.oauth2Client, ["oauth2Client"]),
     ...formatChangeSetEntries(results.auth.changeSet.scim, ["scimConfig"]),
     ...formatChangeSetEntries(results.auth.changeSet.scimResource, ["scimResource"]),
+    ...(results.auth.changeSet.connection
+      ? formatChangeSetEntries(results.auth.changeSet.connection, ["connection"])
+      : []),
   ];
 
   // Print grouped sections
@@ -401,6 +404,7 @@ export function summarizePlanResultsForDisplay(
       results.auth.changeSet.oauth2Client,
       results.auth.changeSet.scim,
       results.auth.changeSet.scimResource,
+      ...(results.auth.changeSet.connection ? [results.auth.changeSet.connection] : []),
       results.pipeline.changeSet.service,
       results.app,
       results.secretManager.vaultChangeSet,

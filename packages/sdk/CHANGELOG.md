@@ -1,5 +1,85 @@
 # @tailor-platform/sdk
 
+## 1.35.0
+
+### Minor Changes
+
+- [#912](https://github.com/tailor-platform/sdk/pull/912) [`dbc22b9`](https://github.com/tailor-platform/sdk/commit/dbc22b9ab6c79c5f4342af5ad69224c3fab61922) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `ArrayColumnType<T>` for correct Kysely type resolution in ColumnType arrays
+
+  Kysely's `Insertable`/`Selectable` only resolves `ColumnType` at the top-level table property, so `ColumnType[]` (e.g. `Timestamp[]`, `ObjectColumnType<{...}>[]`) was not resolved correctly. `ArrayColumnType<T>` wraps the array inside the `ColumnType` so that insert/select/update types are properly resolved for array fields containing `Timestamp` or `ObjectColumnType`.
+
+## 1.34.0
+
+### Minor Changes
+
+- [#819](https://github.com/tailor-platform/sdk/pull/819) [`a63948d`](https://github.com/tailor-platform/sdk/commit/a63948de613f43eab7cc1208d23f92c1e15ae31b) Thanks [@toiroakr](https://github.com/toiroakr)! - Add auth connection support for managing OAuth2 connections with external providers
+
+- [#855](https://github.com/tailor-platform/sdk/pull/855) [`150296e`](https://github.com/tailor-platform/sdk/commit/150296efbadcfa2dfe011c728c29dbbd63eb5634) Thanks [@dqn](https://github.com/dqn)! - Delegate deploy logic to a shared composite action (tailor-platform/actions/deploy) instead of generating local composite actions
+
+## 1.33.2
+
+### Patch Changes
+
+- [#899](https://github.com/tailor-platform/sdk/pull/899) [`ce19ee7`](https://github.com/tailor-platform/sdk/commit/ce19ee7dbb5bbf45d13ad06b6a02ea770f17435b) Thanks [@remiposo](https://github.com/remiposo)! - Fix SQL query command rewriting user input, which broke INSERT/UPDATE statements and PascalCase table names
+
+## 1.33.1
+
+### Patch Changes
+
+- [#838](https://github.com/tailor-platform/sdk/pull/838) [`36d437c`](https://github.com/tailor-platform/sdk/commit/36d437c54adb719aecb6a4d01a779bfd68d68adb) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix Kysely type generation for date/datetime fields inside nested objects (`db.object()`).
+
+  - Added `ObjectColumnType<T>` helper type that wraps nested objects in `ColumnType`, enabling Kysely's `Insertable`/`Selectable` to correctly expand types for nested fields
+  - Nested objects containing date/datetime fields now use `ObjectColumnType<{ field: Timestamp; ... }>`, so `Insertable` accepts `Date | string` and `Selectable` returns `Date`
+  - Nullable fields inside nested objects are now optional (`?`) for inserts, required for selects
+
+- [#891](https://github.com/tailor-platform/sdk/pull/891) [`ad5644a`](https://github.com/tailor-platform/sdk/commit/ad5644a61005a1484ce321cb4211d190d4ca9168) Thanks [@k1LoW](https://github.com/k1LoW)! - Add `emailConfig` option to `defineIdp()` for namespace-level email defaults.
+
+  - `fromName`: default sender display name for emails
+  - `passwordResetSubject`: default subject for password reset emails
+  - Validation: max 200 characters, no newline characters (header injection prevention)
+
+- [#850](https://github.com/tailor-platform/sdk/pull/850) [`3ec5e35`](https://github.com/tailor-platform/sdk/commit/3ec5e3574043e062a69e4023579494e545c658eb) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @oxc-project/types to v0.122.0
+
+- [#860](https://github.com/tailor-platform/sdk/pull/860) [`20ce9ac`](https://github.com/tailor-platform/sdk/commit/20ce9acfac1348b175ad694ea0f6693663abd196) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): lock file maintenance
+
+- [#862](https://github.com/tailor-platform/sdk/pull/862) [`680be1b`](https://github.com/tailor-platform/sdk/commit/680be1b908ef6e50ddc0265cf31c47d1255bcd03) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update anthropics/claude-code-action action to v1.0.82
+
+- [#863](https://github.com/tailor-platform/sdk/pull/863) [`fbd1220`](https://github.com/tailor-platform/sdk/commit/fbd1220eceaf773497c338a36d47432ec95e8adf) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency eslint-plugin-jsdoc to v62.8.1
+
+- [#865](https://github.com/tailor-platform/sdk/pull/865) [`d5ebb8b`](https://github.com/tailor-platform/sdk/commit/d5ebb8b533a1e4c259412ac46953ea0d08085236) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency graphql to v16.13.2
+
+- [#866](https://github.com/tailor-platform/sdk/pull/866) [`e840eca`](https://github.com/tailor-platform/sdk/commit/e840eca55a832107af193f4b29bb7729097745f9) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency oxlint-tsgolint to v0.18.0
+
+- [#867](https://github.com/tailor-platform/sdk/pull/867) [`2850dfb`](https://github.com/tailor-platform/sdk/commit/2850dfb935270b5d7c069526703d48bc0b61a221) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency tsdown to v0.21.6
+
+- [#868](https://github.com/tailor-platform/sdk/pull/868) [`fcafc10`](https://github.com/tailor-platform/sdk/commit/fcafc103c4fb60abb4ad7990b6a8637b36ad6d1f) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update vitest monorepo to v4.1.2
+
+- [#871](https://github.com/tailor-platform/sdk/pull/871) [`a1b8372`](https://github.com/tailor-platform/sdk/commit/a1b837274eb7c15cb246860a090a4d05229c1447) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update opentelemetry-js monorepo
+
+- [#872](https://github.com/tailor-platform/sdk/pull/872) [`ea937d9`](https://github.com/tailor-platform/sdk/commit/ea937d957ff526aec1d441dad7b0af4fdf648378) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency rhysd/actionlint to v1.7.12
+
+- [#873](https://github.com/tailor-platform/sdk/pull/873) [`5bee342`](https://github.com/tailor-platform/sdk/commit/5bee342221286580cb33468d825808542966206c) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update anthropics/claude-code-action action to v1.0.83
+
+- [#874](https://github.com/tailor-platform/sdk/pull/874) [`7ff3617`](https://github.com/tailor-platform/sdk/commit/7ff3617c0cd08518b5e1a2b254c87144ba304bed) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency tsdown to v0.21.7
+
+- [#875](https://github.com/tailor-platform/sdk/pull/875) [`112769c`](https://github.com/tailor-platform/sdk/commit/112769c1a91247f8dc5e342eebac6ceb96a76e86) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency turbo to v2.8.21
+
+- [#876](https://github.com/tailor-platform/sdk/pull/876) [`0da01f9`](https://github.com/tailor-platform/sdk/commit/0da01f937072d375b363bbd021875d4fcefe41f7) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency aquaproj/aqua-registry to v4.491.0
+
+- [#877](https://github.com/tailor-platform/sdk/pull/877) [`3fb644d`](https://github.com/tailor-platform/sdk/commit/3fb644d7fddbb8373d88941f542dd1851b4272c5) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @typescript/native-preview to v7.0.0-dev.20260329.1
+
+- [#878](https://github.com/tailor-platform/sdk/pull/878) [`5f09037`](https://github.com/tailor-platform/sdk/commit/5f09037b9cfe8e5f8f3e5f9ebde2060b034a0d25) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency aquaproj/aqua-renovate-config to v2.12.0
+
+- [#880](https://github.com/tailor-platform/sdk/pull/880) [`5a2ad18`](https://github.com/tailor-platform/sdk/commit/5a2ad18a6c47ba2128c5fe45db3b8cacb364da35) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency knip to v6.1.0
+
+- [#881](https://github.com/tailor-platform/sdk/pull/881) [`933249a`](https://github.com/tailor-platform/sdk/commit/933249ac9d393491c610516c96bc9d59691bf681) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update oxlint monorepo
+
+- [#886](https://github.com/tailor-platform/sdk/pull/886) [`4d6a9d9`](https://github.com/tailor-platform/sdk/commit/4d6a9d95528dcdfeba131c2385fb5a5249f6c5db) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update anthropics/claude-code-action action to v1.0.85
+
+- [#889](https://github.com/tailor-platform/sdk/pull/889) [`575fc11`](https://github.com/tailor-platform/sdk/commit/575fc11cc1d3bf5ab11bffe0c8079949c16cb90d) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency bufbuild/buf to v1.67.0
+
+- [#892](https://github.com/tailor-platform/sdk/pull/892) [`3ca56ef`](https://github.com/tailor-platform/sdk/commit/3ca56effb336c0232ae6701871e2d3c0f09ad7b6) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update pnpm to v10.33.0
+
 ## 1.33.0
 
 ### Minor Changes
