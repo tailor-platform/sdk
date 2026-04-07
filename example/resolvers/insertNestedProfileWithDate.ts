@@ -26,10 +26,12 @@ export default createResolver({
           name: input.name,
           email: input.email,
         },
-        metadata: {
-          created: new Date(),
-          version: 1,
-        },
+        metadata: [
+          {
+            created: new Date(),
+            version: 1,
+          },
+        ],
       })
       .returning("id")
       .executeTakeFirstOrThrow();
@@ -41,11 +43,11 @@ export default createResolver({
       .where("id", "=", inserted.id)
       .executeTakeFirstOrThrow();
 
-    console.log(`typeof metadata.created: ${typeof selected.metadata.created}`);
+    console.log(`typeof metadata[0].created: ${typeof selected.metadata[0].created}`);
 
     return {
       id: selected.id,
-      metadataCreated: selected.metadata.created,
+      metadataCreated: selected.metadata[0].created,
     };
   },
 });

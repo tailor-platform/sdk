@@ -3,6 +3,7 @@ import {
   type Generated,
   type Timestamp,
   type ObjectColumnType,
+  type ArrayColumnType,
   type Serial,
   type NamespaceDB,
   type NamespaceInsertable,
@@ -50,11 +51,11 @@ export interface Namespace {
         email: string;
         phone?: string | null;
       }>;
-      metadata: ObjectColumnType<{
+      metadata: ArrayColumnType<ObjectColumnType<{
         created: Timestamp;
         lastUpdated?: Timestamp | null;
         version: number;
-      }>;
+      }>>;
       archived: boolean | null;
       createdAt: Generated<Timestamp>;
       updatedAt: Timestamp | null;
