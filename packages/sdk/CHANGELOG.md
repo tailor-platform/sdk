@@ -1,5 +1,13 @@
 # @tailor-platform/sdk
 
+## 1.35.0
+
+### Minor Changes
+
+- [#912](https://github.com/tailor-platform/sdk/pull/912) [`dbc22b9`](https://github.com/tailor-platform/sdk/commit/dbc22b9ab6c79c5f4342af5ad69224c3fab61922) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `ArrayColumnType<T>` for correct Kysely type resolution in ColumnType arrays
+
+  Kysely's `Insertable`/`Selectable` only resolves `ColumnType` at the top-level table property, so `ColumnType[]` (e.g. `Timestamp[]`, `ObjectColumnType<{...}>[]`) was not resolved correctly. `ArrayColumnType<T>` wraps the array inside the `ColumnType` so that insert/select/update types are properly resolved for array fields containing `Timestamp` or `ObjectColumnType`.
+
 ## 1.34.0
 
 ### Minor Changes
