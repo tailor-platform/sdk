@@ -401,4 +401,22 @@ describe("formatErrorWithSourcemap", () => {
 
     expect(result).toBeNull();
   });
+
+  test("handles server line offset when server wraps bundled code with boilerplate", () => {
+    // The server wraps bundled code with 3 lines of boilerplate,
+    // so the error reports line 4 instead of line 1 in the bundled code.
+    const bundledCode = makeRealisticBundle();
+    const error = [
+      "rpc error: code = Aborted desc = Error: intentional error",
+      "    at M (file:///test-run--error-test.js:4:1)",
+      "    at <eval>:17:38",
+    ].join("\n");
+
+    const result = formatErrorWithSourcemap(error, bundledCode);
+
+    expect(result).not.toBeNull();
+    const plain = stripAnsi(result!);
+    expect(plain).toContain("Error: intentional error");
+    expect(plain).toContain("resolvers/error-test.ts:4:3");
+  });
 });

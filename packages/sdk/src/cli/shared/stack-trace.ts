@@ -235,6 +235,51 @@ export function formatMappedError(
 }
 
 /**
+ * Detect the line offset added by the server's script wrapper.
+ *
+ * The platform server wraps bundled code with boilerplate lines before execution.
+ * Stack traces report absolute line numbers in the wrapped script, not relative
+ * to the bundled code. This function finds the offset by trying each possible
+ * code line in the bundle as the target for the first frame's reported position.
+ * @param frames - Parsed stack frames from the error
+ * @param traceMap - TraceMap from inline sourcemap
+ * @param bundledCode - Bundled JavaScript code
+ * @returns Line offset to subtract from frame line numbers, or 0 if none detected
+ */
+function detectServerLineOffset(
+  frames: StackFrame[],
+  traceMap: TraceMap,
+  bundledCode: string,
+): number {
+  if (frames.length === 0) return 0;
+
+  // Count actual code lines (before sourcemap comment)
+  const lines = bundledCode.split("\n");
+  let codeLineCount = 0;
+  for (const line of lines) {
+    if (/^\/\/[#@]\s*sourceMappingURL/.test(line)) break;
+    if (line.trim()) codeLineCount++;
+  }
+
+  const firstFrame = frames[0];
+
+  // Try mapping the first frame to each possible code line
+  for (let targetLine = 1; targetLine <= codeLineCount; targetLine++) {
+    const offset = firstFrame.line - targetLine;
+    if (offset <= 0) continue;
+
+    const pos = originalPositionFor(traceMap, {
+      line: targetLine,
+      column: firstFrame.column - 1,
+    });
+
+    if (pos.source != null) return offset;
+  }
+
+  return 0;
+}
+
+/**
  * Format an error string with sourcemap-based source locations.
  * This is the main entry point for test-run error display.
  *
@@ -253,13 +298,24 @@ export function formatErrorWithSourcemap(error: string, bundledCode: string): st
     const traceMap = extractInlineSourcemap(bundledCode);
     if (!traceMap) return null;
 
+    // Try direct mapping first
     const mappedFrames = mapStackFrames(frames, traceMap);
+    if (mappedFrames.some((f) => f.mapped !== null)) {
+      return formatMappedError(errorMessage, mappedFrames, traceMap);
+    }
 
-    // If no frames could be mapped, fall back to default display
-    const hasMapped = mappedFrames.some((f) => f.mapped !== null);
-    if (!hasMapped) return null;
+    // The platform server wraps bundled code with boilerplate, shifting line numbers.
+    // Detect and compensate for this offset.
+    const offset = detectServerLineOffset(frames, traceMap, bundledCode);
+    if (offset > 0) {
+      const adjustedFrames = frames.map((f) => ({ ...f, line: f.line - offset }));
+      const adjustedMapped = mapStackFrames(adjustedFrames, traceMap);
+      if (adjustedMapped.some((f) => f.mapped !== null)) {
+        return formatMappedError(errorMessage, adjustedMapped, traceMap);
+      }
+    }
 
-    return formatMappedError(errorMessage, mappedFrames, traceMap);
+    return null;
   } catch {
     return null;
   }
