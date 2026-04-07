@@ -46,12 +46,11 @@ const RPC_ERROR_PREFIX = "rpc error: code = Aborted desc = ";
 export function parseStackTrace(error: string): ParsedStackTrace {
   const lines = error.split("\n");
 
-  // Extract error message (all non-frame lines before the first frame)
   const messageLines: string[] = [];
   const frameLines: string[] = [];
 
   for (const line of lines) {
-    if (line.match(/^\s+at\s+/)) {
+    if (/^\s+at\s+/.test(line)) {
       frameLines.push(line);
     } else if (frameLines.length === 0) {
       messageLines.push(line);
@@ -65,7 +64,6 @@ export function parseStackTrace(error: string): ParsedStackTrace {
     errorMessage = errorMessage.slice(RPC_ERROR_PREFIX.length);
   }
 
-  // Parse each frame line
   const frames: StackFrame[] = [];
   for (const line of frameLines) {
     const match = STACK_FRAME_REGEX.exec(line);
@@ -167,7 +165,7 @@ const SNIPPET_CONTEXT_LINES = 2;
  * The target line is marked with `>` and highlighted.
  * @param content - Full source file content
  * @param targetLine - 1-based line number to highlight
- * @returns Formatted snippet string, or null if content is unavailable
+ * @returns Formatted snippet string
  */
 function buildCodeSnippet(content: string, targetLine: number): string {
   const lines = content.split("\n");
@@ -285,6 +283,7 @@ function detectServerLineOffset(
     if (mappedCount > bestMappedCount) {
       bestMappedCount = mappedCount;
       bestOffset = offset;
+      if (bestMappedCount === frames.length) break;
     }
   }
 
