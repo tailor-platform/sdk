@@ -222,12 +222,13 @@ function printPlanResults(results: PlanResults) {
     results.auth.changeSet.authHook,
     results.functionRegistry.authHookFunctionChanges,
   );
+  const tailorDBResourceEntries = formatTailorDBResourceChangeEntries(
+    results.tailorDB.changeSet.type,
+    results.tailorDB.changeSet.gqlPermission,
+  );
   const tailorDBEntries: GroupedDisplayEntry[] = [
     ...formatChangeSetEntries(results.tailorDB.changeSet.service, ["service"]),
-    ...formatTailorDBResourceChangeEntries(
-      results.tailorDB.changeSet.type,
-      results.tailorDB.changeSet.gqlPermission,
-    ),
+    ...tailorDBResourceEntries,
   ];
   const pipelineEntries: GroupedDisplayEntry[] = [
     ...formatChangeSetEntries(results.pipeline.changeSet.service, ["service"]),
@@ -266,7 +267,7 @@ function printPlanResults(results: PlanResults) {
     resolverEntries,
     workflowEntries,
     authHookEntries,
-    tailorDBEntries,
+    tailorDBEntries: tailorDBResourceEntries,
   });
 
   logger.log(formatPlanSummary(summary));
@@ -392,20 +393,7 @@ export function summarizePlanResultsForDisplay(
     summary,
     summarizeChangeSets([
       otherChanges,
-      results.tailorDB.changeSet.service,
       results.staticWebsite.changeSet,
-      results.idp.changeSet.service,
-      results.idp.changeSet.client,
-      results.auth.changeSet.service,
-      results.auth.changeSet.idpConfig,
-      results.auth.changeSet.userProfileConfig,
-      results.auth.changeSet.tenantConfig,
-      results.auth.changeSet.machineUser,
-      results.auth.changeSet.oauth2Client,
-      results.auth.changeSet.scim,
-      results.auth.changeSet.scimResource,
-      ...(results.auth.changeSet.connection ? [results.auth.changeSet.connection] : []),
-      results.pipeline.changeSet.service,
       results.app,
       results.secretManager.vaultChangeSet,
       results.secretManager.secretChangeSet,
@@ -510,6 +498,26 @@ export function summarizePlanResultsForDisplay(
         },
       ),
     ),
+  );
+
+  // Count service-level and non-grouped resources not tracked via display entries above
+  addPlanSummary(
+    summary,
+    summarizeChangeSets([
+      results.tailorDB.changeSet.service,
+      results.pipeline.changeSet.service,
+      results.idp.changeSet.service,
+      results.idp.changeSet.client,
+      results.auth.changeSet.service,
+      results.auth.changeSet.idpConfig,
+      results.auth.changeSet.userProfileConfig,
+      results.auth.changeSet.tenantConfig,
+      results.auth.changeSet.machineUser,
+      results.auth.changeSet.oauth2Client,
+      results.auth.changeSet.scim,
+      results.auth.changeSet.scimResource,
+      ...(results.auth.changeSet.connection ? [results.auth.changeSet.connection] : []),
+    ]),
   );
 
   return summary;
