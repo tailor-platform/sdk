@@ -57,14 +57,11 @@ function functionRegistryTrn(workspaceId: string, name: string) {
   return `trn:v1:workspace:${workspaceId}:function_registry:${name}`;
 }
 
-/** Function registry name prefix for resolver entries. */
-export const RESOLVER_PREFIX = "resolver--";
-/** Function registry name prefix for executor entries. */
-export const EXECUTOR_PREFIX = "executor--";
+const RESOLVER_PREFIX = "resolver--";
+const EXECUTOR_PREFIX = "executor--";
 /** Function registry name prefix for workflow job entries. */
 export const WORKFLOW_PREFIX = "workflow--";
-/** Function registry name prefix for auth hook entries. */
-export const AUTH_HOOK_PREFIX = "auth-hook--";
+const AUTH_HOOK_PREFIX = "auth-hook--";
 
 /**
  * Build a function registry name for a resolver.
