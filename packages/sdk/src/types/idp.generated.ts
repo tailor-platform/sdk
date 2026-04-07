@@ -67,6 +67,233 @@ export type IdPEmailConfig = {
 };
 export type IdPEmailConfigInput = IdPEmailConfig;
 
+/**
+ * Per-operation permission policies for IdP users
+ */
+export type IdPPermission = {
+  create: readonly (
+    | readonly unknown[]
+    | {
+        conditions:
+          | readonly (
+              | string
+              | boolean
+              | readonly string[]
+              | readonly boolean[]
+              | {
+                  user: string;
+                }
+              | {
+                  idpUser: string;
+                }
+              | {
+                  oldIdpUser: string;
+                }
+              | {
+                  newIdpUser: string;
+                }
+            )[]
+          | readonly (readonly (
+              | string
+              | boolean
+              | readonly string[]
+              | readonly boolean[]
+              | {
+                  user: string;
+                }
+              | {
+                  idpUser: string;
+                }
+              | {
+                  oldIdpUser: string;
+                }
+              | {
+                  newIdpUser: string;
+                }
+            )[])[];
+        description?: string | undefined;
+        permit?: boolean | undefined;
+      }
+  )[];
+  read: readonly (
+    | readonly unknown[]
+    | {
+        conditions:
+          | readonly (
+              | string
+              | boolean
+              | readonly string[]
+              | readonly boolean[]
+              | {
+                  user: string;
+                }
+              | {
+                  idpUser: string;
+                }
+              | {
+                  oldIdpUser: string;
+                }
+              | {
+                  newIdpUser: string;
+                }
+            )[]
+          | readonly (readonly (
+              | string
+              | boolean
+              | readonly string[]
+              | readonly boolean[]
+              | {
+                  user: string;
+                }
+              | {
+                  idpUser: string;
+                }
+              | {
+                  oldIdpUser: string;
+                }
+              | {
+                  newIdpUser: string;
+                }
+            )[])[];
+        description?: string | undefined;
+        permit?: boolean | undefined;
+      }
+  )[];
+  update: readonly (
+    | readonly unknown[]
+    | {
+        conditions:
+          | readonly (
+              | string
+              | boolean
+              | readonly string[]
+              | readonly boolean[]
+              | {
+                  user: string;
+                }
+              | {
+                  idpUser: string;
+                }
+              | {
+                  oldIdpUser: string;
+                }
+              | {
+                  newIdpUser: string;
+                }
+            )[]
+          | readonly (readonly (
+              | string
+              | boolean
+              | readonly string[]
+              | readonly boolean[]
+              | {
+                  user: string;
+                }
+              | {
+                  idpUser: string;
+                }
+              | {
+                  oldIdpUser: string;
+                }
+              | {
+                  newIdpUser: string;
+                }
+            )[])[];
+        description?: string | undefined;
+        permit?: boolean | undefined;
+      }
+  )[];
+  delete: readonly (
+    | readonly unknown[]
+    | {
+        conditions:
+          | readonly (
+              | string
+              | boolean
+              | readonly string[]
+              | readonly boolean[]
+              | {
+                  user: string;
+                }
+              | {
+                  idpUser: string;
+                }
+              | {
+                  oldIdpUser: string;
+                }
+              | {
+                  newIdpUser: string;
+                }
+            )[]
+          | readonly (readonly (
+              | string
+              | boolean
+              | readonly string[]
+              | readonly boolean[]
+              | {
+                  user: string;
+                }
+              | {
+                  idpUser: string;
+                }
+              | {
+                  oldIdpUser: string;
+                }
+              | {
+                  newIdpUser: string;
+                }
+            )[])[];
+        description?: string | undefined;
+        permit?: boolean | undefined;
+      }
+  )[];
+  sendPasswordResetEmail: readonly (
+    | readonly unknown[]
+    | {
+        conditions:
+          | readonly (
+              | string
+              | boolean
+              | readonly string[]
+              | readonly boolean[]
+              | {
+                  user: string;
+                }
+              | {
+                  idpUser: string;
+                }
+              | {
+                  oldIdpUser: string;
+                }
+              | {
+                  newIdpUser: string;
+                }
+            )[]
+          | readonly (readonly (
+              | string
+              | boolean
+              | readonly string[]
+              | readonly boolean[]
+              | {
+                  user: string;
+                }
+              | {
+                  idpUser: string;
+                }
+              | {
+                  oldIdpUser: string;
+                }
+              | {
+                  newIdpUser: string;
+                }
+            )[])[];
+        description?: string | undefined;
+        permit?: boolean | undefined;
+      }
+  )[];
+};
+export type IdPPermissionInput = IdPPermission;
+
 export type IdPInput = {
   /** IdP service name */
   name: string;
@@ -116,6 +343,231 @@ export type IdPInput = {
     | {
         fromName?: string | undefined;
         passwordResetSubject?: string | undefined;
+      }
+    | undefined;
+  /** Per-operation permission policies for IdP users */
+  permission?:
+    | {
+        create: readonly (
+          | readonly unknown[]
+          | {
+              conditions:
+                | readonly (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: string;
+                      }
+                    | {
+                        oldIdpUser: string;
+                      }
+                    | {
+                        newIdpUser: string;
+                      }
+                  )[]
+                | readonly (readonly (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: string;
+                      }
+                    | {
+                        oldIdpUser: string;
+                      }
+                    | {
+                        newIdpUser: string;
+                      }
+                  )[])[];
+              description?: string | undefined;
+              permit?: boolean | undefined;
+            }
+        )[];
+        read: readonly (
+          | readonly unknown[]
+          | {
+              conditions:
+                | readonly (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: string;
+                      }
+                    | {
+                        oldIdpUser: string;
+                      }
+                    | {
+                        newIdpUser: string;
+                      }
+                  )[]
+                | readonly (readonly (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: string;
+                      }
+                    | {
+                        oldIdpUser: string;
+                      }
+                    | {
+                        newIdpUser: string;
+                      }
+                  )[])[];
+              description?: string | undefined;
+              permit?: boolean | undefined;
+            }
+        )[];
+        update: readonly (
+          | readonly unknown[]
+          | {
+              conditions:
+                | readonly (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: string;
+                      }
+                    | {
+                        oldIdpUser: string;
+                      }
+                    | {
+                        newIdpUser: string;
+                      }
+                  )[]
+                | readonly (readonly (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: string;
+                      }
+                    | {
+                        oldIdpUser: string;
+                      }
+                    | {
+                        newIdpUser: string;
+                      }
+                  )[])[];
+              description?: string | undefined;
+              permit?: boolean | undefined;
+            }
+        )[];
+        delete: readonly (
+          | readonly unknown[]
+          | {
+              conditions:
+                | readonly (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: string;
+                      }
+                    | {
+                        oldIdpUser: string;
+                      }
+                    | {
+                        newIdpUser: string;
+                      }
+                  )[]
+                | readonly (readonly (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: string;
+                      }
+                    | {
+                        oldIdpUser: string;
+                      }
+                    | {
+                        newIdpUser: string;
+                      }
+                  )[])[];
+              description?: string | undefined;
+              permit?: boolean | undefined;
+            }
+        )[];
+        sendPasswordResetEmail: readonly (
+          | readonly unknown[]
+          | {
+              conditions:
+                | readonly (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: string;
+                      }
+                    | {
+                        oldIdpUser: string;
+                      }
+                    | {
+                        newIdpUser: string;
+                      }
+                  )[]
+                | readonly (readonly (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: string;
+                      }
+                    | {
+                        oldIdpUser: string;
+                      }
+                    | {
+                        newIdpUser: string;
+                      }
+                  )[])[];
+              description?: string | undefined;
+              permit?: boolean | undefined;
+            }
+        )[];
       }
     | undefined;
 };
@@ -168,6 +620,231 @@ export type IdP = {
     | {
         fromName?: string | undefined;
         passwordResetSubject?: string | undefined;
+      }
+    | undefined;
+  /** Per-operation permission policies for IdP users */
+  permission?:
+    | {
+        create: readonly (
+          | readonly unknown[]
+          | {
+              conditions:
+                | readonly (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: string;
+                      }
+                    | {
+                        oldIdpUser: string;
+                      }
+                    | {
+                        newIdpUser: string;
+                      }
+                  )[]
+                | readonly (readonly (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: string;
+                      }
+                    | {
+                        oldIdpUser: string;
+                      }
+                    | {
+                        newIdpUser: string;
+                      }
+                  )[])[];
+              description?: string | undefined;
+              permit?: boolean | undefined;
+            }
+        )[];
+        read: readonly (
+          | readonly unknown[]
+          | {
+              conditions:
+                | readonly (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: string;
+                      }
+                    | {
+                        oldIdpUser: string;
+                      }
+                    | {
+                        newIdpUser: string;
+                      }
+                  )[]
+                | readonly (readonly (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: string;
+                      }
+                    | {
+                        oldIdpUser: string;
+                      }
+                    | {
+                        newIdpUser: string;
+                      }
+                  )[])[];
+              description?: string | undefined;
+              permit?: boolean | undefined;
+            }
+        )[];
+        update: readonly (
+          | readonly unknown[]
+          | {
+              conditions:
+                | readonly (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: string;
+                      }
+                    | {
+                        oldIdpUser: string;
+                      }
+                    | {
+                        newIdpUser: string;
+                      }
+                  )[]
+                | readonly (readonly (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: string;
+                      }
+                    | {
+                        oldIdpUser: string;
+                      }
+                    | {
+                        newIdpUser: string;
+                      }
+                  )[])[];
+              description?: string | undefined;
+              permit?: boolean | undefined;
+            }
+        )[];
+        delete: readonly (
+          | readonly unknown[]
+          | {
+              conditions:
+                | readonly (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: string;
+                      }
+                    | {
+                        oldIdpUser: string;
+                      }
+                    | {
+                        newIdpUser: string;
+                      }
+                  )[]
+                | readonly (readonly (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: string;
+                      }
+                    | {
+                        oldIdpUser: string;
+                      }
+                    | {
+                        newIdpUser: string;
+                      }
+                  )[])[];
+              description?: string | undefined;
+              permit?: boolean | undefined;
+            }
+        )[];
+        sendPasswordResetEmail: readonly (
+          | readonly unknown[]
+          | {
+              conditions:
+                | readonly (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: string;
+                      }
+                    | {
+                        oldIdpUser: string;
+                      }
+                    | {
+                        newIdpUser: string;
+                      }
+                  )[]
+                | readonly (readonly (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: string;
+                      }
+                    | {
+                        oldIdpUser: string;
+                      }
+                    | {
+                        newIdpUser: string;
+                      }
+                  )[])[];
+              description?: string | undefined;
+              permit?: boolean | undefined;
+            }
+        )[];
       }
     | undefined;
 };

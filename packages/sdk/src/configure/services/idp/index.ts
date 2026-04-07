@@ -38,3 +38,6 @@ export function defineIdp<const TClients extends string[]>(
 }
 
 export type { IdPConfig, IdPExternalConfig } from "@/types/idp";
+
+export type { IdPPermission, IdPPermissionCondition } from "./permission";
+export { unsafeAllowAllIdPPermission } from "./permission";
