@@ -274,7 +274,7 @@ export async function planWorkflow(
   appName: string,
   workflows: Record<string, Workflow>,
   mainJobDeps: Record<string, string[]>,
-  unchangedJobFunctions: ReadonlySet<string>,
+  unchangedJobFunctions: ReadonlySet<string> = new Set<string>(),
 ) {
   const changeSet = createChangeSet<CreateWorkflow, UpdateWorkflow, DeleteWorkflow>("Workflows");
   const conflicts: OwnerConflict[] = [];
