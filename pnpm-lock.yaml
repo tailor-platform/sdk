@@ -518,6 +518,9 @@ importers:
       '@inquirer/prompts':
         specifier: 8.3.2
         version: 8.3.2(@types/node@24.12.0)
+      '@jridgewell/trace-mapping':
+        specifier: 0.3.31
+        version: 0.3.31
       '@liam-hq/cli':
         specifier: 0.7.24
         version: 0.7.24(@types/node@24.12.0)(typescript@5.9.3)
