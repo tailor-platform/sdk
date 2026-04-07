@@ -89,6 +89,23 @@ describe("parseStackTrace", () => {
     });
   });
 
+  test("parses Windows file URLs with drive letter", () => {
+    const error = [
+      "rpc error: code = Aborted desc = Error: test",
+      "    at fn (file:///C:/Users/dev/project/bundle.js:1:100)",
+    ].join("\n");
+
+    const result = parseStackTrace(error);
+
+    expect(result.frames).toHaveLength(1);
+    expect(result.frames[0]).toEqual({
+      functionName: "fn",
+      file: "file:///C:/Users/dev/project/bundle.js",
+      line: 1,
+      column: 100,
+    });
+  });
+
   test("strips rpc error prefix from error message", () => {
     const error =
       "rpc error: code = Aborted desc = RangeError: out of bounds\n    at fn (file:///b.js:1:1)";
@@ -434,6 +451,46 @@ describe("formatErrorWithSourcemap", () => {
     const plain = stripAnsi(result!);
     expect(plain).toContain("Error: intentional error");
     expect(plain).toContain("resolvers/error-test.ts:4:3");
+  });
+
+  test("handles bundle with blank lines in offset detection", () => {
+    // Bundle with blank lines: sourcemap line numbers include blank lines.
+    // Without counting blank lines, the offset range calculation would be wrong.
+    const sourceContent = [
+      "function throwError() {",
+      '  throw new Error("intentional error");',
+      "}",
+    ].join("\n");
+
+    const sourcemap = {
+      version: 3,
+      sources: ["resolvers/error-test.ts"],
+      sourcesContent: [sourceContent],
+      names: [],
+      // Output line 3 (after a blank line) -> source line 2 (0-based: 1)
+      mappings: ";;AACA",
+    };
+    const code = [
+      'var a = "setup";',
+      "",
+      'function M(){throw new Error("intentional error")}',
+    ].join("\n");
+    const json = JSON.stringify(sourcemap);
+    const base64 = Buffer.from(json).toString("base64");
+    const bundledCode = `${code}\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,${base64}`;
+
+    // No server wrapping: error at bundle line 3 directly
+    const error = [
+      "rpc error: code = Aborted desc = Error: intentional error",
+      "    at M (file:///test-run--error-test.js:3:1)",
+    ].join("\n");
+
+    const result = formatErrorWithSourcemap(error, bundledCode);
+
+    expect(result).not.toBeNull();
+    const plain = stripAnsi(result!);
+    expect(plain).toContain("Error: intentional error");
+    expect(plain).toContain("resolvers/error-test.ts:2");
   });
 
   test("handles server line offset with multi-line bundle", () => {

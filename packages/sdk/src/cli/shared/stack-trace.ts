@@ -32,7 +32,7 @@ export interface ParsedStackTrace {
 
 // Matches: "    at functionName (file:///path:line:col)"
 // Or:      "    at file:///path:line:col"
-const STACK_FRAME_REGEX = /^\s+at\s+(?:(.+?)\s+\()?(file:\/\/\/[^:]+):(\d+):(\d+)\)?$/;
+const STACK_FRAME_REGEX = /^\s+at\s+(?:(.+?)\s+\()?(file:\/\/\/.+?):(\d+):(\d+)\)?$/;
 
 // The rpc error prefix added by the platform
 const RPC_ERROR_PREFIX = "rpc error: code = Aborted desc = ";
@@ -261,7 +261,7 @@ function detectServerLineOffset(
   let codeLineCount = 0;
   for (const line of lines) {
     if (/^\/\/[#@]\s*sourceMappingURL/.test(line)) break;
-    if (line.trim()) codeLineCount++;
+    codeLineCount++;
   }
   if (codeLineCount === 0) return 0;
 
