@@ -222,10 +222,21 @@ function printPlanResults(results: PlanResults) {
     results.auth.changeSet.authHook,
     results.functionRegistry.authHookFunctionChanges,
   );
-  const tailorDBEntries = formatTailorDBResourceChangeEntries(
-    results.tailorDB.changeSet.type,
-    results.tailorDB.changeSet.gqlPermission,
-  );
+  const tailorDBEntries: GroupedDisplayEntry[] = [
+    ...formatChangeSetEntries(results.tailorDB.changeSet.service, ["service"]),
+    ...formatTailorDBResourceChangeEntries(
+      results.tailorDB.changeSet.type,
+      results.tailorDB.changeSet.gqlPermission,
+    ),
+  ];
+  const pipelineEntries: GroupedDisplayEntry[] = [
+    ...formatChangeSetEntries(results.pipeline.changeSet.service, ["service"]),
+    ...resolverEntries,
+  ];
+  const idpEntries: GroupedDisplayEntry[] = [
+    ...formatChangeSetEntries(results.idp.changeSet.service, ["service"]),
+    ...formatChangeSetEntries(results.idp.changeSet.client, ["client"]),
+  ];
   const authEntries: GroupedDisplayEntry[] = [
     ...formatChangeSetEntries(results.auth.changeSet.service, ["service"]),
     ...formatChangeSetEntries(results.auth.changeSet.idpConfig, ["idpConfig"]),
@@ -242,7 +253,8 @@ function printPlanResults(results: PlanResults) {
   printGroupedDisplaySection("Executors", executorEntries);
   printGroupedDisplaySection("Workflows", workflowEntries);
   printGroupedDisplaySection("TailorDB resources", tailorDBEntries);
-  printGroupedDisplaySection("Pipeline resolvers", resolverEntries);
+  printGroupedDisplaySection("Pipeline", pipelineEntries);
+  printGroupedDisplaySection("IdP", idpEntries);
   printGroupedDisplaySection("Auth", authEntries);
 
   // Compute summary
