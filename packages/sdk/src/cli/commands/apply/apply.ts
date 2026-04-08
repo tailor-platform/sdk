@@ -49,6 +49,7 @@ import {
   workflowJobFunctionName,
 } from "./function-registry";
 import {
+  extractServiceActions,
   formatChangeSetEntries,
   printGroupedDisplaySection,
   type GroupedDisplayEntry,
@@ -226,14 +227,8 @@ function printPlanResults(results: PlanResults) {
     results.tailorDB.changeSet.type,
     results.tailorDB.changeSet.gqlPermission,
   );
-  const tailorDBEntries: GroupedDisplayEntry[] = [
-    ...formatChangeSetEntries(results.tailorDB.changeSet.service, ["service"]),
-    ...tailorDBResourceEntries,
-  ];
-  const pipelineEntries: GroupedDisplayEntry[] = [
-    ...formatChangeSetEntries(results.pipeline.changeSet.service, ["service"]),
-    ...resolverEntries,
-  ];
+  const tailorDBEntries: GroupedDisplayEntry[] = [...tailorDBResourceEntries];
+  const pipelineEntries: GroupedDisplayEntry[] = [...resolverEntries];
   const namespaceOf = (item: HasName) =>
     "request" in item &&
     item.request &&
@@ -249,11 +244,9 @@ function printPlanResults(results: PlanResults) {
       ? (item.request.authNamespace as string)
       : undefined;
   const idpEntries: GroupedDisplayEntry[] = [
-    ...formatChangeSetEntries(results.idp.changeSet.service, ["service"]),
     ...formatChangeSetEntries(results.idp.changeSet.client, ["client"], namespaceOf),
   ];
   const authEntries: GroupedDisplayEntry[] = [
-    ...formatChangeSetEntries(results.auth.changeSet.service, ["service"]),
     ...formatChangeSetEntries(results.auth.changeSet.idpConfig, ["idpConfig"], namespaceOf),
     ...formatChangeSetEntries(
       results.auth.changeSet.userProfileConfig,
@@ -272,12 +265,16 @@ function printPlanResults(results: PlanResults) {
   ];
 
   // Print grouped sections
-  printGroupedDisplaySection("TailorDB", tailorDBEntries);
-  printGroupedDisplaySection("Resolver", pipelineEntries);
+  const tailorDBServiceActions = extractServiceActions(results.tailorDB.changeSet.service);
+  const pipelineServiceActions = extractServiceActions(results.pipeline.changeSet.service);
+  const idpServiceActions = extractServiceActions(results.idp.changeSet.service);
+  const authServiceActions = extractServiceActions(results.auth.changeSet.service);
+  printGroupedDisplaySection("TailorDB", tailorDBEntries, tailorDBServiceActions);
+  printGroupedDisplaySection("Resolver", pipelineEntries, pipelineServiceActions);
   printGroupedDisplaySection("Executor", executorEntries);
   printGroupedDisplaySection("Workflow", workflowEntries);
-  printGroupedDisplaySection("IdP", idpEntries);
-  printGroupedDisplaySection("Auth", authEntries);
+  printGroupedDisplaySection("IdP", idpEntries, idpServiceActions);
+  printGroupedDisplaySection("Auth", authEntries, authServiceActions);
 
   // Compute summary
   const summary = summarizePlanResultsForDisplay(results, {

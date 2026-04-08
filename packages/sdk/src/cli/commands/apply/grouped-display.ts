@@ -1,5 +1,5 @@
 import { logger, styles, symbols } from "@/cli/shared/logger";
-import type { HasName } from "./change-set";
+import type { ChangeSet, HasName } from "./change-set";
 
 export type DisplayAction = "create" | "update" | "delete" | "replace";
 
@@ -64,21 +64,15 @@ export function actionSymbol(action: DisplayAction): string {
 /**
  * Convert a plain change set into grouped display entries.
  * @param changeSet - Change set to convert
- * @param changeSet.creates - Created resources
- * @param changeSet.updates - Updated resources
- * @param changeSet.deletes - Deleted resources
- * @param changeSet.replaces - Replaced resources
  * @param labels - Labels to attach to each entry
  * @param getNamespace - Optional callback to extract namespace from an item
  * @returns Display entries in CLI print order
  */
 export function formatChangeSetEntries(
-  changeSet: {
-    creates: ReadonlyArray<HasName>;
-    updates: ReadonlyArray<HasName>;
-    deletes: ReadonlyArray<HasName>;
-    replaces: ReadonlyArray<HasName>;
-  },
+  changeSet: Pick<
+    ChangeSet<HasName, HasName, HasName, HasName>,
+    "creates" | "updates" | "deletes" | "replaces"
+  >,
   labels: string[] = [],
   getNamespace?: (item: HasName) => string | undefined,
 ): GroupedDisplayEntry[] {
@@ -248,16 +242,51 @@ export function formatChangeEntriesWithFunctionRegistry<
   ];
 }
 
+export type NamespaceAction = {
+  name: string;
+  action: DisplayAction;
+};
+
+/**
+ * Extract service-level actions from a change set for namespace header display.
+ * @param changeSet - Service change set
+ * @returns Array of namespace actions
+ */
+export function extractServiceActions(
+  changeSet: Pick<
+    ChangeSet<HasName, HasName, HasName, HasName>,
+    "creates" | "updates" | "deletes" | "replaces"
+  >,
+): NamespaceAction[] {
+  return [
+    ...changeSet.creates.map((item) => ({ name: item.name, action: "create" as const })),
+    ...changeSet.deletes.map((item) => ({ name: item.name, action: "delete" as const })),
+    ...changeSet.updates.map((item) => ({ name: item.name, action: "update" as const })),
+    ...changeSet.replaces.map((item) => ({ name: item.name, action: "replace" as const })),
+  ];
+}
+
 /**
  * Print a titled section of grouped display entries, nesting by namespace.
+ * Service-level changes are shown as the namespace header symbol.
+ * Services without child entries are shown as flat entries.
  * @param title - Section title
- * @param entries - Entries to print
+ * @param entries - Entries to print (should NOT include service entries)
+ * @param serviceActions - Optional service-level actions to merge into namespace headers
  */
 export function printGroupedDisplaySection(
   title: string,
   entries: ReadonlyArray<GroupedDisplayEntry>,
+  serviceActions?: ReadonlyArray<NamespaceAction>,
 ) {
-  if (entries.length === 0) {
+  const serviceMap = new Map<string, DisplayAction>();
+  if (serviceActions) {
+    for (const sa of serviceActions) {
+      serviceMap.set(sa.name, sa.action);
+    }
+  }
+
+  if (entries.length === 0 && serviceMap.size === 0) {
     return;
   }
 
@@ -275,10 +304,16 @@ export function printGroupedDisplaySection(
     byNamespace.get(ns)!.push(entry);
   }
 
+  // Track which services have child entries
+  const printedServices = new Set<string>();
+
   for (const ns of namespaceOrder) {
     const group = byNamespace.get(ns)!;
     if (ns) {
-      logger.log(`  ${styles.bold(`${ns}:`)}`);
+      const svcAction = serviceMap.get(ns);
+      const prefix = svcAction ? `${actionSymbol(svcAction)} ` : "";
+      logger.log(`  ${prefix}${styles.bold(`${ns}:`)}`);
+      printedServices.add(ns);
       for (const entry of group) {
         logger.log(`    ${formatGroupedDisplayLine(entry)}`);
       }
@@ -286,6 +321,13 @@ export function printGroupedDisplaySection(
       for (const entry of group) {
         logger.log(`  ${formatGroupedDisplayLine(entry)}`);
       }
+    }
+  }
+
+  // Print services without child entries as flat entries
+  for (const [name, action] of serviceMap) {
+    if (!printedServices.has(name)) {
+      logger.log(`  ${actionSymbol(action)} ${name}`);
     }
   }
 }
