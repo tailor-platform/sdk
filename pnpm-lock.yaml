@@ -549,8 +549,8 @@ importers:
         specifier: 0.1.3
         version: 0.1.3(kysely@0.28.15)
       '@tailor-platform/function-types':
-        specifier: 0.8.3
-        version: 0.8.3
+        specifier: 0.8.4
+        version: 0.8.4
       '@toiroakr/lines-db':
         specifier: 0.9.1
         version: 0.9.1(valibot@1.1.0(typescript@5.9.3))
@@ -2446,8 +2446,8 @@ packages:
     peerDependencies:
       kysely: '>= 0.24.0 < 1'
 
-  '@tailor-platform/function-types@0.8.3':
-    resolution: {integrity: sha512-dSObI4z8OvcLbqeWE8napvPRk402eYVkyLu2u12povraQNzA0xTD5/9k3W4NbTwAcmMT5MxZRtBRN4xw2jAPsw==}
+  '@tailor-platform/function-types@0.8.4':
+    resolution: {integrity: sha512-QaE4CNQJp35be/GOfmCGOBFkliXv5WKi7pBLWeD0Bl6xoRXvtq/j5DAADATV6J3eyTXb0U5+XjSbG5rJnw/QMQ==}
 
   '@toiroakr/lines-db@0.9.1':
     resolution: {integrity: sha512-eDnWE17nLSgBBchpFfmwon45yFf1ekTHLrN1X+pF2/B/zw34QH+rgWvqklrGpg1m1JQZavCLKWactTlVsxV3QQ==}
@@ -6695,7 +6695,7 @@ snapshots:
     dependencies:
       kysely: 0.28.15
 
-  '@tailor-platform/function-types@0.8.3': {}
+  '@tailor-platform/function-types@0.8.4': {}
 
   '@toiroakr/lines-db@0.9.1(valibot@1.1.0(typescript@5.9.3))':
     dependencies:
