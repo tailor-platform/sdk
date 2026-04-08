@@ -55,7 +55,7 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
 > Triggered jobs are not executed; only the target job's \`body\` function runs in isolation.`,
   examples: [
     {
-      cmd: 'resolvers/add.ts --arg \'{"input":{"a":1,"b":2}}\'',
+      cmd: 'resolvers/add.ts --arg \'{"a":1,"b":2}\'',
       desc: "Run a resolver with input arguments",
     },
     {
@@ -63,7 +63,7 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
       desc: "Run a specific workflow job by name",
     },
     {
-      cmd: 'build/resolvers/add.js --arg \'{"input":{"a":1,"b":2}}\'',
+      cmd: 'build/resolvers/add.js --arg \'{"a":1,"b":2}\'',
       desc: "Run a pre-bundled .js file directly",
     },
   ],
