@@ -226,13 +226,20 @@ function printPlanResults(results: PlanResults) {
   );
   const tailorDBEntries: GroupedDisplayEntry[] = [...tailorDBResourceEntries];
   const pipelineEntries: GroupedDisplayEntry[] = [...resolverEntries];
-  const namespaceOf = (item: HasName) =>
-    "request" in item &&
-    item.request &&
-    typeof item.request === "object" &&
-    "namespaceName" in item.request
-      ? (item.request.namespaceName as string)
-      : undefined;
+  const namespaceOf = (item: HasName) => {
+    if (
+      "request" in item &&
+      item.request &&
+      typeof item.request === "object" &&
+      "namespaceName" in item.request
+    ) {
+      return item.request.namespaceName as string;
+    }
+    if ("namespaceName" in item) {
+      return item.namespaceName as string;
+    }
+    return undefined;
+  };
   const authNamespaceOf = (item: HasName) =>
     "request" in item &&
     item.request &&
