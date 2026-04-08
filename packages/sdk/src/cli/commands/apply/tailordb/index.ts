@@ -1026,10 +1026,12 @@ export async function planTailorDB(context: PlanContext) {
 
 type TailorDBDisplayEntry = GroupedDisplayEntry;
 
+type NamespacedItem = HasName & { request?: { namespaceName?: string } };
+
 function collectTailorDBDisplayEntries(
   action: DisplayAction,
-  typeItems: ReadonlyArray<HasName>,
-  gqlPermissionItems: ReadonlyArray<HasName>,
+  typeItems: ReadonlyArray<NamespacedItem>,
+  gqlPermissionItems: ReadonlyArray<NamespacedItem>,
 ): TailorDBDisplayEntry[] {
   const typeNames = new Set(typeItems.map((item) => item.name));
   const gqlPermissionNames = new Set(gqlPermissionItems.map((item) => item.name));
@@ -1038,6 +1040,7 @@ function collectTailorDBDisplayEntries(
     symbol: actionSymbol(action),
     name: item.name,
     labels: gqlPermissionNames.has(item.name) ? ["type", "gqlPermission"] : ["type"],
+    namespace: item.request?.namespaceName,
   }));
   const gqlPermissionOnlyEntries = gqlPermissionItems
     .filter((gqlPermission) => !typeNames.has(gqlPermission.name))
@@ -1046,6 +1049,7 @@ function collectTailorDBDisplayEntries(
       symbol: actionSymbol(action),
       name: item.name,
       labels: ["gqlPermission"],
+      namespace: item.request?.namespaceName,
     }));
 
   return [...typeEntries, ...gqlPermissionOnlyEntries];

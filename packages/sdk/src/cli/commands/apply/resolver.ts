@@ -440,6 +440,9 @@ export function formatResolverChangeEntries(
       const namespace = item.request.namespaceName;
       return namespace ? [resolverFunctionName(namespace, item.name)] : [];
     },
+    {
+      getNamespace: (item) => item.request.namespaceName,
+    },
   );
 }
 

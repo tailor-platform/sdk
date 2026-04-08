@@ -8,6 +8,7 @@ export type GroupedDisplayEntry = {
   symbol: string;
   name: string;
   labels: string[];
+  namespace?: string;
 };
 
 export type RelatedFunctionRegistryChanges = {
@@ -68,6 +69,7 @@ export function actionSymbol(action: DisplayAction): string {
  * @param changeSet.deletes - Deleted resources
  * @param changeSet.replaces - Replaced resources
  * @param labels - Labels to attach to each entry
+ * @param getNamespace - Optional callback to extract namespace from an item
  * @returns Display entries in CLI print order
  */
 export function formatChangeSetEntries(
@@ -78,32 +80,22 @@ export function formatChangeSetEntries(
     replaces: ReadonlyArray<HasName>;
   },
   labels: string[] = [],
+  getNamespace?: (item: HasName) => string | undefined,
 ): GroupedDisplayEntry[] {
+  function toEntry(action: DisplayAction, item: HasName): GroupedDisplayEntry {
+    return {
+      action,
+      symbol: actionSymbol(action),
+      name: item.name,
+      labels: [...labels],
+      namespace: getNamespace?.(item),
+    };
+  }
   return [
-    ...changeSet.creates.map((item) => ({
-      action: "create" as const,
-      symbol: actionSymbol("create"),
-      name: item.name,
-      labels: [...labels],
-    })),
-    ...changeSet.deletes.map((item) => ({
-      action: "delete" as const,
-      symbol: actionSymbol("delete"),
-      name: item.name,
-      labels: [...labels],
-    })),
-    ...changeSet.updates.map((item) => ({
-      action: "update" as const,
-      symbol: actionSymbol("update"),
-      name: item.name,
-      labels: [...labels],
-    })),
-    ...changeSet.replaces.map((item) => ({
-      action: "replace" as const,
-      symbol: actionSymbol("replace"),
-      name: item.name,
-      labels: [...labels],
-    })),
+    ...changeSet.creates.map((item) => toEntry("create", item)),
+    ...changeSet.deletes.map((item) => toEntry("delete", item)),
+    ...changeSet.updates.map((item) => toEntry("update", item)),
+    ...changeSet.replaces.map((item) => toEntry("replace", item)),
   ];
 }
 
@@ -113,30 +105,30 @@ function formatGroupedDisplayLine(entry: GroupedDisplayEntry) {
     : `${entry.symbol} ${entry.name}`;
 }
 
-function formatFunctionRegistryDisplayName(name: string): string {
+function parseFunctionRegistryName(name: string): { displayName: string; namespace?: string } {
   if (name.startsWith("resolver--")) {
     const [, namespace, resolverName] = name.split("--");
     if (namespace && resolverName) {
-      return `${namespace}.${resolverName}`;
+      return { displayName: resolverName, namespace };
     }
   }
 
   if (name.startsWith("workflow--")) {
-    return name.slice("workflow--".length);
+    return { displayName: name.slice("workflow--".length) };
   }
 
   if (name.startsWith("executor--")) {
-    return name.slice("executor--".length);
+    return { displayName: name.slice("executor--".length) };
   }
 
   if (name.startsWith("auth-hook--")) {
     const [, namespace, hookPoint] = name.split("--");
     if (namespace && hookPoint) {
-      return `${namespace}/${hookPoint}`;
+      return { displayName: hookPoint, namespace };
     }
   }
 
-  return name;
+  return { displayName: name };
 }
 
 /**
@@ -159,12 +151,16 @@ export function buildRemainingFunctionRegistryEntries(
   return actions.flatMap(([action, nameSet, consumedSet]) =>
     [...nameSet]
       .filter((name) => !consumedSet.has(name))
-      .map((name) => ({
-        action,
-        symbol: actionSymbol(action),
-        name: formatFunctionRegistryDisplayName(name),
-        labels: ["function"],
-      })),
+      .map((name) => {
+        const { displayName, namespace } = parseFunctionRegistryName(name);
+        return {
+          action,
+          symbol: actionSymbol(action),
+          name: displayName,
+          labels: ["function"],
+          namespace,
+        };
+      }),
   );
 }
 
@@ -183,6 +179,9 @@ export function buildRemainingFunctionRegistryEntries(
  * @param changeSet.replaces - Replaced resources
  * @param functionRegistryChanges - Related function registry changes
  * @param getFunctionRegistryNames - Derives function registry names from a resource item
+ * @param options - Optional display callbacks
+ * @param options.getNamespace - Extract namespace from an item for nested display
+ * @param options.getDisplayName - Override display name for an item
  * @returns Display entries for CLI output
  */
 export function formatChangeEntriesWithFunctionRegistry<
@@ -199,7 +198,12 @@ export function formatChangeEntriesWithFunctionRegistry<
   },
   functionRegistryChanges: RelatedFunctionRegistryChanges | undefined,
   getFunctionRegistryNames: (item: C | U | D, action: DisplayAction) => string[],
+  options?: {
+    getNamespace?: (item: C | U | D) => string | undefined;
+    getDisplayName?: (item: C | U | D) => string;
+  },
 ): GroupedDisplayEntry[] {
+  const { getNamespace, getDisplayName } = options ?? {};
   const functionNames = createRelatedFunctionRegistryNameSets(functionRegistryChanges);
   const consumed: RelatedFunctionRegistryNameSets = createRelatedFunctionRegistryNameSets();
 
@@ -222,8 +226,9 @@ export function formatChangeEntriesWithFunctionRegistry<
       return {
         action,
         symbol: actionSymbol(action),
-        name: item.name,
+        name: getDisplayName?.(item) ?? item.name,
         labels: hasMatch ? [resourceLabel, "function"] : [resourceLabel],
+        namespace: getNamespace?.(item),
       };
     });
   }
@@ -235,31 +240,52 @@ export function formatChangeEntriesWithFunctionRegistry<
     ...changeSet.replaces.map((item) => ({
       action: "replace" as const,
       symbol: actionSymbol("replace"),
-      name: item.name,
+      name: getDisplayName?.(item as C | U | D) ?? item.name,
       labels: [resourceLabel],
+      namespace: getNamespace?.(item as C | U | D),
     })),
     ...buildRemainingFunctionRegistryEntries(functionNames, consumed),
   ];
 }
 
 /**
- * Print a titled section of grouped display entries.
+ * Print a titled section of grouped display entries, nesting by namespace.
  * @param title - Section title
  * @param entries - Entries to print
- * @param indent - Leading spaces before the title
  */
 export function printGroupedDisplaySection(
   title: string,
   entries: ReadonlyArray<GroupedDisplayEntry>,
-  indent = 0,
 ) {
   if (entries.length === 0) {
     return;
   }
 
-  logger.log(styles.bold(`${" ".repeat(indent)}${title}:`));
-  const entryIndent = " ".repeat(indent + 2);
+  logger.log(styles.bold(`${title}:`));
+
+  // Group entries by namespace while preserving order
+  const namespaceOrder: (string | undefined)[] = [];
+  const byNamespace = new Map<string | undefined, GroupedDisplayEntry[]>();
   for (const entry of entries) {
-    logger.log(`${entryIndent}${formatGroupedDisplayLine(entry)}`);
+    const ns = entry.namespace;
+    if (!byNamespace.has(ns)) {
+      namespaceOrder.push(ns);
+      byNamespace.set(ns, []);
+    }
+    byNamespace.get(ns)!.push(entry);
+  }
+
+  for (const ns of namespaceOrder) {
+    const group = byNamespace.get(ns)!;
+    if (ns) {
+      logger.log(`  ${styles.bold(`${ns}:`)}`);
+      for (const entry of group) {
+        logger.log(`    ${formatGroupedDisplayLine(entry)}`);
+      }
+    } else {
+      for (const entry of group) {
+        logger.log(`  ${formatGroupedDisplayLine(entry)}`);
+      }
+    }
   }
 }

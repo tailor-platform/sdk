@@ -234,22 +234,44 @@ function printPlanResults(results: PlanResults) {
     ...formatChangeSetEntries(results.pipeline.changeSet.service, ["service"]),
     ...resolverEntries,
   ];
+  const nsFromRequest = (item: HasName) =>
+    "request" in item &&
+    item.request &&
+    typeof item.request === "object" &&
+    "namespaceName" in item.request
+      ? (item.request.namespaceName as string)
+      : undefined;
+  const authNsFromRequest = (item: HasName) =>
+    "request" in item &&
+    item.request &&
+    typeof item.request === "object" &&
+    "authNamespace" in item.request
+      ? (item.request.authNamespace as string)
+      : undefined;
   const idpEntries: GroupedDisplayEntry[] = [
     ...formatChangeSetEntries(results.idp.changeSet.service, ["service"]),
-    ...formatChangeSetEntries(results.idp.changeSet.client, ["client"]),
+    ...formatChangeSetEntries(results.idp.changeSet.client, ["client"], nsFromRequest),
   ];
   const authEntries: GroupedDisplayEntry[] = [
     ...formatChangeSetEntries(results.auth.changeSet.service, ["service"]),
-    ...formatChangeSetEntries(results.auth.changeSet.idpConfig, ["idpConfig"]),
-    ...formatChangeSetEntries(results.auth.changeSet.userProfileConfig, ["userProfileConfig"]),
-    ...formatChangeSetEntries(results.auth.changeSet.tenantConfig, ["tenantConfig"]),
-    ...formatChangeSetEntries(results.auth.changeSet.machineUser, ["machineUser"]),
+    ...formatChangeSetEntries(results.auth.changeSet.idpConfig, ["idpConfig"], nsFromRequest),
+    ...formatChangeSetEntries(
+      results.auth.changeSet.userProfileConfig,
+      ["userProfileConfig"],
+      nsFromRequest,
+    ),
+    ...formatChangeSetEntries(results.auth.changeSet.tenantConfig, ["tenantConfig"], nsFromRequest),
+    ...formatChangeSetEntries(
+      results.auth.changeSet.machineUser,
+      ["machineUser"],
+      authNsFromRequest,
+    ),
     ...authHookEntries,
-    ...formatChangeSetEntries(results.auth.changeSet.oauth2Client, ["oauth2Client"]),
-    ...formatChangeSetEntries(results.auth.changeSet.scim, ["scimConfig"]),
-    ...formatChangeSetEntries(results.auth.changeSet.scimResource, ["scimResource"]),
+    ...formatChangeSetEntries(results.auth.changeSet.oauth2Client, ["oauth2Client"], nsFromRequest),
+    ...formatChangeSetEntries(results.auth.changeSet.scim, ["scimConfig"], nsFromRequest),
+    ...formatChangeSetEntries(results.auth.changeSet.scimResource, ["scimResource"], nsFromRequest),
     ...(results.auth.changeSet.connection
-      ? formatChangeSetEntries(results.auth.changeSet.connection, ["connection"])
+      ? formatChangeSetEntries(results.auth.changeSet.connection, ["connection"], nsFromRequest)
       : []),
   ];
 

@@ -654,6 +654,7 @@ describe("formatResolverChangeEntries", () => {
         symbol: "~",
         name: "add",
         labels: ["resolver", "function"],
+        namespace: "my-resolver",
       },
     ]);
   });
@@ -688,6 +689,7 @@ describe("formatResolverChangeEntries", () => {
         symbol: "-",
         name: "add",
         labels: ["resolver", "function"],
+        namespace: "my-resolver",
       },
     ]);
   });

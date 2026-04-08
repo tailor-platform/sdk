@@ -1932,6 +1932,10 @@ export function formatAuthHookChangeEntries(
       const [namespace, hookPoint] = item.name.split("/");
       return namespace && hookPoint ? [authHookFunctionName(namespace, hookPoint)] : [];
     },
+    {
+      getNamespace: (item) => item.name.split("/")[0],
+      getDisplayName: (item) => item.name.split("/")[1] ?? item.name,
+    },
   );
 }
 

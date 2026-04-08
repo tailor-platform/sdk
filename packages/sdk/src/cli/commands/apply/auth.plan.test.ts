@@ -510,8 +510,9 @@ describe("formatAuthHookChangeEntries", () => {
       {
         action: "update",
         symbol: "~",
-        name: "my-auth/before-login",
+        name: "before-login",
         labels: ["authHook", "function"],
+        namespace: "my-auth",
       },
     ]);
   });
@@ -540,14 +541,16 @@ describe("formatAuthHookChangeEntries", () => {
       {
         action: "update",
         symbol: "~",
-        name: "my-auth/before-login",
+        name: "before-login",
         labels: ["authHook"],
+        namespace: "my-auth",
       },
       {
         action: "create",
         symbol: "+",
-        name: "my-auth/before-login",
+        name: "before-login",
         labels: ["function"],
+        namespace: "my-auth",
       },
     ]);
   });
