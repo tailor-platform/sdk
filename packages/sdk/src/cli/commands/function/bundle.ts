@@ -149,7 +149,7 @@ function generateEntry(
         const _user = ${userExpr};
 
         const $tailor_resolver_body = async (context) => {
-          const enrichedContext = { ...context, env: _env, user: _user };
+          const enrichedContext = { ...context, input: context.input ?? context, env: _env, user: _user };
 
           if (_internalResolver.input) {
             const result = t.object(_internalResolver.input).parse({
