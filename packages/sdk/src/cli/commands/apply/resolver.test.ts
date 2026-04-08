@@ -653,7 +653,7 @@ describe("formatResolverChangeEntries", () => {
         action: "update",
         symbol: "~",
         name: "add",
-        labels: ["resolver", "functionRegistry"],
+        labels: ["resolver", "function"],
       },
     ]);
   });
@@ -687,7 +687,7 @@ describe("formatResolverChangeEntries", () => {
         action: "delete",
         symbol: "-",
         name: "add",
-        labels: ["resolver", "functionRegistry"],
+        labels: ["resolver", "function"],
       },
     ]);
   });

@@ -163,7 +163,7 @@ export function buildRemainingFunctionRegistryEntries(
         action,
         symbol: actionSymbol(action),
         name: formatFunctionRegistryDisplayName(name),
-        labels: ["functionRegistry"],
+        labels: ["function"],
       })),
   );
 }
@@ -223,7 +223,7 @@ export function formatChangeEntriesWithFunctionRegistry<
         action,
         symbol: actionSymbol(action),
         name: item.name,
-        labels: hasMatch ? [resourceLabel, "functionRegistry"] : [resourceLabel],
+        labels: hasMatch ? [resourceLabel, "function"] : [resourceLabel],
       };
     });
   }

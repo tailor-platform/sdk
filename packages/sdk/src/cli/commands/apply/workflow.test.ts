@@ -402,7 +402,7 @@ describe("formatWorkflowChangeEntries", () => {
         action: "update",
         symbol: "~",
         name: "order-processing",
-        labels: ["workflow", "functionRegistry"],
+        labels: ["workflow", "function"],
       },
     ]);
   });
@@ -428,7 +428,7 @@ describe("formatWorkflowChangeEntries", () => {
         action: "update",
         symbol: "~",
         name: "process-order",
-        labels: ["functionRegistry"],
+        labels: ["function"],
       },
     ]);
   });
@@ -461,7 +461,7 @@ describe("formatWorkflowChangeEntries", () => {
         action: "delete",
         symbol: "-",
         name: "order-processing",
-        labels: ["workflow", "functionRegistry"],
+        labels: ["workflow", "function"],
       },
     ]);
   });
@@ -500,7 +500,7 @@ describe("formatWorkflowChangeEntries", () => {
         action: "delete",
         symbol: "-",
         name: "send-notification",
-        labels: ["functionRegistry"],
+        labels: ["function"],
       },
     ]);
   });

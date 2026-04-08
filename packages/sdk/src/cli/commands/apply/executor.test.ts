@@ -1088,7 +1088,7 @@ describe("formatExecutorChangeEntries", () => {
         action: "update",
         symbol: "~",
         name: "user-created",
-        labels: ["executor", "functionRegistry"],
+        labels: ["executor", "function"],
       },
     ]);
   });
@@ -1123,7 +1123,7 @@ describe("formatExecutorChangeEntries", () => {
         action: "delete",
         symbol: "-",
         name: "user-created",
-        labels: ["executor", "functionRegistry"],
+        labels: ["executor", "function"],
       },
     ]);
   });
