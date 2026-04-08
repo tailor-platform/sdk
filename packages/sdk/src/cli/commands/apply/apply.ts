@@ -234,14 +234,14 @@ function printPlanResults(results: PlanResults) {
     ...formatChangeSetEntries(results.pipeline.changeSet.service, ["service"]),
     ...resolverEntries,
   ];
-  const getNamespaceName = (item: HasName) =>
+  const namespaceOf = (item: HasName) =>
     "request" in item &&
     item.request &&
     typeof item.request === "object" &&
     "namespaceName" in item.request
       ? (item.request.namespaceName as string)
       : undefined;
-  const getAuthNamespace = (item: HasName) =>
+  const authNamespaceOf = (item: HasName) =>
     "request" in item &&
     item.request &&
     typeof item.request === "object" &&
@@ -250,40 +250,24 @@ function printPlanResults(results: PlanResults) {
       : undefined;
   const idpEntries: GroupedDisplayEntry[] = [
     ...formatChangeSetEntries(results.idp.changeSet.service, ["service"]),
-    ...formatChangeSetEntries(results.idp.changeSet.client, ["client"], getNamespaceName),
+    ...formatChangeSetEntries(results.idp.changeSet.client, ["client"], namespaceOf),
   ];
   const authEntries: GroupedDisplayEntry[] = [
     ...formatChangeSetEntries(results.auth.changeSet.service, ["service"]),
-    ...formatChangeSetEntries(results.auth.changeSet.idpConfig, ["idpConfig"], getNamespaceName),
+    ...formatChangeSetEntries(results.auth.changeSet.idpConfig, ["idpConfig"], namespaceOf),
     ...formatChangeSetEntries(
       results.auth.changeSet.userProfileConfig,
       ["userProfileConfig"],
-      getNamespaceName,
+      namespaceOf,
     ),
-    ...formatChangeSetEntries(
-      results.auth.changeSet.tenantConfig,
-      ["tenantConfig"],
-      getNamespaceName,
-    ),
-    ...formatChangeSetEntries(
-      results.auth.changeSet.machineUser,
-      ["machineUser"],
-      getAuthNamespace,
-    ),
+    ...formatChangeSetEntries(results.auth.changeSet.tenantConfig, ["tenantConfig"], namespaceOf),
+    ...formatChangeSetEntries(results.auth.changeSet.machineUser, ["machineUser"], authNamespaceOf),
     ...authHookEntries,
-    ...formatChangeSetEntries(
-      results.auth.changeSet.oauth2Client,
-      ["oauth2Client"],
-      getNamespaceName,
-    ),
-    ...formatChangeSetEntries(results.auth.changeSet.scim, ["scimConfig"], getNamespaceName),
-    ...formatChangeSetEntries(
-      results.auth.changeSet.scimResource,
-      ["scimResource"],
-      getNamespaceName,
-    ),
+    ...formatChangeSetEntries(results.auth.changeSet.oauth2Client, ["oauth2Client"], namespaceOf),
+    ...formatChangeSetEntries(results.auth.changeSet.scim, ["scimConfig"], namespaceOf),
+    ...formatChangeSetEntries(results.auth.changeSet.scimResource, ["scimResource"], namespaceOf),
     ...(results.auth.changeSet.connection
-      ? formatChangeSetEntries(results.auth.changeSet.connection, ["connection"], getNamespaceName)
+      ? formatChangeSetEntries(results.auth.changeSet.connection, ["connection"], namespaceOf)
       : []),
   ];
 
