@@ -255,9 +255,9 @@ function printPlanResults(results: PlanResults) {
 
   // Print grouped sections
   printGroupedDisplaySection("TailorDB", tailorDBEntries);
-  printGroupedDisplaySection("Resolvers", pipelineEntries);
-  printGroupedDisplaySection("Executors", executorEntries);
-  printGroupedDisplaySection("Workflows", workflowEntries);
+  printGroupedDisplaySection("Resolver", pipelineEntries);
+  printGroupedDisplaySection("Executor", executorEntries);
+  printGroupedDisplaySection("Workflow", workflowEntries);
   printGroupedDisplaySection("IdP", idpEntries);
   printGroupedDisplaySection("Auth", authEntries);
 
