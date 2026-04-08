@@ -125,7 +125,7 @@
     "find-up-simple": "1.0.1",
     "globals": "17.4.0",
     "inflection": "3.0.2",
-    "kysely": "0.28.14",
+    "kysely": "0.28.15",
     "madge": "8.0.0",
     "mime-types": "3.0.2",
     "multiline-ts": "4.0.1",
