@@ -25,7 +25,7 @@ import { type AuthService } from "@/cli/services/auth/service";
 import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "@/cli/shared/client";
 import { OAuth2ClientSchema } from "@/parser/service/auth";
 import { applyAuthConnections, planAuthConnections } from "./auth-connection";
-import { createChangeSet, type HasName } from "./change-set";
+import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
 import { areNormalizedEqual, normalizeProtoConfig, normalizeStringArray } from "./compare";
 import { authHookFunctionName } from "./function-registry";
 import {
@@ -1914,20 +1914,14 @@ function areAuthHooksEqual(
 /**
  * Format auth hook changes for grouped dry-run display.
  * @param changeSet - Auth hook changes
- * @param changeSet.creates - Auth hook creations
- * @param changeSet.updates - Auth hook updates
- * @param changeSet.deletes - Auth hook deletions
- * @param changeSet.replaces - Auth hook replacements
  * @param functionRegistryAuthHookChanges - Related function registry changes for auth hooks
  * @returns Display entries for auth hook output
  */
 export function formatAuthHookChangeEntries(
-  changeSet: {
-    creates: ReadonlyArray<HasName>;
-    updates: ReadonlyArray<HasName>;
-    deletes: ReadonlyArray<HasName>;
-    replaces: ReadonlyArray<HasName>;
-  },
+  changeSet: Pick<
+    ChangeSet<HasName, HasName, HasName>,
+    "creates" | "updates" | "deletes" | "replaces"
+  >,
   functionRegistryAuthHookChanges?: RelatedFunctionRegistryChanges,
 ): GroupedDisplayEntry[] {
   return formatChangeEntriesWithFunctionRegistry(
