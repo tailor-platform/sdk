@@ -1,0 +1,37 @@
+name: Link Check
+
+on:
+  pull_request:
+    paths:
+      - "packages/sdk/docs/**/*.md"
+  workflow_dispatch:
+
+jobs:
+  link-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get changed files
+        id: changed-files
+        run: |
+          CHANGED_FILES=$(git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }} | grep '\.md$' || true)
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "files=" >> $GITHUB_OUTPUT
+          else
+            FILES_LIST=$(echo "$CHANGED_FILES" | tr '\n' ' ')
+            echo "files=$FILES_LIST" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check links in changed files
+        if: steps.changed-files.outputs.files != ''
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: |
+            --no-progress
+            --exclude 'mailto:'
+            ${{ steps.changed-files.outputs.files }}
+          fail: true
