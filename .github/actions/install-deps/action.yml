@@ -11,7 +11,7 @@ runs:
   using: composite
   steps:
     - name: Setup takumi-guard
-      uses: flatt-security/setup-takumi-guard-npm@8f53b50568e4466f2d92504f349c05b9ffcb8b59 # v1
+      uses: flatt-security/setup-takumi-guard-npm@3c4ad0e8c9e81d0efbccff304adac60e42e3f32d # v1
 
     - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
       name: Install pnpm
