@@ -121,7 +121,7 @@ export async function planPipeline(context: PlanContext) {
     resourceOwners,
   } = await planServices(client, workspaceId, application.name, pipelines);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
-  const { changeSet: resolverChangeSet, resolverNamespaceMap } = await planResolvers(
+  const { changeSet: resolverChangeSet } = await planResolvers(
     client,
     workspaceId,
     pipelines,
@@ -136,7 +136,6 @@ export async function planPipeline(context: PlanContext) {
       service: serviceChangeSet,
       resolver: resolverChangeSet,
     },
-    resolverNamespaceMap,
     conflicts,
     unmanaged,
     resourceOwners,
@@ -339,8 +338,6 @@ async function planResolvers(
     }
   }
 
-  const resolverNamespaceMap = new Map<string, string>();
-
   for (const pipeline of pipelines) {
     const existingResolvers = await fetchResolvers(pipeline.namespace);
     const existingResolversMap = new Map(
@@ -366,7 +363,6 @@ async function planResolvers(
           areResolversEqual(existingResolverDetail, desiredResolver)
         ) {
           changeSet.unchanged.push({ name: resolver.name });
-          resolverNamespaceMap.set(resolver.name, pipeline.namespace);
         } else {
           changeSet.updates.push({
             name: resolver.name,
@@ -414,7 +410,7 @@ async function planResolvers(
       });
     });
   }
-  return { changeSet, resolverNamespaceMap };
+  return { changeSet };
 }
 
 type ResolverDisplayEntry = GroupedDisplayEntry;

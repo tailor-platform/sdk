@@ -350,7 +350,6 @@ describe("planWorkflow", () => {
           resourceOwners: new Set<string>(),
           appName,
           unchangedWorkflowJobNames: new Set(["keep-job"]),
-          unchangedWorkflowJobMap: new Map<string, string[]>(),
         },
         "create-update",
       );

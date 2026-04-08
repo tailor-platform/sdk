@@ -281,7 +281,6 @@ export async function planWorkflow(
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
   const unchangedWorkflowJobNames = new Set<string>();
-  const unchangedWorkflowJobMap = new Map<string, string[]>();
 
   // Fetch existing workflows from API
   const withoutLabel = await fetchAll(async (pageToken, maxPageSize) => {
@@ -347,7 +346,6 @@ export async function planWorkflow(
         )
       ) {
         changeSet.unchanged.push({ name: workflow.name });
-        unchangedWorkflowJobMap.set(workflow.name, usedJobNames);
         for (const jobName of usedJobNames) {
           unchangedWorkflowJobNames.add(jobName);
         }
@@ -398,7 +396,6 @@ export async function planWorkflow(
     resourceOwners,
     appName,
     unchangedWorkflowJobNames,
-    unchangedWorkflowJobMap,
   };
 }
 

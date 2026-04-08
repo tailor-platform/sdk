@@ -88,7 +88,6 @@ function emptyResults(): PlanResults {
         service: createChangeSet("Pipeline services"),
         resolver: createChangeSet("Pipeline resolvers"),
       },
-      resolverNamespaceMap: new Map<string, string>(),
       conflicts: [],
       unmanaged: [],
       resourceOwners: new Set<string>(),
@@ -103,7 +102,6 @@ function emptyResults(): PlanResults {
     workflow: {
       changeSet: createChangeSet("Workflows"),
       unchangedWorkflowJobNames: new Set<string>(),
-      unchangedWorkflowJobMap: new Map<string, string[]>(),
       conflicts: [],
       unmanaged: [],
       resourceOwners: new Set<string>(),
