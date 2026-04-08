@@ -59,7 +59,7 @@ import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { logger } from "@/cli/shared/logger";
 import { createChangeSet, type HasName, type ChangeSet } from "../change-set";
 import { areNormalizedEqual, normalizeProtoConfig } from "../compare";
-import { actionSymbol, type DisplayAction, type GroupedDisplayEntry } from "../grouped-display";
+import { ACTION_SYMBOLS, type DisplayAction, type GroupedDisplayEntry } from "../grouped-display";
 import {
   buildMetaRequest,
   hasMatchingSdkVersion,
@@ -1037,7 +1037,7 @@ function collectTailorDBDisplayEntries(
   const gqlPermissionNames = new Set(gqlPermissionItems.map((item) => item.name));
   const typeEntries = typeItems.map((item) => ({
     action,
-    symbol: actionSymbol(action),
+    symbol: ACTION_SYMBOLS[action],
     name: item.name,
     labels: gqlPermissionNames.has(item.name) ? ["type", "gqlPermission"] : ["type"],
     namespace: item.request?.namespaceName,
@@ -1046,7 +1046,7 @@ function collectTailorDBDisplayEntries(
     .filter((gqlPermission) => !typeNames.has(gqlPermission.name))
     .map((item) => ({
       action,
-      symbol: actionSymbol(action),
+      symbol: ACTION_SYMBOLS[action],
       name: item.name,
       labels: ["gqlPermission"],
       namespace: item.request?.namespaceName,

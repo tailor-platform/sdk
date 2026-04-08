@@ -47,25 +47,12 @@ export function createRelatedFunctionRegistryNameSets(
   };
 }
 
-/**
- * Resolve the display symbol for a grouped action.
- * @param action - Action kind
- * @returns Styled CLI symbol
- */
-export function actionSymbol(action: DisplayAction): string {
-  switch (action) {
-    case "create":
-      return symbols.create;
-    case "update":
-      return symbols.update;
-    case "delete":
-      return symbols.delete;
-    case "replace":
-      return symbols.replace;
-    default:
-      throw new Error(`Unknown action type: ${action satisfies never}`);
-  }
-}
+export const ACTION_SYMBOLS = {
+  create: symbols.create,
+  update: symbols.update,
+  delete: symbols.delete,
+  replace: symbols.replace,
+} as const satisfies Record<DisplayAction, string>;
 
 /**
  * Convert a plain change set into grouped display entries.
@@ -85,7 +72,7 @@ export function formatChangeSetEntries(
   function toEntry(action: DisplayAction, item: HasName): GroupedDisplayEntry {
     return {
       action,
-      symbol: actionSymbol(action),
+      symbol: ACTION_SYMBOLS[action],
       name: item.name,
       labels: [...labels],
       namespace: getNamespace?.(item),
@@ -155,7 +142,7 @@ export function buildRemainingFunctionRegistryEntries(
         const { displayName, namespace } = parseFunctionRegistryName(name);
         return {
           action,
-          symbol: actionSymbol(action),
+          symbol: ACTION_SYMBOLS[action],
           name: displayName,
           labels: ["function"],
           namespace,
@@ -225,7 +212,7 @@ export function formatChangeEntriesWithFunctionRegistry<
       }
       return {
         action,
-        symbol: actionSymbol(action),
+        symbol: ACTION_SYMBOLS[action],
         name: getDisplayName?.(item) ?? item.name,
         labels: hasMatch ? [resourceLabel, "function"] : [resourceLabel],
         namespace: getNamespace?.(item),
@@ -239,7 +226,7 @@ export function formatChangeEntriesWithFunctionRegistry<
     ...processItems(changeSet.updates, "update", functionNames.updates, consumed.updates),
     ...changeSet.replaces.map((item) => ({
       action: "replace" as const,
-      symbol: actionSymbol("replace"),
+      symbol: ACTION_SYMBOLS["replace"],
       name: getDisplayName?.(item as C | U | D) ?? item.name,
       labels: [resourceLabel],
       namespace: getNamespace?.(item as C | U | D),
@@ -317,7 +304,7 @@ export function printGroupedDisplaySection(
     const group = byNamespace.get(ns)!;
     if (ns) {
       const svcAction = serviceMap.get(ns);
-      const prefix = svcAction ? `${actionSymbol(svcAction)} ` : "";
+      const prefix = svcAction ? `${ACTION_SYMBOLS[svcAction]} ` : "";
       logger.log(`  ${prefix}${styles.bold(`${ns}:`)}`);
       printedServices.add(ns);
       for (const entry of group) {
@@ -333,7 +320,7 @@ export function printGroupedDisplaySection(
   // Print services without child entries as flat entries
   for (const [name, action] of serviceMap) {
     if (!printedServices.has(name)) {
-      logger.log(`  ${actionSymbol(action)} ${name}`);
+      logger.log(`  ${ACTION_SYMBOLS[action]} ${name}`);
     }
   }
 }
