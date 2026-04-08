@@ -262,6 +262,13 @@ function printPlanResults(results: PlanResults) {
   ];
 
   // Print grouped sections
+  const { otherChanges: otherFunctionRegistryChanges } = splitFunctionRegistryChanges(
+    results.functionRegistry.changeSet,
+  );
+  printGroupedDisplaySection(
+    results.functionRegistry.changeSet.title,
+    formatChangeSetEntries(otherFunctionRegistryChanges),
+  );
   const tailorDBServiceActions = extractServiceActions(results.tailorDB.changeSet.service);
   const pipelineServiceActions = extractServiceActions(results.pipeline.changeSet.service);
   const idpServiceActions = extractServiceActions(results.idp.changeSet.service);

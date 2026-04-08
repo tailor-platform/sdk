@@ -3,7 +3,6 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { logger } from "@/cli/shared/logger";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
-import { formatChangeSetEntries, printGroupedDisplaySection } from "./grouped-display";
 import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase } from "@/cli/commands/apply/apply";
@@ -57,11 +56,10 @@ function functionRegistryTrn(workspaceId: string, name: string) {
   return `trn:v1:workspace:${workspaceId}:function_registry:${name}`;
 }
 
-const RESOLVER_PREFIX = "resolver--";
-const EXECUTOR_PREFIX = "executor--";
-/** Function registry name prefix for workflow job entries. */
+export const RESOLVER_PREFIX = "resolver--";
+export const EXECUTOR_PREFIX = "executor--";
 export const WORKFLOW_PREFIX = "workflow--";
-const AUTH_HOOK_PREFIX = "auth-hook--";
+export const AUTH_HOOK_PREFIX = "auth-hook--";
 
 /**
  * Build a function registry name for a resolver.
@@ -151,15 +149,6 @@ export function splitFunctionRegistryChanges<
     authHookFunctionChanges: collect("authHook"),
     otherChanges: collect("other"),
   };
-}
-
-function printOtherFunctionRegistryChanges(
-  changeSet: Pick<
-    FunctionRegistryChangeSet,
-    "title" | "creates" | "updates" | "deletes" | "replaces"
-  >,
-) {
-  printGroupedDisplaySection(changeSet.title, formatChangeSetEntries(changeSet));
 }
 
 /**
@@ -423,15 +412,7 @@ export async function planFunctionRegistry(
     resolverFunctionChanges,
     executorFunctionChanges,
     authHookFunctionChanges,
-    otherChanges,
   } = splitFunctionRegistryChanges(changeSet);
-  printOtherFunctionRegistryChanges({
-    title: changeSet.title,
-    creates: otherChanges.creates,
-    updates: otherChanges.updates,
-    deletes: otherChanges.deletes,
-    replaces: otherChanges.replaces,
-  });
   return {
     changeSet,
     workflowJobChanges,

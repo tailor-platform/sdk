@@ -1,4 +1,10 @@
 import { logger, styles, symbols } from "@/cli/shared/logger";
+import {
+  AUTH_HOOK_PREFIX,
+  EXECUTOR_PREFIX,
+  RESOLVER_PREFIX,
+  WORKFLOW_PREFIX,
+} from "./function-registry";
 import type { ChangeSet, HasName } from "./change-set";
 
 export type DisplayAction = "create" | "update" | "delete" | "replace";
@@ -100,22 +106,22 @@ function formatGroupedDisplayLine(entry: GroupedDisplayEntry) {
 }
 
 function parseFunctionRegistryName(name: string): { displayName: string; namespace?: string } {
-  if (name.startsWith("resolver--")) {
+  if (name.startsWith(RESOLVER_PREFIX)) {
     const [, namespace, resolverName] = name.split("--");
     if (namespace && resolverName) {
       return { displayName: resolverName, namespace };
     }
   }
 
-  if (name.startsWith("workflow--")) {
-    return { displayName: name.slice("workflow--".length) };
+  if (name.startsWith(WORKFLOW_PREFIX)) {
+    return { displayName: name.slice(WORKFLOW_PREFIX.length) };
   }
 
-  if (name.startsWith("executor--")) {
-    return { displayName: name.slice("executor--".length) };
+  if (name.startsWith(EXECUTOR_PREFIX)) {
+    return { displayName: name.slice(EXECUTOR_PREFIX.length) };
   }
 
-  if (name.startsWith("auth-hook--")) {
+  if (name.startsWith(AUTH_HOOK_PREFIX)) {
     const [, namespace, hookPoint] = name.split("--");
     if (namespace && hookPoint) {
       return { displayName: hookPoint, namespace };
