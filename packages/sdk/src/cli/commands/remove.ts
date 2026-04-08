@@ -76,10 +76,10 @@ async function execRemove(
   const secretManager = await planSecretManager(ctx);
 
   // Print planned deletions
-  // Note: staticWebsite, app, secretManager print inside their plan functions
   tailorDB.changeSet.service.print();
   tailorDB.changeSet.type.print();
   tailorDB.changeSet.gqlPermission.print();
+  staticWebsite.changeSet.print();
   idp.changeSet.service.print();
   idp.changeSet.client.print();
   auth.changeSet.service.print();
@@ -93,9 +93,12 @@ async function execRemove(
   auth.changeSet.scimResource.print();
   pipeline.changeSet.service.print();
   pipeline.changeSet.resolver.print();
+  app.print();
   executor.changeSet.print();
   workflow.changeSet.print();
   functionRegistry.changeSet.print();
+  secretManager.vaultChangeSet.print();
+  secretManager.secretChangeSet.print();
 
   if (
     tailorDB.changeSet.service.deletes.length === 0 &&

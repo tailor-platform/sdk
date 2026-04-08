@@ -280,12 +280,16 @@ function printPlanResults(results: PlanResults) {
   const pipelineServiceActions = extractServiceActions(results.pipeline.changeSet.service);
   const idpServiceActions = extractServiceActions(results.idp.changeSet.service);
   const authServiceActions = extractServiceActions(results.auth.changeSet.service);
+  results.staticWebsite.changeSet.print();
+  results.app.print();
   printGroupedDisplaySection("TailorDB", tailorDBEntries, tailorDBServiceActions);
   printGroupedDisplaySection("Resolver", pipelineEntries, pipelineServiceActions);
   printGroupedDisplaySection("Executor", executorEntries);
   printGroupedDisplaySection("Workflow", workflowEntries);
   printGroupedDisplaySection("IdP", idpEntries, idpServiceActions);
   printGroupedDisplaySection("Auth", authEntries, authServiceActions);
+  results.secretManager.vaultChangeSet.print();
+  results.secretManager.secretChangeSet.print();
 
   // Compute summary: count display entries + service actions + non-grouped changesets
   const allDisplayEntries = [

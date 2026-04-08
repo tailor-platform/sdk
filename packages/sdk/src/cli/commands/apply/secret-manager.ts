@@ -241,8 +241,6 @@ export async function planSecretManager(context: PlanContext) {
     }
   }
 
-  vaultChangeSet.print();
-  secretChangeSet.print();
   return { vaultChangeSet, secretChangeSet, conflicts, unmanaged, resourceOwners };
 }
 
