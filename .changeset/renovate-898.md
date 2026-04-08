@@ -2,4 +2,5 @@
 "@tailor-platform/sdk": patch
 ---
 
-chore(deps): update dependency turbo to v2.9.2
+chore(deps): update dependency turbo to v2.9.3
+
