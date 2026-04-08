@@ -38,21 +38,18 @@ import {
 } from "./executor";
 import {
   applyFunctionRegistry,
-  authHookFunctionName,
   collectFunctionEntries,
-  executorFunctionName,
   filterBundledWorkflowJobs,
   planFunctionRegistry,
-  resolverFunctionName,
   splitFunctionRegistryChanges,
   WORKFLOW_PREFIX,
-  workflowJobFunctionName,
 } from "./function-registry";
 import {
   extractServiceActions,
   formatChangeSetEntries,
   printGroupedDisplaySection,
   type GroupedDisplayEntry,
+  type NamespaceAction,
 } from "./grouped-display";
 import { applyIdP, planIdP } from "./idp";
 import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey } from "./label";
@@ -276,125 +273,37 @@ function printPlanResults(results: PlanResults) {
   printGroupedDisplaySection("IdP", idpEntries, idpServiceActions);
   printGroupedDisplaySection("Auth", authEntries, authServiceActions);
 
-  // Compute summary
-  const summary = summarizePlanResultsForDisplay(results, {
-    executorEntries,
-    resolverEntries,
-    workflowEntries,
-    authHookEntries,
-    tailorDBEntries: tailorDBResourceEntries,
-  });
-
+  // Compute summary: count display entries + service actions + non-grouped changesets
+  const allDisplayEntries = [
+    ...tailorDBEntries,
+    ...pipelineEntries,
+    ...executorEntries,
+    ...workflowEntries,
+    ...idpEntries,
+    ...authEntries,
+  ];
+  const allServiceActions = [
+    ...tailorDBServiceActions,
+    ...pipelineServiceActions,
+    ...idpServiceActions,
+    ...authServiceActions,
+  ];
+  const summary = summarizePlanResults(results, allDisplayEntries, allServiceActions);
   logger.log(formatPlanSummary(summary));
 }
 
-function addPlanSummary(target: PlanSummary, source: PlanSummary) {
-  target.create += source.create;
-  target.update += source.update;
-  target.delete += source.delete;
-  target.replace += source.replace;
-  target.unchanged += source.unchanged;
-}
-
-function summarizeDisplayEntries(
-  entries: ReadonlyArray<Pick<GroupedDisplayEntry, "action">>,
-  unchanged = 0,
-): PlanSummary {
-  const summary: PlanSummary = {
-    create: 0,
-    update: 0,
-    delete: 0,
-    replace: 0,
-    unchanged,
-  };
-
-  for (const entry of entries) {
-    switch (entry.action) {
-      case "create":
-        summary.create += 1;
-        break;
-      case "update":
-        summary.update += 1;
-        break;
-      case "delete":
-        summary.delete += 1;
-        break;
-      case "replace":
-        summary.replace += 1;
-        break;
-      default:
-        throw new Error(`Unknown action type: ${entry.action satisfies never}`);
-    }
-  }
-
-  return summary;
-}
-
-function countUnchangedNamesExcludingChanged(
-  unchangedGroups: ReadonlyArray<ReadonlyArray<HasName>>,
-  changedGroups: ReadonlyArray<ReadonlyArray<HasName>>,
-): number {
-  const changedNames = new Set<string>();
-  for (const group of changedGroups) {
-    for (const item of group) {
-      changedNames.add(item.name);
-    }
-  }
-
-  const unchangedNames = new Set<string>();
-  for (const group of unchangedGroups) {
-    for (const item of group) {
-      if (!changedNames.has(item.name)) {
-        unchangedNames.add(item.name);
-      }
-    }
-  }
-
-  return unchangedNames.size;
-}
-
-function countUnchangedItemsWithoutChangedRelations<T extends HasName>(
-  unchangedItems: ReadonlyArray<T>,
-  changedGroups: ReadonlyArray<ReadonlyArray<HasName>>,
-  getRelatedChangedNames: (item: T) => ReadonlyArray<string>,
-): number {
-  const changedNames = new Set<string>();
-  for (const group of changedGroups) {
-    for (const item of group) {
-      changedNames.add(item.name);
-    }
-  }
-
-  let count = 0;
-  for (const item of unchangedItems) {
-    if (!getRelatedChangedNames(item).some((name) => changedNames.has(name))) {
-      count += 1;
-    }
-  }
-
-  return count;
-}
-
-type GroupedDisplayEntries = {
-  executorEntries: ReadonlyArray<GroupedDisplayEntry>;
-  resolverEntries: ReadonlyArray<GroupedDisplayEntry>;
-  workflowEntries: ReadonlyArray<GroupedDisplayEntry>;
-  authHookEntries: ReadonlyArray<GroupedDisplayEntry>;
-  tailorDBEntries: ReadonlyArray<GroupedDisplayEntry>;
-};
-
 /**
- * Summarize plan counts using the same grouped units shown in dry-run output.
+ * Summarize plan counts from display entries, service actions, and non-grouped changesets.
  * @param results - Planned apply results
- * @param displayEntries - Pre-computed grouped display entries for each resource kind
- * @returns Aggregated plan summary aligned with grouped display rows
+ * @param displayEntries - All grouped display entries across sections
+ * @param serviceActions - All service-level namespace actions
+ * @returns Aggregated plan summary
  */
-export function summarizePlanResultsForDisplay(
+export function summarizePlanResults(
   results: PlanResults,
-  displayEntries: GroupedDisplayEntries,
+  displayEntries: ReadonlyArray<GroupedDisplayEntry>,
+  serviceActions: ReadonlyArray<NamespaceAction>,
 ): PlanSummary {
-  const { executorEntries, resolverEntries, workflowEntries, authHookEntries, tailorDBEntries } =
-    displayEntries;
   const summary: PlanSummary = {
     create: 0,
     update: 0,
@@ -403,137 +312,29 @@ export function summarizePlanResultsForDisplay(
     unchanged: 0,
   };
 
+  // Count grouped display entries
+  for (const entry of displayEntries) {
+    summary[entry.action] += 1;
+  }
+
+  // Count service-level actions (shown as namespace headers)
+  for (const sa of serviceActions) {
+    summary[sa.action] += 1;
+  }
+
+  // Count non-grouped changesets (staticWebsite, app, secretManager, functionRegistry other)
   const { otherChanges } = splitFunctionRegistryChanges(results.functionRegistry.changeSet);
-  addPlanSummary(
-    summary,
-    summarizeChangeSets([
-      otherChanges,
-      results.staticWebsite.changeSet,
-      results.app,
-      results.secretManager.vaultChangeSet,
-      results.secretManager.secretChangeSet,
-    ]),
-  );
-
-  addPlanSummary(
-    summary,
-    summarizeDisplayEntries(
-      tailorDBEntries,
-      countUnchangedNamesExcludingChanged(
-        [
-          results.tailorDB.changeSet.type.unchanged,
-          results.tailorDB.changeSet.gqlPermission.unchanged,
-        ],
-        [
-          results.tailorDB.changeSet.type.creates,
-          results.tailorDB.changeSet.type.updates,
-          results.tailorDB.changeSet.type.deletes,
-          results.tailorDB.changeSet.type.replaces,
-          results.tailorDB.changeSet.gqlPermission.creates,
-          results.tailorDB.changeSet.gqlPermission.updates,
-          results.tailorDB.changeSet.gqlPermission.deletes,
-          results.tailorDB.changeSet.gqlPermission.replaces,
-        ],
-      ),
-    ),
-  );
-
-  addPlanSummary(
-    summary,
-    summarizeDisplayEntries(
-      resolverEntries,
-      countUnchangedItemsWithoutChangedRelations(
-        results.pipeline.changeSet.resolver.unchanged,
-        [
-          results.functionRegistry.resolverFunctionChanges.creates,
-          results.functionRegistry.resolverFunctionChanges.updates,
-          results.functionRegistry.resolverFunctionChanges.deletes,
-          results.functionRegistry.resolverFunctionChanges.replaces,
-        ],
-        (item) => {
-          const ns = results.pipeline.resolverNamespaceMap.get(item.name);
-          return ns ? [resolverFunctionName(ns, item.name)] : [];
-        },
-      ),
-    ),
-  );
-
-  addPlanSummary(
-    summary,
-    summarizeDisplayEntries(
-      executorEntries,
-      countUnchangedItemsWithoutChangedRelations(
-        results.executor.changeSet.unchanged,
-        [
-          results.functionRegistry.executorFunctionChanges.creates,
-          results.functionRegistry.executorFunctionChanges.updates,
-          results.functionRegistry.executorFunctionChanges.deletes,
-          results.functionRegistry.executorFunctionChanges.replaces,
-        ],
-        (item) => [executorFunctionName(item.name)],
-      ),
-    ),
-  );
-
-  addPlanSummary(
-    summary,
-    summarizeDisplayEntries(
-      workflowEntries,
-      countUnchangedItemsWithoutChangedRelations(
-        results.workflow.changeSet.unchanged,
-        [
-          results.functionRegistry.workflowJobChanges.creates,
-          results.functionRegistry.workflowJobChanges.updates,
-          results.functionRegistry.workflowJobChanges.deletes,
-          results.functionRegistry.workflowJobChanges.replaces,
-        ],
-        (item) => {
-          const jobNames = results.workflow.unchangedWorkflowJobMap.get(item.name);
-          return jobNames?.map((name) => workflowJobFunctionName(name)) ?? [];
-        },
-      ),
-    ),
-  );
-
-  addPlanSummary(
-    summary,
-    summarizeDisplayEntries(
-      authHookEntries,
-      countUnchangedItemsWithoutChangedRelations(
-        results.auth.changeSet.authHook.unchanged,
-        [
-          results.functionRegistry.authHookFunctionChanges.creates,
-          results.functionRegistry.authHookFunctionChanges.updates,
-          results.functionRegistry.authHookFunctionChanges.deletes,
-          results.functionRegistry.authHookFunctionChanges.replaces,
-        ],
-        (item) => {
-          const [namespaceName, hookPoint] = item.name.split("/");
-          return namespaceName && hookPoint ? [authHookFunctionName(namespaceName, hookPoint)] : [];
-        },
-      ),
-    ),
-  );
-
-  // Count service-level and non-grouped resources not tracked via display entries above
-  addPlanSummary(
-    summary,
-    summarizeChangeSets([
-      results.tailorDB.changeSet.service,
-      results.pipeline.changeSet.service,
-      results.idp.changeSet.service,
-      results.idp.changeSet.client,
-      results.auth.changeSet.service,
-      results.auth.changeSet.idpConfig,
-      results.auth.changeSet.userProfileConfig,
-      results.auth.changeSet.tenantConfig,
-      results.auth.changeSet.machineUser,
-      results.auth.changeSet.oauth2Client,
-      results.auth.changeSet.scim,
-      results.auth.changeSet.scimResource,
-      ...(results.auth.changeSet.connection ? [results.auth.changeSet.connection] : []),
-    ]),
-  );
+  const nonGrouped = summarizeChangeSets([
+    otherChanges,
+    results.staticWebsite.changeSet,
+    results.app,
+    results.secretManager.vaultChangeSet,
+    results.secretManager.secretChangeSet,
+  ]);
+  summary.create += nonGrouped.create;
+  summary.update += nonGrouped.update;
+  summary.delete += nonGrouped.delete;
+  summary.replace += nonGrouped.replace;
 
   return summary;
 }
