@@ -3,12 +3,11 @@ import type {
   StandardIdPActionPermission,
   StandardIdPPermissionCondition,
   IdPPermissionOperand,
+  IdPUserField,
 } from "@/types/idp";
 import type { IdPPermission as RawIdPPermission } from "@/types/idp.generated";
 
 type PermissionOperator = "=" | "!=" | "in" | "not in";
-
-type IdPUserField = "id" | "name" | "disabled";
 
 type ObjectOperand =
   | { user: string }
