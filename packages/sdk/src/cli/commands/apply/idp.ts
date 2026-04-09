@@ -19,6 +19,7 @@ import {
   type IdPService as ProtoIdPService,
 } from "@tailor-proto/tailor/v1/idp_resource_pb";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
+import { logger } from "@/cli/shared/logger";
 import { parseIdPPermission } from "@/parser/service/idp/permission";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
@@ -386,6 +387,11 @@ async function planServices(
     const userAuthPolicy = idp.userAuthPolicy;
     const publishUserEvents = idp.publishUserEvents ?? false;
     const emailConfig = idp.emailConfig;
+    if (!idp.permission) {
+      logger.warn(
+        `IdP service "${namespaceName}" has no permission configured. All operations will be denied by default.`,
+      );
+    }
     const parsedPermission = parseIdPPermission(idp.permission);
     const protoPermission = parsedPermission ? protoIdPPermission(parsedPermission) : undefined;
     const desired = normalizeComparableIdPService({
