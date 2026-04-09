@@ -13,8 +13,7 @@ type ObjectOperand =
   | { user: string }
   | { idpUser: IdPUserField }
   | { oldIdpUser: IdPUserField }
-  | { newIdpUser: IdPUserField }
-  | { value: unknown };
+  | { newIdpUser: IdPUserField };
 
 type ValueOperand = string | boolean | string[] | boolean[];
 
