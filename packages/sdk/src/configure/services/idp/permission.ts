@@ -72,15 +72,13 @@ type StringContainsCondition<User extends object, Update extends boolean> =
   | readonly [string, ContainsOperator, string[]]
   | readonly [UserStringOperand<User>, ContainsOperator, string[]]
   | readonly [string, ContainsOperator, UserStringArrayOperand<User>]
-  | readonly [IdPUserOperand<Update>, ContainsOperator, string[] | UserStringArrayOperand<User>]
-  | readonly [string | UserStringOperand<User>, ContainsOperator, IdPUserOperand<Update>];
+  | readonly [IdPUserOperand<Update>, ContainsOperator, string[] | UserStringArrayOperand<User>];
 
 type BooleanContainsCondition<User extends object, Update extends boolean> =
   | readonly [boolean, ContainsOperator, boolean[]]
   | readonly [UserBooleanOperand<User>, ContainsOperator, boolean[]]
   | readonly [boolean, ContainsOperator, UserBooleanArrayOperand<User>]
-  | readonly [IdPUserOperand<Update>, ContainsOperator, boolean[] | UserBooleanArrayOperand<User>]
-  | readonly [boolean | UserBooleanOperand<User>, ContainsOperator, IdPUserOperand<Update>];
+  | readonly [IdPUserOperand<Update>, ContainsOperator, boolean[] | UserBooleanArrayOperand<User>];
 
 type ContainsCondition<
   User extends object = InferredAttributeMap,
