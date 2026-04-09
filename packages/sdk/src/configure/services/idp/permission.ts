@@ -1,4 +1,5 @@
 import type { InferredAttributeMap } from "../../types";
+import type { IdPUserField } from "@/types/idp";
 
 type EqualityOperator = "=" | "!=";
 type ContainsOperator = "in" | "not in";
@@ -34,8 +35,6 @@ type UserBooleanOperand<User extends object = InferredAttributeMap> = {
 type UserBooleanArrayOperand<User extends object = InferredAttributeMap> = {
   user: BooleanArrayFieldKeys<User>;
 };
-
-type IdPUserField = "id" | "name" | "disabled";
 
 type IdPUserOperand<Update extends boolean = false> = Update extends true
   ? { oldIdpUser: IdPUserField } | { newIdpUser: IdPUserField }
