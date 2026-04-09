@@ -28,16 +28,15 @@ tailor-sdk workspace [command]
 
 **Commands**
 
-| Command                                     | Description                                 |
-| ------------------------------------------- | ------------------------------------------- |
-| [`workspace app`](#workspace-app)           | Manage workspace applications               |
-| [`workspace create`](#workspace-create)     | Create a new Tailor Platform workspace.     |
-| [`workspace delete`](#workspace-delete)     | Delete a Tailor Platform workspace.         |
-| [`workspace function`](#workspace-function) | Manage workspace functions                  |
-| [`workspace get`](#workspace-get)           | Show detailed information about a workspace |
-| [`workspace list`](#workspace-list)         | List all Tailor Platform workspaces.        |
-| [`workspace restore`](#workspace-restore)   | Restore a deleted workspace                 |
-| [`workspace user`](#workspace-user)         | Manage workspace users                      |
+| Command                                   | Description                                 |
+| ----------------------------------------- | ------------------------------------------- |
+| [`workspace app`](#workspace-app)         | Manage workspace applications               |
+| [`workspace create`](#workspace-create)   | Create a new Tailor Platform workspace.     |
+| [`workspace delete`](#workspace-delete)   | Delete a Tailor Platform workspace.         |
+| [`workspace get`](#workspace-get)         | Show detailed information about a workspace |
+| [`workspace list`](#workspace-list)       | List all Tailor Platform workspaces.        |
+| [`workspace restore`](#workspace-restore) | Restore a deleted workspace                 |
+| [`workspace user`](#workspace-user)       | Manage workspace users                      |
 
 <!-- politty:command:workspace:subcommands:end -->
 
@@ -486,123 +485,6 @@ tailor-sdk workspace app list [options]
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 <!-- politty:command:workspace app list:global-options-link:end -->
-<!-- politty:command:workspace function:heading:start -->
-
-### workspace function
-
-<!-- politty:command:workspace function:heading:end -->
-
-<!-- politty:command:workspace function:description:start -->
-
-Manage workspace functions
-
-<!-- politty:command:workspace function:description:end -->
-
-<!-- politty:command:workspace function:usage:start -->
-
-**Usage**
-
-```
-tailor-sdk workspace function [command]
-```
-
-<!-- politty:command:workspace function:usage:end -->
-
-<!-- politty:command:workspace function:global-options-link:start -->
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-<!-- politty:command:workspace function:global-options-link:end -->
-
-<!-- politty:command:workspace function:subcommands:start -->
-
-**Commands**
-
-| Command                                               | Description                             |
-| ----------------------------------------------------- | --------------------------------------- |
-| [`workspace function get`](#workspace-function-get)   | Get a function registry by name         |
-| [`workspace function list`](#workspace-function-list) | List function registries in a workspace |
-
-<!-- politty:command:workspace function:subcommands:end -->
-
-<!-- politty:command:workspace function get:heading:start -->
-
-#### workspace function get
-
-<!-- politty:command:workspace function get:heading:end -->
-
-<!-- politty:command:workspace function get:description:start -->
-
-Get a function registry by name
-
-<!-- politty:command:workspace function get:description:end -->
-
-<!-- politty:command:workspace function get:usage:start -->
-
-**Usage**
-
-```
-tailor-sdk workspace function get [options]
-```
-
-<!-- politty:command:workspace function get:usage:end -->
-
-<!-- politty:command:workspace function get:options:start -->
-
-**Options**
-
-| Option                          | Alias | Description       | Required | Default | Env                            |
-| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
-| `--name <NAME>`                 | `-n`  | Function name     | Yes      | -       | -                              |
-
-<!-- politty:command:workspace function get:options:end -->
-
-<!-- politty:command:workspace function get:global-options-link:start -->
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-<!-- politty:command:workspace function get:global-options-link:end -->
-<!-- politty:command:workspace function list:heading:start -->
-
-#### workspace function list
-
-<!-- politty:command:workspace function list:heading:end -->
-
-<!-- politty:command:workspace function list:description:start -->
-
-List function registries in a workspace
-
-<!-- politty:command:workspace function list:description:end -->
-
-<!-- politty:command:workspace function list:usage:start -->
-
-**Usage**
-
-```
-tailor-sdk workspace function list [options]
-```
-
-<!-- politty:command:workspace function list:usage:end -->
-
-<!-- politty:command:workspace function list:options:start -->
-
-**Options**
-
-| Option                          | Alias | Description                         | Required | Default | Env                            |
-| ------------------------------- | ----- | ----------------------------------- | -------- | ------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                        | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                   | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
-| `--limit <LIMIT>`               | `-l`  | Maximum number of functions to list | No       | -       | -                              |
-
-<!-- politty:command:workspace function list:options:end -->
-
-<!-- politty:command:workspace function list:global-options-link:start -->
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-<!-- politty:command:workspace function list:global-options-link:end -->
 
 <!-- politty:command:workspace get:heading:start -->
 

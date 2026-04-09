@@ -6,7 +6,7 @@ import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { humanizeRelativeTime } from "@/cli/shared/format";
 import { logger } from "@/cli/shared/logger";
-import { functionRegistryInfo, type FunctionRegistryInfo } from "./transform";
+import { functionRegistryInfo, type FunctionRegistryInfo } from "./registry-transform";
 
 const listRegistryOptionsSchema = z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
