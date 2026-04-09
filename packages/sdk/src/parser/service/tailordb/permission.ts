@@ -1,17 +1,15 @@
 import type {
-  TailorTypePermission,
-  TailorTypeGqlPermission,
   StandardTailorTypePermission,
   StandardTailorTypeGqlPermission,
   StandardActionPermission,
   StandardPermissionCondition,
   StandardGqlPermissionPolicy,
-  RawPermissions,
   Permissions,
-} from "./types";
+} from "@/types/tailordb";
+import type { RawPermissions } from "@/types/tailordb.generated";
 
 // Raw permission types for normalize function parameters
-type PermissionOperator = "=" | "!=" | "in" | "not in";
+type PermissionOperator = "=" | "!=" | "in" | "not in" | "hasAny" | "not hasAny";
 
 type ObjectOperand =
   | { user: string }
@@ -34,6 +32,8 @@ const operatorMap: Record<PermissionOperator, string> = {
   "!=": "ne",
   in: "in",
   "not in": "nin",
+  hasAny: "hasAny",
+  "not hasAny": "nhasAny",
 };
 
 type GqlPermissionPolicy = {
@@ -74,13 +74,11 @@ function isSingleArrayConditionFormat(cond: readonly unknown[]): boolean {
 
 /**
  * Normalize record-level permissions into a standard structure.
- * @template User
- * @template Type
  * @param permission - Tailor type permission
  * @returns Normalized record permissions
  */
-function normalizePermission<User extends object = object, Type extends object = object>(
-  permission: TailorTypePermission<User, Type>,
+function normalizePermission(
+  permission: NonNullable<RawPermissions["record"]>,
 ): StandardTailorTypePermission {
   const keys = Object.keys(permission) as Array<keyof typeof permission>;
   return keys.reduce((acc, action) => {
@@ -96,9 +94,7 @@ function normalizePermission<User extends object = object, Type extends object =
  * @returns Normalized GQL permissions
  */
 export function normalizeGqlPermission(
-  // Raw GQL permissions are not strongly typed at parse time
-  // oxlint-disable-next-line no-explicit-any
-  permission: TailorTypeGqlPermission<any, any>,
+  permission: NonNullable<RawPermissions["gql"]>,
 ): StandardTailorTypeGqlPermission {
   return (permission as readonly GqlPermissionPolicy[]).map((policy) =>
     normalizeGqlPolicy(policy),

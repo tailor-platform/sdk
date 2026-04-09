@@ -1,0 +1,57 @@
+name: Changeset Check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  changeset-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    if: >-
+      github.event.pull_request.user.login != 'renovate[bot]' &&
+      github.event.pull_request.head.ref != 'changeset-release/main' &&
+      !contains(github.event.pull_request.labels.*.name, 'skip-changeset')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Detect changes
+        id: filter
+        uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+        with:
+          filters: |
+            changeset:
+              - '.changeset/*.md'
+              - '!.changeset/README.md'
+            packages:
+              - 'packages/sdk/**'
+              - 'packages/create-sdk/**'
+              - 'packages/tailor-proto/**'
+
+      - name: Fail if no changeset
+        if: steps.filter.outputs.packages == 'true' && steps.filter.outputs.changeset != 'true'
+        run: |
+          echo "::error::No changeset file found in this PR."
+          echo ""
+          echo "Please add a changeset file using: pnpm changeset"
+          echo ""
+          echo "If this PR does not require a changeset (e.g., docs-only changes),"
+          echo "add 'skip-changeset' label to this PR."
+          exit 1
+
+      - name: Install Deps
+        if: steps.filter.outputs.changeset == 'true'
+        uses: ./.github/actions/install-deps
+
+      - name: Validate changeset packages
+        if: steps.filter.outputs.changeset == 'true'
+        run: pnpm changeset status --since origin/main

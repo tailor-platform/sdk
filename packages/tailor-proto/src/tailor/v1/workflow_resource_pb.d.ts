@@ -4,7 +4,7 @@
 
 import type { GenEnum, GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
-import type { Timestamp } from "@bufbuild/protobuf/wkt";
+import type { Duration, Timestamp } from "@bufbuild/protobuf/wkt";
 
 /**
  * Describes the file tailor/v1/workflow_resource.proto.
@@ -55,6 +55,37 @@ export declare type WorkflowJobFunction = Message<"tailor.v1.WorkflowJobFunction
 export declare const WorkflowJobFunctionSchema: GenMessage<WorkflowJobFunction>;
 
 /**
+ * @generated from message tailor.v1.RetryPolicy
+ */
+export declare type RetryPolicy = Message<"tailor.v1.RetryPolicy"> & {
+  /**
+   * @generated from field: int32 max_retries = 1;
+   */
+  maxRetries: number;
+
+  /**
+   * @generated from field: google.protobuf.Duration initial_backoff = 2;
+   */
+  initialBackoff?: Duration;
+
+  /**
+   * @generated from field: google.protobuf.Duration max_backoff = 3;
+   */
+  maxBackoff?: Duration;
+
+  /**
+   * @generated from field: double backoff_multiplier = 4;
+   */
+  backoffMultiplier: number;
+};
+
+/**
+ * Describes the message tailor.v1.RetryPolicy.
+ * Use `create(RetryPolicySchema)` to create a new message.
+ */
+export declare const RetryPolicySchema: GenMessage<RetryPolicy>;
+
+/**
  * @generated from message tailor.v1.Workflow
  */
 export declare type Workflow = Message<"tailor.v1.Workflow"> & {
@@ -89,6 +120,11 @@ export declare type Workflow = Message<"tailor.v1.Workflow"> & {
    * @generated from field: google.protobuf.Timestamp updated_at = 6;
    */
   updatedAt?: Timestamp;
+
+  /**
+   * @generated from field: optional tailor.v1.RetryPolicy retry_policy = 7;
+   */
+  retryPolicy?: RetryPolicy;
 };
 
 /**
@@ -168,6 +204,11 @@ export enum WorkflowJobExecution_Status {
    * @generated from enum value: STATUS_FAILED = 4;
    */
   FAILED = 4,
+
+  /**
+   * @generated from enum value: STATUS_WAITING = 5;
+   */
+  WAITING = 5,
 }
 
 /**
@@ -208,6 +249,16 @@ export declare type WorkflowExecution = Message<"tailor.v1.WorkflowExecution"> &
    * @generated from field: google.protobuf.Timestamp finished_at = 6;
    */
   finishedAt?: Timestamp;
+
+  /**
+   * @generated from field: int32 retry_count = 7;
+   */
+  retryCount: number;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp retry_after = 8;
+   */
+  retryAfter?: Timestamp;
 };
 
 /**
@@ -249,6 +300,16 @@ export enum WorkflowExecution_Status {
    * @generated from enum value: STATUS_FAILED = 5;
    */
   FAILED = 5,
+
+  /**
+   * @generated from enum value: STATUS_PENDING_RETRY = 6;
+   */
+  PENDING_RETRY = 6,
+
+  /**
+   * @generated from enum value: STATUS_WAITING = 7;
+   */
+  WAITING = 7,
 }
 
 /**

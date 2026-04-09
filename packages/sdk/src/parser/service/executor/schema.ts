@@ -2,22 +2,37 @@ import { z } from "zod";
 import { AuthInvokerSchema } from "../auth";
 import { functionSchema } from "../common";
 
-export const RecordTriggerSchema = z.object({
-  kind: z.enum(["recordCreated", "recordUpdated", "recordDeleted"]),
-  typeName: z.string(),
-  condition: functionSchema.optional(),
+export const TailorDBTriggerSchema = z.object({
+  kind: z.literal("tailordb").describe("TailorDB record event trigger"),
+  events: z
+    .array(
+      z.enum([
+        "tailordb.type_record.created",
+        "tailordb.type_record.updated",
+        "tailordb.type_record.deleted",
+      ]),
+    )
+    .min(1)
+    .transform((arr) => [...new Set(arr)])
+    .describe("TailorDB event types to trigger on"),
+  typeName: z.string().describe("TailorDB type name to watch for events"),
+  condition: functionSchema.optional().describe("Condition function to filter events"),
 });
 
 export const ResolverExecutedTriggerSchema = z.object({
   kind: z.literal("resolverExecuted"),
-  resolverName: z.string(),
-  condition: functionSchema.optional(),
+  resolverName: z.string().describe("Name of the resolver to trigger on"),
+  condition: functionSchema.optional().describe("Condition function to filter events"),
 });
 
 export const ScheduleTriggerSchema = z.object({
   kind: z.literal("schedule"),
-  cron: z.string(),
-  timezone: z.string().optional().default("UTC"),
+  cron: z.string().describe("CRON expression for the schedule"),
+  timezone: z
+    .string()
+    .optional()
+    .default("UTC")
+    .describe("Timezone for the CRON schedule (default: UTC)"),
 });
 
 export const IncomingWebhookTriggerSchema = z.object({
@@ -25,15 +40,31 @@ export const IncomingWebhookTriggerSchema = z.object({
 });
 
 export const IdpUserTriggerSchema = z.object({
-  kind: z.enum(["idpUserCreated", "idpUserUpdated", "idpUserDeleted"]),
+  kind: z.literal("idpUser").describe("IdP user event trigger"),
+  events: z
+    .array(z.enum(["idp.user.created", "idp.user.updated", "idp.user.deleted"]))
+    .min(1)
+    .transform((arr) => [...new Set(arr)])
+    .describe("IdP user event types to trigger on"),
 });
 
 export const AuthAccessTokenTriggerSchema = z.object({
-  kind: z.enum(["authAccessTokenIssued", "authAccessTokenRefreshed", "authAccessTokenRevoked"]),
+  kind: z.literal("authAccessToken").describe("Auth access token event trigger"),
+  events: z
+    .array(
+      z.enum([
+        "auth.access_token.issued",
+        "auth.access_token.refreshed",
+        "auth.access_token.revoked",
+      ]),
+    )
+    .min(1)
+    .transform((arr) => [...new Set(arr)])
+    .describe("Auth access token event types to trigger on"),
 });
 
 export const TriggerSchema = z.discriminatedUnion("kind", [
-  RecordTriggerSchema,
+  TailorDBTriggerSchema,
   ResolverExecutedTriggerSchema,
   ScheduleTriggerSchema,
   IncomingWebhookTriggerSchema,
@@ -43,25 +74,26 @@ export const TriggerSchema = z.discriminatedUnion("kind", [
 
 export const FunctionOperationSchema = z.object({
   kind: z.enum(["function", "jobFunction"]),
-  body: functionSchema,
-  authInvoker: AuthInvokerSchema.optional(),
+  body: functionSchema.describe("Function implementation"),
+  authInvoker: AuthInvokerSchema.optional().describe("Auth invoker for the function execution"),
 });
 
 export const GqlOperationSchema = z.object({
   kind: z.literal("graphql"),
-  appName: z.string().optional(),
-  query: z.preprocess((val) => String(val), z.string()),
-  variables: functionSchema.optional(),
-  authInvoker: AuthInvokerSchema.optional(),
+  appName: z.string().optional().describe("Target application name for the GraphQL query"),
+  query: z.preprocess((val) => String(val), z.string().describe("GraphQL query string")),
+  variables: functionSchema.optional().describe("Function to compute GraphQL variables"),
+  authInvoker: AuthInvokerSchema.optional().describe("Auth invoker for the GraphQL execution"),
 });
 
 export const WebhookOperationSchema = z.object({
   kind: z.literal("webhook"),
-  url: functionSchema,
-  requestBody: functionSchema.optional(),
+  url: functionSchema.describe("Function returning the webhook URL"),
+  requestBody: functionSchema.optional().describe("Function to compute the request body"),
   headers: z
     .record(z.string(), z.union([z.string(), z.object({ vault: z.string(), key: z.string() })]))
-    .optional(),
+    .optional()
+    .describe("HTTP headers for the webhook request"),
 });
 
 export const WorkflowOperationSchema = z.preprocess(
@@ -81,9 +113,12 @@ export const WorkflowOperationSchema = z.preprocess(
   },
   z.object({
     kind: z.literal("workflow"),
-    workflowName: z.string(),
-    args: z.union([z.record(z.string(), z.unknown()), functionSchema]).optional(),
-    authInvoker: AuthInvokerSchema.optional(),
+    workflowName: z.string().describe("Name of the workflow to execute"),
+    args: z
+      .union([z.record(z.string(), z.unknown()), functionSchema])
+      .optional()
+      .describe("Arguments to pass to the workflow"),
+    authInvoker: AuthInvokerSchema.optional().describe("Auth invoker for the workflow execution"),
   }),
 );
 
@@ -95,9 +130,9 @@ const OperationSchema = z.union([
 ]);
 
 export const ExecutorSchema = z.object({
-  name: z.string(),
-  description: z.string().optional(),
-  disabled: z.boolean().optional().default(false),
-  trigger: TriggerSchema,
-  operation: OperationSchema,
+  name: z.string().describe("Executor name"),
+  description: z.string().optional().describe("Executor description"),
+  disabled: z.boolean().optional().default(false).describe("Whether the executor is disabled"),
+  trigger: TriggerSchema.describe("Event trigger configuration"),
+  operation: OperationSchema.describe("Operation to execute when triggered"),
 });

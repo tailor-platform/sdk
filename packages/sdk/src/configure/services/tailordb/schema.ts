@@ -1,3 +1,4 @@
+import { cloneDeep } from "es-toolkit";
 import {
   type AllowedValues,
   type AllowedValuesOutput,
@@ -10,12 +11,7 @@ import {
   type TailorFieldType,
   type TailorToTs,
 } from "@/configure/types/types";
-import {
-  type TailorDBTypeMetadata,
-  type RawPermissions,
-  type RawRelationConfig,
-  type RelationType,
-} from "@/parser/service/tailordb/types";
+import { brandValue } from "@/utils/brand";
 import { type TailorTypeGqlPermission, type TailorTypePermission } from "./permission";
 import {
   type DBFieldMetadata,
@@ -30,6 +26,9 @@ import {
 import type { InferredAttributeMap, TailorUser } from "@/configure/types";
 import type { Prettify, output, InferFieldsOutput } from "@/configure/types/helpers";
 import type { FieldValidateInput, ValidateConfig, Validators } from "@/configure/types/validation";
+import type { PluginAttachment, PluginConfigs } from "@/types/plugin";
+import type { TailorDBTypeMetadata, RawRelationConfig, RelationType } from "@/types/tailordb";
+import type { RawPermissions } from "@/types/tailordb.generated";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 
 interface RelationConfig<S extends RelationType, T extends TailorDBType> {
@@ -73,6 +72,7 @@ const regex = {
   time: /^(?<hour>\d{2}):(?<minute>\d{2})$/,
   datetime:
     /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(.(?<millisec>\d{3}))?Z$/,
+  decimal: /^-?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/,
 } as const;
 
 type FieldParseArgs = {
@@ -105,6 +105,12 @@ export interface TailorDBField<Defined extends DefinedDBFieldMetadata, Output> e
   TailorField<Defined, Output, DBFieldMetadata, Defined["type"]>,
   "description" | "validate"
 > {
+  /**
+   * typeName is not available on TailorDB fields.
+   * Use typeName on pipeline fields (t.enum / t.object) instead.
+   */
+  typeName(this: never, typeName: string): never;
+
   /** Returns a shallow copy of the raw relation config if set */
   readonly rawRelation: Readonly<RawRelationConfig> | undefined;
 
@@ -121,7 +127,11 @@ export interface TailorDBField<Defined extends DefinedDBFieldMetadata, Output> e
   ): TailorDBField<Prettify<CurrentDefined & { description: true }>, Output>;
 
   /**
-   * Define a relation to another type
+   * Define a relation to another type.
+   * Relation types: "n-1" (many-to-one), "1-1" (one-to-one), "keyOnly" (key only).
+   * Aliases "manyToOne", "oneToOne", and "N-1" are also accepted.
+   * @example db.uuid().relation({ type: "n-1", toward: { type: otherModel } })
+   * @example db.uuid().relation({ type: "1-1", toward: { type: profile } })
    */
   relation<S extends RelationType, T extends TailorAnyDBType, CurrentDefined extends Defined>(
     this: CurrentDefined extends { relation: unknown }
@@ -184,7 +194,10 @@ export interface TailorDBField<Defined extends DefinedDBFieldMetadata, Output> e
   ): TailorDBField<Prettify<CurrentDefined & { vector: true }>, Output>;
 
   /**
-   * Add hooks for create/update operations
+   * Add hooks for create/update operations on this field.
+   * The hook function receives `{ value, data, user }` and returns the computed value.
+   * @example db.string().hooks({ create: ({ data }) => data.firstName + " " + data.lastName })
+   * @example db.datetime().hooks({ create: () => new Date(), update: () => new Date() })
    */
   hooks<CurrentDefined extends Defined, const H extends Hook<unknown, Output>>(
     this: CurrentDefined extends { hooks: unknown }
@@ -207,7 +220,15 @@ export interface TailorDBField<Defined extends DefinedDBFieldMetadata, Output> e
   >;
 
   /**
-   * Add validation functions to the field
+   * Add validation functions to the field.
+   * Accepts a function or a tuple of [function, errorMessage].
+   * Prefer the tuple form for diagnosable errors.
+   * @example
+   * // Function form (default error message):
+   * db.int().validate(({ value }) => value >= 0)
+   * @example
+   * // Tuple form with custom error message (recommended):
+   * db.string().validate([({ value }) => value.length >= 8, "Must be at least 8 characters"])
    */
   validate<CurrentDefined extends Defined>(
     this: CurrentDefined extends { validate: unknown }
@@ -376,6 +397,15 @@ function createTailorDBField<
           });
         }
         break;
+      case "decimal":
+        if (typeof value !== "string" || !regex.decimal.test(value)) {
+          issues.push({
+            message: `Expected a decimal string: received ${String(value)}`,
+            path: pathArray.length > 0 ? pathArray : undefined,
+          });
+        }
+        break;
+
       case "enum":
         if (field._metadata.allowedValues) {
           const allowedValues = field._metadata.allowedValues.map((v) => v.value);
@@ -508,6 +538,12 @@ function createTailorDBField<
     return { value };
   }
 
+  function cloneWith(metadataUpdates: Partial<DBFieldMetadata>) {
+    const cloned = field.clone();
+    Object.assign(cloned._metadata, metadataUpdates);
+    return cloned;
+  }
+
   const field: FieldType = {
     type,
     fields: (fields ?? {}) as Record<string, TailorAnyField>,
@@ -527,24 +563,16 @@ function createTailorDBField<
     },
 
     description(description: string) {
-      this._metadata.description = description;
-      // Fluent API returns this with updated type
       // oxlint-disable-next-line no-explicit-any
-      return this as any;
+      return cloneWith({ description }) as any;
     },
 
-    typeName(typeName: string) {
-      this._metadata.typeName = typeName;
-      // Fluent API returns this with updated type
-      // oxlint-disable-next-line no-explicit-any
-      return this as any;
-    },
+    // oxlint-disable-next-line no-explicit-any
+    typeName: ((typeName: string) => cloneWith({ typeName })) as any,
 
     validate(...validateInputs: FieldValidateInput<FieldOutput<OutputBase, TOptions>>[]) {
-      this._metadata.validate = validateInputs;
-      // Fluent API returns this with updated type
       // oxlint-disable-next-line no-explicit-any
-      return this as any;
+      return cloneWith({ validate: validateInputs }) as any;
     },
 
     parse(args: FieldParseArgs): StandardSchemaV1.Result<FieldOutput<OutputBase, TOptions>> {
@@ -560,9 +588,10 @@ function createTailorDBField<
 
     // TailorDBField specific methods
     relation(config: RelationConfig<RelationType, TailorDBType> | RelationSelfConfig) {
-      // Store raw relation config - all processing happens in parser layer
+      const cloned = field.clone();
       const targetType = isRelationSelfConfig(config) ? "self" : config.toward.type.name;
-      _rawRelation = {
+      // oxlint-disable-next-line no-explicit-any
+      (cloned as any)._setRawRelation({
         type: config.type,
         toward: {
           type: targetType,
@@ -570,48 +599,52 @@ function createTailorDBField<
           key: config.toward.key,
         },
         backward: config.backward,
-      };
+      });
       // oxlint-disable-next-line no-explicit-any
-      return this as any;
+      return cloned as any;
     },
 
     index() {
-      this._metadata.index = true;
       // oxlint-disable-next-line no-explicit-any
-      return this as any;
+      return cloneWith({ index: true }) as any;
     },
 
     unique() {
-      this._metadata.unique = true;
-      this._metadata.index = true;
       // oxlint-disable-next-line no-explicit-any
-      return this as any;
+      return cloneWith({ unique: true, index: true }) as any;
     },
 
     vector() {
-      this._metadata.vector = true;
       // oxlint-disable-next-line no-explicit-any
-      return this as any;
+      return cloneWith({ vector: true }) as any;
     },
 
     hooks(hooks: Hook<unknown, FieldOutput<OutputBase, TOptions>>) {
-      this._metadata.hooks = hooks;
       // oxlint-disable-next-line no-explicit-any
-      return this as any;
+      return cloneWith({ hooks }) as any;
     },
 
     serial(config: SerialConfig) {
-      this._metadata.serial = config;
       // oxlint-disable-next-line no-explicit-any
-      return this as any;
+      return cloneWith({ serial: config }) as any;
     },
 
     clone(cloneOptions?: FieldOptions) {
-      // Create a new field with the same configuration
-      const clonedField = createTailorDBField(type, options, fields, values);
+      // Deep clone nested object fields if present
+      let clonedFields = fields;
+      if (fields) {
+        const cloned: Record<string, TailorAnyDBField> = {};
+        for (const [key, field] of Object.entries(fields)) {
+          cloned[key] = field.clone();
+        }
+        clonedFields = cloned;
+      }
 
-      // Copy metadata
-      Object.assign(clonedField._metadata, this._metadata);
+      // Create a new field with cloned configuration
+      const clonedField = createTailorDBField(type, options, clonedFields, values);
+
+      // Deep copy metadata using cloneDeep (preserves function references)
+      Object.assign(clonedField._metadata, cloneDeep(this._metadata));
 
       // Apply new options if provided
       if (cloneOptions) {
@@ -625,11 +658,9 @@ function createTailorDBField<
 
       // Copy raw relation if exists
       if (_rawRelation) {
-        // Access the internal _rawRelation of the cloned field
-        // We need to call relation method to set it
-        const clonedRawRelation = { ..._rawRelation, toward: { ..._rawRelation.toward } };
-        // @ts-expect-error - Accessing internal state for cloning
-        clonedField._setRawRelation(clonedRawRelation);
+        const clonedRawRelation = cloneDeep(_rawRelation);
+        // oxlint-disable-next-line no-explicit-any
+        (clonedField as any)._setRawRelation(clonedRawRelation);
       }
 
       // oxlint-disable-next-line no-explicit-any
@@ -637,7 +668,7 @@ function createTailorDBField<
     },
 
     // Internal method for clone to set rawRelation
-    // @ts-expect-error - Internal method
+    // @ts-ignore - Internal method not in interface
     _setRawRelation(relation: RawRelationConfig) {
       _rawRelation = relation;
     },
@@ -648,38 +679,128 @@ function createTailorDBField<
 
 const createField = createTailorDBField;
 
+/**
+ * Create a UUID field.
+ * @param options - Field configuration options
+ * @returns A UUID field
+ * @example db.uuid()
+ * @example db.uuid({ optional: true })
+ */
 function uuid<const Opt extends FieldOptions>(options?: Opt) {
   return createField("uuid", options);
 }
 
+/**
+ * Create a string field.
+ * @param options - Field configuration options
+ * @returns A string field
+ * @example db.string()
+ * @example db.string({ optional: true })
+ */
 function string<const Opt extends FieldOptions>(options?: Opt) {
   return createField("string", options);
 }
 
+/**
+ * Create a boolean field.
+ * Note: The method name is `bool` but creates a `boolean` type field.
+ * @param options - Field configuration options
+ * @returns A boolean field
+ * @example db.bool()
+ * @example db.bool({ optional: true })
+ */
 function bool<const Opt extends FieldOptions>(options?: Opt) {
   return createField("boolean", options);
 }
 
+/**
+ * Create an integer field.
+ * @param options - Field configuration options
+ * @returns An integer field
+ * @example db.int()
+ * @example db.int({ optional: true })
+ */
 function int<const Opt extends FieldOptions>(options?: Opt) {
   return createField("integer", options);
 }
 
+/**
+ * Create a float (decimal number) field.
+ * @param options - Field configuration options
+ * @returns A float field
+ * @example db.float()
+ * @example db.float({ optional: true })
+ */
 function float<const Opt extends FieldOptions>(options?: Opt) {
   return createField("float", options);
 }
 
+interface DecimalFieldOptions extends FieldOptions {
+  scale?: number;
+}
+
+/**
+ * Create a decimal field (stored as string for precision).
+ * @param options - Field configuration options including optional scale (0-12)
+ * @returns A decimal field
+ * @example db.decimal()
+ * @example db.decimal({ scale: 2 })
+ * @example db.decimal({ scale: 2, optional: true })
+ */
+function decimal<const Opt extends DecimalFieldOptions>(options?: Opt) {
+  if (options?.scale !== undefined) {
+    if (!Number.isInteger(options.scale) || options.scale < 0 || options.scale > 12) {
+      throw new Error("scale must be an integer between 0 and 12");
+    }
+  }
+  const field = createField("decimal", options);
+  if (options?.scale !== undefined) {
+    field._metadata.scale = options.scale;
+  }
+  return field;
+}
+
+/**
+ * Create a date field (date only, no time component).
+ * Format: "yyyy-MM-dd"
+ * @param options - Field configuration options
+ * @returns A date field
+ * @example db.date()
+ */
 function date<const Opt extends FieldOptions>(options?: Opt) {
   return createField("date", options);
 }
 
+/**
+ * Create a datetime field (date and time).
+ * Format: ISO 8601 "yyyy-MM-ddTHH:mm:ssZ"
+ * @param options - Field configuration options
+ * @returns A datetime field
+ * @example db.datetime()
+ */
 function datetime<const Opt extends FieldOptions>(options?: Opt) {
   return createField("datetime", options);
 }
 
+/**
+ * Create a time field (time only, no date component).
+ * Format: "HH:mm"
+ * @param options - Field configuration options
+ * @returns A time field
+ * @example db.time()
+ */
 function time<const Opt extends FieldOptions>(options?: Opt) {
   return createField("time", options);
 }
 
+/**
+ * Create an enum field with a fixed set of allowed string values.
+ * @param values - Array of allowed string values, or array of `{ value, description }` objects
+ * @param options - Field configuration options
+ * @returns An enum field
+ * @example db.enum(["active", "inactive", "suspended"])
+ * @example db.enum(["small", "medium", "large"], { optional: true })
+ */
 function _enum<const V extends AllowedValues, const Opt extends FieldOptions>(
   values: V,
   options?: Opt,
@@ -690,6 +811,14 @@ function _enum<const V extends AllowedValues, const Opt extends FieldOptions>(
   return createField<"enum", Opt, AllowedValuesOutput<V>>("enum", options, undefined, values);
 }
 
+/**
+ * Create a nested object field with sub-fields.
+ * @param fields - Record of nested field definitions
+ * @param options - Field configuration options
+ * @returns A nested object field
+ * @example db.object({ street: db.string(), city: db.string(), zip: db.string() })
+ * @example db.object({ name: db.string() }, { optional: true })
+ */
 function object<
   const F extends Record<string, TailorAnyDBField> & ExcludeNestedDBFields<F>,
   const Opt extends FieldOptions,
@@ -718,12 +847,27 @@ export interface TailorDBType<
   readonly metadata: TailorDBTypeMetadata;
 
   /**
-   * Add hooks for fields
+   * Add hooks for fields at the type level.
+   * Each key is a field name, and the value defines create/update hooks.
+   * @example
+   * db.type("Order", {
+   *   total: db.float(),
+   *   tax: db.float(),
+   *   ...db.fields.timestamps(),
+   * }).hooks({
+   *   tax: { create: ({ data }) => data.total * 0.1, update: ({ data }) => data.total * 0.1 },
+   * })
    */
   hooks(hooks: Hooks<Fields>): TailorDBType<Fields, User>;
 
   /**
-   * Add validators for fields
+   * Add validators for fields at the type level.
+   * Each key is a field name, and the value is a validator or array of validators.
+   * Prefer the tuple form [function, message] for diagnosable errors.
+   * @example
+   * db.type("User", { email: db.string() }).validate({
+   *   email: [({ value }) => value.includes("@"), "Email must contain @"],
+   * })
    */
   validate(validators: Validators<Fields>): TailorDBType<Fields, User>;
 
@@ -745,7 +889,16 @@ export interface TailorDBType<
   ): TailorDBType<Fields, User>;
 
   /**
-   * Set record-level permissions
+   * Set record-level permissions for create, read, update, and delete operations.
+   * Prefer object format with explicit `conditions` and `permit` for readability.
+   * For update operations, use `newRecord` and `oldRecord` operands.
+   * @example
+   * .permission({
+   *   create: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+   *   read: [{ conditions: [[{ record: "isPublic" }, "=", true]], permit: true }],
+   *   update: [{ conditions: [[{ newRecord: "ownerId" }, "=", { user: "id" }]], permit: true }],
+   *   delete: [{ conditions: [[{ record: "ownerId" }, "=", { user: "id" }]], permit: true }],
+   * })
    */
   permission<
     U extends object = User,
@@ -758,7 +911,15 @@ export interface TailorDBType<
   ): TailorDBType<Fields, U>;
 
   /**
-   * Set GraphQL-level permissions
+   * Set GraphQL-level permissions controlling access to GraphQL operations.
+   * @example
+   * .gqlPermission([
+   *   {
+   *     conditions: [[{ user: "_loggedIn" }, "=", true]],
+   *     actions: "all",
+   *     permit: true,
+   *   },
+   * ])
    */
   gqlPermission<
     U extends object = User,
@@ -775,6 +936,7 @@ export interface TailorDBType<
   /**
    * Pick specific fields from the type
    */
+  pickFields<K extends keyof Fields>(keys: K[]): Pick<Fields, K>;
   pickFields<K extends keyof Fields, const Opt extends FieldOptions>(
     keys: K[],
     options: Opt,
@@ -793,6 +955,20 @@ export interface TailorDBType<
    * Omit specific fields from the type
    */
   omitFields<K extends keyof Fields>(keys: K[]): Omit<Fields, K>;
+
+  /**
+   * Plugin attachments for this type
+   */
+  readonly plugins: PluginAttachment[];
+
+  /**
+   * Attach a plugin to this type
+   * @param config - Plugin configuration in the format { pluginId: config }
+   * @returns The type with the plugin attached
+   */
+  plugin<P extends keyof PluginConfigs<keyof Fields & string>>(config: {
+    [K in P]: PluginConfigs<keyof Fields & string>[K];
+  }): TailorDBType<Fields, User>;
 }
 
 /**
@@ -818,6 +994,7 @@ function createTailorDBType<
   let _indexes: IndexDef<TailorDBType<Fields, User>>[] = [];
   const _permissions: RawPermissions = {};
   let _files: Record<string, string> = {};
+  const _plugins: PluginAttachment[] = [];
 
   if (options.pluralForm) {
     if (name === options.pluralForm) {
@@ -828,7 +1005,7 @@ function createTailorDBType<
 
   const dbType: TailorDBType<Fields, User> = {
     name,
-    fields,
+    fields: { ...fields },
     _output: null as unknown as InferFieldsOutput<Fields>,
     _description,
 
@@ -860,7 +1037,8 @@ function createTailorDBType<
       // `Hooks<Fields>` is strongly typed, but `Object.entries()` loses that information.
       // oxlint-disable-next-line no-explicit-any
       Object.entries(hooks).forEach(([fieldName, fieldHooks]: [string, any]) => {
-        this.fields[fieldName].hooks(fieldHooks);
+        (this.fields as Record<string, TailorAnyDBField>)[fieldName] =
+          this.fields[fieldName].hooks(fieldHooks);
       });
       return this;
     },
@@ -877,21 +1055,26 @@ function createTailorDBType<
           return Array.isArray(v) && v.length === 2 && typeof v[1] === "string";
         };
 
+        let updatedField: TailorAnyDBField;
         if (Array.isArray(validators)) {
           if (isValidateConfig(validators)) {
-            field.validate(validators);
+            updatedField = field.validate(validators);
           } else {
-            field.validate(...validators);
+            updatedField = field.validate(...validators);
           }
         } else {
-          field.validate(validators);
+          updatedField = field.validate(validators);
         }
+        (this.fields as Record<string, TailorAnyDBField>)[fieldName] = updatedField;
       });
       return this;
     },
 
     features(features: Omit<TypeFeatures, "pluralForm">) {
-      _settings = { ..._settings, ...features };
+      _settings = {
+        ..._settings,
+        ...features,
+      };
       return this;
     },
 
@@ -915,7 +1098,7 @@ function createTailorDBType<
       >,
     >(permission: P) {
       const ret = this as TailorDBType<Fields, U>;
-      _permissions.record = permission;
+      _permissions.record = permission as RawPermissions["record"];
       return ret;
     },
 
@@ -924,7 +1107,7 @@ function createTailorDBType<
       P extends TailorTypeGqlPermission<U> = TailorTypeGqlPermission<U>,
     >(permission: P) {
       const ret = this as TailorDBType<Fields, U>;
-      _permissions.gql = permission;
+      _permissions.gql = permission as RawPermissions["gql"];
       return ret;
     },
 
@@ -934,7 +1117,7 @@ function createTailorDBType<
       return this;
     },
 
-    pickFields<K extends keyof Fields, const Opt extends FieldOptions>(keys: K[], options: Opt) {
+    pickFields<K extends keyof Fields, const Opt extends FieldOptions>(keys: K[], options?: Opt) {
       const result = {} as Record<K, TailorAnyDBField>;
       for (const key of keys) {
         if (options) {
@@ -943,16 +1126,8 @@ function createTailorDBType<
           result[key] = this.fields[key];
         }
       }
-      return result as {
-        [P in K]: Fields[P] extends TailorDBField<infer D, infer _O>
-          ? TailorDBField<
-              Omit<D, "array"> & {
-                array: Opt extends { array: true } ? true : D["array"];
-              },
-              FieldOutput<TailorToTs[D["type"]], Opt>
-            >
-          : never;
-      };
+      // oxlint-disable-next-line no-explicit-any
+      return result as any;
     },
 
     omitFields<K extends keyof Fields>(keys: K[]): Omit<Fields, K> {
@@ -965,9 +1140,22 @@ function createTailorDBType<
       }
       return result as Omit<Fields, K>;
     },
+
+    get plugins(): PluginAttachment[] {
+      return _plugins;
+    },
+
+    plugin<P extends keyof PluginConfigs<keyof Fields & string>>(config: {
+      [K in P]: PluginConfigs<keyof Fields & string>[K];
+    }): TailorDBType<Fields, User> {
+      for (const [pluginId, pluginConfig] of Object.entries(config)) {
+        _plugins.push({ pluginId, config: pluginConfig });
+      }
+      return this;
+    },
   };
 
-  return dbType;
+  return brandValue(dbType, "tailordb-type");
 }
 
 export type TailorDBInstance<
@@ -984,17 +1172,29 @@ type DBType<F extends { id?: never } & Record<string, TailorAnyDBField>> = Tailo
 >;
 
 /**
- * Creates a new database type with the specified fields
+ * Creates a new database type with the specified fields.
+ * An `id` field (UUID) is automatically added to every type.
  * @param name - The name of the type, or a tuple of [name, pluralForm]
  * @param fields - The field definitions for the type
  * @returns A new TailorDBType instance
+ * @example
+ * export const user = db.type("User", {
+ *   name: db.string(),
+ *   email: db.string(),
+ *   age: db.int({ optional: true }),
+ *   role: db.enum(["admin", "member"]),
+ *   ...db.fields.timestamps(),
+ * });
+ * // Always export both the value and type:
+ * export type user = typeof user;
  */
 function dbType<const F extends { id?: never } & Record<string, TailorAnyDBField>>(
   name: string | [string, string],
   fields: F,
 ): DBType<F>;
 /**
- * Creates a new database type with the specified fields and description
+ * Creates a new database type with the specified fields and description.
+ * An `id` field (UUID) is automatically added to every type.
  * @param name - The name of the type, or a tuple of [name, pluralForm]
  * @param description - A description of the type
  * @param fields - The field definitions for the type
@@ -1031,6 +1231,7 @@ function dbType<const F extends { id?: never } & Record<string, TailorAnyDBField
   ) as DBType<F>;
 }
 
+/** TailorDB schema builder utilities for defining types and fields. */
 export const db = {
   type: dbType,
   uuid,
@@ -1038,12 +1239,23 @@ export const db = {
   bool,
   int,
   float,
+  decimal,
   date,
   datetime,
   time,
   enum: _enum,
   object,
   fields: {
+    /**
+     * Creates standard timestamp fields (createdAt, updatedAt) with auto-hooks.
+     * createdAt is set on create, updatedAt is set on update.
+     * @returns An object with createdAt and updatedAt fields
+     * @example
+     * const model = db.type("Model", {
+     *   name: db.string(),
+     *   ...db.fields.timestamps(),
+     * });
+     */
     timestamps: () => ({
       createdAt: datetime()
         .hooks({ create: () => new Date() })

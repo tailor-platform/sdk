@@ -5,12 +5,12 @@ paths:
 
 # CLI Logging Guidelines
 
-The CLI module uses a unified logging system. Always use `logger` and `styles` from `src/cli/utils/logger.ts`.
+The CLI module uses a unified logging system. Always use `logger` and `styles` from `src/cli/shared/logger.ts`.
 
 **Imports:**
 
 ```typescript
-import { logger, styles } from "../utils/logger";
+import { logger, styles } from "../shared/logger";
 ```
 
 **Logger Methods:**
@@ -64,9 +64,7 @@ This separation allows piping data to other commands without log messages interf
 
 **Rules:**
 
-1. ❌ Do NOT import `consola` directly - use `logger` instead
-2. ❌ Do NOT create custom consola instances
-3. ❌ Do NOT use `console.log()` or `process.stdout.write()` directly - use `logger.out()` for stdout
-4. ✅ Use `logger` for all CLI output
-5. ✅ Use `styles` for inline text coloring
-6. ✅ Use `logger.out()` for structured data output (handles JSON mode automatically)
+1. ❌ Do NOT use `console.log()` or `process.stdout.write()` directly - use `logger.out()` for stdout
+2. ✅ Use `logger` for all CLI output
+3. ✅ Use `styles` for inline text coloring
+4. ✅ Use `logger.out()` for structured data output (handles JSON mode automatically)

@@ -1,5 +1,109 @@
 # @tailor-platform/create-sdk
 
+## 1.35.0
+
+## 1.34.0
+
+## 1.33.2
+
+## 1.33.1
+
+## 1.33.0
+
+## 1.32.1
+
+### Patch Changes
+
+- [#826](https://github.com/tailor-platform/sdk/pull/826) [`72c2842`](https://github.com/tailor-platform/sdk/commit/72c2842046b2841571e095e10187339fdf66acd5) Thanks [@toiroakr](https://github.com/toiroakr)! - Bundle `@tailor-platform/function-types` as a dependency of `@tailor-platform/sdk`. Users no longer need to install `@tailor-platform/function-types` separately or add it to their `tsconfig.json` types array. The ambient types are automatically available when importing from `@tailor-platform/sdk`.
+
+## 1.32.0
+
+## 1.31.0
+
+## 1.30.0
+
+## 1.29.0
+
+## 1.28.0
+
+## 1.27.0
+
+## 1.26.0
+
+## 1.25.4
+
+## 1.25.3
+
+## 1.25.2
+
+### Patch Changes
+
+- [#719](https://github.com/tailor-platform/sdk/pull/719) [`60b882d`](https://github.com/tailor-platform/sdk/commit/60b882d631bd959f1b2e760430030edc68aa3dba) Thanks [@toiroakr](https://github.com/toiroakr)! - Upgrade politty to v0.4.9 and migrate to native globalArgs, cleanup, and arg effect patterns, eliminating the withCommonArgs wrapper
+
+## 1.25.1
+
+## 1.25.0
+
+## 1.24.0
+
+## 1.23.0
+
+## 1.22.0
+
+## 1.21.0
+
+## 1.20.0
+
+## 1.19.0
+
+## 1.18.0
+
+## 1.17.1
+
+### Patch Changes
+
+- [#627](https://github.com/tailor-platform/sdk/pull/627) [`b75a0cd`](https://github.com/tailor-platform/sdk/commit/b75a0cd124a707befaaf77b5da0dafe8835b7263) Thanks [@toiroakr](https://github.com/toiroakr)! - Remove redundant kysely and @tailor-platform/function-kysely-tailordb dependencies from create-sdk templates, as these are already provided through @tailor-platform/sdk
+
+## 1.17.0
+
+## 1.16.0
+
+## 1.15.2
+
+## 1.15.1
+
+## 1.15.0
+
+## 1.14.2
+
+## 1.14.1
+
+## 1.14.0
+
+## 1.13.0
+
+## 1.12.0
+
+## 1.11.1
+
+## 1.11.0
+
+## 1.10.1
+
+## 1.10.0
+
+## 1.9.3
+
+### Patch Changes
+
+- [#551](https://github.com/tailor-platform/sdk/pull/551) [`67b9ce0`](https://github.com/tailor-platform/sdk/commit/67b9ce038315252c44622b2ddcfadac890d2d6f1) Thanks [@riku99](https://github.com/riku99)! - Use changeset publish for git tag and GitHub release creation
+
+## 1.9.2
+
+## 1.9.1
+
+## 1.9.0
+
 ## 1.8.0
 
 ## 1.7.0

@@ -130,6 +130,119 @@ describe("defineIdp", () => {
     expect(idpWithPartialPasswordPolicy.userAuthPolicy?.passwordRequireLowercase).toBeUndefined();
   });
 
+  it("should preserve userAuthPolicy allowedEmailDomains", () => {
+    const idpWithAllowedEmailDomains = defineIdp("idp-with-allowed-email-domains", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      userAuthPolicy: {
+        allowedEmailDomains: ["example.com", "corp.example.com"],
+      },
+    });
+    expect(idpWithAllowedEmailDomains.userAuthPolicy?.allowedEmailDomains).toEqual([
+      "example.com",
+      "corp.example.com",
+    ]);
+
+    const idpWithEmptyAllowedEmailDomains = defineIdp("idp-with-empty-allowed-email-domains", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      userAuthPolicy: {
+        allowedEmailDomains: [],
+      },
+    });
+    expect(idpWithEmptyAllowedEmailDomains.userAuthPolicy?.allowedEmailDomains).toEqual([]);
+
+    const idpNoAllowedEmailDomains = defineIdp("idp-no-allowed-email-domains", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      userAuthPolicy: {},
+    });
+    expect(idpNoAllowedEmailDomains.userAuthPolicy?.allowedEmailDomains).toBeUndefined();
+  });
+
+  it("should preserve userAuthPolicy allowGoogleOauth", () => {
+    const idpWithAllowGoogleOauth = defineIdp("idp-with-allow-google-oauth", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      userAuthPolicy: {
+        allowGoogleOauth: true,
+      },
+    });
+    expect(idpWithAllowGoogleOauth.userAuthPolicy?.allowGoogleOauth).toBe(true);
+
+    const idpWithAllowGoogleOauthFalse = defineIdp("idp-with-allow-google-oauth-false", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      userAuthPolicy: {
+        allowGoogleOauth: false,
+      },
+    });
+    expect(idpWithAllowGoogleOauthFalse.userAuthPolicy?.allowGoogleOauth).toBe(false);
+
+    const idpNoAllowGoogleOauth = defineIdp("idp-no-allow-google-oauth", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      userAuthPolicy: {},
+    });
+    expect(idpNoAllowGoogleOauth.userAuthPolicy?.allowGoogleOauth).toBeUndefined();
+  });
+
+  it("should preserve userAuthPolicy allowMicrosoftOauth", () => {
+    const idpWithAllowMicrosoftOauth = defineIdp("idp-with-allow-microsoft-oauth", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      userAuthPolicy: {
+        allowMicrosoftOauth: true,
+      },
+    });
+    expect(idpWithAllowMicrosoftOauth.userAuthPolicy?.allowMicrosoftOauth).toBe(true);
+
+    const idpWithAllowMicrosoftOauthFalse = defineIdp("idp-with-allow-microsoft-oauth-false", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      userAuthPolicy: {
+        allowMicrosoftOauth: false,
+      },
+    });
+    expect(idpWithAllowMicrosoftOauthFalse.userAuthPolicy?.allowMicrosoftOauth).toBe(false);
+
+    const idpNoAllowMicrosoftOauth = defineIdp("idp-no-allow-microsoft-oauth", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      userAuthPolicy: {},
+    });
+    expect(idpNoAllowMicrosoftOauth.userAuthPolicy?.allowMicrosoftOauth).toBeUndefined();
+  });
+
+  it("should preserve userAuthPolicy disablePasswordAuth", () => {
+    const idpWithDisablePasswordAuth = defineIdp("idp-with-disable-password-auth", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      userAuthPolicy: {
+        disablePasswordAuth: true,
+        allowGoogleOauth: true,
+        allowedEmailDomains: ["example.com"],
+      },
+    });
+    expect(idpWithDisablePasswordAuth.userAuthPolicy?.disablePasswordAuth).toBe(true);
+
+    const idpWithDisablePasswordAuthFalse = defineIdp("idp-with-disable-password-auth-false", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      userAuthPolicy: {
+        disablePasswordAuth: false,
+      },
+    });
+    expect(idpWithDisablePasswordAuthFalse.userAuthPolicy?.disablePasswordAuth).toBe(false);
+
+    const idpNoDisablePasswordAuth = defineIdp("idp-no-disable-password-auth", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      userAuthPolicy: {},
+    });
+    expect(idpNoDisablePasswordAuth.userAuthPolicy?.disablePasswordAuth).toBeUndefined();
+  });
+
   it("should validate password length ranges", () => {
     // Valid ranges
     expect(() =>
@@ -188,5 +301,102 @@ describe("defineIdp", () => {
       clients: ["client-1"] as const,
     });
     expect(idpNoPublishUserEvents.publishUserEvents).toBeUndefined();
+  });
+
+  it("should preserve gqlOperations config", () => {
+    const idpWithGqlOperations = defineIdp("idp-with-gql-operations", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      gqlOperations: {
+        create: false,
+        update: false,
+        delete: false,
+        read: false,
+        sendPasswordResetEmail: false,
+      },
+    });
+    expect(idpWithGqlOperations.gqlOperations).toEqual({
+      create: false,
+      update: false,
+      delete: false,
+      read: false,
+      sendPasswordResetEmail: false,
+    });
+
+    const idpWithPartialGqlOperations = defineIdp("idp-with-partial-gql-operations", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      gqlOperations: {
+        create: false,
+        read: true,
+      },
+    });
+    expect(idpWithPartialGqlOperations.gqlOperations).toEqual({
+      create: false,
+      read: true,
+    });
+
+    const idpNoGqlOperations = defineIdp("idp-no-gql-operations", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+    });
+    expect(idpNoGqlOperations.gqlOperations).toBeUndefined();
+  });
+
+  it("gqlOperations: 'query' stores alias as raw value", () => {
+    const idpWithQueryAlias = defineIdp("idp-with-query-alias", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      gqlOperations: "query",
+    });
+
+    // Configure layer stores the alias without normalization
+    expect(idpWithQueryAlias.gqlOperations).toBe("query");
+  });
+
+  it("should preserve emailConfig", () => {
+    const idpWithEmailConfig = defineIdp("idp-with-email-config", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      emailConfig: {
+        fromName: "My App",
+        passwordResetSubject: "Reset your password",
+      },
+    });
+    expect(idpWithEmailConfig.emailConfig).toEqual({
+      fromName: "My App",
+      passwordResetSubject: "Reset your password",
+    });
+
+    const idpWithPartialEmailConfig = defineIdp("idp-with-partial-email-config", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      emailConfig: {
+        fromName: "My App",
+      },
+    });
+    expect(idpWithPartialEmailConfig.emailConfig).toEqual({
+      fromName: "My App",
+    });
+
+    const idpNoEmailConfig = defineIdp("idp-no-email-config", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+    });
+    expect(idpNoEmailConfig.emailConfig).toBeUndefined();
+  });
+
+  it("gqlOperations: 'query' works with other config options", () => {
+    const idpWithQueryAndOtherOptions = defineIdp("idp-with-query-and-options", {
+      authorization: "loggedIn",
+      clients: ["client-1"] as const,
+      lang: "en",
+      publishUserEvents: true,
+      gqlOperations: "query",
+    });
+
+    expect(idpWithQueryAndOtherOptions.lang).toBe("en");
+    expect(idpWithQueryAndOtherOptions.publishUserEvents).toBe(true);
+    expect(idpWithQueryAndOtherOptions.gqlOperations).toBe("query");
   });
 });

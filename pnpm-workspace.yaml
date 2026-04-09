@@ -1,9 +1,16 @@
 minimumReleaseAge: 4320 # 3 days
+minimumReleaseAgeExclude:
+  - "@toiroakr/lines-db"
+  - politty
+  - zinfer
+  # Renovate security update: kysely@0.28.14
+  - kysely@0.28.14
 
 packages:
   - packages/*
   - packages/create-sdk/templates/*
   - example
+  - llm-challenge
 
 allowBuilds:
   "@swc/core": true

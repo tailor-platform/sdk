@@ -56,6 +56,34 @@ export const fetchCustomer = createWorkflowJob({
 });
 ```
 
+## Input and Output Type Constraints
+
+Workflow job inputs and outputs are serialized as JSON when passed between jobs. This imposes type constraints:
+
+**Input types** must be JSON-compatible — only primitives (`string`, `number`, `boolean`, `null`), arrays, and plain objects are allowed. `Date`, `Map`, `Set`, functions, and other non-serializable types cannot be used.
+
+```typescript
+// OK
+export const myJob = createWorkflowJob({
+  name: "my-job",
+  body: async (input: { id: string; count: number; tags: string[] }) => {
+    // ...
+  },
+});
+
+// Compile error — Date is not allowed in input
+export const badJob = createWorkflowJob({
+  name: "bad-job",
+  body: async (input: { createdAt: Date }) => {
+    // ...
+  },
+});
+```
+
+**Output types** are more permissive — `Date` and objects with `toJSON()` are allowed because they are serialized via `JSON.stringify` at runtime (e.g., `Date` becomes a string).
+
+These constraints are enforced at compile time — you will get a type error if you use an unsupported type.
+
 ## Triggering Jobs
 
 Use `.trigger()` to start other jobs from within a job.
@@ -117,6 +145,32 @@ export const processOrder = createWorkflowJob({
 export default createWorkflow({
   name: "order-processing",
   mainJob: processOrder,
+});
+```
+
+## Retry Policy
+
+You can configure automatic retry behavior with exponential backoff by setting `retryPolicy` on a workflow. All fields are required when `retryPolicy` is set:
+
+| Field               | Type     | Description                                                |
+| ------------------- | -------- | ---------------------------------------------------------- |
+| `maxRetries`        | `number` | Maximum number of retries (1–10)                           |
+| `initialBackoff`    | `string` | Initial backoff duration (e.g., `"1s"`, `"500ms"`, max 1h) |
+| `maxBackoff`        | `string` | Maximum backoff duration (e.g., `"30s"`, `"5m"`, max 24h)  |
+| `backoffMultiplier` | `number` | Backoff multiplier for exponential backoff (>= 1)          |
+
+Duration strings support `ms`, `s`, and `m` units. `initialBackoff` must be less than or equal to `maxBackoff`.
+
+```typescript
+export default createWorkflow({
+  name: "order-processing",
+  mainJob: processOrder,
+  retryPolicy: {
+    maxRetries: 3,
+    initialBackoff: "1s",
+    maxBackoff: "30s",
+    backoffMultiplier: 2,
+  },
 });
 ```
 

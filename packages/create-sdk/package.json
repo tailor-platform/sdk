@@ -1,11 +1,11 @@
 {
   "name": "@tailor-platform/create-sdk",
-  "version": "1.8.0",
+  "version": "1.35.0",
   "description": "A CLI tool to quickly create a new Tailor Platform SDK project",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/tailor-platform/sdk.git",
+    "url": "git+https://github.com/tailor-platform/sdk.git",
     "directory": "packages/create-sdk"
   },
   "bin": "dist/index.js",
@@ -22,24 +22,25 @@
     "lint": "oxlint . && eslint --cache .",
     "lint:fix": "oxlint --fix . && eslint --cache --fix .",
     "typecheck": "tsc --noEmit",
-    "prepublish": "node scripts/prepare-templates.js && pnpm run build"
+    "prepublish": "node scripts/prepare-templates.js && pnpm run build",
+    "publint": "publint --strict"
   },
   "dependencies": {
-    "@clack/prompts": "0.11.0",
+    "@clack/prompts": "1.1.0",
     "execa": "9.6.1",
     "picocolors": "1.1.1",
     "pkg-types": "2.3.0",
-    "politty": "^0.1.1",
-    "zod": "4.3.5"
+    "politty": "0.4.12",
+    "zod": "4.3.6"
   },
   "devDependencies": {
-    "@eslint/js": "9.39.2",
-    "@types/node": "24.10.9",
-    "eslint": "9.39.2",
-    "eslint-plugin-oxlint": "1.39.0",
-    "oxlint": "1.39.0",
-    "tsdown": "0.19.0",
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.12.2",
+    "eslint": "10.2.0",
+    "eslint-plugin-oxlint": "1.58.0",
+    "oxlint": "1.58.0",
+    "tsdown": "0.21.7",
     "typescript": "5.9.3",
-    "typescript-eslint": "8.53.0"
+    "typescript-eslint": "8.57.2"
   }
 }

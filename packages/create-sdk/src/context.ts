@@ -25,11 +25,19 @@ const availableTemplates = async () => {
 const templateHints: Record<string, string | undefined> = {
   "hello-world": "Initial project to get started with Tailor Platform SDK",
   "inventory-management": "Simple inventory management system",
-  testing: "Testing guide for Tailor Platform SDK",
   "multi-application": "Multi-application setup with shared databases",
+  tailordb: "Comprehensive TailorDB type definitions with all features",
+  resolver: "Resolver patterns with testing (simple, DB, env, user)",
+  workflow: "Workflow patterns with job chaining and testing",
+  executor: "Executor trigger types (record, resolver, schedule, webhook)",
+  "static-web-site": "Static website with auth and IdP integration",
+  generators: "Built-in generators: kysely, enums, files, seed",
 };
 
-const validateName = (name: string) => {
+const validateName = (name: string | undefined) => {
+  if (!name) {
+    return "Project name is required.";
+  }
   if (name.length < 3 || name.length > 30) {
     return "Project name must be between 3 and 30 characters long.";
   }

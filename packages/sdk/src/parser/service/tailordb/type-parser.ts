@@ -1,4 +1,5 @@
 import * as inflection from "inflection";
+import { isPluginGeneratedType } from "@/types/tailordb";
 import { parseFieldConfig } from "./field";
 import { parsePermissions } from "./permission";
 import {
@@ -7,16 +8,14 @@ import {
   buildRelationInfo,
   applyRelationMetadataToFieldConfig,
 } from "./relation";
-import { ensureNoExternalVariablesInFieldScripts } from "./tailordb-field-script-external-var-guard";
 import type {
   TailorDBField,
+  TypeSourceInfo,
   ParsedField,
   ParsedRelationship,
   TailorDBType,
-  TailorDBTypeSchemaOutput,
-} from "./types";
-
-export type TypeSourceInfo = Record<string, { filePath: string; exportName: string }>;
+} from "@/types/tailordb";
+import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "@/types/tailordb.generated";
 
 /**
  * Parse multiple TailorDB types, build relationships, and validate uniqueness.
@@ -74,6 +73,16 @@ function parseTailorDBType(
     // Process relation if rawRelation is present
     if (rawRelation) {
       validateRelationConfig(rawRelation, context);
+
+      // Validate that n-1/manyToOne relations cannot have explicit unique
+      const isNToOne = ["n-1", "manyToOne", "N-1"].includes(rawRelation.type);
+      if (isNToOne && fieldConfig.unique) {
+        throw new Error(
+          `Field "${fieldName}" on type "${type.name}": cannot set unique on n-1 (manyToOne) relation. ` +
+            `Use 1-1 (oneToOne) relation instead, or remove the unique constraint.`,
+        );
+      }
+
       const relationMetadata = processRelationMetadata(rawRelation, context, fieldConfig.array);
       fieldConfig = applyRelationMetadataToFieldConfig(fieldConfig, relationMetadata);
     }
@@ -89,8 +98,6 @@ function parseTailorDBType(
         `Field "${fieldName}" on type "${type.name}": unique cannot be set on array fields`,
       );
     }
-
-    ensureNoExternalVariablesInFieldScripts(type.name, fieldName, fieldConfig);
 
     const parsedField: ParsedField = { name: fieldName, config: fieldConfig };
 
@@ -193,7 +200,11 @@ function buildBackwardRelationships(
   for (const [targetTypeName, backwardNames] of Object.entries(backwardNameSources)) {
     const targetType = types[targetTypeName];
     const targetTypeSourceInfo = typeSourceInfo?.[targetTypeName];
-    const targetLocation = targetTypeSourceInfo ? ` (${targetTypeSourceInfo.filePath})` : "";
+    const targetLocation = targetTypeSourceInfo
+      ? isPluginGeneratedType(targetTypeSourceInfo)
+        ? ` (plugin: ${targetTypeSourceInfo.pluginId})`
+        : ` (${targetTypeSourceInfo.filePath})`
+      : "";
 
     for (const [backwardName, sources] of Object.entries(backwardNames)) {
       // Check for duplicate backward relation names
@@ -201,7 +212,11 @@ function buildBackwardRelationships(
         const sourceList = sources
           .map((s) => {
             const sourceInfo = typeSourceInfo?.[s.sourceType];
-            const location = sourceInfo ? ` (${sourceInfo.filePath})` : "";
+            const location = sourceInfo
+              ? isPluginGeneratedType(sourceInfo)
+                ? ` (plugin: ${sourceInfo.pluginId})`
+                : ` (${sourceInfo.filePath})`
+              : "";
             return `${s.sourceType}.${s.fieldName}${location}`;
           })
           .join(", ");
@@ -215,7 +230,11 @@ function buildBackwardRelationships(
       if (backwardName in targetType.fields) {
         const source = sources[0];
         const sourceInfo = typeSourceInfo?.[source.sourceType];
-        const sourceLocation = sourceInfo ? ` (${sourceInfo.filePath})` : "";
+        const sourceLocation = sourceInfo
+          ? isPluginGeneratedType(sourceInfo)
+            ? ` (plugin: ${sourceInfo.pluginId})`
+            : ` (${sourceInfo.filePath})`
+          : "";
         errors.push(
           `Backward relation name "${backwardName}" from ${source.sourceType}.${source.fieldName}${sourceLocation} ` +
             `conflicts with existing field "${backwardName}" on type "${targetTypeName}"${targetLocation}. ` +
@@ -227,7 +246,11 @@ function buildBackwardRelationships(
       if (targetType.files && backwardName in targetType.files) {
         const source = sources[0];
         const sourceInfo = typeSourceInfo?.[source.sourceType];
-        const sourceLocation = sourceInfo ? ` (${sourceInfo.filePath})` : "";
+        const sourceLocation = sourceInfo
+          ? isPluginGeneratedType(sourceInfo)
+            ? ` (plugin: ${sourceInfo.pluginId})`
+            : ` (${sourceInfo.filePath})`
+          : "";
         errors.push(
           `Backward relation name "${backwardName}" from ${source.sourceType}.${source.fieldName}${sourceLocation} ` +
             `conflicts with files field "${backwardName}" on type "${targetTypeName}"${targetLocation}. ` +
@@ -268,7 +291,11 @@ function validatePluralFormUniqueness(
 
     if (singularQuery === pluralQuery) {
       const sourceInfo = typeSourceInfo?.[parsedType.name];
-      const location = sourceInfo ? ` (${sourceInfo.filePath})` : "";
+      const location = sourceInfo
+        ? isPluginGeneratedType(sourceInfo)
+          ? ` (plugin: ${sourceInfo.pluginId})`
+          : ` (${sourceInfo.filePath})`
+        : "";
       errors.push(
         `Type "${parsedType.name}"${location} has identical singular and plural query names "${singularQuery}". ` +
           `Use db.type(["${parsedType.name}", "UniquePluralForm"], {...}) to set a unique pluralForm.`,
@@ -308,7 +335,11 @@ function validatePluralFormUniqueness(
     const sourceList = sources
       .map((s) => {
         const sourceInfo = typeSourceInfo?.[s.typeName];
-        const location = sourceInfo ? ` (${sourceInfo.filePath})` : "";
+        const location = sourceInfo
+          ? isPluginGeneratedType(sourceInfo)
+            ? ` (plugin: ${sourceInfo.pluginId})`
+            : ` (${sourceInfo.filePath})`
+          : "";
         return `"${s.typeName}"${location} (${s.kind})`;
       })
       .join(", ");

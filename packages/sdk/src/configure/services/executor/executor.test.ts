@@ -8,10 +8,14 @@ import {
   recordCreatedTrigger,
   recordDeletedTrigger,
   recordUpdatedTrigger,
+  recordTrigger,
   resolverExecutedTrigger,
+  idpUserTrigger,
+  authAccessTokenTrigger,
 } from "./trigger/event";
 import { scheduleTrigger } from "./trigger/schedule";
 import { incomingWebhookTrigger } from "./trigger/webhook";
+import type { Operation } from "./operation";
 
 describe("createExecutor", () => {
   test("can disable executor", () => {
@@ -62,6 +66,29 @@ describe("createExecutor", () => {
     });
     expect(enabledWithoutDescription.description).toBeUndefined();
     expect(enabledWithoutDescription.disabled).toBeUndefined();
+  });
+
+  test("preserves compatibility for explicit legacy generic args", () => {
+    type Args = {
+      body: { id: string };
+      headers: { "x-custom-header": string };
+      method: "POST" | "GET" | "PUT" | "DELETE";
+      rawBody: string;
+    };
+
+    createExecutor<Args, Operation<Args>>({
+      name: "legacy-generic-executor",
+      trigger: incomingWebhookTrigger<{
+        body: { id: string };
+        headers: { "x-custom-header": string };
+      }>(),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          expectTypeOf(args).toEqualTypeOf<Args>();
+        },
+      },
+    });
   });
 });
 
@@ -704,6 +731,172 @@ describe("resolverExecutedTrigger", () => {
       operation: {
         kind: "function",
         body: () => {},
+      },
+    });
+  });
+});
+
+describe("recordTrigger (multi-event)", () => {
+  test("can specify multiple events", () => {
+    const user = db.type("User", {
+      name: db.string(),
+      age: db.int(),
+    });
+    const trigger = recordTrigger({
+      type: user,
+      events: ["created", "updated"],
+    });
+    expect(trigger.kind).toBe("tailordb");
+    expect(trigger.events).toEqual([
+      "tailordb.type_record.created",
+      "tailordb.type_record.updated",
+    ]);
+    expect(trigger.typeName).toBe("User");
+  });
+
+  test("args are a union of selected events with kind discriminant", () => {
+    const user = db.type("User", {
+      name: db.string(),
+      age: db.int(),
+    });
+    createExecutor({
+      name: "test",
+      trigger: recordTrigger({
+        type: user,
+        events: ["created", "updated"],
+      }),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          // Args should be a union of RecordCreatedArgs and RecordUpdatedArgs
+          expectTypeOf(args).toExtend<{
+            workspaceId: string;
+            appNamespace: string;
+            typeName: string;
+          }>();
+
+          // Can narrow by kind
+          if (args.event === "created") {
+            expectTypeOf(args.newRecord).toExtend<{
+              id: string;
+              name: string;
+              age: number;
+            }>();
+          }
+          if (args.event === "updated") {
+            expectTypeOf(args.newRecord).toExtend<{
+              id: string;
+              name: string;
+              age: number;
+            }>();
+            expectTypeOf(args.oldRecord).toExtend<{
+              id: string;
+              name: string;
+              age: number;
+            }>();
+          }
+        },
+      },
+    });
+  });
+
+  test("condition args are union type", () => {
+    const user = db.type("User", {
+      name: db.string(),
+      age: db.int(),
+    });
+    recordTrigger({
+      type: user,
+      events: ["created", "deleted"],
+      condition: (args) => {
+        if (args.event === "created") {
+          return args.newRecord.age >= 18;
+        }
+        return true;
+      },
+    });
+  });
+
+  test("all three events produce full union", () => {
+    const user = db.type("User", {
+      name: db.string(),
+      age: db.int(),
+    });
+    createExecutor({
+      name: "test",
+      trigger: recordTrigger({
+        type: user,
+        events: ["created", "updated", "deleted"],
+      }),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          if (args.event === "deleted") {
+            expectTypeOf(args.oldRecord).toExtend<{
+              id: string;
+              name: string;
+              age: number;
+            }>();
+          }
+        },
+      },
+    });
+  });
+});
+
+describe("idpUserTrigger (multi-event)", () => {
+  test("can specify multiple events", () => {
+    const trigger = idpUserTrigger({ events: ["created", "deleted"] });
+    expect(trigger.kind).toBe("idpUser");
+    expect(trigger.events).toEqual(["idp.user.created", "idp.user.deleted"]);
+  });
+
+  test("args have kind discriminant", () => {
+    createExecutor({
+      name: "test",
+      trigger: idpUserTrigger({ events: ["created", "updated"] }),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          expectTypeOf(args).toExtend<{
+            workspaceId: string;
+            appNamespace: string;
+            namespaceName: string;
+            userId: string;
+          }>();
+          if (args.event === "created") {
+            expectTypeOf(args.event).toEqualTypeOf<"created">();
+          }
+        },
+      },
+    });
+  });
+});
+
+describe("authAccessTokenTrigger (multi-event)", () => {
+  test("can specify multiple events", () => {
+    const trigger = authAccessTokenTrigger({ events: ["issued", "revoked"] });
+    expect(trigger.kind).toBe("authAccessToken");
+    expect(trigger.events).toEqual(["auth.access_token.issued", "auth.access_token.revoked"]);
+  });
+
+  test("args have kind discriminant", () => {
+    createExecutor({
+      name: "test",
+      trigger: authAccessTokenTrigger({ events: ["issued", "refreshed", "revoked"] }),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          expectTypeOf(args).toExtend<{
+            workspaceId: string;
+            appNamespace: string;
+            namespaceName: string;
+            userId: string;
+          }>();
+          if (args.event === "issued") {
+            expectTypeOf(args.event).toEqualTypeOf<"issued">();
+          }
+        },
       },
     });
   });

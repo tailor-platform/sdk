@@ -99,6 +99,74 @@ resolverExecutedTrigger({
 });
 ```
 
+### IdP User Triggers
+
+Fire when IdP users are created, updated, or deleted:
+
+- `idpUserCreatedTrigger()`: Fires when a new IdP user is created
+- `idpUserUpdatedTrigger()`: Fires when an IdP user is updated
+- `idpUserDeletedTrigger()`: Fires when an IdP user is deleted
+
+```typescript
+idpUserCreatedTrigger();
+```
+
+### Auth Access Token Triggers
+
+Fire on auth access token lifecycle events:
+
+- `authAccessTokenIssuedTrigger()`: Fires when a new access token is issued
+- `authAccessTokenRefreshedTrigger()`: Fires when an access token is refreshed
+- `authAccessTokenRevokedTrigger()`: Fires when an access token is revoked
+
+```typescript
+authAccessTokenIssuedTrigger();
+```
+
+### Multi-Event Triggers
+
+Handle multiple event types in a single executor using multi-event trigger factories. These accept an `events` array of short event names:
+
+#### `recordTrigger()`
+
+```typescript
+import { createExecutor, recordTrigger } from "@tailor-platform/sdk";
+import { user } from "../tailordb/user";
+
+export default createExecutor({
+  name: "user-changed",
+  trigger: recordTrigger({
+    type: user,
+    events: ["created", "updated"],
+  }),
+  operation: {
+    kind: "function",
+    body: async (args) => {
+      if (args.event === "created") {
+        console.log("User created:", args.newRecord.name);
+      }
+      if (args.event === "updated") {
+        console.log("User updated:", args.oldRecord.name, "->", args.newRecord.name);
+      }
+    },
+  },
+});
+```
+
+#### `idpUserTrigger()`
+
+```typescript
+idpUserTrigger({ events: ["created", "deleted"] });
+```
+
+#### `authAccessTokenTrigger()`
+
+```typescript
+authAccessTokenTrigger({ events: ["issued", "revoked"] });
+```
+
+The `event` field on args matches the short event name (e.g., `"created"`, `"updated"`, `"deleted"`, `"issued"`, `"refreshed"`, `"revoked"`), enabling type narrowing. The `rawEvent` field contains the full event type string (e.g., `"tailordb.type_record.created"`).
+
 ## Operation Types
 
 ### Function Operation
@@ -263,6 +331,8 @@ Record triggers receive context based on the operation type:
 
 ```typescript
 interface RecordCreatedContext<T> {
+  event: "created"; // Short event name for type narrowing
+  rawEvent: "tailordb.type_record.created"; // Full event type string
   workspaceId: string; // Workspace identifier
   appNamespace: string; // Application/namespace name
   typeName: string; // TailorDB type name
@@ -274,6 +344,8 @@ interface RecordCreatedContext<T> {
 
 ```typescript
 interface RecordUpdatedContext<T> {
+  event: "updated";
+  rawEvent: "tailordb.type_record.updated";
   workspaceId: string;
   appNamespace: string;
   typeName: string;
@@ -286,6 +358,8 @@ interface RecordUpdatedContext<T> {
 
 ```typescript
 interface RecordDeletedContext<T> {
+  event: "deleted";
+  rawEvent: "tailordb.type_record.deleted";
   workspaceId: string;
   appNamespace: string;
   typeName: string;
@@ -400,4 +474,30 @@ export default createExecutor({
     },
   },
 });
+```
+
+### IdP User Event Payload
+
+IdP user triggers receive user context:
+
+```typescript
+interface IdpUserContext {
+  event: "created" | "updated" | "deleted"; // Short event name
+  rawEvent: string; // Full event type (e.g., "idp.user.created")
+  namespaceName: string; // IdP namespace name
+  userId: string; // The affected user ID
+}
+```
+
+### Auth Access Token Event Payload
+
+Auth access token triggers receive token context:
+
+```typescript
+interface AuthAccessTokenContext {
+  event: "issued" | "refreshed" | "revoked"; // Short event name
+  rawEvent: string; // Full event type (e.g., "auth.access_token.issued")
+  namespaceName: string; // Auth namespace name
+  userId: string; // The user associated with the token
+}
 ```

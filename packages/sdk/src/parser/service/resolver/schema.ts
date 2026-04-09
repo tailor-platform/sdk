@@ -1,53 +1,19 @@
 import { z } from "zod";
+import { AuthInvokerSchema } from "@/parser/service/auth/schema";
+import { TailorFieldSchema } from "@/parser/service/field/schema";
 import { functionSchema } from "../common";
 
-const TailorFieldTypeSchema = z.enum([
-  "uuid",
-  "string",
-  "boolean",
-  "integer",
-  "float",
-  "enum",
-  "date",
-  "datetime",
-  "time",
-  "nested",
-]);
-
-export const QueryTypeSchema = z.union([z.literal("query"), z.literal("mutation")]);
-
-const AllowedValueSchema = z.object({
-  value: z.string(),
-  description: z.string().optional(),
-});
-
-const FieldMetadataSchema = z.object({
-  required: z.boolean().optional(),
-  array: z.boolean().optional(),
-  description: z.string().optional(),
-  allowedValues: z.array(AllowedValueSchema).optional(),
-  hooks: z
-    .object({
-      create: functionSchema.optional(),
-      update: functionSchema.optional(),
-    })
-    .optional(),
-  typeName: z.string().optional(),
-});
-
-export const TailorFieldSchema = z.object({
-  type: TailorFieldTypeSchema,
-  metadata: FieldMetadataSchema,
-  get fields() {
-    return z.record(z.string(), TailorFieldSchema);
-  },
-});
+export const QueryTypeSchema = z
+  .union([z.literal("query"), z.literal("mutation")])
+  .describe("GraphQL operation type");
 
 export const ResolverSchema = z.object({
-  operation: QueryTypeSchema,
-  name: z.string(),
-  description: z.string().optional(),
-  input: z.record(z.string(), TailorFieldSchema).optional(),
-  body: functionSchema,
-  output: TailorFieldSchema,
+  operation: QueryTypeSchema.describe("GraphQL operation type (query or mutation)"),
+  name: z.string().describe("Resolver name"),
+  description: z.string().optional().describe("Resolver description"),
+  input: z.record(z.string(), TailorFieldSchema).optional().describe("Input field definitions"),
+  body: functionSchema.describe("Resolver implementation function"),
+  output: TailorFieldSchema.describe("Output field definition"),
+  publishEvents: z.boolean().optional().describe("Enable publishing events from this resolver"),
+  authInvoker: AuthInvokerSchema.optional().describe("Machine user to execute this resolver as"),
 });

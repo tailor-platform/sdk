@@ -12,6 +12,7 @@
     ".tailor-sdk/",
     "generated/",
     "tests/fixtures/",
+    "tests/migration-fixtures/",
     "generated-perf",
     "scripts/perf",
     "seed"
@@ -137,12 +138,7 @@
     {
       "files": ["**/*.ts", "tsdown.config.ts", "vitest.config.ts"],
       "rules": {
-        "import/no-cycle": [
-          "error",
-          {
-            "maxDepth": null
-          }
-        ],
+        "import/no-cycle": "error",
         "no-unused-vars": [
           "error",
           {

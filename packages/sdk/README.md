@@ -30,6 +30,8 @@ npm install @tailor-platform/sdk
 yarn add @tailor-platform/sdk
 # OR
 pnpm add @tailor-platform/sdk
+# OR
+bun add @tailor-platform/sdk
 ```
 
 ## Quick Start
@@ -45,6 +47,25 @@ npm run deploy -- --workspace-id <your-workspace-id>
 See [Available Templates](https://github.com/tailor-platform/sdk/tree/main/packages/create-sdk#available-templates) for more options.
 
 For more details, see the [Quickstart Guide](./docs/quickstart.md).
+
+## Agent Skill
+
+Install the `tailor-sdk` skill with the open `skills` CLI:
+
+```bash
+npx skills add https://github.com/tailor-platform/sdk/tree/main/packages/sdk/skills --skill tailor-sdk
+```
+
+Use the SDK-provided shorthand command (internally uses `skills add`):
+
+```bash
+npx tailor-sdk-skills
+
+# Example: install to Codex in non-interactive mode
+npx tailor-sdk-skills -a codex -y
+```
+
+`npx tailor-sdk-skills` requires an environment where the `@tailor-platform/sdk` package binary is available.
 
 ## Learn More
 
@@ -76,5 +97,5 @@ See [Create Tailor Platform SDK](https://github.com/tailor-platform/sdk/tree/mai
 
 ## Requirements
 
-- Node.js 22 or later
+- Node.js 22 or later (or Bun)
 - A Tailor Platform account ([request access](https://www.tailor.tech/demo))

@@ -2,12 +2,13 @@ import { type TailorUser } from "@/configure/types";
 import { type output, type Prettify } from "@/configure/types/helpers";
 import { type DefinedFieldMetadata, type FieldMetadata } from "@/configure/types/types";
 import { type TailorAnyDBField, type TailorDBField } from "./schema";
+export type { TailorDBServiceConfig } from "@/types/tailordb.generated";
 export type {
   TailorDBExternalConfig,
   TailorDBMigrationConfig,
-  TailorDBServiceConfig,
   TailorDBServiceInput,
-} from "@/parser/service/tailordb/types";
+} from "@/types/tailordb";
+import type { GqlOperationsInput } from "@/types/tailordb.generated";
 import type { NonEmptyObject } from "type-fest";
 
 export type SerialConfig<T extends "string" | "integer" = "string" | "integer"> = Prettify<
@@ -33,6 +34,7 @@ export interface DBFieldMetadata extends FieldMetadata {
   hooks?: Hook<any, any>;
   serial?: SerialConfig;
   relation?: boolean;
+  scale?: number;
 }
 
 export interface DefinedDBFieldMetadata extends DefinedFieldMetadata {
@@ -90,8 +92,20 @@ export type IndexDef<T extends { fields: Record<PropertyKey, unknown> }> = {
   name?: string;
 };
 
+export type GqlOperationsConfig = GqlOperationsInput;
+
 export interface TypeFeatures {
   pluralForm?: string;
   aggregation?: true;
   bulkUpsert?: true;
+  /** Configure GraphQL operations for this type. Use "query" for read-only mode, or an object for granular control. */
+  gqlOperations?: GqlOperationsConfig;
+  /**
+   * Enable publishing events for this type.
+   * When enabled, record creation/update/deletion events are published.
+   * If not specified, this is automatically set to true when an executor uses this type
+   * with recordCreated/recordUpdated/recordDeleted triggers. If explicitly set to false
+   * while an executor uses this type, an error will be thrown during apply.
+   */
+  publishEvents?: boolean;
 }

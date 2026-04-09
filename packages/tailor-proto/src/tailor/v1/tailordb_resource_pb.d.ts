@@ -158,6 +158,11 @@ export declare type TailorDBType_TypeSetting = Message<"tailor.v1.TailorDBType.T
    * @generated from field: bool draft = 8;
    */
   draft: boolean;
+
+  /**
+   * @generated from field: tailor.v1.TailorDBType.DisableGqlOperations disable_gql_operations = 9;
+   */
+  disableGqlOperations?: TailorDBType_DisableGqlOperations;
 };
 
 /**
@@ -165,6 +170,37 @@ export declare type TailorDBType_TypeSetting = Message<"tailor.v1.TailorDBType.T
  * Use `create(TailorDBType_TypeSettingSchema)` to create a new message.
  */
 export declare const TailorDBType_TypeSettingSchema: GenMessage<TailorDBType_TypeSetting>;
+
+/**
+ * @generated from message tailor.v1.TailorDBType.DisableGqlOperations
+ */
+export declare type TailorDBType_DisableGqlOperations = Message<"tailor.v1.TailorDBType.DisableGqlOperations"> & {
+  /**
+   * @generated from field: bool create = 1;
+   */
+  create: boolean;
+
+  /**
+   * @generated from field: bool update = 2;
+   */
+  update: boolean;
+
+  /**
+   * @generated from field: bool delete = 3;
+   */
+  delete: boolean;
+
+  /**
+   * @generated from field: bool read = 4;
+   */
+  read: boolean;
+};
+
+/**
+ * Describes the message tailor.v1.TailorDBType.DisableGqlOperations.
+ * Use `create(TailorDBType_DisableGqlOperationsSchema)` to create a new message.
+ */
+export declare const TailorDBType_DisableGqlOperationsSchema: GenMessage<TailorDBType_DisableGqlOperations>;
 
 /**
  * @generated from message tailor.v1.TailorDBType.Directive
@@ -312,6 +348,11 @@ export declare type TailorDBType_FieldConfig = Message<"tailor.v1.TailorDBType.F
    * @generated from field: tailor.v1.TailorDBType.Serial serial = 17;
    */
   serial?: TailorDBType_Serial;
+
+  /**
+   * @generated from field: optional int32 scale = 18;
+   */
+  scale?: number;
 };
 
 /**
@@ -726,6 +767,16 @@ export enum TailorDBType_Permission_Operator {
    * @generated from enum value: OPERATOR_NIN = 4;
    */
   NIN = 4,
+
+  /**
+   * @generated from enum value: OPERATOR_HAS_ANY = 5;
+   */
+  HAS_ANY = 5,
+
+  /**
+   * @generated from enum value: OPERATOR_NHAS_ANY = 6;
+   */
+  NHAS_ANY = 6,
 }
 
 /**
@@ -923,6 +974,16 @@ export enum TailorDBGQLPermission_Operator {
    * @generated from enum value: OPERATOR_NIN = 4;
    */
   NIN = 4,
+
+  /**
+   * @generated from enum value: OPERATOR_HAS_ANY = 5;
+   */
+  HAS_ANY = 5,
+
+  /**
+   * @generated from enum value: OPERATOR_NHAS_ANY = 6;
+   */
+  NHAS_ANY = 6,
 }
 
 /**

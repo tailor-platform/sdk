@@ -49,6 +49,16 @@ export declare type IdPService = Message<"tailor.v1.IdPService"> & {
    * @generated from field: bool publish_user_events = 6;
    */
   publishUserEvents: boolean;
+
+  /**
+   * @generated from field: tailor.v1.IdPDisableGqlOperations disable_gql_operations = 7;
+   */
+  disableGqlOperations?: IdPDisableGqlOperations;
+
+  /**
+   * @generated from field: tailor.v1.IdPEmailConfig email_config = 8;
+   */
+  emailConfig?: IdPEmailConfig;
 };
 
 /**
@@ -56,6 +66,81 @@ export declare type IdPService = Message<"tailor.v1.IdPService"> & {
  * Use `create(IdPServiceSchema)` to create a new message.
  */
 export declare const IdPServiceSchema: GenMessage<IdPService>;
+
+/**
+ * IdPDisableGqlOperations controls which IdP-related GraphQL operations are disabled.
+ *
+ * @generated from message tailor.v1.IdPDisableGqlOperations
+ */
+export declare type IdPDisableGqlOperations = Message<"tailor.v1.IdPDisableGqlOperations"> & {
+  /**
+   * create disables the _createUser GraphQL mutation.
+   *
+   * @generated from field: bool create = 1;
+   */
+  create: boolean;
+
+  /**
+   * update disables the _updateUser GraphQL mutation.
+   *
+   * @generated from field: bool update = 2;
+   */
+  update: boolean;
+
+  /**
+   * delete disables the _deleteUser GraphQL mutation.
+   *
+   * @generated from field: bool delete = 3;
+   */
+  delete: boolean;
+
+  /**
+   * read disables the _users and _user GraphQL queries.
+   *
+   * @generated from field: bool read = 4;
+   */
+  read: boolean;
+
+  /**
+   * send_password_reset_email disables the _sendPasswordResetEmail GraphQL mutation.
+   *
+   * @generated from field: bool send_password_reset_email = 5;
+   */
+  sendPasswordResetEmail: boolean;
+};
+
+/**
+ * Describes the message tailor.v1.IdPDisableGqlOperations.
+ * Use `create(IdPDisableGqlOperationsSchema)` to create a new message.
+ */
+export declare const IdPDisableGqlOperationsSchema: GenMessage<IdPDisableGqlOperations>;
+
+/**
+ * IdPEmailConfig holds namespace-level email configuration defaults.
+ *
+ * @generated from message tailor.v1.IdPEmailConfig
+ */
+export declare type IdPEmailConfig = Message<"tailor.v1.IdPEmailConfig"> & {
+  /**
+   * from_name is the default sender display name for emails. Empty means use mailer default.
+   *
+   * @generated from field: string from_name = 1;
+   */
+  fromName: string;
+
+  /**
+   * password_reset_subject is the default subject for password reset emails. Empty means use localized default.
+   *
+   * @generated from field: string password_reset_subject = 2;
+   */
+  passwordResetSubject: string;
+};
+
+/**
+ * Describes the message tailor.v1.IdPEmailConfig.
+ * Use `create(IdPEmailConfigSchema)` to create a new message.
+ */
+export declare const IdPEmailConfigSchema: GenMessage<IdPEmailConfig>;
 
 /**
  * @generated from message tailor.v1.IdPClient
@@ -132,6 +217,44 @@ export declare type IdPUserAuthPolicy = Message<"tailor.v1.IdPUserAuthPolicy"> &
    * @generated from field: int32 password_max_length = 8;
    */
   passwordMaxLength: number;
+
+  /**
+   * List of allowed email domains (e.g., ["example.com", "corp.example.com"])
+   * Empty list means all domains are allowed (backward compatible)
+   * Cannot be set when use_non_email_identifier is true
+   *
+   * @generated from field: repeated string allowed_email_domains = 9;
+   */
+  allowedEmailDomains: string[];
+
+  /**
+   * allow_google_oauth enables "Sign in with Google" for this namespace.
+   * When enabled, users can authenticate using their Google account.
+   * Cannot be enabled when use_non_email_identifier is true.
+   * Requires allowed_email_domains to be set.
+   *
+   * @generated from field: bool allow_google_oauth = 10;
+   */
+  allowGoogleOauth: boolean;
+
+  /**
+   * disable_password_auth disables password-based authentication for this namespace.
+   * When enabled, users cannot sign in or reset their password using email/password.
+   * Requires allow_google_oauth or allow_microsoft_oauth to be enabled.
+   * Cannot be used with allow_self_password_reset.
+   *
+   * @generated from field: bool disable_password_auth = 11;
+   */
+  disablePasswordAuth: boolean;
+
+  /**
+   * allow_microsoft_oauth enables "Sign in with Microsoft" for this namespace.
+   * Requires disable_password_auth to be true.
+   * Cannot be enabled when use_non_email_identifier is true.
+   *
+   * @generated from field: bool allow_microsoft_oauth = 12;
+   */
+  allowMicrosoftOauth: boolean;
 };
 
 /**

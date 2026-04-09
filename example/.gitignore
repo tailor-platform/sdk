@@ -9,8 +9,9 @@ build/
 # Tailor Platform SDK generated files
 .tailor-sdk/
 
-# Test files
-tests/fixtures/actual/
+# Test fixtures (keep expected/ only)
+tests/fixtures/*
+!tests/fixtures/expected/
 
 # Cache
 .eslintcache

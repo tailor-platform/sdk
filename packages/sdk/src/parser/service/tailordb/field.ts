@@ -1,11 +1,12 @@
+import { getPrecompiledScriptExpr } from "./hooks-validate-precompiled-expr";
 import type {
   TailorAnyDBField,
   DBFieldMetadata,
   Hook,
   OperatorFieldConfig,
   RawRelationConfig,
-  TailorDBTypeSchemaOutput,
-} from "./types";
+} from "@/types/tailordb";
+import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "@/types/tailordb.generated";
 
 // Since there's naming difference between platform and sdk,
 // use this mapping in all scripts to provide variables that match sdk types.
@@ -42,6 +43,10 @@ export const stringifyFunction = (fn: Function): string => {
 const convertHookToExpr = (
   fn: NonNullable<Hook<unknown, unknown>["create"] | Hook<unknown, unknown>["update"]>,
 ): string => {
+  const precompiledExpr = getPrecompiledScriptExpr(fn);
+  if (precompiledExpr) {
+    return precompiledExpr;
+  }
   const normalized = stringifyFunction(fn);
   return `(${normalized})({ value: _value, data: _data, user: ${tailorUserMap} })`;
 };
@@ -84,7 +89,9 @@ export function parseFieldConfig(
 
       return {
         script: {
-          expr: `(${fn.toString().trim()})({ value: _value, data: _data, user: ${tailorUserMap} })`,
+          expr:
+            getPrecompiledScriptExpr(fn) ??
+            `(${fn.toString().trim()})({ value: _value, data: _data, user: ${tailorUserMap} })`,
         },
         errorMessage: message,
       };

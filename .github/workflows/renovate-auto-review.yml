@@ -1,0 +1,305 @@
+name: Dependencies PR Auto Review with Claude
+
+on:
+  pull_request:
+    types: [opened, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+jobs:
+  dependencies-review:
+    if: |
+      github.actor == 'renovate[bot]'
+    runs-on: ubuntu-slim
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Review dependencies with Claude
+        uses: anthropics/claude-code-action@26ddc358fe3befff50c5ec2f80304c90c763f6f8 # v1.0.90
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          allowed_bots: "renovate[bot]"
+          prompt: |
+            # Automated Dependency Update Review
+
+            **PR**: https://github.com/${{ github.repository }}/pull/${{ github.event.number }}
+
+            Please investigate and analyze the dependency updates in this PR following the steps below, then post a review comment.
+
+            ## Investigation Steps
+
+            ### 1. Retrieve PR Information and Review Diff
+
+            First, retrieve the basic PR information and changes using the following commands:
+
+            ```bash
+            gh pr view ${{ github.event.number }} --json title,body,files
+            gh pr diff ${{ github.event.number }}
+            ```
+
+            ### 2. Identify Updated Libraries
+
+            From the package.json diff, identify the following:
+            - Library name being updated
+            - Version before update
+            - Version after update
+            - Semantic versioning type (major/minor/patch)
+
+            ### 3. Research Release Notes and Changelogs
+
+            Use WebFetch or WebSearch tools to find release notes from these sources:
+
+            - GitHub repository Releases page (e.g., `https://github.com/{org}/{repo}/releases`)
+            - CHANGELOG.md or HISTORY.md
+            - Official documentation release notes section
+            - npm Changes tab (for npm packages)
+
+            **Important**: For updates spanning multiple versions, review the changes for each version.
+
+            ### 4. Summarize and Categorize Changes
+
+            Extract and organize the following from release notes:
+
+            #### 🚨 Breaking Changes
+            - API changes or removals
+            - Behavior changes
+            - Minimum requirements changes (Node.js version, dependencies, etc.)
+
+            #### ✨ New Features
+            - Added features
+            - Performance improvements
+
+            #### 🐛 Bug Fixes
+            - Fixed bugs
+            - Security fixes
+
+            #### 📦 Dependency Changes
+            - Added, updated, or removed dependencies
+
+            **Explanation Guidelines**:
+            - Minimize technical jargon; provide brief explanations when using it
+            - Explain in plain language that engineers unfamiliar with the library can understand
+
+            ### 6. Analyze Impact on Existing Code
+
+            **Important**: To ensure nothing is missed, **execute all steps in order**.
+
+            #### 6.1 Understand Library Features
+            - Understand the main features and APIs provided by the library being updated
+            - Reference official documentation and repository README to list main exports, components, and functions
+
+            #### 6.2 Conduct Phased Searches
+
+            Execute the following searches **in order**. Replace `{library-name}` with the actual library name.
+
+            **Phase 1: Comprehensive Search by Library Name**
+
+            Use the Grep tool to search for **all** usages of the library being updated.
+
+            **For JavaScript/TypeScript/Node.js packages:**
+            - ES Module import (`import ... from 'library-name'`)
+            - CommonJS require (`require('library-name')`)
+            - Dynamic import (`import('library-name')`)
+            - Re-export (`export ... from 'library-name'`)
+            - TypeScript type import (`import type ... from 'library-name'`)
+            - Subpath imports (`library-name/...`)
+
+            **For other languages:**
+            - Python: `import library-name`, `from library-name import`
+            - Go: `import "library-name"`
+            - Search using the appropriate import/require syntax for other languages
+
+            **Phase 2: Library-Specific Usage Pattern Search**
+
+            Execute additional searches based on the library type:
+
+            - **For React/Vue component libraries**:
+              - Search for main component names in JSX/templates
+              - Example: `pattern: <ComponentName` (opening tag)
+
+            - **For CLI tools**:
+              - Check the scripts section in package.json using the Read tool (Node.js)
+              - Search for the library's command name
+
+            - **For configuration file libraries**:
+              - Search configuration files (`.config.js`, `.rc`, `package.json`, etc.)
+              - Examples: `eslint`, `prettier`, `webpack`, etc.
+
+            - **For libraries used in build processes**:
+              - Search for usage in Dockerfile (especially `.docker/` directory)
+              - Check usage in docker-compose.yml
+              - Usage in asset builds and compile steps
+              - Usage in CI/CD configuration files (`.github/workflows/`, etc.)
+
+            - **For type definition libraries** (`@types/*`):
+              - Search for usage locations of the corresponding implementation library
+
+            **Phase 3: Search for Main APIs**
+
+            If there are main APIs or functions changed in release notes:
+            - Search the entire codebase for those names
+            - Use the Read tool to verify found files and avoid false positives
+
+            #### 6.3 Validate Search Results
+
+            **If results are found**:
+            1. **Important**: Use the Read tool to open **all found files** and verify actual usage
+            2. For **all found files**, record:
+               - File path and line number (markdown link format: `[filename](path#Lline-number)`)
+               - Relevant code snippet (including surrounding lines)
+               - Which API/feature is being used
+               - Expected impact (if there are breaking changes)
+            3. **No omissions**: Do not abbreviate with "...etc." or "others" - report all usage locations found in the search
+
+            **If 0 results are found**:
+            1. Use the Read tool to check package.json and verify the library is actually in dependencies/devDependencies
+            2. If included:
+               - Try different search patterns (case sensitivity, aliases, global variables, etc.)
+               - Investigate possibility of indirect dependency (used internally by another library)
+            3. If not included:
+               - Note that it may be a transitive dependency
+
+            #### 6.4 Impact Scope Criteria
+
+            - ✅ **Should be included in impact scope**:
+              - Locations directly calling the library's API
+              - Locations using the library's components
+              - Locations using the library's type definitions
+              - Locations referencing the library in configuration files
+              - Locations using the library in Dockerfile or build processes
+              - Locations using the library in asset compilation or precompilation
+              - Locations using the library in CI/CD pipelines
+
+            - ❌ **Should not be included in impact scope**:
+              - Import statements that are not actually used (dead code)
+              - Mentions only in comments
+              - Indirect dependencies where no direct code changes are required
+
+            #### 6.5 Report Format
+
+            **If usage locations are found**:
+
+            **Important**: List **all files** found in the search as a numbered list. Omissions are strictly prohibited.
+
+            ```markdown
+            #### 📁 Usage Locations
+            `{library-name}` is used in the following **N files**:
+
+            1. [filename](relative-path#Lline-number)
+               ```language
+               code snippet
+               ```
+               - **Feature used**: Feature or API name
+               - **Impact**: Impact if there are breaking changes
+
+            2. [filename](relative-path#Lline-number)
+               ```language
+               code snippet
+               ```
+               - **Feature used**: Feature or API name
+               - **Impact**: Impact if there are breaking changes
+
+            ... (continue with all found files in the same format)
+
+            N. [filename](relative-path#Lline-number)
+               ```language
+               code snippet
+               ```
+               - **Feature used**: Feature or API name
+               - **Impact**: Impact if there are breaking changes
+            ```
+
+            **Notes**:
+            - Always include the actual count in the "N files" section
+            - Do not abbreviate with "..." or "others" - list all usage locations
+            - Even if there are many files (10 or more), list all of them
+
+            **If no usage locations are found**:
+            ```markdown
+            #### 📁 Usage Locations
+            No direct usage locations were found.
+
+            - `{library-name}` is included in package.json dependencies,
+              but no locations directly importing or using it were detected in the codebase.
+            - It may be an indirect dependency (used internally by another library).
+            ```
+
+            **Verification Completion Checklist**:
+            - [ ] Executed all search patterns in Phase 1
+            - [ ] Checked library-specific patterns in Phase 2
+            - [ ] Searched for main APIs in Phase 3 (if applicable)
+            - [ ] Confirmed **all found files** with Read
+            - [ ] Included **all usage locations** in the report (no omissions)
+            - [ ] Verified dependencies in package.json
+
+            ## Post Review Comment
+
+            Compile investigation results in the following format and post using the `gh pr comment` command:
+
+            ```markdown
+            ## 🤖 Claude Dependency Review
+
+            ### 📦 Update Summary
+            - **Library**: {library name}
+            - **Version**: {old version} → {new version}
+            - **Change Type**: {Major/Minor/Patch}
+
+            ### 📝 Release Notes
+            {Release notes URL}
+
+            ### 🚨 Breaking Changes
+            {Only include if there are breaking changes}
+
+            ### ✨ Main Changes
+            {Summary of changes}
+
+            ### 🔍 Impact Analysis
+            {Usage location analysis results}
+
+            ### ✅ Recommended Actions
+            {Document required actions if any, otherwise "None"}
+
+            ---
+            <!-- dependencies-claude-review -->
+            ```
+
+            **Comment Posting Notes**:
+            If an existing comment exists, update it; otherwise, create a new one. Follow these steps:
+
+            1. **Search for existing comment ID**:
+               ```bash
+               COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ github.event.number }}/comments \
+                 --jq '.[] | select(.body | contains("<!-- dependencies-claude-review -->")) | .id' | head -n 1)
+               ```
+
+            2. **Post or update comment**:
+               ```bash
+               COMMENT_BODY="...comment content..."
+
+               if [ -n "$COMMENT_ID" ]; then
+                 # Update existing comment
+                 gh api --method PATCH "repos/${{ github.repository }}/issues/comments/$COMMENT_ID" \
+                   -f body="$COMMENT_BODY"
+               else
+                 # Create new comment
+                 gh pr comment ${{ github.event.number }} --body "$COMMENT_BODY"
+               fi
+               ```
+
+            3. Always include the identifier `<!-- dependencies-claude-review -->` in the comment
+
+            ## Notes
+            - The PR branch is already checked out
+            - Do not display as Claude's conversational response; always post to the PR using the `gh pr comment` command
+            - If unsure or uncertain about anything, honestly state so
+            - If multiple libraries are being updated, investigate each one
+
+          claude_args: |
+            --model claude-sonnet-4-5-20250929
+            --allowedTools "Bash(gh pr:*),Bash(gh api:*),Bash(pnpm view:*),WebSearch,WebFetch,Read,Glob,Grep"

@@ -120,6 +120,65 @@ createResolver({
 });
 ```
 
+### Custom Type Name (`typeName`)
+
+Enum and nested object fields in input/output schemas generate protobuf type names automatically (e.g., `{ResolverName}{FieldName}`). Use `typeName()` to set a custom name:
+
+```typescript
+createResolver({
+  name: "createOrder",
+  operation: "mutation",
+  input: {
+    address: t
+      .object({
+        street: t.string(),
+        city: t.string(),
+        zip: t.string(),
+      })
+      .typeName("ShippingAddress"),
+    status: t.enum(["pending", "confirmed", "shipped"]).typeName("OrderStatus"),
+  },
+  // ...
+});
+```
+
+**Constraints:**
+
+- Only available on `enum()` and `object()` fields — calling on scalar types is a compile error
+- Cannot be called twice on the same field
+- Can be chained with `description()`
+
+This is useful when the same logical type appears in multiple resolvers or when you want a predictable, human-readable name in the generated GraphQL schema.
+
+**Warning:** Do not set `typeName` to an existing TailorDB type name on an `object()` that contains enum or nested fields. Child fields without an explicit `typeName` auto-generate names using `{parentTypeName}{FieldName}`, which can collide with the TailorDB type's own enum/nested type names.
+
+```typescript
+// Collision — "Item" + "status" auto-generates "ItemStatus",
+//   which collides with the TailorDB Item type's status enum
+output: t
+  .object({
+    id: t.uuid(),
+    status: t.enum(["ACTIVE", "INACTIVE"]),
+  })
+  .typeName("Item"),
+
+// OK — use a distinct name that won't collide
+output: t
+  .object({
+    id: t.uuid(),
+    status: t.enum(["ACTIVE", "INACTIVE"]),
+  })
+  .typeName("DeactivateItemOutput"),
+
+// OK — explicitly set typeName on child enum too
+output: t
+  .object({
+    id: t.uuid(),
+    status: t.enum(["ACTIVE", "INACTIVE"]).typeName("DeactivateItemStatus"),
+  })
+  .typeName("Item"),
+```
+
 ## Input Validation
 
 Add validation rules to input fields using the `validate` method:
@@ -156,6 +215,19 @@ You can specify validation as:
 - A function returning `boolean` (uses default error message)
 - A tuple of `[function, errorMessage]` for custom error messages
 - Multiple validators (pass multiple arguments to `validate`)
+
+Validation runs automatically before the `body` function executes. When validation fails, individual errors are returned in the GraphQL `errors` array with field-level paths:
+
+```json
+{
+  "errors": [
+    {
+      "message": "Value must be non-negative",
+      "path": ["createUser", "age"]
+    }
+  ]
+}
+```
 
 ## Body Function
 
@@ -214,3 +286,96 @@ createResolver({
   // ...
 });
 ```
+
+## Event Publishing
+
+Enable event publishing for a resolver to trigger executors on resolver execution:
+
+```typescript
+createResolver({
+  name: "processOrder",
+  operation: "mutation",
+  publishEvents: true,
+  // ...
+});
+```
+
+**Behavior:**
+
+- When `publishEvents: true`, resolver execution events are published
+- When not specified, it is **automatically set to `true`** if an executor uses this resolver with `resolverExecutedTrigger`
+- When explicitly set to `false` while an executor uses this resolver, an error is thrown during `tailor apply`
+
+**Use cases:**
+
+1. **Auto-detection (recommended)**: Don't set `publishEvents` - the SDK automatically enables it when needed by executors
+
+   ```typescript
+   // publishEvents is automatically enabled because an executor uses this resolver
+   export default createResolver({
+     name: "processPayment",
+     operation: "mutation",
+     // publishEvents not set - auto-detected
+     // ...
+   });
+
+   // In executor file:
+   export default createExecutor({
+     trigger: resolverExecutedTrigger("processPayment"),
+     // ...
+   });
+   ```
+
+2. **Manual enable**: Enable event publishing for external consumers or debugging
+
+   ```typescript
+   createResolver({
+     name: "auditAction",
+     operation: "mutation",
+     publishEvents: true, // Enable even without executor triggers
+     // ...
+   });
+   ```
+
+3. **Explicit disable**: Disable event publishing for a resolver that doesn't need it (error if executor uses it)
+
+   ```typescript
+   createResolver({
+     name: "internalHelper",
+     operation: "query",
+     publishEvents: false, // Explicitly disable
+     // ...
+   });
+   ```
+
+## Authentication
+
+Specify an `authInvoker` to execute the resolver with machine user credentials:
+
+```typescript
+import { defineAuth, createResolver, t } from "@tailor-platform/sdk";
+
+const auth = defineAuth("my-auth", {
+  // ... auth configuration
+  machineUsers: {
+    "batch-processor": {
+      attributes: { role: "ADMIN" },
+    },
+  },
+});
+
+export default createResolver({
+  name: "adminQuery",
+  operation: "query",
+  output: t.object({ result: t.string() }),
+  body: async () => {
+    // Executes as "batch-processor" machine user
+    return { result: "ok" };
+  },
+  authInvoker: auth.invoker("batch-processor"),
+});
+```
+
+The `authInvoker` option accepts the return value of `auth.invoker()`, which specifies the auth namespace and machine user name.
+
+**Note:** `authInvoker` controls the permissions for database operations and other platform actions, but the `user` object passed to the `body` function still reflects the original caller who invoked the resolver.

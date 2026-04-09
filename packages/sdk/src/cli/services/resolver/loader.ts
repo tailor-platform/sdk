@@ -1,0 +1,20 @@
+import { pathToFileURL } from "node:url";
+import { ResolverSchema } from "@/parser/service/resolver";
+import type { Resolver } from "@/types/resolver.generated";
+
+/**
+ * Load and validate a resolver definition from a file.
+ * @param resolverFilePath - Path to the resolver file
+ * @returns Parsed resolver or null if invalid
+ */
+export async function loadResolver(resolverFilePath: string): Promise<Resolver | null> {
+  const resolverModule = await import(pathToFileURL(resolverFilePath).href);
+  const resolver = resolverModule.default;
+
+  const parseResult = ResolverSchema.safeParse(resolver);
+  if (!parseResult.success) {
+    return null;
+  }
+
+  return parseResult.data;
+}

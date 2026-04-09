@@ -10,7 +10,7 @@ import {
 import type { Prettify, InferFieldsOutput } from "./helpers";
 import type { FieldValidateInput } from "./validation";
 import type { TailorUser } from "@/configure/types";
-import type { TailorFieldInput } from "@/parser/service/resolver/types";
+import type { TailorFieldInput } from "@/types/field.generated";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 
 const regex = {
@@ -19,6 +19,7 @@ const regex = {
   time: /^(?<hour>\d{2}):(?<minute>\d{2})$/,
   datetime:
     /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(.(?<millisec>\d{3}))?Z$/,
+  decimal: /^-?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/,
 } as const;
 
 // This helper type intentionally uses `any` as a placeholder for unknown field output.
@@ -239,6 +240,15 @@ function createTailorField<
           });
         }
         break;
+      case "decimal":
+        if (typeof value !== "string" || !regex.decimal.test(value)) {
+          issues.push({
+            message: `Expected a decimal string: received ${String(value)}`,
+            path: pathArray.length > 0 ? pathArray : undefined,
+          });
+        }
+        break;
+
       case "enum":
         if (field._metadata.allowedValues) {
           const allowedValues = field._metadata.allowedValues.map((v) => v.value);
@@ -424,38 +434,106 @@ function createTailorField<
   return field;
 }
 
+/**
+ * Create a UUID field for resolver input/output.
+ * @param options - Field configuration options
+ * @returns A UUID field
+ * @example t.uuid()
+ */
 function uuid<const Opt extends FieldOptions>(options?: Opt) {
   return createTailorField("uuid", options);
 }
 
+/**
+ * Create a string field for resolver input/output.
+ * @param options - Field configuration options
+ * @returns A string field
+ * @example t.string()
+ * @example t.string({ optional: true })
+ * @example t.string({ array: true })
+ */
 function string<const Opt extends FieldOptions>(options?: Opt) {
   return createTailorField("string", options);
 }
 
+/**
+ * Create a boolean field for resolver input/output.
+ * @param options - Field configuration options
+ * @returns A boolean field
+ * @example t.bool()
+ */
 function bool<const Opt extends FieldOptions>(options?: Opt) {
   return createTailorField("boolean", options);
 }
 
+/**
+ * Create an integer field for resolver input/output.
+ * @param options - Field configuration options
+ * @returns An integer field
+ * @example t.int()
+ */
 function int<const Opt extends FieldOptions>(options?: Opt) {
   return createTailorField("integer", options);
 }
 
+/**
+ * Create a float field for resolver input/output.
+ * @param options - Field configuration options
+ * @returns A float field
+ * @example t.float()
+ */
 function float<const Opt extends FieldOptions>(options?: Opt) {
   return createTailorField("float", options);
 }
 
+/**
+ * Create a decimal field for resolver input/output (stored as string for precision).
+ * @param options - Field configuration options
+ * @returns A decimal field
+ * @example t.decimal()
+ * @example t.decimal({ optional: true })
+ */
+function decimal<const Opt extends FieldOptions>(options?: Opt) {
+  return createTailorField("decimal", options);
+}
+
+/**
+ * Create a date field for resolver input/output.
+ * @param options - Field configuration options
+ * @returns A date field
+ * @example t.date()
+ */
 function date<const Opt extends FieldOptions>(options?: Opt) {
   return createTailorField("date", options);
 }
 
+/**
+ * Create a datetime field for resolver input/output.
+ * @param options - Field configuration options
+ * @returns A datetime field
+ * @example t.datetime()
+ */
 function datetime<const Opt extends FieldOptions>(options?: Opt) {
   return createTailorField("datetime", options);
 }
 
+/**
+ * Create a time field for resolver input/output.
+ * @param options - Field configuration options
+ * @returns A time field
+ * @example t.time()
+ */
 function time<const Opt extends FieldOptions>(options?: Opt) {
   return createTailorField("time", options);
 }
 
+/**
+ * Create an enum field for resolver input/output.
+ * @param values - Array of allowed string values
+ * @param options - Field configuration options
+ * @returns An enum field
+ * @example t.enum(["active", "inactive"])
+ */
 function _enum<const V extends AllowedValues, const Opt extends FieldOptions>(
   values: V,
   options?: Opt,
@@ -466,6 +544,18 @@ function _enum<const V extends AllowedValues, const Opt extends FieldOptions>(
   return createTailorField<"enum", Opt, AllowedValuesOutput<V>>("enum", options, undefined, values);
 }
 
+/**
+ * Create a nested object field for resolver input/output.
+ * @param fields - Record of field definitions
+ * @param options - Field options (optional, array)
+ * @returns A nested object field
+ * @example
+ * // Single object:
+ * output: t.object({ name: t.string(), email: t.string() })
+ * @example
+ * // Array of objects:
+ * items: t.object({ name: t.string() }, { array: true })
+ */
 function object<const F extends Record<string, TailorAnyField>, const Opt extends FieldOptions>(
   fields: F,
   options?: Opt,
@@ -483,6 +573,7 @@ export const t = {
   bool,
   int,
   float,
+  decimal,
   date,
   datetime,
   time,

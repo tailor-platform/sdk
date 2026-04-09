@@ -1,5 +1,12 @@
-import type { BuiltinIdP } from "@/parser/service/auth/types";
-import type { IdPInput, IdpDefinitionBrand } from "@/parser/service/idp/types";
+import type { BuiltinIdP } from "@/types/auth.generated";
+import type { IdpDefinitionBrand } from "@/types/idp";
+import type { IdPInput } from "@/types/idp.generated";
+
+export type {
+  IdPEmailConfig,
+  IdPGqlOperations,
+  IdPGqlOperationsInput as IdPGqlOperationsConfig,
+} from "@/types/idp.generated";
 
 /**
  * Define an IdP service configuration for the Tailor SDK.
@@ -30,4 +37,4 @@ export function defineIdp<const TClients extends string[]>(
   return result as typeof result & IdpDefinitionBrand;
 }
 
-export type { IdPConfig, IdPExternalConfig } from "@/parser/service/idp/types";
+export type { IdPConfig, IdPExternalConfig } from "@/types/idp";

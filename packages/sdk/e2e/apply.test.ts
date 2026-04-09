@@ -8,7 +8,7 @@
  * The fix ensures services are deleted AFTER the Application is deleted.
  *
  * Prerequisites:
- * - TAILOR_PLATFORM_TOKEN environment variable must be set
+ * - Authentication via TAILOR_PLATFORM_TOKEN env var or `tailor-sdk login`
  * - TAILOR_PLATFORM_ORGANIZATION_ID environment variable must be set
  */
 
@@ -16,18 +16,20 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, test, expect, beforeAll, afterAll } from "vitest";
-import { initOperatorClient, type OperatorClient } from "../src/cli/client";
-import { loadAccessToken } from "../src/cli/context";
-import { apply } from "../src/cli/apply";
+import { describe, test, expect, beforeAll } from "vitest";
+import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
+import { loadAccessToken } from "../src/cli/shared/context";
+import { apply } from "../src/cli/commands/apply/apply";
+import { trackWorkspace, trackTempDir } from "./globalSetup";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Generate unique test app name to avoid conflicts
+// Generate unique test identifiers (include GITHUB_RUN_ID in CI to avoid cross-run cleanup conflicts)
+const ciRunId = process.env.GITHUB_RUN_ID ?? "";
 const testRunId = Date.now().toString(36);
 const testAppName = `e2e-test-${testRunId}`;
-const testWorkspaceName = `e2e-ws-${testRunId}`;
+const testWorkspaceName = `e2e-ws-${ciRunId ? `${ciRunId}-` : ""}${testRunId}`;
 
 // Shared service names used across tests
 const sharedTailordbName = `shared-db-${testRunId}`;
@@ -39,12 +41,7 @@ describe("E2E: Service deletion order", () => {
   let configCounter = 0;
 
   beforeAll(async () => {
-    // Check for required environment variable
-    if (!process.env.TAILOR_PLATFORM_TOKEN) {
-      throw new Error("TAILOR_PLATFORM_TOKEN environment variable must be set to run E2E tests");
-    }
-
-    // Initialize client
+    // Initialize client (supports both TAILOR_PLATFORM_TOKEN env var and platform config login)
     const accessToken = await loadAccessToken({ useProfile: false });
     client = await initOperatorClient(accessToken);
 
@@ -65,6 +62,7 @@ describe("E2E: Service deletion order", () => {
       folderId: process.env.TAILOR_PLATFORM_FOLDER_ID,
     });
     workspaceId = createResp.workspace!.id!;
+    trackWorkspace(workspaceId);
     console.log(`Workspace created: ${workspaceId}`);
 
     // Set workspace ID for apply operations
@@ -73,31 +71,12 @@ describe("E2E: Service deletion order", () => {
     // Create temp directory and symlink @tailor-platform/sdk for module resolution
     const sdkRoot = path.resolve(__dirname, "..");
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "e2e-test-"));
+    trackTempDir(tempDir);
 
-    // Set TAILOR_PLATFORM_SDK_TYPE_PATH to prevent writing to packages/sdk
-    process.env.TAILOR_PLATFORM_SDK_TYPE_PATH = path.join(tempDir, "user-defined.d.ts");
     const nodeModulesDir = path.join(tempDir, "node_modules", "@tailor-platform");
     fs.mkdirSync(nodeModulesDir, { recursive: true });
     fs.symlinkSync(sdkRoot, path.join(nodeModulesDir, "sdk"));
   }, 120000); // 2 minute timeout for workspace creation
-
-  afterAll(async () => {
-    // Cleanup temp directory
-    if (tempDir && fs.existsSync(tempDir)) {
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    }
-
-    // Delete workspace
-    if (client && workspaceId) {
-      console.log(`Deleting workspace "${workspaceId}"...`);
-      try {
-        await client.deleteWorkspace({ workspaceId });
-        console.log("Workspace deleted successfully.");
-      } catch (error) {
-        console.error("Failed to delete workspace:", error);
-      }
-    }
-  }, 120000); // 2 minute timeout for workspace deletion
 
   /**
    * Helper to create a test config file with unique name to avoid Node.js module caching
@@ -490,7 +469,7 @@ export default defineConfig({
     fs.writeFileSync(
       path.join(initialSnapshotDir, "schema.json"),
       JSON.stringify({
-        version: 1,
+        version: 2,
         namespace: sharedTailordbName,
         createdAt: new Date().toISOString(),
         types: {

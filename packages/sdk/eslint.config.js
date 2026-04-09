@@ -1,17 +1,40 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import eslint from "@eslint/js";
 import { defineConfig, globalIgnores } from "eslint/config";
 import globals from "globals";
 import tseslint from "typescript-eslint";
-import importPlugin from "eslint-plugin-import";
+import { createTypeScriptImportResolver } from "eslint-import-resolver-typescript";
+import importPlugin from "eslint-plugin-import-x";
 import jsdocPlugin from "eslint-plugin-jsdoc";
 import oxlint from "eslint-plugin-oxlint";
+import localPlugin from "./eslint-rules/index.js";
+
+// Derive public API entry point source files from package.json#exports
+const pkg = JSON.parse(readFileSync(resolve(import.meta.dirname, "package.json"), "utf8"));
+const publicApiEntryPoints = Object.values(pkg.exports)
+  .map((exp) => exp.types)
+  .filter(Boolean)
+  .map((p) => p.replace(/^\.\/dist\//, "src/").replace(/\.d\.mts$/, ".ts"));
 
 export default defineConfig([
-  globalIgnores(["dist/", "e2e/fixtures/"]),
+  globalIgnores([
+    "dist/",
+    "e2e/fixtures/",
+    ".tailor-sdk/",
+    "tailor.d.ts",
+    "plugin-defined.d.ts",
+    "**/__test_fixtures__/dist/",
+    "**/__test_fixtures__/*-compat-out/",
+  ]),
   eslint.configs.recommended,
   tseslint.configs.recommended,
   importPlugin.flatConfigs.recommended,
-  importPlugin.flatConfigs.typescript,
+  {
+    settings: {
+      "import-x/resolver-next": [createTypeScriptImportResolver()],
+    },
+  },
   jsdocPlugin.configs["flat/recommended"],
   {
     linterOptions: {
@@ -22,7 +45,10 @@ export default defineConfig([
       "jsdoc/require-returns-type": "off",
       "jsdoc/tag-lines": "error",
       "jsdoc/check-param-names": "error",
-      "jsdoc/require-jsdoc": ["error", { publicOnly: true }],
+      // Existence enforcement handled by local/require-public-api-jsdoc rule
+      // (validates only public API entry points from package.json#exports).
+      // require-param and require-returns remain: they only fire when JSDoc exists.
+      "jsdoc/require-jsdoc": "off",
       "jsdoc/require-param": "error",
       "jsdoc/require-returns": "error",
     },
@@ -47,9 +73,9 @@ export default defineConfig([
         "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
-      "import/no-cycle": ["error", { maxDepth: Infinity }],
-      "import/no-unresolved": "off",
-      "import/order": [
+      "import-x/no-cycle": ["error", { maxDepth: Infinity }],
+      "import-x/no-unresolved": "off",
+      "import-x/order": [
         "error",
         {
           groups: ["builtin", "external", "internal", "parent", "sibling", "index", "type"],
@@ -84,12 +110,12 @@ export default defineConfig([
             },
             {
               group: ["**/parser/**", "@/parser/**"],
-              message: "Configure module should not import from parser module.",
+              message:
+                "Configure module should not import from parser module. Use @/types/ instead.",
             },
             {
-              group: ["**/parser/**/types", "@/parser/**/types"],
-              allowTypeImports: true,
-              message: "Configure module should not import from parser module.",
+              group: ["**/plugin/**", "@/plugin/**"],
+              message: "Configure module should not import from plugin module.",
             },
             {
               group: ["zod"],
@@ -116,6 +142,68 @@ export default defineConfig([
             {
               group: ["**/configure/**", "@/configure/**"],
               message: "Parser module should not import from configure module.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/parser/service/tailordb/runtime.ts"],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["**/cli/**", "@/cli/**"],
+              message: "Parser module should not import from cli module.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // Built-in plugins can import from configure module
+    files: ["src/plugin/builtin/**/*.ts"],
+    ignores: ["src/plugin/builtin/**/*.test.ts"],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["**/cli/**", "@/cli/**"],
+              message: "Plugin builtin module should not import from cli module.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // Non-builtin plugin modules cannot import from configure or builtin
+    files: ["src/plugin/**/*.ts"],
+    ignores: ["src/plugin/**/*.test.ts", "src/plugin/builtin/**/*.ts"],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["**/cli/**", "@/cli/**"],
+              message: "Plugin module should not import from cli module.",
+            },
+            {
+              group: ["**/configure/**", "@/configure/**"],
+              message:
+                "Plugin module should not import from configure module. Please use parser module as an intermediary.",
+            },
+            {
+              group: ["**/plugin/builtin/**", "@/plugin/builtin/**"],
+              message:
+                "Plugin module should not import from builtin plugins. Built-in plugins are exported separately.",
             },
           ],
         },
@@ -159,7 +247,12 @@ export default defineConfig([
   },
   {
     files: ["src/cli/**/*.ts"],
-    ignores: ["src/cli/utils/logger.ts", "src/cli/utils/errors.ts", "src/cli/utils/format.ts"],
+    ignores: [
+      "src/cli/shared/logger.ts",
+      "src/cli/shared/errors.ts",
+      "src/cli/shared/format.ts",
+      "src/cli/shared/prompt.ts",
+    ],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -169,22 +262,17 @@ export default defineConfig([
               name: "node:util",
               importNames: ["styleText"],
               message:
-                "Use colors/symbols/logger from '@/cli/utils/logger' instead of styleText for consistent styling.",
+                "Use colors/symbols/logger from '@/cli/shared/logger' instead of styleText for consistent styling.",
             },
             {
               name: "chalk",
               message:
-                "Use colors/symbols/logger from '@/cli/utils/logger' instead of chalk for consistent styling.",
-            },
-            {
-              name: "consola",
-              message:
-                "Use logger from '@/cli/utils/logger' instead of consola for consistent logging.",
+                "Use colors/symbols/logger from '@/cli/shared/logger' instead of chalk for consistent styling.",
             },
             {
               name: "table",
               message:
-                "Use formatTable/formatKeyValueTable/formatTableWithHeaders from '@/cli/utils/format' instead of table for consistent table styling.",
+                "Use formatTable/formatKeyValueTable/formatTableWithHeaders from '@/cli/shared/format' instead of table for consistent table styling.",
             },
             {
               name: "path",
@@ -194,6 +282,16 @@ export default defineConfig([
               name: "node:path",
               message:
                 "Use 'pathe' instead of 'node:path' for consistent cross-platform path handling.",
+            },
+            {
+              name: "@inquirer/prompts",
+              message:
+                "Use 'prompt' from '@/cli/shared/prompt' instead of @inquirer/prompts directly.",
+            },
+            {
+              name: "@inquirer/core",
+              message:
+                "Use 'prompt' from '@/cli/shared/prompt' instead of @inquirer/core directly.",
             },
           ],
         },
@@ -210,7 +308,7 @@ export default defineConfig([
           selector:
             "CallExpression[callee.object.name='console'][callee.property.name=/^(log|error|warn|info|debug)$/]",
           message:
-            "Use logger from '@/cli/utils/logger' instead of console for consistent logging. Use printData for JSON output.",
+            "Use logger from '@/cli/shared/logger' instead of console for consistent logging. Use printData for JSON output.",
         },
       ],
     },
@@ -229,6 +327,24 @@ export default defineConfig([
     },
   },
   {
+    files: ["e2e/**/*.ts"],
+    rules: {
+      "import-x/no-unresolved": "off",
+    },
+  },
+  {
+    // This rule uses the TypeScript type checker to resolve re-exported symbols,
+    // so `eslint --cache` may serve stale results when only a re-export source
+    // file changes (the entry point's mtime stays the same). This is a known
+    // limitation of ESLint's file-level cache with any cross-file type-aware
+    // rule. CI runs on a clean cache, so it always catches violations.
+    files: publicApiEntryPoints,
+    plugins: { local: localPlugin },
+    rules: {
+      "local/require-public-api-jsdoc": "error",
+    },
+  },
+  {
     files: ["**/*.js", "**/*.mjs"],
     extends: [tseslint.configs.disableTypeChecked],
     languageOptions: {
@@ -237,7 +353,7 @@ export default defineConfig([
       },
     },
     rules: {
-      "import/no-unresolved": "off",
+      "import-x/no-unresolved": "off",
     },
   },
   ...oxlint.buildFromOxlintConfigFile("./.oxlintrc.json"),

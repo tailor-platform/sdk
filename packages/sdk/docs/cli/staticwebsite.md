@@ -2,11 +2,19 @@
 
 Commands for managing and deploying static websites.
 
-<!-- politty:command:staticwebsite:start -->
+<!-- politty:command:staticwebsite:heading:start -->
 
 ## staticwebsite
 
+<!-- politty:command:staticwebsite:heading:end -->
+
+<!-- politty:command:staticwebsite:description:start -->
+
 Manage static websites in your workspace.
+
+<!-- politty:command:staticwebsite:description:end -->
+
+<!-- politty:command:staticwebsite:usage:start -->
 
 **Usage**
 
@@ -14,20 +22,38 @@ Manage static websites in your workspace.
 tailor-sdk staticwebsite [command]
 ```
 
+<!-- politty:command:staticwebsite:usage:end -->
+
+<!-- politty:command:staticwebsite:subcommands:start -->
+
 **Commands**
 
 | Command                                         | Description                                           |
 | ----------------------------------------------- | ----------------------------------------------------- |
 | [`staticwebsite deploy`](#staticwebsite-deploy) | Deploy a static website from a local build directory. |
-| [`staticwebsite get`](#staticwebsite-get)       | Get details of a specific static website.             |
 | [`staticwebsite list`](#staticwebsite-list)     | List all static websites in a workspace.              |
+| [`staticwebsite get`](#staticwebsite-get)       | Get details of a specific static website.             |
 
-<!-- politty:command:staticwebsite:end -->
-<!-- politty:command:staticwebsite deploy:start -->
+<!-- politty:command:staticwebsite:subcommands:end -->
+
+<!-- politty:command:staticwebsite:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:staticwebsite:global-options-link:end -->
+<!-- politty:command:staticwebsite deploy:heading:start -->
 
 ### staticwebsite deploy
 
+<!-- politty:command:staticwebsite deploy:heading:end -->
+
+<!-- politty:command:staticwebsite deploy:description:start -->
+
 Deploy a static website from a local build directory.
+
+<!-- politty:command:staticwebsite deploy:description:end -->
+
+<!-- politty:command:staticwebsite deploy:usage:start -->
 
 **Usage**
 
@@ -35,22 +61,39 @@ Deploy a static website from a local build directory.
 tailor-sdk staticwebsite deploy [options]
 ```
 
+<!-- politty:command:staticwebsite deploy:usage:end -->
+
+<!-- politty:command:staticwebsite deploy:options:start -->
+
 **Options**
 
-| Option                          | Alias | Description                      | Default |
-| ------------------------------- | ----- | -------------------------------- | ------- |
-| `--json`                        | `-j`  | Output as JSON                   | `false` |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                     | -       |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                | -       |
-| `--name <NAME>`                 | `-n`  | Static website name              | -       |
-| `--dir <DIR>`                   | `-d`  | Path to the static website files | -       |
+| Option                          | Alias | Description                      | Required | Default | Env                            |
+| ------------------------------- | ----- | -------------------------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                     | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| `--name <NAME>`                 | `-n`  | Static website name              | Yes      | -       | -                              |
+| `--dir <DIR>`                   | `-d`  | Path to the static website files | Yes      | -       | -                              |
 
-<!-- politty:command:staticwebsite deploy:end -->
-<!-- politty:command:staticwebsite list:start -->
+<!-- politty:command:staticwebsite deploy:options:end -->
+
+<!-- politty:command:staticwebsite deploy:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:staticwebsite deploy:global-options-link:end -->
+<!-- politty:command:staticwebsite list:heading:start -->
 
 ### staticwebsite list
 
+<!-- politty:command:staticwebsite list:heading:end -->
+
+<!-- politty:command:staticwebsite list:description:start -->
+
 List all static websites in a workspace.
+
+<!-- politty:command:staticwebsite list:description:end -->
+
+<!-- politty:command:staticwebsite list:usage:start -->
 
 **Usage**
 
@@ -58,20 +101,37 @@ List all static websites in a workspace.
 tailor-sdk staticwebsite list [options]
 ```
 
+<!-- politty:command:staticwebsite list:usage:end -->
+
+<!-- politty:command:staticwebsite list:options:start -->
+
 **Options**
 
-| Option                          | Alias | Description       | Default |
-| ------------------------------- | ----- | ----------------- | ------- |
-| `--json`                        | `-j`  | Output as JSON    | `false` |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | -       |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile | -       |
+| Option                          | Alias | Description       | Required | Default | Env                            |
+| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
 
-<!-- politty:command:staticwebsite list:end -->
-<!-- politty:command:staticwebsite get:start -->
+<!-- politty:command:staticwebsite list:options:end -->
+
+<!-- politty:command:staticwebsite list:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:staticwebsite list:global-options-link:end -->
+<!-- politty:command:staticwebsite get:heading:start -->
 
 ### staticwebsite get
 
+<!-- politty:command:staticwebsite get:heading:end -->
+
+<!-- politty:command:staticwebsite get:description:start -->
+
 Get details of a specific static website.
+
+<!-- politty:command:staticwebsite get:description:end -->
+
+<!-- politty:command:staticwebsite get:usage:start -->
 
 **Usage**
 
@@ -79,21 +139,34 @@ Get details of a specific static website.
 tailor-sdk staticwebsite get [options] <name>
 ```
 
+<!-- politty:command:staticwebsite get:usage:end -->
+
+<!-- politty:command:staticwebsite get:arguments:start -->
+
 **Arguments**
 
 | Argument | Description         | Required |
 | -------- | ------------------- | -------- |
 | `name`   | Static website name | Yes      |
 
+<!-- politty:command:staticwebsite get:arguments:end -->
+
+<!-- politty:command:staticwebsite get:options:start -->
+
 **Options**
 
-| Option                          | Alias | Description       | Default |
-| ------------------------------- | ----- | ----------------- | ------- |
-| `--json`                        | `-j`  | Output as JSON    | `false` |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | -       |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile | -       |
+| Option                          | Alias | Description       | Required | Default | Env                            |
+| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
 
-<!-- politty:command:staticwebsite get:end -->
+<!-- politty:command:staticwebsite get:options:end -->
+
+<!-- politty:command:staticwebsite get:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:staticwebsite get:global-options-link:end -->
 
 **Example:**
 

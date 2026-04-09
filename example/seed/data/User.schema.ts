@@ -1,6 +1,6 @@
 import { t } from "@tailor-platform/sdk";
+import { defineSchema } from "@tailor-platform/sdk/seed";
 import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/test";
-import { defineSchema } from "@toiroakr/lines-db";
 import { user } from "../../tailordb/user";
 
 const schemaType = t.object({
@@ -13,6 +13,9 @@ const hook = createTailorDBHook(user);
 export const schema = defineSchema(
   createStandardSchema(schemaType, hook),
   {
+    foreignKeys: [
+      {"column":"email","references":{"table":"_User","column":"name"}},
+    ],
     indexes: [
       {"name":"user_email_unique_idx","columns":["email"],"unique":true},
       {"name":"idx_name_department","columns":["name","department"],"unique":false},

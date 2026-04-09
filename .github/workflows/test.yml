@@ -11,21 +11,47 @@ concurrency:
 
 jobs:
   test:
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
     runs-on: ubuntu-latest
+    name: Test (Node ${{ matrix.node }})
     timeout-minutes: 10
     permissions:
       contents: read
 
     steps:
       - name: Checkout
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
 
       - name: Install deps
         uses: ./.github/actions/install-deps
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Login as machine user
+        run: pnpm tailor-sdk login --machineuser
+        env:
+          TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_ID }}
+          TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_SECRET }}
 
       - name: Run tests
-        run: pnpm test
-        env:
-          TAILOR_PLATFORM_TOKEN: ${{ secrets.TAILOR_PLATFORM_PAT }}
+        run: pnpm exec turbo run test -- --project unit
+
+  test-summary:
+    needs: [test]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions: {}
+    timeout-minutes: 5
+    steps:
+      - name: Check result
+        run: |
+          if [[ "${{ needs.test.result }}" != "success" ]]; then
+            echo "Test jobs failed"
+            exit 1
+          fi
+          echo "All test jobs succeeded"

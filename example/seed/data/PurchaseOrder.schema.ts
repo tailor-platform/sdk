@@ -1,6 +1,6 @@
 import { t } from "@tailor-platform/sdk";
+import { defineSchema } from "@tailor-platform/sdk/seed";
 import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/test";
-import { defineSchema } from "@toiroakr/lines-db";
 import { purchaseOrder } from "../../tailordb/purchaseOrder";
 
 const schemaType = t.object({

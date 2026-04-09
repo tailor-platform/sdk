@@ -13,15 +13,15 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@eslint/js": "9.39.2",
+    "@eslint/js": "10.0.1",
     "@tailor-platform/sdk": "workspace:^",
-    "@types/node": "24.10.9",
-    "eslint": "9.39.2",
-    "eslint-plugin-oxlint": "1.39.0",
-    "oxfmt": "0.24.0",
-    "oxlint": "1.39.0",
-    "oxlint-tsgolint": "0.11.1",
+    "@types/node": "24.12.2",
+    "eslint": "10.2.0",
+    "eslint-plugin-oxlint": "1.58.0",
+    "oxfmt": "0.42.0",
+    "oxlint": "1.58.0",
+    "oxlint-tsgolint": "0.18.1",
     "typescript": "5.9.3",
-    "typescript-eslint": "8.53.0"
+    "typescript-eslint": "8.57.2"
   }
 }

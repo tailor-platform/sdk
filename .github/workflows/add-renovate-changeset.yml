@@ -19,7 +19,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
 
@@ -53,7 +53,7 @@ jobs:
 
       - name: Commit changeset
         if: steps.check.outputs.exists == 'false'
-        uses: suzuki-shunsuke/commit-action@f28421acc277a6d6a9c1f94ea449076ad77dba67 # v0.1.0
+        uses: suzuki-shunsuke/commit-action@f12e2d628a4ab72dcefe7890ae07e8dbf1e201b9 # v0.1.1
         with:
           app_id: ${{ secrets.TAILOR_GITHUB_APP_ID }}
           app_private_key: ${{ secrets.TAILOR_GITHUB_APP_PRIVATE_KEY }}

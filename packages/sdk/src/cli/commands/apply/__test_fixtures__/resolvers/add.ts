@@ -1,0 +1,23 @@
+import { createResolver, t } from "@tailor-platform/sdk";
+
+const validators: [(a: { value: number }) => boolean, string][] = [
+  [({ value }) => value >= 0, "Value must be non-negative"],
+  [({ value }) => value < 10, "Value must be less than 10"],
+];
+export default createResolver({
+  name: "add",
+  description: "Addition operation",
+  operation: "query",
+  input: {
+    a: t
+      .int()
+      .description("First number to add")
+      .validate(...validators),
+    b: t
+      .int()
+      .description("Second number to add")
+      .validate(...validators),
+  },
+  body: ({ input }) => input.a + input.b,
+  output: t.int().description("Sum of the two input numbers"),
+});

@@ -1,3 +1,4 @@
+import { brandValue } from "@/utils/brand";
 import type { TailorEnv } from "@/configure/types/env";
 import type { JsonCompatible } from "@/configure/types/helpers";
 import type { Jsonifiable, Jsonify, JsonPrimitive } from "type-fest";
@@ -48,6 +49,17 @@ export interface WorkflowJob<Name extends string = string, Input = undefined, Ou
    * tailor.workflow.triggerJobFunction("<job-name>", args).
    *
    * Returns Jsonify<Output> because the value passes through JSON.stringify.
+   *
+   * Inside a workflow job body, .trigger() calls are transformed by the bundler
+   * into synchronous `triggerJobFunction` calls. You may use `await` for
+   * readability — the bundler strips it automatically at build time.
+   * @example
+   * // Both styles work — await is stripped by the bundler:
+   * body: async (input) => {
+   *   const a = await jobA.trigger({ id: input.id });
+   *   const b = await jobB.trigger({ id: input.id });
+   *   return { a, b };
+   * }
    */
   trigger: [Input] extends [undefined]
     ? () => Promise<JsonifyOutput<Awaited<Output>>>
@@ -141,20 +153,53 @@ type WorkflowJobBody<I, O> =
  */
 export const WORKFLOW_TEST_ENV_KEY = "TAILOR_TEST_WORKFLOW_ENV";
 
+/**
+ * Create a workflow job definition.
+ *
+ * All jobs must be named exports from the workflow file.
+ * Job names must be unique across the entire project.
+ * @param config - Job configuration with name and body function
+ * @param config.name - Unique job name across the project
+ * @param config.body - Async function that processes the job input
+ * @returns A WorkflowJob that can be triggered from other jobs
+ * @example
+ * // Simple job with async body:
+ * export const fetchData = createWorkflowJob({
+ *   name: "fetch-data",
+ *   body: async (input: { id: string }) => {
+ *     const db = getDB("tailordb");
+ *     return await db.selectFrom("Table").selectAll().where("id", "=", input.id).executeTakeFirst();
+ *   },
+ * });
+ * @example
+ * // Orchestrator job that fans out to other jobs.
+ * // await is optional — the bundler strips it at build time.
+ * export const orchestrate = createWorkflowJob({
+ *   name: "orchestrate",
+ *   body: async (input: { orderId: string }) => {
+ *     const inventory = await checkInventory.trigger({ orderId: input.orderId });
+ *     const payment = await processPayment.trigger({ orderId: input.orderId });
+ *     return { inventory, payment };
+ *   },
+ * });
+ */
 export const createWorkflowJob = <const Name extends string, I = undefined, O = undefined>(config: {
   readonly name: Name;
   readonly body: WorkflowJobBody<I, O>;
 }): WorkflowJob<Name, I, Awaited<O>> => {
-  return {
-    name: config.name,
-    // JSON.parse(JSON.stringify(...)) ensures the return value matches Jsonify<Output> type.
-    // This converts Date objects to strings, matching actual runtime behavior.
-    // In production, bundler transforms .trigger() calls to tailor.workflow.triggerJobFunction().
-    trigger: async (args?: unknown) => {
-      const env: TailorEnv = JSON.parse(process.env[WORKFLOW_TEST_ENV_KEY] || "{}");
-      const result = await config.body(args as I, { env });
-      return result ? JSON.parse(JSON.stringify(result)) : result;
-    },
-    body: config.body,
-  } as WorkflowJob<Name, I, Awaited<O>>;
+  return brandValue(
+    {
+      name: config.name,
+      // JSON.parse(JSON.stringify(...)) ensures the return value matches Jsonify<Output> type.
+      // This converts Date objects to strings, matching actual runtime behavior.
+      // In production, bundler transforms .trigger() calls to tailor.workflow.triggerJobFunction().
+      trigger: async (args?: unknown) => {
+        const env: TailorEnv = JSON.parse(process.env[WORKFLOW_TEST_ENV_KEY] || "{}");
+        const result = await config.body(args as I, { env });
+        return result ? JSON.parse(JSON.stringify(result)) : result;
+      },
+      body: config.body,
+    } as WorkflowJob<Name, I, Awaited<O>>,
+    "workflow-job",
+  );
 };

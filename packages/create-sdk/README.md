@@ -10,6 +10,8 @@ npm create @tailor-platform/sdk -- [OPTIONS] [NAME]
 yarn create @tailor-platform/sdk [OPTIONS] [NAME]
 # OR
 pnpm create @tailor-platform/sdk [OPTIONS] [NAME]
+# OR
+bun create @tailor-platform/sdk [OPTIONS] [NAME]
 ```
 
 Note: npm 7+ requires `--` before create-sdk options (for example, `--template`).
@@ -84,7 +86,7 @@ This tool will:
 
 ### Note
 
-- If none of the supported package managers (npm, yarn, pnpm) are found, dependency installation will be skipped.
+- If none of the supported package managers (npm, yarn, pnpm, bun) are found, dependency installation will be skipped.
 - If the project already exists within a git repository, git initialization will be skipped.
 
 ## Documentation

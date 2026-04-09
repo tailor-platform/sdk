@@ -1,5 +1,21 @@
 import type { InferredAttributeMap } from "../../types";
 
+/**
+ * Record-level permission configuration for a TailorDB type.
+ * Defines create, read, update, and delete permissions.
+ *
+ * Prefer object format with explicit `conditions` and `permit` for readability.
+ * Shorthand array format is supported for compatibility, but less readable.
+ *
+ * For update operations, use `newRecord`/`oldRecord` operands instead of `record`.
+ * @example
+ * const permission: TailorTypePermission = {
+ *   create: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+ *   read: [{ conditions: [[{ record: "isPublic" }, "=", true]], permit: true }],
+ *   update: [{ conditions: [[{ newRecord: "ownerId" }, "=", { user: "id" }]], permit: true }],
+ *   delete: [{ conditions: [[{ record: "ownerId" }, "=", { user: "id" }]], permit: true }],
+ * };
+ */
 export type TailorTypePermission<
   User extends object = InferredAttributeMap,
   Type extends object = object,
@@ -45,6 +61,7 @@ type GqlPermissionAction = "read" | "create" | "update" | "delete" | "aggregate"
 
 type EqualityOperator = "=" | "!=";
 type ContainsOperator = "in" | "not in";
+type HasAnyOperator = "hasAny" | "not hasAny";
 
 // Helper types for User field extraction
 type StringFieldKeys<User extends object> = {
@@ -195,10 +212,35 @@ type ContainsCondition<
   | StringContainsCondition<Level, User, Update, Type>
   | BooleanContainsCondition<Level, User, Update, Type>;
 
+type HasAnyCondition<
+  Level extends "record" | "gql",
+  User extends object,
+  Update extends boolean,
+  Type extends object,
+> =
+  | readonly [
+      string[] | UserStringArrayOperand<User>,
+      HasAnyOperator,
+      string[] | UserStringArrayOperand<User>,
+    ]
+  | (Level extends "record"
+      ?
+          | readonly [
+              RecordOperand<Type, Update>,
+              HasAnyOperator,
+              string[] | UserStringArrayOperand<User>,
+            ]
+          | readonly [
+              string[] | UserStringArrayOperand<User>,
+              HasAnyOperator,
+              RecordOperand<Type, Update>,
+            ]
+      : never);
+
 /**
  * Type representing a permission condition that combines user attributes, record fields, and literal values using comparison operators.
  *
- * The User type is extended by `user-defined.d.ts`, which is automatically generated when running `tailor-sdk generate`.
+ * The User type is extended by `tailor.d.ts`, which is automatically generated when running `tailor-sdk generate`.
  * Attributes enabled in the config file's `auth.userProfile.attributes` (or
  * `auth.machineUserAttributes` when userProfile is omitted) become available as types.
  * @example
@@ -220,7 +262,10 @@ export type PermissionCondition<
   User extends object = InferredAttributeMap,
   Update extends boolean = boolean,
   Type extends object = object,
-> = EqualityCondition<Level, User, Update, Type> | ContainsCondition<Level, User, Update, Type>;
+> =
+  | EqualityCondition<Level, User, Update, Type>
+  | ContainsCondition<Level, User, Update, Type>
+  | HasAnyCondition<Level, User, Update, Type>;
 
 /**
  * Grants full record-level access without any conditions.

@@ -1,0 +1,99 @@
+name: "TailorDB Migration Test"
+
+on:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 5
+    outputs:
+      should_run: ${{ steps.filter.outputs.changes }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: "false"
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+        id: filter
+        with:
+          filters: |
+            changes:
+              - .github/workflows/migration.yml
+              - example/**
+              - packages/**
+              - package.json
+              - pnpm-lock.yaml
+
+  migration:
+    needs: changes
+    if: needs.changes.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    name: Migration (Linux)
+    permissions:
+      contents: read
+    timeout-minutes: 20
+    steps:
+      - name: checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: "false"
+
+      - name: Install aqua
+        uses: ./.github/actions/install-aqua
+
+      - name: Install deps
+        uses: ./.github/actions/install-deps
+
+      - name: Login as machine user
+        run: pnpm tailor-sdk login --machineuser
+        env:
+          TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_ID }}
+          TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_SECRET }}
+
+      - name: Create workspace
+        working-directory: example
+        run: pnpm --silent tailor-sdk workspace create --name "sdk-ci-migration-${{ github.run_id }}" --region asia-northeast --json > workspace.json
+        env:
+          TAILOR_PLATFORM_ORGANIZATION_ID: ${{ secrets.TAILOR_PLATFORM_ORGANIZATION_ID }}
+          TAILOR_PLATFORM_FOLDER_ID: ${{ secrets.TAILOR_PLATFORM_FOLDER_ID }}
+
+      - name: Set workspace ID
+        working-directory: example
+        shell: bash
+        run: |
+          WORKSPACE_ID=$(jq -r '.id' workspace.json)
+          echo "TAILOR_PLATFORM_WORKSPACE_ID=$WORKSPACE_ID" >> "$GITHUB_ENV"
+
+      - name: Run migration e2e
+        working-directory: example
+        run: pnpm run migration:e2e
+
+      - name: Destroy workspace
+        if: always()
+        working-directory: example
+        run: pnpm tailor-sdk workspace delete --workspace-id "${{ env.TAILOR_PLATFORM_WORKSPACE_ID }}" --yes
+
+  migration-result:
+    needs: [changes, migration]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions: {}
+    timeout-minutes: 5
+    steps:
+      - name: Check result
+        run: |
+          if [[ "${{ needs.changes.outputs.should_run }}" != "true" ]]; then
+            echo "Skipped - no relevant changes"
+            exit 0
+          fi
+          if [[ "${{ needs.migration.result }}" != "success" ]]; then
+            echo "Migration job failed"
+            exit 1
+          fi
+          echo "Migration job succeeded"

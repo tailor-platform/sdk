@@ -1,57 +1,126 @@
 #!/usr/bin/env node
 
-import { register } from "node:module";
 import { defineCommand, runMain } from "politty";
-import { apiCommand } from "./api";
-import { applyCommand } from "./apply";
-import { executorCommand } from "./executor";
-import { generateCommand } from "./generator";
-import { initCommand } from "./init";
-import { loginCommand } from "./login";
-import { logoutCommand } from "./logout";
-import { machineuserCommand } from "./machineuser";
-import { oauth2clientCommand } from "./oauth2client";
-import { openCommand } from "./open";
-import { profileCommand } from "./profile";
-import { removeCommand } from "./remove";
-import { secretCommand } from "./secret";
-import { showCommand } from "./show";
-import { staticwebsiteCommand } from "./staticwebsite";
-import { tailordbCommand } from "./tailordb";
-import { userCommand } from "./user";
-import { readPackageJson } from "./utils/package-json";
-import { workflowCommand } from "./workflow";
-import { workspaceCommand } from "./workspace";
+import { withCompletionCommand } from "politty/completion";
+import { z } from "zod";
+import { apiCommand } from "./commands/api";
+import { applyCommand } from "./commands/apply";
+import { authconnectionCommand } from "./commands/authconnection";
+import { crashReportCommand } from "./commands/crash-report";
+import { executorCommand } from "./commands/executor";
+import { functionCommand } from "./commands/function";
+import { generateCommand } from "./commands/generate";
+import { initCommand } from "./commands/init";
+import { loginCommand } from "./commands/login";
+import { logoutCommand } from "./commands/logout";
+import { machineuserCommand } from "./commands/machineuser";
+import { oauth2clientCommand } from "./commands/oauth2client";
+import { openCommand } from "./commands/open";
+import { organizationCommand } from "./commands/organization";
+import { profileCommand } from "./commands/profile";
+import { removeCommand } from "./commands/remove";
+import { secretCommand } from "./commands/secret";
+import { setupCommand } from "./commands/setup";
+import { showCommand } from "./commands/show";
+import { staticwebsiteCommand } from "./commands/staticwebsite";
+import { tailordbCommand } from "./commands/tailordb";
+import { userCommand } from "./commands/user";
+import { workflowCommand } from "./commands/workflow";
+import { workspaceCommand } from "./commands/workspace";
+import { initCrashReporting } from "./crash-report";
+import { queryCommand } from "./query";
+import { commonArgs, isVerbose } from "./shared/args";
+import { isCLIError } from "./shared/errors";
+import { logger } from "./shared/logger";
+import { readPackageJson } from "./shared/package-json";
+import { isNativeTypeScriptRuntime } from "./shared/runtime";
 
-register("tsx", import.meta.url, { data: {} });
+// Register tsx for TypeScript loading on Node.js.
+// Bun and Deno handle TypeScript natively, so registration is skipped.
+if (!isNativeTypeScriptRuntime()) {
+  const { register } = await import("node:module");
+  register("tsx", import.meta.url, { data: {} });
+}
+
+// Runs before globalArgs effects load --env-file, so env file overrides for
+// TAILOR_CRASH_REPORTS_* are not available for early startup failures.
+// This is intentional: we want crash reporting active before argument parsing,
+// and env files require parsing to be complete. Shell-level env vars still work.
+initCrashReporting();
 
 const packageJson = await readPackageJson();
+const cliName = Object.keys(packageJson.bin ?? {})[0] || "tailor-sdk";
 
-export const mainCommand = defineCommand({
-  name: Object.keys(packageJson.bin ?? {})[0] || "tailor-sdk",
-  description:
-    packageJson.description || "Tailor CLI for managing Tailor Platform SDK applications",
-  subCommands: {
-    api: apiCommand,
-    apply: applyCommand,
-    executor: executorCommand,
-    generate: generateCommand,
-    init: initCommand,
-    login: loginCommand,
-    logout: logoutCommand,
-    machineuser: machineuserCommand,
-    oauth2client: oauth2clientCommand,
-    open: openCommand,
-    profile: profileCommand,
-    remove: removeCommand,
-    secret: secretCommand,
-    show: showCommand,
-    staticwebsite: staticwebsiteCommand,
-    tailordb: tailordbCommand,
-    user: userCommand,
-    workflow: workflowCommand,
-    workspace: workspaceCommand,
+export const mainCommand = withCompletionCommand(
+  defineCommand({
+    name: cliName,
+    description:
+      packageJson.description || "Tailor CLI for managing Tailor Platform SDK applications",
+    subCommands: {
+      api: apiCommand,
+      apply: applyCommand,
+      authconnection: authconnectionCommand,
+      "crash-report": crashReportCommand,
+      executor: executorCommand,
+      function: functionCommand,
+      generate: generateCommand,
+      init: initCommand,
+      login: loginCommand,
+      logout: logoutCommand,
+      machineuser: machineuserCommand,
+      oauth2client: oauth2clientCommand,
+      open: openCommand,
+      organization: organizationCommand,
+      profile: profileCommand,
+      query: queryCommand,
+      remove: removeCommand,
+      secret: secretCommand,
+      setup: setupCommand,
+      show: showCommand,
+      staticwebsite: staticwebsiteCommand,
+      tailordb: tailordbCommand,
+      user: userCommand,
+      workflow: workflowCommand,
+      workspace: workspaceCommand,
+    },
+  }),
+);
+
+runMain(mainCommand, {
+  version: packageJson.version,
+  globalArgs: z.object(commonArgs),
+  displayErrors: false,
+  cleanup: async ({ error }) => {
+    if (error) {
+      if (isCLIError(error)) {
+        logger.log(error.format());
+        if (isVerbose() && error.stack) {
+          logger.debug(`\nStack trace:\n${error.stack}`);
+        }
+      } else if (error instanceof Error) {
+        logger.error(error.message);
+        if (isVerbose() && error.stack) {
+          logger.debug(`\nStack trace:\n${error.stack}`);
+        }
+      } else {
+        logger.error(`Unknown error: ${error}`);
+      }
+
+      // Report programming bugs (native error types that indicate code defects).
+      // Skip domain errors like ConnectError, CIPromptError, and plain Error
+      // used for user-facing validation/not-found messages.
+      // Exclude SyntaxError/ReferenceError: at runtime these typically come from
+      // dynamically imported user config files, not from SDK code.
+      const shouldReport =
+        !isCLIError(error) &&
+        (!(error instanceof Error) || error instanceof TypeError || error instanceof RangeError);
+      if (shouldReport) {
+        // Lazy import to match shutdownTelemetry pattern and keep cleanup handler lightweight.
+        const { reportCrash } = await import("@/cli/crash-report");
+        await reportCrash(error, "handledError");
+      }
+    }
+    const { shutdownTelemetry } = await import("@/cli/telemetry");
+    await shutdownTelemetry();
   },
 });
-
-runMain(mainCommand, { version: packageJson.version });

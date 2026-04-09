@@ -5,8 +5,15 @@
     "outDir": "dist",
     "incremental": true,
     "tsBuildInfoFile": "./.tsbuildinfo",
-    "types": ["node", "@tailor-platform/function-types"]
+    "types": ["node"]
   },
   "include": ["**/*.ts"],
-  "exclude": ["node_modules", "dist", "generated-perf", "scripts/perf", "tests/fixtures"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "generated-perf",
+    "scripts/perf",
+    "tests/fixtures",
+    "tests/migration-fixtures"
+  ]
 }

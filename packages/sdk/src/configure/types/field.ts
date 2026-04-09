@@ -1,8 +1,8 @@
-import { type EnumValue } from "@/parser/service/tailordb/types";
+import type { EnumValue } from "@/types/tailordb";
 
 export type AllowedValue = EnumValue;
 
-export type AllowedValues = [string | EnumValue, ...(string | EnumValue)[]];
+export type AllowedValues = readonly [string | EnumValue, ...(string | EnumValue)[]];
 
 /**
  * Normalize allowed values into EnumValue objects with descriptions.

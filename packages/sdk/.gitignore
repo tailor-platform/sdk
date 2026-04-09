@@ -8,3 +8,9 @@ runtime-perf.json
 runtime-perf-summary.json
 bundle-size.json
 scripts/perf/tsconfig.temp.json
+
+# Integration test fixtures output
+src/cli/commands/apply/__test_fixtures__/dist/
+src/cli/commands/apply/__test_fixtures__/generated/
+src/cli/commands/apply/__test_fixtures__/generators-compat-out/
+src/cli/commands/apply/__test_fixtures__/plugins-compat-out/

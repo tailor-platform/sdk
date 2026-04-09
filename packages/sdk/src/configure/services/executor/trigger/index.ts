@@ -3,7 +3,7 @@ export * from "./schedule";
 export * from "./webhook";
 
 import type {
-  RecordTrigger,
+  TailorDBTrigger,
   ResolverExecutedTrigger,
   IdpUserTrigger,
   AuthAccessTokenTrigger,
@@ -12,7 +12,7 @@ import type { ScheduleTrigger } from "./schedule";
 import type { IncomingWebhookTrigger } from "./webhook";
 
 export type Trigger<Args> =
-  | RecordTrigger<Args>
+  | TailorDBTrigger<Args>
   | ResolverExecutedTrigger<Args>
   | ScheduleTrigger<Args>
   | IncomingWebhookTrigger<Args>

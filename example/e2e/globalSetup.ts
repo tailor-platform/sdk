@@ -21,7 +21,7 @@ export async function setup(project: TestProject) {
   const tokens = await getMachineUserToken({
     name: "manager-machine-user",
   });
-  const workspaceId = loadWorkspaceId();
+  const workspaceId = await loadWorkspaceId();
   const platformToken = await loadAccessToken();
 
   project.provide("url", app.url);

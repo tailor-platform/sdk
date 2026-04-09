@@ -2,6 +2,7 @@ import { describe, it, expectTypeOf, expect } from "vitest";
 import { t } from "@/configure/types";
 import { db } from "./schema";
 import type { Hook } from "./types";
+import type { TailorUser } from "@/configure/types";
 import type { output } from "@/configure/types/helpers";
 import type { FieldValidateInput, ValidateConfig } from "@/configure/types/validation";
 
@@ -201,6 +202,17 @@ describe("TailorDBField enum field tests", () => {
     }>();
   });
 
+  it("accepts as const readonly array", () => {
+    const STATUSES = ["active", "inactive", "pending"] as const;
+    const enumField = db.enum(STATUSES);
+    expectTypeOf<output<typeof enumField>>().toEqualTypeOf<"active" | "inactive" | "pending">();
+    expect(enumField.metadata.allowedValues).toEqual([
+      { value: "active", description: "" },
+      { value: "inactive", description: "" },
+      { value: "pending", description: "" },
+    ]);
+  });
+
   it("enum array works correctly", () => {
     const _enumArrayType = db.type("Test", {
       categories: db.enum(["a", "b", "c"], { array: true }),
@@ -237,21 +249,6 @@ describe("TailorDBField RelationConfig option field tests", () => {
     expect(userField.rawRelation!.toward.as).toBeUndefined();
     expect(userField.rawRelation!.toward.key).toEqual("id");
     expect(userField.rawRelation!.backward).toBeUndefined();
-  });
-
-  it('when toward.key is omitted, undefined is stored (default "id" is computed in parser layer)', () => {
-    const userField = db.uuid().relation({
-      type: "oneToOne",
-      toward: {
-        type: User,
-        as: "owner",
-      },
-    });
-
-    // Raw relation config is stored, processing happens in parser layer
-    expect(userField.rawRelation!.toward.type).toEqual("User");
-    expect(userField.rawRelation!.toward.as).toEqual("owner");
-    expect(userField.rawRelation!.toward.key).toBeUndefined();
   });
 
   it("behavior when toward.as, toward.key, and backward are all explicitly specified", () => {
@@ -431,16 +428,6 @@ describe("TailorDBField hooks modifier tests", () => {
     }>();
   });
 
-  it("calling hooks modifier more than once causes type error", () => {
-    db.string()
-      .hooks({
-        create: () => "created",
-      })
-      .hooks({
-        update: () => "updated",
-      });
-  });
-
   it("setting hooks on nested field causes type error", () => {
     // @ts-expect-error hooks() cannot be called on nested fields
     db.object({
@@ -606,19 +593,6 @@ describe("TailorDBField unique modifier tests", () => {
 });
 
 describe("TailorDBType withTimestamps option tests", () => {
-  it("withTimestamps: false does not add timestamp fields", () => {
-    const _noTimestampType = db.type("Test", {
-      name: db.string(),
-      ...db.fields.timestamps(),
-    });
-    expectTypeOf<output<typeof _noTimestampType>>().toEqualTypeOf<{
-      id: string;
-      name: string;
-      createdAt: string | Date;
-      updatedAt?: string | Date | null;
-    }>();
-  });
-
   it("withTimestamps: true adds timestamp fields", () => {
     const _timestampType = db.type("TestWithTimestamp", {
       name: db.string(),
@@ -919,16 +893,6 @@ describe("TailorDBType hooks modifier tests", () => {
       id: string;
       name: string;
     }>();
-  });
-
-  it("type error occurs when hooks is already set on TailorDBField", () => {
-    db.type("Test", {
-      name: db.string().hooks({ create: () => "created" }),
-    }).hooks({
-      name: {
-        create: () => "created",
-      },
-    });
   });
 
   it("setting hooks on id causes type error", () => {
@@ -1251,13 +1215,6 @@ describe("TailorField/TailorType compatibility tests", () => {
       name: string;
     }>();
   });
-
-  it("can assign TailorDBType to TailorType", () => {
-    const _dbType = db.type("Test", {
-      name: db.string(),
-    });
-    // Type check removed - TailorType no longer exists
-  });
 });
 
 describe("TailorDBType/TailorDBField description support", () => {
@@ -1387,5 +1344,645 @@ describe("TailorDBType files method tests", () => {
     // "avatar" is not an existing field, so it should be allowed
     expectTypeOf<{ avatar: string }>().toExtend<FilesParam>();
     expectTypeOf<{ avatar?: never }>().not.toExtend<FilesParam>();
+  });
+});
+
+describe("TailorDBField runtime validation tests", () => {
+  const user: TailorUser = {
+    id: "test",
+    type: "user",
+    workspaceId: "workspace-test",
+    attributes: {},
+    attributeList: [],
+  };
+  const data = {};
+
+  it("validates string field values", () => {
+    const field = db.string();
+    const result = field.parse({ value: "hello", data, user });
+    expect(result.issues).toBeUndefined();
+    if (result.issues) {
+      throw new Error("Unexpected issues");
+    }
+    expect(result.value).toBe("hello");
+
+    const bad = field.parse({ value: 123, data, user });
+    expect(bad.issues?.[0]?.message).toBe("Expected a string: received 123");
+  });
+
+  it("validates enum values", () => {
+    const field = db.enum(["active", "inactive"]);
+    const result = field.parse({ value: "active", data, user });
+    expect(result.issues).toBeUndefined();
+    if (result.issues) {
+      throw new Error("Unexpected issues");
+    }
+    expect(result.value).toBe("active");
+
+    const bad = field.parse({ value: "unknown", data, user });
+    expect(bad.issues?.[0]?.message).toBe("Must be one of [active, inactive]: received unknown");
+  });
+
+  it("validates integer values", () => {
+    const field = db.int();
+    const ok = field.parse({ value: 42, data, user });
+    expect(ok.issues).toBeUndefined();
+    if (ok.issues) {
+      throw new Error("Unexpected issues");
+    }
+    expect(ok.value).toBe(42);
+
+    const bad = field.parse({ value: "not-a-number", data, user });
+    expect(bad.issues?.[0]?.message).toBe("Expected an integer: received not-a-number");
+  });
+
+  it("validates float values", () => {
+    const field = db.float();
+    const ok = field.parse({ value: 3.14, data, user });
+    expect(ok.issues).toBeUndefined();
+    if (ok.issues) {
+      throw new Error("Unexpected issues");
+    }
+    expect(ok.value).toBe(3.14);
+
+    const bad = field.parse({ value: "not-a-number", data, user });
+    expect(bad.issues?.[0]?.message).toBe("Expected a number: received not-a-number");
+  });
+
+  it("validates boolean values", () => {
+    const field = db.bool();
+    const ok = field.parse({ value: true, data, user });
+    expect(ok.issues).toBeUndefined();
+    if (ok.issues) {
+      throw new Error("Unexpected issues");
+    }
+    expect(ok.value).toBe(true);
+
+    const bad = field.parse({ value: "true", data, user });
+    expect(bad.issues?.[0]?.message).toBe("Expected a boolean: received true");
+  });
+
+  it("validates nested object values", () => {
+    const field = db.object({
+      name: db.string(),
+      age: db.int({ optional: true }),
+    });
+    const ok = field.parse({ value: { name: "test", age: 30 }, data, user });
+    expect(ok.issues).toBeUndefined();
+    if (ok.issues) {
+      throw new Error("Unexpected issues");
+    }
+    expect(ok.value).toEqual({ name: "test", age: 30 });
+
+    const bad = field.parse({ value: { name: 123 }, data, user });
+    expect(bad.issues?.[0]?.path).toEqual(["name"]);
+    expect(bad.issues?.[0]?.message).toBe("Expected a string: received 123");
+  });
+
+  it("validates array values", () => {
+    const field = db.int({ array: true });
+    const ok = field.parse({ value: [1, 2, 3], data, user });
+    expect(ok.issues).toBeUndefined();
+    if (ok.issues) {
+      throw new Error("Unexpected issues");
+    }
+    expect(ok.value).toEqual([1, 2, 3]);
+  });
+
+  it("validates UUID format", () => {
+    const field = db.uuid();
+    const ok = field.parse({ value: "123e4567-e89b-12d3-a456-426614174000", data, user });
+    expect(ok.issues).toBeUndefined();
+    if (ok.issues) {
+      throw new Error("Unexpected issues");
+    }
+    expect(ok.value).toBe("123e4567-e89b-12d3-a456-426614174000");
+
+    const bad = field.parse({ value: "not-a-uuid", data, user });
+    expect(bad.issues?.[0]?.message).toBe("Expected a valid UUID: received not-a-uuid");
+  });
+
+  it("validates date format", () => {
+    const field = db.date();
+    const ok = field.parse({ value: "2025-01-01", data, user });
+    expect(ok.issues).toBeUndefined();
+    if (ok.issues) {
+      throw new Error("Unexpected issues");
+    }
+    expect(ok.value).toBe("2025-01-01");
+
+    const bad = field.parse({ value: "2025/01/01", data, user });
+    expect(bad.issues?.[0]?.message).toBe(
+      'Expected to match "yyyy-MM-dd" format: received 2025/01/01',
+    );
+  });
+
+  it("validates time format", () => {
+    const field = db.time();
+    const ok = field.parse({ value: "10:11", data, user });
+    expect(ok.issues).toBeUndefined();
+    if (ok.issues) {
+      throw new Error("Unexpected issues");
+    }
+    expect(ok.value).toBe("10:11");
+
+    const bad = field.parse({ value: "10:11:12", data, user });
+    expect(bad.issues?.[0]?.message).toBe('Expected to match "HH:mm" format: received 10:11:12');
+  });
+
+  it("validates required and optional handling", () => {
+    const requiredField = db.string();
+    const requiredMissing = requiredField.parse({ value: undefined, data, user });
+    expect(requiredMissing.issues?.[0]?.message).toBe("Required field is missing");
+
+    const optionalField = db.string({ optional: true });
+    const optionalNull = optionalField.parse({ value: undefined, data, user });
+    expect(optionalNull.issues).toBeUndefined();
+    if (optionalNull.issues) {
+      throw new Error("Unexpected issues");
+    }
+    expect(optionalNull.value).toBeNull();
+  });
+});
+
+describe("TailorDBType gqlOperations tests", () => {
+  it("gqlOperations stores raw config via features()", () => {
+    const orderType = db
+      .type("Order", {
+        name: db.string(),
+      })
+      .features({
+        gqlOperations: {
+          delete: false,
+        },
+      });
+
+    // Configure layer stores raw data without normalization
+    const ops = orderType.metadata.settings?.gqlOperations;
+    expect(ops).toEqual({ delete: false });
+  });
+
+  it("gqlOperations stores multiple operations config", () => {
+    const archiveType = db
+      .type("Archive", {
+        data: db.string(),
+      })
+      .features({
+        gqlOperations: {
+          create: false,
+          update: false,
+          delete: false,
+        },
+      });
+
+    const ops = archiveType.metadata.settings?.gqlOperations;
+    expect(ops).toEqual({ create: false, update: false, delete: false });
+  });
+
+  it("gqlOperations stores read config", () => {
+    const secretType = db
+      .type("Secret", {
+        value: db.string(),
+      })
+      .features({
+        gqlOperations: {
+          read: false,
+        },
+      });
+
+    const ops = secretType.metadata.settings?.gqlOperations;
+    expect(ops).toEqual({ read: false });
+  });
+
+  it("gqlOperations works with other features", () => {
+    const logType = db
+      .type("Log", {
+        message: db.string(),
+      })
+      .features({
+        aggregation: true,
+        bulkUpsert: true,
+        gqlOperations: {
+          delete: false,
+        },
+      });
+
+    expect(logType.metadata.settings?.aggregation).toBe(true);
+    expect(logType.metadata.settings?.bulkUpsert).toBe(true);
+    expect(logType.metadata.settings?.gqlOperations).toEqual({ delete: false });
+  });
+});
+
+describe("TailorDBType gqlOperations alias tests", () => {
+  it("gqlOperations: 'query' stores alias as raw value", () => {
+    const readOnlyType = db
+      .type("ReadOnly", {
+        data: db.string(),
+      })
+      .features({
+        gqlOperations: "query",
+      });
+
+    // Configure layer stores the alias without normalization
+    const ops = readOnlyType.metadata.settings?.gqlOperations;
+    expect(ops).toBe("query");
+  });
+
+  it("gqlOperations: 'query' works with other features", () => {
+    const auditType = db
+      .type("Audit", {
+        action: db.string(),
+      })
+      .features({
+        aggregation: true,
+        gqlOperations: "query",
+      });
+
+    expect(auditType.metadata.settings?.aggregation).toBe(true);
+    expect(auditType.metadata.settings?.gqlOperations).toBe("query");
+  });
+});
+
+describe("TailorDBField immutability", () => {
+  it("field.hooks() returns a new field without mutating the original", () => {
+    const original = db.string();
+    const withHooks = original.hooks({ create: () => "created" });
+
+    // hooks() should return a NEW field
+    expect(withHooks).not.toBe(original);
+    // Original should NOT have hooks
+    expect(original.metadata.hooks).toBeUndefined();
+    // New field should have hooks
+    expect(withHooks.metadata.hooks?.create).toBeDefined();
+  });
+
+  it("field.validate() returns a new field without mutating the original", () => {
+    const original = db.string();
+    const withValidate = original.validate(({ value }) => value.length > 0);
+
+    expect(withValidate).not.toBe(original);
+    expect(original.metadata.validate).toBeUndefined();
+    expect(withValidate.metadata.validate).toHaveLength(1);
+  });
+
+  it("field.description() returns a new field without mutating the original", () => {
+    const original = db.string();
+    const withDesc = original.description("desc");
+
+    expect(withDesc).not.toBe(original);
+    expect(original.metadata.description).toBeUndefined();
+    expect(withDesc.metadata.description).toBe("desc");
+  });
+
+  it("field.index() returns a new field without mutating the original", () => {
+    const original = db.string();
+    const withIndex = original.index();
+
+    expect(withIndex).not.toBe(original);
+    expect(original.metadata.index).toBeUndefined();
+    expect(withIndex.metadata.index).toBe(true);
+  });
+
+  it("field.unique() returns a new field without mutating the original", () => {
+    const original = db.string();
+    const withUnique = original.unique();
+
+    expect(withUnique).not.toBe(original);
+    expect(original.metadata.unique).toBeUndefined();
+    expect(withUnique.metadata.unique).toBe(true);
+  });
+
+  it("field.serial() returns a new field without mutating the original", () => {
+    const original = db.int();
+    const withSerial = original.serial({ start: 1 });
+
+    expect(withSerial).not.toBe(original);
+    expect(original.metadata.serial).toBeUndefined();
+    expect(withSerial.metadata.serial).toEqual({ start: 1 });
+  });
+
+  it("field.vector() returns a new field without mutating the original", () => {
+    const original = db.string();
+    const withVector = original.vector();
+
+    expect(withVector).not.toBe(original);
+    expect(original.metadata.vector).toBeUndefined();
+    expect(withVector.metadata.vector).toBe(true);
+  });
+
+  it("field.relation() returns a new field without mutating the original", () => {
+    const User = db.type("User", { name: db.string() });
+    const original = db.uuid();
+    const withRelation = original.relation({ type: "n-1", toward: { type: User } });
+
+    expect(withRelation).not.toBe(original);
+    expect(original.rawRelation).toBeUndefined();
+    expect(withRelation.rawRelation).toBeDefined();
+  });
+
+  it("chained fluent calls produce correct result", () => {
+    const field = db
+      .string()
+      .description("name")
+      .index()
+      .hooks({ create: () => "x" });
+
+    expect(field.metadata.description).toBe("name");
+    expect(field.metadata.index).toBe(true);
+    expect(field.metadata.hooks?.create).toBeDefined();
+  });
+});
+
+describe("TailorDBType does not mutate shared fields", () => {
+  it("type.hooks() does not mutate the shared field", () => {
+    const sharedField = db.string();
+
+    const typeA = db.type("TypeA", { name: sharedField }).hooks({ name: { create: () => "A" } });
+    const typeB = db.type("TypeB", { name: sharedField });
+
+    expect(typeA.fields.name.metadata.hooks).toBeDefined();
+    expect(typeB.fields.name.metadata.hooks).toBeUndefined();
+    expect(sharedField.metadata.hooks).toBeUndefined();
+  });
+
+  it("type.validate() does not mutate the shared field", () => {
+    const sharedField = db.string();
+
+    const typeA = db
+      .type("TypeA", { email: sharedField })
+      .validate({ email: ({ value }) => value.includes("@") });
+    const typeB = db.type("TypeB", { email: sharedField });
+
+    expect(typeA.fields.email.metadata.validate).toBeDefined();
+    expect(typeB.fields.email.metadata.validate).toBeUndefined();
+    expect(sharedField.metadata.validate).toBeUndefined();
+  });
+
+  it("hooks() does not replace entries in the original fields record", () => {
+    const nameField = db.string();
+    const fields = { name: nameField };
+
+    db.type("TypeA", fields).hooks({ name: { create: () => "hooked" } });
+
+    // The fields record should still reference the original field instance
+    expect(fields.name).toBe(nameField);
+  });
+
+  it("validate() does not replace entries in the original fields record", () => {
+    const emailField = db.string();
+    const fields = { email: emailField };
+
+    db.type("TypeA", fields).validate({ email: ({ value }) => value.includes("@") });
+
+    // The fields record should still reference the original field instance
+    expect(fields.email).toBe(emailField);
+  });
+});
+
+describe("TailorDBField clone tests", () => {
+  it("clones field with same metadata", () => {
+    const original = db.string().description("test description").index();
+    const cloned = original.clone();
+
+    expect(cloned.metadata.description).toBe("test description");
+    expect(cloned.metadata.index).toBe(true);
+    expect(cloned.metadata.required).toBe(true);
+  });
+
+  it("cloned field is independent from original", () => {
+    const original = db.string().description("original");
+    const cloned = original.clone();
+
+    // Modifying cloned should not affect original
+    expect(cloned.metadata.description).toBe("original");
+    expect(original.metadata.description).toBe("original");
+  });
+
+  it("clone with optional override changes required to false", () => {
+    const required = db.string();
+    expect(required.metadata.required).toBe(true);
+
+    const optional = required.clone({ optional: true });
+    expect(optional.metadata.required).toBe(false);
+
+    // Original remains unchanged
+    expect(required.metadata.required).toBe(true);
+  });
+
+  it("clone with array override", () => {
+    const single = db.int();
+    const array = single.clone({ array: true });
+
+    expect(array.metadata.array).toBe(true);
+    expectTypeOf<output<typeof array>>().toEqualTypeOf<number[]>();
+  });
+
+  it("clone with both optional and array overrides", () => {
+    const original = db.string();
+    const cloned = original.clone({ optional: true, array: true });
+
+    expect(cloned.metadata.required).toBe(false);
+    expect(cloned.metadata.array).toBe(true);
+    expectTypeOf<output<typeof cloned>>().toEqualTypeOf<string[] | null>();
+  });
+
+  it("clones unique modifier correctly", () => {
+    const original = db.string().unique();
+    const cloned = original.clone();
+
+    expect(cloned.metadata.unique).toBe(true);
+    expect(cloned.metadata.index).toBe(true);
+  });
+
+  it("clones relation config correctly", () => {
+    const User = db.type("User", { name: db.string() });
+    const original = db.uuid().relation({
+      type: "n-1",
+      toward: { type: User, as: "author" },
+      backward: "posts",
+    });
+    const cloned = original.clone();
+
+    expect(cloned.rawRelation).toBeDefined();
+    expect(cloned.rawRelation?.type).toBe("n-1");
+    expect(cloned.rawRelation?.toward.type).toBe("User");
+    expect(cloned.rawRelation?.toward.as).toBe("author");
+    expect(cloned.rawRelation?.backward).toBe("posts");
+
+    // Verify deep copy (different reference)
+    expect(cloned.rawRelation).not.toBe(original.rawRelation);
+    expect(cloned.rawRelation?.toward).not.toBe(original.rawRelation?.toward);
+  });
+
+  it("clones hooks correctly", () => {
+    const createHook = () => "created";
+    const original = db.string().hooks({ create: createHook });
+    const cloned = original.clone();
+
+    expect(cloned.metadata.hooks).toBeDefined();
+    expect(cloned.metadata.hooks?.create).toBe(createHook);
+
+    // Verify deep copy (different reference)
+    expect(cloned.metadata.hooks).not.toBe(original.metadata.hooks);
+  });
+
+  it("clones validate correctly", () => {
+    const validator = ({ value }: { value: string }) => value.length > 0;
+    const original = db.string().validate(validator);
+    const cloned = original.clone();
+
+    expect(cloned.metadata.validate).toBeDefined();
+    expect(cloned.metadata.validate).toHaveLength(1);
+
+    // Verify deep copy (different reference)
+    expect(cloned.metadata.validate).not.toBe(original.metadata.validate);
+  });
+
+  it("clones validate with tuple format correctly", () => {
+    const validator = ({ value }: { value: string }) => value.length > 0;
+    const original = db.string().validate([validator, "Value must not be empty"]);
+    const cloned = original.clone();
+
+    expect(cloned.metadata.validate).toBeDefined();
+    expect(cloned.metadata.validate).toHaveLength(1);
+    expect(cloned.metadata.validate?.[0]).toEqual([validator, "Value must not be empty"]);
+
+    // Verify deep copy (different reference for array and tuple)
+    expect(cloned.metadata.validate).not.toBe(original.metadata.validate);
+    expect(cloned.metadata.validate?.[0]).not.toBe(original.metadata.validate?.[0]);
+  });
+
+  it("clones serial config correctly", () => {
+    const original = db.int().serial({ start: 100 });
+    const cloned = original.clone();
+
+    expect(cloned.metadata.serial).toEqual({ start: 100 });
+
+    // Verify deep copy (different reference)
+    expect(cloned.metadata.serial).not.toBe(original.metadata.serial);
+  });
+
+  it("clones vector config correctly", () => {
+    const original = db.string().vector();
+    const cloned = original.clone();
+
+    expect(cloned.metadata.vector).toBe(true);
+  });
+
+  it("clones enum field correctly", () => {
+    const original = db.enum(["active", "inactive", "pending"]);
+    const cloned = original.clone();
+
+    expect(cloned.metadata.allowedValues).toEqual([
+      { value: "active", description: "" },
+      { value: "inactive", description: "" },
+      { value: "pending", description: "" },
+    ]);
+
+    // Verify deep copy (different reference)
+    expect(cloned.metadata.allowedValues).not.toBe(original.metadata.allowedValues);
+    expect(cloned.metadata.allowedValues?.[0]).not.toBe(original.metadata.allowedValues?.[0]);
+  });
+
+  it("clones nested object field correctly", () => {
+    const original = db.object({
+      name: db.string(),
+      age: db.int({ optional: true }),
+    });
+    const cloned = original.clone();
+
+    expect(cloned.fields.name).toBeDefined();
+    expect(cloned.fields.age).toBeDefined();
+
+    // Verify deep copy (different reference)
+    expect(cloned.fields).not.toBe(original.fields);
+    expect(cloned.fields.name).not.toBe(original.fields.name);
+    expect(cloned.fields.age).not.toBe(original.fields.age);
+  });
+});
+
+describe("TailorDBField decimal type tests", () => {
+  it("decimal field outputs string type correctly", () => {
+    const _decimalType = db.type("Test", {
+      price: db.decimal(),
+    });
+    expectTypeOf<output<typeof _decimalType>>().toEqualTypeOf<{
+      id: string;
+      price: string;
+    }>();
+  });
+
+  it("optional decimal field outputs string | null type correctly", () => {
+    const _decimalType = db.type("Test", {
+      discount: db.decimal({ optional: true }),
+    });
+    expectTypeOf<output<typeof _decimalType>>().toEqualTypeOf<{
+      id: string;
+      discount?: string | null;
+    }>();
+  });
+
+  it("decimal with scale stores scale in metadata", () => {
+    const field = db.decimal({ scale: 2 });
+    expect(field.type).toBe("decimal");
+    expect(field._metadata.scale).toBe(2);
+  });
+
+  it("decimal without scale has no scale in metadata", () => {
+    const field = db.decimal();
+    expect(field.type).toBe("decimal");
+    expect(field._metadata.scale).toBeUndefined();
+  });
+
+  it("decimal scale validation rejects out-of-range values", () => {
+    expect(() => db.decimal({ scale: -1 })).toThrow("scale must be an integer between 0 and 12");
+    expect(() => db.decimal({ scale: 13 })).toThrow("scale must be an integer between 0 and 12");
+  });
+
+  it("decimal scale validation rejects non-integer values", () => {
+    expect(() => db.decimal({ scale: 1.5 })).toThrow("scale must be an integer between 0 and 12");
+  });
+
+  it("decimal parse validates valid decimal strings", () => {
+    const field = db.decimal();
+    const user = { id: "test", _loggedIn: true } as unknown as TailorUser;
+    expect(field.parse({ value: "123.45", data: {}, user })).toEqual({ value: "123.45" });
+    expect(field.parse({ value: "0", data: {}, user })).toEqual({ value: "0" });
+    expect(field.parse({ value: "-99.99", data: {}, user })).toEqual({ value: "-99.99" });
+    expect(field.parse({ value: "1000", data: {}, user })).toEqual({ value: "1000" });
+    expect(field.parse({ value: ".5", data: {}, user })).toEqual({ value: ".5" });
+    expect(field.parse({ value: "5.", data: {}, user })).toEqual({ value: "5." });
+    expect(field.parse({ value: "4.321e+4", data: {}, user })).toEqual({ value: "4.321e+4" });
+    expect(field.parse({ value: "1E-5", data: {}, user })).toEqual({ value: "1E-5" });
+    expect(field.parse({ value: "2.41E-3", data: {}, user })).toEqual({ value: "2.41E-3" });
+    expect(field.parse({ value: "-1.5e10", data: {}, user })).toEqual({ value: "-1.5e10" });
+  });
+
+  it("decimal parse rejects invalid decimal strings", () => {
+    const field = db.decimal();
+    const user = { id: "test", _loggedIn: true } as unknown as TailorUser;
+    const result1 = field.parse({ value: "abc", data: {}, user });
+    expect(result1).toHaveProperty("issues");
+
+    const result2 = field.parse({ value: 123, data: {}, user });
+    expect(result2).toHaveProperty("issues");
+
+    const result3 = field.parse({ value: "", data: {}, user });
+    expect(result3).toHaveProperty("issues");
+
+    const result4 = field.parse({ value: "1_000_000", data: {}, user });
+    expect(result4).toHaveProperty("issues");
+
+    const result5 = field.parse({ value: "0b1.1p-5", data: {}, user });
+    expect(result5).toHaveProperty("issues");
+
+    const result6 = field.parse({ value: "1e", data: {}, user });
+    expect(result6).toHaveProperty("issues");
+
+    const result7 = field.parse({ value: "e5", data: {}, user });
+    expect(result7).toHaveProperty("issues");
+
+    const result8 = field.parse({ value: ".", data: {}, user });
+    expect(result8).toHaveProperty("issues");
   });
 });

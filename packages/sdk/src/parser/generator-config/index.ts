@@ -1,5 +1,4 @@
 import { z } from "zod";
-import type { CodeGeneratorBase } from "./types";
 
 // Dependency kind enum for generators
 const DependencyKindSchema = z.enum(["tailordb", "resolver", "executor"]);
@@ -47,42 +46,3 @@ export const BaseGeneratorConfigSchema = z.union([
   FileUtilsConfigSchema,
   CodeGeneratorSchema,
 ]);
-
-export type * from "./types";
-
-/**
- * Creates a GeneratorConfigSchema with built-in generator support
- * @param builtinGenerators - Map of generator IDs to their constructor functions
- * @returns Generator config schema
- */
-export function createGeneratorConfigSchema(
-  builtinGenerators: Map<
-    string,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (options: any) => CodeGeneratorBase
-  >,
-) {
-  return z
-    .union([
-      KyselyTypeConfigSchema,
-      SeedConfigSchema,
-      EnumConstantsConfigSchema,
-      FileUtilsConfigSchema,
-      CodeGeneratorSchema,
-    ])
-    .transform((gen) => {
-      if (Array.isArray(gen)) {
-        const [id, options] = gen;
-        const constructor = builtinGenerators.get(id);
-        if (constructor) {
-          return constructor(options);
-        }
-        throw new Error(`Unknown generator ID: ${id}`);
-      }
-      return gen as CodeGeneratorBase;
-    })
-    .brand("CodeGenerator");
-}
-
-export type GeneratorConfigSchemaType = ReturnType<typeof createGeneratorConfigSchema>;
-export type Generator = z.output<GeneratorConfigSchemaType>;

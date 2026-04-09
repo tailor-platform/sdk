@@ -1,0 +1,143 @@
+name: Docs Implementation Consistency Check
+
+on:
+  pull_request:
+    types: [ready_for_review, review_requested]
+    paths:
+      - "packages/sdk/src/**"
+      - "packages/sdk/docs/**"
+      - "example/**"
+      - "CLAUDE.md"
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+jobs:
+  docs-consistency:
+    runs-on: ubuntu-slim
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Check docs-implementation consistency
+        uses: anthropics/claude-code-action@26ddc358fe3befff50c5ec2f80304c90c763f6f8 # v1.0.90
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            # Documentation vs Implementation Consistency Check
+
+            Analyze the PR changes and verify that documentation stays consistent with the implementation.
+
+            ## Target Documentation
+
+            - `packages/sdk/docs/cli-reference.md` - CLI reference
+            - `packages/sdk/docs/cli/*.md` - CLI subcommand docs
+            - `packages/sdk/docs/services/*.md` - Service documentation
+            - `packages/sdk/docs/configuration.md` - Configuration reference
+            - `CLAUDE.md` - Developer guide and code patterns
+            - `example/` - Working example code
+
+            ## Investigation Steps
+
+            ### 1. Retrieve PR Changes
+
+            ```bash
+            gh pr view ${{ github.event.number }} --json title,body,files
+            gh pr diff ${{ github.event.number }}
+            ```
+
+            ### 2. Classify Changes
+
+            Determine which categories the PR changes fall into:
+
+            - **CLI commands/options**: Added, changed, or removed commands or flags
+            - **Public API**: New or modified exported functions, types, or interfaces
+            - **Configuration**: Changes to config file schema (`defineConfig`, `defineAuth`, etc.)
+            - **Executors/Resolvers/Workflows**: Changes to creation APIs or trigger types
+            - **Example code**: Changes that should reflect current best practices
+
+            ### 3. Cross-Reference Documentation
+
+            For each changed area, check the corresponding documentation:
+
+            #### 3.1 CLI Changes
+            - Read `packages/sdk/docs/cli-reference.md` and relevant `packages/sdk/docs/cli/*.md` files
+            - Verify all CLI commands, options, and their descriptions match the implementation
+            - Compare source code command definitions with docs
+
+            #### 3.2 API / Config Changes
+            - Read `packages/sdk/docs/services/*.md` and `packages/sdk/docs/configuration.md`
+            - Verify documented function signatures, parameters, and return types match the implementation
+            - Check if new exports are documented
+
+            #### 3.3 Pattern / Example Changes
+            - Read relevant files in `example/` directory
+            - Verify examples use current API patterns (not deprecated ones)
+            - Check `CLAUDE.md` "Code Patterns" and "Non-obvious Rules and Gotchas" sections
+
+            #### 3.4 Reverse Check (docs changed but implementation not updated)
+            - If documentation was changed, verify the implementation matches
+            - Look for docs describing features that don't exist yet or have been removed
+
+            ### 4. Post Results
+
+            Search for an existing comment and update it, or create a new one.
+
+            ```bash
+            COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ github.event.number }}/comments \
+              --jq '.[] | select(.body | contains("<!-- docs-consistency-check -->")) | .id' | head -n 1)
+            ```
+
+            **If inconsistencies are found**, post a comment in this format:
+
+            ```markdown
+            ## 📖 Docs Consistency Check
+
+            ### ⚠️ Inconsistencies Found
+
+            | File | Issue | Suggested Fix |
+            |------|-------|---------------|
+            | `path/to/doc.md` | Description of mismatch | What should be updated |
+
+            ### Details
+
+            (For each inconsistency, explain what the implementation does vs what the documentation says,
+            with references to specific file paths and line numbers.)
+
+            ### Recommended Actions
+            - ...
+
+            ---
+            <!-- docs-consistency-check -->
+            ```
+
+            **If no inconsistencies are found**, post:
+
+            ```markdown
+            ## 📖 Docs Consistency Check
+
+            ✅ No inconsistencies found between documentation and implementation.
+
+            **Checked areas:**
+            - (list what was checked)
+
+            ---
+            <!-- docs-consistency-check -->
+            ```
+
+            Use `gh api --method PATCH` to update if `COMMENT_ID` is set, otherwise use `gh pr comment` to create.
+
+            ## Important Notes
+            - The PR branch is already checked out
+            - Always post results as a PR comment using `gh` commands, not as a conversational response
+            - Be specific: include file paths and line numbers for every inconsistency
+            - Only flag real inconsistencies, not stylistic differences
+            - If unsure whether something is an inconsistency, mention it with a note that it may be intentional
+
+          claude_args: |
+            --model claude-sonnet-4-5-20250929
+            --allowedTools "Bash(gh pr:*),Bash(gh api:*),Read,Glob,Grep"

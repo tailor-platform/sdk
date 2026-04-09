@@ -8,7 +8,7 @@
     "builtin": true,
     "es2018": true
   },
-  "ignorePatterns": ["dist/"],
+  "ignorePatterns": ["dist/", "src/types/*.generated.ts"],
   "rules": {
     "constructor-super": "error",
     "for-direction": "error",
@@ -102,7 +102,7 @@
     "jsdoc/check-tag-names": [
       "warn",
       {
-        "definedTags": ["tailor-platform/sdk"]
+        "definedTags": ["tailor-platform/sdk", "lintignore"]
       }
     ],
     "jsdoc/empty-tags": "warn",
@@ -163,9 +163,117 @@
       }
     },
     {
+      "files": ["src/parser/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/cli/**", "@/cli/**"],
+                "message": "Parser module should not import from cli module."
+              },
+              {
+                "group": ["**/configure/**", "@/configure/**"],
+                "message": "Parser module should not import from configure module."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/parser/service/tailordb/runtime.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/cli/**", "@/cli/**"],
+                "message": "Parser module should not import from cli module."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/parser/**/*.test.ts"],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    },
+    {
+      "files": ["src/plugin/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/cli/**", "@/cli/**"],
+                "message": "Plugin module should not import from cli module."
+              },
+              {
+                "group": ["**/configure/**", "@/configure/**"],
+                "message": "Plugin module should not import from configure module. Please use parser module as an intermediary."
+              },
+              {
+                "group": ["**/plugin/builtin/**", "@/plugin/builtin/**"],
+                "message": "Plugin module should not import from builtin plugins. Built-in plugins are exported separately."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/plugin/builtin/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/cli/**", "@/cli/**"],
+                "message": "Plugin builtin module should not import from cli module."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/plugin/**/*.test.ts", "src/plugin/builtin/**/*.test.ts"],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    },
+    {
       "files": ["src/parser/**/types.ts"],
       "rules": {
         "no-restricted-imports": "off"
+      }
+    },
+    {
+      "files": ["src/configure/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/parser/**", "@/parser/**"],
+                "message": "Configure module should not import from parser module. Use @/types/ instead."
+              },
+              {
+                "group": ["**/plugin/**", "@/plugin/**"],
+                "message": "Configure module should not import from plugin module."
+              }
+            ]
+          }
+        ]
       }
     },
     {
@@ -178,19 +286,15 @@
               {
                 "name": "node:util",
                 "importNames": ["styleText"],
-                "message": "Use colors/symbols/logger from '@/cli/utils/logger' instead of styleText for consistent styling."
+                "message": "Use colors/symbols/logger from '@/cli/shared/logger' instead of styleText for consistent styling."
               },
               {
                 "name": "chalk",
-                "message": "Use colors/symbols/logger from '@/cli/utils/logger' instead of chalk for consistent styling."
-              },
-              {
-                "name": "consola",
-                "message": "Use logger from '@/cli/utils/logger' instead of consola for consistent logging."
+                "message": "Use colors/symbols/logger from '@/cli/shared/logger' instead of chalk for consistent styling."
               },
               {
                 "name": "table",
-                "message": "Use formatTable/formatKeyValueTable/formatTableWithHeaders from '@/cli/utils/format' instead of table for consistent table styling."
+                "message": "Use formatTable/formatKeyValueTable/formatTableWithHeaders from '@/cli/shared/format' instead of table for consistent table styling."
               },
               {
                 "name": "path",
@@ -199,6 +303,14 @@
               {
                 "name": "node:path",
                 "message": "Use 'pathe' instead of 'node:path' for consistent cross-platform path handling."
+              },
+              {
+                "name": "@inquirer/prompts",
+                "message": "Use 'prompt' from '@/cli/shared/prompt' instead of @inquirer/prompts directly."
+              },
+              {
+                "name": "@inquirer/core",
+                "message": "Use 'prompt' from '@/cli/shared/prompt' instead of @inquirer/core directly."
               }
             ],
             "patterns": [
@@ -218,7 +330,12 @@
       }
     },
     {
-      "files": ["src/cli/utils/logger.ts", "src/cli/utils/errors.ts", "src/cli/utils/format.ts"],
+      "files": [
+        "src/cli/shared/logger.ts",
+        "src/cli/shared/errors.ts",
+        "src/cli/shared/format.ts",
+        "src/cli/shared/prompt.ts"
+      ],
       "rules": {
         "no-restricted-imports": "off"
       }

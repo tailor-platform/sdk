@@ -1,0 +1,118 @@
+import { Code, ConnectError } from "@connectrpc/connect";
+import { arg } from "politty";
+import { z } from "zod";
+import { parseDuration, workspaceArgs } from "@/cli/shared/args";
+import { initOperatorClient } from "@/cli/shared/client";
+import { defineAppCommand } from "@/cli/shared/command";
+import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
+import { logger } from "@/cli/shared/logger";
+import { waitArgs } from "./args";
+import { getWorkflowExecution, printExecutionWithLogs } from "./executions";
+import { waitForExecution, type WaitOptions } from "./start";
+import { type WorkflowExecutionInfo } from "./transform";
+
+export interface ResumeWorkflowOptions {
+  executionId: string;
+  workspaceId?: string;
+  profile?: string;
+  interval?: number;
+}
+
+export interface ResumeWorkflowResultWithWait {
+  executionId: string;
+  wait: (options?: WaitOptions) => Promise<WorkflowExecutionInfo>;
+}
+
+/**
+ * Resume a suspended workflow execution and return a handle to wait for completion.
+ * @param options - Resume options
+ * @returns Resume result with wait helper
+ */
+export async function resumeWorkflow(
+  options: ResumeWorkflowOptions,
+): Promise<ResumeWorkflowResultWithWait> {
+  const accessToken = await loadAccessToken({
+    useProfile: true,
+    profile: options.profile,
+  });
+  const client = await initOperatorClient(accessToken);
+  const workspaceId = await loadWorkspaceId({
+    workspaceId: options.workspaceId,
+    profile: options.profile,
+  });
+
+  try {
+    const { executionId } = await client.testResumeWorkflow({
+      workspaceId,
+      executionId: options.executionId,
+    });
+
+    return {
+      executionId,
+      wait: (waitOptions?: WaitOptions) =>
+        waitForExecution({
+          client,
+          workspaceId,
+          executionId,
+          interval: options.interval ?? 3000,
+          showProgress: waitOptions?.showProgress,
+        }),
+    };
+  } catch (error) {
+    if (error instanceof ConnectError) {
+      if (error.code === Code.NotFound) {
+        throw new Error(`Execution '${options.executionId}' not found.`, { cause: error });
+      }
+      if (error.code === Code.FailedPrecondition) {
+        throw new Error(`Execution '${options.executionId}' is not in a resumable state.`, {
+          cause: error,
+        });
+      }
+    }
+    throw error;
+  }
+}
+
+export const resumeCommand = defineAppCommand({
+  name: "resume",
+  description: "Resume a failed or pending workflow execution.",
+  args: z
+    .object({
+      ...workspaceArgs,
+      executionId: arg(z.string(), {
+        positional: true,
+        description: "Failed execution ID",
+      }),
+      ...waitArgs,
+    })
+    .strict(),
+  run: async (args) => {
+    const { executionId, wait } = await resumeWorkflow({
+      executionId: args.executionId,
+      workspaceId: args["workspace-id"],
+      profile: args.profile,
+      interval: parseDuration(args.interval),
+    });
+
+    if (!args.json) {
+      logger.info(`Execution ID: ${executionId}`, { mode: "stream" });
+    }
+
+    if (args.wait) {
+      const result = await wait({ showProgress: !args.json });
+      if (args.logs && !args.json) {
+        const { execution } = await getWorkflowExecution({
+          executionId,
+          workspaceId: args["workspace-id"],
+          profile: args.profile,
+          logs: true,
+        });
+        printExecutionWithLogs(execution);
+      } else {
+        logger.out(result);
+      }
+    } else {
+      logger.out({ executionId });
+    }
+  },
+});

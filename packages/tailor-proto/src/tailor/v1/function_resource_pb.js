@@ -10,20 +10,27 @@ import { file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
  * Describes the file tailor/v1/function_resource.proto.
  */
 export const file_tailor_v1_function_resource = /*@__PURE__*/
-  fileDesc("CiF0YWlsb3IvdjEvZnVuY3Rpb25fcmVzb3VyY2UucHJvdG8SCXRhaWxvci52MSLrAwoRRnVuY3Rpb25FeGVjdXRpb24SFAoCaWQYASABKAlCCLpIBXIDsAEBEh4KDHdvcmtzcGFjZV9pZBgCIAEoCUIIukgFcgOwAQESEwoLc2NyaXB0X25hbWUYAyABKAkSMwoGc3RhdHVzGAQgASgOMiMudGFpbG9yLnYxLkZ1bmN0aW9uRXhlY3V0aW9uLlN0YXR1cxIMCgRsb2dzGAUgASgJEi4KCnN0YXJ0ZWRfYXQYBiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEi8KC2ZpbmlzaGVkX2F0GAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBI7CgR0eXBlGAggASgOMiEudGFpbG9yLnYxLkZ1bmN0aW9uRXhlY3V0aW9uLlR5cGVCCrpIB4IBBBgBGAISDgoGcmVzdWx0GAkgASgJIlsKBlN0YXR1cxIWChJTVEFUVVNfVU5TUEVDSUZJRUQQABISCg5TVEFUVVNfU1VDQ0VTUxABEhEKDVNUQVRVU19GQUlMRUQQAhISCg5TVEFUVVNfUlVOTklORxADIj0KBFR5cGUSFAoQVFlQRV9VTlNQRUNJRklFRBAAEhEKDVRZUEVfU1RBTkRBUkQQARIMCghUWVBFX0pPQhACYgZwcm90bzM", [file_buf_validate_validate, file_google_protobuf_timestamp]);
+  fileDesc("CiF0YWlsb3IvdjEvZnVuY3Rpb25fcmVzb3VyY2UucHJvdG8SCXRhaWxvci52MSJGChFGdW5jdGlvbkVycm9ySW5mbxIWCgRuYW1lGAEgASgJQgi6SAVyAxiAARIZCgdtZXNzYWdlGAIgASgJQgi6SAVyAxiAAiLKBAoRRnVuY3Rpb25FeGVjdXRpb24SFAoCaWQYASABKAlCCLpIBXIDsAEBEh4KDHdvcmtzcGFjZV9pZBgCIAEoCUIIukgFcgOwAQESEwoLc2NyaXB0X25hbWUYAyABKAkSMwoGc3RhdHVzGAQgASgOMiMudGFpbG9yLnYxLkZ1bmN0aW9uRXhlY3V0aW9uLlN0YXR1cxIMCgRsb2dzGAUgASgJEi4KCnN0YXJ0ZWRfYXQYBiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEi8KC2ZpbmlzaGVkX2F0GAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBI7CgR0eXBlGAggASgOMiEudGFpbG9yLnYxLkZ1bmN0aW9uRXhlY3V0aW9uLlR5cGVCCrpIB4IBBBgBGAISDgoGcmVzdWx0GAkgASgJEisKBWVycm9yGAogASgLMhwudGFpbG9yLnYxLkZ1bmN0aW9uRXJyb3JJbmZvEjAKCmVycm9yX2tpbmQYCyABKA4yHC50YWlsb3IudjEuRnVuY3Rpb25FcnJvcktpbmQiWwoGU3RhdHVzEhYKElNUQVRVU19VTlNQRUNJRklFRBAAEhIKDlNUQVRVU19TVUNDRVNTEAESEQoNU1RBVFVTX0ZBSUxFRBACEhIKDlNUQVRVU19SVU5OSU5HEAMiPQoEVHlwZRIUChBUWVBFX1VOU1BFQ0lGSUVEEAASEQoNVFlQRV9TVEFOREFSRBABEgwKCFRZUEVfSk9CEAIqyAEKEUZ1bmN0aW9uRXJyb3JLaW5kEiMKH0ZVTkNUSU9OX0VSUk9SX0tJTkRfVU5TUEVDSUZJRUQQABIcChhGVU5DVElPTl9FUlJPUl9LSU5EX05PTkUQARIkCiBGVU5DVElPTl9FUlJPUl9LSU5EX1VTRVJfUlVOVElNRRACEigKJEZVTkNUSU9OX0VSUk9SX0tJTkRfVVNFUl9OT05fUlVOVElNRRADEiAKHEZVTkNUSU9OX0VSUk9SX0tJTkRfUExBVEZPUk0QBGIGcHJvdG8z", [file_buf_validate_validate, file_google_protobuf_timestamp]);
+
+/**
+ * Describes the message tailor.v1.FunctionErrorInfo.
+ * Use `create(FunctionErrorInfoSchema)` to create a new message.
+ */
+export const FunctionErrorInfoSchema = /*@__PURE__*/
+  messageDesc(file_tailor_v1_function_resource, 0);
 
 /**
  * Describes the message tailor.v1.FunctionExecution.
  * Use `create(FunctionExecutionSchema)` to create a new message.
  */
 export const FunctionExecutionSchema = /*@__PURE__*/
-  messageDesc(file_tailor_v1_function_resource, 0);
+  messageDesc(file_tailor_v1_function_resource, 1);
 
 /**
  * Describes the enum tailor.v1.FunctionExecution.Status.
  */
 export const FunctionExecution_StatusSchema = /*@__PURE__*/
-  enumDesc(file_tailor_v1_function_resource, 0, 0);
+  enumDesc(file_tailor_v1_function_resource, 1, 0);
 
 /**
  * @generated from enum tailor.v1.FunctionExecution.Status
@@ -35,11 +42,23 @@ export const FunctionExecution_Status = /*@__PURE__*/
  * Describes the enum tailor.v1.FunctionExecution.Type.
  */
 export const FunctionExecution_TypeSchema = /*@__PURE__*/
-  enumDesc(file_tailor_v1_function_resource, 0, 1);
+  enumDesc(file_tailor_v1_function_resource, 1, 1);
 
 /**
  * @generated from enum tailor.v1.FunctionExecution.Type
  */
 export const FunctionExecution_Type = /*@__PURE__*/
   tsEnum(FunctionExecution_TypeSchema);
+
+/**
+ * Describes the enum tailor.v1.FunctionErrorKind.
+ */
+export const FunctionErrorKindSchema = /*@__PURE__*/
+  enumDesc(file_tailor_v1_function_resource, 0);
+
+/**
+ * @generated from enum tailor.v1.FunctionErrorKind
+ */
+export const FunctionErrorKind = /*@__PURE__*/
+  tsEnum(FunctionErrorKindSchema);
 

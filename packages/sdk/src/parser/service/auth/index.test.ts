@@ -2,7 +2,7 @@ import { describe, it, expectTypeOf, expect } from "vitest";
 import { db } from "@/configure/services/tailordb/schema";
 import { t } from "@/configure/types/type";
 import { AuthConfigSchema, OAuth2ClientSchema } from "./schema";
-import type { AuthServiceInput } from "./types";
+import type { AuthServiceInput } from "@/types/auth";
 import type { OptionalKeysOf } from "type-fest";
 import type { z } from "zod";
 
@@ -264,6 +264,54 @@ describe("OAuth2ClientSchema validation", () => {
 
     const result = OAuth2ClientSchema.parse(clientWithoutDpop);
     expect(result.requireDpop).toBeUndefined();
+  });
+
+  it("rejects requireDpop=true for browser client type", () => {
+    const browserClientWithDpop = {
+      redirectURIs: ["https://example.com/callback"],
+      clientType: "browser",
+      requireDpop: true,
+    };
+
+    expect(() => OAuth2ClientSchema.parse(browserClientWithDpop)).toThrow(
+      /requireDpop cannot be set to true for browser clients/,
+    );
+  });
+
+  it("accepts requireDpop=false for browser client type", () => {
+    const browserClientWithoutDpop = {
+      redirectURIs: ["https://example.com/callback"],
+      clientType: "browser",
+      requireDpop: false,
+    };
+
+    const result = OAuth2ClientSchema.parse(browserClientWithoutDpop);
+    expect(result.clientType).toBe("browser");
+    expect(result.requireDpop).toBe(false);
+  });
+
+  it("accepts requireDpop=true for confidential client type", () => {
+    const confidentialClientWithDpop = {
+      redirectURIs: ["https://example.com/callback"],
+      clientType: "confidential",
+      requireDpop: true,
+    };
+
+    const result = OAuth2ClientSchema.parse(confidentialClientWithDpop);
+    expect(result.clientType).toBe("confidential");
+    expect(result.requireDpop).toBe(true);
+  });
+
+  it("accepts requireDpop=true for public client type", () => {
+    const publicClientWithDpop = {
+      redirectURIs: ["https://example.com/callback"],
+      clientType: "public",
+      requireDpop: true,
+    };
+
+    const result = OAuth2ClientSchema.parse(publicClientWithDpop);
+    expect(result.clientType).toBe("public");
+    expect(result.requireDpop).toBe(true);
   });
 });
 

@@ -1,17 +1,17 @@
 /**
  * Cleanup script for e2e test workspaces
  *
- * Deletes all workspaces with names starting with "e2e-ws-" or "mig-ws-"
+ * Deletes all workspaces with names starting with "e2e-ws-", "mig-ws-", or "template-e2e-"
  *
  * Usage:
  *   npx tsx scripts/cleanup-e2e-workspaces.ts           # Delete all e2e workspaces
  *   npx tsx scripts/cleanup-e2e-workspaces.ts --dry-run # List without deleting
  */
 
-import { initOperatorClient, type OperatorClient } from "../src/cli/client";
-import { loadAccessToken } from "../src/cli/context";
+import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
+import { loadAccessToken } from "../src/cli/shared/context";
 
-const E2E_WORKSPACE_PREFIXES = ["e2e-ws-", "mig-ws-"];
+const E2E_WORKSPACE_PREFIXES = ["e2e-ws-", "mig-ws-", "template-e2e-"];
 
 interface Workspace {
   id?: string;
@@ -61,9 +61,16 @@ async function main() {
   console.log(`Total workspaces found: ${workspaces.length}\n`);
 
   // Filter e2e workspaces
-  const e2eWorkspaces = workspaces.filter((ws) =>
-    E2E_WORKSPACE_PREFIXES.some((prefix) => ws.name?.startsWith(prefix)),
-  );
+  const runId = process.argv.find((a) => a.startsWith("--run-id="))?.split("=")[1];
+  const e2eWorkspaces = workspaces.filter((ws) => {
+    const matchesPrefix = E2E_WORKSPACE_PREFIXES.some((prefix) => ws.name?.startsWith(prefix));
+    if (!matchesPrefix) return false;
+    // When --run-id is specified (CI), only delete workspaces from this run to avoid cross-run conflicts
+    if (runId) {
+      return ws.name?.includes(runId);
+    }
+    return true;
+  });
 
   if (e2eWorkspaces.length === 0) {
     console.log("✅ No e2e workspaces found to delete.");

@@ -2,7 +2,7 @@ import { log, spinner } from "@clack/prompts";
 import { execa } from "execa";
 
 const detectPackageManager = () => {
-  const availablePMs = ["npm", "yarn", "pnpm"];
+  const availablePMs = ["npm", "yarn", "pnpm", "bun"];
   const userAgent = process.env.npm_config_user_agent;
   if (!userAgent) return;
   const [name] = userAgent.split("/");
@@ -21,7 +21,9 @@ const isGitRepository = async () => {
 
 export const initProject = async () => {
   const packageManager = detectPackageManager();
-  if (packageManager) {
+  if (process.env.CREATE_SDK_NO_INSTALL) {
+    log.info("ℹ️ Skipping dependency installation (CREATE_SDK_NO_INSTALL is set)");
+  } else if (packageManager) {
     const s = spinner();
     s.start(`📦 Installing dependencies with ${packageManager}...`);
     await execa(packageManager, ["install"]);

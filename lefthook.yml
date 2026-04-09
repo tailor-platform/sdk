@@ -1,14 +1,8 @@
 # Refer for explanation to following link: https://lefthook.dev/configuration/
 
 pre-commit:
-  piped: false
   commands:
-    1-build:
-      glob: "*.{ts}"
-      root: "packages/sdk"
-      run: pnpm exec turbo run build --filter=@tailor-platform/sdk
-
-    2-format:
+    format:
       glob: "*.{ts,js,json,md,yml,yaml}"
       exclude:
         - "node_modules/**"
@@ -31,17 +25,19 @@ pre-commit:
         - "example/generated/**"
         - "example/seed/**"
         - "packages/tailor-proto/**"
-        - "packages/create-sdk/templates/**"
       run: pnpm oxfmt --check {staged_files}
 
-    3-lint:
+    checks:
       glob: "*.{ts,js}"
-      run: pnpm exec turbo run lint --filter=@tailor-platform/sdk --filter=example
+      run: >-
+        pnpm exec turbo run build lint typecheck:go knip
+        --filter=@tailor-platform/sdk --filter=example
+        --no-update-notifier --output-logs=errors-only
+        && pnpm exec turbo run lint
+        --filter='./packages/create-sdk/templates/*'
+        --no-update-notifier --output-logs=errors-only
 
-    4-typecheck:
-      glob: "*.{ts,js}"
-      run: pnpm exec turbo run typecheck:go --filter=@tailor-platform/sdk --filter=example
-
-    5-knip:
-      glob: "*.{ts,js}"
-      run: pnpm run knip
+post-commit:
+  commands:
+    verify-signature:
+      run: 'git cat-file -p HEAD | grep -q "gpgsig" || { echo "ERROR: Commit is not signed!" >&2; exit 1; }'

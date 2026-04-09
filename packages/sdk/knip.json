@@ -1,24 +1,38 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
-  "ignoreExportsUsedInFile": {
-    "interface": true,
-    "type": true
-  },
+  "ignoreExportsUsedInFile": true,
   "tags": ["-lintignore"],
-  "ignore": ["scripts/**", "e2e/fixtures/**"],
+  "ignore": [
+    "scripts/**",
+    "e2e/fixtures/**",
+    "src/cli/commands/apply/__test_fixtures__/**",
+    "src/types/*.ts",
+    "zinfer.config.ts"
+  ],
   "ignoreFiles": [
-    "src/cli/workspace/function/index.ts",
-    "src/cli/workspace/function/registry/index.ts"
+    "src/cli/commands/workspace/function/index.ts",
+    "src/cli/commands/workspace/function/registry/index.ts"
   ],
   "ignoreDependencies": [
-    "@tailor-platform/function-kysely-tailordb",
+    "undici",
+    "@liam-hq/cli",
     "@typescript/native-preview",
-    "cross-env",
-    "eslint-plugin-import",
-    "kysely",
+    "eslint-import-resolver-typescript",
+    "eslint-plugin-import-x",
     "oxlint",
     "oxlint-tsgolint",
-    "tsx"
+    "serve",
+    "zinfer"
   ],
-  "ignoreBinaries": ["vitest", "tsdown", "cross-env", "oxlint", "eslint", "tsc", "tsgo", "knip"]
+  "ignoreBinaries": [
+    "vitest",
+    "tsdown",
+    "oxlint",
+    "eslint",
+    "tsc",
+    "tsgo",
+    "knip",
+    "publint",
+    "zinfer"
+  ]
 }

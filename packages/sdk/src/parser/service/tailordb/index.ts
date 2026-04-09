@@ -1,4 +1,3 @@
 export { stringifyFunction, tailorUserMap } from "./field";
-export { parseTypes, type TypeSourceInfo } from "./type-parser";
-export { TailorDBTypeSchema } from "./schema";
-export type * from "./types";
+export { parseTypes } from "./type-parser";
+export { TailorDBServiceConfigSchema, TailorDBTypeSchema } from "./schema";

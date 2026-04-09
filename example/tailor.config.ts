@@ -1,10 +1,14 @@
 import {
   defineAuth,
   defineConfig,
-  defineGenerators,
   defineIdp,
+  definePlugins,
   defineStaticWebSite,
 } from "@tailor-platform/sdk";
+import { enumConstantsPlugin } from "@tailor-platform/sdk/plugin/enum-constants";
+import { fileUtilsPlugin } from "@tailor-platform/sdk/plugin/file-utils";
+import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
+import { seedPlugin } from "@tailor-platform/sdk/plugin/seed";
 import { user } from "./tailordb/user";
 
 const website = defineStaticWebSite("my-frontend", {
@@ -28,6 +32,10 @@ const idp = defineIdp("my-idp", {
     passwordMinLength: 8,
     passwordMaxLength: 128,
   },
+  emailConfig: {
+    fromName: "My App",
+    passwordResetSubject: "Reset your password",
+  },
 });
 
 export const auth = defineAuth("my-auth", {
@@ -45,6 +53,17 @@ export const auth = defineAuth("my-auth", {
       },
     },
   },
+  hooks: {
+    beforeLogin: {
+      handler: async ({ claims, idpConfigName }) => {
+        // Example before login hook implementation
+        console.log("Before login hook triggered with claims:", claims);
+        console.log("IDP Config Name:", idpConfigName);
+        // You can perform additional checks or modifications to claims here
+      },
+      invoker: "manager-machine-user",
+    },
+  },
   oauth2Clients: {
     sample: {
       redirectURIs: ["https://example.com/callback", `${website.url}/callback`],
@@ -53,10 +72,20 @@ export const auth = defineAuth("my-auth", {
     },
   },
   idProvider: idp.provider("sample", "default-idp-client"),
+  // connections: {
+  //   "google-connection": {
+  //     type: "oauth2",
+  //     providerUrl: "https://accounts.google.com",
+  //     issuerUrl: "https://accounts.google.com",
+  //     clientId: process.env.GOOGLE_CLIENT_ID!,
+  //     clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+  //   },
+  // },
 });
 
 export default defineConfig({
   name: "my-app",
+  inlineSourcemap: false,
   env: {
     foo: 1,
     bar: "hello",
@@ -87,9 +116,9 @@ export default defineConfig({
   staticWebsites: [website, erdSite],
 });
 
-export const generators = defineGenerators(
-  ["@tailor-platform/kysely-type", { distPath: "./generated/tailordb.ts" }],
-  ["@tailor-platform/enum-constants", { distPath: "./generated/enums.ts" }],
-  ["@tailor-platform/file-utils", { distPath: "./generated/files.ts" }],
-  ["@tailor-platform/seed", { distPath: "./seed", machineUserName: "manager-machine-user" }],
+export const plugins = definePlugins(
+  kyselyTypePlugin({ distPath: "./generated/tailordb.ts" }),
+  enumConstantsPlugin({ distPath: "./generated/enums.ts" }),
+  fileUtilsPlugin({ distPath: "./generated/files.ts" }),
+  seedPlugin({ distPath: "./seed", machineUserName: "manager-machine-user" }),
 );

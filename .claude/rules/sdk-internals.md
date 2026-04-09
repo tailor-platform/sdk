@@ -21,7 +21,7 @@ The SDK enforces strict module boundaries to maintain a clean architecture:
 2. **Parser Module** (`src/parser/**/*.ts`):
    - Validates and parses definitions created in configure module
    - Acts as intermediary between configure and cli modules
-   - **Note**: Parse operations for TailorDB (inflection, relationship building) are performed automatically in `TailorDBService.loadTypes()` (located in `src/cli/application/tailordb/service.ts`)
+   - **Note**: Parse operations for TailorDB (inflection, relationship building) are performed automatically in `TailorDBService.loadTypes()` (located in `src/cli/services/tailordb/service.ts`)
 
 3. **CLI Module** (`src/cli/**/*.ts`):
    - Implements CLI commands
@@ -33,21 +33,20 @@ The SDK enforces strict module boundaries to maintain a clean architecture:
 1. **Configure Module** (`src/configure/**/*.ts`):
    - ❌ Cannot import from `cli` module
    - ❌ Cannot import from `parser` module
-   - ✅ Can import types from `@/parser/**/types` files only
+   - ✅ Can import from `@/types/` (shared type layer)
    - ⚠️ Can only import types from `zod` (runtime imports are forbidden)
 
 2. **Parser Module** (`src/parser/**/*.ts`):
    - ❌ Cannot import from `cli` module
-   - ⚠️ Cannot import from `configure` module (currently commented out in eslint.config.js)
+   - ❌ Cannot import from `configure` module (exception: `parser/service/tailordb/runtime.ts`)
+   - ✅ Can import from `@/types/` (shared type layer)
 
 3. **CLI Module** (`src/cli/**/*.ts`):
-   - ⚠️ Cannot import from `configure` module (currently commented out in eslint.config.js - use parser module as intermediary)
+   - Uses parser module to process user configurations
 
 4. **Parser Types Files** (`src/parser/**/types.ts`):
    - ✅ Can only import types (all imports must be type-only)
-
-**Note on ESLint Rules:**
-Some import restriction rules in `eslint.config.js` are currently commented out due to existing violations in the codebase. These rules represent the target architecture and should be followed when writing new code or refactoring existing code. When editing files, actively work to reduce violations and move towards enabling these rules.
+   - Should only re-export from `@/types/` (backward compatibility shims)
 
 **Type Import Rules:**
 
@@ -65,62 +64,13 @@ Some import restriction rules in `eslint.config.js` are currently commented out 
 - Bundlers follow the module chain and include all runtime imports, even when only types are needed
 - Example: `configure/auth` → `parser/auth` → `parser/auth/schema` → `zod` (runtime import)
 
-**Solution Pattern: Separate Type Definitions from Runtime Code**
+**Solution: The `src/types/` Layer**
 
-When working with validation libraries like zod:
+Zod schemas live in `parser/**/schema.ts`. Types derived from those schemas are generated into `src/types/*.generated.ts` by zinfer, cleanly separating runtime schema code from type definitions. See the `schema-types` rule for details.
 
-1. **Create separate files for schemas and types:**
+Key principles:
 
-```typescript
-// schema.ts - Runtime validation schemas
-import z from "zod";
-
-export const MySchema = z.object({
-  name: z.string(),
-  age: z.number(),
-});
-
-// NO type exports here!
-// BAD: export type MyType = z.output<typeof MySchema>;
-```
-
-```typescript
-// types.ts - Type definitions only
-import type { z } from "zod"; // Type-only import
-import type { MySchema } from "./schema";
-
-export type MyType = z.output<typeof MySchema>;
-
-// All other types that depend on schema types
-export type MyOtherType = {
-  /* ... */
-};
-```
-
-```typescript
-// index.ts - Re-export types
-export { MySchema } from "./schema";
-export type * from "./types";
-```
-
-2. **Key principles:**
-   - Use `import type { z } from "zod"` in type-only files (compile-time only, won't be bundled)
-   - Keep `z.output<typeof Schema>` type extractions in separate `.types.ts` files
-   - Schema files should only export zod schemas, not types
-   - This prevents bundlers from including zod runtime code in configure module outputs
-
-3. **Verification:**
-   - After changes, run `pnpm exec turbo run test` in example to regenerate bundles
-   - Check bundle sizes and search for library-specific code (e.g., `$ZodType`) to confirm removal
-   - Expected result: Significant bundle size reduction (e.g., 68KB → 18KB in test cases)
-
-**Example Directory Structure:**
-
-```
-parser/service/auth/
-├── schema.ts     # Zod schemas (runtime imports)
-├── types.ts      # Type definitions using import type
-└── index.ts      # Re-exports
-```
-
-This pattern aligns with the module architecture principle that configure modules should not depend on parser modules at runtime, only at the type level.
+- Schema files (`parser/**/schema.ts`) export only Zod schemas, never types
+- Types are generated into `src/types/*.generated.ts` — no runtime dependency on zod
+- Configure and parser modules import types from `@/types/`, not from each other
+- This prevents bundlers from including zod runtime code in configure module outputs

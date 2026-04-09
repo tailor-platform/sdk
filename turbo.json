@@ -6,7 +6,8 @@
     "TAILOR_PLATFORM_TOKEN",
     "TAILOR_PLATFORM_WORKSPACE_ID",
     "TAILOR_PLATFORM_PROFILE",
-    "TAILOR_PLATFORM_SDK_TYPE_PATH"
+    "TAILOR_PLATFORM_ORGANIZATION_ID",
+    "TAILOR_PLATFORM_FOLDER_ID"
   ],
   "tasks": {
     "build": {
@@ -31,19 +32,23 @@
       "cache": false
     },
     "check": {
-      "dependsOn": ["format", "lint:fix", "typecheck:go", "knip"],
+      "dependsOn": ["format", "lint:fix", "typecheck:go", "knip", "publint"],
       "cache": false
     },
     "knip": {
       "cache": true
     },
+    "publint": {
+      "dependsOn": ["build"],
+      "cache": true
+    },
     "lint": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["build"],
       "outputs": [".eslintcache"],
       "cache": true
     },
     "lint:fix": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["build"],
       "outputs": [".eslintcache"],
       "cache": true
     },

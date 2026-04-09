@@ -1,21 +1,36 @@
 name: Install deps
 description: Install dependencies
 
+inputs:
+  node-version:
+    description: "Node.js major version to install"
+    required: false
+    default: "24"
+
 runs:
   using: composite
   steps:
-    - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
+    - name: Setup takumi-guard
+      uses: flatt-security/setup-takumi-guard-npm@3c4ad0e8c9e81d0efbccff304adac60e42e3f32d # v1
+
+    - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
       name: Install pnpm
       with:
         standalone: true
         run_install: false
 
     - name: Install Node.js
-      run: pnpm env use --global 24
+      run: pnpm env use --global ${{ inputs.node-version }}
       shell: bash
 
     - name: Install dependencies
       run: pnpm install
+      shell: bash
+
+    # takumi-guard adds registry=https://npm.flatt.tech/ to .npmrc;
+    # restore it so downstream steps don't see uncommitted changes.
+    - name: Restore .npmrc
+      run: git checkout -- .npmrc
       shell: bash
 
     # Build SDK so that the bin entry points to a real dist file

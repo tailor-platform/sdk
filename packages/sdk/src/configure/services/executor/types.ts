@@ -1,1 +1,1 @@
-export type { ExecutorServiceConfig, ExecutorServiceInput } from "@/parser/service/executor/types";
+export type { ExecutorServiceConfig, ExecutorServiceInput } from "@/types/app-config";

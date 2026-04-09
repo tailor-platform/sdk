@@ -303,6 +303,13 @@ export declare type PipelineResolver_Pipeline = Message<"tailor.v1.PipelineResol
    * @generated from field: tailor.v1.Script operation_hook = 19;
    */
   operationHook?: Script;
+
+  /**
+   * function registry reference
+   *
+   * @generated from field: optional string operation_source_ref = 20;
+   */
+  operationSourceRef?: string;
 };
 
 /**

@@ -1,5 +1,6 @@
 import { describe, it, expect, expectTypeOf } from "vitest";
 import { t } from "./type";
+import type { AllowedValues } from "./field";
 import type { output } from "./helpers";
 import type { TailorUser } from "./user";
 
@@ -183,6 +184,24 @@ describe("TailorField enum field tests", () => {
     expectTypeOf<output<typeof _optionalEnumType>>().toEqualTypeOf<{
       priority?: "high" | "medium" | "low" | null;
     }>();
+  });
+
+  it("accepts as const readonly array", () => {
+    const STATUSES = ["active", "inactive", "pending"] as const;
+    const enumField = t.enum(STATUSES);
+    expectTypeOf<output<typeof enumField>>().toEqualTypeOf<"active" | "inactive" | "pending">();
+    expect(enumField.metadata.allowedValues).toEqual([
+      { value: "active", description: "" },
+      { value: "inactive", description: "" },
+      { value: "pending", description: "" },
+    ]);
+  });
+
+  it("AllowedValues type accepts readonly arrays", () => {
+    const STATUSES = ["active", "inactive"] as const;
+    // Verify that readonly arrays are assignable to AllowedValues
+    const _values: AllowedValues = STATUSES;
+    expect(_values).toEqual(STATUSES);
   });
 
   it("enum array works correctly", () => {
@@ -762,6 +781,41 @@ describe("TailorField runtime validation tests", () => {
           throw new Error("Unexpected issues");
         }
         expect(result.value).toBeNull();
+      }
+    });
+  });
+
+  describe("validates decimal type", () => {
+    it("accepts valid decimal strings", () => {
+      for (const value of [
+        "123.45",
+        "0",
+        "-99.99",
+        "1000",
+        ".5",
+        "5.",
+        "4.321e+4",
+        "1E-5",
+        "2.41E-3",
+        "-1.5e10",
+      ]) {
+        const result = t.decimal().parse({ value, data, user });
+        expect(result.issues).toBeUndefined();
+        if (result.issues) {
+          throw new Error(`Unexpected issues for "${value}"`);
+        }
+        expect(result.value).toBe(value);
+      }
+    });
+
+    it("rejects invalid decimal values", () => {
+      for (const value of ["abc", "", "1_000_000", "0b1.1p-5", "1e", "e5", "."]) {
+        const result = t.decimal().parse({ value, data, user });
+        expect(result.issues).toBeDefined();
+      }
+      {
+        const result = t.decimal().parse({ value: 123, data, user });
+        expect(result.issues).toBeDefined();
       }
     });
   });

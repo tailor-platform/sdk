@@ -2,7 +2,9 @@ export * from "./auth";
 export {
   db,
   type TailorDBType,
+  type TailorAnyDBType,
   type TailorDBField,
+  type TailorAnyDBField,
   type TailorDBInstance,
   unsafeAllowAllTypePermission,
   unsafeAllowAllGqlPermission,
@@ -15,3 +17,4 @@ export * from "./executor";
 export * from "./workflow";
 export * from "./staticwebsite";
 export * from "./idp";
+export * from "./secrets";

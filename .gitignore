@@ -34,13 +34,21 @@ coverage/
 # Tailor Platform SDK
 **/.tailor-sdk/**
 .turbo
-user-defined.d.ts
+tailor.d.ts
 
 .mcp.json
 
 # AI
 .agent/
 .claude/*
-!.claude/rules
-!.claude/rules/**
+!.claude/rules/
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/llm-challenge/
+!.claude/skills/docs-check/
 CLAUDE.local.md
+
+# LLM Challenge
+llm-challenge/results/
+llm-challenge/problems/*/work
+.claude/tmp/

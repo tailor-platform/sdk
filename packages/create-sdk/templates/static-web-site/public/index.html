@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="container">
+      <h1>Tailor Platform Login</h1>
+      <p>Click the button below to sign in with your account.</p>
+      <button id="login-btn">Sign In</button>
+      <div id="user-info" class="hidden">
+        <h2>Welcome!</h2>
+        <pre id="user-data"></pre>
+        <button id="logout-btn">Sign Out</button>
+      </div>
+    </div>
+    <script>
+      // Replace with your actual OAuth2 configuration after deployment
+      const CONFIG = {
+        authorizationEndpoint: "/oauth2/authorize",
+        clientId: "web-client",
+        redirectUri: window.location.origin + "/callback.html",
+        scope: "openid profile email",
+      };
+
+      document.getElementById("login-btn").addEventListener("click", () => {
+        const params = new URLSearchParams({
+          response_type: "code",
+          client_id: CONFIG.clientId,
+          redirect_uri: CONFIG.redirectUri,
+          scope: CONFIG.scope,
+        });
+        window.location.href = CONFIG.authorizationEndpoint + "?" + params.toString();
+      });
+
+      document.getElementById("logout-btn").addEventListener("click", () => {
+        localStorage.removeItem("access_token");
+        document.getElementById("user-info").classList.add("hidden");
+        document.getElementById("login-btn").classList.remove("hidden");
+      });
+
+      // Check if user is already logged in
+      const token = localStorage.getItem("access_token");
+      if (token) {
+        document.getElementById("login-btn").classList.add("hidden");
+        document.getElementById("user-info").classList.remove("hidden");
+        document.getElementById("user-data").textContent =
+          "Logged in with token: " + token.substring(0, 20) + "...";
+      }
+    </script>
+  </body>
+</html>

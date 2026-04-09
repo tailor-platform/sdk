@@ -7,6 +7,7 @@ export type TailorFieldType =
   | "boolean"
   | "integer"
   | "float"
+  | "decimal"
   | "enum"
   | "date"
   | "datetime"
@@ -17,6 +18,7 @@ export type TailorToTs = {
   string: string;
   integer: number;
   float: number;
+  decimal: string;
   boolean: boolean;
   uuid: string;
   date: string;
@@ -30,6 +32,7 @@ export type TailorToTs = {
 export interface FieldMetadata {
   description?: string;
   required?: boolean;
+
   array?: boolean;
   allowedValues?: AllowedValue[];
   // Validation supports any field output type (the field itself remains typed elsewhere).

@@ -5,6 +5,46 @@ on:
   pull_request:
 
 jobs:
+  notify-start:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Post publishing status
+        uses: marocchino/sticky-pull-request-comment@d4d6b0936434b21bc8345ad45a440c5f7d2c40ff # v3.0.3
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        with:
+          header: pkg-pr-new
+          message: |
+            ## ⚡ pkg.pr.new
+
+            > ⏳ **Publishing** commit: ${{ env.SHA }} …
+
+            ### @tailor-platform/sdk
+
+            ```
+            pnpm add https://pkg.pr.new/@tailor-platform/sdk@${{ env.PR_NUMBER }}
+            ```
+
+            ```
+            pnpm dlx https://pkg.pr.new/@tailor-platform/sdk@${{ env.PR_NUMBER }} --help
+            ```
+
+            ### @tailor-platform/create-sdk
+
+            ```
+            pnpm add https://pkg.pr.new/@tailor-platform/create-sdk@${{ env.PR_NUMBER }}
+            ```
+
+            ```
+            pnpm dlx https://pkg.pr.new/@tailor-platform/create-sdk@${{ env.PR_NUMBER }} my-app
+            ```
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   publish-sdk:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -12,11 +52,12 @@ jobs:
       contents: read
       pull-requests: write
     outputs:
-      sdk_url: ${{ steps.extract-url.outputs.sdk_url }}
+      sdk_url: ${{ steps.extract.outputs.sdk_url }}
+      sdk_template_url: ${{ steps.extract.outputs.sdk_template_url }}
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
 
@@ -28,14 +69,17 @@ jobs:
 
       - name: Publish SDK to pkg.pr.new
         id: publish
-        run: pnpm dlx pkg-pr-new publish --pnpm "packages/sdk"
+        run: pnpm dlx pkg-pr-new publish --pnpm --comment=off --json /tmp/sdk-output.json "packages/sdk"
 
-      - name: Extract SDK URL
-        id: extract-url
+      - name: Extract SDK URLs
+        id: extract
         run: |
-          SDK_URL=$(echo "${{ steps.publish.outputs.urls }}" | tr ' ' '\n' | grep -E '@tailor-platform/sdk@')
+          SDK_URL=$(jq -r '.packages[] | select(.name == "@tailor-platform/sdk") | .url' /tmp/sdk-output.json)
+          SDK_TEMPLATE_URL=$(jq -r '.templates[0].url // ""' /tmp/sdk-output.json)
           echo "sdk_url=$SDK_URL" >> "$GITHUB_OUTPUT"
+          echo "sdk_template_url=$SDK_TEMPLATE_URL" >> "$GITHUB_OUTPUT"
           echo "Published SDK at: $SDK_URL"
+          echo "Template URL: $SDK_TEMPLATE_URL"
 
   publish-create-sdk:
     needs: publish-sdk
@@ -45,11 +89,12 @@ jobs:
       contents: read
       pull-requests: write
     outputs:
-      create_sdk_url: ${{ steps.extract-url.outputs.create_sdk_url }}
+      create_sdk_url: ${{ steps.extract.outputs.create_sdk_url }}
+      create_sdk_template_url: ${{ steps.extract.outputs.create_sdk_template_url }}
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
 
@@ -64,52 +109,146 @@ jobs:
 
       - name: Publish create-sdk to pkg.pr.new
         id: publish
-        run: pnpm dlx pkg-pr-new publish --pnpm ./packages/create-sdk
+        run: pnpm dlx pkg-pr-new publish --pnpm --comment=off --json /tmp/create-sdk-output.json ./packages/create-sdk
 
-      - name: Extract create-sdk URL
-        id: extract-url
+      - name: Extract create-sdk URLs
+        id: extract
         run: |
-          CREATE_SDK_URL=$(echo "${{ steps.publish.outputs.urls }}" | tr ' ' '\n' | grep -E '@tailor-platform/create-sdk@')
+          CREATE_SDK_URL=$(jq -r '.packages[] | select(.name == "@tailor-platform/create-sdk") | .url' /tmp/create-sdk-output.json)
+          CREATE_SDK_TEMPLATE_URL=$(jq -r '.templates[0].url // ""' /tmp/create-sdk-output.json)
           echo "create_sdk_url=$CREATE_SDK_URL" >> "$GITHUB_OUTPUT"
+          echo "create_sdk_template_url=$CREATE_SDK_TEMPLATE_URL" >> "$GITHUB_OUTPUT"
           echo "Published create-sdk at: $CREATE_SDK_URL"
+          echo "Template URL: $CREATE_SDK_TEMPLATE_URL"
+
+  update-comment:
+    if: github.event_name == 'pull_request'
+    needs: [publish-sdk, publish-create-sdk]
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Build comment body
+        id: comment
+        env:
+          SDK_URL: ${{ needs.publish-sdk.outputs.sdk_url }}
+          SDK_TEMPLATE_URL: ${{ needs.publish-sdk.outputs.sdk_template_url }}
+          CREATE_SDK_URL: ${{ needs.publish-create-sdk.outputs.create_sdk_url }}
+          CREATE_SDK_TEMPLATE_URL: ${{ needs.publish-create-sdk.outputs.create_sdk_template_url }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          {
+            echo 'body<<COMMENT_EOF'
+
+            echo '## ⚡ pkg.pr.new'
+            echo ''
+            echo '### @tailor-platform/sdk'
+            echo ''
+            echo '```'
+            echo "pnpm add $SDK_URL"
+            echo '```'
+            echo ''
+            echo '```'
+            echo "pnpm dlx $SDK_URL --help"
+            echo '```'
+            echo ''
+            if [ -n "$SDK_TEMPLATE_URL" ]; then
+              echo "[Open in StackBlitz]($SDK_TEMPLATE_URL)"
+              echo ''
+            fi
+            echo '### @tailor-platform/create-sdk'
+            echo ''
+            echo '```'
+            echo "pnpm add $CREATE_SDK_URL"
+            echo '```'
+            echo ''
+            echo '```'
+            echo "pnpm dlx $CREATE_SDK_URL my-app"
+            echo '```'
+            echo ''
+            if [ -n "$CREATE_SDK_TEMPLATE_URL" ]; then
+              echo "[Open in StackBlitz]($CREATE_SDK_TEMPLATE_URL)"
+              echo ''
+            fi
+            echo "> commit: $SHA"
+
+            echo 'COMMENT_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Update PR comment
+        uses: marocchino/sticky-pull-request-comment@d4d6b0936434b21bc8345ad45a440c5f7d2c40ff # v3.0.3
+        with:
+          header: pkg-pr-new
+          message: ${{ steps.comment.outputs.body }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   init-smoke:
     needs: [publish-sdk, publish-create-sdk]
+    strategy:
+      fail-fast: false
+      matrix:
+        runtime: [node, bun]
+        pm: [pnpm, npm, yarn, bun]
+        node: [22, 24]
+        exclude:
+          # Bun has its own runtime version; only run once per PM
+          - runtime: bun
+            node: 22
+          # bun install with Node runtime is out of scope
+          - runtime: node
+            pm: bun
     runs-on: ubuntu-latest
+    name: Smoke (${{ matrix.runtime }}, ${{ matrix.pm }}, node${{ matrix.node }})
     timeout-minutes: 10
     permissions:
       contents: read
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
 
-      - name: Install deps
-        uses: ./.github/actions/install-deps
+      - name: Install pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          standalone: true
+          run_install: false
+
+      - name: Install Node.js
+        run: pnpm env use --global ${{ matrix.node }}
+
+      - name: Install Bun
+        if: matrix.runtime == 'bun'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: latest
+
+      - name: Enable corepack
+        run: corepack enable
 
       - name: Configure git for create-sdk
         run: |
           git config --global user.email "ci@example.com"
           git config --global user.name "SDK CI"
 
-      - name: Show CLI version
-        run: pnpm dlx --package=${{ needs.publish-create-sdk.outputs.create_sdk_url }} create-sdk --version
-
-      - name: Run init non-interactively
+      # npx is used regardless of matrix.pm: pkg.pr.new URLs are most reliable
+      # via npx, and the PM matrix tests dependency resolution, not scaffolding.
+      # CREATE_SDK_NO_INSTALL skips create-sdk's internal install step;
+      # the "Install dependencies" step below tests resolution with the matrix PM.
+      - name: Scaffold project
         run: |
-          # Create into a temp folder outside the workspace
           cd /tmp
-          pnpm dlx --package=${{ needs.publish-create-sdk.outputs.create_sdk_url }} create-sdk test-init-app --template hello-world
-          ls -la test-init-app
+          npx --yes --package=${{ needs.publish-create-sdk.outputs.create_sdk_url }} create-sdk test-init-app --template hello-world
+        env:
+          CREATE_SDK_NO_INSTALL: "1"
 
       - name: Verify generated files
         run: |
           test -f /tmp/test-init-app/tailor.config.ts
           test -f /tmp/test-init-app/package.json
           test -f /tmp/test-init-app/tsconfig.json
-          test -f /tmp/test-init-app/src/resolvers/hello.ts
 
       - name: Verify SDK dependency uses pkg.pr.new URL
         run: |
@@ -121,16 +260,33 @@ jobs:
             echo "Error: SDK dependency should be '$EXPECTED_SDK_URL' but got '$SDK_VERSION'"
             exit 1
           fi
-          echo "✅ SDK dependency correctly uses pkg.pr.new URL"
 
-      - name: Install dependencies with pkg.pr.new SDK
-        run: |
-          cd /tmp/test-init-app
-          pnpm install
+      # Lockfile-less install is expected: scaffolded projects have no lockfile.
+      # Yarn 4 PnP is not tested here; this validates node_modules-based resolution.
+      - name: Install dependencies
+        working-directory: /tmp/test-init-app
+        run: ${{ matrix.pm }} install
 
-      - name: Verify SDK dependency was installed
+      - name: Verify SDK installed
         run: |
-          cd /tmp/test-init-app
-          # Verify the SDK is installed
-          test -d node_modules/@tailor-platform/sdk
-          echo "✅ SDK dependency successfully installed from pkg.pr.new"
+          test -d /tmp/test-init-app/node_modules/@tailor-platform/sdk
+          echo "SDK dependency successfully installed with ${{ matrix.pm }}"
+
+      - name: Verify SDK import (Node)
+        if: matrix.runtime == 'node'
+        working-directory: /tmp/test-init-app
+        run: node -e "import('@tailor-platform/sdk').then(m => { console.log('SDK exports:', Object.keys(m).join(', ')); })"
+
+      - name: Verify SDK import (Bun)
+        if: matrix.runtime == 'bun'
+        working-directory: /tmp/test-init-app
+        run: bun -e "import('@tailor-platform/sdk').then(m => { console.log('SDK exports:', Object.keys(m).join(', ')); })"
+
+      - name: Verify CLI bootstrap (Bun)
+        if: matrix.runtime == 'bun'
+        working-directory: /tmp/test-init-app
+        run: bun node_modules/@tailor-platform/sdk/dist/cli/index.mjs --version
+
+      - name: Typecheck
+        working-directory: /tmp/test-init-app
+        run: npx tsc --noEmit

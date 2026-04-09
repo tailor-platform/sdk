@@ -1,5 +1,5 @@
 import * as inflection from "inflection";
-import type { RawRelationConfig, OperatorFieldConfig } from "./types";
+import type { RawRelationConfig, OperatorFieldConfig } from "@/types/tailordb";
 import type { UnionToTuple } from "type-fest";
 
 const relationTypes = {
@@ -10,8 +10,6 @@ const relationTypes = {
   "N-1": "n-1",
   keyOnly: "keyOnly",
 } as const;
-export type RelationType = keyof typeof relationTypes;
-
 export const relationTypesKeys = Object.keys(relationTypes) as UnionToTuple<
   keyof typeof relationTypes
 >;

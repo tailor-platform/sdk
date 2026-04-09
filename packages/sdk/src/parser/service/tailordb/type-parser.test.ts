@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { db } from "@/configure/services/tailordb/schema";
+import { toSchemaOutputs } from "@/utils/test/internal";
 import { parseTypes } from "./type-parser";
 
 describe("parseTypes", () => {
@@ -13,7 +14,7 @@ describe("parseTypes", () => {
         tags: field,
       });
 
-      expect(() => parseTypes({ Test: testType }, "test-namespace")).toThrow(
+      expect(() => parseTypes(toSchemaOutputs({ Test: testType }), "test-namespace")).toThrow(
         'Field "tags" on type "Test": index cannot be set on array fields',
       );
     });
@@ -27,7 +28,7 @@ describe("parseTypes", () => {
         tags: field,
       });
 
-      expect(() => parseTypes({ Test: testType }, "test-namespace")).toThrow(
+      expect(() => parseTypes(toSchemaOutputs({ Test: testType }), "test-namespace")).toThrow(
         'Field "tags" on type "Test": unique cannot be set on array fields',
       );
     });
@@ -37,7 +38,7 @@ describe("parseTypes", () => {
         email: db.string().index(),
       });
 
-      const result = parseTypes({ Test: testType }, "test-namespace");
+      const result = parseTypes(toSchemaOutputs({ Test: testType }), "test-namespace");
       expect(result.Test.fields.email.config.index).toBe(true);
     });
 
@@ -46,7 +47,7 @@ describe("parseTypes", () => {
         email: db.string().unique(),
       });
 
-      const result = parseTypes({ Test: testType }, "test-namespace");
+      const result = parseTypes(toSchemaOutputs({ Test: testType }), "test-namespace");
       expect(result.Test.fields.email.config.unique).toBe(true);
     });
   });
@@ -66,7 +67,7 @@ describe("parseTypes", () => {
       });
 
       const result = parseTypes(
-        { Employee: employee, PerformanceReview: performanceReview },
+        toSchemaOutputs({ Employee: employee, PerformanceReview: performanceReview }),
         "test-namespace",
       );
 
@@ -99,13 +100,22 @@ describe("parseTypes", () => {
       });
 
       expect(() =>
-        parseTypes({ Employee: employee, PerformanceReview: performanceReview }, "test-namespace"),
+        parseTypes(
+          toSchemaOutputs({ Employee: employee, PerformanceReview: performanceReview }),
+          "test-namespace",
+        ),
       ).toThrow(/Backward relation name conflicts detected/);
       expect(() =>
-        parseTypes({ Employee: employee, PerformanceReview: performanceReview }, "test-namespace"),
+        parseTypes(
+          toSchemaOutputs({ Employee: employee, PerformanceReview: performanceReview }),
+          "test-namespace",
+        ),
       ).toThrow(/performanceReviews/);
       expect(() =>
-        parseTypes({ Employee: employee, PerformanceReview: performanceReview }, "test-namespace"),
+        parseTypes(
+          toSchemaOutputs({ Employee: employee, PerformanceReview: performanceReview }),
+          "test-namespace",
+        ),
       ).toThrow(/Employee/);
     });
 
@@ -129,7 +139,7 @@ describe("parseTypes", () => {
       });
 
       const result = parseTypes(
-        { Employee: employee, PerformanceReview: performanceReview },
+        toSchemaOutputs({ Employee: employee, PerformanceReview: performanceReview }),
         "test-namespace",
       );
 
@@ -172,7 +182,7 @@ describe("parseTypes", () => {
 
       expect(() =>
         parseTypes(
-          { Employee: employee, PerformanceReview: performanceReview },
+          toSchemaOutputs({ Employee: employee, PerformanceReview: performanceReview }),
           "test-namespace",
           typeSourceInfo,
         ),
@@ -192,7 +202,7 @@ describe("parseTypes", () => {
         }),
       });
 
-      const result = parseTypes({ User: user, Post: post }, "test-namespace");
+      const result = parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace");
 
       expect(result.User.backwardRelationships).toHaveProperty("posts");
       expect(result.User.backwardRelationships.posts).toMatchObject({
@@ -215,7 +225,10 @@ describe("parseTypes", () => {
         }),
       });
 
-      const result = parseTypes({ User: user, Profile: profile }, "test-namespace");
+      const result = parseTypes(
+        toSchemaOutputs({ User: user, Profile: profile }),
+        "test-namespace",
+      );
 
       expect(result.User.backwardRelationships).toHaveProperty("profile");
       expect(result.User.backwardRelationships.profile).toMatchObject({
@@ -240,7 +253,9 @@ describe("parseTypes", () => {
         }),
       });
 
-      expect(() => parseTypes({ User: user, Post: post }, "test-namespace")).toThrow(/posts/);
+      expect(() =>
+        parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace"),
+      ).toThrow(/posts/);
     });
 
     it("should throw error when backward name conflicts with files field", () => {
@@ -260,7 +275,9 @@ describe("parseTypes", () => {
         }),
       });
 
-      expect(() => parseTypes({ User: user, Post: post }, "test-namespace")).toThrow(/posts/);
+      expect(() =>
+        parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace"),
+      ).toThrow(/posts/);
     });
   });
 
@@ -279,11 +296,9 @@ describe("parseTypes", () => {
         }),
       });
 
-      expect(() => parseTypes({ User: user, Post: post }, "test-namespace")).toThrow(
-        /has a relation but is missing the required 'type' property/,
-      );
-      expect(() => parseTypes({ User: user, Post: post }, "test-namespace")).toThrow(/userId/);
-      expect(() => parseTypes({ User: user, Post: post }, "test-namespace")).toThrow(/Post/);
+      // Now validated at schema level by Zod - error is thrown in toSchemaOutput
+      expect(() => toSchemaOutputs({ User: user, Post: post })).toThrow(/Invalid option/);
+      expect(() => toSchemaOutputs({ User: user, Post: post })).toThrow(/rawRelation/);
     });
 
     it("should throw error when relation type is invalid", () => {
@@ -300,9 +315,8 @@ describe("parseTypes", () => {
         }),
       });
 
-      expect(() => parseTypes({ User: user, Post: post }, "test-namespace")).toThrow(
-        /has invalid relation type 'invalid-type'/,
-      );
+      // Now validated at schema level by Zod - error is thrown in toSchemaOutput
+      expect(() => toSchemaOutputs({ User: user, Post: post })).toThrow(/Invalid option/);
     });
 
     it("should throw error when target type does not exist", () => {
@@ -318,7 +332,7 @@ describe("parseTypes", () => {
       });
 
       // Only include Post, not User - should throw error about unknown type
-      expect(() => parseTypes({ Post: post }, "test-namespace")).toThrow(
+      expect(() => parseTypes(toSchemaOutputs({ Post: post }), "test-namespace")).toThrow(
         /references unknown type "User"/,
       );
     });
@@ -338,9 +352,9 @@ describe("parseTypes", () => {
           }),
         });
 
-        expect(() => parseTypes({ User: user, Post: post }, "test-namespace")).not.toThrow(
-          /relation type/,
-        );
+        expect(() =>
+          parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace"),
+        ).not.toThrow(/relation type/);
       }
     });
   });
@@ -359,7 +373,7 @@ describe("parseTypes", () => {
         }),
       });
 
-      const result = parseTypes({ User: user, Post: post }, "test-namespace");
+      const result = parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace");
 
       // Check computed metadata on field config
       const authorIdConfig = result.Post.fields.authorId.config;
@@ -370,7 +384,7 @@ describe("parseTypes", () => {
       expect(authorIdConfig.index).toBe(true);
     });
 
-    it("should set unique=true for oneToOne relations", () => {
+    it("should set unique=true for oneToOne relations (relation only)", () => {
       const user = db.type("User", {
         name: db.string(),
       });
@@ -382,9 +396,105 @@ describe("parseTypes", () => {
         }),
       });
 
-      const result = parseTypes({ User: user, Profile: profile }, "test-namespace");
+      const result = parseTypes(
+        toSchemaOutputs({ User: user, Profile: profile }),
+        "test-namespace",
+      );
 
       expect(result.Profile.fields.userId.config.unique).toBe(true);
+    });
+
+    it("should set unique=true for oneToOne relations (unique before relation)", () => {
+      const user = db.type("User", {
+        name: db.string(),
+      });
+
+      const profile = db.type("Profile", {
+        userId: db
+          .uuid()
+          .unique()
+          .relation({
+            type: "1-1",
+            toward: { type: user },
+          }),
+      });
+
+      const result = parseTypes(
+        toSchemaOutputs({ User: user, Profile: profile }),
+        "test-namespace",
+      );
+
+      expect(result.Profile.fields.userId.config.unique).toBe(true);
+    });
+
+    it("should set unique=true for oneToOne relations (unique after relation)", () => {
+      const user = db.type("User", {
+        name: db.string(),
+      });
+
+      const profile = db.type("Profile", {
+        // @ts-expect-error - Testing runtime behavior: 1-1 already implies unique, but we test the call order
+        userId: db
+          .uuid()
+          .relation({
+            type: "1-1",
+            toward: { type: user },
+          })
+          .unique(),
+      });
+
+      const result = parseTypes(
+        toSchemaOutputs({ User: user, Profile: profile }),
+        "test-namespace",
+      );
+
+      expect(result.Profile.fields.userId.config.unique).toBe(true);
+    });
+
+    it("should throw error when unique is set on n-1 relation (unique before relation)", () => {
+      const user = db.type("User", {
+        name: db.string(),
+      });
+
+      const employee = db.type("Employee", {
+        userID: db
+          .uuid()
+          .unique()
+          .relation({
+            type: "n-1",
+            toward: { type: user },
+          }),
+      });
+
+      expect(() =>
+        parseTypes(toSchemaOutputs({ User: user, Employee: employee }), "test-namespace"),
+      ).toThrow(
+        'Field "userID" on type "Employee": cannot set unique on n-1 (manyToOne) relation. ' +
+          "Use 1-1 (oneToOne) relation instead, or remove the unique constraint.",
+      );
+    });
+
+    it("should throw error when unique is set on n-1 relation (unique after relation)", () => {
+      const user = db.type("User", {
+        name: db.string(),
+      });
+
+      const employee = db.type("Employee", {
+        userID: db
+          .uuid()
+          .relation({
+            type: "n-1",
+            toward: { type: user },
+          })
+          .unique(),
+      });
+
+      expect(() =>
+        parseTypes(toSchemaOutputs({ User: user, Employee: employee }), "test-namespace"),
+      ).toThrow(
+        'Field "userID" on type "Employee": cannot set unique on n-1 (manyToOne) relation. ' +
+          "Use 1-1 (oneToOne) relation instead, or remove the unique constraint.",
+      );
     });
 
     it("should handle self-referencing relations", () => {
@@ -397,7 +507,7 @@ describe("parseTypes", () => {
         }),
       });
 
-      const result = parseTypes({ Node: node }, "test-namespace");
+      const result = parseTypes(toSchemaOutputs({ Node: node }), "test-namespace");
 
       // Check that self-reference is resolved to type name
       expect(result.Node.fields.parentId.config.foreignKeyType).toBe("Node");
@@ -416,7 +526,7 @@ describe("parseTypes", () => {
         }),
       });
 
-      const result = parseTypes({ User: user, Post: post }, "test-namespace");
+      const result = parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace");
 
       // keyOnly should not create relation info
       expect(result.Post.fields.userId.relation).toBeUndefined();

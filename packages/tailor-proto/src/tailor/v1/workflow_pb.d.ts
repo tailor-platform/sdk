@@ -4,7 +4,7 @@
 
 import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
-import type { Workflow, WorkflowExecution, WorkflowJobFunction } from "./workflow_resource_pb";
+import type { RetryPolicy, Workflow, WorkflowExecution, WorkflowJobFunction } from "./workflow_resource_pb";
 import type { Filter, PageDirection } from "./resource_pb";
 import type { AuthInvoker } from "./auth_resource_pb";
 
@@ -36,6 +36,11 @@ export declare type CreateWorkflowRequest = Message<"tailor.v1.CreateWorkflowReq
    * @generated from field: map<string, int64> job_functions = 4;
    */
   jobFunctions: { [key: string]: bigint };
+
+  /**
+   * @generated from field: optional tailor.v1.RetryPolicy retry_policy = 5;
+   */
+  retryPolicy?: RetryPolicy;
 };
 
 /**
@@ -83,6 +88,11 @@ export declare type UpdateWorkflowRequest = Message<"tailor.v1.UpdateWorkflowReq
    * @generated from field: map<string, int64> job_functions = 4;
    */
   jobFunctions: { [key: string]: bigint };
+
+  /**
+   * @generated from field: optional tailor.v1.RetryPolicy retry_policy = 5;
+   */
+  retryPolicy?: RetryPolicy;
 };
 
 /**
@@ -545,6 +555,11 @@ export declare type ListWorkflowExecutionsRequest = Message<"tailor.v1.ListWorkf
    * @generated from field: string workspace_id = 1;
    */
   workspaceId: string;
+
+  /**
+   * @generated from field: string workflow_name = 6;
+   */
+  workflowName: string;
 
   /**
    * @generated from field: string page_token = 2;

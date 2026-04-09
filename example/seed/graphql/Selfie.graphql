@@ -1,5 +1,0 @@
-mutation CreateSelfie($input: SelfieCreateInput!) {
-  createSelfie(input: $input) {
-    id
-  }
-}

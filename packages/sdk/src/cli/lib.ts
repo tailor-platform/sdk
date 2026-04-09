@@ -1,15 +1,20 @@
 // CLI API exports for programmatic usage
-import { register } from "node:module";
+import { isNativeTypeScriptRuntime } from "./shared/runtime";
 
-// Register tsx to handle TypeScript files when using CLI API programmatically
-register("tsx", import.meta.url, { data: {} });
+// Register tsx to handle TypeScript files when using CLI API programmatically.
+// Bun and Deno handle TypeScript natively, so registration is skipped.
+if (!isNativeTypeScriptRuntime()) {
+  const { register } = await import("node:module");
+  register("tsx", import.meta.url, { data: {} });
+}
 
-export { apply } from "./apply/index";
-export type { ApplyOptions } from "./apply/index";
-export { generate } from "./generator/index";
-export type { GenerateOptions } from "./generator/options";
-export { loadConfig, type LoadedConfig } from "./config-loader";
-export { generateUserTypes } from "./type-generator";
+export { apply } from "./commands/apply/apply";
+export type { ApplyOptions } from "./commands/apply/apply";
+export type { BundledScripts } from "./commands/apply/function-registry";
+export { generate } from "./commands/generate/service";
+export type { GenerateOptions } from "./commands/generate/options";
+export { loadConfig, type LoadedConfig } from "./shared/config-loader";
+export { generateUserTypes } from "./shared/type-generator";
 export type {
   CodeGenerator,
   TailorDBGenerator,
@@ -24,97 +29,157 @@ export type {
   AggregateArgs,
   GeneratorResult,
   DependencyKind,
-} from "./generator/types";
-export type { TailorDBType } from "@/parser/service/tailordb/types";
-export type { Resolver } from "@/parser/service/resolver";
-export type { Executor } from "@/parser/service/executor";
+  PluginAttachment,
+  TypeSourceInfoEntry,
+} from "./commands/generate/types";
+export type { TailorDBType } from "@/types/tailordb";
+export type { Resolver } from "@/types/resolver.generated";
+export type { Executor } from "@/types/executor.generated";
 
-export { show, type ShowOptions, type ApplicationInfo } from "./show";
-export { remove, type RemoveOptions } from "./remove";
-export { createWorkspace, type CreateWorkspaceOptions } from "./workspace/create";
-export { listWorkspaces, type ListWorkspacesOptions } from "./workspace/list";
-export { deleteWorkspace, type DeleteWorkspaceOptions } from "./workspace/delete";
-export { describeWorkspace, type DescribeWorkspaceOptions } from "./workspace/describe";
-export { restoreWorkspace, type RestoreWorkspaceOptions } from "./workspace/restore";
-export type { WorkspaceInfo, WorkspaceDetails } from "./workspace/transform";
-export { listUsers, type ListUsersOptions } from "./workspace/user/list";
-export { inviteUser, type InviteUserOptions } from "./workspace/user/invite";
-export { updateUser, type UpdateUserOptions } from "./workspace/user/update";
-export { removeUser, type RemoveUserOptions } from "./workspace/user/remove";
-export type { UserInfo } from "./workspace/user/transform";
-export { listApps, type ListAppsOptions } from "./workspace/app/list";
-export { getAppHealth, type HealthOptions as GetAppHealthOptions } from "./workspace/app/health";
-export type { AppInfo, AppHealthInfo } from "./workspace/app/transform";
-export { getFunctionRegistry } from "./workspace/function/registry/get";
-export { listFunctionRegistries } from "./workspace/function/registry/list";
+/** @deprecated Import from '@tailor-platform/sdk/plugin/kysely-type' instead */
+export { kyselyTypePlugin } from "@/plugin/builtin/kysely-type";
+/** @deprecated Import from '@tailor-platform/sdk/plugin/enum-constants' instead */
+export { enumConstantsPlugin } from "@/plugin/builtin/enum-constants";
+/** @deprecated Import from '@tailor-platform/sdk/plugin/file-utils' instead */
+export { fileUtilsPlugin } from "@/plugin/builtin/file-utils";
+/** @deprecated Import from '@tailor-platform/sdk/plugin/seed' instead */
+export { seedPlugin } from "@/plugin/builtin/seed";
+
+export { show, type ShowOptions, type ApplicationInfo } from "./commands/show";
+export { remove, type RemoveOptions } from "./commands/remove";
+export { createWorkspace, type CreateWorkspaceOptions } from "./commands/workspace/create";
+export { listWorkspaces, type ListWorkspacesOptions } from "./commands/workspace/list";
+export { deleteWorkspace, type DeleteWorkspaceOptions } from "./commands/workspace/delete";
+export { getWorkspace, type GetWorkspaceOptions } from "./commands/workspace/get";
+export { restoreWorkspace, type RestoreWorkspaceOptions } from "./commands/workspace/restore";
+export type { WorkspaceInfo, WorkspaceDetails } from "./commands/workspace/transform";
+export { listUsers, type ListUsersOptions } from "./commands/workspace/user/list";
+export { inviteUser, type InviteUserOptions } from "./commands/workspace/user/invite";
+export { updateUser, type UpdateUserOptions } from "./commands/workspace/user/update";
+export { removeUser, type RemoveUserOptions } from "./commands/workspace/user/remove";
+export type { UserInfo } from "./commands/workspace/user/transform";
+export { listApps, type ListAppsOptions } from "./commands/workspace/app/list";
+export {
+  getAppHealth,
+  type HealthOptions as GetAppHealthOptions,
+} from "./commands/workspace/app/health";
+export type { AppInfo, AppHealthInfo } from "./commands/workspace/app/transform";
+export {
+  getFunctionRegistry,
+  type GetRegistryOptions,
+} from "./commands/workspace/function/registry/get";
+export {
+  listFunctionRegistries,
+  type ListRegistryOptions,
+} from "./commands/workspace/function/registry/list";
+export type { FunctionRegistryInfo } from "./commands/workspace/function/registry/transform";
 export {
   listMachineUsers,
   type ListMachineUsersOptions,
   type MachineUserInfo,
-} from "./machineuser/list";
+} from "./commands/machineuser/list";
 export {
   getMachineUserToken,
   type GetMachineUserTokenOptions,
   type MachineUserTokenInfo,
-} from "./machineuser/token";
-export { getOAuth2Client, type GetOAuth2ClientOptions } from "./oauth2client/get";
-export { listOAuth2Clients, type ListOAuth2ClientsOptions } from "./oauth2client/list";
-export type { OAuth2ClientInfo, OAuth2ClientCredentials } from "./oauth2client/transform";
-export { listWorkflows, type ListWorkflowsOptions } from "./workflow/list";
-export { getWorkflow, type GetWorkflowOptions } from "./workflow/get";
+} from "./commands/machineuser/token";
+export { getOAuth2Client, type GetOAuth2ClientOptions } from "./commands/oauth2client/get";
+export { listOAuth2Clients, type ListOAuth2ClientsOptions } from "./commands/oauth2client/list";
+export type { OAuth2ClientInfo, OAuth2ClientCredentials } from "./commands/oauth2client/transform";
+export { listWorkflows, type ListWorkflowsOptions } from "./commands/workflow/list";
+export {
+  getWorkflow,
+  type GetWorkflowOptions,
+  type GetWorkflowTypedOptions,
+} from "./commands/workflow/get";
 export {
   startWorkflow,
   type StartWorkflowOptions,
+  type StartWorkflowTypedOptions,
   type StartWorkflowResultWithWait,
   type WaitOptions,
-} from "./workflow/start";
+} from "./commands/workflow/start";
 export {
   listWorkflowExecutions,
   getWorkflowExecution,
   type ListWorkflowExecutionsOptions,
+  type ListWorkflowExecutionsTypedOptions,
   type GetWorkflowExecutionOptions,
   type GetWorkflowExecutionResult,
-} from "./workflow/executions";
+} from "./commands/workflow/executions";
 export {
   resumeWorkflow,
   type ResumeWorkflowOptions,
   type ResumeWorkflowResultWithWait,
-} from "./workflow/resume";
+} from "./commands/workflow/resume";
 export type {
   WorkflowListInfo,
   WorkflowInfo,
   WorkflowExecutionInfo,
   WorkflowJobExecutionInfo,
-} from "./workflow/transform";
+} from "./commands/workflow/transform";
 export {
   triggerExecutor,
   type TriggerExecutorOptions,
+  type TriggerExecutorTypedOptions,
   type TriggerExecutorResult,
-} from "./executor/trigger";
+} from "./commands/executor/trigger";
 export {
   listExecutorJobs,
   getExecutorJob,
   watchExecutorJob,
   type ListExecutorJobsOptions,
+  type ListExecutorJobsTypedOptions,
   type GetExecutorJobOptions,
+  type GetExecutorJobTypedOptions,
   type WatchExecutorJobOptions,
+  type WatchExecutorJobTypedOptions,
   type ExecutorJobDetailInfo,
   type WatchExecutorJobResult,
-} from "./executor/jobs";
+} from "./commands/executor/jobs";
+export { listExecutors, type ListExecutorsOptions } from "./commands/executor/list";
+export {
+  getExecutor,
+  type GetExecutorOptions,
+  type GetExecutorTypedOptions,
+} from "./commands/executor/get";
+export {
+  listWebhookExecutors,
+  type ListWebhookExecutorsOptions,
+  type WebhookExecutorInfo,
+} from "./commands/executor/webhook";
 export type {
   ExecutorJobListInfo,
   ExecutorJobInfo,
   ExecutorJobAttemptInfo,
-} from "./executor/transform";
-export { loadAccessToken, loadWorkspaceId } from "./context";
-export { apiCall, type ApiCallOptions, type ApiCallResult } from "./api";
-export { truncate, type TruncateOptions } from "./tailordb/truncate";
+  ExecutorListInfo,
+  ExecutorInfo,
+} from "./commands/executor/transform";
+export { listOrganizations, type ListOrganizationsOptions } from "./commands/organization/list";
+export { getOrganization, type GetOrganizationOptions } from "./commands/organization/get";
+export { updateOrganization, type UpdateOrganizationOptions } from "./commands/organization/update";
+export { organizationTree, type OrganizationTreeOptions } from "./commands/organization/tree";
+export type {
+  UserOrganizationInfo,
+  OrganizationInfo,
+  FolderListInfo,
+  FolderInfo,
+} from "./commands/organization/transform";
+export { listFolders, type ListFoldersOptions } from "./commands/organization/folder/list";
+export { getFolder, type GetFolderOptions } from "./commands/organization/folder/get";
+export { createFolder, type CreateFolderOptions } from "./commands/organization/folder/create";
+export { updateFolder, type UpdateFolderOptions } from "./commands/organization/folder/update";
+export { deleteFolder, type DeleteFolderOptions } from "./commands/organization/folder/delete";
+export { loadAccessToken, loadWorkspaceId } from "./shared/context";
+export { apiCall, type ApiCallOptions, type ApiCallResult } from "./commands/api";
+export { query } from "./query";
+export { truncate, type TruncateOptions } from "./commands/tailordb/truncate";
 
 // Migration exports
 export {
   generate as migrateGenerate,
   type GenerateOptions as MigrateGenerateOptions,
-} from "./tailordb/migrate/generate";
+} from "./commands/tailordb/migrate/generate";
 export {
   createSnapshotFromLocalTypes,
   reconstructSnapshotFromMigrations,
@@ -123,18 +188,18 @@ export {
   getLatestMigrationNumber,
   getMigrationFiles,
   compareLocalTypesWithSnapshot,
-} from "./tailordb/migrate/snapshot";
+} from "./commands/tailordb/migrate/snapshot";
 export {
   getNamespacesWithMigrations,
   type NamespaceWithMigrations,
-} from "./tailordb/migrate/config";
+} from "./commands/tailordb/migrate/config";
 export {
   hasChanges,
   formatMigrationDiff,
   formatDiffSummary,
   type MigrationDiff,
   type BreakingChangeInfo,
-} from "./tailordb/migrate/diff-calculator";
+} from "./commands/tailordb/migrate/diff-calculator";
 export {
   SCHEMA_FILE_NAME,
   DIFF_FILE_NAME,
@@ -147,5 +212,22 @@ export {
   type SnapshotType,
   type SnapshotFieldConfig,
   type MigrationInfo,
-} from "./tailordb/migrate/snapshot";
-export { MIGRATION_LABEL_KEY } from "./tailordb/migrate/types";
+} from "./commands/tailordb/migrate/snapshot";
+export { MIGRATION_LABEL_KEY } from "./commands/tailordb/migrate/types";
+
+// Seed exports
+export { chunkSeedData, type SeedChunk, type ChunkSeedDataOptions } from "./shared/seed-chunker";
+export { bundleSeedScript, type SeedBundleResult } from "./commands/generate/seed/bundler";
+export {
+  bundleMigrationScript,
+  type MigrationBundleResult,
+} from "./commands/tailordb/migrate/bundler";
+export {
+  executeScript,
+  waitForExecution,
+  type ScriptExecutionOptions,
+  type ScriptExecutionResult,
+  type ExecutionWaitResult,
+} from "./shared/script-executor";
+export { initOperatorClient, type OperatorClient } from "./shared/client";
+export type { AuthInvoker } from "@tailor-proto/tailor/v1/auth_resource_pb";

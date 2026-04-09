@@ -8,7 +8,7 @@
  * - Apply with migrations
  *
  * Prerequisites:
- * - TAILOR_PLATFORM_TOKEN environment variable must be set
+ * - Authentication via TAILOR_PLATFORM_TOKEN env var or `tailor-sdk login`
  * - TAILOR_PLATFORM_ORGANIZATION_ID environment variable must be set
  *
  * Running Tests:
@@ -34,16 +34,17 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, test, expect, beforeAll, afterAll } from "vitest";
-import { initOperatorClient, type OperatorClient } from "../src/cli/client";
-import { loadAccessToken } from "../src/cli/context";
+import { describe, test, expect, beforeAll } from "vitest";
+import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
+import { loadAccessToken } from "../src/cli/shared/context";
+import { trackWorkspace, trackTempDir } from "./globalSetup";
 import {
   getMigrationFiles,
   reconstructSnapshotFromMigrations,
   loadDiff,
   INITIAL_SCHEMA_NUMBER,
   getMigrationFilePath,
-} from "../src/cli/tailordb/migrate/snapshot";
+} from "../src/cli/commands/tailordb/migrate/snapshot";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -54,10 +55,11 @@ const E2E_WORKSPACE_PREFIX = "e2e-ws-";
 // Fixture directory path
 const FIXTURE_DIR = path.join(__dirname, "fixtures", "migration");
 
-// Generate unique test identifiers
+// Generate unique test identifiers (include GITHUB_RUN_ID in CI to avoid cross-run cleanup conflicts)
+const ciRunId = process.env.GITHUB_RUN_ID ?? "";
 const testRunId = Date.now().toString(36);
 const testAppName = `migration-e2e-${testRunId}`;
-const testWorkspaceName = `${E2E_WORKSPACE_PREFIX}${testRunId}`;
+const testWorkspaceName = `${E2E_WORKSPACE_PREFIX}${ciRunId ? `${ciRunId}-` : ""}${testRunId}`;
 const tailordbName = `testdb-${testRunId}`;
 
 /**
@@ -206,12 +208,7 @@ describe.sequential("E2E: TailorDB Migrations", () => {
   }
 
   beforeAll(async () => {
-    // Check for required environment variable
-    if (!process.env.TAILOR_PLATFORM_TOKEN) {
-      throw new Error("TAILOR_PLATFORM_TOKEN environment variable must be set to run E2E tests");
-    }
-
-    // Initialize client
+    // Initialize client (supports both TAILOR_PLATFORM_TOKEN env var and platform config login)
     const accessToken = await loadAccessToken({ useProfile: false });
     client = await initOperatorClient(accessToken);
 
@@ -232,6 +229,7 @@ describe.sequential("E2E: TailorDB Migrations", () => {
       folderId: process.env.TAILOR_PLATFORM_FOLDER_ID,
     });
     workspaceId = createResp.workspace!.id!;
+    trackWorkspace(workspaceId);
     console.log(`Workspace created: ${workspaceId}`);
 
     // Set workspace ID for apply operations
@@ -240,10 +238,8 @@ describe.sequential("E2E: TailorDB Migrations", () => {
     // Create temp directory
     const sdkRoot = path.resolve(__dirname, "..");
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "migration-e2e-"));
+    trackTempDir(tempDir);
     migrationsDir = path.join(tempDir, "migrations");
-
-    // Set TAILOR_PLATFORM_SDK_TYPE_PATH to prevent writing to packages/sdk
-    process.env.TAILOR_PLATFORM_SDK_TYPE_PATH = path.join(tempDir, "user-defined.d.ts");
 
     // Unset EDITOR to prevent opening editor during migration generation
     delete process.env.EDITOR;
@@ -275,27 +271,6 @@ describe.sequential("E2E: TailorDB Migrations", () => {
       path.join(monorepoNodeModules, "@tailor-platform", "function-kysely-tailordb"),
       path.join(tailorPlatformDir, "function-kysely-tailordb"),
     );
-  }, 120000);
-
-  afterAll(async () => {
-    // Cleanup: remove temp directory and workspace
-    try {
-      // Remove temp directory
-      fs.rmSync(tempDir, { recursive: true, force: true });
-      console.log("✅ Cleaned up temp directory:", tempDir);
-    } catch (error) {
-      console.warn("⚠️  Failed to cleanup temp directory:", error);
-    }
-
-    try {
-      // Remove workspace
-      const accessToken = await loadAccessToken({ useProfile: false });
-      const client = await initOperatorClient(accessToken);
-      await client.deleteWorkspace({ workspaceId });
-      console.log("✅ Cleaned up workspace:", workspaceId);
-    } catch (error) {
-      console.warn("⚠️  Failed to cleanup workspace:", error);
-    }
   }, 120000);
 
   /**

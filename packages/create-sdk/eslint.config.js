@@ -1,6 +1,7 @@
 import eslint from "@eslint/js";
 import { defineConfig, globalIgnores } from "eslint/config";
-import importPlugin from "eslint-plugin-import";
+import { createTypeScriptImportResolver } from "eslint-import-resolver-typescript";
+import importPlugin from "eslint-plugin-import-x";
 import oxlint from "eslint-plugin-oxlint";
 import globals from "globals";
 import tseslint from "typescript-eslint";
@@ -34,11 +35,15 @@ export default defineConfig([
     },
   },
   importPlugin.flatConfigs.recommended,
-  importPlugin.flatConfigs.typescript,
+  {
+    settings: {
+      "import-x/resolver-next": [createTypeScriptImportResolver()],
+    },
+  },
   {
     rules: {
-      "import/no-unresolved": "off",
-      "import/order": [
+      "import-x/no-unresolved": "off",
+      "import-x/order": [
         "error",
         {
           alphabetize: {

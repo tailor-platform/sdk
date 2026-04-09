@@ -120,14 +120,45 @@ export declare const ExecutorTriggerScheduleConfigSchema: GenMessage<ExecutorTri
  */
 export declare type ExecutorTriggerEventConfig = Message<"tailor.v1.ExecutorTriggerEventConfig"> & {
   /**
-   * @generated from field: string event_type = 1;
+   * @generated from field: string event_type = 1 [deprecated = true];
+   * @deprecated
    */
   eventType: string;
 
   /**
-   * @generated from field: tailor.v1.Script condition = 2;
+   * @generated from field: tailor.v1.Script condition = 2 [deprecated = true];
+   * @deprecated
    */
   condition?: Script;
+
+  /**
+   * @generated from oneof tailor.v1.ExecutorTriggerEventConfig.typed_config
+   */
+  typedConfig: {
+    /**
+     * @generated from field: tailor.v1.ExecutorTailorDBEventConfig tailordb = 3;
+     */
+    value: ExecutorTailorDBEventConfig;
+    case: "tailordb";
+  } | {
+    /**
+     * @generated from field: tailor.v1.ExecutorIdPEventConfig idp = 4;
+     */
+    value: ExecutorIdPEventConfig;
+    case: "idp";
+  } | {
+    /**
+     * @generated from field: tailor.v1.ExecutorAuthEventConfig auth = 5;
+     */
+    value: ExecutorAuthEventConfig;
+    case: "auth";
+  } | {
+    /**
+     * @generated from field: tailor.v1.ExecutorPipelineEventConfig pipeline = 6;
+     */
+    value: ExecutorPipelineEventConfig;
+    case: "pipeline";
+  } | { case: undefined; value?: undefined };
 };
 
 /**
@@ -135,6 +166,120 @@ export declare type ExecutorTriggerEventConfig = Message<"tailor.v1.ExecutorTrig
  * Use `create(ExecutorTriggerEventConfigSchema)` to create a new message.
  */
 export declare const ExecutorTriggerEventConfigSchema: GenMessage<ExecutorTriggerEventConfig>;
+
+/**
+ * @generated from message tailor.v1.ExecutorTailorDBEventConfig
+ */
+export declare type ExecutorTailorDBEventConfig = Message<"tailor.v1.ExecutorTailorDBEventConfig"> & {
+  /**
+   * @generated from field: repeated string event_types = 1;
+   */
+  eventTypes: string[];
+
+  /**
+   * @generated from field: string namespace_name = 2;
+   */
+  namespaceName: string;
+
+  /**
+   * @generated from field: string type_name = 3;
+   */
+  typeName: string;
+
+  /**
+   * @generated from field: tailor.v1.Script condition = 4;
+   */
+  condition?: Script;
+};
+
+/**
+ * Describes the message tailor.v1.ExecutorTailorDBEventConfig.
+ * Use `create(ExecutorTailorDBEventConfigSchema)` to create a new message.
+ */
+export declare const ExecutorTailorDBEventConfigSchema: GenMessage<ExecutorTailorDBEventConfig>;
+
+/**
+ * @generated from message tailor.v1.ExecutorIdPEventConfig
+ */
+export declare type ExecutorIdPEventConfig = Message<"tailor.v1.ExecutorIdPEventConfig"> & {
+  /**
+   * @generated from field: repeated string event_types = 1;
+   */
+  eventTypes: string[];
+
+  /**
+   * @generated from field: string namespace_name = 2;
+   */
+  namespaceName: string;
+
+  /**
+   * @generated from field: tailor.v1.Script condition = 3;
+   */
+  condition?: Script;
+};
+
+/**
+ * Describes the message tailor.v1.ExecutorIdPEventConfig.
+ * Use `create(ExecutorIdPEventConfigSchema)` to create a new message.
+ */
+export declare const ExecutorIdPEventConfigSchema: GenMessage<ExecutorIdPEventConfig>;
+
+/**
+ * @generated from message tailor.v1.ExecutorAuthEventConfig
+ */
+export declare type ExecutorAuthEventConfig = Message<"tailor.v1.ExecutorAuthEventConfig"> & {
+  /**
+   * @generated from field: repeated string event_types = 1;
+   */
+  eventTypes: string[];
+
+  /**
+   * @generated from field: string namespace_name = 2;
+   */
+  namespaceName: string;
+
+  /**
+   * @generated from field: tailor.v1.Script condition = 3;
+   */
+  condition?: Script;
+};
+
+/**
+ * Describes the message tailor.v1.ExecutorAuthEventConfig.
+ * Use `create(ExecutorAuthEventConfigSchema)` to create a new message.
+ */
+export declare const ExecutorAuthEventConfigSchema: GenMessage<ExecutorAuthEventConfig>;
+
+/**
+ * @generated from message tailor.v1.ExecutorPipelineEventConfig
+ */
+export declare type ExecutorPipelineEventConfig = Message<"tailor.v1.ExecutorPipelineEventConfig"> & {
+  /**
+   * @generated from field: repeated string event_types = 1;
+   */
+  eventTypes: string[];
+
+  /**
+   * @generated from field: string namespace_name = 2;
+   */
+  namespaceName: string;
+
+  /**
+   * @generated from field: string resolver_name = 3;
+   */
+  resolverName: string;
+
+  /**
+   * @generated from field: tailor.v1.Script condition = 4;
+   */
+  condition?: Script;
+};
+
+/**
+ * Describes the message tailor.v1.ExecutorPipelineEventConfig.
+ * Use `create(ExecutorPipelineEventConfigSchema)` to create a new message.
+ */
+export declare const ExecutorPipelineEventConfigSchema: GenMessage<ExecutorPipelineEventConfig>;
 
 /**
  * @generated from message tailor.v1.ExecutorTriggerIncomingWebhookConfig
@@ -297,6 +442,8 @@ export declare type ExecutorTargetFunctionConfig = Message<"tailor.v1.ExecutorTa
   name: string;
 
   /**
+   * script contains inline JavaScript code. Mutually exclusive with script_ref.
+   *
    * @generated from field: string script = 2;
    */
   script: string;
@@ -310,6 +457,13 @@ export declare type ExecutorTargetFunctionConfig = Message<"tailor.v1.ExecutorTa
    * @generated from field: tailor.v1.AuthInvoker invoker = 4;
    */
   invoker?: AuthInvoker;
+
+  /**
+   * script_ref references a function in the function registry. Mutually exclusive with script.
+   *
+   * @generated from field: optional string script_ref = 5;
+   */
+  scriptRef?: string;
 };
 
 /**

@@ -1,7 +1,8 @@
 import eslint from "@eslint/js";
 import tseslint from "typescript-eslint";
 import { defineConfig, globalIgnores } from "eslint/config";
-import importPlugin from "eslint-plugin-import";
+import { createTypeScriptImportResolver } from "eslint-import-resolver-typescript";
+import importPlugin from "eslint-plugin-import-x";
 import oxlint from "eslint-plugin-oxlint";
 
 export default defineConfig([
@@ -9,6 +10,7 @@ export default defineConfig([
     ".tailor-sdk/",
     "generated/",
     "tests/fixtures/",
+    "tests/migration-fixtures/",
     "generated-perf",
     "scripts/perf",
     "seed",
@@ -18,7 +20,11 @@ export default defineConfig([
   tseslint.configs.recommended,
   tseslint.configs.stylisticTypeChecked,
   importPlugin.flatConfigs.recommended,
-  importPlugin.flatConfigs.typescript,
+  {
+    settings: {
+      "import-x/resolver-next": [createTypeScriptImportResolver()],
+    },
+  },
   {
     languageOptions: {
       parserOptions: {
@@ -34,9 +40,9 @@ export default defineConfig([
         "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
-      "import/no-cycle": ["error", { maxDepth: Infinity }],
-      "import/no-unresolved": "off",
-      "import/order": [
+      "import-x/no-cycle": ["error", { maxDepth: Infinity }],
+      "import-x/no-unresolved": "off",
+      "import-x/order": [
         "error",
         {
           groups: ["builtin", "external", "internal", "parent", "sibling", "index", "type"],
@@ -64,7 +70,7 @@ export default defineConfig([
     files: ["eslint.config.js"],
     extends: [tseslint.configs.disableTypeChecked],
     rules: {
-      "import/no-unresolved": "off",
+      "import-x/no-unresolved": "off",
     },
   },
   ...oxlint.buildFromOxlintConfigFile("./.oxlintrc.json"),

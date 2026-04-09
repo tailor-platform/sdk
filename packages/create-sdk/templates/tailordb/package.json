@@ -1,0 +1,29 @@
+{
+  "name": "tailordb",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "tailor-sdk generate",
+    "deploy": "tailor-sdk apply",
+    "test": "vitest --project unit",
+    "test:unit": "vitest --project unit",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
+    "lint": "oxlint --type-aware . && eslint --cache .",
+    "lint:fix": "oxlint --type-aware --fix . && eslint --cache --fix .",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@tailor-platform/sdk": "workspace:^",
+    "@types/node": "24.12.2",
+    "eslint": "10.2.0",
+    "eslint-plugin-oxlint": "1.58.0",
+    "oxfmt": "0.42.0",
+    "oxlint": "1.58.0",
+    "oxlint-tsgolint": "0.18.1",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.57.2",
+    "vitest": "4.1.2"
+  }
+}

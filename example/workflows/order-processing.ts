@@ -7,7 +7,7 @@ import { sendNotification } from "./jobs/send-notification";
 export const processOrder = createWorkflowJob({
   name: "process-order",
   body: async (input: { orderId: string; customerId: string }, { env }) => {
-    // Log env for demonstration (env is embedded at bundle time)
+    // Log env for demonstration
     console.log("Environment:", env);
 
     // Fetch customer information using trigger
@@ -38,4 +38,10 @@ export const processOrder = createWorkflowJob({
 export default createWorkflow({
   name: "order-processing",
   mainJob: processOrder,
+  retryPolicy: {
+    maxRetries: 3,
+    initialBackoff: "1s",
+    maxBackoff: "30s",
+    backoffMultiplier: 2,
+  },
 });

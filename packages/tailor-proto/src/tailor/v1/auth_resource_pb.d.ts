@@ -815,6 +815,32 @@ export enum AuthSCIMAttribute_Uniqueness {
 export declare const AuthSCIMAttribute_UniquenessSchema: GenEnum<AuthSCIMAttribute_Uniqueness>;
 
 /**
+ * @generated from message tailor.v1.AuthHook
+ */
+export declare type AuthHook = Message<"tailor.v1.AuthHook"> & {
+  /**
+   * @generated from field: tailor.v1.AuthHookPoint hook_point = 1;
+   */
+  hookPoint: AuthHookPoint;
+
+  /**
+   * @generated from field: string script_ref = 2;
+   */
+  scriptRef: string;
+
+  /**
+   * @generated from field: tailor.v1.AuthInvoker invoker = 4;
+   */
+  invoker?: AuthInvoker;
+};
+
+/**
+ * Describes the message tailor.v1.AuthHook.
+ * Use `create(AuthHookSchema)` to create a new message.
+ */
+export declare const AuthHookSchema: GenMessage<AuthHook>;
+
+/**
  * @generated from message tailor.v1.AuthConnection
  */
 export declare type AuthConnection = Message<"tailor.v1.AuthConnection"> & {
@@ -843,6 +869,11 @@ export declare type AuthConnection = Message<"tailor.v1.AuthConnection"> & {
    * @generated from field: google.protobuf.Timestamp created_at = 5;
    */
   createdAt?: Timestamp;
+
+  /**
+   * @generated from field: tailor.v1.AuthConnection.Status status = 6;
+   */
+  status: AuthConnection_Status;
 };
 
 /**
@@ -919,6 +950,31 @@ export enum AuthConnection_Type {
  * Describes the enum tailor.v1.AuthConnection.Type.
  */
 export declare const AuthConnection_TypeSchema: GenEnum<AuthConnection_Type>;
+
+/**
+ * @generated from enum tailor.v1.AuthConnection.Status
+ */
+export enum AuthConnection_Status {
+  /**
+   * @generated from enum value: STATUS_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: STATUS_UNAUTHORIZED = 1;
+   */
+  UNAUTHORIZED = 1,
+
+  /**
+   * @generated from enum value: STATUS_AUTHORIZED = 2;
+   */
+  AUTHORIZED = 2,
+}
+
+/**
+ * Describes the enum tailor.v1.AuthConnection.Status.
+ */
+export declare const AuthConnection_StatusSchema: GenEnum<AuthConnection_Status>;
 
 /**
  * @generated from message tailor.v1.AuthOAuth2Client
@@ -1120,4 +1176,26 @@ export enum PATScope {
  * Describes the enum tailor.v1.PATScope.
  */
 export declare const PATScopeSchema: GenEnum<PATScope>;
+
+/**
+ * Auth Hook --------------------------------------------------------
+ *
+ * @generated from enum tailor.v1.AuthHookPoint
+ */
+export enum AuthHookPoint {
+  /**
+   * @generated from enum value: AUTH_HOOK_POINT_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: AUTH_HOOK_POINT_BEFORE_LOGIN = 1;
+   */
+  BEFORE_LOGIN = 1,
+}
+
+/**
+ * Describes the enum tailor.v1.AuthHookPoint.
+ */
+export declare const AuthHookPointSchema: GenEnum<AuthHookPoint>;
 
