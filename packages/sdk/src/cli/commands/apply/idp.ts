@@ -388,9 +388,7 @@ async function planServices(
     const publishUserEvents = idp.publishUserEvents ?? false;
     const emailConfig = idp.emailConfig;
     if (!idp.permission) {
-      logger.warn(
-        `IdP service "${namespaceName}" has no permission configured. All operations will be denied by default.`,
-      );
+      logger.warn(`IdP service "${namespaceName}" has no permission configured.`);
     }
     const parsedPermission = parseIdPPermission(idp.permission);
     const protoPermission = parsedPermission ? protoIdPPermission(parsedPermission) : undefined;
