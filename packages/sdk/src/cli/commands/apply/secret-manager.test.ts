@@ -734,7 +734,7 @@ describe("applySecretManager state persistence", () => {
   });
 });
 
-describe("planSecretManager skipNullish", () => {
+describe("planSecretManager skipNullishValues", () => {
   function createMockPlanClient(existingSecrets: string[] = [], vaultName = "my-vault") {
     return {
       listSecretManagerVaults: vi.fn().mockResolvedValue({
@@ -848,7 +848,7 @@ describe("planSecretManager skipNullish", () => {
   });
 });
 
-describe("applySecretManager skipNullish state persistence", () => {
+describe("applySecretManager skipNullishValues state persistence", () => {
   function createMockClient() {
     return {
       createSecretManagerVault: vi.fn().mockResolvedValue({}),

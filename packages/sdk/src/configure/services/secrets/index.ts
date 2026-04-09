@@ -28,22 +28,22 @@ export type SecretsConfig = Omit<ReturnType<typeof defineSecretManager>, "get" |
  */
 export function defineSecretManager<const T extends SecretsInput>(config: T): DefinedSecrets<T>;
 /**
- * Define secrets configuration for the Tailor SDK with skipNullish option.
- * When `skipNullish` is true, secrets with nullish values are skipped during deploy
+ * Define secrets configuration for the Tailor SDK with skipNullishValues option.
+ * When `skipNullishValues` is true, secrets with nullish values are skipped during deploy
  * instead of causing an error. This is useful for CI environments where not all
  * secret values are available.
  * @param config - Secrets configuration mapping vault names to their secrets
  * @param options - Options for secret management behavior
- * @param options.skipNullish - When true, secrets with nullish values are skipped during deploy
+ * @param options.skipNullishValues - When true, secrets with nullish values are skipped during deploy
  * @returns Defined secrets with typed runtime access methods
  */
 export function defineSecretManager<const T extends SecretsInputNullish>(
   config: T,
-  options: { skipNullish: true },
+  options: { skipNullishValues: true },
 ): DefinedSecrets<T>;
 export function defineSecretManager<const T extends SecretsInputNullish>(
   config: T,
-  options?: { skipNullish?: boolean },
+  options?: { skipNullishValues?: boolean },
 ): DefinedSecrets<T> {
   const result = { ...config };
 
@@ -61,8 +61,8 @@ export function defineSecretManager<const T extends SecretsInputNullish>(
     },
     enumerable: false,
   });
-  Object.defineProperty(result, "__skipNullish", {
-    value: options?.skipNullish ?? false,
+  Object.defineProperty(result, "__skipNullishValues", {
+    value: options?.skipNullishValues ?? false,
     enumerable: false,
   });
 
