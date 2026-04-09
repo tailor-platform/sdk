@@ -39,6 +39,8 @@ export interface CodemodRunResult {
   changed: boolean;
   filesModified: string[];
   warnings: string[];
+  /** IDs of codemods that actually produced changes in at least one file. */
+  appliedCodemodIds: Set<string>;
 }
 
 /** Default file patterns for TypeScript files. */
@@ -136,6 +138,7 @@ export async function runCodemods(
 
   const filesModified: string[] = [];
   const warnings: string[] = [];
+  const appliedCodemodIds = new Set<string>();
   const seen = new Set<string>();
 
   // Iterate over all matching files (deduplicate across patterns)
@@ -164,6 +167,7 @@ export async function runCodemods(
         const result = await lt.transform(current, absolute);
         if (result != null) {
           current = result;
+          appliedCodemodIds.add(lt.id);
         }
       }
 
@@ -192,5 +196,6 @@ export async function runCodemods(
     changed: filesModified.length > 0,
     filesModified,
     warnings,
+    appliedCodemodIds,
   };
 }

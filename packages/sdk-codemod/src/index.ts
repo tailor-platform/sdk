@@ -63,8 +63,8 @@ const main = defineCommand({
     try {
       const result = await runCodemods(codemodEntries, targetPath, dryRun);
 
-      output.codemodsApplied = result.changed ? codemods.length : 0;
-      output.codemodsSkipped = result.changed ? 0 : codemods.length;
+      output.codemodsApplied = result.appliedCodemodIds.size;
+      output.codemodsSkipped = codemods.length - result.appliedCodemodIds.size;
       output.filesModified = result.filesModified;
       output.warnings = result.warnings;
 
