@@ -35,7 +35,7 @@ type UserBooleanArrayOperand<User extends object = InferredAttributeMap> = {
   user: BooleanArrayFieldKeys<User>;
 };
 
-type IdPUserField = "_id" | "_name" | "_disabled";
+type IdPUserField = "id" | "name" | "disabled";
 
 type IdPUserOperand<Update extends boolean = false> = Update extends true
   ? { oldIdpUser: IdPUserField } | { newIdpUser: IdPUserField }
@@ -115,7 +115,7 @@ type IdPActionPermission<
  * const permission: IdPPermission = {
  *   create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
  *   read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
- *   update: [{ conditions: [[{ newIdpUser: "_name" }, "=", { user: "id" }]], permit: true }],
+ *   update: [{ conditions: [[{ newIdpUser: "name" }, "=", { user: "id" }]], permit: true }],
  *   delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
  *   sendPasswordResetEmail: [{ conditions: [], permit: true }],
  * };

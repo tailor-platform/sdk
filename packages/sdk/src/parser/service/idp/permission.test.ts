@@ -119,28 +119,28 @@ describe("normalizeIdPActionPermission", () => {
       expect(result.conditions[0][0]).toEqual({ user: "role" });
     });
 
-    it("passes through { idpUser: 'field' } as-is", () => {
+    it("passes through { idpUser: 'name' } as-is", () => {
       const result = normalizeIdPActionPermission({
-        conditions: [[{ idpUser: "_name" }, "=", "test"]],
+        conditions: [[{ idpUser: "name" }, "=", "test"]],
         permit: true,
       });
-      expect(result.conditions[0][0]).toEqual({ idpUser: "_name" });
+      expect(result.conditions[0][0]).toEqual({ idpUser: "name" });
     });
 
-    it("passes through { oldIdpUser: 'field' } as-is", () => {
+    it("passes through { oldIdpUser: 'name' } as-is", () => {
       const result = normalizeIdPActionPermission({
-        conditions: [[{ oldIdpUser: "_name" }, "=", "test"]],
+        conditions: [[{ oldIdpUser: "name" }, "=", "test"]],
         permit: true,
       });
-      expect(result.conditions[0][0]).toEqual({ oldIdpUser: "_name" });
+      expect(result.conditions[0][0]).toEqual({ oldIdpUser: "name" });
     });
 
-    it("passes through { newIdpUser: 'field' } as-is", () => {
+    it("passes through { newIdpUser: 'name' } as-is", () => {
       const result = normalizeIdPActionPermission({
-        conditions: [[{ newIdpUser: "_name" }, "=", "test"]],
+        conditions: [[{ newIdpUser: "name" }, "=", "test"]],
         permit: true,
       });
-      expect(result.conditions[0][0]).toEqual({ newIdpUser: "_name" });
+      expect(result.conditions[0][0]).toEqual({ newIdpUser: "name" });
     });
 
     it("passes through string literals", () => {
@@ -186,7 +186,7 @@ describe("normalizeIdPPermission", () => {
       create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
       read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
       update: [
-        { conditions: [[{ newIdpUser: "_name" }, "!=", { oldIdpUser: "_name" }]], permit: true },
+        { conditions: [[{ newIdpUser: "name" }, "!=", { oldIdpUser: "name" }]], permit: true },
       ],
       delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
       sendPasswordResetEmail: [{ conditions: [], permit: true }],

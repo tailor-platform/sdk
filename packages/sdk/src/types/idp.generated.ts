@@ -81,13 +81,13 @@ export type IdPPermission = {
             user: string;
           }
         | {
-            idpUser: "_id" | "_name" | "_disabled";
+            idpUser: "id" | "name" | "disabled";
           }
         | {
-            oldIdpUser: "_id" | "_name" | "_disabled";
+            oldIdpUser: "id" | "name" | "disabled";
           }
         | {
-            newIdpUser: "_id" | "_name" | "_disabled";
+            newIdpUser: "id" | "name" | "disabled";
           }
       )[]
     | readonly (
@@ -101,13 +101,13 @@ export type IdPPermission = {
                 user: string;
               }
             | {
-                idpUser: "_id" | "_name" | "_disabled";
+                idpUser: "id" | "name" | "disabled";
               }
             | {
-                oldIdpUser: "_id" | "_name" | "_disabled";
+                oldIdpUser: "id" | "name" | "disabled";
               }
             | {
-                newIdpUser: "_id" | "_name" | "_disabled";
+                newIdpUser: "id" | "name" | "disabled";
               }
           )[]
       )[]
@@ -122,13 +122,13 @@ export type IdPPermission = {
                   user: string;
                 }
               | {
-                  idpUser: "_id" | "_name" | "_disabled";
+                  idpUser: "id" | "name" | "disabled";
                 }
               | {
-                  oldIdpUser: "_id" | "_name" | "_disabled";
+                  oldIdpUser: "id" | "name" | "disabled";
                 }
               | {
-                  newIdpUser: "_id" | "_name" | "_disabled";
+                  newIdpUser: "id" | "name" | "disabled";
                 }
             )[]
           | readonly (readonly (
@@ -140,13 +140,13 @@ export type IdPPermission = {
                   user: string;
                 }
               | {
-                  idpUser: "_id" | "_name" | "_disabled";
+                  idpUser: "id" | "name" | "disabled";
                 }
               | {
-                  oldIdpUser: "_id" | "_name" | "_disabled";
+                  oldIdpUser: "id" | "name" | "disabled";
                 }
               | {
-                  newIdpUser: "_id" | "_name" | "_disabled";
+                  newIdpUser: "id" | "name" | "disabled";
                 }
             )[])[];
         description?: string | undefined;
@@ -163,13 +163,13 @@ export type IdPPermission = {
             user: string;
           }
         | {
-            idpUser: "_id" | "_name" | "_disabled";
+            idpUser: "id" | "name" | "disabled";
           }
         | {
-            oldIdpUser: "_id" | "_name" | "_disabled";
+            oldIdpUser: "id" | "name" | "disabled";
           }
         | {
-            newIdpUser: "_id" | "_name" | "_disabled";
+            newIdpUser: "id" | "name" | "disabled";
           }
       )[]
     | readonly (
@@ -183,13 +183,13 @@ export type IdPPermission = {
                 user: string;
               }
             | {
-                idpUser: "_id" | "_name" | "_disabled";
+                idpUser: "id" | "name" | "disabled";
               }
             | {
-                oldIdpUser: "_id" | "_name" | "_disabled";
+                oldIdpUser: "id" | "name" | "disabled";
               }
             | {
-                newIdpUser: "_id" | "_name" | "_disabled";
+                newIdpUser: "id" | "name" | "disabled";
               }
           )[]
       )[]
@@ -204,13 +204,13 @@ export type IdPPermission = {
                   user: string;
                 }
               | {
-                  idpUser: "_id" | "_name" | "_disabled";
+                  idpUser: "id" | "name" | "disabled";
                 }
               | {
-                  oldIdpUser: "_id" | "_name" | "_disabled";
+                  oldIdpUser: "id" | "name" | "disabled";
                 }
               | {
-                  newIdpUser: "_id" | "_name" | "_disabled";
+                  newIdpUser: "id" | "name" | "disabled";
                 }
             )[]
           | readonly (readonly (
@@ -222,13 +222,13 @@ export type IdPPermission = {
                   user: string;
                 }
               | {
-                  idpUser: "_id" | "_name" | "_disabled";
+                  idpUser: "id" | "name" | "disabled";
                 }
               | {
-                  oldIdpUser: "_id" | "_name" | "_disabled";
+                  oldIdpUser: "id" | "name" | "disabled";
                 }
               | {
-                  newIdpUser: "_id" | "_name" | "_disabled";
+                  newIdpUser: "id" | "name" | "disabled";
                 }
             )[])[];
         description?: string | undefined;
@@ -245,13 +245,13 @@ export type IdPPermission = {
             user: string;
           }
         | {
-            idpUser: "_id" | "_name" | "_disabled";
+            idpUser: "id" | "name" | "disabled";
           }
         | {
-            oldIdpUser: "_id" | "_name" | "_disabled";
+            oldIdpUser: "id" | "name" | "disabled";
           }
         | {
-            newIdpUser: "_id" | "_name" | "_disabled";
+            newIdpUser: "id" | "name" | "disabled";
           }
       )[]
     | readonly (
@@ -265,13 +265,13 @@ export type IdPPermission = {
                 user: string;
               }
             | {
-                idpUser: "_id" | "_name" | "_disabled";
+                idpUser: "id" | "name" | "disabled";
               }
             | {
-                oldIdpUser: "_id" | "_name" | "_disabled";
+                oldIdpUser: "id" | "name" | "disabled";
               }
             | {
-                newIdpUser: "_id" | "_name" | "_disabled";
+                newIdpUser: "id" | "name" | "disabled";
               }
           )[]
       )[]
@@ -286,13 +286,13 @@ export type IdPPermission = {
                   user: string;
                 }
               | {
-                  idpUser: "_id" | "_name" | "_disabled";
+                  idpUser: "id" | "name" | "disabled";
                 }
               | {
-                  oldIdpUser: "_id" | "_name" | "_disabled";
+                  oldIdpUser: "id" | "name" | "disabled";
                 }
               | {
-                  newIdpUser: "_id" | "_name" | "_disabled";
+                  newIdpUser: "id" | "name" | "disabled";
                 }
             )[]
           | readonly (readonly (
@@ -304,13 +304,13 @@ export type IdPPermission = {
                   user: string;
                 }
               | {
-                  idpUser: "_id" | "_name" | "_disabled";
+                  idpUser: "id" | "name" | "disabled";
                 }
               | {
-                  oldIdpUser: "_id" | "_name" | "_disabled";
+                  oldIdpUser: "id" | "name" | "disabled";
                 }
               | {
-                  newIdpUser: "_id" | "_name" | "_disabled";
+                  newIdpUser: "id" | "name" | "disabled";
                 }
             )[])[];
         description?: string | undefined;
@@ -327,13 +327,13 @@ export type IdPPermission = {
             user: string;
           }
         | {
-            idpUser: "_id" | "_name" | "_disabled";
+            idpUser: "id" | "name" | "disabled";
           }
         | {
-            oldIdpUser: "_id" | "_name" | "_disabled";
+            oldIdpUser: "id" | "name" | "disabled";
           }
         | {
-            newIdpUser: "_id" | "_name" | "_disabled";
+            newIdpUser: "id" | "name" | "disabled";
           }
       )[]
     | readonly (
@@ -347,13 +347,13 @@ export type IdPPermission = {
                 user: string;
               }
             | {
-                idpUser: "_id" | "_name" | "_disabled";
+                idpUser: "id" | "name" | "disabled";
               }
             | {
-                oldIdpUser: "_id" | "_name" | "_disabled";
+                oldIdpUser: "id" | "name" | "disabled";
               }
             | {
-                newIdpUser: "_id" | "_name" | "_disabled";
+                newIdpUser: "id" | "name" | "disabled";
               }
           )[]
       )[]
@@ -368,13 +368,13 @@ export type IdPPermission = {
                   user: string;
                 }
               | {
-                  idpUser: "_id" | "_name" | "_disabled";
+                  idpUser: "id" | "name" | "disabled";
                 }
               | {
-                  oldIdpUser: "_id" | "_name" | "_disabled";
+                  oldIdpUser: "id" | "name" | "disabled";
                 }
               | {
-                  newIdpUser: "_id" | "_name" | "_disabled";
+                  newIdpUser: "id" | "name" | "disabled";
                 }
             )[]
           | readonly (readonly (
@@ -386,13 +386,13 @@ export type IdPPermission = {
                   user: string;
                 }
               | {
-                  idpUser: "_id" | "_name" | "_disabled";
+                  idpUser: "id" | "name" | "disabled";
                 }
               | {
-                  oldIdpUser: "_id" | "_name" | "_disabled";
+                  oldIdpUser: "id" | "name" | "disabled";
                 }
               | {
-                  newIdpUser: "_id" | "_name" | "_disabled";
+                  newIdpUser: "id" | "name" | "disabled";
                 }
             )[])[];
         description?: string | undefined;
@@ -409,13 +409,13 @@ export type IdPPermission = {
             user: string;
           }
         | {
-            idpUser: "_id" | "_name" | "_disabled";
+            idpUser: "id" | "name" | "disabled";
           }
         | {
-            oldIdpUser: "_id" | "_name" | "_disabled";
+            oldIdpUser: "id" | "name" | "disabled";
           }
         | {
-            newIdpUser: "_id" | "_name" | "_disabled";
+            newIdpUser: "id" | "name" | "disabled";
           }
       )[]
     | readonly (
@@ -429,13 +429,13 @@ export type IdPPermission = {
                 user: string;
               }
             | {
-                idpUser: "_id" | "_name" | "_disabled";
+                idpUser: "id" | "name" | "disabled";
               }
             | {
-                oldIdpUser: "_id" | "_name" | "_disabled";
+                oldIdpUser: "id" | "name" | "disabled";
               }
             | {
-                newIdpUser: "_id" | "_name" | "_disabled";
+                newIdpUser: "id" | "name" | "disabled";
               }
           )[]
       )[]
@@ -450,13 +450,13 @@ export type IdPPermission = {
                   user: string;
                 }
               | {
-                  idpUser: "_id" | "_name" | "_disabled";
+                  idpUser: "id" | "name" | "disabled";
                 }
               | {
-                  oldIdpUser: "_id" | "_name" | "_disabled";
+                  oldIdpUser: "id" | "name" | "disabled";
                 }
               | {
-                  newIdpUser: "_id" | "_name" | "_disabled";
+                  newIdpUser: "id" | "name" | "disabled";
                 }
             )[]
           | readonly (readonly (
@@ -468,13 +468,13 @@ export type IdPPermission = {
                   user: string;
                 }
               | {
-                  idpUser: "_id" | "_name" | "_disabled";
+                  idpUser: "id" | "name" | "disabled";
                 }
               | {
-                  oldIdpUser: "_id" | "_name" | "_disabled";
+                  oldIdpUser: "id" | "name" | "disabled";
                 }
               | {
-                  newIdpUser: "_id" | "_name" | "_disabled";
+                  newIdpUser: "id" | "name" | "disabled";
                 }
             )[])[];
         description?: string | undefined;
@@ -548,13 +548,13 @@ export type IdPInput = {
                   user: string;
                 }
               | {
-                  idpUser: "_id" | "_name" | "_disabled";
+                  idpUser: "name" | "id" | "disabled";
                 }
               | {
-                  oldIdpUser: "_id" | "_name" | "_disabled";
+                  oldIdpUser: "name" | "id" | "disabled";
                 }
               | {
-                  newIdpUser: "_id" | "_name" | "_disabled";
+                  newIdpUser: "name" | "id" | "disabled";
                 }
             )[]
           | readonly (
@@ -568,13 +568,13 @@ export type IdPInput = {
                       user: string;
                     }
                   | {
-                      idpUser: "_id" | "_name" | "_disabled";
+                      idpUser: "name" | "id" | "disabled";
                     }
                   | {
-                      oldIdpUser: "_id" | "_name" | "_disabled";
+                      oldIdpUser: "name" | "id" | "disabled";
                     }
                   | {
-                      newIdpUser: "_id" | "_name" | "_disabled";
+                      newIdpUser: "name" | "id" | "disabled";
                     }
                 )[]
             )[]
@@ -589,13 +589,13 @@ export type IdPInput = {
                         user: string;
                       }
                     | {
-                        idpUser: "_id" | "_name" | "_disabled";
+                        idpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        oldIdpUser: "_id" | "_name" | "_disabled";
+                        oldIdpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        newIdpUser: "_id" | "_name" | "_disabled";
+                        newIdpUser: "name" | "id" | "disabled";
                       }
                   )[]
                 | readonly (readonly (
@@ -607,13 +607,13 @@ export type IdPInput = {
                         user: string;
                       }
                     | {
-                        idpUser: "_id" | "_name" | "_disabled";
+                        idpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        oldIdpUser: "_id" | "_name" | "_disabled";
+                        oldIdpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        newIdpUser: "_id" | "_name" | "_disabled";
+                        newIdpUser: "name" | "id" | "disabled";
                       }
                   )[])[];
               description?: string | undefined;
@@ -630,13 +630,13 @@ export type IdPInput = {
                   user: string;
                 }
               | {
-                  idpUser: "_id" | "_name" | "_disabled";
+                  idpUser: "name" | "id" | "disabled";
                 }
               | {
-                  oldIdpUser: "_id" | "_name" | "_disabled";
+                  oldIdpUser: "name" | "id" | "disabled";
                 }
               | {
-                  newIdpUser: "_id" | "_name" | "_disabled";
+                  newIdpUser: "name" | "id" | "disabled";
                 }
             )[]
           | readonly (
@@ -650,13 +650,13 @@ export type IdPInput = {
                       user: string;
                     }
                   | {
-                      idpUser: "_id" | "_name" | "_disabled";
+                      idpUser: "name" | "id" | "disabled";
                     }
                   | {
-                      oldIdpUser: "_id" | "_name" | "_disabled";
+                      oldIdpUser: "name" | "id" | "disabled";
                     }
                   | {
-                      newIdpUser: "_id" | "_name" | "_disabled";
+                      newIdpUser: "name" | "id" | "disabled";
                     }
                 )[]
             )[]
@@ -671,13 +671,13 @@ export type IdPInput = {
                         user: string;
                       }
                     | {
-                        idpUser: "_id" | "_name" | "_disabled";
+                        idpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        oldIdpUser: "_id" | "_name" | "_disabled";
+                        oldIdpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        newIdpUser: "_id" | "_name" | "_disabled";
+                        newIdpUser: "name" | "id" | "disabled";
                       }
                   )[]
                 | readonly (readonly (
@@ -689,13 +689,13 @@ export type IdPInput = {
                         user: string;
                       }
                     | {
-                        idpUser: "_id" | "_name" | "_disabled";
+                        idpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        oldIdpUser: "_id" | "_name" | "_disabled";
+                        oldIdpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        newIdpUser: "_id" | "_name" | "_disabled";
+                        newIdpUser: "name" | "id" | "disabled";
                       }
                   )[])[];
               description?: string | undefined;
@@ -712,13 +712,13 @@ export type IdPInput = {
                   user: string;
                 }
               | {
-                  idpUser: "_id" | "_name" | "_disabled";
+                  idpUser: "name" | "id" | "disabled";
                 }
               | {
-                  oldIdpUser: "_id" | "_name" | "_disabled";
+                  oldIdpUser: "name" | "id" | "disabled";
                 }
               | {
-                  newIdpUser: "_id" | "_name" | "_disabled";
+                  newIdpUser: "name" | "id" | "disabled";
                 }
             )[]
           | readonly (
@@ -732,13 +732,13 @@ export type IdPInput = {
                       user: string;
                     }
                   | {
-                      idpUser: "_id" | "_name" | "_disabled";
+                      idpUser: "name" | "id" | "disabled";
                     }
                   | {
-                      oldIdpUser: "_id" | "_name" | "_disabled";
+                      oldIdpUser: "name" | "id" | "disabled";
                     }
                   | {
-                      newIdpUser: "_id" | "_name" | "_disabled";
+                      newIdpUser: "name" | "id" | "disabled";
                     }
                 )[]
             )[]
@@ -753,13 +753,13 @@ export type IdPInput = {
                         user: string;
                       }
                     | {
-                        idpUser: "_id" | "_name" | "_disabled";
+                        idpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        oldIdpUser: "_id" | "_name" | "_disabled";
+                        oldIdpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        newIdpUser: "_id" | "_name" | "_disabled";
+                        newIdpUser: "name" | "id" | "disabled";
                       }
                   )[]
                 | readonly (readonly (
@@ -771,13 +771,13 @@ export type IdPInput = {
                         user: string;
                       }
                     | {
-                        idpUser: "_id" | "_name" | "_disabled";
+                        idpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        oldIdpUser: "_id" | "_name" | "_disabled";
+                        oldIdpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        newIdpUser: "_id" | "_name" | "_disabled";
+                        newIdpUser: "name" | "id" | "disabled";
                       }
                   )[])[];
               description?: string | undefined;
@@ -794,13 +794,13 @@ export type IdPInput = {
                   user: string;
                 }
               | {
-                  idpUser: "_id" | "_name" | "_disabled";
+                  idpUser: "name" | "id" | "disabled";
                 }
               | {
-                  oldIdpUser: "_id" | "_name" | "_disabled";
+                  oldIdpUser: "name" | "id" | "disabled";
                 }
               | {
-                  newIdpUser: "_id" | "_name" | "_disabled";
+                  newIdpUser: "name" | "id" | "disabled";
                 }
             )[]
           | readonly (
@@ -814,13 +814,13 @@ export type IdPInput = {
                       user: string;
                     }
                   | {
-                      idpUser: "_id" | "_name" | "_disabled";
+                      idpUser: "name" | "id" | "disabled";
                     }
                   | {
-                      oldIdpUser: "_id" | "_name" | "_disabled";
+                      oldIdpUser: "name" | "id" | "disabled";
                     }
                   | {
-                      newIdpUser: "_id" | "_name" | "_disabled";
+                      newIdpUser: "name" | "id" | "disabled";
                     }
                 )[]
             )[]
@@ -835,13 +835,13 @@ export type IdPInput = {
                         user: string;
                       }
                     | {
-                        idpUser: "_id" | "_name" | "_disabled";
+                        idpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        oldIdpUser: "_id" | "_name" | "_disabled";
+                        oldIdpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        newIdpUser: "_id" | "_name" | "_disabled";
+                        newIdpUser: "name" | "id" | "disabled";
                       }
                   )[]
                 | readonly (readonly (
@@ -853,13 +853,13 @@ export type IdPInput = {
                         user: string;
                       }
                     | {
-                        idpUser: "_id" | "_name" | "_disabled";
+                        idpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        oldIdpUser: "_id" | "_name" | "_disabled";
+                        oldIdpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        newIdpUser: "_id" | "_name" | "_disabled";
+                        newIdpUser: "name" | "id" | "disabled";
                       }
                   )[])[];
               description?: string | undefined;
@@ -876,13 +876,13 @@ export type IdPInput = {
                   user: string;
                 }
               | {
-                  idpUser: "_id" | "_name" | "_disabled";
+                  idpUser: "name" | "id" | "disabled";
                 }
               | {
-                  oldIdpUser: "_id" | "_name" | "_disabled";
+                  oldIdpUser: "name" | "id" | "disabled";
                 }
               | {
-                  newIdpUser: "_id" | "_name" | "_disabled";
+                  newIdpUser: "name" | "id" | "disabled";
                 }
             )[]
           | readonly (
@@ -896,13 +896,13 @@ export type IdPInput = {
                       user: string;
                     }
                   | {
-                      idpUser: "_id" | "_name" | "_disabled";
+                      idpUser: "name" | "id" | "disabled";
                     }
                   | {
-                      oldIdpUser: "_id" | "_name" | "_disabled";
+                      oldIdpUser: "name" | "id" | "disabled";
                     }
                   | {
-                      newIdpUser: "_id" | "_name" | "_disabled";
+                      newIdpUser: "name" | "id" | "disabled";
                     }
                 )[]
             )[]
@@ -917,13 +917,13 @@ export type IdPInput = {
                         user: string;
                       }
                     | {
-                        idpUser: "_id" | "_name" | "_disabled";
+                        idpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        oldIdpUser: "_id" | "_name" | "_disabled";
+                        oldIdpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        newIdpUser: "_id" | "_name" | "_disabled";
+                        newIdpUser: "name" | "id" | "disabled";
                       }
                   )[]
                 | readonly (readonly (
@@ -935,13 +935,13 @@ export type IdPInput = {
                         user: string;
                       }
                     | {
-                        idpUser: "_id" | "_name" | "_disabled";
+                        idpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        oldIdpUser: "_id" | "_name" | "_disabled";
+                        oldIdpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        newIdpUser: "_id" | "_name" | "_disabled";
+                        newIdpUser: "name" | "id" | "disabled";
                       }
                   )[])[];
               description?: string | undefined;
@@ -1015,13 +1015,13 @@ export type IdP = {
                   user: string;
                 }
               | {
-                  idpUser: "_id" | "_name" | "_disabled";
+                  idpUser: "name" | "id" | "disabled";
                 }
               | {
-                  oldIdpUser: "_id" | "_name" | "_disabled";
+                  oldIdpUser: "name" | "id" | "disabled";
                 }
               | {
-                  newIdpUser: "_id" | "_name" | "_disabled";
+                  newIdpUser: "name" | "id" | "disabled";
                 }
             )[]
           | readonly (
@@ -1035,13 +1035,13 @@ export type IdP = {
                       user: string;
                     }
                   | {
-                      idpUser: "_id" | "_name" | "_disabled";
+                      idpUser: "name" | "id" | "disabled";
                     }
                   | {
-                      oldIdpUser: "_id" | "_name" | "_disabled";
+                      oldIdpUser: "name" | "id" | "disabled";
                     }
                   | {
-                      newIdpUser: "_id" | "_name" | "_disabled";
+                      newIdpUser: "name" | "id" | "disabled";
                     }
                 )[]
             )[]
@@ -1056,13 +1056,13 @@ export type IdP = {
                         user: string;
                       }
                     | {
-                        idpUser: "_id" | "_name" | "_disabled";
+                        idpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        oldIdpUser: "_id" | "_name" | "_disabled";
+                        oldIdpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        newIdpUser: "_id" | "_name" | "_disabled";
+                        newIdpUser: "name" | "id" | "disabled";
                       }
                   )[]
                 | readonly (readonly (
@@ -1074,13 +1074,13 @@ export type IdP = {
                         user: string;
                       }
                     | {
-                        idpUser: "_id" | "_name" | "_disabled";
+                        idpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        oldIdpUser: "_id" | "_name" | "_disabled";
+                        oldIdpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        newIdpUser: "_id" | "_name" | "_disabled";
+                        newIdpUser: "name" | "id" | "disabled";
                       }
                   )[])[];
               description?: string | undefined;
@@ -1097,13 +1097,13 @@ export type IdP = {
                   user: string;
                 }
               | {
-                  idpUser: "_id" | "_name" | "_disabled";
+                  idpUser: "name" | "id" | "disabled";
                 }
               | {
-                  oldIdpUser: "_id" | "_name" | "_disabled";
+                  oldIdpUser: "name" | "id" | "disabled";
                 }
               | {
-                  newIdpUser: "_id" | "_name" | "_disabled";
+                  newIdpUser: "name" | "id" | "disabled";
                 }
             )[]
           | readonly (
@@ -1117,13 +1117,13 @@ export type IdP = {
                       user: string;
                     }
                   | {
-                      idpUser: "_id" | "_name" | "_disabled";
+                      idpUser: "name" | "id" | "disabled";
                     }
                   | {
-                      oldIdpUser: "_id" | "_name" | "_disabled";
+                      oldIdpUser: "name" | "id" | "disabled";
                     }
                   | {
-                      newIdpUser: "_id" | "_name" | "_disabled";
+                      newIdpUser: "name" | "id" | "disabled";
                     }
                 )[]
             )[]
@@ -1138,13 +1138,13 @@ export type IdP = {
                         user: string;
                       }
                     | {
-                        idpUser: "_id" | "_name" | "_disabled";
+                        idpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        oldIdpUser: "_id" | "_name" | "_disabled";
+                        oldIdpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        newIdpUser: "_id" | "_name" | "_disabled";
+                        newIdpUser: "name" | "id" | "disabled";
                       }
                   )[]
                 | readonly (readonly (
@@ -1156,13 +1156,13 @@ export type IdP = {
                         user: string;
                       }
                     | {
-                        idpUser: "_id" | "_name" | "_disabled";
+                        idpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        oldIdpUser: "_id" | "_name" | "_disabled";
+                        oldIdpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        newIdpUser: "_id" | "_name" | "_disabled";
+                        newIdpUser: "name" | "id" | "disabled";
                       }
                   )[])[];
               description?: string | undefined;
@@ -1179,13 +1179,13 @@ export type IdP = {
                   user: string;
                 }
               | {
-                  idpUser: "_id" | "_name" | "_disabled";
+                  idpUser: "name" | "id" | "disabled";
                 }
               | {
-                  oldIdpUser: "_id" | "_name" | "_disabled";
+                  oldIdpUser: "name" | "id" | "disabled";
                 }
               | {
-                  newIdpUser: "_id" | "_name" | "_disabled";
+                  newIdpUser: "name" | "id" | "disabled";
                 }
             )[]
           | readonly (
@@ -1199,13 +1199,13 @@ export type IdP = {
                       user: string;
                     }
                   | {
-                      idpUser: "_id" | "_name" | "_disabled";
+                      idpUser: "name" | "id" | "disabled";
                     }
                   | {
-                      oldIdpUser: "_id" | "_name" | "_disabled";
+                      oldIdpUser: "name" | "id" | "disabled";
                     }
                   | {
-                      newIdpUser: "_id" | "_name" | "_disabled";
+                      newIdpUser: "name" | "id" | "disabled";
                     }
                 )[]
             )[]
@@ -1220,13 +1220,13 @@ export type IdP = {
                         user: string;
                       }
                     | {
-                        idpUser: "_id" | "_name" | "_disabled";
+                        idpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        oldIdpUser: "_id" | "_name" | "_disabled";
+                        oldIdpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        newIdpUser: "_id" | "_name" | "_disabled";
+                        newIdpUser: "name" | "id" | "disabled";
                       }
                   )[]
                 | readonly (readonly (
@@ -1238,13 +1238,13 @@ export type IdP = {
                         user: string;
                       }
                     | {
-                        idpUser: "_id" | "_name" | "_disabled";
+                        idpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        oldIdpUser: "_id" | "_name" | "_disabled";
+                        oldIdpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        newIdpUser: "_id" | "_name" | "_disabled";
+                        newIdpUser: "name" | "id" | "disabled";
                       }
                   )[])[];
               description?: string | undefined;
@@ -1261,13 +1261,13 @@ export type IdP = {
                   user: string;
                 }
               | {
-                  idpUser: "_id" | "_name" | "_disabled";
+                  idpUser: "name" | "id" | "disabled";
                 }
               | {
-                  oldIdpUser: "_id" | "_name" | "_disabled";
+                  oldIdpUser: "name" | "id" | "disabled";
                 }
               | {
-                  newIdpUser: "_id" | "_name" | "_disabled";
+                  newIdpUser: "name" | "id" | "disabled";
                 }
             )[]
           | readonly (
@@ -1281,13 +1281,13 @@ export type IdP = {
                       user: string;
                     }
                   | {
-                      idpUser: "_id" | "_name" | "_disabled";
+                      idpUser: "name" | "id" | "disabled";
                     }
                   | {
-                      oldIdpUser: "_id" | "_name" | "_disabled";
+                      oldIdpUser: "name" | "id" | "disabled";
                     }
                   | {
-                      newIdpUser: "_id" | "_name" | "_disabled";
+                      newIdpUser: "name" | "id" | "disabled";
                     }
                 )[]
             )[]
@@ -1302,13 +1302,13 @@ export type IdP = {
                         user: string;
                       }
                     | {
-                        idpUser: "_id" | "_name" | "_disabled";
+                        idpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        oldIdpUser: "_id" | "_name" | "_disabled";
+                        oldIdpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        newIdpUser: "_id" | "_name" | "_disabled";
+                        newIdpUser: "name" | "id" | "disabled";
                       }
                   )[]
                 | readonly (readonly (
@@ -1320,13 +1320,13 @@ export type IdP = {
                         user: string;
                       }
                     | {
-                        idpUser: "_id" | "_name" | "_disabled";
+                        idpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        oldIdpUser: "_id" | "_name" | "_disabled";
+                        oldIdpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        newIdpUser: "_id" | "_name" | "_disabled";
+                        newIdpUser: "name" | "id" | "disabled";
                       }
                   )[])[];
               description?: string | undefined;
@@ -1343,13 +1343,13 @@ export type IdP = {
                   user: string;
                 }
               | {
-                  idpUser: "_id" | "_name" | "_disabled";
+                  idpUser: "name" | "id" | "disabled";
                 }
               | {
-                  oldIdpUser: "_id" | "_name" | "_disabled";
+                  oldIdpUser: "name" | "id" | "disabled";
                 }
               | {
-                  newIdpUser: "_id" | "_name" | "_disabled";
+                  newIdpUser: "name" | "id" | "disabled";
                 }
             )[]
           | readonly (
@@ -1363,13 +1363,13 @@ export type IdP = {
                       user: string;
                     }
                   | {
-                      idpUser: "_id" | "_name" | "_disabled";
+                      idpUser: "name" | "id" | "disabled";
                     }
                   | {
-                      oldIdpUser: "_id" | "_name" | "_disabled";
+                      oldIdpUser: "name" | "id" | "disabled";
                     }
                   | {
-                      newIdpUser: "_id" | "_name" | "_disabled";
+                      newIdpUser: "name" | "id" | "disabled";
                     }
                 )[]
             )[]
@@ -1384,13 +1384,13 @@ export type IdP = {
                         user: string;
                       }
                     | {
-                        idpUser: "_id" | "_name" | "_disabled";
+                        idpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        oldIdpUser: "_id" | "_name" | "_disabled";
+                        oldIdpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        newIdpUser: "_id" | "_name" | "_disabled";
+                        newIdpUser: "name" | "id" | "disabled";
                       }
                   )[]
                 | readonly (readonly (
@@ -1402,13 +1402,13 @@ export type IdP = {
                         user: string;
                       }
                     | {
-                        idpUser: "_id" | "_name" | "_disabled";
+                        idpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        oldIdpUser: "_id" | "_name" | "_disabled";
+                        oldIdpUser: "name" | "id" | "disabled";
                       }
                     | {
-                        newIdpUser: "_id" | "_name" | "_disabled";
+                        newIdpUser: "name" | "id" | "disabled";
                       }
                   )[])[];
               description?: string | undefined;

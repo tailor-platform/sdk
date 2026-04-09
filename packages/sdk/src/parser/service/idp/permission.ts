@@ -8,7 +8,7 @@ import type { IdPPermission as RawIdPPermission } from "@/types/idp.generated";
 
 type PermissionOperator = "=" | "!=" | "in" | "not in";
 
-type IdPUserField = "_id" | "_name" | "_disabled";
+type IdPUserField = "id" | "name" | "disabled";
 
 type ObjectOperand =
   | { user: string }
