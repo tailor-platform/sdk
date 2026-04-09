@@ -23,9 +23,9 @@ export type StandardIdPPermissionOperator = "eq" | "ne" | "in" | "nin";
 export type IdPUserField = "id" | "name" | "disabled";
 
 type IdPUserOperand = { user: string };
-type IdPUserFieldOperand = { idpUser: string };
-type OldIdPUserFieldOperand = { oldIdpUser: string };
-type NewIdPUserFieldOperand = { newIdpUser: string };
+type IdPUserFieldOperand = { idpUser: IdPUserField };
+type OldIdPUserFieldOperand = { oldIdpUser: IdPUserField };
+type NewIdPUserFieldOperand = { newIdpUser: IdPUserField };
 
 export type IdPPermissionOperand<Update extends boolean = boolean> =
   | IdPUserOperand
