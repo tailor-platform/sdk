@@ -410,7 +410,7 @@ describe("formatErrorWithSourcemap", () => {
       "    at throwError (file:///test-run--error-test.js:4:3)",
     ].join("\n");
 
-    const result = formatErrorWithSourcemap(error, bundledCode);
+    const result = formatErrorWithSourcemap(error, bundledCode, "/output");
 
     expect(result).not.toBeNull();
     const plain = stripAnsi(result!);
@@ -423,7 +423,7 @@ describe("formatErrorWithSourcemap", () => {
     const bundledCode = 'function M(){throw new Error("test")}M();';
     const error = "rpc error: code = Aborted desc = Error: test\n    at M (file:///b.js:1:1)";
 
-    const result = formatErrorWithSourcemap(error, bundledCode);
+    const result = formatErrorWithSourcemap(error, bundledCode, "/output");
 
     expect(result).toBeNull();
   });
@@ -432,7 +432,7 @@ describe("formatErrorWithSourcemap", () => {
     const bundledCode = makeRealisticBundle();
     const error = "Script execution failed with unknown error";
 
-    const result = formatErrorWithSourcemap(error, bundledCode);
+    const result = formatErrorWithSourcemap(error, bundledCode, "/output");
 
     expect(result).toBeNull();
   });

@@ -10,6 +10,7 @@
  */
 
 import { TraceMap, generatedPositionFor } from "@jridgewell/trace-mapping";
+import * as path from "pathe";
 import { styles } from "@/cli/shared/logger";
 
 /** A single frame parsed from a V8 stack trace */
@@ -139,7 +140,10 @@ export function mapStackFrames(
     }
 
     try {
-      for (const source of traceMap.sources) {
+      // Iterate in reverse: user code and entry file are typically last
+      // in the sources array, while SDK internals and node_modules come first.
+      for (let i = traceMap.sources.length - 1; i >= 0; i--) {
+        const source = traceMap.sources[i];
         if (source == null) continue;
 
         const genPos = generatedPositionFor(traceMap, {
@@ -208,19 +212,25 @@ function buildCodeSnippet(content: string, targetLine: number): string {
  * @param errorMessage - Cleaned error message
  * @param frames - Mapped stack frames
  * @param traceMap - TraceMap for retrieving source content (may be null)
+ * @param bundleDir - Absolute path to bundle output directory for resolving source paths
  * @returns Formatted error string for display
  */
 export function formatMappedError(
   errorMessage: string,
   frames: MappedStackFrame[],
   traceMap: TraceMap | null,
+  bundleDir?: string,
 ): string {
   const parts: string[] = [`  ${styles.error(errorMessage)}`];
 
   for (const frame of frames) {
     if (frame.mapped) {
       const { source, line, column, name } = frame.mapped;
-      const location = `${source}:${line}:${column}`;
+      // Resolve sourcemap-relative path to cwd-relative path
+      const displaySource = bundleDir
+        ? path.relative(process.cwd(), path.resolve(bundleDir, source))
+        : source;
+      const location = `${displaySource}:${line}:${column}`;
       const fnName = name ?? frame.original.functionName;
       parts.push(`\n  at ${fnName} (${styles.info(location)})`);
 
@@ -256,9 +266,14 @@ export function formatMappedError(
  * sourcemap, no stack trace, or processing error).
  * @param error - Raw error string from script execution (may contain V8 stack trace)
  * @param bundledCode - Bundled JavaScript code (may contain inline sourcemap)
+ * @param bundleDir - Absolute path to the bundle output directory (sourcemap paths are relative to this)
  * @returns Formatted error string, or null to fall back to default display
  */
-export function formatErrorWithSourcemap(error: string, bundledCode: string): string | null {
+export function formatErrorWithSourcemap(
+  error: string,
+  bundledCode: string,
+  bundleDir: string,
+): string | null {
   try {
     const { errorMessage, frames } = parseStackTrace(error);
     if (frames.length === 0) return null;
@@ -269,7 +284,7 @@ export function formatErrorWithSourcemap(error: string, bundledCode: string): st
     const mappedFrames = mapStackFrames(frames, traceMap);
 
     if (mappedFrames.some((f) => f.mapped !== null)) {
-      return formatMappedError(errorMessage, mappedFrames, traceMap);
+      return formatMappedError(errorMessage, mappedFrames, traceMap, bundleDir);
     }
 
     return null;

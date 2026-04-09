@@ -192,7 +192,7 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
 
       if (result.error && !result.success) {
         logger.log(styles.bold("\nError:"));
-        const formatted = formatErrorWithSourcemap(result.error, bundledCode);
+        const formatted = formatErrorWithSourcemap(result.error, bundledCode, path.resolve("dist"));
         if (formatted) {
           logger.log(formatted);
         } else {
