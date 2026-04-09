@@ -95,6 +95,7 @@ interface LoadedTransform {
   id: string;
   transform: TransformFn;
   matches: (relativePath: string) => boolean;
+  legacyPatterns: string[];
 }
 
 /**
@@ -121,6 +122,7 @@ export async function runCodemods(
       id: codemod.id,
       transform: await loadTransform(scriptPath),
       matches: picomatch(patterns),
+      legacyPatterns: codemod.legacyPatterns ?? [],
     });
   }
 
@@ -155,11 +157,11 @@ export async function runCodemods(
 
       // Chain only transforms whose filePatterns match this file
       let current = original;
-      const matchedRules: string[] = [];
-      for (const { id, transform, matches } of loaded) {
-        if (!matches(relative)) continue;
-        matchedRules.push(id);
-        const result = await transform(current, absolute);
+      const matchedTransforms: LoadedTransform[] = [];
+      for (const lt of loaded) {
+        if (!lt.matches(relative)) continue;
+        matchedTransforms.push(lt);
+        const result = await lt.transform(current, absolute);
         if (result != null) {
           current = result;
         }
@@ -172,13 +174,16 @@ export async function runCodemods(
         } else {
           await fs.promises.writeFile(absolute, current, "utf-8");
         }
-      } else if (matchedRules.length > 0 && original.includes("defineGenerators")) {
-        // File matched a codemod and contains legacy API but was not modified.
-        // This likely means it uses unsupported patterns (custom generators,
-        // aliased imports, etc.) that require manual migration.
-        warnings.push(
-          `${relative}: contains defineGenerators but was not migrated automatically (matched rules: ${matchedRules.join(", ")}). Manual migration may be needed.`,
-        );
+      } else {
+        // Check each matched codemod's legacyPatterns for unmodified files
+        for (const lt of matchedTransforms) {
+          const found = lt.legacyPatterns.filter((p) => original.includes(p));
+          if (found.length > 0) {
+            warnings.push(
+              `${relative}: contains ${found.join(", ")} but was not migrated automatically (rule: ${lt.id}). Manual migration may be needed.`,
+            );
+          }
+        }
       }
     }
   }

@@ -14,6 +14,7 @@ const allCodemods: CodemodPackage[] = [
     since: "1.0.0",
     until: "2.0.0",
     scriptPath: "v2/define-generators-to-plugins/scripts/transform.js",
+    legacyPatterns: ["defineGenerators"],
   },
 ];
 

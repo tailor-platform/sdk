@@ -18,6 +18,8 @@ export interface CodemodPackage {
   language?: string;
   /** Custom file glob patterns. Defaults to TypeScript patterns when omitted. */
   filePatterns?: string[];
+  /** Legacy patterns to detect in unmodified files for manual migration warnings. */
+  legacyPatterns?: string[];
 }
 
 /**
