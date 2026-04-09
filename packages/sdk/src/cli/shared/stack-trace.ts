@@ -1,13 +1,15 @@
 /**
- * Stack trace parsing, sourcemap mapping, and formatted error display
- * for the test-run command.
+ * Stack trace parsing, sourcemap-based source identification, and
+ * formatted error display for the test-run command.
  *
- * Parses V8 stack traces from bundled/minified function errors,
- * maps positions back to original source using inline sourcemaps,
- * and produces human-readable output with file paths and code snippets.
+ * The platform runtime automatically applies inline sourcemaps to V8
+ * stack traces, so frame positions are already original source positions.
+ * This module identifies which source file each frame belongs to via
+ * reverse lookup (generatedPositionFor), then produces human-readable
+ * output with file paths and code snippets.
  */
 
-import { TraceMap, originalPositionFor } from "@jridgewell/trace-mapping";
+import { TraceMap, generatedPositionFor } from "@jridgewell/trace-mapping";
 import { styles } from "@/cli/shared/logger";
 
 /** A single frame parsed from a V8 stack trace */
@@ -117,11 +119,15 @@ export function extractInlineSourcemap(bundledCode: string): TraceMap | null {
 }
 
 /**
- * Map parsed stack frames to original source positions using a TraceMap.
- * V8 column numbers are 1-based; trace-mapping expects 0-based columns.
- * @param frames - Parsed stack frames
+ * Map parsed stack frames to their source files using a TraceMap.
+ *
+ * The platform runtime applies inline sourcemaps automatically, so V8
+ * reports already-mapped original source positions in stack traces.
+ * This function uses generatedPositionFor to reverse-lookup which source
+ * file each frame's line:column belongs to.
+ * @param frames - Parsed stack frames (positions are already original source positions)
  * @param traceMap - TraceMap from inline sourcemap, or null
- * @returns Frames with mapped source positions
+ * @returns Frames with identified source files
  */
 export function mapStackFrames(
   frames: StackFrame[],
@@ -133,24 +139,29 @@ export function mapStackFrames(
     }
 
     try {
-      const pos = originalPositionFor(traceMap, {
-        line: frame.line,
-        column: frame.column - 1, // V8 is 1-based, trace-mapping is 0-based
-      });
+      for (const source of traceMap.sources) {
+        if (source == null) continue;
 
-      if (pos.source == null) {
-        return { original: frame, mapped: null };
+        const genPos = generatedPositionFor(traceMap, {
+          source,
+          line: frame.line,
+          column: frame.column - 1, // V8 is 1-based, trace-mapping is 0-based
+        });
+
+        if (genPos.line != null) {
+          return {
+            original: frame,
+            mapped: {
+              source,
+              line: frame.line,
+              column: frame.column,
+              name: null,
+            },
+          };
+        }
       }
 
-      return {
-        original: frame,
-        mapped: {
-          source: pos.source,
-          line: pos.line!,
-          column: (pos.column ?? 0) + 1, // Convert back to 1-based
-          name: pos.name,
-        },
-      };
+      return { original: frame, mapped: null };
     } catch {
       return { original: frame, mapped: null };
     }
@@ -233,72 +244,16 @@ export function formatMappedError(
 }
 
 /**
- * Detect the line offset added by the server's script wrapper.
- *
- * The platform server wraps bundled code with boilerplate lines before execution.
- * Stack traces report absolute line numbers in the wrapped script, not relative
- * to the bundled code. This function finds the best offset by trying all valid
- * offsets that keep frame lines within the bundle's code line range, selecting
- * the one that maps the most frames successfully.
- * @param frames - Parsed stack frames from the error
- * @param traceMap - TraceMap from inline sourcemap
- * @param bundledCode - Bundled JavaScript code
- * @returns Line offset to subtract from frame line numbers, or 0 if none detected
- */
-function detectServerLineOffset(
-  frames: StackFrame[],
-  traceMap: TraceMap,
-  bundledCode: string,
-): number {
-  if (frames.length === 0) return 0;
-
-  // Count code lines before the sourcemap comment without splitting the entire bundle
-  const sourcemapCommentIndex = bundledCode.search(/^\/\/[#@]\s*sourceMappingURL/m);
-  const codeSection =
-    sourcemapCommentIndex !== -1 ? bundledCode.slice(0, sourcemapCommentIndex) : bundledCode;
-  if (codeSection.length === 0) return 0;
-  let codeLineCount = 1;
-  for (let i = 0; i < codeSection.length; i++) {
-    if (codeSection[i] === "\n") codeLineCount++;
-  }
-  // Trailing newline before sourcemap comment is a separator, not a code line
-  if (codeSection.endsWith("\n")) codeLineCount--;
-  if (codeLineCount === 0) return 0;
-
-  // Determine valid offset range where all frame lines land within [1, codeLineCount]
-  const minOffset = Math.max(0, ...frames.map((f) => f.line - codeLineCount));
-  const maxOffset = Math.min(...frames.map((f) => f.line - 1));
-  if (maxOffset < minOffset) return 0;
-
-  let bestOffset = 0;
-  let bestMappedCount = 0;
-
-  for (let offset = minOffset; offset <= maxOffset; offset++) {
-    let mappedCount = 0;
-    for (const frame of frames) {
-      const pos = originalPositionFor(traceMap, {
-        line: frame.line - offset,
-        column: frame.column - 1,
-      });
-      if (pos.source != null) mappedCount++;
-    }
-    if (mappedCount > bestMappedCount) {
-      bestMappedCount = mappedCount;
-      bestOffset = offset;
-      if (bestMappedCount === frames.length) break;
-    }
-  }
-
-  return bestOffset;
-}
-
-/**
  * Format an error string with sourcemap-based source locations.
  * This is the main entry point for test-run error display.
  *
- * Returns a formatted error string with original file paths, line numbers,
- * and code snippets, or null if sourcemap processing is not possible
- * (no inline sourcemap, no stack trace, or processing error).
+ * The platform runtime applies inline sourcemaps automatically, so V8
+ * stack frames already contain original source positions. This function
+ * identifies which source file each frame belongs to and formats the
+ * error with file paths, line numbers, and code snippets.
+ *
+ * Returns null if sourcemap processing is not possible (no inline
+ * sourcemap, no stack trace, or processing error).
  * @param error - Raw error string from script execution (may contain V8 stack trace)
  * @param bundledCode - Bundled JavaScript code (may contain inline sourcemap)
  * @returns Formatted error string, or null to fall back to default display
@@ -311,10 +266,7 @@ export function formatErrorWithSourcemap(error: string, bundledCode: string): st
     const traceMap = extractInlineSourcemap(bundledCode);
     if (!traceMap) return null;
 
-    const offset = detectServerLineOffset(frames, traceMap, bundledCode);
-    const adjustedFrames =
-      offset > 0 ? frames.map((f) => ({ ...f, line: f.line - offset })) : frames;
-    const mappedFrames = mapStackFrames(adjustedFrames, traceMap);
+    const mappedFrames = mapStackFrames(frames, traceMap);
 
     if (mappedFrames.some((f) => f.mapped !== null)) {
       return formatMappedError(errorMessage, mappedFrames, traceMap);

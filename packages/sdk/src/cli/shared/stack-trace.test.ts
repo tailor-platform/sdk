@@ -210,23 +210,26 @@ function makeTestSourcemap(): object {
 }
 
 describe("mapStackFrames", () => {
-  test("maps frames to original source positions via sourcemap", () => {
+  test("identifies source file for V8-mapped frame positions via reverse lookup", () => {
     const sourcemap = makeTestSourcemap();
     const bundledCode = makeInlineSourcemapBundle(sourcemap);
     const traceMap = extractInlineSourcemap(bundledCode)!;
 
+    // V8 already applied the sourcemap, so line:column are original source positions
     const frames: StackFrame[] = [
-      { functionName: "M", file: "file:///bundle.js", line: 1, column: 1 },
+      { functionName: "throwError", file: "file:///bundle.js", line: 4, column: 3 },
     ];
 
     const result = mapStackFrames(frames, traceMap);
 
     expect(result).toHaveLength(1);
     expect(result[0].original).toEqual(frames[0]);
-    expect(result[0].mapped).not.toBeNull();
-    expect(result[0].mapped!.source).toBe("resolvers/error-test.ts");
-    expect(result[0].mapped!.line).toBe(4);
-    expect(result[0].mapped!.name).toBe("throwError");
+    expect(result[0].mapped).toEqual({
+      source: "resolvers/error-test.ts",
+      line: 4,
+      column: 3,
+      name: null,
+    });
   });
 
   test("returns mapped: null when traceMap is null", () => {
@@ -401,9 +404,10 @@ describe("formatErrorWithSourcemap", () => {
 
   test("returns formatted error when bundled code has inline sourcemap and error has stack trace", () => {
     const bundledCode = makeRealisticBundle();
+    // V8 already applied the sourcemap, so the frame reports original source positions
     const error = [
       "rpc error: code = Aborted desc = Error: intentional error",
-      "    at M (file:///test-run--error-test.js:1:1)",
+      "    at throwError (file:///test-run--error-test.js:4:3)",
     ].join("\n");
 
     const result = formatErrorWithSourcemap(error, bundledCode);
@@ -431,98 +435,5 @@ describe("formatErrorWithSourcemap", () => {
     const result = formatErrorWithSourcemap(error, bundledCode);
 
     expect(result).toBeNull();
-  });
-
-  test("handles server line offset when server wraps bundled code with boilerplate", () => {
-    // The server wraps bundled code with 3 lines of boilerplate,
-    // so the error reports line 4 instead of line 1 in the bundled code.
-    const bundledCode = makeRealisticBundle();
-    const error = [
-      "rpc error: code = Aborted desc = Error: intentional error",
-      "    at M (file:///test-run--error-test.js:4:1)",
-      "    at <eval>:17:38",
-    ].join("\n");
-
-    const result = formatErrorWithSourcemap(error, bundledCode);
-
-    expect(result).not.toBeNull();
-    const plain = stripAnsi(result!);
-    expect(plain).toContain("Error: intentional error");
-    expect(plain).toContain("resolvers/error-test.ts:4:3");
-  });
-
-  test("handles bundle with blank lines in offset detection", () => {
-    // Bundle with blank lines: sourcemap line numbers include blank lines.
-    // Without counting blank lines, the offset range calculation would be wrong.
-    const sourceContent = [
-      "function throwError() {",
-      '  throw new Error("intentional error");',
-      "}",
-    ].join("\n");
-
-    const sourcemap = {
-      version: 3,
-      sources: ["resolvers/error-test.ts"],
-      sourcesContent: [sourceContent],
-      names: [],
-      // Output line 3 (after a blank line) -> source line 2 (0-based: 1)
-      mappings: ";;AACA",
-    };
-    const code = [
-      'var a = "setup";',
-      "",
-      'function M(){throw new Error("intentional error")}',
-    ].join("\n");
-    const bundledCode = makeInlineSourcemapBundle(sourcemap, code);
-
-    // No server wrapping: error at bundle line 3 directly
-    const error = [
-      "rpc error: code = Aborted desc = Error: intentional error",
-      "    at M (file:///test-run--error-test.js:3:1)",
-    ].join("\n");
-
-    const result = formatErrorWithSourcemap(error, bundledCode);
-
-    expect(result).not.toBeNull();
-    const plain = stripAnsi(result!);
-    expect(plain).toContain("Error: intentional error");
-    expect(plain).toContain("resolvers/error-test.ts:2");
-  });
-
-  test("handles server line offset with multi-line bundle", () => {
-    // Multi-line bundle where only output line 2 has a sourcemap mapping.
-    // Server adds 3 wrapper lines, so the error at bundle line 2 reports as line 5.
-    const sourceContent = [
-      "function throwError() {",
-      '  throw new Error("intentional error");',
-      "}",
-    ].join("\n");
-
-    const sourcemap = {
-      version: 3,
-      sources: ["resolvers/error-test.ts"],
-      sourcesContent: [sourceContent],
-      names: [],
-      // Only output line 2 has a mapping: genCol:0, source:0, origLine:+1, origCol:0
-      mappings: ";AACA;",
-    };
-    const code = [
-      "var wrapper = {};",
-      'function M(){throw new Error("intentional error")}',
-      "wrapper.run = M;",
-    ].join("\n");
-    const bundledCode = makeInlineSourcemapBundle(sourcemap, code);
-
-    const error = [
-      "rpc error: code = Aborted desc = Error: intentional error",
-      "    at M (file:///test-run--error-test.js:5:1)",
-    ].join("\n");
-
-    const result = formatErrorWithSourcemap(error, bundledCode);
-
-    expect(result).not.toBeNull();
-    const plain = stripAnsi(result!);
-    expect(plain).toContain("Error: intentional error");
-    expect(plain).toContain("resolvers/error-test.ts:2");
   });
 });
