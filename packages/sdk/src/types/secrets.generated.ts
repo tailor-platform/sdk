@@ -2,7 +2,7 @@
 
 export type Secrets = {
   [x: string]: {
-    [x: string]: string;
+    [x: string]: string | null | undefined;
   };
 };
 export type SecretsInput = Secrets;

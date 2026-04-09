@@ -36,7 +36,7 @@ import type { StaticWebsite, StaticWebsiteInput } from "@/types/staticwebsite.ge
 
 export type SecretVault = {
   readonly vaultName: string;
-  readonly secrets: ReadonlyArray<{ name: string; value: string }>;
+  readonly secrets: ReadonlyArray<{ name: string; value: string | null | undefined }>;
 };
 
 export type Application = {
@@ -52,6 +52,7 @@ export type Application = {
   readonly workflowService: Readonly<WorkflowService> | undefined;
   readonly staticWebsiteServices: ReadonlyArray<StaticWebsite>;
   readonly secrets: ReadonlyArray<SecretVault>;
+  readonly skipNullishSecrets: boolean;
   readonly env: Readonly<Record<string, string | number | boolean>>;
   readonly applications: ReadonlyArray<Application>;
 };
@@ -215,10 +216,16 @@ function defineStaticWebsites(
   return staticWebsiteServices;
 }
 
-function defineSecretManager(config: AppConfig["secrets"]): SecretVault[] {
+function parseSecretManager(config: AppConfig["secrets"]): {
+  secrets: SecretVault[];
+  skipNullish: boolean;
+} {
   if (!config) {
-    return [];
+    return { secrets: [], skipNullish: false };
   }
+
+  // Read non-enumerable __skipNullish property set by configure layer
+  const skipNullish = (config as Record<string, unknown>).__skipNullish === true;
 
   // Create a plain object with only enumerable properties (vault data).
   // Zod v4's z.record() uses Reflect.ownKeys() which sees non-enumerable
@@ -226,10 +233,26 @@ function defineSecretManager(config: AppConfig["secrets"]): SecretVault[] {
   const data = Object.fromEntries(Object.entries(config));
   const parsed = SecretsSchema.parse(data);
 
-  return Object.entries(parsed).map(([vaultName, vaultSecrets]) => ({
+  const secrets = Object.entries(parsed).map(([vaultName, vaultSecrets]) => ({
     vaultName,
     secrets: Object.entries(vaultSecrets).map(([name, value]) => ({ name, value })),
   }));
+
+  // Defensive check: error if nullish values exist without skipNullish
+  if (!skipNullish) {
+    for (const vault of secrets) {
+      for (const secret of vault.secrets) {
+        if (secret.value == null) {
+          throw new Error(
+            `Secret "${vault.vaultName}/${secret.name}" has no value. ` +
+              `Use { skipNullish: true } option in defineSecretManager() to skip secrets without values.`,
+          );
+        }
+      }
+    }
+  }
+
+  return { secrets, skipNullish };
 }
 
 type DefineServicesResult = {
@@ -239,6 +262,7 @@ type DefineServicesResult = {
   authResult: DefineAuthResult;
   staticWebsiteServices: StaticWebsite[];
   secrets: SecretVault[];
+  skipNullishSecrets: boolean;
 };
 
 function defineServices(config: AppConfig, pluginManager?: PluginManager): DefineServicesResult {
@@ -251,8 +275,16 @@ function defineServices(config: AppConfig, pluginManager?: PluginManager): Defin
     tailordbResult.externalTailorDBNamespaces,
   );
   const staticWebsiteServices = defineStaticWebsites(config.staticWebsites);
-  const secrets = defineSecretManager(config.secrets);
-  return { tailordbResult, resolverResult, idpResult, authResult, staticWebsiteServices, secrets };
+  const { secrets, skipNullish } = parseSecretManager(config.secrets);
+  return {
+    tailordbResult,
+    resolverResult,
+    idpResult,
+    authResult,
+    staticWebsiteServices,
+    secrets,
+    skipNullishSecrets: skipNullish,
+  };
 }
 
 function buildApplication(params: {
@@ -265,6 +297,7 @@ function buildApplication(params: {
   workflowService: WorkflowService | undefined;
   staticWebsiteServices: StaticWebsite[];
   secrets: SecretVault[];
+  skipNullishSecrets: boolean;
   env: Record<string, string | number | boolean>;
 }): Application {
   const application: Application = {
@@ -285,6 +318,7 @@ function buildApplication(params: {
     workflowService: params.workflowService,
     staticWebsiteServices: params.staticWebsiteServices,
     secrets: params.secrets,
+    skipNullishSecrets: params.skipNullishSecrets,
     env: params.env,
     get applications() {
       return [application];
@@ -378,8 +412,15 @@ export async function loadApplication(
   const { config, pluginManager, bundleCache } = params;
 
   // 1. Define services (synchronous)
-  const { tailordbResult, resolverResult, idpResult, authResult, staticWebsiteServices, secrets } =
-    defineServices(config, pluginManager);
+  const {
+    tailordbResult,
+    resolverResult,
+    idpResult,
+    authResult,
+    staticWebsiteServices,
+    secrets,
+    skipNullishSecrets,
+  } = defineServices(config, pluginManager);
 
   // 2. Load TailorDB types and process namespace plugins
   for (const tailordb of tailordbResult.tailorDBServices) {
@@ -496,6 +537,7 @@ export async function loadApplication(
     workflowService,
     staticWebsiteServices,
     secrets,
+    skipNullishSecrets,
     env: config.env ?? {},
   });
 
