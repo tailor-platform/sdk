@@ -67,8 +67,6 @@ export async function getFunctionRegistry(
   }
 }
 
-// oxlint-disable-next-line jsdoc/check-tag-names
-/** @lintignore */
 export const getCommand = defineAppCommand({
   name: "get",
   description: "Get a function registry by name",

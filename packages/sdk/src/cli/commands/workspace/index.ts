@@ -2,7 +2,7 @@ import { defineCommand, runCommand } from "politty";
 import { appCommand } from "./app";
 import { createCommand } from "./create";
 import { deleteCommand } from "./delete";
-// import { functionCommand } from "./function";
+import { functionCommand } from "./function";
 import { getCommand } from "./get";
 import { listCommand } from "./list";
 import { restoreCommand } from "./restore";
@@ -15,7 +15,7 @@ export const workspaceCommand = defineCommand({
     app: appCommand,
     create: createCommand,
     delete: deleteCommand,
-    // function: functionCommand,
+    function: functionCommand,
     get: getCommand,
     list: listCommand,
     restore: restoreCommand,

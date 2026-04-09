@@ -9,10 +9,6 @@
     "src/types/*.ts",
     "zinfer.config.ts"
   ],
-  "ignoreFiles": [
-    "src/cli/commands/workspace/function/index.ts",
-    "src/cli/commands/workspace/function/registry/index.ts"
-  ],
   "ignoreDependencies": [
     "undici",
     "@liam-hq/cli",

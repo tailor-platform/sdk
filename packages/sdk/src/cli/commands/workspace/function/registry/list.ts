@@ -80,8 +80,6 @@ export async function listFunctionRegistries(
   return results;
 }
 
-// oxlint-disable-next-line jsdoc/check-tag-names
-/** @lintignore */
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List function registries in a workspace",
