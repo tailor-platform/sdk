@@ -64,7 +64,7 @@ export async function listFunctionRegistries(
       pageToken,
       ...(pageSize !== undefined ? { pageSize } : {}),
       sortBy: "updated_at",
-      pageDirection: PageDirection.ASC,
+      pageDirection: PageDirection.DESC,
     });
 
     const mapped = functions.map(functionRegistryInfo);
