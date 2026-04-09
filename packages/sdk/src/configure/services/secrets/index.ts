@@ -6,7 +6,13 @@ type SecretsVaultInputNullish = Record<string, string | undefined | null>;
 type SecretsInput = Record<string, SecretsVaultInput>;
 type SecretsInputNullish = Record<string, SecretsVaultInputNullish>;
 
+type SecretsOptions = {
+  readonly skipNullishValues: boolean;
+};
+
 type DefinedSecrets<T extends SecretsInputNullish> = {
+  readonly vaults: T;
+  readonly options: SecretsOptions;
   get<V extends Extract<keyof T, string>, S extends Extract<keyof T[V], string>>(
     vault: V,
     secret: S,
@@ -45,9 +51,12 @@ export function defineSecretManager<const T extends SecretsInputNullish>(
   config: T,
   options?: { skipNullishValues?: boolean },
 ): DefinedSecrets<T> {
-  const result = { ...config };
+  const result: Record<string, unknown> = {
+    vaults: config,
+    options: { skipNullishValues: options?.skipNullishValues ?? false },
+  };
 
-  // Non-enumerable so Zod's z.record validation ignores them
+  // Non-enumerable so Zod's z.object validation ignores them
   Object.defineProperty(result, "get", {
     value: async (vault: string, secret: string) => {
       return tailor.secretmanager.getSecret(vault, secret);
@@ -61,10 +70,6 @@ export function defineSecretManager<const T extends SecretsInputNullish>(
     },
     enumerable: false,
   });
-  Object.defineProperty(result, "__skipNullishValues", {
-    value: options?.skipNullishValues ?? false,
-    enumerable: false,
-  });
 
-  return result as T & DefinedSecrets<T>;
+  return result as DefinedSecrets<T>;
 }

@@ -28,6 +28,19 @@ describe("defineSecretManager", () => {
     expect(typeof secrets.getAll).toBe("function");
   });
 
+  it("should store vaults and options as separate properties", () => {
+    const secrets = defineSecretManager({
+      "my-vault": {
+        "api-key": "test-key",
+      },
+    });
+
+    expect(secrets.vaults).toEqual({
+      "my-vault": { "api-key": "test-key" },
+    });
+    expect(secrets.options).toEqual({ skipNullishValues: false });
+  });
+
   it("should accept undefined values with skipNullishValues option", () => {
     const secrets = defineSecretManager(
       {
@@ -39,35 +52,20 @@ describe("defineSecretManager", () => {
       { skipNullishValues: true },
     );
 
+    expect(secrets.vaults["my-vault"]["missing-key"]).toBeUndefined();
+    expect(secrets.options).toEqual({ skipNullishValues: true });
     expect(typeof secrets.get).toBe("function");
     expect(typeof secrets.getAll).toBe("function");
   });
 
-  it("should store __skipNullishValues as non-enumerable property", () => {
-    const secrets = defineSecretManager(
-      {
-        "my-vault": {
-          "api-key": "test-key",
-        },
-      },
-      { skipNullishValues: true },
-    );
-
-    // __skipNullishValues should not appear in Object.keys
-    const keys = Object.keys(secrets);
-    expect(keys).toEqual(["my-vault"]);
-
-    // But should be accessible directly
-    expect((secrets as Record<string, unknown>).__skipNullishValues).toBe(true);
-  });
-
-  it("should default __skipNullishValues to false when no options provided", () => {
+  it("should not expose get/getAll as enumerable properties", () => {
     const secrets = defineSecretManager({
       "my-vault": {
         "api-key": "test-key",
       },
     });
 
-    expect((secrets as Record<string, unknown>).__skipNullishValues).toBe(false);
+    const keys = Object.keys(secrets);
+    expect(keys).toEqual(["vaults", "options"]);
   });
 });

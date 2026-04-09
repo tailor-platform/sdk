@@ -224,16 +224,10 @@ function parseSecretManager(config: AppConfig["secrets"]): {
     return { secrets: [], skipNullishValues: false };
   }
 
-  // Read non-enumerable __skipNullishValues property set by configure layer
-  const skipNullishValues = (config as Record<string, unknown>).__skipNullishValues === true;
+  const parsed = SecretsSchema.parse(config);
+  const { skipNullishValues } = parsed.options;
 
-  // Create a plain object with only enumerable properties (vault data).
-  // Zod v4's z.record() uses Reflect.ownKeys() which sees non-enumerable
-  // properties like get/getAll attached by defineSecretManager() in the configure layer.
-  const data = Object.fromEntries(Object.entries(config));
-  const parsed = SecretsSchema.parse(data);
-
-  const secrets = Object.entries(parsed).map(([vaultName, vaultSecrets]) => ({
+  const secrets = Object.entries(parsed.vaults).map(([vaultName, vaultSecrets]) => ({
     vaultName,
     secrets: Object.entries(vaultSecrets).map(([name, value]) => ({ name, value })),
   }));
