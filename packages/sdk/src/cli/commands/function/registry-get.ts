@@ -23,7 +23,7 @@ async function loadOptions(options: GetRegistryOptions) {
     throw new Error(result.error.issues[0].message);
   }
 
-  const accessToken = await loadAccessToken();
+  const accessToken = await loadAccessToken({ useProfile: true, profile: result.data.profile });
   const client = await initOperatorClient(accessToken);
   const workspaceId = await loadWorkspaceId({
     workspaceId: result.data.workspaceId,
