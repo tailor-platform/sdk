@@ -153,25 +153,25 @@ Commands for managing organizations and folders.
 
 Commands for managing workspaces and profiles.
 
-| Command                                                                                 | Description                                 |
-| --------------------------------------------------------------------------------------- | ------------------------------------------- |
-| [workspace app health](./cli/workspace.md#workspace-app-health)                         | Check application schema health             |
-| [workspace app list](./cli/workspace.md#workspace-app-list)                             | List applications in a workspace            |
-| [workspace create](./cli/workspace.md#workspace-create)                                 | Create a new Tailor Platform workspace.     |
-| [workspace delete](./cli/workspace.md#workspace-delete)                                 | Delete a Tailor Platform workspace.         |
-| [workspace function registry get](./cli/workspace.md#workspace-function-registry-get)   | Get a function registry by name             |
-| [workspace function registry list](./cli/workspace.md#workspace-function-registry-list) | List function registries in a workspace     |
-| [workspace get](./cli/workspace.md#workspace-get)                                       | Show detailed information about a workspace |
-| [workspace list](./cli/workspace.md#workspace-list)                                     | List all Tailor Platform workspaces.        |
-| [workspace restore](./cli/workspace.md#workspace-restore)                               | Restore a deleted workspace                 |
-| [workspace user invite](./cli/workspace.md#workspace-user-invite)                       | Invite a user to a workspace                |
-| [workspace user list](./cli/workspace.md#workspace-user-list)                           | List users in a workspace                   |
-| [workspace user remove](./cli/workspace.md#workspace-user-remove)                       | Remove a user from a workspace              |
-| [workspace user update](./cli/workspace.md#workspace-user-update)                       | Update a user's role in a workspace         |
-| [profile create](./cli/workspace.md#profile-create)                                     | Create a new profile.                       |
-| [profile delete](./cli/workspace.md#profile-delete)                                     | Delete a profile.                           |
-| [profile list](./cli/workspace.md#profile-list)                                         | List all profiles.                          |
-| [profile update](./cli/workspace.md#profile-update)                                     | Update profile properties.                  |
+| Command                                                               | Description                                 |
+| --------------------------------------------------------------------- | ------------------------------------------- |
+| [workspace app health](./cli/workspace.md#workspace-app-health)       | Check application schema health             |
+| [workspace app list](./cli/workspace.md#workspace-app-list)           | List applications in a workspace            |
+| [workspace create](./cli/workspace.md#workspace-create)               | Create a new Tailor Platform workspace.     |
+| [workspace delete](./cli/workspace.md#workspace-delete)               | Delete a Tailor Platform workspace.         |
+| [workspace function get](./cli/workspace.md#workspace-function-get)   | Get a function registry by name             |
+| [workspace function list](./cli/workspace.md#workspace-function-list) | List function registries in a workspace     |
+| [workspace get](./cli/workspace.md#workspace-get)                     | Show detailed information about a workspace |
+| [workspace list](./cli/workspace.md#workspace-list)                   | List all Tailor Platform workspaces.        |
+| [workspace restore](./cli/workspace.md#workspace-restore)             | Restore a deleted workspace                 |
+| [workspace user invite](./cli/workspace.md#workspace-user-invite)     | Invite a user to a workspace                |
+| [workspace user list](./cli/workspace.md#workspace-user-list)         | List users in a workspace                   |
+| [workspace user remove](./cli/workspace.md#workspace-user-remove)     | Remove a user from a workspace              |
+| [workspace user update](./cli/workspace.md#workspace-user-update)     | Update a user's role in a workspace         |
+| [profile create](./cli/workspace.md#profile-create)                   | Create a new profile.                       |
+| [profile delete](./cli/workspace.md#profile-delete)                   | Delete a profile.                           |
+| [profile list](./cli/workspace.md#profile-list)                       | List all profiles.                          |
+| [profile update](./cli/workspace.md#profile-update)                   | Update profile properties.                  |
 
 ### [Auth Resource Commands](./cli/auth.md)
 

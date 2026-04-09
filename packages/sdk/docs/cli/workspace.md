@@ -518,72 +518,36 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 **Commands**
 
-| Command                                                       | Description                      |
-| ------------------------------------------------------------- | -------------------------------- |
-| [`workspace function registry`](#workspace-function-registry) | Manage function registry entries |
+| Command                                               | Description                             |
+| ----------------------------------------------------- | --------------------------------------- |
+| [`workspace function get`](#workspace-function-get)   | Get a function registry by name         |
+| [`workspace function list`](#workspace-function-list) | List function registries in a workspace |
 
 <!-- politty:command:workspace function:subcommands:end -->
-<!-- politty:command:workspace function registry:heading:start -->
 
-#### workspace function registry
+<!-- politty:command:workspace function get:heading:start -->
 
-<!-- politty:command:workspace function registry:heading:end -->
+#### workspace function get
 
-<!-- politty:command:workspace function registry:description:start -->
+<!-- politty:command:workspace function get:heading:end -->
 
-Manage function registry entries
-
-<!-- politty:command:workspace function registry:description:end -->
-
-<!-- politty:command:workspace function registry:usage:start -->
-
-**Usage**
-
-```
-tailor-sdk workspace function registry [command]
-```
-
-<!-- politty:command:workspace function registry:usage:end -->
-
-<!-- politty:command:workspace function registry:global-options-link:start -->
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-<!-- politty:command:workspace function registry:global-options-link:end -->
-
-<!-- politty:command:workspace function registry:subcommands:start -->
-
-**Commands**
-
-| Command                                                                 | Description                             |
-| ----------------------------------------------------------------------- | --------------------------------------- |
-| [`workspace function registry get`](#workspace-function-registry-get)   | Get a function registry by name         |
-| [`workspace function registry list`](#workspace-function-registry-list) | List function registries in a workspace |
-
-<!-- politty:command:workspace function registry:subcommands:end -->
-<!-- politty:command:workspace function registry get:heading:start -->
-
-##### workspace function registry get
-
-<!-- politty:command:workspace function registry get:heading:end -->
-
-<!-- politty:command:workspace function registry get:description:start -->
+<!-- politty:command:workspace function get:description:start -->
 
 Get a function registry by name
 
-<!-- politty:command:workspace function registry get:description:end -->
+<!-- politty:command:workspace function get:description:end -->
 
-<!-- politty:command:workspace function registry get:usage:start -->
+<!-- politty:command:workspace function get:usage:start -->
 
 **Usage**
 
 ```
-tailor-sdk workspace function registry get [options]
+tailor-sdk workspace function get [options]
 ```
 
-<!-- politty:command:workspace function registry get:usage:end -->
+<!-- politty:command:workspace function get:usage:end -->
 
-<!-- politty:command:workspace function registry get:options:start -->
+<!-- politty:command:workspace function get:options:start -->
 
 **Options**
 
@@ -593,36 +557,36 @@ tailor-sdk workspace function registry get [options]
 | `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
 | `--name <NAME>`                 | `-n`  | Function name     | Yes      | -       | -                              |
 
-<!-- politty:command:workspace function registry get:options:end -->
+<!-- politty:command:workspace function get:options:end -->
 
-<!-- politty:command:workspace function registry get:global-options-link:start -->
+<!-- politty:command:workspace function get:global-options-link:start -->
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
-<!-- politty:command:workspace function registry get:global-options-link:end -->
-<!-- politty:command:workspace function registry list:heading:start -->
+<!-- politty:command:workspace function get:global-options-link:end -->
+<!-- politty:command:workspace function list:heading:start -->
 
-##### workspace function registry list
+#### workspace function list
 
-<!-- politty:command:workspace function registry list:heading:end -->
+<!-- politty:command:workspace function list:heading:end -->
 
-<!-- politty:command:workspace function registry list:description:start -->
+<!-- politty:command:workspace function list:description:start -->
 
 List function registries in a workspace
 
-<!-- politty:command:workspace function registry list:description:end -->
+<!-- politty:command:workspace function list:description:end -->
 
-<!-- politty:command:workspace function registry list:usage:start -->
+<!-- politty:command:workspace function list:usage:start -->
 
 **Usage**
 
 ```
-tailor-sdk workspace function registry list [options]
+tailor-sdk workspace function list [options]
 ```
 
-<!-- politty:command:workspace function registry list:usage:end -->
+<!-- politty:command:workspace function list:usage:end -->
 
-<!-- politty:command:workspace function registry list:options:start -->
+<!-- politty:command:workspace function list:options:start -->
 
 **Options**
 
@@ -632,13 +596,13 @@ tailor-sdk workspace function registry list [options]
 | `--profile <PROFILE>`           | `-p`  | Workspace profile                   | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
 | `--limit <LIMIT>`               | `-l`  | Maximum number of functions to list | No       | -       | -                              |
 
-<!-- politty:command:workspace function registry list:options:end -->
+<!-- politty:command:workspace function list:options:end -->
 
-<!-- politty:command:workspace function registry list:global-options-link:start -->
+<!-- politty:command:workspace function list:global-options-link:start -->
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
-<!-- politty:command:workspace function registry list:global-options-link:end -->
+<!-- politty:command:workspace function list:global-options-link:end -->
 
 <!-- politty:command:workspace get:heading:start -->
 
