@@ -71,7 +71,7 @@ describe("normalizeIdPActionPermission", () => {
   describe("operator mapping", () => {
     it("maps = to eq", () => {
       const result = normalizeIdPActionPermission({
-        conditions: [[{ idpUser: "_name" }, "=", "test@example.com"]],
+        conditions: [[{ idpUser: "name" }, "=", "test@example.com"]],
         permit: true,
       });
       expect(result.conditions[0][1]).toBe("eq");
@@ -79,7 +79,7 @@ describe("normalizeIdPActionPermission", () => {
 
     it("maps != to ne", () => {
       const result = normalizeIdPActionPermission({
-        conditions: [[{ idpUser: "_name" }, "!=", "test@example.com"]],
+        conditions: [[{ idpUser: "name" }, "!=", "test@example.com"]],
         permit: true,
       });
       expect(result.conditions[0][1]).toBe("ne");
