@@ -1,85 +1,92 @@
 import { describe, it, expect } from "vitest";
 import { SecretsSchema } from "./schema";
 
+function wrap(
+  vaults: Record<string, Record<string, string | null | undefined>>,
+  skipNullishValues = false,
+) {
+  return { vaults, options: { skipNullishValues } };
+}
+
 describe("SecretsSchema validation", () => {
   it("accepts valid vault and secret names", () => {
-    const valid = {
+    const valid = wrap({
       "my-vault": {
         "my-secret": "secret-value",
       },
-    };
+    });
     expect(() => SecretsSchema.parse(valid)).not.toThrow();
   });
 
   it("accepts empty secret value", () => {
-    const valid = {
+    const valid = wrap({
       "my-vault": {
         "my-secret": "",
       },
-    };
+    });
     expect(() => SecretsSchema.parse(valid)).not.toThrow();
   });
 
   it("accepts names with only digits", () => {
-    const valid = {
+    const valid = wrap({
       "123": {
         "456": "value",
       },
-    };
+    });
     expect(() => SecretsSchema.parse(valid)).not.toThrow();
   });
 
   it("accepts names at maximum length (63 characters)", () => {
     const name = `a${"b".repeat(61)}c`;
     expect(name).toHaveLength(63);
-    const valid = { [name]: { [name]: "value" } };
+    const valid = wrap({ [name]: { [name]: "value" } });
     expect(() => SecretsSchema.parse(valid)).not.toThrow();
   });
 
   it("accepts names at minimum length (3 characters)", () => {
-    const valid = { abc: { def: "value" } };
+    const valid = wrap({ abc: { def: "value" } });
     expect(() => SecretsSchema.parse(valid)).not.toThrow();
   });
 
   it("rejects vault name with uppercase letters", () => {
-    const invalid = { "My-Vault": { "my-secret": "value" } };
+    const invalid = wrap({ "My-Vault": { "my-secret": "value" } });
     expect(() => SecretsSchema.parse(invalid)).toThrow();
   });
 
   it("rejects secret name with uppercase letters", () => {
-    const invalid = { "my-vault": { "My-Secret": "value" } };
+    const invalid = wrap({ "my-vault": { "My-Secret": "value" } });
     expect(() => SecretsSchema.parse(invalid)).toThrow();
   });
 
   it("rejects name starting with hyphen", () => {
-    const invalid = { "-my-vault": { "my-secret": "value" } };
+    const invalid = wrap({ "-my-vault": { "my-secret": "value" } });
     expect(() => SecretsSchema.parse(invalid)).toThrow();
   });
 
   it("rejects name ending with hyphen", () => {
-    const invalid = { "my-vault-": { "my-secret": "value" } };
+    const invalid = wrap({ "my-vault-": { "my-secret": "value" } });
     expect(() => SecretsSchema.parse(invalid)).toThrow();
   });
 
   it("rejects name shorter than 3 characters", () => {
-    const invalid = { ab: { "my-secret": "value" } };
+    const invalid = wrap({ ab: { "my-secret": "value" } });
     expect(() => SecretsSchema.parse(invalid)).toThrow();
   });
 
   it("rejects name longer than 63 characters", () => {
     const name = `a${"b".repeat(62)}c`;
     expect(name).toHaveLength(64);
-    const invalid = { [name]: { "my-secret": "value" } };
+    const invalid = wrap({ [name]: { "my-secret": "value" } });
     expect(() => SecretsSchema.parse(invalid)).toThrow();
   });
 
   it("rejects name with underscores", () => {
-    const invalid = { my_vault: { "my-secret": "value" } };
+    const invalid = wrap({ my_vault: { "my-secret": "value" } });
     expect(() => SecretsSchema.parse(invalid)).toThrow();
   });
 
   it("accepts multiple vaults with multiple secrets", () => {
-    const valid = {
+    const valid = wrap({
       "vault-1": {
         "secret-a": "value-a",
         "secret-b": "value-b",
@@ -87,7 +94,26 @@ describe("SecretsSchema validation", () => {
       "vault-2": {
         "secret-c": "value-c",
       },
-    };
+    });
     expect(() => SecretsSchema.parse(valid)).not.toThrow();
+  });
+
+  it("accepts nullish secret values", () => {
+    const valid = wrap(
+      {
+        "my-vault": {
+          "my-secret": undefined,
+          "other-secret": null,
+        },
+      },
+      true,
+    );
+    expect(() => SecretsSchema.parse(valid)).not.toThrow();
+  });
+
+  it("accepts skipNullishValues option", () => {
+    const valid = wrap({ "my-vault": { "my-secret": "value" } }, true);
+    const parsed = SecretsSchema.parse(valid);
+    expect(parsed.options.skipNullishValues).toBe(true);
   });
 });
