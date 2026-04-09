@@ -210,7 +210,7 @@ function buildSourceLink(
   const location = `${displayPath}:${line}:${column}`;
   const scheme = detectEditorScheme();
   if (scheme === "vscode") {
-    return osc8Link(`vscode://file/${absolutePath}:${line}:${column}`, location);
+    return osc8Link(`vscode://file${absolutePath}:${line}:${column}`, location);
   }
   return osc8Link(`file://${absolutePath}`, location);
 }
