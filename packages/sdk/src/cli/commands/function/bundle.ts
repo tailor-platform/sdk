@@ -149,10 +149,11 @@ function generateEntry(
         const _user = ${userExpr};
 
         const $tailor_resolver_body = async (context) => {
-          if (context.input) {
+          const _isOldFormat = context.input != null && typeof context.input === 'object' && !Array.isArray(context.input) && Object.keys(context).length === 1;
+          if (_isOldFormat) {
             console.warn('[DEPRECATED] Wrapping args with "input" key (e.g. {"input":{...}}) is deprecated. Pass input fields directly (e.g. {"a":1}). The "input" wrapper will be removed in v2.');
           }
-          const enrichedContext = { ...context, input: context.input ?? context, env: _env, user: _user };
+          const enrichedContext = { ...context, input: _isOldFormat ? context.input : context, env: _env, user: _user };
 
           if (_internalResolver.input) {
             const result = t.object(_internalResolver.input).parse({
