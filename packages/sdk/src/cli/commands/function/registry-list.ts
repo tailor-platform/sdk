@@ -1,3 +1,4 @@
+import { PageDirection } from "@tailor-proto/tailor/v1/resource_pb";
 import { arg } from "politty";
 import { z } from "zod";
 import { positiveIntArg, workspaceArgs } from "@/cli/shared/args";
@@ -62,6 +63,8 @@ export async function listFunctionRegistries(
       workspaceId,
       pageToken,
       ...(pageSize !== undefined ? { pageSize } : {}),
+      sortBy: "updated_at",
+      pageDirection: PageDirection.ASC,
     });
 
     const mapped = functions.map(functionRegistryInfo);
