@@ -226,10 +226,12 @@ export function formatMappedError(
   for (const frame of frames) {
     if (frame.mapped) {
       const { source, line, column, name } = frame.mapped;
-      // Resolve sourcemap-relative path to cwd-relative path
-      const displaySource = bundleDir
-        ? path.relative(process.cwd(), path.resolve(bundleDir, source))
-        : source;
+      // Resolve sourcemap-relative path to cwd-relative path with ./ prefix
+      let displaySource = source;
+      if (bundleDir) {
+        const rel = path.relative(process.cwd(), path.resolve(bundleDir, source));
+        displaySource = rel.startsWith(".") ? rel : `./${rel}`;
+      }
       const location = `${displaySource}:${line}:${column}`;
       const fnName = name ?? frame.original.functionName;
       parts.push(`\n  at ${fnName} (${styles.info(location)})`);
