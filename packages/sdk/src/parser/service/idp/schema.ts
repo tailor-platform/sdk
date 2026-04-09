@@ -194,9 +194,9 @@ const IdPPermissionOperandSchema = z.union([
   z.array(z.string()).readonly(),
   z.array(z.boolean()).readonly(),
   z.object({ user: z.string() }),
-  z.object({ idpUser: z.string() }),
-  z.object({ oldIdpUser: z.string() }),
-  z.object({ newIdpUser: z.string() }),
+  z.object({ idpUser: z.enum(["_id", "_name", "_disabled"]) }),
+  z.object({ oldIdpUser: z.enum(["_id", "_name", "_disabled"]) }),
+  z.object({ newIdpUser: z.enum(["_id", "_name", "_disabled"]) }),
 ]);
 
 const IdPPermissionOperatorSchema = z.enum(["=", "!=", "in", "not in"]);

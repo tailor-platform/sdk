@@ -8,11 +8,13 @@ import type { IdPPermission as RawIdPPermission } from "@/types/idp.generated";
 
 type PermissionOperator = "=" | "!=" | "in" | "not in";
 
+type IdPUserField = "_id" | "_name" | "_disabled";
+
 type ObjectOperand =
   | { user: string }
-  | { idpUser: string }
-  | { oldIdpUser: string }
-  | { newIdpUser: string }
+  | { idpUser: IdPUserField }
+  | { oldIdpUser: IdPUserField }
+  | { newIdpUser: IdPUserField }
   | { value: unknown };
 
 type ValueOperand = string | boolean | string[] | boolean[];

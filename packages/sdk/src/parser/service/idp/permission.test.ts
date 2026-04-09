@@ -71,7 +71,7 @@ describe("normalizeIdPActionPermission", () => {
   describe("operator mapping", () => {
     it("maps = to eq", () => {
       const result = normalizeIdPActionPermission({
-        conditions: [[{ idpUser: "email" }, "=", "test@example.com"]],
+        conditions: [[{ idpUser: "_name" }, "=", "test@example.com"]],
         permit: true,
       });
       expect(result.conditions[0][1]).toBe("eq");
@@ -79,7 +79,7 @@ describe("normalizeIdPActionPermission", () => {
 
     it("maps != to ne", () => {
       const result = normalizeIdPActionPermission({
-        conditions: [[{ idpUser: "email" }, "!=", "test@example.com"]],
+        conditions: [[{ idpUser: "_name" }, "!=", "test@example.com"]],
         permit: true,
       });
       expect(result.conditions[0][1]).toBe("ne");
@@ -121,26 +121,26 @@ describe("normalizeIdPActionPermission", () => {
 
     it("passes through { idpUser: 'field' } as-is", () => {
       const result = normalizeIdPActionPermission({
-        conditions: [[{ idpUser: "email" }, "=", "test"]],
+        conditions: [[{ idpUser: "_name" }, "=", "test"]],
         permit: true,
       });
-      expect(result.conditions[0][0]).toEqual({ idpUser: "email" });
+      expect(result.conditions[0][0]).toEqual({ idpUser: "_name" });
     });
 
     it("passes through { oldIdpUser: 'field' } as-is", () => {
       const result = normalizeIdPActionPermission({
-        conditions: [[{ oldIdpUser: "email" }, "=", "test"]],
+        conditions: [[{ oldIdpUser: "_name" }, "=", "test"]],
         permit: true,
       });
-      expect(result.conditions[0][0]).toEqual({ oldIdpUser: "email" });
+      expect(result.conditions[0][0]).toEqual({ oldIdpUser: "_name" });
     });
 
     it("passes through { newIdpUser: 'field' } as-is", () => {
       const result = normalizeIdPActionPermission({
-        conditions: [[{ newIdpUser: "email" }, "=", "test"]],
+        conditions: [[{ newIdpUser: "_name" }, "=", "test"]],
         permit: true,
       });
-      expect(result.conditions[0][0]).toEqual({ newIdpUser: "email" });
+      expect(result.conditions[0][0]).toEqual({ newIdpUser: "_name" });
     });
 
     it("passes through string literals", () => {
@@ -186,7 +186,7 @@ describe("normalizeIdPPermission", () => {
       create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
       read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
       update: [
-        { conditions: [[{ newIdpUser: "email" }, "!=", { oldIdpUser: "email" }]], permit: true },
+        { conditions: [[{ newIdpUser: "_name" }, "!=", { oldIdpUser: "_name" }]], permit: true },
       ],
       delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
       sendPasswordResetEmail: [{ conditions: [], permit: true }],

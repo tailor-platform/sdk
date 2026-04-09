@@ -9,7 +9,7 @@ describe("IdPPermissionCondition type checks", () => {
 
   it("accepts idpUser operand for non-update actions", () => {
     const _cond: IdPPermissionCondition<object, false> = [
-      { idpUser: "email" },
+      { idpUser: "_name" },
       "=",
       "test@example.com",
     ];
@@ -18,9 +18,9 @@ describe("IdPPermissionCondition type checks", () => {
 
   it("accepts oldIdpUser/newIdpUser operands for update actions", () => {
     const _cond1: IdPPermissionCondition<object, true> = [
-      { oldIdpUser: "email" },
+      { oldIdpUser: "_name" },
       "!=",
-      { newIdpUser: "email" },
+      { newIdpUser: "_name" },
     ];
     expectTypeOf(_cond1).toExtend<IdPPermissionCondition<object, true>>();
   });
@@ -51,7 +51,7 @@ describe("IdPPermission type checks", () => {
     const _perm: IdPPermission = {
       create: [{ conditions: [[{ user: "id" }, "=", "admin"]], permit: true }],
       read: [{ conditions: [[{ user: "id" }, "=", "admin"]], permit: true }],
-      update: [{ conditions: [[{ newIdpUser: "email" }, "=", "test"]], permit: true }],
+      update: [{ conditions: [[{ newIdpUser: "_name" }, "=", "test"]], permit: true }],
       delete: [{ conditions: [[{ user: "id" }, "=", "admin"]], permit: true }],
       sendPasswordResetEmail: [{ conditions: [], permit: true }],
     };
