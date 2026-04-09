@@ -130,9 +130,9 @@ defineIdp("my-idp", {
 **Operands:**
 
 - `{ user: "field" }` - Authenticated user's attribute
-- `{ idpUser: "field" }` - IdP user field (for create/read/delete)
-- `{ oldIdpUser: "field" }` - Previous IdP user field value (for update only)
-- `{ newIdpUser: "field" }` - New IdP user field value (for update only)
+- `{ idpUser: "field" }` - IdP user field (for create/read/delete). Allowed values: `"id"`, `"name"`, `"disabled"`
+- `{ oldIdpUser: "field" }` - Previous IdP user field value (for update only). Allowed values: `"id"`, `"name"`, `"disabled"`
+- `{ newIdpUser: "field" }` - New IdP user field value (for update only). Allowed values: `"id"`, `"name"`, `"disabled"`
 - Literal values: `string`, `boolean`, `string[]`, `boolean[]`
 
 **Operators:** `"="`, `"!="`, `"in"`, `"not in"`
