@@ -22,6 +22,8 @@ export interface DetectedFunction {
   exportName?: string;
   /** For plain functions: whether main is a named export rather than default export */
   namedMain?: boolean;
+  /** For resolvers: whether the resolver defines an input schema */
+  hasInput?: boolean;
 }
 
 interface DetectFunctionOptions {
@@ -48,7 +50,11 @@ export async function detectFunctionType(
   // 1. Check resolver
   const resolverResult = ResolverSchema.safeParse(module.default);
   if (resolverResult.success) {
-    return { type: "resolver", name: resolverResult.data.name };
+    return {
+      type: "resolver",
+      name: resolverResult.data.name,
+      hasInput: resolverResult.data.input != null,
+    };
   }
 
   // 2. Check executor (only function/jobFunction kinds)

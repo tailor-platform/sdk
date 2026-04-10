@@ -125,6 +125,13 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
       functionName = detected.name;
       logger.info(`Detected: ${styles.bold(detected.type)} ${styles.info(`"${detected.name}"`)}`);
 
+      if (detected.type === "resolver" && !detected.hasInput && args.arg) {
+        logger.warn(
+          '--arg is ignored because this resolver has no input schema. Define "input" in your resolver to use --arg.',
+        );
+        args.arg = undefined;
+      }
+
       logger.info("Bundling...");
       ({ bundledCode, scriptName } = await bundleForTestRun({
         detected,
