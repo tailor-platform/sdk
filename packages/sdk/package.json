@@ -131,7 +131,7 @@
     "multiline-ts": "4.0.1",
     "open": "11.0.0",
     "ora": "9.3.0",
-    "oxc-parser": "0.123.0",
+    "oxc-parser": "0.124.0",
     "p-limit": "7.3.0",
     "pathe": "2.0.3",
     "pgsql-ast-parser": "12.0.2",
