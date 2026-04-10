@@ -57,6 +57,29 @@
       "matchManagers": ["npm"],
       "matchPackageNames": ["vitest", "@vitest/*"],
       "groupName": "vitest"
+    },
+    {
+      "description": "Group ESLint ecosystem (core + plugins need compatible versions)",
+      "matchManagers": ["npm"],
+      "matchPackageNames": [
+        "eslint",
+        "@eslint/*",
+        "typescript-eslint",
+        "eslint-plugin-jsdoc",
+        "eslint-plugin-import-x",
+        "eslint-import-resolver-typescript"
+      ],
+      "groupName": "eslint"
+    },
+    {
+      "description": "Group rolldown bundler ecosystem (tsdown depends on rolldown)",
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["rolldown", "tsdown"],
+      "groupName": "rolldown"
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "groupName": "github-actions"
     }
   ]
 }
