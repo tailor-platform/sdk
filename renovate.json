@@ -30,6 +30,45 @@
       "matchManagers": ["npm"],
       "matchPackageNames": ["@connectrpc/*"],
       "groupName": "@connectrpc"
+    },
+    {
+      "description": "Group ESLint ecosystem (core + plugins need compatible versions)",
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["eslint", "eslint-*", "@eslint/*", "typescript-eslint"],
+      "groupName": "eslint"
+    },
+    {
+      "description": "Group oxc-project packages (parser + types must stay in sync, overrides eslint group for eslint-plugin-oxlint)",
+      "matchManagers": ["npm"],
+      "matchPackageNames": [
+        "@oxc-project/*",
+        "oxc-parser",
+        "oxlint",
+        "oxfmt",
+        "eslint-plugin-oxlint"
+      ],
+      "groupName": "oxc"
+    },
+    {
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["@opentelemetry/*"],
+      "groupName": "@opentelemetry"
+    },
+    {
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["@inquirer/*"],
+      "groupName": "@inquirer"
+    },
+    {
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["vitest", "@vitest/*"],
+      "groupName": "vitest"
+    },
+    {
+      "description": "Group rolldown bundler ecosystem (tsdown depends on rolldown)",
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["rolldown", "tsdown"],
+      "groupName": "rolldown"
     }
   ]
 }
