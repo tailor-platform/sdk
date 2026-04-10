@@ -124,6 +124,8 @@ export default {
       expect(result.bundledCode).toContain("export");
       // Validation wrapper should be present
       expect(result.bundledCode).toContain("input");
+      // Deprecation warning message should be present in bundled output
+      expect(result.bundledCode).toContain("[DEPRECATED]");
     });
 
     it("embeds machine user as user context", async () => {
