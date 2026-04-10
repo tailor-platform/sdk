@@ -91,8 +91,8 @@ async function runTestRun(
   if (detected.type === "resolver" && resolvedArg) {
     if (!detected.hasInput) {
       resolvedArg = undefined;
-    } else if (detected.rawInput) {
-      resolvedArg = resolveResolverArg(resolvedArg, detected.rawInput, machineUser, workspaceId);
+    } else if (detected.inputSchema) {
+      resolvedArg = resolveResolverArg(resolvedArg, detected.inputSchema, machineUser, workspaceId);
     }
   }
 

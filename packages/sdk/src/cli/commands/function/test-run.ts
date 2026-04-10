@@ -18,10 +18,8 @@ import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger, styles } from "@/cli/shared/logger";
 import { executeScript } from "@/cli/shared/script-executor";
-// eslint-disable-next-line no-restricted-imports -- needed for local schema parse in format detection
-import { t, type TailorUser } from "@/configure";
 import { bundleForTestRun, type ResolvedMachineUser } from "./bundle";
-import { detectFunctionType } from "./detect";
+import { detectFunctionType, type DetectedFunction } from "./detect";
 
 export const testRunCommand = defineAppCommand({
   name: "test-run",
@@ -133,8 +131,8 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
             '--arg is ignored because this resolver has no input schema. Define "input" in your resolver to use --arg.',
           );
           args.arg = undefined;
-        } else if (detected.rawInput) {
-          args.arg = resolveResolverArg(args.arg, detected.rawInput, machineUser, workspaceId);
+        } else if (detected.inputSchema) {
+          args.arg = resolveResolverArg(args.arg, detected.inputSchema, machineUser, workspaceId);
         }
       }
 
@@ -313,29 +311,27 @@ async function resolveMachineUser(
  * Tries new format (arg = input fields) first via schema parse.
  * If that fails and arg looks like old format, tries unwrapping.
  * @param argStr - JSON string of the arg
- * @param rawInput - Raw input field definitions from the resolver
+ * @param inputSchema - Pre-built schema object from detect (has .parse())
  * @param machineUser - Resolved machine user info
  * @param workspaceId - Workspace ID
  * @returns Resolved JSON string (unwrapped if old format)
  */
 export function resolveResolverArg(
   argStr: string,
-  rawInput: Record<string, unknown>,
+  inputSchema: NonNullable<DetectedFunction["inputSchema"]>,
   machineUser: ResolvedMachineUser,
   workspaceId: string,
 ): string {
   const parsed = JSON.parse(argStr);
-  // oxlint-disable-next-line no-explicit-any -- rawInput is the resolver's field definitions, typed loosely from detect
-  const schema = t.object(rawInput as any);
-  const user: TailorUser = {
+  const user = {
     id: machineUser.id,
-    type: "machine_user",
+    type: "machine_user" as const,
     workspaceId,
-    attributes: (machineUser.attributes as TailorUser["attributes"]) ?? null,
-    attributeList: (machineUser.attributeList as TailorUser["attributeList"]) ?? [],
+    attributes: machineUser.attributes ?? null,
+    attributeList: machineUser.attributeList ?? [],
   };
 
-  const newResult = schema.parse({ value: parsed, data: parsed, user });
+  const newResult = inputSchema.parse({ value: parsed, data: parsed, user });
   if (!newResult.issues) {
     return argStr;
   }
@@ -347,7 +343,7 @@ export function resolveResolverArg(
     typeof parsed.input === "object" &&
     !Array.isArray(parsed.input)
   ) {
-    const oldResult = schema.parse({ value: parsed.input, data: parsed.input, user });
+    const oldResult = inputSchema.parse({ value: parsed.input, data: parsed.input, user });
     if (!oldResult.issues) {
       logger.warn(
         '[DEPRECATED] Wrapping args with "input" key (e.g. {"input":{...}}) is deprecated. Pass input fields directly (e.g. {"a":1}). The "input" wrapper will be removed in v2.',
