@@ -76,10 +76,6 @@
       "matchManagers": ["npm"],
       "matchPackageNames": ["rolldown", "tsdown"],
       "groupName": "rolldown"
-    },
-    {
-      "matchManagers": ["github-actions"],
-      "groupName": "github-actions"
     }
   ]
 }
