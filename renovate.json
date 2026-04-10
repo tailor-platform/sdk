@@ -30,6 +30,33 @@
       "matchManagers": ["npm"],
       "matchPackageNames": ["@connectrpc/*"],
       "groupName": "@connectrpc"
+    },
+    {
+      "description": "Group oxc-project packages (parser + types must stay in sync)",
+      "matchManagers": ["npm"],
+      "matchPackageNames": [
+        "@oxc-project/*",
+        "oxc-parser",
+        "oxlint",
+        "oxfmt",
+        "eslint-plugin-oxlint"
+      ],
+      "groupName": "oxc"
+    },
+    {
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["@opentelemetry/*"],
+      "groupName": "@opentelemetry"
+    },
+    {
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["@inquirer/*"],
+      "groupName": "@inquirer"
+    },
+    {
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["vitest", "@vitest/*"],
+      "groupName": "vitest"
     }
   ]
 }
