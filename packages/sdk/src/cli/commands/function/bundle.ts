@@ -142,10 +142,7 @@ function generateEntry(
       // For test-run, we embed machine user info since there's no operationHook.
       const userExpr = buildMachineUserExpr(machineUser, workspaceId);
 
-      // Detect deprecated {"input":{...}} wrapper via schema parse.
-      // New format (context = input fields) is tried first; if it fails and context
-      // looks like the old wrapper, try context.input before reporting errors.
-      // console.warn (not CLI logger) because this is generated runtime code, not CLI code.
+      // Same pattern as services/resolver/bundler.ts:136-156
       return ml /* js */ `
         import _internalResolver from "${absoluteSourcePath}";
         import { t } from "@tailor-platform/sdk";
@@ -154,24 +151,22 @@ function generateEntry(
         const _user = ${userExpr};
 
         const $tailor_resolver_body = async (context) => {
-          const _schema = t.object(_internalResolver.input);
-          let _inputValue = context;
-          let _issues = _schema.parse({ value: context, data: context, user: _user }).issues;
-          if (_issues && Object.keys(context).length === 1 && context.input != null && typeof context.input === 'object' && !Array.isArray(context.input)) {
-            const _oldResult = _schema.parse({ value: context.input, data: context.input, user: _user });
-            if (!_oldResult.issues) {
-              console.warn('[DEPRECATED] Wrapping args with "input" key (e.g. {"input":{...}}) is deprecated. Pass input fields directly (e.g. {"a":1}). The "input" wrapper will be removed in v2.');
-              _inputValue = context.input;
-              _issues = null;
+          if (_internalResolver.input) {
+            const result = t.object(_internalResolver.input).parse({
+              value: context,
+              data: context,
+              user: _user,
+            });
+
+            if (result.issues) {
+              throw new TailorErrors(result.issues.map(issue => ({
+                message: issue.message,
+                path: issue.path ?? [],
+              })));
             }
           }
-          if (_issues) {
-            throw new TailorErrors(_issues.map(issue => ({
-              message: issue.message,
-              path: issue.path ?? [],
-            })));
-          }
-          const enrichedContext = { input: _inputValue, env: _env, user: _user };
+
+          const enrichedContext = { input: context, env: _env, user: _user };
           return _internalResolver.body(enrichedContext);
         };
 

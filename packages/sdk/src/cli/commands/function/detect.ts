@@ -24,6 +24,8 @@ export interface DetectedFunction {
   namedMain?: boolean;
   /** For resolvers: whether the resolver defines an input schema */
   hasInput?: boolean;
+  /** For resolvers with input: raw input field definitions for local validation */
+  rawInput?: Record<string, unknown>;
 }
 
 interface DetectFunctionOptions {
@@ -53,7 +55,8 @@ export async function detectFunctionType(
     return {
       type: "resolver",
       name: resolverResult.data.name,
-      hasInput: resolverResult.data.input != null,
+      hasInput: module.default.input != null,
+      rawInput: module.default.input,
     };
   }
 

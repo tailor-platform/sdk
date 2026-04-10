@@ -18,6 +18,8 @@ import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger, styles } from "@/cli/shared/logger";
 import { executeScript } from "@/cli/shared/script-executor";
+// eslint-disable-next-line no-restricted-imports -- needed for local schema parse in format detection
+import { t, type TailorUser } from "@/configure";
 import { bundleForTestRun, type ResolvedMachineUser } from "./bundle";
 import { detectFunctionType } from "./detect";
 
@@ -125,11 +127,15 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
       functionName = detected.name;
       logger.info(`Detected: ${styles.bold(detected.type)} ${styles.info(`"${detected.name}"`)}`);
 
-      if (detected.type === "resolver" && !detected.hasInput && args.arg) {
-        logger.warn(
-          '--arg is ignored because this resolver has no input schema. Define "input" in your resolver to use --arg.',
-        );
-        args.arg = undefined;
+      if (detected.type === "resolver" && args.arg) {
+        if (!detected.hasInput) {
+          logger.warn(
+            '--arg is ignored because this resolver has no input schema. Define "input" in your resolver to use --arg.',
+          );
+          args.arg = undefined;
+        } else if (detected.rawInput) {
+          args.arg = resolveResolverArg(args.arg, detected.rawInput, machineUser, workspaceId);
+        }
       }
 
       logger.info("Bundling...");
@@ -300,4 +306,56 @@ async function resolveMachineUser(
   }
 
   return { name: machineUserName, id, attributes, attributeList };
+}
+
+/**
+ * Resolve resolver arg format: detect and unwrap deprecated {"input":{...}} wrapper.
+ * Tries new format (arg = input fields) first via schema parse.
+ * If that fails and arg looks like old format, tries unwrapping.
+ * @param argStr - JSON string of the arg
+ * @param rawInput - Raw input field definitions from the resolver
+ * @param machineUser - Resolved machine user info
+ * @param workspaceId - Workspace ID
+ * @returns Resolved JSON string (unwrapped if old format)
+ */
+export function resolveResolverArg(
+  argStr: string,
+  rawInput: Record<string, unknown>,
+  machineUser: ResolvedMachineUser,
+  workspaceId: string,
+): string {
+  const parsed = JSON.parse(argStr);
+  // oxlint-disable-next-line no-explicit-any -- rawInput is the resolver's field definitions, typed loosely from detect
+  const schema = t.object(rawInput as any);
+  const user: TailorUser = {
+    id: machineUser.id,
+    type: "machine_user",
+    workspaceId,
+    attributes: (machineUser.attributes as TailorUser["attributes"]) ?? null,
+    attributeList: (machineUser.attributeList as TailorUser["attributeList"]) ?? [],
+  };
+
+  const newResult = schema.parse({ value: parsed, data: parsed, user });
+  if (!newResult.issues) {
+    return argStr;
+  }
+
+  // New format failed — check if old format works
+  if (
+    Object.keys(parsed).length === 1 &&
+    parsed.input != null &&
+    typeof parsed.input === "object" &&
+    !Array.isArray(parsed.input)
+  ) {
+    const oldResult = schema.parse({ value: parsed.input, data: parsed.input, user });
+    if (!oldResult.issues) {
+      logger.warn(
+        '[DEPRECATED] Wrapping args with "input" key (e.g. {"input":{...}}) is deprecated. Pass input fields directly (e.g. {"a":1}). The "input" wrapper will be removed in v2.',
+      );
+      return JSON.stringify(parsed.input);
+    }
+  }
+
+  // Both failed — pass as-is, let server report the validation error
+  return argStr;
 }
