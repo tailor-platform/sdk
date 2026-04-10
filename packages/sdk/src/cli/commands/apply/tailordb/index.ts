@@ -80,8 +80,8 @@ import type {
 } from "@/cli/commands/tailordb/migrate/types";
 import type { LoadedConfig } from "@/cli/shared/config-loader";
 import type { Executor } from "@/types/executor.generated";
+import type { EnumValue } from "@/types/field-types";
 import type {
-  EnumValue,
   PermissionOperand,
   StandardActionPermission,
   StandardGqlPermissionPolicy,

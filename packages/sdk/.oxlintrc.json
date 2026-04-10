@@ -245,6 +245,22 @@
       }
     },
     {
+      "files": ["src/plugin/manager.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/cli/**", "@/cli/**"],
+                "message": "Plugin module should not import from cli module."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "files": ["src/plugin/**/*.test.ts", "src/plugin/builtin/**/*.test.ts"],
       "rules": {
         "no-restricted-imports": "off"

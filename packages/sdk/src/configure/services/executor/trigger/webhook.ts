@@ -1,4 +1,4 @@
-import type { TailorEnv } from "@/configure/types/env";
+import type { TailorEnv } from "@/types/env";
 import type { IncomingWebhookTrigger as ParserIncomingWebhookTrigger } from "@/types/executor.generated";
 
 export interface IncomingWebhookArgs<T extends IncomingWebhookRequest> {

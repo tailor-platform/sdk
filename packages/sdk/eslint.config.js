@@ -98,6 +98,35 @@ export default defineConfig([
     },
   },
   {
+    files: ["src/types/**/*.ts"],
+    ignores: ["src/types/**/*.test.ts"],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["**/configure/**", "@/configure/**"],
+              message: "Types module should not import from configure module.",
+            },
+            {
+              group: ["**/cli/**", "@/cli/**"],
+              message: "Types module should not import from cli module.",
+            },
+            {
+              group: ["**/parser/**", "@/parser/**"],
+              message: "Types module should not import from parser module.",
+            },
+            {
+              group: ["**/plugin/**", "@/plugin/**"],
+              message: "Types module should not import from plugin module.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ["src/configure/**/*.ts"],
     rules: {
       "@typescript-eslint/no-restricted-imports": [
@@ -158,6 +187,23 @@ export default defineConfig([
             {
               group: ["**/cli/**", "@/cli/**"],
               message: "Parser module should not import from cli module.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // Plugin manager needs builder methods from configure (e.g., .description(), .permission())
+    files: ["src/plugin/manager.ts"],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["**/cli/**", "@/cli/**"],
+              message: "Plugin module should not import from cli module.",
             },
           ],
         },

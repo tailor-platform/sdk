@@ -8,10 +8,10 @@ import type {
   SCIMConfig,
   TenantProvider as TenantProviderConfig,
 } from "./auth.generated";
-import type { TailorDBInstance } from "@/configure/services/tailordb/schema";
-import type { output } from "@/configure/types/helpers";
-import type { TailorField } from "@/configure/types/type";
-import type { DefinedFieldMetadata, FieldMetadata, TailorFieldType } from "@/configure/types/types";
+import type { DefinedFieldMetadata, FieldMetadata, TailorFieldType } from "./field-types";
+import type { output } from "./helpers";
+import type { TailorDBInstance } from "./tailor-db-field";
+import type { TailorField } from "./tailor-field";
 import type { IsAny, JsonObject } from "type-fest";
 
 // Derived from generated types (zinfer inlines these literal unions)
