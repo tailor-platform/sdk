@@ -1,5 +1,29 @@
 # @tailor-platform/sdk
 
+## 1.35.2
+
+### Patch Changes
+
+- [#925](https://github.com/tailor-platform/sdk/pull/925) [`ce5b766`](https://github.com/tailor-platform/sdk/commit/ce5b76662951cbe89779d45512a57c80cf4a2984) Thanks [@toiroakr](https://github.com/toiroakr)! - `function test-run` resolver arg no longer requires the `input` wrapper key — pass input fields directly (e.g. `-a '{"a":1}'`). The old `{"input":{...}}` format is detected via schema validation and emits a deprecation warning. When no input schema is defined, `--arg` is ignored with a warning.
+
+- [#945](https://github.com/tailor-platform/sdk/pull/945) [`4d9892e`](https://github.com/tailor-platform/sdk/commit/4d9892e6e40c6eb4852714b8437339080e935189) Thanks [@anukiransolur](https://github.com/anukiransolur)! - chore(docs): added requirements for deterministic execution that the workflow must satisfy
+
+- [#890](https://github.com/tailor-platform/sdk/pull/890) [`f0e03f2`](https://github.com/tailor-platform/sdk/commit/f0e03f267435094e88ec3cedd0af22bb4655264c) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency oxfmt to v0.43.0
+
+- [#927](https://github.com/tailor-platform/sdk/pull/927) [`dc699f3`](https://github.com/tailor-platform/sdk/commit/dc699f386b68d9647a77961f5ff34910f1b67939) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @typescript/native-preview to v7.0.0-dev.20260406.1
+
+- [#936](https://github.com/tailor-platform/sdk/pull/936) [`7a1f37b`](https://github.com/tailor-platform/sdk/commit/7a1f37bd376736a47f367ac06fdbb3fbb5fa1446) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency oxc-parser to v0.123.0
+
+- [#943](https://github.com/tailor-platform/sdk/pull/943) [`14af922`](https://github.com/tailor-platform/sdk/commit/14af922e82d945c76b8c864d1bb177eb9fae26f6) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update anthropics/claude-code-action action to v1.0.92
+
+- [#944](https://github.com/tailor-platform/sdk/pull/944) [`f0070a9`](https://github.com/tailor-platform/sdk/commit/f0070a9f41a15c9802b9c5caf201cf802e19a589) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @inquirer/core to v11.1.8
+
+- [#946](https://github.com/tailor-platform/sdk/pull/946) [`c06dd0e`](https://github.com/tailor-platform/sdk/commit/c06dd0e16688b7863a4c85e569ed4e2e60bba971) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency oxfmt to v0.44.0
+
+- [#948](https://github.com/tailor-platform/sdk/pull/948) [`d5f365f`](https://github.com/tailor-platform/sdk/commit/d5f365ff1153d34362b743d8d9019183f67b668a) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @inquirer/prompts to v8.4.0
+
+- [#950](https://github.com/tailor-platform/sdk/pull/950) [`0dc96f9`](https://github.com/tailor-platform/sdk/commit/0dc96f9e2fde7088cef29142ce7917694dee5fca) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency oxc-parser to v0.124.0
+
 ## 1.35.1
 
 ### Patch Changes
