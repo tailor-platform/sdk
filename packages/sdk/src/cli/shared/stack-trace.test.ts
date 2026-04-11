@@ -304,6 +304,74 @@ describe("mapStackFrames", () => {
     expect(result[0].mapped?.line).toBe(10);
     expect(result[0].mapped?.column).toBe(4);
   });
+
+  test("identifies correct source when true source is in middle of sources array", () => {
+    // Exercises round-trip validation with a 3-source bundle where the
+    // true user code sits in the middle of the sources array. Both the
+    // entry wrapper (last, tried first in reverse iteration) and SDK
+    // internals (first) have same-line mappings at different columns
+    // that would false-positive without round-trip validation.
+    const traceMap = new TraceMap({
+      version: 3,
+      file: "bundle.js",
+      sources: ["sdk/internal.ts", "resolvers/target.ts", "entry-wrapper.ts"],
+      sourcesContent: [
+        "export const internal = 1;",
+        ["", "", "", "", "          throw new Error('bug');"].join("\n"),
+        "export const wrapper = 3;",
+      ],
+      names: [],
+      // Generated line 1:
+      //   col 0  ← entry-wrapper.ts   line 5 col 0  (false positive, tried first)
+      //   col 10 ← resolvers/target.ts line 5 col 10 (actual throw, middle)
+      //   col 20 ← sdk/internal.ts    line 5 col 0  (false positive, tried last)
+      mappings: [
+        [
+          [0, 2, 4, 0],
+          [10, 1, 4, 10],
+          [20, 0, 4, 0],
+        ],
+      ],
+    });
+
+    const frames: StackFrame[] = [
+      { functionName: "run", file: "file:///bundle.js", line: 5, column: 11 },
+    ];
+
+    const result = mapStackFrames(frames, traceMap);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].mapped).not.toBeNull();
+    expect(result[0].mapped?.source).toBe("resolvers/target.ts");
+    expect(result[0].mapped?.line).toBe(5);
+    expect(result[0].mapped?.column).toBe(11);
+  });
+
+  test("returns mapped.name as null even when sourcemap contains an original name", () => {
+    // Intentional: V8 function names are already preserved in
+    // frame.original.functionName, so we do not override them with the
+    // original source name from the sourcemap. This test guards against
+    // accidentally propagating origPos.name into mapped.name.
+    const traceMap = new TraceMap({
+      version: 3,
+      file: "bundle.js",
+      sources: ["resolvers/target.ts"],
+      sourcesContent: ["function throwError() { throw new Error('x'); }"],
+      names: ["throwError"],
+      // Generated line 1 col 0 → source 0 line 1 col 0, name index 0
+      mappings: "AAAAA",
+    });
+
+    const frames: StackFrame[] = [
+      { functionName: "M", file: "file:///bundle.js", line: 1, column: 1 },
+    ];
+
+    const result = mapStackFrames(frames, traceMap);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].mapped).not.toBeNull();
+    expect(result[0].mapped?.name).toBeNull();
+  });
 });
 
 describe("formatMappedError", () => {
