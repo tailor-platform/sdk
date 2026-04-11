@@ -7,7 +7,8 @@ import type {
   TailorDBServiceConfigInput,
   TailorDBTypeParsedSettings,
 } from "./tailordb.generated";
-import type { GqlOperationsConfig } from "@/configure/services/tailordb";
+import type { GqlOperationsConfig, RecordHook } from "@/configure/services/tailordb";
+import type { RecordValidateInput } from "@/configure/types/validation";
 
 // Re-exports from configure layer (needed because parser cannot import from configure)
 export type {
@@ -16,6 +17,7 @@ export type {
   TailorDBField,
   DBFieldMetadata,
   Hook,
+  RecordHook,
   TailorTypePermission,
   TailorTypeGqlPermission,
   GqlOperationsConfig,
@@ -206,6 +208,18 @@ export interface TailorDBTypeMetadata {
       unique?: boolean;
     }
   >;
+  /**
+   * Record-level create/update hooks.
+   * TODO(platform): end-to-end wiring depends on protobuf support for record-level hooks.
+   */
+  // oxlint-disable-next-line no-explicit-any
+  hooks?: RecordHook<any>;
+  /**
+   * Record-level validators.
+   * TODO(platform): end-to-end wiring depends on protobuf support for record-level validators.
+   */
+  // oxlint-disable-next-line no-explicit-any
+  validate?: RecordValidateInput<any>[];
 }
 
 export interface ParsedField {

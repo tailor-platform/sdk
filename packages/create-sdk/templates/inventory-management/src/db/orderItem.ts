@@ -13,22 +13,24 @@ export const orderItem = db
       .uuid()
       .description("ID of the product")
       .relation({ type: "n-1", toward: { type: product } }),
-    quantity: db
-      .int()
-      .description("Quantity of the product")
-      .validate(({ value }) => value >= 0),
-    unitPrice: db
-      .float()
-      .description("Unit price of the product")
-      .validate(({ value }) => value >= 0),
+    quantity: db.int().description("Quantity of the product"),
+    unitPrice: db.float().description("Unit price of the product"),
     totalPrice: db.float({ optional: true }).description("Total price of the order item"),
     ...db.fields.timestamps(),
   })
   .hooks({
-    totalPrice: {
-      create: ({ data }) => (data?.quantity ?? 0) * (data.unitPrice ?? 0),
-      update: ({ data }) => (data?.quantity ?? 0) * (data.unitPrice ?? 0),
-    },
+    create: ({ data }) => ({
+      ...data,
+      totalPrice: data.quantity * data.unitPrice,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }),
+    update: ({ data }) => ({
+      ...data,
+      totalPrice: data.quantity * data.unitPrice,
+      updatedAt: new Date(),
+    }),
   })
+  .validate([({ data }) => data.quantity >= 0, ({ data }) => data.unitPrice >= 0])
   .permission(permissionLoggedIn)
   .gqlPermission(gqlPermissionLoggedIn);

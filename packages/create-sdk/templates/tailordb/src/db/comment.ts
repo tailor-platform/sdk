@@ -5,7 +5,7 @@ import { user } from "./user";
 
 export const comment = db
   .type("Comment", "A comment on a task", {
-    body: db.string().validate([({ value }) => value.length >= 1, "Comment must not be empty"]),
+    body: db.string(),
     taskId: db.uuid().relation({
       type: "n-1",
       toward: { type: task },
@@ -22,5 +22,6 @@ export const comment = db
     ...db.fields.timestamps(),
   })
   .indexes({ fields: ["taskId", "createdAt"], unique: false })
+  .validate([({ data }) => data.body.length >= 1, "Comment must not be empty"])
   .permission(allPermission)
   .gqlPermission(allGqlPermission);

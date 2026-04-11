@@ -1,10 +1,8 @@
 import { describe, it, expectTypeOf, expect } from "vitest";
 import { createTable, timestampFields } from "./createTable";
-import { unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "./permission";
+import { unsafeAllowAllGqlPermission } from "./permission";
 import { db } from "./schema";
-import type { Hook } from "./types";
 import type { output } from "@/configure/types/helpers";
-import type { FieldValidateInput } from "@/configure/types/validation";
 
 describe("createTable basic field type tests", () => {
   it("string field outputs string type correctly", () => {
@@ -185,25 +183,6 @@ describe("createTable runtime metadata tests", () => {
     expect(result.fields.embedding.metadata.vector).toBe(true);
   });
 
-  it("hooks set metadata correctly", () => {
-    const result = createTable("Test", {
-      name: { kind: "string", hooks: { create: () => "default" } },
-    });
-    expect(result.fields.name.metadata.hooks).toBeDefined();
-    expect(result.fields.name.metadata.hooks!.create).toBeDefined();
-  });
-
-  it("validate sets metadata correctly", () => {
-    const result = createTable("Test", {
-      age: {
-        kind: "int",
-        validate: [({ value }) => value >= 0, "Must be non-negative"],
-      },
-    });
-    expect(result.fields.age.metadata.validate).toBeDefined();
-    expect(result.fields.age.metadata.validate!.length).toBe(1);
-  });
-
   it("serial sets metadata correctly", () => {
     const result = createTable("Test", {
       code: { kind: "string", serial: { start: 1, format: "INV-%05d" } },
@@ -373,31 +352,6 @@ describe("createTable array field guards", () => {
     });
     expect(result.fields.tags.metadata.index).toBeUndefined();
     expect(result.fields.tags.metadata.unique).toBeUndefined();
-  });
-});
-
-describe("createTable hooks+serial mutual exclusion", () => {
-  it("hooks and serial cannot be combined on the same descriptor", () => {
-    createTable("Test", {
-      // @ts-expect-error hooks and serial are mutually exclusive
-      code: { kind: "string", hooks: { create: () => "default" }, serial: { start: 1 } },
-    });
-  });
-
-  it("hooks descriptor sets serial: false in defined", () => {
-    const result = createTable("Test", {
-      name: { kind: "string", hooks: { create: () => "default" } },
-    });
-    type NameDefined = (typeof result.fields.name)["_defined"];
-    expectTypeOf<NameDefined["serial"]>().toEqualTypeOf<false>();
-  });
-
-  it("serial descriptor sets hooks: { create: false; update: false } in defined", () => {
-    const result = createTable("Test", {
-      code: { kind: "string", serial: { start: 1 } },
-    });
-    type CodeDefined = (typeof result.fields.code)["_defined"];
-    expectTypeOf<CodeDefined["hooks"]>().toEqualTypeOf<{ create: false; update: false }>();
   });
 });
 
@@ -606,29 +560,6 @@ describe("createTable array+vector/serial guards", () => {
   });
 });
 
-describe("createTable hook type validation", () => {
-  it("hook returning correct type is accepted", () => {
-    const result = createTable("Test", {
-      name: { kind: "string", hooks: { create: () => "default" } },
-    });
-    expect(result.fields.name.metadata.hooks).toBeDefined();
-  });
-
-  it("hook returning wrong type causes type error", () => {
-    createTable("Test", {
-      // @ts-expect-error hook returns number but field expects string
-      name: { kind: "string", hooks: { create: () => 42 } },
-    });
-  });
-
-  it("datetime hook returning Date is accepted", () => {
-    const result = createTable("Test", {
-      createdAt: { kind: "datetime", hooks: { create: () => new Date() } },
-    });
-    expect(result.fields.createdAt.metadata.hooks).toBeDefined();
-  });
-});
-
 describe("createTable unique on many-to-one relation guard", () => {
   it("unique: true on n-1 relation causes type error", () => {
     const Target = createTable("Target", { name: { kind: "string" } });
@@ -738,94 +669,6 @@ describe("createTable id field guard", () => {
   });
 });
 
-describe("createTable descriptor-level hooks value typing", () => {
-  it("string hooks value is typed as string | null", () => {
-    const hooks: Hook<unknown, string> = {
-      create: ({ value }) => {
-        expectTypeOf(value).toEqualTypeOf<string | null>();
-        return value ?? "default";
-      },
-    };
-    createTable("Test", { name: { kind: "string", hooks } });
-  });
-
-  it("int hooks value is typed as number | null", () => {
-    const hooks: Hook<unknown, number> = {
-      create: ({ value }) => {
-        expectTypeOf(value).toEqualTypeOf<number | null>();
-        return value ?? 0;
-      },
-    };
-    createTable("Test", { count: { kind: "int", hooks } });
-  });
-
-  it("datetime hooks value is typed as string | Date | null", () => {
-    const hooks: Hook<unknown, string | Date> = {
-      create: ({ value }) => {
-        expectTypeOf(value).toEqualTypeOf<string | Date | null>();
-        return value ?? new Date();
-      },
-    };
-    createTable("Test", { ts: { kind: "datetime", hooks } });
-  });
-
-  it("enum hooks value is typed as enum union | null", () => {
-    createTable(
-      "Test",
-      { role: { kind: "enum", values: ["ADMIN", "USER"] } },
-      {
-        hooks: {
-          role: {
-            create: ({ value }) => {
-              expectTypeOf(value).toEqualTypeOf<"ADMIN" | "USER" | null>();
-              return value ?? "USER";
-            },
-          },
-        },
-      },
-    );
-  });
-
-  it("array string hooks value is typed as string[] | null", () => {
-    const hooks: Hook<unknown, string[]> = {
-      create: ({ value }) => {
-        expectTypeOf(value).toEqualTypeOf<string[] | null>();
-        return value ?? [];
-      },
-    };
-    const result = createTable("Test", { tags: { kind: "string", array: true, hooks } });
-    expect(result.fields.tags.type).toBe("string");
-  });
-
-  it("array int hooks value is typed as number[] | null", () => {
-    const hooks: Hook<unknown, number[]> = {
-      create: ({ value }) => {
-        expectTypeOf(value).toEqualTypeOf<number[] | null>();
-        return value ?? [];
-      },
-    };
-    createTable("Test", { counts: { kind: "int", array: true, hooks } });
-  });
-});
-
-describe("createTable descriptor-level validate value typing", () => {
-  it("string validate value is typed as string", () => {
-    const validate: FieldValidateInput<string> = ({ value }) => {
-      expectTypeOf(value).toEqualTypeOf<string>();
-      return value.length > 0;
-    };
-    createTable("Test", { name: { kind: "string", validate } });
-  });
-
-  it("int validate value is typed as number", () => {
-    const validate: FieldValidateInput<number> = ({ value }) => {
-      expectTypeOf(value).toEqualTypeOf<number>();
-      return value >= 0;
-    };
-    createTable("Test", { count: { kind: "int", validate } });
-  });
-});
-
 describe("createTable unknown descriptor kind", () => {
   it("throws on unknown kind value", () => {
     expect(() =>
@@ -876,42 +719,10 @@ describe("timestampFields", () => {
       name: { kind: "string" },
       ...timestampFields(),
     });
-    expect(result.fields.createdAt.metadata.hooks).toBeDefined();
-    expect(result.fields.updatedAt.metadata.hooks).toBeDefined();
-  });
-});
-
-describe("createTable type-level hooks/validate exclusion in options", () => {
-  it("field with descriptor-level hooks is excluded from type-level hooks in options", () => {
-    createTable(
-      "Test",
-      {
-        name: { kind: "string", hooks: { create: () => "default" } },
-        email: { kind: "string" },
-      },
-      {
-        hooks: {
-          // @ts-expect-error name already has hooks at descriptor level
-          name: { create: () => "override" },
-        },
-      },
-    );
-  });
-
-  it("field with descriptor-level validate is excluded from type-level validate in options", () => {
-    createTable(
-      "Test",
-      {
-        name: { kind: "string", validate: () => true },
-        email: { kind: "string" },
-      },
-      {
-        validate: {
-          // @ts-expect-error name already has validate at descriptor level
-          name: () => true,
-        },
-      },
-    );
+    expect(result.fields.createdAt).toBeDefined();
+    expect(result.fields.updatedAt).toBeDefined();
+    expect(result.fields.createdAt.metadata.required).toBe(true);
+    expect(result.fields.updatedAt.metadata.required).toBe(false);
   });
 });
 
@@ -954,124 +765,67 @@ describe("createTable type-level options", () => {
   });
 });
 
-describe("createTable inline hook type auto-resolution", () => {
-  it("inline scalar string hook value is typed as string | null", () => {
-    createTable("Test", {
-      name: {
-        kind: "string",
+describe("createTable record-level hooks/validate options", () => {
+  it("options.hooks accepts record-level create/update with full data typing", () => {
+    const result = createTable(
+      "Test",
+      {
+        name: { kind: "string" },
+        score: { kind: "int" },
+      },
+      {
         hooks: {
-          create: ({ value }) => {
-            expectTypeOf(value).toEqualTypeOf<string | null>();
-            return value ?? "default";
+          create: ({ data }) => {
+            expectTypeOf(data).toEqualTypeOf<
+              Readonly<{ id: string; name: string; score: number }>
+            >();
+            return { ...data, score: data.score + 1 };
           },
+          update: ({ data }) => ({ ...data, score: data.score + 1 }),
         },
       },
-    });
+    );
+    expect(result.metadata.hooks).toBeDefined();
+    expect(result.metadata.hooks?.create).toBeDefined();
+    expect(result.metadata.hooks?.update).toBeDefined();
   });
 
-  it("inline array string hook value is typed as string[] | null", () => {
-    createTable("Test", {
-      tags: {
-        kind: "string",
-        array: true,
-        hooks: {
-          create: ({ value }) => {
-            expectTypeOf(value).toEqualTypeOf<string[] | null>();
-            return value ?? [];
-          },
-        },
-      },
-    });
-  });
-
-  it("inline array int hook value is typed as number[] | null", () => {
-    createTable("Test", {
-      counts: {
-        kind: "int",
-        array: true,
-        hooks: {
-          create: ({ value }) => {
-            expectTypeOf(value).toEqualTypeOf<number[] | null>();
-            return value ?? [];
-          },
-        },
-      },
-    });
-  });
-
-  it("type-level hook on scalar string resolves value as string | null", () => {
-    createTable(
+  it("options.validate accepts single function", () => {
+    const result = createTable(
       "Test",
       { name: { kind: "string" } },
       {
-        hooks: {
-          name: {
-            create: ({ value }) => {
-              expectTypeOf(value).toEqualTypeOf<string | null>();
-              return value ?? "default";
-            },
-          },
-        },
-        permission: unsafeAllowAllTypePermission,
+        validate: ({ data }) => data.name.length > 0,
       },
     );
+    expect(result.metadata.validate).toHaveLength(1);
   });
 
-  it("type-level hook on array string resolves value as string[] | null", () => {
-    createTable(
+  it("options.validate accepts single [fn, message] tuple", () => {
+    const result = createTable(
       "Test",
-      { tags: { kind: "string", array: true } },
+      { name: { kind: "string" } },
       {
-        hooks: {
-          tags: {
-            create: ({ value }) => {
-              expectTypeOf(value).toEqualTypeOf<string[] | null>();
-              return value ?? [];
-            },
-          },
-        },
-        permission: unsafeAllowAllTypePermission,
+        validate: [({ data }) => data.name.length > 0, "Name must not be empty"],
       },
     );
+    expect(result.metadata.validate).toHaveLength(1);
   });
 
-  // Known TS limitation: inline enum hooks (descriptor-level) cannot narrow
-  // `value` to the literal union. The generic V in EnumDescriptor<V> is not in
-  // a direct inference position when contextual-typing callbacks inside a mapped
-  // object parameter (TS reverse-inference limitation). The widened V causes a
-  // hook return-type mismatch (string vs literal union), making the descriptor
-  // collapse to `never`.
-  //
-  // Workarounds that correctly resolve enum literal types:
-  //   1. Type-level hooks: options.hooks.<field>  (tested below)
-  //   2. Fluent API: db.enum(...).hooks(...)       (tested below)
-
-  it("fluent enum hook value is typed as literal union | null", () => {
-    const role = db.enum(["ADMIN", "USER"]).hooks({
-      create: ({ value }) => {
-        expectTypeOf(value).toEqualTypeOf<"ADMIN" | "USER" | null>();
-        return value ?? "USER";
-      },
-    });
-    const result = createTable("Test", { role });
-    expect(result.fields.role.type).toBe("enum");
-  });
-
-  it("type-level hook on enum resolves value as literal union | null", () => {
-    createTable(
+  it("options.validate accepts mixed array of fns and tuples", () => {
+    const result = createTable(
       "Test",
-      { role: { kind: "enum", values: ["ADMIN", "USER"] } },
       {
-        hooks: {
-          role: {
-            create: ({ value }) => {
-              expectTypeOf(value).toEqualTypeOf<"ADMIN" | "USER" | null>();
-              return value ?? "USER";
-            },
-          },
-        },
-        permission: unsafeAllowAllTypePermission,
+        name: { kind: "string" },
+        age: { kind: "int" },
+      },
+      {
+        validate: [
+          ({ data }) => data.name.length > 0,
+          [({ data }) => data.age >= 0, "Age must be non-negative"],
+        ],
       },
     );
+    expect(result.metadata.validate).toHaveLength(2);
   });
 });

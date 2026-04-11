@@ -5,12 +5,7 @@ import { user } from "./user";
 
 export const task = db
   .type("Task", "A task with comprehensive features", {
-    title: db
-      .string()
-      .validate(
-        [({ value }) => value.length >= 3, "Title must be at least 3 characters"],
-        [({ value }) => value.length <= 200, "Title must be at most 200 characters"],
-      ),
+    title: db.string(),
     description: db.string({ optional: true }),
     status: db.enum([
       { value: "TODO", description: "Not started" },
@@ -18,12 +13,7 @@ export const task = db
       { value: "DONE", description: "Completed" },
       { value: "CANCELLED", description: "No longer needed" },
     ]),
-    priority: db
-      .int()
-      .validate(
-        [({ value }) => value >= 0, "Priority must be non-negative"],
-        [({ value }) => value <= 4, "Priority must be at most 4"],
-      ),
+    priority: db.int(),
     dueDate: db.datetime({ optional: true }),
     assigneeId: db.uuid({ optional: true }).relation({
       type: "n-1",
@@ -37,22 +27,30 @@ export const task = db
     ...db.fields.timestamps(),
   })
   .hooks({
-    isArchived: {
-      create: () => false,
-    },
+    create: ({ data }) => ({
+      ...data,
+      isArchived: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }),
+    update: ({ data }) => ({
+      ...data,
+      updatedAt: new Date(),
+    }),
   })
   .indexes(
     { fields: ["status", "priority"], unique: false },
     { fields: ["assigneeId", "status"], unique: false, name: "task_assignee_status_idx" },
   )
-  .validate({
-    status: [
-      ({ value, data }) => {
-        const d = data as { dueDate: string | null };
-        return !(value === "DONE" && d.dueDate === null);
-      },
+  .validate([
+    [({ data }) => data.title.length >= 3, "Title must be at least 3 characters"],
+    [({ data }) => data.title.length <= 200, "Title must be at most 200 characters"],
+    [({ data }) => data.priority >= 0, "Priority must be non-negative"],
+    [({ data }) => data.priority <= 4, "Priority must be at most 4"],
+    [
+      ({ data }) => !(data.status === "DONE" && data.dueDate === null),
       "Completed tasks must have a due date",
     ],
-  })
+  ])
   .permission(rolePermission)
   .gqlPermission(roleGqlPermission);

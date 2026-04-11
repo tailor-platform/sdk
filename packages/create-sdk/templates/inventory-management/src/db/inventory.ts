@@ -8,11 +8,9 @@ export const inventory = db
       .uuid()
       .description("ID of the product")
       .relation({ type: "1-1", toward: { type: product } }),
-    quantity: db
-      .int()
-      .description("Quantity of the product in inventory")
-      .validate(({ value }) => value >= 0),
+    quantity: db.int().description("Quantity of the product in inventory"),
     ...db.fields.timestamps(),
   })
+  .validate(({ data }) => data.quantity >= 0)
   .permission(permissionLoggedIn)
   .gqlPermission(gqlPermissionLoggedIn);

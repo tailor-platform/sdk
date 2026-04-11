@@ -30,6 +30,8 @@ export default createResolver({
           created: new Date(),
           version: 1,
         },
+        createdAt: new Date(),
+        updatedAt: new Date(),
       })
       .returning("id")
       .executeTakeFirstOrThrow();

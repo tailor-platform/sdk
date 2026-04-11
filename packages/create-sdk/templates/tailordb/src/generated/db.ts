@@ -31,7 +31,7 @@ export interface Namespace {
         editedAt?: Timestamp | null;
         isInternal: boolean;
       }>;
-      createdAt: Generated<Timestamp>;
+      createdAt: Timestamp;
       updatedAt: Timestamp | null;
     }
 
@@ -44,8 +44,8 @@ export interface Namespace {
       dueDate: Timestamp | null;
       assigneeId: string | null;
       categoryId: string | null;
-      isArchived: Generated<boolean>;
-      createdAt: Generated<Timestamp>;
+      isArchived: boolean;
+      createdAt: Timestamp;
       updatedAt: Timestamp | null;
     }
 
@@ -55,7 +55,7 @@ export interface Namespace {
       email: string;
       role: "ADMIN" | "MEMBER" | "VIEWER";
       bio: string | null;
-      createdAt: Generated<Timestamp>;
+      createdAt: Timestamp;
       updatedAt: Timestamp | null;
     }
   }

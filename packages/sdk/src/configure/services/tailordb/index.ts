@@ -17,6 +17,7 @@ export {
 export type {
   DBFieldMetadata,
   Hook,
+  RecordHook,
   GqlOperationsConfig,
   TailorDBMigrationConfig,
   TailorDBServiceConfig,

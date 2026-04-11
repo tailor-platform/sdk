@@ -1,6 +1,4 @@
 import { type TailorUser } from "@/configure/types";
-import type { output, InferFieldsOutput } from "./helpers";
-import type { NonEmptyObject } from "type-fest";
 
 /**
  * Validation function type
@@ -28,35 +26,22 @@ type FieldValidateConfig<O> = ValidateConfig<O>;
 export type FieldValidateInput<O> = FieldValidateFn<O> | FieldValidateConfig<O>;
 
 /**
- * Base validators type for field collections
- * @template F - Record of fields
- * @template ExcludeKeys - Keys to exclude from validation (default: "id" for TailorDB)
+ * Record-level validation function.
+ * Receives the entire record `data` and returns `true` if valid.
  */
-type ValidatorsBase<
-  // Structural constraint only
-  // oxlint-disable-next-line no-explicit-any
-  F extends Record<string, { _defined: any; _output: any; [key: string]: any }>,
-  ExcludeKeys extends string = "id",
-> = NonEmptyObject<{
-  [K in Exclude<keyof F, ExcludeKeys> as F[K]["_defined"] extends {
-    validate: unknown;
-  }
-    ? never
-    : K]?:
-    | ValidateFn<output<F[K]>, InferFieldsOutput<F>>
-    | ValidateConfig<output<F[K]>, InferFieldsOutput<F>>
-    | (
-        | ValidateFn<output<F[K]>, InferFieldsOutput<F>>
-        | ValidateConfig<output<F[K]>, InferFieldsOutput<F>>
-      )[];
-}>;
+export type RecordValidateFn<TData> = (args: { data: TData; user: TailorUser }) => boolean;
 
 /**
- * Validators type (by default excludes "id" field for TailorDB compatibility)
- * Can be used with both TailorField and TailorDBField
+ * Record-level validation configuration with a custom error message.
  */
-export type Validators<
-  // Structural constraint only
-  // oxlint-disable-next-line no-explicit-any
-  F extends Record<string, { _defined: any; _output: any; [key: string]: any }>,
-> = ValidatorsBase<F, "id">;
+export type RecordValidateConfig<TData> = [RecordValidateFn<TData>, string];
+
+/**
+ * Single record-level validation input: either a function or `[function, message]` tuple.
+ */
+export type RecordValidateInput<TData> = RecordValidateFn<TData> | RecordValidateConfig<TData>;
+
+/**
+ * Record-level validators: single input or an array of inputs.
+ */
+export type RecordValidators<TData> = RecordValidateInput<TData> | RecordValidateInput<TData>[];

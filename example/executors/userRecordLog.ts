@@ -15,6 +15,8 @@ export default async ({ newRecord }: { newRecord: t.infer<typeof user> }) => {
     .values({
       userID: newRecord.id,
       message: `User created: ${record?.name} (${record?.email})`,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     })
     .execute();
 };

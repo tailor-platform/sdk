@@ -89,6 +89,11 @@ function toScriptFunction(value: unknown): ScriptFunction | undefined {
 function collectScriptTargets(type: TailorDBTypeSchemaOutput): ScriptTarget[] {
   const targets: ScriptTarget[] = [];
 
+  // TODO(record-level-hooks): also collect record-level hooks/validators from
+  // `type.metadata.hooks` (create/update) and `type.metadata.validate` once the
+  // parser schema round-trips them. These will be bundled alongside the
+  // field-level scripts so that the precompiled expression is populated for
+  // every executable function defined at the type level.
   const collectFieldTargets = (field: TailorDBTypeSchemaOutput["fields"][string]) => {
     const metadata = field.metadata;
 

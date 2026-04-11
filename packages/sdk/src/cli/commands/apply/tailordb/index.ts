@@ -1615,6 +1615,16 @@ function generateTailorDBTypeManifest(
     ? protoPermission(type.permissions.record)
     : defaultPermission;
 
+  // TODO(record-level-hooks): emit record-level hooks (`type.hooks`) and
+  // validators (`type.validate`) here once the platform protobuf surface for
+  // TailorDBType supports them. Today only field-level hooks/validators are
+  // mapped via `toProtoFieldHooks` / `toProtoFieldValidate`, so the
+  // record-level callbacks collected by the configure layer are silently
+  // dropped during apply. Wiring requires (1) new fields on
+  // `TailorDBTypeSchema`/`TailorDBType_SchemaSchema`, (2) the
+  // `hooks-validate-bundler` populating record-level precompiled expressions,
+  // and (3) the parser schema round-tripping those values.
+
   return {
     name: type.name,
     schema: {

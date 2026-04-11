@@ -17,7 +17,7 @@ export interface Namespace {
       id: Generated<string>;
       name: string;
       description: string | null;
-      createdAt: Generated<Timestamp>;
+      createdAt: Timestamp;
       updatedAt: Timestamp | null;
     }
 
@@ -27,7 +27,7 @@ export interface Namespace {
       email: string;
       phone: string | null;
       address: string | null;
-      createdAt: Generated<Timestamp>;
+      createdAt: Timestamp;
       updatedAt: Timestamp | null;
     }
 
@@ -35,14 +35,14 @@ export interface Namespace {
       id: Generated<string>;
       productId: string;
       quantity: number;
-      createdAt: Generated<Timestamp>;
+      createdAt: Timestamp;
       updatedAt: Timestamp | null;
     }
 
     Notification: {
       id: Generated<string>;
       message: string;
-      createdAt: Generated<Timestamp>;
+      createdAt: Timestamp;
       updatedAt: Timestamp | null;
     }
 
@@ -53,7 +53,7 @@ export interface Namespace {
       orderDate: Timestamp;
       orderType: "PURCHASE" | "SALES";
       contactId: string;
-      createdAt: Generated<Timestamp>;
+      createdAt: Timestamp;
       updatedAt: Timestamp | null;
     }
 
@@ -63,8 +63,8 @@ export interface Namespace {
       productId: string;
       quantity: number;
       unitPrice: number;
-      totalPrice: Generated<number | null>;
-      createdAt: Generated<Timestamp>;
+      totalPrice: number | null;
+      createdAt: Timestamp;
       updatedAt: Timestamp | null;
     }
 
@@ -73,7 +73,7 @@ export interface Namespace {
       name: string;
       description: string | null;
       categoryId: string;
-      createdAt: Generated<Timestamp>;
+      createdAt: Timestamp;
       updatedAt: Timestamp | null;
     }
 
@@ -82,7 +82,7 @@ export interface Namespace {
       name: string;
       email: string;
       role: "MANAGER" | "STAFF";
-      createdAt: Generated<Timestamp>;
+      createdAt: Timestamp;
       updatedAt: Timestamp | null;
     }
   }

@@ -4,7 +4,7 @@ import {
   type AllowedValuesOutput,
   mapAllowedValues,
 } from "@/configure/types/field";
-import { type TailorField, type TailorAnyField } from "@/configure/types/type";
+import { type TailorField } from "@/configure/types/type";
 import {
   type FieldOptions,
   type FieldOutput,
@@ -16,8 +16,7 @@ import { type TailorTypeGqlPermission, type TailorTypePermission } from "./permi
 import {
   type DBFieldMetadata,
   type DefinedDBFieldMetadata,
-  type Hooks,
-  type Hook,
+  type RecordHook,
   type SerialConfig,
   type IndexDef,
   type TypeFeatures,
@@ -25,7 +24,7 @@ import {
 } from "./types";
 import type { InferredAttributeMap, TailorUser } from "@/configure/types";
 import type { Prettify, output, InferFieldsOutput } from "@/configure/types/helpers";
-import type { FieldValidateInput, ValidateConfig, Validators } from "@/configure/types/validation";
+import type { RecordValidateInput, RecordValidators } from "@/configure/types/validation";
 import type { PluginAttachment, PluginConfigs } from "@/types/plugin";
 import type { TailorDBTypeMetadata, RawRelationConfig, RelationType } from "@/types/tailordb";
 import type { RawPermissions } from "@/types/tailordb.generated";
@@ -56,6 +55,16 @@ function isRelationSelfConfig(
   config: RelationConfig<RelationType, TailorDBType> | RelationSelfConfig,
 ): config is RelationSelfConfig {
   return config.toward.type === "self";
+}
+
+/**
+ * Distinguishes a single `[fn, message]` tuple from an array of record validators.
+ * A config tuple has exactly 2 elements where the second is a string.
+ * @param value - Potential validators array or tuple
+ * @returns True if the value is a single `[fn, message]` tuple
+ */
+function isRecordValidateConfig(value: readonly unknown[]): boolean {
+  return value.length === 2 && typeof value[1] === "string" && typeof value[0] === "function";
 }
 
 // Helper alias: DB fields can be arbitrarily nested, so we intentionally keep this loose.
@@ -99,12 +108,26 @@ type FieldParseInternalArgs = {
 
 /**
  * TailorDBField interface representing a database field with extended metadata.
- * Extends TailorField with database-specific features like relations, indexes, and hooks.
+ * Extends TailorField with database-specific features like relations and indexes.
+ *
+ * NOTE: Field-level `hooks` and `validate` have been removed from the public API.
+ * Configure them at the record level via `db.type(...).hooks(...) / .validate(...)`
+ * or via the third `options` argument of `createTable`.
  */
 export interface TailorDBField<Defined extends DefinedDBFieldMetadata, Output> extends Omit<
   TailorField<Defined, Output, DBFieldMetadata, Defined["type"]>,
-  "description" | "validate"
+  "description" | "fields"
 > {
+  /** Nested fields for object-like DB types */
+  readonly fields: Record<string, TailorAnyDBField>;
+
+  /**
+   * Field-level `validate` has been removed from the public TailorDB API.
+   * Configure validation at the record level via
+   * `db.type(...).validate(...)` or the third `options` argument of `createTable`.
+   */
+  validate(this: never, ...args: never[]): never;
+
   /**
    * typeName is not available on TailorDB fields.
    * Use typeName on pipeline fields (t.enum / t.object) instead.
@@ -122,7 +145,7 @@ export interface TailorDBField<Defined extends DefinedDBFieldMetadata, Output> e
   description<CurrentDefined extends Defined>(
     this: CurrentDefined extends { description: unknown }
       ? never
-      : TailorField<CurrentDefined, Output>,
+      : TailorDBField<CurrentDefined, Output>,
     description: string,
   ): TailorDBField<Prettify<CurrentDefined & { description: true }>, Output>;
 
@@ -192,50 +215,6 @@ export interface TailorDBField<Defined extends DefinedDBFieldMetadata, Output> e
         ? TailorDBField<CurrentDefined, Output>
         : never,
   ): TailorDBField<Prettify<CurrentDefined & { vector: true }>, Output>;
-
-  /**
-   * Add hooks for create/update operations on this field.
-   * The hook function receives `{ value, data, user }` and returns the computed value.
-   * @example db.string().hooks({ create: ({ data }) => data.firstName + " " + data.lastName })
-   * @example db.datetime().hooks({ create: () => new Date(), update: () => new Date() })
-   */
-  hooks<CurrentDefined extends Defined, const H extends Hook<unknown, Output>>(
-    this: CurrentDefined extends { hooks: unknown }
-      ? never
-      : CurrentDefined extends { type: "nested" }
-        ? never
-        : TailorDBField<CurrentDefined, Output>,
-    hooks: H,
-  ): TailorDBField<
-    Prettify<
-      CurrentDefined & {
-        hooks?: {
-          create: H extends { create: unknown } ? true : false;
-          update: H extends { update: unknown } ? true : false;
-        };
-        serial: false;
-      }
-    >,
-    Output
-  >;
-
-  /**
-   * Add validation functions to the field.
-   * Accepts a function or a tuple of [function, errorMessage].
-   * Prefer the tuple form for diagnosable errors.
-   * @example
-   * // Function form (default error message):
-   * db.int().validate(({ value }) => value >= 0)
-   * @example
-   * // Tuple form with custom error message (recommended):
-   * db.string().validate([({ value }) => value.length >= 8, "Must be at least 8 characters"])
-   */
-  validate<CurrentDefined extends Defined>(
-    this: CurrentDefined extends { validate: unknown }
-      ? never
-      : TailorDBField<CurrentDefined, Output>,
-    ...validate: FieldValidateInput<Output>[]
-  ): TailorDBField<Prettify<CurrentDefined & { validate: true }>, Output>;
 
   /**
    * Configure serial/auto-increment behavior
@@ -447,24 +426,6 @@ export function createTailorDBField<
         break;
     }
 
-    // Custom validation functions
-    const validateFns = field._metadata.validate;
-    if (validateFns && validateFns.length > 0) {
-      for (const validateInput of validateFns) {
-        const { fn, message } =
-          typeof validateInput === "function"
-            ? { fn: validateInput, message: "Validation failed" }
-            : { fn: validateInput[0], message: validateInput[1] };
-
-        if (!fn({ value, data, user })) {
-          issues.push({
-            message,
-            path: pathArray.length > 0 ? pathArray : undefined,
-          });
-        }
-      }
-    }
-
     return issues;
   }
 
@@ -546,7 +507,7 @@ export function createTailorDBField<
 
   const field: FieldType = {
     type,
-    fields: (fields ?? {}) as Record<string, TailorAnyField>,
+    fields: fields ?? {},
     _defined: undefined as unknown as {
       type: T;
       array: TOptions extends { array: true } ? true : false;
@@ -570,10 +531,15 @@ export function createTailorDBField<
     // oxlint-disable-next-line no-explicit-any
     typeName: ((typeName: string) => cloneWith({ typeName })) as any,
 
-    validate(...validateInputs: FieldValidateInput<FieldOutput<OutputBase, TOptions>>[]) {
+    // Field-level `validate` has been removed. The stub throws to surface the mistake
+    // at runtime even though the `this: never` signature prevents type-level calls.
+    // oxlint-disable-next-line no-explicit-any
+    validate: (() => {
+      throw new Error(
+        "Field-level `.validate()` has been removed. Use `db.type(...).validate(...)` or the third `options` argument of `createTable` instead.",
+      );
       // oxlint-disable-next-line no-explicit-any
-      return cloneWith({ validate: validateInputs }) as any;
-    },
+    }) as any,
 
     parse(args: FieldParseArgs): StandardSchemaV1.Result<FieldOutput<OutputBase, TOptions>> {
       return parseInternal({
@@ -617,11 +583,6 @@ export function createTailorDBField<
     vector() {
       // oxlint-disable-next-line no-explicit-any
       return cloneWith({ vector: true }) as any;
-    },
-
-    hooks(hooks: Hook<unknown, FieldOutput<OutputBase, TOptions>>) {
-      // oxlint-disable-next-line no-explicit-any
-      return cloneWith({ hooks }) as any;
     },
 
     serial(config: SerialConfig) {
@@ -847,29 +808,32 @@ export interface TailorDBType<
   readonly metadata: TailorDBTypeMetadata;
 
   /**
-   * Add hooks for fields at the type level.
-   * Each key is a field name, and the value defines create/update hooks.
+   * Add record-level create/update hooks. Each callback receives `{ data, user }`
+   * (the entire record as a partial) and must return a complete record.
+   * Spread the incoming data (`{ ...data, field: newValue }`) to satisfy required fields.
    * @example
    * db.type("Order", {
    *   total: db.float(),
    *   tax: db.float(),
    *   ...db.fields.timestamps(),
    * }).hooks({
-   *   tax: { create: ({ data }) => data.total * 0.1, update: ({ data }) => data.total * 0.1 },
+   *   create: ({ data }) => ({ ...data, tax: (data.total ?? 0) * 0.1 }),
+   *   update: ({ data }) => ({ ...data, tax: (data.total ?? 0) * 0.1 }),
    * })
    */
-  hooks(hooks: Hooks<Fields>): TailorDBType<Fields, User>;
+  hooks(hooks: RecordHook<InferFieldsOutput<Fields>>): TailorDBType<Fields, User>;
 
   /**
-   * Add validators for fields at the type level.
-   * Each key is a field name, and the value is a validator or array of validators.
-   * Prefer the tuple form [function, message] for diagnosable errors.
+   * Add record-level validators. Each callback receives `{ data, user }` and must
+   * return `true` for a valid record. Use the tuple form `[fn, message]` for
+   * diagnosable error messages.
    * @example
-   * db.type("User", { email: db.string() }).validate({
-   *   email: [({ value }) => value.includes("@"), "Email must contain @"],
-   * })
+   * db.type("User", { email: db.string() }).validate([
+   *   ({ data }) => data.email.includes("@"),
+   *   "Email must contain @",
+   * ])
    */
-  validate(validators: Validators<Fields>): TailorDBType<Fields, User>;
+  validate(validators: RecordValidators<InferFieldsOutput<Fields>>): TailorDBType<Fields, User>;
 
   /**
    * Configure type features
@@ -995,6 +959,8 @@ export function createTailorDBType<
   const _permissions: RawPermissions = {};
   let _files: Record<string, string> = {};
   const _plugins: PluginAttachment[] = [];
+  let _recordHooks: RecordHook<InferFieldsOutput<Fields>> | undefined;
+  let _recordValidators: RecordValidateInput<InferFieldsOutput<Fields>>[] | undefined;
 
   if (options.pluralForm) {
     if (name === options.pluralForm) {
@@ -1030,43 +996,21 @@ export function createTailorDBType<
         permissions: _permissions,
         files: _files,
         ...(Object.keys(indexes).length > 0 && { indexes }),
+        ...(_recordHooks && { hooks: _recordHooks }),
+        ...(_recordValidators && { validate: _recordValidators }),
       };
     },
 
-    hooks(hooks: Hooks<Fields>) {
-      // `Hooks<Fields>` is strongly typed, but `Object.entries()` loses that information.
-      // oxlint-disable-next-line no-explicit-any
-      Object.entries(hooks).forEach(([fieldName, fieldHooks]: [string, any]) => {
-        (this.fields as Record<string, TailorAnyDBField>)[fieldName] =
-          this.fields[fieldName].hooks(fieldHooks);
-      });
+    hooks(hooks: RecordHook<InferFieldsOutput<Fields>>) {
+      _recordHooks = hooks;
       return this;
     },
 
-    validate(validators: Validators<Fields>) {
-      Object.entries(validators).forEach(([fieldName, fieldValidators]) => {
-        const field = this.fields[fieldName] as TailorAnyDBField;
-
-        const validators = fieldValidators as
-          | FieldValidateInput<unknown>
-          | FieldValidateInput<unknown>[];
-
-        const isValidateConfig = (v: unknown): v is ValidateConfig<unknown> => {
-          return Array.isArray(v) && v.length === 2 && typeof v[1] === "string";
-        };
-
-        let updatedField: TailorAnyDBField;
-        if (Array.isArray(validators)) {
-          if (isValidateConfig(validators)) {
-            updatedField = field.validate(validators);
-          } else {
-            updatedField = field.validate(...validators);
-          }
-        } else {
-          updatedField = field.validate(validators);
-        }
-        (this.fields as Record<string, TailorAnyDBField>)[fieldName] = updatedField;
-      });
+    validate(validators: RecordValidators<InferFieldsOutput<Fields>>) {
+      _recordValidators =
+        Array.isArray(validators) && !isRecordValidateConfig(validators)
+          ? (validators as RecordValidateInput<InferFieldsOutput<Fields>>[])
+          : [validators as RecordValidateInput<InferFieldsOutput<Fields>>];
       return this;
     },
 
@@ -1247,22 +1191,22 @@ export const db = {
   object,
   fields: {
     /**
-     * Creates standard timestamp fields (createdAt, updatedAt) with auto-hooks.
-     * createdAt is set on create, updatedAt is set on update.
+     * Creates standard timestamp fields (createdAt, updatedAt).
+     * Users must populate these via record-level hooks on `db.type(...).hooks(...)`
+     * or via the third `options` argument of `createTable`.
      * @returns An object with createdAt and updatedAt fields
      * @example
      * const model = db.type("Model", {
      *   name: db.string(),
      *   ...db.fields.timestamps(),
+     * }).hooks({
+     *   create: ({ data }) => ({ ...data, createdAt: new Date() }),
+     *   update: ({ data }) => ({ ...data, updatedAt: new Date() }),
      * });
      */
     timestamps: () => ({
-      createdAt: datetime()
-        .hooks({ create: () => new Date() })
-        .description("Record creation timestamp"),
-      updatedAt: datetime({ optional: true })
-        .hooks({ update: () => new Date() })
-        .description("Record last update timestamp"),
+      createdAt: datetime().description("Record creation timestamp"),
+      updatedAt: datetime({ optional: true }).description("Record last update timestamp"),
     }),
   },
 };

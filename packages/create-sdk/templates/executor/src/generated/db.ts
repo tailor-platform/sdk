@@ -19,7 +19,7 @@ export interface Namespace {
       entityType: string;
       entityId: string;
       message: string;
-      createdAt: Generated<Timestamp>;
+      createdAt: Timestamp;
       updatedAt: Timestamp | null;
     }
 
@@ -29,7 +29,7 @@ export interface Namespace {
       title: string;
       body: string;
       isRead: boolean;
-      createdAt: Generated<Timestamp>;
+      createdAt: Timestamp;
       updatedAt: Timestamp | null;
     }
 
@@ -38,7 +38,7 @@ export interface Namespace {
       name: string;
       email: string;
       role: "ADMIN" | "MEMBER";
-      createdAt: Generated<Timestamp>;
+      createdAt: Timestamp;
       updatedAt: Timestamp | null;
     }
   }

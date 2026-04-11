@@ -9,22 +9,26 @@ export const customer = db
     country: db.string(),
     postalCode: db.string(),
     address: db.string({ optional: true }),
-    city: db.string({ optional: true }).validate(
-      ({ value }) => (value ? value.length > 1 : true),
-      ({ value }) => (value ? value.length < 100 : true),
-    ),
+    city: db.string({ optional: true }),
     fullAddress: db.string(),
     state: db.string(),
     ...db.fields.timestamps(),
   })
   .hooks({
-    fullAddress: {
-      create: ({ data }) => `${data.postalCode} ${data.address} ${data.city}`,
-      update: ({ data }) => `${data.postalCode} ${data.address} ${data.city}`,
-    },
+    create: ({ data }) => ({
+      ...data,
+      fullAddress: `${data.postalCode} ${data.address ?? ""} ${data.city ?? ""}`,
+      createdAt: new Date(),
+    }),
+    update: ({ data }) => ({
+      ...data,
+      fullAddress: `${data.postalCode} ${data.address ?? ""} ${data.city ?? ""}`,
+      updatedAt: new Date(),
+    }),
   })
-  .validate({
-    name: [({ value }) => value.length > 5, "Name must be longer than 5 characters"],
-  })
+  .validate([
+    [({ data }) => data.name.length > 5, "Name must be longer than 5 characters"],
+    ({ data }) => (data.city ? data.city.length > 1 && data.city.length < 100 : true),
+  ])
   .permission(defaultPermission)
   .gqlPermission(defaultGqlPermission);

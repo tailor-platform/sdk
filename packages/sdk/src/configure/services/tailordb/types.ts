@@ -1,5 +1,5 @@
 import { type TailorUser } from "@/configure/types";
-import { type output, type Prettify } from "@/configure/types/helpers";
+import { type Prettify } from "@/configure/types/helpers";
 import { type DefinedFieldMetadata, type FieldMetadata } from "@/configure/types/types";
 import { type TailorAnyDBField, type TailorDBField } from "./schema";
 export type { TailorDBServiceConfig } from "@/types/tailordb.generated";
@@ -9,7 +9,6 @@ export type {
   TailorDBServiceInput,
 } from "@/types/tailordb";
 import type { GqlOperationsInput } from "@/types/tailordb.generated";
-import type { NonEmptyObject } from "type-fest";
 
 export type SerialConfig<T extends "string" | "integer" = "string" | "integer"> = Prettify<
   {
@@ -73,18 +72,30 @@ export type Hook<TData, TReturn> = {
   update?: HookFn<TReturn | null, TData, TReturn>;
 };
 
-export type Hooks<
-  F extends Record<string, TailorAnyDBField>,
-  TData = { [K in keyof F]: output<F[K]> },
-> = NonEmptyObject<{
-  [K in Exclude<keyof F, "id"> as F[K]["_defined"] extends {
-    hooks: unknown;
-  }
-    ? never
-    : F[K]["_defined"] extends { type: "nested" }
-      ? never
-      : K]?: Hook<TData, output<F[K]>>;
-}>;
+/**
+ * Record-level hook function arguments.
+ * `data` is the full record snapshot at hook time; spread it to satisfy required fields.
+ */
+type RecordHookFnArgs<TData> = {
+  readonly data: Readonly<TData>;
+  readonly user: TailorUser;
+};
+
+/**
+ * Record-level hook function.
+ * Receives the entire record `data` and must return a complete record to persist.
+ * Spread the incoming data (`{ ...data, field: newValue }`) to satisfy required fields.
+ */
+type RecordHookFn<TData> = (args: RecordHookFnArgs<TData>) => TData;
+
+/**
+ * Record-level hooks for create/update operations.
+ * Each callback receives `{ data, user }` and must return a full record matching the type shape.
+ */
+export type RecordHook<TData> = {
+  create?: RecordHookFn<TData>;
+  update?: RecordHookFn<TData>;
+};
 
 export type IndexDef<T extends { fields: Record<PropertyKey, unknown> }> = {
   fields: [keyof T["fields"], keyof T["fields"], ...(keyof T["fields"])[]];

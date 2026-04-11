@@ -27,7 +27,7 @@ export interface Namespace {
       quantity: number;
       totalPrice: number;
       status: "PENDING" | "CONFIRMED" | "SHIPPED" | "DELIVERED" | "CANCELLED";
-      createdAt: Generated<Timestamp>;
+      createdAt: Timestamp;
       updatedAt: Timestamp | null;
     }
 
@@ -38,7 +38,7 @@ export interface Namespace {
       price: number;
       status: "DRAFT" | "ACTIVE" | "DISCONTINUED";
       categoryId: string | null;
-      createdAt: Generated<Timestamp>;
+      createdAt: Timestamp;
       updatedAt: Timestamp | null;
     }
 
@@ -47,7 +47,7 @@ export interface Namespace {
       name: string;
       email: string;
       role: "ADMIN" | "MEMBER" | "VIEWER";
-      createdAt: Generated<Timestamp>;
+      createdAt: Timestamp;
       updatedAt: Timestamp | null;
     }
   }

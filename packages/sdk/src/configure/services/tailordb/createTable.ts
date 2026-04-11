@@ -8,11 +8,11 @@ import {
   createTailorDBType,
 } from "./schema";
 import type { TailorTypeGqlPermission, TailorTypePermission } from "./permission";
-import type { Hook, Hooks, SerialConfig, IndexDef, TypeFeatures } from "./types";
+import type { RecordHook, SerialConfig, IndexDef, TypeFeatures } from "./types";
 import type { InferredAttributeMap } from "@/configure/types";
 import type { InferFieldsOutput, output } from "@/configure/types/helpers";
 import type { TailorFieldType, TailorToTs } from "@/configure/types/types";
-import type { FieldValidateInput, ValidateConfig, Validators } from "@/configure/types/validation";
+import type { RecordValidators } from "@/configure/types/validation";
 import type { PluginAttachment } from "@/types/plugin";
 import type { RelationType } from "@/types/tailordb";
 
@@ -43,44 +43,33 @@ type KindToTsType = {
     : K]: TailorToTs[KindToFieldType[K]];
 };
 
-// Validate callbacks receive the base scalar type (e.g. `string`, `number`)
-// regardless of array/optional flags. Inline validate lambdas may lose
-// contextual typing due to the TS union `FieldValidateInput<O> |
-// FieldValidateInput<O>[]`; hoist the validator if needed.
-type FieldOptions<O = unknown> = {
+// Field-level options.
+// NOTE: field-level `hooks` and `validate` have been removed. Configure them at
+// record level via the third `options` argument of `createTable` instead.
+type FieldOptions = {
   unique?: boolean;
   index?: boolean;
-  validate?: FieldValidateInput<O> | FieldValidateInput<O>[];
 };
 
-// Hook callbacks receive the correct output type: base scalar for scalar fields,
-// base scalar[] for array fields. The `optional` modifier does not affect hook
-// typing because hooks always receive `TReturn | null`.
-// Discriminated by `array: true` vs `array?: false` so TypeScript narrows to
-// the correct hook type per field.
-type ScalarOrArrayHooks<O> =
-  | { array?: false; hooks?: Hook<unknown, O> }
-  | { array: true; hooks?: Hook<unknown, O[]> };
-
 type StringDescriptor = CommonFieldOptions &
-  FieldOptions<string> &
-  ScalarOrArrayHooks<string> & {
+  FieldOptions & {
     kind: "string";
+    array?: boolean;
     vector?: boolean;
     serial?: SerialConfig<"string">;
   };
 
 type IntDescriptor = CommonFieldOptions &
-  FieldOptions<number> &
-  ScalarOrArrayHooks<number> & {
+  FieldOptions & {
     kind: "int";
+    array?: boolean;
     serial?: SerialConfig<"integer">;
   };
 
 type SimpleDescriptor<K extends keyof KindToTsType> = CommonFieldOptions &
-  FieldOptions<KindToTsType[K]> &
-  ScalarOrArrayHooks<KindToTsType[K]> & {
+  FieldOptions & {
     kind: K;
+    array?: boolean;
   };
 
 type FloatDescriptor = SimpleDescriptor<"float">;
@@ -89,16 +78,16 @@ type DateDescriptor = SimpleDescriptor<"date">;
 type DatetimeDescriptor = SimpleDescriptor<"datetime">;
 type TimeDescriptor = SimpleDescriptor<"time">;
 type DecimalDescriptor = CommonFieldOptions &
-  FieldOptions<string> &
-  ScalarOrArrayHooks<string> & {
+  FieldOptions & {
     kind: "decimal";
+    array?: boolean;
     scale?: number;
   };
 
 type UuidDescriptor = CommonFieldOptions &
-  FieldOptions<string> &
-  ScalarOrArrayHooks<string> & {
+  FieldOptions & {
     kind: "uuid";
+    array?: boolean;
     relation?: {
       type: RelationType;
       toward: {
@@ -113,14 +102,14 @@ type UuidDescriptor = CommonFieldOptions &
   };
 
 type EnumDescriptor<V extends AllowedValues = AllowedValues> = CommonFieldOptions &
-  FieldOptions<AllowedValuesOutput<V>> &
-  ScalarOrArrayHooks<AllowedValuesOutput<V>> & {
+  FieldOptions & {
     kind: "enum";
+    array?: boolean;
     values: V;
     typeName?: string;
   };
 
-// Nested object sub-fields bypass top-level constraint types (RejectArrayCombinations, ValidateHookTypes, etc.)
+// Nested object sub-fields bypass top-level constraint types (RejectArrayCombinations, etc.)
 // because recursive mapped-type constraints would add significant complexity. This is a shared gap
 // with the fluent API (db.object() sub-fields are also unconstrained). Invalid nested combinations
 // are caught at deployment time by the platform.
@@ -174,23 +163,11 @@ type DescriptorOutput<D extends FieldDescriptor> = ApplyArrayAndOptional<
 type DescriptorDefined<D extends FieldDescriptor> = {
   type: D["kind"] extends keyof KindToFieldType ? KindToFieldType[D["kind"]] : TailorFieldType;
   array: D extends { array: true } ? true : false;
-} & (D extends { hooks: infer H }
-  ? H extends object
-    ? {
-        hooks: {
-          create: H extends { create: unknown } ? true : false;
-          update: H extends { update: unknown } ? true : false;
-        };
-        serial: false;
-      }
-    : unknown
-  : unknown) &
-  (D extends { validate: object } ? { validate: true } : unknown) &
-  (D extends { unique: true }
-    ? { unique: true; index: true }
-    : D extends { index: true }
-      ? { index: true }
-      : unknown) &
+} & (D extends { unique: true }
+  ? { unique: true; index: true }
+  : D extends { index: true }
+    ? { index: true }
+    : unknown) &
   (D extends { serial: object }
     ? { serial: true; hooks: { create: false; update: false } }
     : unknown) &
@@ -222,21 +199,6 @@ type RejectNestedSubFields<F extends Record<string, FieldEntry>> = {
     : F[K];
 };
 
-// Computes the hook output type from a descriptor's own properties (kind,
-// array), without intersecting with the FieldDescriptor union. This avoids
-// distributive type expansion that would produce a union of base types.
-type DescriptorHookOutput<D> = D extends { array: true }
-  ? D extends { kind: "enum"; values: infer V extends AllowedValues }
-    ? AllowedValuesOutput<V>[]
-    : D extends { kind: infer K extends keyof KindToTsType }
-      ? KindToTsType[K][]
-      : unknown[]
-  : D extends { kind: "enum"; values: infer V extends AllowedValues }
-    ? AllowedValuesOutput<V>
-    : D extends { kind: infer K extends keyof KindToTsType }
-      ? KindToTsType[K]
-      : unknown;
-
 // All descriptor-level validations in a single mapped type to minimize type
 // evaluation passes (avoids combinatorial explosion with union descriptors).
 type ValidatedDescriptors<D extends Record<string, FieldEntry>> = D & {
@@ -246,40 +208,30 @@ type ValidatedDescriptors<D extends Record<string, FieldEntry>> = D & {
     | { array: true; vector: true }
     | { array: true; serial: object }
     ? never
-    : // 2. RejectHooksWithSerial: hooks + serial are mutually exclusive
-      D[K] extends { kind: string; hooks: object; serial: object }
-      ? never
-      : // 3. RejectUniqueOnManyRelation: unique only allowed on oneToOne uuid relations
-        D[K] extends { kind: "uuid"; unique: true; relation: { type: infer T } }
-        ? T extends "oneToOne" | "1-1"
-          ? D[K]
-          : never
-        : // 4. RejectNestedInObject: no nested objects inside object fields
-          D[K] extends { kind: "object"; fields: infer F }
-          ? F extends Record<string, FieldEntry>
-            ? D[K] & { fields: RejectNestedSubFields<F> }
-            : D[K]
-          : // 5. ValidateHookTypes: hook return type matches field output type.
-            //    Infer H from D[K] directly (not via FieldDescriptor intersection)
-            //    to avoid distributive type expansion from ScalarOrArray variants.
-            D[K] extends { kind: string; hooks: infer H }
-            ? H extends Hook<unknown, DescriptorHookOutput<D[K]>>
-              ? D[K]
-              : never
-            : // 6. ValidateRelationKeys: relation key must exist in target type
-              D[K] extends { kind: "uuid"; relation: { toward: { type: infer T; key: infer Key } } }
-              ? Key extends string
-                ? T extends TailorAnyDBType
-                  ? Key extends (keyof T["fields"] & string) | "id"
-                    ? D[K]
-                    : never
-                  : T extends "self"
-                    ? Key extends (keyof D & string) | "id"
-                      ? D[K]
-                      : never
-                    : D[K]
+    : // 2. RejectUniqueOnManyRelation: unique only allowed on oneToOne uuid relations
+      D[K] extends { kind: "uuid"; unique: true; relation: { type: infer T } }
+      ? T extends "oneToOne" | "1-1"
+        ? D[K]
+        : never
+      : // 3. RejectNestedInObject: no nested objects inside object fields
+        D[K] extends { kind: "object"; fields: infer F }
+        ? F extends Record<string, FieldEntry>
+          ? D[K] & { fields: RejectNestedSubFields<F> }
+          : D[K]
+        : // 4. ValidateRelationKeys: relation key must exist in target type
+          D[K] extends { kind: "uuid"; relation: { toward: { type: infer T; key: infer Key } } }
+          ? Key extends string
+            ? T extends TailorAnyDBType
+              ? Key extends (keyof T["fields"] & string) | "id"
+                ? D[K]
+                : never
+              : T extends "self"
+                ? Key extends (keyof D & string) | "id"
+                  ? D[K]
+                  : never
                 : D[K]
-              : D[K];
+            : D[K]
+          : D[K];
 };
 
 type CreateTableOptions<
@@ -295,8 +247,18 @@ type CreateTableOptions<
   permission?: TailorTypePermission<InferredAttributeMap, output<TailorDBType<Fields>>>;
   gqlPermission?: TailorTypeGqlPermission;
   plugins?: PluginAttachment[];
-  hooks?: Hooks<Fields>;
-  validate?: Validators<Fields>;
+  /**
+   * Record-level create/update hooks. Each callback receives `{ data, user }`
+   * (the entire record as a partial) and must return a complete record.
+   * Use `{ ...data, field: newValue }` to satisfy required fields.
+   */
+  hooks?: RecordHook<InferFieldsOutput<Fields>>;
+  /**
+   * Record-level validators. Each callback receives `{ data, user }` and must
+   * return `true` for a valid record. Use the tuple form `[fn, message]` for
+   * diagnosable error messages.
+   */
+  validate?: RecordValidators<InferFieldsOutput<Fields>>;
 };
 
 function isPassthroughField(entry: FieldEntry): entry is TailorAnyDBField {
@@ -321,10 +283,6 @@ function resolveFieldMap(entries: Record<string, FieldEntry>): Record<string, Ta
   return Object.fromEntries(
     Object.entries(entries).map(([key, entry]) => [key, resolveField(entry)]),
   );
-}
-
-function isValidateConfig(v: unknown): v is ValidateConfig<unknown> {
-  return Array.isArray(v) && v.length === 2 && typeof v[1] === "string";
 }
 
 function buildField(descriptor: FieldDescriptor): TailorAnyDBField {
@@ -357,7 +315,7 @@ function buildField(descriptor: FieldDescriptor): TailorAnyDBField {
     field = (field as any).typeName(descriptor.typeName);
   }
 
-  // Object descriptors only support description and typeName; skip indexable/hookable options.
+  // Object descriptors only support description and typeName; skip indexable options.
   if (descriptor.kind === "object") {
     return field;
   }
@@ -371,21 +329,6 @@ function buildField(descriptor: FieldDescriptor): TailorAnyDBField {
       field = field.unique();
     } else if (descriptor.index === true) {
       field = field.index();
-    }
-  }
-
-  if (descriptor.hooks !== undefined) {
-    // oxlint-disable-next-line no-explicit-any -- union of typed Hook<unknown, O> variants narrows to specific O; widen to any for TailorAnyDBField
-    field = field.hooks(descriptor.hooks as any);
-  }
-
-  if (descriptor.validate !== undefined) {
-    if (Array.isArray(descriptor.validate) && !isValidateConfig(descriptor.validate)) {
-      // oxlint-disable-next-line no-explicit-any -- union of typed FieldValidateInput<O> variants; widen to any for TailorAnyDBField
-      field = field.validate(...(descriptor.validate as any));
-    } else {
-      // oxlint-disable-next-line no-explicit-any -- union of typed FieldValidateInput<O> variants; widen to any for TailorAnyDBField
-      field = field.validate(descriptor.validate as any);
     }
   }
 
@@ -508,26 +451,34 @@ export function createTable<const D extends { id?: never } & Record<string, Fiel
 }
 
 /**
- * Returns standard timestamp fields (createdAt, updatedAt) with auto-hooks.
- * createdAt is set on create, updatedAt is set on update.
+ * Returns standard timestamp field descriptors (createdAt, updatedAt).
+ * Hooks for auto-populating these timestamps must be configured at the record
+ * level via `options.hooks` (see `createTable`).
  * @returns An object with createdAt and updatedAt field descriptors
  * @example
- * const model = createTable("Model", {
- *   name: { kind: "string" },
- *   ...timestampFields(),
- * });
+ * const model = createTable(
+ *   "Model",
+ *   {
+ *     name: { kind: "string" },
+ *     ...timestampFields(),
+ *   },
+ *   {
+ *     hooks: {
+ *       create: ({ data }) => ({ ...data, createdAt: new Date() }),
+ *       update: ({ data }) => ({ ...data, updatedAt: new Date() }),
+ *     },
+ *   },
+ * );
  */
 export function timestampFields() {
   return {
     createdAt: {
       kind: "datetime",
-      hooks: { create: () => new Date() },
       description: "Record creation timestamp",
     },
     updatedAt: {
       kind: "datetime",
       optional: true,
-      hooks: { update: () => new Date() },
       description: "Record last update timestamp",
     },
   } as const satisfies Record<string, FieldDescriptor>;

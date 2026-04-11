@@ -266,6 +266,14 @@ export const TailorDBTypeSchema = z.object({
         }),
       )
       .optional(),
+    // TODO(record-level-hooks): accept record-level `hooks` (create/update)
+    // and `validate` (array of functions or `[fn, message]` tuples) here once
+    // the platform protobuf supports record-level hooks. Until then, these
+    // properties are dropped during parsing so the existing apply pipeline
+    // stays compatible. The configure layer (`db.type(...).hooks(...)` and
+    // `.validate(...)`) and the `createTable` options counterparts already
+    // collect them into TailorDBType metadata; only the parser/bundler/apply
+    // wiring is missing.
   }),
 });
 

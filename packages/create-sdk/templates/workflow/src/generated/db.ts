@@ -18,7 +18,7 @@ export interface Namespace {
       customerName: string;
       amount: number;
       status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
-      createdAt: Generated<Timestamp>;
+      createdAt: Timestamp;
       updatedAt: Timestamp | null;
     }
 
@@ -27,7 +27,7 @@ export interface Namespace {
       name: string;
       email: string;
       age: number;
-      createdAt: Generated<Timestamp>;
+      createdAt: Timestamp;
       updatedAt: Timestamp | null;
     }
   }
