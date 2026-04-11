@@ -9,7 +9,7 @@
  * output with file paths and code snippets.
  */
 
-import { TraceMap, generatedPositionFor } from "@jridgewell/trace-mapping";
+import { TraceMap, generatedPositionFor, originalPositionFor } from "@jridgewell/trace-mapping";
 import * as path from "pathe";
 import { styles } from "@/cli/shared/logger";
 
@@ -152,17 +152,35 @@ export function mapStackFrames(
           column: frame.column - 1, // V8 is 1-based, trace-mapping is 0-based
         });
 
-        if (genPos.line != null) {
-          return {
-            original: frame,
-            mapped: {
-              source,
-              line: frame.line,
-              column: frame.column,
-              name: null,
-            },
-          };
+        if (genPos.line == null) continue;
+
+        // Round-trip validation: generatedPositionFor uses
+        // GREATEST_LOWER_BOUND bias by default, so it may return a
+        // near-match when the queried source has a mapping on the target
+        // line at an earlier column. Verify the generated position maps
+        // back to the exact (source, line, column) we queried before
+        // accepting the match; otherwise try the next source.
+        const origPos = originalPositionFor(traceMap, {
+          line: genPos.line,
+          column: genPos.column,
+        });
+        if (
+          origPos.source !== source ||
+          origPos.line !== frame.line ||
+          origPos.column !== frame.column - 1
+        ) {
+          continue;
         }
+
+        return {
+          original: frame,
+          mapped: {
+            source,
+            line: frame.line,
+            column: frame.column,
+            name: null,
+          },
+        };
       }
 
       return { original: frame, mapped: null };

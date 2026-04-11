@@ -263,6 +263,47 @@ describe("mapStackFrames", () => {
     expect(result).toHaveLength(1);
     expect(result[0].mapped).toBeNull();
   });
+
+  test("identifies correct source in multi-source bundles via round-trip validation", () => {
+    // generatedPositionFor uses GREATEST_LOWER_BOUND bias by default, so it
+    // returns a match whenever the queried source has any mapping on the
+    // target line at an earlier column. Here utils/common.ts has an
+    // unrelated mapping on line 10 at column 0, and reverse iteration would
+    // hit it first for a frame at (line 10, column 4). Without round-trip
+    // validation, the frame is incorrectly attributed to utils/common.ts
+    // even though the actual throw site is resolvers/add.ts line 10 col 4.
+    const traceMap = new TraceMap({
+      version: 3,
+      file: "bundle.js",
+      sources: ["resolvers/add.ts", "utils/common.ts"],
+      sourcesContent: [
+        ["", "", "", "", "", "", "", "", "", '   throw new Error("bug");'].join("\n"),
+        "export const y = 2;",
+      ],
+      names: [],
+      // Generated line 1:
+      //   col 0  ← resolvers/add.ts line 10 col 3 (actual throw)
+      //   col 14 ← utils/common.ts  line 10 col 0 (unrelated same-line mapping)
+      mappings: [
+        [
+          [0, 0, 9, 3],
+          [14, 1, 9, 0],
+        ],
+      ],
+    });
+
+    const frames: StackFrame[] = [
+      { functionName: "add", file: "file:///bundle.js", line: 10, column: 4 },
+    ];
+
+    const result = mapStackFrames(frames, traceMap);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].mapped).not.toBeNull();
+    expect(result[0].mapped?.source).toBe("resolvers/add.ts");
+    expect(result[0].mapped?.line).toBe(10);
+    expect(result[0].mapped?.column).toBe(4);
+  });
 });
 
 describe("formatMappedError", () => {
