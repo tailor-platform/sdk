@@ -1,4 +1,5 @@
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
+import { FunctionExecution_Type } from "@tailor-proto/tailor/v1/function_resource_pb";
 import { describe, test, expect, vi } from "vitest";
 import { downloadFunctionScript, scriptNameToRegistryName } from "./function-script-download";
 import type { OperatorClient } from "@/cli/shared/client";
@@ -132,40 +133,86 @@ describe("downloadFunctionScript", () => {
 
 describe("scriptNameToRegistryName", () => {
   test("translates resolver scriptName to registry name", () => {
-    expect(scriptNameToRegistryName("my-resolver.throwError.body.js")).toBe(
-      "resolver--my-resolver--throwError",
-    );
+    expect(
+      scriptNameToRegistryName("my-resolver.throwError.body.js", FunctionExecution_Type.STANDARD),
+    ).toBe("resolver--my-resolver--throwError");
   });
 
   test("preserves dots in resolver name (non-greedy namespace)", () => {
     // namespace must not contain dots; resolver name may contain dots
-    expect(scriptNameToRegistryName("ns.foo.bar.body.js")).toBe("resolver--ns--foo.bar");
-  });
-
-  test("translates executor scriptName to registry name", () => {
-    expect(scriptNameToRegistryName("user-changed.operation.js")).toBe("executor--user-changed");
-  });
-
-  test("translates auth hook scriptName to registry name", () => {
-    expect(scriptNameToRegistryName("my-auth.before-login.hook.js")).toBe(
-      "auth-hook--my-auth--before-login",
+    expect(scriptNameToRegistryName("ns.foo.bar.body.js", FunctionExecution_Type.STANDARD)).toBe(
+      "resolver--ns--foo.bar",
     );
   });
 
-  test("translates workflow job scriptName (no extension) to registry name", () => {
-    expect(scriptNameToRegistryName("validate-order")).toBe("workflow--validate-order");
+  test("translates executor scriptName to registry name", () => {
+    expect(
+      scriptNameToRegistryName("user-changed.operation.js", FunctionExecution_Type.STANDARD),
+    ).toBe("executor--user-changed");
   });
 
-  test("returns null for ad-hoc test-run scripts", () => {
-    expect(scriptNameToRegistryName("test-run--throwError.js")).toBeNull();
+  test("translates auth hook scriptName to registry name", () => {
+    expect(
+      scriptNameToRegistryName("my-auth.before-login.hook.js", FunctionExecution_Type.STANDARD),
+    ).toBe("auth-hook--my-auth--before-login");
   });
 
-  test("returns null for seed scripts", () => {
-    expect(scriptNameToRegistryName("seed-tailordb.ts")).toBeNull();
+  test("translates workflow job scriptName (no dots) under JOB type", () => {
+    expect(scriptNameToRegistryName("validate-order", FunctionExecution_Type.JOB)).toBe(
+      "workflow--validate-order",
+    );
   });
 
-  test("returns null for query scripts", () => {
-    expect(scriptNameToRegistryName("query-gql.js")).toBeNull();
-    expect(scriptNameToRegistryName("query-sql-tailordb.js")).toBeNull();
+  test("translates workflow job scriptName that contains dots under JOB type", () => {
+    // WorkflowJobSchema.name is an unconstrained string, so job names
+    // may legitimately contain dots. The JOB type discriminator must
+    // take precedence over any extension-based heuristic.
+    expect(scriptNameToRegistryName("billing.retry.v2", FunctionExecution_Type.JOB)).toBe(
+      "workflow--billing.retry.v2",
+    );
+    expect(
+      scriptNameToRegistryName("looks-like-a-resolver.body.js", FunctionExecution_Type.JOB),
+    ).toBe("workflow--looks-like-a-resolver.body.js");
+  });
+
+  test("returns null for ad-hoc test-run scripts under STANDARD type", () => {
+    expect(
+      scriptNameToRegistryName("test-run--throwError.js", FunctionExecution_Type.STANDARD),
+    ).toBeNull();
+  });
+
+  test("returns null for seed scripts under STANDARD type", () => {
+    expect(
+      scriptNameToRegistryName("seed-tailordb.ts", FunctionExecution_Type.STANDARD),
+    ).toBeNull();
+  });
+
+  test("returns null for query scripts under STANDARD type", () => {
+    expect(scriptNameToRegistryName("query-gql.js", FunctionExecution_Type.STANDARD)).toBeNull();
+    expect(
+      scriptNameToRegistryName("query-sql-tailordb.js", FunctionExecution_Type.STANDARD),
+    ).toBeNull();
+  });
+
+  test("falls back to extension parsing for UNSPECIFIED type (legacy servers)", () => {
+    // Older servers may leave `type` as the proto-default UNSPECIFIED.
+    // Continue using the filename suffix heuristic so registered
+    // resolvers/executors/auth-hooks still map when type is missing.
+    expect(
+      scriptNameToRegistryName("my-resolver.fn.body.js", FunctionExecution_Type.UNSPECIFIED),
+    ).toBe("resolver--my-resolver--fn");
+    expect(
+      scriptNameToRegistryName("user-changed.operation.js", FunctionExecution_Type.UNSPECIFIED),
+    ).toBe("executor--user-changed");
+  });
+
+  test("falls back to workflow for bare names under UNSPECIFIED (legacy servers)", () => {
+    // Without a reliable `type`, we can only assume bare-name
+    // scriptNames are workflow jobs. Dotted job names cannot be
+    // disambiguated from resolver/executor/seed scripts in this
+    // branch and remain unsupported for legacy servers.
+    expect(scriptNameToRegistryName("validate-order", FunctionExecution_Type.UNSPECIFIED)).toBe(
+      "workflow--validate-order",
+    );
   });
 });

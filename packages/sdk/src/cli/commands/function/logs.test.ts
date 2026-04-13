@@ -1,4 +1,5 @@
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
+import { FunctionExecution_Type } from "@tailor-proto/tailor/v1/function_resource_pb";
 import { describe, test, expect, vi } from "vitest";
 import {
   composeExecutionErrorString,
@@ -192,11 +193,33 @@ describe("downloadScriptForMapping", () => {
       client,
       workspaceId: "ws-1",
       scriptName: "test-run--throwError.js",
+      executionType: FunctionExecution_Type.STANDARD,
       executionStartedAt: new Date("2024-01-01T00:00:00Z"),
     });
 
     expect(result).toBeNull();
     expect(client.downloadFunctionRegistryScript).not.toHaveBeenCalled();
+  });
+
+  test("downloads workflow job script whose name contains dots under JOB type", async () => {
+    const client = makeDownloadClient([new TextEncoder().encode("job-code")], {
+      updatedAt: new Date("2024-01-01T00:00:00Z"),
+    });
+
+    const result = await downloadScriptForMapping({
+      client,
+      workspaceId: "ws-1",
+      scriptName: "billing.retry.v2",
+      executionType: FunctionExecution_Type.JOB,
+      executionStartedAt: new Date("2024-02-01T00:00:00Z"),
+    });
+
+    expect(result).toBe("job-code");
+    expect(client.downloadFunctionRegistryScript).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+      name: "workflow--billing.retry.v2",
+      contentHash: undefined,
+    });
   });
 
   test("returns code when registry updatedAt is not newer than executionStartedAt", async () => {
@@ -208,6 +231,7 @@ describe("downloadScriptForMapping", () => {
       client,
       workspaceId: "ws-1",
       scriptName: "my-resolver.throwError.body.js",
+      executionType: FunctionExecution_Type.STANDARD,
       executionStartedAt: new Date("2024-02-01T00:00:00Z"),
     });
 
@@ -226,6 +250,7 @@ describe("downloadScriptForMapping", () => {
       client,
       workspaceId: "ws-1",
       scriptName: "my-resolver.throwError.body.js",
+      executionType: FunctionExecution_Type.STANDARD,
       executionStartedAt: new Date("2024-02-01T00:00:00Z"),
     });
 
@@ -241,6 +266,7 @@ describe("downloadScriptForMapping", () => {
       client,
       workspaceId: "ws-1",
       scriptName: "my-resolver.throwError.body.js",
+      executionType: FunctionExecution_Type.STANDARD,
       executionStartedAt: null,
     });
 
@@ -254,6 +280,7 @@ describe("downloadScriptForMapping", () => {
       client,
       workspaceId: "ws-1",
       scriptName: "my-resolver.throwError.body.js",
+      executionType: FunctionExecution_Type.STANDARD,
       executionStartedAt: new Date("2024-02-01T00:00:00Z"),
     });
 
@@ -267,6 +294,7 @@ describe("downloadScriptForMapping", () => {
       client,
       workspaceId: "ws-1",
       scriptName: "my-resolver.throwError.body.js",
+      executionType: FunctionExecution_Type.STANDARD,
       executionStartedAt: new Date("2024-02-01T00:00:00Z"),
     });
 

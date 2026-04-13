@@ -6,6 +6,7 @@
  */
 
 import { timestampDate } from "@bufbuild/protobuf/wkt";
+import { FunctionExecution_Type } from "@tailor-proto/tailor/v1/function_resource_pb";
 import type { OperatorClient } from "@/cli/shared/client";
 
 /**
@@ -13,19 +14,35 @@ import type { OperatorClient } from "@/cli/shared/client";
  * function registry name used by `downloadFunctionRegistryScript`.
  *
  * The platform records executions under a script-name format that
- * differs from the registry name. Known mappings:
+ * differs from the registry name. The execution `type` is used as the
+ * primary discriminator because workflow job names are unconstrained
+ * strings (`WorkflowJobSchema.name: z.string()`) and may contain dots
+ * that collide with the resolver / executor / hook filename suffixes.
  *
- *   resolver:     `<namespace>.<name>.body.js`     -> `resolver--<namespace>--<name>`
- *   executor:     `<name>.operation.js`            -> `executor--<name>`
- *   workflow job: `<name>` (no extension)          -> `workflow--<name>`
- *   auth hook:    `<authName>.<hookPoint>.hook.js` -> `auth-hook--<authName>--<hookPoint>`
+ *   JOB:                        `<jobName>`                       -> `workflow--<jobName>`
+ *   STANDARD resolver:          `<namespace>.<name>.body.js`      -> `resolver--<namespace>--<name>`
+ *   STANDARD executor:          `<name>.operation.js`             -> `executor--<name>`
+ *   STANDARD auth hook:         `<authName>.<hookPoint>.hook.js`  -> `auth-hook--<authName>--<hookPoint>`
  *
- * Returns `null` for unrecognized formats (including ad-hoc test-run
- * scripts that are not stored in the registry).
+ * For older servers that leave `type` as `UNSPECIFIED`, the same
+ * filename-suffix heuristic is applied, with a bare-name fallback to
+ * `workflow--<name>` for backward compatibility. Returns `null` for
+ * unrecognized formats (ad-hoc test-run scripts, seed scripts, etc.
+ * that are not stored in the registry).
  * @param scriptName - The `scriptName` field from a `FunctionExecution`
+ * @param executionType - The `type` field from a `FunctionExecution`
  * @returns The function registry name, or null when no mapping applies
  */
-export function scriptNameToRegistryName(scriptName: string): string | null {
+export function scriptNameToRegistryName(
+  scriptName: string,
+  executionType: FunctionExecution_Type,
+): string | null {
+  // JOB: scriptName IS the workflow job name. Job names are
+  // unconstrained, so dots must be preserved.
+  if (executionType === FunctionExecution_Type.JOB) {
+    return `workflow--${scriptName}`;
+  }
+
   // Resolver: `<namespace>.<name>.body.js`
   // Use a non-greedy match for namespace so a name containing dots is
   // grouped into `name`, mirroring how resolvers are registered.
@@ -49,8 +66,11 @@ export function scriptNameToRegistryName(scriptName: string): string | null {
     return `auth-hook--${authName}--${hookPoint}`;
   }
 
-  // Workflow job: bare name (no extension).
-  if (!scriptName.includes(".")) {
+  // Legacy (UNSPECIFIED) servers may not populate `type`. Fall back to
+  // the historical bare-name heuristic for simple workflow job names.
+  // Dotted job names cannot be disambiguated here and are left
+  // unmapped; callers should upgrade the server for full coverage.
+  if (executionType === FunctionExecution_Type.UNSPECIFIED && !scriptName.includes(".")) {
     return `workflow--${scriptName}`;
   }
 

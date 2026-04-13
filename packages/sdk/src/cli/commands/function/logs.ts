@@ -214,6 +214,12 @@ interface DownloadScriptForMappingOptions {
   /** FunctionExecution.scriptName (not the function registry name) */
   scriptName: string;
   /**
+   * FunctionExecution.type. Used as the discriminator for the registry
+   * name translation so that workflow job names containing dots are
+   * not misread as resolver / seed scripts.
+   */
+  executionType: FunctionExecution_Type;
+  /**
    * When the execution started. Used to detect redeploys that happened
    * after the execution: if the current registry entry's `updatedAt`
    * is strictly newer, the downloaded bundle may differ from what was
@@ -243,8 +249,8 @@ interface DownloadScriptForMappingOptions {
 export async function downloadScriptForMapping(
   options: DownloadScriptForMappingOptions,
 ): Promise<string | null> {
-  const { client, workspaceId, scriptName, executionStartedAt } = options;
-  const registryName = scriptNameToRegistryName(scriptName);
+  const { client, workspaceId, scriptName, executionType, executionStartedAt } = options;
+  const registryName = scriptNameToRegistryName(scriptName, executionType);
   if (registryName == null) {
     logger.debug(
       `Script "${scriptName}" is not a deployed registry script (e.g. test-run or seed); skipping sourcemap mapping.`,
@@ -318,6 +324,7 @@ export const logsCommand = defineAppCommand({
               client,
               workspaceId,
               scriptName: detail.scriptName,
+              executionType: execution.type,
               executionStartedAt: detail.startedAt,
             })
           : null;
