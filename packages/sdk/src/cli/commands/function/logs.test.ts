@@ -98,6 +98,24 @@ describe("formatExecutionError", () => {
     expect(plain).toContain("at fn (file:///b.js:1:1)");
     // Sourcemap mapping markers must NOT appear
     expect(plain).not.toContain("> 1");
+    // Error header must appear exactly once (stackTrace already contains it)
+    expect(plain.match(/Error: boom/g)).toHaveLength(1);
+  });
+
+  test("fallback does not duplicate header when stackTrace begins with frame lines", () => {
+    const error = {
+      name: "Error",
+      message: "boom",
+      stackTrace: "    at fn (file:///b.js:1:1)",
+    };
+
+    const result = formatExecutionError(error, null);
+    const plain = stripAnsi(result);
+
+    // Header must be present (synthesized from name/message)
+    expect(plain).toContain("Error: boom");
+    expect(plain).toContain("at fn (file:///b.js:1:1)");
+    expect(plain.match(/Error: boom/g)).toHaveLength(1);
   });
 
   test("falls back to plain text when stackTrace is empty", () => {

@@ -123,15 +123,19 @@ export function composeExecutionErrorString(error: FunctionExecutionErrorDisplay
 /**
  * Plain-text fallback used when sourcemap mapping is unavailable.
  * Shows `Name: message` then the raw stack trace lines (dimmed).
+ *
+ * Uses `composeExecutionErrorString` to produce a canonical
+ * `Name: message\n<frames>` string first, so the header is never
+ * duplicated when `stackTrace` already begins with `Name: message`.
  * @param error - Function error info from FunctionExecution
  * @returns Formatted fallback string for display
  */
 function formatExecutionErrorFallback(error: FunctionExecutionErrorDisplay): string {
-  const lines = [`  ${styles.error(`${error.name}: ${error.message}`)}`];
-  if (error.stackTrace) {
-    for (const line of error.stackTrace.split("\n")) {
-      lines.push(`  ${styles.dim(line)}`);
-    }
+  const composed = composeExecutionErrorString(error);
+  const [headerLine, ...frameLines] = composed.split("\n");
+  const lines = [`  ${styles.error(headerLine ?? "")}`];
+  for (const line of frameLines) {
+    lines.push(`  ${styles.dim(line)}`);
   }
   return lines.join("\n");
 }
