@@ -21,7 +21,7 @@ jobs:
           persist-credentials: false
 
       - name: Review dependencies with Claude
-        uses: anthropics/claude-code-action@58dbe8ed6879f0d3b02ac295b20d5fdfe7733e0c # v1.0.85
+        uses: anthropics/claude-code-action@657fb7c9c986158a19624b357bcbc8c6deb83598 # v1.0.92
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           allowed_bots: "renovate[bot]"

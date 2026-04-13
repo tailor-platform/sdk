@@ -13,6 +13,13 @@ import { WorkflowJobSchema } from "@/parser/service/workflow";
 
 export type FunctionType = "resolver" | "executor" | "workflow-job" | "plain";
 
+/** Minimal schema interface for local format detection (subset of TailorField) */
+interface InputSchema {
+  parse(args: { value: unknown; data: unknown; user: Record<string, unknown> }): {
+    issues?: readonly { message: string; path?: readonly (string | number | symbol)[] }[];
+  };
+}
+
 export interface DetectedFunction {
   /** Detected function type */
   type: FunctionType;
@@ -22,6 +29,10 @@ export interface DetectedFunction {
   exportName?: string;
   /** For plain functions: whether main is a named export rather than default export */
   namedMain?: boolean;
+  /** For resolvers: whether the resolver defines an input schema */
+  hasInput?: boolean;
+  /** For resolvers with input: pre-built schema object with .parse() for local format detection */
+  inputSchema?: InputSchema;
 }
 
 interface DetectFunctionOptions {
@@ -48,7 +59,20 @@ export async function detectFunctionType(
   // 1. Check resolver
   const resolverResult = ResolverSchema.safeParse(module.default);
   if (resolverResult.success) {
-    return { type: "resolver", name: resolverResult.data.name };
+    const rawInput = module.default.input;
+    let inputSchema: DetectedFunction["inputSchema"];
+    if (rawInput) {
+      // Build schema object for local format detection.
+      // t is already loaded by the user's module (which imports @tailor-platform/sdk).
+      const { t } = await import("@tailor-platform/sdk");
+      inputSchema = t.object(rawInput) as InputSchema;
+    }
+    return {
+      type: "resolver",
+      name: resolverResult.data.name,
+      hasInput: rawInput != null,
+      inputSchema,
+    };
   }
 
   // 2. Check executor (only function/jobFunction kinds)
