@@ -3,6 +3,11 @@ name: SDK Metrics
 on:
   pull_request:
     branches: [main]
+    paths:
+      - packages/**
+      - package.json
+      - pnpm-lock.yaml
+      - .github/workflows/sdk-metrics.yml
   push:
     branches: [main]
   workflow_dispatch:
@@ -14,6 +19,8 @@ permissions:
 
 jobs:
   coverage:
+    # Skip re-runs triggered by tailor-pr-trigger bot (changeset/generate commits)
+    if: github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]'
     name: Coverage
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -51,6 +58,7 @@ jobs:
         run: pnpm --filter @tailor-platform/sdk exec tsx scripts/cleanup-e2e-workspaces.ts --run-id=${{ github.run_id }}
 
   bundle-size:
+    if: github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]'
     name: Bundle Size
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -78,6 +86,7 @@ jobs:
           path: packages/sdk/bundle-size.json
 
   type-performance:
+    if: github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]'
     name: Type Performance
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -104,6 +113,7 @@ jobs:
             packages/sdk/diagnostics-summary.json
 
   runtime-performance:
+    if: github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]'
     name: Runtime Performance
     runs-on: ubuntu-latest
     timeout-minutes: 15
