@@ -3,10 +3,17 @@ on:
   push:
     branches: [main]
   pull_request:
+    paths:
+      - packages/**
+      - package.json
+      - pnpm-lock.yaml
+      - .github/workflows/pkg-pr-new.yml
 
 jobs:
   notify-start:
-    if: github.event_name == 'pull_request'
+    if: >-
+      github.event_name == 'pull_request' &&
+      (github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]')
     runs-on: ubuntu-latest
     timeout-minutes: 1
     permissions:
@@ -46,6 +53,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   publish-sdk:
+    # Skip re-runs triggered by tailor-pr-trigger bot (changeset/generate commits)
+    if: github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -122,7 +131,9 @@ jobs:
           echo "Template URL: $CREATE_SDK_TEMPLATE_URL"
 
   update-comment:
-    if: github.event_name == 'pull_request'
+    if: >-
+      github.event_name == 'pull_request' &&
+      (github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]')
     needs: [publish-sdk, publish-create-sdk]
     runs-on: ubuntu-latest
     timeout-minutes: 1
