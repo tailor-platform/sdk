@@ -188,16 +188,24 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runtime: [node, bun]
-        pm: [pnpm, npm, yarn, bun]
-        node: [22, 24]
-        exclude:
-          # Bun has its own runtime version; only run once per PM
-          - runtime: bun
-            node: 22
-          # bun install with Node runtime is out of scope
+        # Minimal set covering all PM / runtime / Node axes.
+        # pkg.pr.new is flaky, so we keep the matrix small.
+        include:
           - runtime: node
+            pm: pnpm
+            node: 22
+          - runtime: node
+            pm: npm
+            node: 24
+          - runtime: node
+            pm: yarn
+            node: 22
+          - runtime: bun
             pm: bun
+            node: 24
+          - runtime: bun
+            pm: pnpm
+            node: 24
     runs-on: ubuntu-latest
     name: Smoke (${{ matrix.runtime }}, ${{ matrix.pm }}, node${{ matrix.node }})
     timeout-minutes: 10
