@@ -1,5 +1,33 @@
 # @tailor-platform/sdk
 
+## 1.36.0
+
+### Minor Changes
+
+- [#920](https://github.com/tailor-platform/sdk/pull/920) [`1b64d8e`](https://github.com/tailor-platform/sdk/commit/1b64d8e07c4b8b2c8bcfaded5210b8774d4556ff) Thanks [@dqn](https://github.com/dqn)! - Show original source locations and code snippets in `function test-run` errors using inline sourcemaps
+
+- [#931](https://github.com/tailor-platform/sdk/pull/931) [`a1dab54`](https://github.com/tailor-platform/sdk/commit/a1dab54dfec4c7eb69348ab94a82de9d22231c45) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `ignoreNullishValues` option to `defineSecretManager` to skip secrets with nullish values during deploy
+
+- [#965](https://github.com/tailor-platform/sdk/pull/965) [`c273be3`](https://github.com/tailor-platform/sdk/commit/c273be330071a9e3d2d2ebc65ef9b17e9c995ddc) Thanks [@haru0017](https://github.com/haru0017)! - Add `defaultRedirectURL` to SAML IdP config for handling SAML ACS responses with empty RelayState
+
+### Patch Changes
+
+- [#911](https://github.com/tailor-platform/sdk/pull/911) [`3cf9975`](https://github.com/tailor-platform/sdk/commit/3cf997591ac06c18a973cd16b3c6bc70b05f6793) Thanks [@k1LoW](https://github.com/k1LoW)! - Add `permission` option to `defineIdp()` for per-operation permission policies on IdP users (create, read, update, delete, sendPasswordResetEmail)
+
+- [#947](https://github.com/tailor-platform/sdk/pull/947) [`19f95c2`](https://github.com/tailor-platform/sdk/commit/19f95c27e22027037457fcfcd9adca360f62553d) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency oxlint to v1.59.0
+
+- [#956](https://github.com/tailor-platform/sdk/pull/956) [`391c53d`](https://github.com/tailor-platform/sdk/commit/391c53d32dd7108aead8917abb12a2b928df792a) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): lock file maintenance
+
+- [#957](https://github.com/tailor-platform/sdk/pull/957) [`cc14d77`](https://github.com/tailor-platform/sdk/commit/cc14d773c1f62b9e14c935cf4541983ed514fe90) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update actions/upload-artifact action to v7.0.1
+
+- [#958](https://github.com/tailor-platform/sdk/pull/958) [`32e6b1f`](https://github.com/tailor-platform/sdk/commit/32e6b1fa67a582db685f8268dbbb38c0ac45b101) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update anthropics/claude-code-action action to v1.0.93
+
+- [#959](https://github.com/tailor-platform/sdk/pull/959) [`61b60c9`](https://github.com/tailor-platform/sdk/commit/61b60c9b0e8af467a50bc4ee06ada89fba76a653) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency knip to v6.3.1
+
+- [#960](https://github.com/tailor-platform/sdk/pull/960) [`9e0ce60`](https://github.com/tailor-platform/sdk/commit/9e0ce60b2d5c662c6983c60a377f5ce7c3dea7df) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency turbo to v2.9.5
+
+- [#962](https://github.com/tailor-platform/sdk/pull/962) [`dd74185`](https://github.com/tailor-platform/sdk/commit/dd74185d593be00122a173ca427c238292a627bf) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update marocchino/sticky-pull-request-comment action to v3.0.4
+
 ## 1.35.2
 
 ### Patch Changes
