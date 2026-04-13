@@ -36,6 +36,10 @@ export const SAMLSchema = z
       .string()
       .optional()
       .describe("Raw SAML metadata XML (mutually exclusive with metadataURL)"),
+    defaultRedirectURL: z
+      .string()
+      .optional()
+      .describe("URL to redirect to when SAML ACS receives a response with an empty RelayState."),
   })
   .refine((value) => {
     const hasMetadata = value.metadataURL !== undefined;
