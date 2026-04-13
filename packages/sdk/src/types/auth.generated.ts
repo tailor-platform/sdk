@@ -38,6 +38,8 @@ export type SAMLInput = {
   metadataURL?: string | undefined;
   /** Raw SAML metadata XML (mutually exclusive with metadataURL) */
   rawMetadata?: string | undefined;
+  /** URL to redirect to when SAML ACS receives a response with an empty RelayState. */
+  defaultRedirectURL?: string | undefined;
 };
 
 export type SAML = {
@@ -50,6 +52,8 @@ export type SAML = {
   metadataURL?: string | undefined;
   /** Raw SAML metadata XML (mutually exclusive with metadataURL) */
   rawMetadata?: string | undefined;
+  /** URL to redirect to when SAML ACS receives a response with an empty RelayState. */
+  defaultRedirectURL?: string | undefined;
 };
 
 export type IDToken = {
@@ -329,6 +333,7 @@ export type AuthConfigInput =
             enableSignRequest?: boolean | undefined;
             metadataURL?: string | undefined;
             rawMetadata?: string | undefined;
+            defaultRedirectURL?: string | undefined;
           }
         | {
             name: string;
@@ -489,6 +494,7 @@ export type AuthConfigInput =
             enableSignRequest?: boolean | undefined;
             metadataURL?: string | undefined;
             rawMetadata?: string | undefined;
+            defaultRedirectURL?: string | undefined;
           }
         | {
             name: string;
@@ -661,6 +667,7 @@ export type AuthConfigInput =
             enableSignRequest?: boolean | undefined;
             metadataURL?: string | undefined;
             rawMetadata?: string | undefined;
+            defaultRedirectURL?: string | undefined;
           }
         | {
             name: string;
@@ -810,6 +817,7 @@ export type AuthConfig =
             enableSignRequest: boolean;
             metadataURL?: string | undefined;
             rawMetadata?: string | undefined;
+            defaultRedirectURL?: string | undefined;
           }
         | {
             name: string;
@@ -980,6 +988,7 @@ export type AuthConfig =
             enableSignRequest: boolean;
             metadataURL?: string | undefined;
             rawMetadata?: string | undefined;
+            defaultRedirectURL?: string | undefined;
           }
         | {
             name: string;
@@ -1162,6 +1171,7 @@ export type AuthConfig =
             enableSignRequest: boolean;
             metadataURL?: string | undefined;
             rawMetadata?: string | undefined;
+            defaultRedirectURL?: string | undefined;
           }
         | {
             name: string;
