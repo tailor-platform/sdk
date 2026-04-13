@@ -18,6 +18,7 @@ import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger, styles } from "@/cli/shared/logger";
 import { executeScript } from "@/cli/shared/script-executor";
+import { formatErrorWithSourcemap } from "@/cli/shared/stack-trace";
 import { bundleForTestRun, type ResolvedMachineUser } from "./bundle";
 import { detectFunctionType, type DetectedFunction } from "./detect";
 
@@ -202,7 +203,12 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
 
       if (result.error && !result.success) {
         logger.log(styles.bold("\nError:"));
-        logger.log(`  ${styles.error(result.error)}`);
+        const formatted = formatErrorWithSourcemap(result.error, bundledCode, process.cwd());
+        if (formatted) {
+          logger.log(formatted);
+        } else {
+          logger.log(`  ${styles.error(result.error)}`);
+        }
       }
     }
 
