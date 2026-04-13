@@ -7,7 +7,7 @@ type SecretsInput = Record<string, SecretsVaultInput>;
 type SecretsInputNullish = Record<string, SecretsVaultInputNullish>;
 
 type SecretsOptions = {
-  readonly skipNullishValues: boolean;
+  readonly ignoreNullishValues: boolean;
 };
 
 type DefinedSecrets<T extends SecretsInputNullish> = {
@@ -34,26 +34,26 @@ export type SecretsConfig = Omit<ReturnType<typeof defineSecretManager>, "get" |
  */
 export function defineSecretManager<const T extends SecretsInput>(config: T): DefinedSecrets<T>;
 /**
- * Define secrets configuration for the Tailor SDK with skipNullishValues option.
- * When `skipNullishValues` is true, secrets with nullish values are skipped during deploy
+ * Define secrets configuration for the Tailor SDK with ignoreNullishValues option.
+ * When `ignoreNullishValues` is true, secrets with nullish values are skipped during deploy
  * instead of causing an error. This is useful for CI environments where not all
  * secret values are available.
  * @param config - Secrets configuration mapping vault names to their secrets
  * @param options - Options for secret management behavior
- * @param options.skipNullishValues - When true, secrets with nullish values are skipped during deploy
+ * @param options.ignoreNullishValues - When true, secrets with nullish values are skipped during deploy
  * @returns Defined secrets with typed runtime access methods
  */
 export function defineSecretManager<const T extends SecretsInputNullish>(
   config: T,
-  options: { skipNullishValues: true },
+  options: { ignoreNullishValues: true },
 ): DefinedSecrets<T>;
 export function defineSecretManager<const T extends SecretsInputNullish>(
   config: T,
-  options?: { skipNullishValues?: boolean },
+  options?: { ignoreNullishValues?: boolean },
 ): DefinedSecrets<T> {
   const result: Record<string, unknown> = {
     vaults: config,
-    options: { skipNullishValues: options?.skipNullishValues ?? false },
+    options: { ignoreNullishValues: options?.ignoreNullishValues ?? false },
   };
 
   // Non-enumerable so Zod's z.object validation ignores them

@@ -38,10 +38,10 @@ describe("defineSecretManager", () => {
     expect(secrets.vaults).toEqual({
       "my-vault": { "api-key": "test-key" },
     });
-    expect(secrets.options).toEqual({ skipNullishValues: false });
+    expect(secrets.options).toEqual({ ignoreNullishValues: false });
   });
 
-  it("should accept undefined values with skipNullishValues option", () => {
+  it("should accept undefined values with ignoreNullishValues option", () => {
     const secrets = defineSecretManager(
       {
         "my-vault": {
@@ -49,11 +49,11 @@ describe("defineSecretManager", () => {
           "missing-key": undefined,
         },
       },
-      { skipNullishValues: true },
+      { ignoreNullishValues: true },
     );
 
     expect(secrets.vaults["my-vault"]["missing-key"]).toBeUndefined();
-    expect(secrets.options).toEqual({ skipNullishValues: true });
+    expect(secrets.options).toEqual({ ignoreNullishValues: true });
     expect(typeof secrets.get).toBe("function");
     expect(typeof secrets.getAll).toBe("function");
   });

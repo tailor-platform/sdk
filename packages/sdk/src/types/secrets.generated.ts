@@ -7,7 +7,7 @@ export type Secrets = {
     };
   };
   options: {
-    skipNullishValues: boolean;
+    ignoreNullishValues: boolean;
   };
 };
 export type SecretsInput = Secrets;

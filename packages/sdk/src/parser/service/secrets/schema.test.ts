@@ -3,9 +3,9 @@ import { SecretsSchema } from "./schema";
 
 function wrap(
   vaults: Record<string, Record<string, string | null | undefined>>,
-  skipNullishValues = false,
+  ignoreNullishValues = false,
 ) {
-  return { vaults, options: { skipNullishValues } };
+  return { vaults, options: { ignoreNullishValues } };
 }
 
 describe("SecretsSchema validation", () => {
@@ -111,9 +111,9 @@ describe("SecretsSchema validation", () => {
     expect(() => SecretsSchema.parse(valid)).not.toThrow();
   });
 
-  it("accepts skipNullishValues option", () => {
+  it("accepts ignoreNullishValues option", () => {
     const valid = wrap({ "my-vault": { "my-secret": "value" } }, true);
     const parsed = SecretsSchema.parse(valid);
-    expect(parsed.options.skipNullishValues).toBe(true);
+    expect(parsed.options.ignoreNullishValues).toBe(true);
   });
 });

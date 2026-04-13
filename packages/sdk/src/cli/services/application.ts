@@ -52,7 +52,7 @@ export type Application = {
   readonly workflowService: Readonly<WorkflowService> | undefined;
   readonly staticWebsiteServices: ReadonlyArray<StaticWebsite>;
   readonly secrets: ReadonlyArray<SecretVault>;
-  readonly skipNullishValues: boolean;
+  readonly ignoreNullishValues: boolean;
   readonly env: Readonly<Record<string, string | number | boolean>>;
   readonly applications: ReadonlyArray<Application>;
 };
@@ -218,35 +218,35 @@ function defineStaticWebsites(
 
 function parseSecretManager(config: AppConfig["secrets"]): {
   secrets: SecretVault[];
-  skipNullishValues: boolean;
+  ignoreNullishValues: boolean;
 } {
   if (!config) {
-    return { secrets: [], skipNullishValues: false };
+    return { secrets: [], ignoreNullishValues: false };
   }
 
   const parsed = SecretsSchema.parse(config);
-  const { skipNullishValues } = parsed.options;
+  const { ignoreNullishValues } = parsed.options;
 
   const secrets = Object.entries(parsed.vaults).map(([vaultName, vaultSecrets]) => ({
     vaultName,
     secrets: Object.entries(vaultSecrets).map(([name, value]) => ({ name, value })),
   }));
 
-  // Defensive check: error if nullish values exist without skipNullishValues
-  if (!skipNullishValues) {
+  // Defensive check: error if nullish values exist without ignoreNullishValues
+  if (!ignoreNullishValues) {
     for (const vault of secrets) {
       for (const secret of vault.secrets) {
         if (secret.value == null) {
           throw new Error(
             `Secret "${vault.vaultName}/${secret.name}" has no value. ` +
-              `Use { skipNullishValues: true } option in defineSecretManager() to skip secrets without values.`,
+              `Use { ignoreNullishValues: true } option in defineSecretManager() to skip secrets without values.`,
           );
         }
       }
     }
   }
 
-  return { secrets, skipNullishValues };
+  return { secrets, ignoreNullishValues };
 }
 
 type DefineServicesResult = {
@@ -256,7 +256,7 @@ type DefineServicesResult = {
   authResult: DefineAuthResult;
   staticWebsiteServices: StaticWebsite[];
   secrets: SecretVault[];
-  skipNullishValues: boolean;
+  ignoreNullishValues: boolean;
 };
 
 function defineServices(config: AppConfig, pluginManager?: PluginManager): DefineServicesResult {
@@ -269,7 +269,7 @@ function defineServices(config: AppConfig, pluginManager?: PluginManager): Defin
     tailordbResult.externalTailorDBNamespaces,
   );
   const staticWebsiteServices = defineStaticWebsites(config.staticWebsites);
-  const { secrets, skipNullishValues } = parseSecretManager(config.secrets);
+  const { secrets, ignoreNullishValues } = parseSecretManager(config.secrets);
   return {
     tailordbResult,
     resolverResult,
@@ -277,7 +277,7 @@ function defineServices(config: AppConfig, pluginManager?: PluginManager): Defin
     authResult,
     staticWebsiteServices,
     secrets,
-    skipNullishValues: skipNullishValues,
+    ignoreNullishValues: ignoreNullishValues,
   };
 }
 
@@ -291,7 +291,7 @@ function buildApplication(params: {
   workflowService: WorkflowService | undefined;
   staticWebsiteServices: StaticWebsite[];
   secrets: SecretVault[];
-  skipNullishValues: boolean;
+  ignoreNullishValues: boolean;
   env: Record<string, string | number | boolean>;
 }): Application {
   const application: Application = {
@@ -312,7 +312,7 @@ function buildApplication(params: {
     workflowService: params.workflowService,
     staticWebsiteServices: params.staticWebsiteServices,
     secrets: params.secrets,
-    skipNullishValues: params.skipNullishValues,
+    ignoreNullishValues: params.ignoreNullishValues,
     env: params.env,
     get applications() {
       return [application];
@@ -413,7 +413,7 @@ export async function loadApplication(
     authResult,
     staticWebsiteServices,
     secrets,
-    skipNullishValues,
+    ignoreNullishValues,
   } = defineServices(config, pluginManager);
 
   // 2. Load TailorDB types and process namespace plugins
@@ -531,7 +531,7 @@ export async function loadApplication(
     workflowService,
     staticWebsiteServices,
     secrets,
-    skipNullishValues,
+    ignoreNullishValues,
     env: config.env ?? {},
   });
 

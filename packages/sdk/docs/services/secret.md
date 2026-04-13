@@ -66,7 +66,7 @@ The exported `secrets` object provides type-safe `get()` and `getAll()` methods 
 
 ### Skipping Secrets with Missing Values
 
-In CI environments, you may not have all secret values available (e.g., secrets are already set on the platform and you don't want to duplicate them in CI environment variables). Use the `skipNullishValues` option to skip secrets whose values are `undefined` or `null`:
+In CI environments, you may not have all secret values available (e.g., secrets are already set on the platform and you don't want to duplicate them in CI environment variables). Use the `ignoreNullishValues` option to skip secrets whose values are `undefined` or `null`:
 
 ```typescript
 export const secrets = defineSecretManager(
@@ -76,11 +76,11 @@ export const secrets = defineSecretManager(
       "sendgrid-api-key": process.env.SENDGRID_API_KEY,
     },
   },
-  { skipNullishValues: true },
+  { ignoreNullishValues: true },
 );
 ```
 
-When `skipNullishValues: true`:
+When `ignoreNullishValues: true`:
 
 - Secrets with a string value are created or updated as normal
 - Secrets with `undefined` or `null` values are **skipped** — they are not created, updated, or deleted
