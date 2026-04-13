@@ -41,6 +41,6 @@
     "oxlint": "1.59.0",
     "tsdown": "0.21.7",
     "typescript": "5.9.3",
-    "typescript-eslint": "8.58.0"
+    "typescript-eslint": "8.58.1"
   }
 }
