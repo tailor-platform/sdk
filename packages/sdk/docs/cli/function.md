@@ -152,7 +152,7 @@ tailor-sdk function test-run [options] <file>
 **Run a resolver with input arguments**
 
 ```bash
-$ tailor-sdk function test-run resolvers/add.ts --arg '{"input":{"a":1,"b":2}}'
+$ tailor-sdk function test-run resolvers/add.ts --arg '{"a":1,"b":2}'
 ```
 
 **Run a specific workflow job by name**
@@ -164,7 +164,7 @@ $ tailor-sdk function test-run workflows/sample.ts --name validate-order
 **Run a pre-bundled .js file directly**
 
 ```bash
-$ tailor-sdk function test-run build/resolvers/add.js --arg '{"input":{"a":1,"b":2}}'
+$ tailor-sdk function test-run build/resolvers/add.js --arg '{"a":1,"b":2}'
 ```
 
 <!-- politty:command:function test-run:examples:end -->

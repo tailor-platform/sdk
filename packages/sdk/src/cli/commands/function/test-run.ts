@@ -18,8 +18,9 @@ import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger, styles } from "@/cli/shared/logger";
 import { executeScript } from "@/cli/shared/script-executor";
+import { formatErrorWithSourcemap } from "@/cli/shared/stack-trace";
 import { bundleForTestRun, type ResolvedMachineUser } from "./bundle";
-import { detectFunctionType } from "./detect";
+import { detectFunctionType, type DetectedFunction } from "./detect";
 
 export const testRunCommand = defineAppCommand({
   name: "test-run",
@@ -55,7 +56,7 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
 > Triggered jobs are not executed; only the target job's \`body\` function runs in isolation.`,
   examples: [
     {
-      cmd: 'resolvers/add.ts --arg \'{"input":{"a":1,"b":2}}\'',
+      cmd: 'resolvers/add.ts --arg \'{"a":1,"b":2}\'',
       desc: "Run a resolver with input arguments",
     },
     {
@@ -63,7 +64,7 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
       desc: "Run a specific workflow job by name",
     },
     {
-      cmd: 'build/resolvers/add.js --arg \'{"input":{"a":1,"b":2}}\'',
+      cmd: 'build/resolvers/add.js --arg \'{"a":1,"b":2}\'',
       desc: "Run a pre-bundled .js file directly",
     },
   ],
@@ -124,6 +125,17 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
       functionType = detected.type;
       functionName = detected.name;
       logger.info(`Detected: ${styles.bold(detected.type)} ${styles.info(`"${detected.name}"`)}`);
+
+      if (detected.type === "resolver" && args.arg) {
+        if (!detected.hasInput) {
+          logger.warn(
+            '--arg is ignored because this resolver has no input schema. Define "input" in your resolver to use --arg.',
+          );
+          args.arg = undefined;
+        } else if (detected.inputSchema) {
+          args.arg = resolveResolverArg(args.arg, detected.inputSchema, machineUser, workspaceId);
+        }
+      }
 
       logger.info("Bundling...");
       ({ bundledCode, scriptName } = await bundleForTestRun({
@@ -191,7 +203,12 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
 
       if (result.error && !result.success) {
         logger.log(styles.bold("\nError:"));
-        logger.log(`  ${styles.error(result.error)}`);
+        const formatted = formatErrorWithSourcemap(result.error, bundledCode, process.cwd());
+        if (formatted) {
+          logger.log(formatted);
+        } else {
+          logger.log(`  ${styles.error(result.error)}`);
+        }
       }
     }
 
@@ -293,4 +310,54 @@ async function resolveMachineUser(
   }
 
   return { name: machineUserName, id, attributes, attributeList };
+}
+
+/**
+ * Resolve resolver arg format: detect and unwrap deprecated {"input":{...}} wrapper.
+ * Tries new format (arg = input fields) first via schema parse.
+ * If that fails and arg looks like old format, tries unwrapping.
+ * @param argStr - JSON string of the arg
+ * @param inputSchema - Pre-built schema object from detect (has .parse())
+ * @param machineUser - Resolved machine user info
+ * @param workspaceId - Workspace ID
+ * @returns Resolved JSON string (unwrapped if old format)
+ */
+export function resolveResolverArg(
+  argStr: string,
+  inputSchema: NonNullable<DetectedFunction["inputSchema"]>,
+  machineUser: ResolvedMachineUser,
+  workspaceId: string,
+): string {
+  const parsed = JSON.parse(argStr);
+  const user = {
+    id: machineUser.id,
+    type: "machine_user" as const,
+    workspaceId,
+    attributes: machineUser.attributes ?? null,
+    attributeList: machineUser.attributeList ?? [],
+  };
+
+  const newResult = inputSchema.parse({ value: parsed, data: parsed, user });
+  if (!newResult.issues) {
+    return argStr;
+  }
+
+  // New format failed — check if old format works
+  if (
+    Object.keys(parsed).length === 1 &&
+    parsed.input != null &&
+    typeof parsed.input === "object" &&
+    !Array.isArray(parsed.input)
+  ) {
+    const oldResult = inputSchema.parse({ value: parsed.input, data: parsed.input, user });
+    if (!oldResult.issues) {
+      logger.warn(
+        '[DEPRECATED] Wrapping args with "input" key (e.g. {"input":{...}}) is deprecated. Pass input fields directly (e.g. {"a":1}). The "input" wrapper will be removed in v2.',
+      );
+      return JSON.stringify(parsed.input);
+    }
+  }
+
+  // Both failed — pass as-is, let server report the validation error
+  return argStr;
 }
