@@ -1,4 +1,5 @@
-import { type MessageInitShape } from "@bufbuild/protobuf";
+import { fromJson, type MessageInitShape } from "@bufbuild/protobuf";
+import { ValueSchema } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
 import {
   type CreateIdPClientRequestSchema,
@@ -9,14 +10,28 @@ import {
 } from "@tailor-proto/tailor/v1/idp_pb";
 import {
   IdPLang,
+  IdPPermissionOperator,
+  IdPPermissionPermit,
+  type IdPPermissionConditionSchema as ProtoIdPPermissionConditionSchema,
+  type IdPPermissionOperandSchema as ProtoIdPPermissionOperandSchema,
+  type IdPPermissionPolicySchema as ProtoIdPPermissionPolicySchema,
+  type IdPPermissionSchema as ProtoIdPPermissionSchema,
   type IdPService as ProtoIdPService,
 } from "@tailor-proto/tailor/v1/idp_resource_pb";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
+import { logger } from "@/cli/shared/logger";
+import { parseIdPPermission } from "@/parser/service/idp/permission";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
+import type {
+  IdPPermissionOperand,
+  StandardIdPActionPermission,
+  StandardIdPPermission,
+  StandardIdPPermissionCondition,
+} from "@/types/idp";
 import type { IdP, IdPLang as IdPLangInput } from "@/types/idp.generated";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
@@ -203,6 +218,7 @@ type ComparableIdPService = {
   publishUserEvents: boolean;
   disableGqlOperations: Record<string, boolean> | undefined;
   emailConfig: Record<string, string> | undefined;
+  permission: MessageInitShape<typeof ProtoIdPPermissionSchema> | undefined;
 };
 
 function normalizeComparableUserAuthPolicy(
@@ -254,6 +270,7 @@ function normalizeComparableIdPService(
     | "publishUserEvents"
     | "disableGqlOperations"
     | "emailConfig"
+    | "permission"
   >,
 ): ComparableIdPService {
   return {
@@ -263,6 +280,31 @@ function normalizeComparableIdPService(
     publishUserEvents: input.publishUserEvents,
     disableGqlOperations: input.disableGqlOperations,
     emailConfig: input.emailConfig,
+    permission: input.permission,
+  };
+}
+
+function normalizeComparablePermission(
+  permission: ProtoIdPService["permission"],
+): MessageInitShape<typeof ProtoIdPPermissionSchema> | undefined {
+  if (!permission) {
+    return undefined;
+  }
+  const normalizePolicy = (policy: (typeof permission.create)[number]) => ({
+    conditions: policy.conditions.map((c) => ({
+      left: c.left ? { kind: c.left.kind } : undefined,
+      operator: c.operator,
+      right: c.right ? { kind: c.right.kind } : undefined,
+    })),
+    permit: policy.permit,
+    description: policy.description,
+  });
+  return {
+    create: permission.create.map(normalizePolicy),
+    read: permission.read.map(normalizePolicy),
+    update: permission.update.map(normalizePolicy),
+    delete: permission.delete.map(normalizePolicy),
+    sendPasswordResetEmail: permission.sendPasswordResetEmail.map(normalizePolicy),
   };
 }
 
@@ -275,6 +317,7 @@ function areIdPServicesEqual(existing: ProtoIdPService, desired: ComparableIdPSe
       publishUserEvents: existing.publishUserEvents,
       disableGqlOperations: normalizeComparableDisableGqlOperations(existing.disableGqlOperations),
       emailConfig: normalizeComparableEmailConfig(existing.emailConfig),
+      permission: normalizeComparablePermission(existing.permission),
     }),
     desired,
   );
@@ -344,6 +387,11 @@ async function planServices(
     const userAuthPolicy = idp.userAuthPolicy;
     const publishUserEvents = idp.publishUserEvents ?? false;
     const emailConfig = idp.emailConfig;
+    if (!idp.permission) {
+      logger.warn(`IdP service "${namespaceName}" has no permission configured.`);
+    }
+    const parsedPermission = parseIdPPermission(idp.permission);
+    const protoPermission = parsedPermission ? protoIdPPermission(parsedPermission) : undefined;
     const desired = normalizeComparableIdPService({
       authorization,
       lang,
@@ -353,6 +401,7 @@ async function planServices(
         convertGqlOperationsToDisable(idp.gqlOperations),
       ),
       emailConfig: normalizeComparableEmailConfig(emailConfig),
+      permission: protoPermission,
     });
     const request = {
       workspaceId,
@@ -363,6 +412,7 @@ async function planServices(
       publishUserEvents,
       disableGqlOperations: convertGqlOperationsToDisable(idp.gqlOperations),
       emailConfig,
+      permission: protoPermission,
     };
 
     if (existing) {
@@ -560,5 +610,94 @@ function convertGqlOperationsToDisable(
     delete: gqlOperations.delete === false,
     read: gqlOperations.read === false,
     sendPasswordResetEmail: gqlOperations.sendPasswordResetEmail === false,
+  };
+}
+
+function protoIdPPermission(
+  permission: StandardIdPPermission,
+): MessageInitShape<typeof ProtoIdPPermissionSchema> {
+  return {
+    create: permission.create.map((p) => protoIdPPolicy(p)),
+    read: permission.read.map((p) => protoIdPPolicy(p)),
+    update: permission.update.map((p) => protoIdPPolicy(p)),
+    delete: permission.delete.map((p) => protoIdPPolicy(p)),
+    sendPasswordResetEmail: permission.sendPasswordResetEmail.map((p) => protoIdPPolicy(p)),
+  };
+}
+
+function protoIdPPolicy(
+  policy: StandardIdPActionPermission,
+): MessageInitShape<typeof ProtoIdPPermissionPolicySchema> {
+  let permit: IdPPermissionPermit;
+  switch (policy.permit) {
+    case "allow":
+      permit = IdPPermissionPermit.ALLOW;
+      break;
+    case "deny":
+      permit = IdPPermissionPermit.DENY;
+      break;
+    default:
+      throw new Error(`Unknown permission: ${policy.permit satisfies never}`);
+  }
+  return {
+    conditions: policy.conditions.map((cond) => protoIdPCondition(cond)),
+    permit,
+    description: policy.description,
+  };
+}
+
+function protoIdPCondition(
+  condition: StandardIdPPermissionCondition,
+): MessageInitShape<typeof ProtoIdPPermissionConditionSchema> {
+  const [left, operator, right] = condition;
+
+  const l = protoIdPOperand(left);
+  const r = protoIdPOperand(right);
+  let op: IdPPermissionOperator;
+  switch (operator) {
+    case "eq":
+      op = IdPPermissionOperator.EQ;
+      break;
+    case "ne":
+      op = IdPPermissionOperator.NE;
+      break;
+    case "in":
+      op = IdPPermissionOperator.IN;
+      break;
+    case "nin":
+      op = IdPPermissionOperator.NIN;
+      break;
+    default:
+      throw new Error(`Unknown operator: ${operator satisfies never}`);
+  }
+  return {
+    left: l,
+    operator: op,
+    right: r,
+  };
+}
+
+function protoIdPOperand(
+  operand: IdPPermissionOperand,
+): MessageInitShape<typeof ProtoIdPPermissionOperandSchema> {
+  if (typeof operand === "object" && !Array.isArray(operand)) {
+    if ("user" in operand) {
+      return { kind: { case: "userField", value: operand.user } };
+    } else if ("idpUser" in operand) {
+      return { kind: { case: "idpUserField", value: operand.idpUser } };
+    } else if ("newIdpUser" in operand) {
+      return { kind: { case: "newIdpUserField", value: operand.newIdpUser } };
+    } else if ("oldIdpUser" in operand) {
+      return { kind: { case: "oldIdpUserField", value: operand.oldIdpUser } };
+    } else {
+      throw new Error(`Unknown operand: ${JSON.stringify(operand)}`);
+    }
+  }
+
+  return {
+    kind: {
+      case: "value",
+      value: fromJson(ValueSchema, operand),
+    },
   };
 }
