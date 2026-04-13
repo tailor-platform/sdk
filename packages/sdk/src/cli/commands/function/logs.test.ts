@@ -1,5 +1,27 @@
-import { describe, test, expect } from "vitest";
-import { composeExecutionErrorString, formatExecutionError } from "./logs";
+import { timestampFromDate } from "@bufbuild/protobuf/wkt";
+import { describe, test, expect, vi } from "vitest";
+import {
+  composeExecutionErrorString,
+  downloadScriptForMapping,
+  formatExecutionError,
+} from "./logs";
+import type { OperatorClient } from "@/cli/shared/client";
+
+function makeDownloadClient(chunks: Uint8Array[], metadata?: { updatedAt: Date }): OperatorClient {
+  return {
+    downloadFunctionRegistryScript: vi.fn(async function* () {
+      yield {
+        payload: {
+          case: "metadata" as const,
+          value: metadata ? { function: { updatedAt: timestampFromDate(metadata.updatedAt) } } : {},
+        },
+      };
+      for (const c of chunks) {
+        yield { payload: { case: "chunk" as const, value: c } };
+      }
+    }),
+  } as unknown as OperatorClient;
+}
 
 // Strip ANSI escape codes for plain-text assertions
 function stripAnsi(str: string): string {
@@ -159,5 +181,95 @@ describe("formatExecutionError", () => {
 
     expect(plain).toContain("Error: intentional error");
     expect(plain).toContain("resolvers/error-test.ts:4:3");
+  });
+});
+
+describe("downloadScriptForMapping", () => {
+  test("returns null when scriptName does not map to a registry entry (test-run)", async () => {
+    const client = makeDownloadClient([]);
+
+    const result = await downloadScriptForMapping({
+      client,
+      workspaceId: "ws-1",
+      scriptName: "test-run--throwError.js",
+      executionStartedAt: new Date("2024-01-01T00:00:00Z"),
+    });
+
+    expect(result).toBeNull();
+    expect(client.downloadFunctionRegistryScript).not.toHaveBeenCalled();
+  });
+
+  test("returns code when registry updatedAt is not newer than executionStartedAt", async () => {
+    const client = makeDownloadClient([new TextEncoder().encode("code")], {
+      updatedAt: new Date("2024-01-01T00:00:00Z"),
+    });
+
+    const result = await downloadScriptForMapping({
+      client,
+      workspaceId: "ws-1",
+      scriptName: "my-resolver.throwError.body.js",
+      executionStartedAt: new Date("2024-02-01T00:00:00Z"),
+    });
+
+    expect(result).toBe("code");
+  });
+
+  test("returns null when registry updatedAt is strictly newer than executionStartedAt", async () => {
+    // Registry was redeployed at 2024-03-01, but the execution we are
+    // viewing started at 2024-02-01. Mapping the old stack trace
+    // against the new bundle would show misleading source locations.
+    const client = makeDownloadClient([new TextEncoder().encode("new-code")], {
+      updatedAt: new Date("2024-03-01T00:00:00Z"),
+    });
+
+    const result = await downloadScriptForMapping({
+      client,
+      workspaceId: "ws-1",
+      scriptName: "my-resolver.throwError.body.js",
+      executionStartedAt: new Date("2024-02-01T00:00:00Z"),
+    });
+
+    expect(result).toBeNull();
+  });
+
+  test("returns code when executionStartedAt is null (no staleness check possible)", async () => {
+    const client = makeDownloadClient([new TextEncoder().encode("code")], {
+      updatedAt: new Date("2024-03-01T00:00:00Z"),
+    });
+
+    const result = await downloadScriptForMapping({
+      client,
+      workspaceId: "ws-1",
+      scriptName: "my-resolver.throwError.body.js",
+      executionStartedAt: null,
+    });
+
+    expect(result).toBe("code");
+  });
+
+  test("returns code when registry metadata omits updatedAt", async () => {
+    const client = makeDownloadClient([new TextEncoder().encode("code")]);
+
+    const result = await downloadScriptForMapping({
+      client,
+      workspaceId: "ws-1",
+      scriptName: "my-resolver.throwError.body.js",
+      executionStartedAt: new Date("2024-02-01T00:00:00Z"),
+    });
+
+    expect(result).toBe("code");
+  });
+
+  test("returns null when download yields no chunks", async () => {
+    const client = makeDownloadClient([], { updatedAt: new Date("2024-01-01T00:00:00Z") });
+
+    const result = await downloadScriptForMapping({
+      client,
+      workspaceId: "ws-1",
+      scriptName: "my-resolver.throwError.body.js",
+      executionStartedAt: new Date("2024-02-01T00:00:00Z"),
+    });
+
+    expect(result).toBeNull();
   });
 });

@@ -208,24 +208,42 @@ function printFunctionExecutionDetail(options: PrintFunctionExecutionDetailOptio
   }
 }
 
+interface DownloadScriptForMappingOptions {
+  client: OperatorClient;
+  workspaceId: string;
+  /** FunctionExecution.scriptName (not the function registry name) */
+  scriptName: string;
+  /**
+   * When the execution started. Used to detect redeploys that happened
+   * after the execution: if the current registry entry's `updatedAt`
+   * is strictly newer, the downloaded bundle may differ from what was
+   * actually executed, so mapping is skipped to avoid misleading
+   * source locations. `FunctionExecution` carries no bundle version
+   * today, so this timestamp comparison is the best available signal.
+   */
+  executionStartedAt: Date | null;
+}
+
 /**
  * Download a deployed function script for sourcemap mapping. Logs a
  * debug message on failure but never throws. Error display falls back
- * to a plain-text format when the script cannot be retrieved.
+ * to a plain-text format when the script cannot be retrieved or when
+ * the current registry entry is stale relative to the execution.
  *
  * `FunctionExecution.scriptName` does not match the function registry
  * name directly; `scriptNameToRegistryName` translates between the two
  * formats.
- * @param client - Operator client instance
- * @param workspaceId - Workspace ID
- * @param scriptName - Script name (matches FunctionExecution.scriptName)
- * @returns Bundled script content, or null when unavailable
+ * @param options - Lookup options
+ * @param options.client - Operator client instance
+ * @param options.workspaceId - Workspace ID
+ * @param options.scriptName - Script name (matches FunctionExecution.scriptName)
+ * @param options.executionStartedAt - Execution start timestamp used for staleness check
+ * @returns Bundled script content, or null when unavailable / stale
  */
-async function downloadScriptForMapping(
-  client: OperatorClient,
-  workspaceId: string,
-  scriptName: string,
+export async function downloadScriptForMapping(
+  options: DownloadScriptForMappingOptions,
 ): Promise<string | null> {
+  const { client, workspaceId, scriptName, executionStartedAt } = options;
   const registryName = scriptNameToRegistryName(scriptName);
   if (registryName == null) {
     logger.debug(
@@ -233,13 +251,24 @@ async function downloadScriptForMapping(
     );
     return null;
   }
-  const code = await downloadFunctionScript({ client, workspaceId, name: registryName });
-  if (code == null) {
+  const result = await downloadFunctionScript({ client, workspaceId, name: registryName });
+  if (result == null) {
     logger.debug(
       `Could not download script "${scriptName}" (registry: "${registryName}") for stack trace mapping; showing raw stack trace.`,
     );
+    return null;
   }
-  return code;
+  if (
+    executionStartedAt != null &&
+    result.registryUpdatedAt != null &&
+    result.registryUpdatedAt.getTime() > executionStartedAt.getTime()
+  ) {
+    logger.debug(
+      `Registry script "${registryName}" was updated at ${result.registryUpdatedAt.toISOString()} after execution started at ${executionStartedAt.toISOString()}; skipping sourcemap mapping to avoid stale source locations.`,
+    );
+    return null;
+  }
+  return result.code;
 }
 
 export const logsCommand = defineAppCommand({
@@ -285,7 +314,12 @@ export const logsCommand = defineAppCommand({
         // inline sourcemap. Failure (script removed, no permission, etc.)
         // is non-fatal; we fall back to a plain-text error display.
         const bundledCode = detail.error
-          ? await downloadScriptForMapping(client, workspaceId, detail.scriptName)
+          ? await downloadScriptForMapping({
+              client,
+              workspaceId,
+              scriptName: detail.scriptName,
+              executionStartedAt: detail.startedAt,
+            })
           : null;
         printFunctionExecutionDetail({ detail, bundledCode });
       }

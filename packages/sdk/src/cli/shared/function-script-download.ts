@@ -5,6 +5,7 @@
  * concatenates content chunks into a single UTF-8 string.
  */
 
+import { timestampDate } from "@bufbuild/protobuf/wkt";
 import type { OperatorClient } from "@/cli/shared/client";
 
 /**
@@ -70,32 +71,54 @@ export interface DownloadFunctionScriptOptions {
   contentHash?: string;
 }
 
+/** Result of a successful function script download */
+export interface DownloadedFunctionScript {
+  /** Bundled script content as a UTF-8 string */
+  code: string;
+  /**
+   * Server-side last-update timestamp of the registry entry, or null
+   * when the metadata message omitted it. Callers comparing against an
+   * execution timestamp use this to detect redeploys that happened
+   * after the execution ran.
+   */
+  registryUpdatedAt: Date | null;
+}
+
 /**
  * Download a deployed function script.
  *
- * Returns the full bundled script content as a UTF-8 string, or null if
- * the download fails (script removed, network error, etc.). Errors are
- * swallowed so callers can fall back to a non-sourcemap display.
+ * Returns the bundled script content together with the registry
+ * entry's `updatedAt` timestamp. Returns null when the download fails
+ * (script removed, network error, etc.) or when no content chunks are
+ * received; errors are swallowed so callers can fall back to a
+ * non-sourcemap display.
  * @param options - Download options
- * @returns Script content, or null on failure / empty response
+ * @returns Script content plus metadata, or null on failure / empty response
  */
 export async function downloadFunctionScript(
   options: DownloadFunctionScriptOptions,
-): Promise<string | null> {
+): Promise<DownloadedFunctionScript | null> {
   const { client, workspaceId, name, contentHash } = options;
   try {
     const chunks: Uint8Array[] = [];
+    let registryUpdatedAt: Date | null = null;
     for await (const response of client.downloadFunctionRegistryScript({
       workspaceId,
       name,
       contentHash,
     })) {
-      if (response.payload.case === "chunk") {
+      if (response.payload.case === "metadata") {
+        const updatedAt = response.payload.value.function?.updatedAt;
+        if (updatedAt) registryUpdatedAt = timestampDate(updatedAt);
+      } else if (response.payload.case === "chunk") {
         chunks.push(response.payload.value);
       }
     }
     if (chunks.length === 0) return null;
-    return Buffer.concat(chunks).toString("utf-8");
+    return {
+      code: Buffer.concat(chunks).toString("utf-8"),
+      registryUpdatedAt,
+    };
   } catch {
     return null;
   }

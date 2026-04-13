@@ -1,3 +1,4 @@
+import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { describe, test, expect, vi } from "vitest";
 import { downloadFunctionScript, scriptNameToRegistryName } from "./function-script-download";
 import type { OperatorClient } from "@/cli/shared/client";
@@ -20,9 +21,15 @@ function makeStreamingClient(responses: DownloadResponse[]): OperatorClient {
 }
 
 describe("downloadFunctionScript", () => {
-  test("concatenates chunks into a UTF-8 string", async () => {
+  test("concatenates chunks into a UTF-8 string and returns registry updatedAt", async () => {
+    const updatedAt = new Date("2024-03-01T00:00:00Z");
     const client = makeStreamingClient([
-      { payload: { case: "metadata", value: {} } },
+      {
+        payload: {
+          case: "metadata",
+          value: { function: { updatedAt: timestampFromDate(updatedAt) } },
+        },
+      },
       { payload: { case: "chunk", value: new TextEncoder().encode("hello, ") } },
       { payload: { case: "chunk", value: new TextEncoder().encode("world") } },
     ]);
@@ -33,7 +40,22 @@ describe("downloadFunctionScript", () => {
       name: "my-fn",
     });
 
-    expect(result).toBe("hello, world");
+    expect(result).toEqual({ code: "hello, world", registryUpdatedAt: updatedAt });
+  });
+
+  test("returns registryUpdatedAt as null when metadata omits the timestamp", async () => {
+    const client = makeStreamingClient([
+      { payload: { case: "metadata", value: {} } },
+      { payload: { case: "chunk", value: new TextEncoder().encode("x") } },
+    ]);
+
+    const result = await downloadFunctionScript({
+      client,
+      workspaceId: "ws-1",
+      name: "my-fn",
+    });
+
+    expect(result).toEqual({ code: "x", registryUpdatedAt: null });
   });
 
   test("returns null when no chunks are received", async () => {
