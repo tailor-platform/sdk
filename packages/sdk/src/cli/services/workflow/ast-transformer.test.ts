@@ -757,6 +757,40 @@ const result = await myWorkflow.trigger({ id: 1 }, { authInvoker });
       expect(result).toContain('tailor.workflow.triggerWorkflow("my-workflow"');
       expect(result).toContain("{ authInvoker: authInvoker }");
     });
+
+    it("expands a string-literal authInvoker to object form using authNamespace", () => {
+      const source = `
+const result = await myWorkflow.trigger({ id: 1 }, { authInvoker: "kiosk" });
+`;
+      const workflowNameMap = new Map([["myWorkflow", "my-workflow"]]);
+      const jobNameMap = new Map<string, string>();
+
+      const result = transformFunctionTriggers(
+        source,
+        workflowNameMap,
+        jobNameMap,
+        undefined,
+        undefined,
+        "my-auth",
+      );
+
+      expect(result).toContain('tailor.workflow.triggerWorkflow("my-workflow"');
+      expect(result).toContain(
+        '{ authInvoker: { namespace: "my-auth", machineUserName: "kiosk" } }',
+      );
+    });
+
+    it("keeps string-literal authInvoker as-is when authNamespace is not provided", () => {
+      const source = `
+const result = await myWorkflow.trigger({ id: 1 }, { authInvoker: "kiosk" });
+`;
+      const workflowNameMap = new Map([["myWorkflow", "my-workflow"]]);
+      const jobNameMap = new Map<string, string>();
+
+      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
+
+      expect(result).toContain('{ authInvoker: "kiosk" }');
+    });
   });
 
   describe("job trigger transformation", () => {

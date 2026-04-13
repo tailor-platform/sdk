@@ -30,6 +30,34 @@ interface ExtendedTriggerCall {
 }
 
 /**
+ * Parse a string literal from its source text.
+ * Supports `"..."` and `'...'` forms. Returns undefined for template literals
+ * or any non-literal expression.
+ * @param raw - Raw source text of the expression
+ * @returns Literal content without the surrounding quotes, or undefined
+ */
+function parseStringLiteral(raw: string): string | undefined {
+  if (raw.length < 2) return undefined;
+  const first = raw[0];
+  const last = raw[raw.length - 1];
+  if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
+    try {
+      // Safe: we verified the wrapping quotes are matched; JSON handles
+      // standard escape sequences for double-quoted strings. For single
+      // quoted strings, convert to JSON form.
+      if (first === '"') {
+        return JSON.parse(raw) as string;
+      }
+      const unquoted = raw.slice(1, -1).replace(/\\'/g, "'").replace(/"/g, '\\"');
+      return JSON.parse(`"${unquoted}"`) as string;
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
+/**
  * Extract authInvoker info from a config object expression
  * Returns the authInvoker value text and whether it's a shorthand property
  * @param configArg - Config argument node
@@ -185,6 +213,7 @@ function detectExtendedTriggerCalls(
  * @param jobNameMap - Map from variable name to job name
  * @param workflowFileMap - Map from file path (without extension) to workflow name for default exports
  * @param currentFilePath - Path of the current file being transformed (for resolving relative imports)
+ * @param authNamespace - Auth service namespace used to expand string-literal `authInvoker` to object form
  * @returns Transformed source code with trigger calls rewritten
  */
 export function transformFunctionTriggers(
@@ -193,6 +222,7 @@ export function transformFunctionTriggers(
   jobNameMap: Map<string, string>,
   workflowFileMap?: Map<string, string>,
   currentFilePath?: string,
+  authNamespace?: string,
 ): string {
   const { program } = parseSync("input.ts", source);
 
@@ -232,10 +262,22 @@ export function transformFunctionTriggers(
       // Workflow trigger - get workflow name from map
       const workflowName = localWorkflowNameMap.get(call.identifierName);
       if (workflowName) {
-        // Use authInvoker info extracted during detection
-        const authInvokerExpr = call.authInvoker.isShorthand
-          ? "authInvoker"
-          : call.authInvoker.valueText;
+        // Use authInvoker info extracted during detection.
+        // If the value is a string literal (e.g. `"kiosk"`), expand it to the
+        // object form `{ namespace, machineUserName }` using the app's auth namespace.
+        // Variable references (e.g. `auth.invoker(...)`, shorthand) are passed through.
+        let authInvokerExpr: string;
+        if (call.authInvoker.isShorthand) {
+          authInvokerExpr = "authInvoker";
+        } else {
+          const raw = call.authInvoker.valueText.trim();
+          const stringLiteral = parseStringLiteral(raw);
+          if (stringLiteral !== undefined && authNamespace) {
+            authInvokerExpr = `{ namespace: ${JSON.stringify(authNamespace)}, machineUserName: ${JSON.stringify(stringLiteral)} }`;
+          } else {
+            authInvokerExpr = call.authInvoker.valueText;
+          }
+        }
         // Transform to tailor.workflow.triggerWorkflow
         const transformedCall = `tailor.workflow.triggerWorkflow("${workflowName}", ${call.argsText || "undefined"}, { authInvoker: ${authInvokerExpr} })`;
         replacements.push({

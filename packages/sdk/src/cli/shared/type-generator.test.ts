@@ -76,6 +76,23 @@ describe("generateTypeDefinition", () => {
 
     expect(result).toContain("interface Env {}");
   });
+
+  it("should generate empty MachineUserNameRegistry when no machine users provided", () => {
+    const result = generateTypeDefinition(undefined, undefined);
+
+    expect(result).toContain("interface MachineUserNameRegistry {}");
+  });
+
+  it("should generate MachineUserNameRegistry with machine user names", () => {
+    const result = generateTypeDefinition(undefined, undefined, undefined, [
+      "manager-machine-user",
+      "kiosk",
+    ]);
+
+    expect(result).toContain("interface MachineUserNameRegistry");
+    expect(result).toContain('"manager-machine-user": true;');
+    expect(result).toContain('"kiosk": true;');
+  });
 });
 
 describe("extractAttributesFromConfig + generateTypeDefinition", () => {
@@ -106,5 +123,28 @@ describe("extractAttributesFromConfig + generateTypeDefinition", () => {
     expect(content).toContain('role: "ADMIN" | "WORKER";');
     expect(content).toContain("isActive: boolean;");
     expect(content).toContain("tags: string[];");
+  });
+
+  it("extracts machine user names into MachineUserNameRegistry", () => {
+    const config = {
+      name: "test-app",
+      auth: defineAuth("auth", {
+        machineUserAttributes: {
+          role: t.enum(["ADMIN", "WORKER"]),
+        },
+        machineUsers: {
+          admin: { attributes: { role: "ADMIN" } },
+          worker: { attributes: { role: "WORKER" } },
+        },
+      }),
+    };
+
+    const { attributeMap, machineUserNames } = extractAttributesFromConfig(config);
+    expect(machineUserNames).toEqual(["admin", "worker"]);
+
+    const content = generateTypeDefinition(attributeMap, undefined, undefined, machineUserNames);
+    expect(content).toContain("interface MachineUserNameRegistry");
+    expect(content).toContain('"admin": true;');
+    expect(content).toContain('"worker": true;');
   });
 });
