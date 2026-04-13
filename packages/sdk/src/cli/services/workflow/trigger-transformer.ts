@@ -30,31 +30,22 @@ interface ExtendedTriggerCall {
 }
 
 /**
- * Parse a string literal from its source text.
- * Supports `"..."` and `'...'` forms. Returns undefined for template literals
- * or any non-literal expression.
- * @param raw - Raw source text of the expression
- * @returns Literal content without the surrounding quotes, or undefined
+ * Name of the injected runtime normalizer helper. Chosen to be unique enough
+ * to avoid collisions with user code.
  */
-function parseStringLiteral(raw: string): string | undefined {
-  if (raw.length < 2) return undefined;
-  const first = raw[0];
-  const last = raw[raw.length - 1];
-  if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
-    try {
-      // Safe: we verified the wrapping quotes are matched; JSON handles
-      // standard escape sequences for double-quoted strings. For single
-      // quoted strings, convert to JSON form.
-      if (first === '"') {
-        return JSON.parse(raw) as string;
-      }
-      const unquoted = raw.slice(1, -1).replace(/\\'/g, "'").replace(/"/g, '\\"');
-      return JSON.parse(`"${unquoted}"`) as string;
-    } catch {
-      return undefined;
-    }
-  }
-  return undefined;
+const NORMALIZER_IDENTIFIER = "__tailor_normalizeAuthInvoker";
+
+/**
+ * Build the source text of the injected normalizer helper.
+ *
+ * Accepts either a plain string (machine user name) or the object form
+ * `{ namespace, machineUserName }`, and always returns the object form.
+ * The auth namespace is baked in at bundle time.
+ * @param authNamespace - Auth service namespace to embed
+ * @returns Source line defining the helper
+ */
+function buildNormalizerHelperSource(authNamespace: string): string {
+  return `const ${NORMALIZER_IDENTIFIER} = (v) => typeof v === "string" ? { namespace: ${JSON.stringify(authNamespace)}, machineUserName: v } : v;\n`;
 }
 
 /**
@@ -256,27 +247,30 @@ export function transformFunctionTriggers(
   const triggerCalls = detectExtendedTriggerCalls(program, source, workflowNames, jobNames);
 
   const replacements: Replacement[] = [];
+  // Whether any workflow trigger authInvoker was wrapped with the runtime
+  // normalizer. Used to decide whether to inject the helper at the top.
+  let needsNormalizerHelper = false;
 
   for (const call of triggerCalls) {
     if (call.kind === "workflow" && call.authInvoker) {
       // Workflow trigger - get workflow name from map
       const workflowName = localWorkflowNameMap.get(call.identifierName);
       if (workflowName) {
-        // Use authInvoker info extracted during detection.
-        // If the value is a string literal (e.g. `"kiosk"`), expand it to the
-        // object form `{ namespace, machineUserName }` using the app's auth namespace.
-        // Variable references (e.g. `auth.invoker(...)`, shorthand) are passed through.
+        // Resolve the source expression for authInvoker.
+        const rawExpr = call.authInvoker.isShorthand ? "authInvoker" : call.authInvoker.valueText;
+        // Wrap with the runtime normalizer so any form (string literal,
+        // variable reference, function call, or `{ namespace, machineUserName }`
+        // object) becomes the object form the platform RPC expects. The
+        // normalizer is injected once at the top of the file.
+        // When no auth service is configured we can't expand a string, so
+        // we pass through unchanged (platform will reject a string with a
+        // clear error).
         let authInvokerExpr: string;
-        if (call.authInvoker.isShorthand) {
-          authInvokerExpr = "authInvoker";
+        if (authNamespace) {
+          authInvokerExpr = `${NORMALIZER_IDENTIFIER}(${rawExpr})`;
+          needsNormalizerHelper = true;
         } else {
-          const raw = call.authInvoker.valueText.trim();
-          const stringLiteral = parseStringLiteral(raw);
-          if (stringLiteral !== undefined && authNamespace) {
-            authInvokerExpr = `{ namespace: ${JSON.stringify(authNamespace)}, machineUserName: ${JSON.stringify(stringLiteral)} }`;
-          } else {
-            authInvokerExpr = call.authInvoker.valueText;
-          }
+          authInvokerExpr = rawExpr;
         }
         // Transform to tailor.workflow.triggerWorkflow
         const transformedCall = `tailor.workflow.triggerWorkflow("${workflowName}", ${call.argsText || "undefined"}, { authInvoker: ${authInvokerExpr} })`;
@@ -306,5 +300,14 @@ export function transformFunctionTriggers(
     }
   }
 
-  return applyReplacements(source, replacements);
+  const transformed = applyReplacements(source, replacements);
+
+  // Inject the normalizer helper at the top of the file if we referenced it.
+  // Each module gets its own copy; rolldown keeps module scopes separate so
+  // there is no cross-module naming conflict.
+  if (needsNormalizerHelper && authNamespace) {
+    return buildNormalizerHelperSource(authNamespace) + transformed;
+  }
+
+  return transformed;
 }

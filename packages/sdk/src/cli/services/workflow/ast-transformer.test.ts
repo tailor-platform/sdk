@@ -758,7 +758,7 @@ const result = await myWorkflow.trigger({ id: 1 }, { authInvoker });
       expect(result).toContain("{ authInvoker: authInvoker }");
     });
 
-    it("expands a string-literal authInvoker to object form using authNamespace", () => {
+    it("wraps a string-literal authInvoker with the runtime normalizer when authNamespace is provided", () => {
       const source = `
 const result = await myWorkflow.trigger({ id: 1 }, { authInvoker: "kiosk" });
 `;
@@ -775,12 +775,75 @@ const result = await myWorkflow.trigger({ id: 1 }, { authInvoker: "kiosk" });
       );
 
       expect(result).toContain('tailor.workflow.triggerWorkflow("my-workflow"');
+      expect(result).toContain('{ authInvoker: __tailor_normalizeAuthInvoker("kiosk") }');
+      // Helper injected at the top of the file with the namespace baked in
       expect(result).toContain(
-        '{ authInvoker: { namespace: "my-auth", machineUserName: "kiosk" } }',
+        'const __tailor_normalizeAuthInvoker = (v) => typeof v === "string" ? { namespace: "my-auth", machineUserName: v } : v;',
       );
     });
 
-    it("keeps string-literal authInvoker as-is when authNamespace is not provided", () => {
+    it("wraps a variable-reference authInvoker with the runtime normalizer", () => {
+      const source = `
+const invoker = "kiosk";
+const result = await myWorkflow.trigger({ id: 1 }, { authInvoker: invoker });
+`;
+      const workflowNameMap = new Map([["myWorkflow", "my-workflow"]]);
+      const jobNameMap = new Map<string, string>();
+
+      const result = transformFunctionTriggers(
+        source,
+        workflowNameMap,
+        jobNameMap,
+        undefined,
+        undefined,
+        "my-auth",
+      );
+
+      expect(result).toContain("{ authInvoker: __tailor_normalizeAuthInvoker(invoker) }");
+    });
+
+    it("wraps a shorthand authInvoker with the runtime normalizer", () => {
+      const source = `
+const authInvoker = "kiosk";
+const result = await myWorkflow.trigger({ id: 1 }, { authInvoker });
+`;
+      const workflowNameMap = new Map([["myWorkflow", "my-workflow"]]);
+      const jobNameMap = new Map<string, string>();
+
+      const result = transformFunctionTriggers(
+        source,
+        workflowNameMap,
+        jobNameMap,
+        undefined,
+        undefined,
+        "my-auth",
+      );
+
+      expect(result).toContain("{ authInvoker: __tailor_normalizeAuthInvoker(authInvoker) }");
+    });
+
+    it("injects the normalizer helper only once per file even for multiple trigger calls", () => {
+      const source = `
+await myWorkflow.trigger({ id: 1 }, { authInvoker: "kiosk" });
+await myWorkflow.trigger({ id: 2 }, { authInvoker: "batch" });
+`;
+      const workflowNameMap = new Map([["myWorkflow", "my-workflow"]]);
+      const jobNameMap = new Map<string, string>();
+
+      const result = transformFunctionTriggers(
+        source,
+        workflowNameMap,
+        jobNameMap,
+        undefined,
+        undefined,
+        "my-auth",
+      );
+
+      const matches = result.match(/const __tailor_normalizeAuthInvoker =/g);
+      expect(matches).toHaveLength(1);
+    });
+
+    it("keeps authInvoker unchanged and omits the helper when authNamespace is not provided", () => {
       const source = `
 const result = await myWorkflow.trigger({ id: 1 }, { authInvoker: "kiosk" });
 `;
@@ -790,6 +853,7 @@ const result = await myWorkflow.trigger({ id: 1 }, { authInvoker: "kiosk" });
       const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain('{ authInvoker: "kiosk" }');
+      expect(result).not.toContain("__tailor_normalizeAuthInvoker");
     });
   });
 
