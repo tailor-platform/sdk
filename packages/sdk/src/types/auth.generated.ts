@@ -38,7 +38,7 @@ export type SAMLInput = {
   metadataURL?: string | undefined;
   /** Raw SAML metadata XML (mutually exclusive with metadataURL) */
   rawMetadata?: string | undefined;
-  /** URL to redirect to when SAML ACS receives a response with an empty RelayState. This allows applications to handle the situation on their own, for example by initiating a standard SP-initiated login flow. */
+  /** URL to redirect to when SAML ACS receives a response with an empty RelayState. */
   defaultRedirectURL?: string | undefined;
 };
 
@@ -52,7 +52,7 @@ export type SAML = {
   metadataURL?: string | undefined;
   /** Raw SAML metadata XML (mutually exclusive with metadataURL) */
   rawMetadata?: string | undefined;
-  /** URL to redirect to when SAML ACS receives a response with an empty RelayState. This allows applications to handle the situation on their own, for example by initiating a standard SP-initiated login flow. */
+  /** URL to redirect to when SAML ACS receives a response with an empty RelayState. */
   defaultRedirectURL?: string | undefined;
 };
 
