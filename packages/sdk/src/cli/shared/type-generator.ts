@@ -89,9 +89,14 @@ ${mapFields}
 ${envFields}
   }`;
 
-  // Generate MachineUserNameRegistry interface
+  // Generate MachineUserNameRegistry interface.
+  // Quote keys only when they aren't valid TypeScript identifiers — matches
+  // the formatter (oxfmt) output so subsequent format passes are no-ops.
+  const isValidIdentifier = (s: string): boolean => /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(s);
   const machineUserFields = machineUserNames?.length
-    ? machineUserNames.map((name) => `    ${JSON.stringify(name)}: true;`).join("\n")
+    ? machineUserNames
+        .map((name) => `    ${isValidIdentifier(name) ? name : JSON.stringify(name)}: true;`)
+        .join("\n")
     : "";
 
   const machineUserBody =

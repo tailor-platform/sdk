@@ -90,8 +90,11 @@ describe("generateTypeDefinition", () => {
     ]);
 
     expect(result).toContain("interface MachineUserNameRegistry");
+    // Names with hyphens are quoted
     expect(result).toContain('"manager-machine-user": true;');
-    expect(result).toContain('"kiosk": true;');
+    // Valid identifiers are emitted unquoted (matches formatter output)
+    expect(result).toContain("kiosk: true;");
+    expect(result).not.toContain('"kiosk": true;');
   });
 });
 
@@ -144,7 +147,7 @@ describe("extractAttributesFromConfig + generateTypeDefinition", () => {
 
     const content = generateTypeDefinition(attributeMap, undefined, undefined, machineUserNames);
     expect(content).toContain("interface MachineUserNameRegistry");
-    expect(content).toContain('"admin": true;');
-    expect(content).toContain('"worker": true;');
+    expect(content).toContain("admin: true;");
+    expect(content).toContain("worker: true;");
   });
 });
