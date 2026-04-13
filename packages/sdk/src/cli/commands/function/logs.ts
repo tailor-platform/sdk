@@ -3,12 +3,17 @@ import { FunctionExecution_Type } from "@tailor-proto/tailor/v1/function_resourc
 import { arg } from "politty";
 import { z } from "zod";
 import { workspaceArgs } from "@/cli/shared/args";
-import { fetchAll, initOperatorClient } from "@/cli/shared/client";
+import { fetchAll, initOperatorClient, type OperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { formatKeyValueTable } from "@/cli/shared/format";
 import { functionExecutionStatusToString } from "@/cli/shared/function-execution";
+import {
+  downloadFunctionScript,
+  scriptNameToRegistryName,
+} from "@/cli/shared/function-script-download";
 import { logger, styles } from "@/cli/shared/logger";
+import { formatErrorWithSourcemap } from "@/cli/shared/stack-trace";
 import type { FunctionExecution } from "@tailor-proto/tailor/v1/function_resource_pb";
 
 interface FunctionExecutionListInfo {
@@ -20,6 +25,12 @@ interface FunctionExecutionListInfo {
   finishedAt: Date | null;
 }
 
+interface FunctionExecutionErrorDisplay {
+  name: string;
+  message: string;
+  stackTrace: string;
+}
+
 interface FunctionExecutionDetailInfo {
   id: string;
   scriptName: string;
@@ -29,6 +40,7 @@ interface FunctionExecutionDetailInfo {
   finishedAt: Date | null;
   logs: string;
   result: string;
+  error: FunctionExecutionErrorDisplay | null;
 }
 
 /**
@@ -78,14 +90,85 @@ function toFunctionExecutionDetailInfo(execution: FunctionExecution): FunctionEx
     finishedAt: execution.finishedAt ? timestampDate(execution.finishedAt) : null,
     logs: execution.logs,
     result: execution.result,
+    error: execution.error
+      ? {
+          name: execution.error.name,
+          message: execution.error.message,
+          stackTrace: execution.error.stackTrace,
+        }
+      : null,
   };
 }
 
 /**
- * Print function execution detail in a human-readable format.
- * @param detail - Function execution detail info
+ * Compose a V8-style error string from a FunctionErrorInfo so that it
+ * can be parsed by `parseStackTrace`.
+ *
+ * `Error.prototype.stack` in V8 begins with `Name: message`, but the
+ * platform may store only the frame lines; in that case prepend the
+ * message line. When `stackTrace` is empty, return only `Name: message`.
+ * @param error - Function error info from FunctionExecution
+ * @returns Error string suitable for parseStackTrace
  */
-function printFunctionExecutionDetail(detail: FunctionExecutionDetailInfo) {
+export function composeExecutionErrorString(error: FunctionExecutionErrorDisplay): string {
+  const { name, message, stackTrace } = error;
+  if (!stackTrace) return `${name}: ${message}`;
+  const firstLine = stackTrace.split("\n", 1)[0] ?? "";
+  if (/^\s+at\s+/.test(firstLine)) {
+    return `${name}: ${message}\n${stackTrace}`;
+  }
+  return stackTrace;
+}
+
+/**
+ * Plain-text fallback used when sourcemap mapping is unavailable.
+ * Shows `Name: message` then the raw stack trace lines (dimmed).
+ * @param error - Function error info from FunctionExecution
+ * @returns Formatted fallback string for display
+ */
+function formatExecutionErrorFallback(error: FunctionExecutionErrorDisplay): string {
+  const lines = [`  ${styles.error(`${error.name}: ${error.message}`)}`];
+  if (error.stackTrace) {
+    for (const line of error.stackTrace.split("\n")) {
+      lines.push(`  ${styles.dim(line)}`);
+    }
+  }
+  return lines.join("\n");
+}
+
+/**
+ * Format an execution error for display, applying sourcemap mapping
+ * when bundled code is available.
+ * @param error - Function error info from FunctionExecution
+ * @param bundledCode - Downloaded bundled script content (may be null)
+ * @returns Formatted error string for display
+ */
+export function formatExecutionError(
+  error: FunctionExecutionErrorDisplay,
+  bundledCode: string | null,
+): string {
+  if (bundledCode && error.stackTrace) {
+    const errorString = composeExecutionErrorString(error);
+    const formatted = formatErrorWithSourcemap(errorString, bundledCode, process.cwd());
+    if (formatted) return formatted;
+  }
+  return formatExecutionErrorFallback(error);
+}
+
+interface PrintFunctionExecutionDetailOptions {
+  detail: FunctionExecutionDetailInfo;
+  /** Bundled script content for sourcemap-based stack trace mapping (optional) */
+  bundledCode?: string | null;
+}
+
+/**
+ * Print function execution detail in a human-readable format.
+ * @param options - Print options
+ * @param options.detail - Function execution detail info
+ * @param options.bundledCode - Downloaded bundled script content (used for sourcemap mapping)
+ */
+function printFunctionExecutionDetail(options: PrintFunctionExecutionDetailOptions) {
+  const { detail, bundledCode } = options;
   const formatDate = (date: Date | null): string => (date ? date.toISOString() : "N/A");
 
   const summaryData: [string, string][] = [
@@ -114,6 +197,45 @@ function printFunctionExecutionDetail(detail: FunctionExecutionDetailInfo) {
       logger.log(`  ${detail.result}`);
     }
   }
+
+  if (detail.error) {
+    logger.log(styles.bold("\nError:"));
+    logger.log(formatExecutionError(detail.error, bundledCode ?? null));
+  }
+}
+
+/**
+ * Download a deployed function script for sourcemap mapping. Logs a
+ * debug message on failure but never throws. Error display falls back
+ * to a plain-text format when the script cannot be retrieved.
+ *
+ * `FunctionExecution.scriptName` does not match the function registry
+ * name directly; `scriptNameToRegistryName` translates between the two
+ * formats.
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ * @param scriptName - Script name (matches FunctionExecution.scriptName)
+ * @returns Bundled script content, or null when unavailable
+ */
+async function downloadScriptForMapping(
+  client: OperatorClient,
+  workspaceId: string,
+  scriptName: string,
+): Promise<string | null> {
+  const registryName = scriptNameToRegistryName(scriptName);
+  if (registryName == null) {
+    logger.debug(
+      `Script "${scriptName}" is not a deployed registry script (e.g. test-run or seed); skipping sourcemap mapping.`,
+    );
+    return null;
+  }
+  const code = await downloadFunctionScript({ client, workspaceId, name: registryName });
+  if (code == null) {
+    logger.debug(
+      `Could not download script "${scriptName}" (registry: "${registryName}") for stack trace mapping; showing raw stack trace.`,
+    );
+  }
+  return code;
 }
 
 export const logsCommand = defineAppCommand({
@@ -154,7 +276,14 @@ export const logsCommand = defineAppCommand({
       if (args.json) {
         logger.out(detail);
       } else {
-        printFunctionExecutionDetail(detail);
+        // Download the deployed script when an error is present so the
+        // stack trace can be mapped back to original sources via the
+        // inline sourcemap. Failure (script removed, no permission, etc.)
+        // is non-fatal; we fall back to a plain-text error display.
+        const bundledCode = detail.error
+          ? await downloadScriptForMapping(client, workspaceId, detail.scriptName)
+          : null;
+        printFunctionExecutionDetail({ detail, bundledCode });
       }
     } else {
       const executions = await fetchAll(async (pageToken, maxPageSize) => {
