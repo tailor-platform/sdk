@@ -9,6 +9,7 @@ import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { ExecutorSchema } from "@/parser/service/executor";
 import { ResolverSchema } from "@/parser/service/resolver";
+import { t } from "@/parser/service/tailordb/runtime";
 import { WorkflowJobSchema } from "@/parser/service/workflow";
 
 export type FunctionType = "resolver" | "executor" | "workflow-job" | "plain";
@@ -63,8 +64,6 @@ export async function detectFunctionType(
     let inputSchema: DetectedFunction["inputSchema"];
     if (rawInput) {
       // Build schema object for local format detection.
-      // t is already loaded by the user's module (which imports @tailor-platform/sdk).
-      const { t } = await import("@tailor-platform/sdk");
       inputSchema = t.object(rawInput) as InputSchema;
     }
     return {
