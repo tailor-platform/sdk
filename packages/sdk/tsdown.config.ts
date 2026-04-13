@@ -36,6 +36,10 @@ export default defineConfig({
   outDir: "dist",
   tsconfig: "./tsconfig.json",
   minify: false,
+  // `@tailor-platform/sdk` is self-referential (this package). The CLI
+  // dynamically imports it at runtime to share the already-loaded module
+  // with the user's code, so tell rolldown to leave it as an external.
+  external: ["@tailor-platform/sdk"],
   outExtensions: () => ({
     js: ".mjs",
     dts: ".d.mts",

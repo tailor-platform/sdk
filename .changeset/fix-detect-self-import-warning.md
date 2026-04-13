@@ -2,4 +2,4 @@
 "@tailor-platform/sdk": patch
 ---
 
-Remove self-referential dynamic import in `function test-run` detection that produced an UNRESOLVED_IMPORT warning during SDK builds
+Silence the `UNRESOLVED_IMPORT` warning emitted during SDK builds by marking the self-referential `@tailor-platform/sdk` dynamic import in `function test-run` detection as external
