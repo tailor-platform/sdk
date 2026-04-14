@@ -203,7 +203,11 @@ function normalizeComparableExecutor(executor: MessageInitShape<typeof ExecutorE
           ...normalized.triggerConfig,
           config: {
             ...normalized.triggerConfig.config,
-            value: {},
+            value: {
+              ...normalized.triggerConfig.config.value,
+              // secret is server-managed, so omit it from comparison
+              secret: undefined,
+            },
           },
         }
       : normalized.triggerConfig?.config?.case === "event"
@@ -371,7 +375,24 @@ function protoExecutor(
       triggerConfig = {
         config: {
           case: "incomingWebhook",
-          value: {},
+          value: {
+            ...(trigger.response
+              ? {
+                  response: {
+                    ...(trigger.response.body
+                      ? {
+                          body: {
+                            expr: `(${stringifyFunction(trigger.response.body)})(${argsExpr})`,
+                          },
+                        }
+                      : {}),
+                    ...(trigger.response.statusCode != null
+                      ? { statusCode: trigger.response.statusCode }
+                      : {}),
+                  },
+                }
+              : {}),
+          },
         },
       };
       break;

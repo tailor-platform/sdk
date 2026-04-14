@@ -41,8 +41,23 @@ export type ScheduleTrigger = {
   timezone: string;
 };
 
+export type IncomingWebhookTriggerResponse = {
+  /** Function returning the response body */
+  body?: Function | undefined;
+  /** HTTP status code for the response */
+  statusCode?: number | undefined;
+};
+export type IncomingWebhookTriggerResponseInput = IncomingWebhookTriggerResponse;
+
 export type IncomingWebhookTrigger = {
   kind: "incomingWebhook";
+  /** Response configuration */
+  response?:
+    | {
+        body?: Function | undefined;
+        statusCode?: number | undefined;
+      }
+    | undefined;
 };
 export type IncomingWebhookTriggerInput = IncomingWebhookTrigger;
 
@@ -194,6 +209,12 @@ export type ExecutorInput = {
       }
     | {
         kind: "incomingWebhook";
+        response?:
+          | {
+              body?: Function | undefined;
+              statusCode?: number | undefined;
+            }
+          | undefined;
       }
     | {
         kind: "idpUser";
@@ -244,6 +265,12 @@ export type Executor = {
       }
     | {
         kind: "incomingWebhook";
+        response?:
+          | {
+              body?: Function | undefined;
+              statusCode?: number | undefined;
+            }
+          | undefined;
       }
     | {
         kind: "idpUser";

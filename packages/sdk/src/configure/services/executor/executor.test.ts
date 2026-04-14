@@ -165,6 +165,84 @@ describe("webhookTrigger", () => {
   });
 });
 
+describe("webhookTrigger response", () => {
+  test("can specify response with body and statusCode", () => {
+    const executor = createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger<{
+        body: { challenge: string };
+        headers: Record<string, string>;
+      }>({
+        response: {
+          body: (args) => ({ challenge: args.body.challenge }),
+          statusCode: 200,
+        },
+      }),
+      operation: {
+        kind: "function",
+        body: () => {},
+      },
+    });
+    expect(executor.trigger.response?.body).toBeTypeOf("function");
+    expect(executor.trigger.response?.statusCode).toBe(200);
+  });
+
+  test("can specify response with statusCode only", () => {
+    const executor = createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger({
+        response: {
+          statusCode: 202,
+        },
+      }),
+      operation: {
+        kind: "function",
+        body: () => {},
+      },
+    });
+    expect(executor.trigger.response?.statusCode).toBe(202);
+    expect(executor.trigger.response?.body).toBeUndefined();
+  });
+
+  test("response body args are typed from trigger generic", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger<{
+        body: { challenge: string };
+        headers: { "x-custom": string };
+      }>({
+        response: {
+          body: (args) => {
+            expectTypeOf(args.body.challenge).toEqualTypeOf<string>();
+            expectTypeOf(args.headers).toExtend<{ "x-custom": string }>();
+            return { challenge: args.body.challenge };
+          },
+        },
+      }),
+      operation: {
+        kind: "function",
+        body: () => {},
+      },
+    });
+  });
+
+  test("response body cannot return non-JSON value", () => {
+    incomingWebhookTrigger({
+      response: {
+        // @ts-expect-error Date is not JsonValue
+        body: () => new Date(),
+      },
+    });
+
+    incomingWebhookTrigger({
+      response: {
+        // @ts-expect-error undefined is not JsonValue
+        body: () => undefined,
+      },
+    });
+  });
+});
+
 describe("recordCreatedTrigger", () => {
   test("can omit condition", () => {
     const user = db.type("User", {
