@@ -617,9 +617,6 @@ importers:
       pkg-types:
         specifier: 2.3.0
         version: 2.3.0
-      politty:
-        specifier: 0.4.13
-        version: 0.4.13(@clack/prompts@1.2.0)(@inquirer/prompts@8.4.0(@types/node@24.12.2))(zod@4.3.6)
       rolldown:
         specifier: 1.0.0-rc.13
         version: 1.0.0-rc.13
@@ -693,6 +690,9 @@ importers:
       oxlint-tsgolint:
         specifier: 0.20.0
         version: 0.20.0
+      politty:
+        specifier: 0.4.14
+        version: 0.4.14(@clack/prompts@1.2.0)(@inquirer/prompts@8.4.0(@types/node@24.12.2))(zod@4.3.6)
       sonda:
         specifier: 0.11.1
         version: 0.11.1
@@ -4715,8 +4715,8 @@ packages:
     peerDependencies:
       zod: ^4.2.1
 
-  politty@0.4.13:
-    resolution: {integrity: sha512-XfjkE0uMnTPJ4Qq9pvncgd0vSMmEJGCgAL+jvILCPkOzHq7CKjRO8A5xMSALUFUDFm/ZhgMlPzgijE6OJwJUIQ==}
+  politty@0.4.14:
+    resolution: {integrity: sha512-YmPmZKT5uXASbjwiJeBB/l6kA0VlIWSHT9Kz/Ek3ZpBSxdaGKv9H2FYvAIuOZRQTAtBVjavLPMxF2IKId1at5g==}
     engines: {node: '>=18'}
     peerDependencies:
       '@clack/prompts': ^0.10.0 || ^0.11.0 || ^1.0.0
@@ -9180,7 +9180,7 @@ snapshots:
       string-width: 8.2.0
       zod: 4.3.6
 
-  politty@0.4.13(@clack/prompts@1.2.0)(@inquirer/prompts@8.4.0(@types/node@24.12.2))(zod@4.3.6):
+  politty@0.4.14(@clack/prompts@1.2.0)(@inquirer/prompts@8.4.0(@types/node@24.12.2))(zod@4.3.6):
     dependencies:
       string-width: 8.2.0
       zod: 4.3.6
