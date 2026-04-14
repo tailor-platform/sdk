@@ -31,13 +31,7 @@ interface FunctionExecutionErrorDisplay {
   stackTrace: string;
 }
 
-interface FunctionExecutionDetailInfo {
-  id: string;
-  scriptName: string;
-  status: string;
-  type: string;
-  startedAt: Date | null;
-  finishedAt: Date | null;
+interface FunctionExecutionDetailInfo extends FunctionExecutionListInfo {
   logs: string;
   result: string;
   error: FunctionExecutionErrorDisplay | null;
@@ -82,12 +76,7 @@ function toFunctionExecutionListInfo(execution: FunctionExecution): FunctionExec
  */
 function toFunctionExecutionDetailInfo(execution: FunctionExecution): FunctionExecutionDetailInfo {
   return {
-    id: execution.id,
-    scriptName: execution.scriptName,
-    status: functionExecutionStatusToString(execution.status),
-    type: functionExecutionTypeToString(execution.type),
-    startedAt: execution.startedAt ? timestampDate(execution.startedAt) : null,
-    finishedAt: execution.finishedAt ? timestampDate(execution.finishedAt) : null,
+    ...toFunctionExecutionListInfo(execution),
     logs: execution.logs,
     result: execution.result,
     error: execution.error
@@ -133,11 +122,10 @@ export function composeExecutionErrorString(error: FunctionExecutionErrorDisplay
 function formatExecutionErrorFallback(error: FunctionExecutionErrorDisplay): string {
   const composed = composeExecutionErrorString(error);
   const [headerLine, ...frameLines] = composed.split("\n");
-  const lines = [`  ${styles.error(headerLine ?? "")}`];
-  for (const line of frameLines) {
-    lines.push(`  ${styles.dim(line)}`);
-  }
-  return lines.join("\n");
+  return [
+    `  ${styles.error(headerLine ?? "")}`,
+    ...frameLines.map((line) => `  ${styles.dim(line)}`),
+  ].join("\n");
 }
 
 /**
