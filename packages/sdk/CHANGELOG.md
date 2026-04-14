@@ -1,5 +1,31 @@
 # @tailor-platform/sdk
 
+## 1.37.0
+
+### Minor Changes
+
+- [#971](https://github.com/tailor-platform/sdk/pull/971) [`be1a354`](https://github.com/tailor-platform/sdk/commit/be1a354c44f4c406d674fb03fc6695d07662dfac) Thanks [@toiroakr](https://github.com/toiroakr)! - Accept plain string for `authInvoker` in resolvers, executors, and `workflow.trigger()` (e.g. `authInvoker: "kiosk"`). Machine user names are type-narrowed via the generated `tailor.d.ts` (`MachineUserNameRegistry` interface). `auth.invoker(...)` is now deprecated in favor of the string form, which avoids pulling config-layer (Node-only) dependencies into runtime bundles.
+
+- [#858](https://github.com/tailor-platform/sdk/pull/858) [`28872e5`](https://github.com/tailor-platform/sdk/commit/28872e538fec564cdbd675a6fa102820fe6ccf49) Thanks [@r253hmdryou](https://github.com/r253hmdryou)! - Group related resource changes in apply dry-run output
+
+  Consolidate function registry changes with their parent resources (workflow, resolver, executor, auth hook) in dry-run display. Group TailorDB type and gqlPermission changes by type name. Nest resources under their namespace for clearer hierarchy.
+
+  Plan summary counts now reflect grouped display units to match the displayed rows.
+
+### Patch Changes
+
+- [#972](https://github.com/tailor-platform/sdk/pull/972) [`0a70288`](https://github.com/tailor-platform/sdk/commit/0a7028873f6e9d0c13fc8df3e203f9f8c3ff45d3) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `UNRESOLVED_IMPORT` warning during SDK builds by replacing the self-referential `@tailor-platform/sdk` dynamic import in `function test-run` detection with an alias-based dynamic import
+
+- [#961](https://github.com/tailor-platform/sdk/pull/961) [`6638782`](https://github.com/tailor-platform/sdk/commit/663878239f573537965071e61c92c70be1c4bdda) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency typescript-eslint to v8.58.1
+
+- [#964](https://github.com/tailor-platform/sdk/pull/964) [`3472427`](https://github.com/tailor-platform/sdk/commit/34724277f12e463d6e60b1613b035aa27d3161e5) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @inquirer/prompts to v8.4.1
+
+- [#967](https://github.com/tailor-platform/sdk/pull/967) [`bed9050`](https://github.com/tailor-platform/sdk/commit/bed9050172b74ad5a2200de55b80fbc397b6ef7a) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency rolldown to v1.0.0-rc.15
+
+- [#968](https://github.com/tailor-platform/sdk/pull/968) [`da649c6`](https://github.com/tailor-platform/sdk/commit/da649c69285c4b7b53c28b2ad2b3531b2a0686be) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update actions/create-github-app-token action to v3.1.1
+
+- [#969](https://github.com/tailor-platform/sdk/pull/969) [`133bc14`](https://github.com/tailor-platform/sdk/commit/133bc143b542fc82a462b844c0eca3888332ae24) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update pnpm/action-setup action to v6
+
 ## 1.36.0
 
 ### Minor Changes
