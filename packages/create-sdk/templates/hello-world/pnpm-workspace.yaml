@@ -1,3 +1,7 @@
 allowBuilds:
+  "@prisma/engines": true
+  "@swc/core": true
   "@tailor-platform/sdk": true
-# pnpm v10/v11 compatible
+  esbuild: true
+  multiline-ts: true
+  protobufjs: true
