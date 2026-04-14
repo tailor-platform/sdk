@@ -27,5 +27,15 @@
     "typescript": "5.9.3",
     "typescript-eslint": "8.57.1",
     "vitest": "4.1.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/engines",
+      "@swc/core",
+      "@tailor-platform/sdk",
+      "esbuild",
+      "multiline-ts",
+      "protobufjs"
+    ]
   }
 }
