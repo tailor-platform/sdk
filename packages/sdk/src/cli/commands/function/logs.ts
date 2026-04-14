@@ -231,6 +231,7 @@ interface DownloadScriptForMappingOptions {
  * @param options.client - Operator client instance
  * @param options.workspaceId - Workspace ID
  * @param options.scriptName - Script name (matches FunctionExecution.scriptName)
+ * @param options.executionType - Execution type used to discriminate registry name translation
  * @param options.executionStartedAt - Execution start timestamp used for staleness check
  * @returns Bundled script content, or null when unavailable / stale
  */

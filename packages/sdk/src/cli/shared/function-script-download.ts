@@ -85,7 +85,7 @@ export interface DownloadFunctionScriptOptions {
   client: OperatorClient;
   /** Workspace ID */
   workspaceId: string;
-  /** Function name (matches FunctionExecution.scriptName) */
+  /** Function registry name (translated from FunctionExecution.scriptName via scriptNameToRegistryName) */
   name: string;
   /** Optional content hash for a specific version (defaults to current version) */
   contentHash?: string;
