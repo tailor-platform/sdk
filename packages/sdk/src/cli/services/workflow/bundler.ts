@@ -16,6 +16,7 @@ interface JobInfo {
   name: string;
   exportName: string;
   sourceFile: string;
+  hasWaitPoints?: boolean;
 }
 
 export interface BundleWorkflowJobsResult {
@@ -293,12 +294,16 @@ async function bundleSingleJob(
       const entryPath = path.join(outputDir, `${job.name}.entry.js`);
       const absoluteSourcePath = path.resolve(job.sourceFile);
 
+      // When the job has waitPoints, inject tailor.workflow.wait into the context
+      // so the body's destructured `wait` references the platform API directly.
+      const contextFields = job.hasWaitPoints ? `{ env, wait: tailor.workflow.wait }` : `{ env }`;
+
       const entryContent = ml /* js */ `
         import { ${job.exportName} } from "${absoluteSourcePath}";
 
         export async function main(input) {
           const env = ${JSON.stringify(env)};
-          return await ${job.exportName}.body(input, { env });
+          return await ${job.exportName}.body(input, ${contextFields});
         }
       `;
       fs.writeFileSync(entryPath, entryContent);
@@ -329,7 +334,8 @@ async function bundleSingleJob(
             if (
               !code.includes("createWorkflowJob") &&
               !code.includes("createWorkflow") &&
-              !code.includes(".trigger(")
+              !code.includes(".trigger(") &&
+              !code.includes(".resolve(")
             ) {
               return null;
             }
@@ -344,11 +350,15 @@ async function bundleSingleJob(
             );
 
             // Then, apply workflow.trigger transformation if context is provided
-            if (triggerContext && transformed.includes(".trigger(")) {
+            if (
+              triggerContext &&
+              (transformed.includes(".trigger(") || transformed.includes(".resolve("))
+            ) {
               transformed = transformFunctionTriggers(
                 transformed,
                 triggerContext.workflowNameMap,
                 triggerContext.jobNameMap,
+                triggerContext.jobWaitPointKeysMap,
                 triggerContext.workflowFileMap,
                 id,
                 triggerContext.authNamespace,

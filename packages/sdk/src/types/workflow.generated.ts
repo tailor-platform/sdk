@@ -7,6 +7,16 @@ export type WorkflowJob = {
   trigger: Function;
   /** Job implementation function */
   body: Function;
+  /** Wait point definitions */
+  waitPoints?:
+    | {
+        [x: string]: {
+          [x: string]: never;
+        };
+      }
+    | undefined;
+  /** Resolve function for wait points */
+  resolve?: Function | undefined;
 };
 export type WorkflowJobInput = WorkflowJob;
 
@@ -31,6 +41,14 @@ export type Workflow = {
     name: string;
     trigger: Function;
     body: Function;
+    waitPoints?:
+      | {
+          [x: string]: {
+            [x: string]: never;
+          };
+        }
+      | undefined;
+    resolve?: Function | undefined;
   };
   /** Retry policy for the workflow */
   retryPolicy?:

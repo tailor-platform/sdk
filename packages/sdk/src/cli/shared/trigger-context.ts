@@ -2,7 +2,11 @@ import * as fs from "node:fs";
 import { parseSync } from "oxc-parser";
 import * as path from "pathe";
 import { loadFilesWithIgnores, type FileLoadConfig } from "@/cli/services/file-loader";
-import { findAllJobs, buildJobNameMap } from "@/cli/services/workflow/job-detector";
+import {
+  findAllJobs,
+  buildJobNameMap,
+  findJobWaitPointKeys,
+} from "@/cli/services/workflow/job-detector";
 import { transformFunctionTriggers } from "@/cli/services/workflow/trigger-transformer";
 import { findAllWorkflows, buildWorkflowNameMap } from "@/cli/services/workflow/workflow-detector";
 import { logger } from "@/cli/shared/logger";
@@ -15,6 +19,8 @@ import type { Plugin } from "rolldown";
 export interface TriggerContext {
   workflowNameMap: Map<string, string>;
   jobNameMap: Map<string, string>;
+  /** Maps job variable name to its wait point keys (only for jobs with waitPoints) */
+  jobWaitPointKeysMap: Map<string, string[]>;
   /** Maps file path (without extension) to workflow name for default exports */
   workflowFileMap: Map<string, string>;
   /**
@@ -49,10 +55,11 @@ export async function buildTriggerContext(
 ): Promise<TriggerContext> {
   const workflowNameMap = new Map<string, string>();
   const jobNameMap = new Map<string, string>();
+  const jobWaitPointKeysMap = new Map<string, string[]>();
   const workflowFileMap = new Map<string, string>();
 
   if (!workflowConfig) {
-    return { workflowNameMap, jobNameMap, workflowFileMap, authNamespace };
+    return { workflowNameMap, jobNameMap, jobWaitPointKeysMap, workflowFileMap, authNamespace };
   }
 
   const workflowFiles = loadFilesWithIgnores(workflowConfig);
@@ -83,6 +90,12 @@ export async function buildTriggerContext(
       for (const [exportName, jobName] of jobMap) {
         jobNameMap.set(exportName, jobName);
       }
+
+      // Detect wait point keys for jobs
+      const waitPointKeys = findJobWaitPointKeys(program, source);
+      for (const [exportName, keys] of waitPointKeys) {
+        jobWaitPointKeysMap.set(exportName, keys);
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       logger.warn(`Failed to process workflow file ${file}: ${errorMessage}`, {
@@ -92,7 +105,7 @@ export async function buildTriggerContext(
     }
   }
 
-  return { workflowNameMap, jobNameMap, workflowFileMap, authNamespace };
+  return { workflowNameMap, jobNameMap, jobWaitPointKeysMap, workflowFileMap, authNamespace };
 }
 
 function sortedMapToJson(m: Map<string, string>): string {
@@ -107,9 +120,15 @@ function sortedMapToJson(m: Map<string, string>): string {
  */
 export function serializeTriggerContext(ctx: TriggerContext | undefined): string {
   if (!ctx) return "";
+  const sortedWaitPointKeys = JSON.stringify(
+    [...ctx.jobWaitPointKeysMap.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => [k, [...v].sort()]),
+  );
   return (
     sortedMapToJson(ctx.workflowNameMap) +
     sortedMapToJson(ctx.jobNameMap) +
+    sortedWaitPointKeys +
     sortedMapToJson(ctx.workflowFileMap) +
     (ctx.authNamespace ?? "")
   );
@@ -137,14 +156,15 @@ export function createTriggerTransformPlugin(
         },
       },
       handler(code, id) {
-        // Only transform source files that contain trigger calls
-        if (!code.includes(".trigger(")) {
+        // Only transform source files that contain trigger or resolve calls
+        if (!code.includes(".trigger(") && !code.includes(".resolve(")) {
           return null;
         }
         const transformed = transformFunctionTriggers(
           code,
           triggerContext.workflowNameMap,
           triggerContext.jobNameMap,
+          triggerContext.jobWaitPointKeysMap,
           triggerContext.workflowFileMap,
           id,
           triggerContext.authNamespace,

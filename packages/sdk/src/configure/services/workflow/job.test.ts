@@ -1,5 +1,6 @@
-import { describe, it, expectTypeOf } from "vitest";
+import { describe, it, expect, expectTypeOf } from "vitest";
 import { createWorkflowJob, type WorkflowJob } from "./job";
+import { waitPoint } from "./wait-point";
 
 describe("WorkflowJob type inference", () => {
   it("preserves literal types in output when using as const", () => {
@@ -337,6 +338,168 @@ describe("WorkflowJob type constraints", () => {
         },
       });
       expectTypeOf(job.name).toEqualTypeOf<"test">();
+    });
+  });
+});
+
+describe("WorkflowJob with waitPoints", () => {
+  describe("type inference", () => {
+    it("wait function key parameter is typed from waitPoints keys", () => {
+      const job = createWorkflowJob({
+        name: "test",
+        waitPoints: {
+          approval: waitPoint<{ message: string }, { approved: boolean }>(),
+          review: waitPoint<{ doc: string }, { score: number }>(),
+        },
+        body: async (_input: { id: string }, { wait }) => {
+          // wait should accept "approval" or "review" as keys
+          const a = await wait("approval", { message: "test" });
+          expectTypeOf(a).toEqualTypeOf<{ approved: boolean }>();
+
+          const r = await wait("review", { doc: "doc-1" });
+          expectTypeOf(r).toEqualTypeOf<{ score: number }>();
+
+          return { approved: a.approved, score: r.score };
+        },
+      });
+      expectTypeOf(job.name).toEqualTypeOf<"test">();
+    });
+
+    it("resolve method key parameter is typed from waitPoints keys", () => {
+      const job = createWorkflowJob({
+        name: "test",
+        waitPoints: {
+          approval: waitPoint<{ message: string }, { approved: boolean }>(),
+        },
+        body: async (_input: undefined, { wait }) => {
+          return await wait("approval", { message: "test" });
+        },
+      });
+
+      // resolve should be a valid function accepting "approval" as key
+      expectTypeOf(job.resolve).toBeFunction();
+    });
+
+    it("resolve callback receives typed payload and returns typed result", () => {
+      const job = createWorkflowJob({
+        name: "test",
+        waitPoints: {
+          approval: waitPoint<{ message: string }, { approved: boolean }>(),
+        },
+        body: async (_input: undefined, { wait }) => {
+          return await wait("approval", { message: "test" });
+        },
+      });
+
+      // Verify resolve callback types
+      type ResolveFn = typeof job.resolve;
+      expectTypeOf<ResolveFn>().toBeFunction();
+    });
+
+    it("wait with undefined payload requires no argument", () => {
+      const _job = createWorkflowJob({
+        name: "test",
+        waitPoints: {
+          signal: waitPoint<undefined, { done: boolean }>(),
+        },
+        body: async (_input: undefined, { wait }) => {
+          // Should be callable without payload
+          const result = await wait("signal");
+          return result;
+        },
+      });
+    });
+
+    it("wait return type applies JsonifyOutput (Date→string)", () => {
+      const _job = createWorkflowJob({
+        name: "test",
+        waitPoints: {
+          check: waitPoint<undefined, { timestamp: Date }>(),
+        },
+        body: async (_input: undefined, { wait }) => {
+          const result = await wait("check");
+          // timestamp should be string (Date becomes string via Jsonify)
+          expectTypeOf(result.timestamp).toEqualTypeOf<string>();
+          return result;
+        },
+      });
+    });
+  });
+
+  describe("backward compatibility", () => {
+    it("jobs without waitPoints still work", () => {
+      const job = createWorkflowJob({
+        name: "test",
+        body: (input: { id: string }) => ({ result: input.id }),
+      });
+      expectTypeOf(job.name).toEqualTypeOf<"test">();
+      // trigger still works the same
+      const _trigger: (input: { id: string }) => Promise<{ result: string }> = job.trigger;
+      expectTypeOf(_trigger).toBeFunction();
+    });
+  });
+
+  describe("local testing: wait/resolve coordination", () => {
+    it("wait resolves when resolve is called", async () => {
+      const job = createWorkflowJob({
+        name: "test-wait",
+        waitPoints: {
+          approval: waitPoint<{ message: string }, { approved: boolean }>(),
+        },
+        body: async (input: { id: string }, { wait }) => {
+          const result = await wait("approval", { message: `Approve ${input.id}?` });
+          return { id: input.id, approved: result.approved };
+        },
+      });
+
+      // Start the trigger (will block on wait)
+      const resultPromise = job.trigger({ id: "123" });
+
+      // Resolve the wait
+      await job.resolve("approval", "exec-1", (payload) => {
+        expect(payload).toEqual({ message: "Approve 123?" });
+        return { approved: true };
+      });
+
+      // Now the trigger should complete
+      const result = await resultPromise;
+      expect(result).toEqual({ id: "123", approved: true });
+    });
+
+    it("resolve callback result is JSON-serialized", async () => {
+      const job = createWorkflowJob({
+        name: "test-json",
+        waitPoints: {
+          check: waitPoint<undefined, { timestamp: Date }>(),
+        },
+        body: async (_input: undefined, { wait }) => {
+          return await wait("check");
+        },
+      });
+
+      const resultPromise = job.trigger();
+
+      await job.resolve("check", "exec-1", () => {
+        return { timestamp: new Date("2025-01-01T00:00:00.000Z") };
+      });
+
+      const result = await resultPromise;
+      // Date should be converted to string via JSON serialization
+      expect(result).toEqual({ timestamp: "2025-01-01T00:00:00.000Z" });
+    });
+
+    it("throws when resolving without a pending wait", async () => {
+      const job = createWorkflowJob({
+        name: "test-no-wait",
+        waitPoints: {
+          approval: waitPoint<undefined, undefined>(),
+        },
+        body: async () => undefined,
+      });
+
+      await expect(job.resolve("approval", "exec-1", () => undefined)).rejects.toThrow(
+        'No pending wait for key "approval"',
+      );
     });
   });
 });

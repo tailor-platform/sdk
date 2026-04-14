@@ -1,13 +1,93 @@
 import { parseSync } from "oxc-parser";
 import { type ASTNode, type Replacement, applyReplacements, findStatementEnd } from "./ast-utils";
-import { findAllJobs, buildJobNameMap, detectTriggerCalls } from "./job-detector";
+import {
+  findAllJobs,
+  buildJobNameMap,
+  detectTriggerCalls,
+  findJobWaitPointKeys,
+} from "./job-detector";
 import { collectSdkBindings, isSdkFunctionCall } from "./sdk-binding-collector";
 import type {
   Program,
   VariableDeclaration,
   ExportNamedDeclaration,
   ExportDefaultDeclaration,
+  CallExpression,
+  StaticMemberExpression,
+  IdentifierReference,
 } from "@oxc-project/types";
+
+interface ResolveCall {
+  identifierName: string;
+  callRange: { start: number; end: number };
+  keyText: string;
+  execIdText: string;
+  callbackText: string;
+}
+
+/**
+ * Detect .resolve() calls in the source code
+ * Returns information about each resolve call for transformation
+ * @param program - Parsed TypeScript program
+ * @param sourceText - Source code text
+ * @param jobsWithResolve - Set of known job identifier names that have waitPoints
+ * @returns Detected resolve calls
+ */
+function detectResolveCalls(
+  program: Program,
+  sourceText: string,
+  jobsWithResolve: Set<string>,
+): ResolveCall[] {
+  const calls: ResolveCall[] = [];
+
+  function walk(node: ASTNode | null | undefined): void {
+    if (!node || typeof node !== "object") return;
+
+    if (node.type === "CallExpression") {
+      const callExpr = node as unknown as CallExpression;
+      const callee = callExpr.callee;
+
+      if (callee.type === "MemberExpression") {
+        const memberExpr = callee as unknown as StaticMemberExpression;
+        if (
+          !memberExpr.computed &&
+          memberExpr.object.type === "Identifier" &&
+          memberExpr.property.name === "resolve" &&
+          callExpr.arguments.length >= 3
+        ) {
+          const identifierName = (memberExpr.object as IdentifierReference).name;
+          if (!jobsWithResolve.has(identifierName)) return;
+
+          const [keyArg, execIdArg, callbackArg] = callExpr.arguments;
+          if (keyArg && execIdArg && callbackArg) {
+            calls.push({
+              identifierName,
+              callRange: { start: callExpr.start, end: callExpr.end },
+              keyText: sourceText.slice(keyArg.start as number, keyArg.end as number),
+              execIdText: sourceText.slice(execIdArg.start as number, execIdArg.end as number),
+              callbackText: sourceText.slice(
+                callbackArg.start as number,
+                callbackArg.end as number,
+              ),
+            });
+          }
+        }
+      }
+    }
+
+    for (const key of Object.keys(node)) {
+      const child = node[key] as unknown;
+      if (Array.isArray(child)) {
+        child.forEach((c: unknown) => walk(c as ASTNode | null));
+      } else if (child && typeof child === "object") {
+        walk(child as ASTNode);
+      }
+    }
+  }
+
+  walk(program as unknown as ASTNode);
+  return calls;
+}
 
 /**
  * Find variable declarations by export names
@@ -221,6 +301,27 @@ export function transformWorkflowSource(
       replacements.push({
         start: call.fullRange.start,
         end: call.fullRange.end,
+        text: transformedCall,
+      });
+    }
+  }
+
+  // Step 5: Transform .resolve() calls to tailor.workflow.resolve()
+  // Only transform resolve calls that are NOT inside ranges being removed
+  // resolve is async on the platform, so await is preserved
+  const waitPointKeysMap = findJobWaitPointKeys(program, source);
+  const jobsWithResolve = new Set(waitPointKeysMap.keys());
+  if (jobsWithResolve.size > 0) {
+    const resolveCalls = detectResolveCalls(program, source, jobsWithResolve);
+    for (const call of resolveCalls) {
+      if (isInsideRemovedRange(call.callRange.start)) {
+        continue;
+      }
+      // job.resolve("key", executionId, callback) → tailor.workflow.resolve(executionId, "key", callback)
+      const transformedCall = `tailor.workflow.resolve(${call.execIdText}, ${call.keyText}, ${call.callbackText})`;
+      replacements.push({
+        start: call.callRange.start,
+        end: call.callRange.end,
         text: transformedCall,
       });
     }

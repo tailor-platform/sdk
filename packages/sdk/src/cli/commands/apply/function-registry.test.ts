@@ -553,7 +553,13 @@ describe("collectFunctionEntries", () => {
     });
 
     const jobs: CollectedJob[] = [
-      { name: "process-order", exportName: "processOrder", sourceFile: "workflows/order.ts" },
+      {
+        name: "process-order",
+        exportName: "processOrder",
+        sourceFile: "workflows/order.ts",
+        hasWaitPoints: false,
+        waitPointKeys: [],
+      },
     ];
 
     const entries = collectFunctionEntries(createMockApplication(), jobs, scripts);

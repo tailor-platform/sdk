@@ -17,7 +17,7 @@ interface AuthInvokerInfo {
 }
 
 interface ExtendedTriggerCall {
-  kind: "job" | "workflow";
+  kind: "job" | "workflow" | "resolve";
   identifierName: string;
   callRange: { start: number; end: number };
   argsText: string;
@@ -27,6 +27,10 @@ interface ExtendedTriggerCall {
   hasAwait?: boolean;
   // The range including the await keyword (if present)
   fullRange?: { start: number; end: number };
+  // For resolve calls: the individual argument texts
+  resolveKeyText?: string;
+  resolveExecIdText?: string;
+  resolveCallbackText?: string;
 }
 
 /**
@@ -92,19 +96,21 @@ function extractAuthInvokerInfo(
 }
 
 /**
- * Detect .trigger() calls for known workflows and jobs
- * Only detects calls where the identifier is in workflowNames or jobNames
+ * Detect .trigger() and .resolve() calls for known workflows and jobs
+ * Only detects calls where the identifier is in workflowNames, jobNames, or jobsWithResolve
  * @param program - The parsed AST program
  * @param sourceText - The source code text
  * @param workflowNames - Set of known workflow identifier names
  * @param jobNames - Set of known job identifier names
- * @returns Detected trigger call metadata
+ * @param jobsWithResolve - Set of known job identifier names that have waitPoints (for .resolve() detection)
+ * @returns Detected trigger/resolve call metadata
  */
 function detectExtendedTriggerCalls(
   program: Program,
   sourceText: string,
   workflowNames: Set<string>,
   jobNames: Set<string>,
+  jobsWithResolve: Set<string> = new Set(),
 ): ExtendedTriggerCall[] {
   const calls: ExtendedTriggerCall[] = [];
 
@@ -118,13 +124,47 @@ function detectExtendedTriggerCalls(
 
       if (callee.type === "MemberExpression") {
         const memberExpr = callee as unknown as StaticMemberExpression;
-        if (
-          !memberExpr.computed &&
-          memberExpr.object.type === "Identifier" &&
-          memberExpr.property.name === "trigger"
-        ) {
-          const identifierName = (memberExpr.object as IdentifierReference).name;
+        const identifierName =
+          !memberExpr.computed && memberExpr.object.type === "Identifier"
+            ? (memberExpr.object as IdentifierReference).name
+            : null;
+        const propertyName = !memberExpr.computed ? memberExpr.property.name : null;
 
+        // Detect .resolve(key, executionId, callback) on jobs with waitPoints
+        if (
+          identifierName &&
+          propertyName === "resolve" &&
+          jobsWithResolve.has(identifierName) &&
+          callExpr.arguments.length >= 3
+        ) {
+          const [keyArg, execIdArg, callbackArg] = callExpr.arguments;
+          if (keyArg && execIdArg && callbackArg) {
+            const resolveKeyText = sourceText.slice(keyArg.start as number, keyArg.end as number);
+            const resolveExecIdText = sourceText.slice(
+              execIdArg.start as number,
+              execIdArg.end as number,
+            );
+            const resolveCallbackText = sourceText.slice(
+              callbackArg.start as number,
+              callbackArg.end as number,
+            );
+
+            // resolve is async on the platform, so keep await
+            calls.push({
+              kind: "resolve",
+              identifierName,
+              callRange: { start: callExpr.start, end: callExpr.end },
+              argsText: "",
+              resolveKeyText,
+              resolveExecIdText,
+              resolveCallbackText,
+              hasAwait: false,
+            });
+          }
+          return; // Skip further processing for this node
+        }
+
+        if (identifierName && propertyName === "trigger") {
           // Only process if this is a known workflow or job
           const isWorkflow = workflowNames.has(identifierName);
           const isJob = jobNames.has(identifierName);
@@ -197,20 +237,22 @@ function detectExtendedTriggerCalls(
 }
 
 /**
- * Transform trigger calls for resolver/executor/workflow functions
- * Handles both job.trigger() and workflow.trigger() calls
+ * Transform trigger and resolve calls for resolver/executor/workflow functions
+ * Handles job.trigger(), workflow.trigger(), and job.resolve() calls
  * @param source - The source code to transform
  * @param workflowNameMap - Map from variable name to workflow name
  * @param jobNameMap - Map from variable name to job name
+ * @param jobWaitPointKeysMap - Map from variable name to wait point keys (for .resolve() detection)
  * @param workflowFileMap - Map from file path (without extension) to workflow name for default exports
  * @param currentFilePath - Path of the current file being transformed (for resolving relative imports)
  * @param authNamespace - Auth service namespace used to expand string-literal `authInvoker` to object form
- * @returns Transformed source code with trigger calls rewritten
+ * @returns Transformed source code with trigger/resolve calls rewritten
  */
 export function transformFunctionTriggers(
   source: string,
   workflowNameMap: Map<string, string>,
   jobNameMap: Map<string, string>,
+  jobWaitPointKeysMap?: Map<string, string[]>,
   workflowFileMap?: Map<string, string>,
   currentFilePath?: string,
   authNamespace?: string,
@@ -242,9 +284,16 @@ export function transformFunctionTriggers(
   // Build sets of known workflow and job identifier names for filtering
   const workflowNames = new Set(localWorkflowNameMap.keys());
   const jobNames = new Set(jobNameMap.keys());
+  const jobsWithResolve = new Set(jobWaitPointKeysMap?.keys() ?? []);
 
-  // Detect trigger calls only for known workflows and jobs
-  const triggerCalls = detectExtendedTriggerCalls(program, source, workflowNames, jobNames);
+  // Detect trigger and resolve calls only for known workflows and jobs
+  const triggerCalls = detectExtendedTriggerCalls(
+    program,
+    source,
+    workflowNames,
+    jobNames,
+    jobsWithResolve,
+  );
 
   const replacements: Replacement[] = [];
   // Whether any workflow trigger authInvoker was wrapped with the runtime
@@ -294,6 +343,18 @@ export function transformFunctionTriggers(
         replacements.push({
           start: range.start,
           end: range.end,
+          text: transformedCall,
+        });
+      }
+    } else if (call.kind === "resolve") {
+      // Resolve call: job.resolve("key", executionId, callback)
+      // → tailor.workflow.resolve(executionId, "key", callback)
+      // The arguments are reordered to match the platform API.
+      if (call.resolveKeyText && call.resolveExecIdText && call.resolveCallbackText) {
+        const transformedCall = `tailor.workflow.resolve(${call.resolveExecIdText}, ${call.resolveKeyText}, ${call.resolveCallbackText})`;
+        replacements.push({
+          start: call.callRange.start,
+          end: call.callRange.end,
           text: transformedCall,
         });
       }

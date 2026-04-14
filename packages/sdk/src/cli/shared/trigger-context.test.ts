@@ -6,6 +6,7 @@ describe("serializeTriggerContext", () => {
     return {
       workflowNameMap: new Map(),
       jobNameMap: new Map(),
+      jobWaitPointKeysMap: new Map(),
       workflowFileMap: new Map(),
     };
   }
@@ -19,7 +20,7 @@ describe("serializeTriggerContext", () => {
     const b = serializeTriggerContext(emptyContext());
 
     expect(a).toBe(b);
-    expect(a).toBe("[][][]");
+    expect(a).toBe("[][][][]");
   });
 
   test("returns same output regardless of map insertion order", () => {

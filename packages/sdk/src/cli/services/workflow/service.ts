@@ -11,6 +11,10 @@ export interface CollectedJob {
   name: string;
   exportName: string;
   sourceFile: string;
+  /** Whether this job declares waitPoints */
+  hasWaitPoints: boolean;
+  /** Keys declared in waitPoints (empty when hasWaitPoints is false) */
+  waitPointKeys: string[];
 }
 
 interface WorkflowLoadResult {
@@ -116,7 +120,16 @@ async function loadAndCollectJobs(config: WorkflowServiceConfig): Promise<Workfl
   const fileCount = workflowFiles.length;
 
   // Maps for collecting data
-  const allJobsMap = new Map<string, { name: string; exportName: string; sourceFile: string }>();
+  const allJobsMap = new Map<
+    string,
+    {
+      name: string;
+      exportName: string;
+      sourceFile: string;
+      hasWaitPoints: boolean;
+      waitPointKeys: string[];
+    }
+  >();
 
   // Load all files in parallel and collect jobs and workflows
   const loadResults = await Promise.all(
@@ -161,13 +174,21 @@ async function loadAndCollectJobs(config: WorkflowServiceConfig): Promise<Workfl
  * @returns Extracted jobs and workflow
  */
 async function loadFileContent(filePath: string): Promise<{
-  jobs: Array<{ name: string; exportName: string; sourceFile: string }>;
+  jobs: Array<{
+    name: string;
+    exportName: string;
+    sourceFile: string;
+    hasWaitPoints: boolean;
+    waitPointKeys: string[];
+  }>;
   workflow: Workflow | null;
 }> {
   const jobs: Array<{
     name: string;
     exportName: string;
     sourceFile: string;
+    hasWaitPoints: boolean;
+    waitPointKeys: string[];
   }> = [];
   let workflow: Workflow | null = null;
 
@@ -188,10 +209,14 @@ async function loadFileContent(filePath: string): Promise<{
 
       const jobResult = WorkflowJobSchema.safeParse(exportValue);
       if (jobResult.success) {
+        const waitPoints = jobResult.data.waitPoints;
+        const waitPointKeys = waitPoints ? Object.keys(waitPoints) : [];
         jobs.push({
           name: jobResult.data.name,
           exportName,
           sourceFile: filePath,
+          hasWaitPoints: waitPointKeys.length > 0,
+          waitPointKeys,
         });
       } else if (isSdkBranded(exportValue, ["workflow", "workflow-job"])) {
         throw jobResult.error;

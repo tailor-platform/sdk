@@ -1,13 +1,16 @@
 import { brandValue } from "@/utils/brand";
+import type { WaitPointsConfig, WaitFn, ResolveFn } from "./wait-point";
 import type { TailorEnv } from "@/configure/types/env";
 import type { JsonCompatible } from "@/configure/types/helpers";
 import type { Jsonifiable, Jsonify, JsonPrimitive } from "type-fest";
 
 /**
  * Context object passed as the second argument to workflow job body functions.
+ * When the job declares `waitPoints`, the context includes a typed `wait` function.
  */
-export type WorkflowJobContext = {
+export type WorkflowJobContext<W extends WaitPointsConfig = WaitPointsConfig> = {
   env: TailorEnv;
+  wait: WaitFn<W>;
 };
 
 /**
@@ -39,8 +42,14 @@ export type WorkflowJobInput = undefined | JsonCompatible<unknown>;
  * - Input: Must be JSON-compatible (no Date/toJSON objects) or undefined. Interfaces are allowed.
  * - Output: Must be Jsonifiable, undefined, or void
  * - Trigger returns Jsonify<Output> (Date becomes string after JSON.stringify)
+ * - WaitPoints: Optional map of wait point keys to WaitPointDef for wait/resolve support
  */
-export interface WorkflowJob<Name extends string = string, Input = undefined, Output = undefined> {
+export interface WorkflowJob<
+  Name extends string = string,
+  Input = undefined,
+  Output = undefined,
+  WaitPoints extends WaitPointsConfig = WaitPointsConfig,
+> {
   name: Name;
   /**
    * Trigger this job with the given input.
@@ -64,7 +73,19 @@ export interface WorkflowJob<Name extends string = string, Input = undefined, Ou
   trigger: [Input] extends [undefined]
     ? () => Promise<JsonifyOutput<Awaited<Output>>>
     : (input: Input) => Promise<JsonifyOutput<Awaited<Output>>>;
-  body: (input: Input, context: WorkflowJobContext) => Output | Promise<Output>;
+  body: (input: Input, context: WorkflowJobContext<WaitPoints>) => Output | Promise<Output>;
+  /**
+   * Resolve a waiting execution for this job.
+   * Called from resolvers, executors, or other workflow jobs.
+   *
+   * During bundling:
+   *   `job.resolve("key", executionId, cb)` → `tailor.workflow.resolve(executionId, "key", cb)`
+   * @example
+   * await processOrder.resolve("approval", executionId, (payload) => {
+   *   return { approved: true };
+   * });
+   */
+  resolve: ResolveFn<WaitPoints>;
 }
 
 /**
@@ -140,10 +161,10 @@ type IsValidOutput<T> = T extends undefined | void
  * Body function type with conditional constraint.
  * If input contains invalid types (like Date), the body type becomes `never` to cause an error.
  */
-type WorkflowJobBody<I, O> =
+type WorkflowJobBody<I, O, W extends WaitPointsConfig = WaitPointsConfig> =
   IsValidInput<I> extends true
     ? IsValidOutput<O> extends true
-      ? (input: I, context: WorkflowJobContext) => O | Promise<O>
+      ? (input: I, context: WorkflowJobContext<W>) => O | Promise<O>
       : never
     : never;
 
@@ -158,9 +179,10 @@ export const WORKFLOW_TEST_ENV_KEY = "TAILOR_TEST_WORKFLOW_ENV";
  *
  * All jobs must be named exports from the workflow file.
  * Job names must be unique across the entire project.
- * @param config - Job configuration with name and body function
+ * @param config - Job configuration with name, body function, and optional waitPoints
  * @param config.name - Unique job name across the project
  * @param config.body - Async function that processes the job input
+ * @param config.waitPoints - Optional map of wait point definitions for wait/resolve support
  * @returns A WorkflowJob that can be triggered from other jobs
  * @example
  * // Simple job with async body:
@@ -182,11 +204,53 @@ export const WORKFLOW_TEST_ENV_KEY = "TAILOR_TEST_WORKFLOW_ENV";
  *     return { inventory, payment };
  *   },
  * });
+ * @example
+ * // Job with wait/resolve for human-in-the-loop workflows:
+ * export const processOrder = createWorkflowJob({
+ *   name: "process-order",
+ *   waitPoints: {
+ *     approval: waitPoint<{ message: string }, { approved: boolean }>(),
+ *   },
+ *   body: async (input: { orderId: string }, { wait }) => {
+ *     const result = await wait("approval", { message: `Approve ${input.orderId}?` });
+ *     return { orderId: input.orderId, approved: result.approved };
+ *   },
+ * });
  */
-export const createWorkflowJob = <const Name extends string, I = undefined, O = undefined>(config: {
+export const createWorkflowJob = <
+  const Name extends string,
+  I = undefined,
+  O = undefined,
+  W extends WaitPointsConfig = Record<string, never>,
+>(config: {
   readonly name: Name;
-  readonly body: WorkflowJobBody<I, O>;
-}): WorkflowJob<Name, I, Awaited<O>> => {
+  readonly body: WorkflowJobBody<I, O, W>;
+  readonly waitPoints?: W;
+}): WorkflowJob<Name, I, Awaited<O>, W> => {
+  // In-memory coordination for local testing of wait/resolve.
+  // In production, the bundler injects tailor.workflow.wait directly.
+  const pendingWaits = new Map<string, { payload: unknown; resolve: (result: unknown) => void }>();
+
+  const waitFn = async (key: string, payload?: unknown) => {
+    return new Promise((resolvePromise) => {
+      pendingWaits.set(key, { payload, resolve: resolvePromise });
+    });
+  };
+
+  const resolveFn = async (
+    key: string,
+    _executionId: string,
+    callback: (p: unknown) => unknown,
+  ) => {
+    const pending = pendingWaits.get(key);
+    if (!pending) {
+      throw new Error(`No pending wait for key "${key}" on job "${config.name}"`);
+    }
+    const result = await callback(pending.payload);
+    pending.resolve(result ? JSON.parse(JSON.stringify(result)) : result);
+    pendingWaits.delete(key);
+  };
+
   return brandValue(
     {
       name: config.name,
@@ -195,11 +259,12 @@ export const createWorkflowJob = <const Name extends string, I = undefined, O = 
       // In production, bundler transforms .trigger() calls to tailor.workflow.triggerJobFunction().
       trigger: async (args?: unknown) => {
         const env: TailorEnv = JSON.parse(process.env[WORKFLOW_TEST_ENV_KEY] || "{}");
-        const result = await config.body(args as I, { env });
+        const result = await config.body(args as I, { env, wait: waitFn } as WorkflowJobContext<W>);
         return result ? JSON.parse(JSON.stringify(result)) : result;
       },
       body: config.body,
-    } as WorkflowJob<Name, I, Awaited<O>>,
+      resolve: resolveFn,
+    } as WorkflowJob<Name, I, Awaited<O>, W>,
     "workflow-job",
   );
 };

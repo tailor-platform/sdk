@@ -1,6 +1,11 @@
 import { parseSync } from "oxc-parser";
 import { describe, expect, it } from "vitest";
-import { findAllJobs, detectTriggerCalls, buildJobNameMap } from "./job-detector";
+import {
+  findAllJobs,
+  detectTriggerCalls,
+  buildJobNameMap,
+  findJobWaitPointKeys,
+} from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
 import { transformFunctionTriggers } from "./trigger-transformer";
 import { findAllWorkflows, buildWorkflowNameMap } from "./workflow-detector";
@@ -771,6 +776,7 @@ const result = await myWorkflow.trigger({ id: 1 }, { authInvoker: "kiosk" });
         jobNameMap,
         undefined,
         undefined,
+        undefined,
         "my-auth",
       );
 
@@ -796,6 +802,7 @@ const result = await myWorkflow.trigger({ id: 1 }, { authInvoker: invoker });
         jobNameMap,
         undefined,
         undefined,
+        undefined,
         "my-auth",
       );
 
@@ -816,6 +823,7 @@ const result = await myWorkflow.trigger({ id: 1 }, { authInvoker });
         jobNameMap,
         undefined,
         undefined,
+        undefined,
         "my-auth",
       );
 
@@ -834,6 +842,7 @@ await myWorkflow.trigger({ id: 2 }, { authInvoker: "batch" });
         source,
         workflowNameMap,
         jobNameMap,
+        undefined,
         undefined,
         undefined,
         "my-auth",
@@ -1038,5 +1047,136 @@ const customer = fetchCustomer.trigger({ customerId: "123" });
       );
       expect(result).not.toContain("await");
     });
+  });
+
+  describe("resolve transformation", () => {
+    it("transforms job.resolve() to tailor.workflow.resolve() with reordered args", () => {
+      const source = `
+await processOrder.resolve("approval", executionId, (payload) => {
+  return { approved: true };
+});
+`;
+      const workflowNameMap = new Map<string, string>();
+      const jobNameMap = new Map([["processOrder", "process-order"]]);
+      const jobWaitPointKeysMap = new Map([["processOrder", ["approval"]]]);
+
+      const result = transformFunctionTriggers(
+        source,
+        workflowNameMap,
+        jobNameMap,
+        jobWaitPointKeysMap,
+      );
+
+      // Arguments should be reordered: (key, executionId, cb) → (executionId, key, cb)
+      expect(result).toContain('tailor.workflow.resolve(executionId, "approval", (payload)');
+    });
+
+    it("does not transform .resolve() for unknown identifiers", () => {
+      const source = `
+await unknown.resolve("key", executionId, (payload) => {
+  return { ok: true };
+});
+`;
+      const workflowNameMap = new Map<string, string>();
+      const jobNameMap = new Map<string, string>();
+      const jobWaitPointKeysMap = new Map<string, string[]>();
+
+      const result = transformFunctionTriggers(
+        source,
+        workflowNameMap,
+        jobNameMap,
+        jobWaitPointKeysMap,
+      );
+
+      // Should not transform
+      expect(result).toContain('await unknown.resolve("key"');
+      expect(result).not.toContain("tailor.workflow.resolve");
+    });
+
+    it("does not transform .resolve() for jobs without waitPoints", () => {
+      const source = `
+await myJob.resolve("key", executionId, (payload) => {
+  return { ok: true };
+});
+`;
+      const workflowNameMap = new Map<string, string>();
+      const jobNameMap = new Map([["myJob", "my-job"]]);
+      // myJob is a known job but does NOT have waitPoints
+      const jobWaitPointKeysMap = new Map<string, string[]>();
+
+      const result = transformFunctionTriggers(
+        source,
+        workflowNameMap,
+        jobNameMap,
+        jobWaitPointKeysMap,
+      );
+
+      // Should not transform since myJob has no waitPoints
+      expect(result).toContain('await myJob.resolve("key"');
+      expect(result).not.toContain("tailor.workflow.resolve");
+    });
+
+    it("transforms both .trigger() and .resolve() in the same source", () => {
+      const source = `
+const result = await fetchData.trigger({ id: "123" });
+await processOrder.resolve("approval", executionId, (payload) => {
+  return { approved: true };
+});
+`;
+      const workflowNameMap = new Map<string, string>();
+      const jobNameMap = new Map([
+        ["fetchData", "fetch-data"],
+        ["processOrder", "process-order"],
+      ]);
+      const jobWaitPointKeysMap = new Map([["processOrder", ["approval"]]]);
+
+      const result = transformFunctionTriggers(
+        source,
+        workflowNameMap,
+        jobNameMap,
+        jobWaitPointKeysMap,
+      );
+
+      expect(result).toContain('tailor.workflow.triggerJobFunction("fetch-data"');
+      expect(result).toContain('tailor.workflow.resolve(executionId, "approval"');
+    });
+  });
+});
+
+describe("AST Transformer - findJobWaitPointKeys", () => {
+  it("detects waitPoints keys from createWorkflowJob calls", () => {
+    const source = `
+import { createWorkflowJob, waitPoint } from "@tailor-platform/sdk";
+
+const myJob = createWorkflowJob({
+  name: "my-job",
+  waitPoints: {
+    approval: waitPoint(),
+    review: waitPoint(),
+  },
+  body: async (input, { wait }) => {
+    return await wait("approval");
+  },
+});
+`;
+    const { program } = parseSync("test.ts", source);
+    const keys = findJobWaitPointKeys(program, source);
+
+    expect(keys.get("myJob")).toEqual(["approval", "review"]);
+  });
+
+  it("returns empty map for jobs without waitPoints", () => {
+    const source = `
+import { createWorkflowJob } from "@tailor-platform/sdk";
+
+const myJob = createWorkflowJob({
+  name: "my-job",
+  body: async () => {},
+});
+`;
+    const { program } = parseSync("test.ts", source);
+    const keys = findJobWaitPointKeys(program, source);
+
+    expect(keys.size).toBe(0);
   });
 });

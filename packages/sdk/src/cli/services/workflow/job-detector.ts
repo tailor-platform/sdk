@@ -4,6 +4,7 @@ import type {
   Program,
   CallExpression,
   ObjectExpression,
+  ObjectProperty,
   StaticMemberExpression,
   IdentifierReference,
   AwaitExpression,
@@ -192,4 +193,82 @@ export function detectTriggerCalls(program: Program, sourceText: string): Trigge
 
   walk(program as unknown as ASTNode);
   return calls;
+}
+
+/**
+ * Find wait point keys for each job that declares waitPoints.
+ * Detects `createWorkflowJob({ ..., waitPoints: { key1: ..., key2: ... } })`.
+ * @param program - Parsed TypeScript program
+ * @param _sourceText - Source code text (currently unused)
+ * @returns Map from export name to list of wait point keys
+ */
+export function findJobWaitPointKeys(program: Program, _sourceText: string): Map<string, string[]> {
+  const result = new Map<string, string[]>();
+  const bindings = collectSdkBindings(program, "createWorkflowJob");
+
+  function walk(node: ASTNode | null | undefined, parents: ASTNode[] = []): void {
+    if (!node || typeof node !== "object") return;
+
+    if (isSdkFunctionCall(node, bindings, "createWorkflowJob")) {
+      const callExpr = node as unknown as CallExpression;
+      const args = callExpr.arguments;
+      if (args?.length >= 1 && args[0]?.type === "ObjectExpression") {
+        const configObj = args[0] as ObjectExpression;
+        const waitPointsProp = findProperty(configObj.properties, "waitPoints");
+
+        if (waitPointsProp && waitPointsProp.value.type === "ObjectExpression") {
+          const waitPointsObj = waitPointsProp.value as ObjectExpression;
+          const keys: string[] = [];
+
+          for (const prop of waitPointsObj.properties) {
+            if (prop.type === "Property") {
+              const objProp = prop as ObjectProperty;
+              const keyName =
+                objProp.key.type === "Identifier"
+                  ? objProp.key.name
+                  : objProp.key.type === "Literal"
+                    ? (objProp.key as { value?: string }).value
+                    : null;
+              if (keyName) {
+                keys.push(keyName);
+              }
+            }
+          }
+
+          if (keys.length > 0) {
+            // Find the export name from parent declarations
+            let exportName: string | undefined;
+            for (let i = parents.length - 1; i >= 0; i--) {
+              const parent = parents[i];
+              if (parent.type === "VariableDeclarator") {
+                const declarator = parent as unknown as {
+                  id?: { type?: string; name?: string };
+                };
+                if (declarator.id?.type === "Identifier") {
+                  exportName = declarator.id.name;
+                }
+                break;
+              }
+            }
+            if (exportName) {
+              result.set(exportName, keys);
+            }
+          }
+        }
+      }
+    }
+
+    const newParents = [...parents, node];
+    for (const key of Object.keys(node)) {
+      const child = node[key] as unknown;
+      if (Array.isArray(child)) {
+        child.forEach((c: unknown) => walk(c as ASTNode | null, newParents));
+      } else if (child && typeof child === "object") {
+        walk(child as ASTNode, newParents);
+      }
+    }
+  }
+
+  walk(program as unknown as ASTNode);
+  return result;
 }
