@@ -235,7 +235,9 @@ jobs:
           run_install: false
 
       - name: Install Node.js
-        run: pnpm env use --global ${{ matrix.node }}
+        uses: actions/setup-node@cdca7365b2dadb8aad0a33bc7601856ffabcc48e # v4.3.0
+        with:
+          node-version: ${{ matrix.node }}
 
       - name: Install Bun
         if: matrix.runtime == 'bun'
