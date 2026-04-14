@@ -219,6 +219,5 @@ export async function planStaticWebsite(context: PlanContext) {
     }
   });
 
-  changeSet.print();
   return { changeSet, conflicts, unmanaged, resourceOwners };
 }

@@ -43,7 +43,7 @@ describe("formatPlanSummary", () => {
         replace: 0,
         unchanged: 15,
       }),
-    ).toBe("Plan: 1 to create, 2 to update, 0 to delete, 15 unchanged");
+    ).toBe("Plan: 1 to create, 2 to update, 0 to delete");
   });
 
   test("includes replace count when replacements exist", () => {
@@ -55,6 +55,6 @@ describe("formatPlanSummary", () => {
         replace: 3,
         unchanged: 15,
       }),
-    ).toBe("Plan: 1 to create, 2 to update, 0 to delete, 3 to replace, 15 unchanged");
+    ).toBe("Plan: 1 to create, 2 to update, 0 to delete, 3 to replace");
   });
 });

@@ -256,9 +256,9 @@ Get a machine user token using the CLI:
 tailor-sdk machineuser token <name>
 ```
 
-### Using auth.invoker()
+### Specifying a machine user invoker
 
-The `auth.invoker()` method creates a type-safe reference to a machine user for use in workflow triggers. This specifies which machine user's permissions should be used when executing the workflow.
+Resolvers, executors, and `workflow.trigger()` accept an `authInvoker` option that chooses which machine user runs the operation. Pass the machine user name as a plain string — it is type-narrowed to the names you registered in `machineUsers`.
 
 ```typescript
 // tailor.config.ts
@@ -275,7 +275,6 @@ export const auth = defineAuth("my-auth", {
 ```typescript
 // resolvers/trigger-workflow.ts
 import { createResolver, t } from "@tailor-platform/sdk";
-import { auth } from "../tailor.config";
 import myWorkflow from "../workflows/my-workflow";
 
 export default createResolver({
@@ -288,7 +287,7 @@ export default createResolver({
     // Trigger workflow with machine user permissions
     const workflowRunId = await myWorkflow.trigger(
       { id: input.id },
-      { authInvoker: auth.invoker("admin-machine-user") },
+      { authInvoker: "admin-machine-user" },
     );
     return { workflowRunId };
   },
@@ -298,7 +297,9 @@ export default createResolver({
 });
 ```
 
-The `invoker()` method is type-safe and only accepts machine user names defined in the auth configuration.
+Type narrowing is provided by the generated `tailor.d.ts` (the `MachineUserNameRegistry` interface). Run `tailor-sdk generate` (or `apply`) after defining new machine users to refresh it.
+
+> **Deprecated:** The `auth.invoker("<name>")` helper is still available for backward compatibility. Prefer the string form — it does not require importing `auth` from `tailor.config.ts` into runtime files, avoiding bundling config-layer (Node-only) dependencies.
 
 ## OAuth 2.0 Clients
 
