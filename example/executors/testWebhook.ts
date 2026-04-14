@@ -7,9 +7,7 @@ export default createExecutor({
     body: { message: string; challenge: string };
     headers: Record<string, string>;
   }>({
-    response: {
-      body: (args) => ({ challenge: args.body.challenge }),
-    },
+    response: (args) => ({ challenge: args.body.challenge }),
   }),
   operation: {
     kind: "function",

@@ -166,6 +166,23 @@ describe("webhookTrigger", () => {
 });
 
 describe("webhookTrigger response", () => {
+  test("can specify response as function shorthand", () => {
+    const executor = createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger<{
+        body: { challenge: string };
+        headers: Record<string, string>;
+      }>({
+        response: (args) => ({ challenge: args.body.challenge }),
+      }),
+      operation: {
+        kind: "function",
+        body: () => {},
+      },
+    });
+    expect(executor.trigger.response).toEqual({ body: expect.any(Function) });
+  });
+
   test("can specify response with body and statusCode", () => {
     const executor = createExecutor({
       name: "test",
@@ -183,8 +200,10 @@ describe("webhookTrigger response", () => {
         body: () => {},
       },
     });
-    expect(executor.trigger.response?.body).toBeTypeOf("function");
-    expect(executor.trigger.response?.statusCode).toBe(200);
+    expect(executor.trigger.response).toEqual({
+      body: expect.any(Function),
+      statusCode: 200,
+    });
   });
 
   test("can specify response with statusCode only", () => {
@@ -200,8 +219,7 @@ describe("webhookTrigger response", () => {
         body: () => {},
       },
     });
-    expect(executor.trigger.response?.statusCode).toBe(202);
-    expect(executor.trigger.response?.body).toBeUndefined();
+    expect(executor.trigger.response).toEqual({ statusCode: 202 });
   });
 
   test("response body args are typed from trigger generic", () => {
@@ -211,12 +229,10 @@ describe("webhookTrigger response", () => {
         body: { challenge: string };
         headers: { "x-custom": string };
       }>({
-        response: {
-          body: (args) => {
-            expectTypeOf(args.body.challenge).toEqualTypeOf<string>();
-            expectTypeOf(args.headers).toExtend<{ "x-custom": string }>();
-            return { challenge: args.body.challenge };
-          },
+        response: (args) => {
+          expectTypeOf(args.body.challenge).toEqualTypeOf<string>();
+          expectTypeOf(args.headers).toExtend<{ "x-custom": string }>();
+          return { challenge: args.body.challenge };
         },
       }),
       operation: {
@@ -228,10 +244,8 @@ describe("webhookTrigger response", () => {
 
   test("response body cannot return non-JSON value", () => {
     incomingWebhookTrigger({
-      response: {
-        // @ts-expect-error Date is not JsonValue
-        body: () => new Date(),
-      },
+      // @ts-expect-error Date is not JsonValue
+      response: () => new Date(),
     });
 
     incomingWebhookTrigger({

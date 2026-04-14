@@ -15,7 +15,7 @@ export interface IncomingWebhookRequest {
   headers: Record<string, string>;
 }
 
-export interface IncomingWebhookResponse<Args> {
+export interface IncomingWebhookResponseConfig<Args> {
   /**
    * Expression that returns the webhook HTTP response body.
    * Receives the same args as the executor operation.
@@ -27,6 +27,10 @@ export interface IncomingWebhookResponse<Args> {
    */
   statusCode?: number;
 }
+
+export type IncomingWebhookResponse<Args> =
+  | ((args: Args) => JsonValue)
+  | IncomingWebhookResponseConfig<Args>;
 
 export interface IncomingWebhookTriggerOptions<Args> {
   response?: IncomingWebhookResponse<Args>;
@@ -45,9 +49,11 @@ export type IncomingWebhookTrigger<Args> = ParserIncomingWebhookTrigger & {
 export function incomingWebhookTrigger<T extends IncomingWebhookRequest>(
   options?: IncomingWebhookTriggerOptions<IncomingWebhookArgs<T>>,
 ): IncomingWebhookTrigger<IncomingWebhookArgs<T>> {
+  const response =
+    typeof options?.response === "function" ? { body: options.response } : options?.response;
   return {
     kind: "incomingWebhook",
-    ...(options?.response ? { response: options.response } : {}),
+    ...(response ? { response } : {}),
     __args: {} as IncomingWebhookArgs<T>,
   };
 }
