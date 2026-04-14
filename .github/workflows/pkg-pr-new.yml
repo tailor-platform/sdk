@@ -229,24 +229,14 @@ jobs:
         with:
           persist-credentials: false
 
-      # Node.js must be installed BEFORE pnpm/action-setup v6 so the system
-      # Node.js >= 22.13; otherwise v6 auto-enables standalone mode whose
-      # self-update resolves to a pnpm 11 beta, ignoring packageManager.
-      - name: Install Node.js
-        uses: actions/setup-node@cdca7365b2dadb8aad0a33bc7601856ffabcc48e # v4.3.0
-        with:
-          node-version: 24
-
       - name: Install pnpm
         uses: pnpm/action-setup@08c4be7e2e672a47d11bd04269e27e5f3e8529cb # v6.0.0
         with:
+          standalone: true
           run_install: false
 
-      - name: Switch Node.js to matrix version
-        if: matrix.node != 24
-        uses: actions/setup-node@cdca7365b2dadb8aad0a33bc7601856ffabcc48e # v4.3.0
-        with:
-          node-version: ${{ matrix.node }}
+      - name: Install Node.js
+        run: pnpm env use --global ${{ matrix.node }}
 
       - name: Install Bun
         if: matrix.runtime == 'bun'

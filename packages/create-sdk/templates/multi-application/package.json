@@ -23,10 +23,5 @@
     "oxlint-tsgolint": "0.20.0",
     "typescript": "5.9.3",
     "typescript-eslint": "8.58.1"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "@tailor-platform/sdk"
-    ]
   }
 }
