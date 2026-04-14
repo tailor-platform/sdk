@@ -194,23 +194,6 @@ export default defineConfig([
     },
   },
   {
-    // Plugin manager needs builder methods from configure (e.g., .description(), .permission())
-    files: ["src/plugin/manager.ts"],
-    rules: {
-      "@typescript-eslint/no-restricted-imports": [
-        "error",
-        {
-          patterns: [
-            {
-              group: ["**/cli/**", "@/cli/**"],
-              message: "Plugin module should not import from cli module.",
-            },
-          ],
-        },
-      ],
-    },
-  },
-  {
     // Built-in plugins can import from configure module
     files: ["src/plugin/builtin/**/*.ts"],
     ignores: ["src/plugin/builtin/**/*.test.ts"],
@@ -231,7 +214,7 @@ export default defineConfig([
   {
     // Non-builtin plugin modules cannot import from configure or builtin
     files: ["src/plugin/**/*.ts"],
-    ignores: ["src/plugin/**/*.test.ts", "src/plugin/builtin/**/*.ts"],
+    ignores: ["src/plugin/**/*.test.ts", "src/plugin/builtin/**/*.ts", "src/plugin/manager.ts"],
     rules: {
       "@typescript-eslint/no-restricted-imports": [
         "error",
