@@ -1,2 +1,3 @@
 allowBuilds:
   "@tailor-platform/sdk": true
+# pnpm v10/v11 compatible
