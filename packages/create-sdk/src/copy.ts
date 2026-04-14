@@ -10,7 +10,12 @@ import { Context } from "./context";
 // would break workspace:^ resolution.
 const PNPM_WORKSPACE_YAML = `\
 allowBuilds:
+  "@prisma/engines": true
+  "@swc/core": true
   "@tailor-platform/sdk": true
+  esbuild: true
+  multiline-ts: true
+  protobufjs: true
 `;
 
 export const copyProject = async (ctx: Context) => {
