@@ -10,7 +10,10 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+    - name: Setup takumi-guard
+      uses: flatt-security/setup-takumi-guard-npm@3c4ad0e8c9e81d0efbccff304adac60e42e3f32d # v1
+
+    - uses: pnpm/action-setup@08c4be7e2e672a47d11bd04269e27e5f3e8529cb # v6.0.0
       name: Install pnpm
       with:
         standalone: true
@@ -22,6 +25,12 @@ runs:
 
     - name: Install dependencies
       run: pnpm install
+      shell: bash
+
+    # takumi-guard adds registry=https://npm.flatt.tech/ to .npmrc;
+    # restore it so downstream steps don't see uncommitted changes.
+    - name: Restore .npmrc
+      run: git checkout -- .npmrc
       shell: bash
 
     # Build SDK so that the bin entry points to a real dist file

@@ -1,8 +1,10 @@
+import type { IdPPermission } from "./permission";
 import type { BuiltinIdP } from "@/types/auth.generated";
 import type { IdpDefinitionBrand } from "@/types/idp";
 import type { IdPInput } from "@/types/idp.generated";
 
 export type {
+  IdPEmailConfig,
   IdPGqlOperations,
   IdPGqlOperationsInput as IdPGqlOperationsConfig,
 } from "@/types/idp.generated";
@@ -16,7 +18,10 @@ export type {
  */
 export function defineIdp<const TClients extends string[]>(
   name: string,
-  config: Omit<IdPInput, "name" | "clients"> & { clients: TClients },
+  config: Omit<IdPInput, "name" | "clients" | "permission"> & {
+    clients: TClients;
+    permission?: IdPPermission;
+  },
 ) {
   const result = {
     ...config,
@@ -37,3 +42,6 @@ export function defineIdp<const TClients extends string[]>(
 }
 
 export type { IdPConfig, IdPExternalConfig } from "@/types/idp";
+
+export type { IdPPermission, IdPPermissionCondition } from "./permission";
+export { unsafeAllowAllIdPPermission } from "./permission";

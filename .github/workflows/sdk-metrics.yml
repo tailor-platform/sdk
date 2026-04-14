@@ -3,6 +3,11 @@ name: SDK Metrics
 on:
   pull_request:
     branches: [main]
+    paths:
+      - packages/**
+      - package.json
+      - pnpm-lock.yaml
+      - .github/workflows/sdk-metrics.yml
   push:
     branches: [main]
   workflow_dispatch:
@@ -14,6 +19,8 @@ permissions:
 
 jobs:
   coverage:
+    # Skip re-runs triggered by tailor-pr-trigger bot (changeset/generate commits)
+    if: github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]'
     name: Coverage
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -41,7 +48,7 @@ jobs:
           TAILOR_PLATFORM_FOLDER_ID: ${{ secrets.TAILOR_PLATFORM_FOLDER_ID }}
 
       - name: Upload results
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: coverage-results
           path: packages/sdk/coverage/lcov.info
@@ -51,6 +58,7 @@ jobs:
         run: pnpm --filter @tailor-platform/sdk exec tsx scripts/cleanup-e2e-workspaces.ts --run-id=${{ github.run_id }}
 
   bundle-size:
+    if: github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]'
     name: Bundle Size
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -72,12 +80,13 @@ jobs:
         run: pnpm --filter @tailor-platform/sdk measure:bundle
 
       - name: Upload results
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: bundle-size-results
           path: packages/sdk/bundle-size.json
 
   type-performance:
+    if: github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]'
     name: Type Performance
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -96,7 +105,7 @@ jobs:
         run: pnpm --filter @tailor-platform/sdk perf:typecheck
 
       - name: Upload results
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: type-perf-results
           path: |
@@ -104,6 +113,7 @@ jobs:
             packages/sdk/diagnostics-summary.json
 
   runtime-performance:
+    if: github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]'
     name: Runtime Performance
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -125,7 +135,7 @@ jobs:
         run: pnpm --filter @tailor-platform/sdk perf:runtime
 
       - name: Upload results
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: runtime-perf-results
           path: |

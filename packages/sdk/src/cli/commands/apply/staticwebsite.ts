@@ -7,10 +7,12 @@ import {
 } from "@tailor-proto/tailor/v1/staticwebsite_pb";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { createChangeSet } from "./change-set";
-import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
+import { areNormalizedEqual } from "./compare";
+import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
+import type { StaticWebsite as ProtoStaticWebsite } from "@tailor-proto/tailor/v1/staticwebsite_resource_pb";
 
 /**
  * Apply static website changes for the given phase.
@@ -61,8 +63,46 @@ type DeleteStaticWebsite = {
   request: MessageInitShape<typeof DeleteStaticWebsiteRequestSchema>;
 };
 
+type ComparableStaticWebsite = {
+  description: string;
+  allowedIpAddresses: string[];
+};
+
+type ComparableStaticWebsiteInput = {
+  description?: string;
+  allowedIpAddresses?: readonly string[];
+};
+
 function trn(workspaceId: string, name: string) {
   return `trn:v1:workspace:${workspaceId}:staticwebsite:${name}`;
+}
+
+function normalizeComparableStaticWebsiteShape(
+  input: Pick<ComparableStaticWebsite, "description" | "allowedIpAddresses">,
+): ComparableStaticWebsite {
+  return {
+    description: input.description,
+    allowedIpAddresses: [...input.allowedIpAddresses].sort(),
+  };
+}
+
+function normalizeComparableStaticWebsite(
+  input: ComparableStaticWebsiteInput,
+): ComparableStaticWebsite {
+  return normalizeComparableStaticWebsiteShape({
+    description: input.description || "",
+    allowedIpAddresses: [...(input.allowedIpAddresses || [])],
+  });
+}
+
+function areStaticWebsitesEqual(
+  existing: ProtoStaticWebsite,
+  desired: ComparableStaticWebsiteInput,
+): boolean {
+  return areNormalizedEqual(
+    normalizeComparableStaticWebsite(existing),
+    normalizeComparableStaticWebsite(desired),
+  );
 }
 
 /**
@@ -104,6 +144,7 @@ export async function planStaticWebsite(context: PlanContext) {
       existingWebsites[resource.name] = {
         resource,
         label: metadata?.labels[sdkNameLabelKey],
+        allLabels: metadata?.labels,
       };
     }),
   );
@@ -114,8 +155,18 @@ export async function planStaticWebsite(context: PlanContext) {
     const name = websiteService.name;
     const existing = existingWebsites[name];
     const metaRequest = await buildMetaRequest(trn(workspaceId, name), application.name);
+    const desired = normalizeComparableStaticWebsite(config);
+    const request = {
+      workspaceId,
+      staticwebsite: {
+        name,
+        description: config.description || "",
+        allowedIpAddresses: config.allowedIpAddresses || [],
+      },
+    };
 
     if (existing) {
+      const isManagedByApp = existing.label === application.name;
       if (!existing.label) {
         unmanaged.push({
           resourceType: "StaticWebsite",
@@ -129,30 +180,24 @@ export async function planStaticWebsite(context: PlanContext) {
         });
       }
 
-      changeSet.updates.push({
-        name,
-        request: {
-          workspaceId,
-          staticwebsite: {
-            name,
-            description: config.description || "",
-            allowedIpAddresses: config.allowedIpAddresses || [],
-          },
-        },
-        metaRequest,
-      });
+      if (
+        isManagedByApp &&
+        hasMatchingSdkVersion(existing.allLabels, metaRequest.labels) &&
+        areStaticWebsitesEqual(existing.resource as ProtoStaticWebsite, desired)
+      ) {
+        changeSet.unchanged.push({ name });
+      } else {
+        changeSet.updates.push({
+          name,
+          request,
+          metaRequest,
+        });
+      }
       delete existingWebsites[name];
     } else {
       changeSet.creates.push({
         name,
-        request: {
-          workspaceId,
-          staticwebsite: {
-            name,
-            description: config.description || "",
-            allowedIpAddresses: config.allowedIpAddresses || [],
-          },
-        },
+        request,
         metaRequest,
       });
     }
@@ -174,6 +219,5 @@ export async function planStaticWebsite(context: PlanContext) {
     }
   });
 
-  changeSet.print();
   return { changeSet, conflicts, unmanaged, resourceOwners };
 }

@@ -22,7 +22,7 @@ Generates a TypeScript file containing:
 
 - Type definitions for all TailorDB types
 - `getDB(namespace)` function to create Kysely instances
-- Utility types for Timestamp and Serial fields
+- Utility types for `Timestamp`, `Serial`, and `ObjectColumnType` (wraps nested objects containing date/datetime fields to provide correct insert vs select types)
 
 ### Usage
 

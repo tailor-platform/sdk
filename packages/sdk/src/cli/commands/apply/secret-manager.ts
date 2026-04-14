@@ -1,7 +1,7 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { createChangeSet } from "./change-set";
-import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
+import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
 import { hashValue, loadSecretsState, saveSecretsState } from "./secrets-state";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
@@ -51,7 +51,7 @@ type DeleteSecret = {
  * @returns Planned changes for vaults and secrets
  */
 export async function planSecretManager(context: PlanContext) {
-  const { client, workspaceId, application, forRemoval } = context;
+  const { client, workspaceId, application, forRemoval, forceApplyAll = false } = context;
   const secretVaults = forRemoval ? [] : application.secrets;
 
   const vaultChangeSet = createChangeSet<CreateVault, ExistingVault, DeleteVault>(
@@ -90,11 +90,13 @@ export async function planSecretManager(context: PlanContext) {
       existingVaults[resource.name] = {
         resource,
         label: metadata?.labels[sdkNameLabelKey],
+        allLabels: metadata?.labels,
       };
     }),
   );
 
   const state = loadSecretsState();
+  const skippedSecrets: string[] = [];
 
   await Promise.all(
     secretVaults.map(async (vault) => {
@@ -102,6 +104,10 @@ export async function planSecretManager(context: PlanContext) {
       const existing = existingVaults[vaultName];
 
       if (existing) {
+        const metaRequest = await buildMetaRequest(
+          vaultTrn(workspaceId, vaultName),
+          application.name,
+        );
         if (!existing.label) {
           unmanaged.push({
             resourceType: "Secret Manager vault",
@@ -114,11 +120,17 @@ export async function planSecretManager(context: PlanContext) {
             currentOwner: existing.label,
           });
         }
-        // Track existing vault for metadata update
-        vaultChangeSet.updates.push({
-          name: vaultName,
-          workspaceId,
-        });
+        if (
+          existing.label === application.name &&
+          hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)
+        ) {
+          vaultChangeSet.unchanged.push({ name: vaultName });
+        } else {
+          vaultChangeSet.updates.push({
+            name: vaultName,
+            workspaceId,
+          });
+        }
         delete existingVaults[vaultName];
       } else {
         vaultChangeSet.creates.push({
@@ -153,10 +165,17 @@ export async function planSecretManager(context: PlanContext) {
 
       // Diff secrets
       for (const secret of vault.secrets) {
+        if (secret.value == null) {
+          // Nullish value: skip create/update/delete for this secret
+          existingSet.delete(secret.name);
+          skippedSecrets.push(`${vaultName}/${secret.name}`);
+          continue;
+        }
+
         if (existingSet.has(secret.name)) {
           const currentHash = hashValue(secret.value);
           const storedHash = state.vaults[vaultName]?.[secret.name];
-          if (currentHash !== storedHash) {
+          if (forceApplyAll || currentHash !== storedHash) {
             secretChangeSet.updates.push({
               name: `${vaultName}/${secret.name}`,
               secretName: secret.name,
@@ -230,9 +249,7 @@ export async function planSecretManager(context: PlanContext) {
     }
   }
 
-  vaultChangeSet.print();
-  secretChangeSet.print();
-  return { vaultChangeSet, secretChangeSet, conflicts, unmanaged, resourceOwners };
+  return { vaultChangeSet, secretChangeSet, skippedSecrets, conflicts, unmanaged, resourceOwners };
 }
 
 function vaultTrn(workspaceId: string, name: string) {
@@ -318,7 +335,9 @@ export async function applySecretManager(
           state.vaults[vault.vaultName] = {};
         }
         for (const secret of vault.secrets) {
-          state.vaults[vault.vaultName][secret.name] = hashValue(secret.value);
+          if (secret.value != null) {
+            state.vaults[vault.vaultName][secret.name] = hashValue(secret.value);
+          }
         }
       }
       saveSecretsState(state);

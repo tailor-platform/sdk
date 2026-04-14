@@ -19,13 +19,21 @@ import * as inflection from "inflection";
 import { type ResolverService } from "@/cli/services/resolver/service";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { buildResolverOperationHookExpr } from "@/cli/shared/runtime-args";
-import { createChangeSet } from "./change-set";
+import { normalizeAuthInvoker } from "./auth-invoker";
+import { createChangeSet, type ChangeSet } from "./change-set";
+import { areNormalizedEqual, normalizeProtoConfig } from "./compare";
 import { resolverFunctionName } from "./function-registry";
-import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
+import {
+  formatChangeEntriesWithFunctionRegistry,
+  type GroupedDisplayEntry,
+  type RelatedFunctionRegistryChanges,
+} from "./grouped-display";
+import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
 import type { Executor } from "@/types/executor.generated";
-import type { Resolver, TailorField } from "@/types/resolver.generated";
+import type { TailorField } from "@/types/field.generated";
+import type { Resolver } from "@/types/resolver.generated";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
 // Scalar type mapping for field type conversion
@@ -95,7 +103,7 @@ export async function applyPipeline(
  * @returns Planned changes
  */
 export async function planPipeline(context: PlanContext) {
-  const { client, workspaceId, application, forRemoval } = context;
+  const { client, workspaceId, application, forRemoval, forceApplyAll = false } = context;
   const pipelines: Readonly<ResolverService>[] = [];
   if (!forRemoval) {
     for (const pipeline of application.resolverServices) {
@@ -114,17 +122,17 @@ export async function planPipeline(context: PlanContext) {
     resourceOwners,
   } = await planServices(client, workspaceId, application.name, pipelines);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
-  const resolverChangeSet = await planResolvers(
+  const { changeSet: resolverChangeSet } = await planResolvers(
     client,
     workspaceId,
     pipelines,
     executors,
     deletedServices,
     application.env,
+    application.authService?.config.name,
+    forceApplyAll,
   );
 
-  serviceChangeSet.print();
-  resolverChangeSet.print();
   return {
     changeSet: {
       service: serviceChangeSet,
@@ -197,6 +205,7 @@ async function planServices(
       existingServices[resource.namespace.name] = {
         resource,
         label: metadata?.labels[sdkNameLabelKey],
+        allLabels: metadata?.labels,
       };
     }),
   );
@@ -218,14 +227,21 @@ async function planServices(
         });
       }
 
-      changeSet.updates.push({
-        name: pipeline.namespace,
-        request: {
-          workspaceId,
-          namespaceName: pipeline.namespace,
-        },
-        metaRequest,
-      });
+      if (
+        existing.label === appName &&
+        hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)
+      ) {
+        changeSet.unchanged.push({ name: pipeline.namespace });
+      } else {
+        changeSet.updates.push({
+          name: pipeline.namespace,
+          request: {
+            workspaceId,
+            namespaceName: pipeline.namespace,
+          },
+          metaRequest,
+        });
+      }
       delete existingServices[pipeline.namespace];
     } else {
       changeSet.creates.push({
@@ -280,6 +296,8 @@ async function planResolvers(
   executors: ReadonlyArray<Executor>,
   deletedServices: ReadonlyArray<string>,
   env: Record<string, string | number | boolean>,
+  authNamespace: string | undefined,
+  forceApplyAll = false,
 ) {
   const changeSet = createChangeSet<CreateResolver, UpdateResolver, DeleteResolver>(
     "Pipeline resolvers",
@@ -325,43 +343,53 @@ async function planResolvers(
 
   for (const pipeline of pipelines) {
     const existingResolvers = await fetchResolvers(pipeline.namespace);
-    const existingNameSet = new Set<string>();
-    existingResolvers.forEach((resolver) => {
-      existingNameSet.add(resolver.name);
-    });
+    const existingResolversMap = new Map(
+      existingResolvers.map((resolver) => [resolver.name, resolver]),
+    );
     for (const resolver of Object.values(pipeline.resolvers)) {
-      if (existingNameSet.has(resolver.name)) {
-        changeSet.updates.push({
-          name: resolver.name,
-          request: {
-            workspaceId,
-            namespaceName: pipeline.namespace,
-            pipelineResolver: processResolver(
-              pipeline.namespace,
-              resolver,
-              executorUsedResolvers,
-              env,
-            ),
-          },
+      const desiredResolver = processResolver(
+        pipeline.namespace,
+        resolver,
+        executorUsedResolvers,
+        env,
+        authNamespace,
+      );
+      const existingResolver = existingResolversMap.get(resolver.name);
+      if (existingResolver) {
+        const { pipelineResolver: existingResolverDetail } = await client.getPipelineResolver({
+          workspaceId,
+          namespaceName: pipeline.namespace,
+          resolverName: resolver.name,
         });
-        existingNameSet.delete(resolver.name);
+        if (
+          !forceApplyAll &&
+          existingResolverDetail &&
+          areResolversEqual(existingResolverDetail, desiredResolver)
+        ) {
+          changeSet.unchanged.push({ name: resolver.name });
+        } else {
+          changeSet.updates.push({
+            name: resolver.name,
+            request: {
+              workspaceId,
+              namespaceName: pipeline.namespace,
+              pipelineResolver: desiredResolver,
+            },
+          });
+        }
+        existingResolversMap.delete(resolver.name);
       } else {
         changeSet.creates.push({
           name: resolver.name,
           request: {
             workspaceId,
             namespaceName: pipeline.namespace,
-            pipelineResolver: processResolver(
-              pipeline.namespace,
-              resolver,
-              executorUsedResolvers,
-              env,
-            ),
+            pipelineResolver: desiredResolver,
           },
         });
       }
     }
-    existingNameSet.forEach((name) => {
+    existingResolversMap.forEach((_resolver, name) => {
       changeSet.deletes.push({
         name,
         request: {
@@ -386,7 +414,142 @@ async function planResolvers(
       });
     });
   }
-  return changeSet;
+  return { changeSet };
+}
+
+type ResolverDisplayEntry = GroupedDisplayEntry;
+
+/**
+ * Format resolver changes for grouped dry-run display.
+ * @param changeSet - Resolver changes
+ * @param resolverFunctionChanges - Related function registry changes for resolvers
+ * @returns Display entries for resolver output
+ */
+export function formatResolverChangeEntries(
+  changeSet: Pick<
+    ChangeSet<CreateResolver, UpdateResolver, DeleteResolver>,
+    "creates" | "updates" | "deletes" | "replaces"
+  >,
+  resolverFunctionChanges?: RelatedFunctionRegistryChanges,
+): ResolverDisplayEntry[] {
+  return formatChangeEntriesWithFunctionRegistry(
+    "resolver",
+    changeSet,
+    resolverFunctionChanges,
+    (item) => {
+      const namespace = item.request.namespaceName;
+      return namespace ? [resolverFunctionName(namespace, item.name)] : [];
+    },
+    {
+      getNamespace: (item) => item.request.namespaceName,
+    },
+  );
+}
+
+function normalizeComparableResolver(resolver: MessageInitShape<typeof PipelineResolverSchema>) {
+  const normalized = normalizeProtoConfig(resolver) ?? {};
+  return {
+    name: normalized.name,
+    description: normalized.description ?? "",
+    authorization: normalized.authorization ?? "",
+    operationType: normalized.operationType,
+    publishExecutionEvents: normalized.publishExecutionEvents ?? false,
+    inputs: normalizeComparableFields(normalized.inputs),
+    response: normalizeComparableField(normalized.response),
+    pipelines: normalizeComparablePipelines(normalized.pipelines),
+  };
+}
+
+function areResolversEqual(
+  existing: MessageInitShape<typeof PipelineResolverSchema>,
+  desired: MessageInitShape<typeof PipelineResolverSchema>,
+): boolean {
+  return areNormalizedEqual(
+    normalizeComparableResolver(existing),
+    normalizeComparableResolver(desired),
+  );
+}
+
+function normalizeComparablePipelines(
+  pipelines: MessageInitShape<typeof PipelineResolverSchema>["pipelines"],
+): Array<{
+  name: string;
+  operationName: string;
+  description: string;
+  operationType: PipelineResolver_OperationType | undefined;
+  operationSourceRef: string;
+  operationHook: string;
+  postScript: string;
+  skipOperationOnError: boolean;
+  invoker:
+    | NonNullable<MessageInitShape<typeof PipelineResolverSchema>["pipelines"]>[number]["invoker"]
+    | undefined;
+}> {
+  return (pipelines ?? []).map((pipeline) => ({
+    name: pipeline.name ?? "",
+    operationName: pipeline.operationName ?? "",
+    description: pipeline.description ?? "",
+    operationType: pipeline.operationType,
+    operationSourceRef: pipeline.operationSourceRef ?? "",
+    operationHook: pipeline.operationHook?.expr ?? "",
+    postScript: pipeline.postScript ?? "",
+    skipOperationOnError: pipeline.skipOperationOnError ?? false,
+    invoker: pipeline.invoker ?? undefined,
+  }));
+}
+
+function normalizeComparableFields(
+  fields: MessageInitShape<typeof PipelineResolverSchema>["inputs"],
+): Array<ReturnType<typeof normalizeComparableField>> {
+  return (fields ?? []).map((field) => normalizeComparableField(field));
+}
+
+function normalizeComparableField(
+  field: MessageInitShape<typeof PipelineResolver_FieldSchema> | undefined,
+):
+  | {
+      name: string;
+      array: boolean;
+      required: boolean;
+      description: string;
+      type: ReturnType<typeof normalizeComparableType>;
+    }
+  | undefined {
+  if (!field) {
+    return undefined;
+  }
+  return {
+    name: field.name ?? "",
+    array: field.array ?? false,
+    required: field.required ?? true,
+    description: field.description ?? "",
+    type: normalizeComparableType(field.type),
+  };
+}
+
+function normalizeComparableType(
+  type: MessageInitShape<typeof PipelineResolver_TypeSchema> | undefined,
+):
+  | {
+      kind: string;
+      name: string;
+      required: boolean;
+      description: string;
+      allowedValues: unknown[];
+      fields: Array<ReturnType<typeof normalizeComparableField>>;
+    }
+  | undefined {
+  if (!type) {
+    return undefined;
+  }
+  return {
+    kind: type.kind ?? "",
+    name: type.name ?? "",
+    required: type.required ?? true,
+    description: type.description ?? "",
+    allowedValues: type.allowedValues ?? [],
+    fields: (type.fields ?? []).map((field) => normalizeComparableField(field)),
+  };
 }
 
 function processResolver(
@@ -394,6 +557,7 @@ function processResolver(
   resolver: Resolver,
   executorUsedResolvers: ReadonlySet<string>,
   env: Record<string, string | number | boolean>,
+  authNamespace: string | undefined,
 ): MessageInitShape<typeof PipelineResolverSchema> {
   const pipelines: MessageInitShape<typeof PipelineResolver_PipelineSchema>[] = [
     {
@@ -406,7 +570,11 @@ function processResolver(
         expr: buildResolverOperationHookExpr(env),
       },
       postScript: `args.body`,
-      invoker: resolver.authInvoker,
+      invoker: normalizeAuthInvoker(
+        resolver.authInvoker,
+        authNamespace,
+        `Resolver "${resolver.name}"`,
+      ),
     },
   ];
 

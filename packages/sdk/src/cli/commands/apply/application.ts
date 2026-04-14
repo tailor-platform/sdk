@@ -1,13 +1,16 @@
 import { type MessageInitShape } from "@bufbuild/protobuf";
 import { Code, ConnectError } from "@connectrpc/connect";
 import {
+  type Application as ProtoApplication,
   Subgraph_ServiceType,
   type SubgraphSchema,
 } from "@tailor-proto/tailor/v1/application_resource_pb";
 import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "@/cli/shared/client";
 import { createChangeSet } from "./change-set";
-import { buildMetaRequest } from "./label";
+import { areNormalizedEqual } from "./compare";
+import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey } from "./label";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
+import type { Application } from "@/cli/services/application";
 import type {
   DeleteApplicationRequestSchema,
   CreateApplicationRequestSchema,
@@ -79,8 +82,94 @@ type DeleteApplication = {
   request: MessageInitShape<typeof DeleteApplicationRequestSchema>;
 };
 
+type ComparableApplication = {
+  authNamespace: string;
+  authIdpConfigName: string;
+  cors: string[];
+  subgraphs: Array<{ serviceType: Subgraph_ServiceType; serviceNamespace: string }>;
+  allowedIpAddresses: string[];
+  disableIntrospection: boolean;
+  disabled: boolean;
+};
+
 function trn(workspaceId: string, name: string) {
   return `trn:v1:workspace:${workspaceId}:application:${name}`;
+}
+
+function sortStrings(values: readonly string[] | undefined): string[] {
+  return [...(values ?? [])].sort();
+}
+
+function normalizeSubgraphs(
+  subgraphs: ReadonlyArray<MessageInitShape<typeof SubgraphSchema>> | undefined,
+): ComparableApplication["subgraphs"] {
+  return [...(subgraphs ?? [])]
+    .map((subgraph) => ({
+      serviceType: subgraph.serviceType!,
+      serviceNamespace: subgraph.serviceNamespace ?? "",
+    }))
+    .sort((left, right) => {
+      if (left.serviceType !== right.serviceType) {
+        return left.serviceType - right.serviceType;
+      }
+      return left.serviceNamespace.localeCompare(right.serviceNamespace);
+    });
+}
+
+function toComparableApplication(
+  input: Pick<
+    ComparableApplication,
+    | "authNamespace"
+    | "authIdpConfigName"
+    | "cors"
+    | "subgraphs"
+    | "allowedIpAddresses"
+    | "disableIntrospection"
+    | "disabled"
+  >,
+): ComparableApplication {
+  return {
+    authNamespace: input.authNamespace,
+    authIdpConfigName: input.authIdpConfigName,
+    cors: sortStrings(input.cors),
+    subgraphs: [...input.subgraphs],
+    allowedIpAddresses: sortStrings(input.allowedIpAddresses),
+    disableIntrospection: input.disableIntrospection,
+    disabled: input.disabled,
+  };
+}
+
+function normalizeComparableApplication(
+  application: Readonly<Application>,
+  authNamespace: string | undefined,
+  authIdpConfigName: string | undefined,
+  cors: string[],
+): ComparableApplication {
+  return toComparableApplication({
+    authNamespace: authNamespace ?? "",
+    authIdpConfigName: authIdpConfigName ?? "",
+    cors,
+    subgraphs: normalizeSubgraphs(application.subgraphs.map((subgraph) => protoSubgraph(subgraph))),
+    allowedIpAddresses: application.config.allowedIpAddresses ?? [],
+    disableIntrospection: application.config.disableIntrospection ?? false,
+    disabled: false,
+  });
+}
+
+function normalizeComparableExistingApplication(app: ProtoApplication): ComparableApplication {
+  return toComparableApplication({
+    authNamespace: app.authNamespace,
+    authIdpConfigName: app.authIdpConfigName,
+    cors: app.cors,
+    subgraphs: normalizeSubgraphs(app.subgraphs),
+    allowedIpAddresses: app.allowedIpAddresses,
+    disableIntrospection: app.disableIntrospection,
+    disabled: app.disabled,
+  });
+}
+
+function areApplicationsEqual(existing: ProtoApplication, desired: ComparableApplication): boolean {
+  return areNormalizedEqual(normalizeComparableExistingApplication(existing), desired);
 }
 
 /**
@@ -120,14 +209,12 @@ export async function planApplication(context: PlanContext) {
         },
       });
     }
-    changeSet.print();
     return changeSet;
   }
 
   // Skip application create/update when there are no subgraphs
   // (e.g. deploying only static web hosting)
   if (application.subgraphs.length === 0) {
-    changeSet.print();
     return changeSet;
   }
 
@@ -164,40 +251,57 @@ export async function planApplication(context: PlanContext) {
     }
   }
   const metaRequest = await buildMetaRequest(trn(workspaceId, application.name), application.name);
+  const resolvedCors = await resolveStaticWebsiteUrls(
+    client,
+    workspaceId,
+    application.config.cors,
+    "CORS",
+  );
+  const desired = normalizeComparableApplication(
+    application,
+    authNamespace,
+    authIdpConfigName,
+    resolvedCors,
+  );
+  const request = {
+    workspaceId,
+    applicationName: application.name,
+    authNamespace,
+    authIdpConfigName,
+    cors: application.config.cors,
+    subgraphs: application.subgraphs.map((subgraph) => protoSubgraph(subgraph)),
+    allowedIpAddresses: application.config.allowedIpAddresses,
+    disableIntrospection: application.config.disableIntrospection,
+  };
+  const existing = existingApplications.find((app) => app.name === application.name);
 
-  if (existingApplications.some((app) => app.name === application.name)) {
-    changeSet.updates.push({
-      name: application.name,
-      request: {
-        workspaceId,
-        applicationName: application.name,
-        authNamespace,
-        authIdpConfigName,
-        cors: application.config.cors,
-        subgraphs: application.subgraphs.map((subgraph) => protoSubgraph(subgraph)),
-        allowedIpAddresses: application.config.allowedIpAddresses,
-        disableIntrospection: application.config.disableIntrospection,
-      },
-      metaRequest,
+  if (existing) {
+    const { metadata } = await client.getMetadata({
+      trn: trn(workspaceId, application.name),
     });
+    if (
+      metadata?.labels?.[sdkNameLabelKey] === application.name &&
+      hasMatchingSdkVersion(metadata?.labels, metaRequest.labels) &&
+      areApplicationsEqual(existing, desired)
+    ) {
+      changeSet.unchanged.push({
+        name: application.name,
+      });
+    } else {
+      changeSet.updates.push({
+        name: application.name,
+        request,
+        metaRequest,
+      });
+    }
   } else {
     changeSet.creates.push({
       name: application.name,
-      request: {
-        workspaceId,
-        applicationName: application.name,
-        authNamespace,
-        authIdpConfigName,
-        cors: application.config.cors,
-        subgraphs: application.subgraphs.map((subgraph) => protoSubgraph(subgraph)),
-        allowedIpAddresses: application.config.allowedIpAddresses,
-        disableIntrospection: application.config.disableIntrospection,
-      },
+      request,
       metaRequest,
     });
   }
 
-  changeSet.print();
   return changeSet;
 }
 

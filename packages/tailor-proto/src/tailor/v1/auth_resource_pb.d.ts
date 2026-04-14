@@ -151,6 +151,11 @@ export declare type AuthIDPConfig_SAMLConfig = Message<"tailor.v1.AuthIDPConfig.
    * @generated from field: bool enable_sign_request = 5;
    */
   enableSignRequest: boolean;
+
+  /**
+   * @generated from field: string default_redirect_url = 6;
+   */
+  defaultRedirectUrl: string;
 };
 
 /**
@@ -869,6 +874,11 @@ export declare type AuthConnection = Message<"tailor.v1.AuthConnection"> & {
    * @generated from field: google.protobuf.Timestamp created_at = 5;
    */
   createdAt?: Timestamp;
+
+  /**
+   * @generated from field: tailor.v1.AuthConnection.Status status = 6;
+   */
+  status: AuthConnection_Status;
 };
 
 /**
@@ -945,6 +955,31 @@ export enum AuthConnection_Type {
  * Describes the enum tailor.v1.AuthConnection.Type.
  */
 export declare const AuthConnection_TypeSchema: GenEnum<AuthConnection_Type>;
+
+/**
+ * @generated from enum tailor.v1.AuthConnection.Status
+ */
+export enum AuthConnection_Status {
+  /**
+   * @generated from enum value: STATUS_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: STATUS_UNAUTHORIZED = 1;
+   */
+  UNAUTHORIZED = 1,
+
+  /**
+   * @generated from enum value: STATUS_AUTHORIZED = 2;
+   */
+  AUTHORIZED = 2,
+}
+
+/**
+ * Describes the enum tailor.v1.AuthConnection.Status.
+ */
+export declare const AuthConnection_StatusSchema: GenEnum<AuthConnection_Status>;
 
 /**
  * @generated from message tailor.v1.AuthOAuth2Client

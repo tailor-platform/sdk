@@ -5,7 +5,7 @@
 import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
 import type { PageDirection } from "./resource_pb";
-import type { IdPClient, IdPDisableGqlOperations, IdPLang, IdPService, IdPUserAuthPolicy } from "./idp_resource_pb";
+import type { IdPClient, IdPDisableGqlOperations, IdPEmailConfig, IdPLang, IdPPermission, IdPService, IdPUserAuthPolicy } from "./idp_resource_pb";
 
 /**
  * Describes the file tailor/v1/idp.proto.
@@ -112,6 +112,16 @@ export declare type CreateIdPServiceRequest = Message<"tailor.v1.CreateIdPServic
    * @generated from field: tailor.v1.IdPDisableGqlOperations disable_gql_operations = 7;
    */
   disableGqlOperations?: IdPDisableGqlOperations;
+
+  /**
+   * @generated from field: tailor.v1.IdPEmailConfig email_config = 8;
+   */
+  emailConfig?: IdPEmailConfig;
+
+  /**
+   * @generated from field: tailor.v1.IdPPermission permission = 9;
+   */
+  permission?: IdPPermission;
 };
 
 /**
@@ -179,6 +189,16 @@ export declare type UpdateIdPServiceRequest = Message<"tailor.v1.UpdateIdPServic
    * @generated from field: tailor.v1.IdPDisableGqlOperations disable_gql_operations = 7;
    */
   disableGqlOperations?: IdPDisableGqlOperations;
+
+  /**
+   * @generated from field: tailor.v1.IdPEmailConfig email_config = 8;
+   */
+  emailConfig?: IdPEmailConfig;
+
+  /**
+   * @generated from field: tailor.v1.IdPPermission permission = 9;
+   */
+  permission?: IdPPermission;
 };
 
 /**

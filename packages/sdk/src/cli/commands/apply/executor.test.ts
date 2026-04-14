@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
-import { planExecutor } from "./executor";
+import { formatExecutorChangeEntries, planExecutor } from "./executor";
 import { sdkNameLabelKey } from "./label";
 import type { PlanContext } from "./apply";
 import type { Application } from "@/cli/services/application";
@@ -93,11 +93,16 @@ describe("planExecutor", () => {
 
   // Helper to create mock client
   function createMockClient(
-    existingExecutors: Array<{ name: string; label?: string }>,
+    existingExecutors: Array<{
+      name: string;
+      label?: string;
+      resource?: Record<string, unknown>;
+      sdkVersion?: string;
+    }>,
   ): OperatorClient {
     return {
       listExecutorExecutors: vi.fn().mockResolvedValue({
-        executors: existingExecutors.map((e) => ({ name: e.name })),
+        executors: existingExecutors.map((e) => e.resource ?? { name: e.name }),
         nextPageToken: "",
       }),
       getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
@@ -105,7 +110,12 @@ describe("planExecutor", () => {
         const executor = existingExecutors.find((e) => e.name === name);
         return {
           metadata: {
-            labels: executor?.label ? { [sdkNameLabelKey]: executor.label } : {},
+            labels: executor?.label
+              ? {
+                  [sdkNameLabelKey]: executor.label,
+                  "sdk-version": executor.sdkVersion ?? "v1-0-0",
+                }
+              : {},
           },
         };
       }),
@@ -426,6 +436,90 @@ describe("planExecutor", () => {
       // No creates or deletes
       expect(result.changeSet.creates).toHaveLength(0);
       expect(result.changeSet.deletes).toHaveLength(0);
+    });
+
+    test("existing executor is unchanged when remote definition matches desired definition", async () => {
+      const executor = createMockExecutor("existing-executor");
+      const createClient = createMockClient([]);
+      const createResult = await planExecutor({
+        client: createClient,
+        workspaceId,
+        application: createMockApplication([executor]),
+        forRemoval: false,
+        config: mockConfig,
+      });
+      const desiredExecutor = createResult.changeSet.creates[0].request.executor;
+
+      const client = createMockClient([
+        {
+          name: "existing-executor",
+          label: appName,
+          resource: desiredExecutor as Record<string, unknown>,
+        },
+      ]);
+
+      const result = await planExecutor({
+        client,
+        workspaceId,
+        application: createMockApplication([executor]),
+        forRemoval: false,
+        config: mockConfig,
+      });
+
+      expect(result.changeSet.unchanged).toHaveLength(1);
+      expect(result.changeSet.unchanged[0].name).toBe("existing-executor");
+      expect(result.changeSet.updates).toHaveLength(0);
+    });
+
+    test("event executor is unchanged when remote response includes empty eventType", async () => {
+      const executor: Executor = {
+        name: "existing-executor",
+        description: "Executor existing-executor",
+        disabled: false,
+        trigger: {
+          kind: "tailordb",
+          typeName: "User",
+          events: ["tailordb.type_record.created"],
+        },
+        operation: {
+          kind: "function",
+          body: () => {},
+        },
+      };
+      const createClient = createMockClient([]);
+      const createResult = await planExecutor({
+        client: createClient,
+        workspaceId,
+        application: createMockApplication([executor], { tailorDBTypes: { User: "tailordb" } }),
+        forRemoval: false,
+        config: mockConfig,
+      });
+      const desiredExecutor = structuredClone(createResult.changeSet.creates[0].request.executor);
+      const eventConfig = desiredExecutor?.triggerConfig?.config;
+      if (eventConfig?.case !== "event") {
+        throw new Error("expected event trigger config");
+      }
+      eventConfig.value.eventType = "";
+
+      const client = createMockClient([
+        {
+          name: "existing-executor",
+          label: appName,
+          resource: desiredExecutor as Record<string, unknown>,
+        },
+      ]);
+
+      const result = await planExecutor({
+        client,
+        workspaceId,
+        application: createMockApplication([executor], { tailorDBTypes: { User: "tailordb" } }),
+        forRemoval: false,
+        config: mockConfig,
+      });
+
+      expect(result.changeSet.unchanged).toHaveLength(1);
+      expect(result.changeSet.unchanged[0].name).toBe("existing-executor");
+      expect(result.changeSet.updates).toHaveLength(0);
     });
   });
 
@@ -951,5 +1045,86 @@ describe("planExecutor", () => {
       ]);
       expect(typedConfig.value.condition).toBeDefined();
     });
+  });
+});
+
+describe("formatExecutorChangeEntries", () => {
+  test("groups function executor updates with related function registry updates", () => {
+    const entries = formatExecutorChangeEntries(
+      {
+        creates: [],
+        updates: [
+          {
+            name: "user-created",
+            request: {
+              workspaceId: "ws",
+              executor: {
+                name: "user-created",
+                targetType: 3,
+              },
+            },
+            metaRequest: { trn: "t", labels: {} },
+          },
+        ],
+        deletes: [],
+        replaces: [],
+      },
+      {
+        "user-created": {
+          name: "user-created",
+          targetType: 3,
+        },
+      },
+      {
+        creates: [],
+        updates: [{ name: "executor--user-created" }],
+        deletes: [],
+        replaces: [],
+      },
+    );
+
+    expect(entries).toEqual([
+      {
+        action: "update",
+        symbol: "~",
+        name: "user-created",
+        labels: ["executor", "function"],
+      },
+    ]);
+  });
+
+  test("groups function executor deletes with related function registry deletes", () => {
+    const entries = formatExecutorChangeEntries(
+      {
+        creates: [],
+        updates: [],
+        deletes: [
+          {
+            name: "user-created",
+            request: {
+              workspaceId: "ws",
+              name: "user-created",
+            },
+          },
+        ],
+        replaces: [],
+      },
+      {},
+      {
+        creates: [],
+        updates: [],
+        deletes: [{ name: "executor--user-created" }],
+        replaces: [],
+      },
+    );
+
+    expect(entries).toEqual([
+      {
+        action: "delete",
+        symbol: "-",
+        name: "user-created",
+        labels: ["executor", "function"],
+      },
+    ]);
   });
 });

@@ -3,16 +3,66 @@ on:
   push:
     branches: [main]
   pull_request:
+    paths:
+      - packages/**
+      - package.json
+      - pnpm-lock.yaml
+      - .github/workflows/pkg-pr-new.yml
 
 jobs:
+  notify-start:
+    if: >-
+      github.event_name == 'pull_request' &&
+      (github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Post publishing status
+        uses: marocchino/sticky-pull-request-comment@0ea0beb66eb9baf113663a64ec522f60e49231c0 # v3.0.4
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        with:
+          header: pkg-pr-new
+          message: |
+            ## ⚡ pkg.pr.new
+
+            > ⏳ **Publishing** commit: ${{ env.SHA }} …
+
+            ### @tailor-platform/sdk
+
+            ```
+            pnpm add https://pkg.pr.new/@tailor-platform/sdk@${{ env.PR_NUMBER }}
+            ```
+
+            ```
+            pnpm dlx https://pkg.pr.new/@tailor-platform/sdk@${{ env.PR_NUMBER }} --help
+            ```
+
+            ### @tailor-platform/create-sdk
+
+            ```
+            pnpm add https://pkg.pr.new/@tailor-platform/create-sdk@${{ env.PR_NUMBER }}
+            ```
+
+            ```
+            pnpm dlx https://pkg.pr.new/@tailor-platform/create-sdk@${{ env.PR_NUMBER }} my-app
+            ```
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   publish-sdk:
+    # Skip re-runs triggered by tailor-pr-trigger bot (changeset/generate commits)
+    if: github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read
       pull-requests: write
     outputs:
-      sdk_url: ${{ steps.extract-url.outputs.sdk_url }}
+      sdk_url: ${{ steps.extract.outputs.sdk_url }}
+      sdk_template_url: ${{ steps.extract.outputs.sdk_template_url }}
 
     steps:
       - name: Checkout code
@@ -28,14 +78,17 @@ jobs:
 
       - name: Publish SDK to pkg.pr.new
         id: publish
-        run: pnpm dlx pkg-pr-new publish --pnpm "packages/sdk"
+        run: pnpm dlx pkg-pr-new publish --pnpm --comment=off --json /tmp/sdk-output.json "packages/sdk"
 
-      - name: Extract SDK URL
-        id: extract-url
+      - name: Extract SDK URLs
+        id: extract
         run: |
-          SDK_URL=$(echo "${{ steps.publish.outputs.urls }}" | tr ' ' '\n' | grep -E '@tailor-platform/sdk@')
+          SDK_URL=$(jq -r '.packages[] | select(.name == "@tailor-platform/sdk") | .url' /tmp/sdk-output.json)
+          SDK_TEMPLATE_URL=$(jq -r '.templates[0].url // ""' /tmp/sdk-output.json)
           echo "sdk_url=$SDK_URL" >> "$GITHUB_OUTPUT"
+          echo "sdk_template_url=$SDK_TEMPLATE_URL" >> "$GITHUB_OUTPUT"
           echo "Published SDK at: $SDK_URL"
+          echo "Template URL: $SDK_TEMPLATE_URL"
 
   publish-create-sdk:
     needs: publish-sdk
@@ -45,7 +98,8 @@ jobs:
       contents: read
       pull-requests: write
     outputs:
-      create_sdk_url: ${{ steps.extract-url.outputs.create_sdk_url }}
+      create_sdk_url: ${{ steps.extract.outputs.create_sdk_url }}
+      create_sdk_template_url: ${{ steps.extract.outputs.create_sdk_template_url }}
 
     steps:
       - name: Checkout code
@@ -64,30 +118,105 @@ jobs:
 
       - name: Publish create-sdk to pkg.pr.new
         id: publish
-        run: pnpm dlx pkg-pr-new publish --pnpm ./packages/create-sdk
+        run: pnpm dlx pkg-pr-new publish --pnpm --comment=off --json /tmp/create-sdk-output.json ./packages/create-sdk
 
-      - name: Extract create-sdk URL
-        id: extract-url
+      - name: Extract create-sdk URLs
+        id: extract
         run: |
-          CREATE_SDK_URL=$(echo "${{ steps.publish.outputs.urls }}" | tr ' ' '\n' | grep -E '@tailor-platform/create-sdk@')
+          CREATE_SDK_URL=$(jq -r '.packages[] | select(.name == "@tailor-platform/create-sdk") | .url' /tmp/create-sdk-output.json)
+          CREATE_SDK_TEMPLATE_URL=$(jq -r '.templates[0].url // ""' /tmp/create-sdk-output.json)
           echo "create_sdk_url=$CREATE_SDK_URL" >> "$GITHUB_OUTPUT"
+          echo "create_sdk_template_url=$CREATE_SDK_TEMPLATE_URL" >> "$GITHUB_OUTPUT"
           echo "Published create-sdk at: $CREATE_SDK_URL"
+          echo "Template URL: $CREATE_SDK_TEMPLATE_URL"
+
+  update-comment:
+    if: >-
+      github.event_name == 'pull_request' &&
+      (github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]')
+    needs: [publish-sdk, publish-create-sdk]
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Build comment body
+        id: comment
+        env:
+          SDK_URL: ${{ needs.publish-sdk.outputs.sdk_url }}
+          SDK_TEMPLATE_URL: ${{ needs.publish-sdk.outputs.sdk_template_url }}
+          CREATE_SDK_URL: ${{ needs.publish-create-sdk.outputs.create_sdk_url }}
+          CREATE_SDK_TEMPLATE_URL: ${{ needs.publish-create-sdk.outputs.create_sdk_template_url }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          {
+            echo 'body<<COMMENT_EOF'
+
+            echo '## ⚡ pkg.pr.new'
+            echo ''
+            echo '### @tailor-platform/sdk'
+            echo ''
+            echo '```'
+            echo "pnpm add $SDK_URL"
+            echo '```'
+            echo ''
+            echo '```'
+            echo "pnpm dlx $SDK_URL --help"
+            echo '```'
+            echo ''
+            if [ -n "$SDK_TEMPLATE_URL" ]; then
+              echo "[Open in StackBlitz]($SDK_TEMPLATE_URL)"
+              echo ''
+            fi
+            echo '### @tailor-platform/create-sdk'
+            echo ''
+            echo '```'
+            echo "pnpm add $CREATE_SDK_URL"
+            echo '```'
+            echo ''
+            echo '```'
+            echo "pnpm dlx $CREATE_SDK_URL my-app"
+            echo '```'
+            echo ''
+            if [ -n "$CREATE_SDK_TEMPLATE_URL" ]; then
+              echo "[Open in StackBlitz]($CREATE_SDK_TEMPLATE_URL)"
+              echo ''
+            fi
+            echo "> commit: $SHA"
+
+            echo 'COMMENT_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Update PR comment
+        uses: marocchino/sticky-pull-request-comment@0ea0beb66eb9baf113663a64ec522f60e49231c0 # v3.0.4
+        with:
+          header: pkg-pr-new
+          message: ${{ steps.comment.outputs.body }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   init-smoke:
     needs: [publish-sdk, publish-create-sdk]
     strategy:
       fail-fast: false
       matrix:
-        runtime: [node, bun]
-        pm: [pnpm, npm, yarn, bun]
-        node: [22, 24]
-        exclude:
-          # Bun has its own runtime version; only run once per PM
-          - runtime: bun
-            node: 22
-          # bun install with Node runtime is out of scope
+        # Minimal set covering all PM / runtime / Node axes.
+        # pkg.pr.new is flaky, so we keep the matrix small.
+        include:
           - runtime: node
+            pm: pnpm
+            node: 22
+          - runtime: node
+            pm: npm
+            node: 24
+          - runtime: node
+            pm: yarn
+            node: 22
+          - runtime: bun
             pm: bun
+            node: 24
+          - runtime: bun
+            pm: pnpm
+            node: 24
     runs-on: ubuntu-latest
     name: Smoke (${{ matrix.runtime }}, ${{ matrix.pm }}, node${{ matrix.node }})
     timeout-minutes: 10
@@ -101,7 +230,7 @@ jobs:
           persist-credentials: false
 
       - name: Install pnpm
-        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        uses: pnpm/action-setup@08c4be7e2e672a47d11bd04269e27e5f3e8529cb # v6.0.0
         with:
           standalone: true
           run_install: false

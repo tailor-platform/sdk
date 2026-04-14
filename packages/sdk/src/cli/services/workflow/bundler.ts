@@ -21,6 +21,8 @@ interface JobInfo {
 export interface BundleWorkflowJobsResult {
   /** Maps mainJobName -> list of all job names it depends on (including itself) */
   mainJobDeps: Record<string, string[]>;
+  /** Job names that were actually bundled */
+  usedJobNames: string[];
   /** Maps job name to bundled code string */
   bundledCode: Map<string, string>;
 }
@@ -52,7 +54,7 @@ export async function bundleWorkflowJobs(
 ): Promise<BundleWorkflowJobsResult> {
   if (allJobs.length === 0) {
     logger.warn("No workflow jobs to bundle");
-    return { mainJobDeps: {}, bundledCode: new Map() };
+    return { mainJobDeps: {}, usedJobNames: [], bundledCode: new Map() };
   }
 
   // Filter to only used jobs and get per-mainJob dependencies
@@ -108,7 +110,11 @@ export async function bundleWorkflowJobs(
 
   logger.log(`${styles.success("Bundled")} ${styles.info('"workflow-job"')}`);
 
-  return { mainJobDeps, bundledCode };
+  return {
+    mainJobDeps,
+    usedJobNames: usedJobs.map((job) => job.name),
+    bundledCode,
+  };
 }
 
 interface FilterUsedJobsResult {
@@ -345,6 +351,7 @@ async function bundleSingleJob(
                 triggerContext.jobNameMap,
                 triggerContext.workflowFileMap,
                 id,
+                triggerContext.authNamespace,
               );
             }
 

@@ -294,19 +294,10 @@ createExecutor({
 
 ### Authentication for Operations
 
-GraphQL and Workflow operations can specify an `authInvoker` to execute with machine user credentials:
+GraphQL and Workflow operations can specify an `authInvoker` to execute with machine user credentials. Pass the machine user name as a plain string — it is type-narrowed to the names defined in your auth config:
 
 ```typescript
-import { defineAuth, createExecutor, scheduleTrigger } from "@tailor-platform/sdk";
-
-const auth = defineAuth("my-auth", {
-  // ... auth configuration
-  machineUsers: {
-    "batch-processor": {
-      attributes: { role: "ADMIN" },
-    },
-  },
-});
+import { createExecutor, scheduleTrigger } from "@tailor-platform/sdk";
 
 export default createExecutor({
   name: "scheduled-cleanup",
@@ -314,10 +305,12 @@ export default createExecutor({
   operation: {
     kind: "graphql",
     query: `mutation { cleanupOldRecords { count } }`,
-    authInvoker: auth.invoker("batch-processor"),
+    authInvoker: "batch-processor",
   },
 });
 ```
+
+> **Deprecated:** `auth.invoker("batch-processor")` still works, but is deprecated. Prefer the string form to avoid importing config-layer modules into runtime files.
 
 ## Event Payloads
 

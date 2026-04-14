@@ -57,8 +57,16 @@ import {
 import { type TailorDBService } from "@/cli/services/tailordb/service";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { logger } from "@/cli/shared/logger";
-import { createChangeSet } from "../change-set";
-import { buildMetaRequest, sdkNameLabelKey, trnPrefix, type WithLabel } from "../label";
+import { createChangeSet, type HasName, type ChangeSet } from "../change-set";
+import { areNormalizedEqual, normalizeProtoConfig } from "../compare";
+import { ACTION_SYMBOLS, type DisplayAction, type GroupedDisplayEntry } from "../grouped-display";
+import {
+  buildMetaRequest,
+  hasMatchingSdkVersion,
+  sdkNameLabelKey,
+  trnPrefix,
+  type WithLabel,
+} from "../label";
 import {
   executeMigrations,
   detectPendingMigrations,
@@ -966,7 +974,15 @@ async function executeSingleMigrationPostPhase(
  * @returns Planned changes
  */
 export async function planTailorDB(context: PlanContext) {
-  const { client, workspaceId, application, forRemoval, config, noSchemaCheck } = context;
+  const {
+    client,
+    workspaceId,
+    application,
+    forRemoval,
+    config,
+    noSchemaCheck,
+    forceApplyAll = false,
+  } = context;
   const tailordbs: TailorDBService[] = [];
   if (!forRemoval) {
     for (const tailordb of application.tailorDBServices) {
@@ -986,13 +1002,9 @@ export async function planTailorDB(context: PlanContext) {
   } = await planServices(client, workspaceId, application.name, tailordbs);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
   const [typeChangeSet, gqlPermissionChangeSet] = await Promise.all([
-    planTypes(client, workspaceId, tailordbs, executors, deletedServices),
-    planGqlPermissions(client, workspaceId, tailordbs, deletedServices),
+    planTypes(client, workspaceId, tailordbs, executors, deletedServices, undefined, forceApplyAll),
+    planGqlPermissions(client, workspaceId, tailordbs, deletedServices, forceApplyAll),
   ]);
-
-  serviceChangeSet.print();
-  typeChangeSet.print();
-  gqlPermissionChangeSet.print();
 
   return {
     changeSet: {
@@ -1010,6 +1022,81 @@ export async function planTailorDB(context: PlanContext) {
       noSchemaCheck: noSchemaCheck ?? false,
     },
   };
+}
+
+type TailorDBDisplayEntry = GroupedDisplayEntry;
+
+type NamespacedItem = HasName & { request?: { namespaceName?: string } };
+
+function itemKey(item: NamespacedItem): string {
+  return `${item.request?.namespaceName ?? ""}/${item.name}`;
+}
+
+function collectTailorDBDisplayEntries(
+  action: DisplayAction,
+  typeItems: ReadonlyArray<NamespacedItem>,
+  gqlPermissionItems: ReadonlyArray<NamespacedItem>,
+): TailorDBDisplayEntry[] {
+  const typeKeys = new Set(typeItems.map(itemKey));
+  const gqlPermissionKeys = new Set(gqlPermissionItems.map(itemKey));
+  const typeEntries = typeItems.map((item) => ({
+    action,
+    symbol: ACTION_SYMBOLS[action],
+    name: item.name,
+    labels: gqlPermissionKeys.has(itemKey(item)) ? ["type", "gqlPermission"] : ["type"],
+    namespace: item.request?.namespaceName,
+  }));
+  const gqlPermissionOnlyEntries = gqlPermissionItems
+    .filter((item) => !typeKeys.has(itemKey(item)))
+    .map((item) => ({
+      action,
+      symbol: ACTION_SYMBOLS[action],
+      name: item.name,
+      labels: ["gqlPermission"],
+      namespace: item.request?.namespaceName,
+    }));
+
+  return [...typeEntries, ...gqlPermissionOnlyEntries];
+}
+
+/**
+ * Format TailorDB type and gqlPermission changes as grouped dry-run entries.
+ * @param typeChangeSet - TailorDB type changes
+ * @param gqlPermissionChangeSet - TailorDB gqlPermission changes
+ * @returns Display entries for TailorDB resource output
+ */
+export function formatTailorDBResourceChangeEntries(
+  typeChangeSet: Pick<
+    ChangeSet<HasName, HasName, HasName>,
+    "creates" | "updates" | "deletes" | "replaces"
+  >,
+  gqlPermissionChangeSet: Pick<
+    ChangeSet<HasName, HasName, HasName>,
+    "creates" | "updates" | "deletes" | "replaces"
+  >,
+): TailorDBDisplayEntry[] {
+  return [
+    ...collectTailorDBDisplayEntries(
+      "create",
+      typeChangeSet.creates,
+      gqlPermissionChangeSet.creates,
+    ),
+    ...collectTailorDBDisplayEntries(
+      "delete",
+      typeChangeSet.deletes,
+      gqlPermissionChangeSet.deletes,
+    ),
+    ...collectTailorDBDisplayEntries(
+      "update",
+      typeChangeSet.updates,
+      gqlPermissionChangeSet.updates,
+    ),
+    ...collectTailorDBDisplayEntries(
+      "replace",
+      typeChangeSet.replaces,
+      gqlPermissionChangeSet.replaces,
+    ),
+  ];
 }
 
 type CreateService = {
@@ -1030,6 +1117,35 @@ type DeleteService = {
 
 function trn(workspaceId: string, name: string) {
   return `${trnPrefix(workspaceId)}:tailordb:${name}`;
+}
+
+function normalizeComparableTailorDBService(service: {
+  namespace?: string;
+  defaultTimezone?: string;
+}) {
+  return normalizeProtoConfig({
+    namespace: service.namespace,
+    defaultTimezone: service.defaultTimezone || "UTC",
+  });
+}
+
+function areTailorDBServicesEqual(
+  existing: {
+    namespace?: { name?: string };
+    defaultTimezone?: string;
+  },
+  desired: Readonly<TailorDBService>,
+): boolean {
+  return areNormalizedEqual(
+    normalizeComparableTailorDBService({
+      namespace: existing.namespace?.name,
+      defaultTimezone: existing.defaultTimezone,
+    }),
+    normalizeComparableTailorDBService({
+      namespace: desired.namespace,
+      defaultTimezone: "UTC",
+    }),
+  );
 }
 
 async function planServices(
@@ -1098,10 +1214,18 @@ async function planServices(
         });
       }
 
-      changeSet.updates.push({
-        name: tailordb.namespace,
-        metaRequest,
-      });
+      if (
+        existing.label === appName &&
+        hasMatchingSdkVersion(existing.allLabels, metaRequest.labels) &&
+        areTailorDBServicesEqual(existing.resource, tailordb)
+      ) {
+        changeSet.unchanged.push({ name: tailordb.namespace });
+      } else {
+        changeSet.updates.push({
+          name: tailordb.namespace,
+          metaRequest,
+        });
+      }
       delete existingServices[tailordb.namespace];
     } else {
       changeSet.creates.push({
@@ -1158,6 +1282,7 @@ async function planTypes(
   executors: ReadonlyArray<Executor>,
   deletedServices: ReadonlyArray<string>,
   filteredTypesByNamespace?: Map<string, Record<string, TailorDBType>>,
+  forceApplyAll = false,
 ) {
   const changeSet = createChangeSet<CreateType, UpdateType, DeleteType>("TailorDB types");
 
@@ -1203,8 +1328,7 @@ async function planTypes(
 
   for (const tailordb of tailordbs) {
     const existingTypes = await fetchTypes(tailordb.namespace);
-    const existingNameSet = new Set<string>();
-    existingTypes.forEach((type) => existingNameSet.add(type.name));
+    const existingTypesMap = new Map(existingTypes.map((type) => [type.name, type]));
 
     // Use filtered types if provided, otherwise use local types
     const types = filteredTypesByNamespace?.get(tailordb.namespace) ?? tailordb.types;
@@ -1215,16 +1339,27 @@ async function planTypes(
         executorUsedTypes,
         tailordb.config.gqlOperations,
       );
-      if (existingNameSet.has(typeName)) {
-        changeSet.updates.push({
-          name: typeName,
-          request: {
-            workspaceId,
-            namespaceName: tailordb.namespace,
-            tailordbType,
-          },
-        });
-        existingNameSet.delete(typeName);
+      const existingType = existingTypesMap.get(typeName);
+      if (existingType) {
+        if (
+          !forceApplyAll &&
+          areNormalizedEqual(
+            normalizeComparableTailorDBType(existingType),
+            normalizeComparableTailorDBType(tailordbType),
+          )
+        ) {
+          changeSet.unchanged.push({ name: typeName });
+        } else {
+          changeSet.updates.push({
+            name: typeName,
+            request: {
+              workspaceId,
+              namespaceName: tailordb.namespace,
+              tailordbType,
+            },
+          });
+        }
+        existingTypesMap.delete(typeName);
       } else {
         changeSet.creates.push({
           name: typeName,
@@ -1236,7 +1371,7 @@ async function planTypes(
         });
       }
     }
-    existingNameSet.forEach((name) => {
+    existingTypesMap.forEach((_type, name) => {
       changeSet.deletes.push({
         name,
         request: {
@@ -1261,6 +1396,135 @@ async function planTypes(
     });
   }
   return changeSet;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+const tailordbCompareKnownDefaults = {
+  /**
+   * Platform returns this object with explicit false flags even when the SDK omitted
+   * gqlOperations entirely. Treat the all-false object as "unset" for diff purposes.
+   */
+  disableGqlOperations: {
+    create: false,
+    update: false,
+    delete: false,
+    read: false,
+  },
+  /**
+   * Some remote validate expressions are emitted as an empty string when the SDK did
+   * not define a script. Local manifests omit the field entirely.
+   */
+  emptyExpression: "",
+  /**
+   * Proto bigint-backed values can round-trip as numbers locally and strings remotely.
+   * Canonicalize them to strings at compare time.
+   */
+  numericStringPaths: new Set([
+    "schema.fields.*.serial.start",
+    "schema.fields.*.serial.maxValue",
+    "schema.settings.defaultQueryLimitSize",
+    "schema.settings.maxBulkUpsertSize",
+  ]),
+} as const;
+
+function normalizeComparableTailorDBType(type: unknown) {
+  const normalized = normalizeProtoConfig(type) as {
+    name?: string;
+    schema?: {
+      description?: string;
+      fields?: Record<string, unknown>;
+      relationships?: Record<string, unknown>;
+      settings?: Record<string, unknown>;
+      indexes?: Record<string, unknown>;
+      files?: Record<string, unknown>;
+      permission?: Record<string, unknown>;
+    };
+  } | null;
+  return normalizeTailorDBCompareValue(
+    {
+      name: normalized?.name ?? "",
+      schema: {
+        description: normalized?.schema?.description ?? "",
+        fields: normalized?.schema?.fields ?? {},
+        relationships: normalized?.schema?.relationships ?? {},
+        settings: normalized?.schema?.settings ?? {},
+        indexes: normalized?.schema?.indexes ?? {},
+        files: normalized?.schema?.files ?? {},
+        permission: normalized?.schema?.permission ?? {},
+      },
+    },
+    [],
+  );
+}
+
+function normalizeTailorDBCompareValue(
+  value: unknown,
+  path: readonly (string | number)[],
+): unknown {
+  if (value === undefined || value === null) {
+    return value;
+  }
+
+  if (typeof value === "number" || typeof value === "bigint" || typeof value === "string") {
+    if (matchesNumericStringPath(path) && isNumericLikeValue(value)) {
+      return String(value);
+    }
+    if (path.at(-1) === "expr" && value === tailordbCompareKnownDefaults.emptyExpression) {
+      return undefined;
+    }
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .map((item, index) => normalizeTailorDBCompareValue(item, [...path, index]))
+      .filter((item) => item !== undefined);
+  }
+
+  if (!isPlainObject(value)) {
+    return value;
+  }
+
+  const normalizedEntries = Object.entries(value)
+    .map(
+      ([key, entryValue]) =>
+        [key, normalizeTailorDBCompareValue(entryValue, [...path, key])] as const,
+    )
+    .filter(([, entryValue]) => entryValue !== undefined);
+
+  const normalizedObject = Object.fromEntries(normalizedEntries);
+
+  if (path.at(-1) === "fields" && Object.keys(normalizedObject).length === 0) {
+    return undefined;
+  }
+
+  if (
+    path.at(-1) === "disableGqlOperations" &&
+    areNormalizedEqual(normalizedObject, tailordbCompareKnownDefaults.disableGqlOperations)
+  ) {
+    return undefined;
+  }
+
+  return normalizedObject;
+}
+
+function matchesNumericStringPath(path: readonly (string | number)[]): boolean {
+  const pathKey = path.map((segment) => String(segment)).join(".");
+  return [...tailordbCompareKnownDefaults.numericStringPaths].some((pattern) => {
+    const patternParts = pattern.split(".");
+    const pathParts = pathKey.split(".");
+    if (patternParts.length !== pathParts.length) {
+      return false;
+    }
+    return patternParts.every((part, index) => part === "*" || part === pathParts[index]);
+  });
+}
+
+function isNumericLikeValue(value: string | number | bigint): boolean {
+  return typeof value === "number" || typeof value === "bigint" || /^-?\d+$/.test(value);
 }
 
 // TODO(remiposo): Copied the type-processor / aggregator processing almost as-is.
@@ -1498,7 +1762,9 @@ function processNestedFields(
         vector: false,
         ...toProtoFieldHooks(nestedFieldConfig),
         fields: deepNestedFields,
-        ...(nestedFieldConfig.scale !== undefined && { scale: nestedFieldConfig.scale }),
+        ...(nestedFieldConfig.scale !== undefined && {
+          scale: nestedFieldConfig.scale,
+        }),
       };
     } else {
       nestedFields[nestedFieldName] = {
@@ -1524,7 +1790,9 @@ function processNestedFields(
             }),
           },
         }),
-        ...(nestedFieldConfig.scale !== undefined && { scale: nestedFieldConfig.scale }),
+        ...(nestedFieldConfig.scale !== undefined && {
+          scale: nestedFieldConfig.scale,
+        }),
       };
     }
   });
@@ -1665,6 +1933,7 @@ async function planGqlPermissions(
   workspaceId: string,
   tailordbs: ReadonlyArray<TailorDBService>,
   deletedServices: ReadonlyArray<string>,
+  forceApplyAll = false,
 ) {
   const changeSet = createChangeSet<CreateGqlPermission, UpdateGqlPermission, DeleteGqlPermission>(
     "TailorDB gqlPermissions",
@@ -1702,16 +1971,31 @@ async function planGqlPermissions(
       if (!gqlPermission) {
         continue;
       }
+      const desiredPermission = protoGqlPermission(gqlPermission);
+      const existingPermission = existingGqlPermissions.find(
+        (entry) => entry.typeName === typeName,
+      );
       if (existingNameSet.has(typeName)) {
-        changeSet.updates.push({
-          name: typeName,
-          request: {
-            workspaceId,
-            namespaceName: tailordb.namespace,
-            typeName: typeName,
-            permission: protoGqlPermission(gqlPermission),
-          },
-        });
+        if (
+          !forceApplyAll &&
+          existingPermission &&
+          areNormalizedEqual(
+            normalizeComparableGqlPermission(existingPermission.permission),
+            normalizeComparableGqlPermission(desiredPermission),
+          )
+        ) {
+          changeSet.unchanged.push({ name: typeName });
+        } else {
+          changeSet.updates.push({
+            name: typeName,
+            request: {
+              workspaceId,
+              namespaceName: tailordb.namespace,
+              typeName: typeName,
+              permission: desiredPermission,
+            },
+          });
+        }
         existingNameSet.delete(typeName);
       } else {
         changeSet.creates.push({
@@ -1720,7 +2004,7 @@ async function planGqlPermissions(
             workspaceId,
             namespaceName: tailordb.namespace,
             typeName: typeName,
-            permission: protoGqlPermission(gqlPermission),
+            permission: desiredPermission,
           },
         });
       }
@@ -1750,6 +2034,23 @@ async function planGqlPermissions(
     });
   }
   return changeSet;
+}
+
+function normalizeComparableGqlPermission(permission: unknown) {
+  const normalized = normalizeProtoConfig(permission) as {
+    policies?: Array<{
+      actions?: number[];
+      conditions?: unknown[];
+      permit?: number;
+      description?: string;
+    }>;
+  } | null;
+  return {
+    policies: (normalized?.policies ?? []).map((policy) => ({
+      ...policy,
+      actions: [...(policy.actions ?? [])].sort((left, right) => left - right),
+    })),
+  };
 }
 
 function protoGqlPermission(

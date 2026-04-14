@@ -17,9 +17,16 @@ import {
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { buildExecutorArgsExpr } from "@/cli/shared/runtime-args";
 import { stringifyFunction } from "@/parser/service/tailordb";
-import { createChangeSet } from "./change-set";
+import { normalizeAuthInvoker } from "./auth-invoker";
+import { createChangeSet, type ChangeSet } from "./change-set";
+import { areNormalizedEqual, normalizeProtoConfig } from "./compare";
 import { executorFunctionName } from "./function-registry";
-import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
+import {
+  formatChangeEntriesWithFunctionRegistry,
+  type GroupedDisplayEntry,
+  type RelatedFunctionRegistryChanges,
+} from "./grouped-display";
+import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
 import type { Application } from "@/cli/services/application";
@@ -115,6 +122,7 @@ export async function planExecutor(context: PlanContext) {
       existingExecutors[resource.name] = {
         resource,
         label: metadata?.labels[sdkNameLabelKey],
+        allLabels: metadata?.labels,
       };
     }),
   );
@@ -123,6 +131,7 @@ export async function planExecutor(context: PlanContext) {
   for (const executor of Object.values(executors)) {
     const existing = existingExecutors[executor.name];
     const metaRequest = await buildMetaRequest(trn(workspaceId, executor.name), application.name);
+    const desiredExecutor = protoExecutor(application, executor);
     if (existing) {
       if (!existing.label) {
         unmanaged.push({
@@ -137,21 +146,29 @@ export async function planExecutor(context: PlanContext) {
         });
       }
 
-      changeSet.updates.push({
-        name: executor.name,
-        request: {
-          workspaceId,
-          executor: protoExecutor(application, executor),
-        },
-        metaRequest,
-      });
+      if (
+        existing.label === application.name &&
+        hasMatchingSdkVersion(existing.allLabels, metaRequest.labels) &&
+        areExecutorsEqual(existing.resource, desiredExecutor)
+      ) {
+        changeSet.unchanged.push({ name: executor.name });
+      } else {
+        changeSet.updates.push({
+          name: executor.name,
+          request: {
+            workspaceId,
+            executor: desiredExecutor,
+          },
+          metaRequest,
+        });
+      }
       delete existingExecutors[executor.name];
     } else {
       changeSet.creates.push({
         name: executor.name,
         request: {
           workspaceId,
-          executor: protoExecutor(application, executor),
+          executor: desiredExecutor,
         },
         metaRequest,
       });
@@ -174,8 +191,136 @@ export async function planExecutor(context: PlanContext) {
     }
   });
 
-  changeSet.print();
   return { changeSet, conflicts, unmanaged, resourceOwners };
+}
+
+type ExecutorDisplayEntry = GroupedDisplayEntry;
+
+function isFunctionBackedExecutor(
+  executor: MessageInitShape<typeof ExecutorExecutorSchema> | undefined,
+) {
+  return (
+    executor?.targetType === ExecutorTargetType.FUNCTION ||
+    executor?.targetType === ExecutorTargetType.JOB_FUNCTION
+  );
+}
+
+/**
+ * Build desired executor configs keyed by executor name from create/update changes.
+ * @param changeSet - Executor create/update changes
+ * @returns Executor configs keyed by name
+ */
+export function buildPlannedExecutorsByName(
+  changeSet: Pick<ChangeSet<CreateExecutor, UpdateExecutor, DeleteExecutor>, "creates" | "updates">,
+): Record<string, MessageInitShape<typeof ExecutorExecutorSchema> | undefined> {
+  return Object.fromEntries(
+    [...changeSet.creates, ...changeSet.updates].map((item) => [item.name, item.request.executor]),
+  );
+}
+
+/**
+ * Format executor changes for grouped dry-run display.
+ * @param changeSet - Executor changes
+ * @param executors - Desired executor configs keyed by name
+ * @param functionRegistryExecutorChanges - Related function registry changes for executors
+ * @returns Display entries for executor output
+ */
+export function formatExecutorChangeEntries(
+  changeSet: Pick<
+    ChangeSet<CreateExecutor, UpdateExecutor, DeleteExecutor>,
+    "creates" | "updates" | "deletes" | "replaces"
+  >,
+  executors: Record<string, MessageInitShape<typeof ExecutorExecutorSchema> | undefined>,
+  functionRegistryExecutorChanges?: RelatedFunctionRegistryChanges,
+): ExecutorDisplayEntry[] {
+  return formatChangeEntriesWithFunctionRegistry(
+    "executor",
+    changeSet,
+    functionRegistryExecutorChanges,
+    (item, action) => {
+      if (action === "delete") {
+        return [executorFunctionName(item.name)];
+      }
+      const executor = executors[item.name];
+      return executor && isFunctionBackedExecutor(executor)
+        ? [executorFunctionName(item.name)]
+        : [];
+    },
+  );
+}
+
+function normalizeComparableExecutor(executor: MessageInitShape<typeof ExecutorExecutorSchema>) {
+  const normalized = normalizeProtoConfig(executor) ?? {};
+  const webhookHeaders =
+    normalized.targetConfig?.config?.case === "webhook"
+      ? [...(normalized.targetConfig.config.value.headers ?? [])].sort((left, right) =>
+          (left.key ?? "").localeCompare(right.key ?? ""),
+        )
+      : undefined;
+  const triggerConfig =
+    normalized.triggerConfig?.config?.case === "incomingWebhook"
+      ? {
+          ...normalized.triggerConfig,
+          config: {
+            ...normalized.triggerConfig.config,
+            value: {},
+          },
+        }
+      : normalized.triggerConfig?.config?.case === "event"
+        ? {
+            ...normalized.triggerConfig,
+            config: {
+              ...normalized.triggerConfig.config,
+              value: {
+                ...normalized.triggerConfig.config.value,
+                // The platform fills this field in responses even though the SDK never sets it.
+                eventType: undefined,
+              },
+            },
+          }
+        : normalized.triggerConfig;
+  return {
+    name: normalized.name,
+    description: normalized.description ?? "",
+    disabled: normalized.disabled ?? false,
+    triggerType: normalized.triggerType,
+    triggerConfig,
+    targetType: normalized.targetType,
+    targetConfig:
+      normalized.targetConfig?.config?.case === "webhook"
+        ? {
+            ...normalized.targetConfig,
+            config: {
+              ...normalized.targetConfig.config,
+              value: {
+                ...normalized.targetConfig.config.value,
+                headers: webhookHeaders,
+              },
+            },
+          }
+        : normalized.targetConfig?.config?.case === "function"
+          ? {
+              ...normalized.targetConfig,
+              config: {
+                ...normalized.targetConfig.config,
+                value: {
+                  ...normalized.targetConfig.config.value,
+                  script: undefined,
+                },
+              },
+            }
+          : normalized.targetConfig,
+  };
+}
+
+function areExecutorsEqual(
+  existing: MessageInitShape<typeof ExecutorExecutorSchema>,
+  desired: MessageInitShape<typeof ExecutorExecutorSchema>,
+): boolean {
+  return areNormalizedEqual(
+    normalizeComparableExecutor(existing),
+    normalizeComparableExecutor(desired),
+  );
 }
 
 function resolveTailorDBNamespace(application: Readonly<Application>, typeName: string): string {
@@ -318,6 +463,9 @@ function protoExecutor(
   let targetType: ExecutorTargetType;
   let targetConfig: MessageInitShape<typeof ExecutorTargetConfigSchema>;
 
+  const authNamespace = application.authService?.parsedConfig.name;
+  const invokerContext = `Executor "${executor.name}"`;
+
   switch (target.kind) {
     case "webhook": {
       targetType = ExecutorTargetType.WEBHOOK;
@@ -371,7 +519,7 @@ function protoExecutor(
                   expr: `(${stringifyFunction(target.variables)})(${argsExpr})`,
                 }
               : undefined,
-            invoker: target.authInvoker ?? undefined,
+            invoker: normalizeAuthInvoker(target.authInvoker, authNamespace, invokerContext),
           },
         },
       };
@@ -394,7 +542,7 @@ function protoExecutor(
             variables: {
               expr: argsExpr,
             },
-            invoker: target.authInvoker ?? undefined,
+            invoker: normalizeAuthInvoker(target.authInvoker, authNamespace, invokerContext),
           },
         },
       };
@@ -412,7 +560,7 @@ function protoExecutor(
                 ? { expr: `(${stringifyFunction(target.args)})(${argsExpr})` }
                 : { expr: JSON.stringify(target.args) }
               : undefined,
-            invoker: target.authInvoker ?? undefined,
+            invoker: normalizeAuthInvoker(target.authInvoker, authNamespace, invokerContext),
           },
         },
       };

@@ -4,6 +4,12 @@ on:
   push:
     branches: [main]
   pull_request:
+    paths:
+      - packages/**
+      - example/**
+      - package.json
+      - pnpm-lock.yaml
+      - .github/workflows/template-tests.yml
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -11,6 +17,8 @@ concurrency:
 
 jobs:
   template-unit-tests:
+    # Skip re-runs triggered by tailor-pr-trigger bot (changeset/generate commits)
+    if: github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]'
     strategy:
       fail-fast: false
       matrix:
@@ -47,6 +55,8 @@ jobs:
         run: pnpm test:unit
 
   template-typecheck:
+    # Skip re-runs triggered by tailor-pr-trigger bot (changeset/generate commits)
+    if: github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]'
     strategy:
       fail-fast: false
       matrix:

@@ -10,6 +10,7 @@ Auth provides:
 - Machine users for service-to-service authentication
 - OAuth 2.0 client configuration
 - Identity provider integration
+- Auth connections for external OAuth2 provider integration
 
 For the official Tailor Platform documentation, see [Auth Guide](https://docs.tailor.tech/guides/auth/overview).
 
@@ -45,6 +46,15 @@ const auth = defineAuth("my-auth", {
     "my-oauth2-client": {
       redirectURIs: ["https://example.com/callback"],
       grantTypes: ["authorization_code", "refresh_token"],
+    },
+  },
+  connections: {
+    "google-connection": {
+      type: "oauth2",
+      providerUrl: "https://accounts.google.com",
+      issuerUrl: "https://accounts.google.com",
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     },
   },
   idProvider: idp.provider("my-provider", "my-client"),
@@ -246,9 +256,9 @@ Get a machine user token using the CLI:
 tailor-sdk machineuser token <name>
 ```
 
-### Using auth.invoker()
+### Specifying a machine user invoker
 
-The `auth.invoker()` method creates a type-safe reference to a machine user for use in workflow triggers. This specifies which machine user's permissions should be used when executing the workflow.
+Resolvers, executors, and `workflow.trigger()` accept an `authInvoker` option that chooses which machine user runs the operation. Pass the machine user name as a plain string — it is type-narrowed to the names you registered in `machineUsers`.
 
 ```typescript
 // tailor.config.ts
@@ -265,7 +275,6 @@ export const auth = defineAuth("my-auth", {
 ```typescript
 // resolvers/trigger-workflow.ts
 import { createResolver, t } from "@tailor-platform/sdk";
-import { auth } from "../tailor.config";
 import myWorkflow from "../workflows/my-workflow";
 
 export default createResolver({
@@ -278,7 +287,7 @@ export default createResolver({
     // Trigger workflow with machine user permissions
     const workflowRunId = await myWorkflow.trigger(
       { id: input.id },
-      { authInvoker: auth.invoker("admin-machine-user") },
+      { authInvoker: "admin-machine-user" },
     );
     return { workflowRunId };
   },
@@ -288,7 +297,9 @@ export default createResolver({
 });
 ```
 
-The `invoker()` method is type-safe and only accepts machine user names defined in the auth configuration.
+Type narrowing is provided by the generated `tailor.d.ts` (the `MachineUserNameRegistry` interface). Run `tailor-sdk generate` (or `apply`) after defining new machine users to refresh it.
+
+> **Deprecated:** The `auth.invoker("<name>")` helper is still available for backward compatibility. Prefer the string form — it does not require importing `auth` from `tailor.config.ts` into runtime files, avoiding bundling config-layer (Node-only) dependencies.
 
 ## OAuth 2.0 Clients
 
@@ -341,6 +352,106 @@ idProvider: idp.provider("my-provider", "my-client"),
 
 See [IdP](./idp.md) for configuring identity providers.
 
+## Auth Connections
+
+Auth connections enable OAuth2 authentication with external providers (Google, Microsoft 365, QuickBooks, etc.) for application-to-application flows. Functions can access connection tokens at runtime via `tailor.authconnection.getConnectionToken()`.
+
+For the official Tailor Platform documentation, see [AuthConnection Guide](https://docs.tailor.tech/guides/auth/authconnection).
+
+### Setup Flow
+
+Setting up an auth connection requires two steps:
+
+1. **Create** the connection (registers the OAuth2 provider credentials)
+2. **Authorize** the connection (runs the OAuth2 flow to obtain and store tokens)
+
+Both steps are needed regardless of whether you manage connections via config or CLI.
+
+### Configuration
+
+Define connections in `defineAuth()`:
+
+```typescript
+import { defineAuth } from "@tailor-platform/sdk";
+
+export const auth = defineAuth("my-auth", {
+  // ... other auth config
+  connections: {
+    "google-connection": {
+      type: "oauth2",
+      providerUrl: "https://accounts.google.com",
+      issuerUrl: "https://accounts.google.com",
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    },
+  },
+});
+```
+
+After `tailor-sdk apply`, authorize the connection:
+
+```bash
+tailor-sdk authconnection authorize --name google-connection \
+  --scopes "openid,profile,email"
+```
+
+The authorize command opens a browser for the OAuth2 flow. The authorization code is sent to the platform, which exchanges it for tokens using the client secret registered in the connection config.
+
+### Connection Config Fields
+
+| Field          | Type     | Required | Description                                 |
+| -------------- | -------- | -------- | ------------------------------------------- |
+| `type`         | `string` | Yes      | Connection type. Currently only `"oauth2"`. |
+| `providerUrl`  | `string` | Yes      | OAuth2 provider URL.                        |
+| `issuerUrl`    | `string` | Yes      | OAuth2 issuer URL for JWT validation.       |
+| `clientId`     | `string` | Yes      | OAuth2 client ID.                           |
+| `clientSecret` | `string` | Yes      | OAuth2 client secret.                       |
+| `authUrl`      | `string` | No       | Override for the authorization endpoint.    |
+| `tokenUrl`     | `string` | No       | Override for the token endpoint.            |
+
+### Change Detection
+
+The SDK uses hash-based change detection for connection configs. Only connections whose configuration has changed since the last `apply` are updated (revoked and recreated). Deleting the `.tailor-sdk/` directory forces all connections to be re-sent.
+
+### `auth.getConnectionToken()`
+
+`auth.getConnectionToken()` retrieves connection tokens at runtime by calling `tailor.authconnection.getConnectionToken()` internally. When `connections` is defined in `defineAuth()`, the connection name is type-checked and autocompleted against the defined keys:
+
+```typescript
+import { auth } from "../tailor.config";
+
+// In a resolver, executor, or workflow:
+const tokens = await auth.getConnectionToken("google-connection");
+const response = await fetch("https://www.googleapis.com/...", {
+  headers: { Authorization: `Bearer ${tokens.access_token}` },
+});
+
+// auth.getConnectionToken("unknown"); // Type error — only "google-connection" is allowed
+```
+
+When `connections` is not defined, `getConnectionToken()` accepts any string. This supports connections managed entirely via the CLI.
+
+See [Built-in Interfaces](https://docs.tailor.tech/guides/function/builtin-interfaces.html#auth-connection) for the full runtime API.
+
+### CLI Management
+
+Auth connections can also be managed via the CLI:
+
+```bash
+# Authorize (opens browser for OAuth2 flow)
+tailor-sdk authconnection authorize --name google-connection
+
+# List all connections
+tailor-sdk authconnection list
+
+# Revoke a connection
+tailor-sdk authconnection revoke --name google-connection
+```
+
+Connection creation is handled by `tailor-sdk apply` via the config.
+
+See [Auth Resource Commands](../cli/auth.md) for full CLI documentation.
+
 ## Before Login Hook
 
 Run custom logic before a user logs in. This is useful for JIT (Just-In-Time) user provisioning — automatically creating or updating user records when a user authenticates for the first time.
@@ -379,6 +490,11 @@ export const auth = defineAuth("my-auth", {
 Manage Auth resources using the CLI:
 
 ```bash
+# Auth connections
+tailor-sdk authconnection authorize --name <name>
+tailor-sdk authconnection list
+tailor-sdk authconnection revoke --name <name>
+
 # List machine users
 tailor-sdk machineuser list
 

@@ -88,6 +88,7 @@ export type FunctionOperation = {
   body: Function;
   /** Auth invoker for the function execution */
   authInvoker?:
+    | string
     | {
         namespace: string;
         machineUserName: string;
@@ -105,6 +106,7 @@ export type GqlOperationInput = {
   variables?: Function | undefined;
   /** Auth invoker for the GraphQL execution */
   authInvoker?:
+    | string
     | {
         namespace: string;
         machineUserName: string;
@@ -121,6 +123,7 @@ export type GqlOperation = {
   variables?: Function | undefined;
   /** Auth invoker for the GraphQL execution */
   authInvoker?:
+    | string
     | {
         namespace: string;
         machineUserName: string;
@@ -160,6 +163,7 @@ export type WorkflowOperation = {
       }
     | undefined;
   authInvoker?:
+    | string
     | {
         namespace: string;
         machineUserName: string;
@@ -269,6 +273,7 @@ export type Executor = {
             }
           | undefined;
         authInvoker?:
+          | string
           | {
               namespace: string;
               machineUserName: string;
@@ -279,6 +284,7 @@ export type Executor = {
         kind: "function" | "jobFunction";
         body: Function;
         authInvoker?:
+          | string
           | {
               namespace: string;
               machineUserName: string;
@@ -291,6 +297,7 @@ export type Executor = {
         appName?: string | undefined;
         variables?: Function | undefined;
         authInvoker?:
+          | string
           | {
               namespace: string;
               machineUserName: string;
