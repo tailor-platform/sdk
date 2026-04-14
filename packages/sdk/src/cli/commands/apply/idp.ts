@@ -177,8 +177,6 @@ export async function planIdP(context: PlanContext) {
     forceApplyAll,
   );
 
-  serviceChangeSet.print();
-  clientChangeSet.print();
   return {
     changeSet: {
       service: serviceChangeSet,

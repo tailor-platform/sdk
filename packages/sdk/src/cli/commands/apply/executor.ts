@@ -18,9 +18,14 @@ import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { buildExecutorArgsExpr } from "@/cli/shared/runtime-args";
 import { stringifyFunction } from "@/parser/service/tailordb";
 import { normalizeAuthInvoker } from "./auth-invoker";
-import { createChangeSet } from "./change-set";
+import { createChangeSet, type ChangeSet } from "./change-set";
 import { areNormalizedEqual, normalizeProtoConfig } from "./compare";
 import { executorFunctionName } from "./function-registry";
+import {
+  formatChangeEntriesWithFunctionRegistry,
+  type GroupedDisplayEntry,
+  type RelatedFunctionRegistryChanges,
+} from "./grouped-display";
 import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
@@ -186,8 +191,62 @@ export async function planExecutor(context: PlanContext) {
     }
   });
 
-  changeSet.print();
   return { changeSet, conflicts, unmanaged, resourceOwners };
+}
+
+type ExecutorDisplayEntry = GroupedDisplayEntry;
+
+function isFunctionBackedExecutor(
+  executor: MessageInitShape<typeof ExecutorExecutorSchema> | undefined,
+) {
+  return (
+    executor?.targetType === ExecutorTargetType.FUNCTION ||
+    executor?.targetType === ExecutorTargetType.JOB_FUNCTION
+  );
+}
+
+/**
+ * Build desired executor configs keyed by executor name from create/update changes.
+ * @param changeSet - Executor create/update changes
+ * @returns Executor configs keyed by name
+ */
+export function buildPlannedExecutorsByName(
+  changeSet: Pick<ChangeSet<CreateExecutor, UpdateExecutor, DeleteExecutor>, "creates" | "updates">,
+): Record<string, MessageInitShape<typeof ExecutorExecutorSchema> | undefined> {
+  return Object.fromEntries(
+    [...changeSet.creates, ...changeSet.updates].map((item) => [item.name, item.request.executor]),
+  );
+}
+
+/**
+ * Format executor changes for grouped dry-run display.
+ * @param changeSet - Executor changes
+ * @param executors - Desired executor configs keyed by name
+ * @param functionRegistryExecutorChanges - Related function registry changes for executors
+ * @returns Display entries for executor output
+ */
+export function formatExecutorChangeEntries(
+  changeSet: Pick<
+    ChangeSet<CreateExecutor, UpdateExecutor, DeleteExecutor>,
+    "creates" | "updates" | "deletes" | "replaces"
+  >,
+  executors: Record<string, MessageInitShape<typeof ExecutorExecutorSchema> | undefined>,
+  functionRegistryExecutorChanges?: RelatedFunctionRegistryChanges,
+): ExecutorDisplayEntry[] {
+  return formatChangeEntriesWithFunctionRegistry(
+    "executor",
+    changeSet,
+    functionRegistryExecutorChanges,
+    (item, action) => {
+      if (action === "delete") {
+        return [executorFunctionName(item.name)];
+      }
+      const executor = executors[item.name];
+      return executor && isFunctionBackedExecutor(executor)
+        ? [executorFunctionName(item.name)]
+        : [];
+    },
+  );
 }
 
 function normalizeComparableExecutor(executor: MessageInitShape<typeof ExecutorExecutorSchema>) {

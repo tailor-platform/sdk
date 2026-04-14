@@ -20,9 +20,14 @@ import { type ResolverService } from "@/cli/services/resolver/service";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { buildResolverOperationHookExpr } from "@/cli/shared/runtime-args";
 import { normalizeAuthInvoker } from "./auth-invoker";
-import { createChangeSet } from "./change-set";
+import { createChangeSet, type ChangeSet } from "./change-set";
 import { areNormalizedEqual, normalizeProtoConfig } from "./compare";
 import { resolverFunctionName } from "./function-registry";
+import {
+  formatChangeEntriesWithFunctionRegistry,
+  type GroupedDisplayEntry,
+  type RelatedFunctionRegistryChanges,
+} from "./grouped-display";
 import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
@@ -117,7 +122,7 @@ export async function planPipeline(context: PlanContext) {
     resourceOwners,
   } = await planServices(client, workspaceId, application.name, pipelines);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
-  const resolverChangeSet = await planResolvers(
+  const { changeSet: resolverChangeSet } = await planResolvers(
     client,
     workspaceId,
     pipelines,
@@ -128,8 +133,6 @@ export async function planPipeline(context: PlanContext) {
     forceApplyAll,
   );
 
-  serviceChangeSet.print();
-  resolverChangeSet.print();
   return {
     changeSet: {
       service: serviceChangeSet,
@@ -411,7 +414,36 @@ async function planResolvers(
       });
     });
   }
-  return changeSet;
+  return { changeSet };
+}
+
+type ResolverDisplayEntry = GroupedDisplayEntry;
+
+/**
+ * Format resolver changes for grouped dry-run display.
+ * @param changeSet - Resolver changes
+ * @param resolverFunctionChanges - Related function registry changes for resolvers
+ * @returns Display entries for resolver output
+ */
+export function formatResolverChangeEntries(
+  changeSet: Pick<
+    ChangeSet<CreateResolver, UpdateResolver, DeleteResolver>,
+    "creates" | "updates" | "deletes" | "replaces"
+  >,
+  resolverFunctionChanges?: RelatedFunctionRegistryChanges,
+): ResolverDisplayEntry[] {
+  return formatChangeEntriesWithFunctionRegistry(
+    "resolver",
+    changeSet,
+    resolverFunctionChanges,
+    (item) => {
+      const namespace = item.request.namespaceName;
+      return namespace ? [resolverFunctionName(namespace, item.name)] : [];
+    },
+    {
+      getNamespace: (item) => item.request.namespaceName,
+    },
+  );
 }
 
 function normalizeComparableResolver(resolver: MessageInitShape<typeof PipelineResolverSchema>) {
