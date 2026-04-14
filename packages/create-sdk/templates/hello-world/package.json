@@ -1,6 +1,7 @@
 {
   "name": "hello-world",
   "private": true,
+  "description": "Tailor Platform SDK hello-world template",
   "type": "module",
   "scripts": {
     "deploy": "tailor-sdk apply",
