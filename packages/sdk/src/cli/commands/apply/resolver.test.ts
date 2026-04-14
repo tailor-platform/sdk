@@ -1,6 +1,6 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { sdkNameLabelKey } from "./label";
-import { applyPipeline, planPipeline } from "./resolver";
+import { applyPipeline, formatResolverChangeEntries, planPipeline } from "./resolver";
 import type { PlanContext } from "./apply";
 import type { Application } from "@/cli/services/application";
 import type { ExecutorService } from "@/cli/services/executor/service";
@@ -710,6 +710,78 @@ describe("processResolver authInvoker mapping", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const proto = (resolverCreate as any).request.pipelineResolver;
     expect(proto.pipelines[0].invoker).toBeUndefined();
+  });
+});
+
+describe("formatResolverChangeEntries", () => {
+  test("groups resolver updates with related function registry updates", () => {
+    const entries = formatResolverChangeEntries(
+      {
+        creates: [],
+        updates: [
+          {
+            name: "add",
+            request: {
+              workspaceId: "ws",
+              namespaceName: "my-resolver",
+            },
+          },
+        ],
+        deletes: [],
+        replaces: [],
+      },
+      {
+        creates: [],
+        updates: [{ name: "resolver--my-resolver--add" }],
+        deletes: [],
+        replaces: [],
+      },
+    );
+
+    expect(entries).toEqual([
+      {
+        action: "update",
+        symbol: "~",
+        name: "add",
+        labels: ["resolver", "function"],
+        namespace: "my-resolver",
+      },
+    ]);
+  });
+
+  test("groups resolver deletes with related function registry deletes", () => {
+    const entries = formatResolverChangeEntries(
+      {
+        creates: [],
+        updates: [],
+        deletes: [
+          {
+            name: "add",
+            request: {
+              workspaceId: "ws",
+              namespaceName: "my-resolver",
+            },
+          },
+        ],
+        replaces: [],
+      },
+      {
+        creates: [],
+        updates: [],
+        deletes: [{ name: "resolver--my-resolver--add" }],
+        replaces: [],
+      },
+    );
+
+    expect(entries).toEqual([
+      {
+        action: "delete",
+        symbol: "-",
+        name: "add",
+        labels: ["resolver", "function"],
+        namespace: "my-resolver",
+      },
+    ]);
   });
 });
 

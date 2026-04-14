@@ -1,6 +1,5 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
-import { logger, styles } from "@/cli/shared/logger";
 import { createChangeSet } from "./change-set";
 import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
 import { hashValue, loadSecretsState, saveSecretsState } from "./secrets-state";
@@ -250,14 +249,6 @@ export async function planSecretManager(context: PlanContext) {
     }
   }
 
-  vaultChangeSet.print();
-  secretChangeSet.print();
-  if (skippedSecrets.length > 0) {
-    logger.log(styles.bold("Secret Manager secrets (skipped - no value provided):"));
-    for (const name of skippedSecrets) {
-      logger.log(`  ${styles.dim("○")} ${name}`);
-    }
-  }
   return { vaultChangeSet, secretChangeSet, skippedSecrets, conflicts, unmanaged, resourceOwners };
 }
 

@@ -75,6 +75,32 @@ async function execRemove(
   const functionRegistry = await planFunctionRegistry(client, workspaceId, application.name, []);
   const secretManager = await planSecretManager(ctx);
 
+  // Print planned deletions (same order as apply dry-run)
+  functionRegistry.changeSet.print();
+  staticWebsite.changeSet.print();
+  app.print();
+  tailorDB.changeSet.service.print();
+  tailorDB.changeSet.type.print();
+  tailorDB.changeSet.gqlPermission.print();
+  pipeline.changeSet.service.print();
+  pipeline.changeSet.resolver.print();
+  executor.changeSet.print();
+  workflow.changeSet.print();
+  idp.changeSet.service.print();
+  idp.changeSet.client.print();
+  auth.changeSet.service.print();
+  auth.changeSet.idpConfig.print();
+  auth.changeSet.userProfileConfig.print();
+  auth.changeSet.tenantConfig.print();
+  auth.changeSet.machineUser.print();
+  auth.changeSet.oauth2Client.print();
+  auth.changeSet.authHook.print();
+  auth.changeSet.scim.print();
+  auth.changeSet.scimResource.print();
+  auth.changeSet.connection?.print();
+  secretManager.vaultChangeSet.print();
+  secretManager.secretChangeSet.print();
+
   if (
     tailorDB.changeSet.service.deletes.length === 0 &&
     staticWebsite.changeSet.deletes.length === 0 &&
