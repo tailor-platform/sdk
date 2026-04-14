@@ -439,7 +439,10 @@ export async function loadApplication(
   }
 
   // 6. Build trigger context for workflow/job trigger transformation
-  const triggerContext = await buildTriggerContext(config.workflow);
+  const triggerContext = await buildTriggerContext(
+    config.workflow,
+    authResult.authService?.config.name,
+  );
 
   // 6.5. Resolve inline sourcemap setting
   const inlineSourcemap = resolveInlineSourcemap(config.inlineSourcemap);

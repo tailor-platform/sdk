@@ -227,11 +227,10 @@ export default createWorkflow({
 You can start a workflow execution from a resolver using `workflow.trigger()`.
 
 - `workflow.trigger(args, options?)` returns a workflow run ID (`Promise<string>`).
-- To run with machine-user permissions, pass `{ authInvoker: auth.invoker("<machine-user>") }`.
+- To run with machine-user permissions, pass `{ authInvoker: "<machine-user>" }`. The name is type-narrowed to the machine users defined in your auth config.
 
 ```typescript
 import { createResolver, t } from "@tailor-platform/sdk";
-import { auth } from "../tailor.config";
 import orderProcessingWorkflow from "../workflows/order-processing";
 
 export default createResolver({
@@ -244,7 +243,7 @@ export default createResolver({
   body: async ({ input }) => {
     const workflowRunId = await orderProcessingWorkflow.trigger(
       { orderId: input.orderId, customerId: input.customerId },
-      { authInvoker: auth.invoker("manager-machine-user") },
+      { authInvoker: "manager-machine-user" },
     );
 
     return { workflowRunId };
@@ -254,6 +253,8 @@ export default createResolver({
   }),
 });
 ```
+
+> **Deprecated:** `auth.invoker("manager-machine-user")` still works but is deprecated. Using the string form avoids importing `auth` into runtime code.
 
 See the full working example in the repository: [example/resolvers/triggerWorkflow.ts](../../../../example/resolvers/triggerWorkflow.ts).
 

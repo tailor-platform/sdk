@@ -30,6 +30,25 @@ interface ExtendedTriggerCall {
 }
 
 /**
+ * Name of the injected runtime normalizer helper. Chosen to be unique enough
+ * to avoid collisions with user code.
+ */
+const NORMALIZER_IDENTIFIER = "__tailor_normalizeAuthInvoker";
+
+/**
+ * Build the source text of the injected normalizer helper.
+ *
+ * Accepts either a plain string (machine user name) or the object form
+ * `{ namespace, machineUserName }`, and always returns the object form.
+ * The auth namespace is baked in at bundle time.
+ * @param authNamespace - Auth service namespace to embed
+ * @returns Source line defining the helper
+ */
+function buildNormalizerHelperSource(authNamespace: string): string {
+  return `const ${NORMALIZER_IDENTIFIER} = (v) => typeof v === "string" ? { namespace: ${JSON.stringify(authNamespace)}, machineUserName: v } : v;\n`;
+}
+
+/**
  * Extract authInvoker info from a config object expression
  * Returns the authInvoker value text and whether it's a shorthand property
  * @param configArg - Config argument node
@@ -185,6 +204,7 @@ function detectExtendedTriggerCalls(
  * @param jobNameMap - Map from variable name to job name
  * @param workflowFileMap - Map from file path (without extension) to workflow name for default exports
  * @param currentFilePath - Path of the current file being transformed (for resolving relative imports)
+ * @param authNamespace - Auth service namespace used to expand string-literal `authInvoker` to object form
  * @returns Transformed source code with trigger calls rewritten
  */
 export function transformFunctionTriggers(
@@ -193,6 +213,7 @@ export function transformFunctionTriggers(
   jobNameMap: Map<string, string>,
   workflowFileMap?: Map<string, string>,
   currentFilePath?: string,
+  authNamespace?: string,
 ): string {
   const { program } = parseSync("input.ts", source);
 
@@ -226,16 +247,31 @@ export function transformFunctionTriggers(
   const triggerCalls = detectExtendedTriggerCalls(program, source, workflowNames, jobNames);
 
   const replacements: Replacement[] = [];
+  // Whether any workflow trigger authInvoker was wrapped with the runtime
+  // normalizer. Used to decide whether to inject the helper at the top.
+  let needsNormalizerHelper = false;
 
   for (const call of triggerCalls) {
     if (call.kind === "workflow" && call.authInvoker) {
       // Workflow trigger - get workflow name from map
       const workflowName = localWorkflowNameMap.get(call.identifierName);
       if (workflowName) {
-        // Use authInvoker info extracted during detection
-        const authInvokerExpr = call.authInvoker.isShorthand
-          ? "authInvoker"
-          : call.authInvoker.valueText;
+        // Resolve the source expression for authInvoker.
+        const rawExpr = call.authInvoker.isShorthand ? "authInvoker" : call.authInvoker.valueText;
+        // Wrap with the runtime normalizer so any form (string literal,
+        // variable reference, function call, or `{ namespace, machineUserName }`
+        // object) becomes the object form the platform RPC expects. The
+        // normalizer is injected once at the top of the file.
+        // When no auth service is configured we can't expand a string, so
+        // we pass through unchanged (platform will reject a string with a
+        // clear error).
+        let authInvokerExpr: string;
+        if (authNamespace) {
+          authInvokerExpr = `${NORMALIZER_IDENTIFIER}(${rawExpr})`;
+          needsNormalizerHelper = true;
+        } else {
+          authInvokerExpr = rawExpr;
+        }
         // Transform to tailor.workflow.triggerWorkflow
         const transformedCall = `tailor.workflow.triggerWorkflow("${workflowName}", ${call.argsText || "undefined"}, { authInvoker: ${authInvokerExpr} })`;
         replacements.push({
@@ -264,5 +300,14 @@ export function transformFunctionTriggers(
     }
   }
 
-  return applyReplacements(source, replacements);
+  const transformed = applyReplacements(source, replacements);
+
+  // Inject the normalizer helper at the top of the file if we referenced it.
+  // Each module gets its own copy; rolldown keeps module scopes separate so
+  // there is no cross-module naming conflict.
+  if (needsNormalizerHelper && authNamespace) {
+    return buildNormalizerHelperSource(authNamespace) + transformed;
+  }
+
+  return transformed;
 }
