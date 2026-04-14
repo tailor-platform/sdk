@@ -64,6 +64,31 @@ export default defineConfig({
 
 The exported `secrets` object provides type-safe `get()` and `getAll()` methods for runtime access from resolvers, executors, and workflows.
 
+### Skipping Secrets with Missing Values
+
+In CI environments, you may not have all secret values available (e.g., secrets are already set on the platform and you don't want to duplicate them in CI environment variables). Use the `ignoreNullishValues` option to skip secrets whose values are `undefined` or `null`:
+
+```typescript
+export const secrets = defineSecretManager(
+  {
+    "api-keys": {
+      "stripe-secret-key": process.env.STRIPE_SECRET_KEY,
+      "sendgrid-api-key": process.env.SENDGRID_API_KEY,
+    },
+  },
+  { ignoreNullishValues: true },
+);
+```
+
+When `ignoreNullishValues: true`:
+
+- Secrets with a string value are created or updated as normal
+- Secrets with `undefined` or `null` values are **skipped** — they are not created, updated, or deleted
+- Skipped secrets are shown in the deploy output for visibility
+- Secrets removed from the config entirely are still deleted (orphan cleanup)
+
+This allows you to set secret values once (e.g., via local `tailor-sdk apply` or the CLI) and then deploy from CI without needing the actual values in CI environment variables.
+
 ## Using Secrets
 
 ### Runtime Access with `get()` / `getAll()`

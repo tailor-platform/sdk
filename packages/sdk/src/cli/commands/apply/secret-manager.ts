@@ -96,6 +96,7 @@ export async function planSecretManager(context: PlanContext) {
   );
 
   const state = loadSecretsState();
+  const skippedSecrets: string[] = [];
 
   await Promise.all(
     secretVaults.map(async (vault) => {
@@ -164,6 +165,13 @@ export async function planSecretManager(context: PlanContext) {
 
       // Diff secrets
       for (const secret of vault.secrets) {
+        if (secret.value == null) {
+          // Nullish value: skip create/update/delete for this secret
+          existingSet.delete(secret.name);
+          skippedSecrets.push(`${vaultName}/${secret.name}`);
+          continue;
+        }
+
         if (existingSet.has(secret.name)) {
           const currentHash = hashValue(secret.value);
           const storedHash = state.vaults[vaultName]?.[secret.name];
@@ -241,7 +249,7 @@ export async function planSecretManager(context: PlanContext) {
     }
   }
 
-  return { vaultChangeSet, secretChangeSet, conflicts, unmanaged, resourceOwners };
+  return { vaultChangeSet, secretChangeSet, skippedSecrets, conflicts, unmanaged, resourceOwners };
 }
 
 function vaultTrn(workspaceId: string, name: string) {
@@ -327,7 +335,9 @@ export async function applySecretManager(
           state.vaults[vault.vaultName] = {};
         }
         for (const secret of vault.secrets) {
-          state.vaults[vault.vaultName][secret.name] = hashValue(secret.value);
+          if (secret.value != null) {
+            state.vaults[vault.vaultName][secret.name] = hashValue(secret.value);
+          }
         }
       }
       saveSecretsState(state);

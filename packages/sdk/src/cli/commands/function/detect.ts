@@ -63,8 +63,7 @@ export async function detectFunctionType(
     let inputSchema: DetectedFunction["inputSchema"];
     if (rawInput) {
       // Build schema object for local format detection.
-      // t is already loaded by the user's module (which imports @tailor-platform/sdk).
-      const { t } = await import("@tailor-platform/sdk");
+      const { t } = await import("@/configure/types");
       inputSchema = t.object(rawInput) as InputSchema;
     }
     return {

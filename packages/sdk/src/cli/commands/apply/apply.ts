@@ -9,7 +9,7 @@ import { initOperatorClient } from "@/cli/shared/client";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { getDistDir } from "@/cli/shared/dist-dir";
-import { logger } from "@/cli/shared/logger";
+import { logger, styles } from "@/cli/shared/logger";
 import { readPackageJson } from "@/cli/shared/package-json";
 import { generateUserTypes } from "@/cli/shared/type-generator";
 import { withSpan } from "@/cli/telemetry";
@@ -290,6 +290,12 @@ function printPlanResults(results: PlanResults) {
   printGroupedDisplaySection("Auth", authEntries, authServiceActions);
   results.secretManager.vaultChangeSet.print();
   results.secretManager.secretChangeSet.print();
+  if (results.secretManager.skippedSecrets.length > 0) {
+    logger.log(styles.bold("Secret Manager secrets (skipped - no value provided):"));
+    for (const name of results.secretManager.skippedSecrets) {
+      logger.log(`  ${styles.dim("○")} ${name}`);
+    }
+  }
 
   // Compute summary: count display entries + service actions + non-grouped changesets
   const allDisplayEntries = [

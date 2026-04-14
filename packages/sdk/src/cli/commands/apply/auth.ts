@@ -711,6 +711,7 @@ function protoIdPConfig(idpConfig: IdProviderConfig): MessageInitShape<typeof Au
                 ? { metadataUrl: idpConfig.metadataURL }
                 : { rawMetadata: idpConfig.rawMetadata! }),
               enableSignRequest: idpConfig.enableSignRequest,
+              defaultRedirectUrl: idpConfig.defaultRedirectURL,
             },
           },
         },
@@ -1193,7 +1194,9 @@ function normalizeComparableUserProfileConfig(
     | MessageInitShape<typeof UserProfileProviderConfigSchema>
     | {
         providerType?: UserProfileProviderConfig_UserProfileProviderType;
-        config?: { config?: { case?: string; value?: Record<string, unknown> } };
+        config?: {
+          config?: { case?: string; value?: Record<string, unknown> };
+        };
       },
 ) {
   const comparableConfig = config.config?.config;
@@ -1238,7 +1241,9 @@ function normalizeComparableTenantProviderConfig(
     | undefined
     | {
         providerType?: TenantProviderConfig_TenantProviderType;
-        config?: { config?: { case?: string; value?: Record<string, unknown> } };
+        config?: {
+          config?: { case?: string; value?: Record<string, unknown> };
+        };
       },
 ) {
   return normalizeProtoConfig(config);
@@ -1250,7 +1255,9 @@ function areTenantProviderConfigsEqual(
     | undefined
     | {
         providerType?: TenantProviderConfig_TenantProviderType;
-        config?: { config?: { case?: string; value?: Record<string, unknown> } };
+        config?: {
+          config?: { case?: string; value?: Record<string, unknown> };
+        };
       },
   desired: MessageInitShape<typeof TenantProviderConfigSchema>,
 ) {

@@ -19,6 +19,7 @@ import * as inflection from "inflection";
 import { type ResolverService } from "@/cli/services/resolver/service";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { buildResolverOperationHookExpr } from "@/cli/shared/runtime-args";
+import { normalizeAuthInvoker } from "./auth-invoker";
 import { createChangeSet, type ChangeSet } from "./change-set";
 import { areNormalizedEqual, normalizeProtoConfig } from "./compare";
 import { resolverFunctionName } from "./function-registry";
@@ -128,6 +129,7 @@ export async function planPipeline(context: PlanContext) {
     executors,
     deletedServices,
     application.env,
+    application.authService?.config.name,
     forceApplyAll,
   );
 
@@ -294,6 +296,7 @@ async function planResolvers(
   executors: ReadonlyArray<Executor>,
   deletedServices: ReadonlyArray<string>,
   env: Record<string, string | number | boolean>,
+  authNamespace: string | undefined,
   forceApplyAll = false,
 ) {
   const changeSet = createChangeSet<CreateResolver, UpdateResolver, DeleteResolver>(
@@ -349,6 +352,7 @@ async function planResolvers(
         resolver,
         executorUsedResolvers,
         env,
+        authNamespace,
       );
       const existingResolver = existingResolversMap.get(resolver.name);
       if (existingResolver) {
@@ -553,6 +557,7 @@ function processResolver(
   resolver: Resolver,
   executorUsedResolvers: ReadonlySet<string>,
   env: Record<string, string | number | boolean>,
+  authNamespace: string | undefined,
 ): MessageInitShape<typeof PipelineResolverSchema> {
   const pipelines: MessageInitShape<typeof PipelineResolver_PipelineSchema>[] = [
     {
@@ -565,7 +570,11 @@ function processResolver(
         expr: buildResolverOperationHookExpr(env),
       },
       postScript: `args.body`,
-      invoker: resolver.authInvoker,
+      invoker: normalizeAuthInvoker(
+        resolver.authInvoker,
+        authNamespace,
+        `Resolver "${resolver.name}"`,
+      ),
     },
   ];
 

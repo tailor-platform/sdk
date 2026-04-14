@@ -110,6 +110,7 @@ function emptyResults(): PlanResults {
     secretManager: {
       vaultChangeSet: createChangeSet("Vaults"),
       secretChangeSet: createChangeSet("Secrets"),
+      skippedSecrets: [],
       conflicts: [],
       unmanaged: [],
       resourceOwners: new Set<string>(),

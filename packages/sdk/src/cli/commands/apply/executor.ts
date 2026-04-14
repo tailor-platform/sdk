@@ -17,6 +17,7 @@ import {
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { buildExecutorArgsExpr } from "@/cli/shared/runtime-args";
 import { stringifyFunction } from "@/parser/service/tailordb";
+import { normalizeAuthInvoker } from "./auth-invoker";
 import { createChangeSet, type ChangeSet } from "./change-set";
 import { areNormalizedEqual, normalizeProtoConfig } from "./compare";
 import { executorFunctionName } from "./function-registry";
@@ -462,6 +463,9 @@ function protoExecutor(
   let targetType: ExecutorTargetType;
   let targetConfig: MessageInitShape<typeof ExecutorTargetConfigSchema>;
 
+  const authNamespace = application.authService?.parsedConfig.name;
+  const invokerContext = `Executor "${executor.name}"`;
+
   switch (target.kind) {
     case "webhook": {
       targetType = ExecutorTargetType.WEBHOOK;
@@ -515,7 +519,7 @@ function protoExecutor(
                   expr: `(${stringifyFunction(target.variables)})(${argsExpr})`,
                 }
               : undefined,
-            invoker: target.authInvoker ?? undefined,
+            invoker: normalizeAuthInvoker(target.authInvoker, authNamespace, invokerContext),
           },
         },
       };
@@ -538,7 +542,7 @@ function protoExecutor(
             variables: {
               expr: argsExpr,
             },
-            invoker: target.authInvoker ?? undefined,
+            invoker: normalizeAuthInvoker(target.authInvoker, authNamespace, invokerContext),
           },
         },
       };
@@ -556,7 +560,7 @@ function protoExecutor(
                 ? { expr: `(${stringifyFunction(target.args)})(${argsExpr})` }
                 : { expr: JSON.stringify(target.args) }
               : undefined,
-            invoker: target.authInvoker ?? undefined,
+            invoker: normalizeAuthInvoker(target.authInvoker, authNamespace, invokerContext),
           },
         },
       };
