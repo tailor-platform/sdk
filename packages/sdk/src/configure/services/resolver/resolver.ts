@@ -1,5 +1,7 @@
 import { t } from "@/configure/types/type";
 import { brandValue } from "@/utils/brand";
+import type { AuthInvoker } from "@/configure/services/auth";
+import type { MachineUserName } from "@/configure/types/machine-user";
 import type { TailorAnyField, TailorField } from "@/configure/types/type";
 import type { TailorEnv } from "@/types/env";
 import type { InferFieldsOutput, output } from "@/types/helpers";
@@ -34,11 +36,12 @@ type NormalizedOutput<Output extends TailorAnyField | Record<string, TailorAnyFi
 type ResolverReturn<
   Input extends Record<string, TailorAnyField> | undefined,
   Output extends TailorAnyField | Record<string, TailorAnyField>,
-> = Omit<ResolverInput, "input" | "output" | "body"> &
+> = Omit<ResolverInput, "input" | "output" | "body" | "authInvoker"> &
   Readonly<{
     input?: Input;
     output: NormalizedOutput<Output>;
     body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>>;
+    authInvoker?: AuthInvoker<string> | MachineUserName;
   }>;
 
 /**
@@ -83,11 +86,12 @@ export function createResolver<
   Input extends Record<string, TailorAnyField> | undefined = undefined,
   Output extends TailorAnyField | Record<string, TailorAnyField> = TailorAnyField,
 >(
-  config: Omit<ResolverInput, "input" | "output" | "body"> &
+  config: Omit<ResolverInput, "input" | "output" | "body" | "authInvoker"> &
     Readonly<{
       input?: Input;
       output: Output;
       body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>>;
+      authInvoker?: AuthInvoker<string> | MachineUserName;
     }>,
 ): ResolverReturn<Input, Output> {
   // Check if output is already a TailorField using duck typing.

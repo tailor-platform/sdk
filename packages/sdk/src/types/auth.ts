@@ -278,6 +278,10 @@ type ConnectionNames<Config> = Config extends { connections?: Record<infer K, un
 
 export type DefinedAuth<Name extends string, Config, MachineUserNames extends string> = Config & {
   name: Name;
+  /**
+   * @deprecated Pass the machine user name directly as a string instead, e.g. `authInvoker: "machine-user-name"`.
+   * Using this function pulls config-layer (Node-only) dependencies into runtime bundles.
+   */
   invoker<M extends MachineUserNames>(machineUser: M): AuthInvokerWithName<M>;
   getConnectionToken<C extends ConnectionNames<Config>>(
     connectionName: C,

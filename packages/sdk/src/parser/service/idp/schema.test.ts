@@ -693,6 +693,95 @@ describe("IdPSchema emailConfig tests", () => {
   });
 });
 
+describe("IdPSchema permission tests", () => {
+  it("accepts permission with all 5 actions", () => {
+    const config = {
+      name: "test-idp",
+      authorization: "loggedIn" as const,
+      clients: ["client-1"],
+      permission: {
+        create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+        read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+        update: [
+          { conditions: [[{ newIdpUser: "name" }, "!=", { oldIdpUser: "name" }]], permit: true },
+        ],
+        delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+        sendPasswordResetEmail: [{ conditions: [], permit: true }],
+      },
+    };
+
+    const result = IdPSchema.parse(config);
+    expect(result.permission).toBeDefined();
+    expect(result.permission!.create).toHaveLength(1);
+    expect(result.permission!.sendPasswordResetEmail).toHaveLength(1);
+  });
+
+  it("accepts missing permission", () => {
+    const config = {
+      name: "test-idp",
+      authorization: "loggedIn" as const,
+      clients: ["client-1"],
+    };
+
+    const result = IdPSchema.parse(config);
+    expect(result.permission).toBeUndefined();
+  });
+
+  it("accepts permission with empty arrays (deny-all)", () => {
+    const config = {
+      name: "test-idp",
+      authorization: "loggedIn" as const,
+      clients: ["client-1"],
+      permission: {
+        create: [],
+        read: [],
+        update: [],
+        delete: [],
+        sendPasswordResetEmail: [],
+      },
+    };
+
+    const result = IdPSchema.parse(config);
+    expect(result.permission!.create).toHaveLength(0);
+  });
+
+  it("accepts permission with array shorthand format", () => {
+    const config = {
+      name: "test-idp",
+      authorization: "loggedIn" as const,
+      clients: ["client-1"],
+      permission: {
+        create: [[{ user: "role" }, "=", "ADMIN"]],
+        read: [[{ user: "role" }, "=", "ADMIN"]],
+        update: [[{ user: "role" }, "=", "ADMIN"]],
+        delete: [[{ user: "role" }, "=", "ADMIN"]],
+        sendPasswordResetEmail: [[{ user: "role" }, "=", "ADMIN"]],
+      },
+    };
+
+    const result = IdPSchema.parse(config);
+    expect(result.permission).toBeDefined();
+  });
+
+  it("accepts permission with in/not in operators", () => {
+    const config = {
+      name: "test-idp",
+      authorization: "loggedIn" as const,
+      clients: ["client-1"],
+      permission: {
+        create: [{ conditions: [[{ user: "role" }, "in", ["ADMIN", "MANAGER"]]], permit: true }],
+        read: [{ conditions: [[{ user: "role" }, "not in", ["GUEST"]]], permit: true }],
+        update: [],
+        delete: [],
+        sendPasswordResetEmail: [],
+      },
+    };
+
+    const result = IdPSchema.parse(config);
+    expect(result.permission).toBeDefined();
+  });
+});
+
 describe("IdPSchema gqlOperations alias tests", () => {
   it("accepts 'query' alias in IdPSchema", () => {
     const config = {

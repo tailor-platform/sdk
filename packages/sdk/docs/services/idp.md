@@ -99,6 +99,56 @@ defineIdp("my-idp", {
 
 **Validation:** Each field must be 200 characters or less and must not contain newline characters.
 
+### permission
+
+Per-operation permission policies for IdP user management. Controls who can create, read, update, delete users, and send password reset emails.
+
+```typescript
+defineIdp("my-idp", {
+  authorization: "loggedIn",
+  clients: ["my-client"],
+  permission: {
+    create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    update: [
+      { conditions: [[{ newIdpUser: "name" }, "!=", { oldIdpUser: "name" }]], permit: true },
+    ],
+    delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    sendPasswordResetEmail: [{ conditions: [], permit: true }],
+  },
+});
+```
+
+**Operations:**
+
+- `create` - Controls who can create IdP users
+- `read` - Controls who can read IdP users
+- `update` - Controls who can update IdP users
+- `delete` - Controls who can delete IdP users
+- `sendPasswordResetEmail` - Controls who can send password reset emails
+
+**Operands:**
+
+- `{ user: "field" }` - Authenticated user's attribute
+- `{ idpUser: "field" }` - IdP user field (for create/read/delete). Allowed values: `"id"`, `"name"`, `"disabled"`
+- `{ oldIdpUser: "field" }` - Previous IdP user field value (for update only). Allowed values: `"id"`, `"name"`, `"disabled"`
+- `{ newIdpUser: "field" }` - New IdP user field value (for update only). Allowed values: `"id"`, `"name"`, `"disabled"`
+- Literal values: `string`, `boolean`, `string[]`, `boolean[]`
+
+**Operators:** `"="`, `"!="`, `"in"`, `"not in"`
+
+**Helper:** `unsafeAllowAllIdPPermission` grants full access without conditions. Intended only for development and testing.
+
+```typescript
+import { unsafeAllowAllIdPPermission } from "@tailor-platform/sdk";
+
+defineIdp("my-idp", {
+  authorization: "loggedIn",
+  clients: ["my-client"],
+  permission: unsafeAllowAllIdPPermission,
+});
+```
+
 ## Using idp.provider()
 
 The `idp.provider()` method creates a type-safe reference to the IdP for use in Auth configuration. The client name is validated at compile time against the clients defined in the IdP.

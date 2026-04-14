@@ -1,3 +1,4 @@
+import type { ValueOperand } from "./auth";
 import type { BuiltinIdP } from "./auth.generated";
 import type { IdPInput } from "./idp.generated";
 
@@ -14,3 +15,39 @@ export type IdPExternalConfig = { name: string; external: true };
 export type IdPOwnConfig = Omit<DefinedIdp<string, IdPInput, string>, "provider">;
 
 export type IdPConfig = IdPOwnConfig | IdPExternalConfig;
+
+// IdP Permission standard types (normalized form used between parser and CLI)
+
+export type StandardIdPPermissionOperator = "eq" | "ne" | "in" | "nin";
+
+export type IdPUserField = "id" | "name" | "disabled";
+
+type IdPUserOperand = { user: string };
+type IdPUserFieldOperand = { idpUser: IdPUserField };
+type OldIdPUserFieldOperand = { oldIdpUser: IdPUserField };
+type NewIdPUserFieldOperand = { newIdpUser: IdPUserField };
+
+export type IdPPermissionOperand<Update extends boolean = boolean> =
+  | IdPUserOperand
+  | ValueOperand
+  | (Update extends true ? OldIdPUserFieldOperand | NewIdPUserFieldOperand : IdPUserFieldOperand);
+
+export type StandardIdPPermissionCondition<Update extends boolean = boolean> = readonly [
+  IdPPermissionOperand<Update>,
+  StandardIdPPermissionOperator,
+  IdPPermissionOperand<Update>,
+];
+
+export type StandardIdPActionPermission<Update extends boolean = boolean> = {
+  conditions: readonly StandardIdPPermissionCondition<Update>[];
+  description?: string;
+  permit: "allow" | "deny";
+};
+
+export type StandardIdPPermission = {
+  create: readonly StandardIdPActionPermission<false>[];
+  read: readonly StandardIdPActionPermission<false>[];
+  update: readonly StandardIdPActionPermission<true>[];
+  delete: readonly StandardIdPActionPermission<false>[];
+  sendPasswordResetEmail: readonly StandardIdPActionPermission<false>[];
+};

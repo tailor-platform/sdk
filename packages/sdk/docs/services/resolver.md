@@ -350,19 +350,10 @@ createResolver({
 
 ## Authentication
 
-Specify an `authInvoker` to execute the resolver with machine user credentials:
+Specify an `authInvoker` to execute the resolver with machine user credentials. Pass the machine user name as a plain string — it is type-narrowed to the names you defined in your auth config:
 
 ```typescript
-import { defineAuth, createResolver, t } from "@tailor-platform/sdk";
-
-const auth = defineAuth("my-auth", {
-  // ... auth configuration
-  machineUsers: {
-    "batch-processor": {
-      attributes: { role: "ADMIN" },
-    },
-  },
-});
+import { createResolver, t } from "@tailor-platform/sdk";
 
 export default createResolver({
   name: "adminQuery",
@@ -372,10 +363,12 @@ export default createResolver({
     // Executes as "batch-processor" machine user
     return { result: "ok" };
   },
-  authInvoker: auth.invoker("batch-processor"),
+  authInvoker: "batch-processor",
 });
 ```
 
-The `authInvoker` option accepts the return value of `auth.invoker()`, which specifies the auth namespace and machine user name.
+The machine user name is looked up in the auth service configured on your app (`machineUsers` in `defineAuth`). The namespace is resolved automatically — no need to import `auth` from `tailor.config.ts` in resolver files.
+
+> **Deprecated:** `auth.invoker("batch-processor")` still works, but is deprecated. Importing `auth` into runtime files pulls config-layer (Node-only) dependencies into the bundle.
 
 **Note:** `authInvoker` controls the permissions for database operations and other platform actions, but the `user` object passed to the `body` function still reflects the original caller who invoked the resolver.
