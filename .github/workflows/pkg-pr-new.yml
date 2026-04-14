@@ -234,6 +234,7 @@ jobs:
         with:
           standalone: true
           run_install: false
+          version: 10
 
       - name: Install Node.js
         run: pnpm env use --global ${{ matrix.node }}
@@ -279,14 +280,6 @@ jobs:
             echo "Error: SDK dependency should be '$EXPECTED_SDK_URL' but got '$SDK_VERSION'"
             exit 1
           fi
-
-      - name: Debug scaffolded project
-        working-directory: /tmp/test-init-app
-        run: |
-          echo "=== pnpm version ==="
-          pnpm --version
-          echo "=== package.json pnpm config ==="
-          jq '.pnpm' package.json
 
       # Lockfile-less install is expected: scaffolded projects have no lockfile.
       # Yarn 4 PnP is not tested here; this validates node_modules-based resolution.
