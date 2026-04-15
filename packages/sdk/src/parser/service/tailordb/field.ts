@@ -109,7 +109,15 @@ export function parseFieldConfig(
               }
             : undefined,
         }
-      : undefined,
+      : metadata.generated && fieldType === "datetime"
+        ? {
+            // Auto-generate timestamp hooks for fields created by db.fields.timestamps().
+            // Required datetime (createdAt) gets a create hook;
+            // optional datetime (updatedAt) gets an update hook.
+            create: metadata.required !== false ? { expr: "new Date()" } : undefined,
+            update: metadata.required === false ? { expr: "new Date()" } : undefined,
+          }
+        : undefined,
     serial: metadata.serial
       ? {
           start: metadata.serial.start,

@@ -32,7 +32,7 @@ export const unauthenticatedTailorUser = {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
   return (data: unknown) => {
-    return Object.entries(type.fields).reduce(
+    let result = Object.entries(type.fields).reduce(
       (hooked, [key, value]) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const field = value as TailorField<any, any, any>;
@@ -63,7 +63,23 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
         return hooked;
       },
       {} as Record<string, unknown>,
-    ) as Partial<output<T>>;
+    );
+
+    // Apply record-level hooks (e.g., computed fields like fullAddress)
+    const recordHook = type.metadata?.hooks?.create;
+    if (recordHook) {
+      result = recordHook({ data: result, user: unauthenticatedTailorUser }) as Record<
+        string,
+        unknown
+      >;
+      for (const [key, val] of Object.entries(result)) {
+        if (val instanceof Date) {
+          result[key] = val.toISOString();
+        }
+      }
+    }
+
+    return result as Partial<output<T>>;
   };
 }
 
