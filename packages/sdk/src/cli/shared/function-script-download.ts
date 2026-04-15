@@ -7,6 +7,7 @@
 
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { FunctionExecution_Type } from "@tailor-proto/tailor/v1/function_resource_pb";
+import { logger } from "@/cli/shared/logger";
 import type { OperatorClient } from "@/cli/shared/client";
 
 /**
@@ -139,7 +140,8 @@ export async function downloadFunctionScript(
       code: Buffer.concat(chunks).toString("utf-8"),
       registryUpdatedAt,
     };
-  } catch {
+  } catch (error) {
+    logger.debug(`Failed to download function script "${options.name}": ${error}`);
     return null;
   }
 }
