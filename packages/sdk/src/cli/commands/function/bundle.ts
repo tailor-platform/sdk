@@ -91,6 +91,11 @@ export async function bundleForTestRun(
           }
         : true,
       codeSplitting: false,
+      // Emit sourcemap `sources` relative to cwd so stack traces resolve
+      // back to paths a user can open (e.g. `resolvers/add.ts`), not the
+      // rolldown-default virtual output dir which produces spurious `..`
+      // segments.
+      dir: process.cwd(),
     },
     tsconfig,
     treeshake: {
