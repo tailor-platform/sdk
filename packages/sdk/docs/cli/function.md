@@ -89,19 +89,45 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 <!-- politty:command:function logs:global-options-link:end -->
 
-**Usage Examples:**
+<!-- politty:command:function logs:examples:start -->
+
+**Examples**
+
+**List all function execution logs**
 
 ```bash
-# List all function execution logs
-tailor-sdk function logs
-
-# Get execution details with logs
-tailor-sdk function logs <execution-id>
-
-# Output as JSON
-tailor-sdk function logs --json
-tailor-sdk function logs <execution-id> --json
+$ tailor-sdk function logs
 ```
+
+**Get execution details with logs**
+
+```bash
+$ tailor-sdk function logs <execution-id>
+```
+
+**Output as JSON**
+
+```bash
+$ tailor-sdk function logs --json
+```
+
+**Get execution details as JSON**
+
+```bash
+$ tailor-sdk function logs <execution-id> --json
+```
+
+<!-- politty:command:function logs:examples:end -->
+
+<!-- politty:command:function logs:notes:start -->
+
+**Notes**
+
+When viewing a specific execution that failed, the command displays error details with the stack trace mapped back to original source files via the inline sourcemap (clickable file links and code snippets, matching `function test-run` output).
+
+When the deployed script cannot be downloaded or the function has been redeployed since the execution, the command falls back to a plain-text error display to avoid showing misleading source locations.
+
+<!-- politty:command:function logs:notes:end -->
 
 <!-- politty:command:function test-run:heading:start -->
 
