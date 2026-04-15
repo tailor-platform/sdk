@@ -1204,9 +1204,12 @@ export const db = {
      *   update: ({ data }) => ({ ...data, updatedAt: new Date() }),
      * });
      */
-    timestamps: () => ({
-      createdAt: datetime().description("Record creation timestamp"),
-      updatedAt: datetime({ optional: true }).description("Record last update timestamp"),
-    }),
+    timestamps: () => {
+      const createdAt = datetime().description("Record creation timestamp");
+      createdAt._metadata.generated = true;
+      const updatedAt = datetime({ optional: true }).description("Record last update timestamp");
+      updatedAt._metadata.generated = true;
+      return { createdAt, updatedAt };
+    },
   },
 };

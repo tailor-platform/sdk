@@ -68,6 +68,8 @@ export type DBFieldMetadata = {
     | undefined;
   /** Decimal scale (number of digits after decimal point, 0-12) */
   scale?: number | undefined;
+  /** Whether the field value is auto-generated (e.g. timestamps) */
+  generated?: boolean | undefined;
 };
 export type DBFieldMetadataInput = DBFieldMetadata;
 
@@ -554,6 +556,7 @@ export type TailorDBTypeRaw = {
             }
           | undefined;
         scale?: number | undefined | undefined;
+        generated?: boolean | undefined | undefined;
       };
       rawRelation?:
         | {

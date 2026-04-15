@@ -80,12 +80,8 @@ describe("KyselyTypePlugin integration tests", () => {
       expect(result.typeDef).toContain("birthDate: Timestamp | null;");
       expect(result.typeDef).toContain("lastLogin: Timestamp | null;");
       expect(result.typeDef).toContain("tags: string[];");
-      // TODO(record-level-hooks): `db.fields.timestamps()` no longer installs
-      // field-level hooks, so Kysely cannot detect that `createdAt` is
-      // auto-generated. Remove this workaround once the Kysely plugin is
-      // taught to detect generation via record-level hooks.
-      expect(result.typeDef).toContain("createdAt: Timestamp;");
-      expect(result.typeDef).toContain("updatedAt: Timestamp | null;");
+      expect(result.typeDef).toContain("createdAt: Generated<Timestamp>;");
+      expect(result.typeDef).toContain("updatedAt: Generated<Timestamp | null>;");
     });
 
     it("should have correct id and description", () => {

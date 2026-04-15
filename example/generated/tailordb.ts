@@ -26,8 +26,8 @@ export interface Namespace {
       city: string | null;
       fullAddress: string;
       state: string;
-      createdAt: Timestamp;
-      updatedAt: Timestamp | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Generated<Timestamp | null>;
     }
 
     Invoice: {
@@ -37,8 +37,8 @@ export interface Namespace {
       amount: number | null;
       sequentialId: Serial<number>;
       status: "draft" | "sent" | "paid" | "cancelled" | null;
-      createdAt: Timestamp;
-      updatedAt: Timestamp | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Generated<Timestamp | null>;
     }
 
     NestedProfile: {
@@ -56,8 +56,8 @@ export interface Namespace {
         version: number;
       }>;
       archived: boolean | null;
-      createdAt: Timestamp;
-      updatedAt: Timestamp | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Generated<Timestamp | null>;
     }
 
     Product: {
@@ -68,8 +68,8 @@ export interface Namespace {
       stock: number;
       category: "electronics" | "clothing" | "food";
       supplierId: string;
-      createdAt: Timestamp;
-      updatedAt: Timestamp | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Generated<Timestamp | null>;
     }
 
     PurchaseOrder: {
@@ -84,8 +84,8 @@ export interface Namespace {
         size: number;
         type: "text" | "image";
       }[];
-      createdAt: Timestamp;
-      updatedAt: Timestamp | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Generated<Timestamp | null>;
     }
 
     SalesOrder: {
@@ -97,8 +97,8 @@ export interface Namespace {
       status: string | null;
       cancelReason: string | null;
       canceledAt: Timestamp | null;
-      createdAt: Timestamp;
-      updatedAt: Timestamp | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Generated<Timestamp | null>;
     }
 
     SalesOrderCreated: {
@@ -126,8 +126,8 @@ export interface Namespace {
       country: string;
       state: "Alabama" | "Alaska";
       city: string;
-      createdAt: Timestamp;
-      updatedAt: Timestamp | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Generated<Timestamp | null>;
     }
 
     User: {
@@ -137,32 +137,32 @@ export interface Namespace {
       status: string | null;
       department: string | null;
       role: "MANAGER" | "STAFF";
-      createdAt: Timestamp;
-      updatedAt: Timestamp | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Generated<Timestamp | null>;
     }
 
     UserLog: {
       id: Generated<string>;
       userID: string;
       message: string;
-      createdAt: Timestamp;
-      updatedAt: Timestamp | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Generated<Timestamp | null>;
     }
 
     UserSetting: {
       id: Generated<string>;
       language: "jp" | "en";
       userID: string;
-      createdAt: Timestamp;
-      updatedAt: Timestamp | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Generated<Timestamp | null>;
     }
   },
   "analyticsdb": {
     Event: {
       id: Generated<string>;
       name: "CLICK" | "VIEW" | "PURCHASE";
-      createdAt: Timestamp;
-      updatedAt: Timestamp | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Generated<Timestamp | null>;
     }
   }
 }

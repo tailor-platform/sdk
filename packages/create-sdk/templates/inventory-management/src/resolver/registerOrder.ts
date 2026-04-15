@@ -16,7 +16,7 @@ const insertOrder = async (db: DB<"main-db">, input: Input) => {
   // Insert Order
   const order = await db
     .insertInto("Order")
-    .values(input.order)
+    .values({ ...input.order, createdAt: new Date() })
     .returning("id")
     .executeTakeFirstOrThrow();
 
@@ -27,6 +27,7 @@ const insertOrder = async (db: DB<"main-db">, input: Input) => {
       input.items.map((item) => ({
         ...item,
         orderId: order.id,
+        createdAt: new Date(),
       })),
     )
     .execute();
@@ -63,6 +64,8 @@ const updateInventory = async (db: DB<"main-db">, input: Input) => {
           .values({
             productId: item.productId,
             quantity: item.quantity,
+            createdAt: new Date(),
+            updatedAt: new Date(),
           })
           .execute();
       } else {

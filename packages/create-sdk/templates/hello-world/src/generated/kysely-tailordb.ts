@@ -18,8 +18,8 @@ export interface Namespace {
       name: string;
       email: string;
       role: "MANAGER" | "STAFF";
-      createdAt: Timestamp;
-      updatedAt: Timestamp | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Generated<Timestamp | null>;
     }
   }
 }

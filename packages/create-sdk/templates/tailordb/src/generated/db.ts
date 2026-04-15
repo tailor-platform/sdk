@@ -31,8 +31,8 @@ export interface Namespace {
         editedAt?: Timestamp | null;
         isInternal: boolean;
       }>;
-      createdAt: Timestamp;
-      updatedAt: Timestamp | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Generated<Timestamp | null>;
     }
 
     Task: {
@@ -45,8 +45,8 @@ export interface Namespace {
       assigneeId: string | null;
       categoryId: string | null;
       isArchived: boolean;
-      createdAt: Timestamp;
-      updatedAt: Timestamp | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Generated<Timestamp | null>;
     }
 
     User: {
@@ -55,8 +55,8 @@ export interface Namespace {
       email: string;
       role: "ADMIN" | "MEMBER" | "VIEWER";
       bio: string | null;
-      createdAt: Timestamp;
-      updatedAt: Timestamp | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Generated<Timestamp | null>;
     }
   }
 }

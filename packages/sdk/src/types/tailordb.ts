@@ -128,6 +128,7 @@ export interface OperatorFieldConfig {
     format?: string;
   };
   scale?: number;
+  generated?: boolean;
   fields?: Record<string, OperatorFieldConfig>;
 }
 

@@ -19,6 +19,8 @@ export default createExecutor({
         .insertInto("Notification")
         .values({
           message: `Inventory for product ${newRecord.productId} is below threshold. Current quantity: ${newRecord.quantity}`,
+          createdAt: new Date(),
+          updatedAt: new Date(),
         })
         .execute();
     },

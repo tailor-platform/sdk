@@ -29,7 +29,7 @@ function createDbOperations(db: DB<"main-db">): DbOperations {
     createUser: async (input: UserProfile) => {
       return await db
         .insertInto("User")
-        .values(input)
+        .values({ ...input, createdAt: new Date(), updatedAt: new Date() })
         .returning(["id", "name", "email", "age", "createdAt", "updatedAt"])
         .executeTakeFirstOrThrow();
     },

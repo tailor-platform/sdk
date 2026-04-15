@@ -140,8 +140,14 @@ describe("bundled execution tests", () => {
       expect(executedQueries).toEqual([
         { query: 'select * from "User" where "id" = $1', params: ["user-1"] },
         {
-          query: 'insert into "UserLog" ("userID", "message") values ($1, $2)',
-          params: ["user-1", "User created: undefined (undefined)"],
+          query:
+            'insert into "UserLog" ("userID", "message", "createdAt", "updatedAt") values ($1, $2, $3, $4)',
+          params: [
+            "user-1",
+            "User created: undefined (undefined)",
+            new Date("2025-10-06T12:34:56.000Z"),
+            new Date("2025-10-06T12:34:56.000Z"),
+          ],
         },
       ]);
       expect(createdClients).toMatchObject([{ namespace: "tailordb" }]);

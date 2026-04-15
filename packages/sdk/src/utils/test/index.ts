@@ -55,6 +55,8 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
           if (hooked[key] instanceof Date) {
             hooked[key] = hooked[key].toISOString();
           }
+        } else if (field.metadata.generated && field.type === "datetime") {
+          hooked[key] = new Date().toISOString();
         } else if (data && typeof data === "object") {
           hooked[key] = (data as Record<string, unknown>)[key];
         }

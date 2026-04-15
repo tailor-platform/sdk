@@ -18,8 +18,8 @@ export interface Namespace {
       customerName: string;
       amount: number;
       status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
-      createdAt: Timestamp;
-      updatedAt: Timestamp | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Generated<Timestamp | null>;
     }
 
     User: {
@@ -27,8 +27,8 @@ export interface Namespace {
       name: string;
       email: string;
       age: number;
-      createdAt: Timestamp;
-      updatedAt: Timestamp | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Generated<Timestamp | null>;
     }
   }
 }

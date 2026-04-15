@@ -19,8 +19,8 @@ export interface Namespace {
       entityType: string;
       entityId: string;
       message: string;
-      createdAt: Timestamp;
-      updatedAt: Timestamp | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Generated<Timestamp | null>;
     }
 
     Notification: {
@@ -29,8 +29,8 @@ export interface Namespace {
       title: string;
       body: string;
       isRead: boolean;
-      createdAt: Timestamp;
-      updatedAt: Timestamp | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Generated<Timestamp | null>;
     }
 
     User: {
@@ -38,8 +38,8 @@ export interface Namespace {
       name: string;
       email: string;
       role: "ADMIN" | "MEMBER";
-      createdAt: Timestamp;
-      updatedAt: Timestamp | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Generated<Timestamp | null>;
     }
   }
 }

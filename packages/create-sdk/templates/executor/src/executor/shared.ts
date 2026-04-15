@@ -9,5 +9,8 @@ interface AuditLogInput {
 
 export async function createAuditLog(input: AuditLogInput): Promise<void> {
   const db = getDB("main-db");
-  await db.insertInto("AuditLog").values(input).execute();
+  await db
+    .insertInto("AuditLog")
+    .values({ ...input, createdAt: new Date(), updatedAt: new Date() })
+    .execute();
 }

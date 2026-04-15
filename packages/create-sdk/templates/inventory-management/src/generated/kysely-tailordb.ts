@@ -17,8 +17,8 @@ export interface Namespace {
       id: Generated<string>;
       name: string;
       description: string | null;
-      createdAt: Timestamp;
-      updatedAt: Timestamp | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Generated<Timestamp | null>;
     }
 
     Contact: {
@@ -27,23 +27,23 @@ export interface Namespace {
       email: string;
       phone: string | null;
       address: string | null;
-      createdAt: Timestamp;
-      updatedAt: Timestamp | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Generated<Timestamp | null>;
     }
 
     Inventory: {
       id: Generated<string>;
       productId: string;
       quantity: number;
-      createdAt: Timestamp;
-      updatedAt: Timestamp | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Generated<Timestamp | null>;
     }
 
     Notification: {
       id: Generated<string>;
       message: string;
-      createdAt: Timestamp;
-      updatedAt: Timestamp | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Generated<Timestamp | null>;
     }
 
     Order: {
@@ -53,8 +53,8 @@ export interface Namespace {
       orderDate: Timestamp;
       orderType: "PURCHASE" | "SALES";
       contactId: string;
-      createdAt: Timestamp;
-      updatedAt: Timestamp | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Generated<Timestamp | null>;
     }
 
     OrderItem: {
@@ -64,8 +64,8 @@ export interface Namespace {
       quantity: number;
       unitPrice: number;
       totalPrice: number | null;
-      createdAt: Timestamp;
-      updatedAt: Timestamp | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Generated<Timestamp | null>;
     }
 
     Product: {
@@ -73,8 +73,8 @@ export interface Namespace {
       name: string;
       description: string | null;
       categoryId: string;
-      createdAt: Timestamp;
-      updatedAt: Timestamp | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Generated<Timestamp | null>;
     }
 
     User: {
@@ -82,8 +82,8 @@ export interface Namespace {
       name: string;
       email: string;
       role: "MANAGER" | "STAFF";
-      createdAt: Timestamp;
-      updatedAt: Timestamp | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Generated<Timestamp | null>;
     }
   }
 }

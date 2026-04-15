@@ -34,6 +34,7 @@ export interface DBFieldMetadata extends FieldMetadata {
   serial?: SerialConfig;
   relation?: boolean;
   scale?: number;
+  generated?: boolean;
 }
 
 export interface DefinedDBFieldMetadata extends DefinedFieldMetadata {
@@ -49,6 +50,7 @@ export interface DefinedDBFieldMetadata extends DefinedFieldMetadata {
   };
   serial?: boolean;
   relation?: boolean;
+  generated?: boolean;
 }
 
 export type ExcludeNestedDBFields<T extends Record<string, TailorAnyDBField>> = {

@@ -1,0 +1,554 @@
+{
+  "version": 1,
+  "namespace": "tailordb",
+  "createdAt": "2026-04-15T02:51:59.393Z",
+  "changes": [
+    {
+      "kind": "field_modified",
+      "typeName": "Customer",
+      "fieldName": "name",
+      "before": {
+        "type": "string",
+        "required": true,
+        "validate": [
+          {
+            "script": {
+              "expr": "(({value})=>value.length>5)({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            },
+            "errorMessage": "Name must be longer than 5 characters"
+          }
+        ]
+      },
+      "after": {
+        "type": "string",
+        "required": true
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "Customer",
+      "fieldName": "city",
+      "before": {
+        "type": "string",
+        "required": false,
+        "validate": [
+          {
+            "script": {
+              "expr": "(({value})=>value?value.length>1:true)({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            },
+            "errorMessage": "failed by `({value})=>value?value.length>1:true`"
+          },
+          {
+            "script": {
+              "expr": "(({value})=>value?value.length<100:true)({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            },
+            "errorMessage": "failed by `({value})=>value?value.length<100:true`"
+          }
+        ]
+      },
+      "after": {
+        "type": "string",
+        "required": false
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "Customer",
+      "fieldName": "fullAddress",
+      "before": {
+        "type": "string",
+        "required": true,
+        "hooks": {
+          "create": {
+            "expr": "(({data})=>`${data.postalCode} ${data.address} ${data.city}`)({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+          },
+          "update": {
+            "expr": "(({data})=>`${data.postalCode} ${data.address} ${data.city}`)({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+          }
+        }
+      },
+      "after": {
+        "type": "string",
+        "required": true
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "Customer",
+      "fieldName": "createdAt",
+      "before": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp",
+        "hooks": {
+          "create": {
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+          }
+        }
+      },
+      "after": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp"
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "Customer",
+      "fieldName": "updatedAt",
+      "before": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp",
+        "hooks": {
+          "update": {
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+          }
+        }
+      },
+      "after": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp"
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "Invoice",
+      "fieldName": "createdAt",
+      "before": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp",
+        "hooks": {
+          "create": {
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+          }
+        }
+      },
+      "after": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp"
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "Invoice",
+      "fieldName": "updatedAt",
+      "before": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp",
+        "hooks": {
+          "update": {
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+          }
+        }
+      },
+      "after": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp"
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "NestedProfile",
+      "fieldName": "createdAt",
+      "before": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp",
+        "hooks": {
+          "create": {
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+          }
+        }
+      },
+      "after": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp"
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "NestedProfile",
+      "fieldName": "updatedAt",
+      "before": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp",
+        "hooks": {
+          "update": {
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+          }
+        }
+      },
+      "after": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp"
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "Product",
+      "fieldName": "createdAt",
+      "before": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp",
+        "hooks": {
+          "create": {
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+          }
+        }
+      },
+      "after": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp"
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "Product",
+      "fieldName": "updatedAt",
+      "before": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp",
+        "hooks": {
+          "update": {
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+          }
+        }
+      },
+      "after": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp"
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "PurchaseOrder",
+      "fieldName": "attachedFiles",
+      "before": {
+        "type": "nested",
+        "required": true,
+        "array": true,
+        "fields": {
+          "id": {
+            "type": "uuid",
+            "required": true
+          },
+          "name": {
+            "type": "string",
+            "required": true
+          },
+          "size": {
+            "type": "integer",
+            "required": true,
+            "validate": [
+              {
+                "script": {
+                  "expr": "(({value})=>value>0)({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+                },
+                "errorMessage": "failed by `({value})=>value>0`"
+              }
+            ]
+          },
+          "type": {
+            "type": "enum",
+            "required": true,
+            "allowedValues": [
+              {
+                "value": "text"
+              },
+              {
+                "value": "image"
+              }
+            ]
+          }
+        }
+      },
+      "after": {
+        "type": "nested",
+        "required": true,
+        "array": true,
+        "fields": {
+          "id": {
+            "type": "uuid",
+            "required": true
+          },
+          "name": {
+            "type": "string",
+            "required": true
+          },
+          "size": {
+            "type": "integer",
+            "required": true
+          },
+          "type": {
+            "type": "enum",
+            "required": true,
+            "allowedValues": [
+              {
+                "value": "text"
+              },
+              {
+                "value": "image"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "PurchaseOrder",
+      "fieldName": "createdAt",
+      "before": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp",
+        "hooks": {
+          "create": {
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+          }
+        }
+      },
+      "after": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp"
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "PurchaseOrder",
+      "fieldName": "updatedAt",
+      "before": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp",
+        "hooks": {
+          "update": {
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+          }
+        }
+      },
+      "after": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp"
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "SalesOrder",
+      "fieldName": "createdAt",
+      "before": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp",
+        "hooks": {
+          "create": {
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+          }
+        }
+      },
+      "after": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp"
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "SalesOrder",
+      "fieldName": "updatedAt",
+      "before": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp",
+        "hooks": {
+          "update": {
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+          }
+        }
+      },
+      "after": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp"
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "Supplier",
+      "fieldName": "createdAt",
+      "before": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp",
+        "hooks": {
+          "create": {
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+          }
+        }
+      },
+      "after": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp"
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "Supplier",
+      "fieldName": "updatedAt",
+      "before": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp",
+        "hooks": {
+          "update": {
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+          }
+        }
+      },
+      "after": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp"
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "User",
+      "fieldName": "createdAt",
+      "before": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp",
+        "hooks": {
+          "create": {
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+          }
+        }
+      },
+      "after": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp"
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "User",
+      "fieldName": "updatedAt",
+      "before": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp",
+        "hooks": {
+          "update": {
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+          }
+        }
+      },
+      "after": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp"
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "UserLog",
+      "fieldName": "createdAt",
+      "before": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp",
+        "hooks": {
+          "create": {
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+          }
+        }
+      },
+      "after": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp"
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "UserLog",
+      "fieldName": "updatedAt",
+      "before": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp",
+        "hooks": {
+          "update": {
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+          }
+        }
+      },
+      "after": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp"
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "UserSetting",
+      "fieldName": "createdAt",
+      "before": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp",
+        "hooks": {
+          "create": {
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+          }
+        }
+      },
+      "after": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp"
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "UserSetting",
+      "fieldName": "updatedAt",
+      "before": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp",
+        "hooks": {
+          "update": {
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+          }
+        }
+      },
+      "after": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp"
+      }
+    }
+  ],
+  "hasBreakingChanges": false,
+  "breakingChanges": [],
+  "requiresMigrationScript": false
+}

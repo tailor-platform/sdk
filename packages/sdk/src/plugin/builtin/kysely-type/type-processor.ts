@@ -139,7 +139,7 @@ function generateFieldType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
     usedUtilityTypes.Serial = true;
     finalType = `Serial<${finalType}>`;
   }
-  if (fieldConfig.hooks?.create) {
+  if (fieldConfig.generated || fieldConfig.hooks?.create) {
     finalType = `Generated<${finalType}>`;
   }
 

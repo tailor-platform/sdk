@@ -100,6 +100,10 @@ export const DBFieldMetadataSchema = z.object({
     .max(12)
     .optional()
     .describe("Decimal scale (number of digits after decimal point, 0-12)"),
+  generated: z
+    .boolean()
+    .optional()
+    .describe("Whether the field value is auto-generated (e.g. timestamps)"),
 });
 
 const RelationTypeSchema = z.enum(relationTypesKeys);

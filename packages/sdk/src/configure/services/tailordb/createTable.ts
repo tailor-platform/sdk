@@ -19,6 +19,7 @@ import type { RelationType } from "@/types/tailordb";
 type CommonFieldOptions = {
   optional?: boolean;
   description?: string;
+  generated?: boolean;
 };
 
 const kindToFieldType = {
@@ -303,6 +304,10 @@ function buildField(descriptor: FieldDescriptor): TailorAnyDBField {
 
   let field: TailorAnyDBField = createTailorDBField(fieldType, options, nestedFields, values);
 
+  if (descriptor.generated === true) {
+    field._metadata.generated = true;
+  }
+
   if (descriptor.description !== undefined) {
     field = field.description(descriptor.description);
   }
@@ -475,11 +480,13 @@ export function timestampFields() {
     createdAt: {
       kind: "datetime",
       description: "Record creation timestamp",
+      generated: true,
     },
     updatedAt: {
       kind: "datetime",
       optional: true,
       description: "Record last update timestamp",
+      generated: true,
     },
   } as const satisfies Record<string, FieldDescriptor>;
 }
