@@ -1,3 +1,5 @@
+import { parseBoolean } from "./parse-boolean";
+
 /**
  * Resolve whether inline sourcemaps should be enabled.
  *
@@ -10,8 +12,7 @@
  */
 export function resolveInlineSourcemap(configValue?: boolean): boolean {
   if (configValue !== undefined) return configValue;
-  if (process.env.TAILOR_ENABLE_INLINE_SOURCEMAP !== undefined) {
-    return process.env.TAILOR_ENABLE_INLINE_SOURCEMAP === "true";
-  }
+  const envValue = parseBoolean(process.env.TAILOR_ENABLE_INLINE_SOURCEMAP);
+  if (envValue !== undefined) return envValue;
   return true;
 }
