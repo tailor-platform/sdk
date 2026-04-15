@@ -122,16 +122,16 @@ function parseTailorDBType(
     fields[fieldName] = parsedField;
   }
 
-  // Distribute record-level validators to the first field so they are sent
-  // to the platform via the existing field-level validate pipeline.
-  // The platform only supports per-field validators in protobuf, so this is
-  // the workaround until type-level validators are natively supported.
+  // Distribute record-level validators to the first non-id field so they are
+  // sent to the platform via the existing field-level validate pipeline.
+  // The platform only supports per-field validators in protobuf, and the
+  // auto-generated `id` field does not evaluate validators, so we skip it.
   if (metadata.validate && metadata.validate.length > 0) {
     const recordValidate = convertRecordValidators(metadata.validate);
-    const firstFieldName = Object.keys(fields)[0];
-    if (firstFieldName) {
-      const firstField = fields[firstFieldName];
-      firstField.config.validate = [...(firstField.config.validate || []), ...recordValidate];
+    const targetFieldName = Object.keys(fields).find((name) => name !== "id");
+    if (targetFieldName) {
+      const targetField = fields[targetFieldName];
+      targetField.config.validate = [...(targetField.config.validate || []), ...recordValidate];
     }
   }
 

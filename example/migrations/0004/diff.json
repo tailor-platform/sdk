@@ -1,18 +1,18 @@
 {
   "version": 1,
   "namespace": "tailordb",
-  "createdAt": "2026-04-15T04:00:14.559Z",
+  "createdAt": "2026-04-15T04:08:49.948Z",
   "changes": [
     {
       "kind": "field_modified",
       "typeName": "Customer",
-      "fieldName": "id",
+      "fieldName": "name",
       "before": {
-        "type": "uuid",
+        "type": "string",
         "required": true
       },
       "after": {
-        "type": "uuid",
+        "type": "string",
         "required": true,
         "validate": [
           {
