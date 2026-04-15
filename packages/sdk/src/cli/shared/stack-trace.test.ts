@@ -479,6 +479,28 @@ describe("formatMappedError", () => {
     // Should have the file path but no code snippet
     expect(plain).toContain("resolvers/error-test.ts:4:3");
   });
+
+  test("prefixes dotfile-rooted paths with ./ so they are not mistaken for relative-path markers", () => {
+    // Regression: paths like `.tailor-sdk/test-run/...` start with `.` but
+    // are not `../` escapes. The display must prefix them with `./` so
+    // users can tell they are cwd-relative.
+    const frames: MappedStackFrame[] = [
+      {
+        original: { functionName: "main", file: "file:///bundle.js", line: 1, column: 1 },
+        mapped: {
+          source: ".tailor-sdk/test-run/test-run--add.entry.js",
+          line: 16,
+          column: 13,
+          name: null,
+        },
+      },
+    ];
+
+    const result = formatMappedError("Error: test", frames, null, process.cwd());
+    const plain = stripVTControlCharacters(result);
+
+    expect(plain).toContain("./.tailor-sdk/test-run/test-run--add.entry.js:16:13");
+  });
 });
 
 describe("formatErrorWithSourcemap", () => {
