@@ -40,6 +40,11 @@ export type ObjectColumnType<T> = ColumnType<
   { [K in keyof T]: ResolveInsert<T[K]> },
   { [K in keyof T]: ResolveUpdate<T[K]> }
 >;
+export type ArrayColumnType<T> = ColumnType<
+  ResolveSelect<T>[],
+  ResolveInsert<T>[],
+  ResolveUpdate<T>[]
+>;
 export type Generated<T> =
   T extends ColumnType<infer S, infer I, infer U>
     ? ColumnType<S, I | undefined, U>

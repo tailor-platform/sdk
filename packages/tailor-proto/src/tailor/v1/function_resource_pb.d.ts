@@ -24,6 +24,13 @@ export declare type FunctionErrorInfo = Message<"tailor.v1.FunctionErrorInfo"> &
    * @generated from field: string message = 2;
    */
   message: string;
+
+  /**
+   * Only populated in GetFunctionExecution, not in ListFunctionExecutions.
+   *
+   * @generated from field: string stack_trace = 3;
+   */
+  stackTrace: string;
 };
 
 /**

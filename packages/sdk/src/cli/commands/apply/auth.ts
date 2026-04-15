@@ -25,9 +25,14 @@ import { type AuthService } from "@/cli/services/auth/service";
 import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "@/cli/shared/client";
 import { OAuth2ClientSchema } from "@/parser/service/auth";
 import { applyAuthConnections, planAuthConnections } from "./auth-connection";
-import { createChangeSet } from "./change-set";
+import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
 import { areNormalizedEqual, normalizeProtoConfig, normalizeStringArray } from "./compare";
 import { authHookFunctionName } from "./function-registry";
+import {
+  formatChangeEntriesWithFunctionRegistry,
+  type GroupedDisplayEntry,
+  type RelatedFunctionRegistryChanges,
+} from "./grouped-display";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
@@ -310,16 +315,6 @@ export async function planAuth(context: PlanContext) {
     planAuthConnections(client, workspaceId, application.name, auths),
   ]);
 
-  serviceChangeSet.print();
-  idpConfigChangeSet.print();
-  userProfileConfigChangeSet.print();
-  tenantConfigChangeSet.print();
-  machineUserChangeSet.print();
-  authHookChangeSet.print();
-  oauth2ClientChangeSet.print();
-  scimChangeSet.print();
-  scimResourceChangeSet.print();
-  connectionResult.changeSet.print();
   return {
     changeSet: {
       service: serviceChangeSet,
@@ -716,6 +711,7 @@ function protoIdPConfig(idpConfig: IdProviderConfig): MessageInitShape<typeof Au
                 ? { metadataUrl: idpConfig.metadataURL }
                 : { rawMetadata: idpConfig.rawMetadata! }),
               enableSignRequest: idpConfig.enableSignRequest,
+              defaultRedirectUrl: idpConfig.defaultRedirectURL,
             },
           },
         },
@@ -1198,7 +1194,9 @@ function normalizeComparableUserProfileConfig(
     | MessageInitShape<typeof UserProfileProviderConfigSchema>
     | {
         providerType?: UserProfileProviderConfig_UserProfileProviderType;
-        config?: { config?: { case?: string; value?: Record<string, unknown> } };
+        config?: {
+          config?: { case?: string; value?: Record<string, unknown> };
+        };
       },
 ) {
   const comparableConfig = config.config?.config;
@@ -1243,7 +1241,9 @@ function normalizeComparableTenantProviderConfig(
     | undefined
     | {
         providerType?: TenantProviderConfig_TenantProviderType;
-        config?: { config?: { case?: string; value?: Record<string, unknown> } };
+        config?: {
+          config?: { case?: string; value?: Record<string, unknown> };
+        };
       },
 ) {
   return normalizeProtoConfig(config);
@@ -1255,7 +1255,9 @@ function areTenantProviderConfigsEqual(
     | undefined
     | {
         providerType?: TenantProviderConfig_TenantProviderType;
-        config?: { config?: { case?: string; value?: Record<string, unknown> } };
+        config?: {
+          config?: { case?: string; value?: Record<string, unknown> };
+        };
       },
   desired: MessageInitShape<typeof TenantProviderConfigSchema>,
 ) {
@@ -1912,6 +1914,34 @@ function areAuthHooksEqual(
             machineUserName: desired.invoker.machineUserName ?? "",
           }
         : undefined,
+    },
+  );
+}
+
+/**
+ * Format auth hook changes for grouped dry-run display.
+ * @param changeSet - Auth hook changes
+ * @param functionRegistryAuthHookChanges - Related function registry changes for auth hooks
+ * @returns Display entries for auth hook output
+ */
+export function formatAuthHookChangeEntries(
+  changeSet: Pick<
+    ChangeSet<HasName, HasName, HasName>,
+    "creates" | "updates" | "deletes" | "replaces"
+  >,
+  functionRegistryAuthHookChanges?: RelatedFunctionRegistryChanges,
+): GroupedDisplayEntry[] {
+  return formatChangeEntriesWithFunctionRegistry(
+    "authHook",
+    changeSet,
+    functionRegistryAuthHookChanges,
+    (item) => {
+      const [namespace, hookPoint] = item.name.split("/");
+      return namespace && hookPoint ? [authHookFunctionName(namespace, hookPoint)] : [];
+    },
+    {
+      getNamespace: (item) => item.name.split("/")[0],
+      getDisplayName: (item) => item.name.split("/")[1] ?? item.name,
     },
   );
 }

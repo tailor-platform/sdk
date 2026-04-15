@@ -41,8 +41,23 @@ export type ScheduleTrigger = {
   timezone: string;
 };
 
+export type IncomingWebhookTriggerResponse = {
+  /** Function returning the response body */
+  body?: Function | undefined;
+  /** HTTP status code for the response */
+  statusCode?: number | undefined;
+};
+export type IncomingWebhookTriggerResponseInput = IncomingWebhookTriggerResponse;
+
 export type IncomingWebhookTrigger = {
   kind: "incomingWebhook";
+  /** Response configuration */
+  response?:
+    | {
+        body?: Function | undefined;
+        statusCode?: number | undefined;
+      }
+    | undefined;
 };
 export type IncomingWebhookTriggerInput = IncomingWebhookTrigger;
 
@@ -88,6 +103,7 @@ export type FunctionOperation = {
   body: Function;
   /** Auth invoker for the function execution */
   authInvoker?:
+    | string
     | {
         namespace: string;
         machineUserName: string;
@@ -105,6 +121,7 @@ export type GqlOperationInput = {
   variables?: Function | undefined;
   /** Auth invoker for the GraphQL execution */
   authInvoker?:
+    | string
     | {
         namespace: string;
         machineUserName: string;
@@ -121,6 +138,7 @@ export type GqlOperation = {
   variables?: Function | undefined;
   /** Auth invoker for the GraphQL execution */
   authInvoker?:
+    | string
     | {
         namespace: string;
         machineUserName: string;
@@ -160,6 +178,7 @@ export type WorkflowOperation = {
       }
     | undefined;
   authInvoker?:
+    | string
     | {
         namespace: string;
         machineUserName: string;
@@ -194,6 +213,12 @@ export type ExecutorInput = {
       }
     | {
         kind: "incomingWebhook";
+        response?:
+          | {
+              body?: Function | undefined;
+              statusCode?: number | undefined;
+            }
+          | undefined;
       }
     | {
         kind: "idpUser";
@@ -244,6 +269,12 @@ export type Executor = {
       }
     | {
         kind: "incomingWebhook";
+        response?:
+          | {
+              body?: Function | undefined;
+              statusCode?: number | undefined;
+            }
+          | undefined;
       }
     | {
         kind: "idpUser";
@@ -269,6 +300,7 @@ export type Executor = {
             }
           | undefined;
         authInvoker?:
+          | string
           | {
               namespace: string;
               machineUserName: string;
@@ -279,6 +311,7 @@ export type Executor = {
         kind: "function" | "jobFunction";
         body: Function;
         authInvoker?:
+          | string
           | {
               namespace: string;
               machineUserName: string;
@@ -291,6 +324,7 @@ export type Executor = {
         appName?: string | undefined;
         variables?: Function | undefined;
         authInvoker?:
+          | string
           | {
               namespace: string;
               machineUserName: string;

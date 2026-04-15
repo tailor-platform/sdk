@@ -704,7 +704,7 @@ describe("queryCommand args", () => {
       engine: "sql",
       query: "select 1;",
       file: "query.sql",
-      machineuser: "bot",
+      "machine-user": "bot",
     });
 
     expect(result.success).toBe(false);
@@ -719,7 +719,7 @@ describe("queryCommand args", () => {
       engine: "sql",
       edit: true,
       query: "select 1;",
-      machineuser: "bot",
+      "machine-user": "bot",
     });
 
     expect(result.success).toBe(false);
@@ -736,7 +736,7 @@ describe("queryCommand args", () => {
       engine: "sql",
       edit: true,
       file: "query.sql",
-      machineuser: "bot",
+      "machine-user": "bot",
     });
 
     expect(result.success).toBe(false);

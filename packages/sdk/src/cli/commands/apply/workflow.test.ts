@@ -1,6 +1,6 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { sdkNameLabelKey } from "./label";
-import { applyWorkflow, planWorkflow } from "./workflow";
+import { applyWorkflow, formatWorkflowChangeEntries, planWorkflow } from "./workflow";
 import type { OperatorClient } from "@/cli/shared/client";
 import type { Workflow, WorkflowJob } from "@/types/workflow.generated";
 
@@ -337,6 +337,7 @@ describe("planWorkflow", () => {
                 name: "removed-workflow",
                 workspaceId,
                 workflowId: "workflow-1",
+                usedJobNames: ["removed-job"],
               },
             ],
             replaces: [],
@@ -364,5 +365,142 @@ describe("planWorkflow", () => {
         labels: { [sdkNameLabelKey]: "" },
       });
     });
+  });
+});
+
+describe("formatWorkflowChangeEntries", () => {
+  test("groups workflow updates with related workflow job function updates", () => {
+    const entries = formatWorkflowChangeEntries(
+      {
+        creates: [],
+        updates: [
+          {
+            name: "order-processing",
+            workspaceId: "ws",
+            workflow: {
+              name: "order-processing",
+              mainJob: { name: "process-order", body: () => {}, trigger: () => {} },
+            },
+            usedJobNames: ["process-order"],
+            metaRequest: { trn: "t", labels: {} },
+          },
+        ],
+        deletes: [],
+        replaces: [],
+      },
+      {
+        creates: [],
+        updates: [{ name: "workflow--process-order" }],
+        deletes: [],
+        replaces: [],
+      },
+    );
+
+    expect(entries).toEqual([
+      {
+        action: "update",
+        symbol: "~",
+        name: "order-processing",
+        labels: ["workflow", "function"],
+      },
+    ]);
+  });
+
+  test("keeps unrelated workflow job function changes visible", () => {
+    const entries = formatWorkflowChangeEntries(
+      {
+        creates: [],
+        updates: [],
+        deletes: [],
+        replaces: [],
+      },
+      {
+        creates: [],
+        updates: [{ name: "workflow--process-order" }],
+        deletes: [],
+        replaces: [],
+      },
+    );
+
+    expect(entries).toEqual([
+      {
+        action: "update",
+        symbol: "~",
+        name: "process-order",
+        labels: ["function"],
+      },
+    ]);
+  });
+
+  test("groups workflow deletes with related function registry deletes", () => {
+    const entries = formatWorkflowChangeEntries(
+      {
+        creates: [],
+        updates: [],
+        deletes: [
+          {
+            name: "order-processing",
+            workspaceId: "ws",
+            workflowId: "workflow-1",
+            usedJobNames: ["process-order", "send-notification"],
+          },
+        ],
+        replaces: [],
+      },
+      {
+        creates: [],
+        updates: [],
+        deletes: [{ name: "workflow--process-order" }, { name: "workflow--send-notification" }],
+        replaces: [],
+      },
+    );
+
+    expect(entries).toEqual([
+      {
+        action: "delete",
+        symbol: "-",
+        name: "order-processing",
+        labels: ["workflow", "function"],
+      },
+    ]);
+  });
+
+  test("keeps unrelated workflow function deletes visible", () => {
+    const entries = formatWorkflowChangeEntries(
+      {
+        creates: [],
+        updates: [],
+        deletes: [
+          {
+            name: "order-processing",
+            workspaceId: "ws",
+            workflowId: "workflow-1",
+            usedJobNames: ["process-order"],
+          },
+        ],
+        replaces: [],
+      },
+      {
+        creates: [],
+        updates: [],
+        deletes: [{ name: "workflow--send-notification" }],
+        replaces: [],
+      },
+    );
+
+    expect(entries).toEqual([
+      {
+        action: "delete",
+        symbol: "-",
+        name: "order-processing",
+        labels: ["workflow"],
+      },
+      {
+        action: "delete",
+        symbol: "-",
+        name: "send-notification",
+        labels: ["function"],
+      },
+    ]);
   });
 });

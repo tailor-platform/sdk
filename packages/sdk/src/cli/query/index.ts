@@ -730,9 +730,11 @@ export const queryCommand = defineAppCommand({
       edit: arg(z.boolean().default(false), {
         description: "Open a temporary file in your editor; omit to start REPL mode",
       }),
-      machineuser: arg(z.string(), {
+      "machine-user": arg(z.string(), {
         alias: "m",
+        hiddenAlias: "machineuser",
         description: "Machine user name for query execution",
+        env: "TAILOR_PLATFORM_MACHINE_USER_NAME",
       }),
     })
     .superRefine((args, ctx) => {
@@ -774,7 +776,7 @@ export const queryCommand = defineAppCommand({
       profile: args.profile,
       configPath: args.config,
       engine: args.engine,
-      machineUser: args.machineuser,
+      machineUser: args["machine-user"],
     };
 
     if (mode.mode === "abort") {

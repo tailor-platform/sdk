@@ -3,10 +3,15 @@ import { AuthConnectionConfigSchema } from "@/parser/service/auth-connection";
 import { TailorFieldSchema } from "@/parser/service/field/schema";
 import type { ValueOperand } from "@/types/auth";
 
-export const AuthInvokerSchema = z.object({
+export const AuthInvokerObjectSchema = z.object({
   namespace: z.string().describe("Auth namespace"),
   machineUserName: z.string().describe("Machine user name for authentication"),
 });
+
+export const AuthInvokerSchema = z.union([
+  z.string().describe("Machine user name (namespace auto-resolved from auth service)"),
+  AuthInvokerObjectSchema,
+]);
 
 const secretValueSchema = z.object({
   vaultName: z.string().describe("Vault name containing the secret"),
@@ -36,6 +41,10 @@ export const SAMLSchema = z
       .string()
       .optional()
       .describe("Raw SAML metadata XML (mutually exclusive with metadataURL)"),
+    defaultRedirectURL: z
+      .string()
+      .optional()
+      .describe("URL to redirect to when SAML ACS receives a response with an empty RelayState."),
   })
   .refine((value) => {
     const hasMetadata = value.metadataURL !== undefined;

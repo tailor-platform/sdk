@@ -117,7 +117,5 @@ export function formatPlanSummary(summary: PlanSummary): string {
     parts.push(`${summary.replace} to replace`);
   }
 
-  parts.push(`${summary.unchanged} unchanged`);
-
   return `Plan: ${parts.join(", ")}`;
 }

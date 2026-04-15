@@ -135,14 +135,14 @@ tailor-sdk function test-run [options] <file>
 
 **Options**
 
-| Option                          | Alias | Description                                                              | Required | Default              | Env                            |
-| ------------------------------- | ----- | ------------------------------------------------------------------------ | -------- | -------------------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                             | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                        | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
-| `--name <NAME>`                 | `-n`  | Workflow job name to run (matches the `name` field of createWorkflowJob) | No       | -                    | -                              |
-| `--arg <ARG>`                   | `-a`  | JSON argument to pass to the function                                    | No       | -                    | -                              |
-| `--machine-user <MACHINE_USER>` | `-m`  | Machine user name for authentication                                     | No       | -                    | -                              |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                  | No       | `"tailor.config.ts"` | -                              |
+| Option                          | Alias | Description                                                              | Required | Default              | Env                                 |
+| ------------------------------- | ----- | ------------------------------------------------------------------------ | -------- | -------------------- | ----------------------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                             | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`      |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                        | No       | -                    | `TAILOR_PLATFORM_PROFILE`           |
+| `--name <NAME>`                 | `-n`  | Workflow job name to run (matches the `name` field of createWorkflowJob) | No       | -                    | -                                   |
+| `--arg <ARG>`                   | `-a`  | JSON argument to pass to the function                                    | No       | -                    | -                                   |
+| `--machine-user <MACHINE_USER>` | `-m`  | Machine user name for authentication                                     | No       | -                    | `TAILOR_PLATFORM_MACHINE_USER_NAME` |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                  | No       | `"tailor.config.ts"` | -                                   |
 
 <!-- politty:command:function test-run:options:end -->
 <!-- politty:command:function test-run:examples:start -->
@@ -152,7 +152,7 @@ tailor-sdk function test-run [options] <file>
 **Run a resolver with input arguments**
 
 ```bash
-$ tailor-sdk function test-run resolvers/add.ts --arg '{"input":{"a":1,"b":2}}'
+$ tailor-sdk function test-run resolvers/add.ts --arg '{"a":1,"b":2}'
 ```
 
 **Run a specific workflow job by name**
@@ -164,7 +164,7 @@ $ tailor-sdk function test-run workflows/sample.ts --name validate-order
 **Run a pre-bundled .js file directly**
 
 ```bash
-$ tailor-sdk function test-run build/resolvers/add.js --arg '{"input":{"a":1,"b":2}}'
+$ tailor-sdk function test-run build/resolvers/add.js --arg '{"a":1,"b":2}'
 ```
 
 <!-- politty:command:function test-run:examples:end -->

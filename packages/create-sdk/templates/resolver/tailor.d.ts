@@ -13,6 +13,9 @@ declare module "@tailor-platform/sdk" {
     appName: "Resolver Template";
     version: 1;
   }
+  interface MachineUserNameRegistry {
+    admin: true;
+  }
 }
 
 export {};
