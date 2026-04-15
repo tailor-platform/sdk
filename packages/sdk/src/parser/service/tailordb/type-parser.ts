@@ -1,6 +1,7 @@
 import * as inflection from "inflection";
 import { isPluginGeneratedType } from "@/types/tailordb";
-import { parseFieldConfig } from "./field";
+import { parseFieldConfig, tailorUserMap } from "./field";
+import { getPrecompiledScriptExpr } from "./hooks-validate-precompiled-expr";
 import { parsePermissions } from "./permission";
 import {
   validateRelationConfig,
@@ -14,6 +15,7 @@ import type {
   ParsedField,
   ParsedRelationship,
   TailorDBType,
+  OperatorValidateConfig,
 } from "@/types/tailordb";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "@/types/tailordb.generated";
 
@@ -120,6 +122,19 @@ function parseTailorDBType(
     fields[fieldName] = parsedField;
   }
 
+  // Distribute record-level validators to the first field so they are sent
+  // to the platform via the existing field-level validate pipeline.
+  // The platform only supports per-field validators in protobuf, so this is
+  // the workaround until type-level validators are natively supported.
+  if (metadata.validate && metadata.validate.length > 0) {
+    const recordValidate = convertRecordValidators(metadata.validate);
+    const firstFieldName = Object.keys(fields)[0];
+    if (firstFieldName) {
+      const firstField = fields[firstFieldName];
+      firstField.config.validate = [...(firstField.config.validate || []), ...recordValidate];
+    }
+  }
+
   return {
     name: type.name,
     pluralForm,
@@ -132,6 +147,34 @@ function parseTailorDBType(
     indexes: metadata.indexes,
     files: metadata.files,
   };
+}
+
+/**
+ * Convert record-level validators to OperatorValidateConfig[].
+ * Record-level validators use { data, user } signature (no field-specific value).
+ * The platform provides _data as the full record, so the same expression template works.
+ * @param validators - Record-level validator definitions
+ * @returns Parsed validate configs ready for the apply pipeline
+ */
+function convertRecordValidators(
+  validators: NonNullable<TailorDBTypeSchemaOutput["metadata"]["validate"]>,
+): OperatorValidateConfig[] {
+  return validators.map((v) => {
+    const { fn, message } =
+      typeof v === "function"
+        ? { fn: v, message: `failed by \`${v.toString().trim()}\`` }
+        : { fn: v[0], message: v[1] as string };
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+    const fnRef = fn as Function;
+    return {
+      script: {
+        expr:
+          getPrecompiledScriptExpr(fnRef as (...args: never[]) => unknown) ??
+          `(${fnRef.toString().trim()})({ value: _value, data: _data, user: ${tailorUserMap} })`,
+      },
+      errorMessage: message,
+    };
+  });
 }
 
 /**

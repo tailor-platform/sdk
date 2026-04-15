@@ -87,7 +87,7 @@ export interface EnumValue {
   description?: string;
 }
 
-interface OperatorValidateConfig {
+export interface OperatorValidateConfig {
   script: Script;
   errorMessage: string;
 }
