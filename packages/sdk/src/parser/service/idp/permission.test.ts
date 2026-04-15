@@ -192,8 +192,9 @@ describe("normalizeIdPPermission", () => {
       sendPasswordResetEmail: [{ conditions: [], permit: true }],
     };
 
-    // @ts-expect-error tsgo narrowing difference — raw object literal not inferred as const tuple
-    const result = normalizeIdPPermission(raw as Parameters<typeof normalizeIdPPermission>[0]);
+    const result = normalizeIdPPermission(
+      raw as unknown as Parameters<typeof normalizeIdPPermission>[0],
+    );
 
     expect(result.create).toHaveLength(1);
     expect(result.read).toHaveLength(1);
@@ -214,7 +215,9 @@ describe("normalizeIdPPermission", () => {
       sendPasswordResetEmail: [],
     };
 
-    const result = normalizeIdPPermission(raw as Parameters<typeof normalizeIdPPermission>[0]);
+    const result = normalizeIdPPermission(
+      raw as unknown as Parameters<typeof normalizeIdPPermission>[0],
+    );
 
     expect(result.create).toHaveLength(0);
     expect(result.read).toHaveLength(0);
