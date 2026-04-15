@@ -37,6 +37,14 @@ export type InferFieldsOutput<F extends Record<string, { _output: any; [key: str
     >
   >;
 
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
 /**
  * A looser version of JsonValue that accepts interfaces.
  * TypeScript interfaces don't have index signatures by default,

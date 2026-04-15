@@ -91,6 +91,18 @@ describe("Kysely TypeProcessor", () => {
       expect(result.typeDef).toContain("tags: string[];");
       expect(result.typeDef).toContain("scores: number[] | null;");
     });
+
+    it("should use ArrayColumnType for datetime array fields", async () => {
+      const type = db.type("Event", {
+        eventDates: db.datetime({ array: true }),
+        optionalDates: db.date({ array: true, optional: true }),
+      });
+
+      const result = await processKyselyType(parseTailorDBType(toSchemaOutput(type)));
+
+      expect(result.typeDef).toContain("eventDates: ArrayColumnType<Timestamp>;");
+      expect(result.typeDef).toContain("optionalDates: ArrayColumnType<Timestamp> | null;");
+    });
   });
 
   describe("enum types", () => {
@@ -186,6 +198,59 @@ describe("Kysely TypeProcessor", () => {
       expect(result.typeDef).toContain("dueDate: Timestamp");
       expect(result.typeDef).toContain("reminderAt?: Timestamp | null");
       expect(result.usedUtilityTypes.Timestamp).toBe(true);
+    });
+
+    it("should wrap nested object arrays with ArrayColumnType<ObjectColumnType<>>", async () => {
+      const type = db.type("Profile", {
+        metadata: db.object(
+          {
+            created: db.datetime(),
+            version: db.int(),
+          },
+          { array: true },
+        ),
+      });
+
+      const result = await processKyselyType(parseTailorDBType(toSchemaOutput(type)));
+
+      expect(result.typeDef).toContain("ArrayColumnType<ObjectColumnType<");
+      expect(result.typeDef).toContain("created: Timestamp");
+      expect(result.typeDef).toContain("version: number");
+    });
+
+    it("should handle optional nested object arrays", async () => {
+      const type = db.type("Profile", {
+        tags: db.object(
+          {
+            name: db.string(),
+            value: db.string({ optional: true }),
+          },
+          { array: true, optional: true },
+        ),
+      });
+
+      const result = await processKyselyType(parseTailorDBType(toSchemaOutput(type)));
+
+      expect(result.typeDef).toContain("ArrayColumnType<ObjectColumnType<");
+      expect(result.typeDef).toContain("| null");
+    });
+
+    it("should use plain array syntax for nested objects without ColumnType fields", async () => {
+      const type = db.type("Profile", {
+        tags: db.object(
+          {
+            name: db.string(),
+            value: db.string(),
+          },
+          { array: true },
+        ),
+      });
+
+      const result = await processKyselyType(parseTailorDBType(toSchemaOutput(type)));
+
+      // Plain object (no Timestamp/optional fields) uses regular array syntax
+      expect(result.typeDef).toContain("}[];");
+      expect(result.typeDef).not.toContain("ArrayColumnType");
     });
 
     it("should handle optional nested objects", async () => {

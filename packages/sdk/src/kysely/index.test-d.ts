@@ -2,6 +2,7 @@ import { describe, it, assertType, expectTypeOf } from "vitest";
 import type {
   Generated,
   ObjectColumnType,
+  ArrayColumnType,
   Timestamp,
   NamespaceInsertable,
   NamespaceSelectable,
@@ -20,11 +21,23 @@ type TestNamespace = {
   testNs: {
     Receipt: {
       id: Generated<string>;
+      // 1. plain timestamp
       receiptDate: Timestamp;
+      // 2. timestamp inside object
       dueSchedule: ObjectColumnType<{
         dueDate: Timestamp;
         reminderAt?: Timestamp | null;
       }>;
+      // 3. timestamp inside object x array
+      metadata: ArrayColumnType<
+        ObjectColumnType<{
+          created: Timestamp;
+          lastUpdated?: Timestamp | null;
+          version: number;
+        }>
+      >;
+      // 4. timestamp array
+      eventDates: ArrayColumnType<Timestamp>;
     };
   };
 };
@@ -38,6 +51,8 @@ describe("NamespaceInsertable", () => {
       dueSchedule: {
         dueDate: new Date(),
       },
+      metadata: [{ created: new Date(), version: 1 }],
+      eventDates: [new Date()],
     });
 
     assertType<ReceiptInsertable>({
@@ -45,6 +60,8 @@ describe("NamespaceInsertable", () => {
       dueSchedule: {
         dueDate: "2024-01-01",
       },
+      metadata: [{ created: "2024-01-01", version: 1 }],
+      eventDates: ["2024-01-01"],
     });
   });
 });
@@ -57,5 +74,20 @@ describe("NamespaceSelectable", () => {
     expectTypeOf<ReceiptSelectable["dueSchedule"]["dueDate"]>().toEqualTypeOf<Date>();
     // Nullable nested fields should be required in select
     expectTypeOf<ReceiptSelectable["dueSchedule"]["reminderAt"]>().toEqualTypeOf<Date | null>();
+  });
+
+  it("should return array of resolved objects for ObjectArrayColumnType", () => {
+    type ReceiptSelectable = NamespaceSelectable<TestNamespace, "Receipt">;
+
+    expectTypeOf<ReceiptSelectable["metadata"]>().toEqualTypeOf<
+      { created: Date; lastUpdated: Date | null; version: number }[]
+    >();
+    expectTypeOf<ReceiptSelectable["metadata"][0]["created"]>().toEqualTypeOf<Date>();
+  });
+
+  it("should return Date[] for timestamp array", () => {
+    type ReceiptSelectable = NamespaceSelectable<TestNamespace, "Receipt">;
+
+    expectTypeOf<ReceiptSelectable["eventDates"]>().toEqualTypeOf<Date[]>();
   });
 });

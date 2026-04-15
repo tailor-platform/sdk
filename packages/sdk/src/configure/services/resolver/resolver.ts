@@ -10,9 +10,11 @@ import {
   resolveResolverFieldMap,
   resolveResolverField,
 } from "./descriptor";
+import type { AuthInvoker } from "@/configure/services/auth";
 import type { TailorAnyField, TailorUser } from "@/configure/types";
 import type { TailorEnv } from "@/configure/types/env";
 import type { InferFieldsOutput, output } from "@/configure/types/helpers";
+import type { MachineUserName } from "@/configure/types/machine-user";
 import type { TailorField } from "@/configure/types/type";
 import type { TailorFieldType } from "@/configure/types/types";
 import type { ResolverInput } from "@/types/resolver.generated";
@@ -61,11 +63,15 @@ type NormalizedOutput<Output> = Output extends TailorAnyField
         >
       >;
 
-type ResolverReturn<Input, Output> = Omit<ResolverInput, "input" | "output" | "body"> &
+type ResolverReturn<Input, Output> = Omit<
+  ResolverInput,
+  "input" | "output" | "body" | "authInvoker"
+> &
   Readonly<{
     input?: ResolvedInput<Input>;
     output: NormalizedOutput<Output>;
     body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>>;
+    authInvoker?: AuthInvoker<string> | MachineUserName;
   }>;
 
 /**
@@ -121,11 +127,12 @@ export function createResolver<
     | TailorAnyField
     | ResolverFieldDescriptor,
 >(
-  config: Omit<ResolverInput, "input" | "output" | "body"> &
+  config: Omit<ResolverInput, "input" | "output" | "body" | "authInvoker"> &
     Readonly<{
       input?: Input;
       output: Output;
       body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>>;
+      authInvoker?: AuthInvoker<string> | MachineUserName;
     }>,
 ): ResolverReturn<Input, Output> {
   const resolvedInput = config.input

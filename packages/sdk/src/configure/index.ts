@@ -23,6 +23,8 @@ export {
   type AttributeMap,
   type AttributeList,
   type Env,
+  type MachineUserNameRegistry,
+  type MachineUserName,
 } from "@/configure/types";
 
 export * from "@/configure/services";

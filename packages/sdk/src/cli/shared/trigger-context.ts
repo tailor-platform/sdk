@@ -17,6 +17,12 @@ export interface TriggerContext {
   jobNameMap: Map<string, string>;
   /** Maps file path (without extension) to workflow name for default exports */
   workflowFileMap: Map<string, string>;
+  /**
+   * Auth service namespace used to expand a string-literal `authInvoker`
+   * (e.g. `"kiosk"`) to the `{ namespace, machineUserName }` form expected by
+   * the runtime. Undefined when no Auth service is configured.
+   */
+  authNamespace?: string;
 }
 
 /**
@@ -34,17 +40,19 @@ function normalizeFilePath(filePath: string): string {
  * Build trigger context from workflow configuration
  * Scans workflow files to collect workflow and job mappings
  * @param workflowConfig - Workflow file loading configuration
+ * @param authNamespace - Auth service namespace (optional, used for string-literal authInvoker expansion)
  * @returns Trigger context built from workflow sources
  */
 export async function buildTriggerContext(
   workflowConfig: FileLoadConfig | undefined,
+  authNamespace?: string,
 ): Promise<TriggerContext> {
   const workflowNameMap = new Map<string, string>();
   const jobNameMap = new Map<string, string>();
   const workflowFileMap = new Map<string, string>();
 
   if (!workflowConfig) {
-    return { workflowNameMap, jobNameMap, workflowFileMap };
+    return { workflowNameMap, jobNameMap, workflowFileMap, authNamespace };
   }
 
   const workflowFiles = loadFilesWithIgnores(workflowConfig);
@@ -84,7 +92,7 @@ export async function buildTriggerContext(
     }
   }
 
-  return { workflowNameMap, jobNameMap, workflowFileMap };
+  return { workflowNameMap, jobNameMap, workflowFileMap, authNamespace };
 }
 
 function sortedMapToJson(m: Map<string, string>): string {
@@ -102,7 +110,8 @@ export function serializeTriggerContext(ctx: TriggerContext | undefined): string
   return (
     sortedMapToJson(ctx.workflowNameMap) +
     sortedMapToJson(ctx.jobNameMap) +
-    sortedMapToJson(ctx.workflowFileMap)
+    sortedMapToJson(ctx.workflowFileMap) +
+    (ctx.authNamespace ?? "")
   );
 }
 
@@ -138,6 +147,7 @@ export function createTriggerTransformPlugin(
           triggerContext.jobNameMap,
           triggerContext.workflowFileMap,
           id,
+          triggerContext.authNamespace,
         );
         return { code: transformed };
       },

@@ -8,7 +8,7 @@ import {
   type MachineUser,
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import * as path from "pathe";
-import { parse as parseSql, toSql } from "pgsql-ast-parser";
+import { parse as parseSql } from "pgsql-ast-parser";
 import { arg } from "politty";
 import { z } from "zod";
 import { bundleQueryScript } from "../bundler/query/query-bundler";
@@ -769,9 +769,11 @@ export const queryCommand = defineAppCommand({
       edit: arg(z.boolean().default(false), {
         description: "Open a temporary file in your editor; omit to start REPL mode",
       }),
-      machineuser: arg(z.string(), {
+      "machine-user": arg(z.string(), {
         alias: "m",
+        hiddenAlias: "machineuser",
         description: "Machine user name for query execution",
+        env: "TAILOR_PLATFORM_MACHINE_USER_NAME",
       }),
     })
     .superRefine((args, ctx) => {
@@ -813,7 +815,7 @@ export const queryCommand = defineAppCommand({
       profile: args.profile,
       configPath: args.config,
       engine: args.engine,
-      machineUser: args.machineuser,
+      machineUser: args["machine-user"],
     };
 
     if (mode.mode === "abort") {
@@ -880,14 +882,16 @@ function printSingleSqlResult(
 }
 
 function splitSqlStatements(query: string): string[] {
-  try {
-    const statements = parseSql(query);
-    if (statements.length === 0) return [];
-    return statements.map((s) => toSql.statement(s));
-  } catch {
-    const trimmed = query.trim();
-    return trimmed.length > 0 ? [trimmed] : [];
-  }
+  const statements = parseSql(query, { locationTracking: true });
+  // Extract original SQL text using AST location info instead of re-serializing
+  // to preserve the user's original casing and syntax.
+  // _location.end is unreliable for INSERT/UPDATE statements (https://github.com/oguimbal/pgsql-ast-parser/issues/135),
+  // so we use the next statement's start (or end of string) as the boundary.
+  return statements.map((s, i) => {
+    const start = s._location!.start;
+    const end = i + 1 < statements.length ? statements[i + 1]._location!.start : query.length;
+    return query.substring(start, end);
+  });
 }
 
 function isSQLExecutionResultArray(value: unknown): value is SQLExecutionResult[] {

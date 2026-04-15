@@ -125,11 +125,21 @@ function generateFieldType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
   const isArray = fieldConfig.array === true;
   const isNullable = fieldConfig.required !== true;
 
+  // Types that use ColumnType internally (Timestamp, ObjectColumnType) cannot be
+  // directly wrapped with [] for arrays, because Kysely only resolves ColumnType at
+  // the top-level table property. Use ArrayColumnType/ObjectArrayColumnType to keep
+  // the ColumnType at the top level with arrays inside.
+  const columnTypeBaseTypes = new Set(["Timestamp"]);
+  const isColumnTypeBase = columnTypeBaseTypes.has(baseTypeResult.type);
+
   let finalType = baseTypeResult.type;
   if (isArray) {
-    // Wrap enum types in parentheses before adding array suffix
-    const needsParens = fieldConfig.type === "enum";
-    finalType = needsParens ? `(${baseTypeResult.type})[]` : `${baseTypeResult.type}[]`;
+    if (isColumnTypeBase || finalType.startsWith("ObjectColumnType<")) {
+      finalType = `ArrayColumnType<${baseTypeResult.type}>`;
+    } else {
+      const needsParens = fieldConfig.type === "enum";
+      finalType = needsParens ? `(${baseTypeResult.type})[]` : `${baseTypeResult.type}[]`;
+    }
   }
   if (isNullable) {
     finalType = `${finalType} | null`;
@@ -228,6 +238,12 @@ export function generateUnifiedKyselyTypes(namespaceData: KyselyNamespaceMetadat
   );
   if (hasObjectColumnType) {
     utilityTypeImports.push("type ObjectColumnType");
+  }
+  const hasArrayColumnType = namespaceData.some((ns) =>
+    ns.types.some((t) => t.typeDef.includes("ArrayColumnType<")),
+  );
+  if (hasArrayColumnType) {
+    utilityTypeImports.push("type ArrayColumnType");
   }
   if (globalUsedUtilityTypes.Serial) {
     utilityTypeImports.push("type Serial");

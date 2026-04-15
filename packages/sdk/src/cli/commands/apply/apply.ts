@@ -9,14 +9,19 @@ import { initOperatorClient } from "@/cli/shared/client";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { getDistDir } from "@/cli/shared/dist-dir";
-import { logger } from "@/cli/shared/logger";
+import { logger, styles } from "@/cli/shared/logger";
 import { readPackageJson } from "@/cli/shared/package-json";
 import { generateUserTypes } from "@/cli/shared/type-generator";
 import { withSpan } from "@/cli/telemetry";
 import { PluginManager } from "@/plugin/manager";
 import { applyApplication, planApplication } from "./application";
-import { applyAuth, planAuth } from "./auth";
-import { formatPlanSummary, summarizeChangeSets } from "./change-set";
+import { applyAuth, formatAuthHookChangeEntries, planAuth } from "./auth";
+import {
+  formatPlanSummary,
+  summarizeChangeSets,
+  type HasName,
+  type PlanSummary,
+} from "./change-set";
 import {
   confirmImportantResourceDeletion,
   confirmOwnerConflict,
@@ -25,20 +30,34 @@ import {
   type OwnerConflict,
   type UnmanagedResource,
 } from "./confirm";
-import { applyExecutor, planExecutor } from "./executor";
+import {
+  applyExecutor,
+  buildPlannedExecutorsByName,
+  formatExecutorChangeEntries,
+  planExecutor,
+} from "./executor";
 import {
   applyFunctionRegistry,
   collectFunctionEntries,
   filterBundledWorkflowJobs,
   planFunctionRegistry,
+  splitFunctionRegistryChanges,
+  WORKFLOW_PREFIX,
 } from "./function-registry";
+import {
+  extractServiceActions,
+  formatChangeSetEntries,
+  printGroupedDisplaySection,
+  type GroupedDisplayEntry,
+  type NamespaceAction,
+} from "./grouped-display";
 import { applyIdP, planIdP } from "./idp";
 import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey } from "./label";
-import { applyPipeline, planPipeline } from "./resolver";
+import { applyPipeline, formatResolverChangeEntries, planPipeline } from "./resolver";
 import { applySecretManager, planSecretManager } from "./secret-manager";
 import { applyStaticWebsite, planStaticWebsite } from "./staticwebsite";
-import { applyTailorDB, planTailorDB } from "./tailordb";
-import { applyWorkflow, planWorkflow } from "./workflow";
+import { applyTailorDB, formatTailorDBResourceChangeEntries, planTailorDB } from "./tailordb";
+import { applyWorkflow, formatWorkflowChangeEntries, planWorkflow } from "./workflow";
 import type { OperatorClient } from "@/cli/shared/client";
 import type { LoadedConfig } from "@/cli/shared/config-loader";
 
@@ -170,7 +189,7 @@ async function shouldForceApplyAll(
   return false;
 }
 
-function printPlanSummary(results: {
+type PlanResults = {
   functionRegistry: Awaited<ReturnType<typeof planFunctionRegistry>>;
   tailorDB: Awaited<ReturnType<typeof planTailorDB>>;
   staticWebsite: Awaited<ReturnType<typeof planStaticWebsite>>;
@@ -181,34 +200,167 @@ function printPlanSummary(results: {
   executor: Awaited<ReturnType<typeof planExecutor>>;
   workflow: Awaited<ReturnType<typeof planWorkflow>>;
   secretManager: Awaited<ReturnType<typeof planSecretManager>>;
-}) {
-  const summary = summarizeChangeSets([
-    results.functionRegistry.changeSet,
-    results.tailorDB.changeSet.service,
+};
+
+function printPlanResults(results: PlanResults) {
+  const executorEntries = formatExecutorChangeEntries(
+    results.executor.changeSet,
+    buildPlannedExecutorsByName(results.executor.changeSet),
+    results.functionRegistry.executorFunctionChanges,
+  );
+  const resolverEntries = formatResolverChangeEntries(
+    results.pipeline.changeSet.resolver,
+    results.functionRegistry.resolverFunctionChanges,
+  );
+  const workflowEntries = formatWorkflowChangeEntries(
+    results.workflow.changeSet,
+    results.functionRegistry.workflowJobChanges,
+  );
+  const authHookEntries = formatAuthHookChangeEntries(
+    results.auth.changeSet.authHook,
+    results.functionRegistry.authHookFunctionChanges,
+  );
+  const tailorDBResourceEntries = formatTailorDBResourceChangeEntries(
     results.tailorDB.changeSet.type,
     results.tailorDB.changeSet.gqlPermission,
+  );
+  const tailorDBEntries: GroupedDisplayEntry[] = [...tailorDBResourceEntries];
+  const pipelineEntries: GroupedDisplayEntry[] = [...resolverEntries];
+  const namespaceOf = (item: HasName) => {
+    if (
+      "request" in item &&
+      item.request &&
+      typeof item.request === "object" &&
+      "namespaceName" in item.request
+    ) {
+      return item.request.namespaceName as string;
+    }
+    if ("namespaceName" in item) {
+      return item.namespaceName as string;
+    }
+    return undefined;
+  };
+  const authNamespaceOf = (item: HasName) =>
+    "request" in item &&
+    item.request &&
+    typeof item.request === "object" &&
+    "authNamespace" in item.request
+      ? (item.request.authNamespace as string)
+      : undefined;
+  const idpEntries: GroupedDisplayEntry[] = [
+    ...formatChangeSetEntries(results.idp.changeSet.client, ["client"], namespaceOf),
+  ];
+  const authEntries: GroupedDisplayEntry[] = [
+    ...formatChangeSetEntries(results.auth.changeSet.idpConfig, ["idpConfig"], namespaceOf),
+    ...formatChangeSetEntries(
+      results.auth.changeSet.userProfileConfig,
+      ["userProfileConfig"],
+      namespaceOf,
+    ),
+    ...formatChangeSetEntries(results.auth.changeSet.tenantConfig, ["tenantConfig"], namespaceOf),
+    ...formatChangeSetEntries(results.auth.changeSet.machineUser, ["machineUser"], authNamespaceOf),
+    ...authHookEntries,
+    ...formatChangeSetEntries(results.auth.changeSet.oauth2Client, ["oauth2Client"], namespaceOf),
+    ...formatChangeSetEntries(results.auth.changeSet.scim, ["scimConfig"], namespaceOf),
+    ...formatChangeSetEntries(results.auth.changeSet.scimResource, ["scimResource"], namespaceOf),
+    ...(results.auth.changeSet.connection
+      ? formatChangeSetEntries(results.auth.changeSet.connection, ["connection"], namespaceOf)
+      : []),
+  ];
+
+  // Print grouped sections
+  const { otherChanges: otherFunctionRegistryChanges } = splitFunctionRegistryChanges(
+    results.functionRegistry.changeSet,
+  );
+  printGroupedDisplaySection(
+    results.functionRegistry.changeSet.title,
+    formatChangeSetEntries(otherFunctionRegistryChanges),
+  );
+  const tailorDBServiceActions = extractServiceActions(results.tailorDB.changeSet.service);
+  const pipelineServiceActions = extractServiceActions(results.pipeline.changeSet.service);
+  const idpServiceActions = extractServiceActions(results.idp.changeSet.service);
+  const authServiceActions = extractServiceActions(results.auth.changeSet.service);
+  results.staticWebsite.changeSet.print();
+  results.app.print();
+  printGroupedDisplaySection("TailorDB", tailorDBEntries, tailorDBServiceActions);
+  printGroupedDisplaySection("Resolver", pipelineEntries, pipelineServiceActions);
+  printGroupedDisplaySection("Executor", executorEntries);
+  printGroupedDisplaySection("Workflow", workflowEntries);
+  printGroupedDisplaySection("IdP", idpEntries, idpServiceActions);
+  printGroupedDisplaySection("Auth", authEntries, authServiceActions);
+  results.secretManager.vaultChangeSet.print();
+  results.secretManager.secretChangeSet.print();
+  if (results.secretManager.skippedSecrets.length > 0) {
+    logger.log(styles.bold("Secret Manager secrets (skipped - no value provided):"));
+    for (const name of results.secretManager.skippedSecrets) {
+      logger.log(`  ${styles.dim("○")} ${name}`);
+    }
+  }
+
+  // Compute summary: count display entries + service actions + non-grouped changesets
+  const allDisplayEntries = [
+    ...tailorDBEntries,
+    ...pipelineEntries,
+    ...executorEntries,
+    ...workflowEntries,
+    ...idpEntries,
+    ...authEntries,
+  ];
+  const allServiceActions = [
+    ...tailorDBServiceActions,
+    ...pipelineServiceActions,
+    ...idpServiceActions,
+    ...authServiceActions,
+  ];
+  const summary = summarizePlanResults(results, allDisplayEntries, allServiceActions);
+  logger.log(formatPlanSummary(summary));
+}
+
+/**
+ * Summarize plan counts from display entries, service actions, and non-grouped changesets.
+ * @param results - Planned apply results
+ * @param displayEntries - All grouped display entries across sections
+ * @param serviceActions - All service-level namespace actions
+ * @returns Aggregated plan summary
+ */
+export function summarizePlanResults(
+  results: PlanResults,
+  displayEntries: ReadonlyArray<GroupedDisplayEntry>,
+  serviceActions: ReadonlyArray<NamespaceAction>,
+): PlanSummary {
+  const summary: PlanSummary = {
+    create: 0,
+    update: 0,
+    delete: 0,
+    replace: 0,
+    unchanged: 0,
+  };
+
+  // Count grouped display entries
+  for (const entry of displayEntries) {
+    summary[entry.action] += 1;
+  }
+
+  // Count service-level actions (shown as namespace headers)
+  for (const sa of serviceActions) {
+    summary[sa.action] += 1;
+  }
+
+  // Count non-grouped changesets (staticWebsite, app, secretManager, functionRegistry other)
+  const { otherChanges } = splitFunctionRegistryChanges(results.functionRegistry.changeSet);
+  const nonGrouped = summarizeChangeSets([
+    otherChanges,
     results.staticWebsite.changeSet,
-    results.idp.changeSet.service,
-    results.idp.changeSet.client,
-    results.auth.changeSet.service,
-    results.auth.changeSet.idpConfig,
-    results.auth.changeSet.userProfileConfig,
-    results.auth.changeSet.tenantConfig,
-    results.auth.changeSet.machineUser,
-    results.auth.changeSet.oauth2Client,
-    results.auth.changeSet.authHook,
-    results.auth.changeSet.scim,
-    results.auth.changeSet.scimResource,
-    results.pipeline.changeSet.service,
-    results.pipeline.changeSet.resolver,
     results.app,
-    results.executor.changeSet,
-    results.workflow.changeSet,
     results.secretManager.vaultChangeSet,
     results.secretManager.secretChangeSet,
   ]);
+  summary.create += nonGrouped.create;
+  summary.update += nonGrouped.update;
+  summary.delete += nonGrouped.delete;
+  summary.replace += nonGrouped.replace;
 
-  logger.log(formatPlanSummary(summary));
+  return summary;
 }
 
 /**
@@ -357,9 +509,8 @@ export async function apply(options?: ApplyOptions) {
       );
       const unchangedWorkflowJobs = new Set(
         functionRegistry.changeSet.unchanged
-          .map((entry) => entry.name)
-          .filter((name) => name.startsWith("workflow--"))
-          .map((name) => name.slice("workflow--".length)),
+          .filter((entry) => entry.name.startsWith(WORKFLOW_PREFIX))
+          .map((entry) => entry.name.slice(WORKFLOW_PREFIX.length)),
       );
       const [tailorDB, staticWebsite, idp, auth, pipeline, app, executor, workflow, secretManager] =
         await Promise.all([
@@ -488,7 +639,7 @@ export async function apply(options?: ApplyOptions) {
       }
     });
 
-    printPlanSummary({
+    printPlanResults({
       functionRegistry,
       tailorDB,
       staticWebsite,

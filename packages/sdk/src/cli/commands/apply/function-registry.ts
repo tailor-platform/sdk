@@ -2,7 +2,7 @@ import * as crypto from "node:crypto";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { logger } from "@/cli/shared/logger";
-import { createChangeSet } from "./change-set";
+import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
 import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase } from "@/cli/commands/apply/apply";
@@ -41,6 +41,8 @@ type DeleteFunction = {
   workspaceId: string;
 };
 
+export type FunctionRegistryChangeSet = ChangeSet<CreateFunction, UpdateFunction, DeleteFunction>;
+
 /**
  * Compute SHA-256 content hash for a script string.
  * @param content - Script content to hash
@@ -54,6 +56,11 @@ function functionRegistryTrn(workspaceId: string, name: string) {
   return `trn:v1:workspace:${workspaceId}:function_registry:${name}`;
 }
 
+export const RESOLVER_PREFIX = "resolver--";
+export const EXECUTOR_PREFIX = "executor--";
+export const WORKFLOW_PREFIX = "workflow--";
+export const AUTH_HOOK_PREFIX = "auth-hook--";
+
 /**
  * Build a function registry name for a resolver.
  * @param namespace - Resolver namespace
@@ -61,7 +68,7 @@ function functionRegistryTrn(workspaceId: string, name: string) {
  * @returns Function registry name
  */
 export function resolverFunctionName(namespace: string, resolverName: string): string {
-  return `resolver--${namespace}--${resolverName}`;
+  return `${RESOLVER_PREFIX}${namespace}--${resolverName}`;
 }
 
 /**
@@ -70,7 +77,7 @@ export function resolverFunctionName(namespace: string, resolverName: string): s
  * @returns Function registry name
  */
 export function executorFunctionName(executorName: string): string {
-  return `executor--${executorName}`;
+  return `${EXECUTOR_PREFIX}${executorName}`;
 }
 
 /**
@@ -79,7 +86,69 @@ export function executorFunctionName(executorName: string): string {
  * @returns Function registry name
  */
 export function workflowJobFunctionName(jobName: string): string {
-  return `workflow--${jobName}`;
+  return `${WORKFLOW_PREFIX}${jobName}`;
+}
+
+/**
+ * Split function registry changes into grouped buckets by resource-name prefix.
+ * @param changeSet - Function registry change set
+ * @returns Grouped function registry changes by resource kind
+ */
+export function splitFunctionRegistryChanges<
+  C extends HasName,
+  U extends HasName,
+  D extends HasName,
+  R extends HasName,
+>(changeSet: ChangeSet<C, U, D, R>) {
+  type Buckets<T> = {
+    workflowJob: T[];
+    resolver: T[];
+    executor: T[];
+    authHook: T[];
+    other: T[];
+  };
+
+  function partition<T extends HasName>(items: ReadonlyArray<T>): Buckets<T> {
+    const buckets: Buckets<T> = {
+      workflowJob: [],
+      resolver: [],
+      executor: [],
+      authHook: [],
+      other: [],
+    };
+    for (const item of items) {
+      if (item.name.startsWith(WORKFLOW_PREFIX)) buckets.workflowJob.push(item);
+      else if (item.name.startsWith(RESOLVER_PREFIX)) buckets.resolver.push(item);
+      else if (item.name.startsWith(EXECUTOR_PREFIX)) buckets.executor.push(item);
+      else if (item.name.startsWith(AUTH_HOOK_PREFIX)) buckets.authHook.push(item);
+      else buckets.other.push(item);
+    }
+    return buckets;
+  }
+
+  const creates = partition(changeSet.creates);
+  const updates = partition(changeSet.updates);
+  const deletes = partition(changeSet.deletes);
+  const replaces = partition(changeSet.replaces);
+  const unchanged = partition(changeSet.unchanged);
+
+  function collect<K extends keyof Buckets<unknown>>(key: K) {
+    return {
+      creates: creates[key],
+      updates: updates[key],
+      deletes: deletes[key],
+      replaces: replaces[key],
+      unchanged: unchanged[key],
+    };
+  }
+
+  return {
+    workflowJobChanges: collect("workflowJob"),
+    resolverFunctionChanges: collect("resolver"),
+    executorFunctionChanges: collect("executor"),
+    authHookFunctionChanges: collect("authHook"),
+    otherChanges: collect("other"),
+  };
 }
 
 /**
@@ -225,9 +294,11 @@ export async function planFunctionRegistry(
   appName: string,
   entries: FunctionEntry[],
 ) {
-  const changeSet = createChangeSet<CreateFunction, UpdateFunction, DeleteFunction>(
-    "Function registry",
-  );
+  const changeSet: FunctionRegistryChangeSet = createChangeSet<
+    CreateFunction,
+    UpdateFunction,
+    DeleteFunction
+  >("Function registry");
   const conflicts: OwnerConflict[] = [];
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
@@ -336,8 +407,22 @@ export async function planFunctionRegistry(
     }
   }
 
-  changeSet.print();
-  return { changeSet, conflicts, unmanaged, resourceOwners };
+  const {
+    workflowJobChanges,
+    resolverFunctionChanges,
+    executorFunctionChanges,
+    authHookFunctionChanges,
+  } = splitFunctionRegistryChanges(changeSet);
+  return {
+    changeSet,
+    workflowJobChanges,
+    resolverFunctionChanges,
+    executorFunctionChanges,
+    authHookFunctionChanges,
+    conflicts,
+    unmanaged,
+    resourceOwners,
+  };
 }
 
 /**

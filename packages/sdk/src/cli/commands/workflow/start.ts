@@ -350,9 +350,11 @@ export const startCommand = defineAppCommand({
     .object({
       ...deploymentArgs,
       ...nameArgs,
-      machineuser: arg(z.string(), {
+      "machine-user": arg(z.string(), {
         alias: "m",
+        hiddenAlias: "machineuser",
         description: "Machine user name",
+        env: "TAILOR_PLATFORM_MACHINE_USER_NAME",
       }),
       arg: arg(z.string().optional(), {
         alias: "a",
@@ -364,7 +366,7 @@ export const startCommand = defineAppCommand({
   run: async (args) => {
     const { executionId, wait } = await startWorkflowByName({
       name: args.name,
-      machineUser: args.machineuser,
+      machineUser: args["machine-user"],
       arg: args.arg,
       workspaceId: args["workspace-id"],
       profile: args.profile,
