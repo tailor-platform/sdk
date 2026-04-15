@@ -4,6 +4,12 @@ import { pathToFileURL } from "node:url";
 type MainFunction = (args: Record<string, unknown>) => unknown | Promise<unknown>;
 type QueryResolver = (query: string, params: unknown[]) => unknown[];
 type JobHandler = (jobName: string, args: unknown) => unknown;
+type WaitHandler = (key: string, payload: unknown) => unknown;
+type ResolveHandler = (
+  executionId: string,
+  key: string,
+  callback: (payload: unknown) => unknown,
+) => Promise<void> | void;
 
 interface TailordbGlobal {
   tailordb?: {
@@ -19,6 +25,12 @@ interface TailordbGlobal {
   tailor?: {
     workflow: {
       triggerJobFunction: (jobName: string, args: unknown) => unknown;
+      wait?: (key: string, payload?: unknown) => unknown;
+      resolve?: (
+        executionId: string,
+        key: string,
+        callback: (payload: unknown) => unknown,
+      ) => Promise<void>;
     };
   };
 }
@@ -88,6 +100,7 @@ export function setupWorkflowMock(handler: JobHandler): {
   GlobalThis.tailor = {
     ...GlobalThis.tailor,
     workflow: {
+      ...GlobalThis.tailor?.workflow,
       triggerJobFunction: (jobName: string, args: unknown) => {
         triggeredJobs.push({ jobName, args });
         return handler(jobName, args);
@@ -112,6 +125,43 @@ export function setupTailorErrorsMock(): void {
       this.errors = errors;
     }
   };
+}
+
+/**
+ * Sets up mocks for `globalThis.tailor.workflow.wait` and `.resolve` used in bundled workflow tests.
+ * @param config - Optional handlers for wait and resolve calls.
+ * @param config.onWait - Handler called when wait is invoked.
+ * @param config.onResolve - Handler called when resolve is invoked.
+ * @returns Object containing arrays of wait and resolve calls for assertions.
+ */
+export function setupWaitPointMock(config?: { onWait?: WaitHandler; onResolve?: ResolveHandler }): {
+  waitCalls: { key: string; payload: unknown }[];
+  resolveCalls: { executionId: string; key: string }[];
+} {
+  const waitCalls: { key: string; payload: unknown }[] = [];
+  const resolveCalls: { executionId: string; key: string }[] = [];
+
+  GlobalThis.tailor = {
+    ...GlobalThis.tailor,
+    workflow: {
+      ...GlobalThis.tailor?.workflow,
+      triggerJobFunction: GlobalThis.tailor?.workflow?.triggerJobFunction ?? (() => undefined),
+      wait: (key: string, payload?: unknown) => {
+        waitCalls.push({ key, payload });
+        return config?.onWait?.(key, payload);
+      },
+      resolve: async (
+        executionId: string,
+        key: string,
+        callback: (payload: unknown) => unknown,
+      ) => {
+        resolveCalls.push({ executionId, key });
+        await config?.onResolve?.(executionId, key, callback);
+      },
+    },
+  } as typeof GlobalThis.tailor;
+
+  return { waitCalls, resolveCalls };
 }
 
 /**
