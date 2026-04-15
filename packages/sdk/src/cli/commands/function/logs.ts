@@ -269,6 +269,27 @@ export async function downloadScriptForMapping(
 export const logsCommand = defineAppCommand({
   name: "logs",
   description: "List or get function execution logs.",
+  notes: `When viewing a specific execution that failed, the command displays error details with the stack trace mapped back to original source files via the inline sourcemap (clickable file links and code snippets, matching \`function test-run\` output).
+
+When the deployed script cannot be downloaded or the function has been redeployed since the execution, the command falls back to a plain-text error display to avoid showing misleading source locations.`,
+  examples: [
+    {
+      cmd: "",
+      desc: "List all function execution logs",
+    },
+    {
+      cmd: "<execution-id>",
+      desc: "Get execution details with logs",
+    },
+    {
+      cmd: "--json",
+      desc: "Output as JSON",
+    },
+    {
+      cmd: "<execution-id> --json",
+      desc: "Get execution details as JSON",
+    },
+  ],
   args: z
     .object({
       ...workspaceArgs,
