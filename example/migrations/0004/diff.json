@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "namespace": "tailordb",
+  "createdAt": "2026-04-15T04:00:14.559Z",
+  "changes": [
+    {
+      "kind": "field_modified",
+      "typeName": "Customer",
+      "fieldName": "id",
+      "before": {
+        "type": "uuid",
+        "required": true
+      },
+      "after": {
+        "type": "uuid",
+        "required": true,
+        "validate": [
+          {
+            "script": {
+              "expr": "(({data})=>data.name.length>5)({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            },
+            "errorMessage": "Name must be longer than 5 characters"
+          },
+          {
+            "script": {
+              "expr": "(({data})=>data.city?data.city.length>1&&data.city.length<100:true)({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            },
+            "errorMessage": "failed by `({data})=>data.city?data.city.length>1&&data.city.length<100:true`"
+          }
+        ]
+      }
+    }
+  ],
+  "hasBreakingChanges": false,
+  "breakingChanges": [],
+  "requiresMigrationScript": false
+}
