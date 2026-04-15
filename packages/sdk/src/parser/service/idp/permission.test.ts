@@ -182,7 +182,7 @@ describe("normalizeIdPActionPermission", () => {
 
 describe("normalizeIdPPermission", () => {
   it("normalizes all 5 action types", () => {
-    const raw = {
+    const raw: Parameters<typeof normalizeIdPPermission>[0] = {
       create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
       read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
       update: [
@@ -192,9 +192,7 @@ describe("normalizeIdPPermission", () => {
       sendPasswordResetEmail: [{ conditions: [], permit: true }],
     };
 
-    const result = normalizeIdPPermission(
-      raw as unknown as Parameters<typeof normalizeIdPPermission>[0],
-    );
+    const result = normalizeIdPPermission(raw);
 
     expect(result.create).toHaveLength(1);
     expect(result.read).toHaveLength(1);
@@ -207,7 +205,7 @@ describe("normalizeIdPPermission", () => {
   });
 
   it("handles empty permission arrays", () => {
-    const raw = {
+    const raw: Parameters<typeof normalizeIdPPermission>[0] = {
       create: [],
       read: [],
       update: [],
@@ -215,9 +213,7 @@ describe("normalizeIdPPermission", () => {
       sendPasswordResetEmail: [],
     };
 
-    const result = normalizeIdPPermission(
-      raw as unknown as Parameters<typeof normalizeIdPPermission>[0],
-    );
+    const result = normalizeIdPPermission(raw);
 
     expect(result.create).toHaveLength(0);
     expect(result.read).toHaveLength(0);
