@@ -1,0 +1,410 @@
+{
+  "version": 1,
+  "namespace": "tailordb",
+  "createdAt": "2026-04-15T03:25:31.444Z",
+  "changes": [
+    {
+      "kind": "field_modified",
+      "typeName": "Customer",
+      "fieldName": "createdAt",
+      "before": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp"
+      },
+      "after": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp",
+        "hooks": {
+          "create": {
+            "expr": "new Date()"
+          }
+        }
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "Customer",
+      "fieldName": "updatedAt",
+      "before": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp"
+      },
+      "after": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp",
+        "hooks": {
+          "update": {
+            "expr": "new Date()"
+          }
+        }
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "Invoice",
+      "fieldName": "createdAt",
+      "before": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp"
+      },
+      "after": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp",
+        "hooks": {
+          "create": {
+            "expr": "new Date()"
+          }
+        }
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "Invoice",
+      "fieldName": "updatedAt",
+      "before": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp"
+      },
+      "after": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp",
+        "hooks": {
+          "update": {
+            "expr": "new Date()"
+          }
+        }
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "NestedProfile",
+      "fieldName": "createdAt",
+      "before": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp"
+      },
+      "after": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp",
+        "hooks": {
+          "create": {
+            "expr": "new Date()"
+          }
+        }
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "NestedProfile",
+      "fieldName": "updatedAt",
+      "before": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp"
+      },
+      "after": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp",
+        "hooks": {
+          "update": {
+            "expr": "new Date()"
+          }
+        }
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "Product",
+      "fieldName": "createdAt",
+      "before": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp"
+      },
+      "after": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp",
+        "hooks": {
+          "create": {
+            "expr": "new Date()"
+          }
+        }
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "Product",
+      "fieldName": "updatedAt",
+      "before": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp"
+      },
+      "after": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp",
+        "hooks": {
+          "update": {
+            "expr": "new Date()"
+          }
+        }
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "PurchaseOrder",
+      "fieldName": "createdAt",
+      "before": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp"
+      },
+      "after": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp",
+        "hooks": {
+          "create": {
+            "expr": "new Date()"
+          }
+        }
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "PurchaseOrder",
+      "fieldName": "updatedAt",
+      "before": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp"
+      },
+      "after": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp",
+        "hooks": {
+          "update": {
+            "expr": "new Date()"
+          }
+        }
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "SalesOrder",
+      "fieldName": "createdAt",
+      "before": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp"
+      },
+      "after": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp",
+        "hooks": {
+          "create": {
+            "expr": "new Date()"
+          }
+        }
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "SalesOrder",
+      "fieldName": "updatedAt",
+      "before": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp"
+      },
+      "after": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp",
+        "hooks": {
+          "update": {
+            "expr": "new Date()"
+          }
+        }
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "Supplier",
+      "fieldName": "createdAt",
+      "before": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp"
+      },
+      "after": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp",
+        "hooks": {
+          "create": {
+            "expr": "new Date()"
+          }
+        }
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "Supplier",
+      "fieldName": "updatedAt",
+      "before": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp"
+      },
+      "after": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp",
+        "hooks": {
+          "update": {
+            "expr": "new Date()"
+          }
+        }
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "User",
+      "fieldName": "createdAt",
+      "before": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp"
+      },
+      "after": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp",
+        "hooks": {
+          "create": {
+            "expr": "new Date()"
+          }
+        }
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "User",
+      "fieldName": "updatedAt",
+      "before": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp"
+      },
+      "after": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp",
+        "hooks": {
+          "update": {
+            "expr": "new Date()"
+          }
+        }
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "UserLog",
+      "fieldName": "createdAt",
+      "before": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp"
+      },
+      "after": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp",
+        "hooks": {
+          "create": {
+            "expr": "new Date()"
+          }
+        }
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "UserLog",
+      "fieldName": "updatedAt",
+      "before": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp"
+      },
+      "after": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp",
+        "hooks": {
+          "update": {
+            "expr": "new Date()"
+          }
+        }
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "UserSetting",
+      "fieldName": "createdAt",
+      "before": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp"
+      },
+      "after": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp",
+        "hooks": {
+          "create": {
+            "expr": "new Date()"
+          }
+        }
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "UserSetting",
+      "fieldName": "updatedAt",
+      "before": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp"
+      },
+      "after": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp",
+        "hooks": {
+          "update": {
+            "expr": "new Date()"
+          }
+        }
+      }
+    }
+  ],
+  "hasBreakingChanges": false,
+  "breakingChanges": [],
+  "requiresMigrationScript": false
+}
