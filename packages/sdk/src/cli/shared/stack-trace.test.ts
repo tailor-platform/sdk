@@ -1,3 +1,4 @@
+import { stripVTControlCharacters } from "node:util";
 import { TraceMap } from "@jridgewell/trace-mapping";
 import { describe, test, expect } from "vitest";
 import {
@@ -9,12 +10,6 @@ import {
   type StackFrame,
   type MappedStackFrame,
 } from "./stack-trace";
-
-// Strip ANSI escape codes for plain-text assertions
-function stripAnsi(str: string): string {
-  // eslint-disable-next-line no-control-regex
-  return str.replace(/\x1b\[[0-9;]*m/g, "");
-}
 
 describe("parseStackTrace", () => {
   test("parses standard V8 stack trace with rpc error prefix", () => {
@@ -406,7 +401,7 @@ describe("formatMappedError", () => {
     });
 
     const result = formatMappedError("Error: intentional error", frames, traceMap);
-    const plain = stripAnsi(result);
+    const plain = stripVTControlCharacters(result);
 
     // Should contain the error message
     expect(plain).toContain("Error: intentional error");
@@ -439,7 +434,7 @@ describe("formatMappedError", () => {
     });
 
     const result = formatMappedError("Error: test", frames, traceMap);
-    const plain = stripAnsi(result);
+    const plain = stripVTControlCharacters(result);
 
     expect(plain).toContain("resolvers/error-test.ts:4:3");
     expect(plain).toContain("resolvers/error-test.ts:9:5");
@@ -454,7 +449,7 @@ describe("formatMappedError", () => {
     ];
 
     const result = formatMappedError("Error: test", frames, null);
-    const plain = stripAnsi(result);
+    const plain = stripVTControlCharacters(result);
 
     // Should still contain the error message
     expect(plain).toContain("Error: test");
@@ -479,7 +474,7 @@ describe("formatMappedError", () => {
     });
 
     const result = formatMappedError("Error: test", frames, traceMap);
-    const plain = stripAnsi(result);
+    const plain = stripVTControlCharacters(result);
 
     // Should have the file path but no code snippet
     expect(plain).toContain("resolvers/error-test.ts:4:3");
@@ -522,7 +517,7 @@ describe("formatErrorWithSourcemap", () => {
     const result = formatErrorWithSourcemap(error, bundledCode, "/output");
 
     expect(result).not.toBeNull();
-    const plain = stripAnsi(result!);
+    const plain = stripVTControlCharacters(result!);
     expect(plain).toContain("Error: intentional error");
     expect(plain).toContain("resolvers/error-test.ts:4:3");
     expect(plain).toContain('throw new Error("intentional error")');
