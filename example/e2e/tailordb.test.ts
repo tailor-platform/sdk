@@ -236,6 +236,7 @@ describe("dataplane", () => {
               email: "customer-${randomUUID()}@example.com"
               country: "USA"
               postalCode: "12345"
+              fullAddress: "12345"
               state: "California"
             }
           ) {
@@ -419,6 +420,7 @@ describe("dataplane", () => {
               email: "customer@example.com"
               country: "USA"
               postalCode: "12345"
+              fullAddress: "12345"
               state: "California"
             }
           ) {
@@ -535,6 +537,8 @@ describe("dataplane", () => {
       });
     });
 
+    // TODO(record-level-hooks): once the platform supports record-level hooks,
+    // remove the explicit fullAddress input and verify the hook computes it.
     test("custom hooks execute correctly", async () => {
       const query = gql`
         mutation {
@@ -546,6 +550,7 @@ describe("dataplane", () => {
               postalCode: "12345"
               address: "123 Main St"
               city: "Los Angeles"
+              fullAddress: "12345 123 Main St Los Angeles"
               state: "California"
             }
           ) {
@@ -577,6 +582,7 @@ describe("dataplane", () => {
               email: "bob@example.com"
               country: "USA"
               postalCode: "12345"
+              fullAddress: "12345"
               state: "California"
             }
           ) {
