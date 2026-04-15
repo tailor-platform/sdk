@@ -4,9 +4,11 @@ export default createExecutor({
   name: "test-webhook",
   description: "Test executor for incoming webhook trigger",
   trigger: incomingWebhookTrigger<{
-    body: { message: string };
+    body: { message: string; challenge: string };
     headers: Record<string, string>;
-  }>(),
+  }>({
+    response: (args) => ({ challenge: args.body.challenge }),
+  }),
   operation: {
     kind: "function",
     body: (args) => {

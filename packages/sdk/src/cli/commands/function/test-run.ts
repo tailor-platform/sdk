@@ -42,6 +42,7 @@ export const testRunCommand = defineAppCommand({
     "machine-user": arg(z.string().optional(), {
       alias: "m",
       description: "Machine user name for authentication",
+      env: "TAILOR_PLATFORM_MACHINE_USER_NAME",
     }),
     config: arg(z.string().default("tailor.config.ts"), {
       alias: "c",
