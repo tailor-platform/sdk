@@ -35,8 +35,14 @@ export const ScheduleTriggerSchema = z.object({
     .describe("Timezone for the CRON schedule (default: UTC)"),
 });
 
+export const IncomingWebhookTriggerResponseSchema = z.object({
+  body: functionSchema.optional().describe("Function returning the response body"),
+  statusCode: z.number().int().optional().describe("HTTP status code for the response"),
+});
+
 export const IncomingWebhookTriggerSchema = z.object({
   kind: z.literal("incomingWebhook"),
+  response: IncomingWebhookTriggerResponseSchema.optional().describe("Response configuration"),
 });
 
 export const IdpUserTriggerSchema = z.object({
