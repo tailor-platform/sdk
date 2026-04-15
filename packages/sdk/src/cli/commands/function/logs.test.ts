@@ -1,3 +1,4 @@
+import { stripVTControlCharacters } from "node:util";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { FunctionExecution_Type } from "@tailor-proto/tailor/v1/function_resource_pb";
 import { describe, test, expect, vi } from "vitest";
@@ -22,12 +23,6 @@ function makeDownloadClient(chunks: Uint8Array[], metadata?: { updatedAt: Date }
       }
     }),
   } as unknown as OperatorClient;
-}
-
-// Strip ANSI escape codes for plain-text assertions
-function stripAnsi(str: string): string {
-  // eslint-disable-next-line no-control-regex
-  return str.replace(/\x1b\[[0-9;]*m/g, "");
 }
 
 function makeInlineSourcemapBundle(sourcemap: object, code: string): string {
@@ -100,7 +95,7 @@ describe("formatExecutionError", () => {
     };
 
     const result = formatExecutionError(error, bundledCode);
-    const plain = stripAnsi(result);
+    const plain = stripVTControlCharacters(result);
 
     expect(plain).toContain("Error: intentional error");
     expect(plain).toContain("resolvers/error-test.ts:4:3");
@@ -115,7 +110,7 @@ describe("formatExecutionError", () => {
     };
 
     const result = formatExecutionError(error, null);
-    const plain = stripAnsi(result);
+    const plain = stripVTControlCharacters(result);
 
     expect(plain).toContain("Error: boom");
     expect(plain).toContain("at fn (file:///b.js:1:1)");
@@ -133,7 +128,7 @@ describe("formatExecutionError", () => {
     };
 
     const result = formatExecutionError(error, null);
-    const plain = stripAnsi(result);
+    const plain = stripVTControlCharacters(result);
 
     // Header must be present (synthesized from name/message)
     expect(plain).toContain("Error: boom");
@@ -150,7 +145,7 @@ describe("formatExecutionError", () => {
     };
 
     const result = formatExecutionError(error, bundledCode);
-    const plain = stripAnsi(result);
+    const plain = stripVTControlCharacters(result);
 
     expect(plain).toContain("ValidationError: name is required");
   });
@@ -163,7 +158,7 @@ describe("formatExecutionError", () => {
     };
 
     const result = formatExecutionError(error, "// no sourcemap here\nconsole.log('x');");
-    const plain = stripAnsi(result);
+    const plain = stripVTControlCharacters(result);
 
     expect(plain).toContain("Error: boom");
     expect(plain).toContain("at fn (file:///b.js:1:1)");
@@ -178,7 +173,7 @@ describe("formatExecutionError", () => {
     };
 
     const result = formatExecutionError(error, bundledCode);
-    const plain = stripAnsi(result);
+    const plain = stripVTControlCharacters(result);
 
     expect(plain).toContain("Error: intentional error");
     expect(plain).toContain("resolvers/error-test.ts:4:3");
