@@ -136,4 +136,84 @@ describe("createTailorDBHook", () => {
     const omitted = schema["~standard"].validate({});
     expect(omitted).toHaveProperty("value");
   });
+
+  it("invokes field-level create hook with value, full data, and unauthenticated user", () => {
+    const seen: { value: unknown; data: unknown; userId: string }[] = [];
+    const type = db
+      .type("Order", {
+        total: db.float(),
+        tax: db.float(),
+      })
+      .hooks({
+        tax: {
+          create: ({ value, data, user }) => {
+            seen.push({ value, data, userId: user.id });
+            return (data as { total: number }).total * 0.1;
+          },
+        },
+      });
+    const hook = createTailorDBHook(type);
+
+    const result = hook({ total: 100, tax: undefined });
+    expect(result.tax).toBe(10);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toEqual({
+      value: undefined,
+      data: { total: 100, tax: undefined },
+      userId: "00000000-0000-0000-0000-000000000000",
+    });
+  });
+
+  it("normalizes Date returned from a create hook to an ISO string", () => {
+    const fixed = new Date("2026-04-15T00:00:00.000Z");
+    const type = db
+      .type("Test", {
+        createdAt: db.datetime(),
+      })
+      .hooks({
+        createdAt: {
+          create: () => fixed,
+        },
+      });
+    const hook = createTailorDBHook(type);
+
+    const result = hook({});
+    expect(result.createdAt).toBe("2026-04-15T00:00:00.000Z");
+  });
+
+  it("invokes nested-element hooks for each item of a nested object array", () => {
+    const calls: unknown[] = [];
+    const type = db.type("Test", {
+      lines: db.object(
+        {
+          kind: db.string(),
+          // db.object cannot itself carry hooks via .hooks(), but createTailorDBHook
+          // recurses into nested fields, so a hook on a sub-field must run per element.
+          stamp: db.string(),
+        },
+        { array: true },
+      ),
+    });
+    // Manually attach a create hook to the nested sub-field so that the recursion
+    // path through the array branch is exercised.
+    (type.fields.lines.fields.stamp._metadata as { hooks?: { create?: unknown } }).hooks = {
+      create: ({ value }: { value: unknown }) => {
+        calls.push(value);
+        return `stamped:${value as string}`;
+      },
+    };
+    const hook = createTailorDBHook(type);
+
+    const result = hook({
+      lines: [
+        { kind: "A", stamp: "x" },
+        { kind: "B", stamp: "y" },
+      ],
+    });
+    expect(calls).toEqual(["x", "y"]);
+    expect(result.lines).toEqual([
+      { kind: "A", stamp: "stamped:x" },
+      { kind: "B", stamp: "stamped:y" },
+    ]);
+  });
 });
