@@ -50,7 +50,7 @@ export async function listOAuth2Clients(
         pageToken,
         pageSize,
         namespaceName: application.authNamespace,
-        ...(pageDirection !== undefined ? { pageDirection } : {}),
+        pageDirection,
       });
       return [oauth2Clients, nextPageToken];
     },

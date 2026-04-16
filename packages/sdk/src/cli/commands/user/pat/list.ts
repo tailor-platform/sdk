@@ -30,7 +30,7 @@ export const listCommand = defineAppCommand({
         const { personalAccessTokens, nextPageToken } = await client.listPersonalAccessTokens({
           pageToken,
           pageSize,
-          ...(pageDirection !== undefined ? { pageDirection } : {}),
+          pageDirection,
         });
         return [personalAccessTokens, nextPageToken];
       },

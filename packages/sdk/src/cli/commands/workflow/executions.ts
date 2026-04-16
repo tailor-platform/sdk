@@ -179,7 +179,7 @@ export async function listWorkflowExecutions<W extends WorkflowLike>(
         workflowName: workflowName ?? "",
         pageToken,
         pageSize,
-        ...(pageDirection !== undefined ? { pageDirection } : {}),
+        pageDirection,
         filter,
       });
       return [executions, nextPageToken];

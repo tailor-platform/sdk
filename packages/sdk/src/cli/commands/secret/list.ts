@@ -55,7 +55,7 @@ async function secretList(options: SecretListOptions): Promise<SecretInfo[]> {
         secretmanagerVaultName: options.vaultName,
         pageToken,
         pageSize,
-        ...(pageDirection !== undefined ? { pageDirection } : {}),
+        pageDirection,
       });
       return [secrets, nextPageToken];
     },

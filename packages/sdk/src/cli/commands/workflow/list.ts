@@ -36,7 +36,7 @@ export async function listWorkflows(options?: ListWorkflowsOptions): Promise<Wor
         workspaceId,
         pageToken,
         pageSize,
-        ...(pageDirection !== undefined ? { pageDirection } : {}),
+        pageDirection,
       });
       return [workflows, nextPageToken];
     },

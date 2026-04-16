@@ -45,7 +45,7 @@ async function listStaticWebsites(
         workspaceId,
         pageToken,
         pageSize,
-        ...(pageDirection !== undefined ? { pageDirection } : {}),
+        pageDirection,
       });
       return [staticwebsites, nextPageToken];
     },

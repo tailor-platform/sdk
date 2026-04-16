@@ -36,7 +36,7 @@ export async function listExecutors(options?: ListExecutorsOptions): Promise<Exe
         workspaceId,
         pageToken,
         pageSize,
-        ...(pageDirection !== undefined ? { pageDirection } : {}),
+        pageDirection,
       });
       return [executors, nextPageToken];
     },

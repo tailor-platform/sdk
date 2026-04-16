@@ -81,7 +81,7 @@ export async function listMachineUsers(
         pageToken,
         pageSize,
         authNamespace: application.authNamespace,
-        ...(pageDirection !== undefined ? { pageDirection } : {}),
+        pageDirection,
       });
       return [machineUsers, nextPageToken];
     },

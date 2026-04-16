@@ -56,7 +56,7 @@ export const listAuthConnectionCommand = defineAppCommand({
             workspaceId,
             pageToken,
             pageSize,
-            ...(pageDirection !== undefined ? { pageDirection } : {}),
+            pageDirection,
           });
           return [connections, nextPageToken];
         },

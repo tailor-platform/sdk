@@ -354,7 +354,7 @@ When the deployed script cannot be downloaded or the function has been redeploye
             workspaceId,
             pageToken,
             pageSize,
-            ...(pageDirection !== undefined ? { pageDirection } : {}),
+            pageDirection,
           });
           return [executions, nextPageToken];
         },

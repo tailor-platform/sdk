@@ -191,7 +191,7 @@ export async function listExecutorJobs<E extends ExecutorLike>(
           executorName,
           pageToken,
           pageSize,
-          ...(pageDirection !== undefined ? { pageDirection } : {}),
+          pageDirection,
           filter,
         });
         return [jobs, nextPageToken];

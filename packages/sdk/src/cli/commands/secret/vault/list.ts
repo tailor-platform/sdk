@@ -51,7 +51,7 @@ async function vaultList(options?: VaultListOptions): Promise<VaultInfo[]> {
         workspaceId,
         pageToken,
         pageSize,
-        ...(pageDirection !== undefined ? { pageDirection } : {}),
+        pageDirection,
       });
       return [vaults, nextPageToken];
     },
