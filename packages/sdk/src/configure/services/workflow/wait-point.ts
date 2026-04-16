@@ -26,17 +26,7 @@ interface WaitPointWithSetter<Payload, Result> {
   setKey: (key: string) => void;
 }
 
-/**
- * Create a WaitPointInstance that delegates to the platform runtime.
- * Use `setupWaitPointMock` to mock `globalThis.tailor.workflow.wait/resolve` in tests.
- * @param initialKey - Initial key (can be updated via the returned setter)
- * @returns The instance and a setter to update the key after construction
- */
-function createWaitPointInstance<Payload = undefined, Result = undefined>(
-  initialKey: string,
-): WaitPointWithSetter<Payload, Result> {
-  let key = initialKey;
-
+function getPlatformWorkflow<Payload = undefined, Result = undefined>() {
   const platform = globalThis as {
     tailor?: {
       workflow?: {
@@ -49,22 +39,33 @@ function createWaitPointInstance<Payload = undefined, Result = undefined>(
       };
     };
   };
-
-  function getPlatformWorkflow() {
-    const workflow = platform.tailor?.workflow;
-    if (!workflow) {
-      throw new Error("tailor.workflow is not available. Use setupWaitPointMock() in tests.");
-    }
-    return workflow;
+  const workflow = platform.tailor?.workflow;
+  if (!workflow) {
+    throw new Error("tailor.workflow is not available. Use setupWaitPointMock() in tests.");
   }
+  return workflow;
+}
+
+/**
+ * Create a WaitPointInstance that delegates to the platform runtime.
+ * Use `setupWaitPointMock` to mock `globalThis.tailor.workflow.wait/resolve` in tests.
+ * @param initialKey - Initial key (can be updated via the returned setter)
+ * @returns The instance and a setter to update the key after construction
+ */
+function createWaitPointInstance<Payload = undefined, Result = undefined>(
+  initialKey: string,
+): WaitPointWithSetter<Payload, Result> {
+  let key = initialKey;
 
   const instance = brandValue(
     {
       wait(payload?: Payload) {
-        return Promise.resolve(getPlatformWorkflow().wait?.(key, payload)) as Promise<Result>;
+        return Promise.resolve(
+          getPlatformWorkflow<Payload, Result>().wait?.(key, payload),
+        ) as Promise<Result>;
       },
       async resolve(executionId: string, callback: (p: Payload) => Result | Promise<Result>) {
-        await getPlatformWorkflow().resolve?.(executionId, key, callback);
+        await getPlatformWorkflow<Payload, Result>().resolve?.(executionId, key, callback);
       },
     },
     "wait-point",
