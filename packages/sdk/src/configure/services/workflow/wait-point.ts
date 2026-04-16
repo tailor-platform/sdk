@@ -21,8 +21,8 @@ export interface WaitPointInstance<Payload = undefined, Result = undefined> {
   ) => Promise<void>;
 }
 
-interface WaitPointWithSetter {
-  instance: WaitPointInstance<unknown, unknown>;
+interface WaitPointWithSetter<Payload, Result> {
+  instance: WaitPointInstance<Payload, Result>;
   setKey: (key: string) => void;
 }
 
@@ -31,7 +31,9 @@ interface WaitPointWithSetter {
  * @param initialKey - Initial key (used in error messages until updated)
  * @returns The instance and a setter to update the key after construction
  */
-function createWaitPointInstance(initialKey: string): WaitPointWithSetter {
+function createWaitPointInstance<Payload = undefined, Result = undefined>(
+  initialKey: string,
+): WaitPointWithSetter<Payload, Result> {
   let key = initialKey;
   const pendingWaits = new Map<string, { payload: unknown; resolve: (result: unknown) => void }>();
 
@@ -74,7 +76,7 @@ function createWaitPointInstance(initialKey: string): WaitPointWithSetter {
       },
     } satisfies WaitPointInstance<unknown, unknown>,
     "wait-point",
-  );
+  ) as unknown as WaitPointInstance<Payload, Result>;
 
   return {
     instance,
@@ -101,11 +103,10 @@ type DefineFn = <Payload = undefined, Result = undefined>() => WaitPointInstance
  *
  * await approval.wait({ message: "Please approve" });
  */
-// oxlint-disable-next-line no-explicit-any
 export function defineWaitPoint<Payload = undefined, Result = undefined>(
   key: string,
 ): WaitPointInstance<Payload, Result> {
-  return createWaitPointInstance(key).instance as unknown as WaitPointInstance<Payload, Result>;
+  return createWaitPointInstance<Payload, Result>(key).instance;
 }
 
 /**
@@ -133,19 +134,20 @@ export function defineWaitPoint<Payload = undefined, Result = undefined>(
 export function defineWaitPoints<T extends Record<string, WaitPointInstance<any, any>>>(
   builder: (define: DefineFn) => T,
 ): T {
-  const setters = new Map<WaitPointInstance<unknown, unknown>, (key: string) => void>();
+  // oxlint-disable-next-line no-explicit-any
+  const setters = new Map<WaitPointInstance<any, any>, (key: string) => void>();
 
   const define: DefineFn = <Payload, Result>() => {
-    const { instance, setKey } = createWaitPointInstance("__pending__");
+    const { instance, setKey } = createWaitPointInstance<Payload, Result>("__pending__");
     setters.set(instance, setKey);
-    return instance as unknown as WaitPointInstance<Payload, Result>;
+    return instance;
   };
 
   const result = builder(define);
 
   // Set the correct key on each instance based on the property name
   for (const key of Object.keys(result)) {
-    const setter = setters.get(result[key] as WaitPointInstance<unknown, unknown>);
+    const setter = setters.get(result[key]);
     setter?.(key);
   }
 
