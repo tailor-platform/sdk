@@ -202,7 +202,18 @@ Wait points allow a workflow job to suspend execution and wait for an external s
 
 ### Defining Wait Points
 
-Use `defineWaitPoints` to declare typed wait points. Each property name becomes the wait point key:
+Use `defineWaitPoint` to declare a single typed wait point:
+
+```typescript
+import { defineWaitPoint } from "@tailor-platform/sdk";
+
+export const approval = defineWaitPoint<
+  { message: string; requestId: string },
+  { approved: boolean }
+>("approval");
+```
+
+For multiple wait points, use `defineWaitPoints` with a builder callback. Property names become wait point keys, and JSDoc on each property is preserved in IDE autocompletion:
 
 ```typescript
 import { defineWaitPoints } from "@tailor-platform/sdk";
@@ -213,7 +224,7 @@ export const { approval } = defineWaitPoints((define) => ({
 }));
 ```
 
-The `define` function accepts two type parameters:
+Both accept two type parameters:
 
 - **`Payload`** — Data sent when the job suspends (passed to `.wait()`). Must be JSON-compatible (`string`, `number`, `boolean`, `null`, arrays, plain objects). Use `undefined` if no payload is needed.
 - **`Result`** — Data returned when the wait point is resolved (returned from `.wait()`, produced by the `.resolve()` callback). Allows `Date` and `toJSON()` objects (serialized via `JSON.stringify`). The return type of `.wait()` applies `Jsonify` (e.g., `Date` becomes `string`).
