@@ -96,11 +96,31 @@ db.enum([
 ### Object Fields
 
 ```typescript
+// Basic nested object
 db.object({
   street: db.string(),
   city: db.string(),
   country: db.string(),
 });
+
+// Nested object array
+db.object(
+  {
+    id: db.uuid(),
+    name: db.string(),
+    size: db.int(),
+  },
+  { array: true },
+);
+
+// Optional nested object array
+db.object(
+  {
+    kind: db.string(),
+    days: db.int(),
+  },
+  { optional: true, array: true },
+);
 ```
 
 ## Field Modifiers
