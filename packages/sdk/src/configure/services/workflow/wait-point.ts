@@ -35,29 +35,33 @@ function createWaitPointInstance<Payload = undefined, Result = undefined>(
   initialKey: string,
 ): WaitPointWithSetter<Payload, Result> {
   let key = initialKey;
-  const pendingWaits = new Map<string, { payload: unknown; resolve: (result: unknown) => void }>();
+  const pendingWaits = new Map<string, { payload: Payload; resolve: (result: Result) => void }>();
 
   const instance = brandValue(
     {
-      wait(payload?: unknown) {
+      wait(payload?: Payload) {
         const platformWait = (
           globalThis as {
-            tailor?: { workflow?: { wait?: (k: string, p?: unknown) => unknown } };
+            tailor?: { workflow?: { wait?: (k: string, p?: Payload) => Result } };
           }
         ).tailor?.workflow?.wait;
         if (platformWait) {
-          return Promise.resolve(platformWait(key, payload)) as Promise<unknown>;
+          return Promise.resolve(platformWait(key, payload)) as Promise<Result>;
         }
-        return new Promise<unknown>((resolve) => {
-          pendingWaits.set("pending", { payload, resolve });
+        return new Promise<Result>((resolve) => {
+          pendingWaits.set("pending", { payload: payload as Payload, resolve });
         });
       },
-      async resolve(executionId: string, callback: (p: unknown) => unknown) {
+      async resolve(executionId: string, callback: (p: Payload) => Result | Promise<Result>) {
         const platformResolve = (
           globalThis as {
             tailor?: {
               workflow?: {
-                resolve?: (e: string, k: string, c: (p: unknown) => unknown) => Promise<void>;
+                resolve?: (
+                  e: string,
+                  k: string,
+                  c: (p: Payload) => Result | Promise<Result>,
+                ) => Promise<void>;
               };
             };
           }
@@ -74,7 +78,7 @@ function createWaitPointInstance<Payload = undefined, Result = undefined>(
         pending.resolve(result ? JSON.parse(JSON.stringify(result)) : result);
         pendingWaits.delete("pending");
       },
-    } satisfies WaitPointInstance<unknown, unknown>,
+    },
     "wait-point",
   ) as unknown as WaitPointInstance<Payload, Result>;
 
