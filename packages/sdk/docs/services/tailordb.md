@@ -96,14 +96,14 @@ db.enum([
 ### Object Fields
 
 ```typescript
-// Basic nested object
+// Object field
 db.object({
   street: db.string(),
   city: db.string(),
   country: db.string(),
 });
 
-// Nested object array
+// Object array field
 db.object(
   {
     id: db.uuid(),
@@ -113,7 +113,7 @@ db.object(
   { array: true },
 );
 
-// Optional nested object array
+// Optional object array field
 db.object(
   {
     kind: db.string(),
