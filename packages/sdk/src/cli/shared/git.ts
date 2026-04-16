@@ -43,7 +43,13 @@ function runCommand({ command, args, options }: RunCommandArgs): Promise<RunResu
     child.stderr?.on("data", (chunk: Buffer) => {
       stderr += chunk.toString("utf8");
     });
-    child.on("error", (err) => reject(err));
+    child.on("error", (err) => {
+      if (options?.allowFail) {
+        resolve({ stdout: "", stderr: err.message, exitCode: 127 });
+        return;
+      }
+      reject(err);
+    });
     child.on("close", (code) => {
       const exitCode = code ?? 1;
       if (exitCode !== 0 && !options?.allowFail) {

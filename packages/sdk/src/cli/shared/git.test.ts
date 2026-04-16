@@ -54,6 +54,19 @@ describe("git", () => {
       expect(result.exitCode).not.toBe(0);
       expect(result.stderr.length).toBeGreaterThan(0);
     });
+
+    it("resolves with exit code 127 when the binary is not found and allowFail is true", async () => {
+      const result = await runGit(["--version"], {
+        allowFail: true,
+        env: { PATH: "/nonexistent" },
+      });
+      expect(result.exitCode).toBe(127);
+      expect(result.stderr.length).toBeGreaterThan(0);
+    });
+
+    it("rejects when the binary is not found and allowFail is not set", async () => {
+      await expect(runGit(["--version"], { env: { PATH: "/nonexistent" } })).rejects.toThrow();
+    });
   });
 
   describe("gitTopLevel", () => {
