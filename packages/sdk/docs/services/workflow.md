@@ -238,12 +238,12 @@ Both accept two type parameters:
 Call `.wait()` inside a workflow job body to suspend execution:
 
 ```typescript
-import { createWorkflow, createWorkflowJob, defineWaitPoints } from "@tailor-platform/sdk";
+import { createWorkflow, createWorkflowJob, defineWaitPoint } from "@tailor-platform/sdk";
 
-export const { approval } = defineWaitPoints((define) => ({
-  /** Approval for order processing */
-  approval: define<{ message: string; requestId: string }, { approved: boolean }>(),
-}));
+export const approval = defineWaitPoint<
+  { message: string; requestId: string },
+  { approved: boolean }
+>("approval");
 
 export const processWithApproval = createWorkflowJob({
   name: "process-with-approval",
