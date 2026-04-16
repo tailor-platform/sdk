@@ -108,6 +108,22 @@ function createWaitPointInstance(initialKey: string): WaitPointInstance<unknown,
 type DefineFn = <Payload = undefined, Result = undefined>() => WaitPointInstance<Payload, Result>;
 
 /**
+ * Define a single typed wait point with an explicit key.
+ * @param key - The wait point key used to match wait and resolve calls
+ * @returns A WaitPointInstance with typed `.wait()` and `.resolve()` methods
+ * @example
+ * export const approval = defineWaitPoint<{ message: string }, { approved: boolean }>("approval");
+ *
+ * await approval.wait({ message: "Please approve" });
+ */
+// oxlint-disable-next-line no-explicit-any
+export function defineWaitPoint<Payload = undefined, Result = undefined>(
+  key: string,
+): WaitPointInstance<Payload, Result> {
+  return createWaitPointInstance(key) as unknown as WaitPointInstance<Payload, Result>;
+}
+
+/**
  * Define a group of typed wait points for human-in-the-loop workflows.
  * Property names become the wait point keys.
  *

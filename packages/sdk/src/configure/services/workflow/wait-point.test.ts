@@ -1,6 +1,6 @@
 import { afterEach, describe, it, expect, expectTypeOf } from "vitest";
 import { setupWaitPointMock } from "@/utils/test/mock";
-import { defineWaitPoints } from "./wait-point";
+import { defineWaitPoint, defineWaitPoints } from "./wait-point";
 
 const TailorGlobal = globalThis as { tailor?: { workflow?: Record<string, unknown> } };
 
@@ -100,5 +100,47 @@ describe("defineWaitPoints", () => {
     const result = await wps.step.wait();
     expect(result).toBe("mocked-result");
     expect(mock.waitCalls).toHaveLength(1);
+  });
+});
+
+describe("defineWaitPoint", () => {
+  afterEach(() => {
+    delete TailorGlobal.tailor;
+  });
+
+  it("creates a typed instance with the given key", () => {
+    const wp = defineWaitPoint<{ msg: string }, { ok: boolean }>("my-key");
+    expectTypeOf(wp.wait).toBeFunction();
+    expectTypeOf(wp.resolve).toBeFunction();
+  });
+
+  it("wait/resolve coordination works", async () => {
+    const wp = defineWaitPoint<{ msg: string }, { ok: boolean }>("approval");
+
+    const resultPromise = wp.wait({ msg: "test" });
+    await wp.resolve("exec-1", (payload) => {
+      expect(payload).toEqual({ msg: "test" });
+      return { ok: true };
+    });
+    expect(await resultPromise).toEqual({ ok: true });
+  });
+
+  it("error message includes the given key", async () => {
+    const wp = defineWaitPoint<undefined, undefined>("my-step");
+    await expect(wp.resolve("exec-1", () => undefined)).rejects.toThrow(
+      'No pending wait for key "my-step"',
+    );
+  });
+
+  it("delegates to platform API when available", async () => {
+    const { waitCalls } = setupWaitPointMock({
+      onWait: (_key, _payload) => ({ ok: true }),
+    });
+
+    const wp = defineWaitPoint<{ msg: string }, { ok: boolean }>("approval");
+    const result = await wp.wait({ msg: "please" });
+    expect(result).toEqual({ ok: true });
+    expect(waitCalls).toHaveLength(1);
+    expect(waitCalls[0]).toEqual({ key: "approval", payload: { msg: "please" } });
   });
 });
