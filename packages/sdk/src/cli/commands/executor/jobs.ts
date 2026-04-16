@@ -15,8 +15,15 @@ import {
 import ora from "ora";
 import { arg } from "politty";
 import { z } from "zod";
-import { durationArg, parseDuration, positiveIntArg, workspaceArgs } from "@/cli/shared/args";
-import { fetchAll, initOperatorClient } from "@/cli/shared/client";
+import {
+  durationArg,
+  nonNegativeIntArg,
+  type Order,
+  pagedLogArgs,
+  parseDuration,
+  workspaceArgs,
+} from "@/cli/shared/args";
+import { fetchAll, fetchPaged, initOperatorClient, toPageDirection } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { formatKeyValueTable } from "@/cli/shared/format";
@@ -48,6 +55,7 @@ type ExecutorLike = {
 export type ListExecutorJobsTypedOptions<E extends ExecutorLike = ExecutorLike> = {
   executor: E;
   status?: string;
+  order?: Order;
   limit?: number;
   workspaceId?: string;
   profile?: string;
@@ -76,6 +84,7 @@ export type WatchExecutorJobTypedOptions<E extends ExecutorLike = ExecutorLike> 
 export interface ListExecutorJobsOptions {
   executorName: string;
   status?: string;
+  order?: Order;
   limit?: number;
   workspaceId?: string;
   profile?: string;
@@ -172,14 +181,23 @@ export async function listExecutorJobs<E extends ExecutorLike>(
 
   const filter = filters.length > 0 ? create(FilterSchema, { and: filters }) : undefined;
 
+  const pageDirection = toPageDirection(options.order ?? "desc");
+
   try {
-    const { jobs } = await client.listExecutorJobs({
-      workspaceId,
-      executorName,
-      pageSize: options.limit,
-      pageDirection: PageDirection.DESC,
-      filter,
-    });
+    const jobs = await fetchPaged(
+      async (pageToken, pageSize) => {
+        const { jobs, nextPageToken } = await client.listExecutorJobs({
+          workspaceId,
+          executorName,
+          pageToken,
+          pageSize,
+          ...(pageDirection !== undefined ? { pageDirection } : {}),
+          filter,
+        });
+        return [jobs, nextPageToken];
+      },
+      { limit: options.limit },
+    );
 
     return jobs.map(toExecutorJobListInfo);
   } catch (error) {
@@ -552,12 +570,13 @@ export const jobsCommand = defineAppCommand({
         alias: "i",
         description: "Polling interval when using --wait (e.g., '3s', '500ms', '1m')",
       }),
+      ...pagedLogArgs,
+      limit: arg(nonNegativeIntArg.default(50), {
+        description: "Maximum number of jobs to list (0: unlimited, default: 50) (list mode only)",
+      }),
       logs: arg(z.boolean().default(false), {
         alias: "l",
         description: "Display function execution logs after completion (requires --wait)",
-      }),
-      limit: arg(positiveIntArg.optional(), {
-        description: "Maximum number of jobs to list (default: 50, max: 1000) (list mode only)",
       }),
     })
     .strict(),
@@ -645,6 +664,7 @@ export const jobsCommand = defineAppCommand({
       const jobs = await listExecutorJobs({
         executorName: args.executorName,
         status: args.status,
+        order: args.order,
         limit: args.limit,
         workspaceId: args["workspace-id"],
         profile: args.profile,

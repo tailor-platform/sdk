@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { workspaceArgs } from "@/cli/shared/args";
-import { fetchAll, initOperatorClient } from "@/cli/shared/client";
+import { type Order, paginationArgs, workspaceArgs } from "@/cli/shared/args";
+import { fetchPaged, initOperatorClient, toPageDirection } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger, styles } from "@/cli/shared/logger";
@@ -9,6 +9,8 @@ import { type ExecutorListInfo, toExecutorListInfo } from "./transform";
 export interface ListExecutorsOptions {
   workspaceId?: string;
   profile?: string;
+  order?: Order;
+  limit?: number;
 }
 
 /**
@@ -27,14 +29,19 @@ export async function listExecutors(options?: ListExecutorsOptions): Promise<Exe
     profile: options?.profile,
   });
 
-  const executors = await fetchAll(async (pageToken, maxPageSize) => {
-    const { executors, nextPageToken } = await client.listExecutorExecutors({
-      workspaceId,
-      pageToken,
-      pageSize: maxPageSize,
-    });
-    return [executors, nextPageToken];
-  });
+  const pageDirection = toPageDirection(options?.order);
+  const executors = await fetchPaged(
+    async (pageToken, pageSize) => {
+      const { executors, nextPageToken } = await client.listExecutorExecutors({
+        workspaceId,
+        pageToken,
+        pageSize,
+        ...(pageDirection !== undefined ? { pageDirection } : {}),
+      });
+      return [executors, nextPageToken];
+    },
+    { limit: options?.limit },
+  );
 
   return executors.map((e) => toExecutorListInfo(e));
 }
@@ -45,12 +52,15 @@ export const listCommand = defineAppCommand({
   args: z
     .object({
       ...workspaceArgs,
+      ...paginationArgs,
     })
     .strict(),
   run: async (args) => {
     const executors = await listExecutors({
       workspaceId: args["workspace-id"],
       profile: args.profile,
+      order: args.order,
+      limit: args.limit,
     });
 
     if (executors.length === 0) {

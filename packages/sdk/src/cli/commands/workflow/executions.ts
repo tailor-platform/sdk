@@ -3,14 +3,13 @@ import {
   Condition_Operator,
   ConditionSchema,
   FilterSchema,
-  PageDirection,
 } from "@tailor-proto/tailor/v1/resource_pb";
 import { WorkflowExecution_Status } from "@tailor-proto/tailor/v1/workflow_resource_pb";
 import ora from "ora";
 import { arg } from "politty";
 import { z } from "zod";
-import { parseDuration, workspaceArgs } from "@/cli/shared/args";
-import { fetchAll, initOperatorClient } from "@/cli/shared/client";
+import { type Order, pagedLogArgs, parseDuration, workspaceArgs } from "@/cli/shared/args";
+import { fetchPaged, initOperatorClient, toPageDirection } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { formatKeyValueTable } from "@/cli/shared/format";
@@ -34,6 +33,8 @@ export type ListWorkflowExecutionsTypedOptions<W extends WorkflowLike = Workflow
   status?: string;
   workspaceId?: string;
   profile?: string;
+  order?: Order;
+  limit?: number;
 };
 
 /**
@@ -44,6 +45,8 @@ export interface ListWorkflowExecutionsOptions {
   profile?: string;
   workflowName?: string;
   status?: string;
+  order?: Order;
+  limit?: number;
 }
 
 export interface GetWorkflowExecutionOptions {
@@ -168,17 +171,21 @@ export async function listWorkflowExecutions<W extends WorkflowLike>(
         })
       : undefined;
 
-  const executions = await fetchAll(async (pageToken, maxPageSize) => {
-    const { executions, nextPageToken } = await client.listWorkflowExecutions({
-      workspaceId,
-      workflowName: workflowName ?? "",
-      pageToken,
-      pageSize: maxPageSize,
-      pageDirection: PageDirection.DESC,
-      filter,
-    });
-    return [executions, nextPageToken];
-  });
+  const pageDirection = toPageDirection(options?.order ?? "desc");
+  const executions = await fetchPaged(
+    async (pageToken, pageSize) => {
+      const { executions, nextPageToken } = await client.listWorkflowExecutions({
+        workspaceId,
+        workflowName: workflowName ?? "",
+        pageToken,
+        pageSize,
+        ...(pageDirection !== undefined ? { pageDirection } : {}),
+        filter,
+      });
+      return [executions, nextPageToken];
+    },
+    { limit: options?.limit },
+  );
 
   return executions.map(toWorkflowExecutionInfo);
 }
@@ -378,6 +385,7 @@ export const executionsCommand = defineAppCommand({
   args: z
     .object({
       ...workspaceArgs,
+      ...pagedLogArgs,
       executionId: arg(z.string().optional(), {
         positional: true,
         description: "Execution ID (if provided, shows details)",
@@ -433,6 +441,8 @@ export const executionsCommand = defineAppCommand({
         profile: args.profile,
         workflowName: args["workflow-name"],
         status: args.status,
+        order: args.order,
+        limit: args.limit,
       });
       logger.out(executions);
     }

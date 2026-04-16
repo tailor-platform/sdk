@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { workspaceArgs } from "@/cli/shared/args";
-import { fetchAll, initOperatorClient } from "@/cli/shared/client";
+import { type Order, paginationArgs, workspaceArgs } from "@/cli/shared/args";
+import { fetchPaged, initOperatorClient, toPageDirection } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
@@ -9,6 +9,8 @@ import { type WorkflowListInfo, toWorkflowListInfo } from "./transform";
 export interface ListWorkflowsOptions {
   workspaceId?: string;
   profile?: string;
+  order?: Order;
+  limit?: number;
 }
 
 /**
@@ -27,14 +29,19 @@ export async function listWorkflows(options?: ListWorkflowsOptions): Promise<Wor
     profile: options?.profile,
   });
 
-  const workflows = await fetchAll(async (pageToken, maxPageSize) => {
-    const { workflows, nextPageToken } = await client.listWorkflows({
-      workspaceId,
-      pageToken,
-      pageSize: maxPageSize,
-    });
-    return [workflows, nextPageToken];
-  });
+  const pageDirection = toPageDirection(options?.order);
+  const workflows = await fetchPaged(
+    async (pageToken, pageSize) => {
+      const { workflows, nextPageToken } = await client.listWorkflows({
+        workspaceId,
+        pageToken,
+        pageSize,
+        ...(pageDirection !== undefined ? { pageDirection } : {}),
+      });
+      return [workflows, nextPageToken];
+    },
+    { limit: options?.limit },
+  );
 
   return workflows.map(toWorkflowListInfo);
 }
@@ -45,12 +52,15 @@ export const listCommand = defineAppCommand({
   args: z
     .object({
       ...workspaceArgs,
+      ...paginationArgs,
     })
     .strict(),
   run: async (args) => {
     const workflows = await listWorkflows({
       workspaceId: args["workspace-id"],
       profile: args.profile,
+      order: args.order,
+      limit: args.limit,
     });
 
     if (workflows.length === 0 && !args.json) {

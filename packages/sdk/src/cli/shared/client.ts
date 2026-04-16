@@ -8,11 +8,13 @@ import {
   type Interceptor,
   type Transport,
 } from "@connectrpc/connect";
+import { PageDirection } from "@tailor-proto/tailor/v1/resource_pb";
 import { OperatorService } from "@tailor-proto/tailor/v1/service_pb";
 import { getGlobalDispatcher } from "undici";
 import { z } from "zod";
 import { logger } from "./logger";
 import { readPackageJson } from "./package-json";
+import type { Order } from "./args";
 
 export const platformBaseUrl = process.env.PLATFORM_URL ?? "https://api.tailor.tech";
 
@@ -265,6 +267,60 @@ export async function fetchAll<T>(
     pageToken = nextPageToken;
   }
   return items;
+}
+
+interface FetchPagedOptions {
+  /** Maximum number of items to return. 0 or undefined means unlimited. */
+  limit?: number;
+}
+
+/**
+ * Fetch paginated resources with an optional upper bound on the number of
+ * items returned. When `limit` is 0 or undefined the function behaves
+ * like `fetchAll` and returns every page. When `limit` is positive the
+ * function stops once enough items are collected, requesting smaller
+ * pages as it approaches the boundary.
+ * @template T
+ * @param fn - Page fetcher returning items and next page token
+ * @param options - Pagination options
+ * @returns Fetched items (length <= limit when limit > 0)
+ */
+export async function fetchPaged<T>(
+  fn: (pageToken: string, pageSize: number) => Promise<[T[], string]>,
+  options?: FetchPagedOptions,
+): Promise<T[]> {
+  const limit = options?.limit;
+  const unbounded = limit === undefined || limit === 0;
+  const items: T[] = [];
+  let pageToken = "";
+
+  while (true) {
+    const pageSize = unbounded ? MAX_PAGE_SIZE : Math.min(limit - items.length, MAX_PAGE_SIZE);
+    if (!unbounded && pageSize <= 0) break;
+
+    const [batch, nextPageToken] = await fn(pageToken, pageSize);
+    items.push(...batch);
+    if (!unbounded && items.length >= limit) break;
+    if (!nextPageToken) break;
+    pageToken = nextPageToken;
+  }
+
+  if (!unbounded && items.length > limit) {
+    return items.slice(0, limit);
+  }
+  return items;
+}
+
+/**
+ * Translate a CLI `--order` value into the proto `PageDirection` enum.
+ * Returns `undefined` when the user did not specify an order so that
+ * callers can omit the field and fall back to the server default.
+ * @param order - Order string from CLI args (`"asc"` | `"desc"` | undefined)
+ * @returns PageDirection, or undefined when `order` is undefined
+ */
+export function toPageDirection(order: Order | undefined): PageDirection | undefined {
+  if (order === undefined) return undefined;
+  return order === "asc" ? PageDirection.ASC : PageDirection.DESC;
 }
 
 /**

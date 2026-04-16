@@ -57,6 +57,19 @@ export function parseDuration(duration: string): number {
  */
 export const positiveIntArg = z.coerce.number().int().positive();
 
+/**
+ * Schema for non-negative integer validation (from string input).
+ * Accepts 0 (used for `--limit 0` to disable the limit).
+ */
+export const nonNegativeIntArg = z.coerce.number().int().nonnegative();
+
+/**
+ * Schema for sort order (`asc` or `desc`).
+ */
+export const orderArg = z.enum(["asc", "desc"]);
+
+export type Order = z.infer<typeof orderArg>;
+
 // ============================================================================
 // Env File Helpers
 // ============================================================================
@@ -202,6 +215,38 @@ export const organizationArgs = {
     description: "Organization ID",
     env: "TAILOR_PLATFORM_ORGANIZATION_ID",
     completion: { type: "none" },
+  }),
+} satisfies ArgsShape;
+
+/**
+ * Arguments for list commands that should accept `--order` / `--limit`
+ * without changing the default behavior (unbounded, server default order).
+ *
+ * Use this for configuration-style list commands where the historical
+ * behavior of returning every item must be preserved.
+ */
+export const paginationArgs = {
+  order: arg(orderArg.optional(), {
+    description: "Sort order (asc or desc; default: server order)",
+  }),
+  limit: arg(nonNegativeIntArg.optional(), {
+    alias: "l",
+    description: "Maximum number of items to return (0 or omit: unlimited)",
+  }),
+} satisfies ArgsShape;
+
+/**
+ * Arguments for time-series log list commands. Defaults to newest-first
+ * (`desc`) and a 50-item cap so that listing stays responsive on busy
+ * workspaces. Pass `--limit 0` to disable the cap and fetch all entries.
+ */
+export const pagedLogArgs = {
+  order: arg(orderArg.default("desc"), {
+    description: "Sort order (asc or desc)",
+  }),
+  limit: arg(nonNegativeIntArg.default(50), {
+    alias: "l",
+    description: "Maximum number of items to return (0: unlimited)",
   }),
 } satisfies ArgsShape;
 

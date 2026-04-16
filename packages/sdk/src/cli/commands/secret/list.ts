@@ -1,8 +1,8 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { z } from "zod";
-import { workspaceArgs } from "@/cli/shared/args";
-import { fetchAll, initOperatorClient } from "@/cli/shared/client";
+import { type Order, paginationArgs, workspaceArgs } from "@/cli/shared/args";
+import { fetchPaged, initOperatorClient, toPageDirection } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
@@ -13,6 +13,8 @@ export interface SecretListOptions {
   workspaceId?: string;
   profile?: string;
   vaultName: string;
+  order?: Order;
+  limit?: number;
 }
 
 export interface SecretInfo {
@@ -45,15 +47,20 @@ async function secretList(options: SecretListOptions): Promise<SecretInfo[]> {
     profile: options.profile,
   });
 
-  const secrets = await fetchAll(async (pageToken, maxPageSize) => {
-    const { secrets, nextPageToken } = await client.listSecretManagerSecrets({
-      workspaceId,
-      secretmanagerVaultName: options.vaultName,
-      pageToken,
-      pageSize: maxPageSize,
-    });
-    return [secrets, nextPageToken];
-  });
+  const pageDirection = toPageDirection(options.order);
+  const secrets = await fetchPaged(
+    async (pageToken, pageSize) => {
+      const { secrets, nextPageToken } = await client.listSecretManagerSecrets({
+        workspaceId,
+        secretmanagerVaultName: options.vaultName,
+        pageToken,
+        pageSize,
+        ...(pageDirection !== undefined ? { pageDirection } : {}),
+      });
+      return [secrets, nextPageToken];
+    },
+    { limit: options.limit },
+  );
 
   return secrets.map(secretInfo);
 }
@@ -65,6 +72,7 @@ export const listSecretCommand = defineAppCommand({
     .object({
       ...workspaceArgs,
       ...vaultArgs,
+      ...paginationArgs,
     })
     .strict(),
   run: async (args) => {
@@ -73,6 +81,8 @@ export const listSecretCommand = defineAppCommand({
         workspaceId: args["workspace-id"],
         profile: args.profile,
         vaultName: args["vault-name"],
+        order: args.order,
+        limit: args.limit,
       });
       logger.out(secrets);
     } catch (error) {

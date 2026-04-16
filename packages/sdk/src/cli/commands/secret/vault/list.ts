@@ -1,7 +1,7 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { z } from "zod";
-import { workspaceArgs } from "@/cli/shared/args";
-import { fetchAll, initOperatorClient } from "@/cli/shared/client";
+import { type Order, paginationArgs, workspaceArgs } from "@/cli/shared/args";
+import { fetchPaged, initOperatorClient, toPageDirection } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
@@ -10,6 +10,8 @@ import type { SecretManagerVault } from "@tailor-proto/tailor/v1/secret_manager_
 export interface VaultListOptions {
   workspaceId?: string;
   profile?: string;
+  order?: Order;
+  limit?: number;
 }
 
 export interface VaultInfo {
@@ -42,14 +44,19 @@ async function vaultList(options?: VaultListOptions): Promise<VaultInfo[]> {
     profile: options?.profile,
   });
 
-  const vaults = await fetchAll(async (pageToken, maxPageSize) => {
-    const { vaults, nextPageToken } = await client.listSecretManagerVaults({
-      workspaceId,
-      pageToken,
-      pageSize: maxPageSize,
-    });
-    return [vaults, nextPageToken];
-  });
+  const pageDirection = toPageDirection(options?.order);
+  const vaults = await fetchPaged(
+    async (pageToken, pageSize) => {
+      const { vaults, nextPageToken } = await client.listSecretManagerVaults({
+        workspaceId,
+        pageToken,
+        pageSize,
+        ...(pageDirection !== undefined ? { pageDirection } : {}),
+      });
+      return [vaults, nextPageToken];
+    },
+    { limit: options?.limit },
+  );
 
   return vaults.map(vaultInfo);
 }
@@ -60,12 +67,15 @@ export const listCommand = defineAppCommand({
   args: z
     .object({
       ...workspaceArgs,
+      ...paginationArgs,
     })
     .strict(),
   run: async (args) => {
     const vaults = await vaultList({
       workspaceId: args["workspace-id"],
       profile: args.profile,
+      order: args.order,
+      limit: args.limit,
     });
 
     logger.out(vaults);
