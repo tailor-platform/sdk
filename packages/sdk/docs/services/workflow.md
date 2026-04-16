@@ -218,10 +218,14 @@ For multiple wait points, use `defineWaitPoints` with a builder callback. Proper
 ```typescript
 import { defineWaitPoints } from "@tailor-platform/sdk";
 
-export const { approval } = defineWaitPoints((define) => ({
-  /** Approval for order processing */
-  approval: define<{ message: string; requestId: string }, { approved: boolean }>(),
+export const waitPoints = defineWaitPoints((define) => ({
+  /** Manager approval step */
+  managerApproval: define<{ amount: number }, { approved: boolean }>(),
+  /** Finance review step */
+  financeReview: define<{ invoiceId: string }, { validated: boolean }>(),
 }));
+
+await waitPoints.managerApproval.wait({ amount: 50000 });
 ```
 
 Both accept two type parameters:
@@ -290,25 +294,6 @@ export default createResolver({
     resolved: t.bool(),
   }),
 });
-```
-
-### Multiple Wait Points
-
-Define multiple wait points and access them via the container object. JSDoc on each property is visible in IDE autocompletion:
-
-```typescript
-export const waitPoints = defineWaitPoints((define) => ({
-  /** Manager approval step */
-  managerApproval: define<{ amount: number }, { approved: boolean }>(),
-  /** Finance review step */
-  financeReview: define<{ invoiceId: string }, { validated: boolean }>(),
-  /** Simple notification acknowledgment (no payload needed) */
-  acknowledgment: define<undefined, { acknowledged: boolean }>(),
-}));
-
-await waitPoints.managerApproval.wait({ amount: 50000 });
-await waitPoints.financeReview.wait({ invoiceId: "INV-001" });
-await waitPoints.acknowledgment.wait();
 ```
 
 Wait points can be imported and used in any file (workflow jobs, resolvers, executors). For local testing, see [Testing Wait Points](../testing.md#testing-wait-points).
