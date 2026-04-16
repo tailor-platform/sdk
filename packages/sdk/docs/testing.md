@@ -254,52 +254,18 @@ describe("workflow integration", () => {
 
 ## Testing Wait Points
 
-Test wait point behavior in workflows using in-memory coordination or platform mocks.
-
-### In-Memory Coordination
-
-Wait points use in-memory Promise coordination when running locally. Call `.wait()` and `.resolve()` concurrently:
+Use `setupWaitPointMock` to mock `tailor.workflow.wait` and `tailor.workflow.resolve` in tests:
 
 ```typescript
-import { defineWaitPoints } from "@tailor-platform/sdk";
-
-const { approval } = defineWaitPoints((define) => ({
-  approval: define<{ msg: string }, { ok: boolean }>(),
-}));
-
-describe("wait point", () => {
-  test("wait/resolve coordination", async () => {
-    // Start waiting (this will block until resolved)
-    const resultPromise = approval.wait({ msg: "test" });
-
-    // Resolve the waiting execution
-    await approval.resolve("exec-1", (payload) => {
-      expect(payload).toEqual({ msg: "test" });
-      return { ok: true };
-    });
-
-    // The wait resolves with the result
-    expect(await resultPromise).toEqual({ ok: true });
-  });
-});
-```
-
-### Mocking Platform API with `setupWaitPointMock`
-
-Use `setupWaitPointMock` to simulate the Tailor Platform's `tailor.workflow.wait` and `tailor.workflow.resolve`:
-
-```typescript
-import { afterEach, vi } from "vitest";
+import { afterEach } from "vitest";
 import { setupWaitPointMock } from "@tailor-platform/sdk/test";
-import { defineWaitPoints } from "@tailor-platform/sdk";
+import { defineWaitPoint } from "@tailor-platform/sdk";
 
 const TailorGlobal = globalThis as { tailor?: { workflow?: Record<string, unknown> } };
 
-const { approval } = defineWaitPoints((define) => ({
-  approval: define<{ msg: string }, { approved: boolean }>(),
-}));
+const approval = defineWaitPoint<{ msg: string }, { approved: boolean }>("approval");
 
-describe("wait point with mock", () => {
+describe("wait point", () => {
   afterEach(() => {
     delete TailorGlobal.tailor;
   });
@@ -334,8 +300,7 @@ describe("wait point with mock", () => {
 
 **Key points:**
 
-- In-memory coordination requires calling `.wait()` before `.resolve()` — otherwise `.resolve()` throws an error
-- `setupWaitPointMock` sets `globalThis.tailor.workflow.wait/resolve`, which takes priority over in-memory coordination
+- `setupWaitPointMock` sets `globalThis.tailor.workflow.wait/resolve` to mock handlers
 - Clean up mocks in `afterEach` by deleting `TailorGlobal.tailor`
 - **Best for:** Testing jobs that use wait points, verifying resolve callbacks
 

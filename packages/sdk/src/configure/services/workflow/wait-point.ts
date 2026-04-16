@@ -27,15 +27,15 @@ interface WaitPointWithSetter<Payload, Result> {
 }
 
 /**
- * Create a WaitPointInstance with in-memory coordination for local testing.
- * @param initialKey - Initial key (used in error messages until updated)
+ * Create a WaitPointInstance that delegates to the platform runtime.
+ * Use `setupWaitPointMock` to mock `globalThis.tailor.workflow.wait/resolve` in tests.
+ * @param initialKey - Initial key (can be updated via the returned setter)
  * @returns The instance and a setter to update the key after construction
  */
 function createWaitPointInstance<Payload = undefined, Result = undefined>(
   initialKey: string,
 ): WaitPointWithSetter<Payload, Result> {
   let key = initialKey;
-  const pendingWaits = new Map<string, { payload: Payload; resolve: (result: Result) => void }>();
 
   const instance = brandValue(
     {
@@ -45,12 +45,12 @@ function createWaitPointInstance<Payload = undefined, Result = undefined>(
             tailor?: { workflow?: { wait?: (k: string, p?: Payload) => Result } };
           }
         ).tailor?.workflow?.wait;
-        if (platformWait) {
-          return Promise.resolve(platformWait(key, payload)) as Promise<Result>;
+        if (!platformWait) {
+          throw new Error(
+            `tailor.workflow.wait is not available. Use setupWaitPointMock() in tests.`,
+          );
         }
-        return new Promise<Result>((resolve) => {
-          pendingWaits.set("pending", { payload: payload as Payload, resolve });
-        });
+        return Promise.resolve(platformWait(key, payload)) as Promise<Result>;
       },
       async resolve(executionId: string, callback: (p: Payload) => Result | Promise<Result>) {
         const platformResolve = (
@@ -66,17 +66,12 @@ function createWaitPointInstance<Payload = undefined, Result = undefined>(
             };
           }
         ).tailor?.workflow?.resolve;
-        if (platformResolve) {
-          await platformResolve(executionId, key, callback);
-          return;
+        if (!platformResolve) {
+          throw new Error(
+            `tailor.workflow.resolve is not available. Use setupWaitPointMock() in tests.`,
+          );
         }
-        const pending = pendingWaits.get("pending");
-        if (!pending) {
-          throw new Error(`No pending wait for key "${key}"`);
-        }
-        const result = await callback(pending.payload);
-        pending.resolve(result ? JSON.parse(JSON.stringify(result)) : result);
-        pendingWaits.delete("pending");
+        await platformResolve(executionId, key, callback);
       },
     },
     "wait-point",

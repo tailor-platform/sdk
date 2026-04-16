@@ -8,6 +8,7 @@ describe("defineWaitPoints", () => {
   afterEach(() => {
     delete TailorGlobal.tailor;
   });
+
   it("creates instances with typed wait/resolve", () => {
     const wps = defineWaitPoints((define) => ({
       approval: define<{ message: string }, { approved: boolean }>(),
@@ -32,29 +33,14 @@ describe("defineWaitPoints", () => {
     expectTypeOf<Params>().toEqualTypeOf<[]>();
   });
 
-  it("wait/resolve coordination works", async () => {
-    const wps = defineWaitPoints((define) => ({
-      approval: define<{ msg: string }, { ok: boolean }>(),
-    }));
-
-    const resultPromise = wps.approval.wait({ msg: "test" });
-    await wps.approval.resolve("exec-1", (payload) => {
-      expect(payload).toEqual({ msg: "test" });
-      return { ok: true };
-    });
-    expect(await resultPromise).toEqual({ ok: true });
-  });
-
-  it("error message includes the correct key", async () => {
+  it("throws without platform API or mock", () => {
     const wps = defineWaitPoints((define) => ({
       approval: define<undefined, undefined>(),
     }));
-    await expect(wps.approval.resolve("exec-1", () => undefined)).rejects.toThrow(
-      'No pending wait for key "approval"',
-    );
+    expect(() => wps.approval.wait()).toThrow("setupWaitPointMock()");
   });
 
-  it("wait() delegates to globalThis.tailor.workflow.wait when available", async () => {
+  it("wait() delegates to mock", async () => {
     const { waitCalls } = setupWaitPointMock({
       onWait: (_key, _payload) => ({ approved: true }),
     });
@@ -69,7 +55,7 @@ describe("defineWaitPoints", () => {
     expect(waitCalls[0]).toEqual({ key: "approval", payload: { msg: "please" } });
   });
 
-  it("resolve() delegates to globalThis.tailor.workflow.resolve when available", async () => {
+  it("resolve() delegates to mock", async () => {
     const { resolveCalls } = setupWaitPointMock({
       onResolve: async (_execId, _key, callback) => {
         callback({ msg: "hello" });
@@ -88,18 +74,17 @@ describe("defineWaitPoints", () => {
     expect(resolveCalls[0]).toEqual({ executionId: "exec-1", key: "approval" });
   });
 
-  it("setupWaitPointMock works for mocking platform API", async () => {
-    const mock = setupWaitPointMock({
-      onWait: () => "mocked-result",
+  it("sets correct key from property name", async () => {
+    const { waitCalls } = setupWaitPointMock({
+      onWait: () => "ok",
     });
 
     const wps = defineWaitPoints((define) => ({
       step: define<undefined, string>(),
     }));
 
-    const result = await wps.step.wait();
-    expect(result).toBe("mocked-result");
-    expect(mock.waitCalls).toHaveLength(1);
+    await wps.step.wait();
+    expect(waitCalls[0]).toEqual({ key: "step", payload: undefined });
   });
 });
 
@@ -114,33 +99,30 @@ describe("defineWaitPoint", () => {
     expectTypeOf(wp.resolve).toBeFunction();
   });
 
-  it("wait/resolve coordination works", async () => {
-    const wp = defineWaitPoint<{ msg: string }, { ok: boolean }>("approval");
-
-    const resultPromise = wp.wait({ msg: "test" });
-    await wp.resolve("exec-1", (payload) => {
-      expect(payload).toEqual({ msg: "test" });
-      return { ok: true };
-    });
-    expect(await resultPromise).toEqual({ ok: true });
-  });
-
-  it("error message includes the given key", async () => {
+  it("throws without platform API or mock", () => {
     const wp = defineWaitPoint<undefined, undefined>("my-step");
-    await expect(wp.resolve("exec-1", () => undefined)).rejects.toThrow(
-      'No pending wait for key "my-step"',
-    );
+    expect(() => wp.wait()).toThrow("setupWaitPointMock()");
   });
 
-  it("delegates to platform API when available", async () => {
+  it("uses the provided key", async () => {
     const { waitCalls } = setupWaitPointMock({
       onWait: (_key, _payload) => ({ ok: true }),
     });
 
     const wp = defineWaitPoint<{ msg: string }, { ok: boolean }>("approval");
-    const result = await wp.wait({ msg: "please" });
-    expect(result).toEqual({ ok: true });
-    expect(waitCalls).toHaveLength(1);
+    await wp.wait({ msg: "please" });
     expect(waitCalls[0]).toEqual({ key: "approval", payload: { msg: "please" } });
+  });
+
+  it("resolve delegates to mock", async () => {
+    const { resolveCalls } = setupWaitPointMock({
+      onResolve: async (_execId, _key, callback) => {
+        callback(undefined);
+      },
+    });
+
+    const wp = defineWaitPoint<undefined, { ok: boolean }>("my-step");
+    await wp.resolve("exec-1", () => ({ ok: true }));
+    expect(resolveCalls[0]).toEqual({ executionId: "exec-1", key: "my-step" });
   });
 });
