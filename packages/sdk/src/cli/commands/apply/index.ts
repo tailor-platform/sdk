@@ -1,12 +1,33 @@
 import { arg } from "politty";
 import { z } from "zod";
 import { apply } from "@/cli/commands/apply/apply";
+import { prepareBasePlan } from "@/cli/commands/apply/merge-plan-setup";
 import { confirmationArgs, deploymentArgs } from "@/cli/shared/args";
 import { defineAppCommand } from "@/cli/shared/command";
 
 export const applyCommand = defineAppCommand({
   name: "apply",
   description: "Apply Tailor configuration to deploy your application.",
+  notes: `Use \`--base\` to preview the plan **as if the current branch were merged into its base branch**.
+The command creates a temporary git worktree, merges HEAD into the base ref (no commit),
+and runs the plan against that merged state. This is useful in CI for previewing the
+deployment impact of a pull request before merging.
+
+The base ref is auto-detected from the current GitHub PR (via \`gh\`) or \`origin/HEAD\`.
+Override with \`--base-ref <ref>\`. \`--base\` implies \`--dry-run\` and disables caching.
+
+If \`pnpm-lock.yaml\` or the root \`package.json\` differs between source and merge target,
+the command aborts without running. Install the merged dependencies first, then retry.`,
+  examples: [
+    {
+      cmd: "--base",
+      desc: "Plan against current HEAD merged into the auto-detected base branch",
+    },
+    {
+      cmd: "--base-ref origin/main",
+      desc: "Plan against current HEAD merged into a specific base ref",
+    },
+  ],
   args: z
     .object({
       ...deploymentArgs,
@@ -24,20 +45,50 @@ export const applyCommand = defineAppCommand({
       "clean-cache": arg(z.boolean().optional(), {
         description: "Clean the bundle cache before building",
       }),
+      base: arg(z.boolean().optional(), {
+        description:
+          "Plan against the config as it would look after merging current HEAD into the base ref. Implies --dry-run.",
+      }),
+      "base-ref": arg(z.string().optional(), {
+        description:
+          "Override the base ref for --base (implies --base when given without --base). Defaults to auto-detection (gh PR base then origin/HEAD).",
+      }),
     })
     .strict(),
   run: async (args) => {
     const { initTelemetry } = await import("@/cli/telemetry");
     await initTelemetry();
-    await apply({
-      workspaceId: args["workspace-id"],
-      profile: args.profile,
-      configPath: args.config,
-      dryRun: args["dry-run"],
-      yes: args.yes,
-      noSchemaCheck: args["no-schema-check"],
-      noCache: args["no-cache"],
-      cleanCache: args["clean-cache"],
-    });
+
+    const baseRef = args["base-ref"];
+    const basePlan = args.base === true || baseRef !== undefined;
+    if (!basePlan) {
+      await apply({
+        workspaceId: args["workspace-id"],
+        profile: args.profile,
+        configPath: args.config,
+        dryRun: args["dry-run"],
+        yes: args.yes,
+        noSchemaCheck: args["no-schema-check"],
+        noCache: args["no-cache"],
+        cleanCache: args["clean-cache"],
+      });
+      return;
+    }
+
+    const prepared = await prepareBasePlan({ baseRef, configPath: args.config });
+    try {
+      await apply({
+        workspaceId: args["workspace-id"],
+        profile: args.profile,
+        configPath: prepared.configPath,
+        dryRun: true,
+        yes: args.yes,
+        noSchemaCheck: args["no-schema-check"],
+        noCache: true,
+        cleanCache: args["clean-cache"],
+      });
+    } finally {
+      await prepared.worktree.dispose();
+    }
   },
 });

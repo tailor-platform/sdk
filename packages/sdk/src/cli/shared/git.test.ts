@@ -1,0 +1,183 @@
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "pathe";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  currentBranch,
+  detectBaseRef,
+  gitTopLevel,
+  prepareMergeWorktree,
+  revParse,
+  runGit,
+} from "./git";
+
+async function initTestRepo(dir: string) {
+  await runGit(["init", "--initial-branch=main", dir]);
+  const cfg = { cwd: dir };
+  await runGit(["config", "user.email", "test@example.com"], cfg);
+  await runGit(["config", "user.name", "Test"], cfg);
+  await runGit(["config", "commit.gpgsign", "false"], cfg);
+  await runGit(["config", "tag.gpgsign", "false"], cfg);
+}
+
+async function commitFile(dir: string, file: string, content: string, message: string) {
+  fs.writeFileSync(path.join(dir, file), content);
+  await runGit(["add", file], { cwd: dir });
+  await runGit(["commit", "-m", message], { cwd: dir });
+}
+
+describe("git", () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "git-test-"));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  describe("runGit", () => {
+    it("returns stdout for a successful command", async () => {
+      await initTestRepo(tmpDir);
+      const result = await runGit(["rev-parse", "--is-inside-work-tree"], { cwd: tmpDir });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout.trim()).toBe("true");
+    });
+
+    it("throws when the command fails by default", async () => {
+      await expect(runGit(["rev-parse", "HEAD"], { cwd: tmpDir })).rejects.toThrow();
+    });
+
+    it("does not throw when allowFail is true", async () => {
+      const result = await runGit(["rev-parse", "HEAD"], { cwd: tmpDir, allowFail: true });
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("gitTopLevel", () => {
+    it("returns the repository root", async () => {
+      await initTestRepo(tmpDir);
+      const root = await gitTopLevel(tmpDir);
+      expect(fs.realpathSync(root)).toBe(fs.realpathSync(tmpDir));
+    });
+
+    it("throws outside a repository", async () => {
+      await expect(gitTopLevel(tmpDir)).rejects.toThrow();
+    });
+  });
+
+  describe("currentBranch", () => {
+    it("returns the branch name on a named branch", async () => {
+      await initTestRepo(tmpDir);
+      await commitFile(tmpDir, "a.txt", "a", "first");
+      expect(await currentBranch(tmpDir)).toBe("main");
+    });
+
+    it("returns null when HEAD is detached", async () => {
+      await initTestRepo(tmpDir);
+      await commitFile(tmpDir, "a.txt", "a", "first");
+      const sha = (await revParse("HEAD", tmpDir)).slice(0, 40);
+      await runGit(["checkout", "--detach", sha], { cwd: tmpDir });
+      expect(await currentBranch(tmpDir)).toBeNull();
+    });
+  });
+
+  describe("revParse", () => {
+    it("resolves HEAD to a 40-char SHA", async () => {
+      await initTestRepo(tmpDir);
+      await commitFile(tmpDir, "a.txt", "a", "first");
+      const sha = await revParse("HEAD", tmpDir);
+      expect(sha).toMatch(/^[0-9a-f]{40}$/);
+    });
+  });
+
+  describe("detectBaseRef", () => {
+    it("prefers the gh PR base ref when available", async () => {
+      const result = await detectBaseRef({
+        cwd: tmpDir,
+        runGh: async () => ({ stdout: "main\n", stderr: "", exitCode: 0 }),
+        runGitCmd: async () => ({ stdout: "", stderr: "", exitCode: 1 }),
+      });
+      expect(result).toBe("origin/main");
+    });
+
+    it("falls back to origin/HEAD symbolic ref when gh is unavailable", async () => {
+      const result = await detectBaseRef({
+        cwd: tmpDir,
+        runGh: async () => ({ stdout: "", stderr: "gh: not found", exitCode: 127 }),
+        runGitCmd: async () => ({ stdout: "origin/main\n", stderr: "", exitCode: 0 }),
+      });
+      expect(result).toBe("origin/main");
+    });
+
+    it("returns null when neither gh nor origin/HEAD work", async () => {
+      const result = await detectBaseRef({
+        cwd: tmpDir,
+        runGh: async () => ({ stdout: "", stderr: "err", exitCode: 1 }),
+        runGitCmd: async () => ({ stdout: "", stderr: "err", exitCode: 1 }),
+      });
+      expect(result).toBeNull();
+    });
+
+    it("ignores empty stdout from gh", async () => {
+      const result = await detectBaseRef({
+        cwd: tmpDir,
+        runGh: async () => ({ stdout: "\n", stderr: "", exitCode: 0 }),
+        runGitCmd: async () => ({ stdout: "origin/main\n", stderr: "", exitCode: 0 }),
+      });
+      expect(result).toBe("origin/main");
+    });
+  });
+
+  describe("prepareMergeWorktree", () => {
+    it("creates a worktree containing the merged content", async () => {
+      await initTestRepo(tmpDir);
+      await commitFile(tmpDir, "base.txt", "base\n", "base");
+      await runGit(["checkout", "-b", "feature"], { cwd: tmpDir });
+      await commitFile(tmpDir, "feature.txt", "feat\n", "feat");
+
+      const prepared = await prepareMergeWorktree({
+        repoRoot: tmpDir,
+        baseRef: "main",
+        headRef: "feature",
+      });
+      try {
+        expect(fs.existsSync(path.join(prepared.path, "base.txt"))).toBe(true);
+        expect(fs.existsSync(path.join(prepared.path, "feature.txt"))).toBe(true);
+        expect(prepared.baseRef).toMatch(/^[0-9a-f]{40}$/);
+        expect(prepared.headRef).toMatch(/^[0-9a-f]{40}$/);
+      } finally {
+        await prepared.dispose();
+      }
+      expect(fs.existsSync(prepared.path)).toBe(false);
+    });
+
+    it("throws with a descriptive error when merge conflicts occur", async () => {
+      await initTestRepo(tmpDir);
+      await commitFile(tmpDir, "conflict.txt", "base\n", "base");
+      await runGit(["checkout", "-b", "feature"], { cwd: tmpDir });
+      await commitFile(tmpDir, "conflict.txt", "from-feature\n", "feat");
+      await runGit(["checkout", "main"], { cwd: tmpDir });
+      await commitFile(tmpDir, "conflict.txt", "from-main\n", "main change");
+
+      await expect(
+        prepareMergeWorktree({ repoRoot: tmpDir, baseRef: "main", headRef: "feature" }),
+      ).rejects.toThrow(/conflict/i);
+    });
+
+    it("dispose is idempotent", async () => {
+      await initTestRepo(tmpDir);
+      await commitFile(tmpDir, "a.txt", "a", "first");
+
+      const prepared = await prepareMergeWorktree({
+        repoRoot: tmpDir,
+        baseRef: "main",
+        headRef: "HEAD",
+      });
+      await prepared.dispose();
+      await expect(prepared.dispose()).resolves.toBeUndefined();
+    });
+  });
+});

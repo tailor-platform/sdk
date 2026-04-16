@@ -115,16 +115,18 @@ tailor-sdk apply [options]
 
 **Options**
 
-| Option                          | Alias | Description                                        | Required | Default              | Env                               |
-| ------------------------------- | ----- | -------------------------------------------------- | -------- | -------------------- | --------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                       | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                  | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file                            | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
-| `--yes`                         | `-y`  | Skip confirmation prompts                          | No       | `false`              | -                                 |
-| `--dry-run`                     | `-d`  | Run the command without making any changes         | No       | -                    | -                                 |
-| `--no-schema-check`             | -     | Skip schema diff check against migration snapshots | No       | -                    | -                                 |
-| `--no-cache`                    | -     | Disable bundle caching for this run                | No       | -                    | -                                 |
-| `--clean-cache`                 | -     | Clean the bundle cache before building             | No       | -                    | -                                 |
+| Option                          | Alias | Description                                                                                                                            | Required | Default              | Env                               |
+| ------------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                                                           | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                                                      | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                                                                                | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| `--yes`                         | `-y`  | Skip confirmation prompts                                                                                                              | No       | `false`              | -                                 |
+| `--dry-run`                     | `-d`  | Run the command without making any changes                                                                                             | No       | -                    | -                                 |
+| `--no-schema-check`             | -     | Skip schema diff check against migration snapshots                                                                                     | No       | -                    | -                                 |
+| `--no-cache`                    | -     | Disable bundle caching for this run                                                                                                    | No       | -                    | -                                 |
+| `--clean-cache`                 | -     | Clean the bundle cache before building                                                                                                 | No       | -                    | -                                 |
+| `--base`                        | -     | Plan against the config as it would look after merging current HEAD into the base ref. Implies --dry-run.                              | No       | -                    | -                                 |
+| `--base-ref <BASE_REF>`         | -     | Override the base ref for --base (implies --base when given without --base). Defaults to auto-detection (gh PR base then origin/HEAD). | No       | -                    | -                                 |
 
 <!-- politty:command:apply:options:end -->
 
