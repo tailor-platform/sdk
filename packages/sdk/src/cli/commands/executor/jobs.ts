@@ -196,7 +196,7 @@ export async function listExecutorJobs<E extends ExecutorLike>(
         });
         return [jobs, nextPageToken];
       },
-      { limit: options.limit },
+      { limit: options.limit ?? 50 },
     );
 
     return jobs.map(toExecutorJobListInfo);
