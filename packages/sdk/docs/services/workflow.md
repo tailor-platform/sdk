@@ -196,6 +196,144 @@ export default createWorkflow({
 });
 ```
 
+## Wait Points
+
+Wait points allow a workflow job to suspend execution and wait for an external signal before resuming. This enables human-in-the-loop patterns such as approvals, reviews, and manual confirmations.
+
+### Defining Wait Points
+
+Use `defineWaitPoints` to declare typed wait points. Each property name becomes the wait point key:
+
+```typescript
+import { defineWaitPoints } from "@tailor-platform/sdk";
+
+export const { approval } = defineWaitPoints((define) => ({
+  /** Approval for order processing */
+  approval: define<{ message: string; requestId: string }, { approved: boolean }>(),
+}));
+```
+
+The `define` function accepts two type parameters:
+
+- **`Payload`** — Data sent when the job suspends (passed to `.wait()`). Must be JSON-compatible (`string`, `number`, `boolean`, `null`, arrays, plain objects). Use `undefined` if no payload is needed.
+- **`Result`** — Data returned when the wait point is resolved (returned from `.wait()`, produced by the `.resolve()` callback). Allows `Date` and `toJSON()` objects (serialized via `JSON.stringify`). The return type of `.wait()` applies `Jsonify` (e.g., `Date` becomes `string`).
+
+### Waiting in a Job
+
+Call `.wait()` inside a workflow job body to suspend execution:
+
+```typescript
+import { createWorkflow, createWorkflowJob, defineWaitPoints } from "@tailor-platform/sdk";
+
+export const { approval } = defineWaitPoints((define) => ({
+  /** Approval for order processing */
+  approval: define<{ message: string; requestId: string }, { approved: boolean }>(),
+}));
+
+export const processWithApproval = createWorkflowJob({
+  name: "process-with-approval",
+  body: async (input: { orderId: string }) => {
+    // Suspends here until resolved externally
+    const result = await approval.wait({
+      message: `Please approve order ${input.orderId}`,
+      requestId: input.orderId,
+    });
+
+    if (!result.approved) {
+      return { orderId: input.orderId, status: "rejected" as const };
+    }
+    return { orderId: input.orderId, status: "approved" as const };
+  },
+});
+
+export default createWorkflow({
+  name: "approval-workflow",
+  mainJob: processWithApproval,
+});
+```
+
+### Resolving from a Resolver
+
+Call `.resolve()` from a resolver (or executor) to resume a suspended job. The callback receives the payload that was passed to `.wait()` and returns the result:
+
+```typescript
+import { createResolver, t } from "@tailor-platform/sdk";
+import { approval } from "../workflows/approval";
+
+export default createResolver({
+  name: "resolveApproval",
+  description: "Resolve a waiting approval",
+  operation: "mutation",
+  input: {
+    executionId: t.string(),
+    approved: t.bool(),
+  },
+  body: async ({ input }) => {
+    await approval.resolve(input.executionId, (payload) => {
+      console.log("Resolving:", payload.message);
+      return { approved: input.approved };
+    });
+    return { resolved: true };
+  },
+  output: t.object({
+    resolved: t.bool(),
+  }),
+});
+```
+
+### Multiple Wait Points
+
+You can define multiple wait points in a single `defineWaitPoints` call:
+
+```typescript
+export const waitPoints = defineWaitPoints((define) => ({
+  /** Manager approval step */
+  managerApproval: define<{ amount: number }, { approved: boolean }>(),
+  /** Finance review step */
+  financeReview: define<{ invoiceId: string }, { validated: boolean }>(),
+  /** Simple notification acknowledgment (no payload needed) */
+  acknowledgment: define<undefined, { acknowledged: boolean }>(),
+}));
+
+// Access via namespace: waitPoints.managerApproval.wait(...)
+// Or destructure for direct access:
+export const { managerApproval, financeReview, acknowledgment } = waitPoints;
+```
+
+### Access Patterns
+
+Wait points support two access patterns:
+
+**Namespaced access** — Use the container object directly. JSDoc on each property is visible in IDE autocompletion:
+
+```typescript
+const waitPoints = defineWaitPoints((define) => ({
+  /** Approval step */
+  approval: define<{ message: string }, { approved: boolean }>(),
+}));
+
+await waitPoints.approval.wait({ message: "Please approve" });
+```
+
+**Destructured access** — Export individual wait points for cross-file imports:
+
+```typescript
+// workflows/approval.ts
+export const { approval } = defineWaitPoints((define) => ({
+  approval: define<{ message: string }, { approved: boolean }>(),
+}));
+
+// resolvers/resolveApproval.ts
+import { approval } from "../workflows/approval";
+await approval.resolve(executionId, (payload) => ({ approved: true }));
+```
+
+### Important Notes
+
+- Wait points can be imported and used in any file (workflow jobs, resolvers, executors). No special bundler transformation is needed.
+- Aliasing (`import { approval as deny }`) and storing in variables work correctly.
+- On the Tailor Platform, `.wait()` delegates to `tailor.workflow.wait()` and `.resolve()` delegates to `tailor.workflow.resolve()`. For local testing, in-memory coordination is used as a fallback (see [Testing Wait Points](../testing.md#testing-wait-points)).
+
 ## Retry Policy
 
 You can configure automatic retry behavior with exponential backoff by setting `retryPolicy` on a workflow. All fields are required when `retryPolicy` is set:
