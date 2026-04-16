@@ -37,14 +37,23 @@ function createWaitPointInstance<Payload = undefined, Result = undefined>(
 ): WaitPointWithSetter<Payload, Result> {
   let key = initialKey;
 
+  const platform = globalThis as {
+    tailor?: {
+      workflow?: {
+        wait?: (k: string, p?: Payload) => Result;
+        resolve?: (
+          e: string,
+          k: string,
+          c: (p: Payload) => Result | Promise<Result>,
+        ) => Promise<void>;
+      };
+    };
+  };
+
   const instance = brandValue(
     {
       wait(payload?: Payload) {
-        const platformWait = (
-          globalThis as {
-            tailor?: { workflow?: { wait?: (k: string, p?: Payload) => Result } };
-          }
-        ).tailor?.workflow?.wait;
+        const platformWait = platform.tailor?.workflow?.wait;
         if (!platformWait) {
           throw new Error(
             `tailor.workflow.wait is not available. Use setupWaitPointMock() in tests.`,
@@ -53,19 +62,7 @@ function createWaitPointInstance<Payload = undefined, Result = undefined>(
         return Promise.resolve(platformWait(key, payload)) as Promise<Result>;
       },
       async resolve(executionId: string, callback: (p: Payload) => Result | Promise<Result>) {
-        const platformResolve = (
-          globalThis as {
-            tailor?: {
-              workflow?: {
-                resolve?: (
-                  e: string,
-                  k: string,
-                  c: (p: Payload) => Result | Promise<Result>,
-                ) => Promise<void>;
-              };
-            };
-          }
-        ).tailor?.workflow?.resolve;
+        const platformResolve = platform.tailor?.workflow?.resolve;
         if (!platformResolve) {
           throw new Error(
             `tailor.workflow.resolve is not available. Use setupWaitPointMock() in tests.`,
