@@ -283,7 +283,7 @@ export default createResolver({
 
 ### Multiple Wait Points
 
-You can define multiple wait points in a single `defineWaitPoints` call:
+Define multiple wait points and access them via the container object. JSDoc on each property is visible in IDE autocompletion:
 
 ```typescript
 export const waitPoints = defineWaitPoints((define) => ({
@@ -295,44 +295,12 @@ export const waitPoints = defineWaitPoints((define) => ({
   acknowledgment: define<undefined, { acknowledged: boolean }>(),
 }));
 
-// Access via namespace: waitPoints.managerApproval.wait(...)
-// Or destructure for direct access:
-export const { managerApproval, financeReview, acknowledgment } = waitPoints;
+await waitPoints.managerApproval.wait({ amount: 50000 });
+await waitPoints.financeReview.wait({ invoiceId: "INV-001" });
+await waitPoints.acknowledgment.wait();
 ```
 
-### Access Patterns
-
-Wait points support two access patterns:
-
-**Namespaced access** — Use the container object directly. JSDoc on each property is visible in IDE autocompletion:
-
-```typescript
-const waitPoints = defineWaitPoints((define) => ({
-  /** Approval step */
-  approval: define<{ message: string }, { approved: boolean }>(),
-}));
-
-await waitPoints.approval.wait({ message: "Please approve" });
-```
-
-**Destructured access** — Export individual wait points for cross-file imports:
-
-```typescript
-// workflows/approval.ts
-export const { approval } = defineWaitPoints((define) => ({
-  approval: define<{ message: string }, { approved: boolean }>(),
-}));
-
-// resolvers/resolveApproval.ts
-import { approval } from "../workflows/approval";
-await approval.resolve(executionId, (payload) => ({ approved: true }));
-```
-
-### Important Notes
-
-- Wait points can be imported and used in any file (workflow jobs, resolvers, executors). No special bundler transformation is needed.
-- Aliasing (`import { approval as deny }`) and storing in variables work correctly.
-- On the Tailor Platform, `.wait()` delegates to `tailor.workflow.wait()` and `.resolve()` delegates to `tailor.workflow.resolve()`. For local testing, in-memory coordination is used as a fallback (see [Testing Wait Points](../testing.md#testing-wait-points)).
+Wait points can be imported and used in any file (workflow jobs, resolvers, executors). On the Tailor Platform, `.wait()` delegates to `tailor.workflow.wait()` and `.resolve()` delegates to `tailor.workflow.resolve()`. For local testing, in-memory coordination is used as a fallback (see [Testing Wait Points](../testing.md#testing-wait-points)).
 
 ## Retry Policy
 
