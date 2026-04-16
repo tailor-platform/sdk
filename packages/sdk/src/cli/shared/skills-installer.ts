@@ -1,8 +1,6 @@
 import { spawn } from "node:child_process";
 
 export const SKILL_NAME = "tailor-sdk";
-export const DEFAULT_SKILLS_SOURCE =
-  "https://github.com/tailor-platform/sdk/tree/main/packages/sdk/skills";
 const SKILLS_SOURCE_ENV_KEY = "TAILOR_SDK_SKILLS_SOURCE";
 
 interface ChildProcessLike {
@@ -27,17 +25,31 @@ function resolveNpxCommand(platform: NodeJS.Platform = process.platform): string
 }
 
 function resolveSkillsSource(source?: string): string {
-  return source ?? process.env[SKILLS_SOURCE_ENV_KEY] ?? DEFAULT_SKILLS_SOURCE;
+  const envSource = process.env[SKILLS_SOURCE_ENV_KEY];
+  if (envSource) return envSource;
+  if (source) return source;
+  throw new Error(
+    "Skill source is not resolved. Set TAILOR_SDK_SKILLS_SOURCE or pass `source` explicitly.",
+  );
 }
 
 /**
  * Build CLI arguments for `skills add` with the fixed tailor-sdk skill target.
+ * `--copy` is included so the installed skill survives `pnpm install` wiping `node_modules`.
  * @param additionalArgs - Additional options to pass through to `skills add`
  * @param source - Optional skill source URL or path
  * @returns CLI arguments for `npx skills add`
  */
 export function buildSkillsAddArgs(additionalArgs: readonly string[], source?: string): string[] {
-  return ["skills", "add", resolveSkillsSource(source), "--skill", SKILL_NAME, ...additionalArgs];
+  return [
+    "skills",
+    "add",
+    resolveSkillsSource(source),
+    "--skill",
+    SKILL_NAME,
+    "--copy",
+    ...additionalArgs,
+  ];
 }
 
 /**
