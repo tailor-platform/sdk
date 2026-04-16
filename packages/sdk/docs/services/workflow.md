@@ -300,7 +300,7 @@ await waitPoints.financeReview.wait({ invoiceId: "INV-001" });
 await waitPoints.acknowledgment.wait();
 ```
 
-Wait points can be imported and used in any file (workflow jobs, resolvers, executors). On the Tailor Platform, `.wait()` delegates to `tailor.workflow.wait()` and `.resolve()` delegates to `tailor.workflow.resolve()`. For local testing, in-memory coordination is used as a fallback (see [Testing Wait Points](../testing.md#testing-wait-points)).
+Wait points can be imported and used in any file (workflow jobs, resolvers, executors). For local testing, see [Testing Wait Points](../testing.md#testing-wait-points).
 
 ## Retry Policy
 
