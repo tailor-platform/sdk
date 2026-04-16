@@ -747,4 +747,23 @@ describe("queryCommand args", () => {
       "Pass only one of --edit, -q/--query, or -f/--file.",
     );
   });
+
+  test("newline-on-enter is optional and passes boolean through", () => {
+    const omitted = queryCommand.args.safeParse({
+      engine: "sql",
+      "machine-user": "bot",
+    });
+    expect(omitted.success).toBe(true);
+    if (!omitted.success) throw new Error("expected args parsing to succeed");
+    expect(omitted.data["newline-on-enter"]).toBeUndefined();
+
+    const disabled = queryCommand.args.safeParse({
+      engine: "sql",
+      "machine-user": "bot",
+      "newline-on-enter": false,
+    });
+    expect(disabled.success).toBe(true);
+    if (!disabled.success) throw new Error("expected args parsing to succeed");
+    expect(disabled.data["newline-on-enter"]).toBe(false);
+  });
 });

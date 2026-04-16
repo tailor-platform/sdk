@@ -22,6 +22,7 @@ import { loadAccessToken, loadWorkspaceId } from "../shared/context";
 import { getEditorCommand, openInEditor } from "../shared/editor";
 import { isCLIError } from "../shared/errors";
 import { logger } from "../shared/logger";
+import { parseBoolean } from "../shared/parse-boolean";
 import { executeScript } from "../shared/script-executor";
 import { resolveTypeNamespaces } from "../shared/tailordb-namespace";
 import { mapQueryExecutionError } from "./errors";
@@ -472,6 +473,7 @@ function createReplValidator(engine: QueryEngine): (value: string) => string | u
 async function runRepl(
   options: QueryBaseOptions & {
     json?: boolean;
+    newlineOnEnter: boolean;
   },
 ): Promise<void> {
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
@@ -495,7 +497,7 @@ async function runRepl(
   // that closes the window. A clean fix requires the library to export history utilities.
   const prompt = createPrompt({
     prefix: "",
-    preferNewlineOnEnter: true,
+    preferNewlineOnEnter: options.newlineOnEnter,
     validate,
     highlight,
     transform: replTransform,
@@ -736,6 +738,10 @@ export const queryCommand = defineAppCommand({
         description: "Machine user name for query execution",
         env: "TAILOR_PLATFORM_MACHINE_USER_NAME",
       }),
+      "newline-on-enter": arg(z.boolean().optional(), {
+        description:
+          "REPL: when true, Enter inserts a newline and Shift+Enter submits. Use --no-newline-on-enter to swap. Falls back to TAILOR_PLATFORM_QUERY_NEWLINE_ON_ENTER, then true.",
+      }),
     })
     .superRefine((args, ctx) => {
       if (args.query != null && args.file != null) {
@@ -785,9 +791,14 @@ export const queryCommand = defineAppCommand({
     }
 
     if (mode.mode === "repl") {
+      const newlineOnEnter =
+        args["newline-on-enter"] ??
+        parseBoolean(process.env.TAILOR_PLATFORM_QUERY_NEWLINE_ON_ENTER) ??
+        true;
       await runRepl({
         ...sharedOptions,
         json: args.json,
+        newlineOnEnter,
       });
       return;
     }
