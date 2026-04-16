@@ -21,45 +21,36 @@ export interface WaitPointInstance<Payload = undefined, Result = undefined> {
   ) => Promise<void>;
 }
 
-// Internal symbol used by defineWaitPoints to set the correct key on each
-// instance after the builder callback has assembled the object.
-const SET_KEY = Symbol.for("@tailor-platform/sdk/waitPoint/setKey");
-
-interface WaitPointInternals {
-  [SET_KEY]?: (key: string) => void;
+interface WaitPointWithSetter {
+  instance: WaitPointInstance<unknown, unknown>;
+  setKey: (key: string) => void;
 }
 
 /**
  * Create a WaitPointInstance with in-memory coordination for local testing.
- * The key starts as a placeholder and is updated by `defineWaitPoints` after
- * the builder callback returns.
  * @param initialKey - Initial key (used in error messages until updated)
- * @returns A WaitPointInstance with local testing coordination
+ * @returns The instance and a setter to update the key after construction
  */
-function createWaitPointInstance(initialKey: string): WaitPointInstance<unknown, unknown> {
+function createWaitPointInstance(initialKey: string): WaitPointWithSetter {
   let key = initialKey;
   const pendingWaits = new Map<string, { payload: unknown; resolve: (result: unknown) => void }>();
 
   const instance = brandValue(
     {
       wait(payload?: unknown) {
-        // Production: delegate to platform API
         const platformWait = (
           globalThis as {
             tailor?: { workflow?: { wait?: (k: string, p?: unknown) => unknown } };
           }
         ).tailor?.workflow?.wait;
         if (platformWait) {
-          // Wrap in Promise.resolve since the platform's wait is synchronous but our type signature is async
           return Promise.resolve(platformWait(key, payload)) as Promise<unknown>;
         }
-        // Local testing: in-memory coordination
         return new Promise<unknown>((resolve) => {
           pendingWaits.set("pending", { payload, resolve });
         });
       },
       async resolve(executionId: string, callback: (p: unknown) => unknown) {
-        // Production: delegate to platform API
         const platformResolve = (
           globalThis as {
             tailor?: {
@@ -73,7 +64,6 @@ function createWaitPointInstance(initialKey: string): WaitPointInstance<unknown,
           await platformResolve(executionId, key, callback);
           return;
         }
-        // Local testing: in-memory coordination
         const pending = pendingWaits.get("pending");
         if (!pending) {
           throw new Error(`No pending wait for key "${key}"`);
@@ -86,17 +76,12 @@ function createWaitPointInstance(initialKey: string): WaitPointInstance<unknown,
     "wait-point",
   );
 
-  // Internal hook for defineWaitPoints to set the correct key after construction.
-  Object.defineProperty(instance, SET_KEY, {
-    value: (k: string) => {
+  return {
+    instance,
+    setKey: (k: string) => {
       key = k;
     },
-    enumerable: false,
-    writable: false,
-    configurable: false,
-  });
-
-  return instance;
+  };
 }
 
 /**
@@ -120,7 +105,7 @@ type DefineFn = <Payload = undefined, Result = undefined>() => WaitPointInstance
 export function defineWaitPoint<Payload = undefined, Result = undefined>(
   key: string,
 ): WaitPointInstance<Payload, Result> {
-  return createWaitPointInstance(key) as unknown as WaitPointInstance<Payload, Result>;
+  return createWaitPointInstance(key).instance as unknown as WaitPointInstance<Payload, Result>;
 }
 
 /**
@@ -148,15 +133,20 @@ export function defineWaitPoint<Payload = undefined, Result = undefined>(
 export function defineWaitPoints<T extends Record<string, WaitPointInstance<any, any>>>(
   builder: (define: DefineFn) => T,
 ): T {
-  const define: DefineFn = <Payload, Result>() =>
-    createWaitPointInstance("__pending__") as unknown as WaitPointInstance<Payload, Result>;
+  const setters = new Map<WaitPointInstance<unknown, unknown>, (key: string) => void>();
+
+  const define: DefineFn = <Payload, Result>() => {
+    const { instance, setKey } = createWaitPointInstance("__pending__");
+    setters.set(instance, setKey);
+    return instance as unknown as WaitPointInstance<Payload, Result>;
+  };
 
   const result = builder(define);
 
   // Set the correct key on each instance based on the property name
   for (const key of Object.keys(result)) {
-    const instance = result[key] as WaitPointInternals;
-    instance[SET_KEY]?.(key);
+    const setter = setters.get(result[key] as WaitPointInstance<unknown, unknown>);
+    setter?.(key);
   }
 
   return result;
