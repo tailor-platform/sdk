@@ -351,6 +351,7 @@ async function bundleSingleJob(
                 triggerContext.jobNameMap,
                 triggerContext.workflowFileMap,
                 id,
+                triggerContext.authNamespace,
               );
             }
 

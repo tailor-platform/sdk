@@ -26,6 +26,7 @@ import { AuthInvokerSchema, type AuthInvoker } from "@tailor-proto/tailor/v1/aut
 import { describe, test, expect, beforeAll } from "vitest";
 import { bundleForTestRun, type ResolvedMachineUser } from "../src/cli/commands/function/bundle";
 import { detectFunctionType } from "../src/cli/commands/function/detect";
+import { resolveResolverArg } from "../src/cli/commands/function/test-run";
 import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
 import { executeScript, type ScriptExecutionResult } from "../src/cli/shared/script-executor";
@@ -86,6 +87,15 @@ async function runTestRun(
     jobName: options?.name,
   });
 
+  let resolvedArg = options?.arg;
+  if (detected.type === "resolver" && resolvedArg) {
+    if (!detected.hasInput) {
+      resolvedArg = undefined;
+    } else if (detected.inputSchema) {
+      resolvedArg = resolveResolverArg(resolvedArg, detected.inputSchema, machineUser, workspaceId);
+    }
+  }
+
   const { bundledCode, scriptName } = await bundleForTestRun({
     detected,
     sourceFile: filePath,
@@ -99,7 +109,7 @@ async function runTestRun(
     workspaceId,
     name: scriptName,
     code: bundledCode,
-    arg: options?.arg,
+    arg: resolvedArg,
     invoker: authInvoker,
   });
 
@@ -219,6 +229,21 @@ describe.sequential("E2E: function test-run", () => {
       expect(typeof parsed.result.summary[2]).toBe("string");
     });
 
+    test("inserts nested object with Date and verifies round-trip", async () => {
+      const result = await runTestRun("resolvers/insertNestedProfileWithDate.ts", {
+        arg: '{"input":{"name":"Test User","email":"test@example.com"}}',
+      });
+
+      expect(result.success).toBe(true);
+      // Log should contain typeof info from the resolver
+      expect(result.logs).toContain("typeof metadata.created:");
+      const parsed = JSON.parse(result.result);
+      expect(parsed.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+      // Verify nested datetime was stored and returned as a valid date
+      expect(parsed.metadataCreated).toBeTruthy();
+      expect(new Date(parsed.metadataCreated).getFullYear()).toBeGreaterThanOrEqual(2026);
+    });
+
     test("reports validation errors for invalid input", async () => {
       const result = await runTestRun("resolvers/add.ts", {
         arg: '{"input":{"a":100,"b":2}}',
@@ -280,7 +305,7 @@ describe.sequential("E2E: function test-run", () => {
         workspaceId,
         name: "add.js",
         code,
-        arg: '{"input":{"a":5,"b":7}}',
+        arg: '{"a":5,"b":7}',
         invoker: authInvoker,
       });
 

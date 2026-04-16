@@ -4,6 +4,11 @@ export default defineConfig({
   test: {
     watch: false,
     outputFile: { json: "tests/results.json" },
+    // Disable inline sourcemaps during tests to keep bundled output stable
+    // for size and fixture comparisons.
+    env: {
+      TAILOR_ENABLE_INLINE_SOURCEMAP: "false",
+    },
     projects: [
       {
         test: {

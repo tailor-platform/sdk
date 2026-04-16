@@ -24,9 +24,15 @@ import {
 import { type AuthService } from "@/cli/services/auth/service";
 import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "@/cli/shared/client";
 import { OAuth2ClientSchema } from "@/parser/service/auth";
-import { createChangeSet } from "./change-set";
+import { applyAuthConnections, planAuthConnections } from "./auth-connection";
+import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
 import { areNormalizedEqual, normalizeProtoConfig, normalizeStringArray } from "./compare";
 import { authHookFunctionName } from "./function-registry";
+import {
+  formatChangeEntriesWithFunctionRegistry,
+  type GroupedDisplayEntry,
+  type RelatedFunctionRegistryChanges,
+} from "./grouped-display";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
 import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
@@ -97,6 +103,15 @@ export async function applyAuth(
         await client.setMetadata(update.metaRequest);
       }),
     ]);
+
+    // Auth Connections
+    if (changeSet.connection) {
+      await applyAuthConnections(
+        client,
+        { changeSet: changeSet.connection } as Awaited<ReturnType<typeof planAuthConnections>>,
+        "create-update",
+      );
+    }
 
     // IdPConfigs
     await Promise.all([
@@ -242,6 +257,15 @@ export async function applyAuth(
     await Promise.all(
       changeSet.idpConfig.deletes.map((del) => client.deleteAuthIDPConfig(del.request)),
     );
+
+    // Auth Connections
+    if (changeSet.connection) {
+      await applyAuthConnections(
+        client,
+        { changeSet: changeSet.connection } as Awaited<ReturnType<typeof planAuthConnections>>,
+        "delete-resources",
+      );
+    }
   } else if (phase === "delete-services") {
     // Services only
     await Promise.all(
@@ -278,6 +302,7 @@ export async function planAuth(context: PlanContext) {
     oauth2ClientChangeSet,
     scimChangeSet,
     scimResourceChangeSet,
+    connectionResult,
   ] = await Promise.all([
     planIdPConfigs(client, workspaceId, auths, deletedServices, forceApplyAll),
     planUserProfileConfigs(client, workspaceId, auths, deletedServices, forceApplyAll),
@@ -287,17 +312,9 @@ export async function planAuth(context: PlanContext) {
     planOAuth2Clients(client, workspaceId, auths, deletedServices, forceApplyAll),
     planSCIMConfigs(client, workspaceId, auths, deletedServices),
     planSCIMResources(client, workspaceId, auths, deletedServices),
+    planAuthConnections(client, workspaceId, application.name, auths),
   ]);
 
-  serviceChangeSet.print();
-  idpConfigChangeSet.print();
-  userProfileConfigChangeSet.print();
-  tenantConfigChangeSet.print();
-  machineUserChangeSet.print();
-  authHookChangeSet.print();
-  oauth2ClientChangeSet.print();
-  scimChangeSet.print();
-  scimResourceChangeSet.print();
   return {
     changeSet: {
       service: serviceChangeSet,
@@ -309,10 +326,11 @@ export async function planAuth(context: PlanContext) {
       oauth2Client: oauth2ClientChangeSet,
       scim: scimChangeSet,
       scimResource: scimResourceChangeSet,
+      connection: connectionResult.changeSet,
     },
-    conflicts,
-    unmanaged,
-    resourceOwners,
+    conflicts: [...conflicts, ...connectionResult.conflicts],
+    unmanaged: [...unmanaged, ...connectionResult.unmanaged],
+    resourceOwners: new Set([...resourceOwners, ...connectionResult.resourceOwners]),
   };
 }
 
@@ -693,6 +711,7 @@ function protoIdPConfig(idpConfig: IdProviderConfig): MessageInitShape<typeof Au
                 ? { metadataUrl: idpConfig.metadataURL }
                 : { rawMetadata: idpConfig.rawMetadata! }),
               enableSignRequest: idpConfig.enableSignRequest,
+              defaultRedirectUrl: idpConfig.defaultRedirectURL,
             },
           },
         },
@@ -1175,7 +1194,9 @@ function normalizeComparableUserProfileConfig(
     | MessageInitShape<typeof UserProfileProviderConfigSchema>
     | {
         providerType?: UserProfileProviderConfig_UserProfileProviderType;
-        config?: { config?: { case?: string; value?: Record<string, unknown> } };
+        config?: {
+          config?: { case?: string; value?: Record<string, unknown> };
+        };
       },
 ) {
   const comparableConfig = config.config?.config;
@@ -1220,7 +1241,9 @@ function normalizeComparableTenantProviderConfig(
     | undefined
     | {
         providerType?: TenantProviderConfig_TenantProviderType;
-        config?: { config?: { case?: string; value?: Record<string, unknown> } };
+        config?: {
+          config?: { case?: string; value?: Record<string, unknown> };
+        };
       },
 ) {
   return normalizeProtoConfig(config);
@@ -1232,7 +1255,9 @@ function areTenantProviderConfigsEqual(
     | undefined
     | {
         providerType?: TenantProviderConfig_TenantProviderType;
-        config?: { config?: { case?: string; value?: Record<string, unknown> } };
+        config?: {
+          config?: { case?: string; value?: Record<string, unknown> };
+        };
       },
   desired: MessageInitShape<typeof TenantProviderConfigSchema>,
 ) {
@@ -1889,6 +1914,34 @@ function areAuthHooksEqual(
             machineUserName: desired.invoker.machineUserName ?? "",
           }
         : undefined,
+    },
+  );
+}
+
+/**
+ * Format auth hook changes for grouped dry-run display.
+ * @param changeSet - Auth hook changes
+ * @param functionRegistryAuthHookChanges - Related function registry changes for auth hooks
+ * @returns Display entries for auth hook output
+ */
+export function formatAuthHookChangeEntries(
+  changeSet: Pick<
+    ChangeSet<HasName, HasName, HasName>,
+    "creates" | "updates" | "deletes" | "replaces"
+  >,
+  functionRegistryAuthHookChanges?: RelatedFunctionRegistryChanges,
+): GroupedDisplayEntry[] {
+  return formatChangeEntriesWithFunctionRegistry(
+    "authHook",
+    changeSet,
+    functionRegistryAuthHookChanges,
+    (item) => {
+      const [namespace, hookPoint] = item.name.split("/");
+      return namespace && hookPoint ? [authHookFunctionName(namespace, hookPoint)] : [];
+    },
+    {
+      getNamespace: (item) => item.name.split("/")[0],
+      getDisplayName: (item) => item.name.split("/")[1] ?? item.name,
     },
   );
 }

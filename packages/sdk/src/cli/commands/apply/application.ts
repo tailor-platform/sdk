@@ -209,14 +209,12 @@ export async function planApplication(context: PlanContext) {
         },
       });
     }
-    changeSet.print();
     return changeSet;
   }
 
   // Skip application create/update when there are no subgraphs
   // (e.g. deploying only static web hosting)
   if (application.subgraphs.length === 0) {
-    changeSet.print();
     return changeSet;
   }
 
@@ -304,7 +302,6 @@ export async function planApplication(context: PlanContext) {
     });
   }
 
-  changeSet.print();
   return changeSet;
 }
 

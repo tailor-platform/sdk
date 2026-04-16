@@ -2,4 +2,4 @@
 "@tailor-platform/sdk": patch
 ---
 
-chore(deps): lock file maintenance
+chore(deps): update vitest to v4.1.4

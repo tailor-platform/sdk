@@ -19,14 +19,21 @@ import * as inflection from "inflection";
 import { type ResolverService } from "@/cli/services/resolver/service";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { buildResolverOperationHookExpr } from "@/cli/shared/runtime-args";
-import { createChangeSet } from "./change-set";
+import { normalizeAuthInvoker } from "./auth-invoker";
+import { createChangeSet, type ChangeSet } from "./change-set";
 import { areNormalizedEqual, normalizeProtoConfig } from "./compare";
 import { resolverFunctionName } from "./function-registry";
+import {
+  formatChangeEntriesWithFunctionRegistry,
+  type GroupedDisplayEntry,
+  type RelatedFunctionRegistryChanges,
+} from "./grouped-display";
 import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
 import type { Executor } from "@/types/executor.generated";
-import type { Resolver, TailorField } from "@/types/resolver.generated";
+import type { TailorField } from "@/types/field.generated";
+import type { Resolver } from "@/types/resolver.generated";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
 // Scalar type mapping for field type conversion
@@ -115,18 +122,17 @@ export async function planPipeline(context: PlanContext) {
     resourceOwners,
   } = await planServices(client, workspaceId, application.name, pipelines);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
-  const resolverChangeSet = await planResolvers(
+  const { changeSet: resolverChangeSet } = await planResolvers(
     client,
     workspaceId,
     pipelines,
     executors,
     deletedServices,
     application.env,
+    application.authService?.config.name,
     forceApplyAll,
   );
 
-  serviceChangeSet.print();
-  resolverChangeSet.print();
   return {
     changeSet: {
       service: serviceChangeSet,
@@ -290,6 +296,7 @@ async function planResolvers(
   executors: ReadonlyArray<Executor>,
   deletedServices: ReadonlyArray<string>,
   env: Record<string, string | number | boolean>,
+  authNamespace: string | undefined,
   forceApplyAll = false,
 ) {
   const changeSet = createChangeSet<CreateResolver, UpdateResolver, DeleteResolver>(
@@ -345,6 +352,7 @@ async function planResolvers(
         resolver,
         executorUsedResolvers,
         env,
+        authNamespace,
       );
       const existingResolver = existingResolversMap.get(resolver.name);
       if (existingResolver) {
@@ -406,7 +414,36 @@ async function planResolvers(
       });
     });
   }
-  return changeSet;
+  return { changeSet };
+}
+
+type ResolverDisplayEntry = GroupedDisplayEntry;
+
+/**
+ * Format resolver changes for grouped dry-run display.
+ * @param changeSet - Resolver changes
+ * @param resolverFunctionChanges - Related function registry changes for resolvers
+ * @returns Display entries for resolver output
+ */
+export function formatResolverChangeEntries(
+  changeSet: Pick<
+    ChangeSet<CreateResolver, UpdateResolver, DeleteResolver>,
+    "creates" | "updates" | "deletes" | "replaces"
+  >,
+  resolverFunctionChanges?: RelatedFunctionRegistryChanges,
+): ResolverDisplayEntry[] {
+  return formatChangeEntriesWithFunctionRegistry(
+    "resolver",
+    changeSet,
+    resolverFunctionChanges,
+    (item) => {
+      const namespace = item.request.namespaceName;
+      return namespace ? [resolverFunctionName(namespace, item.name)] : [];
+    },
+    {
+      getNamespace: (item) => item.request.namespaceName,
+    },
+  );
 }
 
 function normalizeComparableResolver(resolver: MessageInitShape<typeof PipelineResolverSchema>) {
@@ -520,6 +557,7 @@ function processResolver(
   resolver: Resolver,
   executorUsedResolvers: ReadonlySet<string>,
   env: Record<string, string | number | boolean>,
+  authNamespace: string | undefined,
 ): MessageInitShape<typeof PipelineResolverSchema> {
   const pipelines: MessageInitShape<typeof PipelineResolver_PipelineSchema>[] = [
     {
@@ -532,7 +570,11 @@ function processResolver(
         expr: buildResolverOperationHookExpr(env),
       },
       postScript: `args.body`,
-      invoker: resolver.authInvoker,
+      invoker: normalizeAuthInvoker(
+        resolver.authInvoker,
+        authNamespace,
+        `Resolver "${resolver.name}"`,
+      ),
     },
   ];
 

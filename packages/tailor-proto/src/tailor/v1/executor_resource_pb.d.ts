@@ -289,6 +289,11 @@ export declare type ExecutorTriggerIncomingWebhookConfig = Message<"tailor.v1.Ex
    * @generated from field: string secret = 1;
    */
   secret: string;
+
+  /**
+   * @generated from field: tailor.v1.ExecutorTriggerIncomingWebhookResponseConfig response = 2;
+   */
+  response?: ExecutorTriggerIncomingWebhookResponseConfig;
 };
 
 /**
@@ -296,6 +301,27 @@ export declare type ExecutorTriggerIncomingWebhookConfig = Message<"tailor.v1.Ex
  * Use `create(ExecutorTriggerIncomingWebhookConfigSchema)` to create a new message.
  */
 export declare const ExecutorTriggerIncomingWebhookConfigSchema: GenMessage<ExecutorTriggerIncomingWebhookConfig>;
+
+/**
+ * @generated from message tailor.v1.ExecutorTriggerIncomingWebhookResponseConfig
+ */
+export declare type ExecutorTriggerIncomingWebhookResponseConfig = Message<"tailor.v1.ExecutorTriggerIncomingWebhookResponseConfig"> & {
+  /**
+   * @generated from field: tailor.v1.Script body = 1;
+   */
+  body?: Script;
+
+  /**
+   * @generated from field: optional int32 status_code = 2;
+   */
+  statusCode?: number;
+};
+
+/**
+ * Describes the message tailor.v1.ExecutorTriggerIncomingWebhookResponseConfig.
+ * Use `create(ExecutorTriggerIncomingWebhookResponseConfigSchema)` to create a new message.
+ */
+export declare const ExecutorTriggerIncomingWebhookResponseConfigSchema: GenMessage<ExecutorTriggerIncomingWebhookResponseConfig>;
 
 /**
  * @generated from message tailor.v1.ExecutorTargetConfig
