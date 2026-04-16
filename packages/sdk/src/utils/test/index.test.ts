@@ -187,21 +187,16 @@ describe("createTailorDBHook", () => {
       lines: db.object(
         {
           kind: db.string(),
-          // db.object cannot itself carry hooks via .hooks(), but createTailorDBHook
-          // recurses into nested fields, so a hook on a sub-field must run per element.
-          stamp: db.string(),
+          stamp: db.string().hooks({
+            create: ({ value }) => {
+              calls.push(value);
+              return `stamped:${value as string}`;
+            },
+          }),
         },
         { array: true },
       ),
     });
-    // Manually attach a create hook to the nested sub-field so that the recursion
-    // path through the array branch is exercised.
-    (type.fields.lines.fields.stamp._metadata as { hooks?: { create?: unknown } }).hooks = {
-      create: ({ value }: { value: unknown }) => {
-        calls.push(value);
-        return `stamped:${value as string}`;
-      },
-    };
     const hook = createTailorDBHook(type);
 
     const result = hook({
