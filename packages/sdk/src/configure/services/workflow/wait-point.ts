@@ -50,25 +50,21 @@ function createWaitPointInstance<Payload = undefined, Result = undefined>(
     };
   };
 
+  function getPlatformWorkflow() {
+    const workflow = platform.tailor?.workflow;
+    if (!workflow) {
+      throw new Error("tailor.workflow is not available. Use setupWaitPointMock() in tests.");
+    }
+    return workflow;
+  }
+
   const instance = brandValue(
     {
       wait(payload?: Payload) {
-        const platformWait = platform.tailor?.workflow?.wait;
-        if (!platformWait) {
-          throw new Error(
-            `tailor.workflow.wait is not available. Use setupWaitPointMock() in tests.`,
-          );
-        }
-        return Promise.resolve(platformWait(key, payload)) as Promise<Result>;
+        return Promise.resolve(getPlatformWorkflow().wait?.(key, payload)) as Promise<Result>;
       },
       async resolve(executionId: string, callback: (p: Payload) => Result | Promise<Result>) {
-        const platformResolve = platform.tailor?.workflow?.resolve;
-        if (!platformResolve) {
-          throw new Error(
-            `tailor.workflow.resolve is not available. Use setupWaitPointMock() in tests.`,
-          );
-        }
-        await platformResolve(executionId, key, callback);
+        await getPlatformWorkflow().resolve?.(executionId, key, callback);
       },
     },
     "wait-point",
