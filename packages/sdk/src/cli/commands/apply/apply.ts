@@ -11,6 +11,7 @@ import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { logger, styles } from "@/cli/shared/logger";
 import { readPackageJson } from "@/cli/shared/package-json";
+import { parseBoolean } from "@/cli/shared/parse-boolean";
 import { generateUserTypes } from "@/cli/shared/type-generator";
 import { withSpan } from "@/cli/telemetry";
 import { PluginManager } from "@/plugin/manager";
@@ -382,7 +383,7 @@ export async function apply(options?: ApplyOptions) {
 
         const dryRun = options?.dryRun ?? false;
         const buildOnly =
-          options?.buildOnly ?? process.env.TAILOR_PLATFORM_SDK_BUILD_ONLY === "true";
+          options?.buildOnly ?? parseBoolean(process.env.TAILOR_PLATFORM_SDK_BUILD_ONLY) === true;
         const noCache = options?.noCache ?? false;
 
         // Initialize cache manager

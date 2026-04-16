@@ -4,6 +4,10 @@ import path from "node:path";
 import url from "node:url";
 import { generate, apply } from "@tailor-platform/sdk/cli";
 
+// Disable inline sourcemaps during test fixture generation so that snapshot
+// comparisons remain stable across environments.
+process.env.TAILOR_ENABLE_INLINE_SOURCEMAP ??= "false";
+
 const __filename = url.fileURLToPath(import.meta.url);
 
 const expectedDir = "tests/fixtures/expected";
