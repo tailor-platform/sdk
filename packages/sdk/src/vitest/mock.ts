@@ -171,7 +171,7 @@ function createDefaultState(): MockState {
 export const tailordbMock = {
   /**
    * Set a fallback query resolver. Called when the result queue is empty.
-   * @param resolver
+   * @param resolver - Function that returns rows for a given query and params
    */
   setQueryResolver(resolver: QueryResolver): void {
     getState().queryResolver = resolver;
@@ -242,7 +242,7 @@ export const tailordbMock = {
 export const workflowMock = {
   /**
    * Set a fallback job handler. Called when the result queue is empty.
-   * @param handler
+   * @param handler - Function that returns a result for a given job name and args
    */
   setJobHandler(handler: JobHandler): void {
     getState().jobHandler = handler;
@@ -270,7 +270,7 @@ export const workflowMock = {
 
   /**
    * Set the execution ID returned by triggerWorkflow.
-   * @param id
+   * @param id - Execution ID string
    */
   setWorkflowExecutionId(id: string): void {
     getState().workflowExecutionId = id;
@@ -278,7 +278,7 @@ export const workflowMock = {
 
   /**
    * Set the result returned by wait.
-   * @param result
+   * @param result - Value to return from wait calls
    */
   setWaitResult(result: unknown): void {
     getState().waitResult = result;
@@ -885,7 +885,7 @@ class TailorDBFileErrorMock extends Error {
 /**
  * Inject all platform API mocks into globalThis.
  * Called by the tailor-runtime Vitest environment during setup.
- * @param global
+ * @param global - The global object to inject mocks into
  */
 export function injectMocks(global: typeof globalThis): void {
   const g = global as Record<string, unknown>;
@@ -931,7 +931,7 @@ export function injectMocks(global: typeof globalThis): void {
 /**
  * Remove all injected mocks from globalThis.
  * Called by the tailor-runtime Vitest environment during teardown.
- * @param global
+ * @param global - The global object to clean up mocks from
  */
 export function cleanupMocks(global: typeof globalThis): void {
   const g = global as Record<string, unknown>;

@@ -35,7 +35,7 @@ for (const mod of builtinModules) {
 
 /**
  * Check if a module specifier is a blocked Node.js built-in.
- * @param specifier
+ * @param specifier - Module specifier to check (e.g. "node:crypto", "fs")
  * @returns Whether the specifier is blocked
  */
 export function isBlockedModule(specifier: string): boolean {
@@ -44,7 +44,7 @@ export function isBlockedModule(specifier: string): boolean {
 
 /**
  * Get the error message for a blocked module import.
- * @param specifier
+ * @param specifier - Module specifier that was blocked
  * @returns Error message with optional suggestion for the Web Standard API alternative
  */
 export function getBlockedMessage(specifier: string): string {

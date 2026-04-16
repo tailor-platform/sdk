@@ -8,7 +8,7 @@ For a complete working example with full test code, use the `testing` template:
 npm create @tailor-platform/sdk -- --template testing <your-project-name>
 ```
 
-## Runtime Environment Emulation
+## Runtime Environment Emulation (Beta)
 
 The Tailor Platform function runtime only provides Web Standard APIs. Node.js built-in modules like `node:crypto` and globals like `Buffer` are not available. The `tailor-runtime` Vitest environment catches these incompatibilities locally before deployment.
 
@@ -31,7 +31,7 @@ export default defineConfig({
 
 1. **Node.js module blocking** — `import { randomBytes } from "node:crypto"` in production code throws an error with a suggestion for the Web Standard API alternative (`globalThis.crypto`). Test files (`*.test.ts`, `*.spec.ts`) are exempt.
 2. **Node.js globals removal** — Only globals available in the platform runtime are kept (whitelist). `Buffer`, `global`, `setImmediate`, `__dirname`, `__filename`, `performance`, and others are removed.
-3. **Platform API mocks** — `globalThis.tailordb`, `globalThis.tailor`, `TailorErrors`, `TailorErrorMessage`, `TailorDBFileError` are auto-injected. Use `tailordbMock` and `workflowMock` to configure mock responses.
+3. **Platform API mocks** — `globalThis.tailordb`, `globalThis.tailor`, `TailorErrors`, `TailorErrorMessage`, `TailorDBFileError` are auto-injected with mock control objects for response configuration and call recording.
 
 ### TailorDB Mock
 
@@ -152,6 +152,111 @@ export default defineConfig({
 | `idpMock`            | `tailor.idp`            | `setResolver`, `enqueueResult`, `calls`                                                               |
 | `fileMock`           | `tailordb.file`         | `setResolver`, `enqueueResult`, `calls`                                                               |
 | `iconvMock`          | `tailor.iconv`          | `setResolver`, `calls`                                                                                |
+
+### SecretManager Mock
+
+```typescript
+import { secretmanagerMock } from "@tailor-platform/sdk/vitest";
+
+beforeEach(() => secretmanagerMock.reset());
+
+test("reads secrets from vault", async () => {
+  secretmanagerMock.setSecrets({
+    "my-vault": { API_KEY: "sk-123", DB_PASS: "secret" },
+  });
+
+  const key = await tailor.secretmanager.getSecret("my-vault", "API_KEY");
+  expect(key).toBe("sk-123");
+  expect(secretmanagerMock.calls).toEqual([
+    { method: "getSecret", vault: "my-vault", name: "API_KEY" },
+  ]);
+});
+```
+
+### AuthConnection Mock
+
+```typescript
+import { authconnectionMock } from "@tailor-platform/sdk/vitest";
+
+beforeEach(() => authconnectionMock.reset());
+
+test("returns configured token", async () => {
+  authconnectionMock.setTokens({
+    google: { access_token: "ya29.xxx", expires_in: 3600 },
+  });
+
+  const token = await tailor.authconnection.getConnectionToken("google");
+  expect(token.access_token).toBe("ya29.xxx");
+});
+```
+
+When no token is configured for a connection, it returns `{ access_token: "mock-token" }`.
+
+### IDP Mock
+
+```typescript
+import { idpMock } from "@tailor-platform/sdk/vitest";
+
+beforeEach(() => idpMock.reset());
+
+test("resolver-based", async () => {
+  idpMock.setResolver((method, args) => {
+    if (method === "user") return { id: "u-1", name: "alice", disabled: false };
+    return null; // falls back to defaults
+  });
+
+  const client = new tailor.idp.Client({ namespace: "my-ns" });
+  const user = await client.user("u-1");
+  expect(user.name).toBe("alice");
+});
+
+test("queue-based", async () => {
+  idpMock.enqueueResult({ id: "u-1", name: "alice", disabled: false });
+
+  const client = new tailor.idp.Client({ namespace: "my-ns" });
+  const user = await client.user("u-1");
+  expect(user.name).toBe("alice");
+  expect(idpMock.calls).toMatchObject([{ method: "user", namespace: "my-ns" }]);
+});
+```
+
+### File Mock
+
+```typescript
+import { fileMock } from "@tailor-platform/sdk/vitest";
+
+beforeEach(() => fileMock.reset());
+
+test("mock file download", async () => {
+  fileMock.enqueueResult({
+    data: new Uint8Array([1, 2, 3]),
+    metadata: { contentType: "image/png", fileSize: 3, sha256sum: "abc", lastUploadedAt: "" },
+  });
+
+  const result = await tailordb.file.download("ns", "Doc", "attachment", "r-1");
+  expect(result.data).toEqual(new Uint8Array([1, 2, 3]));
+  expect(fileMock.calls).toMatchObject([{ method: "download", recordId: "r-1" }]);
+});
+```
+
+### Iconv Mock
+
+```typescript
+import { iconvMock } from "@tailor-platform/sdk/vitest";
+
+beforeEach(() => iconvMock.reset());
+
+test("mock encoding conversion", () => {
+  iconvMock.setResolver((method, args) => {
+    if (method === "decode") return "decoded-text";
+    return null; // falls back to default empty string
+  });
+
+  const result = tailor.iconv.decode(new Uint8Array([0x48, 0x69]), "UTF-8");
+  expect(result).toBe("decoded-text");
+  expect(iconvMock.calls).toMatchObject([{ method: "decode" }]);
+});
+```
 
 ### Loading Secrets from Config
 

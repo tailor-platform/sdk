@@ -4,6 +4,8 @@ import type { Plugin } from "vite";
 /**
  * Creates Vitest plugins that emulate the Tailor Platform function runtime environment.
  *
+ * **Beta:** This API may change in future releases.
+ *
  * ## What it does
  *
  * 1. **Node.js module blocking** (transform hook) — Imports of `node:*` modules
