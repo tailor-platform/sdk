@@ -254,44 +254,76 @@ describe("workflow integration", () => {
 
 ## Testing Wait Points
 
-Use `setupWaitPointMock` to mock `tailor.workflow.wait` and `tailor.workflow.resolve` in tests:
+Use `setupWaitPointMock` to mock `tailor.workflow.wait` and `tailor.workflow.resolve` when testing jobs that use wait points:
 
 ```typescript
-import { afterEach } from "vitest";
+import { afterEach, vi } from "vitest";
 import { setupWaitPointMock } from "@tailor-platform/sdk/test";
-import { defineWaitPoint } from "@tailor-platform/sdk";
+import { processWithApproval } from "./workflows/approval";
 
 const TailorGlobal = globalThis as { tailor?: { workflow?: Record<string, unknown> } };
 
-const approval = defineWaitPoint<{ msg: string }, { approved: boolean }>("approval");
-
-describe("wait point", () => {
+describe("approval workflow", () => {
   afterEach(() => {
     delete TailorGlobal.tailor;
   });
 
-  test("mock wait", async () => {
+  test("approved flow returns approved status", async () => {
     const { waitCalls } = setupWaitPointMock({
       onWait: (_key, _payload) => ({ approved: true }),
     });
 
-    const result = await approval.wait({ msg: "please" });
-    expect(result).toEqual({ approved: true });
+    const result = await processWithApproval.body({ orderId: "order-1" }, { env: {} });
+
+    expect(result).toEqual({ orderId: "order-1", status: "approved" });
     expect(waitCalls).toHaveLength(1);
-    expect(waitCalls[0]).toEqual({ key: "approval", payload: { msg: "please" } });
+    expect(waitCalls[0]).toEqual({
+      key: "approval",
+      payload: { message: "Please approve order order-1", orderId: "order-1" },
+    });
   });
 
-  test("mock resolve", async () => {
+  test("rejected flow returns rejected status", async () => {
+    setupWaitPointMock({
+      onWait: () => ({ approved: false }),
+    });
+
+    const result = await processWithApproval.body({ orderId: "order-2" }, { env: {} });
+
+    expect(result).toEqual({ orderId: "order-2", status: "rejected" });
+  });
+});
+```
+
+### Testing Resolvers that Call `.resolve()`
+
+```typescript
+import { afterEach } from "vitest";
+import { setupWaitPointMock, unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
+import resolver from "./resolvers/resolveApproval";
+
+const TailorGlobal = globalThis as { tailor?: { workflow?: Record<string, unknown> } };
+
+describe("resolveApproval resolver", () => {
+  afterEach(() => {
+    delete TailorGlobal.tailor;
+  });
+
+  test("resolves approval", async () => {
     const { resolveCalls } = setupWaitPointMock({
-      onResolve: async (_execId, _key, callback) => {
-        callback({ msg: "hello" });
+      onResolve: (_execId, _key, callback) => {
+        const result = callback({ message: "Please approve", orderId: "order-1" });
+        expect(result).toEqual({ approved: true });
       },
     });
 
-    await approval.resolve("exec-1", (payload) => {
-      expect(payload).toEqual({ msg: "hello" });
-      return { approved: true };
+    const result = await resolver.body({
+      input: { executionId: "exec-1", approved: true },
+      user: unauthenticatedTailorUser,
+      env: {},
     });
+
+    expect(result).toEqual({ resolved: true });
     expect(resolveCalls).toHaveLength(1);
     expect(resolveCalls[0]).toEqual({ executionId: "exec-1", key: "approval" });
   });
@@ -301,8 +333,10 @@ describe("wait point", () => {
 **Key points:**
 
 - `setupWaitPointMock` sets `globalThis.tailor.workflow.wait/resolve` to mock handlers
+- `onWait` controls what `.wait()` returns — use it to test different branches (approved/rejected)
+- `onResolve` lets you verify the callback behavior in resolvers that call `.resolve()`
 - Clean up mocks in `afterEach` by deleting `TailorGlobal.tailor`
-- **Best for:** Testing jobs that use wait points, verifying resolve callbacks
+- **Best for:** Testing jobs that use wait points and resolvers that resolve them
 
 ## End-to-End (E2E) Tests
 
