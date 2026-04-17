@@ -317,10 +317,15 @@ export async function prepareMergeWorktree(
   ]);
 
   const worktreePath = fs.mkdtempSync(path.join(os.tmpdir(), tmpDirPrefix));
-  let worktreeRegistered = false;
   try {
-    await runGit(["worktree", "add", "--detach", worktreePath, resolvedBase], { cwd: repoRoot });
-    worktreeRegistered = true;
+    // Disable hooks for both the worktree setup and merge. A failing
+    // post-checkout hook would otherwise leave `.git/worktrees/<name>` behind
+    // (git registers the worktree before running hooks), and the preview
+    // plan has no reason to run a developer's local checkout hooks anyway.
+    await runGit(
+      ["-c", "core.hooksPath=/dev/null", "worktree", "add", "--detach", worktreePath, resolvedBase],
+      { cwd: repoRoot },
+    );
 
     const mergeEnv: NodeJS.ProcessEnv = { ...process.env, GIT_MERGE_AUTOEDIT: "no" };
     const mergeResult = await runGit(
@@ -345,7 +350,12 @@ export async function prepareMergeWorktree(
       );
     }
   } catch (err) {
-    await cleanupWorktree({ repoRoot, worktreePath, registered: worktreeRegistered });
+    // Always attempt `git worktree remove` whether or not `worktree add`
+    // completed: git registers the worktree in `.git/worktrees/<name>`
+    // before finishing the checkout, so a late failure (e.g. a hook that
+    // slipped past `core.hooksPath`) would otherwise leave stale metadata.
+    // `remove --force` with allowFail is a no-op when nothing was registered.
+    await cleanupWorktree({ repoRoot, worktreePath });
     throw err;
   }
 
@@ -357,7 +367,7 @@ export async function prepareMergeWorktree(
     async dispose() {
       if (disposed) return;
       disposed = true;
-      await cleanupWorktree({ repoRoot, worktreePath, registered: true });
+      await cleanupWorktree({ repoRoot, worktreePath });
     },
   };
 }
@@ -365,15 +375,12 @@ export async function prepareMergeWorktree(
 interface CleanupArgs {
   repoRoot: string;
   worktreePath: string;
-  registered: boolean;
 }
 
-async function cleanupWorktree({ repoRoot, worktreePath, registered }: CleanupArgs): Promise<void> {
-  if (registered) {
-    await runGit(["worktree", "remove", "--force", worktreePath], {
-      cwd: repoRoot,
-      allowFail: true,
-    });
-  }
+async function cleanupWorktree({ repoRoot, worktreePath }: CleanupArgs): Promise<void> {
+  await runGit(["worktree", "remove", "--force", worktreePath], {
+    cwd: repoRoot,
+    allowFail: true,
+  });
   fs.rmSync(worktreePath, { recursive: true, force: true });
 }

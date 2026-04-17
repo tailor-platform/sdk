@@ -168,9 +168,11 @@ function rewriteSymlink(srcEntry: string, tgtEntry: string, ctx: LinkCtx): void 
   const linkTarget = fs.readlinkSync(srcEntry);
   const { sourceDest, targetDest } = describeLink(srcEntry, linkTarget, ctx);
   // Links pointing outside the source repo (e.g. pnpm content-addressed store
-  // entries) reference immutable deps; copy the link verbatim.
+  // entries) reference immutable deps. Write the resolved absolute path so a
+  // relative link like `../../shared/foo` doesn't re-resolve against
+  // `targetRoot/node_modules` and break.
   if (targetDest === null) {
-    fs.symlinkSync(linkTarget, tgtEntry, resolveLinkType(sourceDest));
+    fs.symlinkSync(sourceDest, tgtEntry, resolveLinkType(sourceDest));
     return;
   }
   // Intra-repo links (workspace packages, absolute or relative). Retarget them

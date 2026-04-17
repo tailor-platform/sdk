@@ -297,6 +297,36 @@ describe("linkNodeModules", () => {
     expect(fs.readFileSync(linked, "utf8")).toBe("export const v = 'MERGED';\n");
   });
 
+  it("rewrites relative external symlinks so they resolve to the same directory", () => {
+    // sourceRoot and targetRoot are sibling temp dirs; a relative link that
+    // reaches above sourceRoot to another sibling directory must still resolve
+    // to that original directory when recreated under targetRoot.
+    const externalShared = fs.mkdtempSync(path.join(os.tmpdir(), "mw-ext-"));
+    try {
+      writeFile(externalShared, "shared/index.js", "module.exports = 'EXTERNAL';");
+      const relFromSourceNm = path.relative(
+        path.join(sourceRoot, "node_modules"),
+        path.join(externalShared, "shared"),
+      );
+
+      writeFile(sourceRoot, "pnpm-lock.yaml", "lock");
+      writeFile(sourceRoot, "package.json", "{}");
+      fs.mkdirSync(path.join(sourceRoot, "node_modules"));
+      fs.symlinkSync(relFromSourceNm, path.join(sourceRoot, "node_modules/shared"));
+
+      writeFile(targetRoot, "pnpm-lock.yaml", "lock");
+      writeFile(targetRoot, "package.json", "{}");
+
+      const result = linkNodeModules({ sourceRoot, targetRoot });
+
+      expect(result.method).toBe("symlink");
+      const linked = path.join(targetRoot, "node_modules/shared/index.js");
+      expect(fs.readFileSync(linked, "utf8")).toBe("module.exports = 'EXTERNAL';");
+    } finally {
+      fs.rmSync(externalShared, { recursive: true, force: true });
+    }
+  });
+
   it("copies external absolute symlinks verbatim (e.g. pnpm store)", () => {
     const externalStore = fs.mkdtempSync(path.join(os.tmpdir(), "mw-store-"));
     try {

@@ -378,5 +378,33 @@ describe("git", () => {
       await prepared.dispose();
       await expect(prepared.dispose()).resolves.toBeUndefined();
     });
+
+    it("ignores a repo-local post-checkout hook that would otherwise fail", async () => {
+      await initTestRepo(tmpDir);
+      await commitFile(tmpDir, "base.txt", "b", "base");
+      await runGit(["checkout", "-b", "feature"], { cwd: tmpDir });
+      await commitFile(tmpDir, "feat.txt", "f", "feat");
+      await runGit(["checkout", "main"], { cwd: tmpDir });
+
+      // A failing post-checkout hook must not leak stale .git/worktrees metadata.
+      const hooksDir = path.join(tmpDir, ".git", "hooks");
+      fs.mkdirSync(hooksDir, { recursive: true });
+      fs.writeFileSync(path.join(hooksDir, "post-checkout"), "#!/bin/sh\nexit 1\n", {
+        mode: 0o755,
+      });
+
+      const prepared = await prepareMergeWorktree({
+        repoRoot: tmpDir,
+        baseRef: "main",
+        headRef: "feature",
+      });
+      try {
+        expect(fs.existsSync(path.join(prepared.path, "feat.txt"))).toBe(true);
+      } finally {
+        await prepared.dispose();
+      }
+      const worktreesList = await runGit(["worktree", "list", "--porcelain"], { cwd: tmpDir });
+      expect(worktreesList.stdout).not.toContain(prepared.path);
+    });
   });
 });
