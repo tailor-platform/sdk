@@ -12,14 +12,16 @@ export async function resolveBundledSkillsDir(): Promise<string> {
   return resolve(dirname(pkgJsonPath), "skills");
 }
 
+const DEFAULT_AGENT = "claude-code";
+
 export const installCommand = defineAppCommand({
   name: "install",
   description: "Install the tailor-sdk agent skill from the installed SDK package.",
   args: z
     .object({
-      agent: arg(z.string().optional(), {
+      agent: arg(z.string().default(DEFAULT_AGENT), {
         alias: "a",
-        description: "Target agent (claude, codex). Defaults to claude.",
+        description: `vercel/skills agent name (e.g. ${DEFAULT_AGENT}, codex). Defaults to ${DEFAULT_AGENT}.`,
       }),
       yes: arg(z.boolean().default(false), {
         alias: "y",
