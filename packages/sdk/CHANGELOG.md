@@ -1,5 +1,15 @@
 # @tailor-platform/sdk
 
+## 1.39.0
+
+### Minor Changes
+
+- [#1000](https://github.com/tailor-platform/sdk/pull/1000) [`fbfb157`](https://github.com/tailor-platform/sdk/commit/fbfb15780f8c61aeb30994b2e3d675c40ac32baa) Thanks [@toiroakr](https://github.com/toiroakr)! - Support `TAILOR_PLATFORM_SDK_DTS_PATH` environment variable to customize the output path of `tailor.d.ts`
+
+### Patch Changes
+
+- [#1002](https://github.com/tailor-platform/sdk/pull/1002) [`e0f6384`](https://github.com/tailor-platform/sdk/commit/e0f6384cad3ea1391119b104f159db8fb43205c8) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update anthropics/claude-code-action action to v1.0.99
+
 ## 1.38.0
 
 ### Minor Changes
