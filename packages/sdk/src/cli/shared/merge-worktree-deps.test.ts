@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
@@ -22,6 +23,16 @@ describe("linkNodeModules", () => {
     const full = path.join(root, rel);
     fs.mkdirSync(path.dirname(full), { recursive: true });
     fs.writeFileSync(full, content);
+  }
+
+  function initGitRepo(root: string) {
+    const opts = { cwd: root, stdio: "ignore" as const };
+    execFileSync("git", ["init", "--initial-branch=main", "--quiet"], opts);
+    execFileSync("git", ["config", "user.email", "t@e.com"], opts);
+    execFileSync("git", ["config", "user.name", "Test"], opts);
+    execFileSync("git", ["config", "commit.gpgsign", "false"], opts);
+    execFileSync("git", ["add", "."], opts);
+    execFileSync("git", ["commit", "--quiet", "-m", "init"], opts);
   }
 
   it("populates target node_modules with entries linked from source", () => {
@@ -165,6 +176,97 @@ describe("linkNodeModules", () => {
     );
     // Same src between source and target so fallback is allowed.
     writeFile(targetRoot, "packages/sdk/src/index.ts", "export const v = 'SRC';\n");
+
+    const result = linkNodeModules({ sourceRoot, targetRoot });
+
+    expect(result.method).toBe("symlink");
+    const linked = path.join(targetRoot, "node_modules/sdk/dist/index.mjs");
+    expect(fs.readFileSync(linked, "utf8")).toBe("export const v = 'BUILT';\n");
+  });
+
+  it("falls back to source when merged tree lacks the declared bin entrypoint", () => {
+    writeFile(sourceRoot, "pnpm-lock.yaml", "lock");
+    writeFile(sourceRoot, "package.json", "{}");
+    writeFile(
+      sourceRoot,
+      "packages/cli/package.json",
+      JSON.stringify({ bin: { "my-cli": "./dist/cli.js" } }),
+    );
+    writeFile(sourceRoot, "packages/cli/src/index.ts", "export const v = 'SRC';\n");
+    writeFile(sourceRoot, "packages/cli/dist/cli.js", "#!/usr/bin/env node\n");
+    fs.mkdirSync(path.join(sourceRoot, "node_modules"));
+    fs.symlinkSync("../packages/cli", path.join(sourceRoot, "node_modules/cli"));
+
+    writeFile(targetRoot, "pnpm-lock.yaml", "lock");
+    writeFile(targetRoot, "package.json", "{}");
+    writeFile(
+      targetRoot,
+      "packages/cli/package.json",
+      JSON.stringify({ bin: { "my-cli": "./dist/cli.js" } }),
+    );
+    writeFile(targetRoot, "packages/cli/src/index.ts", "export const v = 'SRC';\n");
+
+    const result = linkNodeModules({ sourceRoot, targetRoot });
+
+    expect(result.method).toBe("symlink");
+    const linked = path.join(targetRoot, "node_modules/cli/dist/cli.js");
+    expect(fs.readFileSync(linked, "utf8")).toBe("#!/usr/bin/env node\n");
+  });
+
+  it("falls back to source when merged tree lacks the implicit index.js", () => {
+    writeFile(sourceRoot, "pnpm-lock.yaml", "lock");
+    writeFile(sourceRoot, "package.json", "{}");
+    writeFile(sourceRoot, "packages/impl/package.json", "{}");
+    writeFile(sourceRoot, "packages/impl/src/main.ts", "export const v = 'SRC';\n");
+    writeFile(sourceRoot, "packages/impl/index.js", "module.exports = require('./src/main');\n");
+    fs.mkdirSync(path.join(sourceRoot, "node_modules"));
+    fs.symlinkSync("../packages/impl", path.join(sourceRoot, "node_modules/impl"));
+
+    // Gitignore the built index.js so the source checkout treats it as an
+    // artifact rather than tracked content; mirrors a typical monorepo where
+    // the built entrypoint lives outside git.
+    writeFile(sourceRoot, ".gitignore", "packages/impl/index.js\n");
+    initGitRepo(sourceRoot);
+
+    writeFile(targetRoot, "pnpm-lock.yaml", "lock");
+    writeFile(targetRoot, "package.json", "{}");
+    writeFile(targetRoot, "packages/impl/package.json", "{}");
+    writeFile(targetRoot, "packages/impl/src/main.ts", "export const v = 'SRC';\n");
+
+    const result = linkNodeModules({ sourceRoot, targetRoot });
+
+    expect(result.method).toBe("symlink");
+    const linked = path.join(targetRoot, "node_modules/impl/index.js");
+    expect(fs.readFileSync(linked, "utf8")).toBe("module.exports = require('./src/main');\n");
+  });
+
+  it("ignores untracked source files when comparing workspace package content", () => {
+    writeFile(sourceRoot, "pnpm-lock.yaml", "lock");
+    writeFile(sourceRoot, "package.json", "{}");
+    writeFile(
+      sourceRoot,
+      "packages/sdk/package.json",
+      JSON.stringify({ main: "./dist/index.mjs" }),
+    );
+    writeFile(sourceRoot, "packages/sdk/src/index.ts", "export const v = 'TRACKED';\n");
+    writeFile(sourceRoot, "packages/sdk/dist/index.mjs", "export const v = 'BUILT';\n");
+    // Untracked files that exist only in the developer's local checkout; they
+    // would spuriously abort the parity check without the git-tracked filter.
+    writeFile(sourceRoot, "packages/sdk/.env", "SECRET=1\n");
+    writeFile(sourceRoot, "packages/sdk/coverage-report.txt", "local run\n");
+    writeFile(sourceRoot, ".gitignore", ".env\ncoverage-report.txt\n");
+    fs.mkdirSync(path.join(sourceRoot, "node_modules"));
+    fs.symlinkSync("../packages/sdk", path.join(sourceRoot, "node_modules/sdk"));
+    initGitRepo(sourceRoot);
+
+    writeFile(targetRoot, "pnpm-lock.yaml", "lock");
+    writeFile(targetRoot, "package.json", "{}");
+    writeFile(
+      targetRoot,
+      "packages/sdk/package.json",
+      JSON.stringify({ main: "./dist/index.mjs" }),
+    );
+    writeFile(targetRoot, "packages/sdk/src/index.ts", "export const v = 'TRACKED';\n");
 
     const result = linkNodeModules({ sourceRoot, targetRoot });
 

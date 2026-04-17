@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { hashFile } from "@/cli/cache/hasher";
@@ -31,6 +32,8 @@ const LOCKFILES = ["pnpm-lock.yaml", "package-lock.json", "yarn.lock", "bun.lock
 // mismatch is expected (the whole point of the fallback is that dist/ is
 // absent in the merged worktree).
 const PACKAGE_ARTIFACT_DIRS = new Set(["node_modules", ".git", "dist", "build", "lib", "out"]);
+// Files Node falls back to when no main/module/exports/bin is declared.
+const IMPLICIT_ENTRYPOINTS = ["index.js", "index.mjs", "index.cjs"];
 
 /**
  * Link node_modules directories from `sourceRoot` into the matching locations
@@ -161,6 +164,7 @@ interface WorkspacePkgManifest {
   main?: string;
   module?: string;
   exports?: unknown;
+  bin?: unknown;
 }
 
 function packageCanResolve(pkgPath: string): boolean {
@@ -178,9 +182,13 @@ function packageCanResolve(pkgPath: string): boolean {
   if (typeof pkg.main === "string") entrypoints.push(pkg.main);
   if (typeof pkg.module === "string") entrypoints.push(pkg.module);
   collectExportPaths(pkg.exports, entrypoints);
-  // Package with no declared entrypoints (e.g. CLI-only tools) may still be
-  // resolvable; skip the check rather than forcing an abort.
-  if (entrypoints.length === 0) return true;
+  collectBinPaths(pkg.bin, entrypoints);
+  // No declared entrypoints: Node resolves `index.js` / `index.mjs` / `index.cjs`.
+  // Treat the package as resolvable only if at least one exists in the merged
+  // tree; otherwise fall back to source artifacts.
+  if (entrypoints.length === 0) {
+    return IMPLICIT_ENTRYPOINTS.some((f) => fs.existsSync(path.join(pkgPath, f)));
+  }
   for (const rel of entrypoints) {
     if (!fs.existsSync(path.join(pkgPath, rel))) return false;
   }
@@ -199,6 +207,18 @@ function collectExportPaths(node: unknown, out: string[]): void {
   if (node && typeof node === "object") {
     for (const v of Object.values(node as Record<string, unknown>)) {
       collectExportPaths(v, out);
+    }
+  }
+}
+
+function collectBinPaths(bin: unknown, out: string[]): void {
+  if (typeof bin === "string") {
+    out.push(bin);
+    return;
+  }
+  if (bin && typeof bin === "object") {
+    for (const v of Object.values(bin as Record<string, unknown>)) {
+      if (typeof v === "string") out.push(v);
     }
   }
 }
@@ -247,8 +267,35 @@ function findPackageContentMismatch(sourcePkg: string, targetPkg: string): strin
 }
 
 function collectTrackedLikeFiles(dir: string): Set<string> {
+  // Prefer `git ls-files` so local untracked files (.env, editor caches, test
+  // output) on the source side don't make the parity check spuriously abort.
+  // The merge-preview is defined against HEAD, so comparing the tracked file
+  // sets is what matters. Fall back to a disk walk when git is unavailable.
+  const tracked = listGitTrackedFiles(dir);
+  if (tracked) return tracked;
   const files = new Set<string>();
   walkPackageFiles(dir, dir, files);
+  return files;
+}
+
+function listGitTrackedFiles(dir: string): Set<string> | null {
+  let stdout: string;
+  try {
+    stdout = execFileSync("git", ["ls-files", "-z"], {
+      cwd: dir,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+  } catch {
+    return null;
+  }
+  const files = new Set<string>();
+  for (const rel of stdout.split("\0")) {
+    if (!rel) continue;
+    const first = rel.split("/", 1)[0];
+    if (PACKAGE_ARTIFACT_DIRS.has(first)) continue;
+    files.add(rel);
+  }
   return files;
 }
 
