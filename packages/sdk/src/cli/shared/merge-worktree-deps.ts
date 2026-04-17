@@ -100,14 +100,7 @@ function populateNodeModules(sourceDir: string, targetDir: string): void {
     const srcEntry = path.join(sourceDir, entry.name);
     const tgtEntry = path.join(targetDir, entry.name);
     if (entry.isSymbolicLink()) {
-      // Recreate the symlink verbatim. Relative links like `../packages/foo`
-      // then resolve inside `targetDir`, pointing to the merged worktree copy.
-      // Resolve the link target against the source location to determine its
-      // type, so Windows creates directory (not file) links for workspace
-      // packages whose relative targets don't yet exist under `targetDir`.
-      const linkTarget = fs.readlinkSync(srcEntry);
-      const type = resolveLinkType(path.resolve(path.dirname(srcEntry), linkTarget));
-      fs.symlinkSync(linkTarget, tgtEntry, type);
+      rewriteSymlink(srcEntry, tgtEntry);
     } else if (entry.isDirectory() && entry.name.startsWith("@")) {
       // Scoped package dirs (e.g. `@scope/pkg`) contain the actual package
       // entries one level deeper, which may include workspace symlinks.
@@ -117,6 +110,49 @@ function populateNodeModules(sourceDir: string, targetDir: string): void {
       fs.symlinkSync(srcEntry, tgtEntry, entry.isDirectory() ? "dir" : "file");
     }
   }
+}
+
+function rewriteSymlink(srcEntry: string, tgtEntry: string): void {
+  const linkTarget = fs.readlinkSync(srcEntry);
+  if (path.isAbsolute(linkTarget)) {
+    // Absolute links already point at a concrete source location (e.g. pnpm
+    // content-addressed store entries); copy verbatim.
+    fs.symlinkSync(linkTarget, tgtEntry, resolveLinkType(linkTarget));
+    return;
+  }
+  // Relative links typically point at workspace packages. Recreate the link
+  // verbatim so it resolves inside `targetDir` (the merged worktree). But
+  // workspace packages may export built artifacts (e.g. `dist/`) that live
+  // outside git and so won't exist inside the merged worktree — in that case
+  // the retargeted link cannot load, so we fall back to the source location
+  // where dependencies are already installed.
+  const targetDest = path.resolve(path.dirname(tgtEntry), linkTarget);
+  if (packageEntrypointsExist(targetDest)) {
+    fs.symlinkSync(linkTarget, tgtEntry, resolveLinkType(targetDest));
+    return;
+  }
+  const sourceDest = path.resolve(path.dirname(srcEntry), linkTarget);
+  fs.symlinkSync(sourceDest, tgtEntry, resolveLinkType(sourceDest));
+}
+
+function packageEntrypointsExist(pkgPath: string): boolean {
+  let pkg: { main?: string; module?: string };
+  try {
+    pkg = JSON.parse(fs.readFileSync(path.join(pkgPath, "package.json"), "utf8")) as {
+      main?: string;
+      module?: string;
+    };
+  } catch {
+    // No package.json (or unreadable): assume it's a plain directory worth
+    // linking to (e.g. `.bin` stubs, type-only packages) and skip the check.
+    return true;
+  }
+  for (const entry of [pkg.main, pkg.module]) {
+    if (typeof entry === "string" && !fs.existsSync(path.join(pkgPath, entry))) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function resolveLinkType(absTarget: string): "dir" | "file" {

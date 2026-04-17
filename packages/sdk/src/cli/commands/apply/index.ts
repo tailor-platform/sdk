@@ -78,23 +78,29 @@ the command aborts without running. Install the merged dependencies first, then 
 
     const prepared = await prepareBasePlan({ baseRef, configPath: args.config });
     const originalCwd = process.cwd();
-    // File loaders (TailorDB, resolvers, executors, workflows) resolve `files` globs
-    // via process.cwd(); chdir to the same subdirectory inside the merged worktree
-    // so relative globs keep working from (e.g.) `example/` rather than the repo root.
-    process.chdir(prepared.cwd);
+    let chdirDone = false;
     try {
+      // File loaders (TailorDB, resolvers, executors, workflows) resolve `files`
+      // globs via process.cwd(); chdir to the same subdirectory inside the
+      // merged worktree so relative globs keep working from (e.g.) `example/`
+      // rather than the repo root.
+      process.chdir(prepared.cwd);
+      chdirDone = true;
       await apply({
         workspaceId: args["workspace-id"],
         profile: args.profile,
         configPath: prepared.configPath,
         dryRun: true,
-        yes: args.yes,
+        // `--base` is a CI-friendly preview that never mutates the workspace;
+        // auto-confirm so downstream prompts (deletions, owner conflicts) do
+        // not turn the read-only plan into an error in non-interactive shells.
+        yes: true,
         noSchemaCheck: args["no-schema-check"],
         noCache: true,
         cleanCache: args["clean-cache"],
       });
     } finally {
-      process.chdir(originalCwd);
+      if (chdirDone) process.chdir(originalCwd);
       await prepared.worktree.dispose();
     }
   },
