@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
-import { CodeGeneratorSchema, BaseGeneratorConfigSchema } from "@/parser/generator-config";
+import { CodeGeneratorSchema, BaseGeneratorConfigSchema } from "@/parser/generator-config/schema";
 import { PluginConfigSchema } from "@/parser/plugin-config";
 import { builtinPlugins } from "@/plugin/builtin/registry";
 import { loadConfigPath } from "./context";

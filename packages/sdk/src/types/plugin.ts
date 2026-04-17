@@ -4,7 +4,7 @@ import type {
   ExecutorReadyContext,
   GeneratorResult,
 } from "./plugin-generation";
-import type { TailorAnyDBField, TailorAnyDBType } from "@/configure/services/tailordb";
+import type { TailorAnyDBField, TailorAnyDBType } from "./tailor-db-field";
 
 export type TypeConfigRequired<PluginConfig = unknown> =
   | boolean

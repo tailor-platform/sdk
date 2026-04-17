@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/sdk",
-  "version": "1.37.0",
+  "version": "1.39.0",
   "description": "Tailor Platform SDK - The SDK to work with Tailor Platform",
   "license": "MIT",
   "repository": {
@@ -123,9 +123,9 @@
     "date-fns": "4.1.0",
     "es-toolkit": "1.45.1",
     "find-up-simple": "1.0.1",
-    "globals": "17.4.0",
+    "globals": "17.5.0",
     "inflection": "3.0.2",
-    "kysely": "0.28.15",
+    "kysely": "0.28.16",
     "madge": "8.0.0",
     "mime-types": "3.0.2",
     "multiline-ts": "4.0.1",
@@ -164,10 +164,10 @@
     "oxlint": "1.59.0",
     "oxlint-tsgolint": "0.20.0",
     "sonda": "0.11.1",
-    "tsdown": "0.21.7",
+    "tsdown": "0.21.8",
     "typescript": "5.9.3",
     "typescript-eslint": "8.58.1",
     "vitest": "4.1.4",
-    "zinfer": "0.1.7"
+    "zinfer": "0.1.8"
   }
 }

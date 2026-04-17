@@ -111,6 +111,12 @@ const files: Record<string, FileConfig> = {
     commands: ["setup"],
     render: defaultRender,
   },
+  "docs/cli/upgrade.md": {
+    title: "Upgrade Commands",
+    description: "Commands for upgrading SDK versions with automated code migration.",
+    commands: ["upgrade"],
+    render: defaultRender,
+  },
   "docs/cli/skills.md": {
     title: "Skills Commands",
     description: "Commands for installing Tailor SDK agent skills.",

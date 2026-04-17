@@ -1,5 +1,5 @@
-import { type TailorUser } from "@/configure/types";
 import type { output, InferFieldsOutput } from "./helpers";
+import type { TailorUser } from "./user";
 import type { NonEmptyObject } from "type-fest";
 
 /**
