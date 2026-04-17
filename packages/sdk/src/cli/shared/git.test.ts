@@ -141,10 +141,98 @@ describe("git", () => {
       const result = await detectBaseRef({
         cwd: tmpDir,
         env: {},
-        runGh: async () => ({ stdout: "main\n", stderr: "", exitCode: 0 }),
-        runGitCmd: async () => ({ stdout: "", stderr: "", exitCode: 1 }),
+        runGh: async () => ({
+          stdout: JSON.stringify({
+            baseRefName: "main",
+            url: "https://github.com/acme/repo/pull/42",
+          }),
+          stderr: "",
+          exitCode: 0,
+        }),
+        runGitCmd: async (args) => {
+          if (args[0] === "remote" && args[1] === "-v") {
+            return {
+              stdout: [
+                "origin\thttps://github.com/acme/repo.git (fetch)",
+                "origin\thttps://github.com/acme/repo.git (push)",
+              ].join("\n"),
+              stderr: "",
+              exitCode: 0,
+            };
+          }
+          if (args[0] === "rev-parse" && args.includes("origin/main")) {
+            return { stdout: "deadbeef\n", stderr: "", exitCode: 0 };
+          }
+          return { stdout: "", stderr: "", exitCode: 1 };
+        },
       });
       expect(result).toBe("origin/main");
+    });
+
+    it("maps the gh PR base to the upstream remote in a fork-style checkout", async () => {
+      const result = await detectBaseRef({
+        cwd: tmpDir,
+        env: {},
+        runGh: async () => ({
+          stdout: JSON.stringify({
+            baseRefName: "main",
+            url: "https://github.com/upstream/repo/pull/7",
+          }),
+          stderr: "",
+          exitCode: 0,
+        }),
+        runGitCmd: async (args) => {
+          if (args[0] === "remote" && args[1] === "-v") {
+            return {
+              stdout: [
+                "origin\tgit@github.com:contributor/repo.git (fetch)",
+                "origin\tgit@github.com:contributor/repo.git (push)",
+                "upstream\thttps://github.com/upstream/repo.git (fetch)",
+                "upstream\thttps://github.com/upstream/repo.git (push)",
+              ].join("\n"),
+              stderr: "",
+              exitCode: 0,
+            };
+          }
+          if (args[0] === "rev-parse" && args.includes("upstream/main")) {
+            return { stdout: "deadbeef\n", stderr: "", exitCode: 0 };
+          }
+          return { stdout: "", stderr: "", exitCode: 1 };
+        },
+      });
+      expect(result).toBe("upstream/main");
+    });
+
+    it("falls back to origin/HEAD when the gh-reported base ref is not fetched locally", async () => {
+      const result = await detectBaseRef({
+        cwd: tmpDir,
+        env: {},
+        runGh: async () => ({
+          stdout: JSON.stringify({
+            baseRefName: "main",
+            url: "https://github.com/acme/repo/pull/1",
+          }),
+          stderr: "",
+          exitCode: 0,
+        }),
+        runGitCmd: async (args) => {
+          if (args[0] === "remote" && args[1] === "-v") {
+            return {
+              stdout: "origin\thttps://github.com/acme/repo.git (fetch)",
+              stderr: "",
+              exitCode: 0,
+            };
+          }
+          if (args[0] === "rev-parse") {
+            return { stdout: "", stderr: "fatal", exitCode: 1 };
+          }
+          if (args[0] === "symbolic-ref") {
+            return { stdout: "origin/release\n", stderr: "", exitCode: 0 };
+          }
+          return { stdout: "", stderr: "", exitCode: 1 };
+        },
+      });
+      expect(result).toBe("origin/release");
     });
 
     it("falls back to origin/HEAD symbolic ref when gh is unavailable", async () => {
@@ -181,8 +269,27 @@ describe("git", () => {
       const result = await detectBaseRef({
         cwd: tmpDir,
         env: { GITHUB_BASE_REF: "" },
-        runGh: async () => ({ stdout: "release\n", stderr: "", exitCode: 0 }),
-        runGitCmd: async () => ({ stdout: "", stderr: "", exitCode: 1 }),
+        runGh: async () => ({
+          stdout: JSON.stringify({
+            baseRefName: "release",
+            url: "https://github.com/acme/repo/pull/3",
+          }),
+          stderr: "",
+          exitCode: 0,
+        }),
+        runGitCmd: async (args) => {
+          if (args[0] === "remote" && args[1] === "-v") {
+            return {
+              stdout: "origin\thttps://github.com/acme/repo.git (fetch)",
+              stderr: "",
+              exitCode: 0,
+            };
+          }
+          if (args[0] === "rev-parse" && args.includes("origin/release")) {
+            return { stdout: "deadbeef\n", stderr: "", exitCode: 0 };
+          }
+          return { stdout: "", stderr: "", exitCode: 1 };
+        },
       });
       expect(result).toBe("origin/release");
     });

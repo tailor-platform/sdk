@@ -153,13 +153,30 @@ export async function detectBaseRef(deps?: DetectBaseRefDeps): Promise<string | 
     );
   }
 
-  const ghResult = await runGhFn(["pr", "view", "--json", "baseRefName", "-q", ".baseRefName"], {
+  const ghResult = await runGhFn(["pr", "view", "--json", "baseRefName,url"], {
     cwd: deps?.cwd,
     allowFail: true,
   });
   if (ghResult.exitCode === 0) {
-    const branch = ghResult.stdout.trim();
-    if (branch) return `origin/${branch}`;
+    const parsed = parseGhPrView(ghResult.stdout);
+    if (parsed?.baseRefName) {
+      // Fork-style clones route the PR against an upstream remote that is not
+      // called `origin`. Pick the remote whose URL matches the PR's base repo
+      // URL so `--base` plans against the real PR base rather than the
+      // contributor's fork mirror. Fall back to `origin` when no remote
+      // matches, matching historical behavior.
+      const remote = await resolvePrBaseRemote({
+        prUrl: parsed.url,
+        cwd: deps?.cwd,
+        runGitFn,
+      });
+      const ref = `${remote}/${parsed.baseRefName}`;
+      const verify = await runGitFn(["rev-parse", "--verify", "--quiet", ref], {
+        cwd: deps?.cwd,
+        allowFail: true,
+      });
+      if (verify.exitCode === 0) return ref;
+    }
   }
 
   const symRef = await runGitFn(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"], {
@@ -172,6 +189,67 @@ export async function detectBaseRef(deps?: DetectBaseRefDeps): Promise<string | 
   }
 
   return null;
+}
+
+interface GhPrView {
+  baseRefName?: string;
+  url?: string;
+}
+
+function parseGhPrView(stdout: string): GhPrView | null {
+  try {
+    const raw = JSON.parse(stdout) as Record<string, unknown>;
+    const baseRefName = typeof raw.baseRefName === "string" ? raw.baseRefName.trim() : undefined;
+    const url = typeof raw.url === "string" ? raw.url : undefined;
+    return { baseRefName: baseRefName || undefined, url };
+  } catch {
+    return null;
+  }
+}
+
+interface ResolvePrBaseRemoteArgs {
+  prUrl: string | undefined;
+  cwd: string | undefined;
+  runGitFn: (args: string[], options?: RunOptions) => Promise<RunResult>;
+}
+
+async function resolvePrBaseRemote(args: ResolvePrBaseRemoteArgs): Promise<string> {
+  const { prUrl, cwd, runGitFn } = args;
+  const baseRepoUrl = extractBaseRepoUrl(prUrl);
+  if (!baseRepoUrl) return "origin";
+  const remotes = await runGitFn(["remote", "-v"], { cwd, allowFail: true });
+  if (remotes.exitCode !== 0) return "origin";
+  const wanted = normalizeGitRepoUrl(baseRepoUrl);
+  for (const line of remotes.stdout.split("\n")) {
+    if (!line.includes("(fetch)")) continue;
+    const match = /^(\S+)\s+(\S+)\s+\(fetch\)/.exec(line);
+    if (!match) continue;
+    const [, name, url] = match;
+    if (normalizeGitRepoUrl(url) === wanted) return name;
+  }
+  return "origin";
+}
+
+function extractBaseRepoUrl(prUrl: string | undefined): string | null {
+  if (!prUrl) return null;
+  // PR URL format: https://<host>/<owner>/<repo>/pull/<n>. Strip /pull/... to
+  // get the base repo URL.
+  const match = /^(https?:\/\/[^/]+\/[^/]+\/[^/]+)\/pull\/\d+/.exec(prUrl);
+  return match ? match[1] : null;
+}
+
+function normalizeGitRepoUrl(url: string): string {
+  // Normalize https, ssh, and git@ forms so fetch URLs compare equal.
+  // https://github.com/owner/repo.git -> github.com/owner/repo
+  // git@github.com:owner/repo.git     -> github.com/owner/repo
+  // ssh://git@github.com/owner/repo   -> github.com/owner/repo
+  return url
+    .trim()
+    .replace(/\.git$/, "")
+    .replace(/^https?:\/\//, "")
+    .replace(/^ssh:\/\/(?:[^@]+@)?/, "")
+    .replace(/^git@([^:]+):/, "$1/")
+    .toLowerCase();
 }
 
 /**
