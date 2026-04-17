@@ -203,36 +203,31 @@ describe("git", () => {
       expect(result).toBe("upstream/main");
     });
 
-    it("falls back to origin/HEAD when the gh-reported base ref is not fetched locally", async () => {
-      const result = await detectBaseRef({
-        cwd: tmpDir,
-        env: {},
-        runGh: async () => ({
-          stdout: JSON.stringify({
-            baseRefName: "main",
-            url: "https://github.com/acme/repo/pull/1",
+    it("throws when the gh-reported PR base ref is not fetched locally instead of falling back", async () => {
+      await expect(
+        detectBaseRef({
+          cwd: tmpDir,
+          env: {},
+          runGh: async () => ({
+            stdout: JSON.stringify({
+              baseRefName: "release",
+              url: "https://github.com/acme/repo/pull/1",
+            }),
+            stderr: "",
+            exitCode: 0,
           }),
-          stderr: "",
-          exitCode: 0,
-        }),
-        runGitCmd: async (args) => {
-          if (args[0] === "remote" && args[1] === "-v") {
-            return {
-              stdout: "origin\thttps://github.com/acme/repo.git (fetch)",
-              stderr: "",
-              exitCode: 0,
-            };
-          }
-          if (args[0] === "rev-parse") {
+          runGitCmd: async (args) => {
+            if (args[0] === "remote" && args[1] === "-v") {
+              return {
+                stdout: "origin\thttps://github.com/acme/repo.git (fetch)",
+                stderr: "",
+                exitCode: 0,
+              };
+            }
             return { stdout: "", stderr: "fatal", exitCode: 1 };
-          }
-          if (args[0] === "symbolic-ref") {
-            return { stdout: "origin/release\n", stderr: "", exitCode: 0 };
-          }
-          return { stdout: "", stderr: "", exitCode: 1 };
-        },
-      });
-      expect(result).toBe("origin/release");
+          },
+        }),
+      ).rejects.toThrow(/gh reported PR base "release".*not available/);
     });
 
     it("falls back to origin/HEAD symbolic ref when gh is unavailable", async () => {

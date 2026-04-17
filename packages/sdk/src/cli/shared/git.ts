@@ -176,6 +176,13 @@ export async function detectBaseRef(deps?: DetectBaseRefDeps): Promise<string | 
         allowFail: true,
       });
       if (verify.exitCode === 0) return ref;
+      // gh reported an authoritative PR base. Falling back to origin/HEAD
+      // would silently plan against the default branch instead, so surface
+      // a clear error telling the caller to fetch the missing ref.
+      throw new Error(
+        `gh reported PR base "${parsed.baseRefName}" but ${ref} is not available locally. ` +
+          `Fetch it (e.g. \`git fetch ${remote} ${parsed.baseRefName}\`) and retry.`,
+      );
     }
   }
 
