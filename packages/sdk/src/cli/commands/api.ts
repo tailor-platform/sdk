@@ -94,14 +94,24 @@ function resolveNamespaceName(methodName: string, config: LoadedConfig): string 
   return undefined;
 }
 
-function injectFields(body: string, fields: Record<string, string>): string {
-  const parsed = JSON.parse(body) as Record<string, unknown>;
-  for (const [key, value] of Object.entries(fields)) {
-    if (!(key in parsed)) {
-      parsed[key] = value;
-    }
+/**
+ * Parse a JSON body string as a plain object for field injection.
+ * Returns undefined for invalid JSON or non-object values (null, arrays, primitives),
+ * so callers can fall back to sending the raw string unchanged.
+ * @param body - Raw body string
+ * @returns Parsed object or undefined
+ */
+function parseBodyAsObject(body: string): Record<string, unknown> | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return undefined;
   }
-  return JSON.stringify(parsed);
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    return undefined;
+  }
+  return parsed as Record<string, unknown>;
 }
 
 export const apiCommand = defineAppCommand({
@@ -131,44 +141,46 @@ Values already present in \`--body\` are never overridden. If a value cannot be 
     })
     .strict(),
   run: async (args) => {
-    let body = args.body;
-
     const methodName = args.endpoint.includes("/")
       ? args.endpoint.split("/").pop()!
-      : (args.endpoint as string);
+      : args.endpoint;
 
-    const fieldNames = getEndpointFieldNames(methodName);
-    const fieldsToInject: Record<string, string> = {};
+    const parsedBody = parseBodyAsObject(args.body);
+    let mutated = false;
 
-    if (fieldNames.includes("workspaceId")) {
-      try {
-        fieldsToInject.workspaceId = await loadWorkspaceId({
-          workspaceId: args["workspace-id"],
-          profile: args.profile,
-        });
-      } catch {
-        // Cannot resolve workspace ID — skip
+    if (parsedBody) {
+      const fieldNames = getEndpointFieldNames(methodName);
+
+      if (fieldNames.includes("workspaceId") && !("workspaceId" in parsedBody)) {
+        try {
+          parsedBody.workspaceId = await loadWorkspaceId({
+            workspaceId: args["workspace-id"],
+            profile: args.profile,
+          });
+          mutated = true;
+        } catch {
+          // Cannot resolve workspace ID — skip
+        }
       }
-    }
 
-    if (fieldNames.includes("namespaceName")) {
-      try {
-        const { config } = await loadConfig(args.config);
-        const ns = resolveNamespaceName(methodName, config);
-        if (ns) fieldsToInject.namespaceName = ns;
-      } catch {
-        // Config not available — skip
+      if (fieldNames.includes("namespaceName") && !("namespaceName" in parsedBody)) {
+        try {
+          const { config } = await loadConfig(args.config);
+          const ns = resolveNamespaceName(methodName, config);
+          if (ns) {
+            parsedBody.namespaceName = ns;
+            mutated = true;
+          }
+        } catch {
+          // Config not available — skip
+        }
       }
-    }
-
-    if (Object.keys(fieldsToInject).length > 0) {
-      body = injectFields(body, fieldsToInject);
     }
 
     const result = await apiCall({
       profile: args.profile,
-      endpoint: args.endpoint as string,
-      body,
+      endpoint: args.endpoint,
+      body: mutated ? JSON.stringify(parsedBody) : args.body,
     });
 
     logger.log(JSON.stringify(result.data, null, 2));

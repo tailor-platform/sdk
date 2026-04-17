@@ -1,5 +1,5 @@
 import { runCommand } from "politty";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { apiCommand } from "./api";
@@ -24,6 +24,11 @@ describe("api command body auto-injection", () => {
       ok: true,
       json: () => Promise.resolve({ result: "ok" }),
     });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.stubGlobal("fetch", fetchMock);
   });
 
   describe("workspaceId injection", () => {
@@ -201,6 +206,34 @@ describe("api command body auto-injection", () => {
       const body = JSON.parse(options.body as string);
       expect(body.namespaceName).toBeUndefined();
       expect(body.workspaceId).toBe("ws-1");
+    });
+  });
+
+  describe("body parsing guards", () => {
+    test("should pass through non-object JSON body without attempting injection", async () => {
+      await runCommand(apiCommand, ["GetFunctionExecution", "-b", '"just-a-string"']);
+
+      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(options.body).toBe('"just-a-string"');
+      expect(loadWorkspaceId).not.toHaveBeenCalled();
+    });
+
+    test("should pass through invalid JSON body without attempting injection", async () => {
+      await runCommand(apiCommand, ["GetFunctionExecution", "-b", "not-json"]);
+
+      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(options.body).toBe("not-json");
+      expect(loadWorkspaceId).not.toHaveBeenCalled();
+    });
+
+    test("should not resolve workspaceId when body already contains it", async () => {
+      await runCommand(apiCommand, [
+        "GetFunctionExecution",
+        "-b",
+        '{"workspaceId":"ws-provided","executionId":"exec-1"}',
+      ]);
+
+      expect(loadWorkspaceId).not.toHaveBeenCalled();
     });
   });
 });
