@@ -105,6 +105,74 @@ describe("linkNodeModules", () => {
     expect(fs.readFileSync(linked, "utf8")).toBe("export const sdk = 'BUILT';");
   });
 
+  it("aborts when a workspace package diverged and its built artifacts are absent from the merged tree", () => {
+    writeFile(sourceRoot, "pnpm-lock.yaml", "lock");
+    writeFile(sourceRoot, "package.json", "{}");
+    writeFile(
+      sourceRoot,
+      "packages/sdk/package.json",
+      JSON.stringify({ main: "./dist/index.mjs" }),
+    );
+    writeFile(sourceRoot, "packages/sdk/src/index.ts", "export const v = 'SOURCE';\n");
+    writeFile(sourceRoot, "packages/sdk/dist/index.mjs", "export const v = 'BUILT';\n");
+    fs.mkdirSync(path.join(sourceRoot, "node_modules"));
+    fs.symlinkSync("../packages/sdk", path.join(sourceRoot, "node_modules/sdk"));
+
+    writeFile(targetRoot, "pnpm-lock.yaml", "lock");
+    writeFile(targetRoot, "package.json", "{}");
+    writeFile(
+      targetRoot,
+      "packages/sdk/package.json",
+      JSON.stringify({ main: "./dist/index.mjs" }),
+    );
+    writeFile(targetRoot, "packages/sdk/src/index.ts", "export const v = 'MERGED';\n");
+
+    const result = linkNodeModules({ sourceRoot, targetRoot });
+
+    expect(result.method).toBe("abort");
+    expect(result.reason).toContain("sdk");
+    expect(result.reason).toMatch(/rebuild/);
+    expect(fs.existsSync(path.join(targetRoot, "node_modules"))).toBe(false);
+  });
+
+  it("detects missing entrypoints declared via exports-only manifests", () => {
+    writeFile(sourceRoot, "pnpm-lock.yaml", "lock");
+    writeFile(sourceRoot, "package.json", "{}");
+    writeFile(
+      sourceRoot,
+      "packages/sdk/package.json",
+      JSON.stringify({
+        exports: {
+          ".": { import: "./dist/index.mjs", types: "./dist/index.d.mts" },
+        },
+      }),
+    );
+    writeFile(sourceRoot, "packages/sdk/src/index.ts", "export const v = 'SRC';\n");
+    writeFile(sourceRoot, "packages/sdk/dist/index.mjs", "export const v = 'BUILT';\n");
+    fs.mkdirSync(path.join(sourceRoot, "node_modules"));
+    fs.symlinkSync("../packages/sdk", path.join(sourceRoot, "node_modules/sdk"));
+
+    writeFile(targetRoot, "pnpm-lock.yaml", "lock");
+    writeFile(targetRoot, "package.json", "{}");
+    writeFile(
+      targetRoot,
+      "packages/sdk/package.json",
+      JSON.stringify({
+        exports: {
+          ".": { import: "./dist/index.mjs", types: "./dist/index.d.mts" },
+        },
+      }),
+    );
+    // Same src between source and target so fallback is allowed.
+    writeFile(targetRoot, "packages/sdk/src/index.ts", "export const v = 'SRC';\n");
+
+    const result = linkNodeModules({ sourceRoot, targetRoot });
+
+    expect(result.method).toBe("symlink");
+    const linked = path.join(targetRoot, "node_modules/sdk/dist/index.mjs");
+    expect(fs.readFileSync(linked, "utf8")).toBe("export const v = 'BUILT';\n");
+  });
+
   it("recreates scoped workspace symlinks so they resolve inside the target worktree", () => {
     writeFile(sourceRoot, "pnpm-lock.yaml", "lock");
     writeFile(sourceRoot, "package.json", "{}");
