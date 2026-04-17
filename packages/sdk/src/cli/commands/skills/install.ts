@@ -1,11 +1,16 @@
-import { resolve } from "pathe";
+import { dirname, resolve } from "pathe";
+import { resolvePackageJSON } from "pkg-types";
 import { arg } from "politty";
 import { z } from "zod";
 import { defineAppCommand } from "@/cli/shared/command";
 import { runSkillsInstaller } from "@/cli/shared/skills-installer";
 
-// dist/cli/commands/skills/install.mjs -> ../../../.. = {sdk_package_root}/skills
-const bundledSkillsDir = resolve(import.meta.dirname, "..", "..", "..", "..", "skills");
+// Resolve the SDK package root at runtime so the skills directory is found
+// regardless of how the file is bundled (tsdown inlines non-entry modules).
+export async function resolveBundledSkillsDir(): Promise<string> {
+  const pkgJsonPath = await resolvePackageJSON(import.meta.url);
+  return resolve(dirname(pkgJsonPath), "skills");
+}
 
 export const installCommand = defineAppCommand({
   name: "install",
@@ -24,7 +29,7 @@ export const installCommand = defineAppCommand({
     .strict(),
   run: async (args) => {
     const exitCode = await runSkillsInstaller({
-      source: bundledSkillsDir,
+      source: await resolveBundledSkillsDir(),
       agent: args.agent,
       yes: args.yes,
     });
