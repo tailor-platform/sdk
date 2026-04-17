@@ -102,7 +102,12 @@ function populateNodeModules(sourceDir: string, targetDir: string): void {
     if (entry.isSymbolicLink()) {
       // Recreate the symlink verbatim. Relative links like `../packages/foo`
       // then resolve inside `targetDir`, pointing to the merged worktree copy.
-      fs.symlinkSync(fs.readlinkSync(srcEntry), tgtEntry);
+      // Resolve the link target against the source location to determine its
+      // type, so Windows creates directory (not file) links for workspace
+      // packages whose relative targets don't yet exist under `targetDir`.
+      const linkTarget = fs.readlinkSync(srcEntry);
+      const type = resolveLinkType(path.resolve(path.dirname(srcEntry), linkTarget));
+      fs.symlinkSync(linkTarget, tgtEntry, type);
     } else if (entry.isDirectory() && entry.name.startsWith("@")) {
       // Scoped package dirs (e.g. `@scope/pkg`) contain the actual package
       // entries one level deeper, which may include workspace symlinks.
@@ -111,6 +116,16 @@ function populateNodeModules(sourceDir: string, targetDir: string): void {
     } else {
       fs.symlinkSync(srcEntry, tgtEntry, entry.isDirectory() ? "dir" : "file");
     }
+  }
+}
+
+function resolveLinkType(absTarget: string): "dir" | "file" {
+  try {
+    return fs.statSync(absTarget).isDirectory() ? "dir" : "file";
+  } catch {
+    // Target missing (e.g. pnpm's `.bin` shims or broken link): default to
+    // file, which is the safer fallback for executables and stubs.
+    return "file";
   }
 }
 
