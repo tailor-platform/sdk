@@ -174,6 +174,12 @@ To update types in `tailor.d.ts`, run:
 tailor-sdk generate
 ```
 
+To customize the output path, set the `TAILOR_PLATFORM_SDK_DTS_PATH` environment variable:
+
+```bash
+TAILOR_PLATFORM_SDK_DTS_PATH=src/types/tailor.d.ts tailor-sdk generate
+```
+
 ## Machine Users
 
 Service accounts for automated access without user interaction:
