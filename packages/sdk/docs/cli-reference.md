@@ -62,6 +62,7 @@ You can use environment variables to configure workspace and authentication:
 | `TAILOR_TOKEN`                               | **Deprecated.** Use `TAILOR_PLATFORM_TOKEN` instead                          |
 | `TAILOR_PLATFORM_PROFILE`                    | Workspace profile name                                                       |
 | `TAILOR_PLATFORM_SDK_CONFIG_PATH`            | Path to SDK config file                                                      |
+| `TAILOR_PLATFORM_SDK_DTS_PATH`               | Output path for generated `tailor.d.ts` type definition file                 |
 | `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     | Client ID for `login --machine-user`                                         |
 | `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | Client secret for `login --machine-user`                                     |
 | `TAILOR_PLATFORM_MACHINE_USER_NAME`          | Default machine user name for `query`, `workflow start`, `function test-run` |
