@@ -28,8 +28,19 @@ describe("listWorkflowExecutions API types", () => {
     acceptsOptions({
       workflow: myWorkflow,
       status: "RUNNING",
+      order: "desc",
+      limit: 25,
       workspaceId: "ws-1",
       profile: "dev",
+    });
+  });
+
+  it("rejects invalid order values", () => {
+    const acceptsOptions = (_options: ListWorkflowExecutionsTypedOptions): void => {};
+
+    acceptsOptions({
+      // @ts-expect-error - only "asc" and "desc" are valid
+      order: "newest",
     });
   });
 
@@ -78,6 +89,8 @@ describe("listWorkflowExecutions API types", () => {
     acceptsDeprecatedOptions({
       workflowName: "legacy-workflow",
       status: "RUNNING",
+      order: "asc",
+      limit: 10,
       workspaceId: "ws-1",
       profile: "dev",
     });
