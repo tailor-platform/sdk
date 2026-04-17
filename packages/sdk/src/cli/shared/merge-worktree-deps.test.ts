@@ -129,6 +129,41 @@ describe("linkNodeModules", () => {
     expect(result.reason).toContain(lockfile);
   });
 
+  it("aborts when a nested lockfile differs even though the root matches", () => {
+    writeFile(sourceRoot, "pnpm-lock.yaml", "lock");
+    writeFile(sourceRoot, "package.json", "{}");
+    writeFile(sourceRoot, "apps/foo/package.json", "{}");
+    writeFile(sourceRoot, "apps/foo/package-lock.json", "v1");
+    writeFile(sourceRoot, "apps/foo/node_modules/dep/index.js", "a");
+
+    writeFile(targetRoot, "pnpm-lock.yaml", "lock");
+    writeFile(targetRoot, "package.json", "{}");
+    writeFile(targetRoot, "apps/foo/package.json", "{}");
+    writeFile(targetRoot, "apps/foo/package-lock.json", "v2");
+
+    const result = linkNodeModules({ sourceRoot, targetRoot });
+
+    expect(result.method).toBe("abort");
+    expect(result.reason).toContain("apps/foo/package-lock.json");
+    expect(fs.existsSync(path.join(targetRoot, "apps/foo/node_modules"))).toBe(false);
+  });
+
+  it("aborts when a nested package.json differs even though the root matches", () => {
+    writeFile(sourceRoot, "pnpm-lock.yaml", "lock");
+    writeFile(sourceRoot, "package.json", "{}");
+    writeFile(sourceRoot, "packages/sdk/package.json", '{"deps":"a"}');
+    writeFile(sourceRoot, "packages/sdk/node_modules/dep/index.js", "a");
+
+    writeFile(targetRoot, "pnpm-lock.yaml", "lock");
+    writeFile(targetRoot, "package.json", "{}");
+    writeFile(targetRoot, "packages/sdk/package.json", '{"deps":"b"}');
+
+    const result = linkNodeModules({ sourceRoot, targetRoot });
+
+    expect(result.method).toBe("abort");
+    expect(result.reason).toContain("packages/sdk/package.json");
+  });
+
   it("aborts when the root package.json differs", () => {
     writeFile(sourceRoot, "pnpm-lock.yaml", "lock");
     writeFile(sourceRoot, "package.json", '{"deps":"a"}');

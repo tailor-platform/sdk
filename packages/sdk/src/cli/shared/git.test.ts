@@ -124,19 +124,17 @@ describe("git", () => {
       expect(result).toBe("origin/main");
     });
 
-    it("falls through when GITHUB_BASE_REF names an un-fetched ref", async () => {
-      const result = await detectBaseRef({
-        cwd: tmpDir,
-        env: { GITHUB_BASE_REF: "main" },
-        runGh: async () => ({ stdout: "release\n", stderr: "", exitCode: 0 }),
-        runGitCmd: async (args) => {
-          if (args[0] === "rev-parse") {
-            return { stdout: "", stderr: "", exitCode: 1 };
-          }
-          return { stdout: "", stderr: "", exitCode: 1 };
-        },
-      });
-      expect(result).toBe("origin/release");
+    it("throws when GITHUB_BASE_REF names an un-fetched ref instead of falling back", async () => {
+      await expect(
+        detectBaseRef({
+          cwd: tmpDir,
+          env: { GITHUB_BASE_REF: "main" },
+          runGh: async () => {
+            throw new Error("gh must not be consulted when GITHUB_BASE_REF is authoritative");
+          },
+          runGitCmd: async () => ({ stdout: "", stderr: "", exitCode: 1 }),
+        }),
+      ).rejects.toThrow(/GITHUB_BASE_REF is "main".*not available/);
     });
 
     it("prefers the gh PR base ref when GITHUB_BASE_REF is absent", async () => {

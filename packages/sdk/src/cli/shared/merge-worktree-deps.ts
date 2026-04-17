@@ -42,26 +42,25 @@ const LOCKFILES = ["pnpm-lock.yaml", "package-lock.json", "yarn.lock", "bun.lock
 export function linkNodeModules(options: LinkNodeModulesOptions): LinkNodeModulesResult {
   const { sourceRoot, targetRoot } = options;
 
-  for (const lockfile of LOCKFILES) {
-    if (filesDiffer(sourceRoot, targetRoot, lockfile)) {
-      return {
-        method: "abort",
-        reason: `${lockfile} differs between source and merge target; reinstall dependencies first.`,
-        created: [],
-      };
+  const nodeModulesDirs = findNodeModulesDirs(sourceRoot);
+
+  // Verify manifests match at the repo root plus each node_modules' parent
+  // directory. Nested workspaces (e.g. `apps/foo/package-lock.json`) can
+  // change independently of the repo root, so a root-only check would
+  // silently link stale deps into the merged tree.
+  const parentsToCheck = new Set<string>(["."]);
+  for (const rel of nodeModulesDirs) {
+    parentsToCheck.add(path.dirname(rel));
+  }
+  for (const parentRel of parentsToCheck) {
+    const targetParent = path.join(targetRoot, parentRel);
+    if (!fs.existsSync(targetParent)) continue;
+    const mismatch = findManifestMismatch(sourceRoot, targetRoot, parentRel);
+    if (mismatch) {
+      return { method: "abort", reason: mismatch, created: [] };
     }
   }
 
-  if (filesDiffer(sourceRoot, targetRoot, "package.json")) {
-    return {
-      method: "abort",
-      reason:
-        "Root package.json differs between source and merge target; dependencies may need to be reinstalled.",
-      created: [],
-    };
-  }
-
-  const nodeModulesDirs = findNodeModulesDirs(sourceRoot);
   const created: string[] = [];
   for (const rel of nodeModulesDirs) {
     const sourcePath = path.join(sourceRoot, rel);
@@ -75,6 +74,24 @@ export function linkNodeModules(options: LinkNodeModulesOptions): LinkNodeModule
   }
 
   return { method: "symlink", created };
+}
+
+function findManifestMismatch(
+  sourceRoot: string,
+  targetRoot: string,
+  parentRel: string,
+): string | null {
+  for (const lockfile of LOCKFILES) {
+    const lockRel = path.join(parentRel, lockfile);
+    if (filesDiffer(sourceRoot, targetRoot, lockRel)) {
+      return `${lockRel} differs between source and merge target; reinstall dependencies first.`;
+    }
+  }
+  const pkgRel = path.join(parentRel, "package.json");
+  if (filesDiffer(sourceRoot, targetRoot, pkgRel)) {
+    return `${pkgRel} differs between source and merge target; dependencies may need to be reinstalled.`;
+  }
+  return null;
 }
 
 function populateNodeModules(sourceDir: string, targetDir: string): void {

@@ -137,15 +137,20 @@ export async function detectBaseRef(deps?: DetectBaseRefDeps): Promise<string | 
   const ciBase = env.GITHUB_BASE_REF?.trim();
   if (ciBase) {
     const ref = `origin/${ciBase}`;
-    // Verify the ref was fetched before returning it; otherwise later `git
-    // merge` fails cryptically. A shallow `actions/checkout` may have skipped
-    // fetching the base branch, in which case we fall through to other
-    // detection paths.
     const verify = await runGitFn(["rev-parse", "--verify", "--quiet", ref], {
       cwd: deps?.cwd,
       allowFail: true,
     });
     if (verify.exitCode === 0) return ref;
+    // GITHUB_BASE_REF is authoritative — falling back to gh or origin/HEAD
+    // would silently plan against a different base. Surface a clear error
+    // so CI can fetch the base ref (e.g. `fetch-depth: 0`) and retry.
+    throw new Error(
+      `GITHUB_BASE_REF is "${ciBase}" but ${ref} is not available locally. ` +
+        `The PR checkout is likely shallow; fetch the base branch (e.g. ` +
+        `configure actions/checkout with \`fetch-depth: 0\` or run ` +
+        `\`git fetch origin ${ciBase}\`) and retry.`,
+    );
   }
 
   const ghResult = await runGhFn(["pr", "view", "--json", "baseRefName", "-q", ".baseRefName"], {
