@@ -110,11 +110,18 @@ describe("git", () => {
     it("prefers GITHUB_BASE_REF when set by CI and the ref is fetched", async () => {
       const result = await detectBaseRef({
         cwd: tmpDir,
-        env: { GITHUB_BASE_REF: "main" },
+        env: { GITHUB_BASE_REF: "main", GITHUB_REPOSITORY: "acme/repo" },
         runGh: async () => {
           throw new Error("gh should not be called when GITHUB_BASE_REF is set and verified");
         },
         runGitCmd: async (args) => {
+          if (args[0] === "remote" && args[1] === "-v") {
+            return {
+              stdout: "origin\thttps://github.com/acme/repo.git (fetch)",
+              stderr: "",
+              exitCode: 0,
+            };
+          }
           if (args[0] === "rev-parse" && args.includes("origin/main")) {
             return { stdout: "deadbeef\n", stderr: "", exitCode: 0 };
           }
@@ -122,6 +129,39 @@ describe("git", () => {
         },
       });
       expect(result).toBe("origin/main");
+    });
+
+    it("maps GITHUB_BASE_REF to the base-repo remote in fork-style CI checkouts", async () => {
+      const result = await detectBaseRef({
+        cwd: tmpDir,
+        env: {
+          GITHUB_BASE_REF: "main",
+          GITHUB_REPOSITORY: "upstream/repo",
+          GITHUB_SERVER_URL: "https://github.com",
+        },
+        runGh: async () => {
+          throw new Error("gh should not be called when GITHUB_BASE_REF is set and verified");
+        },
+        runGitCmd: async (args) => {
+          if (args[0] === "remote" && args[1] === "-v") {
+            return {
+              stdout: [
+                "origin\thttps://github.com/contributor/repo.git (fetch)",
+                "origin\thttps://github.com/contributor/repo.git (push)",
+                "upstream\thttps://github.com/upstream/repo.git (fetch)",
+                "upstream\thttps://github.com/upstream/repo.git (push)",
+              ].join("\n"),
+              stderr: "",
+              exitCode: 0,
+            };
+          }
+          if (args[0] === "rev-parse" && args.includes("upstream/main")) {
+            return { stdout: "deadbeef\n", stderr: "", exitCode: 0 };
+          }
+          return { stdout: "", stderr: "", exitCode: 1 };
+        },
+      });
+      expect(result).toBe("upstream/main");
     });
 
     it("throws when GITHUB_BASE_REF names an un-fetched ref instead of falling back", async () => {

@@ -136,7 +136,13 @@ export async function detectBaseRef(deps?: DetectBaseRefDeps): Promise<string | 
 
   const ciBase = env.GITHUB_BASE_REF?.trim();
   if (ciBase) {
-    const ref = `origin/${ciBase}`;
+    // Fork-style pull_request checkouts can point `origin` at the contributor
+    // fork, which would make `origin/<base>` resolve to the fork's branch
+    // instead of the PR's real base. Use GITHUB_REPOSITORY to match the
+    // base-repo remote, mirroring the gh path.
+    const baseRepoUrl = buildGithubRepoUrl(env.GITHUB_SERVER_URL, env.GITHUB_REPOSITORY);
+    const remote = await resolveBaseRemote({ baseRepoUrl, cwd: deps?.cwd, runGitFn });
+    const ref = `${remote}/${ciBase}`;
     const verify = await runGitFn(["rev-parse", "--verify", "--quiet", ref], {
       cwd: deps?.cwd,
       allowFail: true,
@@ -149,7 +155,7 @@ export async function detectBaseRef(deps?: DetectBaseRefDeps): Promise<string | 
       `GITHUB_BASE_REF is "${ciBase}" but ${ref} is not available locally. ` +
         `The PR checkout is likely shallow; fetch the base branch (e.g. ` +
         `configure actions/checkout with \`fetch-depth: 0\` or run ` +
-        `\`git fetch origin ${ciBase}\`) and retry.`,
+        `\`git fetch ${remote} ${ciBase}\`) and retry.`,
     );
   }
 
@@ -165,8 +171,8 @@ export async function detectBaseRef(deps?: DetectBaseRefDeps): Promise<string | 
       // URL so `--base` plans against the real PR base rather than the
       // contributor's fork mirror. Fall back to `origin` when no remote
       // matches, matching historical behavior.
-      const remote = await resolvePrBaseRemote({
-        prUrl: parsed.url,
+      const remote = await resolveBaseRemote({
+        baseRepoUrl: extractBaseRepoUrl(parsed.url),
         cwd: deps?.cwd,
         runGitFn,
       });
@@ -214,15 +220,14 @@ function parseGhPrView(stdout: string): GhPrView | null {
   }
 }
 
-interface ResolvePrBaseRemoteArgs {
-  prUrl: string | undefined;
+interface ResolveBaseRemoteArgs {
+  baseRepoUrl: string | null;
   cwd: string | undefined;
   runGitFn: (args: string[], options?: RunOptions) => Promise<RunResult>;
 }
 
-async function resolvePrBaseRemote(args: ResolvePrBaseRemoteArgs): Promise<string> {
-  const { prUrl, cwd, runGitFn } = args;
-  const baseRepoUrl = extractBaseRepoUrl(prUrl);
+async function resolveBaseRemote(args: ResolveBaseRemoteArgs): Promise<string> {
+  const { baseRepoUrl, cwd, runGitFn } = args;
   if (!baseRepoUrl) return "origin";
   const remotes = await runGitFn(["remote", "-v"], { cwd, allowFail: true });
   if (remotes.exitCode !== 0) return "origin";
@@ -243,6 +248,16 @@ function extractBaseRepoUrl(prUrl: string | undefined): string | null {
   // get the base repo URL.
   const match = /^(https?:\/\/[^/]+\/[^/]+\/[^/]+)\/pull\/\d+/.exec(prUrl);
   return match ? match[1] : null;
+}
+
+function buildGithubRepoUrl(
+  serverUrl: string | undefined,
+  repository: string | undefined,
+): string | null {
+  const repo = repository?.trim();
+  if (!repo) return null;
+  const server = serverUrl?.trim() || "https://github.com";
+  return `${server.replace(/\/+$/, "")}/${repo}`;
 }
 
 function normalizeGitRepoUrl(url: string): string {
