@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   add-changeset-app:
@@ -35,6 +36,7 @@ jobs:
           FILENAME=".changeset/renovate-${PR_NUMBER}.md"
           if [ -f "$FILENAME" ]; then
             echo "should_create=false" >> "$GITHUB_OUTPUT"
+            echo "add_skip_label=false" >> "$GITHUB_OUTPUT"
             echo "Changeset $FILENAME already exists; skipping"
             exit 0
           fi
@@ -46,6 +48,7 @@ jobs:
 
           if [ -z "$changed" ]; then
             echo "should_create=false" >> "$GITHUB_OUTPUT"
+            echo "add_skip_label=true" >> "$GITHUB_OUTPUT"
             echo "No packages/*/package.json changes; skipping"
             exit 0
           fi
@@ -72,6 +75,7 @@ jobs:
 
           if [ "${#names[@]}" -eq 0 ]; then
             echo "should_create=false" >> "$GITHUB_OUTPUT"
+            echo "add_skip_label=true" >> "$GITHUB_OUTPUT"
             echo "Only devDependencies changed; no changeset needed"
             exit 0
           fi
@@ -79,6 +83,7 @@ jobs:
           unique=$(printf '%s\n' "${names[@]}" | sort -u)
           {
             echo "should_create=true"
+            echo "add_skip_label=false"
             echo "names<<NAMES_EOF"
             echo "$unique"
             echo "NAMES_EOF"
@@ -114,3 +119,10 @@ jobs:
           files: |
             .changeset/renovate-${{ github.event.pull_request.number }}.md
           fail_on_self_push: false
+
+      - name: Add skip-changeset label
+        if: steps.plan.outputs.add_skip_label == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: gh pr edit "$PR_NUMBER" --add-label skip-changeset
