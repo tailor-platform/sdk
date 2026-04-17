@@ -151,6 +151,11 @@ export declare type AuthIDPConfig_SAMLConfig = Message<"tailor.v1.AuthIDPConfig.
    * @generated from field: bool enable_sign_request = 5;
    */
   enableSignRequest: boolean;
+
+  /**
+   * @generated from field: string default_redirect_url = 6;
+   */
+  defaultRedirectUrl: string;
 };
 
 /**

@@ -3,6 +3,7 @@ import type { Operation } from "./operation";
 import type { Trigger } from "./trigger";
 import type { AuthInvoker } from "@/configure/services/auth";
 import type { Workflow } from "@/configure/services/workflow/workflow";
+import type { MachineUserName } from "@/configure/types/machine-user";
 import type { ExecutorInput } from "@/types/executor.generated";
 
 /**
@@ -30,7 +31,7 @@ type Executor<T extends Trigger<unknown>, O> = O extends {
         kind: "workflow";
         workflow: W;
         args?: WorkflowInput<W> | ((args: TriggerArgs<T>) => WorkflowInput<W>);
-        authInvoker?: AuthInvoker<string>;
+        authInvoker?: AuthInvoker<string> | MachineUserName;
       };
     }
   : ExecutorBase<T> & {

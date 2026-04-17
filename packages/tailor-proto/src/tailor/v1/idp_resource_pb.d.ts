@@ -5,6 +5,7 @@
 import type { GenEnum, GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
 import type { Namespace } from "./resource_pb";
+import type { Value } from "@bufbuild/protobuf/wkt";
 
 /**
  * Describes the file tailor/v1/idp_resource.proto.
@@ -59,6 +60,11 @@ export declare type IdPService = Message<"tailor.v1.IdPService"> & {
    * @generated from field: tailor.v1.IdPEmailConfig email_config = 8;
    */
   emailConfig?: IdPEmailConfig;
+
+  /**
+   * @generated from field: tailor.v1.IdPPermission permission = 9;
+   */
+  permission?: IdPPermission;
 };
 
 /**
@@ -66,6 +72,142 @@ export declare type IdPService = Message<"tailor.v1.IdPService"> & {
  * Use `create(IdPServiceSchema)` to create a new message.
  */
 export declare const IdPServiceSchema: GenMessage<IdPService>;
+
+/**
+ * IdPPermission defines per-operation permission policies for IDP namespaces.
+ *
+ * @generated from message tailor.v1.IdPPermission
+ */
+export declare type IdPPermission = Message<"tailor.v1.IdPPermission"> & {
+  /**
+   * @generated from field: repeated tailor.v1.IdPPermissionPolicy create = 1;
+   */
+  create: IdPPermissionPolicy[];
+
+  /**
+   * @generated from field: repeated tailor.v1.IdPPermissionPolicy read = 2;
+   */
+  read: IdPPermissionPolicy[];
+
+  /**
+   * @generated from field: repeated tailor.v1.IdPPermissionPolicy update = 3;
+   */
+  update: IdPPermissionPolicy[];
+
+  /**
+   * @generated from field: repeated tailor.v1.IdPPermissionPolicy delete = 4;
+   */
+  delete: IdPPermissionPolicy[];
+
+  /**
+   * @generated from field: repeated tailor.v1.IdPPermissionPolicy send_password_reset_email = 5;
+   */
+  sendPasswordResetEmail: IdPPermissionPolicy[];
+};
+
+/**
+ * Describes the message tailor.v1.IdPPermission.
+ * Use `create(IdPPermissionSchema)` to create a new message.
+ */
+export declare const IdPPermissionSchema: GenMessage<IdPPermission>;
+
+/**
+ * @generated from message tailor.v1.IdPPermissionPolicy
+ */
+export declare type IdPPermissionPolicy = Message<"tailor.v1.IdPPermissionPolicy"> & {
+  /**
+   * @generated from field: repeated tailor.v1.IdPPermissionCondition conditions = 1;
+   */
+  conditions: IdPPermissionCondition[];
+
+  /**
+   * @generated from field: tailor.v1.IdPPermissionPermit permit = 2;
+   */
+  permit: IdPPermissionPermit;
+
+  /**
+   * @generated from field: optional string description = 3;
+   */
+  description?: string;
+};
+
+/**
+ * Describes the message tailor.v1.IdPPermissionPolicy.
+ * Use `create(IdPPermissionPolicySchema)` to create a new message.
+ */
+export declare const IdPPermissionPolicySchema: GenMessage<IdPPermissionPolicy>;
+
+/**
+ * @generated from message tailor.v1.IdPPermissionCondition
+ */
+export declare type IdPPermissionCondition = Message<"tailor.v1.IdPPermissionCondition"> & {
+  /**
+   * @generated from field: tailor.v1.IdPPermissionOperand left = 1;
+   */
+  left?: IdPPermissionOperand;
+
+  /**
+   * @generated from field: tailor.v1.IdPPermissionOperator operator = 2;
+   */
+  operator: IdPPermissionOperator;
+
+  /**
+   * @generated from field: tailor.v1.IdPPermissionOperand right = 3;
+   */
+  right?: IdPPermissionOperand;
+};
+
+/**
+ * Describes the message tailor.v1.IdPPermissionCondition.
+ * Use `create(IdPPermissionConditionSchema)` to create a new message.
+ */
+export declare const IdPPermissionConditionSchema: GenMessage<IdPPermissionCondition>;
+
+/**
+ * @generated from message tailor.v1.IdPPermissionOperand
+ */
+export declare type IdPPermissionOperand = Message<"tailor.v1.IdPPermissionOperand"> & {
+  /**
+   * @generated from oneof tailor.v1.IdPPermissionOperand.kind
+   */
+  kind: {
+    /**
+     * @generated from field: string user_field = 1;
+     */
+    value: string;
+    case: "userField";
+  } | {
+    /**
+     * @generated from field: string idp_user_field = 2;
+     */
+    value: string;
+    case: "idpUserField";
+  } | {
+    /**
+     * @generated from field: string old_idp_user_field = 3;
+     */
+    value: string;
+    case: "oldIdpUserField";
+  } | {
+    /**
+     * @generated from field: string new_idp_user_field = 4;
+     */
+    value: string;
+    case: "newIdpUserField";
+  } | {
+    /**
+     * @generated from field: google.protobuf.Value value = 5;
+     */
+    value: Value;
+    case: "value";
+  } | { case: undefined; value?: undefined };
+};
+
+/**
+ * Describes the message tailor.v1.IdPPermissionOperand.
+ * Use `create(IdPPermissionOperandSchema)` to create a new message.
+ */
+export declare const IdPPermissionOperandSchema: GenMessage<IdPPermissionOperand>;
 
 /**
  * IdPDisableGqlOperations controls which IdP-related GraphQL operations are disabled.
@@ -262,6 +404,66 @@ export declare type IdPUserAuthPolicy = Message<"tailor.v1.IdPUserAuthPolicy"> &
  * Use `create(IdPUserAuthPolicySchema)` to create a new message.
  */
 export declare const IdPUserAuthPolicySchema: GenMessage<IdPUserAuthPolicy>;
+
+/**
+ * @generated from enum tailor.v1.IdPPermissionOperator
+ */
+export enum IdPPermissionOperator {
+  /**
+   * @generated from enum value: ID_P_PERMISSION_OPERATOR_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: ID_P_PERMISSION_OPERATOR_EQ = 1;
+   */
+  EQ = 1,
+
+  /**
+   * @generated from enum value: ID_P_PERMISSION_OPERATOR_NE = 2;
+   */
+  NE = 2,
+
+  /**
+   * @generated from enum value: ID_P_PERMISSION_OPERATOR_IN = 3;
+   */
+  IN = 3,
+
+  /**
+   * @generated from enum value: ID_P_PERMISSION_OPERATOR_NIN = 4;
+   */
+  NIN = 4,
+}
+
+/**
+ * Describes the enum tailor.v1.IdPPermissionOperator.
+ */
+export declare const IdPPermissionOperatorSchema: GenEnum<IdPPermissionOperator>;
+
+/**
+ * @generated from enum tailor.v1.IdPPermissionPermit
+ */
+export enum IdPPermissionPermit {
+  /**
+   * @generated from enum value: ID_P_PERMISSION_PERMIT_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: ID_P_PERMISSION_PERMIT_ALLOW = 1;
+   */
+  ALLOW = 1,
+
+  /**
+   * @generated from enum value: ID_P_PERMISSION_PERMIT_DENY = 2;
+   */
+  DENY = 2,
+}
+
+/**
+ * Describes the enum tailor.v1.IdPPermissionPermit.
+ */
+export declare const IdPPermissionPermitSchema: GenEnum<IdPPermissionPermit>;
 
 /**
  * IdPLang represents the IETF BCP 47 language subtag.

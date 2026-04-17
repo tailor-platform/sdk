@@ -115,6 +115,54 @@ export const mainJob = createWorkflowJob({
 
 **Important:** On the Tailor runtime, job triggers are executed synchronously. This means `Promise.all([jobA.trigger(), jobB.trigger()])` will not run jobs in parallel.
 
+### Deterministic Execution Requirement
+
+Workflow jobs use a **suspend/resume execution model**. When a job calls `.trigger()`, the runtime suspends the current job, executes the triggered job, and then **re-executes the calling job from the beginning** with cached results from previous triggers.
+
+This means that **job code must be deterministic** — every re-execution must produce the same sequence of `.trigger()` calls with the same arguments in the same order.
+
+Using `.trigger()` inside a loop works correctly, as long as the loop is deterministic:
+
+```typescript
+// ✅ OK: deterministic loop — same calls in the same order on every execution
+const regions = ["us", "eu", "ap"];
+for (const region of regions) {
+  const result = await fetchData.trigger({ region });
+  results.push(result);
+}
+```
+
+```typescript
+// ❌ Bad: non-deterministic — argument changes between executions
+await processJob.trigger({ timestamp: Date.now() });
+
+// ✅ OK: call Date.now() in separated job
+const timestamp = await timestampJob.trigger();
+await processJob.trigger({ timestamp });
+```
+
+```typescript
+// ❌ Bad: non-deterministic — external data may change between executions
+const items = await fetch("https://api.example.com/items").then((r) => r.json());
+for (const item of items) {
+  await processItem.trigger({ id: item.id });
+}
+
+// ✅ OK: call fetch("https://api.example.com/items").then((r) => r.json()); in separated job
+const items = await fetchItemsJob.trigger();
+for (const item of items) {
+  await processItem.trigger({ id: item.id });
+}
+```
+
+If the runtime detects that a `.trigger()` call at the same position has different arguments than the previous execution, it will throw an **argument hash mismatch error**.
+
+**Guidelines:**
+
+- Do not use non-deterministic values (random numbers, timestamps, external API responses) as `.trigger()` arguments.
+- Do not use conditions that may change between executions to decide whether to call `.trigger()`.
+- Any data that varies between executions should be fetched **inside the triggered job**, not passed as an argument from the calling job.
+
 ## Workflow Definition
 
 Define a workflow using `createWorkflow` and export it as default:
@@ -179,11 +227,10 @@ export default createWorkflow({
 You can start a workflow execution from a resolver using `workflow.trigger()`.
 
 - `workflow.trigger(args, options?)` returns a workflow run ID (`Promise<string>`).
-- To run with machine-user permissions, pass `{ authInvoker: auth.invoker("<machine-user>") }`.
+- To run with machine-user permissions, pass `{ authInvoker: "<machine-user>" }`. The name is type-narrowed to the machine users defined in your auth config.
 
 ```typescript
 import { createResolver, t } from "@tailor-platform/sdk";
-import { auth } from "../tailor.config";
 import orderProcessingWorkflow from "../workflows/order-processing";
 
 export default createResolver({
@@ -196,7 +243,7 @@ export default createResolver({
   body: async ({ input }) => {
     const workflowRunId = await orderProcessingWorkflow.trigger(
       { orderId: input.orderId, customerId: input.customerId },
-      { authInvoker: auth.invoker("manager-machine-user") },
+      { authInvoker: "manager-machine-user" },
     );
 
     return { workflowRunId };
@@ -206,6 +253,8 @@ export default createResolver({
   }),
 });
 ```
+
+> **Deprecated:** `auth.invoker("manager-machine-user")` still works but is deprecated. Using the string form avoids importing `auth` into runtime code.
 
 See the full working example in the repository: [example/resolvers/triggerWorkflow.ts](../../../../example/resolvers/triggerWorkflow.ts).
 

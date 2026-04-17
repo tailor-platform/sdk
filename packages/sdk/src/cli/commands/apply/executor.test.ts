@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
-import { planExecutor } from "./executor";
+import { formatExecutorChangeEntries, planExecutor } from "./executor";
 import { sdkNameLabelKey } from "./label";
 import type { PlanContext } from "./apply";
 import type { Application } from "@/cli/services/application";
@@ -1045,5 +1045,86 @@ describe("planExecutor", () => {
       ]);
       expect(typedConfig.value.condition).toBeDefined();
     });
+  });
+});
+
+describe("formatExecutorChangeEntries", () => {
+  test("groups function executor updates with related function registry updates", () => {
+    const entries = formatExecutorChangeEntries(
+      {
+        creates: [],
+        updates: [
+          {
+            name: "user-created",
+            request: {
+              workspaceId: "ws",
+              executor: {
+                name: "user-created",
+                targetType: 3,
+              },
+            },
+            metaRequest: { trn: "t", labels: {} },
+          },
+        ],
+        deletes: [],
+        replaces: [],
+      },
+      {
+        "user-created": {
+          name: "user-created",
+          targetType: 3,
+        },
+      },
+      {
+        creates: [],
+        updates: [{ name: "executor--user-created" }],
+        deletes: [],
+        replaces: [],
+      },
+    );
+
+    expect(entries).toEqual([
+      {
+        action: "update",
+        symbol: "~",
+        name: "user-created",
+        labels: ["executor", "function"],
+      },
+    ]);
+  });
+
+  test("groups function executor deletes with related function registry deletes", () => {
+    const entries = formatExecutorChangeEntries(
+      {
+        creates: [],
+        updates: [],
+        deletes: [
+          {
+            name: "user-created",
+            request: {
+              workspaceId: "ws",
+              name: "user-created",
+            },
+          },
+        ],
+        replaces: [],
+      },
+      {},
+      {
+        creates: [],
+        updates: [],
+        deletes: [{ name: "executor--user-created" }],
+        replaces: [],
+      },
+    );
+
+    expect(entries).toEqual([
+      {
+        action: "delete",
+        symbol: "-",
+        name: "user-created",
+        labels: ["executor", "function"],
+      },
+    ]);
   });
 });
