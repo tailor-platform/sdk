@@ -275,6 +275,52 @@ describe("linkNodeModules", () => {
     expect(fs.readFileSync(linked, "utf8")).toBe("export const v = 'BUILT';\n");
   });
 
+  it("translates absolute intra-repo workspace symlinks to the merge worktree", () => {
+    writeFile(sourceRoot, "pnpm-lock.yaml", "lock");
+    writeFile(sourceRoot, "package.json", "{}");
+    writeFile(sourceRoot, "packages/my-pkg/src/index.ts", "export const v = 'SOURCE';\n");
+    fs.mkdirSync(path.join(sourceRoot, "node_modules"));
+    // Absolute symlink pointing into sourceRoot (pnpm/yarn can emit these).
+    fs.symlinkSync(
+      path.join(sourceRoot, "packages/my-pkg"),
+      path.join(sourceRoot, "node_modules/my-pkg"),
+    );
+
+    writeFile(targetRoot, "pnpm-lock.yaml", "lock");
+    writeFile(targetRoot, "package.json", "{}");
+    writeFile(targetRoot, "packages/my-pkg/src/index.ts", "export const v = 'MERGED';\n");
+
+    const result = linkNodeModules({ sourceRoot, targetRoot });
+
+    expect(result.method).toBe("symlink");
+    const linked = path.join(targetRoot, "node_modules/my-pkg/src/index.ts");
+    expect(fs.readFileSync(linked, "utf8")).toBe("export const v = 'MERGED';\n");
+  });
+
+  it("copies external absolute symlinks verbatim (e.g. pnpm store)", () => {
+    const externalStore = fs.mkdtempSync(path.join(os.tmpdir(), "mw-store-"));
+    try {
+      writeFile(externalStore, "pkg/package.json", JSON.stringify({ main: "./index.js" }));
+      writeFile(externalStore, "pkg/index.js", "module.exports = 'STORE';");
+
+      writeFile(sourceRoot, "pnpm-lock.yaml", "lock");
+      writeFile(sourceRoot, "package.json", "{}");
+      fs.mkdirSync(path.join(sourceRoot, "node_modules"));
+      fs.symlinkSync(path.join(externalStore, "pkg"), path.join(sourceRoot, "node_modules/pkg"));
+
+      writeFile(targetRoot, "pnpm-lock.yaml", "lock");
+      writeFile(targetRoot, "package.json", "{}");
+
+      const result = linkNodeModules({ sourceRoot, targetRoot });
+
+      expect(result.method).toBe("symlink");
+      const linked = path.join(targetRoot, "node_modules/pkg/index.js");
+      expect(fs.readFileSync(linked, "utf8")).toBe("module.exports = 'STORE';");
+    } finally {
+      fs.rmSync(externalStore, { recursive: true, force: true });
+    }
+  });
+
   it("recreates scoped workspace symlinks so they resolve inside the target worktree", () => {
     writeFile(sourceRoot, "pnpm-lock.yaml", "lock");
     writeFile(sourceRoot, "package.json", "{}");

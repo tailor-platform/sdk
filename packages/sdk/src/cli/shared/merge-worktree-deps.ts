@@ -70,15 +70,16 @@ export function linkNodeModules(options: LinkNodeModulesOptions): LinkNodeModule
     }
   }
 
-  // Pre-scan workspace symlinks before populating. If any relative link points
-  // at a merged-tree package missing its entrypoints AND that package's source
+  // Pre-scan workspace symlinks before populating. If any link points at a
+  // merged-tree package missing its entrypoints AND that package's source
   // content diverged from the merged tree, the source artifacts would
   // misrepresent the merged state. Abort instead of silently mixing trees.
+  const ctx: LinkCtx = { sourceRoot, targetRoot };
   for (const rel of nodeModulesDirs) {
     const sourceNm = path.join(sourceRoot, rel);
     const targetParent = path.join(targetRoot, path.dirname(rel));
     if (!fs.existsSync(targetParent)) continue;
-    const workspaceMismatch = findWorkspaceMismatch(sourceNm, path.join(targetRoot, rel));
+    const workspaceMismatch = findWorkspaceMismatch(sourceNm, path.join(targetRoot, rel), ctx);
     if (workspaceMismatch) {
       return { method: "abort", reason: workspaceMismatch, created: [] };
     }
@@ -92,11 +93,16 @@ export function linkNodeModules(options: LinkNodeModulesOptions): LinkNodeModule
     if (!fs.existsSync(parent)) continue;
 
     fs.rmSync(targetPath, { recursive: true, force: true });
-    populateNodeModules(sourcePath, targetPath);
+    populateNodeModules(sourcePath, targetPath, ctx);
     created.push(targetPath);
   }
 
   return { method: "symlink", created };
+}
+
+interface LinkCtx {
+  sourceRoot: string;
+  targetRoot: string;
 }
 
 function findManifestMismatch(
@@ -117,47 +123,75 @@ function findManifestMismatch(
   return null;
 }
 
-function populateNodeModules(sourceDir: string, targetDir: string): void {
+function populateNodeModules(sourceDir: string, targetDir: string, ctx: LinkCtx): void {
   fs.mkdirSync(targetDir, { recursive: true });
   for (const entry of fs.readdirSync(sourceDir, { withFileTypes: true })) {
     const srcEntry = path.join(sourceDir, entry.name);
     const tgtEntry = path.join(targetDir, entry.name);
     if (entry.isSymbolicLink()) {
-      rewriteSymlink(srcEntry, tgtEntry);
+      rewriteSymlink(srcEntry, tgtEntry, ctx);
     } else if (entry.isDirectory() && entry.name.startsWith("@")) {
       // Scoped package dirs (e.g. `@scope/pkg`) contain the actual package
       // entries one level deeper, which may include workspace symlinks.
       // Recurse so their symlinks are recreated verbatim too.
-      populateNodeModules(srcEntry, tgtEntry);
+      populateNodeModules(srcEntry, tgtEntry, ctx);
     } else {
       fs.symlinkSync(srcEntry, tgtEntry, entry.isDirectory() ? "dir" : "file");
     }
   }
 }
 
-function rewriteSymlink(srcEntry: string, tgtEntry: string): void {
+/** Describes where a symlink's target lives relative to the source/target roots. */
+interface LinkRedirect {
+  /** Absolute path the original link resolves to inside the source checkout. */
+  sourceDest: string;
+  /**
+   * When the link points inside `sourceRoot`, the corresponding path in the
+   * merge worktree. `null` for external targets (pnpm store, system paths),
+   * which should be linked verbatim.
+   */
+  targetDest: string | null;
+}
+
+function describeLink(srcEntry: string, linkTarget: string, ctx: LinkCtx): LinkRedirect {
+  const sourceDest = path.isAbsolute(linkTarget)
+    ? linkTarget
+    : path.resolve(path.dirname(srcEntry), linkTarget);
+  if (!isInside(sourceDest, ctx.sourceRoot)) {
+    return { sourceDest, targetDest: null };
+  }
+  const relFromRoot = path.relative(ctx.sourceRoot, sourceDest);
+  return { sourceDest, targetDest: path.join(ctx.targetRoot, relFromRoot) };
+}
+
+function rewriteSymlink(srcEntry: string, tgtEntry: string, ctx: LinkCtx): void {
   const linkTarget = fs.readlinkSync(srcEntry);
-  if (path.isAbsolute(linkTarget)) {
-    // Absolute links already point at a concrete source location (e.g. pnpm
-    // content-addressed store entries); copy verbatim.
-    fs.symlinkSync(linkTarget, tgtEntry, resolveLinkType(linkTarget));
+  const { sourceDest, targetDest } = describeLink(srcEntry, linkTarget, ctx);
+  // Links pointing outside the source repo (e.g. pnpm content-addressed store
+  // entries) reference immutable deps; copy the link verbatim.
+  if (targetDest === null) {
+    fs.symlinkSync(linkTarget, tgtEntry, resolveLinkType(sourceDest));
     return;
   }
-  // Relative links typically point at workspace packages. Recreate the link
-  // verbatim so it resolves inside `targetDir` (the merged worktree). But
-  // workspace packages may export built artifacts (e.g. `dist/`) that live
-  // outside git and so won't exist inside the merged worktree — in that case
-  // the retargeted link cannot load, so we fall back to the source location
-  // where dependencies are already installed. The pre-scan in
+  // Intra-repo links (workspace packages, absolute or relative). Retarget them
+  // at the merged tree so imports resolve against merged code. Workspace
+  // packages may export built artifacts (e.g. `dist/`) that live outside git
+  // and so won't exist inside the merged worktree — in that case the
+  // retargeted link cannot load, so fall back to the source location where
+  // dependencies are already installed. The pre-scan in
   // `findWorkspaceMismatch` proved the source/merged contents match when this
   // fallback is taken, so the source artifacts are a faithful stand-in.
-  const targetDest = path.resolve(path.dirname(tgtEntry), linkTarget);
   if (packageCanResolve(targetDest)) {
-    fs.symlinkSync(linkTarget, tgtEntry, resolveLinkType(targetDest));
+    const linkToWrite = path.isAbsolute(linkTarget) ? targetDest : linkTarget;
+    fs.symlinkSync(linkToWrite, tgtEntry, resolveLinkType(targetDest));
     return;
   }
-  const sourceDest = path.resolve(path.dirname(srcEntry), linkTarget);
   fs.symlinkSync(sourceDest, tgtEntry, resolveLinkType(sourceDest));
+}
+
+function isInside(candidate: string, root: string): boolean {
+  const rel = path.relative(root, candidate);
+  return rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel);
 }
 
 interface WorkspacePkgManifest {
@@ -223,7 +257,7 @@ function collectBinPaths(bin: unknown, out: string[]): void {
   }
 }
 
-function findWorkspaceMismatch(sourceNm: string, targetNm: string): string | null {
+function findWorkspaceMismatch(sourceNm: string, targetNm: string, ctx: LinkCtx): string | null {
   let entries: fs.Dirent[];
   try {
     entries = fs.readdirSync(sourceNm, { withFileTypes: true });
@@ -235,16 +269,17 @@ function findWorkspaceMismatch(sourceNm: string, targetNm: string): string | nul
     const tgtEntry = path.join(targetNm, entry.name);
     if (entry.isSymbolicLink()) {
       const linkTarget = fs.readlinkSync(srcEntry);
-      if (path.isAbsolute(linkTarget)) continue;
-      const targetDest = path.resolve(path.dirname(tgtEntry), linkTarget);
+      const { sourceDest, targetDest } = describeLink(srcEntry, linkTarget, ctx);
+      // External links (pnpm store, system paths) are immutable and identical
+      // between source and merged worktree; skip the parity check.
+      if (targetDest === null) continue;
       if (packageCanResolve(targetDest)) continue;
-      const sourceDest = path.resolve(path.dirname(srcEntry), linkTarget);
       const diverged = findPackageContentMismatch(sourceDest, targetDest);
       if (diverged) {
         return `workspace package "${entry.name}" diverged between source and merged tree (${diverged}); rebuild its artifacts inside the merged worktree and retry.`;
       }
     } else if (entry.isDirectory() && entry.name.startsWith("@")) {
-      const nested = findWorkspaceMismatch(srcEntry, tgtEntry);
+      const nested = findWorkspaceMismatch(srcEntry, tgtEntry, ctx);
       if (nested) return nested;
     }
   }
