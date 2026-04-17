@@ -107,9 +107,24 @@ describe("git", () => {
   });
 
   describe("detectBaseRef", () => {
-    it("prefers the gh PR base ref when available", async () => {
+    it("prefers GITHUB_BASE_REF when set by CI", async () => {
       const result = await detectBaseRef({
         cwd: tmpDir,
+        env: { GITHUB_BASE_REF: "main" },
+        runGh: async () => {
+          throw new Error("gh should not be called when GITHUB_BASE_REF is set");
+        },
+        runGitCmd: async () => {
+          throw new Error("symbolic-ref should not be called when GITHUB_BASE_REF is set");
+        },
+      });
+      expect(result).toBe("origin/main");
+    });
+
+    it("prefers the gh PR base ref when GITHUB_BASE_REF is absent", async () => {
+      const result = await detectBaseRef({
+        cwd: tmpDir,
+        env: {},
         runGh: async () => ({ stdout: "main\n", stderr: "", exitCode: 0 }),
         runGitCmd: async () => ({ stdout: "", stderr: "", exitCode: 1 }),
       });
@@ -119,6 +134,7 @@ describe("git", () => {
     it("falls back to origin/HEAD symbolic ref when gh is unavailable", async () => {
       const result = await detectBaseRef({
         cwd: tmpDir,
+        env: {},
         runGh: async () => ({ stdout: "", stderr: "gh: not found", exitCode: 127 }),
         runGitCmd: async () => ({ stdout: "origin/main\n", stderr: "", exitCode: 0 }),
       });
@@ -128,6 +144,7 @@ describe("git", () => {
     it("returns null when neither gh nor origin/HEAD work", async () => {
       const result = await detectBaseRef({
         cwd: tmpDir,
+        env: {},
         runGh: async () => ({ stdout: "", stderr: "err", exitCode: 1 }),
         runGitCmd: async () => ({ stdout: "", stderr: "err", exitCode: 1 }),
       });
@@ -137,10 +154,21 @@ describe("git", () => {
     it("ignores empty stdout from gh", async () => {
       const result = await detectBaseRef({
         cwd: tmpDir,
+        env: {},
         runGh: async () => ({ stdout: "\n", stderr: "", exitCode: 0 }),
         runGitCmd: async () => ({ stdout: "origin/main\n", stderr: "", exitCode: 0 }),
       });
       expect(result).toBe("origin/main");
+    });
+
+    it("ignores empty GITHUB_BASE_REF and falls through to gh", async () => {
+      const result = await detectBaseRef({
+        cwd: tmpDir,
+        env: { GITHUB_BASE_REF: "" },
+        runGh: async () => ({ stdout: "release\n", stderr: "", exitCode: 0 }),
+        runGitCmd: async () => ({ stdout: "", stderr: "", exitCode: 1 }),
+      });
+      expect(result).toBe("origin/release");
     });
   });
 

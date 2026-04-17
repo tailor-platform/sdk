@@ -24,7 +24,7 @@ describe("linkNodeModules", () => {
     fs.writeFileSync(full, content);
   }
 
-  it("symlinks node_modules when lockfile and root package.json match", () => {
+  it("populates target node_modules with entries linked from source", () => {
     writeFile(sourceRoot, "pnpm-lock.yaml", "lock-content");
     writeFile(sourceRoot, "package.json", '{"name":"root"}');
     writeFile(sourceRoot, "node_modules/foo/index.js", "module.exports = 1;");
@@ -35,12 +35,13 @@ describe("linkNodeModules", () => {
     const result = linkNodeModules({ sourceRoot, targetRoot });
 
     expect(result.method).toBe("symlink");
-    const linked = path.join(targetRoot, "node_modules");
-    expect(fs.lstatSync(linked).isSymbolicLink()).toBe(true);
-    expect(fs.readFileSync(path.join(linked, "foo/index.js"), "utf8")).toBe("module.exports = 1;");
+    const tgt = path.join(targetRoot, "node_modules");
+    expect(fs.lstatSync(tgt).isDirectory()).toBe(true);
+    expect(fs.lstatSync(path.join(tgt, "foo")).isSymbolicLink()).toBe(true);
+    expect(fs.readFileSync(path.join(tgt, "foo/index.js"), "utf8")).toBe("module.exports = 1;");
   });
 
-  it("symlinks nested package node_modules at workspace paths", () => {
+  it("populates nested package node_modules at workspace paths", () => {
     writeFile(sourceRoot, "pnpm-lock.yaml", "lock");
     writeFile(sourceRoot, "package.json", "{}");
     writeFile(sourceRoot, "packages/sdk/package.json", "{}");
@@ -55,8 +56,26 @@ describe("linkNodeModules", () => {
 
     expect(result.method).toBe("symlink");
     const nested = path.join(targetRoot, "packages/sdk/node_modules");
-    expect(fs.lstatSync(nested).isSymbolicLink()).toBe(true);
+    expect(fs.lstatSync(nested).isDirectory()).toBe(true);
     expect(fs.readFileSync(path.join(nested, "child/index.js"), "utf8")).toBe("b");
+  });
+
+  it("recreates workspace symlinks so they resolve inside the target worktree", () => {
+    writeFile(sourceRoot, "pnpm-lock.yaml", "lock");
+    writeFile(sourceRoot, "package.json", "{}");
+    writeFile(sourceRoot, "packages/my-pkg/src/index.ts", "export const v = 'SOURCE';\n");
+    fs.mkdirSync(path.join(sourceRoot, "node_modules"));
+    fs.symlinkSync("../packages/my-pkg", path.join(sourceRoot, "node_modules/my-pkg"));
+
+    writeFile(targetRoot, "pnpm-lock.yaml", "lock");
+    writeFile(targetRoot, "package.json", "{}");
+    writeFile(targetRoot, "packages/my-pkg/src/index.ts", "export const v = 'MERGED';\n");
+
+    const result = linkNodeModules({ sourceRoot, targetRoot });
+
+    expect(result.method).toBe("symlink");
+    const linked = path.join(targetRoot, "node_modules/my-pkg/src/index.ts");
+    expect(fs.readFileSync(linked, "utf8")).toBe("export const v = 'MERGED';\n");
   });
 
   it("aborts when pnpm-lock.yaml differs between source and target", () => {
@@ -72,6 +91,24 @@ describe("linkNodeModules", () => {
     expect(result.method).toBe("abort");
     expect(result.reason).toMatch(/pnpm-lock\.yaml/);
     expect(fs.existsSync(path.join(targetRoot, "node_modules"))).toBe(false);
+  });
+
+  it.each([
+    ["package-lock.json", "npm"],
+    ["yarn.lock", "yarn"],
+    ["bun.lockb", "bun"],
+    ["bun.lock", "bun"],
+  ])("aborts when %s differs between source and target", (lockfile) => {
+    writeFile(sourceRoot, lockfile, "a");
+    writeFile(sourceRoot, "package.json", "{}");
+
+    writeFile(targetRoot, lockfile, "b");
+    writeFile(targetRoot, "package.json", "{}");
+
+    const result = linkNodeModules({ sourceRoot, targetRoot });
+
+    expect(result.method).toBe("abort");
+    expect(result.reason).toContain(lockfile);
   });
 
   it("aborts when the root package.json differs", () => {

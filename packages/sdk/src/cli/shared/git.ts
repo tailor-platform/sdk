@@ -116,18 +116,26 @@ export interface DetectBaseRefDeps {
   cwd?: string;
   runGh?: (args: string[], options?: RunOptions) => Promise<RunResult>;
   runGitCmd?: (args: string[], options?: RunOptions) => Promise<RunResult>;
+  /** Env used to read CI metadata like `GITHUB_BASE_REF`. Defaults to `process.env`. */
+  env?: NodeJS.ProcessEnv;
 }
 
 /**
  * Detect the base ref for the current branch.
- * Tries `gh pr view` first, then falls back to `origin/HEAD` symbolic ref.
+ * Checks CI metadata (`GITHUB_BASE_REF`) first so detached-HEAD pull_request
+ * checkouts target the real PR base, then tries `gh pr view`, and finally
+ * falls back to `origin/HEAD`.
  * @param deps - Optional command runners for testability and the working directory
  * @returns A ref name like `origin/main`, or `null` when detection fails
  */
 export async function detectBaseRef(deps?: DetectBaseRefDeps): Promise<string | null> {
+  const env = deps?.env ?? process.env;
   const runGhFn = deps?.runGh ?? ((args, options) => runGh(args, { ...options, allowFail: true }));
   const runGitFn =
     deps?.runGitCmd ?? ((args, options) => runGit(args, { ...options, allowFail: true }));
+
+  const ciBase = env.GITHUB_BASE_REF?.trim();
+  if (ciBase) return `origin/${ciBase}`;
 
   const ghResult = await runGhFn(["pr", "view", "--json", "baseRefName", "-q", ".baseRefName"], {
     cwd: deps?.cwd,

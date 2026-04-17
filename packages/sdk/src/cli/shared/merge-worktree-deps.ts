@@ -24,24 +24,32 @@ export interface LinkNodeModulesOptions {
 
 const MAX_DEPTH = 6;
 const SKIP_DIRS = new Set(["node_modules", ".git"]);
+const LOCKFILES = ["pnpm-lock.yaml", "package-lock.json", "yarn.lock", "bun.lockb", "bun.lock"];
 
 /**
  * Link node_modules directories from `sourceRoot` into the matching locations
- * under `targetRoot`. Aborts without touching the target if the root
- * `pnpm-lock.yaml` or `package.json` differs between source and target, since
- * that signals a dependency change requiring a fresh install.
+ * under `targetRoot`. Aborts without touching the target if any supported
+ * lockfile or the root `package.json` differs between source and target,
+ * since that signals a dependency change requiring a fresh install.
+ *
+ * Each target `node_modules` is created as a real directory and its top-level
+ * entries are linked from the source. Symlinks are recreated verbatim so
+ * relative workspace links (e.g. `../packages/foo`) resolve inside the target
+ * worktree instead of leaking back to the source checkout.
  * @param options - Source and target worktree roots
  * @returns Result describing whether links were created or why the operation aborted
  */
 export function linkNodeModules(options: LinkNodeModulesOptions): LinkNodeModulesResult {
   const { sourceRoot, targetRoot } = options;
 
-  if (filesDiffer(sourceRoot, targetRoot, "pnpm-lock.yaml")) {
-    return {
-      method: "abort",
-      reason: "pnpm-lock.yaml differs between source and merge target; run `pnpm install` first.",
-      created: [],
-    };
+  for (const lockfile of LOCKFILES) {
+    if (filesDiffer(sourceRoot, targetRoot, lockfile)) {
+      return {
+        method: "abort",
+        reason: `${lockfile} differs between source and merge target; reinstall dependencies first.`,
+        created: [],
+      };
+    }
   }
 
   if (filesDiffer(sourceRoot, targetRoot, "package.json")) {
@@ -61,19 +69,27 @@ export function linkNodeModules(options: LinkNodeModulesOptions): LinkNodeModule
     const parent = path.dirname(targetPath);
     if (!fs.existsSync(parent)) continue;
 
-    if (fs.existsSync(targetPath)) {
-      if (fs.lstatSync(targetPath).isSymbolicLink()) {
-        created.push(targetPath);
-        continue;
-      }
-      fs.rmSync(targetPath, { recursive: true, force: true });
-    }
-
-    fs.symlinkSync(sourcePath, targetPath, "dir");
+    fs.rmSync(targetPath, { recursive: true, force: true });
+    populateNodeModules(sourcePath, targetPath);
     created.push(targetPath);
   }
 
   return { method: "symlink", created };
+}
+
+function populateNodeModules(sourceDir: string, targetDir: string): void {
+  fs.mkdirSync(targetDir, { recursive: true });
+  for (const entry of fs.readdirSync(sourceDir, { withFileTypes: true })) {
+    const srcEntry = path.join(sourceDir, entry.name);
+    const tgtEntry = path.join(targetDir, entry.name);
+    if (entry.isSymbolicLink()) {
+      // Recreate the symlink verbatim. Relative links like `../packages/foo`
+      // then resolve inside `targetDir`, pointing to the merged worktree copy.
+      fs.symlinkSync(fs.readlinkSync(srcEntry), tgtEntry);
+    } else {
+      fs.symlinkSync(srcEntry, tgtEntry, entry.isDirectory() ? "dir" : "file");
+    }
+  }
 }
 
 function filesDiffer(sourceRoot: string, targetRoot: string, rel: string): boolean {

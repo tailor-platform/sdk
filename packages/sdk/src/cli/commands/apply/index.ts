@@ -13,8 +13,9 @@ The command creates a temporary git worktree, merges HEAD into the base ref (no 
 and runs the plan against that merged state. This is useful in CI for previewing the
 deployment impact of a pull request before merging.
 
-The base ref is auto-detected from the current GitHub PR (via \`gh\`) or \`origin/HEAD\`.
-Override with \`--base-ref <ref>\`. \`--base\` implies \`--dry-run\` and disables caching.
+The base ref is auto-detected from \`GITHUB_BASE_REF\` (set by GitHub Actions on
+pull_request events), then \`gh pr view\`, and finally \`origin/HEAD\`. Override
+with \`--base-ref <ref>\`. \`--base\` implies \`--dry-run\` and disables caching.
 
 If \`pnpm-lock.yaml\` or the root \`package.json\` differs between source and merge target,
 the command aborts without running. Install the merged dependencies first, then retry.`,
@@ -51,7 +52,7 @@ the command aborts without running. Install the merged dependencies first, then 
       }),
       "base-ref": arg(z.string().optional(), {
         description:
-          "Override the base ref for --base (implies --base when given without --base). Defaults to auto-detection (gh PR base then origin/HEAD).",
+          "Override the base ref for --base (implies --base when given without --base). Defaults to auto-detection (GITHUB_BASE_REF, gh PR base, then origin/HEAD).",
       }),
     })
     .strict(),
