@@ -1,5 +1,5 @@
 import { runCommand } from "politty";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { apiCommand } from "./api";
@@ -14,9 +14,16 @@ vi.mock("@/cli/shared/config-loader", () => ({
 }));
 
 const fetchMock = vi.fn();
-vi.stubGlobal("fetch", fetchMock);
 
 describe("api command body auto-injection", () => {
+  beforeAll(() => {
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterAll(() => {
+    vi.unstubAllGlobals();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
@@ -24,11 +31,6 @@ describe("api command body auto-injection", () => {
       ok: true,
       json: () => Promise.resolve({ result: "ok" }),
     });
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    vi.stubGlobal("fetch", fetchMock);
   });
 
   describe("workspaceId injection", () => {
