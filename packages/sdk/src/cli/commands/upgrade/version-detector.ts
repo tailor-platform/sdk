@@ -26,18 +26,3 @@ export async function detectInstalledVersion(projectRoot: string): Promise<strin
   }
   return null;
 }
-
-/**
- * Read the SDK version range from the project's package.json dependencies.
- * Used as the default target version when --to is not specified.
- * @param projectRoot - The project root directory
- * @returns The version range string from dependencies, or null if not found
- */
-export async function detectDeclaredVersion(projectRoot: string): Promise<string | null> {
-  try {
-    const pkg = await readPackageJSON(projectRoot);
-    return pkg.dependencies?.[SDK_PACKAGE_NAME] ?? pkg.devDependencies?.[SDK_PACKAGE_NAME] ?? null;
-  } catch {
-    return null;
-  }
-}
