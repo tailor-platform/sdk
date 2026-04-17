@@ -11,26 +11,26 @@ import { logger, styles } from "@/cli/shared/logger";
 import { linkNodeModules } from "@/cli/shared/merge-worktree-deps";
 
 /**
- * Options for translating the config path into the merged worktree.
+ * Options for translating a repository-relative path into the merged worktree.
  */
-export interface TranslateConfigPathOptions {
+export interface TranslatePathOptions {
   originalAbsPath: string;
   repoRoot: string;
   worktreeRoot: string;
 }
 
 /**
- * Translate an absolute config path from the source repository into the
- * equivalent path inside the merged worktree.
- * @param options - Original absolute config path, repository root, and worktree root
- * @returns Absolute path to the config file inside the worktree
+ * Translate an absolute path from the source repository into the equivalent
+ * path inside the merged worktree. Used for both the config path and cwd.
+ * @param options - Original absolute path, repository root, and worktree root
+ * @returns Absolute path to the same location inside the worktree
  */
-export function translateConfigPath(options: TranslateConfigPathOptions): string {
+export function translatePath(options: TranslatePathOptions): string {
   const { originalAbsPath, repoRoot, worktreeRoot } = options;
   const rel = path.relative(repoRoot, originalAbsPath);
   if (rel.startsWith("..") || path.isAbsolute(rel)) {
     throw new Error(
-      `Config path ${originalAbsPath} is outside the repository root ${repoRoot} and cannot be translated.`,
+      `Path ${originalAbsPath} is outside the repository root ${repoRoot} and cannot be translated.`,
     );
   }
   return path.join(worktreeRoot, rel);
@@ -52,6 +52,8 @@ export interface PrepareBasePlanOptions {
 export interface PreparedBasePlan {
   /** Absolute path to the config file inside the merged worktree. */
   configPath: string;
+  /** Absolute cwd inside the merged worktree, mirroring the caller's cwd. */
+  cwd: string;
   /** The worktree handle (for cleanup via `dispose()`). */
   worktree: PreparedMergeWorktree;
   /** The ref used as the merge base. */
@@ -94,12 +96,17 @@ export async function prepareBasePlan(
           `Aborting base plan to avoid stale or inconsistent dependencies.`,
       );
     }
-    const configPath = translateConfigPath({
+    const configPath = translatePath({
       originalAbsPath,
       repoRoot,
       worktreeRoot: worktree.path,
     });
-    return { configPath, worktree, baseRef };
+    const cwd = translatePath({
+      originalAbsPath: process.cwd(),
+      repoRoot,
+      worktreeRoot: worktree.path,
+    });
+    return { configPath, cwd, worktree, baseRef };
   } catch (err) {
     await worktree.dispose();
     throw err;

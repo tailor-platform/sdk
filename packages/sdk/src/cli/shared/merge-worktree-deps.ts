@@ -86,6 +86,11 @@ function populateNodeModules(sourceDir: string, targetDir: string): void {
       // Recreate the symlink verbatim. Relative links like `../packages/foo`
       // then resolve inside `targetDir`, pointing to the merged worktree copy.
       fs.symlinkSync(fs.readlinkSync(srcEntry), tgtEntry);
+    } else if (entry.isDirectory() && entry.name.startsWith("@")) {
+      // Scoped package dirs (e.g. `@scope/pkg`) contain the actual package
+      // entries one level deeper, which may include workspace symlinks.
+      // Recurse so their symlinks are recreated verbatim too.
+      populateNodeModules(srcEntry, tgtEntry);
     } else {
       fs.symlinkSync(srcEntry, tgtEntry, entry.isDirectory() ? "dir" : "file");
     }

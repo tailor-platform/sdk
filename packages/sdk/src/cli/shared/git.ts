@@ -135,7 +135,18 @@ export async function detectBaseRef(deps?: DetectBaseRefDeps): Promise<string | 
     deps?.runGitCmd ?? ((args, options) => runGit(args, { ...options, allowFail: true }));
 
   const ciBase = env.GITHUB_BASE_REF?.trim();
-  if (ciBase) return `origin/${ciBase}`;
+  if (ciBase) {
+    const ref = `origin/${ciBase}`;
+    // Verify the ref was fetched before returning it; otherwise later `git
+    // merge` fails cryptically. A shallow `actions/checkout` may have skipped
+    // fetching the base branch, in which case we fall through to other
+    // detection paths.
+    const verify = await runGitFn(["rev-parse", "--verify", "--quiet", ref], {
+      cwd: deps?.cwd,
+      allowFail: true,
+    });
+    if (verify.exitCode === 0) return ref;
+  }
 
   const ghResult = await runGhFn(["pr", "view", "--json", "baseRefName", "-q", ".baseRefName"], {
     cwd: deps?.cwd,

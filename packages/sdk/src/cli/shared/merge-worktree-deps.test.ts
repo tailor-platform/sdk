@@ -78,6 +78,24 @@ describe("linkNodeModules", () => {
     expect(fs.readFileSync(linked, "utf8")).toBe("export const v = 'MERGED';\n");
   });
 
+  it("recreates scoped workspace symlinks so they resolve inside the target worktree", () => {
+    writeFile(sourceRoot, "pnpm-lock.yaml", "lock");
+    writeFile(sourceRoot, "package.json", "{}");
+    writeFile(sourceRoot, "packages/my-pkg/src/index.ts", "export const v = 'SOURCE';\n");
+    fs.mkdirSync(path.join(sourceRoot, "node_modules/@scope"), { recursive: true });
+    fs.symlinkSync("../../packages/my-pkg", path.join(sourceRoot, "node_modules/@scope/my-pkg"));
+
+    writeFile(targetRoot, "pnpm-lock.yaml", "lock");
+    writeFile(targetRoot, "package.json", "{}");
+    writeFile(targetRoot, "packages/my-pkg/src/index.ts", "export const v = 'MERGED';\n");
+
+    const result = linkNodeModules({ sourceRoot, targetRoot });
+
+    expect(result.method).toBe("symlink");
+    const linked = path.join(targetRoot, "node_modules/@scope/my-pkg/src/index.ts");
+    expect(fs.readFileSync(linked, "utf8")).toBe("export const v = 'MERGED';\n");
+  });
+
   it("aborts when pnpm-lock.yaml differs between source and target", () => {
     writeFile(sourceRoot, "pnpm-lock.yaml", "lock-a");
     writeFile(sourceRoot, "package.json", "{}");

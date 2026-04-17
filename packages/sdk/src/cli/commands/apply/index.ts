@@ -79,8 +79,9 @@ the command aborts without running. Install the merged dependencies first, then 
     const prepared = await prepareBasePlan({ baseRef, configPath: args.config });
     const originalCwd = process.cwd();
     // File loaders (TailorDB, resolvers, executors, workflows) resolve `files` globs
-    // via process.cwd(); chdir so they see the merged worktree, not the source branch.
-    process.chdir(prepared.worktree.path);
+    // via process.cwd(); chdir to the same subdirectory inside the merged worktree
+    // so relative globs keep working from (e.g.) `example/` rather than the repo root.
+    process.chdir(prepared.cwd);
     try {
       await apply({
         workspaceId: args["workspace-id"],

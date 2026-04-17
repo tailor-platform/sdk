@@ -107,18 +107,36 @@ describe("git", () => {
   });
 
   describe("detectBaseRef", () => {
-    it("prefers GITHUB_BASE_REF when set by CI", async () => {
+    it("prefers GITHUB_BASE_REF when set by CI and the ref is fetched", async () => {
       const result = await detectBaseRef({
         cwd: tmpDir,
         env: { GITHUB_BASE_REF: "main" },
         runGh: async () => {
-          throw new Error("gh should not be called when GITHUB_BASE_REF is set");
+          throw new Error("gh should not be called when GITHUB_BASE_REF is set and verified");
         },
-        runGitCmd: async () => {
-          throw new Error("symbolic-ref should not be called when GITHUB_BASE_REF is set");
+        runGitCmd: async (args) => {
+          if (args[0] === "rev-parse" && args.includes("origin/main")) {
+            return { stdout: "deadbeef\n", stderr: "", exitCode: 0 };
+          }
+          throw new Error(`unexpected git call: ${args.join(" ")}`);
         },
       });
       expect(result).toBe("origin/main");
+    });
+
+    it("falls through when GITHUB_BASE_REF names an un-fetched ref", async () => {
+      const result = await detectBaseRef({
+        cwd: tmpDir,
+        env: { GITHUB_BASE_REF: "main" },
+        runGh: async () => ({ stdout: "release\n", stderr: "", exitCode: 0 }),
+        runGitCmd: async (args) => {
+          if (args[0] === "rev-parse") {
+            return { stdout: "", stderr: "", exitCode: 1 };
+          }
+          return { stdout: "", stderr: "", exitCode: 1 };
+        },
+      });
+      expect(result).toBe("origin/release");
     });
 
     it("prefers the gh PR base ref when GITHUB_BASE_REF is absent", async () => {
