@@ -165,7 +165,7 @@
     "oxlint": "1.59.0",
     "oxlint-tsgolint": "0.20.0",
     "sonda": "0.11.1",
-    "tsdown": "0.21.7",
+    "tsdown": "0.21.8",
     "typescript": "5.9.3",
     "typescript-eslint": "8.58.1",
     "vitest": "4.1.4",
