@@ -96,11 +96,31 @@ db.enum([
 ### Object Fields
 
 ```typescript
+// Object field
 db.object({
   street: db.string(),
   city: db.string(),
   country: db.string(),
 });
+
+// Object array field
+db.object(
+  {
+    id: db.uuid(),
+    name: db.string(),
+    size: db.int(),
+  },
+  { array: true },
+);
+
+// Optional object array field
+db.object(
+  {
+    kind: db.string(),
+    days: db.int(),
+  },
+  { optional: true, array: true },
+);
 ```
 
 ## Field Modifiers
