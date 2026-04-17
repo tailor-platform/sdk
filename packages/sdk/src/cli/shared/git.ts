@@ -239,7 +239,15 @@ async function resolveBaseRemote(args: ResolveBaseRemoteArgs): Promise<string> {
     const [, name, url] = match;
     if (normalizeGitRepoUrl(url) === wanted) return name;
   }
-  return "origin";
+  // The PR's base-repo URL is known but no local remote points at it. Falling
+  // back to `origin` in a fork checkout would silently verify and plan against
+  // the contributor fork's branch instead of the upstream PR base. Surface a
+  // clear error so the caller can wire up the upstream remote.
+  throw new Error(
+    `No git remote matches the PR base repository (${baseRepoUrl}). ` +
+      `Add the upstream remote and fetch its base branch, e.g.: ` +
+      `\`git remote add upstream ${baseRepoUrl} && git fetch upstream\`.`,
+  );
 }
 
 function extractBaseRepoUrl(prUrl: string | undefined): string | null {

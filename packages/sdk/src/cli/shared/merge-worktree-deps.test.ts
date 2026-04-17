@@ -146,6 +146,46 @@ describe("linkNodeModules", () => {
     expect(fs.existsSync(path.join(targetRoot, "node_modules"))).toBe(false);
   });
 
+  it("aborts when a workspace package linked via .pnpm diverged in the merge", () => {
+    // pnpm puts workspace packages inside `.pnpm/<name>@link+<path>/node_modules/<name>`
+    // as relative symlinks. When `.pnpm` is symlinked wholesale into the merge
+    // worktree, those peers still resolve through source; the pre-scan must
+    // walk the virtual store so divergent workspace content is caught.
+    writeFile(sourceRoot, "pnpm-lock.yaml", "lock");
+    writeFile(sourceRoot, "package.json", "{}");
+    writeFile(
+      sourceRoot,
+      "packages/wspkg/package.json",
+      JSON.stringify({ name: "wspkg", main: "./dist/index.js" }),
+    );
+    writeFile(sourceRoot, "packages/wspkg/src/index.ts", "export const v = 'SOURCE';\n");
+    writeFile(sourceRoot, "packages/wspkg/dist/index.js", "module.exports = 'BUILT';\n");
+    fs.mkdirSync(
+      path.join(sourceRoot, "node_modules/.pnpm/wspkg@link+packages+wspkg/node_modules"),
+      { recursive: true },
+    );
+    fs.symlinkSync(
+      "../../../../packages/wspkg",
+      path.join(sourceRoot, "node_modules/.pnpm/wspkg@link+packages+wspkg/node_modules/wspkg"),
+    );
+
+    writeFile(targetRoot, "pnpm-lock.yaml", "lock");
+    writeFile(targetRoot, "package.json", "{}");
+    writeFile(
+      targetRoot,
+      "packages/wspkg/package.json",
+      JSON.stringify({ name: "wspkg", main: "./dist/index.js" }),
+    );
+    writeFile(targetRoot, "packages/wspkg/src/index.ts", "export const v = 'MERGED';\n");
+
+    const result = linkNodeModules({ sourceRoot, targetRoot });
+
+    expect(result.method).toBe("abort");
+    expect(result.reason).toContain("wspkg");
+    expect(result.reason).toMatch(/rebuild/);
+    expect(fs.existsSync(path.join(targetRoot, "node_modules"))).toBe(false);
+  });
+
   it("detects missing entrypoints declared via exports-only manifests", () => {
     writeFile(sourceRoot, "pnpm-lock.yaml", "lock");
     writeFile(sourceRoot, "package.json", "{}");

@@ -283,7 +283,32 @@ function findWorkspaceMismatch(sourceNm: string, targetNm: string, ctx: LinkCtx)
     } else if (entry.isDirectory() && entry.name.startsWith("@")) {
       const nested = findWorkspaceMismatch(srcEntry, tgtEntry, ctx);
       if (nested) return nested;
+    } else if (entry.isDirectory() && entry.name === ".pnpm") {
+      // pnpm's virtual store gets symlinked wholesale into the merged
+      // worktree, so any peer or workspace import inside .pnpm still resolves
+      // through source. If a workspace package that .pnpm points at diverged
+      // in the merge, dependent code would silently load source-tree content
+      // instead of the merged tree. Extend the parity check through
+      // `.pnpm/<pkg>@<ver>/node_modules/` so those divergences are caught too.
+      const mismatch = findPnpmStoreMismatch(srcEntry, ctx);
+      if (mismatch) return mismatch;
     }
+  }
+  return null;
+}
+
+function findPnpmStoreMismatch(pnpmDir: string, ctx: LinkCtx): string | null {
+  let pkgDirs: fs.Dirent[];
+  try {
+    pkgDirs = fs.readdirSync(pnpmDir, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  for (const pkgDir of pkgDirs) {
+    if (!pkgDir.isDirectory()) continue;
+    const innerNm = path.join(pnpmDir, pkgDir.name, "node_modules");
+    const mismatch = findWorkspaceMismatch(innerNm, innerNm, ctx);
+    if (mismatch) return mismatch;
   }
   return null;
 }

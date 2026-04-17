@@ -177,6 +177,32 @@ describe("git", () => {
       ).rejects.toThrow(/GITHUB_BASE_REF is "main".*not available/);
     });
 
+    it("throws when GITHUB_REPOSITORY is set but no local remote matches the upstream", async () => {
+      await expect(
+        detectBaseRef({
+          cwd: tmpDir,
+          env: {
+            GITHUB_BASE_REF: "main",
+            GITHUB_REPOSITORY: "upstream/repo",
+            GITHUB_SERVER_URL: "https://github.com",
+          },
+          runGh: async () => {
+            throw new Error("gh should not be called when GITHUB_BASE_REF is set");
+          },
+          runGitCmd: async (args) => {
+            if (args[0] === "remote" && args[1] === "-v") {
+              return {
+                stdout: "origin\thttps://github.com/contributor/repo.git (fetch)",
+                stderr: "",
+                exitCode: 0,
+              };
+            }
+            return { stdout: "", stderr: "", exitCode: 1 };
+          },
+        }),
+      ).rejects.toThrow(/No git remote matches the PR base repository/);
+    });
+
     it("prefers the gh PR base ref when GITHUB_BASE_REF is absent", async () => {
       const result = await detectBaseRef({
         cwd: tmpDir,
