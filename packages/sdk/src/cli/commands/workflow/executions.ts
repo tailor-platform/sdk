@@ -117,6 +117,10 @@ function parseStatus(status: string): WorkflowExecution_Status {
 
 /**
  * List workflow executions with optional filters.
+ *
+ * Returns at most `options.limit` items. When `limit` is omitted, defaults
+ * to 50 so programmatic callers do not accidentally page through the entire
+ * history. Pass `limit: 0` to disable the cap and fetch all executions.
  * @param options - Workflow execution listing options
  * @returns List of workflow executions
  */
@@ -184,7 +188,7 @@ export async function listWorkflowExecutions<W extends WorkflowLike>(
       });
       return [executions, nextPageToken];
     },
-    { limit: options?.limit },
+    { limit: options?.limit ?? 50 },
   );
 
   return executions.map(toWorkflowExecutionInfo);

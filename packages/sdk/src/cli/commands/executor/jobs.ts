@@ -140,6 +140,11 @@ function formatTime(date: Date): string {
 
 /**
  * List executor jobs for a given executor.
+ *
+ * Returns at most `options.limit` items. When `limit` is omitted, defaults
+ * to 50 so programmatic callers do not accidentally page through the entire
+ * history on busy executors. Pass `limit: 0` to disable the cap and fetch
+ * all jobs.
  * @param options - Options for listing executor jobs
  * @returns List of executor job information
  */
