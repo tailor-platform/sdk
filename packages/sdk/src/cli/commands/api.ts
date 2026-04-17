@@ -107,6 +107,14 @@ function injectFields(body: string, fields: Record<string, string>): string {
 export const apiCommand = defineAppCommand({
   name: "api",
   description: "Call Tailor Platform API endpoints directly.",
+  notes: `The request body is inferred from the proto definition of the target endpoint, and commonly required fields are auto-injected so they can be omitted from \`--body\`:
+
+- \`workspaceId\` — resolved from \`-w\` / \`TAILOR_PLATFORM_WORKSPACE_ID\` / the selected profile.
+- \`namespaceName\` — resolved from \`tailor.config.ts\` based on the endpoint's service:
+  - Auth / Tenant / UserProfile endpoints use \`auth.name\`.
+  - IdP / TailorDB / Pipeline endpoints use the sole configured namespace when exactly one is defined.
+
+Values already present in \`--body\` are never overridden. If a value cannot be resolved (e.g. no config found), injection is silently skipped and the server-side validation error takes precedence.`,
   args: z
     .object({
       ...workspaceArgs,
