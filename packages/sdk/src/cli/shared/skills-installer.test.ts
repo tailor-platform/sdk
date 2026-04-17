@@ -39,7 +39,7 @@ const createMockChildProcess = () => {
 
 describe("skills-installer", () => {
   it("builds skills add arguments with the provided source and --copy", () => {
-    expect(buildSkillsAddArgs([], TEST_SOURCE)).toEqual([
+    expect(buildSkillsAddArgs({ source: TEST_SOURCE })).toEqual([
       "skills",
       "add",
       TEST_SOURCE,
@@ -52,22 +52,16 @@ describe("skills-installer", () => {
   it("prefers TAILOR_SDK_SKILLS_SOURCE env var over the passed source", () => {
     vi.stubEnv("TAILOR_SDK_SKILLS_SOURCE", "/override/skills");
     try {
-      expect(buildSkillsAddArgs([], TEST_SOURCE)[2]).toBe("/override/skills");
+      expect(buildSkillsAddArgs({ source: TEST_SOURCE })[2]).toBe("/override/skills");
     } finally {
       vi.unstubAllEnvs();
     }
   });
 
-  it("throws when neither env var nor source is provided", () => {
-    expect(() => buildSkillsAddArgs([])).toThrow(/Skill source is not resolved/);
-  });
-
-  it("appends user arguments after fixed skill options", () => {
-    expect(buildSkillsAddArgs(["-a", "codex", "-y"], TEST_SOURCE).slice(-3)).toEqual([
-      "-a",
-      "codex",
-      "-y",
-    ]);
+  it("appends --agent and --yes when provided", () => {
+    expect(
+      buildSkillsAddArgs({ source: TEST_SOURCE, agent: "codex", yes: true }).slice(-3),
+    ).toEqual(["--agent", "codex", "--yes"]);
   });
 
   it("runs npx with generated arguments and returns exit code", async () => {
@@ -75,14 +69,14 @@ describe("skills-installer", () => {
     const spawnFn = vi.fn(() => mock.process);
 
     const promise = runSkillsInstaller({
-      additionalArgs: ["-a", "codex"],
       source: TEST_SOURCE,
+      agent: "codex",
       spawnFn,
     });
 
     expect(spawnFn).toHaveBeenCalledWith(
       expect.stringMatching(/^npx(\\.cmd)?$/),
-      ["skills", "add", TEST_SOURCE, "--skill", SKILL_NAME, "--copy", "-a", "codex"],
+      ["skills", "add", TEST_SOURCE, "--skill", SKILL_NAME, "--copy", "--agent", "codex"],
       { stdio: "inherit" },
     );
 

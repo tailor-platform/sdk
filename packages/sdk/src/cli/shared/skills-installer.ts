@@ -14,9 +14,10 @@ type SpawnLike = (
   options: { stdio: "inherit" },
 ) => ChildProcessLike;
 
-interface RunSkillsInstallerOptions {
-  additionalArgs?: string[];
-  source?: string;
+export interface RunSkillsInstallerOptions {
+  source: string;
+  agent?: string;
+  yes?: boolean;
   spawnFn?: SpawnLike;
 }
 
@@ -24,32 +25,35 @@ function resolveNpxCommand(platform: NodeJS.Platform = process.platform): string
   return platform === "win32" ? "npx.cmd" : "npx";
 }
 
-function resolveSkillsSource(source?: string): string {
-  const envSource = process.env[SKILLS_SOURCE_ENV_KEY];
-  if (envSource) return envSource;
-  if (source) return source;
-  throw new Error(
-    "Skill source is not resolved. Set TAILOR_SDK_SKILLS_SOURCE or pass `source` explicitly.",
-  );
+function resolveSkillsSource(source: string): string {
+  return process.env[SKILLS_SOURCE_ENV_KEY] ?? source;
 }
 
 /**
  * Build CLI arguments for `skills add` with the fixed tailor-sdk skill target.
  * `--copy` is included so the installed skill survives `pnpm install` wiping `node_modules`.
- * @param additionalArgs - Additional options to pass through to `skills add`
- * @param source - Optional skill source URL or path
+ * @param options - Options controlling the generated `skills add` arguments
+ * @param options.source
+ * @param options.agent
+ * @param options.yes
  * @returns CLI arguments for `npx skills add`
  */
-export function buildSkillsAddArgs(additionalArgs: readonly string[], source?: string): string[] {
-  return [
+export function buildSkillsAddArgs(options: {
+  source: string;
+  agent?: string;
+  yes?: boolean;
+}): string[] {
+  const args = [
     "skills",
     "add",
-    resolveSkillsSource(source),
+    resolveSkillsSource(options.source),
     "--skill",
     SKILL_NAME,
     "--copy",
-    ...additionalArgs,
   ];
+  if (options.agent) args.push("--agent", options.agent);
+  if (options.yes) args.push("--yes");
+  return args;
 }
 
 /**
@@ -57,8 +61,12 @@ export function buildSkillsAddArgs(additionalArgs: readonly string[], source?: s
  * @param options - Runtime options for skill installation
  * @returns Process exit code from the spawned `npx` command
  */
-export async function runSkillsInstaller(options: RunSkillsInstallerOptions = {}): Promise<number> {
-  const args = buildSkillsAddArgs(options.additionalArgs ?? [], options.source);
+export async function runSkillsInstaller(options: RunSkillsInstallerOptions): Promise<number> {
+  const args = buildSkillsAddArgs({
+    source: options.source,
+    agent: options.agent,
+    yes: options.yes,
+  });
   const spawnFn =
     options.spawnFn ??
     ((command: string, spawnArgs: string[], spawnOptions: { stdio: "inherit" }) =>

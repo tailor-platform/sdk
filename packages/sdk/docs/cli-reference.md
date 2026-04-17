@@ -260,6 +260,14 @@ Commands for setting up project infrastructure.
 | ------------------------------------------- | ------------------------------------------------------- |
 | [setup github](./cli/setup.md#setup-github) | Generate GitHub Actions workflow for deployment. (beta) |
 
+### [Skills Commands](./cli/skills.md)
+
+Commands for installing Tailor SDK agent skills.
+
+| Command                                          | Description                                                        |
+| ------------------------------------------------ | ------------------------------------------------------------------ |
+| [skills install](./cli/skills.md#skills-install) | Install the tailor-sdk agent skill from the installed SDK package. |
+
 ### [Completion](./cli/completion.md)
 
 Generate shell completion scripts for bash, zsh, and fish.

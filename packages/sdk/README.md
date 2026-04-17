@@ -53,19 +53,16 @@ For more details, see the [Quickstart Guide](./docs/quickstart.md).
 Install the `tailor-sdk` skill from the locally installed SDK package:
 
 ```bash
-npx tailor-sdk-skills
+npx tailor-sdk skills install
 
 # Example: install to Codex in non-interactive mode
-npx tailor-sdk-skills -a codex -y
+npx tailor-sdk skills install -a codex -y
 ```
 
 This uses the `skills` CLI under the hood, sourcing the skill from
 `node_modules/@tailor-platform/sdk/skills` so the skill version always matches
 the installed SDK version. Files are copied (not symlinked) so they survive
 `pnpm install` wiping `node_modules`.
-
-`npx tailor-sdk-skills` requires an environment where `@tailor-platform/sdk` is
-installed (the binary resolves the skill source relative to itself).
 
 ## Learn More
 

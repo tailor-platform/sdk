@@ -111,6 +111,12 @@ const files: Record<string, FileConfig> = {
     commands: ["setup"],
     render: defaultRender,
   },
+  "docs/cli/skills.md": {
+    title: "Skills Commands",
+    description: "Commands for installing Tailor SDK agent skills.",
+    commands: ["skills"],
+    render: defaultRender,
+  },
   "docs/cli/completion.md": {
     title: "Completion",
     description: "Generate shell completion scripts for bash, zsh, and fish.",
