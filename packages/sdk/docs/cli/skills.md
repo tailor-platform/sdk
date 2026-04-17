@@ -61,10 +61,10 @@ tailor-sdk skills install [options]
 
 **Options**
 
-| Option            | Alias | Description                                       | Required | Default |
-| ----------------- | ----- | ------------------------------------------------- | -------- | ------- |
-| `--agent <AGENT>` | `-a`  | Target agent (claude, codex). Defaults to claude. | No       | -       |
-| `--yes`           | `-y`  | Auto-approve prompts.                             | No       | `false` |
+| Option            | Alias | Description                                                                  | Required | Default         |
+| ----------------- | ----- | ---------------------------------------------------------------------------- | -------- | --------------- |
+| `--agent <AGENT>` | `-a`  | vercel/skills agent name (e.g. claude-code, codex). Defaults to claude-code. | No       | `"claude-code"` |
+| `--yes`           | `-y`  | Auto-approve prompts.                                                        | No       | `false`         |
 
 <!-- politty:command:skills install:options:end -->
 
