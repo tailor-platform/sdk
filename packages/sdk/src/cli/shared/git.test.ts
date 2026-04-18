@@ -334,9 +334,36 @@ describe("git", () => {
         cwd: tmpDir,
         env: {},
         runGh: async () => ({ stdout: "", stderr: "gh: not found", exitCode: 127 }),
-        runGitCmd: async () => ({ stdout: "origin/main\n", stderr: "", exitCode: 0 }),
+        runGitCmd: async (args) => {
+          if (args[0] === "symbolic-ref") {
+            return { stdout: "origin/main\n", stderr: "", exitCode: 0 };
+          }
+          if (args[0] === "rev-parse" && args.includes("--verify")) {
+            return { stdout: "abc123\n", stderr: "", exitCode: 0 };
+          }
+          return { stdout: "", stderr: "unexpected", exitCode: 1 };
+        },
       });
       expect(result).toBe("origin/main");
+    });
+
+    it("throws when origin/HEAD points at a ref that is not locally fetched", async () => {
+      await expect(
+        detectBaseRef({
+          cwd: tmpDir,
+          env: {},
+          runGh: async () => ({ stdout: "", stderr: "gh: not found", exitCode: 127 }),
+          runGitCmd: async (args) => {
+            if (args[0] === "symbolic-ref") {
+              return { stdout: "origin/main\n", stderr: "", exitCode: 0 };
+            }
+            if (args[0] === "rev-parse" && args.includes("--verify")) {
+              return { stdout: "", stderr: "fatal: bad ref", exitCode: 128 };
+            }
+            return { stdout: "", stderr: "unexpected", exitCode: 1 };
+          },
+        }),
+      ).rejects.toThrow(/origin\/HEAD points at "origin\/main".*not available locally/);
     });
 
     it("returns null when neither gh nor origin/HEAD work", async () => {
@@ -354,7 +381,15 @@ describe("git", () => {
         cwd: tmpDir,
         env: {},
         runGh: async () => ({ stdout: "\n", stderr: "", exitCode: 0 }),
-        runGitCmd: async () => ({ stdout: "origin/main\n", stderr: "", exitCode: 0 }),
+        runGitCmd: async (args) => {
+          if (args[0] === "symbolic-ref") {
+            return { stdout: "origin/main\n", stderr: "", exitCode: 0 };
+          }
+          if (args[0] === "rev-parse" && args.includes("--verify")) {
+            return { stdout: "abc123\n", stderr: "", exitCode: 0 };
+          }
+          return { stdout: "", stderr: "unexpected", exitCode: 1 };
+        },
       });
       expect(result).toBe("origin/main");
     });

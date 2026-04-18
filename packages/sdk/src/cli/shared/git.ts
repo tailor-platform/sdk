@@ -198,7 +198,22 @@ export async function detectBaseRef(deps?: DetectBaseRefDeps): Promise<string | 
   });
   if (symRef.exitCode === 0) {
     const ref = symRef.stdout.trim();
-    if (ref) return ref;
+    if (ref) {
+      // `origin/HEAD` may be set while the target ref itself isn't fetched
+      // (common on shallow clones). Verify here so the caller gets the same
+      // "fetch it and retry" guidance as the other two branches instead of
+      // an opaque `git rev-parse origin/main failed` later.
+      const verify = await runGitFn(["rev-parse", "--verify", "--quiet", ref], {
+        cwd: deps?.cwd,
+        allowFail: true,
+      });
+      if (verify.exitCode === 0) return ref;
+      throw new Error(
+        `origin/HEAD points at "${ref}" but that ref is not available locally. ` +
+          `The checkout is likely shallow; fetch the base branch (e.g. ` +
+          `\`git fetch origin\`) and retry.`,
+      );
+    }
   }
 
   return null;
