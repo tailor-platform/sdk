@@ -226,6 +226,10 @@ function packageCanResolve(pkgPath: string): boolean {
     return IMPLICIT_ENTRYPOINTS.some((f) => fs.existsSync(path.join(pkgPath, f)));
   }
   for (const rel of entrypoints) {
+    // Wildcard patterns like `./src/*.js` expand to concrete subpaths at
+    // resolve time and cannot be existence-checked as literal filenames.
+    // Skip them; any non-wildcard sibling entry still validates the package.
+    if (rel.includes("*")) continue;
     if (!fs.existsSync(path.join(pkgPath, rel))) return false;
   }
   return true;

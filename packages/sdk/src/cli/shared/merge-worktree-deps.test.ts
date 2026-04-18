@@ -265,6 +265,44 @@ describe("linkNodeModules", () => {
     expect(fs.readFileSync(linked, "utf8")).toBe("export const v = 'BUILT';\n");
   });
 
+  it("treats wildcard export patterns as resolvable without literal existence checks", () => {
+    // Subpath patterns like `./src/*.js` expand per-import at resolve time.
+    // Existence-checking the literal path would make packageCanResolve return
+    // false and spuriously abort the merge for packages that only export
+    // patterns.
+    writeFile(sourceRoot, "pnpm-lock.yaml", "lock");
+    writeFile(sourceRoot, "package.json", "{}");
+    writeFile(
+      sourceRoot,
+      "packages/util/package.json",
+      JSON.stringify({
+        name: "util",
+        exports: { "./*": "./src/*.js" },
+      }),
+    );
+    writeFile(sourceRoot, "packages/util/src/a.js", "module.exports = 'SRC_A';\n");
+    fs.mkdirSync(path.join(sourceRoot, "node_modules"));
+    fs.symlinkSync("../packages/util", path.join(sourceRoot, "node_modules/util"));
+
+    writeFile(targetRoot, "pnpm-lock.yaml", "lock");
+    writeFile(targetRoot, "package.json", "{}");
+    writeFile(
+      targetRoot,
+      "packages/util/package.json",
+      JSON.stringify({
+        name: "util",
+        exports: { "./*": "./src/*.js" },
+      }),
+    );
+    writeFile(targetRoot, "packages/util/src/a.js", "module.exports = 'MERGED_A';\n");
+
+    const result = linkNodeModules({ sourceRoot, targetRoot });
+
+    expect(result.method).toBe("symlink");
+    const linked = path.join(targetRoot, "node_modules/util/src/a.js");
+    expect(fs.readFileSync(linked, "utf8")).toBe("module.exports = 'MERGED_A';\n");
+  });
+
   it("falls back to source when merged tree lacks the declared bin entrypoint", () => {
     writeFile(sourceRoot, "pnpm-lock.yaml", "lock");
     writeFile(sourceRoot, "package.json", "{}");
