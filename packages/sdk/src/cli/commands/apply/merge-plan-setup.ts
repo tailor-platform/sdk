@@ -64,7 +64,7 @@ export interface PreparedBasePlan {
  * Prepare a merged worktree for a base plan run. Detects the base ref, creates
  * the worktree, links node_modules, and returns the translated config path.
  * On any failure before the worktree is returned, the worktree is disposed.
- * @param options - Base ref, config path, and cwd
+ * @param options - Optional base ref and config path
  * @returns Prepared worktree, translated config path, and base ref
  */
 export async function prepareBasePlan(

@@ -10,6 +10,7 @@ temporary git worktree, merges HEAD into the base ref (no commit), and runs
 the plan against that merged state. This is useful in CI for previewing the
 deployment impact of a pull request before merging.
 
-The base ref is auto-detected from the current GitHub PR (via `gh`) or
+The base ref is auto-detected from `GITHUB_BASE_REF` (set by GitHub Actions
+on pull_request events), then the current GitHub PR (via `gh`), and finally
 `origin/HEAD`. Override with `--base-ref <ref>`. `--base` implies `--dry-run`
 and disables caching.
