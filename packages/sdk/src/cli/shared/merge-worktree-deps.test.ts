@@ -265,6 +265,48 @@ describe("linkNodeModules", () => {
     expect(fs.readFileSync(linked, "utf8")).toBe("export const v = 'BUILT';\n");
   });
 
+  it("retargets to the merged tree when only the type-declaration file is missing", () => {
+    // `.d.ts` paths are consumed by tsc alone; Node's module resolver never
+    // loads them. A missing declaration file in the merged tree must not force
+    // the source-tree fallback when the runtime entrypoint is present.
+    writeFile(sourceRoot, "pnpm-lock.yaml", "lock");
+    writeFile(sourceRoot, "package.json", "{}");
+    writeFile(
+      sourceRoot,
+      "packages/sdk/package.json",
+      JSON.stringify({
+        exports: {
+          ".": { import: "./dist/index.mjs", types: "./dist/index.d.mts" },
+        },
+      }),
+    );
+    writeFile(sourceRoot, "packages/sdk/dist/index.mjs", "export const v = 'SOURCE_BUILT';\n");
+    writeFile(sourceRoot, "packages/sdk/dist/index.d.mts", "export const v: string;\n");
+    fs.mkdirSync(path.join(sourceRoot, "node_modules"));
+    fs.symlinkSync("../packages/sdk", path.join(sourceRoot, "node_modules/sdk"));
+
+    writeFile(targetRoot, "pnpm-lock.yaml", "lock");
+    writeFile(targetRoot, "package.json", "{}");
+    writeFile(
+      targetRoot,
+      "packages/sdk/package.json",
+      JSON.stringify({
+        exports: {
+          ".": { import: "./dist/index.mjs", types: "./dist/index.d.mts" },
+        },
+      }),
+    );
+    // Target has the runtime artifact but NOT the .d.mts (common when tsc
+    // declarations are produced by a separate step that hasn't run yet).
+    writeFile(targetRoot, "packages/sdk/dist/index.mjs", "export const v = 'MERGED_BUILT';\n");
+
+    const result = linkNodeModules({ sourceRoot, targetRoot });
+
+    expect(result.method).toBe("symlink");
+    const linked = path.join(targetRoot, "node_modules/sdk/dist/index.mjs");
+    expect(fs.readFileSync(linked, "utf8")).toBe("export const v = 'MERGED_BUILT';\n");
+  });
+
   it("treats wildcard export patterns as resolvable without literal existence checks", () => {
     // Subpath patterns like `./src/*.js` expand per-import at resolve time.
     // Existence-checking the literal path would make packageCanResolve return

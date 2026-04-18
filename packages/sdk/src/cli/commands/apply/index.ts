@@ -17,8 +17,9 @@ The base ref is auto-detected from \`GITHUB_BASE_REF\` (set by GitHub Actions on
 pull_request events), then \`gh pr view\`, and finally \`origin/HEAD\`. Override
 with \`--base-ref <ref>\`. \`--base\` implies \`--dry-run\` and disables caching.
 
-If \`pnpm-lock.yaml\` or the root \`package.json\` differs between source and merge target,
-the command aborts without running. Install the merged dependencies first, then retry.`,
+If any lockfile (\`pnpm-lock.yaml\`, \`package-lock.json\`, \`yarn.lock\`, \`bun.lock\`) or
+any workspace \`package.json\` differs between source and merge target, the command
+aborts without running. Install the merged dependencies first, then retry.`,
   examples: [
     {
       cmd: "--base",
@@ -100,8 +101,11 @@ the command aborts without running. Install the merged dependencies first, then 
         cleanCache: args["clean-cache"],
       });
     } finally {
-      if (chdirDone) process.chdir(originalCwd);
-      await prepared.worktree.dispose();
+      try {
+        if (chdirDone) process.chdir(originalCwd);
+      } finally {
+        await prepared.worktree.dispose();
+      }
     }
   },
 });

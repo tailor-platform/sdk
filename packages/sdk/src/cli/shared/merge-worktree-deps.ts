@@ -219,13 +219,17 @@ function packageCanResolve(pkgPath: string): boolean {
   if (typeof pkg.module === "string") entrypoints.push(pkg.module);
   collectExportPaths(pkg.exports, entrypoints);
   collectBinPaths(pkg.bin, entrypoints);
+  // `.d.ts`/`.d.mts`/`.d.cts` paths are consumed by tsc alone — Node's module
+  // resolver never loads them — so a missing declaration file must not force
+  // the source-tree fallback.
+  const runtimeEntrypoints = entrypoints.filter((p) => !/\.d\.[mc]?ts$/.test(p));
   // No declared entrypoints: Node resolves `index.js` / `index.mjs` / `index.cjs`.
   // Treat the package as resolvable only if at least one exists in the merged
   // tree; otherwise fall back to source artifacts.
-  if (entrypoints.length === 0) {
+  if (runtimeEntrypoints.length === 0) {
     return IMPLICIT_ENTRYPOINTS.some((f) => fs.existsSync(path.join(pkgPath, f)));
   }
-  for (const rel of entrypoints) {
+  for (const rel of runtimeEntrypoints) {
     // Wildcard patterns like `./src/*.js` expand to concrete subpaths at
     // resolve time and cannot be existence-checked as literal filenames.
     // Sanity-check the static prefix before the first `*` instead — if that
