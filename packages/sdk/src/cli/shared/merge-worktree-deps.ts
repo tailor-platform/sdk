@@ -228,8 +228,15 @@ function packageCanResolve(pkgPath: string): boolean {
   for (const rel of entrypoints) {
     // Wildcard patterns like `./src/*.js` expand to concrete subpaths at
     // resolve time and cannot be existence-checked as literal filenames.
-    // Skip them; any non-wildcard sibling entry still validates the package.
-    if (rel.includes("*")) continue;
+    // Sanity-check the static prefix before the first `*` instead — if that
+    // directory is missing (e.g. `./dist/*.js` when dist/ wasn't built),
+    // treat the package as unresolved so the symlink falls back to source.
+    if (rel.includes("*")) {
+      const prefix = rel.slice(0, rel.indexOf("*"));
+      const prefixDir = prefix.endsWith("/") ? prefix : path.dirname(prefix);
+      if (!fs.existsSync(path.join(pkgPath, prefixDir))) return false;
+      continue;
+    }
     if (!fs.existsSync(path.join(pkgPath, rel))) return false;
   }
   return true;

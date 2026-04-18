@@ -303,6 +303,47 @@ describe("linkNodeModules", () => {
     expect(fs.readFileSync(linked, "utf8")).toBe("module.exports = 'MERGED_A';\n");
   });
 
+  it("falls back to source for wildcard exports pointing at a missing artifact dir", () => {
+    // Pattern exports that target a generated dir (e.g. dist/) must still
+    // force the source fallback when the merged tree has not been built —
+    // otherwise retargeting the symlink would leave `pkg/foo` unresolvable.
+    writeFile(sourceRoot, "pnpm-lock.yaml", "lock");
+    writeFile(sourceRoot, "package.json", "{}");
+    writeFile(
+      sourceRoot,
+      "packages/util/package.json",
+      JSON.stringify({
+        name: "util",
+        exports: { "./*": "./dist/*.js" },
+      }),
+    );
+    writeFile(sourceRoot, "packages/util/src/a.ts", "export const v = 'SRC';\n");
+    writeFile(sourceRoot, "packages/util/dist/a.js", "module.exports = 'BUILT';\n");
+    fs.mkdirSync(path.join(sourceRoot, "node_modules"));
+    fs.symlinkSync("../packages/util", path.join(sourceRoot, "node_modules/util"));
+
+    writeFile(targetRoot, "pnpm-lock.yaml", "lock");
+    writeFile(targetRoot, "package.json", "{}");
+    writeFile(
+      targetRoot,
+      "packages/util/package.json",
+      JSON.stringify({
+        name: "util",
+        exports: { "./*": "./dist/*.js" },
+      }),
+    );
+    // Same src between source and target so fallback is allowed.
+    writeFile(targetRoot, "packages/util/src/a.ts", "export const v = 'SRC';\n");
+    // Target intentionally has no dist/, so wildcard prefix check must fail.
+
+    const result = linkNodeModules({ sourceRoot, targetRoot });
+
+    expect(result.method).toBe("symlink");
+    // Symlink should fall back to source so dist/ resolves.
+    const linked = path.join(targetRoot, "node_modules/util/dist/a.js");
+    expect(fs.readFileSync(linked, "utf8")).toBe("module.exports = 'BUILT';\n");
+  });
+
   it("falls back to source when merged tree lacks the declared bin entrypoint", () => {
     writeFile(sourceRoot, "pnpm-lock.yaml", "lock");
     writeFile(sourceRoot, "package.json", "{}");
