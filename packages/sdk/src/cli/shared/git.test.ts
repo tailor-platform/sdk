@@ -177,6 +177,39 @@ describe("git", () => {
       ).rejects.toThrow(/GITHUB_BASE_REF is "main".*not available/);
     });
 
+    it("matches credentialed remote URLs when resolving the base-repo remote", async () => {
+      // actions/checkout embeds a token in the fetch URL
+      // (https://x-access-token:<token>@github.com/owner/repo.git). URL
+      // normalization must strip the userinfo, otherwise the comparison with
+      // GITHUB_REPOSITORY's plain URL fails and auto-detection errors out
+      // even though origin is the correct base repo.
+      const result = await detectBaseRef({
+        cwd: tmpDir,
+        env: {
+          GITHUB_BASE_REF: "main",
+          GITHUB_REPOSITORY: "acme/repo",
+          GITHUB_SERVER_URL: "https://github.com",
+        },
+        runGh: async () => {
+          throw new Error("gh should not be called when GITHUB_BASE_REF is set");
+        },
+        runGitCmd: async (args) => {
+          if (args[0] === "remote" && args[1] === "-v") {
+            return {
+              stdout: "origin\thttps://x-access-token:sekrit@github.com/acme/repo.git (fetch)",
+              stderr: "",
+              exitCode: 0,
+            };
+          }
+          if (args[0] === "rev-parse" && args.includes("origin/main")) {
+            return { stdout: "deadbeef\n", stderr: "", exitCode: 0 };
+          }
+          return { stdout: "", stderr: "", exitCode: 1 };
+        },
+      });
+      expect(result).toBe("origin/main");
+    });
+
     it("throws when GITHUB_REPOSITORY is set but no local remote matches the upstream", async () => {
       await expect(
         detectBaseRef({

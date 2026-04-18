@@ -270,13 +270,14 @@ function buildGithubRepoUrl(
 
 function normalizeGitRepoUrl(url: string): string {
   // Normalize https, ssh, and git@ forms so fetch URLs compare equal.
-  // https://github.com/owner/repo.git -> github.com/owner/repo
-  // git@github.com:owner/repo.git     -> github.com/owner/repo
-  // ssh://git@github.com/owner/repo   -> github.com/owner/repo
+  // https://x-access-token:tok@github.com/owner/repo.git -> github.com/owner/repo
+  // https://github.com/owner/repo.git                    -> github.com/owner/repo
+  // git@github.com:owner/repo.git                        -> github.com/owner/repo
+  // ssh://git@github.com/owner/repo                      -> github.com/owner/repo
   return url
     .trim()
     .replace(/\.git$/, "")
-    .replace(/^https?:\/\//, "")
+    .replace(/^https?:\/\/(?:[^@/?#]+@)?/, "")
     .replace(/^ssh:\/\/(?:[^@]+@)?/, "")
     .replace(/^git@([^:]+):/, "$1/")
     .toLowerCase();

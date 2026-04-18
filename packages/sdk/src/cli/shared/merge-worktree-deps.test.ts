@@ -182,8 +182,49 @@ describe("linkNodeModules", () => {
 
     expect(result.method).toBe("abort");
     expect(result.reason).toContain("wspkg");
-    expect(result.reason).toMatch(/rebuild/);
+    expect(result.reason).toMatch(/reinstall/);
     expect(fs.existsSync(path.join(targetRoot, "node_modules"))).toBe(false);
+  });
+
+  it("aborts when a .pnpm-linked workspace diverged even if target entrypoints exist", () => {
+    // Top-level links can safely short-circuit on `packageCanResolve(target)`
+    // because `rewriteSymlink` retargets them to the merged tree. Links
+    // inside `.pnpm` are not retargeted (the whole store is symlinked
+    // wholesale), so divergence must abort even when target has entrypoints.
+    writeFile(sourceRoot, "pnpm-lock.yaml", "lock");
+    writeFile(sourceRoot, "package.json", "{}");
+    writeFile(
+      sourceRoot,
+      "packages/wspkg/package.json",
+      JSON.stringify({ name: "wspkg", main: "./dist/index.js" }),
+    );
+    writeFile(sourceRoot, "packages/wspkg/src/index.ts", "export const v = 'SOURCE';\n");
+    writeFile(sourceRoot, "packages/wspkg/dist/index.js", "module.exports = 'SOURCE_BUILT';\n");
+    fs.mkdirSync(
+      path.join(sourceRoot, "node_modules/.pnpm/wspkg@link+packages+wspkg/node_modules"),
+      { recursive: true },
+    );
+    fs.symlinkSync(
+      "../../../../packages/wspkg",
+      path.join(sourceRoot, "node_modules/.pnpm/wspkg@link+packages+wspkg/node_modules/wspkg"),
+    );
+
+    writeFile(targetRoot, "pnpm-lock.yaml", "lock");
+    writeFile(targetRoot, "package.json", "{}");
+    writeFile(
+      targetRoot,
+      "packages/wspkg/package.json",
+      JSON.stringify({ name: "wspkg", main: "./dist/index.js" }),
+    );
+    writeFile(targetRoot, "packages/wspkg/src/index.ts", "export const v = 'MERGED';\n");
+    // Target does have its own dist/, so packageCanResolve would succeed.
+    writeFile(targetRoot, "packages/wspkg/dist/index.js", "module.exports = 'MERGED_BUILT';\n");
+
+    const result = linkNodeModules({ sourceRoot, targetRoot });
+
+    expect(result.method).toBe("abort");
+    expect(result.reason).toContain("wspkg");
+    expect(result.reason).toMatch(/reinstall/);
   });
 
   it("detects missing entrypoints declared via exports-only manifests", () => {
