@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { runGit } from "@/cli/shared/git";
 import { prepareBasePlan, translatePath } from "./merge-plan-setup";
 
@@ -145,11 +145,21 @@ describe("prepareBasePlan", () => {
   it("throws a clear error when no base ref is passed and auto-detection fails", async () => {
     await commitFile(repoRoot, "tailor.config.ts", "export default {};\n", "seed config");
 
+    // CI sets GITHUB_BASE_REF on pull_request runs, which would make
+    // detectBaseRef enter the CI branch instead of returning null. Blank it
+    // here so this test exercises the "no signals at all" path regardless of
+    // the host environment.
+    vi.stubEnv("GITHUB_BASE_REF", "");
+
     process.chdir(repoRoot);
-    await expect(
-      prepareBasePlan({ baseRef: undefined }),
-      // No origin/HEAD, no GITHUB_BASE_REF, no gh PR — detectBaseRef returns null.
-    ).rejects.toThrow(/Could not detect base ref/);
+    try {
+      await expect(
+        prepareBasePlan({ baseRef: undefined }),
+        // No origin/HEAD, no GITHUB_BASE_REF, no gh PR — detectBaseRef returns null.
+      ).rejects.toThrow(/Could not detect base ref/);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("throws when the config file cannot be found", async () => {
