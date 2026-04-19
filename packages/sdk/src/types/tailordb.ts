@@ -1,4 +1,6 @@
 import type { ValueOperand } from "./auth";
+import type { DefinedFieldMetadata, FieldMetadata, EnumValue } from "./field-types";
+import type { Prettify } from "./helpers";
 import type {
   DBFieldMetadata as DBFieldMetadataGenerated,
   RawPermissions,
@@ -6,22 +8,70 @@ import type {
   TailorDBServiceConfig,
   TailorDBServiceConfigInput,
   TailorDBTypeParsedSettings,
+  GqlOperationsInput,
 } from "./tailordb.generated";
-import type { GqlOperationsConfig } from "@/configure/services/tailordb";
 
-// Re-exports from configure layer (needed because parser cannot import from configure)
+// Re-exports from tailor-db-field (needed because parser cannot import from configure)
 export type {
   TailorAnyDBField,
   TailorAnyDBType,
   TailorDBField,
-  DBFieldMetadata,
-  Hook,
-  TailorTypePermission,
-  TailorTypeGqlPermission,
-  GqlOperationsConfig,
-} from "@/configure/services/tailordb";
+  TailorDBInstance,
+} from "./tailor-db-field";
 
 export type { GqlOperations } from "./tailordb.generated";
+
+// --- Types from configure/services/tailordb/types.ts ---
+
+export type SerialConfig<T extends "string" | "integer" = "string" | "integer"> = Prettify<
+  {
+    start: number;
+    maxValue?: number;
+  } & (T extends "string"
+    ? {
+        format?: string;
+      }
+    : object)
+>;
+
+export interface DBFieldMetadata extends FieldMetadata {
+  index?: boolean;
+  unique?: boolean;
+  vector?: boolean;
+  foreignKey?: boolean;
+  foreignKeyType?: string;
+  foreignKeyField?: string;
+  /** Lifecycle hooks for the field */
+  hooks?: DBFieldMetadataGenerated["hooks"];
+  serial?: SerialConfig;
+  relation?: boolean;
+  scale?: number;
+}
+
+export interface DefinedDBFieldMetadata extends DefinedFieldMetadata {
+  index?: boolean;
+  unique?: boolean;
+  vector?: boolean;
+  foreignKey?: boolean;
+  foreignKeyType?: boolean;
+  validate?: boolean;
+  hooks?: {
+    create: boolean;
+    update: boolean;
+  };
+  serial?: boolean;
+  relation?: boolean;
+}
+
+export type IndexDef<T extends { fields: Record<PropertyKey, unknown> }> = {
+  fields: [keyof T["fields"], keyof T["fields"], ...(keyof T["fields"])[]];
+  unique?: boolean;
+  name?: string;
+};
+
+export type GqlOperationsConfig = GqlOperationsInput;
+
+// --- Original types/tailordb.ts types ---
 
 export type TailorDBFieldOutput = {
   type: string;
@@ -80,11 +130,6 @@ export interface Script {
   expr: string;
 }
 
-export interface EnumValue {
-  value: string;
-  description?: string;
-}
-
 interface OperatorValidateConfig {
   script: Script;
   errorMessage: string;
@@ -129,7 +174,7 @@ export interface OperatorFieldConfig {
   fields?: Record<string, OperatorFieldConfig>;
 }
 
-// Permission types
+// Permission types (parsed/standard format)
 type GqlPermissionAction = "read" | "create" | "update" | "delete" | "aggregate" | "bulkUpsert";
 
 type StandardPermissionOperator = "eq" | "ne" | "in" | "nin" | "hasAny" | "nhasAny";
@@ -138,14 +183,14 @@ type UserOperand = {
   user: string;
 };
 
-type RecordOperand<Update extends boolean = false> = Update extends true
+type StandardRecordOperand<Update extends boolean = false> = Update extends true
   ? { oldRecord: string } | { newRecord: string }
   : { record: string };
 
 export type PermissionOperand<
   Level extends "record" | "gql" = "record" | "gql",
   Update extends boolean = boolean,
-> = UserOperand | ValueOperand | (Level extends "record" ? RecordOperand<Update> : never);
+> = UserOperand | ValueOperand | (Level extends "record" ? StandardRecordOperand<Update> : never);
 
 export type StandardPermissionCondition<
   Level extends "record" | "gql" = "record" | "gql",

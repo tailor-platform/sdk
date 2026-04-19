@@ -2,7 +2,6 @@ import { getPrecompiledScriptExpr } from "./hooks-validate-precompiled-expr";
 import type {
   TailorAnyDBField,
   DBFieldMetadata,
-  Hook,
   OperatorFieldConfig,
   RawRelationConfig,
 } from "@/types/tailordb";
@@ -40,10 +39,9 @@ export const stringifyFunction = (fn: Function): string => {
  * @param fn - Hook function
  * @returns JavaScript expression calling the hook
  */
-const convertHookToExpr = (
-  fn: NonNullable<Hook<unknown, unknown>["create"] | Hook<unknown, unknown>["update"]>,
-): string => {
-  const precompiledExpr = getPrecompiledScriptExpr(fn);
+// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+const convertHookToExpr = (fn: Function): string => {
+  const precompiledExpr = getPrecompiledScriptExpr(fn as (...args: never[]) => unknown);
   if (precompiledExpr) {
     return precompiledExpr;
   }

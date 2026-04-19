@@ -117,6 +117,12 @@ const files: Record<string, FileConfig> = {
     commands: ["setup"],
     render: defaultRender,
   },
+  "docs/cli/upgrade.md": {
+    title: "Upgrade Commands",
+    description: "Commands for upgrading SDK versions with automated code migration.",
+    commands: ["upgrade"],
+    render: defaultRender,
+  },
   "docs/cli/completion.md": {
     title: "Completion",
     description: "Generate shell completion scripts for bash, zsh, and fish.",
