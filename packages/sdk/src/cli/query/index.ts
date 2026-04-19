@@ -576,7 +576,7 @@ function printReplHelp(engine: QueryEngine): void {
   logger.log("  Ctrl+C                     Cancel current input");
   logger.log("  Ctrl+D                     Exit REPL (on empty input)");
   logger.log("  Ctrl+Z / Ctrl+Y            Undo / Redo");
-  logger.log("  Up/Down at boundary        Navigate history");
+  logger.log("  Up/Down (first/last line)  Navigate history");
   logger.log("");
   logger.log("Editing aids:");
   logger.log("  Syntax highlighting        Enabled for the current engine");
@@ -740,7 +740,7 @@ export const queryCommand = defineAppCommand({
       }),
       "newline-on-enter": arg(z.boolean().optional(), {
         description:
-          "REPL: when true, Enter inserts a newline and Shift+Enter submits. Use --no-newline-on-enter to swap. Falls back to TAILOR_PLATFORM_QUERY_NEWLINE_ON_ENTER, then true.",
+          "REPL: when true, Enter inserts a newline and Shift+Enter submits. Use --no-newline-on-enter to swap.",
       }),
     })
     .superRefine((args, ctx) => {
