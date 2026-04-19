@@ -1,4 +1,6 @@
-import type { InferredAttributeMap } from "../../types";
+import type { InferredAttributeMap } from "@/types/user";
+
+// --- Permission types (UX-focused, for configure layer) ---
 
 /**
  * Record-level permission configuration for a TailorDB type.
@@ -266,6 +268,8 @@ export type PermissionCondition<
   | EqualityCondition<Level, User, Update, Type>
   | ContainsCondition<Level, User, Update, Type>
   | HasAnyCondition<Level, User, Update, Type>;
+
+// --- Runtime constants ---
 
 /**
  * Grants full record-level access without any conditions.

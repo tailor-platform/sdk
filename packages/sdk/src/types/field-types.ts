@@ -1,5 +1,9 @@
-import { type AllowedValue } from "./field";
 import type { FieldValidateInput } from "./validation";
+
+export interface EnumValue {
+  value: string;
+  description?: string;
+}
 
 export type TailorFieldType =
   | "uuid"
@@ -34,7 +38,7 @@ export interface FieldMetadata {
   required?: boolean;
 
   array?: boolean;
-  allowedValues?: AllowedValue[];
+  allowedValues?: EnumValue[];
   // Validation supports any field output type (the field itself remains typed elsewhere).
   // oxlint-disable-next-line no-explicit-any
   validate?: FieldValidateInput<any>[];

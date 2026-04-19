@@ -1,8 +1,8 @@
 import type { AuthConfig } from "./auth";
 import type { IdPConfig } from "./idp";
+import type { SecretsConfig } from "./secrets-config";
+import type { StaticWebsiteConfig } from "./staticwebsite-config";
 import type { TailorDBServiceInput } from "./tailordb";
-import type { SecretsConfig } from "@/configure/services/secrets";
-import type { StaticWebsiteConfig } from "@/configure/services/staticwebsite";
 
 export type ExecutorServiceConfig = { files: string[]; ignores?: string[] };
 export type ExecutorServiceInput = ExecutorServiceConfig;

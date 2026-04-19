@@ -6,9 +6,10 @@ import { logger, styles } from "@/cli/shared/logger";
 import { parseTypes, TailorDBTypeSchema } from "@/parser/service/tailordb";
 import { isSdkBranded } from "@/utils/brand";
 import { precompileTailorDBTypeScripts } from "./hooks-validate-bundler";
+import type { TailorAnyDBType } from "@/parser/service/tailordb/runtime";
 import type { PluginManager } from "@/plugin/manager";
 import type { PluginAttachment } from "@/types/plugin";
-import type { TypeSourceInfo, TailorAnyDBType, TailorDBType } from "@/types/tailordb";
+import type { TypeSourceInfo, TailorDBType } from "@/types/tailordb";
 import type {
   TailorDBServiceConfig,
   TailorDBTypeRaw as TailorDBTypeSchemaOutput,
