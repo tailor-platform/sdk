@@ -98,6 +98,35 @@ export default defineConfig([
     },
   },
   {
+    files: ["src/types/**/*.ts"],
+    ignores: ["src/types/**/*.test.ts"],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["**/configure/**", "@/configure/**"],
+              message: "Types module should not import from configure module.",
+            },
+            {
+              group: ["**/cli/**", "@/cli/**"],
+              message: "Types module should not import from cli module.",
+            },
+            {
+              group: ["**/parser/**", "@/parser/**"],
+              message: "Types module should not import from parser module.",
+            },
+            {
+              group: ["**/plugin/**", "@/plugin/**"],
+              message: "Types module should not import from plugin module.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ["src/configure/**/*.ts"],
     rules: {
       "@typescript-eslint/no-restricted-imports": [
@@ -185,7 +214,7 @@ export default defineConfig([
   {
     // Non-builtin plugin modules cannot import from configure or builtin
     files: ["src/plugin/**/*.ts"],
-    ignores: ["src/plugin/**/*.test.ts", "src/plugin/builtin/**/*.ts"],
+    ignores: ["src/plugin/**/*.test.ts", "src/plugin/builtin/**/*.ts", "src/plugin/manager.ts"],
     rules: {
       "@typescript-eslint/no-restricted-imports": [
         "error",

@@ -1,5 +1,5 @@
-import type { InferredAttributeMap } from "../../types";
 import type { IdPUserField } from "@/types/idp";
+import type { InferredAttributeMap } from "@/types/user";
 
 type EqualityOperator = "=" | "!=";
 type ContainsOperator = "in" | "not in";

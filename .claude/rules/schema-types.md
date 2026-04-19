@@ -27,8 +27,8 @@ src/types/*.ts (manual: derived types, utilities)
 
 ## Where to Define Types
 
-- **`src/types/`**: Internal types shared across layers — generated types, parsed data structures, problem domain models (permissions, metadata, type source info)
-- **`src/configure/`**: User-facing API types — field builder types (`TailorField`), fluent method chain generics, service configuration types that SDK users directly interact with. Types here must stay close to the implementation for generic type inference to work correctly.
+- **`src/types/`**: Shared structural types — generated types, parsed data structures, minimal structural interfaces for builder types (`TailorField`, `TailorDBField`, `TailorDBType` — properties only, no methods), utility types (`output`, `Prettify`), and runtime shared types (`TailorUser`, `EnumValue`). This is the lowest layer — it must NOT import from `configure`, `cli`, `parser`, or `plugin`.
+- **`src/configure/`**: User-facing API — full builder interfaces with fluent methods (extending types/ minimal interfaces), UX-focused types (permissions, `Hook`, `TypeFeatures`), runtime implementations (`createTailorField`, `t` namespace, `db` factory), and configuration functions (`defineAuth`, `defineConfig`).
 
 ## zinfer Generation
 

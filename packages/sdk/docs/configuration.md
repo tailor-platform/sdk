@@ -218,17 +218,19 @@ export default defineConfig({
 
 **ignores**: Glob patterns to exclude files. Optional.
 
-### Generators
+### Plugins
 
-Configure code generators using `defineGenerators()`. Generators must be exported as a named export.
+Configure plugins using `definePlugins()`. Plugins must be exported as a named export.
 
 ```typescript
-import { defineGenerators } from "@tailor-platform/sdk";
+import { definePlugins } from "@tailor-platform/sdk";
+import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
+import { enumConstantsPlugin } from "@tailor-platform/sdk/plugin/enum-constants";
 
-export const generators = defineGenerators(
-  ["@tailor-platform/kysely-type", { distPath: "./generated/tailordb.ts" }],
-  ["@tailor-platform/enum-constants", { distPath: "./generated/enums.ts" }],
+export const plugins = definePlugins(
+  kyselyTypePlugin({ distPath: "./generated/tailordb.ts" }),
+  enumConstantsPlugin({ distPath: "./generated/enums.ts" }),
 );
 ```
 
-See [Generators](./generator/index.md) for full documentation.
+See [Generators](./generator/index.md) for legacy `defineGenerators()` documentation.
