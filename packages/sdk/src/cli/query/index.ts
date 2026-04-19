@@ -441,14 +441,25 @@ function clearReplScreen(): void {
   process.stdout.write("\u001Bc");
 }
 
-// TODO: History is shared across all workspaces/profiles. Consider scoping by
-// workspace or profile to avoid replaying statements against the wrong environment.
-function getReplHistoryPath(engine: QueryEngine): string | undefined {
+function sanitizeHistoryScope(value: string): string {
+  return value.replace(/[^a-zA-Z0-9._-]/g, "_");
+}
+
+export function getReplHistoryPath(
+  engine: QueryEngine,
+  profile: string | undefined,
+  workspaceId: string | undefined,
+): string | undefined {
   if (!xdgConfig) {
     return undefined;
   }
-  const filename = engine === "sql" ? "query-history-sql.json" : "query-history-gql.json";
-  return path.join(xdgConfig, "tailor-platform", filename);
+  const scope = [profile, workspaceId]
+    .filter((value): value is string => Boolean(value))
+    .map(sanitizeHistoryScope)
+    .join("-");
+  const engineSlug = engine === "sql" ? "sql" : "gql";
+  const suffix = scope ? `-${scope}` : "";
+  return path.join(xdgConfig, "tailor-platform", `query-history-${engineSlug}${suffix}.json`);
 }
 
 // TODO: Empty input and REPL commands (e.g. \help, \q) are treated as valid by
@@ -483,7 +494,7 @@ async function runRepl(
   }
 
   const execute = await prepareQueryExecutor(options);
-  const historyPath = getReplHistoryPath(options.engine);
+  const historyPath = getReplHistoryPath(options.engine, options.profile, options.workspaceId);
   const validate = createReplValidator(options.engine);
   // Lazy-load the editor module so the `graphql` and `sql-highlight` libs are
   // only pulled in when the REPL is actually entered, not on every CLI startup.

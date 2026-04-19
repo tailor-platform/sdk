@@ -1,5 +1,17 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { query, queryCommand, resolveQueryCommandInput, resolveReplCommand } from "./index";
+import {
+  getReplHistoryPath,
+  query,
+  queryCommand,
+  resolveQueryCommandInput,
+  resolveReplCommand,
+} from "./index";
+
+const xdgTempDir = vi.hoisted(() => `/tmp/tailor-xdg-${Date.now()}-${Math.random()}`);
+
+vi.mock("xdg-basedir", () => ({
+  xdgConfig: xdgTempDir,
+}));
 
 vi.mock("node:fs/promises", () => ({
   readFile: vi.fn(),
@@ -765,5 +777,46 @@ describe("queryCommand args", () => {
     expect(disabled.success).toBe(true);
     if (!disabled.success) throw new Error("expected args parsing to succeed");
     expect(disabled.data["newline-on-enter"]).toBe(false);
+  });
+});
+
+describe("getReplHistoryPath", () => {
+  test("returns an unscoped filename when neither profile nor workspaceId is set", () => {
+    expect(getReplHistoryPath("sql", undefined, undefined)).toBe(
+      `${xdgTempDir}/tailor-platform/query-history-sql.json`,
+    );
+    expect(getReplHistoryPath("gql", undefined, undefined)).toBe(
+      `${xdgTempDir}/tailor-platform/query-history-gql.json`,
+    );
+  });
+
+  test("treats an empty-string profile or workspaceId as unset", () => {
+    expect(getReplHistoryPath("sql", "", "")).toBe(
+      `${xdgTempDir}/tailor-platform/query-history-sql.json`,
+    );
+  });
+
+  test("scopes by profile when only profile is set", () => {
+    expect(getReplHistoryPath("sql", "dev", undefined)).toBe(
+      `${xdgTempDir}/tailor-platform/query-history-sql-dev.json`,
+    );
+  });
+
+  test("scopes by workspaceId when only workspaceId is set", () => {
+    expect(getReplHistoryPath("gql", undefined, "ws-abc-123")).toBe(
+      `${xdgTempDir}/tailor-platform/query-history-gql-ws-abc-123.json`,
+    );
+  });
+
+  test("combines profile and workspaceId when both are set", () => {
+    expect(getReplHistoryPath("sql", "prod", "ws-abc-123")).toBe(
+      `${xdgTempDir}/tailor-platform/query-history-sql-prod-ws-abc-123.json`,
+    );
+  });
+
+  test("sanitizes unsafe characters in the scope so the filename stays safe", () => {
+    expect(getReplHistoryPath("sql", "team/dev prod", "ws/1..2")).toBe(
+      `${xdgTempDir}/tailor-platform/query-history-sql-team_dev_prod-ws_1..2.json`,
+    );
   });
 });
