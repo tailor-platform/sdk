@@ -110,9 +110,15 @@ async function main() {
   }
 
   if (allErrors.length > 0) {
+    const isCI = process.env.CI === "true";
     console.error(`Found ${allErrors.length} relative link(s) escaping packages/sdk/docs/:\n`);
     for (const err of allErrors) {
       console.error(`  ${err.file}:${err.line}: "${err.url}" -> ${err.resolved}`);
+      if (isCI) {
+        // GitHub Actions annotation — shows inline on the PR diff.
+        const msg = `Relative link "${err.url}" escapes packages/sdk/docs/ and will 404 on docs.tailor.tech. Use a GitHub absolute URL instead.`;
+        console.log(`::error file=${err.file},line=${err.line}::${msg}`);
+      }
     }
     console.error(
       `\nOnly packages/sdk/docs/ is published to https://docs.tailor.tech,` +
