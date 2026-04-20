@@ -43,9 +43,9 @@ export default defineConfig({
 
 ## Options
 
-### authorization
+### authorization (optional)
 
-User management permissions. Controls who can manage users in the IdP.
+User management permissions. Controls who can manage users in the IdP. This field can be omitted when using `permission` for access control.
 
 ```typescript
 defineIdp("my-idp", {

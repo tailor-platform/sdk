@@ -440,6 +440,16 @@ describe("IdPUserAuthPolicySchema validation", () => {
 });
 
 describe("IdPSchema validation", () => {
+  it("accepts missing authorization", () => {
+    const config = {
+      name: "test-idp",
+      clients: ["client-1"],
+    };
+
+    const result = IdPSchema.parse(config);
+    expect(result.authorization).toBeUndefined();
+  });
+
   it("accepts publishUserEvents as true", () => {
     const config = {
       name: "test-idp",
