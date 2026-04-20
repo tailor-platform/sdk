@@ -1,7 +1,12 @@
-import { describe, expect, it } from "vitest";
+import * as path from "pathe";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { defineAuth } from "@/configure/services/auth";
 import { t } from "@/configure/types/type";
-import { extractAttributesFromConfig, generateTypeDefinition } from "./type-generator";
+import {
+  extractAttributesFromConfig,
+  generateTypeDefinition,
+  resolveTypeDefinitionPath,
+} from "./type-generator";
 import type { AttributeListConfig, AttributeMapConfig } from "./type-generator";
 
 describe("generateTypeDefinition", () => {
@@ -76,6 +81,59 @@ describe("generateTypeDefinition", () => {
 
     expect(result).toContain("interface Env {}");
   });
+
+  it("should generate empty MachineUserNameRegistry when no machine users provided", () => {
+    const result = generateTypeDefinition(undefined, undefined);
+
+    expect(result).toContain("interface MachineUserNameRegistry {}");
+  });
+
+  it("should generate MachineUserNameRegistry with machine user names", () => {
+    const result = generateTypeDefinition(undefined, undefined, undefined, [
+      "manager-machine-user",
+      "kiosk",
+    ]);
+
+    expect(result).toContain("interface MachineUserNameRegistry");
+    // Names with hyphens are quoted
+    expect(result).toContain('"manager-machine-user": true;');
+    // Valid identifiers are emitted unquoted (matches formatter output)
+    expect(result).toContain("kiosk: true;");
+    expect(result).not.toContain('"kiosk": true;');
+  });
+});
+
+describe("resolveTypeDefinitionPath", () => {
+  const originalEnv = process.env.TAILOR_PLATFORM_SDK_DTS_PATH;
+
+  beforeEach(() => {
+    delete process.env.TAILOR_PLATFORM_SDK_DTS_PATH;
+  });
+
+  afterEach(() => {
+    if (originalEnv !== undefined) {
+      process.env.TAILOR_PLATFORM_SDK_DTS_PATH = originalEnv;
+    } else {
+      delete process.env.TAILOR_PLATFORM_SDK_DTS_PATH;
+    }
+  });
+
+  it("should default to tailor.d.ts next to config file", () => {
+    const result = resolveTypeDefinitionPath("/project/tailor.config.ts");
+    expect(result).toBe(path.resolve("/project", "tailor.d.ts"));
+  });
+
+  it("should use TAILOR_PLATFORM_SDK_DTS_PATH when set to an absolute path", () => {
+    process.env.TAILOR_PLATFORM_SDK_DTS_PATH = "/custom/output/types.d.ts";
+    const result = resolveTypeDefinitionPath("/project/tailor.config.ts");
+    expect(result).toBe("/custom/output/types.d.ts");
+  });
+
+  it("should resolve TAILOR_PLATFORM_SDK_DTS_PATH relative to cwd when relative", () => {
+    process.env.TAILOR_PLATFORM_SDK_DTS_PATH = "custom/types.d.ts";
+    const result = resolveTypeDefinitionPath("/project/tailor.config.ts");
+    expect(result).toBe(path.resolve("custom/types.d.ts"));
+  });
 });
 
 describe("extractAttributesFromConfig + generateTypeDefinition", () => {
@@ -106,5 +164,28 @@ describe("extractAttributesFromConfig + generateTypeDefinition", () => {
     expect(content).toContain('role: "ADMIN" | "WORKER";');
     expect(content).toContain("isActive: boolean;");
     expect(content).toContain("tags: string[];");
+  });
+
+  it("extracts machine user names into MachineUserNameRegistry", () => {
+    const config = {
+      name: "test-app",
+      auth: defineAuth("auth", {
+        machineUserAttributes: {
+          role: t.enum(["ADMIN", "WORKER"]),
+        },
+        machineUsers: {
+          admin: { attributes: { role: "ADMIN" } },
+          worker: { attributes: { role: "WORKER" } },
+        },
+      }),
+    };
+
+    const { attributeMap, machineUserNames } = extractAttributesFromConfig(config);
+    expect(machineUserNames).toEqual(["admin", "worker"]);
+
+    const content = generateTypeDefinition(attributeMap, undefined, undefined, machineUserNames);
+    expect(content).toContain("interface MachineUserNameRegistry");
+    expect(content).toContain("admin: true;");
+    expect(content).toContain("worker: true;");
   });
 });

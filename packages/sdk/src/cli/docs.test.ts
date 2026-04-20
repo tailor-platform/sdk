@@ -45,6 +45,12 @@ const files: Record<string, FileConfig> = {
     commands: ["tailordb"],
     render: defaultRender,
   },
+  "docs/cli/query.md": {
+    title: "Query Commands",
+    description: "Run ad-hoc SQL/GraphQL queries or enter the interactive REPL.",
+    commands: ["query"],
+    render: defaultRender,
+  },
   "docs/cli/user.md": {
     title: "User & Auth Commands",
     description: "Commands for authentication and user management.",
@@ -109,6 +115,18 @@ const files: Record<string, FileConfig> = {
     title: "Setup Commands",
     description: "Commands for setting up project infrastructure.",
     commands: ["setup"],
+    render: defaultRender,
+  },
+  "docs/cli/upgrade.md": {
+    title: "Upgrade Commands",
+    description: "Commands for upgrading SDK versions with automated code migration.",
+    commands: ["upgrade"],
+    render: defaultRender,
+  },
+  "docs/cli/skills.md": {
+    title: "Skills Commands",
+    description: "Commands for installing Tailor SDK agent skills.",
+    commands: ["skills"],
     render: defaultRender,
   },
   "docs/cli/completion.md": {

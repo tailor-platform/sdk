@@ -91,6 +91,11 @@ export async function bundleForTestRun(
           }
         : true,
       codeSplitting: false,
+      // Emit sourcemap `sources` relative to cwd so stack traces resolve
+      // back to paths a user can open (e.g. `resolvers/add.ts`), not the
+      // rolldown-default virtual output dir which produces spurious `..`
+      // segments.
+      dir: process.cwd(),
     },
     tsconfig,
     treeshake: {
@@ -137,7 +142,7 @@ function generateEntry(
       `;
 
     case "resolver": {
-      // Same pattern as services/resolver/bundler.ts:125-152
+      // Mirrors the production resolver bundler (services/resolver/bundler.ts).
       // In production, the operationHook injects user/env into context.
       // For test-run, we embed machine user info since there's no operationHook.
       const userExpr = buildMachineUserExpr(machineUser, workspaceId);
@@ -149,13 +154,11 @@ function generateEntry(
         const _user = ${userExpr};
 
         const $tailor_resolver_body = async (context) => {
-          const enrichedContext = { ...context, env: _env, user: _user };
-
           if (_internalResolver.input) {
             const result = t.object(_internalResolver.input).parse({
-              value: enrichedContext.input,
-              data: enrichedContext.input,
-              user: enrichedContext.user,
+              value: context,
+              data: context,
+              user: _user,
             });
 
             if (result.issues) {
@@ -166,6 +169,7 @@ function generateEntry(
             }
           }
 
+          const enrichedContext = { input: context, env: _env, user: _user };
           return _internalResolver.body(enrichedContext);
         };
 
@@ -174,7 +178,7 @@ function generateEntry(
     }
 
     case "executor": {
-      // Same pattern as services/executor/bundler.ts:144-150
+      // Mirrors the production executor bundler (services/executor/bundler.ts).
       // In production, buildExecutorArgsExpr injects actor/env into args.
       // For test-run, we embed machine user as actor.
       const actorExpr = buildMachineActorExpr(machineUser, workspaceId);
@@ -193,7 +197,7 @@ function generateEntry(
     }
 
     case "workflow-job": {
-      // Same pattern as services/workflow/bundler.ts:286-294
+      // Mirrors the production workflow bundler (services/workflow/bundler.ts).
       // Note: user context is not available in TestExecScript for workflow jobs.
       // The production workflow bundler's user mapping is being fixed in fix/workflow-user.
       const exportName = detected.exportName!;

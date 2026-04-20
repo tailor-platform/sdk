@@ -1,57 +1,25 @@
 import { type AllowedValues, type AllowedValuesOutput, mapAllowedValues } from "./field";
-import {
-  type TailorFieldType,
-  type TailorToTs,
-  type FieldMetadata,
-  type DefinedFieldMetadata,
-  type FieldOptions,
-  type FieldOutput,
-} from "./types";
-import type { Prettify, InferFieldsOutput } from "./helpers";
-import type { FieldValidateInput } from "./validation";
-import type { TailorUser } from "@/configure/types";
-import type { TailorFieldInput } from "@/types/field.generated";
+import type {
+  DefinedFieldMetadata,
+  TailorFieldType,
+  TailorToTs,
+  FieldMetadata,
+  FieldOptions,
+  FieldOutput,
+} from "@/types/field-types";
+import type { InferFieldsOutput, Prettify } from "@/types/helpers";
+import type { TailorField as TailorFieldBase } from "@/types/tailor-field";
+import type { TailorUser } from "@/types/user";
+import type { FieldValidateInput } from "@/types/validation";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
-
-const regex = {
-  uuid: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
-  date: /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/,
-  time: /^(?<hour>\d{2}):(?<minute>\d{2})$/,
-  datetime:
-    /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(.(?<millisec>\d{3}))?Z$/,
-  decimal: /^-?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/,
-} as const;
 
 // This helper type intentionally uses `any` as a placeholder for unknown field output.
 // oxlint-disable-next-line no-explicit-any
 export type TailorAnyField = TailorField<any>;
 
-type FieldParseArgs = {
-  value: unknown;
-  data: unknown;
-  user: TailorUser;
-};
-
-type FieldValidateValueArgs<T extends TailorFieldType> = {
-  value: TailorToTs[T];
-  data: unknown;
-  user: TailorUser;
-  pathArray: string[];
-};
-
-type FieldParseInternalArgs = {
-  // Runtime input is unknown/untyped; we validate and narrow it inside the parser.
-  // oxlint-disable-next-line no-explicit-any
-  value: any;
-  data: unknown;
-  user: TailorUser;
-  pathArray: string[];
-};
-
 /**
- * TailorField interface representing a field with metadata, type information, and optional nested fields.
- * This is the base field type used by both resolver types and TailorDB types.
- * Using interface to allow self-referencing in the fields property.
+ * Full TailorField interface with builder methods.
+ * Extends the minimal structural interface from types/ with fluent API methods.
  */
 export interface TailorField<
   Defined extends DefinedFieldMetadata = DefinedFieldMetadata,
@@ -60,15 +28,9 @@ export interface TailorField<
   Output = any,
   M extends FieldMetadata = FieldMetadata,
   T extends TailorFieldType = TailorFieldType,
-> extends TailorFieldInput {
-  readonly type: T;
+> extends TailorFieldBase<Defined, Output, M, T> {
   readonly fields: Record<string, TailorAnyField>;
-  readonly _defined: Defined;
-  readonly _output: Output;
   _metadata: M;
-
-  /** Returns a shallow copy of the metadata */
-  readonly metadata: M;
 
   /**
    * Set a description for the field
@@ -124,6 +86,37 @@ export interface TailorField<
    */
   _parseInternal(args: FieldParseInternalArgs): StandardSchemaV1.Result<Output>;
 }
+
+const regex = {
+  uuid: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+  date: /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/,
+  time: /^(?<hour>\d{2}):(?<minute>\d{2})$/,
+  datetime:
+    /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(.(?<millisec>\d{3}))?Z$/,
+  decimal: /^-?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/,
+} as const;
+
+type FieldParseArgs = {
+  value: unknown;
+  data: unknown;
+  user: TailorUser;
+};
+
+type FieldValidateValueArgs<T extends TailorFieldType> = {
+  value: TailorToTs[T];
+  data: unknown;
+  user: TailorUser;
+  pathArray: string[];
+};
+
+type FieldParseInternalArgs = {
+  // Runtime input is unknown/untyped; we validate and narrow it inside the parser.
+  // oxlint-disable-next-line no-explicit-any
+  value: any;
+  data: unknown;
+  user: TailorUser;
+  pathArray: string[];
+};
 
 /**
  * Creates a new TailorField instance.

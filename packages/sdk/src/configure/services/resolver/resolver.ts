@@ -1,10 +1,12 @@
 import { t } from "@/configure/types/type";
 import { brandValue } from "@/utils/brand";
-import type { TailorAnyField, TailorUser } from "@/configure/types";
-import type { TailorEnv } from "@/configure/types/env";
-import type { InferFieldsOutput, output } from "@/configure/types/helpers";
-import type { TailorField } from "@/configure/types/type";
+import type { AuthInvoker } from "@/configure/services/auth";
+import type { MachineUserName } from "@/configure/types/machine-user";
+import type { TailorAnyField, TailorField } from "@/configure/types/type";
+import type { TailorEnv } from "@/types/env";
+import type { InferFieldsOutput, output } from "@/types/helpers";
 import type { ResolverInput } from "@/types/resolver.generated";
+import type { TailorUser } from "@/types/user";
 
 type Context<Input extends Record<string, TailorAnyField> | undefined> = {
   input: Input extends Record<string, TailorAnyField> ? InferFieldsOutput<Input> : never;
@@ -34,11 +36,12 @@ type NormalizedOutput<Output extends TailorAnyField | Record<string, TailorAnyFi
 type ResolverReturn<
   Input extends Record<string, TailorAnyField> | undefined,
   Output extends TailorAnyField | Record<string, TailorAnyField>,
-> = Omit<ResolverInput, "input" | "output" | "body"> &
+> = Omit<ResolverInput, "input" | "output" | "body" | "authInvoker"> &
   Readonly<{
     input?: Input;
     output: NormalizedOutput<Output>;
     body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>>;
+    authInvoker?: AuthInvoker<string> | MachineUserName;
   }>;
 
 /**
@@ -83,11 +86,12 @@ export function createResolver<
   Input extends Record<string, TailorAnyField> | undefined = undefined,
   Output extends TailorAnyField | Record<string, TailorAnyField> = TailorAnyField,
 >(
-  config: Omit<ResolverInput, "input" | "output" | "body"> &
+  config: Omit<ResolverInput, "input" | "output" | "body" | "authInvoker"> &
     Readonly<{
       input?: Input;
       output: Output;
       body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>>;
+      authInvoker?: AuthInvoker<string> | MachineUserName;
     }>,
 ): ResolverReturn<Input, Output> {
   // Check if output is already a TailorField using duck typing.

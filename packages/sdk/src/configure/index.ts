@@ -1,6 +1,6 @@
 /// <reference types="@tailor-platform/function-types" />
 import { t as _t } from "@/configure/types";
-import type * as helperTypes from "@/configure/types/helpers";
+import type * as helperTypes from "@/types/helpers";
 
 type TailorOutput<T> = helperTypes.output<T>;
 
@@ -16,14 +16,15 @@ export namespace t {
   export type infer<T> = TailorOutput<T>;
 }
 
+export { type TailorField } from "@/configure/types/type";
 export {
-  type TailorField,
   type TailorUser,
   unauthenticatedTailorUser,
   type AttributeMap,
   type AttributeList,
-  type Env,
-} from "@/configure/types";
+} from "@/types/user";
+export { type Env } from "@/types/env";
+export { type MachineUserNameRegistry, type MachineUserName } from "@/configure/types/machine-user";
 
 export * from "@/configure/services";
 

@@ -2,6 +2,7 @@ import { afterEach, describe, test, expect, vi } from "vitest";
 import {
   createTransport,
   fetchAll,
+  fetchPaged,
   formatRequestParams,
   MAX_PAGE_SIZE,
   parseMethodName,
@@ -35,6 +36,68 @@ describe("fetchAll", () => {
     await fetchAll(fn);
 
     expect(fn).toHaveBeenCalledWith("", MAX_PAGE_SIZE);
+  });
+});
+
+describe("fetchPaged", () => {
+  test("returns every page when limit is undefined", async () => {
+    const fn = vi
+      .fn()
+      .mockResolvedValueOnce([["a", "b"], "next"])
+      .mockResolvedValueOnce([["c"], ""]);
+
+    const items = await fetchPaged(fn);
+
+    expect(items).toEqual(["a", "b", "c"]);
+    expect(fn).toHaveBeenNthCalledWith(1, "", MAX_PAGE_SIZE);
+    expect(fn).toHaveBeenNthCalledWith(2, "next", MAX_PAGE_SIZE);
+  });
+
+  test("treats limit 0 as unlimited", async () => {
+    const fn = vi
+      .fn()
+      .mockResolvedValueOnce([["a", "b"], "next"])
+      .mockResolvedValueOnce([["c"], ""]);
+
+    const items = await fetchPaged(fn, { limit: 0 });
+
+    expect(items).toEqual(["a", "b", "c"]);
+    expect(fn).toHaveBeenNthCalledWith(1, "", MAX_PAGE_SIZE);
+  });
+
+  test("stops fetching once limit is reached and slices overflow", async () => {
+    const fn = vi
+      .fn()
+      .mockResolvedValueOnce([["a", "b", "c", "d"], "next"])
+      .mockResolvedValueOnce([["e"], ""]);
+
+    const items = await fetchPaged(fn, { limit: 3 });
+
+    expect(items).toEqual(["a", "b", "c"]);
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect(fn).toHaveBeenCalledWith("", 3);
+  });
+
+  test("requests smaller pages as it approaches the limit", async () => {
+    const fn = vi
+      .fn()
+      .mockResolvedValueOnce([new Array(MAX_PAGE_SIZE).fill("x"), "next"])
+      .mockResolvedValueOnce([["y", "y", "y"], ""]);
+
+    const items = await fetchPaged(fn, { limit: MAX_PAGE_SIZE + 5 });
+
+    expect(items).toHaveLength(MAX_PAGE_SIZE + 3);
+    expect(fn).toHaveBeenNthCalledWith(1, "", MAX_PAGE_SIZE);
+    expect(fn).toHaveBeenNthCalledWith(2, "next", 5);
+  });
+
+  test("exits when the server returns no next page token", async () => {
+    const fn = vi.fn().mockResolvedValue([["only"], ""]);
+
+    const items = await fetchPaged(fn, { limit: 100 });
+
+    expect(items).toEqual(["only"]);
+    expect(fn).toHaveBeenCalledTimes(1);
   });
 });
 

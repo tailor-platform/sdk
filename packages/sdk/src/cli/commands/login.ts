@@ -129,7 +129,8 @@ export const loginCommand = defineAppCommand({
     z.object({}).strict().describe("User Login"),
     z
       .object({
-        machineuser: arg(z.literal(true), {
+        "machine-user": arg(z.literal(true), {
+          hiddenAlias: "machineuser",
           description: "Login as a platform machine user.",
           required: true,
         }),
@@ -147,7 +148,7 @@ export const loginCommand = defineAppCommand({
       .describe("Machine User Login"),
   ]),
   run: async (args) => {
-    if ("machineuser" in args && args.machineuser) {
+    if ("machine-user" in args && args["machine-user"]) {
       await loginAsMachineUser({
         clientId: args.clientId,
         clientSecret: args.clientSecret,

@@ -69,10 +69,12 @@ tailor-sdk workflow list [options]
 
 **Options**
 
-| Option                          | Alias | Description       | Required | Default | Env                            |
-| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| Option                          | Alias | Description                                              | Required | Default  | Env                            |
+| ------------------------------- | ----- | -------------------------------------------------------- | -------- | -------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                             | No       | -        | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                        | No       | -        | `TAILOR_PLATFORM_PROFILE`      |
+| `--order <ORDER>`               | -     | Sort order (asc or desc)                                 | No       | `"desc"` | -                              |
+| `--limit <LIMIT>`               | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -        | -                              |
 
 <!-- politty:command:workflow list:options:end -->
 
@@ -165,16 +167,16 @@ tailor-sdk workflow start [options] <name>
 
 **Options**
 
-| Option                          | Alias | Description                                                    | Required | Default              | Env                               |
-| ------------------------------- | ----- | -------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                   | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                              | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                        | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
-| `--machineuser <MACHINEUSER>`   | `-m`  | Machine user name                                              | Yes      | -                    | -                                 |
-| `--arg <ARG>`                   | `-a`  | Workflow argument (JSON string)                                | No       | -                    | -                                 |
-| `--wait`                        | `-W`  | Wait for execution to complete                                 | No       | `false`              | -                                 |
-| `--interval <INTERVAL>`         | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m') | No       | `"3s"`               | -                                 |
-| `--logs`                        | `-l`  | Display job execution logs after completion (requires --wait)  | No       | `false`              | -                                 |
+| Option                          | Alias | Description                                                    | Required | Default              | Env                                 |
+| ------------------------------- | ----- | -------------------------------------------------------------- | -------- | -------------------- | ----------------------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                   | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`      |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                              | No       | -                    | `TAILOR_PLATFORM_PROFILE`           |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                        | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH`   |
+| `--machine-user <MACHINE_USER>` | `-m`  | Machine user name                                              | Yes      | -                    | `TAILOR_PLATFORM_MACHINE_USER_NAME` |
+| `--arg <ARG>`                   | `-a`  | Workflow argument (JSON string)                                | No       | -                    | -                                   |
+| `--wait`                        | `-W`  | Wait for execution to complete                                 | No       | `false`              | -                                   |
+| `--interval <INTERVAL>`         | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m') | No       | `"3s"`               | -                                   |
+| `--logs`                        | `-l`  | Display job execution logs after completion (requires --wait)  | No       | `false`              | -                                   |
 
 <!-- politty:command:workflow start:options:end -->
 
@@ -219,15 +221,17 @@ tailor-sdk workflow executions [options] [executionId]
 
 **Options**
 
-| Option                            | Alias | Description                                                    | Required | Default | Env                            |
-| --------------------------------- | ----- | -------------------------------------------------------------- | -------- | ------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>`   | `-w`  | Workspace ID                                                   | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`             | `-p`  | Workspace profile                                              | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
-| `--workflow-name <WORKFLOW_NAME>` | `-n`  | Filter by workflow name (list mode only)                       | No       | -       | -                              |
-| `--status <STATUS>`               | `-s`  | Filter by status (list mode only)                              | No       | -       | -                              |
-| `--wait`                          | `-W`  | Wait for execution to complete                                 | No       | `false` | -                              |
-| `--interval <INTERVAL>`           | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m') | No       | `"3s"`  | -                              |
-| `--logs`                          | -     | Display job execution logs (detail mode only)                  | No       | `false` | -                              |
+| Option                            | Alias | Description                                                    | Required | Default  | Env                            |
+| --------------------------------- | ----- | -------------------------------------------------------------- | -------- | -------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>`   | `-w`  | Workspace ID                                                   | No       | -        | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`             | `-p`  | Workspace profile                                              | No       | -        | `TAILOR_PLATFORM_PROFILE`      |
+| `--order <ORDER>`                 | -     | Sort order (asc or desc)                                       | No       | `"desc"` | -                              |
+| `--limit <LIMIT>`                 | `-l`  | Maximum number of items to return (0: unlimited)               | No       | `50`     | -                              |
+| `--workflow-name <WORKFLOW_NAME>` | `-n`  | Filter by workflow name (list mode only)                       | No       | -        | -                              |
+| `--status <STATUS>`               | `-s`  | Filter by status (list mode only)                              | No       | -        | -                              |
+| `--wait`                          | `-W`  | Wait for execution to complete                                 | No       | `false`  | -                              |
+| `--interval <INTERVAL>`           | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m') | No       | `"3s"`   | -                              |
+| `--logs`                          | -     | Display job execution logs (detail mode only)                  | No       | `false`  | -                              |
 
 <!-- politty:command:workflow executions:options:end -->
 

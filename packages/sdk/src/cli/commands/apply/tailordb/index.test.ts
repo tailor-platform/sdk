@@ -1,6 +1,6 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { sdkNameLabelKey } from "../label";
-import { applyTailorDB, planTailorDB } from ".";
+import { applyTailorDB, formatTailorDBResourceChangeEntries, planTailorDB } from ".";
 import type { PlanContext } from "../apply";
 import type { Application } from "@/cli/services/application";
 import type { ExecutorService } from "@/cli/services/executor/service";
@@ -593,6 +593,92 @@ describe("planTailorDB (service level)", () => {
       expect(result.changeSet.type.updates).toHaveLength(1);
       expect(result.changeSet.type.unchanged).toHaveLength(0);
     });
+  });
+});
+
+describe("formatTailorDBResourceChangeEntries", () => {
+  test("groups type and gqlPermission changes for the same type name", () => {
+    const entries = formatTailorDBResourceChangeEntries(
+      {
+        creates: [{ name: "Project" }],
+        updates: [],
+        deletes: [],
+        replaces: [],
+      },
+      {
+        creates: [{ name: "Project" }],
+        updates: [],
+        deletes: [],
+        replaces: [],
+      },
+    );
+
+    expect(entries).toEqual([
+      {
+        action: "create",
+        symbol: "+",
+        name: "Project",
+        labels: ["type", "gqlPermission"],
+      },
+    ]);
+  });
+
+  test("shows separate entries when type and gqlPermission have different actions for the same name", () => {
+    const entries = formatTailorDBResourceChangeEntries(
+      {
+        creates: [{ name: "Project" }],
+        updates: [],
+        deletes: [],
+        replaces: [],
+      },
+      {
+        creates: [],
+        updates: [{ name: "Project" }],
+        deletes: [],
+        replaces: [],
+      },
+    );
+
+    expect(entries).toEqual([
+      {
+        action: "create",
+        symbol: "+",
+        name: "Project",
+        labels: ["type"],
+      },
+      {
+        action: "update",
+        symbol: "~",
+        name: "Project",
+        labels: ["gqlPermission"],
+      },
+    ]);
+  });
+
+  test("keeps standalone gqlPermission changes visible", () => {
+    const entries = formatTailorDBResourceChangeEntries(
+      {
+        creates: [],
+        updates: [],
+        deletes: [],
+        replaces: [],
+      },
+      {
+        creates: [{ name: "Project" }],
+        updates: [],
+        deletes: [],
+        replaces: [],
+      },
+    );
+
+    expect(entries).toEqual([
+      {
+        action: "create",
+        symbol: "+",
+        name: "Project",
+        labels: ["gqlPermission"],
+      },
+    ]);
   });
 });
 

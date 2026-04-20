@@ -4,6 +4,11 @@ import { type OperatorClient, fetchAll } from "@/cli/shared/client";
 import { createChangeSet, type ChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import { workflowJobFunctionName } from "./function-registry";
+import {
+  formatChangeEntriesWithFunctionRegistry,
+  type GroupedDisplayEntry,
+  type RelatedFunctionRegistryChanges,
+} from "./grouped-display";
 import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { Workflow, RetryPolicy } from "@/types/workflow.generated";
@@ -226,6 +231,7 @@ type DeleteWorkflow = {
   name: string;
   workspaceId: string;
   workflowId: string;
+  usedJobNames: string[];
 };
 
 function parseDurationToProto(duration: string): { seconds: bigint; nanos: number } {
@@ -365,21 +371,24 @@ export async function planWorkflow(
   }
 
   Object.values(existingWorkflows).forEach((existing) => {
-    const label = existing?.label;
+    if (!existing) {
+      return;
+    }
+    const label = existing.label;
     if (label && label !== appName) {
       resourceOwners.add(label);
     }
     // Only delete workflows managed by this application
     if (label === appName) {
       changeSet.deletes.push({
-        name: existing!.resource.name,
+        name: existing.resource.name,
         workspaceId,
-        workflowId: existing!.resource.id,
+        workflowId: existing.resource.id,
+        usedJobNames: getExistingWorkflowJobNames(existing.resource),
       });
     }
   });
 
-  changeSet.print();
   return {
     changeSet,
     conflicts,
@@ -388,6 +397,32 @@ export async function planWorkflow(
     appName,
     unchangedWorkflowJobNames,
   };
+}
+
+type WorkflowDisplayEntry = GroupedDisplayEntry;
+
+/**
+ * Format workflow changes for grouped dry-run display.
+ * @param changeSet - Workflow changes
+ * @param workflowJobFunctionChanges - Related function registry changes for workflow jobs
+ * @returns Display entries for workflow output
+ */
+export function formatWorkflowChangeEntries(
+  changeSet: Pick<
+    ChangeSet<CreateWorkflow, UpdateWorkflow, DeleteWorkflow>,
+    "creates" | "updates" | "deletes" | "replaces"
+  >,
+  workflowJobFunctionChanges?: RelatedFunctionRegistryChanges,
+): WorkflowDisplayEntry[] {
+  return formatChangeEntriesWithFunctionRegistry(
+    "workflow",
+    changeSet,
+    workflowJobFunctionChanges,
+    (item) =>
+      "usedJobNames" in item
+        ? item.usedJobNames.map((jobName) => workflowJobFunctionName(jobName))
+        : [],
+  );
 }
 
 function canTreatWorkflowAsUnchanged(
@@ -485,6 +520,17 @@ function normalizeComparableWorkflowJobNames(
   return Array.isArray(jobFunctions)
     ? [...jobFunctions].sort()
     : Object.keys(jobFunctions ?? {}).sort();
+}
+
+function getExistingWorkflowJobNames(existing: {
+  mainJobFunctionName?: string;
+  jobFunctions?: Record<string, string | bigint>;
+}) {
+  const jobNames = new Set(Object.keys(existing.jobFunctions ?? {}));
+  if (existing.mainJobFunctionName) {
+    jobNames.add(existing.mainJobFunctionName);
+  }
+  return [...jobNames].sort();
 }
 
 function normalizeRetryPolicyForCompare(policy: {

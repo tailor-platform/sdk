@@ -1,6 +1,4 @@
 import { type TailorDBInstance } from "../tailordb/schema";
-import type { TailorField } from "@/configure/types/type";
-import type { DefinedFieldMetadata, FieldMetadata, TailorFieldType } from "@/configure/types/types";
 import type {
   AuthConnectionTokenResult,
   AuthDefinitionBrand,
@@ -10,6 +8,8 @@ import type {
   UserAttributeMap,
 } from "@/types/auth";
 import type { AuthInvoker as ParserAuthInvoker } from "@/types/auth.generated";
+import type { DefinedFieldMetadata, FieldMetadata, TailorFieldType } from "@/types/field-types";
+import type { TailorField } from "@/types/tailor-field";
 
 type MachineUserAttributeFields = Record<
   string,

@@ -1,5 +1,207 @@
 # @tailor-platform/sdk
 
+## 1.39.1
+
+### Patch Changes
+
+- [#885](https://github.com/tailor-platform/sdk/pull/885) [`c67000f`](https://github.com/tailor-platform/sdk/commit/c67000fae7fcfe394e27bae8e12431fac2dc47d0) Thanks [@toiroakr](https://github.com/toiroakr)! - Auto-inject workspaceId and namespaceName into `api` command request body based on proto schema introspection and SDK config
+
+- [#1017](https://github.com/tailor-platform/sdk/pull/1017) [`ab445c4`](https://github.com/tailor-platform/sdk/commit/ab445c494acc3ec1b1f7f135d97f06126902043a) Thanks [@k1LoW](https://github.com/k1LoW)! - Make `authorization` field optional in `defineIdp()` for migration to permission-based access control
+
+- [#930](https://github.com/tailor-platform/sdk/pull/930) [`3bfeec3`](https://github.com/tailor-platform/sdk/commit/3bfeec37db1f28071ac0eeb201f9eea14f0f0d8e) Thanks [@toiroakr](https://github.com/toiroakr)! - Internal refactoring of type layer boundaries. No changes to public API.
+
+- [#1014](https://github.com/tailor-platform/sdk/pull/1014) [`faa3301`](https://github.com/tailor-platform/sdk/commit/faa3301b7ff341ff3ddb52d387ae466381d267e2) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): lock file maintenance
+
+## 1.39.0
+
+### Minor Changes
+
+- [#1000](https://github.com/tailor-platform/sdk/pull/1000) [`fbfb157`](https://github.com/tailor-platform/sdk/commit/fbfb15780f8c61aeb30994b2e3d675c40ac32baa) Thanks [@toiroakr](https://github.com/toiroakr)! - Support `TAILOR_PLATFORM_SDK_DTS_PATH` environment variable to customize the output path of `tailor.d.ts`
+
+### Patch Changes
+
+- [#1002](https://github.com/tailor-platform/sdk/pull/1002) [`e0f6384`](https://github.com/tailor-platform/sdk/commit/e0f6384cad3ea1391119b104f159db8fb43205c8) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update anthropics/claude-code-action action to v1.0.99
+
+## 1.38.0
+
+### Minor Changes
+
+- [#941](https://github.com/tailor-platform/sdk/pull/941) [`0a1b538`](https://github.com/tailor-platform/sdk/commit/0a1b53886ac738347e0e7fcb4f94e4c713fad316) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `upgrade` command with codemod.com-based architecture for automated SDK version migrations. Codemod execution is handled by the new `@tailor-platform/sdk-codemod` package.
+
+- [#986](https://github.com/tailor-platform/sdk/pull/986) [`7de5d91`](https://github.com/tailor-platform/sdk/commit/7de5d91703f7bdd56bf433f60123da7322a6e361) Thanks [@toiroakr](https://github.com/toiroakr)! - Unify machine-user CLI flag naming and add `TAILOR_PLATFORM_MACHINE_USER_NAME` env variable
+
+  - Add `--machine-user` flag to `query`, `workflow start`, and `login` to align with `function test-run` and the rest of the CLI's kebab-case convention. The previous `--machineuser` flag continues to work as a hidden alias.
+  - Add `TAILOR_PLATFORM_MACHINE_USER_NAME` environment variable as a default machine user name for `query`, `workflow start`, and `function test-run`.
+
+- [#990](https://github.com/tailor-platform/sdk/pull/990) [`6e9a062`](https://github.com/tailor-platform/sdk/commit/6e9a062b5ac6de3a7f0cd3e11a5d66d4ca85cd87) Thanks [@dqn](https://github.com/dqn)! - `tailor-sdk function logs <executionId>` now displays error details for failed executions. When `getFunctionExecution` returns a stack trace, the deployed script is downloaded automatically and frames are mapped back to the original source files via the inline sourcemap (with clickable file links and code snippets, matching the existing `function test-run` output). When the script cannot be downloaded, the stack trace is missing, or the function has been redeployed after the execution (detected by comparing the registry entry's `updatedAt` against the execution start time), the command falls back to a plain-text `Name: message` display with the raw stack trace to avoid showing misleading source locations.
+
+- [#977](https://github.com/tailor-platform/sdk/pull/977) [`44a0781`](https://github.com/tailor-platform/sdk/commit/44a07817272eabe87f9a4f25400fec5231f59e58) Thanks [@haru0017](https://github.com/haru0017)! - Add response customization for incoming webhook trigger executor
+
+### Patch Changes
+
+- [#993](https://github.com/tailor-platform/sdk/pull/993) [`d978a9d`](https://github.com/tailor-platform/sdk/commit/d978a9d26534533bfca78e7c6415cab16279d977) Thanks [@toiroakr](https://github.com/toiroakr)! - Accept a wider range of boolean values for environment variables
+
+  The following environment variables now accept common truthy/falsy spellings
+  (case-insensitive): `true/false`, `1/0`, `yes/no`, `on/off`, `t/f`, `y/n`.
+
+  - `TAILOR_ENABLE_INLINE_SOURCEMAP`
+  - `TAILOR_PLATFORM_SDK_BUILD_ONLY`
+  - `DEBUG`
+
+  Previously only the literal string `"true"` enabled these flags.
+
+- [#995](https://github.com/tailor-platform/sdk/pull/995) [`d6bc33c`](https://github.com/tailor-platform/sdk/commit/d6bc33c9b9aee0fdf9cb1edeea58b3cd0bb45f15) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `createTailorDBHook` to correctly handle `db.object({...}, { array: true })` fields. Previously, array values (and `null`/omitted values for optional array fields) were treated as a single nested object and processed recursively, corrupting the value and causing seed validation to fail with "Expected an array". Array elements are now recursed per element, and non-array values are passed through unchanged.
+
+- [#963](https://github.com/tailor-platform/sdk/pull/963) [`0ed350f`](https://github.com/tailor-platform/sdk/commit/0ed350fa90c97634cf7d70ae055550bc021ed1b8) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update vitest to v4.1.4
+
+- [#975](https://github.com/tailor-platform/sdk/pull/975) [`120ef30`](https://github.com/tailor-platform/sdk/commit/120ef304e6d4a0593745ad8a0e484aa2cc21202c) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update anthropics/claude-code-action action to v1.0.97
+
+- [#976](https://github.com/tailor-platform/sdk/pull/976) [`08897a3`](https://github.com/tailor-platform/sdk/commit/08897a32b90388ed1adcbc07395d445f22ab92ce) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency turbo to v2.9.6
+
+- [#979](https://github.com/tailor-platform/sdk/pull/979) [`1e0eb8c`](https://github.com/tailor-platform/sdk/commit/1e0eb8c1b5d25e51b3c846f54cf7133dbddd1509) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency kysely to v0.28.16
+
+- [#981](https://github.com/tailor-platform/sdk/pull/981) [`2cc18f5`](https://github.com/tailor-platform/sdk/commit/2cc18f5e3d30e25da02bce70d0263af3fa73df19) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency aquaproj/aqua-registry to v4.494.1
+
+- [#982](https://github.com/tailor-platform/sdk/pull/982) [`8ad0591`](https://github.com/tailor-platform/sdk/commit/8ad0591f7934351b4559bced1f46a3dabdeffc48) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency knip to v6.4.0
+
+- [#983](https://github.com/tailor-platform/sdk/pull/983) [`b1cb7d3`](https://github.com/tailor-platform/sdk/commit/b1cb7d332ef471ea845011ea9d42819a3e426621) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update pnpm/action-setup action to v6
+
+- [#988](https://github.com/tailor-platform/sdk/pull/988) [`484033d`](https://github.com/tailor-platform/sdk/commit/484033d4d17b8f76299102332a972816b8bed877) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency vitest to v4.1.4
+
+- [#989](https://github.com/tailor-platform/sdk/pull/989) [`13be969`](https://github.com/tailor-platform/sdk/commit/13be969ad22d2609f974f866c98a23d6100c31fa) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency bufbuild/buf to v1.68.1
+
+- [#992](https://github.com/tailor-platform/sdk/pull/992) [`f13ad71`](https://github.com/tailor-platform/sdk/commit/f13ad71475dc444aaf40dd56609c104aa1487677) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency globals to v17.5.0
+
+- [#997](https://github.com/tailor-platform/sdk/pull/997) [`61d5c34`](https://github.com/tailor-platform/sdk/commit/61d5c3466962c270410df07fa6d614c36b2ced2e) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update flatt-security/setup-takumi-guard-npm digest to 9a5d797
+
+- [#999](https://github.com/tailor-platform/sdk/pull/999) [`4ad6aaf`](https://github.com/tailor-platform/sdk/commit/4ad6aaf4374ecb48f6509cd783cdf597b0a116ee) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency tsdown to v0.21.8
+
+- [#994](https://github.com/tailor-platform/sdk/pull/994) [`3622294`](https://github.com/tailor-platform/sdk/commit/36222949efd98d8d5b8ae6d5482d2089d0e2a1f2) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `tailor-sdk function test-run` showing stack trace paths with a spurious `../` prefix (e.g. `../.tailor-sdk/test-run/test-run--add.entry.js`). Sourcemap `sources` are now emitted relative to the current working directory, and cwd-relative paths that start with a dotfile directory (e.g. `.tailor-sdk/...`) are explicitly prefixed with `./` in the display.
+
+## 1.37.0
+
+### Minor Changes
+
+- [#971](https://github.com/tailor-platform/sdk/pull/971) [`be1a354`](https://github.com/tailor-platform/sdk/commit/be1a354c44f4c406d674fb03fc6695d07662dfac) Thanks [@toiroakr](https://github.com/toiroakr)! - Accept plain string for `authInvoker` in resolvers, executors, and `workflow.trigger()` (e.g. `authInvoker: "kiosk"`). Machine user names are type-narrowed via the generated `tailor.d.ts` (`MachineUserNameRegistry` interface). `auth.invoker(...)` is now deprecated in favor of the string form, which avoids pulling config-layer (Node-only) dependencies into runtime bundles.
+
+- [#858](https://github.com/tailor-platform/sdk/pull/858) [`28872e5`](https://github.com/tailor-platform/sdk/commit/28872e538fec564cdbd675a6fa102820fe6ccf49) Thanks [@r253hmdryou](https://github.com/r253hmdryou)! - Group related resource changes in apply dry-run output
+
+  Consolidate function registry changes with their parent resources (workflow, resolver, executor, auth hook) in dry-run display. Group TailorDB type and gqlPermission changes by type name. Nest resources under their namespace for clearer hierarchy.
+
+  Plan summary counts now reflect grouped display units to match the displayed rows.
+
+### Patch Changes
+
+- [#972](https://github.com/tailor-platform/sdk/pull/972) [`0a70288`](https://github.com/tailor-platform/sdk/commit/0a7028873f6e9d0c13fc8df3e203f9f8c3ff45d3) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `UNRESOLVED_IMPORT` warning during SDK builds by replacing the self-referential `@tailor-platform/sdk` dynamic import in `function test-run` detection with an alias-based dynamic import
+
+- [#961](https://github.com/tailor-platform/sdk/pull/961) [`6638782`](https://github.com/tailor-platform/sdk/commit/663878239f573537965071e61c92c70be1c4bdda) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency typescript-eslint to v8.58.1
+
+- [#964](https://github.com/tailor-platform/sdk/pull/964) [`3472427`](https://github.com/tailor-platform/sdk/commit/34724277f12e463d6e60b1613b035aa27d3161e5) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @inquirer/prompts to v8.4.1
+
+- [#967](https://github.com/tailor-platform/sdk/pull/967) [`bed9050`](https://github.com/tailor-platform/sdk/commit/bed9050172b74ad5a2200de55b80fbc397b6ef7a) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency rolldown to v1.0.0-rc.15
+
+- [#968](https://github.com/tailor-platform/sdk/pull/968) [`da649c6`](https://github.com/tailor-platform/sdk/commit/da649c69285c4b7b53c28b2ad2b3531b2a0686be) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update actions/create-github-app-token action to v3.1.1
+
+- [#969](https://github.com/tailor-platform/sdk/pull/969) [`133bc14`](https://github.com/tailor-platform/sdk/commit/133bc143b542fc82a462b844c0eca3888332ae24) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update pnpm/action-setup action to v6
+
+## 1.36.0
+
+### Minor Changes
+
+- [#920](https://github.com/tailor-platform/sdk/pull/920) [`1b64d8e`](https://github.com/tailor-platform/sdk/commit/1b64d8e07c4b8b2c8bcfaded5210b8774d4556ff) Thanks [@dqn](https://github.com/dqn)! - Show original source locations and code snippets in `function test-run` errors using inline sourcemaps
+
+- [#931](https://github.com/tailor-platform/sdk/pull/931) [`a1dab54`](https://github.com/tailor-platform/sdk/commit/a1dab54dfec4c7eb69348ab94a82de9d22231c45) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `ignoreNullishValues` option to `defineSecretManager` to skip secrets with nullish values during deploy
+
+- [#965](https://github.com/tailor-platform/sdk/pull/965) [`c273be3`](https://github.com/tailor-platform/sdk/commit/c273be330071a9e3d2d2ebc65ef9b17e9c995ddc) Thanks [@haru0017](https://github.com/haru0017)! - Add `defaultRedirectURL` to SAML IdP config for handling SAML ACS responses with empty RelayState
+
+### Patch Changes
+
+- [#911](https://github.com/tailor-platform/sdk/pull/911) [`3cf9975`](https://github.com/tailor-platform/sdk/commit/3cf997591ac06c18a973cd16b3c6bc70b05f6793) Thanks [@k1LoW](https://github.com/k1LoW)! - Add `permission` option to `defineIdp()` for per-operation permission policies on IdP users (create, read, update, delete, sendPasswordResetEmail)
+
+- [#947](https://github.com/tailor-platform/sdk/pull/947) [`19f95c2`](https://github.com/tailor-platform/sdk/commit/19f95c27e22027037457fcfcd9adca360f62553d) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency oxlint to v1.59.0
+
+- [#956](https://github.com/tailor-platform/sdk/pull/956) [`391c53d`](https://github.com/tailor-platform/sdk/commit/391c53d32dd7108aead8917abb12a2b928df792a) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): lock file maintenance
+
+- [#957](https://github.com/tailor-platform/sdk/pull/957) [`cc14d77`](https://github.com/tailor-platform/sdk/commit/cc14d773c1f62b9e14c935cf4541983ed514fe90) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update actions/upload-artifact action to v7.0.1
+
+- [#958](https://github.com/tailor-platform/sdk/pull/958) [`32e6b1f`](https://github.com/tailor-platform/sdk/commit/32e6b1fa67a582db685f8268dbbb38c0ac45b101) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update anthropics/claude-code-action action to v1.0.93
+
+- [#959](https://github.com/tailor-platform/sdk/pull/959) [`61b60c9`](https://github.com/tailor-platform/sdk/commit/61b60c9b0e8af467a50bc4ee06ada89fba76a653) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency knip to v6.3.1
+
+- [#960](https://github.com/tailor-platform/sdk/pull/960) [`9e0ce60`](https://github.com/tailor-platform/sdk/commit/9e0ce60b2d5c662c6983c60a377f5ce7c3dea7df) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency turbo to v2.9.5
+
+- [#962](https://github.com/tailor-platform/sdk/pull/962) [`dd74185`](https://github.com/tailor-platform/sdk/commit/dd74185d593be00122a173ca427c238292a627bf) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update marocchino/sticky-pull-request-comment action to v3.0.4
+
+## 1.35.2
+
+### Patch Changes
+
+- [#925](https://github.com/tailor-platform/sdk/pull/925) [`ce5b766`](https://github.com/tailor-platform/sdk/commit/ce5b76662951cbe89779d45512a57c80cf4a2984) Thanks [@toiroakr](https://github.com/toiroakr)! - `function test-run` resolver arg no longer requires the `input` wrapper key — pass input fields directly (e.g. `-a '{"a":1}'`). The old `{"input":{...}}` format is detected via schema validation and emits a deprecation warning. When no input schema is defined, `--arg` is ignored with a warning.
+
+- [#945](https://github.com/tailor-platform/sdk/pull/945) [`4d9892e`](https://github.com/tailor-platform/sdk/commit/4d9892e6e40c6eb4852714b8437339080e935189) Thanks [@anukiransolur](https://github.com/anukiransolur)! - chore(docs): added requirements for deterministic execution that the workflow must satisfy
+
+- [#890](https://github.com/tailor-platform/sdk/pull/890) [`f0e03f2`](https://github.com/tailor-platform/sdk/commit/f0e03f267435094e88ec3cedd0af22bb4655264c) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency oxfmt to v0.43.0
+
+- [#927](https://github.com/tailor-platform/sdk/pull/927) [`dc699f3`](https://github.com/tailor-platform/sdk/commit/dc699f386b68d9647a77961f5ff34910f1b67939) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @typescript/native-preview to v7.0.0-dev.20260406.1
+
+- [#936](https://github.com/tailor-platform/sdk/pull/936) [`7a1f37b`](https://github.com/tailor-platform/sdk/commit/7a1f37bd376736a47f367ac06fdbb3fbb5fa1446) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency oxc-parser to v0.123.0
+
+- [#943](https://github.com/tailor-platform/sdk/pull/943) [`14af922`](https://github.com/tailor-platform/sdk/commit/14af922e82d945c76b8c864d1bb177eb9fae26f6) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update anthropics/claude-code-action action to v1.0.92
+
+- [#944](https://github.com/tailor-platform/sdk/pull/944) [`f0070a9`](https://github.com/tailor-platform/sdk/commit/f0070a9f41a15c9802b9c5caf201cf802e19a589) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @inquirer/core to v11.1.8
+
+- [#946](https://github.com/tailor-platform/sdk/pull/946) [`c06dd0e`](https://github.com/tailor-platform/sdk/commit/c06dd0e16688b7863a4c85e569ed4e2e60bba971) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency oxfmt to v0.44.0
+
+- [#948](https://github.com/tailor-platform/sdk/pull/948) [`d5f365f`](https://github.com/tailor-platform/sdk/commit/d5f365ff1153d34362b743d8d9019183f67b668a) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @inquirer/prompts to v8.4.0
+
+- [#950](https://github.com/tailor-platform/sdk/pull/950) [`0dc96f9`](https://github.com/tailor-platform/sdk/commit/0dc96f9e2fde7088cef29142ce7917694dee5fca) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency oxc-parser to v0.124.0
+
+## 1.35.1
+
+### Patch Changes
+
+- [#896](https://github.com/tailor-platform/sdk/pull/896) [`a57164c`](https://github.com/tailor-platform/sdk/commit/a57164cc7887d2f68600d6dfcb0c38c99dc534cb) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @typescript/native-preview to v7.0.0-dev.20260403.1
+
+- [#897](https://github.com/tailor-platform/sdk/pull/897) [`0846e5d`](https://github.com/tailor-platform/sdk/commit/0846e5d951ec0a30778376ad798ed970b80a1656) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update anthropics/claude-code-action action to v1.0.89
+
+- [#898](https://github.com/tailor-platform/sdk/pull/898) [`58dc091`](https://github.com/tailor-platform/sdk/commit/58dc09166e37dd5a7b29fdb5c05a409e242f66dc) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency turbo to v2.9.3
+
+- [#901](https://github.com/tailor-platform/sdk/pull/901) [`fe02730`](https://github.com/tailor-platform/sdk/commit/fe027300a149c924dc04281e076eaaf9e8f16145) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency kysely to v0.28.15
+
+- [#902](https://github.com/tailor-platform/sdk/pull/902) [`a6cd48e`](https://github.com/tailor-platform/sdk/commit/a6cd48e7789e36b9eca30879ec8da945f603bbf7) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency typescript-eslint to v8.58.0
+
+- [#904](https://github.com/tailor-platform/sdk/pull/904) [`435b2e3`](https://github.com/tailor-platform/sdk/commit/435b2e31bb5cabe62878932c371623d2fa6284da) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @oxc-project/types to v0.123.0
+
+- [#906](https://github.com/tailor-platform/sdk/pull/906) [`a81eea5`](https://github.com/tailor-platform/sdk/commit/a81eea534b756696fa3c33adc70c20fc5986af72) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency knip to v6.3.0
+
+- [#908](https://github.com/tailor-platform/sdk/pull/908) [`b3f2a03`](https://github.com/tailor-platform/sdk/commit/b3f2a03b4700e87c4ab1391b03ef2d824dc6072f) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update oxlint monorepo to v1.58.0
+
+- [#910](https://github.com/tailor-platform/sdk/pull/910) [`cf80512`](https://github.com/tailor-platform/sdk/commit/cf805128342ae21b9eeff81704eac789876accd2) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @tailor-platform/function-types to v0.8.4
+
+- [#915](https://github.com/tailor-platform/sdk/pull/915) [`ad28036`](https://github.com/tailor-platform/sdk/commit/ad2803663a5687c89237d831b28caf8d5fa18bb0) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency @types/node to v24.12.2
+
+- [#916](https://github.com/tailor-platform/sdk/pull/916) [`5b20cbd`](https://github.com/tailor-platform/sdk/commit/5b20cbd3749e180a00f70c251f37a2853cdd115b) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency rolldown to v1.0.0-rc.13
+
+- [#917](https://github.com/tailor-platform/sdk/pull/917) [`9a835e8`](https://github.com/tailor-platform/sdk/commit/9a835e801e7409acd2a2c1fbd14bc6553144c3eb) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update anthropics/claude-code-action action to v1.0.90
+
+- [#918](https://github.com/tailor-platform/sdk/pull/918) [`a2b9002`](https://github.com/tailor-platform/sdk/commit/a2b9002a411c07af944bca1cafc8ba80fddc4e9b) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency aquaproj/aqua-registry to v4.492.0
+
+- [#921](https://github.com/tailor-platform/sdk/pull/921) [`6796c00`](https://github.com/tailor-platform/sdk/commit/6796c0040c1ea3f635a5473dceb4ce7e0cd2eaaa) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update flatt-security/setup-takumi-guard-npm digest to 3c4ad0e
+
+- [#922](https://github.com/tailor-platform/sdk/pull/922) [`44644a9`](https://github.com/tailor-platform/sdk/commit/44644a9c75badb5b659f855900564bf0a202f51e) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update marocchino/sticky-pull-request-comment action to v3.0.3
+
+- [#923](https://github.com/tailor-platform/sdk/pull/923) [`b82bb95`](https://github.com/tailor-platform/sdk/commit/b82bb95779056de8dfa2ccc22da1ffac37e16b14) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency eslint to v10.2.0
+
+- [#924](https://github.com/tailor-platform/sdk/pull/924) [`cdd21da`](https://github.com/tailor-platform/sdk/commit/cdd21da0fabfb0cdabb22ba6ace696e1f2482915) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency eslint-plugin-jsdoc to v62.9.0
+
+- [#932](https://github.com/tailor-platform/sdk/pull/932) [`d50d40d`](https://github.com/tailor-platform/sdk/commit/d50d40dac22646232a8855119cb682ca83fd8603) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency turbo to v2.9.4
+
+- [#933](https://github.com/tailor-platform/sdk/pull/933) [`36e9c50`](https://github.com/tailor-platform/sdk/commit/36e9c50ecf3c916eb411f6919fbc7a0338d5c37a) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency oxlint-tsgolint to v0.20.0
+
+- [#935](https://github.com/tailor-platform/sdk/pull/935) [`3cd9fa0`](https://github.com/tailor-platform/sdk/commit/3cd9fa0870efed639f413a7d58ff26ddb11bd834) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @clack/prompts to v1.2.0
+
+- [#937](https://github.com/tailor-platform/sdk/pull/937) [`1399b34`](https://github.com/tailor-platform/sdk/commit/1399b340640dc1a9e3f7033c6e01990e65372f8b) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency lefthook to v2.1.5
+
 ## 1.35.0
 
 ### Minor Changes

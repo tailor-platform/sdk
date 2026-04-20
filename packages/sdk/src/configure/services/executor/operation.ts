@@ -1,5 +1,6 @@
 import type { AuthInvoker } from "@/configure/services/auth";
 import type { Workflow } from "@/configure/services/workflow/workflow";
+import type { MachineUserName } from "@/configure/types/machine-user";
 import type {
   FunctionOperation as ParserFunctionOperation,
   GqlOperation as ParserGqlOperation,
@@ -9,16 +10,18 @@ import type {
 import type { Client } from "@urql/core";
 
 /** Function-based executor operation. The body receives the trigger args. */
-export type FunctionOperation<Args> = Omit<ParserFunctionOperation, "body"> & {
+export type FunctionOperation<Args> = Omit<ParserFunctionOperation, "body" | "authInvoker"> & {
   body: (args: Args) => void | Promise<void>;
+  authInvoker?: AuthInvoker<string> | MachineUserName;
 };
 
 type UrqlOperationArgs = Parameters<Client["query"] | Client["mutation"]>;
 
 /** GraphQL-based executor operation. Executes a GraphQL query or mutation. */
-export type GqlOperation<Args> = Omit<ParserGqlOperation, "query" | "variables"> & {
+export type GqlOperation<Args> = Omit<ParserGqlOperation, "query" | "variables" | "authInvoker"> & {
   query: UrqlOperationArgs[0];
   variables?: (args: Args) => UrqlOperationArgs[1];
+  authInvoker?: AuthInvoker<string> | MachineUserName;
 };
 
 type RequestHeader =
@@ -291,7 +294,7 @@ export type WorkflowOperation<Args, W extends Workflow = Workflow> = Omit<
 > & {
   workflow: W;
   args?: WorkflowInput<W> | ((args: Args) => WorkflowInput<W>);
-  authInvoker?: AuthInvoker<string>;
+  authInvoker?: AuthInvoker<string> | MachineUserName;
 };
 
 export type Operation<Args> =

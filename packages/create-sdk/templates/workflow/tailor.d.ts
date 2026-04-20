@@ -10,6 +10,9 @@ declare module "@tailor-platform/sdk" {
     __tuple?: [];
   }
   interface Env {}
+  interface MachineUserNameRegistry {
+    admin: true;
+  }
 }
 
 export {};

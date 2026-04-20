@@ -188,11 +188,75 @@ export const IdPEmailConfigSchema = z
   })
   .describe("Namespace-level email configuration defaults");
 
+const IdPPermissionOperandSchema = z.union([
+  z.string(),
+  z.boolean(),
+  z.array(z.string()).readonly(),
+  z.array(z.boolean()).readonly(),
+  z.object({ user: z.string() }),
+  z.object({ idpUser: z.enum(["id", "name", "disabled"]) }),
+  z.object({ oldIdpUser: z.enum(["id", "name", "disabled"]) }),
+  z.object({ newIdpUser: z.enum(["id", "name", "disabled"]) }),
+]);
+
+const IdPPermissionOperatorSchema = z.enum(["=", "!=", "in", "not in"]);
+
+const IdPPermissionConditionSchema = z
+  .tuple([IdPPermissionOperandSchema, IdPPermissionOperatorSchema, IdPPermissionOperandSchema])
+  .readonly();
+
+const IdPActionPermissionSchema = z.union([
+  // Object format: { conditions, description?, permit? }
+  z.object({
+    conditions: z.union([
+      IdPPermissionConditionSchema,
+      z.array(IdPPermissionConditionSchema).readonly(),
+    ]),
+    description: z.string().optional(),
+    permit: z.boolean().optional(),
+  }),
+  // Single condition tuple: [operand, operator, operand]
+  z
+    .tuple([IdPPermissionOperandSchema, IdPPermissionOperatorSchema, IdPPermissionOperandSchema])
+    .readonly(),
+  // Single condition tuple with permit: [operand, operator, operand, permit]
+  z
+    .tuple([
+      IdPPermissionOperandSchema,
+      IdPPermissionOperatorSchema,
+      IdPPermissionOperandSchema,
+      z.boolean(),
+    ])
+    .readonly(),
+  // Multiple conditions with optional trailing permit
+  z
+    .array(z.union([IdPPermissionConditionSchema, z.boolean()]))
+    .refine(
+      (arr) => {
+        const boolIndex = arr.findIndex((item) => typeof item === "boolean");
+        return boolIndex === -1 || boolIndex === arr.length - 1;
+      },
+      { message: "Boolean permit flag must only appear at the end" },
+    )
+    .readonly(),
+]);
+
+export const IdPPermissionSchema = z
+  .object({
+    create: z.array(IdPActionPermissionSchema).readonly(),
+    read: z.array(IdPActionPermissionSchema).readonly(),
+    update: z.array(IdPActionPermissionSchema).readonly(),
+    delete: z.array(IdPActionPermissionSchema).readonly(),
+    sendPasswordResetEmail: z.array(IdPActionPermissionSchema).readonly(),
+  })
+  .describe("Per-operation permission policies for IdP users");
+
 export const IdPSchema = z
   .object({
     name: z.string().describe("IdP service name"),
     authorization: z
       .union([z.literal("insecure"), z.literal("loggedIn"), z.object({ cel: z.string() })])
+      .optional()
       .describe("Authorization mode for IdP API access"),
     clients: z.array(z.string()).describe("OAuth2 client names that can use this IdP"),
     lang: IdPLangSchema.optional().describe("UI language for IdP pages"),
@@ -207,6 +271,9 @@ export const IdPSchema = z
     ),
     emailConfig: IdPEmailConfigSchema.optional().describe(
       "Namespace-level email configuration defaults",
+    ),
+    permission: IdPPermissionSchema.optional().describe(
+      "Per-operation permission policies for IdP users",
     ),
   })
   .brand("IdPConfig");

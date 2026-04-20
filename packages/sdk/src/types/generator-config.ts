@@ -1,10 +1,9 @@
-import type { BaseGeneratorConfigSchema, CodeGeneratorSchema } from "@/parser/generator-config";
-import type { z } from "zod";
+import type { BaseGeneratorConfigInput, CodeGeneratorInput } from "./generator-config.generated";
 
 export type DependencyKind = "tailordb" | "resolver" | "executor";
 
-export type GeneratorConfig = z.input<typeof BaseGeneratorConfigSchema>;
+export type GeneratorConfig = BaseGeneratorConfigInput;
 
-export type CodeGeneratorBase = Omit<z.output<typeof CodeGeneratorSchema>, "dependencies"> & {
+export type CodeGeneratorBase = Omit<CodeGeneratorInput, "dependencies"> & {
   dependencies: readonly DependencyKind[];
 };

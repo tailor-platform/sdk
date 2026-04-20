@@ -42,10 +42,19 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
             data && typeof data === "object" ? (data as Record<string, unknown>)[key] : undefined;
           hooked[key] = existingId ?? crypto.randomUUID();
         } else if (field.type === "nested") {
+          const nestedValue =
+            data && typeof data === "object" ? (data as Record<string, unknown>)[key] : undefined;
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          hooked[key] = createTailorDBHook({ fields: field.fields } as any)(
-            (data as Record<string, unknown>)[key],
-          );
+          const nestedHook = createTailorDBHook({ fields: field.fields } as any);
+          if (field.metadata.array) {
+            // For nested array fields, recurse per element and pass through non-array values
+            // (e.g. null/undefined for optional fields) so validation sees the original value.
+            hooked[key] = Array.isArray(nestedValue)
+              ? nestedValue.map((item) => nestedHook(item))
+              : nestedValue;
+          } else {
+            hooked[key] = nestedHook(nestedValue);
+          }
         } else if (field.metadata.hooks?.create) {
           hooked[key] = field.metadata.hooks.create({
             value: (data as Record<string, unknown>)[key],

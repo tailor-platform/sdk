@@ -6,7 +6,7 @@ import {
   AuthOAuth2Client_GrantType,
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import { describe, expect, test, vi } from "vitest";
-import { planAuth } from "./auth";
+import { formatAuthHookChangeEntries, planAuth } from "./auth";
 import type { PlanContext } from "./apply";
 import type { Application } from "@/cli/services/application";
 import type { OperatorClient } from "@/cli/shared/client";
@@ -482,5 +482,76 @@ describe("planAuth", () => {
     expect(result.changeSet.idpConfig.updates).toHaveLength(1);
     expect(result.changeSet.idpConfig.updates[0]?.name).toBe("default");
     expect(result.changeSet.idpConfig.unchanged).toHaveLength(0);
+  });
+});
+
+describe("formatAuthHookChangeEntries", () => {
+  test("groups auth hook updates with related function registry updates", () => {
+    const entries = formatAuthHookChangeEntries(
+      {
+        creates: [],
+        updates: [
+          {
+            name: "my-auth/before-login",
+          },
+        ],
+        deletes: [],
+        replaces: [],
+      },
+      {
+        creates: [],
+        updates: [{ name: "auth-hook--my-auth--before-login" }],
+        deletes: [],
+        replaces: [],
+      },
+    );
+
+    expect(entries).toEqual([
+      {
+        action: "update",
+        symbol: "~",
+        name: "before-login",
+        labels: ["authHook", "function"],
+        namespace: "my-auth",
+      },
+    ]);
+  });
+
+  test("keeps cross-action function registry changes separate from auth hook updates", () => {
+    const entries = formatAuthHookChangeEntries(
+      {
+        creates: [],
+        updates: [
+          {
+            name: "my-auth/before-login",
+          },
+        ],
+        deletes: [],
+        replaces: [],
+      },
+      {
+        creates: [{ name: "auth-hook--my-auth--before-login" }],
+        updates: [],
+        deletes: [],
+        replaces: [],
+      },
+    );
+
+    expect(entries).toEqual([
+      {
+        action: "update",
+        symbol: "~",
+        name: "before-login",
+        labels: ["authHook"],
+        namespace: "my-auth",
+      },
+      {
+        action: "create",
+        symbol: "+",
+        name: "before-login",
+        labels: ["function"],
+        namespace: "my-auth",
+      },
+    ]);
   });
 });

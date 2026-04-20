@@ -733,3 +733,183 @@ describe("applySecretManager state persistence", () => {
     expect(savedState.vaults["my-vault"]).toBeUndefined();
   });
 });
+
+describe("planSecretManager ignoreNullishValues", () => {
+  function createMockPlanClient(existingSecrets: string[] = [], vaultName = "my-vault") {
+    return {
+      listSecretManagerVaults: vi.fn().mockResolvedValue({
+        vaults: [{ name: vaultName }],
+        nextPageToken: "",
+      }),
+      getMetadata: vi.fn().mockResolvedValue({
+        metadata: { labels: { "sdk-name": "test-app", "sdk-version": sdkVersion } },
+      }),
+      listSecretManagerSecrets: vi.fn().mockResolvedValue({
+        secrets: existingSecrets.map((name) => ({ name })),
+        nextPageToken: "",
+      }),
+    } as unknown as OperatorClient;
+  }
+
+  function createPlanContext(
+    client: OperatorClient,
+    secrets: Array<{
+      vaultName: string;
+      secrets: Array<{ name: string; value: string | null | undefined }>;
+    }>,
+  ): PlanContext {
+    return {
+      client,
+      workspaceId: "ws-1",
+      application: {
+        name: "test-app",
+        secrets,
+      } as unknown as Application,
+      forRemoval: false,
+      config: {} as PlanContext["config"],
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockLoadSecretsState.mockReturnValue({ vaults: {} });
+  });
+
+  test("nullish secret is not created when not on platform", async () => {
+    const client = createMockPlanClient([]);
+    const ctx = createPlanContext(client, [
+      {
+        vaultName: "my-vault",
+        secrets: [{ name: "missing-secret", value: undefined }],
+      },
+    ]);
+
+    const result = await planSecretManager(ctx);
+
+    expect(result.secretChangeSet.creates).toHaveLength(0);
+    expect(result.secretChangeSet.updates).toHaveLength(0);
+    expect(result.secretChangeSet.deletes).toHaveLength(0);
+    expect(result.skippedSecrets).toEqual(["my-vault/missing-secret"]);
+  });
+
+  test("nullish secret does not update or delete existing secret", async () => {
+    const client = createMockPlanClient(["existing-secret"]);
+    const ctx = createPlanContext(client, [
+      {
+        vaultName: "my-vault",
+        secrets: [{ name: "existing-secret", value: undefined }],
+      },
+    ]);
+
+    const result = await planSecretManager(ctx);
+
+    expect(result.secretChangeSet.creates).toHaveLength(0);
+    expect(result.secretChangeSet.updates).toHaveLength(0);
+    expect(result.secretChangeSet.deletes).toHaveLength(0);
+    expect(result.skippedSecrets).toEqual(["my-vault/existing-secret"]);
+  });
+
+  test("null secret value is also skipped", async () => {
+    const client = createMockPlanClient(["existing-secret"]);
+    const ctx = createPlanContext(client, [
+      {
+        vaultName: "my-vault",
+        secrets: [{ name: "existing-secret", value: null }],
+      },
+    ]);
+
+    const result = await planSecretManager(ctx);
+
+    expect(result.secretChangeSet.creates).toHaveLength(0);
+    expect(result.secretChangeSet.updates).toHaveLength(0);
+    expect(result.secretChangeSet.deletes).toHaveLength(0);
+    expect(result.skippedSecrets).toEqual(["my-vault/existing-secret"]);
+  });
+
+  test("mixed valued and nullish secrets are handled correctly", async () => {
+    const client = createMockPlanClient(["existing-secret"]);
+    const ctx = createPlanContext(client, [
+      {
+        vaultName: "my-vault",
+        secrets: [
+          { name: "existing-secret", value: undefined },
+          { name: "new-secret", value: "new-value" },
+        ],
+      },
+    ]);
+
+    const result = await planSecretManager(ctx);
+
+    expect(result.secretChangeSet.creates).toHaveLength(1);
+    expect(result.secretChangeSet.creates[0].secretName).toBe("new-secret");
+    expect(result.secretChangeSet.updates).toHaveLength(0);
+    expect(result.secretChangeSet.deletes).toHaveLength(0);
+    expect(result.skippedSecrets).toEqual(["my-vault/existing-secret"]);
+  });
+});
+
+describe("applySecretManager ignoreNullishValues state persistence", () => {
+  function createMockClient() {
+    return {
+      createSecretManagerVault: vi.fn().mockResolvedValue({}),
+      createSecretManagerSecret: vi.fn().mockResolvedValue({}),
+      updateSecretManagerSecret: vi.fn().mockResolvedValue({}),
+      deleteSecretManagerSecret: vi.fn().mockResolvedValue({}),
+      deleteSecretManagerVault: vi.fn().mockResolvedValue({}),
+      setMetadata: vi.fn().mockResolvedValue({}),
+    } as unknown as OperatorClient;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockLoadSecretsState.mockReturnValue({
+      vaults: {
+        "my-vault": {
+          "nullish-secret": hashValue("previous-value"),
+        },
+      },
+    });
+  });
+
+  test("nullish secret does not overwrite stored hash", async () => {
+    const client = createMockClient();
+    const application = {
+      secrets: [
+        {
+          vaultName: "my-vault",
+          secrets: [
+            { name: "nullish-secret", value: undefined },
+            { name: "valued-secret", value: "real-value" },
+          ],
+        },
+      ],
+    } as unknown as Application;
+
+    const planResult = {
+      vaultChangeSet: { creates: [], updates: [], deletes: [], replaces: [] },
+      secretChangeSet: {
+        creates: [
+          {
+            name: "my-vault/valued-secret",
+            secretName: "valued-secret",
+            workspaceId: "ws-1",
+            vaultName: "my-vault",
+            value: "real-value",
+          },
+        ],
+        updates: [],
+        deletes: [],
+        replaces: [],
+      },
+    } as unknown as Awaited<ReturnType<typeof planSecretManager>>;
+
+    await applySecretManager(client, planResult, "create-update", application);
+
+    expect(mockSaveSecretsState).toHaveBeenCalledTimes(1);
+    const savedState = mockSaveSecretsState.mock.calls[0][0];
+    // Nullish secret preserves previous hash
+    expect(savedState.vaults["my-vault"]["nullish-secret"]).toBe(hashValue("previous-value"));
+    // Valued secret gets new hash
+    expect(savedState.vaults["my-vault"]["valued-secret"]).toBe(hashValue("real-value"));
+  });
+});

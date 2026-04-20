@@ -57,6 +57,7 @@ export type Resolver = {
   publishEvents?: boolean | undefined;
   /** Machine user to execute this resolver as */
   authInvoker?:
+    | string
     | {
         namespace: string;
         machineUserName: string;

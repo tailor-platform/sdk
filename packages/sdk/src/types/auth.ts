@@ -8,10 +8,10 @@ import type {
   SCIMConfig,
   TenantProvider as TenantProviderConfig,
 } from "./auth.generated";
-import type { TailorDBInstance } from "@/configure/services/tailordb/schema";
-import type { output } from "@/configure/types/helpers";
-import type { TailorField } from "@/configure/types/type";
-import type { DefinedFieldMetadata, FieldMetadata, TailorFieldType } from "@/configure/types/types";
+import type { DefinedFieldMetadata, FieldMetadata, TailorFieldType } from "./field-types";
+import type { output } from "./helpers";
+import type { TailorDBInstance } from "./tailor-db-field";
+import type { TailorField } from "./tailor-field";
 import type { IsAny, JsonObject } from "type-fest";
 
 // Derived from generated types (zinfer inlines these literal unions)
@@ -278,6 +278,10 @@ type ConnectionNames<Config> = Config extends { connections?: Record<infer K, un
 
 export type DefinedAuth<Name extends string, Config, MachineUserNames extends string> = Config & {
   name: Name;
+  /**
+   * @deprecated Pass the machine user name directly as a string instead, e.g. `authInvoker: "machine-user-name"`.
+   * Using this function pulls config-layer (Node-only) dependencies into runtime bundles.
+   */
   invoker<M extends MachineUserNames>(machineUser: M): AuthInvokerWithName<M>;
   getConnectionToken<C extends ConnectionNames<Config>>(
     connectionName: C,

@@ -267,6 +267,48 @@ export async function fetchAll<T>(
   return items;
 }
 
+interface FetchPagedOptions {
+  /** Maximum number of items to return. 0 or undefined means unlimited. */
+  limit?: number;
+}
+
+/**
+ * Fetch paginated resources with an optional upper bound on the number of
+ * items returned. When `limit` is 0 or undefined the function behaves
+ * like `fetchAll` and returns every page. When `limit` is positive the
+ * function stops once enough items are collected, requesting smaller
+ * pages as it approaches the boundary.
+ * @template T
+ * @param fn - Page fetcher returning items and next page token
+ * @param options - Pagination options
+ * @returns Fetched items (length <= limit when limit > 0)
+ */
+export async function fetchPaged<T>(
+  fn: (pageToken: string, pageSize: number) => Promise<[T[], string]>,
+  options?: FetchPagedOptions,
+): Promise<T[]> {
+  const limit = options?.limit;
+  const unbounded = limit === undefined || limit === 0;
+  const items: T[] = [];
+  let pageToken = "";
+
+  while (true) {
+    const pageSize = unbounded ? MAX_PAGE_SIZE : Math.min(limit - items.length, MAX_PAGE_SIZE);
+    if (!unbounded && pageSize <= 0) break;
+
+    const [batch, nextPageToken] = await fn(pageToken, pageSize);
+    items.push(...batch);
+    if (!unbounded && items.length >= limit) break;
+    if (!nextPageToken) break;
+    pageToken = nextPageToken;
+  }
+
+  if (!unbounded && items.length > limit) {
+    return items.slice(0, limit);
+  }
+  return items;
+}
+
 /**
  * Fetch user info from the Tailor Platform userinfo endpoint.
  * @param accessToken - Access token for the current user
