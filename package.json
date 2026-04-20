@@ -34,7 +34,7 @@
     "eslint-plugin-import-x": "4.16.2",
     "globals": "17.5.0",
     "knip": "6.4.1",
-    "lefthook": "2.1.5",
+    "lefthook": "2.1.6",
     "oxfmt": "0.45.0",
     "pkg-pr-new": "0.0.66",
     "publint": "0.3.18",
