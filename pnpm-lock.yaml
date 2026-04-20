@@ -651,6 +651,9 @@ importers:
       '@toiroakr/lines-db':
         specifier: 0.9.1
         version: 0.9.1(valibot@1.1.0(typescript@5.9.3))
+      '@toiroakr/read-multiline':
+        specifier: 0.3.0
+        version: 0.3.0
       '@urql/core':
         specifier: 6.0.1
         version: 6.0.1(graphql@16.13.2)
@@ -675,6 +678,9 @@ importers:
       globals:
         specifier: 17.5.0
         version: 17.5.0
+      graphql:
+        specifier: 16.13.2
+        version: 16.13.2
       inflection:
         specifier: 3.0.2
         version: 3.0.2
@@ -723,6 +729,9 @@ importers:
       serve:
         specifier: 14.2.6
         version: 14.2.6
+      sql-highlight:
+        specifier: 6.1.0
+        version: 6.1.0
       std-env:
         specifier: 4.0.0
         version: 4.0.0
@@ -3042,6 +3051,9 @@ packages:
     peerDependenciesMeta:
       valibot:
         optional: true
+
+  '@toiroakr/read-multiline@0.3.0':
+    resolution: {integrity: sha512-GbVRYndmdqFJRqME6PvlcWoLBQhZ9bd+ZjupxjiE7mnR2S5zYtIgZeIwwxfv2hcm1UzeUKnrNP5NIW2YcuCNnA==}
 
   '@ts-graphviz/adapter@2.0.6':
     resolution: {integrity: sha512-kJ10lIMSWMJkLkkCG5gt927SnGZcBuG0s0HHswGzcHTgvtUe7yk5/3zTEr0bafzsodsOq5Gi6FhQeV775nC35Q==}
@@ -5524,6 +5536,10 @@ packages:
   sprintf-js@1.0.3:
     resolution: {integrity: sha512-D9cPgkvLlV3t3IzL0D0YLvGA9Ahk4PcvVwUbN0dSGr1aP0Nrt4AEnTUbuGvquEC0mA64Gqt1fzirlRs5ibXx8g==}
 
+  sql-highlight@6.1.0:
+    resolution: {integrity: sha512-ed7OK4e9ywpE7pgRMkMQmZDPKSVdm0oX5IEtZiKnFucSF0zu6c80GZBe38UqHuVhTWJ9xsKgSMjCG2bml86KvA==}
+    engines: {node: '>=14'}
+
   stable-hash-x@0.2.0:
     resolution: {integrity: sha512-o3yWv49B/o4QZk5ZcsALc6t0+eCelPc44zZsLtCQnZPDwFpDYSWcDnrv2TtMmMbQ7uKo3J0HTURCqckw23czNQ==}
     engines: {node: '>=12.0.0'}
@@ -7764,6 +7780,8 @@ snapshots:
       tsx: 4.21.0
     optionalDependencies:
       valibot: 1.1.0(typescript@5.9.3)
+
+  '@toiroakr/read-multiline@0.3.0': {}
 
   '@ts-graphviz/adapter@2.0.6':
     dependencies:
@@ -10432,6 +10450,8 @@ snapshots:
   split-on-first@3.0.0: {}
 
   sprintf-js@1.0.3: {}
+
+  sql-highlight@6.1.0: {}
 
   stable-hash-x@0.2.0: {}
 

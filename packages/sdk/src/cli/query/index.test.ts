@@ -1,11 +1,17 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import {
+  getReplHistoryPath,
   query,
   queryCommand,
   resolveQueryCommandInput,
   resolveReplCommand,
-  resolveReplInterruptAction,
 } from "./index";
+
+const xdgTempDir = vi.hoisted(() => `/tmp/tailor-xdg-${Date.now()}-${Math.random()}`);
+
+vi.mock("xdg-basedir", () => ({
+  xdgConfig: xdgTempDir,
+}));
 
 vi.mock("node:fs/promises", () => ({
   readFile: vi.fn(),
@@ -753,18 +759,64 @@ describe("queryCommand args", () => {
       "Pass only one of --edit, -q/--query, or -f/--file.",
     );
   });
+
+  test("newline-on-enter is optional and passes boolean through", () => {
+    const omitted = queryCommand.args.safeParse({
+      engine: "sql",
+      "machine-user": "bot",
+    });
+    expect(omitted.success).toBe(true);
+    if (!omitted.success) throw new Error("expected args parsing to succeed");
+    expect(omitted.data["newline-on-enter"]).toBeUndefined();
+
+    const disabled = queryCommand.args.safeParse({
+      engine: "sql",
+      "machine-user": "bot",
+      "newline-on-enter": false,
+    });
+    expect(disabled.success).toBe(true);
+    if (!disabled.success) throw new Error("expected args parsing to succeed");
+    expect(disabled.data["newline-on-enter"]).toBe(false);
+  });
 });
 
-describe("resolveReplInterruptAction", () => {
-  test("exits when there is no buffered input", () => {
-    expect(resolveReplInterruptAction([], "")).toBe("exit");
+describe("getReplHistoryPath", () => {
+  test("returns an unscoped filename when neither profile nor workspaceId is set", () => {
+    expect(getReplHistoryPath("sql", undefined, undefined)).toBe(
+      `${xdgTempDir}/tailor-platform/query-history-sql.json`,
+    );
+    expect(getReplHistoryPath("gql", undefined, undefined)).toBe(
+      `${xdgTempDir}/tailor-platform/query-history-gql.json`,
+    );
   });
 
-  test("clears when buffered lines exist", () => {
-    expect(resolveReplInterruptAction(["select *"], "")).toBe("clear");
+  test("treats an empty-string profile or workspaceId as unset", () => {
+    expect(getReplHistoryPath("sql", "", "")).toBe(
+      `${xdgTempDir}/tailor-platform/query-history-sql.json`,
+    );
   });
 
-  test("clears when the current line has input", () => {
-    expect(resolveReplInterruptAction([], "select *")).toBe("clear");
+  test("scopes by profile when only profile is set", () => {
+    expect(getReplHistoryPath("sql", "dev", undefined)).toBe(
+      `${xdgTempDir}/tailor-platform/query-history-sql-dev.json`,
+    );
+  });
+
+  test("scopes by workspaceId when only workspaceId is set", () => {
+    expect(getReplHistoryPath("gql", undefined, "ws-abc-123")).toBe(
+      `${xdgTempDir}/tailor-platform/query-history-gql-ws-abc-123.json`,
+    );
+  });
+
+  test("combines profile and workspaceId when both are set", () => {
+    expect(getReplHistoryPath("sql", "prod", "ws-abc-123")).toBe(
+      `${xdgTempDir}/tailor-platform/query-history-sql-prod-ws-abc-123.json`,
+    );
+  });
+
+  test("sanitizes unsafe characters in the scope so the filename stays safe", () => {
+    expect(getReplHistoryPath("sql", "team/dev prod", "ws/1..2")).toBe(
+      `${xdgTempDir}/tailor-platform/query-history-sql-team_dev_prod-ws_1..2.json`,
+    );
   });
 });

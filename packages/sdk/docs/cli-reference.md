@@ -119,6 +119,14 @@ Commands for managing TailorDB tables, data, and schema migrations.
 | [tailordb erd serve](./cli/tailordb.md#tailordb-erd-serve)                   | Generate and serve ERD locally (liam build + serve dist). (beta)                                                          |
 | [tailordb erd deploy](./cli/tailordb.md#tailordb-erd-deploy)                 | Deploy ERD static website for TailorDB namespace(s).                                                                      |
 
+### [Query Commands](./cli/query.md)
+
+Run ad-hoc SQL/GraphQL queries or enter the interactive REPL.
+
+| Command                       | Description            |
+| ----------------------------- | ---------------------- |
+| [query](./cli/query.md#query) | Run SQL/GraphQL query. |
+
 ### [User & Auth Commands](./cli/user.md)
 
 Commands for authentication and user management.
