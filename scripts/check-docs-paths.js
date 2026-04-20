@@ -62,9 +62,15 @@ const LINK_RE = /!?\[[^\]\n]*\]\(([^)\s]+)(?:\s+"[^"\n]*")?\)/g;
 const EXTERNAL_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
 
 /**
+ * Find relative links in `content` that escape `docsRoot`.
+ *
+ * @param {string} file - Absolute path to the markdown file.
+ * @param {string} content - Raw markdown content.
+ * @param {string} [docsRoot] - Absolute path to the docs root directory.
+ * @param {string} [repoRoot] - Absolute path to the repository root.
  * @returns {{file: string, line: number, url: string, resolved: string}[]}
  */
-function findEscapingLinks(file, content) {
+function findEscapingLinks(file, content, docsRoot = DOCS_ROOT, repoRoot = REPO_ROOT) {
   const stripped = stripCode(content);
   const errors = [];
   const lines = stripped.split("\n");
@@ -82,16 +88,16 @@ function findEscapingLinks(file, content) {
       if (url.startsWith("/")) continue;
 
       const resolved = resolve(dirname(file), url);
-      const rel = relative(DOCS_ROOT, resolved);
-      // `rel` starts with `..` when `resolved` is outside DOCS_ROOT.
+      const rel = relative(docsRoot, resolved);
+      // `rel` starts with `..` when `resolved` is outside docsRoot.
       // On different drives (Windows), `relative` can return an absolute path
       // — treat that as an escape too.
       if (rel.startsWith("..") || rel.startsWith("/") || /^[A-Za-z]:/.test(rel)) {
         errors.push({
-          file: relative(REPO_ROOT, file),
+          file: relative(repoRoot, file),
           line: idx + 1,
           url: match[1],
-          resolved: relative(REPO_ROOT, resolved),
+          resolved: relative(repoRoot, resolved),
         });
       }
     }
@@ -137,7 +143,12 @@ async function main() {
   );
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+export { stripCode, findEscapingLinks, collectMarkdownFiles };
+
+// Run as CLI when invoked directly (not imported as a module).
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
