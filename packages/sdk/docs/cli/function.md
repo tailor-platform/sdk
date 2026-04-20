@@ -1,6 +1,6 @@
 # Function Commands
 
-Commands for viewing function execution logs.
+Commands for managing function registries and viewing function execution logs.
 
 <!-- politty:command:function:heading:start -->
 

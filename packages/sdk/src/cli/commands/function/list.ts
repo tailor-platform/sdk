@@ -1,3 +1,4 @@
+import { Code, ConnectError } from "@connectrpc/connect";
 import { z } from "zod";
 import { type Order, paginationArgs, toPageDirection, workspaceArgs } from "@/cli/shared/args";
 import { fetchPaged, initOperatorClient } from "@/cli/shared/client";
@@ -7,17 +8,17 @@ import { humanizeRelativeTime } from "@/cli/shared/format";
 import { logger } from "@/cli/shared/logger";
 import { functionRegistryInfo, type FunctionRegistryInfo } from "./transform";
 
-const listRegistryOptionsSchema = z.object({
+const listFunctionRegistriesOptionsSchema = z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
   profile: z.string().optional(),
   order: z.enum(["asc", "desc"]).optional(),
   limit: z.coerce.number().int().nonnegative().optional(),
 });
 
-export type ListRegistryOptions = z.input<typeof listRegistryOptionsSchema>;
+export type ListFunctionRegistriesOptions = z.input<typeof listFunctionRegistriesOptionsSchema>;
 
-async function loadOptions(options: ListRegistryOptions) {
-  const result = listRegistryOptionsSchema.safeParse(options);
+async function loadOptions(options: ListFunctionRegistriesOptions) {
+  const result = listFunctionRegistriesOptionsSchema.safeParse(options);
   if (!result.success) {
     throw new Error(result.error.issues[0].message);
   }
@@ -43,26 +44,33 @@ async function loadOptions(options: ListRegistryOptions) {
  * @returns List of function registries
  */
 export async function listFunctionRegistries(
-  options: ListRegistryOptions,
+  options: ListFunctionRegistriesOptions,
 ): Promise<FunctionRegistryInfo[]> {
   const { client, workspaceId, order, limit } = await loadOptions(options);
   const pageDirection = toPageDirection(order);
 
-  const functions = await fetchPaged(
+  const registries = await fetchPaged(
     async (pageToken, pageSize) => {
-      const { functions, nextPageToken } = await client.listFunctionRegistries({
-        workspaceId,
-        pageToken,
-        pageSize,
-        sortBy: "updated_at",
-        pageDirection,
-      });
-      return [functions, nextPageToken];
+      try {
+        const { functions, nextPageToken } = await client.listFunctionRegistries({
+          workspaceId,
+          pageToken,
+          pageSize,
+          sortBy: "updated_at",
+          pageDirection,
+        });
+        return [functions, nextPageToken];
+      } catch (error) {
+        if (error instanceof ConnectError && error.code === Code.NotFound) {
+          return [[], ""];
+        }
+        throw error;
+      }
     },
     { limit },
   );
 
-  return functions.map(functionRegistryInfo);
+  return registries.map(functionRegistryInfo);
 }
 
 export const listCommand = defineAppCommand({
@@ -75,7 +83,7 @@ export const listCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    const functions = await listFunctionRegistries({
+    const registries = await listFunctionRegistries({
       workspaceId: args["workspace-id"],
       profile: args.profile,
       order: args.order,
@@ -83,8 +91,8 @@ export const listCommand = defineAppCommand({
     });
 
     const formatted = args.json
-      ? functions
-      : functions.map(({ createdAt, updatedAt, ...rest }) => ({
+      ? registries
+      : registries.map(({ createdAt, updatedAt, ...rest }) => ({
           ...rest,
           createdAt: humanizeRelativeTime(createdAt),
           updatedAt: humanizeRelativeTime(updatedAt),

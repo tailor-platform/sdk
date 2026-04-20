@@ -9,16 +9,16 @@ import { humanizeRelativeTime } from "@/cli/shared/format";
 import { logger } from "@/cli/shared/logger";
 import { functionRegistryInfo, type FunctionRegistryInfo } from "./transform";
 
-const getRegistryOptionsSchema = z.object({
+const getFunctionRegistryOptionsSchema = z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
   profile: z.string().optional(),
   name: z.string().min(1, { message: "name is required" }),
 });
 
-export type GetRegistryOptions = z.input<typeof getRegistryOptionsSchema>;
+export type GetFunctionRegistryOptions = z.input<typeof getFunctionRegistryOptionsSchema>;
 
-async function loadOptions(options: GetRegistryOptions) {
-  const result = getRegistryOptionsSchema.safeParse(options);
+async function loadOptions(options: GetFunctionRegistryOptions) {
+  const result = getFunctionRegistryOptionsSchema.safeParse(options);
   if (!result.success) {
     throw new Error(result.error.issues[0].message);
   }
@@ -43,11 +43,11 @@ async function loadOptions(options: GetRegistryOptions) {
  * @returns Function registry info
  */
 export async function getFunctionRegistry(
-  options: GetRegistryOptions,
+  options: GetFunctionRegistryOptions,
 ): Promise<FunctionRegistryInfo> {
   const { client, workspaceId, name } = await loadOptions(options);
 
-  const notFoundErrorMessage = `Function "${name}" not found.`;
+  const notFoundErrorMessage = `Function registry "${name}" not found.`;
   try {
     const response = await client.getFunctionRegistry({
       workspaceId,
