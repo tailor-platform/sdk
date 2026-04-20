@@ -272,7 +272,7 @@ function normalizeComparableIdPService(
   >,
 ): ComparableIdPService {
   return {
-    authorization: input.authorization,
+    authorization: input.authorization || undefined,
     lang: input.lang === IdPLang.UNSPECIFIED ? IdPLang.EN : input.lang,
     userAuthPolicy: input.userAuthPolicy,
     publishUserEvents: input.publishUserEvents,
