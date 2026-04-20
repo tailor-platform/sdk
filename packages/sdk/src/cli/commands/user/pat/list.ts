@@ -1,7 +1,7 @@
 import ml from "multiline-ts";
 import { z } from "zod";
-import { paginationArgs } from "@/cli/shared/args";
-import { fetchPaged, initOperatorClient, toPageDirection } from "@/cli/shared/client";
+import { paginationArgs, toPageDirection } from "@/cli/shared/args";
+import { fetchPaged, initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { fetchLatestToken, readPlatformConfig } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
@@ -10,7 +10,7 @@ import { transformPersonalAccessToken, type PersonalAccessTokenInfo } from "./tr
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List all personal access tokens.",
-  args: z.object({ ...paginationArgs }).strict(),
+  args: z.object({ ...paginationArgs() }).strict(),
   run: async (args) => {
     const config = await readPlatformConfig();
 

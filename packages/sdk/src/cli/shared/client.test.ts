@@ -1,4 +1,3 @@
-import { PageDirection } from "@tailor-proto/tailor/v1/resource_pb";
 import { afterEach, describe, test, expect, vi } from "vitest";
 import {
   createTransport,
@@ -7,7 +6,6 @@ import {
   formatRequestParams,
   MAX_PAGE_SIZE,
   parseMethodName,
-  toPageDirection,
 } from "./client";
 
 vi.mock("@connectrpc/connect-node", () => ({
@@ -100,20 +98,6 @@ describe("fetchPaged", () => {
 
     expect(items).toEqual(["only"]);
     expect(fn).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("toPageDirection", () => {
-  test("returns undefined when order is undefined", () => {
-    expect(toPageDirection(undefined)).toBeUndefined();
-  });
-
-  test("maps asc to PageDirection.ASC", () => {
-    expect(toPageDirection("asc")).toBe(PageDirection.ASC);
-  });
-
-  test("maps desc to PageDirection.DESC", () => {
-    expect(toPageDirection("desc")).toBe(PageDirection.DESC);
   });
 });
 

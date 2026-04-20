@@ -281,10 +281,10 @@ tailor-sdk user pat list [options]
 
 **Options**
 
-| Option            | Alias | Description                                              | Required | Default |
-| ----------------- | ----- | -------------------------------------------------------- | -------- | ------- |
-| `--order <ORDER>` | -     | Sort order (asc or desc; default: server order)          | No       | -       |
-| `--limit <LIMIT>` | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -       |
+| Option            | Alias | Description                                              | Required | Default  |
+| ----------------- | ----- | -------------------------------------------------------- | -------- | -------- |
+| `--order <ORDER>` | -     | Sort order (asc or desc)                                 | No       | `"desc"` |
+| `--limit <LIMIT>` | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -        |
 
 <!-- politty:command:user pat list:options:end -->
 

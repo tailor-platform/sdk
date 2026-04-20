@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { deploymentArgs, type Order, paginationArgs } from "@/cli/shared/args";
-import { fetchPaged, initOperatorClient, toPageDirection } from "@/cli/shared/client";
+import { deploymentArgs, type Order, paginationArgs, toPageDirection } from "@/cli/shared/args";
+import { fetchPaged, initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
@@ -66,7 +66,7 @@ export const listCommand = defineAppCommand({
   args: z
     .object({
       ...deploymentArgs,
-      ...paginationArgs,
+      ...paginationArgs(),
     })
     .strict(),
   run: async (args) => {

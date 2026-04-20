@@ -8,8 +8,14 @@ import { WorkflowExecution_Status } from "@tailor-proto/tailor/v1/workflow_resou
 import ora from "ora";
 import { arg } from "politty";
 import { z } from "zod";
-import { type Order, pagedLogArgs, parseDuration, workspaceArgs } from "@/cli/shared/args";
-import { fetchPaged, initOperatorClient, toPageDirection } from "@/cli/shared/client";
+import {
+  type Order,
+  pagedLogArgs,
+  parseDuration,
+  toPageDirection,
+  workspaceArgs,
+} from "@/cli/shared/args";
+import { fetchPaged, initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { formatKeyValueTable } from "@/cli/shared/format";
@@ -118,9 +124,10 @@ function parseStatus(status: string): WorkflowExecution_Status {
 /**
  * List workflow executions with optional filters.
  *
- * Returns at most `options.limit` items. When `limit` is omitted, defaults
- * to 50 so programmatic callers do not accidentally page through the entire
- * history. Pass `limit: 0` to disable the cap and fetch all executions.
+ * Returns at most `options.limit` items. When `limit` is omitted or 0 the
+ * function pages through every execution. The CLI caps this at 50 by
+ * default via `pagedLogArgs`; programmatic callers that want the same
+ * cap should pass `limit: 50` explicitly.
  * @param options - Workflow execution listing options
  * @returns List of workflow executions
  */
@@ -188,7 +195,7 @@ export async function listWorkflowExecutions<W extends WorkflowLike>(
       });
       return [executions, nextPageToken];
     },
-    { limit: options?.limit ?? 50 },
+    { limit: options?.limit },
   );
 
   return executions.map(toWorkflowExecutionInfo);

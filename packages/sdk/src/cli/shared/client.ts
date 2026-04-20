@@ -8,13 +8,11 @@ import {
   type Interceptor,
   type Transport,
 } from "@connectrpc/connect";
-import { PageDirection } from "@tailor-proto/tailor/v1/resource_pb";
 import { OperatorService } from "@tailor-proto/tailor/v1/service_pb";
 import { getGlobalDispatcher } from "undici";
 import { z } from "zod";
 import { logger } from "./logger";
 import { readPackageJson } from "./package-json";
-import type { Order } from "./args";
 
 export const platformBaseUrl = process.env.PLATFORM_URL ?? "https://api.tailor.tech";
 
@@ -309,18 +307,6 @@ export async function fetchPaged<T>(
     return items.slice(0, limit);
   }
   return items;
-}
-
-/**
- * Translate a CLI `--order` value into the proto `PageDirection` enum.
- * Returns `undefined` when the user did not specify an order so that
- * callers can omit the field and fall back to the server default.
- * @param order - Order string from CLI args (`"asc"` | `"desc"` | undefined)
- * @returns PageDirection, or undefined when `order` is undefined
- */
-export function toPageDirection(order: Order | undefined): PageDirection | undefined {
-  if (order === undefined) return undefined;
-  return order === "asc" ? PageDirection.ASC : PageDirection.DESC;
 }
 
 /**

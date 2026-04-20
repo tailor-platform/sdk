@@ -2,13 +2,8 @@ import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { FunctionExecution_Type } from "@tailor-proto/tailor/v1/function_resource_pb";
 import { arg } from "politty";
 import { z } from "zod";
-import { pagedLogArgs, workspaceArgs } from "@/cli/shared/args";
-import {
-  fetchPaged,
-  initOperatorClient,
-  toPageDirection,
-  type OperatorClient,
-} from "@/cli/shared/client";
+import { pagedLogArgs, toPageDirection, workspaceArgs } from "@/cli/shared/args";
+import { fetchPaged, initOperatorClient, type OperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { formatKeyValueTable } from "@/cli/shared/format";

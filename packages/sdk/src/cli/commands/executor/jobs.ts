@@ -21,9 +21,10 @@ import {
   type Order,
   pagedLogArgs,
   parseDuration,
+  toPageDirection,
   workspaceArgs,
 } from "@/cli/shared/args";
-import { fetchAll, fetchPaged, initOperatorClient, toPageDirection } from "@/cli/shared/client";
+import { fetchAll, fetchPaged, initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { formatKeyValueTable } from "@/cli/shared/format";
@@ -141,10 +142,10 @@ function formatTime(date: Date): string {
 /**
  * List executor jobs for a given executor.
  *
- * Returns at most `options.limit` items. When `limit` is omitted, defaults
- * to 50 so programmatic callers do not accidentally page through the entire
- * history on busy executors. Pass `limit: 0` to disable the cap and fetch
- * all jobs.
+ * Returns at most `options.limit` items. When `limit` is omitted or 0 the
+ * function pages through every job. The CLI caps this at 50 by default
+ * via `pagedLogArgs`; programmatic callers that want the same cap should
+ * pass `limit: 50` explicitly.
  * @param options - Options for listing executor jobs
  * @returns List of executor job information
  */
@@ -201,7 +202,7 @@ export async function listExecutorJobs<E extends ExecutorLike>(
         });
         return [jobs, nextPageToken];
       },
-      { limit: options.limit ?? 50 },
+      { limit: options.limit },
     );
 
     return jobs.map(toExecutorJobListInfo);
