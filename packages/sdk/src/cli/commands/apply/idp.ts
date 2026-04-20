@@ -210,7 +210,7 @@ function trn(workspaceId: string, name: string) {
 }
 
 type ComparableIdPService = {
-  authorization: string;
+  authorization: string | undefined;
   lang: IdPLang;
   userAuthPolicy: Record<string, unknown> | undefined;
   publishUserEvents: boolean;
@@ -272,7 +272,7 @@ function normalizeComparableIdPService(
   >,
 ): ComparableIdPService {
   return {
-    authorization: input.authorization,
+    authorization: input.authorization || undefined,
     lang: input.lang === IdPLang.UNSPECIFIED ? IdPLang.EN : input.lang,
     userAuthPolicy: input.userAuthPolicy,
     publishUserEvents: input.publishUserEvents,
@@ -368,13 +368,16 @@ async function planServices(
     const namespaceName = idp.name;
     const existing = existingServices[namespaceName];
     const metaRequest = await buildMetaRequest(trn(workspaceId, namespaceName), appName);
-    let authorization;
+    let authorization: string | undefined;
     switch (idp.authorization) {
       case "insecure":
         authorization = "true==true";
         break;
       case "loggedIn":
         authorization = "user != null && size(user.id) > 0";
+        break;
+      case undefined:
+        authorization = undefined;
         break;
       default:
         authorization = idp.authorization.cel;

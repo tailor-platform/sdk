@@ -43,9 +43,9 @@ export default defineConfig({
 
 ## Options
 
-### authorization
+### authorization (optional)
 
-User management permissions. Controls who can manage users in the IdP.
+User management permissions. Controls who can manage users in the IdP. This field can be omitted when using `permission` for access control.
 
 ```typescript
 defineIdp("my-idp", {
@@ -57,7 +57,7 @@ defineIdp("my-idp", {
 });
 
 defineIdp("my-idp", {
-  authorization: "user.role == 'admin'", // CEL expression
+  authorization: { cel: "user.role == 'admin'" }, // CEL expression
 });
 ```
 
@@ -65,7 +65,7 @@ defineIdp("my-idp", {
 
 - `"insecure"` - No authentication required (use only for development)
 - `"loggedIn"` - Requires authenticated user
-- CEL expression - Custom authorization logic
+- `{ cel: "<expression>" }` - Custom authorization logic using CEL
 
 ### clients
 

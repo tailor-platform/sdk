@@ -1107,15 +1107,16 @@ export type IdPPermissionInput = IdPPermission;
 export type IdPInput = {
   /** IdP service name */
   name: string;
+  /** OAuth2 client names that can use this IdP */
+  clients: string[];
   /** Authorization mode for IdP API access */
-  authorization:
+  authorization?:
     | "insecure"
     | "loggedIn"
     | {
         cel: string;
-      };
-  /** OAuth2 client names that can use this IdP */
-  clients: string[];
+      }
+    | undefined;
   /** UI language for IdP pages */
   lang?: "en" | "ja" | undefined;
   /** User authentication policy configuration */
@@ -2195,15 +2196,16 @@ export type IdPInput = {
 export type IdP = {
   /** IdP service name */
   name: string;
+  /** OAuth2 client names that can use this IdP */
+  clients: string[];
   /** Authorization mode for IdP API access */
-  authorization:
+  authorization?:
     | "insecure"
     | "loggedIn"
     | {
         cel: string;
-      };
-  /** OAuth2 client names that can use this IdP */
-  clients: string[];
+      }
+    | undefined;
   /** UI language for IdP pages */
   lang?: "en" | "ja" | undefined;
   /** User authentication policy configuration */
