@@ -512,6 +512,7 @@ async function runRepl(
     validate,
     highlight,
     transform: replTransform,
+    clearAfterSubmit: false,
     history: historyPath ? { filePath: historyPath, maxEntries: 100 } : [],
     helpFooter: { items: ["submit", "newline"], maxLines: 1 },
   });
