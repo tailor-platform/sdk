@@ -1,5 +1,17 @@
 # @tailor-platform/sdk
 
+## 1.39.1
+
+### Patch Changes
+
+- [#885](https://github.com/tailor-platform/sdk/pull/885) [`c67000f`](https://github.com/tailor-platform/sdk/commit/c67000fae7fcfe394e27bae8e12431fac2dc47d0) Thanks [@toiroakr](https://github.com/toiroakr)! - Auto-inject workspaceId and namespaceName into `api` command request body based on proto schema introspection and SDK config
+
+- [#1017](https://github.com/tailor-platform/sdk/pull/1017) [`ab445c4`](https://github.com/tailor-platform/sdk/commit/ab445c494acc3ec1b1f7f135d97f06126902043a) Thanks [@k1LoW](https://github.com/k1LoW)! - Make `authorization` field optional in `defineIdp()` for migration to permission-based access control
+
+- [#930](https://github.com/tailor-platform/sdk/pull/930) [`3bfeec3`](https://github.com/tailor-platform/sdk/commit/3bfeec37db1f28071ac0eeb201f9eea14f0f0d8e) Thanks [@toiroakr](https://github.com/toiroakr)! - Internal refactoring of type layer boundaries. No changes to public API.
+
+- [#1014](https://github.com/tailor-platform/sdk/pull/1014) [`faa3301`](https://github.com/tailor-platform/sdk/commit/faa3301b7ff341ff3ddb52d387ae466381d267e2) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): lock file maintenance
+
 ## 1.39.0
 
 ### Minor Changes
