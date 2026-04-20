@@ -16,7 +16,7 @@ export interface WaitPointInstance<Payload = undefined, Result = undefined> {
   resolve: (
     executionId: string,
     callback: (
-      payload: [Payload] extends [undefined] ? undefined : Payload,
+      payload: [Payload] extends [undefined] ? undefined : Jsonify<Payload>,
     ) => Result | Promise<Result>,
   ) => Promise<void>;
 }
@@ -30,11 +30,11 @@ function getPlatformWorkflow<Payload = undefined, Result = undefined>() {
   const platform = globalThis as {
     tailor?: {
       workflow?: {
-        wait?: (k: string, p?: Payload) => Result;
-        resolve?: (
+        wait: (k: string, p?: Payload) => Result;
+        resolve: (
           e: string,
           k: string,
-          c: (p: Payload) => Result | Promise<Result>,
+          c: (p: Jsonify<Payload>) => Result | Promise<Result>,
         ) => Promise<void>;
       };
     };
@@ -61,11 +61,14 @@ function createWaitPointInstance<Payload = undefined, Result = undefined>(
     {
       wait(payload?: Payload) {
         return Promise.resolve(
-          getPlatformWorkflow<Payload, Result>().wait?.(key, payload),
+          getPlatformWorkflow<Payload, Result>().wait(key, payload),
         ) as Promise<Result>;
       },
-      async resolve(executionId: string, callback: (p: Payload) => Result | Promise<Result>) {
-        await getPlatformWorkflow<Payload, Result>().resolve?.(executionId, key, callback);
+      async resolve(
+        executionId: string,
+        callback: (p: Jsonify<Payload>) => Result | Promise<Result>,
+      ) {
+        await getPlatformWorkflow<Payload, Result>().resolve(executionId, key, callback);
       },
     },
     "wait-point",
