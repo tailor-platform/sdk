@@ -1,8 +1,8 @@
 import { toJson } from "@bufbuild/protobuf";
 import { timestampDate, ValueSchema } from "@bufbuild/protobuf/wkt";
 import { z } from "zod";
-import { deploymentArgs } from "@/cli/shared/args";
-import { fetchAll, initOperatorClient } from "@/cli/shared/client";
+import { deploymentArgs, type Order, paginationArgs, toPageDirection } from "@/cli/shared/args";
+import { fetchPaged, initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
@@ -13,6 +13,8 @@ export interface ListMachineUsersOptions {
   workspaceId?: string;
   profile?: string;
   configPath?: string;
+  order?: Order;
+  limit?: number;
 }
 
 export interface MachineUserInfo {
@@ -71,16 +73,20 @@ export async function listMachineUsers(
     throw new Error(`Application ${config.name} does not have an auth configuration.`);
   }
 
-  // Fetch all machine users
-  const machineUsers = await fetchAll(async (pageToken, maxPageSize) => {
-    const { machineUsers, nextPageToken } = await client.listAuthMachineUsers({
-      workspaceId,
-      pageToken,
-      pageSize: maxPageSize,
-      authNamespace: application.authNamespace,
-    });
-    return [machineUsers, nextPageToken];
-  });
+  const pageDirection = toPageDirection(options?.order);
+  const machineUsers = await fetchPaged(
+    async (pageToken, pageSize) => {
+      const { machineUsers, nextPageToken } = await client.listAuthMachineUsers({
+        workspaceId,
+        pageToken,
+        pageSize,
+        authNamespace: application.authNamespace,
+        pageDirection,
+      });
+      return [machineUsers, nextPageToken];
+    },
+    { limit: options?.limit },
+  );
 
   return machineUsers.map(machineUserInfo);
 }
@@ -91,6 +97,7 @@ export const listCommand = defineAppCommand({
   args: z
     .object({
       ...deploymentArgs,
+      ...paginationArgs(),
     })
     .strict(),
   run: async (args) => {
@@ -99,6 +106,8 @@ export const listCommand = defineAppCommand({
       workspaceId: args["workspace-id"],
       profile: args.profile,
       configPath: args.config,
+      order: args.order,
+      limit: args.limit,
     });
 
     // Show machine users info

@@ -272,12 +272,20 @@ List all personal access tokens.
 **Usage**
 
 ```
-tailor-sdk user pat list
+tailor-sdk user pat list [options]
 ```
 
 <!-- politty:command:user pat list:usage:end -->
 
 <!-- politty:command:user pat list:options:start -->
+
+**Options**
+
+| Option            | Alias | Description                                              | Required | Default  |
+| ----------------- | ----- | -------------------------------------------------------- | -------- | -------- |
+| `--order <ORDER>` | -     | Sort order (asc or desc)                                 | No       | `"desc"` |
+| `--limit <LIMIT>` | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -        |
+
 <!-- politty:command:user pat list:options:end -->
 
 <!-- politty:command:user pat list:global-options-link:start -->

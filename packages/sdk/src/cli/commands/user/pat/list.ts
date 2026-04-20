@@ -1,6 +1,7 @@
 import ml from "multiline-ts";
 import { z } from "zod";
-import { fetchAll, initOperatorClient } from "@/cli/shared/client";
+import { paginationArgs, toPageDirection } from "@/cli/shared/args";
+import { fetchPaged, initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { fetchLatestToken, readPlatformConfig } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
@@ -9,7 +10,7 @@ import { transformPersonalAccessToken, type PersonalAccessTokenInfo } from "./tr
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List all personal access tokens.",
-  args: z.object({}).strict(),
+  args: z.object({ ...paginationArgs() }).strict(),
   run: async (args) => {
     const config = await readPlatformConfig();
 
@@ -23,13 +24,18 @@ export const listCommand = defineAppCommand({
     const token = await fetchLatestToken(config, config.current_user);
     const client = await initOperatorClient(token);
 
-    const pats = await fetchAll(async (pageToken, maxPageSize) => {
-      const { personalAccessTokens, nextPageToken } = await client.listPersonalAccessTokens({
-        pageToken,
-        pageSize: maxPageSize,
-      });
-      return [personalAccessTokens, nextPageToken];
-    });
+    const pageDirection = toPageDirection(args.order);
+    const pats = await fetchPaged(
+      async (pageToken, pageSize) => {
+        const { personalAccessTokens, nextPageToken } = await client.listPersonalAccessTokens({
+          pageToken,
+          pageSize,
+          pageDirection,
+        });
+        return [personalAccessTokens, nextPageToken];
+      },
+      { limit: args.limit },
+    );
 
     if (pats.length === 0 && !args.json) {
       logger.info(ml`

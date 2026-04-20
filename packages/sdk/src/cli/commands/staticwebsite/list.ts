@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { workspaceArgs } from "@/cli/shared/args";
-import { fetchAll, initOperatorClient } from "@/cli/shared/client";
+import { type Order, paginationArgs, toPageDirection, workspaceArgs } from "@/cli/shared/args";
+import { fetchPaged, initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
@@ -16,6 +16,8 @@ export interface StaticWebsiteInfo {
 type StaticWebsiteListOptions = {
   workspaceId?: string;
   profile?: string;
+  order?: Order;
+  limit?: number;
 };
 
 /**
@@ -36,14 +38,19 @@ async function listStaticWebsites(
     profile: options?.profile,
   });
 
-  const websites = await fetchAll(async (pageToken, maxPageSize) => {
-    const { staticwebsites, nextPageToken } = await client.listStaticWebsites({
-      workspaceId,
-      pageToken,
-      pageSize: maxPageSize,
-    });
-    return [staticwebsites, nextPageToken];
-  });
+  const pageDirection = toPageDirection(options?.order);
+  const websites = await fetchPaged(
+    async (pageToken, pageSize) => {
+      const { staticwebsites, nextPageToken } = await client.listStaticWebsites({
+        workspaceId,
+        pageToken,
+        pageSize,
+        pageDirection,
+      });
+      return [staticwebsites, nextPageToken];
+    },
+    { limit: options?.limit },
+  );
 
   return websites.map((site) => ({
     workspaceId,
@@ -60,12 +67,15 @@ export const listCommand = defineAppCommand({
   args: z
     .object({
       ...workspaceArgs,
+      ...paginationArgs(),
     })
     .strict(),
   run: async (args) => {
     const websites = await listStaticWebsites({
       workspaceId: args["workspace-id"],
       profile: args.profile,
+      order: args.order,
+      limit: args.limit,
     });
 
     const formatted = args.json

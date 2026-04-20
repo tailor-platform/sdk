@@ -2,8 +2,8 @@ import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { FunctionExecution_Type } from "@tailor-proto/tailor/v1/function_resource_pb";
 import { arg } from "politty";
 import { z } from "zod";
-import { workspaceArgs } from "@/cli/shared/args";
-import { fetchAll, initOperatorClient, type OperatorClient } from "@/cli/shared/client";
+import { pagedLogArgs, toPageDirection, workspaceArgs } from "@/cli/shared/args";
+import { fetchPaged, initOperatorClient, type OperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { formatKeyValueTable } from "@/cli/shared/format";
@@ -293,6 +293,7 @@ When the deployed script cannot be downloaded or the function has been redeploye
   args: z
     .object({
       ...workspaceArgs,
+      ...pagedLogArgs,
       executionId: arg(z.string().optional(), {
         positional: true,
         description: "Execution ID (if provided, shows details with logs)",
@@ -341,14 +342,19 @@ When the deployed script cannot be downloaded or the function has been redeploye
         printFunctionExecutionDetail({ detail, bundledCode });
       }
     } else {
-      const executions = await fetchAll(async (pageToken, maxPageSize) => {
-        const { executions, nextPageToken } = await client.listFunctionExecutions({
-          workspaceId,
-          pageToken,
-          pageSize: maxPageSize,
-        });
-        return [executions, nextPageToken];
-      });
+      const pageDirection = toPageDirection(args.order);
+      const executions = await fetchPaged(
+        async (pageToken, pageSize) => {
+          const { executions, nextPageToken } = await client.listFunctionExecutions({
+            workspaceId,
+            pageToken,
+            pageSize,
+            pageDirection,
+          });
+          return [executions, nextPageToken];
+        },
+        { limit: args.limit },
+      );
 
       const logs = executions.map(toFunctionExecutionListInfo);
 

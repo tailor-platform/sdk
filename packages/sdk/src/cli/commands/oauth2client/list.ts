@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { deploymentArgs } from "@/cli/shared/args";
-import { fetchAll, initOperatorClient } from "@/cli/shared/client";
+import { deploymentArgs, type Order, paginationArgs, toPageDirection } from "@/cli/shared/args";
+import { fetchPaged, initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
@@ -11,6 +11,8 @@ export interface ListOAuth2ClientsOptions {
   workspaceId?: string;
   profile?: string;
   configPath?: string;
+  order?: Order;
+  limit?: number;
 }
 
 /**
@@ -40,15 +42,20 @@ export async function listOAuth2Clients(
     throw new Error(`Application ${config.name} does not have an auth configuration.`);
   }
 
-  const oauth2Clients = await fetchAll(async (pageToken, maxPageSize) => {
-    const { oauth2Clients, nextPageToken } = await client.listAuthOAuth2Clients({
-      workspaceId,
-      pageToken,
-      pageSize: maxPageSize,
-      namespaceName: application.authNamespace,
-    });
-    return [oauth2Clients, nextPageToken];
-  });
+  const pageDirection = toPageDirection(options?.order);
+  const oauth2Clients = await fetchPaged(
+    async (pageToken, pageSize) => {
+      const { oauth2Clients, nextPageToken } = await client.listAuthOAuth2Clients({
+        workspaceId,
+        pageToken,
+        pageSize,
+        namespaceName: application.authNamespace,
+        pageDirection,
+      });
+      return [oauth2Clients, nextPageToken];
+    },
+    { limit: options?.limit },
+  );
 
   return oauth2Clients.map(toOAuth2ClientInfo);
 }
@@ -59,6 +66,7 @@ export const listCommand = defineAppCommand({
   args: z
     .object({
       ...deploymentArgs,
+      ...paginationArgs(),
     })
     .strict(),
   run: async (args) => {
@@ -66,6 +74,8 @@ export const listCommand = defineAppCommand({
       workspaceId: args["workspace-id"],
       profile: args.profile,
       configPath: args.config,
+      order: args.order,
+      limit: args.limit,
     });
 
     logger.out(oauth2Clients);

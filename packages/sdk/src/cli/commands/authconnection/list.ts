@@ -1,8 +1,8 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { z } from "zod";
-import { workspaceArgs } from "@/cli/shared/args";
-import { fetchAll, initOperatorClient } from "@/cli/shared/client";
+import { paginationArgs, toPageDirection, workspaceArgs } from "@/cli/shared/args";
+import { fetchPaged, initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
@@ -36,7 +36,7 @@ function connectionInfo(connection: AuthConnection): ConnectionInfo {
 export const listAuthConnectionCommand = defineAppCommand({
   name: "list",
   description: "List all auth connections.",
-  args: z.object({ ...workspaceArgs }).strict(),
+  args: z.object({ ...workspaceArgs, ...paginationArgs() }).strict(),
   run: async (args) => {
     const accessToken = await loadAccessToken({
       useProfile: true,
@@ -49,14 +49,19 @@ export const listAuthConnectionCommand = defineAppCommand({
     });
 
     try {
-      const connections = await fetchAll(async (pageToken, maxPageSize) => {
-        const { connections, nextPageToken } = await client.listAuthConnections({
-          workspaceId,
-          pageToken,
-          pageSize: maxPageSize,
-        });
-        return [connections, nextPageToken];
-      });
+      const pageDirection = toPageDirection(args.order);
+      const connections = await fetchPaged(
+        async (pageToken, pageSize) => {
+          const { connections, nextPageToken } = await client.listAuthConnections({
+            workspaceId,
+            pageToken,
+            pageSize,
+            pageDirection,
+          });
+          return [connections, nextPageToken];
+        },
+        { limit: args.limit },
+      );
       logger.out(connections.map(connectionInfo));
     } catch (error) {
       if (error instanceof ConnectError && error.code === Code.NotFound) {
