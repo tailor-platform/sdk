@@ -209,7 +209,7 @@ Commands for managing workflows and executions.
 
 ### [Function Commands](./cli/function.md)
 
-Commands for viewing function execution logs.
+Commands for managing function registries and viewing function execution logs.
 
 | Command                                                  | Description                                                     |
 | -------------------------------------------------------- | --------------------------------------------------------------- |
