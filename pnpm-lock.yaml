@@ -130,8 +130,8 @@ importers:
         specifier: 17.5.0
         version: 17.5.0
       knip:
-        specifier: 6.4.0
-        version: 6.4.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)
+        specifier: 6.4.1
+        version: 6.4.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)
       lefthook:
         specifier: 2.1.5
         version: 2.1.5
@@ -4502,8 +4502,8 @@ packages:
     resolution: {integrity: sha512-eTIzlVOSUR+JxdDFepEYcBMtZ9Qqdef+rnzWdRZuMbOywu5tO2w2N7rqjoANZ5k9vywhL6Br1VRjUIgTQx4E8w==}
     engines: {node: '>=6'}
 
-  knip@6.4.0:
-    resolution: {integrity: sha512-SAEeggehgkPdoLZWVEcFKzPw+vNlnrUBDqcX8cOcHGydRInSn5pnn9LN3dDJ8SkDHKXR7xYzNq3HtRJaYmxOHg==}
+  knip@6.4.1:
+    resolution: {integrity: sha512-Ry+ywmDFSZvKp/jx7LxMgsZWRTs931alV84e60lh0Stf6kSRYqSIUTkviyyDFRcSO3yY1Kpbi83OirN+4lA2Xw==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
 
@@ -9172,7 +9172,7 @@ snapshots:
 
   kleur@3.0.3: {}
 
-  knip@6.4.0(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0):
+  knip@6.4.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0):
     dependencies:
       '@nodelib/fs.walk': 1.2.8
       fast-glob: 3.3.3
