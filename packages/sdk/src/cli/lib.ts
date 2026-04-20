@@ -64,12 +64,9 @@ export {
   type HealthOptions as GetAppHealthOptions,
 } from "./commands/workspace/app/health";
 export type { AppInfo, AppHealthInfo } from "./commands/workspace/app/transform";
-export { getFunctionRegistry, type GetRegistryOptions } from "./commands/function/registry-get";
-export {
-  listFunctionRegistries,
-  type ListRegistryOptions,
-} from "./commands/function/registry-list";
-export type { FunctionRegistryInfo } from "./commands/function/registry-transform";
+export { getFunctionRegistry, type GetRegistryOptions } from "./commands/function/get";
+export { listFunctionRegistries, type ListRegistryOptions } from "./commands/function/list";
+export type { FunctionRegistryInfo } from "./commands/function/transform";
 export {
   listMachineUsers,
   type ListMachineUsersOptions,

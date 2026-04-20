@@ -1,7 +1,7 @@
 import { defineCommand, runCommand } from "politty";
+import { getCommand } from "./get";
+import { listCommand } from "./list";
 import { logsCommand } from "./logs";
-import { getCommand } from "./registry-get";
-import { listCommand } from "./registry-list";
 import { testRunCommand } from "./test-run";
 
 export const functionCommand = defineCommand({

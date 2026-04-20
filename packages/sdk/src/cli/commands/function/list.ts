@@ -1,18 +1,17 @@
-import { PageDirection } from "@tailor-proto/tailor/v1/resource_pb";
-import { arg } from "politty";
 import { z } from "zod";
-import { positiveIntArg, workspaceArgs } from "@/cli/shared/args";
-import { initOperatorClient } from "@/cli/shared/client";
+import { type Order, paginationArgs, toPageDirection, workspaceArgs } from "@/cli/shared/args";
+import { fetchPaged, initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { humanizeRelativeTime } from "@/cli/shared/format";
 import { logger } from "@/cli/shared/logger";
-import { functionRegistryInfo, type FunctionRegistryInfo } from "./registry-transform";
+import { functionRegistryInfo, type FunctionRegistryInfo } from "./transform";
 
 const listRegistryOptionsSchema = z.object({
   workspaceId: z.uuid({ message: "workspace-id must be a valid UUID" }).optional(),
   profile: z.string().optional(),
-  limit: z.coerce.number().int().positive().optional(),
+  order: z.enum(["asc", "desc"]).optional(),
+  limit: z.coerce.number().int().nonnegative().optional(),
 });
 
 export type ListRegistryOptions = z.input<typeof listRegistryOptionsSchema>;
@@ -33,54 +32,37 @@ async function loadOptions(options: ListRegistryOptions) {
   return {
     client,
     workspaceId,
+    order: result.data.order as Order | undefined,
     limit: result.data.limit,
   };
 }
 
 /**
- * List function registries in a workspace with an optional limit.
+ * List function registries in a workspace with optional pagination.
  * @param options - Function registry listing options
  * @returns List of function registries
  */
 export async function listFunctionRegistries(
   options: ListRegistryOptions,
 ): Promise<FunctionRegistryInfo[]> {
-  const { client, workspaceId, limit } = await loadOptions(options);
-  const hasLimit = limit !== undefined;
+  const { client, workspaceId, order, limit } = await loadOptions(options);
+  const pageDirection = toPageDirection(order);
 
-  const results: FunctionRegistryInfo[] = [];
-  let pageToken = "";
+  const functions = await fetchPaged(
+    async (pageToken, pageSize) => {
+      const { functions, nextPageToken } = await client.listFunctionRegistries({
+        workspaceId,
+        pageToken,
+        pageSize,
+        sortBy: "updated_at",
+        pageDirection,
+      });
+      return [functions, nextPageToken];
+    },
+    { limit },
+  );
 
-  while (true) {
-    if (hasLimit && results.length >= limit!) {
-      break;
-    }
-
-    const remaining = hasLimit ? limit! - results.length : undefined;
-    const pageSize = remaining !== undefined && remaining > 0 ? remaining : undefined;
-
-    const { functions, nextPageToken } = await client.listFunctionRegistries({
-      workspaceId,
-      pageToken,
-      ...(pageSize !== undefined ? { pageSize } : {}),
-      sortBy: "updated_at",
-      pageDirection: PageDirection.DESC,
-    });
-
-    const mapped = functions.map(functionRegistryInfo);
-    if (remaining !== undefined && mapped.length > remaining) {
-      results.push(...mapped.slice(0, remaining));
-    } else {
-      results.push(...mapped);
-    }
-
-    if (!nextPageToken) {
-      break;
-    }
-    pageToken = nextPageToken;
-  }
-
-  return results;
+  return functions.map(functionRegistryInfo);
 }
 
 export const listCommand = defineAppCommand({
@@ -89,16 +71,14 @@ export const listCommand = defineAppCommand({
   args: z
     .object({
       ...workspaceArgs,
-      limit: arg(positiveIntArg.optional(), {
-        alias: "l",
-        description: "Maximum number of functions to list",
-      }),
+      ...paginationArgs(),
     })
     .strict(),
   run: async (args) => {
     const functions = await listFunctionRegistries({
       workspaceId: args["workspace-id"],
       profile: args.profile,
+      order: args.order,
       limit: args.limit,
     });
 
