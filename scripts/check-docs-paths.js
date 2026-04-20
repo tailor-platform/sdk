@@ -13,7 +13,7 @@
  * repository. This script fills that gap.
  *
  * Usage:
- *   node scripts/check-docs-paths.mjs
+ *   node scripts/check-docs-paths.js
  *
  * Exit codes:
  *   0 - All relative links stay within packages/sdk/docs/

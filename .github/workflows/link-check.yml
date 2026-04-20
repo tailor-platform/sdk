@@ -4,7 +4,7 @@ on:
   pull_request:
     paths:
       - "packages/sdk/docs/**/*.md"
-      - "scripts/check-docs-paths.mjs"
+      - "scripts/check-docs-paths.js"
       - ".github/workflows/link-check.yml"
   workflow_dispatch:
 
@@ -34,4 +34,4 @@ jobs:
       # but 404 on the docs site. lychee passes them because the target file
       # exists on disk — this step catches that specific gap.
       - name: Check relative links stay within packages/sdk/docs/
-        run: node scripts/check-docs-paths.mjs
+        run: node scripts/check-docs-paths.js
