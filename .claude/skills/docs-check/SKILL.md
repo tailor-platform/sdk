@@ -9,6 +9,8 @@ description: >
   Covers: TailorDB, Auth, Executor, Function, Workflow, Resolver, Secret Manager,
   Static Website, AppShell, TRN format, platform limits, and more.
   Also use during planning phases when platform capabilities or limitations need clarification.
+metadata:
+  internal: true
 ---
 
 # Tailor Platform Docs Search
