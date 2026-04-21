@@ -57,7 +57,7 @@ List local crash report files.
 **Usage**
 
 ```
-tailor-sdk crash-report list
+tailor-sdk crash-report list [options]
 ```
 
 <!-- politty:command:crash-report list:usage:end -->

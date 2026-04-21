@@ -1,7 +1,7 @@
 import { defineCommand, runCommand } from "politty";
 import { z } from "zod";
-import { workspaceArgs } from "@/cli/shared/args";
-import { fetchAll, initOperatorClient } from "@/cli/shared/client";
+import { type Order, paginationArgs, toPageDirection, workspaceArgs } from "@/cli/shared/args";
+import { fetchPaged, initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger, styles } from "@/cli/shared/logger";
@@ -15,6 +15,8 @@ export interface WebhookExecutorInfo {
 export interface ListWebhookExecutorsOptions {
   workspaceId?: string;
   profile?: string;
+  order?: Order;
+  limit?: number;
 }
 
 /**
@@ -35,14 +37,19 @@ export async function listWebhookExecutors(
     profile: options?.profile,
   });
 
-  const webhooks = await fetchAll(async (pageToken, maxPageSize) => {
-    const { webhooks, nextPageToken } = await client.listExecutorIncomingWebhooks({
-      workspaceId,
-      pageToken,
-      pageSize: maxPageSize,
-    });
-    return [webhooks, nextPageToken];
-  });
+  const pageDirection = toPageDirection(options?.order);
+  const webhooks = await fetchPaged(
+    async (pageToken, pageSize) => {
+      const { webhooks, nextPageToken } = await client.listExecutorIncomingWebhooks({
+        workspaceId,
+        pageToken,
+        pageSize,
+        pageDirection,
+      });
+      return [webhooks, nextPageToken];
+    },
+    { limit: options?.limit },
+  );
 
   return webhooks.map((w) => ({
     name: w.executorName,
@@ -57,12 +64,15 @@ const listWebhookCommand = defineAppCommand({
   args: z
     .object({
       ...workspaceArgs,
+      ...paginationArgs(),
     })
     .strict(),
   run: async (args) => {
     const executors = await listWebhookExecutors({
       workspaceId: args["workspace-id"],
       profile: args.profile,
+      order: args.order,
+      limit: args.limit,
     });
 
     if (executors.length === 0) {
