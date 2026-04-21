@@ -86,7 +86,7 @@ defineIdp("my-idp", {
 - `read` - Controls who can read IdP users
 - `update` - Controls who can update IdP users
 - `delete` - Controls who can delete IdP users
-- `sendPasswordResetEmail` - Controls who can send password reset emails. The examples above disable this operation; to enable it, use a condition such as `[{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }]`
+- `sendPasswordResetEmail` - Controls who can send password reset emails. The examples above disable this operation; to enable it, use a permission such as `[{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }]`.
 
 **Operands:**
 
