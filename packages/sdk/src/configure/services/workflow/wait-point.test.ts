@@ -17,12 +17,58 @@ describe("defineWaitPoints", () => {
     expectTypeOf(wps.approval.resolve).toBeFunction();
   });
 
-  it("wait return type uses JsonifyOutput (Date→string)", () => {
-    const wps = defineWaitPoints((define) => ({
+  it("rejects Date in Payload / Result (pure JSON only)", () => {
+    defineWaitPoints((define) => ({
+      // @ts-expect-error - Date is not JsonValue-compatible (Result)
       check: define<undefined, { timestamp: Date }>(),
     }));
+    defineWaitPoints((define) => ({
+      // @ts-expect-error - Date is not JsonValue-compatible (Payload)
+      check: define<{ when: Date }, { ok: boolean }>(),
+    }));
+  });
+
+  it("rejects top-level null in Payload", () => {
+    defineWaitPoints((define) => ({
+      // @ts-expect-error - null is not allowed at top level (even in union)
+      check: define<{ id: string } | null, { ok: boolean }>(),
+    }));
+  });
+
+  it("rejects top-level undefined in Payload union", () => {
+    defineWaitPoints((define) => ({
+      // @ts-expect-error - undefined is not allowed at top level (except when Payload = undefined alone)
+      check: define<{ id: string } | undefined, { ok: boolean }>(),
+    }));
+  });
+
+  it("allows Payload = undefined (no-payload convention)", () => {
+    const wps = defineWaitPoints((define) => ({
+      check: define<undefined, { ok: boolean }>(),
+    }));
+    expectTypeOf(wps.check.wait).toBeFunction();
+  });
+
+  it("allows nested null in Payload", () => {
+    const wps = defineWaitPoints((define) => ({
+      check: define<{ data: string | null }, { ok: boolean }>(),
+    }));
+    expectTypeOf(wps.check.wait).toBeFunction();
+  });
+
+  it("allows top-level null in Result", () => {
+    const wps = defineWaitPoints((define) => ({
+      check: define<{ id: string }, { data: string } | null>(),
+    }));
+    expectTypeOf(wps.check.wait).toBeFunction();
+  });
+
+  it("wait return type is Result as-is (no Jsonify transformation)", () => {
+    const wps = defineWaitPoints((define) => ({
+      check: define<undefined, { count: number; tags: string[] }>(),
+    }));
     type WaitReturn = Awaited<ReturnType<typeof wps.check.wait>>;
-    expectTypeOf<WaitReturn>().toEqualTypeOf<{ timestamp: string }>();
+    expectTypeOf<WaitReturn>().toEqualTypeOf<{ count: number; tags: string[] }>();
   });
 
   it("wait omits payload when Payload is undefined", () => {

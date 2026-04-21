@@ -60,7 +60,7 @@ export const fetchCustomer = createWorkflowJob({
 
 Workflow job inputs and outputs are serialized as JSON when passed between jobs. This imposes type constraints:
 
-**Input types** must be JSON-compatible — only primitives (`string`, `number`, `boolean`, `null`), arrays, and plain objects are allowed. `Date`, `Map`, `Set`, functions, and other non-serializable types cannot be used.
+**Input types** must be JSON-compatible — primitives (`string`, `number`, `boolean`), arrays, and plain objects are allowed. `Date`, `Map`, `Set`, functions, and other non-serializable types cannot be used. Top-level `null` is also rejected because the platform normalizes top-level `null`/`undefined` args to `{}` (nested `null` inside objects or arrays is preserved).
 
 ```typescript
 // OK
@@ -78,9 +78,17 @@ export const badJob = createWorkflowJob({
     // ...
   },
 });
+
+// Compile error — top-level null would be normalized to {} by the platform
+export const nullJob = createWorkflowJob({
+  name: "null-job",
+  body: async (input: { id: string } | null) => {
+    // ...
+  },
+});
 ```
 
-**Output types** are more permissive — `Date` and objects with `toJSON()` are allowed because they are serialized via `JSON.stringify` at runtime (e.g., `Date` becomes a string).
+**Output types** have the same restriction as inputs: must be JsonValue-compatible (plain objects/arrays; no class instances or functions). Values with methods (function-typed properties) are rejected at compile time — this covers class instances like `Date` or `RegExp` as well as any plain object that exposes a method such as `toJSON()`.
 
 These constraints are enforced at compile time — you will get a type error if you use an unsupported type.
 
@@ -230,8 +238,10 @@ await waitPoints.managerApproval.wait({ amount: 50000 });
 
 Both accept two type parameters:
 
-- **`Payload`** — Data sent when the job suspends (passed to `.wait()`). Must be JSON-compatible (`string`, `number`, `boolean`, `null`, arrays, plain objects). Use `undefined` if no payload is needed.
-- **`Result`** — Data returned when the wait point is resolved (returned from `.wait()`, produced by the `.resolve()` callback). Allows `Date` and `toJSON()` objects (serialized via `JSON.stringify`). The return type of `.wait()` applies `Jsonify` (e.g., `Date` becomes `string`).
+- **`Payload`** — Data sent when the job suspends (passed to `.wait()`). Must be a pure JSON value (`string`, `number`, `boolean`, `null`, arrays, plain objects). Use `undefined` if no payload is needed.
+- **`Result`** — Data returned when the wait point is resolved (returned from `.wait()`, produced by the `.resolve()` callback). Must be a pure JSON value.
+
+Both must be JsonValue-compatible (plain objects/arrays; no class instances or functions). Values with methods (function-typed properties) are rejected at compile time — this covers class instances like `Date` or `RegExp` as well as any plain object that exposes a method such as `toJSON()`. Convert such values to `string` (e.g. ISO strings) or `number` (epoch millis) before passing them through a wait point.
 
 ### Waiting in a Job
 

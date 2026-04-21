@@ -1,40 +1,49 @@
 import { brandValue } from "@/utils/brand";
-import type { Jsonifiable, Jsonify } from "type-fest";
-
-type JsonifyOutput<T> = T extends Jsonifiable ? Jsonify<T> : T;
+import type { JsonCompatible } from "@/types/helpers";
 
 /**
  * A single wait point instance with typed `.wait()` and `.resolve()` methods.
  *
  * - `.wait(payload?)` suspends execution until resolved. Returns the result from `.resolve()`.
  * - `.resolve(executionId, callback)` resumes a suspended execution.
+ *
+ * Both `Payload` and `Result` must be JsonValue-compatible (primitives, plain objects, arrays).
+ * Functions and objects with a `toJSON` method are rejected at the type level.
  */
 export interface WaitPointInstance<Payload = undefined, Result = undefined> {
   wait: [Payload] extends [undefined]
-    ? () => Promise<JsonifyOutput<Result>>
-    : (payload: Payload) => Promise<JsonifyOutput<Result>>;
+    ? () => Promise<Result>
+    : (payload: Payload) => Promise<Result>;
   resolve: (
     executionId: string,
     callback: (
-      payload: [Payload] extends [undefined] ? undefined : Jsonify<Payload>,
+      payload: [Payload] extends [undefined] ? undefined : Payload,
     ) => Result | Promise<Result>,
   ) => Promise<void>;
 }
 
-interface WaitPointWithSetter<Payload, Result> {
-  instance: WaitPointInstance<Payload, Result>;
+interface InternalWaitPointInstance {
+  wait: (payload?: unknown) => Promise<unknown>;
+  resolve: (
+    executionId: string,
+    callback: (payload: unknown) => unknown | Promise<unknown>,
+  ) => Promise<void>;
+}
+
+interface WaitPointWithSetter {
+  instance: InternalWaitPointInstance;
   setKey: (key: string) => void;
 }
 
-function getPlatformWorkflow<Payload = undefined, Result = undefined>() {
+function getPlatformWorkflow() {
   const platform = globalThis as {
     tailor?: {
       workflow?: {
-        wait: (k: string, p?: Payload) => Result;
+        wait: (k: string, p?: unknown) => unknown;
         resolve: (
           e: string,
           k: string,
-          c: (p: Jsonify<Payload>) => Result | Promise<Result>,
+          c: (p: unknown) => unknown | Promise<unknown>,
         ) => Promise<void>;
       };
     };
@@ -52,27 +61,20 @@ function getPlatformWorkflow<Payload = undefined, Result = undefined>() {
  * @param initialKey - Initial key (can be updated via the returned setter)
  * @returns The instance and a setter to update the key after construction
  */
-function createWaitPointInstance<Payload = undefined, Result = undefined>(
-  initialKey: string,
-): WaitPointWithSetter<Payload, Result> {
+function createWaitPointInstance(initialKey: string): WaitPointWithSetter {
   let key = initialKey;
 
   const instance = brandValue(
     {
-      wait(payload?: Payload) {
-        return Promise.resolve(
-          getPlatformWorkflow<Payload, Result>().wait(key, payload),
-        ) as Promise<Result>;
+      wait(payload?: unknown) {
+        return Promise.resolve(getPlatformWorkflow().wait(key, payload));
       },
-      async resolve(
-        executionId: string,
-        callback: (p: Jsonify<Payload>) => Result | Promise<Result>,
-      ) {
-        await getPlatformWorkflow<Payload, Result>().resolve(executionId, key, callback);
+      async resolve(executionId: string, callback: (p: unknown) => unknown | Promise<unknown>) {
+        await getPlatformWorkflow().resolve(executionId, key, callback);
       },
     },
     "wait-point",
-  ) as unknown as WaitPointInstance<Payload, Result>;
+  ) as InternalWaitPointInstance;
 
   return {
     instance,
@@ -83,15 +85,42 @@ function createWaitPointInstance<Payload = undefined, Result = undefined>(
 }
 
 /**
+ * The type produced by `define<Payload, Result>()` / `defineWaitPoint<Payload, Result>(key)`.
+ * Resolves to `WaitPointInstance<Payload, Result>` when both types are JsonValue-compatible,
+ * or to a template-literal error string that surfaces at the call site.
+ */
+type WaitPointDef<Payload, Result> = [null] extends [Payload]
+  ? "ERROR: Payload cannot be null at the top level"
+  : [Payload] extends [undefined]
+    ? [Result] extends [JsonCompatible<Result> | undefined]
+      ? WaitPointInstance<Payload, Result>
+      : "ERROR: Result must be JsonValue-compatible (plain objects/arrays; no class instances or functions)"
+    : [undefined] extends [Payload]
+      ? "ERROR: Payload cannot include undefined at the top level"
+      : [Payload] extends [JsonCompatible<Payload>]
+        ? [Result] extends [JsonCompatible<Result> | undefined]
+          ? WaitPointInstance<Payload, Result>
+          : "ERROR: Result must be JsonValue-compatible (plain objects/arrays; no class instances or functions)"
+        : "ERROR: Payload must be JsonValue-compatible (plain objects/arrays; no class instances or functions)";
+
+/**
  * The `define` function passed to the `defineWaitPoints` builder callback.
  * Returns an actual WaitPointInstance (not a phantom marker) so that the
  * builder's return type can flow through as-is, preserving JSDoc comments
  * on each property for IDE autocompletion.
+ *
+ * JSON validation is encoded in the return type rather than in type-parameter
+ * constraints, because tsgo rejects self-referential constraints like
+ * `Payload extends JsonCompatible<Payload>` as circular.
  */
-type DefineFn = <Payload = undefined, Result = undefined>() => WaitPointInstance<Payload, Result>;
+type DefineFn = <Payload = undefined, Result = undefined>() => WaitPointDef<Payload, Result>;
 
 /**
  * Define a single typed wait point with an explicit key.
+ *
+ * `Payload` and `Result` must be JsonValue-compatible.
+ * Functions and objects with a `toJSON` method are rejected at the type level;
+ * class instances exposing methods are rejected via the property walk.
  * @param key - The wait point key used to match wait and resolve calls
  * @returns A WaitPointInstance with typed `.wait()` and `.resolve()` methods
  * @example
@@ -101,8 +130,8 @@ type DefineFn = <Payload = undefined, Result = undefined>() => WaitPointInstance
  */
 export function defineWaitPoint<Payload = undefined, Result = undefined>(
   key: string,
-): WaitPointInstance<Payload, Result> {
-  return createWaitPointInstance<Payload, Result>(key).instance;
+): WaitPointDef<Payload, Result> {
+  return createWaitPointInstance(key).instance as unknown as WaitPointDef<Payload, Result>;
 }
 
 /**
@@ -111,6 +140,10 @@ export function defineWaitPoint<Payload = undefined, Result = undefined>(
  *
  * The return type is the same as the builder's return type, so JSDoc on each
  * property is preserved and visible in IDE autocompletion.
+ *
+ * `Payload` and `Result` must be JsonValue-compatible.
+ * Functions and objects with a `toJSON` method are rejected at the type level;
+ * class instances exposing methods are rejected via the property walk.
  * @param builder - Callback that receives a `define` factory and returns an object of wait points
  * @returns The same object returned by the builder (with correct keys set on each instance)
  * @example
@@ -130,20 +163,19 @@ export function defineWaitPoint<Payload = undefined, Result = undefined>(
 export function defineWaitPoints<T extends Record<string, WaitPointInstance<any, any>>>(
   builder: (define: DefineFn) => T,
 ): T {
-  // oxlint-disable-next-line no-explicit-any
-  const setters = new Map<WaitPointInstance<any, any>, (key: string) => void>();
+  const setters = new Map<InternalWaitPointInstance, (key: string) => void>();
 
-  const define: DefineFn = <Payload, Result>() => {
-    const { instance, setKey } = createWaitPointInstance<Payload, Result>("__pending__");
+  const define = (<Payload, Result>() => {
+    const { instance, setKey } = createWaitPointInstance("__pending__");
     setters.set(instance, setKey);
-    return instance;
-  };
+    return instance as unknown as WaitPointDef<Payload, Result>;
+  }) as DefineFn;
 
   const result = builder(define);
 
   // Set the correct key on each instance based on the property name
   for (const key of Object.keys(result)) {
-    const setter = setters.get(result[key]);
+    const setter = setters.get(result[key] as unknown as InternalWaitPointInstance);
     setter?.(key);
   }
 

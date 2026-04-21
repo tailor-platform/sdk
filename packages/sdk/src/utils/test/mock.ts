@@ -144,8 +144,8 @@ export function setupWaitPointMock(config?: { onWait?: WaitHandler; onResolve?: 
   GlobalThis.tailor = {
     ...GlobalThis.tailor,
     workflow: {
+      triggerJobFunction: () => undefined,
       ...GlobalThis.tailor?.workflow,
-      triggerJobFunction: GlobalThis.tailor?.workflow?.triggerJobFunction ?? (() => undefined),
       wait: (key: string, payload?: unknown) => {
         waitCalls.push({ key, payload });
         return config?.onWait?.(key, payload);
