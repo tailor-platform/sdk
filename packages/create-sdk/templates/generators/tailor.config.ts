@@ -5,8 +5,14 @@ import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
 import { seedPlugin } from "@tailor-platform/sdk/plugin/seed";
 
 const idp = defineIdp("main-idp", {
-  authorization: "loggedIn",
   clients: ["default-idp-client"],
+  permission: {
+    create: [{ conditions: [[{ user: "role" }, "=", "admin"]], permit: true }],
+    read: [{ conditions: [[{ user: "role" }, "=", "admin"]], permit: true }],
+    update: [{ conditions: [[{ user: "role" }, "=", "admin"]], permit: true }],
+    delete: [{ conditions: [[{ user: "role" }, "=", "admin"]], permit: true }],
+    sendPasswordResetEmail: [{ conditions: [[{ user: "role" }, "=", "admin"]], permit: true }],
+  },
 });
 
 export default defineConfig({
