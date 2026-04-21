@@ -161,7 +161,7 @@
     "@types/semver": "7.7.1",
     "@typescript/native-preview": "7.0.0-dev.20260417.1",
     "@vitest/coverage-v8": "4.1.4",
-    "eslint": "10.2.0",
+    "eslint": "10.2.1",
     "eslint-plugin-jsdoc": "62.9.0",
     "eslint-plugin-oxlint": "1.60.0",
     "oxfmt": "0.45.0",
