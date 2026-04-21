@@ -1,9 +1,16 @@
-import { defineAuth, defineConfig, defineIdp, definePlugins, t } from "@tailor-platform/sdk";
+import {
+  defineAuth,
+  defineConfig,
+  defineIdp,
+  definePlugins,
+  t,
+  unsafeAllowAllIdPPermission,
+} from "@tailor-platform/sdk";
 import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
 
 const idp = defineIdp("main-idp", {
-  authorization: "loggedIn",
   clients: ["default-idp-client"],
+  permission: unsafeAllowAllIdPPermission,
   userAuthPolicy: {
     useNonEmailIdentifier: false,
     allowSelfPasswordReset: true,

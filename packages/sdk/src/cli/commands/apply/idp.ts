@@ -288,6 +288,15 @@ function normalizeComparablePermission(
   if (!permission) {
     return undefined;
   }
+  if (
+    permission.create.length === 0 &&
+    permission.read.length === 0 &&
+    permission.update.length === 0 &&
+    permission.delete.length === 0 &&
+    permission.sendPasswordResetEmail.length === 0
+  ) {
+    return undefined;
+  }
   const normalizePolicy = (policy: (typeof permission.create)[number]) => ({
     conditions: policy.conditions.map((c) => ({
       left: c.left ? { kind: c.left.kind } : undefined,

@@ -1,4 +1,10 @@
-import { defineAuth, defineConfig, defineIdp, defineStaticWebSite } from "@tailor-platform/sdk";
+import {
+  defineAuth,
+  defineConfig,
+  defineIdp,
+  defineStaticWebSite,
+  unsafeAllowAllIdPPermission,
+} from "@tailor-platform/sdk";
 import { user } from "./src/db/user";
 
 const website = defineStaticWebSite("my-frontend", {
@@ -6,8 +12,8 @@ const website = defineStaticWebSite("my-frontend", {
 });
 
 const idp = defineIdp("my-idp", {
-  authorization: "loggedIn",
   clients: ["default-idp-client"],
+  permission: unsafeAllowAllIdPPermission,
   userAuthPolicy: {
     useNonEmailIdentifier: false,
     allowSelfPasswordReset: true,

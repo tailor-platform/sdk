@@ -311,11 +311,15 @@ export default defineConfig({
 
     // Step 1: Add IdP service to the application
     const configWithIdP = `
-import { defineConfig, defineIdp } from "@tailor-platform/sdk";
+import {
+  defineConfig,
+  defineIdp,
+  unsafeAllowAllIdPPermission,
+} from "@tailor-platform/sdk";
 
 const idp = defineIdp("${idpName}", {
-  authorization: "loggedIn",
   clients: ["default-idp-client"],
+  permission: unsafeAllowAllIdPPermission,
 });
 
 export default defineConfig({
@@ -382,11 +386,16 @@ export default defineConfig({
 
     // Step 1: Add Auth service (without userProfile to avoid SDL composition issues)
     const configWithAuth = `
-import { defineConfig, defineAuth, defineIdp } from "@tailor-platform/sdk";
+import {
+  defineConfig,
+  defineAuth,
+  defineIdp,
+  unsafeAllowAllIdPPermission,
+} from "@tailor-platform/sdk";
 
 const idp = defineIdp("${idpName}", {
-  authorization: "loggedIn",
   clients: ["default-idp-client"],
+  permission: unsafeAllowAllIdPPermission,
 });
 
 const auth = defineAuth("${authName}", {
@@ -418,11 +427,15 @@ export default defineConfig({
 
     // Step 2: Remove Auth from config (keep TailorDB and IdP)
     const configWithoutAuth = `
-import { defineConfig, defineIdp } from "@tailor-platform/sdk";
+import {
+  defineConfig,
+  defineIdp,
+  unsafeAllowAllIdPPermission,
+} from "@tailor-platform/sdk";
 
 const idp = defineIdp("${idpName}", {
-  authorization: "loggedIn",
   clients: ["default-idp-client"],
+  permission: unsafeAllowAllIdPPermission,
 });
 
 export default defineConfig({

@@ -4,6 +4,7 @@ import {
   defineGenerators,
   defineIdp,
   defineStaticWebSite,
+  unsafeAllowAllIdPPermission,
 } from "@tailor-platform/sdk";
 import { organization } from "./tailordb/organization";
 
@@ -12,8 +13,8 @@ const dashboard = defineStaticWebSite("dashboard", {
 });
 
 const idp = defineIdp("saas-idp", {
-  authorization: "loggedIn",
   clients: ["default-idp-client"],
+  permission: unsafeAllowAllIdPPermission,
   userAuthPolicy: {
     useNonEmailIdentifier: false,
     allowSelfPasswordReset: true,
