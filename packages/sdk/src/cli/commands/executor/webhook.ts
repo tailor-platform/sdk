@@ -1,8 +1,7 @@
-import { ExecutorTriggerType } from "@tailor-proto/tailor/v1/executor_resource_pb";
 import { defineCommand, runCommand } from "politty";
 import { z } from "zod";
 import { workspaceArgs } from "@/cli/shared/args";
-import { fetchAll, initOperatorClient, platformBaseUrl } from "@/cli/shared/client";
+import { fetchAll, initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger, styles } from "@/cli/shared/logger";
@@ -16,16 +15,6 @@ export interface WebhookExecutorInfo {
 export interface ListWebhookExecutorsOptions {
   workspaceId?: string;
   profile?: string;
-}
-
-/**
- * Build the webhook URL for an executor.
- * @param workspaceId - Workspace ID
- * @param executorName - Executor name
- * @returns Webhook URL
- */
-function buildWebhookUrl(workspaceId: string, executorName: string): string {
-  return `${platformBaseUrl}/webhook/v1/${workspaceId}/executor/${executorName}`;
 }
 
 /**
@@ -46,24 +35,19 @@ export async function listWebhookExecutors(
     profile: options?.profile,
   });
 
-  const executors = await fetchAll(async (pageToken, maxPageSize) => {
-    const { executors, nextPageToken } = await client.listExecutorExecutors({
+  const webhooks = await fetchAll(async (pageToken, maxPageSize) => {
+    const { webhooks, nextPageToken } = await client.listExecutorIncomingWebhooks({
       workspaceId,
       pageToken,
       pageSize: maxPageSize,
     });
-    return [executors, nextPageToken];
+    return [webhooks, nextPageToken];
   });
 
-  // Filter only incoming webhook triggers
-  const webhookExecutors = executors.filter(
-    (e) => e.triggerType === ExecutorTriggerType.INCOMING_WEBHOOK,
-  );
-
-  return webhookExecutors.map((e) => ({
-    name: e.name,
-    webhookUrl: buildWebhookUrl(workspaceId, e.name),
-    disabled: e.disabled,
+  return webhooks.map((w) => ({
+    name: w.executorName,
+    webhookUrl: w.url,
+    disabled: w.disabled,
   }));
 }
 
