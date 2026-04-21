@@ -29,7 +29,7 @@ const idp = defineIdp("my-idp", {
   clients: ["my-client"],
   permission: {
     create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
-    read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    read: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     update: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     sendPasswordResetEmail: [{ conditions: [], permit: false }],
@@ -41,7 +41,7 @@ const anotherIdp = defineIdp("another-idp", {
   clients: ["another-client"],
   permission: {
     create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
-    read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    read: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     update: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     sendPasswordResetEmail: [{ conditions: [], permit: false }],
@@ -64,7 +64,7 @@ defineIdp("my-idp", {
   clients: ["my-client"],
   permission: {
     create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
-    read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    read: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     update: [
       { conditions: [[{ newIdpUser: "name" }, "!=", { oldIdpUser: "name" }]], permit: true },
     ],
@@ -139,7 +139,7 @@ defineIdp("my-idp", {
   clients: ["my-client"],
   permission: {
     create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
-    read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    read: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     update: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     sendPasswordResetEmail: [{ conditions: [], permit: false }],
@@ -170,7 +170,7 @@ const idp = defineIdp("my-idp", {
   clients: ["default-client", "mobile-client"],
   permission: {
     create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
-    read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    read: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     update: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     sendPasswordResetEmail: [{ conditions: [], permit: false }],
