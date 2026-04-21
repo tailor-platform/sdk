@@ -119,6 +119,7 @@ Legacy access control field. Use `permission` instead for fine-grained per-opera
 
 ```typescript
 defineIdp("my-idp", {
+  clients: ["default-client"],
   authorization: "loggedIn", // Only logged-in users can manage
 });
 ```
