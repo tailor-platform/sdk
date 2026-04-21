@@ -9,7 +9,7 @@ const idp = defineIdp("my-idp", {
   clients: ["default-idp-client"],
   permission: {
     create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
-    read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    read: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     update: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     sendPasswordResetEmail: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],

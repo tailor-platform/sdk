@@ -15,7 +15,7 @@ const idp = defineIdp("saas-idp", {
   clients: ["default-idp-client"],
   permission: {
     create: [{ conditions: [[{ user: "plan" }, "=", "ENTERPRISE"]], permit: true }],
-    read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    read: [{ conditions: [[{ user: "plan" }, "=", "ENTERPRISE"]], permit: true }],
     update: [{ conditions: [[{ user: "plan" }, "=", "ENTERPRISE"]], permit: true }],
     delete: [{ conditions: [[{ user: "plan" }, "=", "ENTERPRISE"]], permit: true }],
     sendPasswordResetEmail: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
