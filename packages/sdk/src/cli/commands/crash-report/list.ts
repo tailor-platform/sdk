@@ -2,9 +2,18 @@ import * as fs from "node:fs";
 import { z } from "zod";
 import { parseCrashReportConfig } from "@/cli/crash-report/config";
 import { CRASH_LOG_EXTENSION } from "@/cli/crash-report/writer";
-import { paginationArgs } from "@/cli/shared/args";
+import { type Order, paginationArgs } from "@/cli/shared/args";
 import { defineAppCommand } from "@/cli/shared/command";
 import { logger } from "@/cli/shared/logger";
+
+export function orderAndLimitCrashReports(
+  entries: string[],
+  options: { order?: Order; limit?: number },
+): string[] {
+  const sorted = entries.filter((f) => f.endsWith(CRASH_LOG_EXTENSION)).sort();
+  const ordered = options.order === "asc" ? sorted : sorted.reverse();
+  return options.limit && options.limit > 0 ? ordered.slice(0, options.limit) : ordered;
+}
 
 export const listCommand = defineAppCommand({
   name: "list",
@@ -29,9 +38,7 @@ export const listCommand = defineAppCommand({
       return;
     }
 
-    const sorted = entries.filter((f) => f.endsWith(CRASH_LOG_EXTENSION)).sort();
-    const ordered = args.order === "asc" ? sorted : sorted.reverse();
-    const files = args.limit && args.limit > 0 ? ordered.slice(0, args.limit) : ordered;
+    const files = orderAndLimitCrashReports(entries, { order: args.order, limit: args.limit });
 
     if (files.length === 0) {
       logger.info("No crash reports found.");

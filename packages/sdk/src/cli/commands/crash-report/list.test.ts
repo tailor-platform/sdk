@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { orderAndLimitCrashReports } from "./list";
 
 vi.mock("std-env", () => ({
   isCI: false,
@@ -79,5 +80,46 @@ describe("crash-report list command", () => {
     const config = parseCrashReportConfig();
 
     expect(fs.existsSync(config.localDir!)).toBe(false);
+  });
+});
+
+describe("orderAndLimitCrashReports", () => {
+  const entries = [
+    "2026-03-01T00-00-00.crash.log",
+    "2026-03-02T00-00-00.crash.log",
+    "2026-03-03T00-00-00.crash.log",
+    "not-a-crash.txt",
+  ];
+
+  test("returns crash files newest-first by default", () => {
+    expect(orderAndLimitCrashReports(entries, {})).toEqual([
+      "2026-03-03T00-00-00.crash.log",
+      "2026-03-02T00-00-00.crash.log",
+      "2026-03-01T00-00-00.crash.log",
+    ]);
+  });
+
+  test("returns crash files oldest-first when order is asc", () => {
+    expect(orderAndLimitCrashReports(entries, { order: "asc" })).toEqual([
+      "2026-03-01T00-00-00.crash.log",
+      "2026-03-02T00-00-00.crash.log",
+      "2026-03-03T00-00-00.crash.log",
+    ]);
+  });
+
+  test("slices to the requested limit", () => {
+    expect(orderAndLimitCrashReports(entries, { limit: 2 })).toEqual([
+      "2026-03-03T00-00-00.crash.log",
+      "2026-03-02T00-00-00.crash.log",
+    ]);
+  });
+
+  test("treats limit 0 as unbounded", () => {
+    expect(orderAndLimitCrashReports(entries, { limit: 0 })).toHaveLength(3);
+  });
+
+  test("filters out non-crash files", () => {
+    const result = orderAndLimitCrashReports(entries, {});
+    expect(result).not.toContain("not-a-crash.txt");
   });
 });
