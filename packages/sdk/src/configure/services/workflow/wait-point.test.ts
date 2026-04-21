@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect, expectTypeOf } from "vitest";
-import { setupWaitPointMock } from "@/utils/test/mock";
+import { setupWaitPointMock, setupWorkflowMock } from "@/utils/test/mock";
 import { defineWaitPoint, defineWaitPoints } from "./wait-point";
 
 const TailorGlobal = globalThis as { tailor?: { workflow?: Record<string, unknown> } };
@@ -81,9 +81,38 @@ describe("defineWaitPoints", () => {
 
   it("throws without platform API or mock", () => {
     const wps = defineWaitPoints((define) => ({
-      approval: define<undefined, undefined>(),
+      approval: define<undefined, { ok: boolean }>(),
     }));
     expect(() => wps.approval.wait()).toThrow("setupWaitPointMock()");
+  });
+
+  it("throws when tailor.workflow exists but lacks wait/resolve (e.g. only setupWorkflowMock)", () => {
+    setupWorkflowMock(() => undefined);
+    const wps = defineWaitPoints((define) => ({
+      approval: define<undefined, { ok: boolean }>(),
+    }));
+    expect(() => wps.approval.wait()).toThrow("setupWaitPointMock()");
+  });
+
+  it("rejects Result = undefined (callback must return a value)", () => {
+    defineWaitPoints((define) => ({
+      // @ts-expect-error - Result cannot be undefined; platform throws if callback returns undefined
+      check: define<undefined, undefined>(),
+    }));
+  });
+
+  it("rejects top-level undefined in Result union", () => {
+    defineWaitPoints((define) => ({
+      // @ts-expect-error - Result cannot include top-level undefined
+      check: define<undefined, { ok: boolean } | undefined>(),
+    }));
+  });
+
+  it("allows nested undefined (optional fields) in Result", () => {
+    const wps = defineWaitPoints((define) => ({
+      check: define<undefined, { ok: boolean; reason?: string }>(),
+    }));
+    expectTypeOf(wps.check.wait).toBeFunction();
   });
 
   it("wait() delegates to mock", async () => {
@@ -146,8 +175,14 @@ describe("defineWaitPoint", () => {
   });
 
   it("throws without platform API or mock", () => {
-    const wp = defineWaitPoint<undefined, undefined>("my-step");
+    const wp = defineWaitPoint<undefined, { ok: boolean }>("my-step");
     expect(() => wp.wait()).toThrow("setupWaitPointMock()");
+  });
+
+  it("rejects Result = undefined (callback must return a value)", () => {
+    const wp = defineWaitPoint<undefined, undefined>("my-step");
+    // @ts-expect-error - wp resolves to an error string, not WaitPointInstance
+    expectTypeOf(wp.wait).toBeFunction();
   });
 
   it("uses the provided key", async () => {

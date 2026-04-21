@@ -49,8 +49,10 @@ function getPlatformWorkflow() {
     };
   };
   const workflow = platform.tailor?.workflow;
-  if (!workflow) {
-    throw new Error("tailor.workflow is not available. Use setupWaitPointMock() in tests.");
+  if (!workflow || typeof workflow.wait !== "function" || typeof workflow.resolve !== "function") {
+    throw new Error(
+      "tailor.workflow.wait/resolve is not available. Use setupWaitPointMock() in tests.",
+    );
   }
   return workflow;
 }
@@ -91,17 +93,21 @@ function createWaitPointInstance(initialKey: string): WaitPointWithSetter {
  */
 type WaitPointDef<Payload, Result> = [null] extends [Payload]
   ? "ERROR: Payload cannot be null at the top level"
-  : [Payload] extends [undefined]
-    ? [Result] extends [JsonCompatible<Result> | undefined]
-      ? WaitPointInstance<Payload, Result>
-      : "ERROR: Result must be JsonValue-compatible (plain objects/arrays; no class instances or functions)"
-    : [undefined] extends [Payload]
-      ? "ERROR: Payload cannot include undefined at the top level"
-      : [Payload] extends [JsonCompatible<Payload>]
-        ? [Result] extends [JsonCompatible<Result> | undefined]
+  : [Result] extends [undefined]
+    ? "ERROR: Result cannot be undefined (resolve callback must return a value)"
+    : [undefined] extends [Result]
+      ? "ERROR: Result cannot include undefined at the top level (resolve callback must return a value)"
+      : [Payload] extends [undefined]
+        ? [Result] extends [JsonCompatible<Result>]
           ? WaitPointInstance<Payload, Result>
           : "ERROR: Result must be JsonValue-compatible (plain objects/arrays; no class instances or functions)"
-        : "ERROR: Payload must be JsonValue-compatible (plain objects/arrays; no class instances or functions)";
+        : [undefined] extends [Payload]
+          ? "ERROR: Payload cannot include undefined at the top level"
+          : [Payload] extends [JsonCompatible<Payload>]
+            ? [Result] extends [JsonCompatible<Result>]
+              ? WaitPointInstance<Payload, Result>
+              : "ERROR: Result must be JsonValue-compatible (plain objects/arrays; no class instances or functions)"
+            : "ERROR: Payload must be JsonValue-compatible (plain objects/arrays; no class instances or functions)";
 
 /**
  * The `define` function passed to the `defineWaitPoints` builder callback.
