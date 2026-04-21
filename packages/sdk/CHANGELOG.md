@@ -1,5 +1,29 @@
 # @tailor-platform/sdk
 
+## 1.40.0
+
+### Minor Changes
+
+- [#1012](https://github.com/tailor-platform/sdk/pull/1012) [`d5f1659`](https://github.com/tailor-platform/sdk/commit/d5f1659f3c53aa1b1839d9198bcd7e7071886daa) Thanks [@dqn](https://github.com/dqn)! - Add `tailor-sdk skills install` subcommand for installing the `tailor-sdk` agent skill from the locally installed SDK package, replacing the standalone `tailor-sdk-skills` binary that fetched `main` from GitHub. The skill version now always matches the installed SDK version, and files are copied (not symlinked) so they persist across `pnpm install`.
+
+  The `tailor-sdk-skills` binary is kept as a deprecated shim that prints a runtime warning and delegates to `tailor-sdk skills install`. It will be removed in v2.
+
+- [#1011](https://github.com/tailor-platform/sdk/pull/1011) [`6711bf8`](https://github.com/tailor-platform/sdk/commit/6711bf8cb2ce122594406d429c7b0b256a5dea1f) Thanks [@dqn](https://github.com/dqn)! - Add `--order` and `--limit` options to CLI list commands for consistent pagination. Time-series log commands (`function logs`, `workflow executions`, `executor jobs`) default to newest-first (`--order desc`) and the most recent 50 items (`--limit 50`); pass `--order asc` or `--limit 0` to opt out. Other list commands (`workflow list`, `executor list`, `staticwebsite list`, `oauth2client list`, `secret list`, `secret vault list`, `user pat list`, `machineuser list`, `authconnection list`) also default to `--order desc` and accept `--limit N` (unlimited when omitted or set to `0`); pass `--order asc` to restore ascending order.
+
+- [#895](https://github.com/tailor-platform/sdk/pull/895) [`a4b134d`](https://github.com/tailor-platform/sdk/commit/a4b134d796a335941c83f49cb572f82ea3fc522a) Thanks [@dqn](https://github.com/dqn)! - Replace query REPL input with a multiline editor supporting inline editing, undo/redo, persistent history, syntax highlighting (SQL and GraphQL), and auto-closing brackets with auto-indent. The submit/newline key binding is configurable via `--newline-on-enter` / `--no-newline-on-enter`, or the `TAILOR_PLATFORM_QUERY_NEWLINE_ON_ENTER` environment variable (default: newline on Enter, submit on Shift+Enter). Persistent history is now scoped per profile and workspace ID so statements from one environment are not replayed against another; the previous single shared history file is no longer read.
+
+### Patch Changes
+
+- [#1024](https://github.com/tailor-platform/sdk/pull/1024) [`98cf36f`](https://github.com/tailor-platform/sdk/commit/98cf36f45df1b4d7f01f8e4bdfa13d7b798e3068) Thanks [@haru0017](https://github.com/haru0017)! - Fix `executor webhook list` to return correct webhook URLs
+
+- [#996](https://github.com/tailor-platform/sdk/pull/996) [`cbb0638`](https://github.com/tailor-platform/sdk/commit/cbb06385578fd37427d73e1602358344a63646f9) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix broken link to `example/resolvers/triggerWorkflow.ts` in the workflow service docs. The link used a relative path that escaped the `docs/` directory and 404'd on https://docs.tailor.tech; it now points to the GitHub source URL so it resolves on both the docs site and GitHub.
+
+- [#1007](https://github.com/tailor-platform/sdk/pull/1007) [`d74dc27`](https://github.com/tailor-platform/sdk/commit/d74dc2741c048cb94c00d8bd4125cb64b6468dea) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update oxc
+
+- [#1015](https://github.com/tailor-platform/sdk/pull/1015) [`a2bace2`](https://github.com/tailor-platform/sdk/commit/a2bace2537cbcf2ff826f184ea48db6eb9d7b67d) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update anthropics/claude-code-action action to v1.0.101
+
+- [#1016](https://github.com/tailor-platform/sdk/pull/1016) [`c480bcb`](https://github.com/tailor-platform/sdk/commit/c480bcb895a5d28bc72c41eebd0937f75e47f154) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency bufbuild/buf to v1.68.2
+
 ## 1.39.1
 
 ### Patch Changes
