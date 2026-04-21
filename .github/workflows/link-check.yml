@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - "packages/sdk/docs/**/*.md"
+      - "scripts/check-docs-paths.js"
+      - ".github/workflows/link-check.yml"
   workflow_dispatch:
 
 jobs:
@@ -26,3 +28,10 @@ jobs:
             --exclude 'mailto:'
             packages/sdk/docs/**/*.md
           fail: true
+
+      # docs.tailor.tech only serves packages/sdk/docs/, so relative links that
+      # escape that directory (e.g. `../../../example/foo.ts`) render on GitHub
+      # but 404 on the docs site. lychee passes them because the target file
+      # exists on disk — this step catches that specific gap.
+      - name: Check relative links stay within packages/sdk/docs/
+        run: node scripts/check-docs-paths.js

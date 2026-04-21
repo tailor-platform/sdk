@@ -48,6 +48,13 @@ export default defineConfig({
           globalSetup: ["e2e/globalSetup.ts"],
         },
       },
+      {
+        test: {
+          name: "scripts",
+          include: ["../../scripts/**/*.test.js"],
+          typecheck: { enabled: false },
+        },
+      },
     ],
     environment: "node",
     globals: true,
