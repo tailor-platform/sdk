@@ -90,7 +90,7 @@ defineIdp("my-idp", {
 
 **Operands:**
 
-- `{ user: "field" }` - Authenticated user's attribute
+- `{ user: "field" }` - Authenticated user's attribute. Built-in fields: `"id"` (user ID), `"_loggedIn"` (boolean, whether the user is authenticated). User-defined attributes (e.g., `"role"`) are also available when configured via `machineUserAttributes` in `defineAuth()`
 - `{ idpUser: "field" }` - IdP user field (for create/read/delete). Allowed values: `"id"`, `"name"`, `"disabled"`
 - `{ oldIdpUser: "field" }` - Previous IdP user field value (for update only). Allowed values: `"id"`, `"name"`, `"disabled"`
 - `{ newIdpUser: "field" }` - New IdP user field value (for update only). Allowed values: `"id"`, `"name"`, `"disabled"`
