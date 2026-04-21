@@ -26,14 +26,26 @@ Configure the Built-in IdP using `defineIdp()`:
 import { defineIdp, defineConfig } from "@tailor-platform/sdk";
 
 const idp = defineIdp("my-idp", {
-  authorization: "loggedIn",
   clients: ["my-client"],
+  permission: {
+    create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    update: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    sendPasswordResetEmail: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+  },
 });
 
 // You can define multiple IdPs
 const anotherIdp = defineIdp("another-idp", {
-  authorization: "loggedIn",
   clients: ["another-client"],
+  permission: {
+    create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    update: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    sendPasswordResetEmail: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+  },
 });
 
 export default defineConfig({
@@ -43,69 +55,12 @@ export default defineConfig({
 
 ## Options
 
-### authorization (optional)
-
-User management permissions. Controls who can manage users in the IdP. This field can be omitted when using `permission` for access control.
-
-```typescript
-defineIdp("my-idp", {
-  authorization: "loggedIn", // Only logged-in users can manage
-});
-
-defineIdp("my-idp", {
-  authorization: "insecure", // Anyone can manage (development only)
-});
-
-defineIdp("my-idp", {
-  authorization: { cel: "user.role == 'admin'" }, // CEL expression
-});
-```
-
-**Values:**
-
-- `"insecure"` - No authentication required (use only for development)
-- `"loggedIn"` - Requires authenticated user
-- `{ cel: "<expression>" }` - Custom authorization logic using CEL
-
-### clients
-
-OAuth client names that can use this IdP:
-
-```typescript
-defineIdp("my-idp", {
-  clients: ["default-client", "mobile-client"],
-});
-```
-
-### emailConfig
-
-Namespace-level email configuration defaults. Per-request values take priority over these defaults.
-
-```typescript
-defineIdp("my-idp", {
-  authorization: "loggedIn",
-  clients: ["my-client"],
-  emailConfig: {
-    fromName: "My App",
-    passwordResetSubject: "Reset your password",
-  },
-});
-```
-
-**Fields:**
-
-- `fromName` - Default sender display name for emails. Empty means use mailer default.
-- `passwordResetSubject` - Default subject for password reset emails. Empty means use localized default.
-
-**Validation:** Each field must be 200 characters or less and must not contain newline characters.
-
 ### permission
 
 Per-operation permission policies for IdP user management. Controls who can create, read, update, delete users, and send password reset emails.
 
 ```typescript
 defineIdp("my-idp", {
-  authorization: "loggedIn",
   clients: ["my-client"],
   permission: {
     create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
@@ -143,11 +98,64 @@ defineIdp("my-idp", {
 import { unsafeAllowAllIdPPermission } from "@tailor-platform/sdk";
 
 defineIdp("my-idp", {
-  authorization: "loggedIn",
   clients: ["my-client"],
   permission: unsafeAllowAllIdPPermission,
 });
 ```
+
+### clients
+
+OAuth client names that can use this IdP:
+
+```typescript
+defineIdp("my-idp", {
+  clients: ["default-client", "mobile-client"],
+});
+```
+
+### authorization (optional, legacy)
+
+Legacy access control field. Use `permission` instead for fine-grained per-operation control. This field is kept for backward compatibility.
+
+```typescript
+defineIdp("my-idp", {
+  authorization: "loggedIn", // Only logged-in users can manage
+});
+```
+
+**Values:**
+
+- `"insecure"` - No authentication required (use only for development)
+- `"loggedIn"` - Requires authenticated user
+- `{ cel: "<expression>" }` - Custom authorization logic using CEL
+
+### emailConfig
+
+Namespace-level email configuration defaults. Per-request values take priority over these defaults.
+
+```typescript
+defineIdp("my-idp", {
+  clients: ["my-client"],
+  permission: {
+    create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    update: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    sendPasswordResetEmail: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+  },
+  emailConfig: {
+    fromName: "My App",
+    passwordResetSubject: "Reset your password",
+  },
+});
+```
+
+**Fields:**
+
+- `fromName` - Default sender display name for emails. Empty means use mailer default.
+- `passwordResetSubject` - Default subject for password reset emails. Empty means use localized default.
+
+**Validation:** Each field must be 200 characters or less and must not contain newline characters.
 
 ## Using idp.provider()
 
@@ -158,8 +166,14 @@ import { defineIdp, defineAuth, defineConfig } from "@tailor-platform/sdk";
 import { user } from "./tailordb/user";
 
 const idp = defineIdp("my-idp", {
-  authorization: "loggedIn",
   clients: ["default-client", "mobile-client"],
+  permission: {
+    create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    update: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    sendPasswordResetEmail: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+  },
 });
 
 const auth = defineAuth("my-auth", {
