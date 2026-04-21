@@ -86,7 +86,7 @@ describe("defineWaitPoints", () => {
     expect(() => wps.approval.wait()).toThrow("setupWaitPointMock()");
   });
 
-  it("throws when tailor.workflow exists but lacks wait/resolve (e.g. only setupWorkflowMock)", () => {
+  it("throws a helpful error when only setupWorkflowMock is active (wait/resolve auto-stubbed)", () => {
     setupWorkflowMock(() => undefined);
     const wps = defineWaitPoints((define) => ({
       approval: define<undefined, { ok: boolean }>(),

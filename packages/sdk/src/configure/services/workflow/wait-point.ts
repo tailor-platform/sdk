@@ -49,10 +49,8 @@ function getPlatformWorkflow() {
     };
   };
   const workflow = platform.tailor?.workflow;
-  if (!workflow || typeof workflow.wait !== "function" || typeof workflow.resolve !== "function") {
-    throw new Error(
-      "tailor.workflow.wait/resolve is not available. Use setupWaitPointMock() in tests.",
-    );
+  if (!workflow) {
+    throw new Error("tailor.workflow is not available. Use setupWaitPointMock() in tests.");
   }
   return workflow;
 }
