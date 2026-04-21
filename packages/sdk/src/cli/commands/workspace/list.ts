@@ -12,7 +12,7 @@ export interface ListWorkspacesOptions {
 }
 
 /**
- * List workspaces with an optional limit.
+ * List workspaces with an optional order and limit.
  * @param options - Workspace listing options
  * @returns List of workspaces
  */

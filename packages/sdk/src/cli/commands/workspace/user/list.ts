@@ -37,7 +37,7 @@ async function loadOptions(options: ListUsersOptions) {
 }
 
 /**
- * List users in a workspace with an optional limit.
+ * List users in a workspace with an optional order and limit.
  * @param options - User listing options
  * @returns List of workspace users
  */

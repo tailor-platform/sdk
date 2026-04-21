@@ -38,7 +38,7 @@ async function loadOptions(options: ListAppsOptions) {
 }
 
 /**
- * List applications in a workspace with an optional limit.
+ * List applications in a workspace with an optional order and limit.
  * @param options - Application listing options
  * @returns List of applications
  */
