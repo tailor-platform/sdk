@@ -66,7 +66,13 @@ defineIdp("my-idp", {
     create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     read: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     update: [
-      { conditions: [[{ newIdpUser: "name" }, "!=", { oldIdpUser: "name" }]], permit: true },
+      {
+        conditions: [
+          [{ user: "role" }, "=", "ADMIN"],
+          [{ newIdpUser: "name" }, "!=", { oldIdpUser: "name" }],
+        ],
+        permit: true,
+      },
     ],
     delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     sendPasswordResetEmail: [{ conditions: [], permit: false }],
