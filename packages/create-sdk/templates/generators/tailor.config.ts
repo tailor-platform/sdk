@@ -1,11 +1,4 @@
-import {
-  defineAuth,
-  defineConfig,
-  defineIdp,
-  definePlugins,
-  t,
-  unsafeAllowAllIdPPermission,
-} from "@tailor-platform/sdk";
+import { defineAuth, defineConfig, defineIdp, definePlugins, t } from "@tailor-platform/sdk";
 import { enumConstantsPlugin } from "@tailor-platform/sdk/plugin/enum-constants";
 import { fileUtilsPlugin } from "@tailor-platform/sdk/plugin/file-utils";
 import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
@@ -13,7 +6,13 @@ import { seedPlugin } from "@tailor-platform/sdk/plugin/seed";
 
 const idp = defineIdp("main-idp", {
   clients: ["default-idp-client"],
-  permission: unsafeAllowAllIdPPermission,
+  permission: {
+    create: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    update: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    delete: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    sendPasswordResetEmail: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+  },
 });
 
 export default defineConfig({

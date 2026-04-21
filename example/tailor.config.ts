@@ -4,7 +4,6 @@ import {
   defineIdp,
   definePlugins,
   defineStaticWebSite,
-  unsafeAllowAllIdPPermission,
 } from "@tailor-platform/sdk";
 import { enumConstantsPlugin } from "@tailor-platform/sdk/plugin/enum-constants";
 import { fileUtilsPlugin } from "@tailor-platform/sdk/plugin/file-utils";
@@ -22,7 +21,13 @@ const erdSite = defineStaticWebSite("my-erd-site", {
 
 const idp = defineIdp("my-idp", {
   clients: ["default-idp-client"],
-  permission: unsafeAllowAllIdPPermission,
+  permission: {
+    create: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    update: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    delete: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    sendPasswordResetEmail: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+  },
   userAuthPolicy: {
     useNonEmailIdentifier: false,
     allowSelfPasswordReset: true,

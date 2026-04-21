@@ -1,10 +1,4 @@
-import {
-  defineAuth,
-  defineConfig,
-  defineIdp,
-  defineStaticWebSite,
-  unsafeAllowAllIdPPermission,
-} from "@tailor-platform/sdk";
+import { defineAuth, defineConfig, defineIdp, defineStaticWebSite } from "@tailor-platform/sdk";
 import { user } from "./src/db/user";
 
 const website = defineStaticWebSite("my-frontend", {
@@ -13,7 +7,13 @@ const website = defineStaticWebSite("my-frontend", {
 
 const idp = defineIdp("my-idp", {
   clients: ["default-idp-client"],
-  permission: unsafeAllowAllIdPPermission,
+  permission: {
+    create: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    update: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    delete: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    sendPasswordResetEmail: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+  },
   userAuthPolicy: {
     useNonEmailIdentifier: false,
     allowSelfPasswordReset: true,
