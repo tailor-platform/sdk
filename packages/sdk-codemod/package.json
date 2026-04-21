@@ -39,7 +39,7 @@
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@types/node": "24.12.2",
-    "@types/picomatch": "4.0.2",
+    "@types/picomatch": "4.0.3",
     "@types/semver": "7.7.1",
     "eslint": "10.2.0",
     "eslint-plugin-oxlint": "1.60.0",
