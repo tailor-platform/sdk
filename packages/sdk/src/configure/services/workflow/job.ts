@@ -72,7 +72,7 @@ export interface WorkflowJob<Name extends string = string, Input = undefined, Ou
  * Uses -? to remove optional modifiers so all properties are treated uniformly.
  */
 type AllPropertiesValid<T> = {
-  [K in keyof T]-?: IsValidInput<T[K]> extends true ? true : false;
+  [K in keyof T]-?: IsValidInputNested<T[K]> extends true ? true : false;
 }[keyof T] extends true
   ? true
   : false;
@@ -81,23 +81,31 @@ type AllPropertiesValid<T> = {
  * Check if a type contains any non-JSON-compatible values.
  * Returns `true` if the type is valid for input, `false` otherwise.
  *
+ * Top-level `null` is rejected because the platform normalizes top-level
+ * `null`/`undefined` args to `{}` (per value normalization spec), which would
+ * cause the body to receive `{}` instead of the declared `null`. Nested
+ * `null` inside objects/arrays is preserved and therefore allowed.
+ *
  * Accepts:
- * - JSON primitives (string, number, boolean, null)
+ * - JSON primitives excluding top-level null (string, number, boolean)
  * - undefined
  * - Optional primitives (e.g., string | undefined)
- * - Arrays of valid types
- * - Objects with valid field types
+ * - Arrays of valid types (including null elements)
+ * - Objects with valid field types (including null fields)
  *
  * Rejects:
+ * - Top-level null (including unions containing null)
  * - Objects with toJSON methods (like Date)
  * - Other non-JSON-serializable types
  */
-type IsValidInput<T> = T extends undefined
+type IsValidInput<T> = null extends T ? false : IsValidInputNested<T>;
+
+type IsValidInputNested<T> = T extends undefined
   ? true
   : T extends JsonPrimitive
     ? true
     : T extends readonly (infer U)[]
-      ? IsValidInput<U>
+      ? IsValidInputNested<U>
       : T extends object
         ? T extends { toJSON: () => unknown }
           ? false

@@ -60,7 +60,7 @@ export const fetchCustomer = createWorkflowJob({
 
 Workflow job inputs and outputs are serialized as JSON when passed between jobs. This imposes type constraints:
 
-**Input types** must be JSON-compatible — only primitives (`string`, `number`, `boolean`, `null`), arrays, and plain objects are allowed. `Date`, `Map`, `Set`, functions, and other non-serializable types cannot be used.
+**Input types** must be JSON-compatible — primitives (`string`, `number`, `boolean`), arrays, and plain objects are allowed. `Date`, `Map`, `Set`, functions, and other non-serializable types cannot be used. Top-level `null` is also rejected because the platform normalizes top-level `null`/`undefined` args to `{}` (nested `null` inside objects or arrays is preserved).
 
 ```typescript
 // OK
@@ -75,6 +75,14 @@ export const myJob = createWorkflowJob({
 export const badJob = createWorkflowJob({
   name: "bad-job",
   body: async (input: { createdAt: Date }) => {
+    // ...
+  },
+});
+
+// Compile error — top-level null would be normalized to {} by the platform
+export const nullJob = createWorkflowJob({
+  name: "null-job",
+  body: async (input: { id: string } | null) => {
     // ...
   },
 });

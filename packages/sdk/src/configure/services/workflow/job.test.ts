@@ -95,6 +95,42 @@ describe("WorkflowJob type constraints", () => {
         }),
       });
     });
+
+    it("rejects null as top-level input (platform normalizes to {})", () => {
+      // Per platform value normalization spec, null is normalized to {} at top level.
+      // Allowing null as Input would cause a type/runtime mismatch.
+      createWorkflowJob({
+        name: "test",
+        // @ts-expect-error - null is normalized to {} by platform
+        body: (_input: null) => ({ result: "ok" }),
+      });
+    });
+
+    it("rejects null in top-level union input", () => {
+      createWorkflowJob({
+        name: "test",
+        // @ts-expect-error - null in top-level union is normalized to {} by platform
+        body: (_input: { id: string } | null) => ({ result: "ok" }),
+      });
+    });
+
+    it("allows nested null in object input", () => {
+      // Nested null (inside object/array) is preserved by JSON serialization.
+      // Only top-level null gets normalized to {}.
+      const job = createWorkflowJob({
+        name: "test",
+        body: (_input: { data: string | null }) => ({ result: "ok" }),
+      });
+      expectTypeOf(job.name).toEqualTypeOf<"test">();
+    });
+
+    it("allows nested null in array input", () => {
+      const job = createWorkflowJob({
+        name: "test",
+        body: (_input: { items: (string | null)[] }) => ({ result: "ok" }),
+      });
+      expectTypeOf(job.name).toEqualTypeOf<"test">();
+    });
   });
 
   describe("output constraints", () => {
