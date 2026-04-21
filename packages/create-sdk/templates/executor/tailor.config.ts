@@ -4,11 +4,11 @@ import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
 const idp = defineIdp("main-idp", {
   clients: ["default-idp-client"],
   permission: {
-    create: [{ conditions: [[{ user: "role" }, "=", "admin"]], permit: true }],
-    read: [{ conditions: [[{ user: "role" }, "=", "admin"]], permit: true }],
-    update: [{ conditions: [[{ user: "role" }, "=", "admin"]], permit: true }],
-    delete: [{ conditions: [[{ user: "role" }, "=", "admin"]], permit: true }],
-    sendPasswordResetEmail: [{ conditions: [[{ user: "role" }, "=", "admin"]], permit: true }],
+    create: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    update: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    delete: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    sendPasswordResetEmail: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
   },
   userAuthPolicy: {
     useNonEmailIdentifier: false,
