@@ -32,7 +32,7 @@ const idp = defineIdp("my-idp", {
     read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
     update: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
-    sendPasswordResetEmail: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    sendPasswordResetEmail: [{ conditions: [], permit: false }],
   },
 });
 
@@ -44,7 +44,7 @@ const anotherIdp = defineIdp("another-idp", {
     read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
     update: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
-    sendPasswordResetEmail: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    sendPasswordResetEmail: [{ conditions: [], permit: false }],
   },
 });
 
@@ -69,7 +69,7 @@ defineIdp("my-idp", {
       { conditions: [[{ newIdpUser: "name" }, "!=", { oldIdpUser: "name" }]], permit: true },
     ],
     delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
-    sendPasswordResetEmail: [{ conditions: [], permit: true }],
+    sendPasswordResetEmail: [{ conditions: [], permit: false }],
   },
 });
 ```
@@ -142,7 +142,7 @@ defineIdp("my-idp", {
     read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
     update: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
-    sendPasswordResetEmail: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    sendPasswordResetEmail: [{ conditions: [], permit: false }],
   },
   emailConfig: {
     fromName: "My App",
@@ -173,7 +173,7 @@ const idp = defineIdp("my-idp", {
     read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
     update: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
     delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
-    sendPasswordResetEmail: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    sendPasswordResetEmail: [{ conditions: [], permit: false }],
   },
 });
 
