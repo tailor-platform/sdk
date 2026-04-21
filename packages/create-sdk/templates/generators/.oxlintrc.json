@@ -7,7 +7,7 @@
   "env": {
     "builtin": true
   },
-  "ignorePatterns": [".tailor-sdk/", "src/generated/", "src/seed/"],
+  "ignorePatterns": [".tailor-sdk/", "src/generated/", "src/seed/", "tailor.d.ts"],
   "rules": {
     "constructor-super": "error",
     "for-direction": "error",

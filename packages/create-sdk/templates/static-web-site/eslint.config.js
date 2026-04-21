@@ -4,7 +4,7 @@ import { defineConfig, globalIgnores } from "eslint/config";
 import oxlint from "eslint-plugin-oxlint";
 
 export default defineConfig([
-  globalIgnores([".tailor-sdk/", "src/generated/"]),
+  globalIgnores([".tailor-sdk/", "src/generated/", "tailor.d.ts"]),
   eslint.configs.recommended,
   tseslint.configs.recommendedTypeChecked,
   tseslint.configs.stylisticTypeChecked,
