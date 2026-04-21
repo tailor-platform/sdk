@@ -26,14 +26,26 @@ Configure the Built-in IdP using `defineIdp()`:
 import { defineIdp, defineConfig } from "@tailor-platform/sdk";
 
 const idp = defineIdp("my-idp", {
-  authorization: "loggedIn",
   clients: ["my-client"],
+  permission: {
+    create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    read: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    update: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    sendPasswordResetEmail: [{ conditions: [], permit: false }],
+  },
 });
 
 // You can define multiple IdPs
 const anotherIdp = defineIdp("another-idp", {
-  authorization: "loggedIn",
   clients: ["another-client"],
+  permission: {
+    create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    read: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    update: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    sendPasswordResetEmail: [{ conditions: [], permit: false }],
+  },
 });
 
 export default defineConfig({
@@ -43,29 +55,59 @@ export default defineConfig({
 
 ## Options
 
-### authorization (optional)
+### permission
 
-User management permissions. Controls who can manage users in the IdP. This field can be omitted when using `permission` for access control.
+Per-operation permission policies for IdP user management. Controls who can create, read, update, delete users, and send password reset emails.
 
 ```typescript
 defineIdp("my-idp", {
-  authorization: "loggedIn", // Only logged-in users can manage
-});
-
-defineIdp("my-idp", {
-  authorization: "insecure", // Anyone can manage (development only)
-});
-
-defineIdp("my-idp", {
-  authorization: { cel: "user.role == 'admin'" }, // CEL expression
+  clients: ["my-client"],
+  permission: {
+    create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    read: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    update: [
+      {
+        conditions: [
+          [{ user: "role" }, "=", "ADMIN"],
+          [{ newIdpUser: "name" }, "!=", { oldIdpUser: "name" }],
+        ],
+        permit: true,
+      },
+    ],
+    delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    sendPasswordResetEmail: [{ conditions: [], permit: false }],
+  },
 });
 ```
 
-**Values:**
+**Operations:**
 
-- `"insecure"` - No authentication required (use only for development)
-- `"loggedIn"` - Requires authenticated user
-- `{ cel: "<expression>" }` - Custom authorization logic using CEL
+- `create` - Controls who can create IdP users
+- `read` - Controls who can read IdP users
+- `update` - Controls who can update IdP users
+- `delete` - Controls who can delete IdP users
+- `sendPasswordResetEmail` - Controls who can send password reset emails. The examples above disable this operation; to enable it, use a permission such as `[{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }]`.
+
+**Operands:**
+
+- `{ user: "field" }` - Authenticated user's attribute. Built-in fields: `"id"` (user ID), `"_loggedIn"` (boolean, whether the user is authenticated). User-defined attributes (e.g., `"role"`) are also available when configured via `userProfile.attributes` or `machineUserAttributes` in `defineAuth()`
+- `{ idpUser: "field" }` - IdP user field (for create/read/delete). Allowed values: `"id"`, `"name"`, `"disabled"`
+- `{ oldIdpUser: "field" }` - Previous IdP user field value (for update only). Allowed values: `"id"`, `"name"`, `"disabled"`
+- `{ newIdpUser: "field" }` - New IdP user field value (for update only). Allowed values: `"id"`, `"name"`, `"disabled"`
+- Literal values: `string`, `boolean`, `string[]`, `boolean[]`
+
+**Operators:** `"="`, `"!="`, `"in"`, `"not in"`
+
+**Helper:** `unsafeAllowAllIdPPermission` grants full access without conditions. Intended only for development and testing.
+
+```typescript
+import { unsafeAllowAllIdPPermission } from "@tailor-platform/sdk";
+
+defineIdp("my-idp", {
+  clients: ["my-client"],
+  permission: unsafeAllowAllIdPPermission,
+});
+```
 
 ### clients
 
@@ -77,14 +119,37 @@ defineIdp("my-idp", {
 });
 ```
 
+### authorization (optional, legacy)
+
+Legacy access control field. Use `permission` instead for fine-grained per-operation control. This field is kept for backward compatibility.
+
+```typescript
+defineIdp("my-idp", {
+  clients: ["default-client"],
+  authorization: "loggedIn", // Only logged-in users can manage
+});
+```
+
+**Values:**
+
+- `"insecure"` - No authentication required (use only for development)
+- `"loggedIn"` - Requires authenticated user
+- `{ cel: "<expression>" }` - Custom authorization logic using CEL
+
 ### emailConfig
 
 Namespace-level email configuration defaults. Per-request values take priority over these defaults.
 
 ```typescript
 defineIdp("my-idp", {
-  authorization: "loggedIn",
   clients: ["my-client"],
+  permission: {
+    create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    read: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    update: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    sendPasswordResetEmail: [{ conditions: [], permit: false }],
+  },
   emailConfig: {
     fromName: "My App",
     passwordResetSubject: "Reset your password",
@@ -99,56 +164,6 @@ defineIdp("my-idp", {
 
 **Validation:** Each field must be 200 characters or less and must not contain newline characters.
 
-### permission
-
-Per-operation permission policies for IdP user management. Controls who can create, read, update, delete users, and send password reset emails.
-
-```typescript
-defineIdp("my-idp", {
-  authorization: "loggedIn",
-  clients: ["my-client"],
-  permission: {
-    create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
-    read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
-    update: [
-      { conditions: [[{ newIdpUser: "name" }, "!=", { oldIdpUser: "name" }]], permit: true },
-    ],
-    delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
-    sendPasswordResetEmail: [{ conditions: [], permit: true }],
-  },
-});
-```
-
-**Operations:**
-
-- `create` - Controls who can create IdP users
-- `read` - Controls who can read IdP users
-- `update` - Controls who can update IdP users
-- `delete` - Controls who can delete IdP users
-- `sendPasswordResetEmail` - Controls who can send password reset emails
-
-**Operands:**
-
-- `{ user: "field" }` - Authenticated user's attribute
-- `{ idpUser: "field" }` - IdP user field (for create/read/delete). Allowed values: `"id"`, `"name"`, `"disabled"`
-- `{ oldIdpUser: "field" }` - Previous IdP user field value (for update only). Allowed values: `"id"`, `"name"`, `"disabled"`
-- `{ newIdpUser: "field" }` - New IdP user field value (for update only). Allowed values: `"id"`, `"name"`, `"disabled"`
-- Literal values: `string`, `boolean`, `string[]`, `boolean[]`
-
-**Operators:** `"="`, `"!="`, `"in"`, `"not in"`
-
-**Helper:** `unsafeAllowAllIdPPermission` grants full access without conditions. Intended only for development and testing.
-
-```typescript
-import { unsafeAllowAllIdPPermission } from "@tailor-platform/sdk";
-
-defineIdp("my-idp", {
-  authorization: "loggedIn",
-  clients: ["my-client"],
-  permission: unsafeAllowAllIdPPermission,
-});
-```
-
 ## Using idp.provider()
 
 The `idp.provider()` method creates a type-safe reference to the IdP for use in Auth configuration. The client name is validated at compile time against the clients defined in the IdP.
@@ -158,8 +173,14 @@ import { defineIdp, defineAuth, defineConfig } from "@tailor-platform/sdk";
 import { user } from "./tailordb/user";
 
 const idp = defineIdp("my-idp", {
-  authorization: "loggedIn",
   clients: ["default-client", "mobile-client"],
+  permission: {
+    create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    read: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    update: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    sendPasswordResetEmail: [{ conditions: [], permit: false }],
+  },
 });
 
 const auth = defineAuth("my-auth", {
