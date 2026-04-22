@@ -1,6 +1,7 @@
 import { brandValue } from "@/utils/brand";
 import type { TailorEnv } from "@/types/env";
 import type { JsonCompatible } from "@/types/helpers";
+import type { TailorInvoker } from "@/types/invoker";
 import type { Jsonifiable, Jsonify, JsonPrimitive } from "type-fest";
 
 /**
@@ -8,6 +9,7 @@ import type { Jsonifiable, Jsonify, JsonPrimitive } from "type-fest";
  */
 export type WorkflowJobContext = {
   env: TailorEnv;
+  invoker: TailorInvoker;
 };
 
 /**
@@ -195,7 +197,7 @@ export const createWorkflowJob = <const Name extends string, I = undefined, O = 
       // In production, bundler transforms .trigger() calls to tailor.workflow.triggerJobFunction().
       trigger: async (args?: unknown) => {
         const env: TailorEnv = JSON.parse(process.env[WORKFLOW_TEST_ENV_KEY] || "{}");
-        const result = await config.body(args as I, { env });
+        const result = await config.body(args as I, { env, invoker: null });
         return result ? JSON.parse(JSON.stringify(result)) : result;
       },
       body: config.body,

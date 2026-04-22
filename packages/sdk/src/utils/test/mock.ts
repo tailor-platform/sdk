@@ -1,9 +1,22 @@
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
+import type { TailorInvoker } from "@/types/invoker";
 
 type MainFunction = (args: Record<string, unknown>) => unknown | Promise<unknown>;
 type QueryResolver = (query: string, params: unknown[]) => unknown[];
 type JobHandler = (jobName: string, args: unknown) => unknown;
+
+/**
+ * Raw invoker shape as returned by the platform's `tailor.context.getInvoker()` op.
+ * Bundled wrappers convert this into the SDK-facing `TailorInvoker` shape at call time.
+ */
+interface RawInvoker {
+  id: string;
+  type: "user" | "machine_user";
+  workspaceId: string;
+  attributes: string[];
+  attributeMap: Record<string, unknown>;
+}
 
 interface TailordbGlobal {
   tailordb?: {
@@ -17,8 +30,11 @@ interface TailordbGlobal {
     };
   };
   tailor?: {
-    workflow: {
+    workflow?: {
       triggerJobFunction: (jobName: string, args: unknown) => unknown;
+    };
+    context?: {
+      getInvoker: () => RawInvoker | null;
     };
   };
 }
@@ -96,6 +112,32 @@ export function setupWorkflowMock(handler: JobHandler): {
   } as typeof GlobalThis.tailor;
 
   return { triggeredJobs };
+}
+
+/**
+ * Sets up a mock for `globalThis.tailor.context.getInvoker` used in bundled
+ * resolver/executor/workflow tests. Accepts the SDK-facing `TailorInvoker`
+ * shape and converts it to the raw shape the platform op would return, so
+ * bundled wrappers can apply their usual SDK-shape normalization.
+ * @param invoker - The `TailorInvoker` value to return from `getInvoker()`, or `null` for anonymous.
+ */
+export function setupInvokerMock(invoker: TailorInvoker): void {
+  const raw: RawInvoker | null = invoker
+    ? {
+        id: invoker.id,
+        type: invoker.type,
+        workspaceId: invoker.workspaceId,
+        attributes: invoker.attributeList as string[],
+        attributeMap: (invoker.attributes ?? {}) as Record<string, unknown>,
+      }
+    : null;
+
+  GlobalThis.tailor = {
+    ...GlobalThis.tailor,
+    context: {
+      getInvoker: () => raw,
+    },
+  } as typeof GlobalThis.tailor;
 }
 
 /**

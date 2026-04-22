@@ -23,6 +23,7 @@ export {
   type AttributeMap,
   type AttributeList,
 } from "@/types/user";
+export { type TailorInvoker } from "@/types/invoker";
 export { type Env } from "@/types/env";
 export { type MachineUserNameRegistry, type MachineUserName } from "@/configure/types/machine-user";
 

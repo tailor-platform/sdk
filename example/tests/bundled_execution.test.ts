@@ -1,6 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
-import { setupTailordbMock, setupWorkflowMock, createImportMain } from "@tailor-platform/sdk/test";
+import {
+  setupTailordbMock,
+  setupWorkflowMock,
+  setupInvokerMock,
+  createImportMain,
+} from "@tailor-platform/sdk/test";
 import { format as formatDate } from "date-fns";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 
@@ -14,6 +19,8 @@ describe("bundled execution tests", () => {
     vi.useFakeTimers();
     vi.setSystemTime(fixedSystemTime);
     setupTailordbMock();
+    // Default to anonymous invoker for tests that don't need a specific value.
+    setupInvokerMock(null);
   });
 
   afterAll(() => {
@@ -223,7 +230,7 @@ describe("bundled execution tests", () => {
       for (const file of entryFiles) {
         const content = fs.readFileSync(path.join(actualDir, file), "utf-8");
         expect(content).toContain('const env = {"foo":1,"bar":"hello","baz":true}');
-        expect(content).toMatch(/\.body\(input, \{ env \}\)/);
+        expect(content).toMatch(/\.body\(input, \{ env, invoker \}\)/);
       }
     });
 

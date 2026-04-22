@@ -152,6 +152,7 @@ function generateEntry(
 
         const _env = ${JSON.stringify(env)};
         const _user = ${userExpr};
+        const _invoker = null;
 
         const $tailor_resolver_body = async (context) => {
           if (_internalResolver.input) {
@@ -159,6 +160,7 @@ function generateEntry(
               value: context,
               data: context,
               user: _user,
+              invoker: _invoker,
             });
 
             if (result.issues) {
@@ -169,7 +171,7 @@ function generateEntry(
             }
           }
 
-          const enrichedContext = { input: context, env: _env, user: _user };
+          const enrichedContext = { input: context, env: _env, user: _user, invoker: _invoker };
           return _internalResolver.body(enrichedContext);
         };
 
@@ -187,9 +189,10 @@ function generateEntry(
 
         const _env = ${JSON.stringify(env)};
         const _actor = ${actorExpr};
+        const _invoker = null;
 
         const __executor_function = async (args) => {
-          return _internalExecutor.operation.body({ ...args, env: _env, actor: _actor });
+          return _internalExecutor.operation.body({ ...args, env: _env, actor: _actor, invoker: _invoker });
         };
 
         export { __executor_function as main };
@@ -205,9 +208,10 @@ function generateEntry(
         import { ${exportName} } from "${absoluteSourcePath}";
 
         const env = ${JSON.stringify(env)};
+        const invoker = null;
 
         export async function main(input) {
-          return await ${exportName}.body(input, { env });
+          return await ${exportName}.body(input, { env, invoker });
         }
       `;
     }

@@ -8,6 +8,7 @@ import type {
   FieldOutput,
 } from "@/types/field-types";
 import type { InferFieldsOutput, Prettify } from "@/types/helpers";
+import type { TailorInvoker } from "@/types/invoker";
 import type { TailorField as TailorFieldBase } from "@/types/tailor-field";
 import type { TailorUser } from "@/types/user";
 import type { FieldValidateInput } from "@/types/validation";
@@ -100,12 +101,18 @@ type FieldParseArgs = {
   value: unknown;
   data: unknown;
   user: TailorUser;
+  /**
+   * Invoker information for the current request. Defaults to `null`
+   * (anonymous) when omitted so existing callers keep working.
+   */
+  invoker?: TailorInvoker;
 };
 
 type FieldValidateValueArgs<T extends TailorFieldType> = {
   value: TailorToTs[T];
   data: unknown;
   user: TailorUser;
+  invoker: TailorInvoker;
   pathArray: string[];
 };
 
@@ -115,6 +122,7 @@ type FieldParseInternalArgs = {
   value: any;
   data: unknown;
   user: TailorUser;
+  invoker: TailorInvoker;
   pathArray: string[];
 };
 
@@ -160,7 +168,7 @@ function createTailorField<
    * @returns Array of validation issues
    */
   function validateValue(args: FieldValidateValueArgs<T>): StandardSchemaV1.Issue[] {
-    const { value, data, user, pathArray } = args;
+    const { value, data, user, invoker, pathArray } = args;
     const issues: StandardSchemaV1.Issue[] = [];
 
     // Type-specific validation
@@ -273,6 +281,7 @@ function createTailorField<
               value: fieldValue,
               data,
               user,
+              invoker,
               pathArray: pathArray.concat(fieldName),
             });
             if (result.issues) {
@@ -292,7 +301,7 @@ function createTailorField<
             ? { fn: validateInput, message: "Validation failed" }
             : { fn: validateInput[0], message: validateInput[1] };
 
-        if (!fn({ value, data, user })) {
+        if (!fn({ value, data, user, invoker })) {
           issues.push({
             message,
             path: pathArray.length > 0 ? pathArray : undefined,
@@ -312,7 +321,7 @@ function createTailorField<
   function parseInternal(
     args: FieldParseInternalArgs,
   ): StandardSchemaV1.Result<FieldOutput<OutputBase, TOptions>> {
-    const { value, data, user, pathArray } = args;
+    const { value, data, user, invoker, pathArray } = args;
     const issues: StandardSchemaV1.Issue[] = [];
 
     // 1. Check required/optional
@@ -350,6 +359,7 @@ function createTailorField<
           value: elementValue,
           data,
           user,
+          invoker,
           pathArray: elementPath,
         });
         if (elementIssues.length > 0) {
@@ -364,7 +374,7 @@ function createTailorField<
     }
 
     // 3. Type-specific validation and custom validation
-    const valueIssues = validateValue({ value, data, user, pathArray });
+    const valueIssues = validateValue({ value, data, user, invoker, pathArray });
     issues.push(...valueIssues);
 
     if (issues.length > 0) {
@@ -417,6 +427,7 @@ function createTailorField<
         value: args.value,
         data: args.data,
         user: args.user,
+        invoker: args.invoker ?? null,
         pathArray: [],
       });
     },

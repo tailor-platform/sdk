@@ -3,6 +3,7 @@ import { db } from "@/configure/services/tailordb";
 import { t } from "@/configure/types";
 import { createResolver } from "./resolver";
 import type { output } from "@/types/helpers";
+import type { TailorInvoker } from "@/types/invoker";
 import type { ResolverInput } from "@/types/resolver.generated";
 import type { TailorUser } from "@/types/user";
 
@@ -18,7 +19,9 @@ describe("createResolver", () => {
         body: (context) => {
           expectTypeOf(context).toHaveProperty("user");
           expectTypeOf(context).toHaveProperty("input");
+          expectTypeOf(context).toHaveProperty("invoker");
           expectTypeOf(context.user).toEqualTypeOf<TailorUser>();
+          expectTypeOf(context.invoker).toEqualTypeOf<TailorInvoker>();
           expectTypeOf(context.input).toBeNever();
           return { result: "hello" };
         },

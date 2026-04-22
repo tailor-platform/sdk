@@ -7,6 +7,7 @@ import { computeBundlerContextHash, withCache, type BundleCache } from "@/cli/ca
 import { loadFilesWithIgnores, type FileLoadConfig } from "@/cli/services/file-loader";
 import { removeStaleEntryFiles } from "@/cli/services/stale-cleanup";
 import { getDistDir } from "@/cli/shared/dist-dir";
+import { INVOKER_EXPR } from "@/cli/shared/invoker-expr";
 import { logger, styles } from "@/cli/shared/logger";
 import {
   createTriggerTransformPlugin,
@@ -151,7 +152,10 @@ async function bundleSingleExecutor(
       const entryContent = ml /* js */ `
         import _internalExecutor from "${absoluteSourcePath}";
 
-        const __executor_function = _internalExecutor.operation.body;
+        const __executor_function = async (args) => {
+          const invoker = ${INVOKER_EXPR};
+          return _internalExecutor.operation.body({ ...args, invoker });
+        };
 
         export { __executor_function as main };
       `;
