@@ -1,5 +1,15 @@
 # @tailor-platform/sdk
 
+## 1.41.0
+
+### Minor Changes
+
+- [#514](https://github.com/tailor-platform/sdk/pull/514) [`3047d45`](https://github.com/tailor-platform/sdk/commit/3047d45fd8daa38616ecaad20d5c04cf75d23931) Thanks [@r253hmdryou](https://github.com/r253hmdryou)! - Add `function get` and `function list` CLI commands for querying function registries in a workspace
+
+### Patch Changes
+
+- [#1030](https://github.com/tailor-platform/sdk/pull/1030) [`fc4cc7c`](https://github.com/tailor-platform/sdk/commit/fc4cc7cc4430c545c50eb8bb4b406023c91d8290) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency politty to v0.4.14
+
 ## 1.40.1
 
 ### Patch Changes
