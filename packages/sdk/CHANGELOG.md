@@ -1,5 +1,19 @@
 # @tailor-platform/sdk
 
+## 1.40.1
+
+### Patch Changes
+
+- [#1026](https://github.com/tailor-platform/sdk/pull/1026) [`7f89969`](https://github.com/tailor-platform/sdk/commit/7f899699ad0386dd0b89b5660d7f49efe07f8647) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `apply` plan for IdP services when `permission` is omitted. The platform returns an empty `IdPPermission` (all action arrays empty) for services without configured permission policies, while the SDK sent `undefined`. The diff logic now normalizes an all-empty permission message to `undefined` so repeated applies are idempotent instead of always reporting the service as updated.
+
+- [#1025](https://github.com/tailor-platform/sdk/pull/1025) [`af5262a`](https://github.com/tailor-platform/sdk/commit/af5262a14a31aa721c5b41b26425d938abb6485e) Thanks [@k1LoW](https://github.com/k1LoW)! - Update IdP documentation to promote `permission`-based access control as the primary pattern over legacy `authorization`
+
+- [#1029](https://github.com/tailor-platform/sdk/pull/1029) [`825bf86`](https://github.com/tailor-platform/sdk/commit/825bf86d5df0ab98665989bf7ff59d5db0597a94) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @toiroakr/read-multiline to v0.3.1
+
+- [#1031](https://github.com/tailor-platform/sdk/pull/1031) [`2e5f589`](https://github.com/tailor-platform/sdk/commit/2e5f589e50937e091f244cd1632ee7252a560394) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update rolldown
+
+- [#1038](https://github.com/tailor-platform/sdk/pull/1038) [`d29b58a`](https://github.com/tailor-platform/sdk/commit/d29b58a27082fb52559548365c6ff75ee1e79122) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @opentelemetry
+
 ## 1.40.0
 
 ### Minor Changes
