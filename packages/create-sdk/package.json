@@ -30,7 +30,7 @@
     "execa": "9.6.1",
     "picocolors": "1.1.1",
     "pkg-types": "2.3.0",
-    "politty": "0.4.12",
+    "politty": "0.4.14",
     "zod": "4.3.6"
   },
   "devDependencies": {
