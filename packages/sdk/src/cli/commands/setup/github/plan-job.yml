@@ -1,0 +1,18 @@
+plan:
+  if: github.event_name == 'pull_request'
+  runs-on: ubuntu-latest
+  permissions:
+    contents: read
+    pull-requests: write
+  steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        fetch-depth: 0
+    # __SETUP_STEPS__
+    - uses: tailor-platform/actions/plan@__ACTIONS_REF__
+      with:
+        workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
+        # __WORKING_DIRECTORY__
+        platform-client-id: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_ID }}
+        platform-client-secret: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_SECRET }}
+        github-token: ${{ secrets.GITHUB_TOKEN }}

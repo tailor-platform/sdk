@@ -58,12 +58,13 @@ describe("renderDeploy", () => {
     organizationId: "org-123",
     folderId: "folder-456",
     packageManager: "pnpm" as const,
+    actionsRef: "980aeba08963f4322b2b48ca7a920f4e14876842",
   };
 
   it("references the composite action", () => {
     const content = renderDeploy(baseParams);
     expect(content).toContain(
-      "uses: tailor-platform/actions/deploy@980aeba08963f4322b2b48ca7a920f4e14876842 # v1.0.0",
+      "uses: tailor-platform/actions/deploy@980aeba08963f4322b2b48ca7a920f4e14876842",
     );
   });
 
@@ -151,8 +152,7 @@ describe("renderDeploy", () => {
 
   it("parameterizes concurrency group with workspace name", () => {
     const content = renderDeploy(baseParams);
-    expect(content).toContain("group: deploy-my-app");
-    expect(content).not.toContain("group: deploy\n");
+    expect(content).toContain("group: tailor-my-app-");
   });
 });
 
@@ -178,7 +178,7 @@ describe("buildFiles", () => {
       outputDir: testDir,
     });
     expect(files).toHaveLength(1);
-    expect(files[0]!.path).toBe(path.join(testDir, ".github/workflows/deploy-my-app.yml"));
+    expect(files[0]!.path).toBe(path.join(testDir, ".github/workflows/tailor-my-app.yml"));
   });
 
   it("detects package manager from project directory", () => {

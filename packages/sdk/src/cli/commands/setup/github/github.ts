@@ -4,6 +4,9 @@ import { logBetaWarning } from "@/cli/shared/beta";
 import { logger, styles } from "@/cli/shared/logger";
 import { detectPackageManager, renderDeploy } from "./templates";
 
+// Default actions reference - update on release
+const ACTIONS_REF = "980aeba08963f4322b2b48ca7a920f4e14876842"; // v1.0.0
+
 export type SetupGitHubOptions = {
   workspaceName: string;
   workspaceRegion: string;
@@ -11,6 +14,7 @@ export type SetupGitHubOptions = {
   folderId: string;
   dir: string;
   outputDir: string;
+  withPlan?: boolean;
 };
 
 type GeneratedFile = {
@@ -30,16 +34,21 @@ type WriteResult = {
  */
 export function buildFiles(options: SetupGitHubOptions): GeneratedFile[] {
   const githubDir = path.join(options.outputDir, ".github");
+  const packageManager = detectPackageManager(options.outputDir);
+  const workingDirectory = options.dir !== "." ? options.dir : undefined;
+
   return [
     {
-      path: path.join(githubDir, `workflows/deploy-${options.workspaceName}.yml`),
+      path: path.join(githubDir, `workflows/tailor-${options.workspaceName}.yml`),
       content: renderDeploy({
         workspaceName: options.workspaceName,
         workspaceRegion: options.workspaceRegion,
         organizationId: options.organizationId,
         folderId: options.folderId,
-        workingDirectory: options.dir !== "." ? options.dir : undefined,
-        packageManager: detectPackageManager(options.outputDir),
+        workingDirectory,
+        packageManager,
+        actionsRef: ACTIONS_REF,
+        withPlan: options.withPlan,
       }),
     },
   ];
@@ -91,4 +100,10 @@ export function setupGitHub(options: SetupGitHubOptions): void {
   logger.info("Next steps - set GitHub secrets:");
   logger.log(`  gh secret set PLATFORM_MACHINE_USER_CLIENT_ID`);
   logger.log(`  gh secret set PLATFORM_MACHINE_USER_CLIENT_SECRET`);
+
+  if (options.withPlan) {
+    logger.newline();
+    logger.info("For plan job - set GitHub variable with your workspace ID:");
+    logger.log(`  gh variable set TAILOR_PLATFORM_WORKSPACE_ID`);
+  }
 }
