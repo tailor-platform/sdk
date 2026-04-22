@@ -652,8 +652,8 @@ importers:
         specifier: 0.9.1
         version: 0.9.1(valibot@1.1.0(typescript@5.9.3))
       '@toiroakr/read-multiline':
-        specifier: 0.3.0
-        version: 0.3.0
+        specifier: 0.3.1
+        version: 0.3.1
       '@urql/core':
         specifier: 6.0.1
         version: 6.0.1(graphql@16.13.2)
@@ -2927,8 +2927,8 @@ packages:
       valibot:
         optional: true
 
-  '@toiroakr/read-multiline@0.3.0':
-    resolution: {integrity: sha512-GbVRYndmdqFJRqME6PvlcWoLBQhZ9bd+ZjupxjiE7mnR2S5zYtIgZeIwwxfv2hcm1UzeUKnrNP5NIW2YcuCNnA==}
+  '@toiroakr/read-multiline@0.3.1':
+    resolution: {integrity: sha512-kWjImhCg3EFZmzQg4ZfVtV6oBHBipvhD4uJibyelUKcQW4P3+467ngn+NHYHtMQ18ciMZFYZePOPjpHQ9kUdbA==}
 
   '@ts-graphviz/adapter@2.0.6':
     resolution: {integrity: sha512-kJ10lIMSWMJkLkkCG5gt927SnGZcBuG0s0HHswGzcHTgvtUe7yk5/3zTEr0bafzsodsOq5Gi6FhQeV775nC35Q==}
@@ -7489,7 +7489,7 @@ snapshots:
     optionalDependencies:
       valibot: 1.1.0(typescript@5.9.3)
 
-  '@toiroakr/read-multiline@0.3.0': {}
+  '@toiroakr/read-multiline@0.3.1': {}
 
   '@ts-graphviz/adapter@2.0.6':
     dependencies:
