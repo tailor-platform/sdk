@@ -432,6 +432,174 @@ describe("planPipeline (resolver service level)", () => {
       expect(result.changeSet.resolver.unchanged).toHaveLength(0);
     });
 
+    // Regression tests for the "resolver-only diff deploy" bug where a newly
+    // created resolver on an existing pipeline service is reported as planned
+    // but the GraphQL gateway cannot see it until something else forces the
+    // parent pipeline service / application to be re-applied. The SDK must
+    // therefore bump the parent service into the `updates` bucket whenever a
+    // child resolver is created / updated / deleted in differential mode.
+    describe("deploy bug: parent service refresh on resolver-only change", () => {
+      test("parent pipeline service is updated when a new resolver is created in an existing service", async () => {
+        const resolver = {
+          name: "deleteInvoiceReconciliations",
+          operation: 0,
+          body: () => "hello",
+          output: { type: "string", metadata: {} },
+        };
+        const pipeline = {
+          namespace: "main-resolver",
+          config: {},
+          resolvers: { [resolver.name]: resolver },
+          loadResolvers: vi.fn().mockResolvedValue(undefined),
+        } as unknown as ResolverService;
+
+        // Existing pipeline service in the workspace, currently with NO
+        // resolvers. Same sdk-version (matches the label mock above).
+        const client = createMockClient([{ name: "main-resolver", label: appName }], {
+          "main-resolver": [],
+        });
+
+        const result = await planPipeline({
+          client,
+          workspaceId,
+          application: createMockApplication([pipeline]),
+          forRemoval: false,
+          config: mockConfig,
+        });
+
+        // Resolver itself is correctly detected as a new create.
+        expect(result.changeSet.resolver.creates).toHaveLength(1);
+        expect(result.changeSet.resolver.creates[0].name).toBe("deleteInvoiceReconciliations");
+
+        // The parent pipeline service must be promoted into `updates` so the
+        // gateway picks up the new resolver. Without this, differential
+        // deploys leave the resolver registered but NOT routed by GraphQL.
+        expect(result.changeSet.service.updates).toHaveLength(1);
+        expect(result.changeSet.service.updates[0].name).toBe("main-resolver");
+        expect(result.changeSet.service.unchanged).toHaveLength(0);
+      });
+
+      test("parent pipeline service is updated when an existing resolver is updated", async () => {
+        const resolver = {
+          name: "test-resolver",
+          operation: 0,
+          body: () => "hello",
+          output: { type: "string", metadata: {} },
+          authInvoker: { namespace: "my-auth", machineUserName: "batch-user" },
+        };
+        const pipeline = {
+          namespace: "main-resolver",
+          config: {},
+          resolvers: { [resolver.name]: resolver },
+          loadResolvers: vi.fn().mockResolvedValue(undefined),
+        } as unknown as ResolverService;
+
+        const createClient = createMockClient([]);
+        const createResult = await planPipeline({
+          client: createClient,
+          workspaceId,
+          application: createMockApplication([pipeline]),
+          forRemoval: false,
+          config: mockConfig,
+        });
+        const desiredResolver = structuredClone(
+          createResult.changeSet.resolver.creates[0]!.request.pipelineResolver,
+        );
+        delete desiredResolver!.pipelines?.[0]?.invoker;
+
+        const client = createMockClient([{ name: "main-resolver", label: appName }], {
+          "main-resolver": [desiredResolver as Record<string, unknown>],
+        });
+        const result = await planPipeline({
+          client,
+          workspaceId,
+          application: createMockApplication([pipeline]),
+          forRemoval: false,
+          config: mockConfig,
+        });
+
+        // Resolver has a real diff (invoker differs).
+        expect(result.changeSet.resolver.updates).toHaveLength(1);
+
+        // The parent service must also be refreshed for the gateway.
+        expect(result.changeSet.service.updates).toHaveLength(1);
+        expect(result.changeSet.service.updates[0].name).toBe("main-resolver");
+        expect(result.changeSet.service.unchanged).toHaveLength(0);
+      });
+
+      test("parent pipeline service is updated when a resolver is deleted from an existing service", async () => {
+        // Config has no resolvers in main-resolver, but the server still
+        // holds a stale resolver that must be removed. The pipeline service
+        // itself remains configured (stays in the subgraphs list).
+        const pipeline = {
+          namespace: "main-resolver",
+          config: {},
+          resolvers: {},
+          loadResolvers: vi.fn().mockResolvedValue(undefined),
+        } as unknown as ResolverService;
+
+        const client = createMockClient([{ name: "main-resolver", label: appName }], {
+          "main-resolver": [{ name: "staleResolver" }],
+        });
+
+        const result = await planPipeline({
+          client,
+          workspaceId,
+          application: createMockApplication([pipeline]),
+          forRemoval: false,
+          config: mockConfig,
+        });
+
+        expect(result.changeSet.resolver.deletes).toHaveLength(1);
+        expect(result.changeSet.resolver.deletes[0].name).toBe("staleResolver");
+        expect(result.changeSet.service.updates).toHaveLength(1);
+        expect(result.changeSet.service.updates[0].name).toBe("main-resolver");
+        expect(result.changeSet.service.unchanged).toHaveLength(0);
+      });
+
+      test("parent pipeline service stays unchanged when no child resolver changes", async () => {
+        const resolver = {
+          name: "test-resolver",
+          operation: 0,
+          body: () => "hello",
+          output: { type: "string", metadata: {} },
+        };
+        const pipeline = {
+          namespace: "main-resolver",
+          config: {},
+          resolvers: { [resolver.name]: resolver },
+          loadResolvers: vi.fn().mockResolvedValue(undefined),
+        } as unknown as ResolverService;
+
+        const createClient = createMockClient([]);
+        const createResult = await planPipeline({
+          client: createClient,
+          workspaceId,
+          application: createMockApplication([pipeline]),
+          forRemoval: false,
+          config: mockConfig,
+        });
+        const desiredResolver = createResult.changeSet.resolver.creates[0].request.pipelineResolver;
+
+        const client = createMockClient([{ name: "main-resolver", label: appName }], {
+          "main-resolver": [desiredResolver as Record<string, unknown>],
+        });
+        const result = await planPipeline({
+          client,
+          workspaceId,
+          application: createMockApplication([pipeline]),
+          forRemoval: false,
+          config: mockConfig,
+        });
+
+        // No resolver changes -> service must stay unchanged. This guards
+        // the fix from over-updating services on every apply.
+        expect(result.changeSet.resolver.unchanged).toHaveLength(1);
+        expect(result.changeSet.service.unchanged).toHaveLength(1);
+        expect(result.changeSet.service.updates).toHaveLength(0);
+      });
+    });
+
     test("resolver is updated when authInvoker differs", async () => {
       const resolver = {
         name: "test-resolver",
@@ -880,5 +1048,159 @@ describe("applyPipeline phase separation", () => {
     // No deletes should happen in create-update phase
     expect(client.deletePipelineResolver).not.toHaveBeenCalled();
     expect(client.deletePipelineService).not.toHaveBeenCalled();
+  });
+});
+
+describe("planPipeline + applyPipeline end-to-end (deploy bug)", () => {
+  const workspaceId = "test-workspace";
+  const appName = "test-app";
+
+  function createMockClient(
+    existingServices: Array<{ name: string; label?: string; sdkVersion?: string }>,
+    existingResolvers: Record<string, Array<Record<string, unknown>>> = {},
+  ) {
+    return {
+      listPipelineServices: vi.fn().mockResolvedValue({
+        pipelineServices: existingServices.map((s) => ({ namespace: { name: s.name } })),
+        nextPageToken: "",
+      }),
+      listPipelineResolvers: vi
+        .fn()
+        .mockImplementation(({ namespaceName }: { namespaceName: string }) => ({
+          pipelineResolvers: existingResolvers[namespaceName] || [],
+          nextPageToken: "",
+        })),
+      getPipelineResolver: vi
+        .fn()
+        .mockImplementation(
+          ({ namespaceName, resolverName }: { namespaceName: string; resolverName: string }) => ({
+            pipelineResolver: (existingResolvers[namespaceName] || []).find(
+              (resolver) => resolver.name === resolverName,
+            ),
+          }),
+        ),
+      getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
+        const name = trn.split(":").pop();
+        const service = existingServices.find((s) => s.name === name);
+        return {
+          metadata: {
+            labels: service?.label
+              ? { [sdkNameLabelKey]: service.label, "sdk-version": service.sdkVersion ?? "v1-0-0" }
+              : {},
+          },
+        };
+      }),
+      createPipelineService: vi.fn().mockResolvedValue({}),
+      updatePipelineService: vi.fn().mockResolvedValue({}),
+      deletePipelineService: vi.fn().mockResolvedValue({}),
+      createPipelineResolver: vi.fn().mockResolvedValue({}),
+      updatePipelineResolver: vi.fn().mockResolvedValue({}),
+      deletePipelineResolver: vi.fn().mockResolvedValue({}),
+      setMetadata: vi.fn().mockResolvedValue({}),
+    } as unknown as OperatorClient;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  test("adding a new resolver triggers both createPipelineResolver AND updatePipelineService", async () => {
+    const resolver = {
+      name: "deleteInvoiceReconciliations",
+      operation: 0,
+      body: () => "hello",
+      output: { type: "string", metadata: {} },
+    };
+    const pipeline = {
+      namespace: "main-resolver",
+      config: {},
+      resolvers: { [resolver.name]: resolver },
+      loadResolvers: vi.fn().mockResolvedValue(undefined),
+    } as unknown as ResolverService;
+
+    const client = createMockClient([{ name: "main-resolver", label: appName }], {
+      "main-resolver": [],
+    });
+    const application = {
+      name: appName,
+      env: {},
+      resolverServices: [pipeline],
+      executorService: {
+        config: {},
+        executors: {},
+        loadExecutors: vi.fn().mockResolvedValue({}),
+      },
+    } as unknown as Application;
+
+    const planResult = await planPipeline({
+      client,
+      workspaceId,
+      application,
+      forRemoval: false,
+      config: mockConfig,
+    });
+
+    await applyPipeline(client, planResult, "create-update");
+
+    // Child resolver is created.
+    expect(client.createPipelineResolver).toHaveBeenCalledTimes(1);
+    // Parent service is refreshed so the gateway re-composes its schema.
+    expect(client.updatePipelineService).toHaveBeenCalledTimes(1);
+    // And its labels are re-stamped (sdk-name / sdk-version).
+    expect(client.setMetadata).toHaveBeenCalledTimes(1);
+  });
+
+  test("no resolver change => no updatePipelineService call", async () => {
+    const resolver = {
+      name: "test-resolver",
+      operation: 0,
+      body: () => "hello",
+      output: { type: "string", metadata: {} },
+    };
+    const pipeline = {
+      namespace: "main-resolver",
+      config: {},
+      resolvers: { [resolver.name]: resolver },
+      loadResolvers: vi.fn().mockResolvedValue(undefined),
+    } as unknown as ResolverService;
+
+    // Prime the desired proto so the existing resolver looks identical.
+    const primingClient = createMockClient([]);
+    const primingApplication = {
+      name: appName,
+      env: {},
+      resolverServices: [pipeline],
+      executorService: {
+        config: {},
+        executors: {},
+        loadExecutors: vi.fn().mockResolvedValue({}),
+      },
+    } as unknown as Application;
+    const priming = await planPipeline({
+      client: primingClient,
+      workspaceId,
+      application: primingApplication,
+      forRemoval: false,
+      config: mockConfig,
+    });
+    const desiredResolver = priming.changeSet.resolver.creates[0].request.pipelineResolver;
+
+    const client = createMockClient([{ name: "main-resolver", label: appName }], {
+      "main-resolver": [desiredResolver as Record<string, unknown>],
+    });
+
+    const planResult = await planPipeline({
+      client,
+      workspaceId,
+      application: primingApplication,
+      forRemoval: false,
+      config: mockConfig,
+    });
+    await applyPipeline(client, planResult, "create-update");
+
+    expect(client.createPipelineResolver).not.toHaveBeenCalled();
+    expect(client.updatePipelineResolver).not.toHaveBeenCalled();
+    expect(client.updatePipelineService).not.toHaveBeenCalled();
+    expect(client.setMetadata).not.toHaveBeenCalled();
   });
 });

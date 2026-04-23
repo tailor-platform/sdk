@@ -133,6 +133,19 @@ export async function planPipeline(context: PlanContext) {
     forceApplyAll,
   );
 
+  // Differential deploys must refresh the parent pipeline service whenever
+  // a child resolver is created / updated / deleted: the GraphQL gateway
+  // only re-composes the subgraph schema when the service itself is
+  // re-applied. Promote otherwise-unchanged services into `updates` so
+  // their `updatePipelineService` + `setMetadata` calls run, matching the
+  // behaviour of full (forceApplyAll) deploys.
+  await promoteServicesWithResolverChanges(
+    workspaceId,
+    application.name,
+    serviceChangeSet,
+    resolverChangeSet,
+  );
+
   return {
     changeSet: {
       service: serviceChangeSet,
@@ -142,6 +155,47 @@ export async function planPipeline(context: PlanContext) {
     unmanaged,
     resourceOwners,
   };
+}
+
+async function promoteServicesWithResolverChanges(
+  workspaceId: string,
+  appName: string,
+  serviceChangeSet: Awaited<ReturnType<typeof planServices>>["changeSet"],
+  resolverChangeSet: Awaited<ReturnType<typeof planResolvers>>["changeSet"],
+) {
+  const changedNamespaces = new Set<string>();
+  const collect = (items: ReadonlyArray<{ request: { namespaceName?: string } }>) => {
+    for (const item of items) {
+      if (item.request.namespaceName) {
+        changedNamespaces.add(item.request.namespaceName);
+      }
+    }
+  };
+  collect(resolverChangeSet.creates);
+  collect(resolverChangeSet.updates);
+  collect(resolverChangeSet.deletes);
+  if (changedNamespaces.size === 0) {
+    return;
+  }
+
+  const remainingUnchanged: typeof serviceChangeSet.unchanged = [];
+  for (const entry of serviceChangeSet.unchanged) {
+    if (!changedNamespaces.has(entry.name)) {
+      remainingUnchanged.push(entry);
+      continue;
+    }
+    const metaRequest = await buildMetaRequest(trn(workspaceId, entry.name), appName);
+    serviceChangeSet.updates.push({
+      name: entry.name,
+      request: {
+        workspaceId,
+        namespaceName: entry.name,
+      },
+      metaRequest,
+    });
+  }
+  serviceChangeSet.unchanged.length = 0;
+  serviceChangeSet.unchanged.push(...remainingUnchanged);
 }
 
 type CreateService = {
