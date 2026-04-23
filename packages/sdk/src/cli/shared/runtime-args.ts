@@ -12,6 +12,24 @@ import { tailorUserMap } from "@/parser/service/tailordb";
 import type { Trigger } from "@/types/executor.generated";
 
 // ---------------------------------------------------------------------------
+// Shared (all services)
+// ---------------------------------------------------------------------------
+
+/**
+ * `invoker` value expression, embedded in every bundler entry wrapper.
+ *
+ * Calls `tailor.context.getInvoker()` and maps the server shape to TailorInvoker:
+ *   server `attributeMap`  → SDK `attributes`
+ *   server `attributes`    → SDK `attributeList`
+ *   other fields           → passed through
+ *   null (anonymous)       → null
+ */
+export const INVOKER_EXPR =
+  `(invoker => invoker ? (({ attributeMap, attributes: attrList, ...rest }) => ` +
+  `({ ...rest, attributes: attributeMap, attributeList: attrList }))(invoker) : null)` +
+  `(tailor.context.getInvoker())`;
+
+// ---------------------------------------------------------------------------
 // Executor
 // ---------------------------------------------------------------------------
 

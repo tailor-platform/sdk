@@ -7,8 +7,8 @@ import { type BundleCache, computeBundlerContextHash, withCache } from "@/cli/ca
 import { type FileLoadConfig, loadFilesWithIgnores } from "@/cli/services/file-loader";
 import { removeStaleEntryFiles } from "@/cli/services/stale-cleanup";
 import { getDistDir } from "@/cli/shared/dist-dir";
-import { INVOKER_EXPR } from "@/cli/shared/invoker-expr";
 import { logger, styles } from "@/cli/shared/logger";
+import { INVOKER_EXPR } from "@/cli/shared/runtime-args";
 import {
   createTriggerTransformPlugin,
   serializeTriggerContext,
