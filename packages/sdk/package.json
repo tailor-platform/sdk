@@ -144,7 +144,7 @@
     "semver": "7.7.4",
     "serve": "14.2.6",
     "sql-highlight": "6.1.0",
-    "std-env": "4.0.0",
+    "std-env": "4.1.0",
     "table": "6.9.0",
     "ts-cron-validator": "1.1.5",
     "tsx": "4.21.0",
