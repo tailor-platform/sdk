@@ -649,8 +649,8 @@ importers:
         specifier: 0.8.4
         version: 0.8.4
       '@toiroakr/lines-db':
-        specifier: 0.9.1
-        version: 0.9.1(valibot@1.1.0(typescript@5.9.3))
+        specifier: 0.9.2
+        version: 0.9.2(valibot@1.1.0(typescript@5.9.3))
       '@toiroakr/read-multiline':
         specifier: 0.3.2
         version: 0.3.2
@@ -2918,8 +2918,8 @@ packages:
   '@tailor-platform/function-types@0.8.4':
     resolution: {integrity: sha512-QaE4CNQJp35be/GOfmCGOBFkliXv5WKi7pBLWeD0Bl6xoRXvtq/j5DAADATV6J3eyTXb0U5+XjSbG5rJnw/QMQ==}
 
-  '@toiroakr/lines-db@0.9.1':
-    resolution: {integrity: sha512-eDnWE17nLSgBBchpFfmwon45yFf1ekTHLrN1X+pF2/B/zw34QH+rgWvqklrGpg1m1JQZavCLKWactTlVsxV3QQ==}
+  '@toiroakr/lines-db@0.9.2':
+    resolution: {integrity: sha512-8ilJFrDcz1aaQb6inA6cQXovu4F3wRHFvG2sNXYlbtwyOg8csJTSB/BP6EEfvWRqt8j/uRK71rI99baS9yKYvw==}
     hasBin: true
     peerDependencies:
       valibot: '>=1.0.0'
@@ -7462,7 +7462,7 @@ snapshots:
 
   '@tailor-platform/function-types@0.8.4': {}
 
-  '@toiroakr/lines-db@0.9.1(valibot@1.1.0(typescript@5.9.3))':
+  '@toiroakr/lines-db@0.9.2(valibot@1.1.0(typescript@5.9.3))':
     dependencies:
       '@standard-schema/spec': 1.1.0
       commander: 14.0.3
