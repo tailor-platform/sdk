@@ -81,6 +81,7 @@ function createMockClient(opts?: {
     publishUserEvents: boolean;
     userAuthPolicy?: Record<string, unknown>;
     disableGqlOperations?: Record<string, boolean>;
+    permission?: Record<string, unknown>;
     label?: string;
   }>;
   clients?: Record<string, Array<{ name: string; clientSecret: string }>>;
@@ -97,6 +98,7 @@ function createMockClient(opts?: {
         publishUserEvents: service.publishUserEvents,
         userAuthPolicy: service.userAuthPolicy,
         disableGqlOperations: service.disableGqlOperations,
+        permission: service.permission,
       })),
       nextPageToken: "",
     }),
@@ -380,6 +382,108 @@ describe("planIdP", () => {
 
     expect(result.changeSet.service.updates).toHaveLength(1);
     expect(result.changeSet.service.unchanged).toHaveLength(0);
+  });
+
+  test("marks idp service unchanged when authorization is omitted and remote is empty string", async () => {
+    const app = createMockApplication();
+    // oxlint-disable-next-line no-explicit-any
+    delete (app.idpServices[0] as any).authorization;
+
+    const client = createMockClient({
+      services: [
+        {
+          name: "idp-a",
+          authorization: "",
+          lang: IdPLang.JA,
+          publishUserEvents: true,
+          userAuthPolicy: {
+            useNonEmailIdentifier: false,
+            allowSelfPasswordReset: true,
+            passwordRequireUppercase: true,
+            passwordRequireLowercase: true,
+            passwordRequireNonAlphanumeric: false,
+            passwordRequireNumeric: true,
+            passwordMinLength: 8,
+            passwordMaxLength: 64,
+            allowedEmailDomains: ["a.example.com", "b.example.com"],
+            allowGoogleOauth: false,
+            disablePasswordAuth: false,
+            allowMicrosoftOauth: false,
+          },
+          disableGqlOperations: {
+            create: false,
+            update: false,
+            delete: false,
+            read: false,
+            sendPasswordResetEmail: false,
+          },
+          label: appName,
+        },
+      ],
+      clients: {
+        "idp-a": [{ name: "default-idp-client", clientSecret: "secret" }],
+      },
+    });
+
+    const context = {
+      ...createContext(client),
+      application: app,
+    };
+
+    const result = await planIdP(context);
+
+    expect(result.changeSet.service.unchanged).toHaveLength(1);
+    expect(result.changeSet.service.updates).toHaveLength(0);
+  });
+
+  test("marks idp service unchanged when permission is omitted and remote is empty permission", async () => {
+    const client = createMockClient({
+      services: [
+        {
+          name: "idp-a",
+          authorization: "user != null && size(user.id) > 0",
+          lang: IdPLang.JA,
+          publishUserEvents: true,
+          userAuthPolicy: {
+            useNonEmailIdentifier: false,
+            allowSelfPasswordReset: true,
+            passwordRequireUppercase: true,
+            passwordRequireLowercase: true,
+            passwordRequireNonAlphanumeric: false,
+            passwordRequireNumeric: true,
+            passwordMinLength: 8,
+            passwordMaxLength: 64,
+            allowedEmailDomains: ["a.example.com", "b.example.com"],
+            allowGoogleOauth: false,
+            disablePasswordAuth: false,
+            allowMicrosoftOauth: false,
+          },
+          disableGqlOperations: {
+            create: false,
+            update: false,
+            delete: false,
+            read: false,
+            sendPasswordResetEmail: false,
+          },
+          permission: {
+            create: [],
+            read: [],
+            update: [],
+            delete: [],
+            sendPasswordResetEmail: [],
+          },
+          label: appName,
+        },
+      ],
+      clients: {
+        "idp-a": [{ name: "default-idp-client", clientSecret: "secret" }],
+      },
+    });
+
+    const result = await planIdP(createContext(client));
+
+    expect(result.changeSet.service.unchanged).toHaveLength(1);
+    expect(result.changeSet.service.updates).toHaveLength(0);
   });
 
   test("creates idp client when it does not exist remotely", async () => {

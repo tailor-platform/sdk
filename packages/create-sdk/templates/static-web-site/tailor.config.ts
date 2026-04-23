@@ -6,8 +6,14 @@ const website = defineStaticWebSite("my-frontend", {
 });
 
 const idp = defineIdp("my-idp", {
-  authorization: "loggedIn",
   clients: ["default-idp-client"],
+  permission: {
+    create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    read: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    update: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    delete: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+    sendPasswordResetEmail: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+  },
   userAuthPolicy: {
     useNonEmailIdentifier: false,
     allowSelfPasswordReset: true,

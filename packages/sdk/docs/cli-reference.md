@@ -62,6 +62,7 @@ You can use environment variables to configure workspace and authentication:
 | `TAILOR_TOKEN`                               | **Deprecated.** Use `TAILOR_PLATFORM_TOKEN` instead                          |
 | `TAILOR_PLATFORM_PROFILE`                    | Workspace profile name                                                       |
 | `TAILOR_PLATFORM_SDK_CONFIG_PATH`            | Path to SDK config file                                                      |
+| `TAILOR_PLATFORM_SDK_DTS_PATH`               | Output path for generated `tailor.d.ts` type definition file                 |
 | `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     | Client ID for `login --machine-user`                                         |
 | `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | Client secret for `login --machine-user`                                     |
 | `TAILOR_PLATFORM_MACHINE_USER_NAME`          | Default machine user name for `query`, `workflow start`, `function test-run` |
@@ -117,6 +118,14 @@ Commands for managing TailorDB tables, data, and schema migrations.
 | [tailordb erd export](./cli/tailordb.md#tailordb-erd-export)                 | Export Liam ERD dist from applied TailorDB schema.                                                                        |
 | [tailordb erd serve](./cli/tailordb.md#tailordb-erd-serve)                   | Generate and serve ERD locally (liam build + serve dist). (beta)                                                          |
 | [tailordb erd deploy](./cli/tailordb.md#tailordb-erd-deploy)                 | Deploy ERD static website for TailorDB namespace(s).                                                                      |
+
+### [Query Commands](./cli/query.md)
+
+Run ad-hoc SQL/GraphQL queries or enter the interactive REPL.
+
+| Command                       | Description            |
+| ----------------------------- | ---------------------- |
+| [query](./cli/query.md#query) | Run SQL/GraphQL query. |
 
 ### [User & Auth Commands](./cli/user.md)
 
@@ -200,10 +209,12 @@ Commands for managing workflows and executions.
 
 ### [Function Commands](./cli/function.md)
 
-Commands for viewing function execution logs.
+Commands for managing function registries and viewing function execution logs.
 
 | Command                                                  | Description                                                     |
 | -------------------------------------------------------- | --------------------------------------------------------------- |
+| [function get](./cli/function.md#function-get)           | Get a function registry by name                                 |
+| [function list](./cli/function.md#function-list)         | List function registries in a workspace                         |
 | [function logs](./cli/function.md#function-logs)         | List or get function execution logs.                            |
 | [function test-run](./cli/function.md#function-test-run) | Run a function on the Tailor Platform server without deploying. |
 
@@ -259,6 +270,22 @@ Commands for setting up project infrastructure.
 | Command                                     | Description                                             |
 | ------------------------------------------- | ------------------------------------------------------- |
 | [setup github](./cli/setup.md#setup-github) | Generate GitHub Actions workflow for deployment. (beta) |
+
+### [Upgrade Commands](./cli/upgrade.md)
+
+Commands for upgrading SDK versions with automated code migration.
+
+| Command                             | Description                                                  |
+| ----------------------------------- | ------------------------------------------------------------ |
+| [upgrade](./cli/upgrade.md#upgrade) | Run codemods to upgrade your project to a newer SDK version. |
+
+### [Skills Commands](./cli/skills.md)
+
+Commands for installing Tailor SDK agent skills.
+
+| Command                                          | Description                                                        |
+| ------------------------------------------------ | ------------------------------------------------------------------ |
+| [skills install](./cli/skills.md#skills-install) | Install the tailor-sdk agent skill from the installed SDK package. |
 
 ### [Completion](./cli/completion.md)
 

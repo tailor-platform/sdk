@@ -1,0 +1,7 @@
+name: "@tailor-platform/define-generators-to-plugins"
+version: "1.0.0"
+description: "Migrate defineGenerators() tuple syntax to definePlugins() with explicit plugin imports"
+engine: jssg
+language: typescript
+since: "1.0.0"
+until: "2.0.0"

@@ -40,7 +40,7 @@ Refer to `example/` for working implementations of all patterns (config, models,
 
 Key files:
 
-- `example/tailor.config.ts` - Configuration with defineConfig, defineAuth, defineIdp, defineStaticWebSite, defineGenerators
+- `example/tailor.config.ts` - Configuration with defineConfig, defineAuth, defineIdp, defineStaticWebSite, definePlugins
 - `example/tailordb/*.ts` - Model definitions with `db.type()`
 - `example/resolvers/*.ts` - Resolver implementations with `createResolver`
 - `example/executors/*.ts` - Executor implementations with `createExecutor`
@@ -74,13 +74,12 @@ Multi-event trigger variants handle multiple events in one executor:
 
 Args include `event` (short name like `"created"`) and `rawEvent` (full event type like `"tailordb.type_record.created"`) for runtime type narrowing.
 
-### Generators
+### Plugins
 
-`defineGenerators()` takes tuples as rest arguments (see `example/tailor.config.ts`). The `@tailor-platform/kysely-type` generator (built into the SDK) is required for `getDB()` in resolvers/executors/workflows.
+`definePlugins()` takes plugin instances as rest arguments (see `example/tailor.config.ts`). The `kyselyTypePlugin` from `@tailor-platform/sdk/plugin/kysely-type` is required for `getDB()` in resolvers/executors/workflows. `defineGenerators()` is deprecated — use `definePlugins()` instead.
 
 ### Configuration
 
-- `definePlugins()` is available for reusable type/resolver/executor generation
 - Static website `.url` property is resolved at deployment time — use it in CORS and redirect URIs
 
 ## Developer Guides

@@ -1,9 +1,21 @@
 #!/usr/bin/env node
 
-import { runSkillsInstaller } from "./shared/skills-installer";
+import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "pathe";
+import { logger } from "./shared/logger";
 
-const exitCode = await runSkillsInstaller({
-  additionalArgs: process.argv.slice(2),
+logger.warn(
+  "`tailor-sdk-skills` is deprecated and will be removed in v2. Use `tailor-sdk skills install` instead.",
+);
+
+const here = dirname(fileURLToPath(import.meta.url));
+const mainCli = resolve(here, "index.mjs");
+
+const child = spawn(process.execPath, [mainCli, "skills", "install", ...process.argv.slice(2)], {
+  stdio: "inherit",
 });
 
-process.exit(exitCode);
+child.on("exit", (code) => {
+  process.exit(code ?? 1);
+});

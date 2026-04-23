@@ -72,411 +72,1031 @@ export type IdPEmailConfigInput = IdPEmailConfig;
  */
 export type IdPPermission = {
   create: readonly (
+    | readonly [
+        (
+          | string
+          | boolean
+          | readonly string[]
+          | readonly boolean[]
+          | {
+              user: string;
+            }
+          | {
+              idpUser: "id" | "name" | "disabled";
+            }
+          | {
+              oldIdpUser: "id" | "name" | "disabled";
+            }
+          | {
+              newIdpUser: "id" | "name" | "disabled";
+            }
+        ),
+        "=" | "!=" | "in" | "not in",
+        (
+          | string
+          | boolean
+          | readonly string[]
+          | readonly boolean[]
+          | {
+              user: string;
+            }
+          | {
+              idpUser: "id" | "name" | "disabled";
+            }
+          | {
+              oldIdpUser: "id" | "name" | "disabled";
+            }
+          | {
+              newIdpUser: "id" | "name" | "disabled";
+            }
+        ),
+      ]
+    | readonly [
+        (
+          | string
+          | boolean
+          | readonly string[]
+          | readonly boolean[]
+          | {
+              user: string;
+            }
+          | {
+              idpUser: "id" | "name" | "disabled";
+            }
+          | {
+              oldIdpUser: "id" | "name" | "disabled";
+            }
+          | {
+              newIdpUser: "id" | "name" | "disabled";
+            }
+        ),
+        "=" | "!=" | "in" | "not in",
+        (
+          | string
+          | boolean
+          | readonly string[]
+          | readonly boolean[]
+          | {
+              user: string;
+            }
+          | {
+              idpUser: "id" | "name" | "disabled";
+            }
+          | {
+              oldIdpUser: "id" | "name" | "disabled";
+            }
+          | {
+              newIdpUser: "id" | "name" | "disabled";
+            }
+        ),
+        boolean,
+      ]
     | readonly (
-        | string
         | boolean
-        | readonly string[]
-        | readonly boolean[]
-        | {
-            user: string;
-          }
-        | {
-            idpUser: "id" | "name" | "disabled";
-          }
-        | {
-            oldIdpUser: "id" | "name" | "disabled";
-          }
-        | {
-            newIdpUser: "id" | "name" | "disabled";
-          }
-      )[]
-    | readonly (
-        | boolean
-        | readonly (
-            | string
-            | boolean
-            | readonly string[]
-            | readonly boolean[]
-            | {
-                user: string;
-              }
-            | {
-                idpUser: "id" | "name" | "disabled";
-              }
-            | {
-                oldIdpUser: "id" | "name" | "disabled";
-              }
-            | {
-                newIdpUser: "id" | "name" | "disabled";
-              }
-          )[]
+        | readonly [
+            (
+              | string
+              | boolean
+              | readonly string[]
+              | readonly boolean[]
+              | {
+                  user: string;
+                }
+              | {
+                  idpUser: "id" | "name" | "disabled";
+                }
+              | {
+                  oldIdpUser: "id" | "name" | "disabled";
+                }
+              | {
+                  newIdpUser: "id" | "name" | "disabled";
+                }
+            ),
+            "=" | "!=" | "in" | "not in",
+            (
+              | string
+              | boolean
+              | readonly string[]
+              | readonly boolean[]
+              | {
+                  user: string;
+                }
+              | {
+                  idpUser: "id" | "name" | "disabled";
+                }
+              | {
+                  oldIdpUser: "id" | "name" | "disabled";
+                }
+              | {
+                  newIdpUser: "id" | "name" | "disabled";
+                }
+            ),
+          ]
       )[]
     | {
         conditions:
-          | readonly (
-              | string
-              | boolean
-              | readonly string[]
-              | readonly boolean[]
-              | {
-                  user: string;
-                }
-              | {
-                  idpUser: "id" | "name" | "disabled";
-                }
-              | {
-                  oldIdpUser: "id" | "name" | "disabled";
-                }
-              | {
-                  newIdpUser: "id" | "name" | "disabled";
-                }
-            )[]
-          | readonly (readonly (
-              | string
-              | boolean
-              | readonly string[]
-              | readonly boolean[]
-              | {
-                  user: string;
-                }
-              | {
-                  idpUser: "id" | "name" | "disabled";
-                }
-              | {
-                  oldIdpUser: "id" | "name" | "disabled";
-                }
-              | {
-                  newIdpUser: "id" | "name" | "disabled";
-                }
-            )[])[];
+          | readonly [
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    newIdpUser: "id" | "name" | "disabled";
+                  }
+              ),
+              "=" | "!=" | "in" | "not in",
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    newIdpUser: "id" | "name" | "disabled";
+                  }
+              ),
+            ]
+          | readonly (readonly [
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    newIdpUser: "id" | "name" | "disabled";
+                  }
+              ),
+              "=" | "!=" | "in" | "not in",
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    newIdpUser: "id" | "name" | "disabled";
+                  }
+              ),
+            ])[];
         description?: string | undefined;
         permit?: boolean | undefined;
       }
   )[];
   read: readonly (
+    | readonly [
+        (
+          | string
+          | boolean
+          | readonly string[]
+          | readonly boolean[]
+          | {
+              user: string;
+            }
+          | {
+              idpUser: "id" | "name" | "disabled";
+            }
+          | {
+              oldIdpUser: "id" | "name" | "disabled";
+            }
+          | {
+              newIdpUser: "id" | "name" | "disabled";
+            }
+        ),
+        "=" | "!=" | "in" | "not in",
+        (
+          | string
+          | boolean
+          | readonly string[]
+          | readonly boolean[]
+          | {
+              user: string;
+            }
+          | {
+              idpUser: "id" | "name" | "disabled";
+            }
+          | {
+              oldIdpUser: "id" | "name" | "disabled";
+            }
+          | {
+              newIdpUser: "id" | "name" | "disabled";
+            }
+        ),
+      ]
+    | readonly [
+        (
+          | string
+          | boolean
+          | readonly string[]
+          | readonly boolean[]
+          | {
+              user: string;
+            }
+          | {
+              idpUser: "id" | "name" | "disabled";
+            }
+          | {
+              oldIdpUser: "id" | "name" | "disabled";
+            }
+          | {
+              newIdpUser: "id" | "name" | "disabled";
+            }
+        ),
+        "=" | "!=" | "in" | "not in",
+        (
+          | string
+          | boolean
+          | readonly string[]
+          | readonly boolean[]
+          | {
+              user: string;
+            }
+          | {
+              idpUser: "id" | "name" | "disabled";
+            }
+          | {
+              oldIdpUser: "id" | "name" | "disabled";
+            }
+          | {
+              newIdpUser: "id" | "name" | "disabled";
+            }
+        ),
+        boolean,
+      ]
     | readonly (
-        | string
         | boolean
-        | readonly string[]
-        | readonly boolean[]
-        | {
-            user: string;
-          }
-        | {
-            idpUser: "id" | "name" | "disabled";
-          }
-        | {
-            oldIdpUser: "id" | "name" | "disabled";
-          }
-        | {
-            newIdpUser: "id" | "name" | "disabled";
-          }
-      )[]
-    | readonly (
-        | boolean
-        | readonly (
-            | string
-            | boolean
-            | readonly string[]
-            | readonly boolean[]
-            | {
-                user: string;
-              }
-            | {
-                idpUser: "id" | "name" | "disabled";
-              }
-            | {
-                oldIdpUser: "id" | "name" | "disabled";
-              }
-            | {
-                newIdpUser: "id" | "name" | "disabled";
-              }
-          )[]
+        | readonly [
+            (
+              | string
+              | boolean
+              | readonly string[]
+              | readonly boolean[]
+              | {
+                  user: string;
+                }
+              | {
+                  idpUser: "id" | "name" | "disabled";
+                }
+              | {
+                  oldIdpUser: "id" | "name" | "disabled";
+                }
+              | {
+                  newIdpUser: "id" | "name" | "disabled";
+                }
+            ),
+            "=" | "!=" | "in" | "not in",
+            (
+              | string
+              | boolean
+              | readonly string[]
+              | readonly boolean[]
+              | {
+                  user: string;
+                }
+              | {
+                  idpUser: "id" | "name" | "disabled";
+                }
+              | {
+                  oldIdpUser: "id" | "name" | "disabled";
+                }
+              | {
+                  newIdpUser: "id" | "name" | "disabled";
+                }
+            ),
+          ]
       )[]
     | {
         conditions:
-          | readonly (
-              | string
-              | boolean
-              | readonly string[]
-              | readonly boolean[]
-              | {
-                  user: string;
-                }
-              | {
-                  idpUser: "id" | "name" | "disabled";
-                }
-              | {
-                  oldIdpUser: "id" | "name" | "disabled";
-                }
-              | {
-                  newIdpUser: "id" | "name" | "disabled";
-                }
-            )[]
-          | readonly (readonly (
-              | string
-              | boolean
-              | readonly string[]
-              | readonly boolean[]
-              | {
-                  user: string;
-                }
-              | {
-                  idpUser: "id" | "name" | "disabled";
-                }
-              | {
-                  oldIdpUser: "id" | "name" | "disabled";
-                }
-              | {
-                  newIdpUser: "id" | "name" | "disabled";
-                }
-            )[])[];
+          | readonly [
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    newIdpUser: "id" | "name" | "disabled";
+                  }
+              ),
+              "=" | "!=" | "in" | "not in",
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    newIdpUser: "id" | "name" | "disabled";
+                  }
+              ),
+            ]
+          | readonly (readonly [
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    newIdpUser: "id" | "name" | "disabled";
+                  }
+              ),
+              "=" | "!=" | "in" | "not in",
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    newIdpUser: "id" | "name" | "disabled";
+                  }
+              ),
+            ])[];
         description?: string | undefined;
         permit?: boolean | undefined;
       }
   )[];
   update: readonly (
+    | readonly [
+        (
+          | string
+          | boolean
+          | readonly string[]
+          | readonly boolean[]
+          | {
+              user: string;
+            }
+          | {
+              idpUser: "id" | "name" | "disabled";
+            }
+          | {
+              oldIdpUser: "id" | "name" | "disabled";
+            }
+          | {
+              newIdpUser: "id" | "name" | "disabled";
+            }
+        ),
+        "=" | "!=" | "in" | "not in",
+        (
+          | string
+          | boolean
+          | readonly string[]
+          | readonly boolean[]
+          | {
+              user: string;
+            }
+          | {
+              idpUser: "id" | "name" | "disabled";
+            }
+          | {
+              oldIdpUser: "id" | "name" | "disabled";
+            }
+          | {
+              newIdpUser: "id" | "name" | "disabled";
+            }
+        ),
+      ]
+    | readonly [
+        (
+          | string
+          | boolean
+          | readonly string[]
+          | readonly boolean[]
+          | {
+              user: string;
+            }
+          | {
+              idpUser: "id" | "name" | "disabled";
+            }
+          | {
+              oldIdpUser: "id" | "name" | "disabled";
+            }
+          | {
+              newIdpUser: "id" | "name" | "disabled";
+            }
+        ),
+        "=" | "!=" | "in" | "not in",
+        (
+          | string
+          | boolean
+          | readonly string[]
+          | readonly boolean[]
+          | {
+              user: string;
+            }
+          | {
+              idpUser: "id" | "name" | "disabled";
+            }
+          | {
+              oldIdpUser: "id" | "name" | "disabled";
+            }
+          | {
+              newIdpUser: "id" | "name" | "disabled";
+            }
+        ),
+        boolean,
+      ]
     | readonly (
-        | string
         | boolean
-        | readonly string[]
-        | readonly boolean[]
-        | {
-            user: string;
-          }
-        | {
-            idpUser: "id" | "name" | "disabled";
-          }
-        | {
-            oldIdpUser: "id" | "name" | "disabled";
-          }
-        | {
-            newIdpUser: "id" | "name" | "disabled";
-          }
-      )[]
-    | readonly (
-        | boolean
-        | readonly (
-            | string
-            | boolean
-            | readonly string[]
-            | readonly boolean[]
-            | {
-                user: string;
-              }
-            | {
-                idpUser: "id" | "name" | "disabled";
-              }
-            | {
-                oldIdpUser: "id" | "name" | "disabled";
-              }
-            | {
-                newIdpUser: "id" | "name" | "disabled";
-              }
-          )[]
+        | readonly [
+            (
+              | string
+              | boolean
+              | readonly string[]
+              | readonly boolean[]
+              | {
+                  user: string;
+                }
+              | {
+                  idpUser: "id" | "name" | "disabled";
+                }
+              | {
+                  oldIdpUser: "id" | "name" | "disabled";
+                }
+              | {
+                  newIdpUser: "id" | "name" | "disabled";
+                }
+            ),
+            "=" | "!=" | "in" | "not in",
+            (
+              | string
+              | boolean
+              | readonly string[]
+              | readonly boolean[]
+              | {
+                  user: string;
+                }
+              | {
+                  idpUser: "id" | "name" | "disabled";
+                }
+              | {
+                  oldIdpUser: "id" | "name" | "disabled";
+                }
+              | {
+                  newIdpUser: "id" | "name" | "disabled";
+                }
+            ),
+          ]
       )[]
     | {
         conditions:
-          | readonly (
-              | string
-              | boolean
-              | readonly string[]
-              | readonly boolean[]
-              | {
-                  user: string;
-                }
-              | {
-                  idpUser: "id" | "name" | "disabled";
-                }
-              | {
-                  oldIdpUser: "id" | "name" | "disabled";
-                }
-              | {
-                  newIdpUser: "id" | "name" | "disabled";
-                }
-            )[]
-          | readonly (readonly (
-              | string
-              | boolean
-              | readonly string[]
-              | readonly boolean[]
-              | {
-                  user: string;
-                }
-              | {
-                  idpUser: "id" | "name" | "disabled";
-                }
-              | {
-                  oldIdpUser: "id" | "name" | "disabled";
-                }
-              | {
-                  newIdpUser: "id" | "name" | "disabled";
-                }
-            )[])[];
+          | readonly [
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    newIdpUser: "id" | "name" | "disabled";
+                  }
+              ),
+              "=" | "!=" | "in" | "not in",
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    newIdpUser: "id" | "name" | "disabled";
+                  }
+              ),
+            ]
+          | readonly (readonly [
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    newIdpUser: "id" | "name" | "disabled";
+                  }
+              ),
+              "=" | "!=" | "in" | "not in",
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    newIdpUser: "id" | "name" | "disabled";
+                  }
+              ),
+            ])[];
         description?: string | undefined;
         permit?: boolean | undefined;
       }
   )[];
   delete: readonly (
+    | readonly [
+        (
+          | string
+          | boolean
+          | readonly string[]
+          | readonly boolean[]
+          | {
+              user: string;
+            }
+          | {
+              idpUser: "id" | "name" | "disabled";
+            }
+          | {
+              oldIdpUser: "id" | "name" | "disabled";
+            }
+          | {
+              newIdpUser: "id" | "name" | "disabled";
+            }
+        ),
+        "=" | "!=" | "in" | "not in",
+        (
+          | string
+          | boolean
+          | readonly string[]
+          | readonly boolean[]
+          | {
+              user: string;
+            }
+          | {
+              idpUser: "id" | "name" | "disabled";
+            }
+          | {
+              oldIdpUser: "id" | "name" | "disabled";
+            }
+          | {
+              newIdpUser: "id" | "name" | "disabled";
+            }
+        ),
+      ]
+    | readonly [
+        (
+          | string
+          | boolean
+          | readonly string[]
+          | readonly boolean[]
+          | {
+              user: string;
+            }
+          | {
+              idpUser: "id" | "name" | "disabled";
+            }
+          | {
+              oldIdpUser: "id" | "name" | "disabled";
+            }
+          | {
+              newIdpUser: "id" | "name" | "disabled";
+            }
+        ),
+        "=" | "!=" | "in" | "not in",
+        (
+          | string
+          | boolean
+          | readonly string[]
+          | readonly boolean[]
+          | {
+              user: string;
+            }
+          | {
+              idpUser: "id" | "name" | "disabled";
+            }
+          | {
+              oldIdpUser: "id" | "name" | "disabled";
+            }
+          | {
+              newIdpUser: "id" | "name" | "disabled";
+            }
+        ),
+        boolean,
+      ]
     | readonly (
-        | string
         | boolean
-        | readonly string[]
-        | readonly boolean[]
-        | {
-            user: string;
-          }
-        | {
-            idpUser: "id" | "name" | "disabled";
-          }
-        | {
-            oldIdpUser: "id" | "name" | "disabled";
-          }
-        | {
-            newIdpUser: "id" | "name" | "disabled";
-          }
-      )[]
-    | readonly (
-        | boolean
-        | readonly (
-            | string
-            | boolean
-            | readonly string[]
-            | readonly boolean[]
-            | {
-                user: string;
-              }
-            | {
-                idpUser: "id" | "name" | "disabled";
-              }
-            | {
-                oldIdpUser: "id" | "name" | "disabled";
-              }
-            | {
-                newIdpUser: "id" | "name" | "disabled";
-              }
-          )[]
+        | readonly [
+            (
+              | string
+              | boolean
+              | readonly string[]
+              | readonly boolean[]
+              | {
+                  user: string;
+                }
+              | {
+                  idpUser: "id" | "name" | "disabled";
+                }
+              | {
+                  oldIdpUser: "id" | "name" | "disabled";
+                }
+              | {
+                  newIdpUser: "id" | "name" | "disabled";
+                }
+            ),
+            "=" | "!=" | "in" | "not in",
+            (
+              | string
+              | boolean
+              | readonly string[]
+              | readonly boolean[]
+              | {
+                  user: string;
+                }
+              | {
+                  idpUser: "id" | "name" | "disabled";
+                }
+              | {
+                  oldIdpUser: "id" | "name" | "disabled";
+                }
+              | {
+                  newIdpUser: "id" | "name" | "disabled";
+                }
+            ),
+          ]
       )[]
     | {
         conditions:
-          | readonly (
-              | string
-              | boolean
-              | readonly string[]
-              | readonly boolean[]
-              | {
-                  user: string;
-                }
-              | {
-                  idpUser: "id" | "name" | "disabled";
-                }
-              | {
-                  oldIdpUser: "id" | "name" | "disabled";
-                }
-              | {
-                  newIdpUser: "id" | "name" | "disabled";
-                }
-            )[]
-          | readonly (readonly (
-              | string
-              | boolean
-              | readonly string[]
-              | readonly boolean[]
-              | {
-                  user: string;
-                }
-              | {
-                  idpUser: "id" | "name" | "disabled";
-                }
-              | {
-                  oldIdpUser: "id" | "name" | "disabled";
-                }
-              | {
-                  newIdpUser: "id" | "name" | "disabled";
-                }
-            )[])[];
+          | readonly [
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    newIdpUser: "id" | "name" | "disabled";
+                  }
+              ),
+              "=" | "!=" | "in" | "not in",
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    newIdpUser: "id" | "name" | "disabled";
+                  }
+              ),
+            ]
+          | readonly (readonly [
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    newIdpUser: "id" | "name" | "disabled";
+                  }
+              ),
+              "=" | "!=" | "in" | "not in",
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    newIdpUser: "id" | "name" | "disabled";
+                  }
+              ),
+            ])[];
         description?: string | undefined;
         permit?: boolean | undefined;
       }
   )[];
   sendPasswordResetEmail: readonly (
+    | readonly [
+        (
+          | string
+          | boolean
+          | readonly string[]
+          | readonly boolean[]
+          | {
+              user: string;
+            }
+          | {
+              idpUser: "id" | "name" | "disabled";
+            }
+          | {
+              oldIdpUser: "id" | "name" | "disabled";
+            }
+          | {
+              newIdpUser: "id" | "name" | "disabled";
+            }
+        ),
+        "=" | "!=" | "in" | "not in",
+        (
+          | string
+          | boolean
+          | readonly string[]
+          | readonly boolean[]
+          | {
+              user: string;
+            }
+          | {
+              idpUser: "id" | "name" | "disabled";
+            }
+          | {
+              oldIdpUser: "id" | "name" | "disabled";
+            }
+          | {
+              newIdpUser: "id" | "name" | "disabled";
+            }
+        ),
+      ]
+    | readonly [
+        (
+          | string
+          | boolean
+          | readonly string[]
+          | readonly boolean[]
+          | {
+              user: string;
+            }
+          | {
+              idpUser: "id" | "name" | "disabled";
+            }
+          | {
+              oldIdpUser: "id" | "name" | "disabled";
+            }
+          | {
+              newIdpUser: "id" | "name" | "disabled";
+            }
+        ),
+        "=" | "!=" | "in" | "not in",
+        (
+          | string
+          | boolean
+          | readonly string[]
+          | readonly boolean[]
+          | {
+              user: string;
+            }
+          | {
+              idpUser: "id" | "name" | "disabled";
+            }
+          | {
+              oldIdpUser: "id" | "name" | "disabled";
+            }
+          | {
+              newIdpUser: "id" | "name" | "disabled";
+            }
+        ),
+        boolean,
+      ]
     | readonly (
-        | string
         | boolean
-        | readonly string[]
-        | readonly boolean[]
-        | {
-            user: string;
-          }
-        | {
-            idpUser: "id" | "name" | "disabled";
-          }
-        | {
-            oldIdpUser: "id" | "name" | "disabled";
-          }
-        | {
-            newIdpUser: "id" | "name" | "disabled";
-          }
-      )[]
-    | readonly (
-        | boolean
-        | readonly (
-            | string
-            | boolean
-            | readonly string[]
-            | readonly boolean[]
-            | {
-                user: string;
-              }
-            | {
-                idpUser: "id" | "name" | "disabled";
-              }
-            | {
-                oldIdpUser: "id" | "name" | "disabled";
-              }
-            | {
-                newIdpUser: "id" | "name" | "disabled";
-              }
-          )[]
+        | readonly [
+            (
+              | string
+              | boolean
+              | readonly string[]
+              | readonly boolean[]
+              | {
+                  user: string;
+                }
+              | {
+                  idpUser: "id" | "name" | "disabled";
+                }
+              | {
+                  oldIdpUser: "id" | "name" | "disabled";
+                }
+              | {
+                  newIdpUser: "id" | "name" | "disabled";
+                }
+            ),
+            "=" | "!=" | "in" | "not in",
+            (
+              | string
+              | boolean
+              | readonly string[]
+              | readonly boolean[]
+              | {
+                  user: string;
+                }
+              | {
+                  idpUser: "id" | "name" | "disabled";
+                }
+              | {
+                  oldIdpUser: "id" | "name" | "disabled";
+                }
+              | {
+                  newIdpUser: "id" | "name" | "disabled";
+                }
+            ),
+          ]
       )[]
     | {
         conditions:
-          | readonly (
-              | string
-              | boolean
-              | readonly string[]
-              | readonly boolean[]
-              | {
-                  user: string;
-                }
-              | {
-                  idpUser: "id" | "name" | "disabled";
-                }
-              | {
-                  oldIdpUser: "id" | "name" | "disabled";
-                }
-              | {
-                  newIdpUser: "id" | "name" | "disabled";
-                }
-            )[]
-          | readonly (readonly (
-              | string
-              | boolean
-              | readonly string[]
-              | readonly boolean[]
-              | {
-                  user: string;
-                }
-              | {
-                  idpUser: "id" | "name" | "disabled";
-                }
-              | {
-                  oldIdpUser: "id" | "name" | "disabled";
-                }
-              | {
-                  newIdpUser: "id" | "name" | "disabled";
-                }
-            )[])[];
+          | readonly [
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    newIdpUser: "id" | "name" | "disabled";
+                  }
+              ),
+              "=" | "!=" | "in" | "not in",
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    newIdpUser: "id" | "name" | "disabled";
+                  }
+              ),
+            ]
+          | readonly (readonly [
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    newIdpUser: "id" | "name" | "disabled";
+                  }
+              ),
+              "=" | "!=" | "in" | "not in",
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "id" | "name" | "disabled";
+                  }
+                | {
+                    newIdpUser: "id" | "name" | "disabled";
+                  }
+              ),
+            ])[];
         description?: string | undefined;
         permit?: boolean | undefined;
       }
@@ -487,15 +1107,16 @@ export type IdPPermissionInput = IdPPermission;
 export type IdPInput = {
   /** IdP service name */
   name: string;
+  /** OAuth2 client names that can use this IdP */
+  clients: string[];
   /** Authorization mode for IdP API access */
-  authorization:
+  authorization?:
     | "insecure"
     | "loggedIn"
     | {
         cel: string;
-      };
-  /** OAuth2 client names that can use this IdP */
-  clients: string[];
+      }
+    | undefined;
   /** UI language for IdP pages */
   lang?: "en" | "ja" | undefined;
   /** User authentication policy configuration */
@@ -539,411 +1160,1031 @@ export type IdPInput = {
   permission?:
     | {
         create: readonly (
+          | readonly [
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+              "in" | "=" | "!=" | "not in",
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+            ]
+          | readonly [
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+              "in" | "=" | "!=" | "not in",
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+              boolean,
+            ]
           | readonly (
-              | string
               | boolean
-              | readonly string[]
-              | readonly boolean[]
-              | {
-                  user: string;
-                }
-              | {
-                  idpUser: "name" | "id" | "disabled";
-                }
-              | {
-                  oldIdpUser: "name" | "id" | "disabled";
-                }
-              | {
-                  newIdpUser: "name" | "id" | "disabled";
-                }
-            )[]
-          | readonly (
-              | boolean
-              | readonly (
-                  | string
-                  | boolean
-                  | readonly string[]
-                  | readonly boolean[]
-                  | {
-                      user: string;
-                    }
-                  | {
-                      idpUser: "name" | "id" | "disabled";
-                    }
-                  | {
-                      oldIdpUser: "name" | "id" | "disabled";
-                    }
-                  | {
-                      newIdpUser: "name" | "id" | "disabled";
-                    }
-                )[]
+              | readonly [
+                  (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        oldIdpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        newIdpUser: "name" | "id" | "disabled";
+                      }
+                  ),
+                  "in" | "=" | "!=" | "not in",
+                  (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        oldIdpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        newIdpUser: "name" | "id" | "disabled";
+                      }
+                  ),
+                ]
             )[]
           | {
               conditions:
-                | readonly (
-                    | string
-                    | boolean
-                    | readonly string[]
-                    | readonly boolean[]
-                    | {
-                        user: string;
-                      }
-                    | {
-                        idpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        oldIdpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        newIdpUser: "name" | "id" | "disabled";
-                      }
-                  )[]
-                | readonly (readonly (
-                    | string
-                    | boolean
-                    | readonly string[]
-                    | readonly boolean[]
-                    | {
-                        user: string;
-                      }
-                    | {
-                        idpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        oldIdpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        newIdpUser: "name" | "id" | "disabled";
-                      }
-                  )[])[];
+                | readonly [
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                    "in" | "=" | "!=" | "not in",
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                  ]
+                | readonly (readonly [
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                    "in" | "=" | "!=" | "not in",
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                  ])[];
               description?: string | undefined;
               permit?: boolean | undefined;
             }
         )[];
         read: readonly (
+          | readonly [
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+              "in" | "=" | "!=" | "not in",
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+            ]
+          | readonly [
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+              "in" | "=" | "!=" | "not in",
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+              boolean,
+            ]
           | readonly (
-              | string
               | boolean
-              | readonly string[]
-              | readonly boolean[]
-              | {
-                  user: string;
-                }
-              | {
-                  idpUser: "name" | "id" | "disabled";
-                }
-              | {
-                  oldIdpUser: "name" | "id" | "disabled";
-                }
-              | {
-                  newIdpUser: "name" | "id" | "disabled";
-                }
-            )[]
-          | readonly (
-              | boolean
-              | readonly (
-                  | string
-                  | boolean
-                  | readonly string[]
-                  | readonly boolean[]
-                  | {
-                      user: string;
-                    }
-                  | {
-                      idpUser: "name" | "id" | "disabled";
-                    }
-                  | {
-                      oldIdpUser: "name" | "id" | "disabled";
-                    }
-                  | {
-                      newIdpUser: "name" | "id" | "disabled";
-                    }
-                )[]
+              | readonly [
+                  (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        oldIdpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        newIdpUser: "name" | "id" | "disabled";
+                      }
+                  ),
+                  "in" | "=" | "!=" | "not in",
+                  (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        oldIdpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        newIdpUser: "name" | "id" | "disabled";
+                      }
+                  ),
+                ]
             )[]
           | {
               conditions:
-                | readonly (
-                    | string
-                    | boolean
-                    | readonly string[]
-                    | readonly boolean[]
-                    | {
-                        user: string;
-                      }
-                    | {
-                        idpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        oldIdpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        newIdpUser: "name" | "id" | "disabled";
-                      }
-                  )[]
-                | readonly (readonly (
-                    | string
-                    | boolean
-                    | readonly string[]
-                    | readonly boolean[]
-                    | {
-                        user: string;
-                      }
-                    | {
-                        idpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        oldIdpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        newIdpUser: "name" | "id" | "disabled";
-                      }
-                  )[])[];
+                | readonly [
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                    "in" | "=" | "!=" | "not in",
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                  ]
+                | readonly (readonly [
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                    "in" | "=" | "!=" | "not in",
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                  ])[];
               description?: string | undefined;
               permit?: boolean | undefined;
             }
         )[];
         update: readonly (
+          | readonly [
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+              "in" | "=" | "!=" | "not in",
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+            ]
+          | readonly [
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+              "in" | "=" | "!=" | "not in",
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+              boolean,
+            ]
           | readonly (
-              | string
               | boolean
-              | readonly string[]
-              | readonly boolean[]
-              | {
-                  user: string;
-                }
-              | {
-                  idpUser: "name" | "id" | "disabled";
-                }
-              | {
-                  oldIdpUser: "name" | "id" | "disabled";
-                }
-              | {
-                  newIdpUser: "name" | "id" | "disabled";
-                }
-            )[]
-          | readonly (
-              | boolean
-              | readonly (
-                  | string
-                  | boolean
-                  | readonly string[]
-                  | readonly boolean[]
-                  | {
-                      user: string;
-                    }
-                  | {
-                      idpUser: "name" | "id" | "disabled";
-                    }
-                  | {
-                      oldIdpUser: "name" | "id" | "disabled";
-                    }
-                  | {
-                      newIdpUser: "name" | "id" | "disabled";
-                    }
-                )[]
+              | readonly [
+                  (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        oldIdpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        newIdpUser: "name" | "id" | "disabled";
+                      }
+                  ),
+                  "in" | "=" | "!=" | "not in",
+                  (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        oldIdpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        newIdpUser: "name" | "id" | "disabled";
+                      }
+                  ),
+                ]
             )[]
           | {
               conditions:
-                | readonly (
-                    | string
-                    | boolean
-                    | readonly string[]
-                    | readonly boolean[]
-                    | {
-                        user: string;
-                      }
-                    | {
-                        idpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        oldIdpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        newIdpUser: "name" | "id" | "disabled";
-                      }
-                  )[]
-                | readonly (readonly (
-                    | string
-                    | boolean
-                    | readonly string[]
-                    | readonly boolean[]
-                    | {
-                        user: string;
-                      }
-                    | {
-                        idpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        oldIdpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        newIdpUser: "name" | "id" | "disabled";
-                      }
-                  )[])[];
+                | readonly [
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                    "in" | "=" | "!=" | "not in",
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                  ]
+                | readonly (readonly [
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                    "in" | "=" | "!=" | "not in",
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                  ])[];
               description?: string | undefined;
               permit?: boolean | undefined;
             }
         )[];
         delete: readonly (
+          | readonly [
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+              "in" | "=" | "!=" | "not in",
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+            ]
+          | readonly [
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+              "in" | "=" | "!=" | "not in",
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+              boolean,
+            ]
           | readonly (
-              | string
               | boolean
-              | readonly string[]
-              | readonly boolean[]
-              | {
-                  user: string;
-                }
-              | {
-                  idpUser: "name" | "id" | "disabled";
-                }
-              | {
-                  oldIdpUser: "name" | "id" | "disabled";
-                }
-              | {
-                  newIdpUser: "name" | "id" | "disabled";
-                }
-            )[]
-          | readonly (
-              | boolean
-              | readonly (
-                  | string
-                  | boolean
-                  | readonly string[]
-                  | readonly boolean[]
-                  | {
-                      user: string;
-                    }
-                  | {
-                      idpUser: "name" | "id" | "disabled";
-                    }
-                  | {
-                      oldIdpUser: "name" | "id" | "disabled";
-                    }
-                  | {
-                      newIdpUser: "name" | "id" | "disabled";
-                    }
-                )[]
+              | readonly [
+                  (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        oldIdpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        newIdpUser: "name" | "id" | "disabled";
+                      }
+                  ),
+                  "in" | "=" | "!=" | "not in",
+                  (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        oldIdpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        newIdpUser: "name" | "id" | "disabled";
+                      }
+                  ),
+                ]
             )[]
           | {
               conditions:
-                | readonly (
-                    | string
-                    | boolean
-                    | readonly string[]
-                    | readonly boolean[]
-                    | {
-                        user: string;
-                      }
-                    | {
-                        idpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        oldIdpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        newIdpUser: "name" | "id" | "disabled";
-                      }
-                  )[]
-                | readonly (readonly (
-                    | string
-                    | boolean
-                    | readonly string[]
-                    | readonly boolean[]
-                    | {
-                        user: string;
-                      }
-                    | {
-                        idpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        oldIdpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        newIdpUser: "name" | "id" | "disabled";
-                      }
-                  )[])[];
+                | readonly [
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                    "in" | "=" | "!=" | "not in",
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                  ]
+                | readonly (readonly [
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                    "in" | "=" | "!=" | "not in",
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                  ])[];
               description?: string | undefined;
               permit?: boolean | undefined;
             }
         )[];
         sendPasswordResetEmail: readonly (
+          | readonly [
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+              "in" | "=" | "!=" | "not in",
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+            ]
+          | readonly [
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+              "in" | "=" | "!=" | "not in",
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+              boolean,
+            ]
           | readonly (
-              | string
               | boolean
-              | readonly string[]
-              | readonly boolean[]
-              | {
-                  user: string;
-                }
-              | {
-                  idpUser: "name" | "id" | "disabled";
-                }
-              | {
-                  oldIdpUser: "name" | "id" | "disabled";
-                }
-              | {
-                  newIdpUser: "name" | "id" | "disabled";
-                }
-            )[]
-          | readonly (
-              | boolean
-              | readonly (
-                  | string
-                  | boolean
-                  | readonly string[]
-                  | readonly boolean[]
-                  | {
-                      user: string;
-                    }
-                  | {
-                      idpUser: "name" | "id" | "disabled";
-                    }
-                  | {
-                      oldIdpUser: "name" | "id" | "disabled";
-                    }
-                  | {
-                      newIdpUser: "name" | "id" | "disabled";
-                    }
-                )[]
+              | readonly [
+                  (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        oldIdpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        newIdpUser: "name" | "id" | "disabled";
+                      }
+                  ),
+                  "in" | "=" | "!=" | "not in",
+                  (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        oldIdpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        newIdpUser: "name" | "id" | "disabled";
+                      }
+                  ),
+                ]
             )[]
           | {
               conditions:
-                | readonly (
-                    | string
-                    | boolean
-                    | readonly string[]
-                    | readonly boolean[]
-                    | {
-                        user: string;
-                      }
-                    | {
-                        idpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        oldIdpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        newIdpUser: "name" | "id" | "disabled";
-                      }
-                  )[]
-                | readonly (readonly (
-                    | string
-                    | boolean
-                    | readonly string[]
-                    | readonly boolean[]
-                    | {
-                        user: string;
-                      }
-                    | {
-                        idpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        oldIdpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        newIdpUser: "name" | "id" | "disabled";
-                      }
-                  )[])[];
+                | readonly [
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                    "in" | "=" | "!=" | "not in",
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                  ]
+                | readonly (readonly [
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                    "in" | "=" | "!=" | "not in",
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                  ])[];
               description?: string | undefined;
               permit?: boolean | undefined;
             }
@@ -955,15 +2196,16 @@ export type IdPInput = {
 export type IdP = {
   /** IdP service name */
   name: string;
+  /** OAuth2 client names that can use this IdP */
+  clients: string[];
   /** Authorization mode for IdP API access */
-  authorization:
+  authorization?:
     | "insecure"
     | "loggedIn"
     | {
         cel: string;
-      };
-  /** OAuth2 client names that can use this IdP */
-  clients: string[];
+      }
+    | undefined;
   /** UI language for IdP pages */
   lang?: "en" | "ja" | undefined;
   /** User authentication policy configuration */
@@ -1006,411 +2248,1031 @@ export type IdP = {
   permission?:
     | {
         create: readonly (
+          | readonly [
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+              "in" | "=" | "!=" | "not in",
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+            ]
+          | readonly [
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+              "in" | "=" | "!=" | "not in",
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+              boolean,
+            ]
           | readonly (
-              | string
               | boolean
-              | readonly string[]
-              | readonly boolean[]
-              | {
-                  user: string;
-                }
-              | {
-                  idpUser: "name" | "id" | "disabled";
-                }
-              | {
-                  oldIdpUser: "name" | "id" | "disabled";
-                }
-              | {
-                  newIdpUser: "name" | "id" | "disabled";
-                }
-            )[]
-          | readonly (
-              | boolean
-              | readonly (
-                  | string
-                  | boolean
-                  | readonly string[]
-                  | readonly boolean[]
-                  | {
-                      user: string;
-                    }
-                  | {
-                      idpUser: "name" | "id" | "disabled";
-                    }
-                  | {
-                      oldIdpUser: "name" | "id" | "disabled";
-                    }
-                  | {
-                      newIdpUser: "name" | "id" | "disabled";
-                    }
-                )[]
+              | readonly [
+                  (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        oldIdpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        newIdpUser: "name" | "id" | "disabled";
+                      }
+                  ),
+                  "in" | "=" | "!=" | "not in",
+                  (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        oldIdpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        newIdpUser: "name" | "id" | "disabled";
+                      }
+                  ),
+                ]
             )[]
           | {
               conditions:
-                | readonly (
-                    | string
-                    | boolean
-                    | readonly string[]
-                    | readonly boolean[]
-                    | {
-                        user: string;
-                      }
-                    | {
-                        idpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        oldIdpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        newIdpUser: "name" | "id" | "disabled";
-                      }
-                  )[]
-                | readonly (readonly (
-                    | string
-                    | boolean
-                    | readonly string[]
-                    | readonly boolean[]
-                    | {
-                        user: string;
-                      }
-                    | {
-                        idpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        oldIdpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        newIdpUser: "name" | "id" | "disabled";
-                      }
-                  )[])[];
+                | readonly [
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                    "in" | "=" | "!=" | "not in",
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                  ]
+                | readonly (readonly [
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                    "in" | "=" | "!=" | "not in",
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                  ])[];
               description?: string | undefined;
               permit?: boolean | undefined;
             }
         )[];
         read: readonly (
+          | readonly [
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+              "in" | "=" | "!=" | "not in",
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+            ]
+          | readonly [
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+              "in" | "=" | "!=" | "not in",
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+              boolean,
+            ]
           | readonly (
-              | string
               | boolean
-              | readonly string[]
-              | readonly boolean[]
-              | {
-                  user: string;
-                }
-              | {
-                  idpUser: "name" | "id" | "disabled";
-                }
-              | {
-                  oldIdpUser: "name" | "id" | "disabled";
-                }
-              | {
-                  newIdpUser: "name" | "id" | "disabled";
-                }
-            )[]
-          | readonly (
-              | boolean
-              | readonly (
-                  | string
-                  | boolean
-                  | readonly string[]
-                  | readonly boolean[]
-                  | {
-                      user: string;
-                    }
-                  | {
-                      idpUser: "name" | "id" | "disabled";
-                    }
-                  | {
-                      oldIdpUser: "name" | "id" | "disabled";
-                    }
-                  | {
-                      newIdpUser: "name" | "id" | "disabled";
-                    }
-                )[]
+              | readonly [
+                  (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        oldIdpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        newIdpUser: "name" | "id" | "disabled";
+                      }
+                  ),
+                  "in" | "=" | "!=" | "not in",
+                  (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        oldIdpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        newIdpUser: "name" | "id" | "disabled";
+                      }
+                  ),
+                ]
             )[]
           | {
               conditions:
-                | readonly (
-                    | string
-                    | boolean
-                    | readonly string[]
-                    | readonly boolean[]
-                    | {
-                        user: string;
-                      }
-                    | {
-                        idpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        oldIdpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        newIdpUser: "name" | "id" | "disabled";
-                      }
-                  )[]
-                | readonly (readonly (
-                    | string
-                    | boolean
-                    | readonly string[]
-                    | readonly boolean[]
-                    | {
-                        user: string;
-                      }
-                    | {
-                        idpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        oldIdpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        newIdpUser: "name" | "id" | "disabled";
-                      }
-                  )[])[];
+                | readonly [
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                    "in" | "=" | "!=" | "not in",
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                  ]
+                | readonly (readonly [
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                    "in" | "=" | "!=" | "not in",
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                  ])[];
               description?: string | undefined;
               permit?: boolean | undefined;
             }
         )[];
         update: readonly (
+          | readonly [
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+              "in" | "=" | "!=" | "not in",
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+            ]
+          | readonly [
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+              "in" | "=" | "!=" | "not in",
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+              boolean,
+            ]
           | readonly (
-              | string
               | boolean
-              | readonly string[]
-              | readonly boolean[]
-              | {
-                  user: string;
-                }
-              | {
-                  idpUser: "name" | "id" | "disabled";
-                }
-              | {
-                  oldIdpUser: "name" | "id" | "disabled";
-                }
-              | {
-                  newIdpUser: "name" | "id" | "disabled";
-                }
-            )[]
-          | readonly (
-              | boolean
-              | readonly (
-                  | string
-                  | boolean
-                  | readonly string[]
-                  | readonly boolean[]
-                  | {
-                      user: string;
-                    }
-                  | {
-                      idpUser: "name" | "id" | "disabled";
-                    }
-                  | {
-                      oldIdpUser: "name" | "id" | "disabled";
-                    }
-                  | {
-                      newIdpUser: "name" | "id" | "disabled";
-                    }
-                )[]
+              | readonly [
+                  (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        oldIdpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        newIdpUser: "name" | "id" | "disabled";
+                      }
+                  ),
+                  "in" | "=" | "!=" | "not in",
+                  (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        oldIdpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        newIdpUser: "name" | "id" | "disabled";
+                      }
+                  ),
+                ]
             )[]
           | {
               conditions:
-                | readonly (
-                    | string
-                    | boolean
-                    | readonly string[]
-                    | readonly boolean[]
-                    | {
-                        user: string;
-                      }
-                    | {
-                        idpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        oldIdpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        newIdpUser: "name" | "id" | "disabled";
-                      }
-                  )[]
-                | readonly (readonly (
-                    | string
-                    | boolean
-                    | readonly string[]
-                    | readonly boolean[]
-                    | {
-                        user: string;
-                      }
-                    | {
-                        idpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        oldIdpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        newIdpUser: "name" | "id" | "disabled";
-                      }
-                  )[])[];
+                | readonly [
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                    "in" | "=" | "!=" | "not in",
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                  ]
+                | readonly (readonly [
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                    "in" | "=" | "!=" | "not in",
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                  ])[];
               description?: string | undefined;
               permit?: boolean | undefined;
             }
         )[];
         delete: readonly (
+          | readonly [
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+              "in" | "=" | "!=" | "not in",
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+            ]
+          | readonly [
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+              "in" | "=" | "!=" | "not in",
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+              boolean,
+            ]
           | readonly (
-              | string
               | boolean
-              | readonly string[]
-              | readonly boolean[]
-              | {
-                  user: string;
-                }
-              | {
-                  idpUser: "name" | "id" | "disabled";
-                }
-              | {
-                  oldIdpUser: "name" | "id" | "disabled";
-                }
-              | {
-                  newIdpUser: "name" | "id" | "disabled";
-                }
-            )[]
-          | readonly (
-              | boolean
-              | readonly (
-                  | string
-                  | boolean
-                  | readonly string[]
-                  | readonly boolean[]
-                  | {
-                      user: string;
-                    }
-                  | {
-                      idpUser: "name" | "id" | "disabled";
-                    }
-                  | {
-                      oldIdpUser: "name" | "id" | "disabled";
-                    }
-                  | {
-                      newIdpUser: "name" | "id" | "disabled";
-                    }
-                )[]
+              | readonly [
+                  (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        oldIdpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        newIdpUser: "name" | "id" | "disabled";
+                      }
+                  ),
+                  "in" | "=" | "!=" | "not in",
+                  (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        oldIdpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        newIdpUser: "name" | "id" | "disabled";
+                      }
+                  ),
+                ]
             )[]
           | {
               conditions:
-                | readonly (
-                    | string
-                    | boolean
-                    | readonly string[]
-                    | readonly boolean[]
-                    | {
-                        user: string;
-                      }
-                    | {
-                        idpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        oldIdpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        newIdpUser: "name" | "id" | "disabled";
-                      }
-                  )[]
-                | readonly (readonly (
-                    | string
-                    | boolean
-                    | readonly string[]
-                    | readonly boolean[]
-                    | {
-                        user: string;
-                      }
-                    | {
-                        idpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        oldIdpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        newIdpUser: "name" | "id" | "disabled";
-                      }
-                  )[])[];
+                | readonly [
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                    "in" | "=" | "!=" | "not in",
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                  ]
+                | readonly (readonly [
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                    "in" | "=" | "!=" | "not in",
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                  ])[];
               description?: string | undefined;
               permit?: boolean | undefined;
             }
         )[];
         sendPasswordResetEmail: readonly (
+          | readonly [
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+              "in" | "=" | "!=" | "not in",
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+            ]
+          | readonly [
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+              "in" | "=" | "!=" | "not in",
+              (
+                | string
+                | boolean
+                | readonly string[]
+                | readonly boolean[]
+                | {
+                    user: string;
+                  }
+                | {
+                    idpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    oldIdpUser: "name" | "id" | "disabled";
+                  }
+                | {
+                    newIdpUser: "name" | "id" | "disabled";
+                  }
+              ),
+              boolean,
+            ]
           | readonly (
-              | string
               | boolean
-              | readonly string[]
-              | readonly boolean[]
-              | {
-                  user: string;
-                }
-              | {
-                  idpUser: "name" | "id" | "disabled";
-                }
-              | {
-                  oldIdpUser: "name" | "id" | "disabled";
-                }
-              | {
-                  newIdpUser: "name" | "id" | "disabled";
-                }
-            )[]
-          | readonly (
-              | boolean
-              | readonly (
-                  | string
-                  | boolean
-                  | readonly string[]
-                  | readonly boolean[]
-                  | {
-                      user: string;
-                    }
-                  | {
-                      idpUser: "name" | "id" | "disabled";
-                    }
-                  | {
-                      oldIdpUser: "name" | "id" | "disabled";
-                    }
-                  | {
-                      newIdpUser: "name" | "id" | "disabled";
-                    }
-                )[]
+              | readonly [
+                  (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        oldIdpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        newIdpUser: "name" | "id" | "disabled";
+                      }
+                  ),
+                  "in" | "=" | "!=" | "not in",
+                  (
+                    | string
+                    | boolean
+                    | readonly string[]
+                    | readonly boolean[]
+                    | {
+                        user: string;
+                      }
+                    | {
+                        idpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        oldIdpUser: "name" | "id" | "disabled";
+                      }
+                    | {
+                        newIdpUser: "name" | "id" | "disabled";
+                      }
+                  ),
+                ]
             )[]
           | {
               conditions:
-                | readonly (
-                    | string
-                    | boolean
-                    | readonly string[]
-                    | readonly boolean[]
-                    | {
-                        user: string;
-                      }
-                    | {
-                        idpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        oldIdpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        newIdpUser: "name" | "id" | "disabled";
-                      }
-                  )[]
-                | readonly (readonly (
-                    | string
-                    | boolean
-                    | readonly string[]
-                    | readonly boolean[]
-                    | {
-                        user: string;
-                      }
-                    | {
-                        idpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        oldIdpUser: "name" | "id" | "disabled";
-                      }
-                    | {
-                        newIdpUser: "name" | "id" | "disabled";
-                      }
-                  )[])[];
+                | readonly [
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                    "in" | "=" | "!=" | "not in",
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                  ]
+                | readonly (readonly [
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                    "in" | "=" | "!=" | "not in",
+                    (
+                      | string
+                      | boolean
+                      | readonly string[]
+                      | readonly boolean[]
+                      | {
+                          user: string;
+                        }
+                      | {
+                          idpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          oldIdpUser: "name" | "id" | "disabled";
+                        }
+                      | {
+                          newIdpUser: "name" | "id" | "disabled";
+                        }
+                    ),
+                  ])[];
               description?: string | undefined;
               permit?: boolean | undefined;
             }

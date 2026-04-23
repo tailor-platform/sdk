@@ -107,10 +107,12 @@ tailor-sdk staticwebsite list [options]
 
 **Options**
 
-| Option                          | Alias | Description       | Required | Default | Env                            |
-| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| Option                          | Alias | Description                                              | Required | Default  | Env                            |
+| ------------------------------- | ----- | -------------------------------------------------------- | -------- | -------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                             | No       | -        | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                        | No       | -        | `TAILOR_PLATFORM_PROFILE`      |
+| `--order <ORDER>`               | -     | Sort order (asc or desc)                                 | No       | `"desc"` | -                              |
+| `--limit <LIMIT>`               | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -        | -                              |
 
 <!-- politty:command:staticwebsite list:options:end -->
 

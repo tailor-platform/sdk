@@ -1,8 +1,9 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
+import { PageDirection } from "@tailor-proto/tailor/v1/resource_pb";
 import * as path from "pathe";
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { loadEnvFiles, durationArg, parseDuration, positiveIntArg } from "./args";
+import { describe, it, expect, beforeEach, afterEach, test, vi } from "vitest";
+import { loadEnvFiles, durationArg, parseDuration, positiveIntArg, toPageDirection } from "./args";
 
 describe("loadEnvFiles", () => {
   const originalEnv = process.env;
@@ -188,5 +189,19 @@ describe("positiveIntArg", () => {
 
   it("rejects non-integers", () => {
     expect(() => positiveIntArg.parse("1.5")).toThrow();
+  });
+});
+
+describe("toPageDirection", () => {
+  test("returns undefined when order is undefined", () => {
+    expect(toPageDirection(undefined)).toBeUndefined();
+  });
+
+  test("maps asc to PageDirection.ASC", () => {
+    expect(toPageDirection("asc")).toBe(PageDirection.ASC);
+  });
+
+  test("maps desc to PageDirection.DESC", () => {
+    expect(toPageDirection("desc")).toBe(PageDirection.DESC);
   });
 });

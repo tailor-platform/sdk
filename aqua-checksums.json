@@ -1,33 +1,33 @@
 {
   "checksums": [
     {
-      "id": "github_release/github.com/bufbuild/buf/v1.67.0/buf-Darwin-arm64.tar.gz",
-      "checksum": "83D778293C122F6BEF294F8E980DAE4C486A354B75D8F199B325F7B31025EC2D",
+      "id": "github_release/github.com/bufbuild/buf/v1.68.4/buf-Darwin-arm64.tar.gz",
+      "checksum": "ECC19E911E286EB7BF631F9F082FA1E2E86160608E4FA94DEB9DFF3568ADC2F2",
       "algorithm": "sha256"
     },
     {
-      "id": "github_release/github.com/bufbuild/buf/v1.67.0/buf-Darwin-x86_64.tar.gz",
-      "checksum": "4C2086469D7210931615B919D8A780D472B1B9B3D94684E743B51FE12C9DD0AA",
+      "id": "github_release/github.com/bufbuild/buf/v1.68.4/buf-Darwin-x86_64.tar.gz",
+      "checksum": "974A31E0E7F4A6C63D305F81A394C3C38A2D3ECBAB55FE8C5F6EE6DA5E2745D2",
       "algorithm": "sha256"
     },
     {
-      "id": "github_release/github.com/bufbuild/buf/v1.67.0/buf-Linux-aarch64.tar.gz",
-      "checksum": "3D542F0F99159C8B6442F4C1F6D8F59FD669356B97AA6F6B67EA4A5AF7F81EC7",
+      "id": "github_release/github.com/bufbuild/buf/v1.68.4/buf-Linux-aarch64.tar.gz",
+      "checksum": "99E2C63CF6ED3230837C005240BD9318E8CEA47961EED7F8ED768DEB14F32F44",
       "algorithm": "sha256"
     },
     {
-      "id": "github_release/github.com/bufbuild/buf/v1.67.0/buf-Linux-x86_64.tar.gz",
-      "checksum": "B8682C2EA6F377CF1441E4FBC54ED1ECCCBB9F2D887560C4320CF7807F015519",
+      "id": "github_release/github.com/bufbuild/buf/v1.68.4/buf-Linux-x86_64.tar.gz",
+      "checksum": "1ED9EAAB096EF2F32D4182C1E0C97DDF78CFACF209A8EABF7836E00B425A7706",
       "algorithm": "sha256"
     },
     {
-      "id": "github_release/github.com/bufbuild/buf/v1.67.0/buf-Windows-arm64.zip",
-      "checksum": "39ABFF2979A0E04BEDD7570485F4DD8DEF73F953B0F6DF1CCD02D77371217221",
+      "id": "github_release/github.com/bufbuild/buf/v1.68.4/buf-Windows-arm64.zip",
+      "checksum": "999468E8FBCAE9BB197195D7D93A2EBF8C6ED33B594C52813B24633BD15D22DE",
       "algorithm": "sha256"
     },
     {
-      "id": "github_release/github.com/bufbuild/buf/v1.67.0/buf-Windows-x86_64.zip",
-      "checksum": "CBE560670298A7BDE425122C59098C4A3B6B7A1E027B312990C96DBB6D1DF958",
+      "id": "github_release/github.com/bufbuild/buf/v1.68.4/buf-Windows-x86_64.zip",
+      "checksum": "36A9367D1BBA1ED0C28C60EB99B24F93D16323AED050A335D05033509BCBD322",
       "algorithm": "sha256"
     },
     {
@@ -91,8 +91,8 @@
       "algorithm": "sha256"
     },
     {
-      "id": "registries/github_content/github.com/aquaproj/aqua-registry/v4.492.0/registry.yaml",
-      "checksum": "A0FAAA0CDBA0C23349E000D45D7DFE48185519CA72A0D5618A4C6198F2BCBA9EE10FA209351D44437495541A3BCECD987D65D176BBF59CF23271FC30D53DA90E",
+      "id": "registries/github_content/github.com/aquaproj/aqua-registry/v4.497.0/registry.yaml",
+      "checksum": "371396DB3E3464928F2000A715F5ACCBC013CBCB7996C52B5DFE283CC14DC8CD1846F888326425A5CF19D206E9856C2404F05BBDA127E60CB18CEA8D59B073E5",
       "algorithm": "sha512"
     }
   ]

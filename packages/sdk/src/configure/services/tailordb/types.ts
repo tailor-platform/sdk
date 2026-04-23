@@ -1,64 +1,10 @@
-import { type TailorUser } from "@/configure/types";
-import { type output, type Prettify } from "@/configure/types/helpers";
-import { type DefinedFieldMetadata, type FieldMetadata } from "@/configure/types/types";
-import { type TailorAnyDBField, type TailorDBField } from "./schema";
-export type { TailorDBServiceConfig } from "@/types/tailordb.generated";
-export type {
-  TailorDBExternalConfig,
-  TailorDBMigrationConfig,
-  TailorDBServiceInput,
-} from "@/types/tailordb";
-import type { GqlOperationsInput } from "@/types/tailordb.generated";
+import type { output } from "@/types/helpers";
+import type { TailorAnyDBField, TailorDBField } from "@/types/tailor-db-field";
+import type { GqlOperationsConfig } from "@/types/tailordb";
+import type { TailorUser } from "@/types/user";
 import type { NonEmptyObject } from "type-fest";
 
-export type SerialConfig<T extends "string" | "integer" = "string" | "integer"> = Prettify<
-  {
-    start: number;
-    maxValue?: number;
-  } & (T extends "string"
-    ? {
-        format?: string;
-      }
-    : object)
->;
-
-export interface DBFieldMetadata extends FieldMetadata {
-  index?: boolean;
-  unique?: boolean;
-  vector?: boolean;
-  foreignKey?: boolean;
-  foreignKeyType?: string;
-  foreignKeyField?: string;
-  // Hooks are user-defined and may depend on runtime data.
-  // oxlint-disable-next-line no-explicit-any
-  hooks?: Hook<any, any>;
-  serial?: SerialConfig;
-  relation?: boolean;
-  scale?: number;
-}
-
-export interface DefinedDBFieldMetadata extends DefinedFieldMetadata {
-  index?: boolean;
-  unique?: boolean;
-  vector?: boolean;
-  foreignKey?: boolean;
-  foreignKeyType?: boolean;
-  validate?: boolean;
-  hooks?: {
-    create: boolean;
-    update: boolean;
-  };
-  serial?: boolean;
-  relation?: boolean;
-}
-
-export type ExcludeNestedDBFields<T extends Record<string, TailorAnyDBField>> = {
-  // Nested types depend on generic output; exclude them via a loose match.
-  // oxlint-disable-next-line no-explicit-any
-  [K in keyof T]: T[K] extends TailorDBField<{ type: "nested"; array: boolean }, any>
-    ? never
-    : T[K];
-};
+// --- Hook types (UX-focused, for configure layer) ---
 
 type HookFn<TValue, TData, TReturn> = (args: {
   value: TValue;
@@ -86,13 +32,17 @@ export type Hooks<
       : K]?: Hook<TData, output<F[K]>>;
 }>;
 
-export type IndexDef<T extends { fields: Record<PropertyKey, unknown> }> = {
-  fields: [keyof T["fields"], keyof T["fields"], ...(keyof T["fields"])[]];
-  unique?: boolean;
-  name?: string;
+// --- Field helper types ---
+
+export type ExcludeNestedDBFields<T extends Record<string, TailorAnyDBField>> = {
+  // Nested types depend on generic output; exclude them via a loose match.
+  // oxlint-disable-next-line no-explicit-any
+  [K in keyof T]: T[K] extends TailorDBField<{ type: "nested"; array: boolean }, any>
+    ? never
+    : T[K];
 };
 
-export type GqlOperationsConfig = GqlOperationsInput;
+// --- Type features ---
 
 export interface TypeFeatures {
   pluralForm?: string;

@@ -5,7 +5,7 @@ import oxlint from "eslint-plugin-oxlint";
 
 export default defineConfig([
   // Ignore sdk's output directory.
-  globalIgnores([".tailor-sdk/", "src/generated/"]),
+  globalIgnores([".tailor-sdk/", "src/generated/", "tailor.d.ts"]),
   // Use recommended rules.
   // https://typescript-eslint.io/users/configs#projects-with-type-checking
   eslint.configs.recommended,

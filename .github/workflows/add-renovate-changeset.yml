@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   add-changeset-app:
@@ -18,41 +19,105 @@ jobs:
       github.event.pull_request.user.type == 'Bot'
 
     steps:
-      - name: Checkout
+      - name: Checkout PR head
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          # Default ref on pull_request events is the merge ref
+          # (refs/pull/N/merge), which is PR head merged with the *current* base
+          # branch tip. That pulls in unrelated base-branch changes whenever main
+          # moves forward while the PR is open, causing false positives. Pin to
+          # the PR head sha so the diff only reflects this PR's own changes.
+          ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
+          fetch-depth: 0
 
-      - name: Check if changeset exists
-        id: check
+      - name: Determine changeset plan
+        id: plan
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
+          set -eo pipefail
+
           FILENAME=".changeset/renovate-${PR_NUMBER}.md"
           if [ -f "$FILENAME" ]; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "should_create=false" >> "$GITHUB_OUTPUT"
+            echo "add_skip_label=false" >> "$GITHUB_OUTPUT"
+            echo "Changeset $FILENAME already exists; skipping"
+            exit 0
           fi
 
+          git fetch --no-tags --quiet origin "$BASE_REF"
+          BASE_SHA=$(git merge-base "origin/${BASE_REF}" HEAD)
+
+          changed=$(git diff --name-only "$BASE_SHA" HEAD \
+            | grep -E '^packages/[^/]+/package\.json$' || true)
+
+          if [ -z "$changed" ]; then
+            echo "should_create=false" >> "$GITHUB_OUTPUT"
+            echo "add_skip_label=true" >> "$GITHUB_OUTPUT"
+            echo "No packages/*/package.json changes; skipping"
+            exit 0
+          fi
+
+          names=()
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            old=$(git show "$BASE_SHA:$file" 2>/dev/null \
+              | jq -S 'del(.devDependencies)' 2>/dev/null || echo "null")
+            new=$(jq -S 'del(.devDependencies)' "$file")
+            if [ "$old" = "$new" ]; then
+              echo "Skipping $file (devDependencies-only change)"
+              continue
+            fi
+            name=$(jq -r '.name' "$file")
+            # @tailor-platform/create-sdk is in the fixed group with
+            # @tailor-platform/sdk (see .changeset/config.json), so normalize
+            # to avoid redundant entries — they always bump together.
+            if [ "$name" = "@tailor-platform/create-sdk" ]; then
+              name="@tailor-platform/sdk"
+            fi
+            names+=("$name")
+          done <<< "$changed"
+
+          if [ "${#names[@]}" -eq 0 ]; then
+            echo "should_create=false" >> "$GITHUB_OUTPUT"
+            echo "add_skip_label=true" >> "$GITHUB_OUTPUT"
+            echo "Only devDependencies changed; no changeset needed"
+            exit 0
+          fi
+
+          unique=$(printf '%s\n' "${names[@]}" | sort -u)
+          {
+            echo "should_create=true"
+            echo "add_skip_label=false"
+            echo "names<<NAMES_EOF"
+            echo "$unique"
+            echo "NAMES_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Create changeset file
-        if: steps.check.outputs.exists == 'false'
+        if: steps.plan.outputs.should_create == 'true'
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          NAMES: ${{ steps.plan.outputs.names }}
         run: |
-          FILENAME="renovate-${PR_NUMBER}.md"
-
-          cat > ".changeset/${FILENAME}" << EOF
-          ---
-          "@tailor-platform/sdk": patch
-          ---
-
-          ${PR_TITLE}
-          EOF
+          set -eo pipefail
+          FILENAME=".changeset/renovate-${PR_NUMBER}.md"
+          {
+            echo "---"
+            while IFS= read -r name; do
+              [ -z "$name" ] && continue
+              printf '"%s": patch\n' "$name"
+            done <<< "$NAMES"
+            echo "---"
+            echo ""
+            printf '%s\n' "${PR_TITLE}"
+          } > "$FILENAME"
 
       - name: Commit changeset
-        if: steps.check.outputs.exists == 'false'
+        if: steps.plan.outputs.should_create == 'true'
         uses: suzuki-shunsuke/commit-action@f12e2d628a4ab72dcefe7890ae07e8dbf1e201b9 # v0.1.1
         with:
           app_id: ${{ secrets.TAILOR_GITHUB_APP_ID }}
@@ -61,3 +126,10 @@ jobs:
           files: |
             .changeset/renovate-${{ github.event.pull_request.number }}.md
           fail_on_self_push: false
+
+      - name: Add skip-changeset label
+        if: steps.plan.outputs.add_skip_label == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: gh pr edit "$PR_NUMBER" --add-label skip-changeset

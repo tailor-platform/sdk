@@ -15,12 +15,12 @@
     "@eslint/js": "10.0.1",
     "@tailor-platform/sdk": "workspace:^",
     "@types/node": "24.12.2",
-    "eslint": "10.2.0",
-    "eslint-plugin-oxlint": "1.59.0",
-    "oxfmt": "0.44.0",
-    "oxlint": "1.59.0",
-    "oxlint-tsgolint": "0.20.0",
+    "eslint": "10.2.1",
+    "eslint-plugin-oxlint": "1.60.0",
+    "oxfmt": "0.45.0",
+    "oxlint": "1.60.0",
+    "oxlint-tsgolint": "0.21.1",
     "typescript": "5.9.3",
-    "typescript-eslint": "8.58.1"
+    "typescript-eslint": "8.58.2"
   }
 }

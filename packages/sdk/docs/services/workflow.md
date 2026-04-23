@@ -256,7 +256,7 @@ export default createResolver({
 
 > **Deprecated:** `auth.invoker("manager-machine-user")` still works but is deprecated. Using the string form avoids importing `auth` into runtime code.
 
-See the full working example in the repository: [example/resolvers/triggerWorkflow.ts](../../../../example/resolvers/triggerWorkflow.ts).
+See the full working example in the repository: [example/resolvers/triggerWorkflow.ts](https://github.com/tailor-platform/sdk/blob/main/example/resolvers/triggerWorkflow.ts).
 
 ## File Organization
 

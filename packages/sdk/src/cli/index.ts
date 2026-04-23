@@ -22,8 +22,10 @@ import { removeCommand } from "./commands/remove";
 import { secretCommand } from "./commands/secret";
 import { setupCommand } from "./commands/setup";
 import { showCommand } from "./commands/show";
+import { skillsCommand } from "./commands/skills";
 import { staticwebsiteCommand } from "./commands/staticwebsite";
 import { tailordbCommand } from "./commands/tailordb";
+import { upgradeCommand } from "./commands/upgrade";
 import { userCommand } from "./commands/user";
 import { workflowCommand } from "./commands/workflow";
 import { workspaceCommand } from "./commands/workspace";
@@ -77,8 +79,10 @@ export const mainCommand = withCompletionCommand(
       secret: secretCommand,
       setup: setupCommand,
       show: showCommand,
+      skills: skillsCommand,
       staticwebsite: staticwebsiteCommand,
       tailordb: tailordbCommand,
+      upgrade: upgradeCommand,
       user: userCommand,
       workflow: workflowCommand,
       workspace: workspaceCommand,
