@@ -10,18 +10,6 @@ export type WorkflowJobContext = {
 };
 
 /**
- * Allowed output types for workflow job body functions.
- * Must be JsonValue-compatible, undefined, or void.
- */
-export type WorkflowJobOutput = JsonCompatible<unknown> | undefined | void;
-
-/**
- * Input type constraint for workflow jobs.
- * Must be JsonValue-compatible or undefined.
- */
-export type WorkflowJobInput = JsonCompatible<unknown> | undefined;
-
-/**
  * The body function type for a workflow job.
  * Resolves to the callable signature when `I` / `O` are JsonValue-compatible,
  * or to a template-literal error string that surfaces at the `body:` property.

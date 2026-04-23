@@ -91,21 +91,19 @@ function createWaitPointInstance(initialKey: string): WaitPointWithSetter {
  */
 type WaitPointDef<Payload, Result> = [null] extends [Payload]
   ? "ERROR: Payload cannot be null at the top level"
-  : [Result] extends [undefined]
-    ? "ERROR: Result cannot be undefined (resolve callback must return a value)"
-    : [undefined] extends [Result]
-      ? "ERROR: Result cannot include undefined at the top level (resolve callback must return a value)"
-      : [Payload] extends [undefined]
-        ? [Result] extends [JsonCompatible<Result>]
-          ? WaitPointInstance<Payload, Result>
-          : "ERROR: Result must be JsonValue-compatible (plain objects/arrays; no class instances or functions)"
-        : [undefined] extends [Payload]
-          ? "ERROR: Payload cannot include undefined at the top level"
-          : [Payload] extends [JsonCompatible<Payload>]
-            ? [Result] extends [JsonCompatible<Result>]
-              ? WaitPointInstance<Payload, Result>
-              : "ERROR: Result must be JsonValue-compatible (plain objects/arrays; no class instances or functions)"
-            : "ERROR: Payload must be JsonValue-compatible (plain objects/arrays; no class instances or functions)";
+  : [undefined] extends [Result]
+    ? "ERROR: Result cannot be (or include) undefined (resolve callback must return a value)"
+    : [Payload] extends [undefined]
+      ? [Result] extends [JsonCompatible<Result>]
+        ? WaitPointInstance<Payload, Result>
+        : "ERROR: Result must be JsonValue-compatible (plain objects/arrays; no class instances or functions)"
+      : [undefined] extends [Payload]
+        ? "ERROR: Payload cannot include undefined at the top level"
+        : [Payload] extends [JsonCompatible<Payload>]
+          ? [Result] extends [JsonCompatible<Result>]
+            ? WaitPointInstance<Payload, Result>
+            : "ERROR: Result must be JsonValue-compatible (plain objects/arrays; no class instances or functions)"
+          : "ERROR: Payload must be JsonValue-compatible (plain objects/arrays; no class instances or functions)";
 
 /**
  * The `define` function passed to the `defineWaitPoints` builder callback.
@@ -152,16 +150,14 @@ export function defineWaitPoint<Payload = undefined, Result = undefined>(
  * @returns The same object returned by the builder (with correct keys set on each instance)
  * @example
  * export const waitPoints = defineWaitPoints(define => ({
- *   /&#42;&#42; Approval for order processing &#42;/
+ *   // Preceding JSDoc on this property is shown in IDE autocompletion
  *   approval: define<{ message: string }, { approved: boolean }>(),
  * }));
  *
  * // IDE shows the JSDoc when typing `waitPoints.`
  * await waitPoints.approval.wait({ message: "Please approve" });
  *
- * // For 2-level access, use destructured export with explicit JSDoc on the export:
- * /&#42;&#42; Approval for order processing &#42;/
- * export const { approval } = waitPoints;
+ * // For 2-level access, use destructured export with JSDoc attached to the export itself.
  */
 // oxlint-disable-next-line no-explicit-any
 export function defineWaitPoints<T extends Record<string, WaitPointInstance<any, any>>>(
