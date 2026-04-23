@@ -19,11 +19,11 @@ export namespace t {
 export { type TailorField } from "@/configure/types/type";
 export {
   type TailorUser,
+  type TailorInvoker,
   unauthenticatedTailorUser,
   type AttributeMap,
   type AttributeList,
 } from "@/types/user";
-export { type TailorInvoker } from "@/types/invoker";
 export { type Env } from "@/types/env";
 export { type MachineUserNameRegistry, type MachineUserName } from "@/configure/types/machine-user";
 

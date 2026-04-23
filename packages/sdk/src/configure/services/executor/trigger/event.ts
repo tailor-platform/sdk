@@ -9,7 +9,7 @@ import type {
   AuthAccessTokenTrigger as ParserAuthAccessTokenTrigger,
 } from "@/types/executor.generated";
 import type { output } from "@/types/helpers";
-import type { TailorInvoker } from "@/types/invoker";
+import type { TailorInvoker } from "@/types/user";
 
 interface EventArgs {
   workspaceId: string;

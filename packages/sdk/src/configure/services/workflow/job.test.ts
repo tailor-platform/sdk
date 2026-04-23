@@ -1,6 +1,6 @@
 import { describe, it, expectTypeOf } from "vitest";
 import { createWorkflowJob, type WorkflowJob } from "./job";
-import type { TailorInvoker } from "@/types/invoker";
+import type { TailorInvoker } from "@/types/user";
 
 describe("WorkflowJob type inference", () => {
   it("preserves literal types in output when using as const", () => {

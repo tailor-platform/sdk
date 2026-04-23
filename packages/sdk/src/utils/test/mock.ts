@@ -1,6 +1,6 @@
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
-import type { TailorInvoker } from "@/types/invoker";
+import type { TailorInvoker } from "@/types/user";
 
 type MainFunction = (args: Record<string, unknown>) => unknown | Promise<unknown>;
 type QueryResolver = (query: string, params: unknown[]) => unknown[];
@@ -128,7 +128,7 @@ export function setupInvokerMock(invoker: TailorInvoker): void {
         type: invoker.type,
         workspaceId: invoker.workspaceId,
         attributes: invoker.attributeList as string[],
-        attributeMap: (invoker.attributes ?? {}) as Record<string, unknown>,
+        attributeMap: invoker.attributes as Record<string, unknown>,
       }
     : null;
 

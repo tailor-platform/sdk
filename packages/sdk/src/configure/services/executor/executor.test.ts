@@ -16,7 +16,7 @@ import {
 import { scheduleTrigger } from "./trigger/schedule";
 import { incomingWebhookTrigger } from "./trigger/webhook";
 import type { Operation } from "./operation";
-import type { TailorInvoker } from "@/types/invoker";
+import type { TailorInvoker } from "@/types/user";
 
 describe("createExecutor", () => {
   test("can disable executor", () => {

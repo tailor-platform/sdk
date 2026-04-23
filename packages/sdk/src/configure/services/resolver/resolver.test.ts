@@ -3,9 +3,8 @@ import { db } from "@/configure/services/tailordb";
 import { t } from "@/configure/types";
 import { createResolver } from "./resolver";
 import type { output } from "@/types/helpers";
-import type { TailorInvoker } from "@/types/invoker";
 import type { ResolverInput } from "@/types/resolver.generated";
-import type { TailorUser } from "@/types/user";
+import type { TailorInvoker, TailorUser } from "@/types/user";
 
 describe("createResolver", () => {
   describe("type inference", () => {

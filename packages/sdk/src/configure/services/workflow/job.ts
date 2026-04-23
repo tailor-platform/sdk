@@ -1,7 +1,7 @@
 import { brandValue } from "@/utils/brand";
 import type { TailorEnv } from "@/types/env";
 import type { JsonCompatible } from "@/types/helpers";
-import type { TailorInvoker } from "@/types/invoker";
+import type { TailorInvoker } from "@/types/user";
 import type { Jsonifiable, Jsonify, JsonPrimitive } from "type-fest";
 
 /**

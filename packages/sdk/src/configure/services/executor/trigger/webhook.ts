@@ -1,7 +1,7 @@
 import type { TailorEnv } from "@/types/env";
 import type { IncomingWebhookTrigger as ParserIncomingWebhookTrigger } from "@/types/executor.generated";
 import type { JsonValue } from "@/types/helpers";
-import type { TailorInvoker } from "@/types/invoker";
+import type { TailorInvoker } from "@/types/user";
 
 export interface IncomingWebhookArgs<T extends IncomingWebhookRequest> {
   body: T["body"];
