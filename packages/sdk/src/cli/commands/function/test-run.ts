@@ -338,7 +338,7 @@ export function resolveResolverArg(
     attributeList: machineUser.attributeList ?? [],
   };
 
-  const newResult = inputSchema.parse({ value: parsed, data: parsed, user, invoker: null });
+  const newResult = inputSchema.parse({ value: parsed, data: parsed, user });
   if (!newResult.issues) {
     return argStr;
   }
@@ -350,12 +350,7 @@ export function resolveResolverArg(
     typeof parsed.input === "object" &&
     !Array.isArray(parsed.input)
   ) {
-    const oldResult = inputSchema.parse({
-      value: parsed.input,
-      data: parsed.input,
-      user,
-      invoker: null,
-    });
+    const oldResult = inputSchema.parse({ value: parsed.input, data: parsed.input, user });
     if (!oldResult.issues) {
       logger.warn(
         '[DEPRECATED] Wrapping args with "input" key (e.g. {"input":{...}}) is deprecated. Pass input fields directly (e.g. {"a":1}). The "input" wrapper will be removed in v2.',

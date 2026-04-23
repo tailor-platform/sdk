@@ -160,7 +160,6 @@ function generateEntry(
               value: context,
               data: context,
               user: _user,
-              invoker: _invoker,
             });
 
             if (result.issues) {

@@ -98,7 +98,6 @@ export function createStandardSchema<T = Record<string, unknown>>(
           value: hooked,
           data: hooked,
           user: unauthenticatedTailorUser,
-          invoker: null,
         });
         if (result.issues) {
           return result;

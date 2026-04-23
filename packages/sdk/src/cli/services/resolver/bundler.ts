@@ -141,7 +141,6 @@ async function bundleSingleResolver(
               value: context.input,
               data: context.input,
               user: context.user,
-              invoker,
             });
 
             if (result.issues) {
