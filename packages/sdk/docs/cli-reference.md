@@ -209,10 +209,12 @@ Commands for managing workflows and executions.
 
 ### [Function Commands](./cli/function.md)
 
-Commands for viewing function execution logs.
+Commands for managing function registries and viewing function execution logs.
 
 | Command                                                  | Description                                                     |
 | -------------------------------------------------------- | --------------------------------------------------------------- |
+| [function get](./cli/function.md#function-get)           | Get a function registry by name                                 |
+| [function list](./cli/function.md#function-list)         | List function registries in a workspace                         |
 | [function logs](./cli/function.md#function-logs)         | List or get function execution logs.                            |
 | [function test-run](./cli/function.md#function-test-run) | Run a function on the Tailor Platform server without deploying. |
 
