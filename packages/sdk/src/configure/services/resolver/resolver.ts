@@ -49,8 +49,8 @@ type ResolverReturn<
  * Create a resolver definition for the Tailor SDK.
  *
  * The `body` function receives a context with `input` (typed from `config.input`),
- * `user`, `invoker` (reflects `authInvoker` delegation), and `env`. The return value
- * must match the `output` type.
+ * `user`, `invoker` (reflects `authInvoker` delegation), and `env`.
+ * The return value of `body` must match the `output` type.
  *
  * `output` accepts either a single TailorField (e.g. `t.string()`) or a
  * Record of fields (e.g. `{ name: t.string(), age: t.int() }`).

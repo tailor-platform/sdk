@@ -30,7 +30,7 @@ interface TailordbGlobal {
     };
   };
   tailor?: {
-    workflow?: {
+    workflow: {
       triggerJobFunction: (jobName: string, args: unknown) => unknown;
     };
     context?: {
