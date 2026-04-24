@@ -15,18 +15,24 @@ describe("order fulfillment workflow", () => {
 
   describe("individual job tests with .body()", () => {
     test("validateOrder accepts valid order", () => {
-      const result = validateOrder.body({ orderId: "order-1", amount: 100 }, { env: {} });
+      const result = validateOrder.body(
+        { orderId: "order-1", amount: 100 },
+        { env: {}, invoker: null },
+      );
       expect(result).toEqual({ valid: true, orderId: "order-1" });
     });
 
     test("validateOrder rejects zero amount", () => {
-      expect(() => validateOrder.body({ orderId: "order-1", amount: 0 }, { env: {} })).toThrow(
-        "Order amount must be positive",
-      );
+      expect(() =>
+        validateOrder.body({ orderId: "order-1", amount: 0 }, { env: {}, invoker: null }),
+      ).toThrow("Order amount must be positive");
     });
 
     test("processPayment returns transaction", () => {
-      const result = processPayment.body({ orderId: "order-1", amount: 100 }, { env: {} });
+      const result = processPayment.body(
+        { orderId: "order-1", amount: 100 },
+        { env: {}, invoker: null },
+      );
       expect(result).toEqual({
         transactionId: "txn-order-1",
         amount: 100,
@@ -37,7 +43,7 @@ describe("order fulfillment workflow", () => {
     test("sendConfirmation returns confirmation", () => {
       const result = sendConfirmation.body(
         { orderId: "order-1", transactionId: "txn-1" },
-        { env: {} },
+        { env: {}, invoker: null },
       );
       expect(result).toEqual({
         orderId: "order-1",
@@ -64,7 +70,10 @@ describe("order fulfillment workflow", () => {
         confirmed: true,
       });
 
-      const result = await fulfillOrder.body({ orderId: "order-1", amount: 100 }, { env: {} });
+      const result = await fulfillOrder.body(
+        { orderId: "order-1", amount: 100 },
+        { env: {}, invoker: null },
+      );
 
       expect(validateOrder.trigger).toHaveBeenCalledWith({
         orderId: "order-1",
@@ -102,7 +111,10 @@ describe("order fulfillment workflow", () => {
         confirmed: true,
       });
 
-      const result = await workflow.mainJob.body({ orderId: "order-2", amount: 200 }, { env: {} });
+      const result = await workflow.mainJob.body(
+        { orderId: "order-2", amount: 200 },
+        { env: {}, invoker: null },
+      );
 
       expect(result).toEqual({
         orderId: "order-2",

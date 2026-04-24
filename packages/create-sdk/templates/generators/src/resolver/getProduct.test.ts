@@ -46,6 +46,7 @@ describe("getProduct resolver", () => {
     const result = await resolver.body({
       input: { productId: "product-1" },
       user: unauthenticatedTailorUser,
+      invoker: null,
       env: {},
     });
 
@@ -78,6 +79,7 @@ describe("getProduct resolver", () => {
     const result = await resolver.body({
       input: { productId: "product-2" },
       user: unauthenticatedTailorUser,
+      invoker: null,
       env: {},
     });
 

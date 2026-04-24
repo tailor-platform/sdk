@@ -37,6 +37,7 @@ describe("incrementUserAge resolver", () => {
     const result = await resolver.body({
       input: { email: "test@example.com" },
       user: unauthenticatedTailorUser,
+      invoker: null,
       env: { appName: "Resolver Template", version: 1 },
     });
     expect(result).toEqual({ oldAge: 30, newAge: 31 });
@@ -56,6 +57,7 @@ describe("incrementUserAge resolver", () => {
     const result = resolver.body({
       input: { email: "test@example.com" },
       user: unauthenticatedTailorUser,
+      invoker: null,
       env: { appName: "Resolver Template", version: 1 },
     });
     await expect(result).rejects.toThrowError();
