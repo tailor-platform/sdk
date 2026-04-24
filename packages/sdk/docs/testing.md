@@ -2,10 +2,17 @@
 
 This guide covers testing patterns for Tailor Platform SDK applications using [Vitest](https://vitest.dev/).
 
-For a complete working example with full test code, use the `testing` template:
+For complete working examples with full test code, use one of the templates that ship with tests:
 
 ```bash
-npm create @tailor-platform/sdk -- --template testing <your-project-name>
+# Resolver with tests
+npm create @tailor-platform/sdk -- --template resolver <your-project-name>
+
+# Workflow with tests
+npm create @tailor-platform/sdk -- --template workflow <your-project-name>
+
+# Executor with tests
+npm create @tailor-platform/sdk -- --template executor <your-project-name>
 ```
 
 ## Runtime Environment Emulation (Beta)
