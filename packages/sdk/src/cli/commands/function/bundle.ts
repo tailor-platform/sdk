@@ -13,6 +13,7 @@ import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { resolveInlineSourcemap } from "@/cli/shared/inline-sourcemap";
+import { INVOKER_EXPR } from "@/cli/shared/runtime-exprs";
 import type { DetectedFunction } from "./detect";
 
 /** Machine user info resolved from config and API for bundle-time user context. */
@@ -152,9 +153,9 @@ function generateEntry(
 
         const _env = ${JSON.stringify(env)};
         const _user = ${userExpr};
-        const _invoker = null;
 
         const $tailor_resolver_body = async (context) => {
+          const _invoker = ${INVOKER_EXPR};
           if (_internalResolver.input) {
             const result = t.object(_internalResolver.input).parse({
               value: context,
@@ -188,9 +189,9 @@ function generateEntry(
 
         const _env = ${JSON.stringify(env)};
         const _actor = ${actorExpr};
-        const _invoker = null;
 
         const __executor_function = async (args) => {
+          const _invoker = ${INVOKER_EXPR};
           return _internalExecutor.operation.body({ ...args, env: _env, actor: _actor, invoker: _invoker });
         };
 
@@ -207,9 +208,9 @@ function generateEntry(
         import { ${exportName} } from "${absoluteSourcePath}";
 
         const env = ${JSON.stringify(env)};
-        const invoker = null;
 
         export async function main(input) {
+          const invoker = ${INVOKER_EXPR};
           return await ${exportName}.body(input, { env, invoker });
         }
       `;
