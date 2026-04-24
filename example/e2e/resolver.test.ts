@@ -261,10 +261,18 @@ describe("dataplane", () => {
       const query = gql`
         query {
           showUserInfo {
-            id
-            type
-            workspaceId
-            role
+            user {
+              id
+              type
+              workspaceId
+              role
+            }
+            invoker {
+              id
+              type
+              workspaceId
+              role
+            }
           }
         }
       `;
@@ -272,10 +280,18 @@ describe("dataplane", () => {
       expect(result.errors).toBeUndefined();
       expect(result.data).toEqual({
         showUserInfo: {
-          id: expect.any(String),
-          type: "machine_user",
-          workspaceId: expect.any(String),
-          role: "MANAGER",
+          user: {
+            id: expect.any(String),
+            type: expect.any(String),
+            workspaceId: expect.any(String),
+            role: expect.any(String),
+          },
+          invoker: {
+            id: expect.any(String),
+            type: "machine_user",
+            workspaceId: expect.any(String),
+            role: "MANAGER",
+          },
         },
       });
     });
