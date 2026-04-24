@@ -19,7 +19,6 @@ describe("bundled execution tests", () => {
     vi.useFakeTimers();
     vi.setSystemTime(fixedSystemTime);
     setupTailordbMock();
-    // Default to anonymous invoker for tests that don't need a specific value.
     setupInvokerMock(null);
   });
 
