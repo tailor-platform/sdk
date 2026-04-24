@@ -234,8 +234,8 @@ Validation runs automatically before the `body` function executes. When validati
 Define actual resolver logic in the `body` function. Function arguments include:
 
 - `input` - Input data from GraphQL request
-- `user` - User performing the operation
-- `invoker` - Principal running this function, overridden by `authInvoker` when set; `null` for anonymous calls.
+- `user` - The user who called this resolver; unaffected by `authInvoker`
+- `invoker` - The principal running this function; equals `user` by default, or the machine user set by `authInvoker`. `null` for anonymous calls.
 - `env` - Environment variables declared in `tailor.config.ts`
 
 ### Using Kysely for Database Access
