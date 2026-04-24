@@ -1,7 +1,6 @@
 import type { TailorEnv } from "@/types/env";
 import type { IncomingWebhookTrigger as ParserIncomingWebhookTrigger } from "@/types/executor.generated";
 import type { JsonValue } from "@/types/helpers";
-import type { TailorInvoker } from "@/types/user";
 
 export interface IncomingWebhookArgs<T extends IncomingWebhookRequest> {
   body: T["body"];
@@ -9,7 +8,6 @@ export interface IncomingWebhookArgs<T extends IncomingWebhookRequest> {
   method: "POST" | "GET" | "PUT" | "DELETE";
   rawBody: string;
   env: TailorEnv;
-  invoker: TailorInvoker;
 }
 
 export interface IncomingWebhookRequest {

@@ -1,6 +1,5 @@
 import type { TailorEnv } from "@/types/env";
 import type { ScheduleTriggerInput as ParserScheduleTriggerInput } from "@/types/executor.generated";
-import type { TailorInvoker } from "@/types/user";
 import type { StandardCRON } from "ts-cron-validator";
 
 type Timezone =
@@ -436,7 +435,6 @@ export type ScheduleTrigger<Args> = ParserScheduleTriggerInput & {
 
 export interface ScheduleArgs {
   env: TailorEnv;
-  invoker: TailorInvoker;
 }
 
 interface ScheduleTriggerOptions<T extends string> {

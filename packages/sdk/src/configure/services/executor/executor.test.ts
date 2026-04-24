@@ -86,7 +86,7 @@ describe("createExecutor", () => {
       operation: {
         kind: "function",
         body: (args) => {
-          expectTypeOf(args).toEqualTypeOf<Args>();
+          expectTypeOf(args).toEqualTypeOf<Args & { invoker: TailorInvoker }>();
         },
       },
     });
@@ -1058,6 +1058,19 @@ describe("functionTarget", () => {
       ]
     >();
   });
+
+  test("body args include invoker", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          expectTypeOf(args.invoker).toEqualTypeOf<TailorInvoker>();
+        },
+      },
+    });
+  });
 });
 
 describe("gqlTarget", () => {
@@ -1121,6 +1134,21 @@ describe("gqlTarget", () => {
           return {
             id: args.body.id,
           };
+        },
+      },
+    });
+  });
+
+  test("variables args do not include invoker", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "graphql",
+        query: "query { __typename }",
+        variables: (args) => {
+          expectTypeOf(args).not.toHaveProperty("invoker");
+          return {};
         },
       },
     });
@@ -1214,6 +1242,24 @@ describe("webhookTarget", () => {
         headers: {
           "Content-Type": "application/json",
           Authorization: { vault: "my-vault", key: "my-secret" },
+        },
+      },
+    });
+  });
+
+  test("url/requestBody args do not include invoker", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "webhook",
+        url: (args) => {
+          expectTypeOf(args).not.toHaveProperty("invoker");
+          return "https://example.com";
+        },
+        requestBody: (args) => {
+          expectTypeOf(args).not.toHaveProperty("invoker");
+          return {};
         },
       },
     });
@@ -1345,90 +1391,17 @@ describe("workflowTarget", () => {
       },
     });
   });
-});
 
-describe("invoker type is exposed on every trigger kind", () => {
-  test("scheduleTrigger body receives invoker", () => {
+  test("args function args do not include invoker", () => {
     createExecutor({
-      name: "schedule",
-      trigger: scheduleTrigger({ cron: "0 12 * * *" }),
-      operation: {
-        kind: "function",
-        body: (args) => {
-          expectTypeOf(args.invoker).toEqualTypeOf<TailorInvoker>();
-        },
-      },
-    });
-  });
-
-  test("incomingWebhookTrigger body receives invoker", () => {
-    createExecutor({
-      name: "webhook",
+      name: "test",
       trigger: incomingWebhookTrigger(),
       operation: {
-        kind: "function",
-        body: (args) => {
-          expectTypeOf(args.invoker).toEqualTypeOf<TailorInvoker>();
-        },
-      },
-    });
-  });
-
-  test("recordCreatedTrigger body receives invoker", () => {
-    const userType = db.type("InvokerUser", { name: db.string() });
-    createExecutor({
-      name: "record",
-      trigger: recordCreatedTrigger({ type: userType }),
-      operation: {
-        kind: "function",
-        body: (args) => {
-          expectTypeOf(args.invoker).toEqualTypeOf<TailorInvoker>();
-        },
-      },
-    });
-  });
-
-  test("resolverExecutedTrigger body receives invoker", () => {
-    const resolver = createResolver({
-      name: "invokerResolver",
-      operation: "query",
-      output: t.object({ ok: t.bool() }),
-      body: () => ({ ok: true }),
-    });
-
-    createExecutor({
-      name: "resolver-exec",
-      trigger: resolverExecutedTrigger({ resolver }),
-      operation: {
-        kind: "function",
-        body: (args) => {
-          expectTypeOf(args.invoker).toEqualTypeOf<TailorInvoker>();
-        },
-      },
-    });
-  });
-
-  test("idpUserTrigger body receives invoker", () => {
-    createExecutor({
-      name: "idp",
-      trigger: idpUserTrigger({ events: ["created"] }),
-      operation: {
-        kind: "function",
-        body: (args) => {
-          expectTypeOf(args.invoker).toEqualTypeOf<TailorInvoker>();
-        },
-      },
-    });
-  });
-
-  test("authAccessTokenTrigger body receives invoker", () => {
-    createExecutor({
-      name: "auth",
-      trigger: authAccessTokenTrigger({ events: ["issued"] }),
-      operation: {
-        kind: "function",
-        body: (args) => {
-          expectTypeOf(args.invoker).toEqualTypeOf<TailorInvoker>();
+        kind: "workflow",
+        workflow: testWorkflow,
+        args: (args) => {
+          expectTypeOf(args).not.toHaveProperty("invoker");
+          return { orderId: "test-id" };
         },
       },
     });

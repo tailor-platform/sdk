@@ -7,11 +7,16 @@ import type {
   WebhookOperation as ParserWebhookOperation,
   WorkflowOperation as ParserWorkflowOperation,
 } from "@/types/executor.generated";
+import type { TailorInvoker } from "@/types/user";
 import type { Client } from "@urql/core";
 
-/** Function-based executor operation. The body receives the trigger args. */
+/**
+ * Function-based executor operation. The body runs in the function runtime
+ * and receives the trigger args together with an `invoker` value supplied by
+ * the runtime (via `tailor.context.getInvoker()`).
+ */
 export type FunctionOperation<Args> = Omit<ParserFunctionOperation, "body" | "authInvoker"> & {
-  body: (args: Args) => void | Promise<void>;
+  body: (args: Args & { invoker: TailorInvoker }) => void | Promise<void>;
   authInvoker?: AuthInvoker<string> | MachineUserName;
 };
 
