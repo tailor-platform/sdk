@@ -104,10 +104,8 @@ export function setupWorkflowMock(handler: JobHandler): {
 
 /**
  * Sets up a mock for `globalThis.tailor.context.getInvoker` used in bundled
- * resolver/executor/workflow tests. Accepts the SDK-facing `TailorInvoker`
- * shape and converts it to the raw shape the platform op would return, so
- * bundled wrappers can apply their usual SDK-shape normalization.
- * @param invoker - The `TailorInvoker` value to return from `getInvoker()`, or `null` for anonymous.
+ * resolver/executor/workflow tests.
+ * @param invoker - The `TailorInvoker` value to return, or `null` for anonymous.
  */
 export function setupInvokerMock(invoker: TailorInvoker): void {
   const raw: tailor.context.Invoker | null = invoker
