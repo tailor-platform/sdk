@@ -282,9 +282,9 @@ describe("dataplane", () => {
         showUserInfo: {
           user: {
             id: expect.any(String),
-            type: expect.any(String),
+            type: "machine_user",
             workspaceId: expect.any(String),
-            role: expect.any(String),
+            role: "MANAGER",
           },
           invoker: {
             id: expect.any(String),
