@@ -60,7 +60,7 @@ export const fetchCustomer = createWorkflowJob({
 
 Workflow job inputs and outputs are serialized as JSON when passed between jobs. This imposes type constraints:
 
-**Input types** must be JSON-compatible — only primitives (`string`, `number`, `boolean`, `null`), arrays, and plain objects are allowed. `Date`, `Map`, `Set`, functions, and other non-serializable types cannot be used.
+**Input types** must be JSON-compatible — primitives (`string`, `number`, `boolean`), arrays, and plain objects are allowed. `Date`, `Map`, `Set`, functions, and other non-serializable types cannot be used. Top-level `null` is also rejected because the platform normalizes top-level `null`/`undefined` args to `{}` (nested `null` inside objects or arrays is preserved).
 
 ```typescript
 // OK
@@ -78,9 +78,17 @@ export const badJob = createWorkflowJob({
     // ...
   },
 });
+
+// Compile error — top-level null would be normalized to {} by the platform
+export const nullJob = createWorkflowJob({
+  name: "null-job",
+  body: async (input: { id: string } | null) => {
+    // ...
+  },
+});
 ```
 
-**Output types** are more permissive — `Date` and objects with `toJSON()` are allowed because they are serialized via `JSON.stringify` at runtime (e.g., `Date` becomes a string).
+**Output types** have the same restriction as inputs: must be JsonValue-compatible (plain objects/arrays; no class instances or functions). Values with methods (function-typed properties) are rejected at compile time — this covers class instances like `Date` or `RegExp` as well as any plain object that exposes a method such as `toJSON()`.
 
 These constraints are enforced at compile time — you will get a type error if you use an unsupported type.
 
@@ -195,6 +203,110 @@ export default createWorkflow({
   mainJob: processOrder,
 });
 ```
+
+## Wait Points
+
+Wait points allow a workflow job to suspend execution and wait for an external signal before resuming. This enables human-in-the-loop patterns such as approvals, reviews, and manual confirmations.
+
+### Defining Wait Points
+
+Use `defineWaitPoint` to declare a single typed wait point:
+
+```typescript
+import { defineWaitPoint } from "@tailor-platform/sdk";
+
+export const approval = defineWaitPoint<
+  { message: string; requestId: string },
+  { approved: boolean }
+>("approval");
+```
+
+For multiple wait points, use `defineWaitPoints` with a builder callback. Property names become wait point keys, and JSDoc on each property is preserved in IDE autocompletion:
+
+```typescript
+import { defineWaitPoints } from "@tailor-platform/sdk";
+
+export const waitPoints = defineWaitPoints((define) => ({
+  /** Manager approval step */
+  managerApproval: define<{ amount: number }, { approved: boolean }>(),
+  /** Finance review step */
+  financeReview: define<{ invoiceId: string }, { validated: boolean }>(),
+}));
+
+await waitPoints.managerApproval.wait({ amount: 50000 });
+```
+
+Both accept two type parameters:
+
+- **`Payload`** — Data sent when the job suspends (passed to `.wait()`). Must be a pure JSON value (`string`, `number`, `boolean`, `null`, arrays, plain objects). Use `undefined` if no payload is needed.
+- **`Result`** — Data returned when the wait point is resolved (returned from `.wait()`, produced by the `.resolve()` callback). Must be a pure JSON value.
+
+Both must be JsonValue-compatible (plain objects/arrays; no class instances or functions). Values with methods (function-typed properties) are rejected at compile time — this covers class instances like `Date` or `RegExp` as well as any plain object that exposes a method such as `toJSON()`. Convert such values to `string` (e.g. ISO strings) or `number` (epoch millis) before passing them through a wait point.
+
+### Waiting in a Job
+
+Call `.wait()` inside a workflow job body to suspend execution:
+
+```typescript
+import { createWorkflow, createWorkflowJob, defineWaitPoint } from "@tailor-platform/sdk";
+
+export const approval = defineWaitPoint<
+  { message: string; requestId: string },
+  { approved: boolean }
+>("approval");
+
+export const processWithApproval = createWorkflowJob({
+  name: "process-with-approval",
+  body: async (input: { orderId: string }) => {
+    // Suspends here until resolved externally
+    const result = await approval.wait({
+      message: `Please approve order ${input.orderId}`,
+      requestId: input.orderId,
+    });
+
+    if (!result.approved) {
+      return { orderId: input.orderId, status: "rejected" as const };
+    }
+    return { orderId: input.orderId, status: "approved" as const };
+  },
+});
+
+export default createWorkflow({
+  name: "approval-workflow",
+  mainJob: processWithApproval,
+});
+```
+
+### Resolving from a Resolver
+
+Call `.resolve()` from a resolver (or executor) to resume a suspended job. The callback receives the payload that was passed to `.wait()` and returns the result:
+
+```typescript
+import { createResolver, t } from "@tailor-platform/sdk";
+import { approval } from "../workflows/approval";
+
+export default createResolver({
+  name: "resolveApproval",
+  description: "Resolve a waiting approval",
+  operation: "mutation",
+  input: {
+    executionId: t.string(),
+    approved: t.bool(),
+  },
+  body: async ({ input }) => {
+    await approval.resolve(input.executionId, (payload) => {
+      console.log("Resolving:", payload.message);
+      return { approved: input.approved };
+    });
+    return { resolved: true };
+  },
+  output: t.object({
+    resolved: t.bool(),
+  }),
+});
+```
+
+Wait points can be imported and used in any file (workflow jobs, resolvers, executors). For local testing, see [Testing Wait Points](../testing.md#testing-wait-points).
 
 ## Retry Policy
 

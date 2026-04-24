@@ -2,7 +2,13 @@
 // avoiding identity mismatches when multiple copies of the SDK are loaded.
 export const SDK_BRAND: unique symbol = Symbol.for("tailor-platform/sdk");
 
-export type SdkBrandKind = "tailordb-type" | "resolver" | "executor" | "workflow" | "workflow-job";
+export type SdkBrandKind =
+  | "tailordb-type"
+  | "resolver"
+  | "executor"
+  | "workflow"
+  | "workflow-job"
+  | "wait-point";
 
 /**
  * Adds a non-enumerable SDK brand symbol to the given object (in-place).

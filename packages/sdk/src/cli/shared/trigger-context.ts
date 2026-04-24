@@ -52,7 +52,12 @@ export async function buildTriggerContext(
   const workflowFileMap = new Map<string, string>();
 
   if (!workflowConfig) {
-    return { workflowNameMap, jobNameMap, workflowFileMap, authNamespace };
+    return {
+      workflowNameMap,
+      jobNameMap,
+      workflowFileMap,
+      authNamespace,
+    };
   }
 
   const workflowFiles = loadFilesWithIgnores(workflowConfig);
@@ -92,7 +97,12 @@ export async function buildTriggerContext(
     }
   }
 
-  return { workflowNameMap, jobNameMap, workflowFileMap, authNamespace };
+  return {
+    workflowNameMap,
+    jobNameMap,
+    workflowFileMap,
+    authNamespace,
+  };
 }
 
 function sortedMapToJson(m: Map<string, string>): string {

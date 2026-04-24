@@ -4,6 +4,12 @@ import { pathToFileURL } from "node:url";
 type MainFunction = (args: Record<string, unknown>) => unknown | Promise<unknown>;
 type QueryResolver = (query: string, params: unknown[]) => unknown[];
 type JobHandler = (jobName: string, args: unknown) => unknown;
+type WaitHandler = (key: string, payload: unknown) => unknown;
+type ResolveHandler = (
+  executionId: string,
+  key: string,
+  callback: (payload: unknown) => unknown,
+) => Promise<void> | void;
 
 interface TailordbGlobal {
   tailordb?: {
@@ -19,6 +25,12 @@ interface TailordbGlobal {
   tailor?: {
     workflow: {
       triggerJobFunction: (jobName: string, args: unknown) => unknown;
+      wait?: (key: string, payload?: unknown) => unknown;
+      resolve?: (
+        executionId: string,
+        key: string,
+        callback: (payload: unknown) => unknown,
+      ) => Promise<void>;
     };
   };
 }
@@ -77,6 +89,8 @@ export function setupTailordbMock(resolver: QueryResolver = () => []): {
 
 /**
  * Sets up a mock for `globalThis.tailor.workflow.triggerJobFunction` used in bundled workflow tests.
+ * `wait`/`resolve` are stubbed to throw a helpful error directing to `setupWaitPointMock()`,
+ * so mistakenly calling wait without wait-point mocks produces a clear message instead of a TypeError.
  * @param handler - Function that handles triggered job calls and returns results.
  * @returns Object containing an array of triggered jobs for assertions.
  */
@@ -88,6 +102,15 @@ export function setupWorkflowMock(handler: JobHandler): {
   GlobalThis.tailor = {
     ...GlobalThis.tailor,
     workflow: {
+      wait: () => {
+        throw new Error("tailor.workflow.wait is not mocked. Use setupWaitPointMock() in tests.");
+      },
+      resolve: async () => {
+        throw new Error(
+          "tailor.workflow.resolve is not mocked. Use setupWaitPointMock() in tests.",
+        );
+      },
+      ...GlobalThis.tailor?.workflow,
       triggerJobFunction: (jobName: string, args: unknown) => {
         triggeredJobs.push({ jobName, args });
         return handler(jobName, args);
@@ -112,6 +135,49 @@ export function setupTailorErrorsMock(): void {
       this.errors = errors;
     }
   };
+}
+
+/**
+ * Sets up mocks for `globalThis.tailor.workflow.wait` and `.resolve` used in bundled workflow tests.
+ * `triggerJobFunction` is stubbed to throw a helpful error directing to `setupWorkflowMock()`,
+ * so mistakenly triggering a job without job mocks produces a clear message instead of silently returning undefined.
+ * @param config - Optional handlers for wait and resolve calls.
+ * @param config.onWait - Handler called when wait is invoked.
+ * @param config.onResolve - Handler called when resolve is invoked.
+ * @returns Object containing arrays of wait and resolve calls for assertions.
+ */
+export function setupWaitPointMock(config?: { onWait?: WaitHandler; onResolve?: ResolveHandler }): {
+  waitCalls: { key: string; payload: unknown }[];
+  resolveCalls: { executionId: string; key: string }[];
+} {
+  const waitCalls: { key: string; payload: unknown }[] = [];
+  const resolveCalls: { executionId: string; key: string }[] = [];
+
+  GlobalThis.tailor = {
+    ...GlobalThis.tailor,
+    workflow: {
+      triggerJobFunction: () => {
+        throw new Error(
+          "tailor.workflow.triggerJobFunction is not mocked. Use setupWorkflowMock() in tests.",
+        );
+      },
+      ...GlobalThis.tailor?.workflow,
+      wait: (key: string, payload?: unknown) => {
+        waitCalls.push({ key, payload });
+        return config?.onWait?.(key, payload);
+      },
+      resolve: async (
+        executionId: string,
+        key: string,
+        callback: (payload: unknown) => unknown,
+      ) => {
+        resolveCalls.push({ executionId, key });
+        await config?.onResolve?.(executionId, key, callback);
+      },
+    },
+  } as typeof GlobalThis.tailor;
+
+  return { waitCalls, resolveCalls };
 }
 
 /**

@@ -49,30 +49,6 @@ const noInputWorkflow = createWorkflow({
   mainJob: noInputJob,
 });
 
-const optionalInputJob = createWorkflowJob({
-  name: "optional-input",
-  body: (input?: { value: number }) => ({ value: input?.value ?? 0 }),
-});
-
-const optionalInputWorkflow = createWorkflow({
-  name: "optional-input-workflow",
-  mainJob: optionalInputJob,
-});
-
-type UndefinedableInputWorkflow = {
-  name: "undefinedable-input-workflow";
-  mainJob: {
-    body: (input: { value: number } | undefined) => { value: number };
-  };
-};
-
-const undefinedableInputWorkflow: UndefinedableInputWorkflow = {
-  name: "undefinedable-input-workflow",
-  mainJob: {
-    body: (input) => ({ value: input?.value ?? 0 }),
-  },
-};
-
 type PlainWorkflowA = {
   name: "plain-a";
   mainJob: {
@@ -109,14 +85,6 @@ const acceptsNoInputWorkflowOptions = (
   _options: StartWorkflowTypedOptions<typeof noInputWorkflow>,
 ): void => {};
 
-const acceptsOptionalInputWorkflowOptions = (
-  _options: StartWorkflowTypedOptions<typeof optionalInputWorkflow>,
-): void => {};
-
-const acceptsUndefinedableInputWorkflowOptions = (
-  _options: StartWorkflowTypedOptions<UndefinedableInputWorkflow>,
-): void => {};
-
 const acceptsDefaultWorkflowOptions = (_options: StartWorkflowTypedOptions): void => {};
 const acceptsDeprecatedOptions = (_options: StartWorkflowOptions): void => {};
 const acceptsUnionWorkflowOptions = (
@@ -124,9 +92,6 @@ const acceptsUnionWorkflowOptions = (
 ): void => {};
 const acceptsUnionInputWorkflowOptions = (
   _options: StartWorkflowTypedOptions<typeof calculationWorkflow | typeof textWorkflow>,
-): void => {};
-const acceptsMixedWorkflowOptions = (
-  _options: StartWorkflowTypedOptions<typeof calculationWorkflow | typeof optionalInputWorkflow>,
 ): void => {};
 const acceptsPlainUnionWorkflowOptions = (
   _options: StartWorkflowTypedOptions<PlainWorkflowA | PlainWorkflowB>,
@@ -171,64 +136,6 @@ describe("startWorkflow API types", () => {
       // @ts-expect-error - no-input workflow must not receive arg
       arg: { any: "value" },
     });
-  });
-
-  it("allows omitting arg when workflow input includes undefined", () => {
-    acceptsOptionalInputWorkflowOptions({
-      workflow: optionalInputWorkflow,
-      authInvoker: auth.invoker("admin"),
-    });
-
-    acceptsOptionalInputWorkflowOptions({
-      workflow: optionalInputWorkflow,
-      authInvoker: auth.invoker("admin"),
-      arg: { value: 1 },
-    });
-
-    acceptsOptionalInputWorkflowOptions({
-      workflow: optionalInputWorkflow,
-      authInvoker: auth.invoker("admin"),
-      arg: undefined,
-    });
-
-    acceptsOptionalInputWorkflowOptions({
-      workflow: optionalInputWorkflow,
-      authInvoker: auth.invoker("admin"),
-      // @ts-expect-error - arg shape must match workflow input
-      arg: { invalid: true },
-    });
-
-    type OptionalArg = StartWorkflowTypedOptions<typeof optionalInputWorkflow>["arg"];
-    expectTypeOf<OptionalArg>().toEqualTypeOf<{ value: number } | undefined>();
-  });
-
-  it("allows omitting arg when workflow input is T | undefined", () => {
-    acceptsUndefinedableInputWorkflowOptions({
-      workflow: undefinedableInputWorkflow,
-      authInvoker: auth.invoker("admin"),
-    });
-
-    acceptsUndefinedableInputWorkflowOptions({
-      workflow: undefinedableInputWorkflow,
-      authInvoker: auth.invoker("admin"),
-      arg: { value: 1 },
-    });
-
-    acceptsUndefinedableInputWorkflowOptions({
-      workflow: undefinedableInputWorkflow,
-      authInvoker: auth.invoker("admin"),
-      arg: undefined,
-    });
-
-    acceptsUndefinedableInputWorkflowOptions({
-      workflow: undefinedableInputWorkflow,
-      authInvoker: auth.invoker("admin"),
-      // @ts-expect-error - arg shape must match workflow input
-      arg: { invalid: true },
-    });
-
-    type UndefinedableArg = StartWorkflowTypedOptions<UndefinedableInputWorkflow>["arg"];
-    expectTypeOf<UndefinedableArg>().toEqualTypeOf<{ value: number } | undefined>();
   });
 
   it("keeps machine user names type-safe via auth.invoker", () => {
@@ -285,25 +192,6 @@ describe("startWorkflow API types", () => {
       typeof calculationWorkflow | typeof textWorkflow
     >["arg"];
     expectTypeOf<UnionInputArg>().toEqualTypeOf<{ a: number; b: number } | { message: string }>();
-  });
-
-  it("keeps workflow-specific arg requirements for mixed union workflows", () => {
-    acceptsMixedWorkflowOptions({
-      workflow: optionalInputWorkflow,
-      authInvoker: auth.invoker("admin"),
-    });
-
-    acceptsMixedWorkflowOptions({
-      workflow: calculationWorkflow,
-      authInvoker: auth.invoker("admin"),
-      arg: { a: 1, b: 2 },
-    });
-
-    // @ts-expect-error - calculation workflow branch still requires arg
-    acceptsMixedWorkflowOptions({
-      workflow: calculationWorkflow,
-      authInvoker: auth.invoker("admin"),
-    });
   });
 
   it("supports plain workflow unions without collapsing arg type", () => {
