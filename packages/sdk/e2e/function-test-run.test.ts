@@ -196,11 +196,20 @@ describe.sequential("E2E: function test-run", () => {
 
       expect(result.success).toBe(true);
       const parsed = JSON.parse(result.result);
-      expect(parsed.type).toBe("machine_user");
-      expect(parsed.workspaceId).toBe(workspaceId);
-      expect(parsed.role).toBe("MANAGER");
-      expect(parsed.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
-      expect(parsed.id).not.toBe("00000000-0000-0000-0000-000000000000");
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+      const nilUuid = "00000000-0000-0000-0000-000000000000";
+
+      expect(parsed.user.type).toBe("machine_user");
+      expect(parsed.user.workspaceId).toBe(workspaceId);
+      expect(parsed.user.role).toBe("MANAGER");
+      expect(parsed.user.id).toMatch(uuidRegex);
+      expect(parsed.user.id).not.toBe(nilUuid);
+
+      expect(parsed.invoker.type).toBe("machine_user");
+      expect(parsed.invoker.workspaceId).toBe(workspaceId);
+      expect(parsed.invoker.role).toBe("MANAGER");
+      expect(parsed.invoker.id).toMatch(uuidRegex);
+      expect(parsed.invoker.id).not.toBe(nilUuid);
     });
 
     test("injects environment variables into resolver", async () => {
