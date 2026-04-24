@@ -20,7 +20,7 @@ describe("createResolver", () => {
           expectTypeOf(context).toHaveProperty("input");
           expectTypeOf(context).toHaveProperty("invoker");
           expectTypeOf(context.user).toEqualTypeOf<TailorUser>();
-          expectTypeOf(context.invoker).toEqualTypeOf<TailorInvoker>();
+          expectTypeOf(context.invoker).toEqualTypeOf<TailorInvoker | undefined>();
           expectTypeOf(context.input).toBeNever();
           return { result: "hello" };
         },

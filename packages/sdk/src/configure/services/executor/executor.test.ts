@@ -86,7 +86,7 @@ describe("createExecutor", () => {
       operation: {
         kind: "function",
         body: (args) => {
-          expectTypeOf(args).toEqualTypeOf<Args & { invoker: TailorInvoker }>();
+          expectTypeOf(args).toEqualTypeOf<Args & { invoker?: TailorInvoker }>();
         },
       },
     });
@@ -1066,7 +1066,7 @@ describe("functionTarget", () => {
       operation: {
         kind: "function",
         body: (args) => {
-          expectTypeOf(args.invoker).toEqualTypeOf<TailorInvoker>();
+          expectTypeOf(args.invoker).toEqualTypeOf<TailorInvoker | undefined>();
         },
       },
     });

@@ -7,7 +7,6 @@ describe("showUserInfo resolver", () => {
     const result = await resolver.body({
       input: undefined as never,
       user: unauthenticatedTailorUser,
-      invoker: null,
       env: { appName: "Resolver Template", version: 1 },
     });
     expect(result).toEqual({
@@ -27,7 +26,6 @@ describe("showUserInfo resolver", () => {
     const result = await resolver.body({
       input: undefined as never,
       user: customUser,
-      invoker: null,
       env: { appName: "Resolver Template", version: 1 },
     });
     expect(result).toEqual({

@@ -1,5 +1,10 @@
 import path from "node:path";
-import { createImportMain, setupTailordbMock, setupWorkflowMock } from "@tailor-platform/sdk/test";
+import {
+  createImportMain,
+  setupInvokerMock,
+  setupTailordbMock,
+  setupWorkflowMock,
+} from "@tailor-platform/sdk/test";
 import { beforeAll, beforeEach, describe, expect, test } from "vitest";
 
 const outputDir = path.join(__dirname, "../.tailor-sdk");
@@ -11,6 +16,7 @@ describe("bundled workflow execution", () => {
 
   beforeAll(() => {
     ({ executedQueries } = setupTailordbMock());
+    setupInvokerMock(null);
   });
 
   beforeEach(() => {

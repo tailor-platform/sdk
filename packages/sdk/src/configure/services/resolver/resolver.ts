@@ -11,7 +11,7 @@ import type { TailorInvoker, TailorUser } from "@/types/user";
 type Context<Input extends Record<string, TailorAnyField> | undefined> = {
   input: Input extends Record<string, TailorAnyField> ? InferFieldsOutput<Input> : never;
   user: TailorUser;
-  invoker: TailorInvoker;
+  invoker?: TailorInvoker;
   env: TailorEnv;
 };
 

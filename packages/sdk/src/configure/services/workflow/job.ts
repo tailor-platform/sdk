@@ -9,7 +9,7 @@ import type { Jsonifiable, Jsonify, JsonPrimitive } from "type-fest";
  */
 export type WorkflowJobContext = {
   env: TailorEnv;
-  invoker: TailorInvoker;
+  invoker?: TailorInvoker;
 };
 
 /**

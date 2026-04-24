@@ -54,7 +54,7 @@ describe("WorkflowJob type inference", () => {
       body: (_input: undefined, context) => {
         expectTypeOf(context).toHaveProperty("env");
         expectTypeOf(context).toHaveProperty("invoker");
-        expectTypeOf(context.invoker).toEqualTypeOf<TailorInvoker>();
+        expectTypeOf(context.invoker).toEqualTypeOf<TailorInvoker | undefined>();
       },
     });
   });
