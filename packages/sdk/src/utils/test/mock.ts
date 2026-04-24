@@ -6,18 +6,6 @@ type MainFunction = (args: Record<string, unknown>) => unknown | Promise<unknown
 type QueryResolver = (query: string, params: unknown[]) => unknown[];
 type JobHandler = (jobName: string, args: unknown) => unknown;
 
-/**
- * Raw invoker shape as returned by the platform's `tailor.context.getInvoker()` op.
- * Bundled wrappers convert this into the SDK-facing `TailorInvoker` shape at call time.
- */
-interface RawInvoker {
-  id: string;
-  type: "user" | "machine_user";
-  workspaceId: string;
-  attributes: string[];
-  attributeMap: Record<string, unknown>;
-}
-
 interface TailordbGlobal {
   tailordb?: {
     Client: new (config: { namespace?: string }) => {
@@ -33,8 +21,8 @@ interface TailordbGlobal {
     workflow: {
       triggerJobFunction: (jobName: string, args: unknown) => unknown;
     };
-    context?: {
-      getInvoker: () => RawInvoker | null;
+    context: {
+      getInvoker: () => tailor.context.Invoker | null;
     };
   };
 }
@@ -122,7 +110,7 @@ export function setupWorkflowMock(handler: JobHandler): {
  * @param invoker - The `TailorInvoker` value to return from `getInvoker()`, or `null` for anonymous.
  */
 export function setupInvokerMock(invoker: TailorInvoker): void {
-  const raw: RawInvoker | null = invoker
+  const raw: tailor.context.Invoker | null = invoker
     ? {
         id: invoker.id,
         type: invoker.type,
