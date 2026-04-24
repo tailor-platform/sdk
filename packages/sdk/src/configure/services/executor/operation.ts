@@ -10,11 +10,7 @@ import type {
 import type { TailorInvoker } from "@/types/user";
 import type { Client } from "@urql/core";
 
-/**
- * Function-based executor operation. The body runs in the function runtime
- * and receives the trigger args together with an `invoker` value supplied by
- * the runtime (via `tailor.context.getInvoker()`).
- */
+/** Function-based executor operation. The body receives the trigger args and the `invoker`. */
 export type FunctionOperation<Args> = Omit<ParserFunctionOperation, "body" | "authInvoker"> & {
   body: (args: Args & { invoker: TailorInvoker }) => void | Promise<void>;
   authInvoker?: AuthInvoker<string> | MachineUserName;
