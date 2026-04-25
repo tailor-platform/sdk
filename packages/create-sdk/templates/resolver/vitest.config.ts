@@ -10,12 +10,6 @@ export default defineConfig({
           include: ["src/**/*.test.ts"],
         },
       },
-      {
-        test: {
-          name: { label: "bundled", color: "yellow" },
-          include: ["tests/**/*.test.ts"],
-        },
-      },
     ],
   },
 });
