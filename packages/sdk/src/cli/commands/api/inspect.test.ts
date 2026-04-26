@@ -75,6 +75,29 @@ describe("renderInspectJson", () => {
     expect(names).toContain("applicationName");
   });
 
+  test("expands map<K, message> value schema", () => {
+    // CreateTailorDBType.tailordbType.schema.fields is map<string, FieldConfig>.
+    const m = getMethod("CreateTailorDBType");
+    const json = renderInspectJson(m);
+    const tailordbType = json.input.fields.find((f) => f.name === "tailordbType");
+    const schema = tailordbType?.message?.fields.find((f) => f.name === "schema");
+    const mapField = schema?.message?.fields.find((f) => f.fieldKind === "map");
+    expect(mapField).toBeDefined();
+    expect(mapField?.message).toBeDefined();
+    expect(mapField?.message?.fields.length ?? 0).toBeGreaterThan(0);
+  });
+
+  test("marks recursive type references with recursive: true", () => {
+    // ListTailorDBTypes.filter.and / .or are repeated Filter, recursive on Filter.
+    const m = getMethod("ListTailorDBTypes");
+    const json = renderInspectJson(m);
+    const filter = json.input.fields.find((f) => f.name === "filter");
+    expect(filter?.message).toBeDefined();
+    const and = filter?.message?.fields.find((f) => f.name === "and");
+    expect(and?.message?.recursive).toBe(true);
+    expect(and?.message?.typeName).toMatch(/Filter/);
+  });
+
   test("does not truncate deeply nested method input", () => {
     // CreateTailorDBType has TailorDBType > schema > fields > … reaching depth 9.
     const m = getMethod("CreateTailorDBType");

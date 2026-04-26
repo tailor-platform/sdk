@@ -1,6 +1,13 @@
 import { ScalarType } from "@bufbuild/protobuf";
 import type { DescEnum, DescField, DescMessage, DescMethodUnary } from "@bufbuild/protobuf";
 
+export interface InspectMessageJson {
+  typeName: string;
+  fields: InspectFieldJson[];
+  /** True when truncated to break a recursive type cycle. */
+  recursive?: boolean;
+}
+
 export interface InspectFieldJson {
   name: string;
   protoName: string;
@@ -8,7 +15,7 @@ export interface InspectFieldJson {
   fieldKind: string;
   repeated: boolean;
   enumValues?: string[];
-  message?: { typeName: string; fields: InspectFieldJson[] } | undefined;
+  message?: InspectMessageJson | undefined;
 }
 
 export interface InspectMethodJson {
@@ -88,6 +95,7 @@ export function describeFieldType(field: DescField): string {
 function nestedMessageForInspect(field: DescField): DescMessage | undefined {
   if (field.fieldKind === "message") return field.message;
   if (field.fieldKind === "list" && field.listKind === "message") return field.message;
+  if (field.fieldKind === "map" && field.mapKind === "message") return field.message;
   return undefined;
 }
 
@@ -115,7 +123,7 @@ function fieldToJson(field: DescField, visited: Set<DescMessage>): InspectFieldJ
     };
     visited.delete(nested);
   } else if (nested) {
-    json.message = { typeName: nested.typeName, fields: [] };
+    json.message = { typeName: nested.typeName, fields: [], recursive: true };
   }
 
   return json;
