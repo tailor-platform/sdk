@@ -403,17 +403,13 @@ async function planServices(
 
     const lang = convertLang(idp.lang);
     const userAuthPolicy = idp.userAuthPolicy;
-    let publishUserEvents: boolean;
-    if (idp.publishUserEvents === undefined) {
-      publishUserEvents = hasIdpUserTrigger;
-      if (hasIdpUserTrigger) {
+    const publishUserEvents = idp.publishUserEvents ?? hasIdpUserTrigger;
+    if (hasIdpUserTrigger) {
+      if (idp.publishUserEvents === undefined) {
         logger.info(
           `IdP service "${namespaceName}": automatically enabled "publishUserEvents" because executors with idpUser triggers are defined. Set "publishUserEvents" explicitly to silence this message.`,
         );
-      }
-    } else {
-      publishUserEvents = idp.publishUserEvents;
-      if (hasIdpUserTrigger && idp.publishUserEvents === false) {
+      } else if (idp.publishUserEvents === false) {
         logger.warn(
           `IdP service "${namespaceName}" has "publishUserEvents: false", but executors with idpUser triggers are defined. Those executors will not fire for this IdP. Set "publishUserEvents: true" to enable them.`,
         );
