@@ -160,14 +160,21 @@ export async function applyIdP(
  * @returns Planned changes and metadata
  */
 export async function planIdP(context: PlanContext) {
-  const { client, workspaceId, application, forRemoval, forceApplyAll = false } = context;
+  const {
+    client,
+    workspaceId,
+    application,
+    forRemoval,
+    forceApplyAll = false,
+    hasIdpUserTrigger = false,
+  } = context;
   const idps = forRemoval ? [] : application.idpServices;
   const {
     changeSet: serviceChangeSet,
     conflicts,
     unmanaged,
     resourceOwners,
-  } = await planServices(client, workspaceId, application.name, idps);
+  } = await planServices(client, workspaceId, application.name, idps, hasIdpUserTrigger);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
   const clientChangeSet = await planClients(
     client,
@@ -335,6 +342,7 @@ async function planServices(
   workspaceId: string,
   appName: string,
   idps: ReadonlyArray<IdP>,
+  hasIdpUserTrigger: boolean,
 ) {
   const changeSet = createChangeSet<CreateService, UpdateService, DeleteService>("IdP services");
   const conflicts: OwnerConflict[] = [];
@@ -395,7 +403,22 @@ async function planServices(
 
     const lang = convertLang(idp.lang);
     const userAuthPolicy = idp.userAuthPolicy;
-    const publishUserEvents = idp.publishUserEvents ?? false;
+    let publishUserEvents: boolean;
+    if (idp.publishUserEvents === undefined) {
+      publishUserEvents = hasIdpUserTrigger;
+      if (hasIdpUserTrigger) {
+        logger.info(
+          `IdP service "${namespaceName}": automatically enabled "publishUserEvents" because executors with idpUser triggers are defined. Set "publishUserEvents" explicitly to silence this message.`,
+        );
+      }
+    } else {
+      publishUserEvents = idp.publishUserEvents;
+      if (hasIdpUserTrigger && idp.publishUserEvents === false) {
+        logger.warn(
+          `IdP service "${namespaceName}" has "publishUserEvents: false", but executors with idpUser triggers are defined. Those executors will not fire for this IdP. Set "publishUserEvents: true" to enable them.`,
+        );
+      }
+    }
     const emailConfig = idp.emailConfig;
     if (!idp.permission) {
       logger.warn(`IdP service "${namespaceName}" has no permission configured.`);

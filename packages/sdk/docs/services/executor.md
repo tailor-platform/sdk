@@ -130,6 +130,8 @@ Fire when IdP users are created, updated, or deleted:
 idpUserCreatedTrigger();
 ```
 
+These triggers require the IdP to publish user lifecycle events. The SDK enables `publishUserEvents` on the IdP automatically during `apply` when any executor uses an `idpUser` trigger; set the value explicitly on `defineIdp()` to override. See [IdP service - publishUserEvents](./idp.md#publishuserevents).
+
 ### Auth Access Token Triggers
 
 Fire on auth access token lifecycle events:
