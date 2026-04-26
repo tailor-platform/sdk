@@ -62,6 +62,13 @@ describe("renderInspectText", () => {
     // Nested fields of TailorDBType (name, schema)
     expect(out).toMatch(/\bname\b/);
   });
+
+  test("annotates oneof membership", () => {
+    const m = getMethod("GrantOrganizationAccess");
+    const out = renderInspectText(m);
+    expect(out).toMatch(/teamId.*\(oneof member\)/);
+    expect(out).toMatch(/email.*\(oneof member\)/);
+  });
 });
 
 describe("renderInspectJson", () => {
@@ -85,6 +92,18 @@ describe("renderInspectJson", () => {
     expect(mapField).toBeDefined();
     expect(mapField?.message).toBeDefined();
     expect(mapField?.message?.fields.length ?? 0).toBeGreaterThan(0);
+  });
+
+  test("annotates oneof membership in JSON output", () => {
+    // GrantOrganizationAccessRequest.member is oneof { teamId, email, machineUserId }.
+    const m = getMethod("GrantOrganizationAccess");
+    const json = renderInspectJson(m);
+    const teamId = json.input.fields.find((f) => f.name === "teamId");
+    const email = json.input.fields.find((f) => f.name === "email");
+    const role = json.input.fields.find((f) => f.name === "role");
+    expect(teamId?.oneof).toBe("member");
+    expect(email?.oneof).toBe("member");
+    expect(role?.oneof).toBeUndefined();
   });
 
   test("marks recursive type references with recursive: true", () => {

@@ -15,6 +15,8 @@ export interface InspectFieldJson {
   fieldKind: string;
   repeated: boolean;
   enumValues?: string[];
+  /** Name of the proto `oneof` group this field belongs to, if any. */
+  oneof?: string;
   message?: InspectMessageJson | undefined;
 }
 
@@ -108,6 +110,8 @@ function fieldToJson(field: DescField, visited: Set<DescMessage>): InspectFieldJ
     repeated: field.fieldKind === "list",
   };
 
+  if (field.oneof) json.oneof = field.oneof.name;
+
   if (field.fieldKind === "enum") {
     json.enumValues = field.enum.values.map((v) => v.name);
   } else if (field.fieldKind === "list" && field.listKind === "enum") {
@@ -143,7 +147,8 @@ export function renderInspectJson(method: DescMethodUnary): InspectMethodJson {
 
 function renderFieldText(field: DescField, indent: string, visited: Set<DescMessage>): string[] {
   const lines: string[] = [];
-  lines.push(`${indent}${field.localName}: ${describeFieldType(field)}`);
+  const oneofTag = field.oneof ? ` (oneof ${field.oneof.name})` : "";
+  lines.push(`${indent}${field.localName}: ${describeFieldType(field)}${oneofTag}`);
 
   if (field.fieldKind === "enum") {
     const values = field.enum.values.map((v) => v.name).join(", ");

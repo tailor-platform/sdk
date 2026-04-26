@@ -242,6 +242,41 @@ describe("mergeFieldEntries", () => {
     if (!r.ok) expect(r.error).toMatch(/repeated|multiple/i);
   });
 
+  test("oneof: rejects two message-valued cases of a nested oneof", () => {
+    // CreateExecutorExecutor.executor.triggerConfig has oneof "config"
+    // with cases { schedule, event, incomingWebhook }, all message types.
+    const r = mergeFieldEntries({
+      body: {},
+      entries: [
+        "executor.triggerConfig.schedule.cron=* * * * *",
+        "executor.triggerConfig.event.eventType=test",
+      ],
+      methodInput: methodInput("CreateExecutorExecutor"),
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/oneof|config/i);
+  });
+
+  test("oneof: descent override clears body sibling case", () => {
+    // body has `event` set; --field selects `schedule` instead → event must drop.
+    const r = mergeFieldEntries({
+      body: {
+        executor: {
+          triggerConfig: { event: { eventType: "old" } },
+        },
+      },
+      entries: ["executor.triggerConfig.schedule.timezone=UTC"],
+      methodInput: methodInput("CreateExecutorExecutor"),
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const triggerConfig = (
+      r.body.executor as { triggerConfig: { event?: unknown; schedule?: unknown } }
+    ).triggerConfig;
+    expect(triggerConfig.event).toBeUndefined();
+    expect(triggerConfig.schedule).toBeDefined();
+  });
+
   test("rejects nesting into google.protobuf well-known type", () => {
     // UpdateApplication.update_mask is google.protobuf.FieldMask; proto JSON
     // uses a comma-delimited string, not nested object.
