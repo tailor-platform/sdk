@@ -85,6 +85,10 @@ function assignField(
 ): { ok: true } | { ok: false; error: string } {
   // Walk segments; descend into nested messages as needed.
   const objStack: Record<string, unknown>[] = [ctx.body];
+  // Track the resolved localName at each depth so the oneof key path is
+  // canonical and not affected by whether the user typed jsonName, snake_case
+  // proto name, or the camelCase localName for the parent segments.
+  const resolvedPath: string[] = [];
   let currentMessage = parentMessage;
 
   for (let i = 0; i < segments.length; i++) {
@@ -118,7 +122,7 @@ function assignField(
     // (scalar/enum/list) or a message-valued case we're descending into:
     // both situations select a single case among siblings.
     if (field.oneof) {
-      const parentDot = segments.slice(0, i).join(".");
+      const parentDot = resolvedPath.join(".");
       const oneofKey = `${parentDot}#${field.oneof.name}`;
       const previous = ctx.oneofChosen.get(oneofKey);
       if (previous !== undefined && previous !== localName) {
@@ -169,6 +173,7 @@ function assignField(
         };
       }
       currentMessage = nested;
+      resolvedPath.push(localName);
       continue;
     }
 

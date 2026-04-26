@@ -36,38 +36,39 @@ function isAssignableLeaf(field: DescField): boolean {
   return false;
 }
 
+// Options that take a value — local api options plus the value-taking
+// global options (env-file family) that may appear before or after the
+// `api` subcommand. Boolean flags such as --inspect, --list, --json,
+// --verbose don't consume the next token.
+const VALUE_TAKING_OPTIONS = new Set([
+  "--workspace-id",
+  "-w",
+  "--profile",
+  "-p",
+  "--config",
+  "-c",
+  "--body",
+  "-b",
+  "--field",
+  "-f",
+  "--env-file",
+  "-e",
+  "--env-file-if-exists",
+]);
+
 function findApiEndpoint(argv: string[]): string | undefined {
-  // Locate the "api" subcommand token, then find the first non-option,
-  // non-option-value token after it.
-  const apiIdx = argv.indexOf("api");
-  if (apiIdx < 0) return undefined;
-
-  // Options that take a value — local api options plus the value-taking
-  // global options (env-file family) that may appear before the endpoint
-  // positional. Boolean flags such as --inspect, --list, --json, --verbose
-  // don't consume the next token.
-  const valueTakingOptions = new Set([
-    "--workspace-id",
-    "-w",
-    "--profile",
-    "-p",
-    "--config",
-    "-c",
-    "--body",
-    "-b",
-    "--field",
-    "-f",
-    "--env-file",
-    "-e",
-    "--env-file-if-exists",
-  ]);
-
-  let i = apiIdx + 1;
-  let seenTerminator = false;
-  // Stop one before the trailing word being completed.
+  // Walk argv from the start so option *values* matching the literal
+  // "api" (e.g. `--env-file api`) don't fool us into treating them as the
+  // subcommand. Once we step past `api`, find the first non-option,
+  // non-option-value token, which is the endpoint positional.
   const last = argv.length - 1;
+  let i = 0;
+  let seenTerminator = false;
+  let pastApi = false;
+
   while (i < last) {
     const token = argv[i] ?? "";
+
     if (!seenTerminator && token === "--") {
       seenTerminator = true;
       i++;
@@ -76,10 +77,16 @@ function findApiEndpoint(argv: string[]): string | undefined {
     if (!seenTerminator && token.startsWith("-")) {
       const eqIdx = token.indexOf("=");
       const optName = eqIdx < 0 ? token : token.slice(0, eqIdx);
-      if (eqIdx < 0 && valueTakingOptions.has(optName)) {
+      if (eqIdx < 0 && VALUE_TAKING_OPTIONS.has(optName)) {
         i += 2;
         continue;
       }
+      i++;
+      continue;
+    }
+    if (!pastApi) {
+      if (token !== "api") return undefined;
+      pastApi = true;
       i++;
       continue;
     }

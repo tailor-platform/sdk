@@ -175,6 +175,16 @@ describe("generateApiFieldCandidates", () => {
     const values = r.candidates.map((c) => c.value);
     expect(values).toContain("workspaceId");
   });
+
+  test("does not mistake an option value of literal 'api' for the subcommand", () => {
+    // `--env-file api` (file named "api") followed by the real subcommand.
+    const argv = ["--env-file", "api", "api", "GetApplication", "--field", ""];
+    const r = generateApiFieldCandidates(ctxFor(argv), argv);
+    expect(r).toBeDefined();
+    if (!r) return;
+    const values = r.candidates.map((c) => c.value);
+    expect(values).toContain("workspaceId");
+  });
 });
 
 describe("applyApiAwareCompletion", () => {
