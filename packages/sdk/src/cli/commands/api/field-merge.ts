@@ -1,5 +1,5 @@
 import { coerceEnumValue, coerceScalarValue } from "./coerce";
-import { getInputFieldByName, nestedMessageOf } from "./proto-reflect";
+import { descendableMessageOf, getInputFieldByName } from "./proto-reflect";
 import type { DescField, DescMessage } from "@bufbuild/protobuf";
 
 export type MergeResult =
@@ -114,8 +114,20 @@ function assignField(
     }
 
     if (!isLast) {
-      const nested = nestedMessageOf(field);
+      const nested = descendableMessageOf(field);
       if (!nested) {
+        if (field.fieldKind === "list" && field.listKind === "message") {
+          return {
+            ok: false,
+            error: `cannot nest into repeated message field ${JSON.stringify(localName)}; --field cannot build proto JSON arrays for repeated messages — use --body for ${rawKey}`,
+          };
+        }
+        if (field.fieldKind === "message") {
+          return {
+            ok: false,
+            error: `cannot nest into well-known type ${field.message.typeName} (${JSON.stringify(localName)}); proto JSON has a bespoke encoding for it — use --body for ${rawKey}`,
+          };
+        }
         return {
           ok: false,
           error: `cannot nest into ${field.fieldKind} field ${JSON.stringify(localName)}; --field key ${JSON.stringify(rawKey)} would require ${localName} to be a message`,

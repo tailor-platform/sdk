@@ -120,7 +120,7 @@ export const apiCommand = defineAppCommand({
 Build the request body in one of two ways:
 
 - \`--body\` accepts a JSON object string (escape hatch for arbitrary shapes including \`map\` and \`bytes\`).
-- \`--field <key>=<value>\` (repeatable, alias \`-f\`) sets fields one at a time. Supports dot-notation for nested messages (\`tailordbType.name=User\`) and repeats the same key to populate \`repeated\` fields. Values are coerced according to the proto field type. \`map\` fields and \`repeated\` of messages are not supported by \`--field\`; use \`--body\` for those.
+- \`--field <key>=<value>\` (repeatable, alias \`-f\`) sets fields one at a time. Supports dot-notation for nested messages (\`tailordbType.name=User\`) and repeats the same key to populate \`repeated\` scalar/enum fields. Values are coerced according to the proto field type. \`map\` fields, \`repeated\` of messages, and \`google.protobuf.*\` well-known types (Duration, Timestamp, FieldMask, …) have JSON encodings that cannot be assembled from \`--field\` entries; use \`--body\` for those.
 
 When both are supplied, \`--body\` is the base and \`--field\` entries override on top.
 

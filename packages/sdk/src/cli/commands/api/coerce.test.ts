@@ -59,6 +59,36 @@ describe("coerceScalarValue", () => {
     expect(r.ok).toBe(false);
   });
 
+  test("rejects out-of-range int64", () => {
+    const tooLarge = coerceScalarValue(ScalarType.INT64, "9223372036854775808");
+    expect(tooLarge.ok).toBe(false);
+    const tooSmall = coerceScalarValue(ScalarType.INT64, "-9223372036854775809");
+    expect(tooSmall.ok).toBe(false);
+  });
+
+  test("accepts int64 boundaries", () => {
+    expect(coerceScalarValue(ScalarType.INT64, "9223372036854775807")).toEqual({
+      ok: true,
+      value: "9223372036854775807",
+    });
+    expect(coerceScalarValue(ScalarType.INT64, "-9223372036854775808")).toEqual({
+      ok: true,
+      value: "-9223372036854775808",
+    });
+  });
+
+  test("rejects out-of-range uint64", () => {
+    const r = coerceScalarValue(ScalarType.UINT64, "18446744073709551616");
+    expect(r.ok).toBe(false);
+  });
+
+  test("accepts uint64 max", () => {
+    expect(coerceScalarValue(ScalarType.UINT64, "18446744073709551615")).toEqual({
+      ok: true,
+      value: "18446744073709551615",
+    });
+  });
+
   test("parses FLOAT/DOUBLE", () => {
     expect(coerceScalarValue(ScalarType.FLOAT, "3.14")).toEqual({ ok: true, value: 3.14 });
     expect(coerceScalarValue(ScalarType.DOUBLE, "-0.5")).toEqual({ ok: true, value: -0.5 });

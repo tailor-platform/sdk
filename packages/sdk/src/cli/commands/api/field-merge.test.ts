@@ -199,4 +199,28 @@ describe("mergeFieldEntries", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toMatch(/map|--body/i);
   });
+
+  test("rejects nesting into repeated message field", () => {
+    // CreateApplication.subgraphs is `repeated Subgraph`; proto JSON is an
+    // array, not an object — dot-notation cannot build it.
+    const r = mergeFieldEntries({
+      body: {},
+      entries: ["subgraphs.serviceType=PIPELINE"],
+      methodInput: methodInput("CreateApplication"),
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/repeated message|--body/i);
+  });
+
+  test("rejects nesting into google.protobuf well-known type", () => {
+    // UpdateApplication.update_mask is google.protobuf.FieldMask; proto JSON
+    // uses a comma-delimited string, not nested object.
+    const r = mergeFieldEntries({
+      body: {},
+      entries: ["updateMask.paths=foo"],
+      methodInput: methodInput("UpdateApplication"),
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/google\.protobuf|well-known|--body/i);
+  });
 });

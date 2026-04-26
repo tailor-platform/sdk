@@ -5,6 +5,9 @@ export type CoerceResult<T> = { ok: true; value: T } | { ok: false; error: strin
 const INT32_MIN = -2_147_483_648;
 const INT32_MAX = 2_147_483_647;
 const UINT32_MAX = 4_294_967_295;
+const INT64_MIN = -(2n ** 63n);
+const INT64_MAX = 2n ** 63n - 1n;
+const UINT64_MAX = 2n ** 64n - 1n;
 
 function parseStrictInt(raw: string): number | undefined {
   if (!/^-?\d+$/.test(raw)) return undefined;
@@ -56,8 +59,16 @@ export function coerceScalarValue(
     case ScalarType.SFIXED64: {
       if (!/^-?\d+$/.test(raw))
         return { ok: false, error: `expected integer, got ${JSON.stringify(raw)}` };
-      if ((scalar === ScalarType.UINT64 || scalar === ScalarType.FIXED64) && raw.startsWith("-")) {
+      const isUnsigned = scalar === ScalarType.UINT64 || scalar === ScalarType.FIXED64;
+      if (isUnsigned && raw.startsWith("-")) {
         return { ok: false, error: `value ${raw} is negative for unsigned 64-bit field` };
+      }
+      const big = BigInt(raw);
+      if (isUnsigned) {
+        if (big > UINT64_MAX) return { ok: false, error: `value ${raw} is out of uint64 range` };
+      } else {
+        if (big < INT64_MIN || big > INT64_MAX)
+          return { ok: false, error: `value ${raw} is out of int64 range` };
       }
       return { ok: true, value: raw };
     }

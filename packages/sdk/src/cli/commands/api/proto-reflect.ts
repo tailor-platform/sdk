@@ -41,6 +41,20 @@ export function nestedMessageOf(field: DescField): DescMessage | undefined {
   return undefined;
 }
 
+/**
+ * Return the message a dot-notation `--field` path is allowed to descend into.
+ * Repeated messages serialize to JSON arrays (not objects) and well-known types
+ * (google.protobuf.*) have bespoke JSON encodings, so neither can be assembled
+ * from `--field key=value` entries without producing invalid request bodies.
+ * @param field - Proto field to inspect
+ * @returns The descendable message, or undefined when dot-notation is unsafe
+ */
+export function descendableMessageOf(field: DescField): DescMessage | undefined {
+  if (field.fieldKind !== "message") return undefined;
+  if (field.message.typeName.startsWith("google.protobuf.")) return undefined;
+  return field.message;
+}
+
 export function extractMethodName(endpoint: string): string {
   if (!endpoint.includes("/")) return endpoint;
   return endpoint.split("/").pop() ?? endpoint;

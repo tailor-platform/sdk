@@ -78,6 +78,37 @@ describe("generateApiFieldCandidates", () => {
     expect(r).toBeUndefined();
   });
 
+  test("emits candidates for --field=<partial> inline form", () => {
+    const argv = ["api", "GetApplication", "--field=app"];
+    const r = generateApiFieldCandidates(ctxFor(argv), argv);
+    expect(r).toBeDefined();
+    if (!r) return;
+    const values = r.candidates.map((c) => c.value);
+    expect(values).toContain("applicationName");
+  });
+
+  test("returns undefined for --field=<key>=<partial> inline form", () => {
+    const argv = ["api", "GetApplication", "--field=workspaceId=abc"];
+    const r = generateApiFieldCandidates(ctxFor(argv), argv);
+    expect(r).toBeUndefined();
+  });
+
+  test("does not present repeated message field as descendable", () => {
+    const argv = ["api", "CreateApplication", "--field", ""];
+    const r = generateApiFieldCandidates(ctxFor(argv), argv);
+    expect(r).toBeDefined();
+    if (!r) return;
+    const values = r.candidates.map((c) => c.value);
+    expect(values).toContain("subgraphs");
+    expect(values).not.toContain("subgraphs.");
+  });
+
+  test("does not descend into google.protobuf well-known type", () => {
+    const argv = ["api", "UpdateApplication", "--field", "updateMask."];
+    const r = generateApiFieldCandidates(ctxFor(argv), argv);
+    expect(r).toBeUndefined();
+  });
+
   test("falls back when method name is unknown", () => {
     const argv = ["api", "NotARealMethod", "--field", ""];
     const r = generateApiFieldCandidates(ctxFor(argv), argv);

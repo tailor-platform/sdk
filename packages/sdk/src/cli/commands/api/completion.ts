@@ -11,10 +11,10 @@ import {
 import { z } from "zod";
 import { describeFieldType } from "./inspect";
 import {
+  descendableMessageOf,
   extractMethodName,
   getInputFieldByName,
   getMethodDescriptor,
-  nestedMessageOf,
 } from "./proto-reflect";
 import type { AnyCommand } from "politty";
 
@@ -74,7 +74,8 @@ export function generateApiFieldCandidates(
   const optName = context.targetOption?.cliName ?? context.targetOption?.name;
   if (!optName || !FIELD_OPTION_NAMES.has(optName)) return undefined;
 
-  const word = context.currentWord;
+  const inlinePrefix = detectInlinePrefix(context.currentWord);
+  const word = inlinePrefix ? context.currentWord.slice(inlinePrefix.length) : context.currentWord;
   if (word.includes("=")) return undefined;
 
   const endpoint = findApiEndpoint(argv);
@@ -91,16 +92,15 @@ export function generateApiFieldCandidates(
   for (const segment of segments) {
     const f = getInputFieldByName(currentMessage, segment);
     if (!f) return undefined;
-    const nested = nestedMessageOf(f);
+    const nested = descendableMessageOf(f);
     if (!nested) return undefined;
     currentMessage = nested;
   }
 
   const candidates: CompletionCandidate[] = [];
   for (const f of currentMessage.fields) {
-    const isMessage =
-      f.fieldKind === "message" || (f.fieldKind === "list" && f.listKind === "message");
-    const suffix = isMessage ? "." : "";
+    const descendable = descendableMessageOf(f) !== undefined;
+    const suffix = descendable ? "." : "";
     candidates.push({
       value: `${prefix}${f.localName}${suffix}`,
       description: describeFieldType(f),
