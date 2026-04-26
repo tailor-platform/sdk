@@ -63,15 +63,17 @@ function findApiEndpoint(argv: string[]): string | undefined {
   ]);
 
   let i = apiIdx + 1;
+  let seenTerminator = false;
   // Stop one before the trailing word being completed.
   const last = argv.length - 1;
   while (i < last) {
     const token = argv[i] ?? "";
-    if (token === "--") {
+    if (!seenTerminator && token === "--") {
+      seenTerminator = true;
       i++;
       continue;
     }
-    if (token.startsWith("-")) {
+    if (!seenTerminator && token.startsWith("-")) {
       const eqIdx = token.indexOf("=");
       const optName = eqIdx < 0 ? token : token.slice(0, eqIdx);
       if (eqIdx < 0 && valueTakingOptions.has(optName)) {

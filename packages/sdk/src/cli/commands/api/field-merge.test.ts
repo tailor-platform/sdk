@@ -94,6 +94,15 @@ describe("mergeFieldEntries", () => {
     if (!r.ok) expect(r.error).toMatch(/WORKSPACE_PLATFORM_USER_ROLE_ADMIN/);
   });
 
+  test("--field for a list field replaces the body list (override semantics)", () => {
+    const r = mergeFieldEntries({
+      body: { cors: ["https://existing"] },
+      entries: ["cors=https://new"],
+      methodInput: methodInput("CreateApplication"),
+    });
+    expect(r).toEqual({ ok: true, body: { cors: ["https://new"] } });
+  });
+
   test("repeated scalar list collects into array", () => {
     const r = mergeFieldEntries({
       body: {},
