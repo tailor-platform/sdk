@@ -62,10 +62,16 @@ function enumLabel(enumDesc: DescEnum): string {
   return `enum ${shortName(enumDesc.typeName)}`;
 }
 
+function enumOf(field: DescField): DescEnum | undefined {
+  if (field.fieldKind === "enum") return field.enum;
+  if (field.fieldKind === "list" && field.listKind === "enum") return field.enum;
+  return undefined;
+}
+
 export function describeFieldType(field: DescField): string {
   switch (field.fieldKind) {
     case "scalar":
-      return field.scalar === ScalarType.STRING ? "string" : scalarLabel(field.scalar);
+      return scalarLabel(field.scalar);
     case "enum":
       return enumLabel(field.enum);
     case "message":
@@ -73,7 +79,7 @@ export function describeFieldType(field: DescField): string {
     case "list": {
       let inner: string;
       if (field.listKind === "scalar") {
-        inner = field.scalar === ScalarType.STRING ? "string" : scalarLabel(field.scalar);
+        inner = scalarLabel(field.scalar);
       } else if (field.listKind === "enum") {
         inner = enumLabel(field.enum);
       } else {
@@ -112,10 +118,9 @@ function fieldToJson(field: DescField, visited: Set<DescMessage>): InspectFieldJ
 
   if (field.oneof) json.oneof = field.oneof.name;
 
-  if (field.fieldKind === "enum") {
-    json.enumValues = field.enum.values.map((v) => v.name);
-  } else if (field.fieldKind === "list" && field.listKind === "enum") {
-    json.enumValues = field.enum.values.map((v) => v.name);
+  const fieldEnum = enumOf(field);
+  if (fieldEnum) {
+    json.enumValues = fieldEnum.values.map((v) => v.name);
   }
 
   const nested = nestedMessageForInspect(field);
@@ -150,11 +155,9 @@ function renderFieldText(field: DescField, indent: string, visited: Set<DescMess
   const oneofTag = field.oneof ? ` (oneof ${field.oneof.name})` : "";
   lines.push(`${indent}${field.localName}: ${describeFieldType(field)}${oneofTag}`);
 
-  if (field.fieldKind === "enum") {
-    const values = field.enum.values.map((v) => v.name).join(", ");
-    lines.push(`${indent}  values: ${values}`);
-  } else if (field.fieldKind === "list" && field.listKind === "enum") {
-    const values = field.enum.values.map((v) => v.name).join(", ");
+  const fieldEnum = enumOf(field);
+  if (fieldEnum) {
+    const values = fieldEnum.values.map((v) => v.name).join(", ");
     lines.push(`${indent}  values: ${values}`);
   }
 

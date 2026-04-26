@@ -177,7 +177,6 @@ function assignField(
       continue;
     }
 
-    // Last segment — assign value
     if (field.fieldKind === "message") {
       return {
         ok: false,

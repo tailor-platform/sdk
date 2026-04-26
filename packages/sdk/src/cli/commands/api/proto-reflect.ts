@@ -22,34 +22,6 @@ export function getInputFieldByName(message: DescMessage, segment: string): Desc
   return message.fields.find((f) => f.localName === segment || f.jsonName === segment);
 }
 
-export function resolveFieldByPath(
-  rootMessage: DescMessage,
-  path: ReadonlyArray<string>,
-): DescField | undefined {
-  if (path.length === 0) return undefined;
-  let current: DescMessage | undefined = rootMessage;
-  let field: DescField | undefined;
-  for (let i = 0; i < path.length; i++) {
-    if (!current) return undefined;
-    const segment = path[i];
-    if (segment === undefined) return undefined;
-    field = getInputFieldByName(current, segment);
-    if (!field) return undefined;
-    if (i < path.length - 1) {
-      const nestedMessage = nestedMessageOf(field);
-      if (!nestedMessage) return undefined;
-      current = nestedMessage;
-    }
-  }
-  return field;
-}
-
-export function nestedMessageOf(field: DescField): DescMessage | undefined {
-  if (field.fieldKind === "message") return field.message;
-  if (field.fieldKind === "list" && field.listKind === "message") return field.message;
-  return undefined;
-}
-
 /**
  * Return the message a dot-notation `--field` path is allowed to descend into.
  * Repeated messages serialize to JSON arrays (not objects) and well-known types
