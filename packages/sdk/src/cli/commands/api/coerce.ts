@@ -75,6 +75,10 @@ export function coerceScalarValue(
 
     case ScalarType.FLOAT:
     case ScalarType.DOUBLE: {
+      // Number("") and Number("  ") both yield 0; require a non-empty,
+      // unpadded numeric literal so an empty `--field key=` rejects.
+      if (!/^-?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(raw))
+        return { ok: false, error: `expected number, got ${JSON.stringify(raw)}` };
       const n = Number(raw);
       if (!Number.isFinite(n))
         return { ok: false, error: `expected number, got ${JSON.stringify(raw)}` };

@@ -99,6 +99,20 @@ describe("coerceScalarValue", () => {
     expect(r.ok).toBe(false);
   });
 
+  test("rejects empty FLOAT/DOUBLE input", () => {
+    expect(coerceScalarValue(ScalarType.FLOAT, "").ok).toBe(false);
+    expect(coerceScalarValue(ScalarType.DOUBLE, "").ok).toBe(false);
+  });
+
+  test("rejects whitespace-only FLOAT/DOUBLE input", () => {
+    expect(coerceScalarValue(ScalarType.DOUBLE, "  ").ok).toBe(false);
+  });
+
+  test("accepts scientific notation for FLOAT/DOUBLE", () => {
+    expect(coerceScalarValue(ScalarType.DOUBLE, "1e3")).toEqual({ ok: true, value: 1000 });
+    expect(coerceScalarValue(ScalarType.FLOAT, "-2.5e-1")).toEqual({ ok: true, value: -0.25 });
+  });
+
   test("returns BYTES verbatim (base64 expected)", () => {
     expect(coerceScalarValue(ScalarType.BYTES, "aGVsbG8=")).toEqual({
       ok: true,

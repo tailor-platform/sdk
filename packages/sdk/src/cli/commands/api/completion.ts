@@ -42,8 +42,10 @@ function findApiEndpoint(argv: string[]): string | undefined {
   const apiIdx = argv.indexOf("api");
   if (apiIdx < 0) return undefined;
 
-  // Options that take a value — only need the ones the api command knows about.
-  // Boolean flags don't consume the next token.
+  // Options that take a value — local api options plus the value-taking
+  // global options (env-file family) that may appear before the endpoint
+  // positional. Boolean flags such as --inspect, --list, --json, --verbose
+  // don't consume the next token.
   const valueTakingOptions = new Set([
     "--workspace-id",
     "-w",
@@ -55,6 +57,9 @@ function findApiEndpoint(argv: string[]): string | undefined {
     "-b",
     "--field",
     "-f",
+    "--env-file",
+    "-e",
+    "--env-file-if-exists",
   ]);
 
   let i = apiIdx + 1;

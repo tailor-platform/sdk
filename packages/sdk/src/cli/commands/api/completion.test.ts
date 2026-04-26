@@ -148,6 +148,33 @@ describe("generateApiFieldCandidates", () => {
     const values = r.candidates.map((c) => c.value);
     expect(values).toContain("workspaceId");
   });
+
+  test("skips global --env-file value when locating the endpoint", () => {
+    const argv = ["api", "--env-file", ".env", "GetApplication", "--field", ""];
+    const r = generateApiFieldCandidates(ctxFor(argv), argv);
+    expect(r).toBeDefined();
+    if (!r) return;
+    const values = r.candidates.map((c) => c.value);
+    expect(values).toContain("workspaceId");
+  });
+
+  test("skips global -e short alias", () => {
+    const argv = ["api", "-e", ".env", "GetApplication", "--field", ""];
+    const r = generateApiFieldCandidates(ctxFor(argv), argv);
+    expect(r).toBeDefined();
+    if (!r) return;
+    const values = r.candidates.map((c) => c.value);
+    expect(values).toContain("workspaceId");
+  });
+
+  test("skips global --env-file-if-exists value", () => {
+    const argv = ["api", "--env-file-if-exists", ".env", "GetApplication", "--field", ""];
+    const r = generateApiFieldCandidates(ctxFor(argv), argv);
+    expect(r).toBeDefined();
+    if (!r) return;
+    const values = r.candidates.map((c) => c.value);
+    expect(values).toContain("workspaceId");
+  });
 });
 
 describe("applyApiAwareCompletion", () => {
