@@ -66,13 +66,6 @@ export async function apiCall(options: ApiCallOptions): Promise<ApiCallResult> {
   };
 }
 
-function getEndpointFieldNames(methodName: string): string[] {
-  // Use localName so the presence check matches the keys mergeFieldEntries
-  // and direct --body parsing write into the request body.
-  const method = getMethodDescriptor(methodName);
-  return method ? method.input.fields.map((f) => f.localName) : [];
-}
-
 function resolveNamespaceName(methodName: string, config: LoadedConfig): string | undefined {
   if (/Auth|Tenant|UserProfile/.test(methodName)) {
     return config.auth?.name;
@@ -220,6 +213,7 @@ If a value cannot be resolved (e.g. no config found), injection is silently skip
 
     let bodyForRequest = args.body;
     let parsedBody: Record<string, unknown> | undefined = baseBody;
+    const method = getMethodDescriptor(methodName);
 
     if (args.field.length > 0) {
       if (!parsedBody) {
@@ -229,7 +223,6 @@ If a value cannot be resolved (e.g. no config found), injection is silently skip
           command: "api",
         });
       }
-      const method = getMethodDescriptor(methodName);
       if (!method) {
         throw CLIError({
           message: `unknown method: ${methodName}`,
@@ -254,8 +247,10 @@ If a value cannot be resolved (e.g. no config found), injection is silently skip
 
     let mutated = args.field.length > 0;
 
-    if (parsedBody) {
-      const fieldNames = getEndpointFieldNames(methodName);
+    if (parsedBody && method) {
+      // Use localName so the presence check matches the keys mergeFieldEntries
+      // and direct --body parsing write into the request body.
+      const fieldNames = method.input.fields.map((f) => f.localName);
 
       if (fieldNames.includes("workspaceId") && !("workspaceId" in parsedBody)) {
         try {
