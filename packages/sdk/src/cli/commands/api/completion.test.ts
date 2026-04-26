@@ -93,14 +93,39 @@ describe("generateApiFieldCandidates", () => {
     expect(r).toBeUndefined();
   });
 
-  test("does not present repeated message field as descendable", () => {
+  test("excludes unassignable fields (repeated message) from candidates", () => {
     const argv = ["api", "CreateApplication", "--field", ""];
     const r = generateApiFieldCandidates(ctxFor(argv), argv);
     expect(r).toBeDefined();
     if (!r) return;
     const values = r.candidates.map((c) => c.value);
-    expect(values).toContain("subgraphs");
+    // subgraphs is `repeated Subgraph` — not assignable via --field, must be hidden.
+    expect(values).not.toContain("subgraphs");
     expect(values).not.toContain("subgraphs.");
+    // The other repeated-scalar field is still suggested.
+    expect(values).toContain("cors");
+  });
+
+  test("excludes map fields from candidates", () => {
+    const argv = ["api", "SetMetadata", "--field", ""];
+    const r = generateApiFieldCandidates(ctxFor(argv), argv);
+    expect(r).toBeDefined();
+    if (!r) return;
+    const values = r.candidates.map((c) => c.value);
+    // labels is map<string, string> — must be hidden.
+    expect(values).not.toContain("labels");
+    expect(values).toContain("trn");
+  });
+
+  test("excludes google.protobuf well-known type fields from candidates", () => {
+    const argv = ["api", "UpdateApplication", "--field", ""];
+    const r = generateApiFieldCandidates(ctxFor(argv), argv);
+    expect(r).toBeDefined();
+    if (!r) return;
+    const values = r.candidates.map((c) => c.value);
+    // updateMask is google.protobuf.FieldMask — must be hidden.
+    expect(values).not.toContain("updateMask");
+    expect(values).not.toContain("updateMask.");
   });
 
   test("does not descend into google.protobuf well-known type", () => {

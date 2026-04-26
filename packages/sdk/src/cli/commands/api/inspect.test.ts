@@ -74,4 +74,28 @@ describe("renderInspectJson", () => {
     expect(names).toContain("workspaceId");
     expect(names).toContain("applicationName");
   });
+
+  test("does not truncate deeply nested method input", () => {
+    // CreateTailorDBType has TailorDBType > schema > fields > … reaching depth 9.
+    const m = getMethod("CreateTailorDBType");
+    const json = renderInspectJson(m);
+    function deepestDepth(
+      field: { message?: { fields: { name: string; message?: unknown }[] } } | undefined,
+      level: number,
+    ): number {
+      if (!field?.message) return level;
+      let max = level;
+      for (const sub of field.message.fields) {
+        const d = deepestDepth(sub as never, level + 1);
+        if (d > max) max = d;
+      }
+      return max;
+    }
+    let max = 0;
+    for (const top of json.input.fields) {
+      const d = deepestDepth(top, 1);
+      if (d > max) max = d;
+    }
+    expect(max).toBeGreaterThan(4);
+  });
 });

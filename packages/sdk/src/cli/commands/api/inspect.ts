@@ -85,7 +85,13 @@ export function describeFieldType(field: DescField): string {
   }
 }
 
-function fieldToJson(field: DescField, depth: number): InspectFieldJson {
+function nestedMessageForInspect(field: DescField): DescMessage | undefined {
+  if (field.fieldKind === "message") return field.message;
+  if (field.fieldKind === "list" && field.listKind === "message") return field.message;
+  return undefined;
+}
+
+function fieldToJson(field: DescField, visited: Set<DescMessage>): InspectFieldJson {
   const json: InspectFieldJson = {
     name: field.localName,
     protoName: field.name,
@@ -100,54 +106,54 @@ function fieldToJson(field: DescField, depth: number): InspectFieldJson {
     json.enumValues = field.enum.values.map((v) => v.name);
   }
 
-  if (depth > 0) {
-    let nested: DescMessage | undefined;
-    if (field.fieldKind === "message") nested = field.message;
-    else if (field.fieldKind === "list" && field.listKind === "message") nested = field.message;
-    if (nested) {
-      json.message = {
-        typeName: nested.typeName,
-        fields: nested.fields.map((f) => fieldToJson(f, depth - 1)),
-      };
-    }
+  const nested = nestedMessageForInspect(field);
+  if (nested && !visited.has(nested)) {
+    visited.add(nested);
+    json.message = {
+      typeName: nested.typeName,
+      fields: nested.fields.map((f) => fieldToJson(f, visited)),
+    };
+    visited.delete(nested);
+  } else if (nested) {
+    json.message = { typeName: nested.typeName, fields: [] };
   }
 
   return json;
 }
 
 export function renderInspectJson(method: DescMethodUnary): InspectMethodJson {
+  const visited = new Set<DescMessage>([method.input]);
   return {
     method: method.name,
     input: {
       typeName: method.input.typeName,
-      fields: method.input.fields.map((f) => fieldToJson(f, 4)),
+      fields: method.input.fields.map((f) => fieldToJson(f, visited)),
     },
     output: { typeName: method.output.typeName },
   };
 }
 
-function renderFieldText(field: DescField, depth: number, indent: string): string[] {
+function renderFieldText(field: DescField, indent: string, visited: Set<DescMessage>): string[] {
   const lines: string[] = [];
-  const prefix = indent;
-  lines.push(`${prefix}${field.localName}: ${describeFieldType(field)}`);
+  lines.push(`${indent}${field.localName}: ${describeFieldType(field)}`);
 
   if (field.fieldKind === "enum") {
     const values = field.enum.values.map((v) => v.name).join(", ");
-    lines.push(`${prefix}  values: ${values}`);
+    lines.push(`${indent}  values: ${values}`);
   } else if (field.fieldKind === "list" && field.listKind === "enum") {
     const values = field.enum.values.map((v) => v.name).join(", ");
-    lines.push(`${prefix}  values: ${values}`);
+    lines.push(`${indent}  values: ${values}`);
   }
 
-  if (depth > 0) {
-    let nested: DescMessage | undefined;
-    if (field.fieldKind === "message") nested = field.message;
-    else if (field.fieldKind === "list" && field.listKind === "message") nested = field.message;
-    if (nested) {
-      for (const sub of nested.fields) {
-        lines.push(...renderFieldText(sub, depth - 1, `${indent}  `));
-      }
+  const nested = nestedMessageForInspect(field);
+  if (nested && !visited.has(nested)) {
+    visited.add(nested);
+    for (const sub of nested.fields) {
+      lines.push(...renderFieldText(sub, `${indent}  `, visited));
     }
+    visited.delete(nested);
+  } else if (nested) {
+    lines.push(`${indent}  …(recursive ${nested.typeName})`);
   }
 
   return lines;
@@ -157,8 +163,9 @@ export function renderInspectText(method: DescMethodUnary): string {
   const lines: string[] = [];
   lines.push(`${method.name}`);
   lines.push(`  request: ${method.input.typeName}`);
+  const visited = new Set<DescMessage>([method.input]);
   for (const f of method.input.fields) {
-    lines.push(...renderFieldText(f, 4, "    "));
+    lines.push(...renderFieldText(f, "    ", visited));
   }
   lines.push(`  response: ${method.output.typeName}`);
   return lines.join("\n");

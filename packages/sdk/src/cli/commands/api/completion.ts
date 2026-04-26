@@ -16,9 +16,25 @@ import {
   getInputFieldByName,
   getMethodDescriptor,
 } from "./proto-reflect";
+import type { DescField } from "@bufbuild/protobuf";
 import type { AnyCommand } from "politty";
 
 const FIELD_OPTION_NAMES = new Set(["field", "f"]);
+
+/**
+ * True when a proto field can be set as a `--field` leaf assignment without
+ * dot-notation. Mirrors the assign-time accept set in `mergeFieldEntries`,
+ * so completion never suggests fields that would unconditionally error.
+ * @param field - Proto field to test
+ * @returns True if the field can be assigned via `--field key=value`
+ */
+function isAssignableLeaf(field: DescField): boolean {
+  if (field.fieldKind === "scalar" || field.fieldKind === "enum") return true;
+  if (field.fieldKind === "list") {
+    return field.listKind === "scalar" || field.listKind === "enum";
+  }
+  return false;
+}
 
 function findApiEndpoint(argv: string[]): string | undefined {
   // Locate the "api" subcommand token, then find the first non-option,
@@ -100,6 +116,7 @@ export function generateApiFieldCandidates(
   const candidates: CompletionCandidate[] = [];
   for (const f of currentMessage.fields) {
     const descendable = descendableMessageOf(f) !== undefined;
+    if (!descendable && !isAssignableLeaf(f)) continue;
     const suffix = descendable ? "." : "";
     candidates.push({
       value: `${prefix}${f.localName}${suffix}`,
