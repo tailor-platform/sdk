@@ -1,0 +1,77 @@
+import { describe, expect, test } from "vitest";
+import { describeFieldType, renderInspectJson, renderInspectText } from "./inspect";
+import { getMethodDescriptor } from "./proto-reflect";
+
+function getMethod(name: string) {
+  const m = getMethodDescriptor(name);
+  if (!m) throw new Error(`method ${name} not found`);
+  return m;
+}
+
+describe("describeFieldType", () => {
+  test("renders scalar string", () => {
+    const m = getMethod("GetApplication");
+    const f = m.input.fields.find((x) => x.localName === "applicationName");
+    expect(f).toBeDefined();
+    if (!f) return;
+    expect(describeFieldType(f)).toBe("string");
+  });
+
+  test("renders repeated scalar", () => {
+    const m = getMethod("CreateApplication");
+    const f = m.input.fields.find((x) => x.localName === "cors");
+    if (!f) throw new Error("cors not found");
+    expect(describeFieldType(f)).toBe("repeated string");
+  });
+
+  test("renders enum", () => {
+    const m = getMethod("InviteWorkspacePlatformUser");
+    const f = m.input.fields.find((x) => x.localName === "role");
+    if (!f) throw new Error("role not found");
+    expect(describeFieldType(f)).toMatch(/enum.*WorkspacePlatformUserRole/);
+  });
+
+  test("renders message reference", () => {
+    const m = getMethod("CreateTailorDBType");
+    const f = m.input.fields.find((x) => x.localName === "tailordbType");
+    if (!f) throw new Error("tailordbType not found");
+    expect(describeFieldType(f)).toMatch(/TailorDBType/);
+  });
+
+  test("renders map type", () => {
+    const m = getMethod("SetMetadata");
+    const f = m.input.fields.find((x) => x.localName === "labels");
+    if (!f) throw new Error("labels not found");
+    expect(describeFieldType(f)).toMatch(/^map</);
+  });
+});
+
+describe("renderInspectText", () => {
+  test("includes method name and field rows", () => {
+    const m = getMethod("GetApplication");
+    const out = renderInspectText(m);
+    expect(out).toMatch(/GetApplication/);
+    expect(out).toMatch(/workspaceId/);
+    expect(out).toMatch(/applicationName/);
+  });
+
+  test("expands nested message fields", () => {
+    const m = getMethod("CreateTailorDBType");
+    const out = renderInspectText(m);
+    expect(out).toMatch(/tailordbType/);
+    // Nested fields of TailorDBType (name, schema)
+    expect(out).toMatch(/\bname\b/);
+  });
+});
+
+describe("renderInspectJson", () => {
+  test("returns structured method descriptor", () => {
+    const m = getMethod("GetApplication");
+    const json = renderInspectJson(m);
+    expect(json.method).toBe("GetApplication");
+    expect(json.input.typeName).toBe("tailor.v1.GetApplicationRequest");
+    const names = json.input.fields.map((f) => f.name);
+    expect(names).toContain("workspaceId");
+    expect(names).toContain("applicationName");
+  });
+});

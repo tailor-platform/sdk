@@ -311,7 +311,7 @@ Call Tailor Platform API endpoints directly.
 **Usage**
 
 ```
-tailor-sdk api [options] <endpoint>
+tailor-sdk api [options] [endpoint]
 ```
 
 <!-- politty:command:api:usage:end -->
@@ -320,9 +320,9 @@ tailor-sdk api [options] <endpoint>
 
 **Arguments**
 
-| Argument   | Description                                                                                 | Required |
-| ---------- | ------------------------------------------------------------------------------------------- | -------- |
-| `endpoint` | API endpoint to call (e.g., 'GetApplication' or 'tailor.v1.OperatorService/GetApplication') | Yes      |
+| Argument   | Description                                                                                  | Required |
+| ---------- | -------------------------------------------------------------------------------------------- | -------- |
+| `endpoint` | API endpoint to call (e.g., 'GetApplication' or 'tailor.v1.OperatorService/GetApplication'). | No       |
 
 <!-- politty:command:api:arguments:end -->
 
@@ -330,12 +330,15 @@ tailor-sdk api [options] <endpoint>
 
 **Options**
 
-| Option                          | Alias | Description             | Required | Default              | Env                               |
-| ------------------------------- | ----- | ----------------------- | -------- | -------------------- | --------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile       | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
-| `--body <BODY>`                 | `-b`  | Request body as JSON    | No       | `"{}"`               | -                                 |
+| Option                          | Alias | Description                                                                                        | Required | Default              | Env                               |
+| ------------------------------- | ----- | -------------------------------------------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                       | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                  | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                                            | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| `--body <BODY>`                 | `-b`  | Request body as JSON.                                                                              | No       | `"{}"`               | -                                 |
+| `--field <FIELD>`               | `-f`  | Set a request field as key=value. Repeatable. Supports dot-notation (e.g. tailordbType.name=User). | No       | `[]`                 | -                                 |
+| `--inspect`                     | -     | Print the input message tree of the endpoint and exit without making a request.                    | No       | `false`              | -                                 |
+| `--list`                        | -     | List all available OperatorService methods and exit.                                               | No       | `false`              | -                                 |
 
 <!-- politty:command:api:options:end -->
 
@@ -345,17 +348,62 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 <!-- politty:command:api:global-options-link:end -->
 
+<!-- politty:command:api:examples:start -->
+
+**Examples**
+
+**List all available OperatorService methods.**
+
+```bash
+$ tailor-sdk api --list
+```
+
+**Show the input message tree for an endpoint.**
+
+```bash
+$ tailor-sdk api GetApplication --inspect
+```
+
+**Call with a single field; workspaceId is auto-injected.**
+
+```bash
+$ tailor-sdk api GetApplication --field applicationName=app-1
+```
+
+**Use repeated --field for proto repeated fields.**
+
+```bash
+$ tailor-sdk api CreateApplication -f applicationName=app -f cors=https://a -f cors=https://b
+```
+
+**Use raw JSON body for advanced shapes.**
+
+```bash
+$ tailor-sdk api ListWorkspaces -b '{"pageSize":10}'
+```
+
+<!-- politty:command:api:examples:end -->
+
 <!-- politty:command:api:notes:start -->
 
 **Notes**
 
-The request body is inferred from the proto definition of the target endpoint, and commonly required fields are auto-injected so they can be omitted from `--body`:
+Use `--list` to enumerate available methods and `--inspect` to print an endpoint's input message tree (combine with `--json` for machine-readable output).
+
+Build the request body in one of two ways:
+
+- `--body` accepts a JSON object string (escape hatch for arbitrary shapes including `map` and `bytes`).
+- `--field <key>=<value>` (repeatable, alias `-f`) sets fields one at a time. Supports dot-notation for nested messages (`tailordbType.name=User`) and repeats the same key to populate `repeated` fields. Values are coerced according to the proto field type. `map` fields and `repeated` of messages are not supported by `--field`; use `--body` for those.
+
+When both are supplied, `--body` is the base and `--field` entries override on top.
+
+Commonly required fields are auto-injected when not already set:
 
 - `workspaceId` — resolved from `-w` / `TAILOR_PLATFORM_WORKSPACE_ID` / the selected profile.
 - `namespaceName` — resolved from `tailor.config.ts` based on the endpoint's service:
   - Auth / Tenant / UserProfile endpoints use `auth.name`.
   - IdP / TailorDB / Pipeline endpoints use the sole configured namespace when exactly one is defined.
 
-Values already present in `--body` are never overridden. If a value cannot be resolved (e.g. no config found), injection is silently skipped and the server-side validation error takes precedence.
+If a value cannot be resolved (e.g. no config found), injection is silently skipped and the server-side validation error takes precedence.
 
 <!-- politty:command:api:notes:end -->

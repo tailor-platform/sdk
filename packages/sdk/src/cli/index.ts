@@ -4,6 +4,7 @@ import { defineCommand, runMain } from "politty";
 import { withCompletionCommand } from "politty/completion";
 import { z } from "zod";
 import { apiCommand } from "./commands/api";
+import { applyApiAwareCompletion } from "./commands/api/completion";
 import { applyCommand } from "./commands/apply";
 import { authconnectionCommand } from "./commands/authconnection";
 import { crashReportCommand } from "./commands/crash-report";
@@ -53,7 +54,7 @@ initCrashReporting();
 const packageJson = await readPackageJson();
 const cliName = Object.keys(packageJson.bin ?? {})[0] || "tailor-sdk";
 
-export const mainCommand = withCompletionCommand(
+const baseMainCommand = withCompletionCommand(
   defineCommand({
     name: cliName,
     description:
@@ -89,6 +90,9 @@ export const mainCommand = withCompletionCommand(
     },
   }),
 );
+
+applyApiAwareCompletion(baseMainCommand);
+export const mainCommand = baseMainCommand;
 
 runMain(mainCommand, {
   version: packageJson.version,
