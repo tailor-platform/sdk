@@ -1,12 +1,21 @@
 import { OperatorService } from "@tailor-proto/tailor/v1/service_pb";
 import type { DescField, DescMessage, DescMethodUnary } from "@bufbuild/protobuf";
 
+// `tailor-sdk api` issues a single JSON POST and reads one JSON response, so
+// only unary RPCs can be invoked. Streaming methods are filtered out of all
+// discovery surfaces (`--list`, completion, `--inspect`).
+function unaryMethods(): DescMethodUnary[] {
+  return OperatorService.methods.filter((m): m is DescMethodUnary => m.methodKind === "unary");
+}
+
 export function listMethodNames(): string[] {
-  return OperatorService.methods.map((m) => m.name).sort();
+  return unaryMethods()
+    .map((m) => m.name)
+    .sort();
 }
 
 export function getMethodDescriptor(methodName: string): DescMethodUnary | undefined {
-  return OperatorService.methods.find((m) => m.name === methodName) as DescMethodUnary | undefined;
+  return unaryMethods().find((m) => m.name === methodName);
 }
 
 export function getInputFieldByName(message: DescMessage, segment: string): DescField | undefined {

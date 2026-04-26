@@ -212,6 +212,36 @@ describe("mergeFieldEntries", () => {
     if (!r.ok) expect(r.error).toMatch(/repeated message|--body/i);
   });
 
+  test("oneof: --field overrides body sibling case", () => {
+    // GrantOrganizationAccess.member is oneof { teamId, email, machineUserId }.
+    const r = mergeFieldEntries({
+      body: { teamId: "t1" },
+      entries: ["email=a@b"],
+      methodInput: methodInput("GrantOrganizationAccess"),
+    });
+    expect(r).toEqual({ ok: true, body: { email: "a@b" } });
+  });
+
+  test("oneof: --field rejects conflicting cases from --field", () => {
+    const r = mergeFieldEntries({
+      body: {},
+      entries: ["teamId=t1", "email=a@b"],
+      methodInput: methodInput("GrantOrganizationAccess"),
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/oneof|member/i);
+  });
+
+  test("oneof: same case set twice still respects single-set rule", () => {
+    const r = mergeFieldEntries({
+      body: {},
+      entries: ["teamId=t1", "teamId=t2"],
+      methodInput: methodInput("GrantOrganizationAccess"),
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/repeated|multiple/i);
+  });
+
   test("rejects nesting into google.protobuf well-known type", () => {
     // UpdateApplication.update_mask is google.protobuf.FieldMask; proto JSON
     // uses a comma-delimited string, not nested object.

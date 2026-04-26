@@ -73,6 +73,7 @@ function coerceFieldValue(
 interface AssignContext {
   body: Record<string, unknown>;
   setLeafKeys: Set<string>; // joined dot path of leaf assignments
+  oneofChosen: Map<string, string>; // `${parentDot}#${oneofName}` → chosen field localName
 }
 
 function assignField(
@@ -164,6 +165,26 @@ function assignField(
       return { ok: false, error: `--field ${JSON.stringify(rawKey)}: ${coerced.error}` };
     }
 
+    // Proto oneof exclusivity: clear sibling cases written by --body, and
+    // reject conflicting --field entries that target the same oneof.
+    if (field.oneof) {
+      const parentDot = segments.slice(0, -1).join(".");
+      const oneofKey = `${parentDot}#${field.oneof.name}`;
+      const previous = ctx.oneofChosen.get(oneofKey);
+      if (previous !== undefined && previous !== localName) {
+        return {
+          ok: false,
+          error: `--field ${JSON.stringify(rawKey)}: oneof ${JSON.stringify(field.oneof.name)} already set via ${JSON.stringify(previous)}; only one case may be assigned`,
+        };
+      }
+      for (const sibling of currentMessage.fields) {
+        if (sibling.oneof?.name !== field.oneof.name) continue;
+        if (sibling.localName === localName) continue;
+        delete currentObj[sibling.localName];
+      }
+      ctx.oneofChosen.set(oneofKey, localName);
+    }
+
     if (field.fieldKind === "list") {
       if (ctx.setLeafKeys.has(dotPath)) {
         const existing = currentObj[localName];
@@ -195,7 +216,7 @@ function assignField(
 
 export function mergeFieldEntries(opts: MergeFieldEntriesOptions): MergeResult {
   const body: Record<string, unknown> = { ...opts.body };
-  const ctx: AssignContext = { body, setLeafKeys: new Set() };
+  const ctx: AssignContext = { body, setLeafKeys: new Set(), oneofChosen: new Map() };
 
   for (const raw of opts.entries) {
     const parsed = parseEntry(raw);
