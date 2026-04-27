@@ -1,70 +1,17 @@
 import { arg } from "politty";
 import { z } from "zod";
 import { configArg, workspaceArgs } from "@/cli/shared/args";
-import { platformBaseUrl, userAgent } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
-import { CLIError } from "@/cli/shared/errors";
+import { loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
-import { mergeFieldEntries } from "./field-merge";
-import { renderInspectJson, renderInspectText } from "./inspect";
+import { apiCall } from "./api-call";
+import { inspectCommand } from "./inspect";
+import { listCommand } from "./list";
 import { extractMethodName, getMethodDescriptor, listMethodNames } from "./proto-reflect";
 import type { LoadedConfig } from "@/cli/shared/config-loader";
 
-export interface ApiCallOptions {
-  profile?: string;
-  endpoint: string;
-  body?: string;
-}
-
-export interface ApiCallResult {
-  status: number;
-  data: unknown;
-}
-
-/**
- * Call Tailor Platform API endpoints directly.
- * If the endpoint doesn't contain "/", it defaults to `tailor.v1.OperatorService/{endpoint}`.
- * @param options - API call options (profile, endpoint, body)
- * @returns Response status and data
- */
-export async function apiCall(options: ApiCallOptions): Promise<ApiCallResult> {
-  const accessToken = await loadAccessToken({
-    useProfile: true,
-    profile: options.profile,
-  });
-
-  let endpointPath: string;
-  if (options.endpoint.includes("/")) {
-    endpointPath = options.endpoint;
-  } else {
-    endpointPath = `tailor.v1.OperatorService/${options.endpoint}`;
-  }
-
-  const url = new URL(endpointPath, platformBaseUrl);
-
-  const response = await fetch(url.toString(), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${accessToken}`,
-      "User-Agent": await userAgent(),
-    },
-    body: options.body ?? "{}",
-  });
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(`API call failed (${response.status}): ${JSON.stringify(data)}`);
-  }
-
-  return {
-    status: response.status,
-    data,
-  };
-}
+export { apiCall, type ApiCallOptions, type ApiCallResult } from "./api-call";
 
 function resolveNamespaceName(methodName: string, config: LoadedConfig): string | undefined {
   if (/Auth|Tenant|UserProfile/.test(methodName)) {
@@ -110,39 +57,34 @@ function parseBodyAsObject(body: string): Record<string, unknown> | undefined {
 export const apiCommand = defineAppCommand({
   name: "api",
   description: "Call Tailor Platform API endpoints directly.",
-  notes: `Use \`--list\` to enumerate available methods and \`--inspect\` to print an endpoint's input message tree (combine with \`--json\` for machine-readable output).
+  notes: `Use \`tailor-sdk api list\` to enumerate invocable methods and \`tailor-sdk api inspect <endpoint>\` to print an endpoint's input message tree (combine with \`--json\` for machine-readable output).
 
-Build the request body in one of two ways:
-
-- \`--body\` accepts a JSON object string (escape hatch for arbitrary shapes including \`map\` fields and \`repeated\` of messages). \`bytes\` fields accept the raw base64 string via \`--field\` directly.
-- \`--field <key>=<value>\` (repeatable, alias \`-f\`) sets fields one at a time. Supports dot-notation for nested messages (\`tailordbType.name=User\`) and repeats the same key to populate \`repeated\` scalar/enum fields. Values are coerced according to the proto field type. \`map\` fields, \`repeated\` of messages, and \`google.protobuf.*\` well-known types (Duration, Timestamp, FieldMask, …) have JSON encodings that cannot be assembled from \`--field\` entries; use \`--body\` for those.
-
-When both are supplied, \`--body\` is the base and \`--field\` entries override on top.
-
-Commonly required fields are auto-injected when not already set:
+The request body is inferred from the proto definition of the target endpoint, and commonly required fields are auto-injected so they can be omitted from \`--body\`:
 
 - \`workspaceId\` — resolved from \`-w\` / \`TAILOR_PLATFORM_WORKSPACE_ID\` / the selected profile.
 - \`namespaceName\` — resolved from \`tailor.config.ts\` based on the endpoint's service:
   - Auth / Tenant / UserProfile endpoints use \`auth.name\`.
   - IdP / TailorDB / Pipeline endpoints use the sole configured namespace when exactly one is defined.
 
-If a value cannot be resolved (e.g. no config found), injection is silently skipped and the server-side validation error takes precedence.`,
+Values already present in \`--body\` are never overridden. If a value cannot be resolved (e.g. no config found), injection is silently skipped and the server-side validation error takes precedence.`,
   examples: [
-    { cmd: "--list", desc: "List all available OperatorService methods." },
-    { cmd: "GetApplication --inspect", desc: "Show the input message tree for an endpoint." },
     {
-      cmd: "GetApplication --field applicationName=app-1",
-      desc: "Call with a single field; workspaceId is auto-injected.",
+      cmd: 'GetApplication -b \'{"applicationName":"app-1"}\'',
+      desc: "Call an endpoint; workspaceId is auto-injected.",
     },
     {
-      cmd: "CreateApplication -f applicationName=app -f cors=https://a -f cors=https://b",
-      desc: "Use repeated --field for proto repeated fields.",
+      cmd: "list",
+      desc: "List all invocable OperatorService methods.",
     },
     {
-      cmd: "ListWorkspaces -b '{\"pageSize\":10}'",
-      desc: "Use raw JSON body for advanced shapes.",
+      cmd: "inspect GetApplication",
+      desc: "Show the input message tree for an endpoint.",
     },
   ],
+  subCommands: {
+    list: listCommand,
+    inspect: inspectCommand,
+  },
   args: z
     .object({
       ...workspaceArgs,
@@ -151,19 +93,7 @@ If a value cannot be resolved (e.g. no config found), injection is silently skip
         alias: "b",
         description: "Request body as JSON.",
       }),
-      field: arg(z.array(z.string()).default([]), {
-        alias: "f",
-        description:
-          "Set a request field as key=value. Repeatable. Supports dot-notation (e.g. tailordbType.name=User).",
-      }),
-      inspect: arg(z.boolean().default(false), {
-        description:
-          "Print the input message tree of the endpoint and exit without making a request.",
-      }),
-      list: arg(z.boolean().default(false), {
-        description: "List all available OperatorService methods and exit.",
-      }),
-      endpoint: arg(z.string().optional(), {
+      endpoint: arg(z.string(), {
         positional: true,
         description:
           "API endpoint to call (e.g., 'GetApplication' or 'tailor.v1.OperatorService/GetApplication').",
@@ -172,84 +102,15 @@ If a value cannot be resolved (e.g. no config found), injection is silently skip
     })
     .strict(),
   run: async (args) => {
-    if (args.list) {
-      const names = listMethodNames();
-      if (logger.jsonMode) {
-        logger.out(names);
-      } else {
-        for (const name of names) logger.out(name);
-      }
-      return;
-    }
-
-    if (args.endpoint === undefined) {
-      throw CLIError({
-        message: "endpoint is required unless --list is given",
-        command: "api",
-      });
-    }
-
-    const endpoint = args.endpoint;
-    const methodName = extractMethodName(endpoint);
-
-    if (args.inspect) {
-      const method = getMethodDescriptor(methodName);
-      if (!method) {
-        throw CLIError({
-          message: `unknown method: ${methodName}`,
-          suggestion: "Run `tailor-sdk api --list` to see available methods.",
-          command: "api",
-        });
-      }
-      if (logger.jsonMode) {
-        logger.out(renderInspectJson(method));
-      } else {
-        logger.out(renderInspectText(method));
-      }
-      return;
-    }
-
-    const baseBody = parseBodyAsObject(args.body);
-
-    let bodyForRequest = args.body;
-    let parsedBody: Record<string, unknown> | undefined = baseBody;
+    const methodName = extractMethodName(args.endpoint);
     const method = getMethodDescriptor(methodName);
 
-    if (args.field.length > 0) {
-      if (!parsedBody) {
-        throw CLIError({
-          message: "--field cannot be combined with a non-object --body",
-          details: `--body must be a JSON object when --field is used; got: ${args.body}`,
-          command: "api",
-        });
-      }
-      if (!method) {
-        throw CLIError({
-          message: `unknown method: ${methodName}`,
-          suggestion: "Run `tailor-sdk api --list` to see available methods.",
-          command: "api",
-        });
-      }
-      const merged = mergeFieldEntries({
-        body: parsedBody,
-        entries: args.field,
-        methodInput: method.input,
-      });
-      if (!merged.ok) {
-        throw CLIError({
-          message: "failed to apply --field entries",
-          details: merged.error,
-          command: "api",
-        });
-      }
-      parsedBody = merged.body;
-    }
-
-    let mutated = args.field.length > 0;
+    const parsedBody = parseBodyAsObject(args.body);
+    let mutated = false;
 
     if (parsedBody && method) {
-      // Use localName so the presence check matches the keys mergeFieldEntries
-      // and direct --body parsing write into the request body.
+      // Use localName so the presence check matches the keys --body parsing
+      // writes into the request body.
       const fieldNames = method.input.fields.map((f) => f.localName);
 
       if (fieldNames.includes("workspaceId") && !("workspaceId" in parsedBody)) {
@@ -278,14 +139,10 @@ If a value cannot be resolved (e.g. no config found), injection is silently skip
       }
     }
 
-    if (mutated && parsedBody) {
-      bodyForRequest = JSON.stringify(parsedBody);
-    }
-
     const result = await apiCall({
       profile: args.profile,
-      endpoint,
-      body: bodyForRequest,
+      endpoint: args.endpoint,
+      body: mutated && parsedBody ? JSON.stringify(parsedBody) : args.body,
     });
 
     logger.log(JSON.stringify(result.data, null, 2));
