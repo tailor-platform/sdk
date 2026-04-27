@@ -9,20 +9,6 @@ Tailor Platform SDK applications are tested with [Vitest](https://vitest.dev/) a
 
 The two layers run as separate Vitest projects so they can be invoked independently:
 
-```typescript
-// vitest.config.ts
-import { defineConfig } from "vitest/config";
-
-export default defineConfig({
-  test: {
-    projects: [
-      { test: { name: "unit", include: ["src/**/*.test.ts"] } },
-      { test: { name: "e2e", include: ["e2e/**/*.test.ts"], globalSetup: "e2e/globalSetup.ts" } },
-    ],
-  },
-});
-```
-
 ```bash
 pnpm test:unit  # fast feedback loop
 pnpm test:e2e   # against a live deployment
