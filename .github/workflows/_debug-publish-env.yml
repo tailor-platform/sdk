@@ -29,20 +29,52 @@ jobs:
         with:
           registry-url: "https://registry.npmjs.org"
 
-      - name: Print versions before npm upgrade
+      - name: Diagnostic — BEFORE npm upgrade
         run: |
-          echo "BEFORE upgrade:"
-          echo "  node: $(node -v)"
-          echo "  npm:  $(npm -v)"
+          echo "=== versions ==="
+          echo "  node:           $(node -v)  ($(which node))"
+          echo "  npm:            $(npm -v)   ($(which npm))"
+          echo
+          echo "=== npm config ==="
+          echo "  prefix:         $(npm config get prefix)"
+          echo "  globalconfig:   $(npm config get globalconfig)"
+          echo "  userconfig:     $(npm config get userconfig)"
+          echo "  cache:          $(npm config get cache)"
+          echo
+          echo "=== PATH ==="
+          echo "$PATH" | tr ':' '\n' | nl
+          echo
+          echo "=== prefix/bin contents ==="
+          ls -la "$(npm config get prefix)/bin" 2>/dev/null || echo "  (no such directory)"
+          echo
+          echo "=== which -a npm ==="
+          which -a npm
         shell: bash
 
       - name: Ensure npm 11+ for OIDC trusted publishing
         run: npm install -g npm@latest
         shell: bash
 
-      - name: Print versions after npm upgrade
+      - name: Diagnostic — AFTER npm upgrade
         run: |
-          echo "AFTER upgrade:"
-          echo "  node: $(node -v)"
-          echo "  npm:  $(npm -v)"
+          echo "=== versions ==="
+          echo "  node:           $(node -v)  ($(which node))"
+          echo "  npm:            $(npm -v)   ($(which npm))"
+          echo
+          echo "=== npm config ==="
+          echo "  prefix:         $(npm config get prefix)"
+          echo
+          echo "=== PATH ==="
+          echo "$PATH" | tr ':' '\n' | nl
+          echo
+          echo "=== prefix/bin contents ==="
+          ls -la "$(npm config get prefix)/bin" 2>/dev/null || echo "  (no such directory)"
+          echo
+          echo "=== which -a npm ==="
+          which -a npm
+          echo
+          echo "=== resolved npm versions on PATH ==="
+          for p in $(which -a npm); do
+            echo "  $p -> $("$p" -v 2>/dev/null || echo "(failed)")"
+          done
         shell: bash
