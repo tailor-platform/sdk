@@ -7,7 +7,7 @@ Tailor Platform SDK applications are tested with [Vitest](https://vitest.dev/) a
 | Unit tests | Resolver / workflow job / executor TypeScript source | No                  |
 | E2E tests  | Deployed GraphQL API, TailorDB, and workflows        | Yes                 |
 
-Lean on unit tests for the day-to-day feedback loop — they exercise business logic against real SDK types in milliseconds, with no deployment in the loop. Reach for E2E tests to confirm integration against a live platform, where mocked globals can drift from the real GraphQL, TailorDB, and workflow runtime.
+Lean on unit tests for the day-to-day feedback loop — they run fast and exercise business logic against real SDK types with no deployment in the loop. Reach for E2E tests to confirm integration against a live platform, where mocked globals can drift from the real GraphQL, TailorDB, and workflow runtime.
 
 Unit-test entrypoints exposed by the SDK:
 
