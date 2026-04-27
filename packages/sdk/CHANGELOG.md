@@ -1,5 +1,33 @@
 # @tailor-platform/sdk
 
+## 1.41.0
+
+### Minor Changes
+
+- [#514](https://github.com/tailor-platform/sdk/pull/514) [`3047d45`](https://github.com/tailor-platform/sdk/commit/3047d45fd8daa38616ecaad20d5c04cf75d23931) Thanks [@r253hmdryou](https://github.com/r253hmdryou)! - Add `function get` and `function list` CLI commands for querying function registries in a workspace
+
+- [#987](https://github.com/tailor-platform/sdk/pull/987) [`35b2090`](https://github.com/tailor-platform/sdk/commit/35b2090b0009d26ebcbb69c76540791b2f39924e) Thanks [@toiroakr](https://github.com/toiroakr)! - Add wait/resolve support for human-in-the-loop workflows via `defineWaitPoint()` and `defineWaitPoints()` with typed `.wait()` and `.resolve()` methods.
+
+  Tighten `createWorkflowJob` I/O types: both `Input` and `Output` must now be JsonValue-compatible (plain objects/arrays; no class instances or functions). `Output` previously accepted `Jsonifiable` with a `Jsonify<Output>` return transform on `.trigger()`, but the platform runtime rejects non-plain objects, so the old types did not match actual runtime behavior.
+
+  Reject top-level `null` in `createWorkflowJob` `Input` and in wait-point `Payload`: the platform normalizes top-level `null`/`undefined` args to `{}`, so declaring a top-level nullable type would cause the body/callback to receive `{}` at runtime, mismatching the declared type. Nested `null` inside objects or arrays is preserved by JSON serialization and remains allowed.
+
+### Patch Changes
+
+- [#1050](https://github.com/tailor-platform/sdk/pull/1050) [`9232660`](https://github.com/tailor-platform/sdk/commit/92326608640e473138712ac00adc29369980c604) Thanks [@toiroakr](https://github.com/toiroakr)! - Address Dependabot noise for the valibot ReDoS advisory (GHSA-vqpr-j7v3-hqw9): bump `@toiroakr/lines-db` to 0.9.2 and document the remaining transitive `@liam-hq/cli → valibot@1.1.0` report in the SDK README, including an override snippet for consumers who want to silence it.
+
+- [#1030](https://github.com/tailor-platform/sdk/pull/1030) [`fc4cc7c`](https://github.com/tailor-platform/sdk/commit/fc4cc7cc4430c545c50eb8bb4b406023c91d8290) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency politty to v0.4.14
+
+- [#1041](https://github.com/tailor-platform/sdk/pull/1041) [`0858d64`](https://github.com/tailor-platform/sdk/commit/0858d64b3a03a3a9d994ebe5cd18a803b9780cac) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update pnpm/action-setup action to v6.0.3
+
+- [#1044](https://github.com/tailor-platform/sdk/pull/1044) [`04c1fea`](https://github.com/tailor-platform/sdk/commit/04c1fea62a0eb70c24609cdf9bccf0a012d71875) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency std-env to v4.1.0
+
+- [#1045](https://github.com/tailor-platform/sdk/pull/1045) [`09fce15`](https://github.com/tailor-platform/sdk/commit/09fce1500cc24bcf6089248030168817598f47bd) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency type-fest to v5.6.0
+
+- [#1051](https://github.com/tailor-platform/sdk/pull/1051) [`f7e1d34`](https://github.com/tailor-platform/sdk/commit/f7e1d340ecac5ea37c3c5ab33bd3d4a536274817) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @inquirer
+
+- [#1052](https://github.com/tailor-platform/sdk/pull/1052) [`7e75310`](https://github.com/tailor-platform/sdk/commit/7e7531040b3ceac90e25f633d71f502ac1ac3239) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @toiroakr/read-multiline to v0.3.2
+
 ## 1.40.1
 
 ### Patch Changes
