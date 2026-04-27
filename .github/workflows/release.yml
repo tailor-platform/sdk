@@ -37,12 +37,8 @@ jobs:
         with:
           registry-url: "https://registry.npmjs.org"
 
-      # `pnpm/action-setup` v6.0.3+ ships a Node directory that contains
-      # only `node` (no `npm`), so `npm` resolves to the runner's system
-      # binary at `/usr/local/bin/npm` (10.8.2) — which lacks OIDC trusted
-      # publishing. Update that system npm in place by pinning the install
-      # prefix to `/usr/local`, otherwise `npm install -g` would land in
-      # the pnpm-managed Node prefix and never appear on PATH.
+      # OIDC trusted publishing needs npm 11.5+. PATH resolves `npm` to the
+      # system binary, so pin --prefix=/usr/local to overwrite it in place.
       - name: Ensure npm 11+ for OIDC trusted publishing
         run: sudo npm install -g npm@latest --prefix=/usr/local
         shell: bash
