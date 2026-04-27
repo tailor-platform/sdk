@@ -5,6 +5,7 @@
 import type { GenEnum, GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
 import type { Application, ApplicationSchemaUpdateAttempt, Subgraph } from "./application_resource_pb";
+import type { GatewayFilter } from "./gateway_filter_resource_pb";
 import type { FieldMask, Timestamp } from "@bufbuild/protobuf/wkt";
 import type { PageDirection } from "./resource_pb";
 
@@ -65,6 +66,11 @@ export declare type CreateApplicationRequest = Message<"tailor.v1.CreateApplicat
    * @generated from field: bool disabled = 9;
    */
   disabled: boolean;
+
+  /**
+   * @generated from field: repeated tailor.v1.GatewayFilter filters = 10;
+   */
+  filters: GatewayFilter[];
 };
 
 /**
@@ -141,6 +147,11 @@ export declare type UpdateApplicationRequest = Message<"tailor.v1.UpdateApplicat
    * @generated from field: bool disabled = 9;
    */
   disabled: boolean;
+
+  /**
+   * @generated from field: repeated tailor.v1.GatewayFilter filters = 10;
+   */
+  filters: GatewayFilter[];
 
   /**
    * @generated from field: google.protobuf.FieldMask update_mask = 100;

@@ -55,6 +55,22 @@ export declare type WorkflowJobFunction = Message<"tailor.v1.WorkflowJobFunction
 export declare const WorkflowJobFunctionSchema: GenMessage<WorkflowJobFunction>;
 
 /**
+ * @generated from message tailor.v1.ConcurrencyPolicy
+ */
+export declare type ConcurrencyPolicy = Message<"tailor.v1.ConcurrencyPolicy"> & {
+  /**
+   * @generated from field: int32 max_concurrent_executions = 1;
+   */
+  maxConcurrentExecutions: number;
+};
+
+/**
+ * Describes the message tailor.v1.ConcurrencyPolicy.
+ * Use `create(ConcurrencyPolicySchema)` to create a new message.
+ */
+export declare const ConcurrencyPolicySchema: GenMessage<ConcurrencyPolicy>;
+
+/**
  * @generated from message tailor.v1.RetryPolicy
  */
 export declare type RetryPolicy = Message<"tailor.v1.RetryPolicy"> & {
@@ -125,6 +141,11 @@ export declare type Workflow = Message<"tailor.v1.Workflow"> & {
    * @generated from field: optional tailor.v1.RetryPolicy retry_policy = 7;
    */
   retryPolicy?: RetryPolicy;
+
+  /**
+   * @generated from field: optional tailor.v1.ConcurrencyPolicy concurrency_policy = 8;
+   */
+  concurrencyPolicy?: ConcurrencyPolicy;
 };
 
 /**

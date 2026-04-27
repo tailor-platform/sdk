@@ -336,6 +336,26 @@ export default createWorkflow({
 });
 ```
 
+## Concurrency Policy
+
+You can limit the number of concurrent executions of a workflow by setting `concurrencyPolicy`. When the limit is reached, new executions remain in PENDING state until a running execution completes.
+
+| Field                     | Type     | Description                                      |
+| ------------------------- | -------- | ------------------------------------------------ |
+| `maxConcurrentExecutions` | `number` | Maximum number of concurrent executions (1-1000) |
+
+When omitted, only platform-level limits apply.
+
+```typescript
+export default createWorkflow({
+  name: "order-processing",
+  mainJob: processOrder,
+  concurrencyPolicy: {
+    maxConcurrentExecutions: 5,
+  },
+});
+```
+
 ## Triggering a Workflow from a Resolver
 
 You can start a workflow execution from a resolver using `workflow.trigger()`.

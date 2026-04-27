@@ -97,6 +97,11 @@ export declare type FunctionExecution = Message<"tailor.v1.FunctionExecution"> &
    * @generated from field: tailor.v1.FunctionErrorKind error_kind = 11;
    */
   errorKind: FunctionErrorKind;
+
+  /**
+   * @generated from field: string content_hash = 12;
+   */
+  contentHash: string;
 };
 
 /**

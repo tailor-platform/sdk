@@ -5,6 +5,7 @@
 import type { GenEnum, GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
+import type { GatewayFilter } from "./gateway_filter_resource_pb";
 
 /**
  * Describes the file tailor/v1/application_resource.proto.
@@ -86,6 +87,11 @@ export declare type Application = Message<"tailor.v1.Application"> & {
    * @generated from field: string auth_idp_config_name = 14;
    */
   authIdpConfigName: string;
+
+  /**
+   * @generated from field: repeated tailor.v1.GatewayFilter filters = 15;
+   */
+  filters: GatewayFilter[];
 };
 
 /**

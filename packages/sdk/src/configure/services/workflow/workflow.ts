@@ -3,9 +3,9 @@ import { brandValue } from "@/utils/brand";
 import type { WorkflowJob } from "./job";
 import type { AuthInvoker } from "../auth";
 import type { MachineUserName } from "@/configure/types/machine-user";
-import type { RetryPolicy } from "@/types/workflow.generated";
+import type { ConcurrencyPolicy, RetryPolicy } from "@/types/workflow.generated";
 
-export type { RetryPolicy };
+export type { ConcurrencyPolicy, RetryPolicy };
 
 export interface WorkflowConfig<
   Job extends WorkflowJob<any, any, any> = WorkflowJob<any, any, any>,
@@ -13,12 +13,14 @@ export interface WorkflowConfig<
   name: string;
   mainJob: Job;
   retryPolicy?: RetryPolicy;
+  concurrencyPolicy?: ConcurrencyPolicy;
 }
 
 export interface Workflow<Job extends WorkflowJob<any, any, any> = WorkflowJob<any, any, any>> {
   name: string;
   mainJob: Job;
   retryPolicy?: RetryPolicy;
+  concurrencyPolicy?: ConcurrencyPolicy;
   trigger: (
     args: Parameters<Job["trigger"]>[0],
     options?: { authInvoker: AuthInvoker<string> | MachineUserName },
@@ -29,6 +31,7 @@ interface WorkflowDefinition<Job extends WorkflowJob<any, any, any>> {
   name: string;
   mainJob: Job;
   retryPolicy?: RetryPolicy;
+  concurrencyPolicy?: ConcurrencyPolicy;
 }
 
 /**
