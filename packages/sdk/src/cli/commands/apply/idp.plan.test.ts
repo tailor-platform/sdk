@@ -38,15 +38,23 @@ const workspaceId = "test-workspace";
 const appName = "test-app";
 const sdkVersion = "v1-0-0";
 
-function createMockApplication(): Application {
+type MockIdpServiceOpts = {
+  name?: string;
+  clients?: string[];
+  publishUserEvents?: boolean | undefined;
+};
+
+function createMockApplication(opts?: {
+  idpServices?: ReadonlyArray<MockIdpServiceOpts>;
+}): Application {
+  const serviceOpts = opts?.idpServices ?? [{}];
   return {
     name: appName,
-    idpServices: [
-      {
-        name: "idp-a",
+    idpServices: serviceOpts.map((service) => {
+      const result: Record<string, unknown> = {
+        name: service.name ?? "idp-a",
         authorization: "loggedIn",
         lang: "ja",
-        publishUserEvents: true,
         userAuthPolicy: {
           useNonEmailIdentifier: false,
           allowSelfPasswordReset: true,
@@ -68,9 +76,17 @@ function createMockApplication(): Application {
           read: true,
           sendPasswordResetEmail: true,
         },
-        clients: ["default-idp-client"],
-      },
-    ],
+        clients: service.clients ?? ["default-idp-client"],
+      };
+      if ("publishUserEvents" in service) {
+        if (service.publishUserEvents !== undefined) {
+          result.publishUserEvents = service.publishUserEvents;
+        }
+      } else {
+        result.publishUserEvents = true;
+      }
+      return result;
+    }),
   } as unknown as Application;
 }
 
@@ -511,20 +527,8 @@ describe("planIdP", () => {
 });
 
 describe("planIdP / publishUserEvents auto-configuration", () => {
-  function makeAppWithPublishUserEvents(value: boolean | undefined): Application {
-    const app = createMockApplication();
-    // oxlint-disable-next-line no-explicit-any
-    const idp = app.idpServices[0] as any;
-    if (value === undefined) {
-      delete idp.publishUserEvents;
-    } else {
-      idp.publishUserEvents = value;
-    }
-    return app;
-  }
-
   test("undefined publishUserEvents stays false when no executor uses idpUser trigger", async () => {
-    const app = makeAppWithPublishUserEvents(undefined);
+    const app = createMockApplication({ idpServices: [{ publishUserEvents: undefined }] });
     const client = createMockClient({ services: [], clients: { "idp-a": [] } });
 
     const result = await planIdP({
@@ -540,7 +544,7 @@ describe("planIdP / publishUserEvents auto-configuration", () => {
   test("undefined publishUserEvents is auto-enabled when an executor uses idpUser trigger", async () => {
     const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
     try {
-      const app = makeAppWithPublishUserEvents(undefined);
+      const app = createMockApplication({ idpServices: [{ publishUserEvents: undefined }] });
       const client = createMockClient({ services: [], clients: { "idp-a": [] } });
 
       const result = await planIdP({
@@ -561,7 +565,7 @@ describe("planIdP / publishUserEvents auto-configuration", () => {
   test("explicit publishUserEvents:true stays true without auto-enable info", async () => {
     const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
     try {
-      const app = makeAppWithPublishUserEvents(true);
+      const app = createMockApplication({ idpServices: [{ publishUserEvents: true }] });
       const client = createMockClient({ services: [], clients: { "idp-a": [] } });
 
       const result = await planIdP({
@@ -580,7 +584,7 @@ describe("planIdP / publishUserEvents auto-configuration", () => {
   test("explicit publishUserEvents:false stays false but warns when executor uses idpUser trigger", async () => {
     const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
     try {
-      const app = makeAppWithPublishUserEvents(false);
+      const app = createMockApplication({ idpServices: [{ publishUserEvents: false }] });
       const client = createMockClient({ services: [], clients: { "idp-a": [] } });
 
       const result = await planIdP({
@@ -599,12 +603,12 @@ describe("planIdP / publishUserEvents auto-configuration", () => {
   test("auto-enables publishUserEvents on every IdP when any executor uses idpUser trigger", async () => {
     const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
     try {
-      const app = makeAppWithPublishUserEvents(undefined);
-      // oxlint-disable-next-line no-explicit-any
-      (app as any).idpServices = [
-        app.idpServices[0],
-        { ...app.idpServices[0], name: "idp-b", clients: ["client-b"] },
-      ];
+      const app = createMockApplication({
+        idpServices: [
+          { publishUserEvents: undefined },
+          { name: "idp-b", clients: ["client-b"], publishUserEvents: undefined },
+        ],
+      });
       const client = createMockClient({
         services: [],
         clients: { "idp-a": [], "idp-b": [] },
