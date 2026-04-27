@@ -83,7 +83,7 @@ const files: Record<string, FileConfig> = {
   },
   "docs/cli/function.md": {
     title: "Function Commands",
-    description: "Commands for viewing function execution logs.",
+    description: "Commands for managing function registries and viewing function execution logs.",
     commands: ["function"],
     render: defaultRender,
   },

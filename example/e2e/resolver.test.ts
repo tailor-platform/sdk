@@ -26,7 +26,7 @@ describe("controlplane", async () => {
       namespaceName,
       pipelineResolverView: PipelineResolverView.FULL,
     });
-    expect(pipelineResolvers.length).toBe(7);
+    expect(pipelineResolvers.length).toBe(8);
 
     const stepChain = pipelineResolvers.find((e) => e.name === "stepChain");
     expect(stepChain).toMatchObject({
@@ -261,10 +261,18 @@ describe("dataplane", () => {
       const query = gql`
         query {
           showUserInfo {
-            id
-            type
-            workspaceId
-            role
+            user {
+              id
+              type
+              workspaceId
+              role
+            }
+            invoker {
+              id
+              type
+              workspaceId
+              role
+            }
           }
         }
       `;
@@ -272,10 +280,18 @@ describe("dataplane", () => {
       expect(result.errors).toBeUndefined();
       expect(result.data).toEqual({
         showUserInfo: {
-          id: expect.any(String),
-          type: "machine_user",
-          workspaceId: expect.any(String),
-          role: "MANAGER",
+          user: {
+            id: expect.any(String),
+            type: "machine_user",
+            workspaceId: expect.any(String),
+            role: "MANAGER",
+          },
+          invoker: {
+            id: expect.any(String),
+            type: "machine_user",
+            workspaceId: expect.any(String),
+            role: "MANAGER",
+          },
         },
       });
     });
@@ -293,17 +309,24 @@ describe("dataplane", () => {
       expect(userInfo).toBeDefined();
 
       const responseFields = userInfo?.response?.type?.fields ?? [];
-      const idField = responseFields.find((f) => f.name === "id");
-      expect(idField?.description).toBe("User ID");
 
-      const typeField = responseFields.find((f) => f.name === "type");
-      expect(typeField?.description).toBe("User type");
+      const userField = responseFields.find((f) => f.name === "user");
+      expect(userField?.description).toBe("Authenticated user");
+      const userSubFields = userField?.type?.fields ?? [];
+      expect(userSubFields.find((f) => f.name === "id")?.description).toBe("User ID");
+      expect(userSubFields.find((f) => f.name === "type")?.description).toBe("User type");
+      expect(userSubFields.find((f) => f.name === "workspaceId")?.description).toBe("Workspace ID");
+      expect(userSubFields.find((f) => f.name === "role")?.description).toBe("User role");
 
-      const workspaceIdField = responseFields.find((f) => f.name === "workspaceId");
-      expect(workspaceIdField?.description).toBe("Workspace ID");
-
-      const roleField = responseFields.find((f) => f.name === "role");
-      expect(roleField?.description).toBe("User role");
+      const invokerField = responseFields.find((f) => f.name === "invoker");
+      expect(invokerField?.description).toBe("Function invoker");
+      const invokerSubFields = invokerField?.type?.fields ?? [];
+      expect(invokerSubFields.find((f) => f.name === "id")?.description).toBe("Invoker ID");
+      expect(invokerSubFields.find((f) => f.name === "type")?.description).toBe("Invoker type");
+      expect(invokerSubFields.find((f) => f.name === "workspaceId")?.description).toBe(
+        "Workspace ID",
+      );
+      expect(invokerSubFields.find((f) => f.name === "role")?.description).toBe("Invoker role");
     });
   });
 

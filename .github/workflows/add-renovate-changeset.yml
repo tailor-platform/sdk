@@ -19,9 +19,15 @@ jobs:
       github.event.pull_request.user.type == 'Bot'
 
     steps:
-      - name: Checkout
+      - name: Checkout PR head
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          # Default ref on pull_request events is the merge ref
+          # (refs/pull/N/merge), which is PR head merged with the *current* base
+          # branch tip. That pulls in unrelated base-branch changes whenever main
+          # moves forward while the PR is open, causing false positives. Pin to
+          # the PR head sha so the diff only reflects this PR's own changes.
+          ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
           fetch-depth: 0
 
@@ -29,7 +35,7 @@ jobs:
         id: plan
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          BASE_SHA_INPUT: ${{ github.event.pull_request.base.sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
           set -eo pipefail
 
@@ -41,7 +47,8 @@ jobs:
             exit 0
           fi
 
-          BASE_SHA=$(git merge-base "$BASE_SHA_INPUT" HEAD)
+          git fetch --no-tags --quiet origin "$BASE_REF"
+          BASE_SHA=$(git merge-base "origin/${BASE_REF}" HEAD)
 
           changed=$(git diff --name-only "$BASE_SHA" HEAD \
             | grep -E '^packages/[^/]+/package\.json$' || true)

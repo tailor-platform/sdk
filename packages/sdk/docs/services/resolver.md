@@ -234,7 +234,9 @@ Validation runs automatically before the `body` function executes. When validati
 Define actual resolver logic in the `body` function. Function arguments include:
 
 - `input` - Input data from GraphQL request
-- `user` - User performing the operation
+- `user` - The user who called this resolver; unaffected by `authInvoker`
+- `invoker` - The principal running this function; equals `user` by default, or the machine user set by `authInvoker`. `null` for anonymous calls.
+- `env` - Environment variables declared in `tailor.config.ts`
 
 ### Using Kysely for Database Access
 
@@ -371,4 +373,4 @@ The machine user name is looked up in the auth service configured on your app (`
 
 > **Deprecated:** `auth.invoker("batch-processor")` still works, but is deprecated. Importing `auth` into runtime files pulls config-layer (Node-only) dependencies into the bundle.
 
-**Note:** `authInvoker` controls the permissions for database operations and other platform actions, but the `user` object passed to the `body` function still reflects the original caller who invoked the resolver.
+**Note:** `authInvoker` controls the permissions for database operations and other platform actions. The `user` object passed to `body` still reflects the original caller, while `invoker` reflects the principal actually running the body.

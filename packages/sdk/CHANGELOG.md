@@ -1,5 +1,63 @@
 # @tailor-platform/sdk
 
+## 1.43.0
+
+### Minor Changes
+
+- [#1062](https://github.com/tailor-platform/sdk/pull/1062) [`7c39665`](https://github.com/tailor-platform/sdk/commit/7c39665bc3364d3bc644c5277f3f9f51926fc2b2) Thanks [@dqn](https://github.com/dqn)! - Auto-enable `publishUserEvents` on IdP services when the project defines executors with `idpUser` triggers (`idpUserCreatedTrigger`, `idpUserUpdatedTrigger`, `idpUserDeletedTrigger`, or `idpUserTrigger`). Previously, omitting `publishUserEvents` defaulted to `false`, silently preventing those executors from firing. The SDK now auto-configures `publishUserEvents: true` for every IdP in the project when any executor uses an `idpUser` trigger, and warns if an IdP explicitly sets `publishUserEvents: false` while such executors are present. Set `publishUserEvents: false` explicitly to opt out.
+
+### Patch Changes
+
+- [#1060](https://github.com/tailor-platform/sdk/pull/1060) [`4ffec9f`](https://github.com/tailor-platform/sdk/commit/4ffec9f86766dc1199ccef31223697c786c3f388) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update oxc
+
+## 1.42.0
+
+### Minor Changes
+
+- [#1046](https://github.com/tailor-platform/sdk/pull/1046) [`9f99c0d`](https://github.com/tailor-platform/sdk/commit/9f99c0d284a5f227acafbb41db6db0bf7293c496) Thanks [@remiposo](https://github.com/remiposo)! - Expose `invoker` on resolver/executor/workflow body contexts. The SDK now calls `tailor.context.getInvoker()` inside bundled wrappers and passes the result to user code as `context.invoker` / `args.invoker`. This reflects `authInvoker` delegation (machine user when specified) and is `null` for anonymous callers.
+
+## 1.41.0
+
+### Minor Changes
+
+- [#514](https://github.com/tailor-platform/sdk/pull/514) [`3047d45`](https://github.com/tailor-platform/sdk/commit/3047d45fd8daa38616ecaad20d5c04cf75d23931) Thanks [@r253hmdryou](https://github.com/r253hmdryou)! - Add `function get` and `function list` CLI commands for querying function registries in a workspace
+
+- [#987](https://github.com/tailor-platform/sdk/pull/987) [`35b2090`](https://github.com/tailor-platform/sdk/commit/35b2090b0009d26ebcbb69c76540791b2f39924e) Thanks [@toiroakr](https://github.com/toiroakr)! - Add wait/resolve support for human-in-the-loop workflows via `defineWaitPoint()` and `defineWaitPoints()` with typed `.wait()` and `.resolve()` methods.
+
+  Tighten `createWorkflowJob` I/O types: both `Input` and `Output` must now be JsonValue-compatible (plain objects/arrays; no class instances or functions). `Output` previously accepted `Jsonifiable` with a `Jsonify<Output>` return transform on `.trigger()`, but the platform runtime rejects non-plain objects, so the old types did not match actual runtime behavior.
+
+  Reject top-level `null` in `createWorkflowJob` `Input` and in wait-point `Payload`: the platform normalizes top-level `null`/`undefined` args to `{}`, so declaring a top-level nullable type would cause the body/callback to receive `{}` at runtime, mismatching the declared type. Nested `null` inside objects or arrays is preserved by JSON serialization and remains allowed.
+
+### Patch Changes
+
+- [#1050](https://github.com/tailor-platform/sdk/pull/1050) [`9232660`](https://github.com/tailor-platform/sdk/commit/92326608640e473138712ac00adc29369980c604) Thanks [@toiroakr](https://github.com/toiroakr)! - Address Dependabot noise for the valibot ReDoS advisory (GHSA-vqpr-j7v3-hqw9): bump `@toiroakr/lines-db` to 0.9.2 and document the remaining transitive `@liam-hq/cli → valibot@1.1.0` report in the SDK README, including an override snippet for consumers who want to silence it.
+
+- [#1030](https://github.com/tailor-platform/sdk/pull/1030) [`fc4cc7c`](https://github.com/tailor-platform/sdk/commit/fc4cc7cc4430c545c50eb8bb4b406023c91d8290) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency politty to v0.4.14
+
+- [#1041](https://github.com/tailor-platform/sdk/pull/1041) [`0858d64`](https://github.com/tailor-platform/sdk/commit/0858d64b3a03a3a9d994ebe5cd18a803b9780cac) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update pnpm/action-setup action to v6.0.3
+
+- [#1044](https://github.com/tailor-platform/sdk/pull/1044) [`04c1fea`](https://github.com/tailor-platform/sdk/commit/04c1fea62a0eb70c24609cdf9bccf0a012d71875) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency std-env to v4.1.0
+
+- [#1045](https://github.com/tailor-platform/sdk/pull/1045) [`09fce15`](https://github.com/tailor-platform/sdk/commit/09fce1500cc24bcf6089248030168817598f47bd) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency type-fest to v5.6.0
+
+- [#1051](https://github.com/tailor-platform/sdk/pull/1051) [`f7e1d34`](https://github.com/tailor-platform/sdk/commit/f7e1d340ecac5ea37c3c5ab33bd3d4a536274817) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @inquirer
+
+- [#1052](https://github.com/tailor-platform/sdk/pull/1052) [`7e75310`](https://github.com/tailor-platform/sdk/commit/7e7531040b3ceac90e25f633d71f502ac1ac3239) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @toiroakr/read-multiline to v0.3.2
+
+## 1.40.1
+
+### Patch Changes
+
+- [#1026](https://github.com/tailor-platform/sdk/pull/1026) [`7f89969`](https://github.com/tailor-platform/sdk/commit/7f899699ad0386dd0b89b5660d7f49efe07f8647) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `apply` plan for IdP services when `permission` is omitted. The platform returns an empty `IdPPermission` (all action arrays empty) for services without configured permission policies, while the SDK sent `undefined`. The diff logic now normalizes an all-empty permission message to `undefined` so repeated applies are idempotent instead of always reporting the service as updated.
+
+- [#1025](https://github.com/tailor-platform/sdk/pull/1025) [`af5262a`](https://github.com/tailor-platform/sdk/commit/af5262a14a31aa721c5b41b26425d938abb6485e) Thanks [@k1LoW](https://github.com/k1LoW)! - Update IdP documentation to promote `permission`-based access control as the primary pattern over legacy `authorization`
+
+- [#1029](https://github.com/tailor-platform/sdk/pull/1029) [`825bf86`](https://github.com/tailor-platform/sdk/commit/825bf86d5df0ab98665989bf7ff59d5db0597a94) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @toiroakr/read-multiline to v0.3.1
+
+- [#1031](https://github.com/tailor-platform/sdk/pull/1031) [`2e5f589`](https://github.com/tailor-platform/sdk/commit/2e5f589e50937e091f244cd1632ee7252a560394) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update rolldown
+
+- [#1038](https://github.com/tailor-platform/sdk/pull/1038) [`d29b58a`](https://github.com/tailor-platform/sdk/commit/d29b58a27082fb52559548365c6ff75ee1e79122) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @opentelemetry
+
 ## 1.40.0
 
 ### Minor Changes
