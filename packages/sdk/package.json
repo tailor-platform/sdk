@@ -44,6 +44,11 @@
       "import": "./dist/kysely/index.mjs",
       "default": "./dist/kysely/index.mjs"
     },
+    "./iconv": {
+      "types": "./dist/iconv/index.d.mts",
+      "import": "./dist/iconv/index.mjs",
+      "default": "./dist/iconv/index.mjs"
+    },
     "./plugin": {
       "types": "./dist/plugin/index.d.mts",
       "import": "./dist/plugin/index.mjs",

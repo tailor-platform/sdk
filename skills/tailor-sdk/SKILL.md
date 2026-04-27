@@ -17,6 +17,7 @@ Use these files as the single source of truth:
 - `node_modules/@tailor-platform/sdk/docs/cli-reference.md`
 - `node_modules/@tailor-platform/sdk/docs/cli/*.md`
 - `node_modules/@tailor-platform/sdk/docs/testing.md`
+- `node_modules/@tailor-platform/sdk/docs/iconv.md`
 
 ## Working Rules
 
@@ -30,5 +31,6 @@ Use these files as the single source of truth:
 - Setup and first deploy: `docs/quickstart.md`
 - Core config shape: `docs/configuration.md`
 - Service details: `docs/services/*.md`
+- Runtime utilities (iconv etc.): `docs/iconv.md`
 - CLI commands: `docs/cli-reference.md` and `docs/cli/*.md`
 - Testing patterns: `docs/testing.md`

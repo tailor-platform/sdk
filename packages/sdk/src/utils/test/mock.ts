@@ -11,6 +11,12 @@ type ResolveHandler = (
   callback: (payload: unknown) => unknown,
 ) => Promise<void> | void;
 
+type IconvHandler = (
+  input: string | Uint8Array | ArrayBuffer,
+  fromEncoding: string,
+  toEncoding: string,
+) => string | Uint8Array;
+
 interface TailordbGlobal {
   tailordb?: {
     Client: new (config: { namespace?: string }) => {
@@ -23,7 +29,7 @@ interface TailordbGlobal {
     };
   };
   tailor?: {
-    workflow: {
+    workflow?: {
       triggerJobFunction: (jobName: string, args: unknown) => unknown;
       wait?: (key: string, payload?: unknown) => unknown;
       resolve?: (
@@ -31,6 +37,21 @@ interface TailordbGlobal {
         key: string,
         callback: (payload: unknown) => unknown,
       ) => Promise<void>;
+    };
+    iconv?: {
+      convert: IconvHandler;
+      convertBuffer: (
+        buffer: Uint8Array | ArrayBuffer,
+        fromEncoding: string,
+        toEncoding: string,
+      ) => string | Uint8Array;
+      decode: (buffer: Uint8Array | ArrayBuffer, encoding: string) => string;
+      encode: (str: string, encoding: string) => string | Uint8Array;
+      encodings: () => string[];
+      Iconv: new (
+        fromEncoding: string,
+        toEncoding: string,
+      ) => { convert(input: string | Uint8Array | ArrayBuffer): string | Uint8Array };
     };
   };
 }
@@ -178,6 +199,81 @@ export function setupWaitPointMock(config?: { onWait?: WaitHandler; onResolve?: 
   } as typeof GlobalThis.tailor;
 
   return { waitCalls, resolveCalls };
+}
+
+interface IconvMockConfig {
+  /** Handler for `convert` and `convertBuffer`. Defaults to passing input through unchanged. */
+  onConvert?: IconvHandler;
+  /** Handler for `decode`. Defaults to UTF-8 TextDecoder. */
+  onDecode?: (buffer: Uint8Array | ArrayBuffer, encoding: string) => string;
+  /** Handler for `encode`. Defaults to UTF-8 TextEncoder. */
+  onEncode?: (str: string, encoding: string) => string | Uint8Array;
+  /** Handler for `encodings`. Defaults to a small static list. */
+  onEncodings?: () => string[];
+}
+
+interface IconvCall {
+  method: "convert" | "convertBuffer" | "decode" | "encode" | "encodings";
+  args: unknown[];
+}
+
+/**
+ * Sets up a mock for `globalThis.tailor.iconv` used in unit tests of code that
+ * imports from `@tailor-platform/sdk/iconv`. Defaults pass strings through and
+ * use Node's TextEncoder/TextDecoder for UTF-8.
+ * @param config - Optional handlers to override default behaviors.
+ * @returns Object containing an array of recorded calls for assertions.
+ */
+export function setupIconvMock(config?: IconvMockConfig): { calls: IconvCall[] } {
+  const calls: IconvCall[] = [];
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+
+  const defaultConvert: IconvHandler = (input, _from, to) => {
+    if (to === "UTF8" || to === "UTF-8") {
+      return typeof input === "string" ? input : decoder.decode(input);
+    }
+    return typeof input === "string" ? encoder.encode(input) : new Uint8Array(input);
+  };
+
+  GlobalThis.tailor = {
+    ...GlobalThis.tailor,
+    iconv: {
+      convert: (input, from, to) => {
+        calls.push({ method: "convert", args: [input, from, to] });
+        return (config?.onConvert ?? defaultConvert)(input, from, to);
+      },
+      convertBuffer: (buffer, from, to) => {
+        calls.push({ method: "convertBuffer", args: [buffer, from, to] });
+        return (config?.onConvert ?? defaultConvert)(buffer, from, to);
+      },
+      decode: (buffer, encoding) => {
+        calls.push({ method: "decode", args: [buffer, encoding] });
+        return (config?.onDecode ?? ((b) => decoder.decode(b)))(buffer, encoding);
+      },
+      encode: (str, encoding) => {
+        calls.push({ method: "encode", args: [str, encoding] });
+        if (config?.onEncode) return config.onEncode(str, encoding);
+        return encoding === "UTF8" || encoding === "UTF-8" ? str : encoder.encode(str);
+      },
+      encodings: () => {
+        calls.push({ method: "encodings", args: [] });
+        return (config?.onEncodings ?? (() => ["UTF-8", "Shift_JIS", "EUC-JP", "ISO-2022-JP"]))();
+      },
+      Iconv: class {
+        constructor(
+          private fromEncoding: string,
+          private toEncoding: string,
+        ) {}
+        convert(input: string | Uint8Array | ArrayBuffer): string | Uint8Array {
+          calls.push({ method: "convert", args: [input, this.fromEncoding, this.toEncoding] });
+          return (config?.onConvert ?? defaultConvert)(input, this.fromEncoding, this.toEncoding);
+        }
+      },
+    },
+  };
+
+  return { calls };
 }
 
 /**

@@ -21,6 +21,7 @@ export default defineConfig({
     "src/cli/skills.ts",
     "src/utils/test/index.ts",
     "src/kysely/index.ts",
+    "src/iconv/index.ts",
     "src/plugin/index.ts",
     "src/plugin/builtin/kysely-type/index.ts",
     "src/plugin/builtin/enum-constants/index.ts",

@@ -83,6 +83,10 @@ the installed SDK version. Files are copied (not symlinked) so they survive
 | [Static Website](./docs/services/staticwebsite.md) | Static file hosting                          |
 | [Secret Manager](./docs/services/secret.md)        | Secure credential storage                    |
 
+### Runtime Utilities
+
+- [Character Encoding Conversion (iconv)](./docs/iconv.md) - Convert between UTF-8, Shift_JIS, EUC-JP, IBM EBCDIC, and other encodings via `@tailor-platform/sdk/iconv`
+
 ### Guides
 
 - [Testing Guide](./docs/testing.md) - Unit and E2E testing patterns
