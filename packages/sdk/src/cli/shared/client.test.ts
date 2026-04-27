@@ -311,7 +311,7 @@ describe("resolveStaticWebsiteUrls", () => {
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
-  test("suppresses warning and keeps original pattern when URL is not assigned yet but site is expected locally", async () => {
+  test("still warns when URL is not assigned yet, even when site is expected locally", async () => {
     const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
     const client = makeClient(async () => ({ staticwebsite: { url: "" } }));
 
@@ -319,7 +319,25 @@ describe("resolveStaticWebsiteUrls", () => {
       expectedLocalNames: new Set(["my-site"]),
     });
 
-    expect(resolved).toEqual(["my-site:url"]);
-    expect(warnSpy).not.toHaveBeenCalled();
+    expect(resolved).toEqual([]);
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Static website "my-site" has no URL assigned yet. Excluding from CORS.',
+    );
+  });
+
+  test("does not suppress non-NotFound errors even when site is expected locally", async () => {
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const client = makeClient(async () => {
+      throw new ConnectError("service unavailable", Code.Unavailable);
+    });
+
+    const resolved = await resolveStaticWebsiteUrls(client, "ws-1", ["my-site:url"], "CORS", {
+      expectedLocalNames: new Set(["my-site"]),
+    });
+
+    expect(resolved).toEqual([]);
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Static website "my-site" not found for CORS configuration. Excluding from CORS.',
+    );
   });
 });

@@ -341,13 +341,15 @@ export type ResolveStaticWebsiteUrlsOptions = {
   /**
    * Names of static websites that are defined locally in the current
    * configuration. When the platform-side lookup for a name in this set
-   * returns NotFound or has no URL assigned yet, the warning is suppressed
+   * fails specifically with a `NotFound` error, the warning is suppressed
    * and the original `name:url[/path]` pattern is returned unresolved
    * instead of being dropped.
    *
    * Use this from plan-phase callers to avoid noisy warnings on the first
    * deployment, where the static website will be created later in the same
-   * apply run.
+   * apply run. Other failure modes ("URL not yet assigned", transient RPC
+   * errors, permission errors) are intentionally not suppressed so that
+   * real platform problems still surface during planning.
    */
   expectedLocalNames?: ReadonlySet<string>;
 };
@@ -393,15 +395,13 @@ export async function resolveStaticWebsiteUrls(
           if (response.staticwebsite?.url) {
             return [response.staticwebsite.url + pathSuffix];
           }
-          if (expectedLocalNames?.has(siteName)) {
-            return [url];
-          }
           logger.warn(
             `Static website "${siteName}" has no URL assigned yet. Excluding from ${context}.`,
           );
           return [];
-        } catch {
-          if (expectedLocalNames?.has(siteName)) {
+        } catch (error) {
+          const isNotFound = error instanceof ConnectError && error.code === Code.NotFound;
+          if (isNotFound && expectedLocalNames?.has(siteName)) {
             return [url];
           }
           logger.warn(
