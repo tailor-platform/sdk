@@ -1,23 +1,13 @@
 # Testing Guide
 
-This guide covers testing Tailor Platform SDK applications with [Vitest](https://vitest.dev/). It walks through two layers of tests, from the fastest local checks to full end-to-end verification against a deployed application.
+Tailor Platform SDK applications are tested with [Vitest](https://vitest.dev/) at two layers:
 
-| Layer      | What it exercises                              | Deployment required |
-| ---------- | ---------------------------------------------- | ------------------- |
-| Unit tests | TypeScript source via `.body()` / `.trigger()` | No                  |
-| E2E tests  | Deployed GraphQL API, TailorDB, workflows      | Yes                 |
+| Layer      | What it exercises                                    | Deployment required |
+| ---------- | ---------------------------------------------------- | ------------------- |
+| Unit tests | Resolver / workflow job / executor TypeScript source | No                  |
+| E2E tests  | Deployed GraphQL API, TailorDB, and workflows        | Yes                 |
 
-Two starter templates ship with complete test suites you can copy from:
-
-```bash
-# Resolver patterns: simple, DB mock, dependency injection, env, user
-npm create @tailor-platform/sdk -- --template resolver <your-project-name>
-
-# Workflow patterns: job chaining, wait points, E2E tests
-npm create @tailor-platform/sdk -- --template workflow <your-project-name>
-```
-
-Both templates split tests into Vitest projects so they can run independently:
+The two layers run as separate Vitest projects so they can be invoked independently:
 
 ```typescript
 // vitest.config.ts
@@ -25,16 +15,9 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    watch: false,
     projects: [
-      { test: { name: { label: "unit", color: "blue" }, include: ["src/**/*.test.ts"] } },
-      {
-        test: {
-          name: { label: "e2e", color: "green" },
-          include: ["e2e/**/*.test.ts"],
-          globalSetup: "e2e/globalSetup.ts",
-        },
-      },
+      { test: { name: "unit", include: ["src/**/*.test.ts"] } },
+      { test: { name: "e2e", include: ["e2e/**/*.test.ts"], globalSetup: "e2e/globalSetup.ts" } },
     ],
   },
 });
@@ -45,15 +28,26 @@ pnpm test:unit  # fast feedback loop
 pnpm test:e2e   # against a live deployment
 ```
 
-Helpers referenced in this guide live under `@tailor-platform/sdk/test`:
+Unit-test entrypoints exposed by the SDK:
+
+- `resolver.body({ input, user, env })` — invoke a resolver
+- `workflowJob.body(input, { env })` / `workflowJob.trigger(input)` — invoke or chain a workflow job
+- `executor.operation.body(args)` — invoke a function-kind executor
+
+Helpers under `@tailor-platform/sdk/test`:
 
 - `unauthenticatedTailorUser` — default `user` value for resolver contexts
 - `setupWaitPointMock({ onWait?, onResolve? })` — stubs `globalThis.tailor.workflow.wait` / `.resolve`
 - `WORKFLOW_TEST_ENV_KEY` — env key consumed by `.trigger()` when run locally
 
+Two starter templates demonstrate the patterns below in a working project:
+
+- `npm create @tailor-platform/sdk -- --template resolver <name>` — resolvers, executors, TailorDB mocking, and DI
+- `npm create @tailor-platform/sdk -- --template workflow <name>` — workflow jobs, wait points, and an E2E suite
+
 ## Unit Tests
 
-Unit tests call `.body()` (or `.trigger()`) directly on a resolver or workflow job and stub any platform-provided globals they touch. No bundling or deployment is involved.
+Unit tests call `.body()` (or `.trigger()`) directly on a resolver, workflow job, or executor and stub any platform-provided globals they touch.
 
 ### Testing Resolvers
 
@@ -217,6 +211,46 @@ describe("resolveApproval resolver", () => {
 ```
 
 `onResolve` lets you assert the callback behavior (the value passed back to the suspended job). Clean `globalThis.tailor` in `afterEach` so tests stay isolated.
+
+### Testing Executors
+
+Function-kind executors expose their handler as `executor.operation.body(args)`. The shape of `args` is determined by the trigger — for example, `recordCreatedTrigger({ type: user })` produces `RecordCreatedArgs<typeof user>` with `event`, `newRecord`, `env`, `actor`, and the rest of the event envelope. GraphQL, webhook, and workflow operation kinds are declarative and don't expose a user-authored body to test.
+
+```typescript
+import { describe, expect, test, vi } from "vitest";
+import executor from "./notifyUserCreated";
+
+describe("notifyUserCreated executor", () => {
+  test("logs the new user's name and email", () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    if (executor.operation.kind !== "function") {
+      throw new Error("expected function operation");
+    }
+    executor.operation.body({
+      event: "created",
+      rawEvent: "tailordb.type_record.created",
+      typeName: "User",
+      newRecord: {
+        id: "user-1",
+        name: "Alice",
+        email: "alice@example.com",
+        age: 30,
+        createdAt: "2025-01-01T00:00:00Z",
+        updatedAt: "2025-01-01T00:00:00Z",
+      },
+      workspaceId: "ws-1",
+      appNamespace: "main",
+      env: { appName: "Resolver Template", version: 1 },
+      actor: null,
+    });
+
+    expect(logSpy).toHaveBeenCalledWith("New user created: Alice (alice@example.com)");
+  });
+});
+```
+
+Executors that hit TailorDB or extract DB operations follow the same patterns shown above for resolvers — mock the global `tailordb.Client` directly, or push DB access behind an interface and inject a stub.
 
 ### Testing Workflow Jobs
 
