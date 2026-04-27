@@ -222,11 +222,12 @@ tailor-sdk organization folder list [options]
 
 **Options**
 
-| Option                                  | Alias | Description                          | Required | Default | Env                               |
-| --------------------------------------- | ----- | ------------------------------------ | -------- | ------- | --------------------------------- |
-| `--organization-id <ORGANIZATION_ID>`   | `-o`  | Organization ID                      | Yes      | -       | `TAILOR_PLATFORM_ORGANIZATION_ID` |
-| `--parent-folder-id <PARENT_FOLDER_ID>` | -     | Parent folder ID to list children of | No       | -       | -                                 |
-| `--limit <LIMIT>`                       | `-l`  | Maximum number of folders to list    | No       | -       | -                                 |
+| Option                                  | Alias | Description                                              | Required | Default  | Env                               |
+| --------------------------------------- | ----- | -------------------------------------------------------- | -------- | -------- | --------------------------------- |
+| `--organization-id <ORGANIZATION_ID>`   | `-o`  | Organization ID                                          | Yes      | -        | `TAILOR_PLATFORM_ORGANIZATION_ID` |
+| `--parent-folder-id <PARENT_FOLDER_ID>` | -     | Parent folder ID to list children of                     | No       | -        | -                                 |
+| `--order <ORDER>`                       | -     | Sort order (asc or desc)                                 | No       | `"desc"` | -                                 |
+| `--limit <LIMIT>`                       | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -        | -                                 |
 
 <!-- politty:command:organization folder list:options:end -->
 
