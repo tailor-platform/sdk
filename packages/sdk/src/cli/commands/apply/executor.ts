@@ -15,7 +15,7 @@ import {
   ExecutorTriggerType,
 } from "@tailor-proto/tailor/v1/executor_resource_pb";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
-import { buildExecutorArgsExpr } from "@/cli/shared/runtime-args";
+import { buildExecutorArgsExpr } from "@/cli/shared/runtime-exprs";
 import { stringifyFunction } from "@/parser/service/tailordb";
 import { normalizeAuthInvoker } from "./auth-invoker";
 import { createChangeSet, type ChangeSet } from "./change-set";
