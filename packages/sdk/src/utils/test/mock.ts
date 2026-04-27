@@ -1,5 +1,6 @@
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
+import type { TailorInvoker } from "@/types/user";
 
 type MainFunction = (args: Record<string, unknown>) => unknown | Promise<unknown>;
 type QueryResolver = (query: string, params: unknown[]) => unknown[];
@@ -31,6 +32,9 @@ interface TailordbGlobal {
         key: string,
         callback: (payload: unknown) => unknown,
       ) => Promise<void>;
+    };
+    context: {
+      getInvoker: () => tailor.context.Invoker | null;
     };
   };
 }
@@ -119,6 +123,30 @@ export function setupWorkflowMock(handler: JobHandler): {
   } as typeof GlobalThis.tailor;
 
   return { triggeredJobs };
+}
+
+/**
+ * Sets up a mock for `globalThis.tailor.context.getInvoker` used in bundled
+ * resolver/executor/workflow tests.
+ * @param invoker - The `TailorInvoker` value to return, or `null` for anonymous.
+ */
+export function setupInvokerMock(invoker: TailorInvoker): void {
+  const raw: tailor.context.Invoker | null = invoker
+    ? {
+        id: invoker.id,
+        type: invoker.type,
+        workspaceId: invoker.workspaceId,
+        attributes: invoker.attributeList as string[],
+        attributeMap: invoker.attributes as Record<string, unknown>,
+      }
+    : null;
+
+  GlobalThis.tailor = {
+    ...GlobalThis.tailor,
+    context: {
+      getInvoker: () => raw,
+    },
+  } as typeof GlobalThis.tailor;
 }
 
 /**

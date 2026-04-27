@@ -183,8 +183,10 @@ import { sendNotification } from "./jobs/send-notification";
 // Jobs must be named exports
 export const processOrder = createWorkflowJob({
   name: "process-order",
-  body: async (input: { customerId: string }, { env }) => {
+  body: async (input: { customerId: string }, { env, invoker }) => {
     // `env` contains values from `tailor.config.ts` -> `env`.
+    // `invoker` is the principal running this job, overridden by `authInvoker`
+    // when set; `null` for anonymous calls.
     // Trigger other jobs by calling .trigger() on the job object.
     const customer = await fetchCustomer.trigger({
       customerId: input.customerId,

@@ -205,6 +205,8 @@ createExecutor({
 });
 ```
 
+`function` and `jobFunction` `body` args include an `invoker` field: the principal running this function, overridden by `authInvoker` when set; `null` for anonymous calls. Other operation kinds (`graphql`, `webhook`, `workflow`) do not pass `invoker` into their callbacks.
+
 ### Job Function Operation
 
 For long-running operations, use `jobFunction` which runs asynchronously and supports extended execution times. See [Job Function Operation](https://docs.tailor.tech/guides/executor/job-function-operation) for details.

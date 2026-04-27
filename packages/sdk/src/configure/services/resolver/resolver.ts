@@ -6,11 +6,12 @@ import type { TailorAnyField, TailorField } from "@/configure/types/type";
 import type { TailorEnv } from "@/types/env";
 import type { InferFieldsOutput, output } from "@/types/helpers";
 import type { ResolverInput } from "@/types/resolver.generated";
-import type { TailorUser } from "@/types/user";
+import type { TailorInvoker, TailorUser } from "@/types/user";
 
 type Context<Input extends Record<string, TailorAnyField> | undefined> = {
   input: Input extends Record<string, TailorAnyField> ? InferFieldsOutput<Input> : never;
   user: TailorUser;
+  invoker?: TailorInvoker;
   env: TailorEnv;
 };
 
@@ -48,7 +49,7 @@ type ResolverReturn<
  * Create a resolver definition for the Tailor SDK.
  *
  * The `body` function receives a context with `input` (typed from `config.input`),
- * `user` (TailorUser with id, type, workspaceId, attributes, attributeList), and `env` (TailorEnv).
+ * `user`, `invoker` (reflects `authInvoker` delegation), and `env`.
  * The return value of `body` must match the `output` type.
  *
  * `output` accepts either a single TailorField (e.g. `t.string()`) or a

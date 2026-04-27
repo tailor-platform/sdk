@@ -18,7 +18,7 @@ import {
 import * as inflection from "inflection";
 import { type ResolverService } from "@/cli/services/resolver/service";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
-import { buildResolverOperationHookExpr } from "@/cli/shared/runtime-args";
+import { buildResolverOperationHookExpr } from "@/cli/shared/runtime-exprs";
 import { normalizeAuthInvoker } from "./auth-invoker";
 import { createChangeSet, type ChangeSet } from "./change-set";
 import { areNormalizedEqual, normalizeProtoConfig } from "./compare";
