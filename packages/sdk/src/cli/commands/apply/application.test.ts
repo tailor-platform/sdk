@@ -1,5 +1,7 @@
+import { Code, ConnectError } from "@connectrpc/connect";
 import { Subgraph_ServiceType } from "@tailor-proto/tailor/v1/application_resource_pb";
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
+import { logger } from "@/cli/shared/logger";
 import { planApplication } from "./application";
 import type { PlanContext } from "./apply";
 import type { Application } from "@/cli/services/application";
@@ -36,7 +38,12 @@ vi.mock("./change-set", async (importOriginal) => {
 const workspaceId = "test-workspace";
 const appName = "test-app";
 
-function createMockApplication(): Application {
+function createMockApplication(
+  overrides: {
+    cors?: string[];
+    staticWebsiteServices?: Array<{ name: string }>;
+  } = {},
+): Application {
   return {
     name: appName,
     subgraphs: [
@@ -44,10 +51,11 @@ function createMockApplication(): Application {
       { Type: "tailordb", Name: "tailordb-a" },
     ],
     config: {
-      cors: ["https://b.example.com", "https://a.example.com"],
+      cors: overrides.cors ?? ["https://b.example.com", "https://a.example.com"],
       allowedIpAddresses: ["2.2.2.2", "1.1.1.1"],
       disableIntrospection: true,
     },
+    staticWebsiteServices: overrides.staticWebsiteServices ?? [],
     authService: {
       config: {
         name: "auth-a",
@@ -222,5 +230,46 @@ describe("planApplication", () => {
     expect(result.creates[0].name).toBe(appName);
     expect(result.updates).toHaveLength(0);
     expect(result.unchanged).toHaveLength(0);
+  });
+
+  describe("CORS resolution on first deployment (issue #1030)", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    test("does not warn when CORS references a locally-defined static website that is not yet on the platform", async () => {
+      const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      const client = {
+        ...createMockClient([]),
+        getStaticWebsite: vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound)),
+      } as unknown as OperatorClient;
+      const application = createMockApplication({
+        cors: ["my-frontend:url"],
+        staticWebsiteServices: [{ name: "my-frontend" }],
+      });
+
+      const result = await planApplication(createContext(client, application));
+
+      expect(result.creates).toHaveLength(1);
+      expect(warnSpy).not.toHaveBeenCalled();
+    });
+
+    test("still warns when CORS references a static website that is not defined locally", async () => {
+      const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      const client = {
+        ...createMockClient([]),
+        getStaticWebsite: vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound)),
+      } as unknown as OperatorClient;
+      const application = createMockApplication({
+        cors: ["typo-name:url"],
+        staticWebsiteServices: [{ name: "my-frontend" }],
+      });
+
+      await planApplication(createContext(client, application));
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        'Static website "typo-name" not found for CORS configuration. Excluding from CORS.',
+      );
+    });
   });
 });
