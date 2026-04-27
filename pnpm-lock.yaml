@@ -146,8 +146,8 @@ importers:
         specifier: 2.3.0
         version: 2.3.0
       politty:
-        specifier: 0.4.14
-        version: 0.4.14(@clack/prompts@1.2.0)(@inquirer/prompts@8.4.2(@types/node@24.12.2))(zod@4.3.6)
+        specifier: 0.4.15
+        version: 0.4.15(@clack/prompts@1.2.0)(@inquirer/prompts@8.4.2(@types/node@24.12.2))(zod@4.3.6)
       zod:
         specifier: 4.3.6
         version: 4.3.6
@@ -624,8 +624,8 @@ importers:
         specifier: 2.3.0
         version: 2.3.0
       politty:
-        specifier: 0.4.14
-        version: 0.4.14(@clack/prompts@1.2.0)(@inquirer/prompts@8.4.2(@types/node@24.12.2))(zod@4.3.6)
+        specifier: 0.4.15
+        version: 0.4.15(@clack/prompts@1.2.0)(@inquirer/prompts@8.4.2(@types/node@24.12.2))(zod@4.3.6)
       rolldown:
         specifier: 1.0.0-rc.16
         version: 1.0.0-rc.16
@@ -742,8 +742,8 @@ importers:
         specifier: 2.3.0
         version: 2.3.0
       politty:
-        specifier: 0.4.14
-        version: 0.4.14(@clack/prompts@1.2.0)(@inquirer/prompts@8.4.2(@types/node@24.12.2))(zod@4.3.6)
+        specifier: 0.4.15
+        version: 0.4.15(@clack/prompts@1.2.0)(@inquirer/prompts@8.4.2(@types/node@24.12.2))(zod@4.3.6)
       semver:
         specifier: 7.7.4
         version: 7.7.4
@@ -4855,8 +4855,8 @@ packages:
     resolution: {integrity: sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA==}
     engines: {node: '>=4'}
 
-  politty@0.4.14:
-    resolution: {integrity: sha512-YmPmZKT5uXASbjwiJeBB/l6kA0VlIWSHT9Kz/Ek3ZpBSxdaGKv9H2FYvAIuOZRQTAtBVjavLPMxF2IKId1at5g==}
+  politty@0.4.15:
+    resolution: {integrity: sha512-wAkRH9YNxkowQD+9Vu9BQ3Nv6K9goyfvUrzvpZV9NdNySe5Ozn+GPMVSdqWu0DF0aD27vd2+7ROC09LYmzdb6A==}
     engines: {node: '>=18'}
     peerDependencies:
       '@clack/prompts': ^0.10.0 || ^0.11.0 || ^1.0.0
@@ -9459,7 +9459,7 @@ snapshots:
 
   pluralize@8.0.0: {}
 
-  politty@0.4.14(@clack/prompts@1.2.0)(@inquirer/prompts@8.4.2(@types/node@24.12.2))(zod@4.3.6):
+  politty@0.4.15(@clack/prompts@1.2.0)(@inquirer/prompts@8.4.2(@types/node@24.12.2))(zod@4.3.6):
     dependencies:
       string-width: 8.2.0
       zod: 4.3.6
