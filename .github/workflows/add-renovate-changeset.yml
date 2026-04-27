@@ -70,6 +70,13 @@ jobs:
               echo "Skipping $file (devDependencies-only change)"
               continue
             fi
+            # Private packages are ignored by changesets; mixing them with
+            # public packages in one changeset breaks `changeset version`
+            # with a "Mixed changesets" error.
+            if [ "$(jq -r '.private // false' "$file")" = "true" ]; then
+              echo "Skipping $file (private package)"
+              continue
+            fi
             name=$(jq -r '.name' "$file")
             # @tailor-platform/create-sdk is in the fixed group with
             # @tailor-platform/sdk (see .changeset/config.json), so normalize
