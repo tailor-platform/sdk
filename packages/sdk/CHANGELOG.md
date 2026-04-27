@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 1.42.0
+
+### Minor Changes
+
+- [#1046](https://github.com/tailor-platform/sdk/pull/1046) [`9f99c0d`](https://github.com/tailor-platform/sdk/commit/9f99c0d284a5f227acafbb41db6db0bf7293c496) Thanks [@remiposo](https://github.com/remiposo)! - Expose `invoker` on resolver/executor/workflow body contexts. The SDK now calls `tailor.context.getInvoker()` inside bundled wrappers and passes the result to user code as `context.invoker` / `args.invoker`. This reflects `authInvoker` delegation (machine user when specified) and is `null` for anonymous callers.
+
 ## 1.41.0
 
 ### Minor Changes
