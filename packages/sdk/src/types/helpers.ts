@@ -47,16 +47,31 @@ export type JsonValue =
 
 /**
  * A looser version of JsonValue that accepts interfaces.
- * TypeScript interfaces don't have index signatures by default,
- * so they can't be assigned to JsonValue's {[Key in string]: JsonValue}.
- * This type uses a recursive check instead.
+ * TypeScript interfaces don't have index signatures by default, so they can't
+ * be assigned to JsonValue's `{ [key: string]: JsonValue }`. This type uses a
+ * recursive structural check instead.
+ *
+ * Rejection rules:
+ * - Functions are rejected (top-level or as property values).
+ * - Objects with a `toJSON` method are rejected (can't faithfully round-trip).
+ * - Class instances that expose methods are rejected via the property walk
+ *   (methods are function-typed properties, which resolve to `never`).
+ *
+ * Limitation: class instances whose declared type has only data properties
+ * (for example `Error`, or user-defined DTO classes) are structurally
+ * indistinguishable from plain objects and cannot be rejected here. The
+ * platform performs the authoritative check at runtime.
  */
+// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
 export type JsonCompatible<T> = T extends string | number | boolean | null | undefined
   ? T
   : T extends readonly (infer U)[]
     ? JsonCompatible<U>[]
-    : T extends object
-      ? T extends { toJSON: () => unknown }
-        ? never // Exclude objects with toJSON (like Date) from input
-        : { [K in keyof T]: JsonCompatible<T[K]> }
-      : never;
+    : // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+      T extends Function
+      ? never
+      : T extends object
+        ? T extends { toJSON: () => unknown }
+          ? never
+          : { [K in keyof T]: JsonCompatible<T[K]> }
+        : never;

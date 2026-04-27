@@ -9,6 +9,7 @@ export {
   setupTailorErrorsMock,
   setupWorkflowMock,
   setupInvokerMock,
+  setupWaitPointMock,
   createImportMain,
 } from "./mock";
 

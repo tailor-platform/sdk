@@ -118,13 +118,14 @@ function detectExtendedTriggerCalls(
 
       if (callee.type === "MemberExpression") {
         const memberExpr = callee as unknown as StaticMemberExpression;
-        if (
-          !memberExpr.computed &&
-          memberExpr.object.type === "Identifier" &&
-          memberExpr.property.name === "trigger"
-        ) {
-          const identifierName = (memberExpr.object as IdentifierReference).name;
 
+        const identifierName =
+          !memberExpr.computed && memberExpr.object.type === "Identifier"
+            ? (memberExpr.object as IdentifierReference).name
+            : null;
+        const propertyName = !memberExpr.computed ? memberExpr.property.name : null;
+
+        if (identifierName && propertyName === "trigger") {
           // Only process if this is a known workflow or job
           const isWorkflow = workflowNames.has(identifierName);
           const isJob = jobNames.has(identifierName);
@@ -198,7 +199,7 @@ function detectExtendedTriggerCalls(
 
 /**
  * Transform trigger calls for resolver/executor/workflow functions
- * Handles both job.trigger() and workflow.trigger() calls
+ * Handles job.trigger() and workflow.trigger() calls
  * @param source - The source code to transform
  * @param workflowNameMap - Map from variable name to workflow name
  * @param jobNameMap - Map from variable name to job name

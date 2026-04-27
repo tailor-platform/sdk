@@ -10,6 +10,11 @@ export const fetchCustomer = createWorkflowJob({
       .selectAll()
       .where("id", "=", input.customerId)
       .executeTakeFirst();
-    return customer;
+    if (!customer) return undefined;
+    return {
+      ...customer,
+      createdAt: customer.createdAt.toISOString(),
+      updatedAt: customer.updatedAt?.toISOString() ?? null,
+    };
   },
 });

@@ -8,7 +8,6 @@ describe("WorkflowJob type inference", () => {
       name: "test",
       body: () => ({ status: "ok" as const, count: 42 }),
     });
-    // status should be "ok" (literal), count should be number
     type Output = Awaited<ReturnType<typeof _job.trigger>>;
     expectTypeOf<Output>().toEqualTypeOf<{ status: "ok"; count: number }>();
   });
@@ -89,23 +88,69 @@ describe("WorkflowJob type constraints", () => {
     });
 
     it("rejects Date in input", () => {
-      // Date is not JsonValue, so this should cause a type error on the body parameter
       createWorkflowJob({
         name: "test",
-        // @ts-expect-error - Date is not allowed in input (not JsonValue)
+        // @ts-expect-error - Date is not JsonValue-compatible
         body: (_input: { date: Date }) => ({ result: "ok" }),
       });
     });
 
     it("rejects objects with toJSON in input", () => {
-      // Objects with toJSON are not JsonValue
       createWorkflowJob({
         name: "test",
-        // @ts-expect-error - Objects with toJSON are not allowed in input
+        // @ts-expect-error - objects with methods (function-typed properties) are not JsonValue-compatible
         body: (_input: { custom: { toJSON: () => string } }) => ({
           result: "ok",
         }),
       });
+    });
+
+    it("rejects null as top-level input", () => {
+      createWorkflowJob({
+        name: "test",
+        // @ts-expect-error - null is not allowed at top level
+        body: (_input: null) => ({ result: "ok" }),
+      });
+    });
+
+    it("rejects null in top-level union input", () => {
+      createWorkflowJob({
+        name: "test",
+        // @ts-expect-error - null is not allowed at top level (even in union)
+        body: (_input: { id: string } | null) => ({ result: "ok" }),
+      });
+    });
+
+    it("rejects undefined in top-level union input", () => {
+      createWorkflowJob({
+        name: "test",
+        // @ts-expect-error - undefined is not allowed at top level (except when I = undefined alone)
+        body: (_input: { id: string } | undefined) => ({ result: "ok" }),
+      });
+    });
+
+    it("allows input = undefined (no-input convention)", () => {
+      const job = createWorkflowJob({
+        name: "test",
+        body: (_input: undefined) => ({ result: "ok" }),
+      });
+      expectTypeOf(job.name).toEqualTypeOf<"test">();
+    });
+
+    it("allows nested null in object input", () => {
+      const job = createWorkflowJob({
+        name: "test",
+        body: (_input: { data: string | null }) => ({ result: "ok" }),
+      });
+      expectTypeOf(job.name).toEqualTypeOf<"test">();
+    });
+
+    it("allows nested null in array input", () => {
+      const job = createWorkflowJob({
+        name: "test",
+        body: (_input: { items: (string | null)[] }) => ({ result: "ok" }),
+      });
+      expectTypeOf(job.name).toEqualTypeOf<"test">();
     });
   });
 
@@ -118,32 +163,32 @@ describe("WorkflowJob type constraints", () => {
       expectTypeOf(job.name).toEqualTypeOf<"test">();
     });
 
-    it("allows Date in output (Jsonifiable)", () => {
-      const job = createWorkflowJob({
+    it("rejects Date in output", () => {
+      createWorkflowJob({
         name: "test",
+        // @ts-expect-error - Date is not JsonValue-compatible
         body: () => ({ timestamp: new Date() }),
       });
-      expectTypeOf(job.name).toEqualTypeOf<"test">();
     });
 
-    it("allows objects with toJSON in output", () => {
+    it("rejects objects with toJSON in output", () => {
       const customObj = {
         value: 42,
         toJSON: () => ({ serialized: 42 }),
       };
-      const job = createWorkflowJob({
+      createWorkflowJob({
         name: "test",
+        // @ts-expect-error - objects with methods (function-typed properties) are not JsonValue-compatible
         body: () => customObj,
       });
-      expectTypeOf(job.name).toEqualTypeOf<"test">();
     });
 
-    it("allows async body returning Jsonifiable", async () => {
-      const job = createWorkflowJob({
+    it("rejects async body returning Date", async () => {
+      createWorkflowJob({
         name: "test",
+        // @ts-expect-error - Date is not JsonValue-compatible
         body: async () => ({ timestamp: new Date(), result: "ok" }),
       });
-      expectTypeOf(job.name).toEqualTypeOf<"test">();
     });
 
     it("allows undefined output", () => {
@@ -177,36 +222,7 @@ describe("WorkflowJob type constraints", () => {
   });
 
   describe("trigger return type", () => {
-    it("returns Jsonify<Output> - Date becomes string", () => {
-      const job = createWorkflowJob({
-        name: "test",
-        body: () => ({ timestamp: new Date() }),
-      });
-      // trigger returns Promise where Date is converted to string via Jsonify
-      expectTypeOf(job.trigger).returns.resolves.toEqualTypeOf<{
-        timestamp: string;
-      }>();
-    });
-
-    it("returns Jsonify<Output> for nested Date", () => {
-      const job = createWorkflowJob({
-        name: "test",
-        body: () => ({
-          data: {
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          },
-        }),
-      });
-      expectTypeOf(job.trigger).returns.resolves.toEqualTypeOf<{
-        data: {
-          createdAt: string;
-          updatedAt: string;
-        };
-      }>();
-    });
-
-    it("keeps primitive types unchanged", () => {
+    it("returns Output as-is (no Jsonify transformation)", () => {
       const job = createWorkflowJob({
         name: "test",
         body: () => ({ result: "ok", count: 42, active: true as boolean }),
@@ -215,6 +231,24 @@ describe("WorkflowJob type constraints", () => {
         result: string;
         count: number;
         active: boolean;
+      }>();
+    });
+
+    it("keeps nested object types unchanged", () => {
+      const job = createWorkflowJob({
+        name: "test",
+        body: () => ({
+          data: {
+            id: "x",
+            tags: ["a", "b"],
+          },
+        }),
+      });
+      expectTypeOf(job.trigger).returns.resolves.toEqualTypeOf<{
+        data: {
+          id: string;
+          tags: string[];
+        };
       }>();
     });
 
@@ -243,8 +277,6 @@ describe("WorkflowJob type constraints", () => {
         name: "test",
         body: () => ({ result: "ok" }),
       });
-      // trigger should be callable without arguments
-      // Using type assertion to verify the signature
       const _trigger: () => Promise<{ result: string }> = job.trigger;
       expectTypeOf(_trigger).toBeFunction();
     });
@@ -254,8 +286,6 @@ describe("WorkflowJob type constraints", () => {
         name: "test",
         body: (input: { id: string }) => ({ result: input.id }),
       });
-      // trigger should require the input parameter
-      // Using type assertion to verify the signature
       const _trigger: (input: { id: string }) => Promise<{ result: string }> = job.trigger;
       expectTypeOf(_trigger).toBeFunction();
     });
@@ -263,24 +293,18 @@ describe("WorkflowJob type constraints", () => {
 
   describe("WorkflowJob interface constraints", () => {
     it("WorkflowJob Input constraint is JsonValue | undefined", () => {
-      // This should compile - JsonValue input
       type ValidJob1 = WorkflowJob<"test", { id: string }, { result: string }>;
-
-      // This should compile - undefined input
       type ValidJob2 = WorkflowJob<"test", undefined, { result: string }>;
 
-      // Verify the types are valid
       expectTypeOf<ValidJob1["name"]>().toEqualTypeOf<"test">();
       expectTypeOf<ValidJob2["name"]>().toEqualTypeOf<"test">();
     });
 
-    it("WorkflowJob Output constraint is Jsonifiable", () => {
-      // This should compile - Date is Jsonifiable
-      type ValidJob = WorkflowJob<"test", undefined, { timestamp: Date; result: string }>;
+    it("trigger return preserves Output as-is", () => {
+      type Job = WorkflowJob<"test", undefined, { id: string; result: string }>;
 
-      // Verify trigger return is Jsonify<Output>
-      expectTypeOf<ReturnType<ValidJob["trigger"]>>().resolves.toEqualTypeOf<{
-        timestamp: string;
+      expectTypeOf<ReturnType<Job["trigger"]>>().resolves.toEqualTypeOf<{
+        id: string;
         result: string;
       }>();
     });

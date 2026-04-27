@@ -3,6 +3,7 @@ import {
   createImportMain,
   setupInvokerMock,
   setupTailordbMock,
+  setupWaitPointMock,
   setupWorkflowMock,
 } from "@tailor-platform/sdk/test";
 import { beforeAll, beforeEach, describe, expect, test } from "vitest";
@@ -79,6 +80,28 @@ describe("bundled workflow execution", () => {
         created: false,
         profile: { name: "Alice Updated", email: "alice@example.com", age: 26 },
       });
+    });
+  });
+
+  describe("approval workflow job", () => {
+    test("process-with-approval returns approved when resolved with true", async () => {
+      setupWaitPointMock({
+        onWait: (_key, _payload) => ({ approved: true }),
+      });
+
+      const main = await importMain("workflow-jobs/process-with-approval.js");
+      const result = await main({ orderId: "order-1" });
+      expect(result).toEqual({ orderId: "order-1", status: "approved" });
+    });
+
+    test("process-with-approval returns rejected when resolved with false", async () => {
+      setupWaitPointMock({
+        onWait: (_key, _payload) => ({ approved: false }),
+      });
+
+      const main = await importMain("workflow-jobs/process-with-approval.js");
+      const result = await main({ orderId: "order-2" });
+      expect(result).toEqual({ orderId: "order-2", status: "rejected" });
     });
   });
 
