@@ -299,6 +299,98 @@ describe("planWorkflow", () => {
       expect(result.changeSet.updates).toHaveLength(0);
     });
 
+    test("workflow with concurrencyPolicy is unchanged when remote maxConcurrentExecutions matches local value", async () => {
+      const client = createMockClient([
+        {
+          id: "1",
+          name: "batch-processing",
+          label: appName,
+          resource: {
+            id: "1",
+            name: "batch-processing",
+            mainJobFunctionName: "run-batch",
+            jobFunctions: {
+              "run-batch": "5",
+            },
+            concurrencyPolicy: {
+              maxConcurrentExecutions: 5,
+            },
+          },
+        },
+      ]);
+
+      const workflow = createMockWorkflow("batch-processing", "run-batch");
+      workflow.concurrencyPolicy = {
+        maxConcurrentExecutions: 5,
+      };
+
+      const workflows = {
+        "batch-processing": workflow,
+      };
+      const mainJobDeps = {
+        "run-batch": ["run-batch"],
+      };
+
+      const result = await planWorkflow(
+        client,
+        workspaceId,
+        appName,
+        workflows,
+        mainJobDeps,
+        new Set(["run-batch"]),
+      );
+
+      expect(result.changeSet.unchanged).toHaveLength(1);
+      expect(result.changeSet.unchanged[0].name).toBe("batch-processing");
+      expect(result.changeSet.updates).toHaveLength(0);
+    });
+
+    test("workflow with concurrencyPolicy is updated when maxConcurrentExecutions differs", async () => {
+      const client = createMockClient([
+        {
+          id: "1",
+          name: "batch-processing",
+          label: appName,
+          resource: {
+            id: "1",
+            name: "batch-processing",
+            mainJobFunctionName: "run-batch",
+            jobFunctions: {
+              "run-batch": "5",
+            },
+            concurrencyPolicy: {
+              maxConcurrentExecutions: 5,
+            },
+          },
+        },
+      ]);
+
+      const workflow = createMockWorkflow("batch-processing", "run-batch");
+      workflow.concurrencyPolicy = {
+        maxConcurrentExecutions: 10,
+      };
+
+      const workflows = {
+        "batch-processing": workflow,
+      };
+      const mainJobDeps = {
+        "run-batch": ["run-batch"],
+      };
+
+      const result = await planWorkflow(
+        client,
+        workspaceId,
+        appName,
+        workflows,
+        mainJobDeps,
+        new Set(["run-batch"]),
+      );
+
+      expect(result.changeSet.unchanged).toHaveLength(0);
+      expect(result.changeSet.updates).toHaveLength(1);
+      expect(result.changeSet.updates[0].name).toBe("batch-processing");
+    });
+
     test("removes metadata from orphaned job functions even when remaining workflows are unchanged", async () => {
       const listWorkflowJobFunctions = vi.fn().mockResolvedValue({
         jobFunctions: [{ name: "keep-job" }, { name: "orphaned-job" }],
