@@ -1,5 +1,6 @@
 import { describe, it, expectTypeOf } from "vitest";
 import { createWorkflowJob, type WorkflowJob } from "./job";
+import type { TailorInvoker } from "@/types/user";
 
 describe("WorkflowJob type inference", () => {
   it("preserves literal types in output when using as const", () => {
@@ -44,6 +45,17 @@ describe("WorkflowJob type inference", () => {
     });
     type Output = Awaited<ReturnType<typeof _job.trigger>>;
     expectTypeOf<Output>().toEqualTypeOf<UserOutput>();
+  });
+
+  it("context exposes invoker field alongside env", () => {
+    createWorkflowJob({
+      name: "test",
+      body: (_input: undefined, context) => {
+        expectTypeOf(context).toHaveProperty("env");
+        expectTypeOf(context).toHaveProperty("invoker");
+        expectTypeOf(context.invoker).toEqualTypeOf<TailorInvoker | undefined>();
+      },
+    });
   });
 });
 

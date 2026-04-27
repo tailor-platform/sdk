@@ -1,6 +1,7 @@
 import path from "node:path";
 import {
   createImportMain,
+  setupInvokerMock,
   setupTailordbMock,
   setupWaitPointMock,
   setupWorkflowMock,
@@ -16,6 +17,7 @@ describe("bundled workflow execution", () => {
 
   beforeAll(() => {
     ({ executedQueries } = setupTailordbMock());
+    setupInvokerMock(null);
   });
 
   beforeEach(() => {

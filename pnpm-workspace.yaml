@@ -1,5 +1,6 @@
 minimumReleaseAge: 4320 # 3 days
 minimumReleaseAgeExclude:
+  - "@tailor-platform/*"
   - "@toiroakr/lines-db"
   - politty
   - zinfer

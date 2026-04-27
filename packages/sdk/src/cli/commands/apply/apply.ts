@@ -84,6 +84,11 @@ export interface PlanContext {
   config: LoadedConfig;
   noSchemaCheck?: boolean;
   forceApplyAll?: boolean;
+  /**
+   * Whether the application contains executors that subscribe to IdP user
+   * events. Controls how `publishUserEvents` defaults on IdP services.
+   */
+  hasIdpUserTrigger?: boolean;
 }
 
 export type ApplyPhase = "create-update" | "delete" | "delete-resources" | "delete-services";
@@ -496,6 +501,9 @@ export async function apply(options?: ApplyOptions) {
       workflow,
       secretManager,
     } = await withSpan("plan", async () => {
+      const hasIdpUserTrigger = Object.values(application.executorService?.executors ?? {}).some(
+        (executor) => executor.trigger.kind === "idpUser",
+      );
       const ctx: PlanContext = {
         client,
         workspaceId,
@@ -504,6 +512,7 @@ export async function apply(options?: ApplyOptions) {
         config,
         noSchemaCheck: options?.noSchemaCheck,
         forceApplyAll,
+        hasIdpUserTrigger,
       };
       const functionRegistry = await withSpan("plan.functionRegistry", () =>
         planFunctionRegistry(client, workspaceId, application.name, functionEntries),
