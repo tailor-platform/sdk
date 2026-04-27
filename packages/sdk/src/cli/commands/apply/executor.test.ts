@@ -139,6 +139,7 @@ describe("planExecutor", () => {
       tailorDBTypes?: Record<string, string>;
       resolverNames?: Record<string, string>;
       idpName?: string;
+      idpNames?: ReadonlyArray<string>;
       authName?: string;
     },
   ): Application {
@@ -156,13 +157,19 @@ describe("planExecutor", () => {
       resolvers: Object.fromEntries((entries ?? []).map(([name]) => [name, { name }])),
     }));
 
+    const idpServices = options?.idpNames
+      ? options.idpNames.map((name) => ({ name }))
+      : options?.idpName
+        ? [{ name: options.idpName }]
+        : [];
+
     return {
       name: appName,
       env: {},
       executorService: createMockExecutorService(executors),
       tailorDBServices,
       resolverServices,
-      idpServices: options?.idpName ? [{ name: options.idpName }] : [],
+      idpServices,
       authService: options?.authName ? { parsedConfig: { name: options.authName } } : undefined,
     } as unknown as Application;
   }
@@ -888,7 +895,69 @@ describe("planExecutor", () => {
 
       await expect(
         planExecutor({ client, workspaceId, application, forRemoval: false, config: mockConfig }),
-      ).rejects.toThrow("No IdP service configured");
+      ).rejects.toThrow(/no IdP is configured/);
+    });
+
+    test("idpUserCreated picks the matching IdP when multiple are configured and idp is specified", async () => {
+      const client = createMockClient([]);
+      const executor: Executor = {
+        name: "on-idp-user-created",
+        description: "test",
+        disabled: false,
+        trigger: { kind: "idpUser", events: ["idp.user.created"], idp: "idp-b" },
+        operation: { kind: "function", body: () => {} },
+      };
+      const application = createMockApplication([executor], {
+        idpNames: ["idp-a", "idp-b"],
+      });
+
+      const result = await planExecutor({
+        client,
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: mockConfig,
+      });
+
+      const typedConfig = getEventConfig(result);
+      expect(typedConfig.case).toBe("idp");
+      expect(typedConfig.value.namespaceName).toBe("idp-b");
+    });
+
+    test("idpUserCreated throws when multiple IdPs are configured and idp is omitted", async () => {
+      const client = createMockClient([]);
+      const executor: Executor = {
+        name: "on-idp-user-created",
+        description: "test",
+        disabled: false,
+        trigger: { kind: "idpUser", events: ["idp.user.created"] },
+        operation: { kind: "function", body: () => {} },
+      };
+      const application = createMockApplication([executor], {
+        idpNames: ["idp-a", "idp-b"],
+      });
+
+      await expect(
+        planExecutor({ client, workspaceId, application, forRemoval: false, config: mockConfig }),
+      ).rejects.toThrow(/multiple IdPs/);
+    });
+
+    test("idpUserCreated throws when specified idp does not exist", async () => {
+      const client = createMockClient([]);
+      const executor: Executor = {
+        name: "on-idp-user-created",
+        description: "test",
+        disabled: false,
+        trigger: { kind: "idpUser", events: ["idp.user.created"], idp: "missing" },
+        operation: { kind: "function", body: () => {} },
+      };
+      const application = createMockApplication([executor], {
+        idpNames: ["idp-a", "idp-b"],
+      });
+
+      await expect(
+        planExecutor({ client, workspaceId, application, forRemoval: false, config: mockConfig }),
+      ).rejects.toThrow(/no IdP with that name is configured/);
     });
 
     test("authAccessTokenIssued throws when no Auth service configured", async () => {

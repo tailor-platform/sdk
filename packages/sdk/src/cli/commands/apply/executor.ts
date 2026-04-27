@@ -352,13 +352,30 @@ function resolveResolverNamespace(
   );
 }
 
-function resolveIdpNamespace(application: Readonly<Application>): string {
+function resolveIdpNamespace(
+  application: Readonly<Application>,
+  executorName: string,
+  idpName: string | undefined,
+): string {
   if (application.idpServices.length === 0) {
-    throw new Error("No IdP service configured");
+    throw new Error(`Executor "${executorName}" uses an idpUser trigger but no IdP is configured.`);
+  }
+  if (idpName !== undefined) {
+    const found = application.idpServices.find((idp) => idp.name === idpName);
+    if (!found) {
+      const available = application.idpServices.map((idp) => idp.name).join(", ");
+      throw new Error(
+        `Executor "${executorName}" specifies IdP "${idpName}" in its idpUser trigger, ` +
+          `but no IdP with that name is configured. Available IdPs: ${available}`,
+      );
+    }
+    return found.name;
   }
   if (application.idpServices.length > 1) {
+    const available = application.idpServices.map((idp) => idp.name).join(", ");
     throw new Error(
-      "Multiple IdP services found; cannot determine which to use for executor trigger",
+      `Executor "${executorName}" uses an idpUser trigger but the project defines multiple IdPs ` +
+        `(${available}). Specify which IdP to subscribe to via the trigger's "idp" option.`,
     );
   }
   return application.idpServices[0].name;
@@ -462,7 +479,7 @@ function protoExecutor(
         case: "idp",
         value: {
           eventTypes: trigger.events,
-          namespaceName: resolveIdpNamespace(application),
+          namespaceName: resolveIdpNamespace(application, executor.name, trigger.idp),
         },
       });
       break;

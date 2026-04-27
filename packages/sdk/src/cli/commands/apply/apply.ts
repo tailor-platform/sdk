@@ -85,10 +85,11 @@ export interface PlanContext {
   noSchemaCheck?: boolean;
   forceApplyAll?: boolean;
   /**
-   * Whether the application contains executors that subscribe to IdP user
-   * events. Controls how `publishUserEvents` defaults on IdP services.
+   * Set of IdP names that have at least one executor with an idpUser trigger.
+   * Controls how `publishUserEvents` defaults on each IdP service. Empty when
+   * no idpUser triggers are defined.
    */
-  hasIdpUserTrigger?: boolean;
+  idpUserTriggerTargets?: ReadonlySet<string>;
 }
 
 export type ApplyPhase = "create-update" | "delete" | "delete-resources" | "delete-services";
@@ -131,6 +132,31 @@ function tailorDBTrn(workspaceId: string, name: string) {
 
 function vaultTrn(workspaceId: string, name: string) {
   return `trn:v1:workspace:${workspaceId}:vault:${name}`;
+}
+
+/**
+ * Resolve the set of IdP names that have at least one executor subscribed to
+ * their user events. When an executor's idpUser trigger omits the `idp` option
+ * and exactly one IdP is configured, that IdP is implicitly the target.
+ * Executors that omit `idp` while multiple IdPs exist are skipped here; the
+ * apply pipeline throws a clearer error for them later.
+ * @param application - Loaded application
+ * @returns Set of IdP names targeted by idpUser triggers
+ */
+function collectIdpUserTriggerTargets(application: Readonly<Application>): ReadonlySet<string> {
+  const targets = new Set<string>();
+  const idps = application.idpServices;
+  for (const executor of Object.values(application.executorService?.executors ?? {})) {
+    if (executor.trigger.kind !== "idpUser") {
+      continue;
+    }
+    if (executor.trigger.idp != null) {
+      targets.add(executor.trigger.idp);
+    } else if (idps.length === 1) {
+      targets.add(idps[0].name);
+    }
+  }
+  return targets;
 }
 
 async function shouldForceApplyAll(
@@ -501,9 +527,7 @@ export async function apply(options?: ApplyOptions) {
       workflow,
       secretManager,
     } = await withSpan("plan", async () => {
-      const hasIdpUserTrigger = Object.values(application.executorService?.executors ?? {}).some(
-        (executor) => executor.trigger.kind === "idpUser",
-      );
+      const idpUserTriggerTargets = collectIdpUserTriggerTargets(application);
       const ctx: PlanContext = {
         client,
         workspaceId,
@@ -512,7 +536,7 @@ export async function apply(options?: ApplyOptions) {
         config,
         noSchemaCheck: options?.noSchemaCheck,
         forceApplyAll,
-        hasIdpUserTrigger,
+        idpUserTriggerTargets,
       };
       const functionRegistry = await withSpan("plan.functionRegistry", () =>
         planFunctionRegistry(client, workspaceId, application.name, functionEntries),

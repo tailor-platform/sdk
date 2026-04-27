@@ -26,6 +26,7 @@ export {
 } from "@/types/user";
 export { type Env } from "@/types/env";
 export { type MachineUserNameRegistry, type MachineUserName } from "@/configure/types/machine-user";
+export { type IdpNameRegistry, type IdpName } from "@/configure/types/idp-name";
 
 export * from "@/configure/services";
 

@@ -166,7 +166,7 @@ export async function planIdP(context: PlanContext) {
     application,
     forRemoval,
     forceApplyAll = false,
-    hasIdpUserTrigger = false,
+    idpUserTriggerTargets,
   } = context;
   const idps = forRemoval ? [] : application.idpServices;
   const {
@@ -174,7 +174,13 @@ export async function planIdP(context: PlanContext) {
     conflicts,
     unmanaged,
     resourceOwners,
-  } = await planServices(client, workspaceId, application.name, idps, hasIdpUserTrigger);
+  } = await planServices(
+    client,
+    workspaceId,
+    application.name,
+    idps,
+    idpUserTriggerTargets ?? new Set<string>(),
+  );
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
   const clientChangeSet = await planClients(
     client,
@@ -342,7 +348,7 @@ async function planServices(
   workspaceId: string,
   appName: string,
   idps: ReadonlyArray<IdP>,
-  hasIdpUserTrigger: boolean,
+  idpUserTriggerTargets: ReadonlySet<string>,
 ) {
   const changeSet = createChangeSet<CreateService, UpdateService, DeleteService>("IdP services");
   const conflicts: OwnerConflict[] = [];
@@ -403,14 +409,17 @@ async function planServices(
 
     const lang = convertLang(idp.lang);
     const userAuthPolicy = idp.userAuthPolicy;
-    const publishUserEvents = idp.publishUserEvents ?? hasIdpUserTrigger;
-    if (hasIdpUserTrigger && idp.publishUserEvents === undefined) {
-      logger.info(
-        `IdP service "${namespaceName}": automatically enabled "publishUserEvents" because executors with idpUser triggers are defined. Set "publishUserEvents" explicitly to silence this message.`,
+    const isIdpUserTriggerTarget = idpUserTriggerTargets.has(namespaceName);
+    if (isIdpUserTriggerTarget && idp.publishUserEvents === false) {
+      throw new Error(
+        `IdP service "${namespaceName}" has "publishUserEvents: false", but executors with idpUser triggers subscribe to it. ` +
+          `Either remove "publishUserEvents: false" or remove the matching executor triggers.`,
       );
-    } else if (hasIdpUserTrigger && idp.publishUserEvents === false) {
-      logger.warn(
-        `IdP service "${namespaceName}" has "publishUserEvents: false", but executors with idpUser triggers are defined. Those executors will not fire for this IdP. Set "publishUserEvents: true" to enable them.`,
+    }
+    const publishUserEvents = idp.publishUserEvents ?? isIdpUserTriggerTarget;
+    if (isIdpUserTriggerTarget && idp.publishUserEvents === undefined) {
+      logger.info(
+        `IdP service "${namespaceName}": automatically enabled "publishUserEvents" because executors with idpUser triggers subscribe to it. Set "publishUserEvents" explicitly to silence this message.`,
       );
     }
     const emailConfig = idp.emailConfig;
