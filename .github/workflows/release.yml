@@ -37,6 +37,13 @@ jobs:
         with:
           registry-url: "https://registry.npmjs.org"
 
+      # `pnpm/action-setup` v6.0.3+ provisions a Node bundled with npm 10.8,
+      # which lacks OIDC trusted publishing support. Force npm to 11.5+ so
+      # `pnpm changeset publish` can publish via OIDC.
+      - name: Ensure npm 11+ for OIDC trusted publishing
+        run: npm install -g npm@latest
+        shell: bash
+
       - name: Create Release PR
         id: changesets
         uses: changesets/action@6a0a831ff30acef54f2c6aa1cbbc1096b066edaf # v1.7.0

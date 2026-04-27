@@ -7,11 +7,13 @@ on:
   pull_request:
     paths:
       - .github/actions/install-deps/action.yml
+      - .github/workflows/release.yml
       - .github/workflows/_debug-publish-env.yml
 
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       id-token: write
     steps:
@@ -27,8 +29,20 @@ jobs:
         with:
           registry-url: "https://registry.npmjs.org"
 
-      - name: Print node and npm versions
+      - name: Print versions before npm upgrade
         run: |
-          echo "node: $(node -v)"
-          echo "npm:  $(npm -v)"
+          echo "BEFORE upgrade:"
+          echo "  node: $(node -v)"
+          echo "  npm:  $(npm -v)"
+        shell: bash
+
+      - name: Ensure npm 11+ for OIDC trusted publishing
+        run: npm install -g npm@latest
+        shell: bash
+
+      - name: Print versions after npm upgrade
+        run: |
+          echo "AFTER upgrade:"
+          echo "  node: $(node -v)"
+          echo "  npm:  $(npm -v)"
         shell: bash
