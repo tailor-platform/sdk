@@ -1,12 +1,14 @@
 import { brandValue } from "@/utils/brand";
 import type { TailorEnv } from "@/types/env";
 import type { JsonCompatible } from "@/types/helpers";
+import type { TailorInvoker } from "@/types/user";
 
 /**
  * Context object passed as the second argument to workflow job body functions.
  */
 export type WorkflowJobContext = {
   env: TailorEnv;
+  invoker?: TailorInvoker;
 };
 
 /**
@@ -115,7 +117,7 @@ export const createWorkflowJob = <const Name extends string, I = undefined, O = 
       name: config.name,
       trigger: async (args?: unknown) => {
         const env: TailorEnv = JSON.parse(process.env[WORKFLOW_TEST_ENV_KEY] || "{}");
-        return await body(args as I, { env });
+        return await body(args as I, { env, invoker: null });
       },
       body,
     } as WorkflowJob<Name, I, Awaited<O>>,

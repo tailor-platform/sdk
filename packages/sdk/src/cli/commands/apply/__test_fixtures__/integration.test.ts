@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
-import { setupTailordbMock, setupTailorErrorsMock } from "@/utils/test/mock";
+import { setupInvokerMock, setupTailordbMock, setupTailorErrorsMock } from "@/utils/test/mock";
 import { prepareFixtures } from "./prepare";
 import type { BundledScripts } from "@/cli/commands/apply/function-registry";
 
@@ -54,6 +54,7 @@ describe("apply command integration tests", () => {
     vi.setSystemTime(fixedSystemTime);
     setupTailordbMock();
     setupTailorErrorsMock();
+    setupInvokerMock(null);
     const result = await prepareFixtures();
     outputDir = result.outputDir;
     bundledScripts = result.bundledScripts;
