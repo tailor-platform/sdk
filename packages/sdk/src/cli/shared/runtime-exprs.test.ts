@@ -1,5 +1,5 @@
 import { describe, test, expect } from "vitest";
-import { buildExecutorArgsExpr, buildResolverOperationHookExpr } from "./runtime-args";
+import { buildExecutorArgsExpr, buildResolverOperationHookExpr } from "./runtime-exprs";
 
 describe("buildExecutorArgsExpr", () => {
   const env = { API_URL: "https://example.com", DEBUG: true };

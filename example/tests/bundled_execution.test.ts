@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { setupTailordbMock, setupWorkflowMock } from "@tailor-platform/sdk/test";
+import { setupTailordbMock, setupWorkflowMock, setupInvokerMock } from "@tailor-platform/sdk/test";
 import { format as formatDate } from "date-fns";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { createImportMain } from "./createImportMain";
@@ -15,6 +15,7 @@ describe("bundled execution tests", () => {
     vi.useFakeTimers();
     vi.setSystemTime(fixedSystemTime);
     setupTailordbMock();
+    setupInvokerMock(null);
   });
 
   afterAll(() => {
@@ -29,7 +30,7 @@ describe("bundled execution tests", () => {
     const maxSizes: Record<string, number> = {
       "executors/user-created.js": 162223 + sizeBuffer,
       "resolvers/add.js": 4504 + sizeBuffer,
-      "resolvers/showUserInfo.js": 4588 + sizeBuffer,
+      "resolvers/showUserInfo.js": 6004 + sizeBuffer,
       "resolvers/stepChain.js": 176907 + sizeBuffer,
       // triggerOrderProcessing: imports auth from tailor.config (~14KB)
       "resolvers/triggerOrderProcessing.js": 14022 + sizeBuffer,
@@ -61,22 +62,38 @@ describe("bundled execution tests", () => {
       expect(result).toEqual(10);
     });
 
-    test("resolvers/showUserInfo.js returns user information", async () => {
+    test("resolvers/showUserInfo.js returns user and invoker information", async () => {
+      setupInvokerMock({
+        id: "f1e2d3c4-b5a6-4798-89a0-1b2c3d4e5f60",
+        type: "machine_user",
+        workspaceId: "b39bdd61-d442-4a4e-8599-33a78a4e19ab",
+        attributes: { role: "MANAGER" },
+        attributeList: [],
+      });
+
       const main = await importActualMain("resolvers/showUserInfo.js");
       const payload = {
         user: {
           id: "57485cfe-fc74-4d46-8660-f0e95d1fbf98",
-          type: "machine_user",
+          type: "user",
           workspaceId: "b39bdd61-d442-4a4e-8599-33a78a4e19ab",
-          attributes: { role: "MANAGER" },
+          attributes: { role: "STAFF" },
         },
       };
       const result = await main(payload);
       expect(result).toEqual({
-        id: "57485cfe-fc74-4d46-8660-f0e95d1fbf98",
-        type: "machine_user",
-        workspaceId: "b39bdd61-d442-4a4e-8599-33a78a4e19ab",
-        role: "MANAGER",
+        user: {
+          id: "57485cfe-fc74-4d46-8660-f0e95d1fbf98",
+          type: "user",
+          workspaceId: "b39bdd61-d442-4a4e-8599-33a78a4e19ab",
+          role: "STAFF",
+        },
+        invoker: {
+          id: "f1e2d3c4-b5a6-4798-89a0-1b2c3d4e5f60",
+          type: "machine_user",
+          workspaceId: "b39bdd61-d442-4a4e-8599-33a78a4e19ab",
+          role: "MANAGER",
+        },
       });
     });
 
@@ -224,7 +241,7 @@ describe("bundled execution tests", () => {
       for (const file of entryFiles) {
         const content = fs.readFileSync(path.join(actualDir, file), "utf-8");
         expect(content).toContain('const env = {"foo":1,"bar":"hello","baz":true}');
-        expect(content).toMatch(/\.body\(input, \{ env \}\)/);
+        expect(content).toMatch(/\.body\(input, \{ env, invoker \}\)/);
       }
     });
 

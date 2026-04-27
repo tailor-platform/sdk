@@ -1,15 +1,35 @@
 /**
- * Runtime args transformation for all services.
+ * JS expressions that shape the inputs passed to user-authored code.
  *
- * Each service transforms server-side args/context into SDK-friendly format:
- * - Executor: server-side expression evaluated by platform before calling function
- * - Resolver: operationHook expression evaluated by platform before calling function
+ * Two delivery paths:
+ * - Apply config: shipped with apply and evaluated by the platform before
+ *   invoking user code.
+ * - Bundle inline: interpolated into the generated `.entry.js` wrapper and
+ *   evaluated inside the bundled script at function entry.
  *
  * The user field mapping (server → SDK) shared across services is defined in
  * `@/parser/service/tailordb` as `tailorUserMap`.
  */
 import { tailorUserMap } from "@/parser/service/tailordb";
 import type { Trigger } from "@/types/executor.generated";
+
+// ---------------------------------------------------------------------------
+// Bundle inline
+// ---------------------------------------------------------------------------
+
+/**
+ * `invoker` value expression, inlined into bundler entry wrappers.
+ *
+ * Calls `tailor.context.getInvoker()` at function entry and maps the server
+ * shape to TailorInvoker. Anonymous callers (`null`) pass through as `null`.
+ */
+export const INVOKER_EXPR = `(($raw) => $raw ? ({
+  id: $raw.id,
+  type: $raw.type,
+  workspaceId: $raw.workspaceId,
+  attributes: $raw.attributeMap,
+  attributeList: $raw.attributes,
+}) : null)(tailor.context.getInvoker())`;
 
 // ---------------------------------------------------------------------------
 // Executor
