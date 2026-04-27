@@ -8,6 +8,7 @@ import { type FileLoadConfig, loadFilesWithIgnores } from "@/cli/services/file-l
 import { removeStaleEntryFiles } from "@/cli/services/stale-cleanup";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { logger, styles } from "@/cli/shared/logger";
+import { INVOKER_EXPR } from "@/cli/shared/runtime-exprs";
 import {
   createTriggerTransformPlugin,
   serializeTriggerContext,
@@ -134,6 +135,7 @@ async function bundleSingleResolver(
         import { t } from "@tailor-platform/sdk";
 
         const $tailor_resolver_body = async (context) => {
+          const invoker = ${INVOKER_EXPR};
           if (_internalResolver.input) {
             const result = t.object(_internalResolver.input).parse({
               value: context.input,
@@ -149,7 +151,7 @@ async function bundleSingleResolver(
             }
           }
 
-          return _internalResolver.body(context);
+          return _internalResolver.body({ ...context, invoker });
         };
 
         export { $tailor_resolver_body as main };

@@ -20,7 +20,7 @@ runs:
         run_install: false
 
     - name: Install Node.js
-      run: pnpm env use --global ${{ inputs.node-version }}
+      run: pnpm runtime set node ${{ inputs.node-version }} -g
       shell: bash
 
     - name: Install dependencies

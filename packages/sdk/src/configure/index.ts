@@ -19,6 +19,7 @@ export namespace t {
 export { type TailorField } from "@/configure/types/type";
 export {
   type TailorUser,
+  type TailorInvoker,
   unauthenticatedTailorUser,
   type AttributeMap,
   type AttributeList,
