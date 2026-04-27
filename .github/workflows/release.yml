@@ -44,7 +44,7 @@ jobs:
       # prefix to `/usr/local`, otherwise `npm install -g` would land in
       # the pnpm-managed Node prefix and never appear on PATH.
       - name: Ensure npm 11+ for OIDC trusted publishing
-        run: npm install -g npm@latest --prefix=/usr/local
+        run: sudo npm install -g npm@latest --prefix=/usr/local
         shell: bash
 
       - name: Create Release PR
