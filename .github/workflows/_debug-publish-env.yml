@@ -52,7 +52,7 @@ jobs:
         shell: bash
 
       - name: Ensure npm 11+ for OIDC trusted publishing
-        run: npm install -g npm@latest
+        run: npm install -g npm@latest --prefix=/usr/local
         shell: bash
 
       - name: Diagnostic — AFTER npm upgrade
