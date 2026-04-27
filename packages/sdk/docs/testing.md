@@ -40,9 +40,10 @@ Helpers under `@tailor-platform/sdk/test`:
 - `setupWaitPointMock({ onWait?, onResolve? })` — stubs `globalThis.tailor.workflow.wait` / `.resolve`
 - `WORKFLOW_TEST_ENV_KEY` — env key consumed by `.trigger()` when run locally
 
-Two starter templates demonstrate the patterns below in a working project:
+Three starter templates demonstrate the patterns below in a working project:
 
-- `npm create @tailor-platform/sdk -- --template resolver <name>` — resolvers, executors, TailorDB mocking, and DI
+- `npm create @tailor-platform/sdk -- --template resolver <name>` — resolvers, TailorDB mocking, and DI
+- `npm create @tailor-platform/sdk -- --template executor <name>` — executors with extracted DB helpers
 - `npm create @tailor-platform/sdk -- --template workflow <name>` — workflow jobs, wait points, and an E2E suite
 
 ## Unit Tests
@@ -214,43 +215,44 @@ describe("resolveApproval resolver", () => {
 
 ### Testing Executors
 
-Function-kind executors expose their handler as `executor.operation.body(args)`. The shape of `args` is determined by the trigger — for example, `recordCreatedTrigger({ type: user })` produces `RecordCreatedArgs<typeof user>` with `event`, `newRecord`, `env`, `actor`, and the rest of the event envelope. GraphQL, webhook, and workflow operation kinds are declarative and don't expose a user-authored body to test.
+Function-kind executors expose their handler as `executor.operation.body(args)`. The shape of `args` is determined by the trigger — for example, `recordCreatedTrigger({ type: user })` produces `{ newRecord }` typed against the type's output. GraphQL, webhook, and workflow operation kinds are declarative and don't expose a user-authored body to test.
+
+The `executor` template extracts shared DB access into a helper (`shared.ts`) and tests the helper directly against a mocked `tailordb.Client` (same TailorDB-mocking pattern as the resolver section). Executor handlers themselves stay thin and can be tested by spying on the helper:
 
 ```typescript
 import { describe, expect, test, vi } from "vitest";
-import executor from "./notifyUserCreated";
+import onUserCreated from "./onUserCreated";
+import * as shared from "./shared";
 
-describe("notifyUserCreated executor", () => {
-  test("logs the new user's name and email", () => {
-    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+describe("onUserCreated executor", () => {
+  test("creates an audit log with the new user's name and email", async () => {
+    const createAuditLog = vi.spyOn(shared, "createAuditLog").mockResolvedValue(undefined);
 
-    if (executor.operation.kind !== "function") {
+    if (onUserCreated.operation.kind !== "function") {
       throw new Error("expected function operation");
     }
-    executor.operation.body({
-      event: "created",
-      rawEvent: "tailordb.type_record.created",
-      typeName: "User",
+    await onUserCreated.operation.body({
       newRecord: {
         id: "user-1",
         name: "Alice",
         email: "alice@example.com",
-        age: 30,
+        role: "ADMIN",
         createdAt: "2025-01-01T00:00:00Z",
         updatedAt: "2025-01-01T00:00:00Z",
       },
-      workspaceId: "ws-1",
-      appNamespace: "main",
-      env: { appName: "Resolver Template", version: 1 },
-      actor: null,
     });
 
-    expect(logSpy).toHaveBeenCalledWith("New user created: Alice (alice@example.com)");
+    expect(createAuditLog).toHaveBeenCalledExactlyOnceWith({
+      action: "USER_CREATED",
+      entityType: "User",
+      entityId: "user-1",
+      message: "Admin user created: Alice (alice@example.com)",
+    });
   });
 });
 ```
 
-Executors that hit TailorDB or extract DB operations follow the same patterns shown above for resolvers — mock the global `tailordb.Client` directly, or push DB access behind an interface and inject a stub.
+To exercise the full chain (executor → helper → TailorDB), drop the spy and stub the global `tailordb.Client` instead, exactly as shown for resolvers.
 
 ### Testing Workflow Jobs
 
