@@ -1,5 +1,15 @@
 # @tailor-platform/sdk
 
+## 1.43.0
+
+### Minor Changes
+
+- [#1062](https://github.com/tailor-platform/sdk/pull/1062) [`7c39665`](https://github.com/tailor-platform/sdk/commit/7c39665bc3364d3bc644c5277f3f9f51926fc2b2) Thanks [@dqn](https://github.com/dqn)! - Auto-enable `publishUserEvents` on IdP services when the project defines executors with `idpUser` triggers (`idpUserCreatedTrigger`, `idpUserUpdatedTrigger`, `idpUserDeletedTrigger`, or `idpUserTrigger`). Previously, omitting `publishUserEvents` defaulted to `false`, silently preventing those executors from firing. The SDK now auto-configures `publishUserEvents: true` for every IdP in the project when any executor uses an `idpUser` trigger, and warns if an IdP explicitly sets `publishUserEvents: false` while such executors are present. Set `publishUserEvents: false` explicitly to opt out.
+
+### Patch Changes
+
+- [#1060](https://github.com/tailor-platform/sdk/pull/1060) [`4ffec9f`](https://github.com/tailor-platform/sdk/commit/4ffec9f86766dc1199ccef31223697c786c3f388) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update oxc
+
 ## 1.42.0
 
 ### Minor Changes
