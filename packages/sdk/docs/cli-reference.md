@@ -95,15 +95,16 @@ Workspace ID resolution follows this priority order:
 
 Commands for managing Tailor Platform applications (work with `tailor.config.ts`).
 
-| Command                                   | Description                                                         |
-| ----------------------------------------- | ------------------------------------------------------------------- |
-| [init](./cli/application.md#init)         | Initialize a new project using create-sdk.                          |
-| [generate](./cli/application.md#generate) | Generate files using Tailor configuration.                          |
-| [apply](./cli/application.md#apply)       | Apply Tailor configuration to deploy your application.              |
-| [remove](./cli/application.md#remove)     | Remove all resources managed by the application from the workspace. |
-| [show](./cli/application.md#show)         | Show information about the deployed application.                    |
-| [open](./cli/application.md#open)         | Open Tailor Platform Console.                                       |
-| [api](./cli/application.md#api)           | Call Tailor Platform API endpoints directly.                        |
+| Command                                         | Description                                                         |
+| ----------------------------------------------- | ------------------------------------------------------------------- |
+| [init](./cli/application.md#init)               | Initialize a new project using create-sdk.                          |
+| [generate](./cli/application.md#generate)       | Generate files using Tailor configuration.                          |
+| [apply](./cli/application.md#apply)             | Apply Tailor configuration to deploy your application.              |
+| [remove](./cli/application.md#remove)           | Remove all resources managed by the application from the workspace. |
+| [show](./cli/application.md#show)               | Show information about the deployed application.                    |
+| [open](./cli/application.md#open)               | Open Tailor Platform Console.                                       |
+| [api list](./cli/application.md#api-list)       | List all invocable OperatorService methods.                         |
+| [api inspect](./cli/application.md#api-inspect) | Print the input message tree of an OperatorService endpoint.        |
 
 ### [TailorDB Commands](./cli/tailordb.md)
 
