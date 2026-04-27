@@ -160,7 +160,7 @@
     "@types/node": "24.12.2",
     "@types/semver": "7.7.1",
     "@typescript/native-preview": "7.0.0-dev.20260423.1",
-    "@vitest/coverage-v8": "4.1.4",
+    "@vitest/coverage-v8": "4.1.5",
     "eslint": "10.2.1",
     "eslint-plugin-jsdoc": "62.9.0",
     "eslint-plugin-oxlint": "1.61.0",
@@ -171,7 +171,7 @@
     "tsdown": "0.21.9",
     "typescript": "5.9.3",
     "typescript-eslint": "8.59.0",
-    "vitest": "4.1.4",
+    "vitest": "4.1.5",
     "zinfer": "0.1.8"
   }
 }
