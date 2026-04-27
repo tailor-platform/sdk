@@ -159,7 +159,6 @@ export default defineConfig({
 | `idpMock`            | `tailor.idp`            | `setResolver`, `enqueueResult`, `calls`                                                               |
 | `fileMock`           | `tailordb.file`         | `setResolver`, `enqueueResult`, `calls`                                                               |
 | `iconvMock`          | `tailor.iconv`          | `setResolver`, `calls`                                                                                |
-| `invokerMock`        | `tailor.context`        | `setInvoker`, `calls`                                                                                 |
 
 ### SecretManager Mock
 
@@ -263,34 +262,6 @@ test("mock encoding conversion", () => {
   const result = tailor.iconv.decode(new Uint8Array([0x48, 0x69]), "UTF-8");
   expect(result).toBe("decoded-text");
   expect(iconvMock.calls).toMatchObject([{ method: "decode" }]);
-});
-```
-
-### Invoker Mock
-
-Configures the value returned by `tailor.context.getInvoker()`, which bundled resolver/executor/workflow runtime expressions use to populate the `invoker` field on each call.
-
-```typescript
-import { invokerMock } from "@tailor-platform/sdk/vitest";
-
-beforeEach(() => invokerMock.reset());
-
-test("authenticated invoker", async () => {
-  invokerMock.setInvoker({
-    id: "u-1",
-    type: "user",
-    workspaceId: "w-1",
-    attributes: { role: "admin" },
-    attributeList: [],
-  });
-
-  // bundled wrappers normalize the raw shape back into a TailorInvoker on the body args
-  // ...invoke the bundled main()
-  expect(invokerMock.calls).toMatchObject([{ method: "getInvoker" }]);
-});
-
-test("anonymous caller", () => {
-  invokerMock.setInvoker(null);
 });
 ```
 

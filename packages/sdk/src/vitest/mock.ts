@@ -5,7 +5,6 @@
  * globalThis by the tailor-runtime Vitest environment. Tests can configure
  * responses and assert on recorded calls via the exported mock objects.
  */
-import type { TailorInvoker } from "@/types/user";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -67,10 +66,6 @@ interface WorkflowCall {
   args: unknown[];
 }
 
-interface InvokerCall {
-  method: "getInvoker";
-}
-
 interface MockState {
   // TailorDB
   queryResolver: QueryResolver;
@@ -101,9 +96,6 @@ interface MockState {
   // Iconv
   iconvResolver: IconvResolver | null;
   iconvCalls: IconvCall[];
-  // Invoker
-  invoker: tailor.context.Invoker | null;
-  invokerCalls: InvokerCall[];
 }
 
 // ---------------------------------------------------------------------------
@@ -144,8 +136,6 @@ function createDefaultState(): MockState {
     fileCalls: [],
     iconvResolver: null,
     iconvCalls: [],
-    invoker: null,
-    invokerCalls: [],
   };
 }
 
@@ -436,70 +426,6 @@ export const iconvMock = {
 };
 
 // ---------------------------------------------------------------------------
-// Invoker Mock
-// ---------------------------------------------------------------------------
-
-/**
- * Mock control object for `tailor.context.getInvoker()`.
- *
- * Automatically injected into `globalThis.tailor.context` by the tailor-runtime environment.
- * Configure the invoker returned by bundled resolver/executor/workflow runtime expressions.
- * @example
- * ```typescript
- * import { invokerMock } from "@tailor-platform/sdk/vitest";
- *
- * beforeEach(() => invokerMock.reset());
- *
- * test("authenticated invoker", () => {
- *   invokerMock.setInvoker({
- *     id: "u-1",
- *     type: "user",
- *     workspaceId: "w-1",
- *     attributes: { role: "admin" },
- *     attributeList: ["admin"],
- *   });
- * });
- * ```
- */
-export const invokerMock = {
-  /**
-   * Set the invoker returned by `tailor.context.getInvoker()`.
-   * Pass `null` (or omit) to simulate an anonymous caller.
-   *
-   * Accepts the SDK-facing `TailorInvoker` shape and converts it to the raw shape
-   * the platform op would return, so bundled wrappers can apply their usual
-   * SDK-shape normalization.
-   * @param invoker - The `TailorInvoker` value to return, or `null` for anonymous.
-   */
-  setInvoker(invoker: TailorInvoker = null): void {
-    getState().invoker = invoker
-      ? {
-          id: invoker.id,
-          type: invoker.type,
-          workspaceId: invoker.workspaceId,
-          attributes: invoker.attributeList as string[],
-          attributeMap: invoker.attributes as Record<string, unknown>,
-        }
-      : null;
-  },
-
-  /**
-   * All `getInvoker()` calls, in order.
-   * @returns Invoker calls array
-   */
-  get calls(): InvokerCall[] {
-    return getState().invokerCalls;
-  },
-
-  /** Reset all invoker mock state. Call in `beforeEach`. */
-  reset(): void {
-    const state = getState();
-    state.invoker = null;
-    state.invokerCalls.length = 0;
-  },
-};
-
-// ---------------------------------------------------------------------------
 // Mock Client implementation (injected as globalThis.tailordb.Client)
 // ---------------------------------------------------------------------------
 
@@ -622,9 +548,7 @@ async function mockResolve(
 // ---------------------------------------------------------------------------
 
 function mockGetInvoker(): tailor.context.Invoker | null {
-  const state = getState();
-  state.invokerCalls.push({ method: "getInvoker" });
-  return state.invoker;
+  return null;
 }
 
 // ---------------------------------------------------------------------------

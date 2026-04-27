@@ -8,7 +8,6 @@ import {
   idpMock,
   fileMock,
   iconvMock,
-  invokerMock,
   injectMocks,
   cleanupMocks,
 } from "../mock";
@@ -449,70 +448,6 @@ describe("mock", () => {
       workflowMock.setWaitResult({ approved: true });
       const result = (globalThis as any).tailor.workflow.wait("key");
       expect(result).toEqual({ approved: true });
-    });
-  });
-
-  describe("invokerMock", () => {
-    beforeEach(() => {
-      invokerMock.reset();
-    });
-
-    test("returns null when no invoker is set", () => {
-      const invoker = (globalThis as any).tailor.context.getInvoker();
-      expect(invoker).toBeNull();
-    });
-
-    test("setInvoker converts SDK shape to raw invoker shape", () => {
-      invokerMock.setInvoker({
-        id: "u-1",
-        type: "user",
-        workspaceId: "w-1",
-        attributes: { role: "admin" },
-        attributeList: [],
-      });
-
-      expect((globalThis as any).tailor.context.getInvoker()).toEqual({
-        id: "u-1",
-        type: "user",
-        workspaceId: "w-1",
-        attributes: [],
-        attributeMap: { role: "admin" },
-      });
-    });
-
-    test("setInvoker(null) clears the invoker", () => {
-      invokerMock.setInvoker({
-        id: "u-1",
-        type: "user",
-        workspaceId: "w-1",
-        attributes: {},
-        attributeList: [],
-      });
-      invokerMock.setInvoker(null);
-      expect((globalThis as any).tailor.context.getInvoker()).toBeNull();
-    });
-
-    test("records getInvoker calls", () => {
-      (globalThis as any).tailor.context.getInvoker();
-      (globalThis as any).tailor.context.getInvoker();
-      expect(invokerMock.calls).toEqual([{ method: "getInvoker" }, { method: "getInvoker" }]);
-    });
-
-    test("reset clears state", () => {
-      invokerMock.setInvoker({
-        id: "u-1",
-        type: "user",
-        workspaceId: "w-1",
-        attributes: {},
-        attributeList: [],
-      });
-      (globalThis as any).tailor.context.getInvoker();
-
-      invokerMock.reset();
-
-      expect((globalThis as any).tailor.context.getInvoker()).toBeNull();
-      // calls reset, then the getInvoker above re-records
-      expect(invokerMock.calls).toHaveLength(1);
     });
   });
 
