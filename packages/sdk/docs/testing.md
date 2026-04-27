@@ -1,19 +1,33 @@
 # Testing Guide
 
-This guide covers testing patterns for Tailor Platform SDK applications using [Vitest](https://vitest.dev/).
+Tailor Platform SDK applications are tested with [Vitest](https://vitest.dev/) at two layers:
 
-For complete working examples with full test code, use one of the templates that ship with tests:
+| Layer      | What it exercises                                    | Deployment required |
+| ---------- | ---------------------------------------------------- | ------------------- |
+| Unit tests | Resolver / workflow job / executor TypeScript source | No                  |
+| E2E tests  | Deployed GraphQL API, TailorDB, and workflows        | Yes                 |
 
-```bash
-# Resolver with tests
-npm create @tailor-platform/sdk -- --template resolver <your-project-name>
+Lean on unit tests for the day-to-day feedback loop — they run fast and exercise business logic against real SDK types with no deployment in the loop. Reach for E2E tests to confirm integration against a live platform, where mocked globals can drift from the real GraphQL, TailorDB, and workflow runtime.
 
-# Workflow with tests
-npm create @tailor-platform/sdk -- --template workflow <your-project-name>
+Unit-test entrypoints exposed by the SDK:
 
-# Executor with tests
-npm create @tailor-platform/sdk -- --template executor <your-project-name>
-```
+- `resolver.body({ input, user, env })` — invoke a resolver
+- `workflowJob.body(input, { env })` / `workflowJob.trigger(input)` — invoke or chain a workflow job
+- `executor.operation.body(args)` — invoke a function-kind executor
+
+Helpers under `@tailor-platform/sdk/test`:
+
+- `unauthenticatedTailorUser` — default `user` value for resolver contexts
+- `setupWaitPointMock({ onWait?, onResolve? })` — stubs `globalThis.tailor.workflow.wait` / `.resolve`
+- `WORKFLOW_TEST_ENV_KEY` — env key consumed by `.trigger()` when run locally
+
+For tighter alignment with the production runtime — Node.js module blocking, Web-only globals, and platform API mocks — pair these helpers with the [`tailor-runtime` Vitest environment](#runtime-environment-emulation-beta) below.
+
+Three starter templates demonstrate the patterns below in a working project:
+
+- `npm create @tailor-platform/sdk -- --template resolver <name>` — resolvers, TailorDB mocking, and DI
+- `npm create @tailor-platform/sdk -- --template executor <name>` — executors with extracted DB helpers
+- `npm create @tailor-platform/sdk -- --template workflow <name>` — workflow jobs, wait points, and an E2E suite
 
 ## Runtime Environment Emulation (Beta)
 
@@ -280,40 +294,42 @@ This makes `tailor.secretmanager.getSecret("vault", "key")` return the values de
 
 ## Unit Tests
 
-Unit tests verify resolver and workflow logic locally without requiring deployment.
+Unit tests call `.body()` (or `.trigger()`) directly on a resolver, workflow job, or executor and stub any platform-provided globals they touch.
 
-### Simple Resolver Testing
+### Testing Resolvers
 
-Test resolvers by directly calling `resolver.body()` with mock inputs.
+#### Simple resolver
+
+For pure logic with no external dependencies, invoke `.body()` directly:
 
 ```typescript
-import { unauthenticatedTailorUser } from "@tailor-platform/sdk";
+import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
+import { describe, expect, test } from "vitest";
 import resolver from "../src/resolver/add";
 
 describe("add resolver", () => {
-  test("basic functionality", async () => {
+  test("adds two numbers", async () => {
     const result = await resolver.body({
       input: { left: 1, right: 2 },
       user: unauthenticatedTailorUser,
+      env: {},
     });
     expect(result).toBe(3);
   });
 });
 ```
 
-**Key points:**
+**Use when:** calculations, data transformations, anything that does not hit the database.
 
-- Use `unauthenticatedTailorUser` for testing logic that doesn't depend on user context
-- **Best for:** Calculations, data transformations without database dependencies
+#### Mocking the TailorDB client
 
-### Mock TailorDB Client
+Stub the global `tailordb.Client` and queue raw query results in order. Best for resolvers that issue a short, predictable query sequence:
 
-> **Note:** If you are using the `tailor-runtime` environment (recommended), `tailordb.Client` is auto-injected. Use `tailordbMock` from `@tailor-platform/sdk/vitest` instead of `vi.stubGlobal()`. See [TailorDB Mock](#tailordb-mock) above.
-
-Mock the global `tailordb.Client` using `vi.stubGlobal()` to simulate database operations and control responses for each query.
+> If you are running with the [`tailor-runtime` Vitest environment](#runtime-environment-emulation-beta), `tailordb.Client` is auto-injected — drive it with `tailordbMock` instead of `vi.stubGlobal()`.
 
 ```typescript
-import { unauthenticatedTailorUser } from "@tailor-platform/sdk";
+import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
+import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 import resolver from "../src/resolver/incrementUserAge";
 
 describe("incrementUserAge resolver", () => {
@@ -330,25 +346,20 @@ describe("incrementUserAge resolver", () => {
       ),
     });
   });
+  afterAll(() => vi.unstubAllGlobals());
+  afterEach(() => mockQueryObject.mockReset());
 
-  afterAll(() => {
-    vi.unstubAllGlobals();
-  });
-
-  afterEach(() => {
-    mockQueryObject.mockReset();
-  });
-
-  test("basic functionality", async () => {
-    // Mock database responses for each query in sequence
-    mockQueryObject.mockResolvedValueOnce({}); // Begin transaction
-    mockQueryObject.mockResolvedValueOnce({ rows: [{ age: 30 }] }); // Select
-    mockQueryObject.mockResolvedValueOnce({}); // Update
-    mockQueryObject.mockResolvedValueOnce({}); // Commit
+  test("increments age inside a transaction", async () => {
+    // BEGIN → SELECT → UPDATE → COMMIT
+    mockQueryObject.mockResolvedValueOnce({});
+    mockQueryObject.mockResolvedValueOnce({ rows: [{ age: 30 }] });
+    mockQueryObject.mockResolvedValueOnce({});
+    mockQueryObject.mockResolvedValueOnce({});
 
     const result = await resolver.body({
       input: { email: "test@example.com" },
       user: unauthenticatedTailorUser,
+      env: {},
     });
 
     expect(result).toEqual({ oldAge: 30, newAge: 31 });
@@ -357,100 +368,68 @@ describe("incrementUserAge resolver", () => {
 });
 ```
 
-**Key points:**
+**Use when:** the business logic runs a few fixed queries and you want to assert the exact call sequence.
 
-- Control exact database responses (query results, errors)
-- Verify database interaction flow (transactions, queries)
-- Test transaction rollback scenarios
-- **Best for:** Business logic with simple database operations
+#### Extracting DB operations (dependency injection)
 
-### Dependency Injection Pattern
-
-Extract database operations into a `DbOperations` interface, allowing business logic to be tested independently from Kysely implementation.
-
-First, structure your resolver to accept database operations:
+Once the logic gets more involved, mocking raw SQL calls becomes brittle. Push database access behind a `DbOperations` interface and test the pure function that uses it:
 
 ```typescript
-import { createResolver, t } from "@tailor-platform/sdk";
-import { getDB } from "generated/tailordb";
+// src/resolver/decrementUserAge.ts
+import type { Selectable } from "@tailor-platform/sdk/kysely";
+import type { Namespace } from "../generated/db";
 
 export interface DbOperations {
-  transaction: (fn: (ops: DbOperations) => Promise<unknown>) => Promise<void>;
-  getUser: (email: string, forUpdate: boolean) => Promise<{ email: string; age: number }>;
-  updateUser: (user: { email: string; age: number }) => Promise<void>;
+  transaction: <T>(fn: (ops: DbOperations) => Promise<T>) => Promise<T>;
+  getUser: (email: string, forUpdate: boolean) => Promise<Selectable<Namespace["main-db"]["User"]>>;
+  updateUser: (user: Selectable<Namespace["main-db"]["User"]>) => Promise<void>;
 }
 
-export async function decrementUserAge(
-  email: string,
-  dbOperations: DbOperations,
-): Promise<{ oldAge: number; newAge: number }> {
-  let oldAge: number;
-  let newAge: number;
-
-  await dbOperations.transaction(async (ops) => {
+export async function decrementUserAge(email: string, db: DbOperations) {
+  return await db.transaction(async (ops) => {
     const user = await ops.getUser(email, true);
-    oldAge = user.age;
-    newAge = user.age - 1;
+    const oldAge = user.age;
+    const newAge = user.age - 1;
     await ops.updateUser({ ...user, age: newAge });
+    return { oldAge, newAge };
   });
-
-  return { oldAge, newAge };
 }
-
-export default createResolver({
-  name: "decrementUserAge",
-  operation: "mutation",
-  input: { email: t.string() },
-  body: async (context) => {
-    const db = getDB("tailordb");
-    const dbOperations = createDbOperations(db);
-    return await decrementUserAge(context.input.email, dbOperations);
-  },
-  output: t.object({ oldAge: t.number(), newAge: t.number() }),
-});
 ```
 
-Then test by mocking the interface:
+The `resolver` template wires this into `createResolver` by implementing a `createDbOperations` helper (backed by Kysely) and passing it to `decrementUserAge`. See `src/resolver/updateUser.ts` in the template for the full file.
 
 ```typescript
-import { DbOperations, decrementUserAge } from "../src/resolver/decrementUserAge";
+// src/resolver/decrementUserAge.test.ts
+import { describe, expect, test, vi } from "vitest";
+import { type DbOperations, decrementUserAge } from "./decrementUserAge";
 
-describe("decrementUserAge resolver", () => {
-  test("basic functionality", async () => {
-    // Mock DbOperations implementation
-    const dbOperations = {
-      transaction: vi.fn(
-        async (fn: (ops: DbOperations) => Promise<unknown>) => await fn(dbOperations),
-      ),
+describe("decrementUserAge", () => {
+  test("decrements age", async () => {
+    const db = {
+      transaction: vi.fn(async (fn: (ops: DbOperations) => Promise<unknown>) => await fn(db)),
       getUser: vi.fn().mockResolvedValue({ email: "test@example.com", age: 30 }),
       updateUser: vi.fn(),
     } as DbOperations;
 
-    const result = await decrementUserAge("test@example.com", dbOperations);
+    const result = await decrementUserAge("test@example.com", db);
 
     expect(result).toEqual({ oldAge: 30, newAge: 29 });
-    expect(dbOperations.getUser).toHaveBeenCalledExactlyOnceWith("test@example.com", true);
-    expect(dbOperations.updateUser).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ age: 29 }),
-    );
+    expect(db.getUser).toHaveBeenCalledExactlyOnceWith("test@example.com", true);
+    expect(db.updateUser).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ age: 29 }));
   });
 });
 ```
 
-**Key points:**
+**Use when:** multi-step business logic. The tests survive query rewrites because they assert high-level intent, not SQL shape.
 
-- Test business logic independently from Kysely implementation details
-- Mock high-level operations instead of low-level SQL queries
-- **Best for:** Complex business logic with multiple database operations
+#### Resolvers that resume a workflow
 
-### Testing Resolvers that Call `.resolve()`
-
-Use `setupWaitPointMock` to mock `tailor.workflow.resolve` when testing resolvers that resume a suspended workflow execution.
+Resolvers that call `waitPoint.resolve(...)` delegate to `tailor.workflow.resolve` at runtime. Use `setupWaitPointMock` to supply an `onResolve` handler and inspect the recorded calls:
 
 ```typescript
-import { afterEach } from "vitest";
 import { setupWaitPointMock, unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
-import resolver from "./resolvers/resolveApproval";
+import { afterEach, describe, expect, test } from "vitest";
+import resolver from "./resolveApproval";
 
 const TailorGlobal = globalThis as { tailor?: { workflow?: Record<string, unknown> } };
 
@@ -459,10 +438,10 @@ describe("resolveApproval resolver", () => {
     delete TailorGlobal.tailor;
   });
 
-  test("resolves approval", async () => {
+  test("resolves approval with approved=true", async () => {
     const { resolveCalls } = setupWaitPointMock({
-      onResolve: (_execId, _key, callback) => {
-        const result = callback({ message: "Please approve", orderId: "order-1" });
+      onResolve: (_executionId, _key, callback) => {
+        const result = callback({ message: "Please approve order order-1", orderId: "order-1" });
         expect(result).toEqual({ approved: true });
       },
     });
@@ -480,157 +459,194 @@ describe("resolveApproval resolver", () => {
 });
 ```
 
-**Key points:**
+`onResolve` lets you assert the callback behavior (the value passed back to the suspended job). Clean `globalThis.tailor` in `afterEach` so tests stay isolated.
 
-- `onResolve` lets you verify the callback behavior in resolvers that call `.resolve()`
-- Clean up mocks in `afterEach` by deleting `TailorGlobal.tailor`
-- **Best for:** Resolvers that resume suspended workflow executions
+### Testing Executors
 
-### Workflow Job Unit Tests
+Function-kind executors expose their handler as `executor.operation.body(args)`. The shape of `args` is determined by the trigger — for example, `recordCreatedTrigger({ type: user })` produces `{ newRecord }` typed against the type's output. GraphQL, webhook, and workflow operation kinds are declarative and don't expose a user-authored body to test.
 
-Test individual workflow job logic locally without deploying. Call `.body()` directly:
+The `executor` template extracts shared DB access into a helper (`shared.ts`) and tests the helper directly against a mocked `tailordb.Client` (same TailorDB-mocking pattern as the resolver section). Executor handlers themselves stay thin and can be tested by spying on the helper:
 
 ```typescript
-import workflow, { addNumbers, calculate } from "./workflows/calculation";
+import { describe, expect, test, vi } from "vitest";
+import onUserCreated from "./onUserCreated";
+import * as shared from "./shared";
 
-describe("workflow jobs", () => {
-  test("addNumbers.body() adds two numbers", () => {
-    const result = addNumbers.body({ a: 2, b: 3 }, { env: {} });
-    expect(result).toBe(5);
+describe("onUserCreated executor", () => {
+  test("creates an audit log with the new user's name and email", async () => {
+    const createAuditLog = vi.spyOn(shared, "createAuditLog").mockResolvedValue(undefined);
+
+    if (onUserCreated.operation.kind !== "function") {
+      throw new Error("expected function operation");
+    }
+    await onUserCreated.operation.body({
+      newRecord: {
+        id: "user-1",
+        name: "Alice",
+        email: "alice@example.com",
+        role: "ADMIN",
+        createdAt: "2025-01-01T00:00:00Z",
+        updatedAt: "2025-01-01T00:00:00Z",
+      },
+    });
+
+    expect(createAuditLog).toHaveBeenCalledExactlyOnceWith({
+      action: "USER_CREATED",
+      entityType: "User",
+      entityId: "user-1",
+      message: "Admin user created: Alice (alice@example.com)",
+    });
   });
 });
 ```
 
-### Mocking Dependent Jobs
+To exercise the full chain (executor → helper → TailorDB), drop the spy and stub the global `tailordb.Client` instead, exactly as shown for resolvers.
 
-For jobs that trigger other jobs, mock the dependencies using `vi.spyOn()`:
+### Testing Workflow Jobs
+
+Workflow jobs expose the same `.body()` entrypoint as resolvers, plus `.trigger()` for calling them from another job or a test.
+
+#### Simple job
+
+Call `.body()` with the input and a stub `{ env: {} }`:
 
 ```typescript
-import { afterEach, vi } from "vitest";
-import workflow, { addNumbers, calculate, multiplyNumbers } from "./workflows/calculation";
+import { describe, expect, test } from "vitest";
+import { validateOrder } from "./order-fulfillment";
 
-describe("workflow with dependencies", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
+describe("validateOrder", () => {
+  test("accepts a valid order", () => {
+    const result = validateOrder.body({ orderId: "order-1", amount: 100 }, { env: {} });
+    expect(result).toEqual({ valid: true, orderId: "order-1" });
   });
 
-  test("calculate.body() with mocked dependent jobs", async () => {
-    // Mock the trigger methods for dependent jobs
-    vi.spyOn(addNumbers, "trigger").mockResolvedValue(5);
-    vi.spyOn(multiplyNumbers, "trigger").mockResolvedValue(10);
-
-    const result = await calculate.body({ a: 2, b: 3 }, { env: {} });
-
-    expect(addNumbers.trigger).toHaveBeenCalledWith({ a: 2, b: 3 });
-    expect(result).toBe(10);
+  test("rejects a non-positive amount", () => {
+    expect(() => validateOrder.body({ orderId: "order-1", amount: 0 }, { env: {} })).toThrow(
+      "Order amount must be positive",
+    );
   });
 });
 ```
 
-**Note:** To execute dependent jobs without mocking, and they require `env`, use `vi.stubEnv(WORKFLOW_TEST_ENV_KEY, ...)` and call `.trigger()` directly as shown in the integration test section below.
+#### Jobs that trigger other jobs
 
-### Workflow Integration Tests with `.trigger()`
-
-Test the full workflow execution locally using `workflow.mainJob.trigger()`:
+Spy on each dependent job's `.trigger()` to replace it with a deterministic result:
 
 ```typescript
-import { WORKFLOW_TEST_ENV_KEY } from "@tailor-platform/sdk/test";
-import { afterEach, vi } from "vitest";
-import workflow from "./workflows/calculation";
+import { afterEach, describe, expect, test, vi } from "vitest";
+import { fulfillOrder, processPayment, sendConfirmation, validateOrder } from "./order-fulfillment";
 
-describe("workflow integration", () => {
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
+describe("fulfillOrder", () => {
+  afterEach(() => vi.restoreAllMocks());
 
-  test("workflow.mainJob.trigger() executes all jobs", async () => {
-    // Set environment variables for the workflow
-    vi.stubEnv(WORKFLOW_TEST_ENV_KEY, JSON.stringify({ NODE_ENV: "test" }));
+  test("chains validate → pay → confirm", async () => {
+    vi.spyOn(validateOrder, "trigger").mockResolvedValue({ valid: true, orderId: "order-1" });
+    vi.spyOn(processPayment, "trigger").mockResolvedValue({
+      transactionId: "txn-order-1",
+      amount: 100,
+      status: "completed",
+    });
+    vi.spyOn(sendConfirmation, "trigger").mockResolvedValue({
+      orderId: "order-1",
+      transactionId: "txn-order-1",
+      confirmed: true,
+    });
 
-    // No mocking - all jobs execute their actual body functions
-    const result = await workflow.mainJob.trigger({ a: 3, b: 4 });
+    const result = await fulfillOrder.body({ orderId: "order-1", amount: 100 }, { env: {} });
 
-    expect(result).toBe(21); // (3 + 4) * 3 = 21
+    expect(validateOrder.trigger).toHaveBeenCalledWith({ orderId: "order-1", amount: 100 });
+    expect(result).toMatchObject({ confirmed: true, paymentStatus: "completed" });
   });
 });
 ```
 
-**Key points:**
+**Use when:** you want to isolate the orchestrating job from its dependencies.
 
-- Use `.body()` for unit testing individual job logic
-- Use `vi.spyOn(job, "trigger").mockResolvedValue(...)` to mock dependent jobs when they don't need `env`
-- If dependent jobs require `env`, use `vi.stubEnv(WORKFLOW_TEST_ENV_KEY, ...)` and call `.trigger()` instead of mocking
-- Use `workflow.mainJob.trigger()` to execute the full workflow chain and get the result
-- **Best for:** Testing workflow orchestration and job dependencies
+#### Jobs that wait on approval
 
-### Testing Jobs with Wait Points
-
-Use `setupWaitPointMock` to mock `tailor.workflow.wait` when testing jobs that suspend on wait points:
+`.wait()` calls delegate to `tailor.workflow.wait`. Use `setupWaitPointMock` with `onWait` to drive each branch:
 
 ```typescript
-import { afterEach, vi } from "vitest";
 import { setupWaitPointMock } from "@tailor-platform/sdk/test";
-import { processWithApproval } from "./workflows/approval";
+import { afterEach, describe, expect, test } from "vitest";
+import { processWithApproval } from "./approval";
 
 const TailorGlobal = globalThis as { tailor?: { workflow?: Record<string, unknown> } };
 
-describe("approval workflow", () => {
+describe("processWithApproval", () => {
   afterEach(() => {
     delete TailorGlobal.tailor;
   });
 
-  test("approved flow returns approved status", async () => {
+  test("returns approved status when .wait() resolves positively", async () => {
     const { waitCalls } = setupWaitPointMock({
-      onWait: (_key, _payload) => ({ approved: true }),
+      onWait: () => ({ approved: true }),
     });
 
     const result = await processWithApproval.body({ orderId: "order-1" }, { env: {} });
 
     expect(result).toEqual({ orderId: "order-1", status: "approved" });
-    expect(waitCalls).toHaveLength(1);
     expect(waitCalls[0]).toEqual({
       key: "approval",
       payload: { message: "Please approve order order-1", orderId: "order-1" },
     });
   });
 
-  test("rejected flow returns rejected status", async () => {
-    setupWaitPointMock({
-      onWait: () => ({ approved: false }),
-    });
+  test("returns rejected status when .wait() resolves negatively", async () => {
+    setupWaitPointMock({ onWait: () => ({ approved: false }) });
 
     const result = await processWithApproval.body({ orderId: "order-2" }, { env: {} });
 
-    expect(result).toEqual({ orderId: "order-2", status: "rejected" });
+    expect(result.status).toBe("rejected");
   });
 });
 ```
 
-**Key points:**
+`onWait` controls what each `.wait()` returns; `waitCalls` captures the `key` and `payload` passed in.
 
-- `onWait` controls what `.wait()` returns — use it to test different branches (approved/rejected)
-- Clean up mocks in `afterEach` by deleting `TailorGlobal.tailor`
-- **Best for:** Jobs that suspend on wait points for human-in-the-loop approval
+#### Running a full workflow locally
+
+To exercise the full chain without any mocking, call `workflow.mainJob.trigger()`. Dependent jobs run their real `.body()` functions. Set `WORKFLOW_TEST_ENV_KEY` first so triggered jobs see the workflow env:
+
+```typescript
+import { WORKFLOW_TEST_ENV_KEY } from "@tailor-platform/sdk/test";
+import { afterEach, describe, expect, test, vi } from "vitest";
+import workflow from "./order-fulfillment";
+
+describe("order-fulfillment workflow", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  test("mainJob.trigger() executes all jobs", async () => {
+    vi.stubEnv(WORKFLOW_TEST_ENV_KEY, JSON.stringify({}));
+
+    const result = await workflow.mainJob.trigger({ orderId: "order-3", amount: 300 });
+
+    expect(result).toMatchObject({ confirmed: true, paymentStatus: "completed" });
+  });
+});
+```
+
+**Use when:** you want to verify orchestration end to end without the cost of a real deployment.
 
 ## End-to-End (E2E) Tests
 
-E2E tests verify your application works correctly when deployed to Tailor Platform. They test the full stack including GraphQL API, database operations, and authentication.
+E2E tests run against a deployed Tailor Platform application. They exercise the full stack — GraphQL, TailorDB, auth, workflows — end to end.
 
-### Setting Up E2E Tests
+The `workflow` template ships a complete `e2e/` directory (`globalSetup.ts`, `workflow.test.ts`, `resolver.test.ts`) that you can copy.
 
-The examples below use `graphql-request` as a lightweight GraphQL client.
+### Install a GraphQL client
 
 ```bash
 pnpm add -D graphql-request
 ```
 
-**1. Global Setup**
+### Global setup
 
-Create a global setup file that retrieves deployment information before running tests:
+Resolve the deployed URL and a machine-user token, and expose them to tests via `inject`:
 
 ```typescript
 // e2e/globalSetup.ts
-import { machineUserToken, show } from "@tailor-platform/sdk/cli";
+import { getMachineUserToken, show } from "@tailor-platform/sdk/cli";
 import type { TestProject } from "vitest/node";
 
 declare module "vitest" {
@@ -642,17 +658,13 @@ declare module "vitest" {
 
 export async function setup(project: TestProject) {
   const app = await show();
-  const tokens = await machineUserToken({
-    name: "admin",
-  });
+  const tokens = await getMachineUserToken({ name: "admin" });
   project.provide("url", app.url);
   project.provide("token", tokens.accessToken);
 }
 ```
 
-**2. Test Files**
-
-Create tests that use injected credentials to send real queries to your deployed application:
+### Resolver E2E test
 
 ```typescript
 // e2e/resolver.test.ts
@@ -661,75 +673,80 @@ import { gql, GraphQLClient } from "graphql-request";
 import { describe, expect, inject, test } from "vitest";
 
 function createGraphQLClient() {
-  const endpoint = new URL("/query", inject("url")).href;
-  return new GraphQLClient(endpoint, {
-    headers: {
-      Authorization: `Bearer ${inject("token")}`,
-    },
+  return new GraphQLClient(new URL("/query", inject("url")).href, {
+    headers: { Authorization: `Bearer ${inject("token")}` },
     errorPolicy: "all",
   });
 }
 
-describe("resolver", () => {
-  const graphQLClient = createGraphQLClient();
+describe("incrementUserAge", () => {
+  const client = createGraphQLClient();
+  const email = `alice-${randomUUID()}@example.com`;
 
-  describe("incrementUserAge", () => {
-    const uuid = randomUUID();
-
-    test("prepare data", async () => {
-      const query = gql`
-        mutation {
-          createUser(input: {
-            name: "alice"
-            email: "alice-${uuid}@example.com"
-            age: 30
-          }) {
+  test("prepares the user", async () => {
+    const res = await client.rawRequest(
+      gql`
+        mutation ($input: UserCreateInput!) {
+          createUser(input: $input) {
             id
           }
         }
-      `;
-      const result = await graphQLClient.rawRequest(query);
-      expect(result.errors).toBeUndefined();
-    });
+      `,
+      { input: { name: "alice", email, age: 30 } },
+    );
+    expect(res.errors).toBeUndefined();
+  });
 
-    test("basic functionality", async () => {
-      const query = gql`
-        mutation {
-          incrementUserAge(email: "alice-${uuid}@example.com") {
+  test("increments the user's age", async () => {
+    const res = await client.rawRequest(
+      gql`
+        mutation ($email: String!) {
+          incrementUserAge(email: $email) {
             oldAge
             newAge
           }
         }
-      `;
-      const result = await graphQLClient.rawRequest(query);
-      expect(result.errors).toBeUndefined();
-      expect(result.data).toEqual({
-        incrementUserAge: { oldAge: 30, newAge: 31 },
-      });
+      `,
+      { email },
+    );
+    expect(res.errors).toBeUndefined();
+    expect(res.data).toEqual({ incrementUserAge: { oldAge: 30, newAge: 31 } });
+  });
+});
+```
+
+### Workflow E2E test
+
+Use `startWorkflow` from the CLI helpers. It starts the workflow on the deployed platform and returns an `executionId` plus a `wait()` that blocks until the run completes:
+
+```typescript
+// e2e/workflow.test.ts
+import { randomUUID } from "node:crypto";
+import { startWorkflow } from "@tailor-platform/sdk/cli";
+import { describe, expect, test } from "vitest";
+import config from "../tailor.config";
+import userProfileSync from "../src/workflow/sync-profile";
+
+describe("user-profile-sync workflow", () => {
+  test("executes end to end", { timeout: 180_000 }, async () => {
+    const { executionId, wait } = await startWorkflow({
+      workflow: userProfileSync,
+      authInvoker: config.auth.invoker("admin"),
+      arg: {
+        name: "workflow-test",
+        email: `wf-${randomUUID()}@example.com`,
+        age: 25,
+      },
+    });
+    console.log(`execution id: ${executionId}`);
+
+    const result = await wait();
+    expect(result).toMatchObject({
+      workflowName: "user-profile-sync",
+      status: "SUCCESS",
     });
   });
 });
 ```
 
-**3. Vitest Configuration**
-
-Configure Vitest to use the global setup:
-
-```typescript
-import { defineConfig } from "vitest/config";
-
-export default defineConfig({
-  test: {
-    include: ["e2e/**/*.test.ts"],
-    globalSetup: ["e2e/globalSetup.ts"],
-  },
-});
-```
-
-**Key points:**
-
-- Tests run against actual deployed application
-- `inject("url")` and `inject("token")` provide deployment credentials automatically
-- Machine user authentication enables API access without manual token management
-- Verify database persistence and API contracts
-- **Best for:** Integration testing, end-to-end API validation
+**Use when:** verifying actual deployments, auth flows, schema migrations, and anything that depends on runtime platform behavior you cannot mock.

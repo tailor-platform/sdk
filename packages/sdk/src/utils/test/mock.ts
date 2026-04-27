@@ -216,6 +216,9 @@ export function setupWaitPointMock(config?: { onWait?: WaitHandler; onResolve?: 
  * Used to test bundled output from `apply --buildOnly`.
  * @param baseDir - Base directory where bundled files are located.
  * @returns An async function that takes a relative path and returns the `main` function.
+ * @deprecated This is an SDK-internal testing helper. Bundling integrity is the SDK's responsibility,
+ * not the application's — verify your code through unit tests against the TypeScript source and
+ * E2E tests against a deployed application instead. This export will be removed in a future release.
  */
 export function createImportMain(baseDir: string): (relativePath: string) => Promise<MainFunction> {
   return async (relativePath: string): Promise<MainFunction> => {
