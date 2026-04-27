@@ -62,6 +62,17 @@ tailor-sdk crash-report list [options]
 
 <!-- politty:command:crash-report list:usage:end -->
 
+<!-- politty:command:crash-report list:options:start -->
+
+**Options**
+
+| Option            | Alias | Description                                              | Required | Default  |
+| ----------------- | ----- | -------------------------------------------------------- | -------- | -------- |
+| `--order <ORDER>` | -     | Sort order (asc or desc)                                 | No       | `"desc"` |
+| `--limit <LIMIT>` | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -        |
+
+<!-- politty:command:crash-report list:options:end -->
+
 <!-- politty:command:crash-report list:global-options-link:start -->
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
