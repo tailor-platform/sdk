@@ -5,7 +5,8 @@ import {
   AuthOAuth2Client_ClientType,
   AuthOAuth2Client_GrantType,
 } from "@tailor-proto/tailor/v1/auth_resource_pb";
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
+import { logger } from "@/cli/shared/logger";
 import { formatAuthHookChangeEntries, planAuth } from "./auth";
 import type { PlanContext } from "./apply";
 import type { Application } from "@/cli/services/application";
@@ -46,6 +47,7 @@ const sdkVersion = "v1-0-0";
 function createMockApplication(): Application {
   return {
     name: appName,
+    staticWebsiteServices: [],
     authService: {
       resolveNamespaces: vi.fn().mockResolvedValue(undefined),
       parsedConfig: {
@@ -84,6 +86,7 @@ function createMockApplication(): Application {
 function createMockApplicationWithCustomOAuth2Lifetimes(): Application {
   return {
     name: appName,
+    staticWebsiteServices: [],
     authService: {
       resolveNamespaces: vi.fn().mockResolvedValue(undefined),
       parsedConfig: {
@@ -108,6 +111,7 @@ function createMockApplicationWithCustomOAuth2Lifetimes(): Application {
 function createMockApplicationWithBuiltInIdP(): Application {
   return {
     name: appName,
+    staticWebsiteServices: [],
     authService: {
       resolveNamespaces: vi.fn().mockResolvedValue(undefined),
       parsedConfig: {
@@ -482,6 +486,56 @@ describe("planAuth", () => {
     expect(result.changeSet.idpConfig.updates).toHaveLength(1);
     expect(result.changeSet.idpConfig.updates[0]?.name).toBe("default");
     expect(result.changeSet.idpConfig.unchanged).toHaveLength(0);
+  });
+
+  describe("OAuth2 redirect URI resolution on first deployment (issue #1030)", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    function createApplicationWithStaticWebsiteRedirectURI(): Application {
+      return {
+        name: appName,
+        staticWebsiteServices: [{ name: "my-frontend" }],
+        authService: {
+          resolveNamespaces: vi.fn().mockResolvedValue(undefined),
+          parsedConfig: {
+            name: "auth-a",
+            oauth2Clients: {
+              sample: {
+                description: "Sample client",
+                grantTypes: ["authorization_code", "refresh_token"],
+                redirectURIs: ["my-frontend:url/callback"],
+                clientType: "confidential",
+                requireDpop: false,
+              },
+            },
+          },
+          userProfile: undefined,
+        },
+      } as unknown as Application;
+    }
+
+    test("does not warn when redirect URI references a locally-defined static website that is not yet on the platform", async () => {
+      const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      const baseClient = createMockClient({});
+      const client = {
+        ...baseClient,
+        getStaticWebsite: vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound)),
+      } as unknown as OperatorClient;
+      const context: PlanContext = {
+        client,
+        workspaceId,
+        application: createApplicationWithStaticWebsiteRedirectURI(),
+        forRemoval: false,
+        config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
+      };
+
+      const result = await planAuth(context);
+
+      expect(result.changeSet.oauth2Client.creates).toHaveLength(1);
+      expect(warnSpy).not.toHaveBeenCalled();
+    });
   });
 });
 

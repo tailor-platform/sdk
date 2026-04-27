@@ -251,11 +251,15 @@ export async function planApplication(context: PlanContext) {
     }
   }
   const metaRequest = await buildMetaRequest(trn(workspaceId, application.name), application.name);
+  const expectedLocalWebsites = new Set(
+    application.staticWebsiteServices.map((website) => website.name),
+  );
   const resolvedCors = await resolveStaticWebsiteUrls(
     client,
     workspaceId,
     application.config.cors,
     "CORS",
+    { expectedLocalNames: expectedLocalWebsites },
   );
   const desired = normalizeComparableApplication(
     application,

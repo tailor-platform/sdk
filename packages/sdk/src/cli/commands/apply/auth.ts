@@ -293,6 +293,9 @@ export async function planAuth(context: PlanContext) {
     resourceOwners,
   } = await planServices(client, workspaceId, application.name, auths, forceApplyAll);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
+  const expectedLocalWebsites = new Set(
+    application.staticWebsiteServices.map((website) => website.name),
+  );
   const [
     idpConfigChangeSet,
     userProfileConfigChangeSet,
@@ -309,7 +312,14 @@ export async function planAuth(context: PlanContext) {
     planTenantConfigs(client, workspaceId, auths, deletedServices, forceApplyAll),
     planMachineUsers(client, workspaceId, auths, deletedServices, forceApplyAll),
     planAuthHooks(client, workspaceId, auths, deletedServices, forceApplyAll),
-    planOAuth2Clients(client, workspaceId, auths, deletedServices, forceApplyAll),
+    planOAuth2Clients(
+      client,
+      workspaceId,
+      auths,
+      deletedServices,
+      expectedLocalWebsites,
+      forceApplyAll,
+    ),
     planSCIMConfigs(client, workspaceId, auths, deletedServices),
     planSCIMResources(client, workspaceId, auths, deletedServices),
     planAuthConnections(client, workspaceId, application.name, auths),
@@ -1395,6 +1405,7 @@ async function planOAuth2Clients(
   workspaceId: string,
   auths: ReadonlyArray<Readonly<AuthService>>,
   deletedServices: ReadonlyArray<string>,
+  expectedLocalWebsites: ReadonlySet<string>,
   forceApplyAll = false,
 ) {
   const changeSet = createChangeSet<
@@ -1441,6 +1452,7 @@ async function planOAuth2Clients(
         workspaceId,
         newOAuth2Client.redirectUris ?? [],
         "OAuth2 redirect URIs",
+        { expectedLocalNames: expectedLocalWebsites },
       );
       if (existingClientsMap.has(oauth2ClientName)) {
         const existingClient = existingClientsMap.get(oauth2ClientName)!;
