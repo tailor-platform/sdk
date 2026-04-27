@@ -4,7 +4,7 @@ import { t } from "@/configure/types";
 import { createResolver } from "./resolver";
 import type { output } from "@/types/helpers";
 import type { ResolverInput } from "@/types/resolver.generated";
-import type { TailorUser } from "@/types/user";
+import type { TailorInvoker, TailorUser } from "@/types/user";
 
 describe("createResolver", () => {
   describe("type inference", () => {
@@ -18,7 +18,9 @@ describe("createResolver", () => {
         body: (context) => {
           expectTypeOf(context).toHaveProperty("user");
           expectTypeOf(context).toHaveProperty("input");
+          expectTypeOf(context).toHaveProperty("invoker");
           expectTypeOf(context.user).toEqualTypeOf<TailorUser>();
+          expectTypeOf(context.invoker).toEqualTypeOf<TailorInvoker | undefined>();
           expectTypeOf(context.input).toBeNever();
           return { result: "hello" };
         },

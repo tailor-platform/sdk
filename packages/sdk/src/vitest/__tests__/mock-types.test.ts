@@ -57,6 +57,13 @@ describe("mock types match @tailor-platform/function-types", () => {
     });
   });
 
+  describe("tailor.context", () => {
+    test("getInvoker", () => {
+      expectTypeOf(tailor.context.getInvoker).toEqualTypeOf<typeof tailor.context.getInvoker>();
+      expectTypeOf(tailor.context.getInvoker()).toEqualTypeOf<tailor.context.Invoker | null>();
+    });
+  });
+
   describe("tailor.idp", () => {
     test("Client constructor", () => {
       expectTypeOf(tailor.idp.Client).toEqualTypeOf<typeof tailor.idp.Client>();

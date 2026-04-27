@@ -164,6 +164,22 @@ defineIdp("my-idp", {
 
 **Validation:** Each field must be 200 characters or less and must not contain newline characters.
 
+### publishUserEvents
+
+Publish IdP user lifecycle events (`idp.user.created`, `idp.user.updated`, `idp.user.deleted`). These events are consumed by executors that use `idpUserCreatedTrigger`, `idpUserUpdatedTrigger`, `idpUserDeletedTrigger`, or `idpUserTrigger`.
+
+```typescript
+defineIdp("my-idp", {
+  clients: ["my-client"],
+  publishUserEvents: true,
+});
+```
+
+**Auto-configuration:** When `publishUserEvents` is omitted, the SDK enables it automatically during `apply` if the project defines any executor with an `idpUser` trigger. Set the value explicitly to override:
+
+- `publishUserEvents: true`: always publish events.
+- `publishUserEvents: false`: never publish events. The SDK warns when executors with `idpUser` triggers are present, since those executors will not fire for this IdP.
+
 ## Using idp.provider()
 
 The `idp.provider()` method creates a type-safe reference to the IdP for use in Auth configuration. The client name is validated at compile time against the clients defined in the IdP.

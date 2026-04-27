@@ -8,6 +8,8 @@ export {
   setupTailordbMock,
   setupTailorErrorsMock,
   setupWorkflowMock,
+  setupInvokerMock,
+  setupWaitPointMock,
   createImportMain,
 } from "./mock";
 

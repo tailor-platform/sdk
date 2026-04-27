@@ -159,6 +159,7 @@ export default defineConfig({
 | `idpMock`            | `tailor.idp`            | `setResolver`, `enqueueResult`, `calls`                                                               |
 | `fileMock`           | `tailordb.file`         | `setResolver`, `enqueueResult`, `calls`                                                               |
 | `iconvMock`          | `tailor.iconv`          | `setResolver`, `calls`                                                                                |
+| `invokerMock`        | `tailor.context`        | `setInvoker`, `calls`                                                                                 |
 
 ### SecretManager Mock
 
@@ -265,6 +266,34 @@ test("mock encoding conversion", () => {
 });
 ```
 
+### Invoker Mock
+
+Configures the value returned by `tailor.context.getInvoker()`, which bundled resolver/executor/workflow runtime expressions use to populate the `invoker` field on each call.
+
+```typescript
+import { invokerMock } from "@tailor-platform/sdk/vitest";
+
+beforeEach(() => invokerMock.reset());
+
+test("authenticated invoker", async () => {
+  invokerMock.setInvoker({
+    id: "u-1",
+    type: "user",
+    workspaceId: "w-1",
+    attributes: { role: "admin" },
+    attributeList: [],
+  });
+
+  // bundled wrappers normalize the raw shape back into a TailorInvoker on the body args
+  // ...invoke the bundled main()
+  expect(invokerMock.calls).toMatchObject([{ method: "getInvoker" }]);
+});
+
+test("anonymous caller", () => {
+  invokerMock.setInvoker(null);
+});
+```
+
 ### Loading Secrets from Config
 
 Pass a config path to load `defineSecretManager()` values into the mock:
@@ -280,7 +309,7 @@ This makes `tailor.secretmanager.getSecret("vault", "key")` return the values de
 
 ## Unit Tests
 
-Unit tests verify resolver logic without requiring deployment.
+Unit tests verify resolver and workflow logic locally without requiring deployment.
 
 ### Simple Resolver Testing
 
@@ -443,13 +472,52 @@ describe("decrementUserAge resolver", () => {
 - Mock high-level operations instead of low-level SQL queries
 - **Best for:** Complex business logic with multiple database operations
 
-## Workflow Tests
+### Testing Resolvers that Call `.resolve()`
 
-Test workflows locally without deploying to Tailor Platform.
+Use `setupWaitPointMock` to mock `tailor.workflow.resolve` when testing resolvers that resume a suspended workflow execution.
 
-### Job Unit Tests
+```typescript
+import { afterEach } from "vitest";
+import { setupWaitPointMock, unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
+import resolver from "./resolvers/resolveApproval";
 
-Test individual job logic by calling `.body()` directly:
+const TailorGlobal = globalThis as { tailor?: { workflow?: Record<string, unknown> } };
+
+describe("resolveApproval resolver", () => {
+  afterEach(() => {
+    delete TailorGlobal.tailor;
+  });
+
+  test("resolves approval", async () => {
+    const { resolveCalls } = setupWaitPointMock({
+      onResolve: (_execId, _key, callback) => {
+        const result = callback({ message: "Please approve", orderId: "order-1" });
+        expect(result).toEqual({ approved: true });
+      },
+    });
+
+    const result = await resolver.body({
+      input: { executionId: "exec-1", approved: true },
+      user: unauthenticatedTailorUser,
+      env: {},
+    });
+
+    expect(result).toEqual({ resolved: true });
+    expect(resolveCalls).toHaveLength(1);
+    expect(resolveCalls[0]).toEqual({ executionId: "exec-1", key: "approval" });
+  });
+});
+```
+
+**Key points:**
+
+- `onResolve` lets you verify the callback behavior in resolvers that call `.resolve()`
+- Clean up mocks in `afterEach` by deleting `TailorGlobal.tailor`
+- **Best for:** Resolvers that resume suspended workflow executions
+
+### Workflow Job Unit Tests
+
+Test individual workflow job logic locally without deploying. Call `.body()` directly:
 
 ```typescript
 import workflow, { addNumbers, calculate } from "./workflows/calculation";
@@ -490,9 +558,9 @@ describe("workflow with dependencies", () => {
 
 **Note:** To execute dependent jobs without mocking, and they require `env`, use `vi.stubEnv(WORKFLOW_TEST_ENV_KEY, ...)` and call `.trigger()` directly as shown in the integration test section below.
 
-### Integration Tests with `.trigger()`
+### Workflow Integration Tests with `.trigger()`
 
-Test the full workflow execution using `workflow.mainJob.trigger()`:
+Test the full workflow execution locally using `workflow.mainJob.trigger()`:
 
 ```typescript
 import { WORKFLOW_TEST_ENV_KEY } from "@tailor-platform/sdk/test";
@@ -523,6 +591,55 @@ describe("workflow integration", () => {
 - If dependent jobs require `env`, use `vi.stubEnv(WORKFLOW_TEST_ENV_KEY, ...)` and call `.trigger()` instead of mocking
 - Use `workflow.mainJob.trigger()` to execute the full workflow chain and get the result
 - **Best for:** Testing workflow orchestration and job dependencies
+
+### Testing Jobs with Wait Points
+
+Use `setupWaitPointMock` to mock `tailor.workflow.wait` when testing jobs that suspend on wait points:
+
+```typescript
+import { afterEach, vi } from "vitest";
+import { setupWaitPointMock } from "@tailor-platform/sdk/test";
+import { processWithApproval } from "./workflows/approval";
+
+const TailorGlobal = globalThis as { tailor?: { workflow?: Record<string, unknown> } };
+
+describe("approval workflow", () => {
+  afterEach(() => {
+    delete TailorGlobal.tailor;
+  });
+
+  test("approved flow returns approved status", async () => {
+    const { waitCalls } = setupWaitPointMock({
+      onWait: (_key, _payload) => ({ approved: true }),
+    });
+
+    const result = await processWithApproval.body({ orderId: "order-1" }, { env: {} });
+
+    expect(result).toEqual({ orderId: "order-1", status: "approved" });
+    expect(waitCalls).toHaveLength(1);
+    expect(waitCalls[0]).toEqual({
+      key: "approval",
+      payload: { message: "Please approve order order-1", orderId: "order-1" },
+    });
+  });
+
+  test("rejected flow returns rejected status", async () => {
+    setupWaitPointMock({
+      onWait: () => ({ approved: false }),
+    });
+
+    const result = await processWithApproval.body({ orderId: "order-2" }, { env: {} });
+
+    expect(result).toEqual({ orderId: "order-2", status: "rejected" });
+  });
+});
+```
+
+**Key points:**
+
+- `onWait` controls what `.wait()` returns — use it to test different branches (approved/rejected)
+- Clean up mocks in `afterEach` by deleting `TailorGlobal.tailor`
+- **Best for:** Jobs that suspend on wait points for human-in-the-loop approval
 
 ## End-to-End (E2E) Tests
 
