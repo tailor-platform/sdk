@@ -1,5 +1,29 @@
 # @tailor-platform/sdk
 
+## 1.44.0
+
+### Minor Changes
+
+- [#1064](https://github.com/tailor-platform/sdk/pull/1064) [`683478e`](https://github.com/tailor-platform/sdk/commit/683478e13b3e308739da5578ad5e13602087700e) Thanks [@dqn](https://github.com/dqn)! - `tailor-sdk api` discoverability improvements:
+
+  - New `tailor-sdk api list` subcommand enumerates all invocable `OperatorService` methods. Streaming RPCs are excluded since the command only handles unary requests.
+  - New `tailor-sdk api inspect <endpoint>` subcommand prints the input message tree of an endpoint without sending a request, including `oneof` membership, recursive type tagging, and `map` value schemas. Combine with the global `--json` flag for machine-readable output.
+  - Shell completion now suggests `OperatorService` method names for the `endpoint` positional of `tailor-sdk api` and `tailor-sdk api inspect`.
+
+- [#1039](https://github.com/tailor-platform/sdk/pull/1039) [`852968d`](https://github.com/tailor-platform/sdk/commit/852968d2e25a3deeb5169132fb76db0d93631c34) Thanks [@dqn](https://github.com/dqn)! - Wire `--order` / `--limit` through the remaining list commands that were missed in the previous pass: `workspace list`, `workspace user list`, `workspace app list`, `organization folder list`, `executor webhook list`, and `crash-report list`. Existing behavior is preserved when the flags are omitted (server-default order, unlimited), so scripts already invoking these commands are unaffected. The programmatic helpers (`listWorkspaces`, `listUsers`, `listApps`, `listFolders`, `listWebhookExecutors`) accept a new optional `order` field with the same defaults.
+
+### Patch Changes
+
+- [#1079](https://github.com/tailor-platform/sdk/pull/1079) [`8ab2714`](https://github.com/tailor-platform/sdk/commit/8ab271494cf76ee8f588848887fa8e9d3eb91bfa) Thanks [@dqn](https://github.com/dqn)! - Suppress the spurious `Static website "<name>" not found for CORS configuration` warning during `apply` planning on the first deployment. The warning previously fired whenever `plan` looked up a static website that the same apply run was about to create. Locally-defined static websites referenced via `:url` patterns in `cors` or OAuth2 `redirectURIs` are now treated as expected during planning; missing remote websites still warn when they are not part of the local configuration.
+
+- [#1074](https://github.com/tailor-platform/sdk/pull/1074) [`d272f26`](https://github.com/tailor-platform/sdk/commit/d272f2604f31f2b61d880f1e57d2732b18f5c982) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency politty to v0.4.15
+
+- [#1076](https://github.com/tailor-platform/sdk/pull/1076) [`4d8c7a3`](https://github.com/tailor-platform/sdk/commit/4d8c7a39adadb09a991f93f44ed519efc506762f) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update rolldown
+
+- [#1082](https://github.com/tailor-platform/sdk/pull/1082) [`15b791d`](https://github.com/tailor-platform/sdk/commit/15b791d4c2d38e8f30e09d739b947099bfece8bd) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @bufbuild/protobuf to v2.12.0
+
+- [#1083](https://github.com/tailor-platform/sdk/pull/1083) [`16d8a42`](https://github.com/tailor-platform/sdk/commit/16d8a427336378a784c0bb492a858206535ff68e) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency es-toolkit to v1.46.0
+
 ## 1.43.0
 
 ### Minor Changes
