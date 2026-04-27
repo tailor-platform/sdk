@@ -138,7 +138,6 @@ describe("planExecutor", () => {
     options?: {
       tailorDBTypes?: Record<string, string>;
       resolverNames?: Record<string, string>;
-      idpName?: string;
       idpNames?: ReadonlyArray<string>;
       authName?: string;
     },
@@ -157,11 +156,7 @@ describe("planExecutor", () => {
       resolvers: Object.fromEntries((entries ?? []).map(([name]) => [name, { name }])),
     }));
 
-    const idpServices = options?.idpNames
-      ? options.idpNames.map((name) => ({ name }))
-      : options?.idpName
-        ? [{ name: options.idpName }]
-        : [];
+    const idpServices = (options?.idpNames ?? []).map((name) => ({ name }));
 
     return {
       name: appName,
@@ -798,7 +793,7 @@ describe("planExecutor", () => {
         operation: { kind: "function", body: () => {} },
       };
       const application = createMockApplication([executor], {
-        idpName: "my-idp",
+        idpNames: ["my-idp"],
       });
 
       const result = await planExecutor({
@@ -1025,7 +1020,7 @@ describe("planExecutor", () => {
         operation: { kind: "function", body: () => {} },
       };
       const application = createMockApplication([executor], {
-        idpName: "my-idp",
+        idpNames: ["my-idp"],
       });
 
       const result = await planExecutor({
