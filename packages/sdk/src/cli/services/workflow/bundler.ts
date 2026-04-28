@@ -336,16 +336,24 @@ async function bundleSingleJob(
               return null;
             }
 
-            // First, apply existing workflow source transformation (removes other jobs, transforms job.trigger)
-            let transformed = transformWorkflowSource(
-              code,
-              job.name,
-              job.exportName,
-              otherJobExportNames,
-              allJobsMap,
-            );
+            // Only apply workflow source transformation (job removal, default
+            // export removal, intra-file trigger rewriting) to the job's own
+            // source file. Dependency files imported by the source file must
+            // keep their exports intact for rolldown to resolve cross-file
+            // imports (e.g. `import workflow from "./other-workflow"`).
+            let transformed = code;
+            const isJobSourceFile = path.resolve(id) === path.resolve(job.sourceFile);
+            if (isJobSourceFile) {
+              transformed = transformWorkflowSource(
+                code,
+                job.name,
+                job.exportName,
+                otherJobExportNames,
+                allJobsMap,
+              );
+            }
 
-            // Then, apply workflow.trigger transformation if context is provided
+            // Apply workflow.trigger / job.trigger transformation if context is provided
             if (triggerContext && transformed.includes(".trigger(")) {
               transformed = transformFunctionTriggers(
                 transformed,
@@ -357,6 +365,7 @@ async function bundleSingleJob(
               );
             }
 
+            if (transformed === code) return null;
             return { code: transformed };
           },
         },

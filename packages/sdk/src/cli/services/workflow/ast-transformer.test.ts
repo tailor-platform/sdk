@@ -636,6 +636,35 @@ export default workflow;
       // workflow identifier default export should be removed
       expect(result).not.toContain("export default");
     });
+
+    it("preserves default export in dependency files where target job does not exist", () => {
+      // This simulates the scenario where the bundler transforms a dependency
+      // file (e.g. simple.ts imported by caller.ts via default import).
+      // The target job "caller-job" does not exist in this file, so the
+      // default export must be preserved for the importing file to resolve it.
+      const source = `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+
+export const step1 = createWorkflowJob({
+  name: "step1",
+  body: (args: { input: number }) => {
+    return { result: args.input + 1 };
+  },
+});
+
+export default createWorkflow({
+  name: "simple-workflow",
+  mainJob: step1,
+});
+`;
+      // "caller-job" is the target job being bundled, but it does NOT exist
+      // in this file. This file is a dependency imported by the caller.
+      const result = transformWorkflowSource(source, "caller-job");
+
+      // The default export must be preserved so that the importing file
+      // can resolve `import simpleWorkflow from "./simple"`
+      expect(result).toContain("export default");
+    });
   });
 });
 
@@ -1311,6 +1340,37 @@ const result = await fetchCustomer.trigger({ customerId: "123" });
       const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain('tailor.workflow.triggerJobFunction("fetch-customer"');
+    });
+
+    it("resolves default imports with absolute paths in workflowFileMap", () => {
+      const source = `
+import simpleWorkflow from "./simple";
+
+export const job = createWorkflowJob({
+  name: "my-job",
+  body: async () => {
+    const result = await simpleWorkflow.trigger(
+      { input: 0 },
+      { authInvoker: "admin" }
+    );
+    return result;
+  },
+});
+`;
+      const workflowNameMap = new Map<string, string>();
+      const jobNameMap = new Map<string, string>();
+      const workflowFileMap = new Map([["/tmp/test-project/workflows/simple", "simple-workflow"]]);
+
+      const result = transformFunctionTriggers(
+        source,
+        workflowNameMap,
+        jobNameMap,
+        workflowFileMap,
+        "/tmp/test-project/workflows/caller.ts",
+      );
+
+      expect(result).toContain('tailor.workflow.triggerWorkflow("simple-workflow"');
+      expect(result).not.toContain('import simpleWorkflow from "./simple"');
     });
   });
 });

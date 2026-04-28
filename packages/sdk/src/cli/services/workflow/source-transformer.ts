@@ -193,15 +193,21 @@ export function transformWorkflowSource(
   }
 
   // Step 3: Remove createWorkflow default export (not needed in job bundles)
-  const workflowExport = findWorkflowDefaultExport(program);
-  if (workflowExport && !isAlreadyMarkedForRemoval(workflowExport.start)) {
-    const endPos = findStatementEnd(source, workflowExport.end);
-    removedRanges.push({ start: workflowExport.start, end: endPos });
-    replacements.push({
-      start: workflowExport.start,
-      end: endPos,
-      text: "",
-    });
+  // Only remove when the target job exists in this file. When the target job
+  // is in a different file, this file is a dependency and its default export
+  // must be preserved so that cross-file imports can be resolved.
+  const targetJobExistsInFile = detectedJobs.some((j) => j.name === targetJobName);
+  if (targetJobExistsInFile) {
+    const workflowExport = findWorkflowDefaultExport(program);
+    if (workflowExport && !isAlreadyMarkedForRemoval(workflowExport.start)) {
+      const endPos = findStatementEnd(source, workflowExport.end);
+      removedRanges.push({ start: workflowExport.start, end: endPos });
+      replacements.push({
+        start: workflowExport.start,
+        end: endPos,
+        text: "",
+      });
+    }
   }
 
   // Step 4: Transform .trigger() calls to tailor.workflow.triggerJobFunction()
