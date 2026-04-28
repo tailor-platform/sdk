@@ -6,7 +6,10 @@ import type { Plugin, ResolvedConfig } from "vite";
 const DEFAULT_TEST_INCLUDE = ["**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}"];
 
 // Matches static import/export declarations with string specifiers.
-const IMPORT_RE = /\b(?:import|export)\s+(?:[\s\S]*?\s+from\s+)?["']([^"']+)["']/g;
+// `[^;]*?` (instead of `[\s\S]*?`) prevents cross-matching across statements,
+// e.g. `export const x = 1;\nimport { y } from "node:crypto"` would otherwise
+// match as a single span and destroy the preceding `export` line on replacement.
+const IMPORT_RE = /\b(?:import|export)\s+(?:[^;]*?\s+from\s+)?["']([^"']+)["']/g;
 
 /**
  * Vite plugin that blocks Node.js built-in module imports from production code.
