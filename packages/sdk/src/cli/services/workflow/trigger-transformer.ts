@@ -100,14 +100,48 @@ function extractAuthInvokerInfo(
 }
 
 /**
- * Count all references to an identifier outside import declarations.
- * Excludes property names in member expressions (e.g., `obj.prop` does not count `prop`).
- * @param program - The parsed AST program
- * @param name - The identifier name to count
- * @returns Number of references found
+ * Check if an AST binding pattern (parameter, catch clause, etc.) contains an Identifier with the given name.
+ * @param node - AST node to inspect
+ * @param name - Identifier name to look for
+ * @returns True if the binding pattern contains the name
  */
-function countIdentifierReferences(program: Program, name: string): number {
-  let count = 0;
+function containsBindingName(node: ASTNode | null | undefined, name: string): boolean {
+  if (!node || typeof node !== "object") return false;
+  if (
+    (node as { type?: string }).type === "Identifier" &&
+    (node as { name?: string }).name === name
+  )
+    return true;
+  for (const key of Object.keys(node)) {
+    const child = node[key] as unknown;
+    if (Array.isArray(child)) {
+      if (child.some((c) => containsBindingName(c as ASTNode, name))) return true;
+    } else if (child && typeof child === "object") {
+      if (containsBindingName(child as ASTNode, name)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Build a map of reference counts for multiple identifiers in a single AST pass.
+ * Scope-aware: references inside functions or catch clauses that shadow the name
+ * via parameters are excluded, so only references to the original import binding
+ * are counted.
+ * Excludes import declarations and property names in non-computed member expressions.
+ * @param program - The parsed AST program
+ * @param names - Set of identifier names to count
+ * @returns Map from identifier name to reference count
+ */
+function buildReferenceCountMap(program: Program, names: Set<string>): Map<string, number> {
+  if (names.size === 0) return new Map();
+
+  const counts = new Map<string, number>();
+  const shadowDepth = new Map<string, number>();
+  for (const name of names) {
+    counts.set(name, 0);
+    shadowDepth.set(name, 0);
+  }
 
   function walk(node: ASTNode | null | undefined, parentNode?: ASTNode, parentKey?: string): void {
     if (!node || typeof node !== "object") return;
@@ -116,15 +150,47 @@ function countIdentifierReferences(program: Program, name: string): number {
 
     if (nodeType === "ImportDeclaration") return;
 
-    if (nodeType === "Identifier" && (node as { name?: string }).name === name) {
-      const isMemberProperty =
-        parentNode &&
-        (parentNode as { type?: string }).type === "MemberExpression" &&
-        parentKey === "property" &&
-        !(parentNode as { computed?: boolean }).computed;
+    // Track scope shadowing from function/catch parameters
+    const shadowedHere: string[] = [];
+    if (
+      nodeType === "FunctionDeclaration" ||
+      nodeType === "FunctionExpression" ||
+      nodeType === "ArrowFunctionExpression"
+    ) {
+      const params = (node as { params?: unknown[] }).params;
+      if (params) {
+        for (const name of names) {
+          if (params.some((p) => containsBindingName(p as ASTNode, name))) {
+            shadowDepth.set(name, (shadowDepth.get(name) ?? 0) + 1);
+            shadowedHere.push(name);
+          }
+        }
+      }
+    }
+    if (nodeType === "CatchClause") {
+      const param = (node as { param?: unknown }).param;
+      if (param) {
+        for (const name of names) {
+          if (containsBindingName(param as ASTNode, name)) {
+            shadowDepth.set(name, (shadowDepth.get(name) ?? 0) + 1);
+            shadowedHere.push(name);
+          }
+        }
+      }
+    }
 
-      if (!isMemberProperty) {
-        count++;
+    if (nodeType === "Identifier") {
+      const identName = (node as { name?: string }).name;
+      if (identName && names.has(identName) && (shadowDepth.get(identName) ?? 0) === 0) {
+        const isMemberProperty =
+          parentNode &&
+          (parentNode as { type?: string }).type === "MemberExpression" &&
+          parentKey === "property" &&
+          !(parentNode as { computed?: boolean }).computed;
+
+        if (!isMemberProperty) {
+          counts.set(identName, (counts.get(identName) ?? 0) + 1);
+        }
       }
     }
 
@@ -136,10 +202,14 @@ function countIdentifierReferences(program: Program, name: string): number {
         walk(child as ASTNode, node, key);
       }
     }
+
+    for (const name of shadowedHere) {
+      shadowDepth.set(name, (shadowDepth.get(name) ?? 0) - 1);
+    }
   }
 
   walk(program as unknown as ASTNode);
-  return count;
+  return counts;
 }
 
 /**
@@ -400,11 +470,14 @@ export function transformFunctionTriggers(
   // Remove default import declarations that became dead after trigger transformation.
   // A default import is dead when ALL references to its local identifier were
   // .trigger() calls that have been rewritten above.
+  // Single AST pass for all candidate names; scope-aware to ignore shadowed references.
+  const refCounts = buildReferenceCountMap(program, workflowDefaultImportNames);
+
   for (const localName of workflowDefaultImportNames) {
     const transformedCount = transformedCallsPerIdentifier.get(localName) ?? 0;
     if (transformedCount === 0) continue;
 
-    const refCount = countIdentifierReferences(program, localName);
+    const refCount = refCounts.get(localName) ?? 0;
     if (transformedCount >= refCount) {
       const importRange = findDefaultImportDeclarationRange(program, localName);
       if (importRange) {

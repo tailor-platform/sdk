@@ -1216,6 +1216,36 @@ export const job = createWorkflowJob({
       expect(result).toContain('tailor.workflow.triggerWorkflow("simple-workflow"');
     });
 
+    it("removes default import even when the name is shadowed in a function parameter", () => {
+      const source = `
+import simpleWorkflow from "./simple";
+
+export const job = createWorkflowJob({
+  name: "my-job",
+  body: async () => {
+    await simpleWorkflow.trigger({ input: 0 }, { authInvoker: "admin" });
+    function helper(simpleWorkflow) {
+      console.log(simpleWorkflow);
+    }
+  },
+});
+`;
+      const workflowNameMap = new Map<string, string>();
+      const jobNameMap = new Map<string, string>();
+      const workflowFileMap = new Map([["src/workflows/simple", "simple-workflow"]]);
+
+      const result = transformFunctionTriggers(
+        source,
+        workflowNameMap,
+        jobNameMap,
+        workflowFileMap,
+        "src/workflows/trigger-test.ts",
+      );
+
+      expect(result).not.toContain('import simpleWorkflow from "./simple"');
+      expect(result).toContain('tailor.workflow.triggerWorkflow("simple-workflow"');
+    });
+
     it("does not affect same-file job triggers", () => {
       const source = `
 const result = await fetchCustomer.trigger({ customerId: "123" });
