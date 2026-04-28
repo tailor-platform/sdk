@@ -12,6 +12,11 @@ test("node:crypto is allowed in test files directly", async () => {
   expect(randomUUID()).toMatch(/^[0-9a-f-]{36}$/);
 });
 
+test("type-only imports from blocked modules are not blocked", async () => {
+  const { fakeHash } = await import("./fixtures/uses-node-crypto-types");
+  expect(fakeHash("hello")).toBe(5);
+});
+
 test("platform API mocks are injected into globalThis", () => {
   const g = globalThis as any;
   expect(g.tailordb).toBeDefined();

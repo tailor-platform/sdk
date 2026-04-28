@@ -15,6 +15,8 @@ const IMPORT_RE = /\b(?:import|export)\s+(?:[\s\S]*?\s+from\s+)?["']([^"']+)["']
  * and replaces them with code that throws a helpful error at runtime.
  * Vitest treats `node:*` as external SSR modules (skipping `resolveId`), so
  * source-level transformation is the only reliable interception point.
+ * Runs in the default phase (no `enforce: "pre"`) so esbuild's TypeScript
+ * transform strips `import type` first; only runtime imports reach this hook.
  * Node.js globals not in the platform runtime are removed by the environment (whitelist-based).
  * Test file patterns are read from the resolved Vitest config (`test.include`).
  * @returns Vite plugin
@@ -24,7 +26,6 @@ export function createBlockPlugin(): Plugin {
 
   return {
     name: "tailor-runtime-block-node",
-    enforce: "pre",
 
     configResolved(config: ResolvedConfig) {
       const testConfig = (config as ResolvedConfig & { test?: { include?: string[] } }).test;
