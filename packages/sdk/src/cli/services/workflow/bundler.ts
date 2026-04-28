@@ -13,6 +13,16 @@ import { detectTriggerCalls, findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
 import { transformFunctionTriggers } from "./trigger-transformer";
 
+function safeRealpath(p: string): string {
+  const resolved = path.resolve(p);
+  try {
+    return fs.realpathSync(resolved);
+  } catch (e) {
+    logger.debug(`realpathSync failed for ${resolved}: ${e instanceof Error ? e.message : e}`);
+    return resolved;
+  }
+}
+
 interface JobInfo {
   name: string;
   exportName: string;
@@ -317,6 +327,9 @@ async function bundleSingleJob(
         allJobsMap.set(j.exportName, j.name);
       }
 
+      // Pre-compute once to avoid redundant realpathSync calls per module
+      const resolvedSourceFile = safeRealpath(job.sourceFile);
+
       // Create transform plugin to transform trigger calls and remove other job declarations
       const transformPlugin: rolldown.Plugin = {
         name: "workflow-transform",
@@ -336,16 +349,24 @@ async function bundleSingleJob(
               return null;
             }
 
-            // First, apply existing workflow source transformation (removes other jobs, transforms job.trigger)
-            let transformed = transformWorkflowSource(
-              code,
-              job.name,
-              job.exportName,
-              otherJobExportNames,
-              allJobsMap,
-            );
+            // Only apply workflow source transformation (job removal, default
+            // export removal, intra-file trigger rewriting) to the job's own
+            // source file. Dependency files imported by the source file must
+            // keep their exports intact for rolldown to resolve cross-file
+            // imports (e.g. `import workflow from "./other-workflow"`).
+            let transformed = code;
+            const isJobSourceFile = safeRealpath(id) === resolvedSourceFile;
+            if (isJobSourceFile) {
+              transformed = transformWorkflowSource(
+                code,
+                job.name,
+                job.exportName,
+                otherJobExportNames,
+                allJobsMap,
+              );
+            }
 
-            // Then, apply workflow.trigger transformation if context is provided
+            // Apply workflow.trigger / job.trigger transformation if context is provided
             if (triggerContext && transformed.includes(".trigger(")) {
               transformed = transformFunctionTriggers(
                 transformed,
@@ -357,6 +378,7 @@ async function bundleSingleJob(
               );
             }
 
+            if (transformed === code) return null;
             return { code: transformed };
           },
         },

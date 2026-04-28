@@ -126,6 +126,15 @@ export function transformWorkflowSource(
   // Find all jobs using AST detection
   const detectedJobs = findAllJobs(program, source);
 
+  // Defense-in-depth: the bundler already gates this function behind an
+  // isJobSourceFile check, so dependency files should not reach here.
+  // Guard anyway so that external callers don't accidentally strip exports
+  // from files that don't contain the target job.
+  const targetJobExistsInFile = detectedJobs.some((j) => j.name === targetJobName);
+  if (!targetJobExistsInFile) {
+    return source;
+  }
+
   // Build job name map from detected jobs if not provided
   const jobNameMap = allJobsMap ?? buildJobNameMap(detectedJobs);
 
