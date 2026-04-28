@@ -325,6 +325,9 @@ async function bundleSingleJob(
         allJobsMap.set(j.exportName, j.name);
       }
 
+      // Pre-compute once to avoid redundant realpathSync calls per module
+      const resolvedSourceFile = safeRealpath(job.sourceFile);
+
       // Create transform plugin to transform trigger calls and remove other job declarations
       const transformPlugin: rolldown.Plugin = {
         name: "workflow-transform",
@@ -350,7 +353,7 @@ async function bundleSingleJob(
             // keep their exports intact for rolldown to resolve cross-file
             // imports (e.g. `import workflow from "./other-workflow"`).
             let transformed = code;
-            const isJobSourceFile = safeRealpath(id) === safeRealpath(job.sourceFile);
+            const isJobSourceFile = safeRealpath(id) === resolvedSourceFile;
             if (isJobSourceFile) {
               transformed = transformWorkflowSource(
                 code,
