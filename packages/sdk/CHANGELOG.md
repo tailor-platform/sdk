@@ -1,5 +1,17 @@
 # @tailor-platform/sdk
 
+## 1.45.0
+
+### Minor Changes
+
+- [#1080](https://github.com/tailor-platform/sdk/pull/1080) [`52823be`](https://github.com/tailor-platform/sdk/commit/52823be3ab8ac4efd3b9621db60d3a6fb9033d12) Thanks [@toiroakr](https://github.com/toiroakr)! - Add an `idp` option to IdP user triggers (`idpUserCreatedTrigger`, `idpUserUpdatedTrigger`, `idpUserDeletedTrigger`, `idpUserTrigger`) so executors can subscribe to a specific IdP namespace. Previously, projects with multiple IdPs failed `apply` because the SDK could not decide which IdP an executor targeted; specify `idp: "my-idp"` to disambiguate, or omit it when the project defines a single IdP. The auto-configuration of `publishUserEvents` now applies only to IdPs that are actually targeted, and `publishUserEvents: false` on a targeted IdP is rejected with a clear error instead of a warning. The new `IdpName` type is narrowed to defined IdP names via the generated `tailor.d.ts` for compile-time validation.
+
+### Patch Changes
+
+- [#1094](https://github.com/tailor-platform/sdk/pull/1094) [`a872d26`](https://github.com/tailor-platform/sdk/commit/a872d26feb81266b27d0415d36b412f12e81fb42) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency ora to v9.4.0
+
+- [#1092](https://github.com/tailor-platform/sdk/pull/1092) [`0687372`](https://github.com/tailor-platform/sdk/commit/0687372075bb8694505b2f0d0199e732606fd758) Thanks [@toiroakr](https://github.com/toiroakr)! - Restructure TailorDB migration documentation. The migration concepts, configuration, supported schema changes, automatic execution flow, and troubleshooting have moved from the CLI reference (`docs/cli/tailordb.md`) into a dedicated guide (`docs/services/tailordb-migration.md`). The CLI reference now keeps only the command tables and links to the guide. The guide also adds previously missing operational guidance: exact `migration set` semantics (label-only, not a DB rollback), team workflow and CI/CD coordination, failure recovery, machine user permissions, multi-namespace ordering, performance for large tables, local testing, rollback strategy, observability, and a beta notice. Minor wording corrections for the pre-migration phase and foreign key change classification.
+
 ## 1.44.2
 
 ### Patch Changes
