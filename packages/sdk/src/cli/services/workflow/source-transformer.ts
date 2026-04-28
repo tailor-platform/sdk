@@ -126,6 +126,14 @@ export function transformWorkflowSource(
   // Find all jobs using AST detection
   const detectedJobs = findAllJobs(program, source);
 
+  // If the target job does not exist in this file, this is a dependency file
+  // imported by the actual source file. Return the source unchanged so that
+  // job declarations and default exports are preserved for cross-file imports.
+  const targetJobExistsInFile = detectedJobs.some((j) => j.name === targetJobName);
+  if (!targetJobExistsInFile) {
+    return source;
+  }
+
   // Build job name map from detected jobs if not provided
   const jobNameMap = allJobsMap ?? buildJobNameMap(detectedJobs);
 
@@ -193,21 +201,15 @@ export function transformWorkflowSource(
   }
 
   // Step 3: Remove createWorkflow default export (not needed in job bundles)
-  // Only remove when the target job exists in this file. When the target job
-  // is in a different file, this file is a dependency and its default export
-  // must be preserved so that cross-file imports can be resolved.
-  const targetJobExistsInFile = detectedJobs.some((j) => j.name === targetJobName);
-  if (targetJobExistsInFile) {
-    const workflowExport = findWorkflowDefaultExport(program);
-    if (workflowExport && !isAlreadyMarkedForRemoval(workflowExport.start)) {
-      const endPos = findStatementEnd(source, workflowExport.end);
-      removedRanges.push({ start: workflowExport.start, end: endPos });
-      replacements.push({
-        start: workflowExport.start,
-        end: endPos,
-        text: "",
-      });
-    }
+  const workflowExport = findWorkflowDefaultExport(program);
+  if (workflowExport && !isAlreadyMarkedForRemoval(workflowExport.start)) {
+    const endPos = findStatementEnd(source, workflowExport.end);
+    removedRanges.push({ start: workflowExport.start, end: endPos });
+    replacements.push({
+      start: workflowExport.start,
+      end: endPos,
+      text: "",
+    });
   }
 
   // Step 4: Transform .trigger() calls to tailor.workflow.triggerJobFunction()
