@@ -1,5 +1,11 @@
 import { parseSync } from "oxc-parser";
-import { type ASTNode, type Replacement, applyReplacements, resolvePath } from "./ast-utils";
+import {
+  type ASTNode,
+  type Replacement,
+  applyReplacements,
+  findStatementEnd,
+  resolvePath,
+} from "./ast-utils";
 import { detectDefaultImports } from "./workflow-detector";
 import type {
   Program,
@@ -9,6 +15,8 @@ import type {
   StaticMemberExpression,
   IdentifierReference,
   AwaitExpression,
+  ImportDeclaration,
+  ImportDefaultSpecifier,
 } from "@oxc-project/types";
 
 interface AuthInvokerInfo {
@@ -89,6 +97,79 @@ function extractAuthInvokerInfo(
   }
 
   return undefined;
+}
+
+/**
+ * Count all references to an identifier outside import declarations.
+ * Excludes property names in member expressions (e.g., `obj.prop` does not count `prop`).
+ * @param program - The parsed AST program
+ * @param name - The identifier name to count
+ * @returns Number of references found
+ */
+function countIdentifierReferences(program: Program, name: string): number {
+  let count = 0;
+
+  function walk(node: ASTNode | null | undefined, parentNode?: ASTNode, parentKey?: string): void {
+    if (!node || typeof node !== "object") return;
+
+    const nodeType = (node as { type?: string }).type;
+
+    if (nodeType === "ImportDeclaration") return;
+
+    if (nodeType === "Identifier" && (node as { name?: string }).name === name) {
+      const isMemberProperty =
+        parentNode &&
+        (parentNode as { type?: string }).type === "MemberExpression" &&
+        parentKey === "property" &&
+        !(parentNode as { computed?: boolean }).computed;
+
+      if (!isMemberProperty) {
+        count++;
+      }
+    }
+
+    for (const key of Object.keys(node)) {
+      const child = node[key] as unknown;
+      if (Array.isArray(child)) {
+        child.forEach((c: unknown) => walk(c as ASTNode | null, node, key));
+      } else if (child && typeof child === "object") {
+        walk(child as ASTNode, node, key);
+      }
+    }
+  }
+
+  walk(program as unknown as ASTNode);
+  return count;
+}
+
+/**
+ * Find the range of an import declaration that contains a default import for the given local name.
+ * Returns null if the import also has named specifiers (to avoid breaking other imports).
+ * @param program - The parsed AST program
+ * @param localName - The local name of the default import
+ * @returns Range of the import declaration, or null
+ */
+function findDefaultImportDeclarationRange(
+  program: Program,
+  localName: string,
+): { start: number; end: number } | null {
+  for (const statement of program.body) {
+    if (statement.type !== "ImportDeclaration") continue;
+
+    const importDecl = statement as unknown as ImportDeclaration;
+    const specifiers = importDecl.specifiers || [];
+
+    for (const spec of specifiers) {
+      if (spec.type === "ImportDefaultSpecifier") {
+        const defaultSpec = spec as ImportDefaultSpecifier;
+        if (defaultSpec.local?.name === localName && specifiers.length === 1) {
+          return { start: importDecl.start, end: importDecl.end };
+        }
+      }
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -222,6 +303,9 @@ export function transformFunctionTriggers(
   // This includes both named exports (from workflowNameMap) and default imports (resolved via workflowFileMap)
   const localWorkflowNameMap = new Map(workflowNameMap);
 
+  // Track which default imports resolved to workflows (candidates for dead import removal)
+  const workflowDefaultImportNames = new Set<string>();
+
   if (workflowFileMap && currentFilePath) {
     // Detect default imports and resolve them to workflow names
     const defaultImports = detectDefaultImports(program);
@@ -236,6 +320,7 @@ export function transformFunctionTriggers(
       const workflowName = workflowFileMap.get(resolvedPath);
       if (workflowName) {
         localWorkflowNameMap.set(localName, workflowName);
+        workflowDefaultImportNames.add(localName);
       }
     }
   }
@@ -251,6 +336,9 @@ export function transformFunctionTriggers(
   // Whether any workflow trigger authInvoker was wrapped with the runtime
   // normalizer. Used to decide whether to inject the helper at the top.
   let needsNormalizerHelper = false;
+
+  // Track how many trigger calls were transformed per identifier (for dead import detection)
+  const transformedCallsPerIdentifier = new Map<string, number>();
 
   for (const call of triggerCalls) {
     if (call.kind === "workflow" && call.authInvoker) {
@@ -280,6 +368,10 @@ export function transformFunctionTriggers(
           end: call.callRange.end,
           text: transformedCall,
         });
+        transformedCallsPerIdentifier.set(
+          call.identifierName,
+          (transformedCallsPerIdentifier.get(call.identifierName) ?? 0) + 1,
+        );
       }
     } else if (call.kind === "job") {
       // Job trigger - get job name from map
@@ -296,6 +388,30 @@ export function transformFunctionTriggers(
           start: range.start,
           end: range.end,
           text: transformedCall,
+        });
+        transformedCallsPerIdentifier.set(
+          call.identifierName,
+          (transformedCallsPerIdentifier.get(call.identifierName) ?? 0) + 1,
+        );
+      }
+    }
+  }
+
+  // Remove default import declarations that became dead after trigger transformation.
+  // A default import is dead when ALL references to its local identifier were
+  // .trigger() calls that have been rewritten above.
+  for (const localName of workflowDefaultImportNames) {
+    const transformedCount = transformedCallsPerIdentifier.get(localName) ?? 0;
+    if (transformedCount === 0) continue;
+
+    const refCount = countIdentifierReferences(program, localName);
+    if (transformedCount >= refCount) {
+      const importRange = findDefaultImportDeclarationRange(program, localName);
+      if (importRange) {
+        replacements.push({
+          start: importRange.start,
+          end: findStatementEnd(source, importRange.end),
+          text: "",
         });
       }
     }
