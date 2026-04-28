@@ -14,11 +14,12 @@ describe("bundleWorkflowJobs", () => {
   });
 
   describe("cross-file workflow default import", () => {
-    let tmpDir: string;
+    let tmpDir: string | undefined;
 
     afterEach(() => {
       if (tmpDir) {
         fs.rmSync(tmpDir, { recursive: true, force: true });
+        tmpDir = undefined;
       }
     });
 
