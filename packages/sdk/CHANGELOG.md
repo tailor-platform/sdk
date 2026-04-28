@@ -1,5 +1,13 @@
 # @tailor-platform/sdk
 
+## 1.44.1
+
+### Patch Changes
+
+- [#1088](https://github.com/tailor-platform/sdk/pull/1088) [`6dc5318`](https://github.com/tailor-platform/sdk/commit/6dc53185418c117c65cebd92c8ee38ae406e8c9a) Thanks [@k1LoW](https://github.com/k1LoW)! - Fix workflow bundle build failure caused by dead default imports after cross-file trigger transformation
+
+- [#1085](https://github.com/tailor-platform/sdk/pull/1085) [`0947e14`](https://github.com/tailor-platform/sdk/commit/0947e14daf39bf35b84f496984c32acb4c7bc24b) Thanks [@k1LoW](https://github.com/k1LoW)! - Add `concurrencyPolicy` option to `createWorkflow` for limiting concurrent workflow executions
+
 ## 1.44.0
 
 ### Minor Changes
