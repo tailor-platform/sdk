@@ -13,6 +13,14 @@ import { detectTriggerCalls, findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
 import { transformFunctionTriggers } from "./trigger-transformer";
 
+function safeRealpath(p: string): string {
+  try {
+    return fs.realpathSync(path.resolve(p));
+  } catch {
+    return path.resolve(p);
+  }
+}
+
 interface JobInfo {
   name: string;
   exportName: string;
@@ -342,7 +350,7 @@ async function bundleSingleJob(
             // keep their exports intact for rolldown to resolve cross-file
             // imports (e.g. `import workflow from "./other-workflow"`).
             let transformed = code;
-            const isJobSourceFile = path.resolve(id) === path.resolve(job.sourceFile);
+            const isJobSourceFile = safeRealpath(id) === safeRealpath(job.sourceFile);
             if (isJobSourceFile) {
               transformed = transformWorkflowSource(
                 code,
