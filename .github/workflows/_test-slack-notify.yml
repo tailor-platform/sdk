@@ -4,7 +4,9 @@ name: _test-slack-notify
 # Delete this file after the dry run on the release-ci-slack-notify branch.
 
 on:
-  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/_test-slack-notify.yml
 
 jobs:
   smoke:
