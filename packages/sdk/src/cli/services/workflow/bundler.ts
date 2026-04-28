@@ -14,10 +14,12 @@ import { transformWorkflowSource } from "./source-transformer";
 import { transformFunctionTriggers } from "./trigger-transformer";
 
 function safeRealpath(p: string): string {
+  const resolved = path.resolve(p);
   try {
-    return fs.realpathSync(path.resolve(p));
-  } catch {
-    return path.resolve(p);
+    return fs.realpathSync(resolved);
+  } catch (e) {
+    logger.debug(`realpathSync failed for ${resolved}: ${e instanceof Error ? e.message : e}`);
+    return resolved;
   }
 }
 
