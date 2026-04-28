@@ -1,4 +1,5 @@
 import { parseSync } from "oxc-parser";
+import * as path from "pathe";
 import { describe, expect, it } from "vitest";
 import { findAllJobs, detectTriggerCalls, buildJobNameMap } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
@@ -1359,14 +1360,15 @@ export const job = createWorkflowJob({
 `;
       const workflowNameMap = new Map<string, string>();
       const jobNameMap = new Map<string, string>();
-      const workflowFileMap = new Map([["/tmp/test-project/workflows/simple", "simple-workflow"]]);
+      const baseDir = path.resolve("/tmp/test-project/workflows");
+      const workflowFileMap = new Map([[path.join(baseDir, "simple"), "simple-workflow"]]);
 
       const result = transformFunctionTriggers(
         source,
         workflowNameMap,
         jobNameMap,
         workflowFileMap,
-        "/tmp/test-project/workflows/caller.ts",
+        path.join(baseDir, "caller.ts"),
       );
 
       expect(result).toContain('tailor.workflow.triggerWorkflow("simple-workflow"');
