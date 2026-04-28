@@ -175,10 +175,10 @@ defineIdp("my-idp", {
 });
 ```
 
-**Auto-configuration:** When `publishUserEvents` is omitted, the SDK enables it automatically during `apply` if the project defines any executor with an `idpUser` trigger. Set the value explicitly to override:
+**Auto-configuration:** When `publishUserEvents` is omitted, the SDK enables it automatically during `apply` for each IdP that is targeted by an executor's `idpUser` trigger. Targeting is per-IdP: an executor specifies which IdP it subscribes to via the trigger's `idp` option (required in multi-IdP projects). Set the value explicitly to override:
 
 - `publishUserEvents: true`: always publish events.
-- `publishUserEvents: false`: never publish events. The SDK warns when executors with `idpUser` triggers are present, since those executors will not fire for this IdP.
+- `publishUserEvents: false`: never publish events. `apply` rejects this with an error if any executor's `idpUser` trigger targets this IdP — either remove `publishUserEvents: false` or remove the matching trigger.
 
 ## Using idp.provider()
 

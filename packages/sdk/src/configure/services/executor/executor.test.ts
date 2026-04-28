@@ -942,6 +942,12 @@ describe("idpUserTrigger (multi-event)", () => {
     const trigger = idpUserTrigger({ events: ["created", "deleted"] });
     expect(trigger.kind).toBe("idpUser");
     expect(trigger.events).toEqual(["idp.user.created", "idp.user.deleted"]);
+    expect(trigger.idp).toBeUndefined();
+  });
+
+  test("can specify an idp namespace", () => {
+    const trigger = idpUserTrigger({ events: ["created"], idp: "my-idp" });
+    expect(trigger.idp).toBe("my-idp");
   });
 
   test("args have kind discriminant", () => {

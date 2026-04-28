@@ -101,6 +101,23 @@ describe("generateTypeDefinition", () => {
     expect(result).toContain("kiosk: true;");
     expect(result).not.toContain('"kiosk": true;');
   });
+
+  it("should generate empty IdpNameRegistry when no idps provided", () => {
+    const result = generateTypeDefinition(undefined, undefined);
+
+    expect(result).toContain("interface IdpNameRegistry {}");
+  });
+
+  it("should generate IdpNameRegistry with idp names", () => {
+    const result = generateTypeDefinition(undefined, undefined, undefined, undefined, [
+      "primary-idp",
+      "backoffice",
+    ]);
+
+    expect(result).toContain("interface IdpNameRegistry");
+    expect(result).toContain('"primary-idp": true;');
+    expect(result).toContain("backoffice: true;");
+  });
 });
 
 describe("resolveTypeDefinitionPath", () => {
@@ -187,5 +204,34 @@ describe("extractAttributesFromConfig + generateTypeDefinition", () => {
     expect(content).toContain("interface MachineUserNameRegistry");
     expect(content).toContain("admin: true;");
     expect(content).toContain("worker: true;");
+  });
+
+  it("extracts idp names into IdpNameRegistry", () => {
+    const config = {
+      name: "test-app",
+      idp: [{ name: "primary-idp" } as never, { name: "backoffice" } as never],
+    };
+
+    const { idpNames } = extractAttributesFromConfig(config);
+    expect(idpNames).toEqual(["primary-idp", "backoffice"]);
+
+    const content = generateTypeDefinition(undefined, undefined, undefined, undefined, idpNames);
+    expect(content).toContain("interface IdpNameRegistry");
+    expect(content).toContain('"primary-idp": true;');
+    expect(content).toContain("backoffice: true;");
+  });
+
+  it("de-duplicates idp names so the registry has unique keys", () => {
+    const config = {
+      name: "test-app",
+      idp: [
+        { name: "primary-idp" } as never,
+        { name: "backoffice" } as never,
+        { name: "primary-idp" } as never,
+      ],
+    };
+
+    const { idpNames } = extractAttributesFromConfig(config);
+    expect(idpNames).toEqual(["primary-idp", "backoffice"]);
   });
 });

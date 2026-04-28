@@ -66,6 +66,8 @@ export type IdpUserTrigger = {
   kind: "idpUser";
   /** IdP user event types to trigger on */
   events: ("idp.user.created" | "idp.user.updated" | "idp.user.deleted")[];
+  /** IdP namespace name to subscribe to. If omitted, the project's only IdP is used; throws when multiple IdPs exist. */
+  idp?: string | undefined;
 };
 export type IdpUserTriggerInput = IdpUserTrigger;
 
@@ -223,6 +225,7 @@ export type ExecutorInput = {
     | {
         kind: "idpUser";
         events: ("idp.user.created" | "idp.user.updated" | "idp.user.deleted")[];
+        idp?: string | undefined;
       }
     | {
         kind: "authAccessToken";
@@ -279,6 +282,7 @@ export type Executor = {
     | {
         kind: "idpUser";
         events: ("idp.user.created" | "idp.user.updated" | "idp.user.deleted")[];
+        idp?: string | undefined;
       }
     | {
         kind: "authAccessToken";

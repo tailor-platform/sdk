@@ -130,7 +130,15 @@ Fire when IdP users are created, updated, or deleted:
 idpUserCreatedTrigger();
 ```
 
-These triggers require the IdP to publish user lifecycle events. The SDK enables `publishUserEvents` on the IdP automatically during `apply` when any executor uses an `idpUser` trigger; set the value explicitly on `defineIdp()` to override. See [IdP service - publishUserEvents](./idp.md#publishuserevents).
+When the project defines multiple IdPs, pass `idp` to target a specific one. The name is type-narrowed via the generated `IdpName` type:
+
+```typescript
+idpUserCreatedTrigger({ idp: "my-idp" });
+```
+
+Omitting `idp` is allowed only when the project has exactly one IdP; otherwise `apply` fails with an error listing the configured IdPs.
+
+These triggers require the IdP to publish user lifecycle events. The SDK enables `publishUserEvents` automatically during `apply` on each IdP that is targeted by an `idpUser` trigger; set the value explicitly on `defineIdp()` to override. See [IdP service - publishUserEvents](./idp.md#publishuserevents).
 
 ### Auth Access Token Triggers
 
@@ -178,6 +186,12 @@ export default createExecutor({
 
 ```typescript
 idpUserTrigger({ events: ["created", "deleted"] });
+```
+
+In multi-IdP projects, add `idp` to target a specific IdP:
+
+```typescript
+idpUserTrigger({ events: ["created", "deleted"], idp: "my-idp" });
 ```
 
 #### `authAccessTokenTrigger()`
