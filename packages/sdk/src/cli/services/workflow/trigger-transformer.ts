@@ -187,8 +187,14 @@ function buildReferenceCountMap(program: Program, names: Set<string>): Map<strin
           (parentNode as { type?: string }).type === "MemberExpression" &&
           parentKey === "property" &&
           !(parentNode as { computed?: boolean }).computed;
+        const isObjectPropertyKey =
+          parentNode &&
+          (parentNode as { type?: string }).type === "Property" &&
+          parentKey === "key" &&
+          !(parentNode as { shorthand?: boolean }).shorthand &&
+          !(parentNode as { computed?: boolean }).computed;
 
-        if (!isMemberProperty) {
+        if (!isMemberProperty && !isObjectPropertyKey) {
           counts.set(identName, (counts.get(identName) ?? 0) + 1);
         }
       }
