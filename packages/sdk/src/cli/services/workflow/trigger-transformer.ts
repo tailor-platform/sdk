@@ -1,5 +1,11 @@
 import { parseSync } from "oxc-parser";
-import { type ASTNode, type Replacement, applyReplacements, resolvePath } from "./ast-utils";
+import {
+  type ASTNode,
+  type Replacement,
+  applyReplacements,
+  findStatementEnd,
+  resolvePath,
+} from "./ast-utils";
 import { detectDefaultImports } from "./workflow-detector";
 import type {
   Program,
@@ -9,6 +15,8 @@ import type {
   StaticMemberExpression,
   IdentifierReference,
   AwaitExpression,
+  ImportDeclaration,
+  ImportDefaultSpecifier,
 } from "@oxc-project/types";
 
 interface AuthInvokerInfo {
@@ -89,6 +97,177 @@ function extractAuthInvokerInfo(
   }
 
   return undefined;
+}
+
+/**
+ * Check if an AST binding pattern (parameter, catch clause, etc.) contains an Identifier with the given name.
+ * @param node - AST node to inspect
+ * @param name - Identifier name to look for
+ * @returns True if the binding pattern contains the name
+ */
+function containsBindingName(node: ASTNode | null | undefined, name: string): boolean {
+  if (!node || typeof node !== "object") return false;
+  if (
+    (node as { type?: string }).type === "Identifier" &&
+    (node as { name?: string }).name === name
+  )
+    return true;
+  for (const key of Object.keys(node)) {
+    const child = node[key] as unknown;
+    if (Array.isArray(child)) {
+      if (child.some((c) => containsBindingName(c as ASTNode, name))) return true;
+    } else if (child && typeof child === "object") {
+      if (containsBindingName(child as ASTNode, name)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Build a map of reference counts for multiple identifiers in a single AST pass.
+ * Scope-aware: references inside functions or catch clauses that shadow the name
+ * via parameters are excluded, so only references to the original import binding
+ * are counted.
+ * Excludes import declarations and property names in non-computed member expressions.
+ * @param program - The parsed AST program
+ * @param names - Set of identifier names to count
+ * @returns Map from identifier name to reference count
+ */
+function buildReferenceCountMap(program: Program, names: Set<string>): Map<string, number> {
+  if (names.size === 0) return new Map();
+
+  const counts = new Map<string, number>();
+  const shadowDepth = new Map<string, number>();
+  for (const name of names) {
+    counts.set(name, 0);
+    shadowDepth.set(name, 0);
+  }
+
+  function walk(node: ASTNode | null | undefined, parentNode?: ASTNode, parentKey?: string): void {
+    if (!node || typeof node !== "object") return;
+
+    const nodeType = (node as { type?: string }).type;
+
+    if (nodeType === "ImportDeclaration") return;
+
+    // Track scope shadowing from function/catch parameters
+    const shadowedHere: string[] = [];
+    if (
+      nodeType === "FunctionDeclaration" ||
+      nodeType === "FunctionExpression" ||
+      nodeType === "ArrowFunctionExpression"
+    ) {
+      const params = (node as { params?: unknown[] }).params;
+      if (params) {
+        for (const name of names) {
+          if (params.some((p) => containsBindingName(p as ASTNode, name))) {
+            shadowDepth.set(name, (shadowDepth.get(name) ?? 0) + 1);
+            shadowedHere.push(name);
+          }
+        }
+      }
+    }
+    if (nodeType === "CatchClause") {
+      const param = (node as { param?: unknown }).param;
+      if (param) {
+        for (const name of names) {
+          if (containsBindingName(param as ASTNode, name)) {
+            shadowDepth.set(name, (shadowDepth.get(name) ?? 0) + 1);
+            shadowedHere.push(name);
+          }
+        }
+      }
+    }
+
+    if (nodeType === "Identifier") {
+      const identName = (node as { name?: string }).name;
+      if (identName && names.has(identName) && (shadowDepth.get(identName) ?? 0) === 0) {
+        const isMemberProperty =
+          parentNode &&
+          (parentNode as { type?: string }).type === "MemberExpression" &&
+          parentKey === "property" &&
+          !(parentNode as { computed?: boolean }).computed;
+        const isObjectPropertyKey =
+          parentNode &&
+          (parentNode as { type?: string }).type === "Property" &&
+          parentKey === "key" &&
+          !(parentNode as { shorthand?: boolean }).shorthand &&
+          !(parentNode as { computed?: boolean }).computed;
+
+        if (!isMemberProperty && !isObjectPropertyKey) {
+          counts.set(identName, (counts.get(identName) ?? 0) + 1);
+        }
+      }
+    }
+
+    for (const key of Object.keys(node)) {
+      const child = node[key] as unknown;
+      if (Array.isArray(child)) {
+        child.forEach((c: unknown) => walk(c as ASTNode | null, node, key));
+      } else if (child && typeof child === "object") {
+        walk(child as ASTNode, node, key);
+      }
+    }
+
+    for (const name of shadowedHere) {
+      shadowDepth.set(name, (shadowDepth.get(name) ?? 0) - 1);
+    }
+  }
+
+  walk(program as unknown as ASTNode);
+  return counts;
+}
+
+interface ImportRemovalRange {
+  start: number;
+  end: number;
+  /** True when the entire import declaration should be removed (including trailing newline). */
+  isFullDeclaration: boolean;
+}
+
+/**
+ * Find the text range to remove for a dead default import.
+ *
+ * - Default-only import (`import wf from "..."`): returns the full declaration range.
+ * - Mixed import (`import wf, { helper } from "..."`): returns the range covering
+ *   the default specifier and trailing comma/whitespace so the result becomes
+ *   `import { helper } from "..."`.
+ * @param program - The parsed AST program
+ * @param localName - The local name of the default import
+ * @param source - The source code text (used to locate the `{` in mixed imports)
+ * @returns Range to remove, or null if the import was not found
+ */
+function findDefaultImportRemovalRange(
+  program: Program,
+  localName: string,
+  source: string,
+): ImportRemovalRange | null {
+  for (const statement of program.body) {
+    if (statement.type !== "ImportDeclaration") continue;
+
+    const importDecl = statement as unknown as ImportDeclaration;
+    const specifiers = importDecl.specifiers || [];
+
+    for (const spec of specifiers) {
+      if (spec.type !== "ImportDefaultSpecifier") continue;
+
+      const defaultSpec = spec as ImportDefaultSpecifier;
+      if (defaultSpec.local?.name !== localName) continue;
+
+      if (specifiers.length === 1) {
+        return { start: importDecl.start, end: importDecl.end, isFullDeclaration: true };
+      }
+
+      // Mixed import: remove "wf, " up to the "{" so the result is "import { ... } from ..."
+      const braceIndex = source.indexOf("{", defaultSpec.end);
+      if (braceIndex !== -1) {
+        return { start: defaultSpec.start, end: braceIndex, isFullDeclaration: false };
+      }
+      return null;
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -222,6 +401,9 @@ export function transformFunctionTriggers(
   // This includes both named exports (from workflowNameMap) and default imports (resolved via workflowFileMap)
   const localWorkflowNameMap = new Map(workflowNameMap);
 
+  // Track which default imports resolved to workflows (candidates for dead import removal)
+  const workflowDefaultImportNames = new Set<string>();
+
   if (workflowFileMap && currentFilePath) {
     // Detect default imports and resolve them to workflow names
     const defaultImports = detectDefaultImports(program);
@@ -236,6 +418,7 @@ export function transformFunctionTriggers(
       const workflowName = workflowFileMap.get(resolvedPath);
       if (workflowName) {
         localWorkflowNameMap.set(localName, workflowName);
+        workflowDefaultImportNames.add(localName);
       }
     }
   }
@@ -251,6 +434,9 @@ export function transformFunctionTriggers(
   // Whether any workflow trigger authInvoker was wrapped with the runtime
   // normalizer. Used to decide whether to inject the helper at the top.
   let needsNormalizerHelper = false;
+
+  // Track how many trigger calls were transformed per identifier (for dead import detection)
+  const transformedCallsPerIdentifier = new Map<string, number>();
 
   for (const call of triggerCalls) {
     if (call.kind === "workflow" && call.authInvoker) {
@@ -280,6 +466,10 @@ export function transformFunctionTriggers(
           end: call.callRange.end,
           text: transformedCall,
         });
+        transformedCallsPerIdentifier.set(
+          call.identifierName,
+          (transformedCallsPerIdentifier.get(call.identifierName) ?? 0) + 1,
+        );
       }
     } else if (call.kind === "job") {
       // Job trigger - get job name from map
@@ -296,6 +486,33 @@ export function transformFunctionTriggers(
           start: range.start,
           end: range.end,
           text: transformedCall,
+        });
+        transformedCallsPerIdentifier.set(
+          call.identifierName,
+          (transformedCallsPerIdentifier.get(call.identifierName) ?? 0) + 1,
+        );
+      }
+    }
+  }
+
+  // Remove default import declarations that became dead after trigger transformation.
+  // A default import is dead when it has no remaining references, either because
+  // it was already unused or because all references to its local identifier were
+  // .trigger() calls that have been rewritten above.
+  // Single AST pass for all candidate names; scope-aware to ignore shadowed references.
+  const refCounts = buildReferenceCountMap(program, workflowDefaultImportNames);
+
+  for (const localName of workflowDefaultImportNames) {
+    const transformedCount = transformedCallsPerIdentifier.get(localName) ?? 0;
+    const refCount = refCounts.get(localName) ?? 0;
+
+    if (refCount === 0 || transformedCount >= refCount) {
+      const removal = findDefaultImportRemovalRange(program, localName, source);
+      if (removal) {
+        replacements.push({
+          start: removal.start,
+          end: removal.isFullDeclaration ? findStatementEnd(source, removal.end) : removal.end,
+          text: "",
         });
       }
     }
