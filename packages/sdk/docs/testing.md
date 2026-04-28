@@ -130,50 +130,6 @@ test("workflow triggers jobs", async () => {
 workflowMock.enqueueResult({ valid: true }, { txnId: "txn-1" });
 ```
 
-### Per-Project Configuration
-
-Apply the runtime environment only to unit tests while keeping other test projects (bundled, e2e) in the default Node.js environment:
-
-```typescript
-export default defineConfig({
-  plugins: [tailorRuntime()],
-  test: {
-    projects: [
-      {
-        test: {
-          name: "unit",
-          environment: "tailor-runtime",
-          include: ["src/**/*.test.ts"],
-        },
-      },
-      {
-        test: {
-          name: "e2e",
-          include: ["e2e/**/*.test.ts"],
-          globalSetup: "e2e/globalSetup.ts",
-        },
-      },
-    ],
-  },
-});
-```
-
-### Known Limitations
-
-- **`process` and `require`** are not removed or blocked. Vitest's internal runner depends on them extensively. On the real platform runtime, they do not exist.
-- **Dynamic `import()`** of bundled files (via `createImportMain()`) bypasses the transform hook since those files are loaded through the Node.js native loader.
-- **Platform API mocks return default values** — All platform APIs are mocked with default return values. Use control objects to configure responses:
-
-| Control Object       | API                     | Methods                                                                                               |
-| -------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------- |
-| `tailordbMock`       | `tailordb.Client`       | `setQueryResolver`, `enqueueResult`, `executedQueries`, `createdClients`                              |
-| `workflowMock`       | `tailor.workflow`       | `setJobHandler`, `enqueueResult`, `triggeredJobs`, `setWorkflowExecutionId`, `setWaitResult`, `calls` |
-| `secretmanagerMock`  | `tailor.secretmanager`  | `setSecrets`, `calls`                                                                                 |
-| `authconnectionMock` | `tailor.authconnection` | `setTokens`, `calls`                                                                                  |
-| `idpMock`            | `tailor.idp`            | `setResolver`, `enqueueResult`, `calls`                                                               |
-| `fileMock`           | `tailordb.file`         | `setResolver`, `enqueueResult`, `calls`                                                               |
-| `iconvMock`          | `tailor.iconv`          | `setResolver`, `calls`                                                                                |
-
 ### SecretManager Mock
 
 ```typescript
@@ -291,6 +247,49 @@ export default defineConfig({
 ```
 
 This makes `tailor.secretmanager.getSecret("vault", "key")` return the values defined in your config. You can still override with `secretmanagerMock.setSecrets()` in individual tests.
+
+### Per-Project Configuration
+
+Apply the runtime environment only to unit tests while keeping other test projects (e.g. e2e) in the default Node.js environment:
+
+```typescript
+export default defineConfig({
+  plugins: [tailorRuntime()],
+  test: {
+    projects: [
+      {
+        test: {
+          name: "unit",
+          environment: "tailor-runtime",
+          include: ["src/**/*.test.ts"],
+        },
+      },
+      {
+        test: {
+          name: "e2e",
+          include: ["e2e/**/*.test.ts"],
+          globalSetup: "e2e/globalSetup.ts",
+        },
+      },
+    ],
+  },
+});
+```
+
+### Known Limitations
+
+- **`process` and `require`** are not removed or blocked. Vitest's internal runner depends on them extensively. On the real platform runtime, they do not exist.
+- **Platform API mocks return default values** — All platform APIs are mocked with default return values. Use control objects to configure responses:
+
+| Control Object       | API                     | Methods                                                                                               |
+| -------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------- |
+| `tailordbMock`       | `tailordb.Client`       | `setQueryResolver`, `enqueueResult`, `executedQueries`, `createdClients`                              |
+| `workflowMock`       | `tailor.workflow`       | `setJobHandler`, `enqueueResult`, `triggeredJobs`, `setWorkflowExecutionId`, `setWaitResult`, `calls` |
+| `secretmanagerMock`  | `tailor.secretmanager`  | `setSecrets`, `calls`                                                                                 |
+| `authconnectionMock` | `tailor.authconnection` | `setTokens`, `calls`                                                                                  |
+| `idpMock`            | `tailor.idp`            | `setResolver`, `enqueueResult`, `calls`                                                               |
+| `fileMock`           | `tailordb.file`         | `setResolver`, `enqueueResult`, `calls`                                                               |
+| `iconvMock`          | `tailor.iconv`          | `setResolver`, `calls`                                                                                |
 
 ## Unit Tests
 
