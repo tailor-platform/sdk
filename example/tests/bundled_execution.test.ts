@@ -1,13 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
+import { tailordbMock, workflowMock } from "@tailor-platform/sdk/vitest";
 import { format as formatDate } from "date-fns";
-import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
-import {
-  createImportMain,
-  setupInvokerMock,
-  setupTailordbMock,
-  setupWorkflowMock,
-} from "./bundled-test-helpers";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import { createImportMain } from "./createImportMain";
 
 describe("bundled execution tests", () => {
   const actualDir = path.join(__dirname, "fixtures/plugins");
@@ -18,12 +14,19 @@ describe("bundled execution tests", () => {
   beforeAll(() => {
     vi.useFakeTimers();
     vi.setSystemTime(fixedSystemTime);
-    setupTailordbMock();
-    setupInvokerMock(null);
   });
 
   afterAll(() => {
     vi.useRealTimers();
+  });
+
+  beforeEach(() => {
+    tailordbMock.reset();
+    workflowMock.reset();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   const importActualMain = createImportMain(actualDir);
@@ -67,12 +70,12 @@ describe("bundled execution tests", () => {
     });
 
     test("resolvers/showUserInfo.js returns user and invoker information", async () => {
-      setupInvokerMock({
+      vi.spyOn(globalThis.tailor.context, "getInvoker").mockReturnValue({
         id: "f1e2d3c4-b5a6-4798-89a0-1b2c3d4e5f60",
         type: "machine_user",
         workspaceId: "b39bdd61-d442-4a4e-8599-33a78a4e19ab",
-        attributes: { role: "MANAGER" },
-        attributeList: [],
+        attributes: [],
+        attributeMap: { role: "MANAGER" },
       });
 
       const main = await importActualMain("resolvers/showUserInfo.js");
@@ -102,7 +105,7 @@ describe("bundled execution tests", () => {
     });
 
     test("resolvers/stepChain.js returns result with summary", async () => {
-      setupTailordbMock((query) => {
+      tailordbMock.setQueryResolver((query) => {
         const normalizedQuery = query.replace(/["`]/g, "").toUpperCase();
         if (normalizedQuery.includes("SELECT NAME FROM USER ORDER BY CREATEDAT DESC")) {
           return [{ name: "Alice" }];
@@ -141,7 +144,7 @@ describe("bundled execution tests", () => {
 
   describe("executors", () => {
     test("executors/user-created.js uses the tailordb client", async () => {
-      const { executedQueries, createdClients } = setupTailordbMock((query, params) => {
+      tailordbMock.setQueryResolver((query, params) => {
         if (query.includes("select * from User where id = $1")) {
           expect(params).toEqual(["user-1"]);
           return [
@@ -159,20 +162,20 @@ describe("bundled execution tests", () => {
       const result = await main(payload);
 
       expect(result).toBeUndefined();
-      expect(executedQueries).toEqual([
+      expect(tailordbMock.executedQueries).toEqual([
         { query: 'select * from "User" where "id" = $1', params: ["user-1"] },
         {
           query: 'insert into "UserLog" ("userID", "message") values ($1, $2)',
           params: ["user-1", "User created: undefined (undefined)"],
         },
       ]);
-      expect(createdClients).toMatchObject([{ namespace: "tailordb" }]);
+      expect(tailordbMock.createdClients).toMatchObject([{ namespace: "tailordb" }]);
     });
   });
 
   describe("workflow-jobs", () => {
     test("workflow-jobs/process-order.js calls dependent jobs correctly", async () => {
-      const { triggeredJobs } = setupWorkflowMock((jobName, args) => {
+      workflowMock.setJobHandler((jobName, args) => {
         if (jobName === "fetch-customer") {
           const { customerId } = args as { customerId: string };
           return { id: customerId, email: "customer@example.com" };
@@ -197,7 +200,7 @@ describe("bundled execution tests", () => {
         processedAt: "2025-01-01 12:00:00",
       });
 
-      expect(triggeredJobs).toEqual([
+      expect(workflowMock.triggeredJobs).toEqual([
         { jobName: "fetch-customer", args: { customerId: "customer-456" } },
         {
           jobName: "send-notification",
@@ -210,7 +213,7 @@ describe("bundled execution tests", () => {
     });
 
     test("workflow-jobs/process-order.js throws error when customer not found", async () => {
-      setupWorkflowMock(() => null);
+      workflowMock.setJobHandler(() => null);
 
       const main = await importActualMain("workflow-jobs/process-order.js");
 
@@ -250,7 +253,7 @@ describe("bundled execution tests", () => {
     });
 
     test("workflow-jobs/validate-order.js triggers check-inventory job", async () => {
-      const { triggeredJobs } = setupWorkflowMock((jobName) => {
+      workflowMock.setJobHandler((jobName) => {
         if (jobName === "check-inventory") {
           return formatExpectation;
         }
@@ -265,7 +268,7 @@ describe("bundled execution tests", () => {
         paymentResult: null,
       });
 
-      expect(triggeredJobs).toEqual([
+      expect(workflowMock.triggeredJobs).toEqual([
         { jobName: "check-inventory", args: undefined },
         { jobName: "process-payment", args: undefined },
       ]);
