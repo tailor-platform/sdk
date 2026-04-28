@@ -11,10 +11,13 @@ import {
 } from "./grouped-display";
 import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { Workflow, RetryPolicy } from "@/types/workflow.generated";
+import type { ConcurrencyPolicy, Workflow, RetryPolicy } from "@/types/workflow.generated";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
-import type { RetryPolicySchema } from "@tailor-proto/tailor/v1/workflow_resource_pb";
+import type {
+  ConcurrencyPolicySchema,
+  RetryPolicySchema,
+} from "@tailor-proto/tailor/v1/workflow_resource_pb";
 
 /**
  * Apply workflow changes for the given phase.
@@ -54,6 +57,9 @@ export async function applyWorkflow(
           ...(create.workflow.retryPolicy && {
             retryPolicy: toRetryPolicy(create.workflow.retryPolicy),
           }),
+          ...(create.workflow.concurrencyPolicy && {
+            concurrencyPolicy: toConcurrencyPolicy(create.workflow.concurrencyPolicy),
+          }),
         });
         await client.setMetadata(create.metaRequest);
       }),
@@ -69,6 +75,9 @@ export async function applyWorkflow(
           jobFunctions: filteredVersions,
           ...(update.workflow.retryPolicy && {
             retryPolicy: toRetryPolicy(update.workflow.retryPolicy),
+          }),
+          ...(update.workflow.concurrencyPolicy && {
+            concurrencyPolicy: toConcurrencyPolicy(update.workflow.concurrencyPolicy),
           }),
         });
         await client.setMetadata(update.metaRequest);
@@ -247,6 +256,14 @@ function toRetryPolicy(policy: RetryPolicy): MessageInitShape<typeof RetryPolicy
     initialBackoff: parseDurationToProto(policy.initialBackoff),
     maxBackoff: parseDurationToProto(policy.maxBackoff),
     backoffMultiplier: policy.backoffMultiplier,
+  };
+}
+
+function toConcurrencyPolicy(
+  policy: ConcurrencyPolicy,
+): MessageInitShape<typeof ConcurrencyPolicySchema> {
+  return {
+    maxConcurrentExecutions: policy.maxConcurrentExecutions,
   };
 }
 
@@ -434,6 +451,9 @@ function canTreatWorkflowAsUnchanged(
       initialBackoff?: { seconds?: bigint; nanos?: number };
       maxBackoff?: { seconds?: bigint; nanos?: number };
     };
+    concurrencyPolicy?: {
+      maxConcurrentExecutions?: number;
+    };
     jobFunctions?: Record<string, string | bigint>;
   },
   workflow: Workflow,
@@ -455,6 +475,9 @@ function areWorkflowsEqual(
       initialBackoff?: { seconds?: bigint; nanos?: number };
       maxBackoff?: { seconds?: bigint; nanos?: number };
     };
+    concurrencyPolicy?: {
+      maxConcurrentExecutions?: number;
+    };
     jobFunctions?: Record<string, string | bigint>;
   },
   workflow: Workflow,
@@ -465,6 +488,10 @@ function areWorkflowsEqual(
     areNormalizedEqual(
       normalizeComparableExistingWorkflowRetryPolicy(existing.retryPolicy),
       normalizeComparableWorkflowRetryPolicy(workflow.retryPolicy),
+    ) &&
+    areNormalizedEqual(
+      normalizeComparableConcurrencyPolicy(existing.concurrencyPolicy),
+      normalizeComparableConcurrencyPolicy(workflow.concurrencyPolicy),
     ) &&
     areNormalizedEqual(
       normalizeComparableWorkflowJobNames(existing.jobFunctions),
@@ -512,6 +539,15 @@ function normalizeComparableWorkflowRetryPolicy(policy: RetryPolicy | undefined)
     initialBackoff: parseDurationToProto(policy.initialBackoff),
     maxBackoff: parseDurationToProto(policy.maxBackoff),
   });
+}
+
+function normalizeComparableConcurrencyPolicy(
+  policy: { maxConcurrentExecutions?: number } | undefined,
+) {
+  if (!policy || !policy.maxConcurrentExecutions) {
+    return undefined;
+  }
+  return { maxConcurrentExecutions: policy.maxConcurrentExecutions };
 }
 
 function normalizeComparableWorkflowJobNames(

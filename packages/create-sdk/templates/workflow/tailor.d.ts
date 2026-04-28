@@ -13,6 +13,7 @@ declare module "@tailor-platform/sdk" {
   interface MachineUserNameRegistry {
     admin: true;
   }
+  interface IdpNameRegistry {}
 }
 
 export {};

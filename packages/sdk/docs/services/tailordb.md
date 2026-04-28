@@ -586,3 +586,9 @@ db.type("User", {
 ```
 
 **Warning**: Do not use `unsafeAllowAllTypePermission` or `unsafeAllowAllGqlPermission` in production environments as they effectively disable authorization checks.
+
+## Migrations
+
+When you change a TailorDB type definition, the SDK can generate a migration that captures the diff and, for breaking changes, runs a data transformation script during `tailor-sdk apply`. See the [TailorDB Migrations guide](./tailordb-migration.md) for the full workflow, configuration, supported change types, team coordination, and troubleshooting.
+
+For the CLI command reference, see [`tailordb migration`](../cli/tailordb.md#tailordb-migration).

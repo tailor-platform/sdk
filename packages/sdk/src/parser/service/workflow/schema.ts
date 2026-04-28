@@ -48,8 +48,20 @@ export const RetryPolicySchema = z
     path: ["initialBackoff"],
   });
 
+export const ConcurrencyPolicySchema = z.object({
+  maxConcurrentExecutions: z
+    .number()
+    .int()
+    .min(1)
+    .max(1000)
+    .describe("Maximum number of concurrent executions (1-1000)"),
+});
+
 export const WorkflowSchema = z.object({
   name: z.string().describe("Workflow name"),
   mainJob: WorkflowJobSchema.describe("Main job that starts the workflow"),
   retryPolicy: RetryPolicySchema.optional().describe("Retry policy for the workflow"),
+  concurrencyPolicy: ConcurrencyPolicySchema.optional().describe(
+    "Concurrency policy for the workflow",
+  ),
 });

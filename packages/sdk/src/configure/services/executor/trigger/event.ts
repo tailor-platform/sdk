@@ -1,5 +1,6 @@
 import type { ResolverConfig } from "@/configure/services/resolver/resolver";
 import type { TailorDBType } from "@/configure/services/tailordb/schema";
+import type { IdpName } from "@/configure/types/idp-name";
 import type { TailorActor } from "@/types/actor";
 import type { TailorEnv } from "@/types/env";
 import type {
@@ -293,59 +294,92 @@ export type IdpUserTrigger<Args> = ParserIdpUserTrigger & {
   __args: Args;
 };
 
+type IdpUserSingleTriggerOptions = {
+  /**
+   * IdP namespace name to subscribe to. Required when the project defines
+   * multiple IdPs; optional when a single IdP exists. Must match an IdP name
+   * declared in `defineConfig({ idp: [...] })`.
+   */
+  idp?: IdpName;
+};
+
 /**
  * Create a trigger that fires when an IdP user is created.
+ * @param options - Trigger options
+ * @param options.idp - IdP namespace name to subscribe to
  * @returns IdP user created trigger
  */
-export function idpUserCreatedTrigger(): IdpUserTrigger<IdpUserCreatedArgs> {
+export function idpUserCreatedTrigger(
+  options?: IdpUserSingleTriggerOptions,
+): IdpUserTrigger<IdpUserCreatedArgs> {
   return {
     kind: "idpUser",
     events: ["idp.user.created"],
+    ...(options?.idp != null ? { idp: options.idp } : {}),
     __args: {} as IdpUserCreatedArgs,
   };
 }
 
 /**
  * Create a trigger that fires when an IdP user is updated.
+ * @param options - Trigger options
+ * @param options.idp - IdP namespace name to subscribe to
  * @returns IdP user updated trigger
  */
-export function idpUserUpdatedTrigger(): IdpUserTrigger<IdpUserUpdatedArgs> {
+export function idpUserUpdatedTrigger(
+  options?: IdpUserSingleTriggerOptions,
+): IdpUserTrigger<IdpUserUpdatedArgs> {
   return {
     kind: "idpUser",
     events: ["idp.user.updated"],
+    ...(options?.idp != null ? { idp: options.idp } : {}),
     __args: {} as IdpUserUpdatedArgs,
   };
 }
 
 /**
  * Create a trigger that fires when an IdP user is deleted.
+ * @param options - Trigger options
+ * @param options.idp - IdP namespace name to subscribe to
  * @returns IdP user deleted trigger
  */
-export function idpUserDeletedTrigger(): IdpUserTrigger<IdpUserDeletedArgs> {
+export function idpUserDeletedTrigger(
+  options?: IdpUserSingleTriggerOptions,
+): IdpUserTrigger<IdpUserDeletedArgs> {
   return {
     kind: "idpUser",
     events: ["idp.user.deleted"],
+    ...(options?.idp != null ? { idp: options.idp } : {}),
     __args: {} as IdpUserDeletedArgs,
   };
 }
 
 type IdpUserTriggerOptions<K extends IdpUserEventKind[]> = {
   events: K;
+  /**
+   * IdP namespace name to subscribe to. Required when the project defines
+   * multiple IdPs; optional when a single IdP exists. Must match an IdP name
+   * declared in `defineConfig({ idp: [...] })`.
+   */
+  idp?: IdpName;
 };
 
 /**
  * Create a trigger that fires on multiple IdP user event types.
  * @template K
  * @param options - Trigger options with events array
+ * @param options.events - IdP user event kinds to subscribe to
+ * @param options.idp - IdP namespace name to subscribe to
  * @returns IdP user trigger
  */
 export function idpUserTrigger<const K extends [IdpUserEventKind, ...IdpUserEventKind[]]>(
   options: IdpUserTriggerOptions<K>,
 ): IdpUserTrigger<IdpUserMultiArgs<K>> {
-  const { events } = options;
+  const { events, idp } = options;
   return {
     kind: "idpUser",
     events: events.map((k) => idpUserEventMap[k]),
+    ...(idp != null ? { idp } : {}),
     __args: {} as IdpUserMultiArgs<K>,
   };
 }

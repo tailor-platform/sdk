@@ -14,6 +14,7 @@ declare module "@tailor-platform/sdk" {
     admin: true;
     viewer: true;
   }
+  interface IdpNameRegistry {}
 }
 
 export {};

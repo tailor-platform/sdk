@@ -1,77 +1,17 @@
-import { OperatorService } from "@tailor-proto/tailor/v1/service_pb";
 import { arg } from "politty";
 import { z } from "zod";
 import { configArg, workspaceArgs } from "@/cli/shared/args";
-import { platformBaseUrl, userAgent } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
+import { loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
+import { apiCall } from "./api-call";
+import { inspectCommand } from "./inspect";
+import { listCommand } from "./list";
+import { extractMethodName, getMethodDescriptor, listMethodNames } from "./proto-reflect";
 import type { LoadedConfig } from "@/cli/shared/config-loader";
 
-export interface ApiCallOptions {
-  profile?: string;
-  endpoint: string;
-  body?: string;
-}
-
-export interface ApiCallResult {
-  status: number;
-  data: unknown;
-}
-
-/**
- * Call Tailor Platform API endpoints directly.
- * If the endpoint doesn't contain "/", it defaults to `tailor.v1.OperatorService/{endpoint}`.
- * @param options - API call options (profile, endpoint, body)
- * @returns Response status and data
- */
-export async function apiCall(options: ApiCallOptions): Promise<ApiCallResult> {
-  const accessToken = await loadAccessToken({
-    useProfile: true,
-    profile: options.profile,
-  });
-
-  // Determine the endpoint path
-  let endpointPath: string;
-  if (options.endpoint.includes("/")) {
-    endpointPath = options.endpoint;
-  } else {
-    // Default to OperatorService if no "/" in endpoint
-    endpointPath = `tailor.v1.OperatorService/${options.endpoint}`;
-  }
-
-  // Build the full URL
-  const url = new URL(endpointPath, platformBaseUrl);
-
-  // Make the request
-  const response = await fetch(url.toString(), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${accessToken}`,
-      "User-Agent": await userAgent(),
-    },
-    body: options.body ?? "{}",
-  });
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(`API call failed (${response.status}): ${JSON.stringify(data)}`);
-  }
-
-  return {
-    status: response.status,
-    data,
-  };
-}
-
-function getEndpointFieldNames(methodName: string): string[] {
-  const method = OperatorService.methods.find((m) => m.name === methodName);
-  if (!method) return [];
-  return method.input.fields.map((f) => f.jsonName);
-}
+export { apiCall, type ApiCallOptions, type ApiCallResult } from "./api-call";
 
 function resolveNamespaceName(methodName: string, config: LoadedConfig): string | undefined {
   if (/Auth|Tenant|UserProfile/.test(methodName)) {
@@ -117,7 +57,9 @@ function parseBodyAsObject(body: string): Record<string, unknown> | undefined {
 export const apiCommand = defineAppCommand({
   name: "api",
   description: "Call Tailor Platform API endpoints directly.",
-  notes: `The request body is inferred from the proto definition of the target endpoint, and commonly required fields are auto-injected so they can be omitted from \`--body\`:
+  notes: `Use \`tailor-sdk api list\` to enumerate invocable methods and \`tailor-sdk api inspect <endpoint>\` to print an endpoint's input message tree (combine with \`--json\` for machine-readable output).
+
+The request body is inferred from the proto definition of the target endpoint, and commonly required fields are auto-injected so they can be omitted from \`--body\`:
 
 - \`workspaceId\` — resolved from \`-w\` / \`TAILOR_PLATFORM_WORKSPACE_ID\` / the selected profile.
 - \`namespaceName\` — resolved from \`tailor.config.ts\` based on the endpoint's service:
@@ -125,31 +67,51 @@ export const apiCommand = defineAppCommand({
   - IdP / TailorDB / Pipeline endpoints use the sole configured namespace when exactly one is defined.
 
 Values already present in \`--body\` are never overridden. If a value cannot be resolved (e.g. no config found), injection is silently skipped and the server-side validation error takes precedence.`,
+  examples: [
+    {
+      cmd: 'GetApplication -b \'{"applicationName":"app-1"}\'',
+      desc: "Call an endpoint; workspaceId is auto-injected.",
+    },
+    {
+      cmd: "list",
+      desc: "List all invocable OperatorService methods.",
+    },
+    {
+      cmd: "inspect GetApplication",
+      desc: "Show the input message tree for an endpoint.",
+    },
+  ],
+  subCommands: {
+    list: listCommand,
+    inspect: inspectCommand,
+  },
   args: z
     .object({
       ...workspaceArgs,
       ...configArg,
       body: arg(z.string().default("{}"), {
         alias: "b",
-        description: "Request body as JSON",
+        description: "Request body as JSON.",
       }),
       endpoint: arg(z.string(), {
         positional: true,
         description:
-          "API endpoint to call (e.g., 'GetApplication' or 'tailor.v1.OperatorService/GetApplication')",
+          "API endpoint to call (e.g., 'GetApplication' or 'tailor.v1.OperatorService/GetApplication').",
+        completion: { custom: { choices: listMethodNames() } },
       }),
     })
     .strict(),
   run: async (args) => {
-    const methodName = args.endpoint.includes("/")
-      ? args.endpoint.split("/").pop()!
-      : args.endpoint;
+    const methodName = extractMethodName(args.endpoint);
+    const method = getMethodDescriptor(methodName);
 
     const parsedBody = parseBodyAsObject(args.body);
     let mutated = false;
 
-    if (parsedBody) {
-      const fieldNames = getEndpointFieldNames(methodName);
+    if (parsedBody && method) {
+      // Use localName so the presence check matches the keys --body parsing
+      // writes into the request body.
+      const fieldNames = method.input.fields.map((f) => f.localName);
 
       if (fieldNames.includes("workspaceId") && !("workspaceId" in parsedBody)) {
         try {
@@ -180,7 +142,7 @@ Values already present in \`--body\` are never overridden. If a value cannot be 
     const result = await apiCall({
       profile: args.profile,
       endpoint: args.endpoint,
-      body: mutated ? JSON.stringify(parsedBody) : args.body,
+      body: mutated && parsedBody ? JSON.stringify(parsedBody) : args.body,
     });
 
     logger.log(JSON.stringify(result.data, null, 2));

@@ -1,5 +1,55 @@
 # @tailor-platform/sdk
 
+## 1.45.0
+
+### Minor Changes
+
+- [#1080](https://github.com/tailor-platform/sdk/pull/1080) [`52823be`](https://github.com/tailor-platform/sdk/commit/52823be3ab8ac4efd3b9621db60d3a6fb9033d12) Thanks [@toiroakr](https://github.com/toiroakr)! - Add an `idp` option to IdP user triggers (`idpUserCreatedTrigger`, `idpUserUpdatedTrigger`, `idpUserDeletedTrigger`, `idpUserTrigger`) so executors can subscribe to a specific IdP namespace. Previously, projects with multiple IdPs failed `apply` because the SDK could not decide which IdP an executor targeted; specify `idp: "my-idp"` to disambiguate, or omit it when the project defines a single IdP. The auto-configuration of `publishUserEvents` now applies only to IdPs that are actually targeted, and `publishUserEvents: false` on a targeted IdP is rejected with a clear error instead of a warning. The new `IdpName` type is narrowed to defined IdP names via the generated `tailor.d.ts` for compile-time validation.
+
+### Patch Changes
+
+- [#1094](https://github.com/tailor-platform/sdk/pull/1094) [`a872d26`](https://github.com/tailor-platform/sdk/commit/a872d26feb81266b27d0415d36b412f12e81fb42) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency ora to v9.4.0
+
+- [#1092](https://github.com/tailor-platform/sdk/pull/1092) [`0687372`](https://github.com/tailor-platform/sdk/commit/0687372075bb8694505b2f0d0199e732606fd758) Thanks [@toiroakr](https://github.com/toiroakr)! - Restructure TailorDB migration documentation. The migration concepts, configuration, supported schema changes, automatic execution flow, and troubleshooting have moved from the CLI reference (`docs/cli/tailordb.md`) into a dedicated guide (`docs/services/tailordb-migration.md`). The CLI reference now keeps only the command tables and links to the guide. The guide also adds previously missing operational guidance: exact `migration set` semantics (label-only, not a DB rollback), team workflow and CI/CD coordination, failure recovery, machine user permissions, multi-namespace ordering, performance for large tables, local testing, rollback strategy, observability, and a beta notice. Minor wording corrections for the pre-migration phase and foreign key change classification.
+
+## 1.44.2
+
+### Patch Changes
+
+- [#1096](https://github.com/tailor-platform/sdk/pull/1096) [`53dbbaf`](https://github.com/tailor-platform/sdk/commit/53dbbaf4a6de353f227c3ef57f39580b7e1d9379) Thanks [@k1LoW](https://github.com/k1LoW)! - Fix workflow bundle build failure caused by removing default exports from dependency files during cross-file workflow imports
+
+## 1.44.1
+
+### Patch Changes
+
+- [#1088](https://github.com/tailor-platform/sdk/pull/1088) [`6dc5318`](https://github.com/tailor-platform/sdk/commit/6dc53185418c117c65cebd92c8ee38ae406e8c9a) Thanks [@k1LoW](https://github.com/k1LoW)! - Fix workflow bundle build failure caused by dead default imports after cross-file trigger transformation
+
+- [#1085](https://github.com/tailor-platform/sdk/pull/1085) [`0947e14`](https://github.com/tailor-platform/sdk/commit/0947e14daf39bf35b84f496984c32acb4c7bc24b) Thanks [@k1LoW](https://github.com/k1LoW)! - Add `concurrencyPolicy` option to `createWorkflow` for limiting concurrent workflow executions
+
+## 1.44.0
+
+### Minor Changes
+
+- [#1064](https://github.com/tailor-platform/sdk/pull/1064) [`683478e`](https://github.com/tailor-platform/sdk/commit/683478e13b3e308739da5578ad5e13602087700e) Thanks [@dqn](https://github.com/dqn)! - `tailor-sdk api` discoverability improvements:
+
+  - New `tailor-sdk api list` subcommand enumerates all invocable `OperatorService` methods. Streaming RPCs are excluded since the command only handles unary requests.
+  - New `tailor-sdk api inspect <endpoint>` subcommand prints the input message tree of an endpoint without sending a request, including `oneof` membership, recursive type tagging, and `map` value schemas. Combine with the global `--json` flag for machine-readable output.
+  - Shell completion now suggests `OperatorService` method names for the `endpoint` positional of `tailor-sdk api` and `tailor-sdk api inspect`.
+
+- [#1039](https://github.com/tailor-platform/sdk/pull/1039) [`852968d`](https://github.com/tailor-platform/sdk/commit/852968d2e25a3deeb5169132fb76db0d93631c34) Thanks [@dqn](https://github.com/dqn)! - Wire `--order` / `--limit` through the remaining list commands that were missed in the previous pass: `workspace list`, `workspace user list`, `workspace app list`, `organization folder list`, `executor webhook list`, and `crash-report list`. Existing behavior is preserved when the flags are omitted (server-default order, unlimited), so scripts already invoking these commands are unaffected. The programmatic helpers (`listWorkspaces`, `listUsers`, `listApps`, `listFolders`, `listWebhookExecutors`) accept a new optional `order` field with the same defaults.
+
+### Patch Changes
+
+- [#1079](https://github.com/tailor-platform/sdk/pull/1079) [`8ab2714`](https://github.com/tailor-platform/sdk/commit/8ab271494cf76ee8f588848887fa8e9d3eb91bfa) Thanks [@dqn](https://github.com/dqn)! - Suppress the spurious `Static website "<name>" not found for CORS configuration` warning during `apply` planning on the first deployment. The warning previously fired whenever `plan` looked up a static website that the same apply run was about to create. Locally-defined static websites referenced via `:url` patterns in `cors` or OAuth2 `redirectURIs` are now treated as expected during planning; missing remote websites still warn when they are not part of the local configuration.
+
+- [#1074](https://github.com/tailor-platform/sdk/pull/1074) [`d272f26`](https://github.com/tailor-platform/sdk/commit/d272f2604f31f2b61d880f1e57d2732b18f5c982) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency politty to v0.4.15
+
+- [#1076](https://github.com/tailor-platform/sdk/pull/1076) [`4d8c7a3`](https://github.com/tailor-platform/sdk/commit/4d8c7a39adadb09a991f93f44ed519efc506762f) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update rolldown
+
+- [#1082](https://github.com/tailor-platform/sdk/pull/1082) [`15b791d`](https://github.com/tailor-platform/sdk/commit/15b791d4c2d38e8f30e09d739b947099bfece8bd) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @bufbuild/protobuf to v2.12.0
+
+- [#1083](https://github.com/tailor-platform/sdk/pull/1083) [`16d8a42`](https://github.com/tailor-platform/sdk/commit/16d8a427336378a784c0bb492a858206535ff68e) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency es-toolkit to v1.46.0
+
 ## 1.43.0
 
 ### Minor Changes

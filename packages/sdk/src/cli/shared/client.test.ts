@@ -1,3 +1,4 @@
+import { Code, ConnectError } from "@connectrpc/connect";
 import { afterEach, describe, test, expect, vi } from "vitest";
 import {
   createTransport,
@@ -6,7 +7,10 @@ import {
   formatRequestParams,
   MAX_PAGE_SIZE,
   parseMethodName,
+  resolveStaticWebsiteUrls,
+  type OperatorClient,
 } from "./client";
+import { logger } from "./logger";
 
 vi.mock("@connectrpc/connect-node", () => ({
   createConnectTransport: vi.fn(() => ({ type: "node-transport" })),
@@ -242,5 +246,98 @@ describe("formatRequestParams", () => {
     };
     const result = formatRequestParams(protoWithBigInt);
     expect(result).toContain('"seconds": "86400"');
+  });
+});
+
+describe("resolveStaticWebsiteUrls", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function makeClient(
+    impl: (name: string) => Promise<{ staticwebsite?: { url?: string } }>,
+  ): OperatorClient {
+    return {
+      getStaticWebsite: vi.fn(({ name }: { name: string }) => impl(name)),
+    } as unknown as OperatorClient;
+  }
+
+  test("resolves :url patterns to fetched URLs", async () => {
+    const client = makeClient(async () => ({ staticwebsite: { url: "https://site.example.com" } }));
+
+    const resolved = await resolveStaticWebsiteUrls(
+      client,
+      "ws-1",
+      ["my-site:url", "my-site:url/callback", "https://literal.example.com"],
+      "CORS",
+    );
+
+    expect(resolved).toEqual([
+      "https://site.example.com",
+      "https://site.example.com/callback",
+      "https://literal.example.com",
+    ]);
+  });
+
+  test("warns and drops entry when site is missing and not expected locally", async () => {
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const client = makeClient(async () => {
+      throw new ConnectError("not found", Code.NotFound);
+    });
+
+    const resolved = await resolveStaticWebsiteUrls(client, "ws-1", ["unknown:url"], "CORS");
+
+    expect(resolved).toEqual([]);
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Static website "unknown" not found for CORS configuration. Excluding from CORS.',
+    );
+  });
+
+  test("suppresses warning and keeps original pattern when site is expected locally", async () => {
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const client = makeClient(async () => {
+      throw new ConnectError("not found", Code.NotFound);
+    });
+
+    const resolved = await resolveStaticWebsiteUrls(
+      client,
+      "ws-1",
+      ["my-site:url", "my-site:url/callback"],
+      "CORS",
+      { expectedLocalNames: new Set(["my-site"]) },
+    );
+
+    expect(resolved).toEqual(["my-site:url", "my-site:url/callback"]);
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  test("still warns when URL is not assigned yet, even when site is expected locally", async () => {
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const client = makeClient(async () => ({ staticwebsite: { url: "" } }));
+
+    const resolved = await resolveStaticWebsiteUrls(client, "ws-1", ["my-site:url"], "CORS", {
+      expectedLocalNames: new Set(["my-site"]),
+    });
+
+    expect(resolved).toEqual([]);
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Static website "my-site" has no URL assigned yet. Excluding from CORS.',
+    );
+  });
+
+  test("does not suppress non-NotFound errors even when site is expected locally", async () => {
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const client = makeClient(async () => {
+      throw new ConnectError("service unavailable", Code.Unavailable);
+    });
+
+    const resolved = await resolveStaticWebsiteUrls(client, "ws-1", ["my-site:url"], "CORS", {
+      expectedLocalNames: new Set(["my-site"]),
+    });
+
+    expect(resolved).toEqual([]);
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Static website "my-site" not found for CORS configuration. Excluding from CORS.',
+    );
   });
 });

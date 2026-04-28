@@ -311,7 +311,7 @@ Call Tailor Platform API endpoints directly.
 **Usage**
 
 ```
-tailor-sdk api [options] <endpoint>
+tailor-sdk api [options] [command] <endpoint>
 ```
 
 <!-- politty:command:api:usage:end -->
@@ -320,9 +320,9 @@ tailor-sdk api [options] <endpoint>
 
 **Arguments**
 
-| Argument   | Description                                                                                 | Required |
-| ---------- | ------------------------------------------------------------------------------------------- | -------- |
-| `endpoint` | API endpoint to call (e.g., 'GetApplication' or 'tailor.v1.OperatorService/GetApplication') | Yes      |
+| Argument   | Description                                                                                  | Required |
+| ---------- | -------------------------------------------------------------------------------------------- | -------- |
+| `endpoint` | API endpoint to call (e.g., 'GetApplication' or 'tailor.v1.OperatorService/GetApplication'). | Yes      |
 
 <!-- politty:command:api:arguments:end -->
 
@@ -335,7 +335,7 @@ tailor-sdk api [options] <endpoint>
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile       | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
 | `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
-| `--body <BODY>`                 | `-b`  | Request body as JSON    | No       | `"{}"`               | -                                 |
+| `--body <BODY>`                 | `-b`  | Request body as JSON.   | No       | `"{}"`               | -                                 |
 
 <!-- politty:command:api:options:end -->
 
@@ -345,9 +345,35 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 <!-- politty:command:api:global-options-link:end -->
 
+<!-- politty:command:api:examples:start -->
+
+**Examples**
+
+**Call an endpoint; workspaceId is auto-injected.**
+
+```bash
+$ tailor-sdk api GetApplication -b '{"applicationName":"app-1"}'
+```
+
+**List all invocable OperatorService methods.**
+
+```bash
+$ tailor-sdk api list
+```
+
+**Show the input message tree for an endpoint.**
+
+```bash
+$ tailor-sdk api inspect GetApplication
+```
+
+<!-- politty:command:api:examples:end -->
+
 <!-- politty:command:api:notes:start -->
 
 **Notes**
+
+Use `tailor-sdk api list` to enumerate invocable methods and `tailor-sdk api inspect <endpoint>` to print an endpoint's input message tree (combine with `--json` for machine-readable output).
 
 The request body is inferred from the proto definition of the target endpoint, and commonly required fields are auto-injected so they can be omitted from `--body`:
 
@@ -359,3 +385,102 @@ The request body is inferred from the proto definition of the target endpoint, a
 Values already present in `--body` are never overridden. If a value cannot be resolved (e.g. no config found), injection is silently skipped and the server-side validation error takes precedence.
 
 <!-- politty:command:api:notes:end -->
+<!-- politty:command:api inspect:heading:start -->
+
+### api inspect
+
+<!-- politty:command:api inspect:heading:end -->
+
+<!-- politty:command:api inspect:description:start -->
+
+Print the input message tree of an OperatorService endpoint.
+
+<!-- politty:command:api inspect:description:end -->
+
+<!-- politty:command:api inspect:usage:start -->
+
+**Usage**
+
+```
+tailor-sdk api inspect <endpoint>
+```
+
+<!-- politty:command:api inspect:usage:end -->
+
+<!-- politty:command:api inspect:arguments:start -->
+
+**Arguments**
+
+| Argument   | Description                                                                                     | Required |
+| ---------- | ----------------------------------------------------------------------------------------------- | -------- |
+| `endpoint` | API endpoint to inspect (e.g., 'GetApplication' or 'tailor.v1.OperatorService/GetApplication'). | Yes      |
+
+<!-- politty:command:api inspect:arguments:end -->
+
+<!-- politty:command:api inspect:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:api inspect:global-options-link:end -->
+
+<!-- politty:command:api inspect:examples:start -->
+
+**Examples**
+
+**Show fields of GetApplicationRequest.**
+
+```bash
+$ tailor-sdk api inspect GetApplication
+```
+
+**Inspect a deeply nested input with `(oneof config)` annotations.**
+
+```bash
+$ tailor-sdk api inspect CreateExecutorExecutor
+```
+
+<!-- politty:command:api inspect:examples:end -->
+
+<!-- politty:command:api inspect:notes:start -->
+
+**Notes**
+
+Combine with the global `--json` flag for a machine-readable descriptor. Recursive type references and `oneof` membership are annotated. Use `tailor-sdk api list` to discover endpoint names.
+
+<!-- politty:command:api inspect:notes:end -->
+
+<!-- politty:command:api list:heading:start -->
+
+### api list
+
+<!-- politty:command:api list:heading:end -->
+
+<!-- politty:command:api list:description:start -->
+
+List all invocable OperatorService methods.
+
+<!-- politty:command:api list:description:end -->
+
+<!-- politty:command:api list:usage:start -->
+
+**Usage**
+
+```
+tailor-sdk api list
+```
+
+<!-- politty:command:api list:usage:end -->
+
+<!-- politty:command:api list:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:api list:global-options-link:end -->
+
+<!-- politty:command:api list:notes:start -->
+
+**Notes**
+
+Only unary RPCs are listed; streaming methods are excluded because `tailor-sdk api run` issues a single JSON POST and reads one JSON response.
+
+<!-- politty:command:api list:notes:end -->
