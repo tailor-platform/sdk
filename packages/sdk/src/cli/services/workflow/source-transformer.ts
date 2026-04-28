@@ -126,9 +126,10 @@ export function transformWorkflowSource(
   // Find all jobs using AST detection
   const detectedJobs = findAllJobs(program, source);
 
-  // If the target job does not exist in this file, this is a dependency file
-  // imported by the actual source file. Return the source unchanged so that
-  // job declarations and default exports are preserved for cross-file imports.
+  // Defense-in-depth: the bundler already gates this function behind an
+  // isJobSourceFile check, so dependency files should not reach here.
+  // Guard anyway so that external callers don't accidentally strip exports
+  // from files that don't contain the target job.
   const targetJobExistsInFile = detectedJobs.some((j) => j.name === targetJobName);
   if (!targetJobExistsInFile) {
     return source;
