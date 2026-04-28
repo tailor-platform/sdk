@@ -474,17 +474,17 @@ export function transformFunctionTriggers(
   }
 
   // Remove default import declarations that became dead after trigger transformation.
-  // A default import is dead when ALL references to its local identifier were
+  // A default import is dead when it has no remaining references, either because
+  // it was already unused or because all references to its local identifier were
   // .trigger() calls that have been rewritten above.
   // Single AST pass for all candidate names; scope-aware to ignore shadowed references.
   const refCounts = buildReferenceCountMap(program, workflowDefaultImportNames);
 
   for (const localName of workflowDefaultImportNames) {
     const transformedCount = transformedCallsPerIdentifier.get(localName) ?? 0;
-    if (transformedCount === 0) continue;
-
     const refCount = refCounts.get(localName) ?? 0;
-    if (transformedCount >= refCount) {
+
+    if (refCount === 0 || transformedCount >= refCount) {
       const importRange = findDefaultImportDeclarationRange(program, localName);
       if (importRange) {
         replacements.push({

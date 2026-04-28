@@ -1274,6 +1274,32 @@ export const job = createWorkflowJob({
       expect(result).not.toContain('import simpleWorkflow from "./simple"');
     });
 
+    it("removes default import that is completely unused (refCount 0)", () => {
+      const source = `
+import simpleWorkflow from "./simple";
+
+export const job = createWorkflowJob({
+  name: "my-job",
+  body: async () => {
+    return "no workflow reference at all";
+  },
+});
+`;
+      const workflowNameMap = new Map<string, string>();
+      const jobNameMap = new Map<string, string>();
+      const workflowFileMap = new Map([["src/workflows/simple", "simple-workflow"]]);
+
+      const result = transformFunctionTriggers(
+        source,
+        workflowNameMap,
+        jobNameMap,
+        workflowFileMap,
+        "src/workflows/trigger-test.ts",
+      );
+
+      expect(result).not.toContain('import simpleWorkflow from "./simple"');
+    });
+
     it("does not affect same-file job triggers", () => {
       const source = `
 const result = await fetchCustomer.trigger({ customerId: "123" });
