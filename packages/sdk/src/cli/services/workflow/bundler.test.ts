@@ -78,8 +78,9 @@ export default createWorkflow({
       const mainJobNames = ["caller-job"];
 
       // Build trigger context to enable trigger transformation
+      // Normalize the same way production's normalizeFilePath does
       const workflowFileMap = new Map<string, string>([
-        [simpleFile.replace(/\.ts$/, ""), "simple-workflow"],
+        [path.resolve(simpleFile).replace(/\.ts$/, ""), "simple-workflow"],
       ]);
       const triggerContext = {
         workflowNameMap: new Map<string, string>(),
