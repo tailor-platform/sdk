@@ -4,7 +4,7 @@
 
 import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
-import type { TelemetryExport } from "./telemetryrouter_resource_pb";
+import type { ResourceAttributesConfig, TelemetryExport } from "./telemetryrouter_resource_pb";
 import type { PageDirection } from "./resource_pb";
 
 /**
@@ -254,4 +254,138 @@ export declare type TestTelemetryExportResponse = Message<"tailor.v1.TestTelemet
  * Use `create(TestTelemetryExportResponseSchema)` to create a new message.
  */
 export declare const TestTelemetryExportResponseSchema: GenMessage<TestTelemetryExportResponse>;
+
+/**
+ * @generated from message tailor.v1.CreateResourceAttributesConfigRequest
+ */
+export declare type CreateResourceAttributesConfigRequest = Message<"tailor.v1.CreateResourceAttributesConfigRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: tailor.v1.ResourceAttributesConfig resource_attributes_config = 2;
+   */
+  resourceAttributesConfig?: ResourceAttributesConfig;
+};
+
+/**
+ * Describes the message tailor.v1.CreateResourceAttributesConfigRequest.
+ * Use `create(CreateResourceAttributesConfigRequestSchema)` to create a new message.
+ */
+export declare const CreateResourceAttributesConfigRequestSchema: GenMessage<CreateResourceAttributesConfigRequest>;
+
+/**
+ * @generated from message tailor.v1.CreateResourceAttributesConfigResponse
+ */
+export declare type CreateResourceAttributesConfigResponse = Message<"tailor.v1.CreateResourceAttributesConfigResponse"> & {
+  /**
+   * @generated from field: tailor.v1.ResourceAttributesConfig resource_attributes_config = 1;
+   */
+  resourceAttributesConfig?: ResourceAttributesConfig;
+};
+
+/**
+ * Describes the message tailor.v1.CreateResourceAttributesConfigResponse.
+ * Use `create(CreateResourceAttributesConfigResponseSchema)` to create a new message.
+ */
+export declare const CreateResourceAttributesConfigResponseSchema: GenMessage<CreateResourceAttributesConfigResponse>;
+
+/**
+ * @generated from message tailor.v1.GetResourceAttributesConfigRequest
+ */
+export declare type GetResourceAttributesConfigRequest = Message<"tailor.v1.GetResourceAttributesConfigRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+};
+
+/**
+ * Describes the message tailor.v1.GetResourceAttributesConfigRequest.
+ * Use `create(GetResourceAttributesConfigRequestSchema)` to create a new message.
+ */
+export declare const GetResourceAttributesConfigRequestSchema: GenMessage<GetResourceAttributesConfigRequest>;
+
+/**
+ * @generated from message tailor.v1.GetResourceAttributesConfigResponse
+ */
+export declare type GetResourceAttributesConfigResponse = Message<"tailor.v1.GetResourceAttributesConfigResponse"> & {
+  /**
+   * @generated from field: tailor.v1.ResourceAttributesConfig resource_attributes_config = 1;
+   */
+  resourceAttributesConfig?: ResourceAttributesConfig;
+};
+
+/**
+ * Describes the message tailor.v1.GetResourceAttributesConfigResponse.
+ * Use `create(GetResourceAttributesConfigResponseSchema)` to create a new message.
+ */
+export declare const GetResourceAttributesConfigResponseSchema: GenMessage<GetResourceAttributesConfigResponse>;
+
+/**
+ * @generated from message tailor.v1.UpdateResourceAttributesConfigRequest
+ */
+export declare type UpdateResourceAttributesConfigRequest = Message<"tailor.v1.UpdateResourceAttributesConfigRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: tailor.v1.ResourceAttributesConfig resource_attributes_config = 2;
+   */
+  resourceAttributesConfig?: ResourceAttributesConfig;
+};
+
+/**
+ * Describes the message tailor.v1.UpdateResourceAttributesConfigRequest.
+ * Use `create(UpdateResourceAttributesConfigRequestSchema)` to create a new message.
+ */
+export declare const UpdateResourceAttributesConfigRequestSchema: GenMessage<UpdateResourceAttributesConfigRequest>;
+
+/**
+ * @generated from message tailor.v1.UpdateResourceAttributesConfigResponse
+ */
+export declare type UpdateResourceAttributesConfigResponse = Message<"tailor.v1.UpdateResourceAttributesConfigResponse"> & {
+  /**
+   * @generated from field: tailor.v1.ResourceAttributesConfig resource_attributes_config = 1;
+   */
+  resourceAttributesConfig?: ResourceAttributesConfig;
+};
+
+/**
+ * Describes the message tailor.v1.UpdateResourceAttributesConfigResponse.
+ * Use `create(UpdateResourceAttributesConfigResponseSchema)` to create a new message.
+ */
+export declare const UpdateResourceAttributesConfigResponseSchema: GenMessage<UpdateResourceAttributesConfigResponse>;
+
+/**
+ * @generated from message tailor.v1.DeleteResourceAttributesConfigRequest
+ */
+export declare type DeleteResourceAttributesConfigRequest = Message<"tailor.v1.DeleteResourceAttributesConfigRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+};
+
+/**
+ * Describes the message tailor.v1.DeleteResourceAttributesConfigRequest.
+ * Use `create(DeleteResourceAttributesConfigRequestSchema)` to create a new message.
+ */
+export declare const DeleteResourceAttributesConfigRequestSchema: GenMessage<DeleteResourceAttributesConfigRequest>;
+
+/**
+ * @generated from message tailor.v1.DeleteResourceAttributesConfigResponse
+ */
+export declare type DeleteResourceAttributesConfigResponse = Message<"tailor.v1.DeleteResourceAttributesConfigResponse"> & {
+};
+
+/**
+ * Describes the message tailor.v1.DeleteResourceAttributesConfigResponse.
+ * Use `create(DeleteResourceAttributesConfigResponseSchema)` to create a new message.
+ */
+export declare const DeleteResourceAttributesConfigResponseSchema: GenMessage<DeleteResourceAttributesConfigResponse>;
 

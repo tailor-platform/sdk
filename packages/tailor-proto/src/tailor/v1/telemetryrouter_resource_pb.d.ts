@@ -192,6 +192,50 @@ export declare type TelemetryExportBearerTokenAuth = Message<"tailor.v1.Telemetr
 export declare const TelemetryExportBearerTokenAuthSchema: GenMessage<TelemetryExportBearerTokenAuth>;
 
 /**
+ * ResourceAttributesConfig is a workspace-level singleton that controls
+ * the resource attributes enriched onto outgoing telemetry signals.
+ *
+ * @generated from message tailor.v1.ResourceAttributesConfig
+ */
+export declare type ResourceAttributesConfig = Message<"tailor.v1.ResourceAttributesConfig"> & {
+  /**
+   * Developer-specified prefix prepended to each microservice's own
+   * service.name (e.g. "gateway", "tailordb") to form the final
+   * service.name resource attribute on outgoing signals:
+   * "<service_name_prefix>-<service.name>".
+   *
+   * @generated from field: string service_name_prefix = 1;
+   */
+  serviceNamePrefix: string;
+
+  /**
+   * Customer-side deployment environment (e.g. "production", "staging").
+   * Optional; when empty, the enricher leaves deployment.environment.name
+   * untouched. Follows OTel semconv `deployment.environment.name` semantics
+   * (free-form string; max 256 chars).
+   *
+   * @generated from field: string deployment_environment_name = 2;
+   */
+  deploymentEnvironmentName: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp created_at = 3;
+   */
+  createdAt?: Timestamp;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp updated_at = 4;
+   */
+  updatedAt?: Timestamp;
+};
+
+/**
+ * Describes the message tailor.v1.ResourceAttributesConfig.
+ * Use `create(ResourceAttributesConfigSchema)` to create a new message.
+ */
+export declare const ResourceAttributesConfigSchema: GenMessage<ResourceAttributesConfig>;
+
+/**
  * @generated from enum tailor.v1.TelemetryExportProtocol
  */
 export enum TelemetryExportProtocol {

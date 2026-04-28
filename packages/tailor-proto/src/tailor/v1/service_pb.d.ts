@@ -20,7 +20,7 @@ import type { CreateIdPClientRequestSchema, CreateIdPClientResponseSchema, Creat
 import type { CreateDeploymentRequestSchema, CreateDeploymentResponseSchema, CreateStaticWebsiteRequestSchema, CreateStaticWebsiteResponseSchema, DeleteStaticWebsiteRequestSchema, DeleteStaticWebsiteResponseSchema, GetStaticWebsiteRequestSchema, GetStaticWebsiteResponseSchema, ListStaticWebsitesRequestSchema, ListStaticWebsitesResponseSchema, PublishDeploymentRequestSchema, PublishDeploymentResponseSchema, UpdateStaticWebsiteRequestSchema, UpdateStaticWebsiteResponseSchema, UploadFileRequestSchema, UploadFileResponseSchema } from "./staticwebsite_pb";
 import type { CreateWorkflowJobFunctionRequestSchema, CreateWorkflowJobFunctionResponseSchema, CreateWorkflowRequestSchema, CreateWorkflowResponseSchema, DeleteWorkflowRequestSchema, DeleteWorkflowResponseSchema, GetWorkflowByNameRequestSchema, GetWorkflowByNameResponseSchema, GetWorkflowExecutionRequestSchema, GetWorkflowExecutionResponseSchema, GetWorkflowJobFunctionByNameRequestSchema, GetWorkflowJobFunctionByNameResponseSchema, GetWorkflowJobFunctionRequestSchema, GetWorkflowJobFunctionResponseSchema, GetWorkflowRequestSchema, GetWorkflowResponseSchema, ListWorkflowExecutionsRequestSchema, ListWorkflowExecutionsResponseSchema, ListWorkflowJobFunctionsRequestSchema, ListWorkflowJobFunctionsResponseSchema, ListWorkflowsRequestSchema, ListWorkflowsResponseSchema, TestResumeWorkflowRequestSchema, TestResumeWorkflowResponseSchema, TestStartWorkflowRequestSchema, TestStartWorkflowResponseSchema, UpdateWorkflowJobFunctionRequestSchema, UpdateWorkflowJobFunctionResponseSchema, UpdateWorkflowRequestSchema, UpdateWorkflowResponseSchema } from "./workflow_pb";
 import type { GetMetadataRequestSchema, GetMetadataResponseSchema, SetMetadataRequestSchema, SetMetadataResponseSchema } from "./metadata_pb";
-import type { CreateTelemetryExportRequestSchema, CreateTelemetryExportResponseSchema, DeleteTelemetryExportRequestSchema, DeleteTelemetryExportResponseSchema, GetTelemetryExportRequestSchema, GetTelemetryExportResponseSchema, ListTelemetryExportsRequestSchema, ListTelemetryExportsResponseSchema, TestTelemetryExportRequestSchema, TestTelemetryExportResponseSchema, UpdateTelemetryExportRequestSchema, UpdateTelemetryExportResponseSchema } from "./telemetryrouter_pb";
+import type { CreateResourceAttributesConfigRequestSchema, CreateResourceAttributesConfigResponseSchema, CreateTelemetryExportRequestSchema, CreateTelemetryExportResponseSchema, DeleteResourceAttributesConfigRequestSchema, DeleteResourceAttributesConfigResponseSchema, DeleteTelemetryExportRequestSchema, DeleteTelemetryExportResponseSchema, GetResourceAttributesConfigRequestSchema, GetResourceAttributesConfigResponseSchema, GetTelemetryExportRequestSchema, GetTelemetryExportResponseSchema, ListTelemetryExportsRequestSchema, ListTelemetryExportsResponseSchema, TestTelemetryExportRequestSchema, TestTelemetryExportResponseSchema, UpdateResourceAttributesConfigRequestSchema, UpdateResourceAttributesConfigResponseSchema, UpdateTelemetryExportRequestSchema, UpdateTelemetryExportResponseSchema } from "./telemetryrouter_pb";
 
 /**
  * Describes the file tailor/v1/service.proto.
@@ -3133,6 +3133,74 @@ export declare const OperatorService: GenService<{
     methodKind: "unary";
     input: typeof TestTelemetryExportRequestSchema;
     output: typeof TestTelemetryExportResponseSchema;
+  },
+  /**
+   * CreateResourceAttributesConfig creates the workspace-level resource
+   * attributes enrichment configuration (singleton per workspace).
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - PermissionDenied: can view workspace but no permission to create
+   * - AlreadyExists: config already exists for this workspace
+   *
+   * @generated from rpc tailor.v1.OperatorService.CreateResourceAttributesConfig
+   */
+  createResourceAttributesConfig: {
+    methodKind: "unary";
+    input: typeof CreateResourceAttributesConfigRequestSchema;
+    output: typeof CreateResourceAttributesConfigResponseSchema;
+  },
+  /**
+   * GetResourceAttributesConfig returns the workspace-level resource
+   * attributes enrichment configuration.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - PermissionDenied: can view workspace but no permission to read
+   * - NotFound: config does not exist for this workspace
+   *
+   * @generated from rpc tailor.v1.OperatorService.GetResourceAttributesConfig
+   */
+  getResourceAttributesConfig: {
+    methodKind: "unary";
+    input: typeof GetResourceAttributesConfigRequestSchema;
+    output: typeof GetResourceAttributesConfigResponseSchema;
+  },
+  /**
+   * UpdateResourceAttributesConfig updates the workspace-level resource
+   * attributes enrichment configuration.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - PermissionDenied: can view workspace but no permission to update
+   * - NotFound: config does not exist for this workspace
+   *
+   * @generated from rpc tailor.v1.OperatorService.UpdateResourceAttributesConfig
+   */
+  updateResourceAttributesConfig: {
+    methodKind: "unary";
+    input: typeof UpdateResourceAttributesConfigRequestSchema;
+    output: typeof UpdateResourceAttributesConfigResponseSchema;
+  },
+  /**
+   * DeleteResourceAttributesConfig deletes the workspace-level resource
+   * attributes enrichment configuration.
+   *
+   * [Errors]
+   * - Unauthenticated: token is missing, expired, or invalid
+   * - InvalidArgument: request is invalid
+   * - PermissionDenied: can view workspace but no permission to delete
+   * - NotFound: config does not exist for this workspace
+   *
+   * @generated from rpc tailor.v1.OperatorService.DeleteResourceAttributesConfig
+   */
+  deleteResourceAttributesConfig: {
+    methodKind: "unary";
+    input: typeof DeleteResourceAttributesConfigRequestSchema;
+    output: typeof DeleteResourceAttributesConfigResponseSchema;
   },
 }>;
 
