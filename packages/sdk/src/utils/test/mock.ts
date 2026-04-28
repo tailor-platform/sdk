@@ -130,6 +130,7 @@ export function setupWorkflowMock(handler: JobHandler): {
 /**
  * Sets up a mock for `globalThis.tailor.context.getInvoker` used in bundled
  * resolver/executor/workflow tests.
+ * @deprecated With the `tailor-runtime` environment from `@tailor-platform/sdk/vitest`, drive the invoker via `vi.spyOn(globalThis.tailor.context, "getInvoker").mockReturnValue(...)` for bundled tests, or pass `invoker` directly to `.body()` when unit-testing resolvers/executors/workflow jobs against the TypeScript source.
  * @param invoker - The `TailorInvoker` value to return, or `null` for anonymous.
  */
 export function setupInvokerMock(invoker: TailorInvoker): void {

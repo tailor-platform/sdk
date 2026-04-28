@@ -279,17 +279,6 @@ export default defineConfig({
 ### Known Limitations
 
 - **`process` and `require`** are not removed or blocked. Vitest's internal runner depends on them extensively. On the real platform runtime, they do not exist.
-- **Platform API mocks return default values** — All platform APIs are mocked with default return values. Use control objects to configure responses:
-
-| Control Object       | API                     | Methods                                                                                               |
-| -------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------- |
-| `tailordbMock`       | `tailordb.Client`       | `setQueryResolver`, `enqueueResult`, `executedQueries`, `createdClients`                              |
-| `workflowMock`       | `tailor.workflow`       | `setJobHandler`, `enqueueResult`, `triggeredJobs`, `setWorkflowExecutionId`, `setWaitResult`, `calls` |
-| `secretmanagerMock`  | `tailor.secretmanager`  | `setSecrets`, `calls`                                                                                 |
-| `authconnectionMock` | `tailor.authconnection` | `setTokens`, `calls`                                                                                  |
-| `idpMock`            | `tailor.idp`            | `setResolver`, `enqueueResult`, `calls`                                                               |
-| `fileMock`           | `tailordb.file`         | `setResolver`, `enqueueResult`, `calls`                                                               |
-| `iconvMock`          | `tailor.iconv`          | `setResolver`, `calls`                                                                                |
 
 ## Unit Tests
 
