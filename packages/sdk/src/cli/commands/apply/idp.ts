@@ -417,11 +417,6 @@ async function planServices(
       );
     }
     const publishUserEvents = idp.publishUserEvents ?? isIdpUserTriggerTarget;
-    if (isIdpUserTriggerTarget && idp.publishUserEvents === undefined) {
-      logger.info(
-        `IdP service "${namespaceName}": automatically enabled "publishUserEvents" because executors with idpUser triggers subscribe to it. Set "publishUserEvents" explicitly to silence this message.`,
-      );
-    }
     const emailConfig = idp.emailConfig;
     if (!idp.permission) {
       logger.warn(`IdP service "${namespaceName}" has no permission configured.`);

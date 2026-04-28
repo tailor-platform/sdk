@@ -1,6 +1,5 @@
 import { IdPLang } from "@tailor-proto/tailor/v1/idp_resource_pb";
 import { describe, expect, test, vi } from "vitest";
-import { logger } from "@/cli/shared/logger";
 import { planIdP } from "./idp";
 import type { PlanContext } from "./apply";
 import type { Application } from "@/cli/services/application";
@@ -542,43 +541,30 @@ describe("planIdP / publishUserEvents auto-configuration", () => {
   });
 
   test("undefined publishUserEvents is auto-enabled when the IdP is targeted by an idpUser trigger", async () => {
-    const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
-    try {
-      const app = createMockApplication({ idpServices: [{ publishUserEvents: undefined }] });
-      const client = createMockClient({ services: [], clients: { "idp-a": [] } });
+    const app = createMockApplication({ idpServices: [{ publishUserEvents: undefined }] });
+    const client = createMockClient({ services: [], clients: { "idp-a": [] } });
 
-      const result = await planIdP({
-        ...createContext(client),
-        application: app,
-        idpUserTriggerTargets: new Set(["idp-a"]),
-      });
+    const result = await planIdP({
+      ...createContext(client),
+      application: app,
+      idpUserTriggerTargets: new Set(["idp-a"]),
+    });
 
-      expect(result.changeSet.service.creates).toHaveLength(1);
-      expect(result.changeSet.service.creates[0].request.publishUserEvents).toBe(true);
-      expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining(`IdP service "idp-a"`));
-      expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining("automatically enabled"));
-    } finally {
-      infoSpy.mockRestore();
-    }
+    expect(result.changeSet.service.creates).toHaveLength(1);
+    expect(result.changeSet.service.creates[0].request.publishUserEvents).toBe(true);
   });
 
-  test("explicit publishUserEvents:true stays true without auto-enable info", async () => {
-    const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
-    try {
-      const app = createMockApplication({ idpServices: [{ publishUserEvents: true }] });
-      const client = createMockClient({ services: [], clients: { "idp-a": [] } });
+  test("explicit publishUserEvents:true stays true", async () => {
+    const app = createMockApplication({ idpServices: [{ publishUserEvents: true }] });
+    const client = createMockClient({ services: [], clients: { "idp-a": [] } });
 
-      const result = await planIdP({
-        ...createContext(client),
-        application: app,
-        idpUserTriggerTargets: new Set(["idp-a"]),
-      });
+    const result = await planIdP({
+      ...createContext(client),
+      application: app,
+      idpUserTriggerTargets: new Set(["idp-a"]),
+    });
 
-      expect(result.changeSet.service.creates[0].request.publishUserEvents).toBe(true);
-      expect(infoSpy).not.toHaveBeenCalled();
-    } finally {
-      infoSpy.mockRestore();
-    }
+    expect(result.changeSet.service.creates[0].request.publishUserEvents).toBe(true);
   });
 
   test("explicit publishUserEvents:false throws when executor targets the IdP", async () => {
@@ -621,37 +607,28 @@ describe("planIdP / publishUserEvents auto-configuration", () => {
   });
 
   test("auto-enables publishUserEvents only on IdPs targeted by idpUser triggers", async () => {
-    const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
-    try {
-      const app = createMockApplication({
-        idpServices: [
-          { publishUserEvents: undefined },
-          { name: "idp-b", clients: ["client-b"], publishUserEvents: undefined },
-        ],
-      });
-      const client = createMockClient({
-        services: [],
-        clients: { "idp-a": [], "idp-b": [] },
-      });
+    const app = createMockApplication({
+      idpServices: [
+        { publishUserEvents: undefined },
+        { name: "idp-b", clients: ["client-b"], publishUserEvents: undefined },
+      ],
+    });
+    const client = createMockClient({
+      services: [],
+      clients: { "idp-a": [], "idp-b": [] },
+    });
 
-      const result = await planIdP({
-        ...createContext(client),
-        application: app,
-        idpUserTriggerTargets: new Set(["idp-a"]),
-      });
+    const result = await planIdP({
+      ...createContext(client),
+      application: app,
+      idpUserTriggerTargets: new Set(["idp-a"]),
+    });
 
-      expect(result.changeSet.service.creates).toHaveLength(2);
-      const byName = new Map(
-        result.changeSet.service.creates.map((create) => [create.name, create.request]),
-      );
-      expect(byName.get("idp-a")?.publishUserEvents).toBe(true);
-      expect(byName.get("idp-b")?.publishUserEvents).toBe(false);
-      const autoEnableMessages = infoSpy.mock.calls.filter(([msg]) =>
-        typeof msg === "string" ? msg.includes("automatically enabled") : false,
-      );
-      expect(autoEnableMessages).toHaveLength(1);
-    } finally {
-      infoSpy.mockRestore();
-    }
+    expect(result.changeSet.service.creates).toHaveLength(2);
+    const byName = new Map(
+      result.changeSet.service.creates.map((create) => [create.name, create.request]),
+    );
+    expect(byName.get("idp-a")?.publishUserEvents).toBe(true);
+    expect(byName.get("idp-b")?.publishUserEvents).toBe(false);
   });
 });
