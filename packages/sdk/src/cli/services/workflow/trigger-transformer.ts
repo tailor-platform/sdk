@@ -218,17 +218,30 @@ function buildReferenceCountMap(program: Program, names: Set<string>): Map<strin
   return counts;
 }
 
+interface ImportRemovalRange {
+  start: number;
+  end: number;
+  /** True when the entire import declaration should be removed (including trailing newline). */
+  isFullDeclaration: boolean;
+}
+
 /**
- * Find the range of an import declaration that contains a default import for the given local name.
- * Returns null if the import also has named specifiers (to avoid breaking other imports).
+ * Find the text range to remove for a dead default import.
+ *
+ * - Default-only import (`import wf from "..."`): returns the full declaration range.
+ * - Mixed import (`import wf, { helper } from "..."`): returns the range covering
+ *   the default specifier and trailing comma/whitespace so the result becomes
+ *   `import { helper } from "..."`.
  * @param program - The parsed AST program
  * @param localName - The local name of the default import
- * @returns Range of the import declaration, or null
+ * @param source - The source code text (used to locate the `{` in mixed imports)
+ * @returns Range to remove, or null if the import was not found
  */
-function findDefaultImportDeclarationRange(
+function findDefaultImportRemovalRange(
   program: Program,
   localName: string,
-): { start: number; end: number } | null {
+  source: string,
+): ImportRemovalRange | null {
   for (const statement of program.body) {
     if (statement.type !== "ImportDeclaration") continue;
 
@@ -236,12 +249,21 @@ function findDefaultImportDeclarationRange(
     const specifiers = importDecl.specifiers || [];
 
     for (const spec of specifiers) {
-      if (spec.type === "ImportDefaultSpecifier") {
-        const defaultSpec = spec as ImportDefaultSpecifier;
-        if (defaultSpec.local?.name === localName && specifiers.length === 1) {
-          return { start: importDecl.start, end: importDecl.end };
-        }
+      if (spec.type !== "ImportDefaultSpecifier") continue;
+
+      const defaultSpec = spec as ImportDefaultSpecifier;
+      if (defaultSpec.local?.name !== localName) continue;
+
+      if (specifiers.length === 1) {
+        return { start: importDecl.start, end: importDecl.end, isFullDeclaration: true };
       }
+
+      // Mixed import: remove "wf, " up to the "{" so the result is "import { ... } from ..."
+      const braceIndex = source.indexOf("{", defaultSpec.end);
+      if (braceIndex !== -1) {
+        return { start: defaultSpec.start, end: braceIndex, isFullDeclaration: false };
+      }
+      return null;
     }
   }
 
@@ -485,11 +507,11 @@ export function transformFunctionTriggers(
     const refCount = refCounts.get(localName) ?? 0;
 
     if (refCount === 0 || transformedCount >= refCount) {
-      const importRange = findDefaultImportDeclarationRange(program, localName);
-      if (importRange) {
+      const removal = findDefaultImportRemovalRange(program, localName, source);
+      if (removal) {
         replacements.push({
-          start: importRange.start,
-          end: findStatementEnd(source, importRange.end),
+          start: removal.start,
+          end: removal.isFullDeclaration ? findStatementEnd(source, removal.end) : removal.end,
           text: "",
         });
       }
