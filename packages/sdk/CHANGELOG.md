@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 1.44.2
+
+### Patch Changes
+
+- [#1096](https://github.com/tailor-platform/sdk/pull/1096) [`53dbbaf`](https://github.com/tailor-platform/sdk/commit/53dbbaf4a6de353f227c3ef57f39580b7e1d9379) Thanks [@k1LoW](https://github.com/k1LoW)! - Fix workflow bundle build failure caused by removing default exports from dependency files during cross-file workflow imports
+
 ## 1.44.1
 
 ### Patch Changes
