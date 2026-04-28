@@ -30,7 +30,7 @@ export interface TriggerContext {
  * @param filePath - File path to normalize
  * @returns Normalized absolute path without extension
  */
-function normalizeFilePath(filePath: string): string {
+export function normalizeFilePath(filePath: string): string {
   const absolutePath = path.resolve(filePath);
   const ext = path.extname(absolutePath);
   return absolutePath.slice(0, -ext.length);

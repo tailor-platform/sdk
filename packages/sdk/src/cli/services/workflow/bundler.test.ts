@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, describe, expect, it } from "vitest";
+import { normalizeFilePath } from "@/cli/shared/trigger-context";
 import { bundleWorkflowJobs } from "./bundler";
 
 describe("bundleWorkflowJobs", () => {
@@ -78,9 +79,8 @@ export default createWorkflow({
       const mainJobNames = ["caller-job"];
 
       // Build trigger context to enable trigger transformation
-      // Normalize the same way production's normalizeFilePath does
       const workflowFileMap = new Map<string, string>([
-        [path.resolve(simpleFile).replace(/\.ts$/, ""), "simple-workflow"],
+        [normalizeFilePath(simpleFile), "simple-workflow"],
       ]);
       const triggerContext = {
         workflowNameMap: new Map<string, string>(),
