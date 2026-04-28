@@ -64,7 +64,7 @@ Key files:
 Available triggers beyond record CRUD (`recordCreatedTrigger`, `recordUpdatedTrigger`, `recordDeletedTrigger`):
 
 - `resolverExecutedTrigger` - Resolver execution
-- `idpUserCreatedTrigger` / `idpUserUpdatedTrigger` / `idpUserDeletedTrigger` - IdP user events
+- `idpUserCreatedTrigger` / `idpUserUpdatedTrigger` / `idpUserDeletedTrigger` - IdP user events. Pass `{ idp: "my-idp" }` to target a specific IdP when the project defines multiple IdPs
 - `authAccessTokenIssuedTrigger` / `authAccessTokenRefreshedTrigger` / `authAccessTokenRevokedTrigger` - Auth token events
 - `scheduleTrigger` - CRON schedule
 - `incomingWebhookTrigger` - Webhook
@@ -72,7 +72,7 @@ Available triggers beyond record CRUD (`recordCreatedTrigger`, `recordUpdatedTri
 Multi-event trigger variants handle multiple events in one executor:
 
 - `recordTrigger({ type, events: ["created", "updated"] })` - Multiple record events
-- `idpUserTrigger({ events: ["created", "deleted"] })` - Multiple IdP user events
+- `idpUserTrigger({ events: ["created", "deleted"] })` - Multiple IdP user events. Add `idp: "my-idp"` to target a specific IdP in multi-IdP projects
 - `authAccessTokenTrigger({ events: ["issued", "revoked"] })` - Multiple auth token events
 
 Args include `event` (short name like `"created"`) and `rawEvent` (full event type like `"tailordb.type_record.created"`) for runtime type narrowing.

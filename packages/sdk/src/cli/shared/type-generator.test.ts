@@ -220,4 +220,18 @@ describe("extractAttributesFromConfig + generateTypeDefinition", () => {
     expect(content).toContain('"primary-idp": true;');
     expect(content).toContain("backoffice: true;");
   });
+
+  it("de-duplicates idp names so the registry has unique keys", () => {
+    const config = {
+      name: "test-app",
+      idp: [
+        { name: "primary-idp" } as never,
+        { name: "backoffice" } as never,
+        { name: "primary-idp" } as never,
+      ],
+    };
+
+    const { idpNames } = extractAttributesFromConfig(config);
+    expect(idpNames).toEqual(["primary-idp", "backoffice"]);
+  });
 });

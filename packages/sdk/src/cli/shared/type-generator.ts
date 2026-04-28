@@ -142,12 +142,9 @@ export {};
 }
 
 function collectAttributesFromConfig(config: AppConfig): ExtractedAttributes {
-  // Extract IdP names from config.idp (top-level array, independent of auth shape)
-  const idpArray = (config as { idp?: ReadonlyArray<{ name?: string }> }).idp;
-  const idpNames =
-    Array.isArray(idpArray) && idpArray.length > 0
-      ? idpArray.map((idp) => idp?.name).filter((name): name is string => typeof name === "string")
-      : undefined;
+  // De-duplicate IdP names so duplicates in config don't emit duplicate
+  // `IdpNameRegistry` keys (which would be invalid TypeScript).
+  const idpNames = config.idp?.length ? [...new Set(config.idp.map((idp) => idp.name))] : undefined;
 
   const auth = config.auth;
   if (!auth || typeof auth !== "object") {
