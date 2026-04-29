@@ -136,46 +136,6 @@ const NESTED_FN_KINDS = [
   "method_definition",
 ];
 
-/**
- * Collect byte ranges of scopes where `name` is locally redeclared.
- *
- * Any identifier reference whose start position falls inside one of these ranges
- * is shadowed by the local binding and must not be renamed by the param rewrite.
- * @param body - The arrow body node to scan.
- * @param name - The identifier name to detect declarations of.
- * @returns Sorted array of [startByte, endByte] ranges (half-open).
- */
-function collectShadowBlockRanges(body: SgNode, name: string): Array<[number, number]> {
-  const ranges: Array<[number, number]> = [];
-  const declarations = [
-    ...body.findAll({
-      rule: {
-        kind: "identifier",
-        regex: `^${name}$`,
-        inside: { kind: "variable_declarator" },
-      },
-    }),
-    ...body.findAll({
-      rule: {
-        kind: "shorthand_property_identifier_pattern",
-        regex: `^${name}$`,
-        inside: { kind: "variable_declarator" },
-      },
-    }),
-  ];
-
-  for (const decl of declarations) {
-    let scope: SgNode | null = decl.parent();
-    while (scope && !SCOPE_KINDS.has(scope.kind())) {
-      scope = scope.parent();
-    }
-    if (!scope) continue;
-    const range = scope.range();
-    ranges.push([range.start.index, range.end.index]);
-  }
-  return ranges;
-}
-
 function isInsideAnyRange(pos: number, ranges: Array<[number, number]>): boolean {
   return ranges.some(([s, e]) => pos >= s && pos < e);
 }
@@ -223,6 +183,21 @@ function collectCtxShadowRanges(
         ranges.push([r.start.index, r.end.index]);
       }
     }
+  }
+  // Also treat re-binding via `var ctx = ...` / `let ctx = ...` as a shadow.
+  // We only check direct identifier-named declarators here — pattern-style
+  // bindings (`const { ctx } = something`) that happen to share the name are
+  // unrelated to the context parameter.
+  const declarators = body.findAll({ rule: { kind: "variable_declarator" } });
+  for (const decl of declarators) {
+    const nameNode = decl.field("name");
+    if (!nameNode || nameNode.kind() !== "identifier") continue;
+    if (nameNode.text() !== ctxName) continue;
+    let scope: SgNode | null = decl.parent();
+    while (scope && !SCOPE_KINDS.has(scope.kind())) scope = scope.parent();
+    if (!scope) continue;
+    const range = scope.range();
+    ranges.push([range.start.index, range.end.index]);
   }
   return ranges;
 }
@@ -304,6 +279,10 @@ function hasCallerBindingConflict(pattern: SgNode, body: SgNode): boolean {
     const k = child.kind();
     if (k === "shorthand_property_identifier_pattern" && child.text() === "caller") return true;
     if (k === "pair_pattern") {
+      // The property key can also collide: `{ user, caller: x }` after the
+      // shorthand rename becomes `{ caller, caller: x }`, a duplicate key.
+      const key = child.field("key");
+      if (key && key.text() === "caller") return true;
       const value = child.field("value");
       if (value && value.kind() === "identifier" && value.text() === "caller") return true;
     }
@@ -396,7 +375,10 @@ function transformResolverBody(arrowNode: SgNode, edits: Edit[]): void {
       }
     }
     if (renamedShorthandUser) {
-      const shadowRanges = collectShadowBlockRanges(body, "user");
+      // Use the broader shadow-range collector here so a nested arrow that
+      // re-binds `user` as a parameter (e.g. `items.map((user) => user.id)`)
+      // does not get its inner reference incorrectly renamed to `caller`.
+      const shadowRanges = collectAllShadowRanges(body, "user");
       // Plain identifier references to the renamed binding (e.g. `user.id`).
       const refs = body.findAll({ rule: { kind: "identifier", regex: "^user$" } });
       for (const ref of refs) {
