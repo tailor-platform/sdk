@@ -1,6 +1,12 @@
 import * as path from "pathe";
 
-const SHIM_PATTERN = /\btailor-sdk-skills\b(?!-)/g;
+// Match the deprecated binary plus the optional `@version` suffix that
+// package-manager run commands can add (`npx tailor-sdk-skills@latest`,
+// `pnpm dlx tailor-sdk-skills@1.2.3`) and the optional ` install` subcommand,
+// so the rewrite drops the version pin and avoids leaving `@latest` attached
+// to the new subcommand. `[ \t]+` (not `\s+`) prevents the optional-install
+// alternative from greedily reaching across newlines into the next command.
+const SHIM_PATTERN = /\btailor-sdk-skills(?:@[^\s'"`]+)?(?:[ \t]+install)?\b(?!-)/g;
 const REPLACEMENT = "tailor-sdk skills install";
 
 function replaceShim(value: string): string {

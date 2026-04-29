@@ -227,6 +227,53 @@ function collectCtxShadowRanges(
   return ranges;
 }
 
+/**
+ * Collect every byte range across the file where `name` is locally re-bound,
+ * so identifier references inside the range are treated as shadowed.
+ *
+ * Combines variable declarations (var/let/const, including object-pattern
+ * shorthand declarations) with function-parameter bindings.
+ */
+function collectAllShadowRanges(root: SgNode, name: string): Array<[number, number]> {
+  const ranges: Array<[number, number]> = [];
+  const escaped = escapeRegex(name);
+
+  const declarations = [
+    ...root.findAll({
+      rule: {
+        kind: "identifier",
+        regex: `^${escaped}$`,
+        inside: { kind: "variable_declarator" },
+      },
+    }),
+    ...root.findAll({
+      rule: {
+        kind: "shorthand_property_identifier_pattern",
+        regex: `^${escaped}$`,
+        inside: { kind: "variable_declarator" },
+      },
+    }),
+  ];
+  for (const decl of declarations) {
+    let scope: SgNode | null = decl.parent();
+    while (scope && !SCOPE_KINDS.has(scope.kind())) scope = scope.parent();
+    if (!scope) continue;
+    const range = scope.range();
+    ranges.push([range.start.index, range.end.index]);
+  }
+
+  for (const k of NESTED_FN_KINDS) {
+    const fns = root.findAll({ rule: { kind: k } });
+    for (const fn of fns) {
+      if (functionRebindsName(fn, name)) {
+        const range = fn.range();
+        ranges.push([range.start.index, range.end.index]);
+      }
+    }
+  }
+  return ranges;
+}
+
 function findResolverBodyArrow(call: SgNode): SgNode | null {
   const args = call.field("arguments");
   if (!args) return null;
@@ -292,17 +339,26 @@ function transformResolverBody(arrowNode: SgNode, edits: Edit[]): void {
     }
     if (renamedShorthandUser) {
       const shadowRanges = collectShadowBlockRanges(body, "user");
+      // Plain identifier references to the renamed binding (e.g. `user.id`).
       const refs = body.findAll({ rule: { kind: "identifier", regex: "^user$" } });
-      // Object literal shorthand uses `shorthand_property_identifier` (no `_pattern`
-      // suffix), so include those too — otherwise `({ user }) => ({ user })` becomes
-      // `({ caller }) => ({ user })` and references an undefined variable.
-      const shortRefs = body.findAll({
-        rule: { kind: "shorthand_property_identifier", regex: "^user$" },
-      });
-      for (const ref of [...refs, ...shortRefs]) {
+      for (const ref of refs) {
         const pos = ref.range().start.index;
         if (isInsideAnyRange(pos, shadowRanges)) continue;
         edits.push(ref.replace("caller"));
+      }
+      // Object literal shorthand (kind: `shorthand_property_identifier`, no
+      // `_pattern` suffix) is both the key and the value. Rewriting it to
+      // `caller` would silently change the resolver's output schema from a
+      // `user` field to a `caller` field. Expand to `user: caller` instead so
+      // the emitted shape stays the same while the value side reads from the
+      // renamed local binding.
+      const shortRefs = body.findAll({
+        rule: { kind: "shorthand_property_identifier", regex: "^user$" },
+      });
+      for (const ref of shortRefs) {
+        const pos = ref.range().start.index;
+        if (isInsideAnyRange(pos, shadowRanges)) continue;
+        edits.push(ref.replace("user: caller"));
       }
     }
     return;
@@ -379,6 +435,30 @@ export default function transform(source: string): string | null {
   const tree = parse(Lang.TypeScript, source).root();
   const edits: Edit[] = [];
 
+  const sdkImports = tree.findAll({
+    rule: {
+      kind: "import_statement",
+      has: { kind: "string", regex: "^[\"']@tailor-platform/sdk(/test)?[\"']$" },
+    },
+  });
+
+  // Only rewrite type identifiers that are imported from the SDK without an
+  // alias. A local `import type { TailorUser } from './domain'` must stay alone
+  // even when the file also imports something else from the SDK.
+  const sdkRenameSourceNames = new Set<string>();
+  for (const importStmt of sdkImports) {
+    const specs = importStmt.findAll({ rule: { kind: "import_specifier" } });
+    for (const spec of specs) {
+      const idents = spec.children().filter((c: SgNode) => c.kind() === "identifier");
+      if (idents.length === 0) continue;
+      const importedName = idents[0]!.text();
+      const aliasNode = idents[1];
+      if (TYPE_RENAME_MAP[importedName] && !aliasNode) {
+        sdkRenameSourceNames.add(importedName);
+      }
+    }
+  }
+
   const typeIdents = tree.findAll({
     rule: {
       kind: "type_identifier",
@@ -386,19 +466,17 @@ export default function transform(source: string): string | null {
     },
   });
   for (const id of typeIdents) {
-    const newName = TYPE_RENAME_MAP[id.text()];
-    if (newName) edits.push(id.replace(newName));
+    if (!sdkRenameSourceNames.has(id.text())) continue;
+    const newName = TYPE_RENAME_MAP[id.text()]!;
+    edits.push(id.replace(newName));
   }
 
-  const sdkImports = tree.findAll({
-    rule: {
-      kind: "import_statement",
-      has: { kind: "string", regex: "^[\"']@tailor-platform/sdk(/test)?[\"']$" },
-    },
-  });
   let importRemoved = false;
   const globalEmittedRenamed = new Set<string>();
-  const unauthenticatedLocalNames = new Set<string>([UNAUTHENTICATED]);
+  // Populated only with names actually imported from the SDK (canonical or
+  // alias). A file with a local `unauthenticatedTailorUser` declaration that
+  // doesn't come from `@tailor-platform/sdk` is intentionally not rewritten.
+  const unauthenticatedLocalNames = new Set<string>();
   for (const importStmt of sdkImports) {
     const { newText, touched } = rebuildImportStatement(
       importStmt,
@@ -411,6 +489,7 @@ export default function transform(source: string): string | null {
   }
 
   for (const localName of unauthenticatedLocalNames) {
+    const shadowRanges = collectAllShadowRanges(tree, localName);
     const ids = tree.findAll({
       rule: {
         kind: "identifier",
@@ -420,6 +499,8 @@ export default function transform(source: string): string | null {
     for (const id of ids) {
       if (isInsideImportStatement(id)) continue;
       if (isMemberExpressionObject(id)) continue;
+      const pos = id.range().start.index;
+      if (isInsideAnyRange(pos, shadowRanges)) continue;
       edits.push(id.replace("null"));
     }
   }

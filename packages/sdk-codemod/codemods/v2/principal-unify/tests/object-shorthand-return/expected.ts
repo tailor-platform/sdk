@@ -4,5 +4,5 @@ export default createResolver({
   name: "n",
   operation: "query",
   output: t.object({ user: t.string() }),
-  body: ({ caller }) => ({ caller }),
+  body: ({ caller }) => ({ user: caller }),
 });

@@ -105,11 +105,22 @@ function transformShellLine(line: string): string {
   return result;
 }
 
+// Sentinel used to fold `\<newline>` continuations into a single logical line
+// before splitting on `\n`. Picked from the Unicode private-use area so it
+// cannot collide with realistic source text.
+const JOIN_MARKER = "<<SDK_CODEMOD_JOIN>>";
+
 function transformShellLikeText(source: string): string | null {
   if (!COMMAND_PATTERN.test(source)) return null;
 
+  // Treat backslash-newline as a line continuation so a multi-line invocation
+  // like `tailor-sdk function test-run resolvers/x.ts \\\n  --arg '{"input":...}'`
+  // is recognized as a single command. The original `\\\n` is restored after
+  // transformation so line breaks remain in place.
+  const joined = source.replace(/\\\n/g, JOIN_MARKER);
+
   let modified = false;
-  const lines = source.split("\n");
+  const lines = joined.split("\n");
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
     const transformed = transformShellLine(line);
@@ -118,7 +129,8 @@ function transformShellLikeText(source: string): string | null {
       modified = true;
     }
   }
-  return modified ? lines.join("\n") : null;
+  if (!modified) return null;
+  return lines.join("\n").split(JOIN_MARKER).join("\\\n");
 }
 
 function transformPackageJson(source: string): string | null {
