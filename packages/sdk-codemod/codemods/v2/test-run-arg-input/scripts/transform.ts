@@ -110,8 +110,9 @@ function transformShellLine(line: string): string {
 }
 
 // Sentinel used to fold `\<newline>` continuations into a single logical line
-// before splitting on `\n`. Picked from the Unicode private-use area so it
-// cannot collide with realistic source text.
+// before splitting on `\n`. Plain ASCII so the SHELL_ARG_PATTERN can reference
+// it directly as a separator alternative; the chosen token is unlikely to
+// appear inside a `tailor-sdk function test-run` invocation.
 const JOIN_MARKER = "SDK_CODEMOD_JOIN";
 
 function transformShellLikeText(source: string): string | null {

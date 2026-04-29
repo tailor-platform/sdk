@@ -140,18 +140,54 @@ function isInsideAnyRange(pos: number, ranges: Array<[number, number]>): boolean
   return ranges.some(([s, e]) => pos >= s && pos < e);
 }
 
+function patternBindsName(pat: SgNode, name: string): boolean {
+  const k = pat.kind();
+  if (k === "identifier") return pat.text() === name;
+  if (k === "object_pattern") {
+    for (const child of pat.children()) {
+      const ck = child.kind();
+      if (ck === "shorthand_property_identifier_pattern" && child.text() === name) return true;
+      if (ck === "pair_pattern") {
+        const value = child.field("value");
+        if (value && patternBindsName(value, name)) return true;
+      }
+      if (ck === "object_assignment_pattern") {
+        const inner = child
+          .children()
+          .find((c: SgNode) => c.kind() === "shorthand_property_identifier_pattern");
+        if (inner && inner.text() === name) return true;
+      }
+      if (ck === "rest_pattern") {
+        const inner = child.children().find((c: SgNode) => c.kind() === "identifier");
+        if (inner && inner.text() === name) return true;
+      }
+    }
+  } else if (k === "array_pattern") {
+    for (const child of pat.children()) {
+      if (patternBindsName(child, name)) return true;
+    }
+  } else if (k === "assignment_pattern") {
+    const left = pat.field("left");
+    if (left && patternBindsName(left, name)) return true;
+  }
+  return false;
+}
+
 function functionRebindsName(fn: SgNode, name: string): boolean {
   const single = fn.field("parameter");
-  if (single && single.kind() === "identifier" && single.text() === name) return true;
+  if (single && patternBindsName(single, name)) return true;
   const params =
     fn.field("parameters") ?? fn.children().find((c: SgNode) => c.kind() === "formal_parameters");
   if (!params) return false;
   for (const child of params.children()) {
     const k = child.kind();
     if (k === "identifier" && child.text() === name) return true;
+    if (k === "object_pattern" || k === "array_pattern") {
+      if (patternBindsName(child, name)) return true;
+    }
     if (k === "required_parameter" || k === "optional_parameter") {
       const pat = child.field("pattern");
-      if (pat && pat.kind() === "identifier" && pat.text() === name) return true;
+      if (pat && patternBindsName(pat, name)) return true;
     }
   }
   return false;
@@ -211,25 +247,17 @@ function collectCtxShadowRanges(
  */
 function collectAllShadowRanges(root: SgNode, name: string): Array<[number, number]> {
   const ranges: Array<[number, number]> = [];
-  const escaped = escapeRegex(name);
 
-  const declarations = [
-    ...root.findAll({
-      rule: {
-        kind: "identifier",
-        regex: `^${escaped}$`,
-        inside: { kind: "variable_declarator" },
-      },
-    }),
-    ...root.findAll({
-      rule: {
-        kind: "shorthand_property_identifier_pattern",
-        regex: `^${escaped}$`,
-        inside: { kind: "variable_declarator" },
-      },
-    }),
-  ];
-  for (const decl of declarations) {
+  // Field-precise scan over `variable_declarator` nodes — only the binding
+  // pattern (`name` field) counts, not value-side identifier references.
+  // `inside: { kind: "variable_declarator" }` would also match `user` in
+  // `const x = user.id`, which would shadow the entire enclosing scope and
+  // suppress every body rename.
+  const declarators = root.findAll({ rule: { kind: "variable_declarator" } });
+  for (const decl of declarators) {
+    const nameNode = decl.field("name");
+    if (!nameNode) continue;
+    if (!patternBindsName(nameNode, name)) continue;
     let scope: SgNode | null = decl.parent();
     while (scope && !SCOPE_KINDS.has(scope.kind())) scope = scope.parent();
     if (!scope) continue;
