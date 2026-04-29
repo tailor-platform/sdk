@@ -83,24 +83,60 @@ function rebuildImportStatement(importStmt: SgNode): ImportRewriteResult {
   };
 }
 
-function hasLocalUserDeclaration(body: SgNode): boolean {
-  const declIdents = body.findAll({
-    rule: {
-      kind: "identifier",
-      regex: "^user$",
-      inside: { kind: "variable_declarator" },
-    },
-  });
-  if (declIdents.length > 0) return true;
+const SCOPE_KINDS = new Set([
+  "statement_block",
+  "function_body",
+  "for_statement",
+  "for_in_statement",
+  "for_of_statement",
+  "arrow_function",
+  "function_expression",
+  "function_declaration",
+  "method_definition",
+]);
 
-  const declPatterns = body.findAll({
-    rule: {
-      kind: "shorthand_property_identifier_pattern",
-      regex: "^user$",
-      inside: { kind: "variable_declarator" },
-    },
-  });
-  return declPatterns.length > 0;
+/**
+ * Collect byte ranges of scopes where `name` is locally redeclared.
+ *
+ * Any identifier reference whose start position falls inside one of these ranges
+ * is shadowed by the local binding and must not be renamed by the param rewrite.
+ * @param body - The arrow body node to scan.
+ * @param name - The identifier name to detect declarations of.
+ * @returns Sorted array of [startByte, endByte] ranges (half-open).
+ */
+function collectShadowBlockRanges(body: SgNode, name: string): Array<[number, number]> {
+  const ranges: Array<[number, number]> = [];
+  const declarations = [
+    ...body.findAll({
+      rule: {
+        kind: "identifier",
+        regex: `^${name}$`,
+        inside: { kind: "variable_declarator" },
+      },
+    }),
+    ...body.findAll({
+      rule: {
+        kind: "shorthand_property_identifier_pattern",
+        regex: `^${name}$`,
+        inside: { kind: "variable_declarator" },
+      },
+    }),
+  ];
+
+  for (const decl of declarations) {
+    let scope: SgNode | null = decl.parent();
+    while (scope && !SCOPE_KINDS.has(scope.kind())) {
+      scope = scope.parent();
+    }
+    if (!scope) continue;
+    const range = scope.range();
+    ranges.push([range.start.index, range.end.index]);
+  }
+  return ranges;
+}
+
+function isInsideAnyRange(pos: number, ranges: Array<[number, number]>): boolean {
+  return ranges.some(([s, e]) => pos >= s && pos < e);
 }
 
 function findResolverBodyArrow(call: SgNode): SgNode | null {
@@ -134,12 +170,14 @@ function transformResolverBody(arrowNode: SgNode, edits: Edit[]): void {
     rule: { kind: "shorthand_property_identifier_pattern", regex: "^user$" },
   });
   if (userPatterns.length > 0) {
-    if (hasLocalUserDeclaration(body)) return;
+    const shadowRanges = collectShadowBlockRanges(body, "user");
     for (const p of userPatterns) {
       edits.push(p.replace("caller"));
     }
     const refs = body.findAll({ rule: { kind: "identifier", regex: "^user$" } });
     for (const ref of refs) {
+      const pos = ref.range().start.index;
+      if (isInsideAnyRange(pos, shadowRanges)) continue;
       edits.push(ref.replace("caller"));
     }
     return;
@@ -214,9 +252,12 @@ export default function transform(source: string): string | null {
       has: { kind: "string", regex: "^[\"']@tailor-platform/sdk[\"']$" },
     },
   });
+  let importRemoved = false;
   for (const importStmt of sdkImports) {
     const { newText, touched } = rebuildImportStatement(importStmt);
-    if (touched) edits.push(importStmt.replace(newText));
+    if (!touched) continue;
+    edits.push(importStmt.replace(newText));
+    if (newText === "") importRemoved = true;
   }
 
   const uauIds = tree.findAll({
@@ -246,5 +287,10 @@ export default function transform(source: string): string | null {
   }
 
   if (edits.length === 0) return null;
-  return tree.commitEdits(edits);
+  let result = tree.commitEdits(edits);
+
+  if (importRemoved) {
+    result = result.replace(/^[\t ]*\n+/, "").replace(/\n{3,}/g, "\n\n");
+  }
+  return result;
 }
