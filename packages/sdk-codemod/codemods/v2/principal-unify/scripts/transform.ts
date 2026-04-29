@@ -53,6 +53,35 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+interface ImportSpec {
+  spec: SgNode;
+  importedName: string;
+  aliasNode: SgNode | undefined;
+  localName: string;
+}
+
+/**
+ * Yield each import specifier in `importStmt` along with its imported name and
+ * optional alias. `import { Foo as Bar }` produces `{ importedName: "Foo",
+ * aliasNode: <Bar>, localName: "Bar" }`; `import { Foo }` produces
+ * `{ importedName: "Foo", aliasNode: undefined, localName: "Foo" }`.
+ */
+function* iterateImportSpecs(importStmt: SgNode): Generator<ImportSpec> {
+  const specs = importStmt.findAll({ rule: { kind: "import_specifier" } });
+  for (const spec of specs) {
+    const idents = spec.children().filter((c: SgNode) => c.kind() === "identifier");
+    if (idents.length === 0) continue;
+    const importedName = idents[0]!.text();
+    const aliasNode = idents[1];
+    yield {
+      spec,
+      importedName,
+      aliasNode,
+      localName: aliasNode?.text() ?? importedName,
+    };
+  }
+}
+
 function rebuildImportStatement(
   importStmt: SgNode,
   globalEmittedRenamed: Set<string>,
@@ -63,21 +92,12 @@ function rebuildImportStatement(
   const trailingSemi = importText.trimEnd().endsWith(";") ? ";" : "";
   const sourceRaw = extractModuleSource(importText);
 
-  const specifiers = importStmt.findAll({ rule: { kind: "import_specifier" } });
   const newSpecTexts: string[] = [];
   const seenLocal = new Set<string>();
   let touched = false;
 
-  for (const spec of specifiers) {
+  for (const { spec, importedName, aliasNode, localName } of iterateImportSpecs(importStmt)) {
     const specText = spec.text();
-    const idents = spec.children().filter((c: SgNode) => c.kind() === "identifier");
-    if (idents.length === 0) {
-      newSpecTexts.push(specText);
-      continue;
-    }
-    const importedName = idents[0]!.text();
-    const aliasNode = idents[1];
-    const localName = aliasNode?.text() ?? importedName;
     const isTypeOnly = /^\s*type\s+/.test(specText);
 
     const renamed = TYPE_RENAME_MAP[importedName];
@@ -515,12 +535,7 @@ export default function transform(source: string): string | null {
   // even when the file also imports something else from the SDK.
   const sdkRenameSourceNames = new Set<string>();
   for (const importStmt of sdkImports) {
-    const specs = importStmt.findAll({ rule: { kind: "import_specifier" } });
-    for (const spec of specs) {
-      const idents = spec.children().filter((c: SgNode) => c.kind() === "identifier");
-      if (idents.length === 0) continue;
-      const importedName = idents[0]!.text();
-      const aliasNode = idents[1];
+    for (const { importedName, aliasNode } of iterateImportSpecs(importStmt)) {
       if (TYPE_RENAME_MAP[importedName] && !aliasNode) {
         sdkRenameSourceNames.add(importedName);
       }
@@ -579,14 +594,9 @@ export default function transform(source: string): string | null {
   // does not actually bring `createResolver` in) are not.
   const createResolverLocalNames = new Set<string>();
   for (const importStmt of sdkImports) {
-    const specs = importStmt.findAll({ rule: { kind: "import_specifier" } });
-    for (const spec of specs) {
-      const idents = spec.children().filter((c: SgNode) => c.kind() === "identifier");
-      if (idents.length === 0) continue;
-      const importedName = idents[0]!.text();
-      const aliasNode = idents[1];
+    for (const { importedName, localName } of iterateImportSpecs(importStmt)) {
       if (importedName === "createResolver") {
-        createResolverLocalNames.add(aliasNode?.text() ?? importedName);
+        createResolverLocalNames.add(localName);
       }
     }
   }

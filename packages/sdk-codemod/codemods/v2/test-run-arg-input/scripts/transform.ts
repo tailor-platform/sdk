@@ -1,11 +1,20 @@
 import * as path from "pathe";
 
 const COMMAND_PATTERN = /\btailor-sdk\s+function\s+test-run\b/;
+
+// Sentinel used to fold `\<newline>` continuations into a single logical line
+// before splitting on `\n`. Plain ASCII so the SHELL_ARG_PATTERN can reference
+// it directly as a separator alternative; the chosen token is unlikely to
+// appear inside a `tailor-sdk function test-run` invocation.
+const JOIN_MARKER = "SDK_CODEMOD_JOIN";
+
 // The separator group accepts the JOIN_MARKER literal so a backslash-newline
 // continuation between `--arg` and the quoted JSON (joined into the line via
 // the marker by `transformShellLikeText`) still matches.
-const SHELL_ARG_PATTERN =
-  /(--arg|-a)(\s*=\s*|(?:\s|SDK_CODEMOD_JOIN)+)(['"`])((?:\\.|(?!\3)[^\\])*)\3/g;
+const SHELL_ARG_PATTERN = new RegExp(
+  `(--arg|-a)(\\s*=\\s*|(?:\\s|${JOIN_MARKER})+)(['"\`])((?:\\\\.|(?!\\3)[^\\\\])*)\\3`,
+  "g",
+);
 
 function isInputWrapper(parsed: unknown): parsed is { input: unknown } {
   return (
@@ -108,12 +117,6 @@ function transformShellLine(line: string): string {
   flushSegment();
   return result;
 }
-
-// Sentinel used to fold `\<newline>` continuations into a single logical line
-// before splitting on `\n`. Plain ASCII so the SHELL_ARG_PATTERN can reference
-// it directly as a separator alternative; the chosen token is unlikely to
-// appear inside a `tailor-sdk function test-run` invocation.
-const JOIN_MARKER = "SDK_CODEMOD_JOIN";
 
 function transformShellLikeText(source: string): string | null {
   if (!COMMAND_PATTERN.test(source)) return null;
