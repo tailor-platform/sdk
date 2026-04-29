@@ -293,6 +293,52 @@ function findResolverBodyArrow(call: SgNode): SgNode | null {
   return null;
 }
 
+/**
+ * Look for any binding named `caller` in the resolver body or pattern. When
+ * one exists, renaming `user` → `caller` would either shadow it, collide with
+ * a duplicate `let`/`const`, or alias an unrelated value, so the codemod
+ * leaves the body alone for manual migration instead.
+ */
+function hasCallerBindingConflict(pattern: SgNode, body: SgNode): boolean {
+  for (const child of pattern.children()) {
+    const k = child.kind();
+    if (k === "shorthand_property_identifier_pattern" && child.text() === "caller") return true;
+    if (k === "pair_pattern") {
+      const value = child.field("value");
+      if (value && value.kind() === "identifier" && value.text() === "caller") return true;
+    }
+    if (k === "object_assignment_pattern") {
+      const inner = child
+        .children()
+        .find((c: SgNode) => c.kind() === "shorthand_property_identifier_pattern");
+      if (inner && inner.text() === "caller") return true;
+    }
+  }
+  const decls = body.findAll({
+    rule: {
+      kind: "identifier",
+      regex: "^caller$",
+      inside: { kind: "variable_declarator" },
+    },
+  });
+  if (decls.length > 0) return true;
+  const shortDecls = body.findAll({
+    rule: {
+      kind: "shorthand_property_identifier_pattern",
+      regex: "^caller$",
+      inside: { kind: "variable_declarator" },
+    },
+  });
+  if (shortDecls.length > 0) return true;
+  for (const k of NESTED_FN_KINDS) {
+    const fns = body.findAll({ rule: { kind: k } });
+    for (const fn of fns) {
+      if (functionRebindsName(fn, "caller")) return true;
+    }
+  }
+  return false;
+}
+
 function transformResolverBody(arrowNode: SgNode, edits: Edit[]): void {
   const params =
     arrowNode.field("parameters") ??
@@ -322,6 +368,8 @@ function transformResolverBody(arrowNode: SgNode, edits: Edit[]): void {
   if (!pattern) return;
 
   if (pattern.kind() === "object_pattern") {
+    if (hasCallerBindingConflict(pattern, body)) return;
+
     let renamedShorthandUser = false;
     // Only iterate top-level pattern children so nested destructures like
     // `({ input: { user } })` are not mistaken for the resolver context user.
@@ -334,6 +382,16 @@ function transformResolverBody(arrowNode: SgNode, edits: Edit[]): void {
         const key = child.field("key");
         if (key && key.text() === "user") {
           edits.push(key.replace("caller"));
+        }
+      } else if (kind === "object_assignment_pattern") {
+        // `{ user = fallback }` — the inner shorthand is the binding; default
+        // expression is preserved.
+        const inner = child
+          .children()
+          .find((c: SgNode) => c.kind() === "shorthand_property_identifier_pattern");
+        if (inner && inner.text() === "user") {
+          edits.push(inner.replace("caller"));
+          renamedShorthandUser = true;
         }
       }
     }
@@ -505,19 +563,43 @@ export default function transform(source: string): string | null {
     }
   }
 
-  const resolverCalls = tree.findAll({
-    rule: {
-      kind: "call_expression",
-      has: {
-        field: "function",
-        kind: "identifier",
-        regex: "^createResolver$",
+  // Resolve which local names refer to the SDK's `createResolver` so aliased
+  // imports like `import { createResolver as makeResolver } ...` are migrated
+  // and unrelated local helpers named `createResolver` (when the SDK import
+  // does not actually bring `createResolver` in) are not.
+  const createResolverLocalNames = new Set<string>();
+  for (const importStmt of sdkImports) {
+    const specs = importStmt.findAll({ rule: { kind: "import_specifier" } });
+    for (const spec of specs) {
+      const idents = spec.children().filter((c: SgNode) => c.kind() === "identifier");
+      if (idents.length === 0) continue;
+      const importedName = idents[0]!.text();
+      const aliasNode = idents[1];
+      if (importedName === "createResolver") {
+        createResolverLocalNames.add(aliasNode?.text() ?? importedName);
+      }
+    }
+  }
+  for (const localName of createResolverLocalNames) {
+    const shadowRanges = collectAllShadowRanges(tree, localName);
+    const calls = tree.findAll({
+      rule: {
+        kind: "call_expression",
+        has: {
+          field: "function",
+          kind: "identifier",
+          regex: `^${escapeRegex(localName)}$`,
+        },
       },
-    },
-  });
-  for (const call of resolverCalls) {
-    const arrow = findResolverBodyArrow(call);
-    if (arrow) transformResolverBody(arrow, edits);
+    });
+    for (const call of calls) {
+      const callee = call.field("function");
+      if (!callee) continue;
+      const pos = callee.range().start.index;
+      if (isInsideAnyRange(pos, shadowRanges)) continue;
+      const arrow = findResolverBodyArrow(call);
+      if (arrow) transformResolverBody(arrow, edits);
+    }
   }
 
   if (edits.length === 0) return null;
