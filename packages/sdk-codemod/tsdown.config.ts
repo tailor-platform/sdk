@@ -17,6 +17,10 @@ export default defineConfig([
     entry: {
       "v2/define-generators-to-plugins/scripts/transform":
         "codemods/v2/define-generators-to-plugins/scripts/transform.ts",
+      "v2/test-run-arg-input/scripts/transform":
+        "codemods/v2/test-run-arg-input/scripts/transform.ts",
+      "v2/sdk-skills-shim/scripts/transform": "codemods/v2/sdk-skills-shim/scripts/transform.ts",
+      "v2/principal-unify/scripts/transform": "codemods/v2/principal-unify/scripts/transform.ts",
     },
     format: ["esm"],
     target: "node18",

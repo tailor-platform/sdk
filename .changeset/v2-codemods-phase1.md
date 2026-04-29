@@ -1,0 +1,9 @@
+---
+"@tailor-platform/sdk-codemod": minor
+---
+
+Add three v2 codemods that the upgrade runner can apply when migrating across the 1.x → 2.x boundary:
+
+- `v2/test-run-arg-input` strips the deprecated `{ "input": ... }` wrapper from `tailor-sdk function test-run --arg` JSON inside `package.json` scripts, shell scripts, and Markdown code blocks.
+- `v2/sdk-skills-shim` rewrites `tailor-sdk-skills` invocations to `tailor-sdk skills install` across `package.json`, shell, YAML, and Markdown files.
+- `v2/principal-unify` renames `TailorUser` / `TailorActor` / `TailorInvoker` to the unified `TailorPrincipal`, drops `unauthenticatedTailorUser` (replacing value references with `null`), and renames `user` to `caller` inside `createResolver` body parameters and member accesses.
