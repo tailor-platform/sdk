@@ -49,9 +49,14 @@ function extractModuleSource(importText: string): string {
   return m?.[2] ?? "@tailor-platform/sdk";
 }
 
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function rebuildImportStatement(
   importStmt: SgNode,
   globalEmittedRenamed: Set<string>,
+  unauthenticatedLocalNames: Set<string>,
 ): ImportRewriteResult {
   const importText = importStmt.text();
   const isImportType = /^\s*import\s+type\b/.test(importText);
@@ -91,6 +96,10 @@ function rebuildImportStatement(
       newSpecTexts.push(`${isTypeOnly ? "type " : ""}${renamed}${asPart}`);
     } else if (importedName === UNAUTHENTICATED) {
       touched = true;
+      // Track the local binding so aliased forms like
+      // `import { unauthenticatedTailorUser as testUser } ...` get their references
+      // rewritten to `null` alongside the canonical name.
+      unauthenticatedLocalNames.add(localName);
     } else {
       if (seenLocal.has(localName)) continue;
       seenLocal.add(localName);
@@ -284,7 +293,13 @@ function transformResolverBody(arrowNode: SgNode, edits: Edit[]): void {
     if (renamedShorthandUser) {
       const shadowRanges = collectShadowBlockRanges(body, "user");
       const refs = body.findAll({ rule: { kind: "identifier", regex: "^user$" } });
-      for (const ref of refs) {
+      // Object literal shorthand uses `shorthand_property_identifier` (no `_pattern`
+      // suffix), so include those too — otherwise `({ user }) => ({ user })` becomes
+      // `({ caller }) => ({ user })` and references an undefined variable.
+      const shortRefs = body.findAll({
+        rule: { kind: "shorthand_property_identifier", regex: "^user$" },
+      });
+      for (const ref of [...refs, ...shortRefs]) {
         const pos = ref.range().start.index;
         if (isInsideAnyRange(pos, shadowRanges)) continue;
         edits.push(ref.replace("caller"));
@@ -308,6 +323,37 @@ function transformResolverBody(arrowNode: SgNode, edits: Edit[]): void {
     const pos = obj.range().start.index;
     if (isInsideAnyRange(pos, ctxShadowRanges)) continue;
     edits.push(propId.replace("caller"));
+  }
+
+  // Also rewrite destructures of the context, e.g. `const { user } = ctx;` →
+  // `const { caller: user } = ctx;`. Local bindings stay the same so existing
+  // body references keep working.
+  const ctxDestructures = body.findAll({
+    rule: {
+      kind: "variable_declarator",
+      has: {
+        field: "value",
+        kind: "identifier",
+        regex: `^${escapeRegex(ctxName)}$`,
+      },
+    },
+  });
+  for (const decl of ctxDestructures) {
+    const pos = decl.range().start.index;
+    if (isInsideAnyRange(pos, ctxShadowRanges)) continue;
+    const pat = decl.field("name");
+    if (!pat || pat.kind() !== "object_pattern") continue;
+    for (const child of pat.children()) {
+      const k = child.kind();
+      if (k === "shorthand_property_identifier_pattern" && child.text() === "user") {
+        edits.push(child.replace("caller: user"));
+      } else if (k === "pair_pattern") {
+        const key = child.field("key");
+        if (key && key.text() === "user") {
+          edits.push(key.replace("caller"));
+        }
+      }
+    }
   }
 }
 
@@ -352,23 +398,30 @@ export default function transform(source: string): string | null {
   });
   let importRemoved = false;
   const globalEmittedRenamed = new Set<string>();
+  const unauthenticatedLocalNames = new Set<string>([UNAUTHENTICATED]);
   for (const importStmt of sdkImports) {
-    const { newText, touched } = rebuildImportStatement(importStmt, globalEmittedRenamed);
+    const { newText, touched } = rebuildImportStatement(
+      importStmt,
+      globalEmittedRenamed,
+      unauthenticatedLocalNames,
+    );
     if (!touched) continue;
     edits.push(importStmt.replace(newText));
     if (newText === "") importRemoved = true;
   }
 
-  const uauIds = tree.findAll({
-    rule: {
-      kind: "identifier",
-      regex: `^${UNAUTHENTICATED}$`,
-    },
-  });
-  for (const id of uauIds) {
-    if (isInsideImportStatement(id)) continue;
-    if (isMemberExpressionObject(id)) continue;
-    edits.push(id.replace("null"));
+  for (const localName of unauthenticatedLocalNames) {
+    const ids = tree.findAll({
+      rule: {
+        kind: "identifier",
+        regex: `^${escapeRegex(localName)}$`,
+      },
+    });
+    for (const id of ids) {
+      if (isInsideImportStatement(id)) continue;
+      if (isMemberExpressionObject(id)) continue;
+      edits.push(id.replace("null"));
+    }
   }
 
   const resolverCalls = tree.findAll({

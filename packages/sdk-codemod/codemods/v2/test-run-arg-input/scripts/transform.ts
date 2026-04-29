@@ -29,6 +29,82 @@ function unwrapJsonString(body: string, quote: string): string | null {
   return inner;
 }
 
+/**
+ * Apply the unwrap to one shell command segment. Quotes are tracked so command
+ * boundary characters inside strings (e.g. `'a;b'`) are not split.
+ */
+function applyUnwrapToSegment(segment: string): string {
+  return segment.replace(SHELL_ARG_PATTERN, (match, flag, sep, quote, body) => {
+    const unwrapped = unwrapJsonString(body, quote);
+    if (unwrapped == null) return match;
+    return `${flag}${sep}${quote}${unwrapped}${quote}`;
+  });
+}
+
+/**
+ * Walk the line splitting on unquoted shell command boundaries (`;`, `&&`,
+ * `||`, `|`, `&`) and only run the unwrap on segments that actually invoke
+ * `tailor-sdk function test-run`. Without this, a chained line like
+ * `tailor-sdk function test-run ... --arg '{"input":...}' && other-cli --arg '{"input":...}'`
+ * would have the unrelated `other-cli` argument unwrapped too.
+ */
+function transformShellLine(line: string): string {
+  if (!COMMAND_PATTERN.test(line)) return line;
+
+  let result = "";
+  let segBuf = "";
+  let i = 0;
+  let quoteChar: string | null = null;
+  const N = line.length;
+
+  const flushSegment = () => {
+    if (COMMAND_PATTERN.test(segBuf)) {
+      result += applyUnwrapToSegment(segBuf);
+    } else {
+      result += segBuf;
+    }
+    segBuf = "";
+  };
+
+  while (i < N) {
+    const ch = line[i]!;
+    if (quoteChar) {
+      if (ch === "\\" && quoteChar !== "'" && i + 1 < N) {
+        segBuf += line.slice(i, i + 2);
+        i += 2;
+        continue;
+      }
+      if (ch === quoteChar) quoteChar = null;
+      segBuf += ch;
+      i++;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === "`") {
+      quoteChar = ch;
+      segBuf += ch;
+      i++;
+      continue;
+    }
+    const two = line.slice(i, i + 2);
+    if (two === "&&" || two === "||") {
+      flushSegment();
+      result += two;
+      i += 2;
+      continue;
+    }
+    if (ch === ";" || ch === "|" || ch === "&") {
+      flushSegment();
+      result += ch;
+      i++;
+      continue;
+    }
+    segBuf += ch;
+    i++;
+  }
+  flushSegment();
+  return result;
+}
+
 function transformShellLikeText(source: string): string | null {
   if (!COMMAND_PATTERN.test(source)) return null;
 
@@ -36,14 +112,11 @@ function transformShellLikeText(source: string): string | null {
   const lines = source.split("\n");
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
-    if (!COMMAND_PATTERN.test(line)) continue;
-    const replaced = line.replace(SHELL_ARG_PATTERN, (match, flag, sep, quote, body) => {
-      const unwrapped = unwrapJsonString(body, quote);
-      if (unwrapped == null) return match;
+    const transformed = transformShellLine(line);
+    if (transformed !== line) {
+      lines[i] = transformed;
       modified = true;
-      return `${flag}${sep}${quote}${unwrapped}${quote}`;
-    });
-    lines[i] = replaced;
+    }
   }
   return modified ? lines.join("\n") : null;
 }
