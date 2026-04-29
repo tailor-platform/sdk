@@ -9,15 +9,11 @@ const TYPE_RENAME_MAP: Record<string, string> = {
 
 const UNAUTHENTICATED = "unauthenticatedTailorUser";
 
+const QUICK_FILTER_NEEDLES = [...Object.keys(TYPE_RENAME_MAP), UNAUTHENTICATED, "createResolver"];
+
 function quickFilter(source: string): boolean {
   if (!source.includes("@tailor-platform/sdk")) return false;
-  return (
-    source.includes("TailorUser") ||
-    source.includes("TailorActor") ||
-    source.includes("TailorInvoker") ||
-    source.includes(UNAUTHENTICATED) ||
-    source.includes("createResolver")
-  );
+  return QUICK_FILTER_NEEDLES.some((needle) => source.includes(needle));
 }
 
 function isInsideImportStatement(node: SgNode): boolean {
@@ -160,6 +156,18 @@ function isInsideAnyRange(pos: number, ranges: Array<[number, number]>): boolean
   return ranges.some(([s, e]) => pos >= s && pos < e);
 }
 
+/**
+ * Walk up from `decl` and return the byte range of its enclosing scope, or
+ * null if no recognized scope ancestor exists.
+ */
+function enclosingScopeRange(decl: SgNode): [number, number] | null {
+  let scope: SgNode | null = decl.parent();
+  while (scope && !SCOPE_KINDS.has(scope.kind())) scope = scope.parent();
+  if (!scope) return null;
+  const range = scope.range();
+  return [range.start.index, range.end.index];
+}
+
 function patternBindsName(pat: SgNode, name: string): boolean {
   const k = pat.kind();
   if (k === "identifier") return pat.text() === name;
@@ -249,11 +257,8 @@ function collectCtxShadowRanges(
     const nameNode = decl.field("name");
     if (!nameNode || nameNode.kind() !== "identifier") continue;
     if (nameNode.text() !== ctxName) continue;
-    let scope: SgNode | null = decl.parent();
-    while (scope && !SCOPE_KINDS.has(scope.kind())) scope = scope.parent();
-    if (!scope) continue;
-    const range = scope.range();
-    ranges.push([range.start.index, range.end.index]);
+    const range = enclosingScopeRange(decl);
+    if (range) ranges.push(range);
   }
   return ranges;
 }
@@ -278,11 +283,8 @@ function collectAllShadowRanges(root: SgNode, name: string): Array<[number, numb
     const nameNode = decl.field("name");
     if (!nameNode) continue;
     if (!patternBindsName(nameNode, name)) continue;
-    let scope: SgNode | null = decl.parent();
-    while (scope && !SCOPE_KINDS.has(scope.kind())) scope = scope.parent();
-    if (!scope) continue;
-    const range = scope.range();
-    ranges.push([range.start.index, range.end.index]);
+    const range = enclosingScopeRange(decl);
+    if (range) ranges.push(range);
   }
 
   for (const k of NESTED_FN_KINDS) {
