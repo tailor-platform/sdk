@@ -29,15 +29,34 @@ function isInsideImportStatement(node: SgNode): boolean {
   return false;
 }
 
+function isMemberExpressionObject(node: SgNode): boolean {
+  const parent = node.parent();
+  if (!parent || parent.kind() !== "member_expression") return false;
+  const obj = parent.field("object");
+  if (!obj) return false;
+  const r = node.range();
+  const or = obj.range();
+  return r.start.index === or.start.index && r.end.index === or.end.index;
+}
+
 interface ImportRewriteResult {
   newText: string;
   touched: boolean;
 }
 
-function rebuildImportStatement(importStmt: SgNode): ImportRewriteResult {
+function extractModuleSource(importText: string): string {
+  const m = importText.match(/from\s+(["'])([^"']+)\1/);
+  return m?.[2] ?? "@tailor-platform/sdk";
+}
+
+function rebuildImportStatement(
+  importStmt: SgNode,
+  globalEmittedRenamed: Set<string>,
+): ImportRewriteResult {
   const importText = importStmt.text();
   const isImportType = /^\s*import\s+type\b/.test(importText);
   const trailingSemi = importText.trimEnd().endsWith(";") ? ";" : "";
+  const sourceRaw = extractModuleSource(importText);
 
   const specifiers = importStmt.findAll({ rule: { kind: "import_specifier" } });
   const newSpecTexts: string[] = [];
@@ -61,7 +80,13 @@ function rebuildImportStatement(importStmt: SgNode): ImportRewriteResult {
       touched = true;
       const finalLocal = aliasNode?.text() ?? renamed;
       if (seenLocal.has(finalLocal)) continue;
+      // Cross-statement dedupe for non-aliased renames so a file with
+      // `import { TailorUser } from "@tailor-platform/sdk"` and
+      // `import { TailorActor } from "@tailor-platform/sdk"` does not collapse to
+      // two duplicate `import { TailorPrincipal } ...` lines.
+      if (!aliasNode && globalEmittedRenamed.has(renamed)) continue;
       seenLocal.add(finalLocal);
+      if (!aliasNode) globalEmittedRenamed.add(renamed);
       const asPart = aliasNode ? ` as ${aliasNode.text()}` : "";
       newSpecTexts.push(`${isTypeOnly ? "type " : ""}${renamed}${asPart}`);
     } else if (importedName === UNAUTHENTICATED) {
@@ -78,7 +103,7 @@ function rebuildImportStatement(importStmt: SgNode): ImportRewriteResult {
 
   const prefix = isImportType ? "import type " : "import ";
   return {
-    newText: `${prefix}{ ${newSpecTexts.join(", ")} } from "@tailor-platform/sdk"${trailingSemi}`,
+    newText: `${prefix}{ ${newSpecTexts.join(", ")} } from "${sourceRaw}"${trailingSemi}`,
     touched: true,
   };
 }
@@ -94,6 +119,13 @@ const SCOPE_KINDS = new Set([
   "function_declaration",
   "method_definition",
 ]);
+
+const NESTED_FN_KINDS = [
+  "arrow_function",
+  "function_expression",
+  "function_declaration",
+  "method_definition",
+];
 
 /**
  * Collect byte ranges of scopes where `name` is locally redeclared.
@@ -139,6 +171,53 @@ function isInsideAnyRange(pos: number, ranges: Array<[number, number]>): boolean
   return ranges.some(([s, e]) => pos >= s && pos < e);
 }
 
+function functionRebindsName(fn: SgNode, name: string): boolean {
+  const single = fn.field("parameter");
+  if (single && single.kind() === "identifier" && single.text() === name) return true;
+  const params =
+    fn.field("parameters") ?? fn.children().find((c: SgNode) => c.kind() === "formal_parameters");
+  if (!params) return false;
+  for (const child of params.children()) {
+    const k = child.kind();
+    if (k === "identifier" && child.text() === name) return true;
+    if (k === "required_parameter" || k === "optional_parameter") {
+      const pat = child.field("pattern");
+      if (pat && pat.kind() === "identifier" && pat.text() === name) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Collect byte ranges of inner functions that re-bind `ctxName` as a parameter.
+ *
+ * Member-accesses to `ctxName.user` whose start byte falls inside any of these
+ * ranges refer to the inner function's parameter, not the resolver context, and
+ * must not be renamed.
+ * @param body - The resolver body node.
+ * @param ctxName - The context parameter identifier name.
+ * @param resolverArrow - The resolver's outer arrow/function expression to exclude.
+ */
+function collectCtxShadowRanges(
+  body: SgNode,
+  ctxName: string,
+  resolverArrow: SgNode,
+): Array<[number, number]> {
+  const ranges: Array<[number, number]> = [];
+  const ar = resolverArrow.range();
+  for (const k of NESTED_FN_KINDS) {
+    const fns = body.findAll({ rule: { kind: k } });
+    for (const fn of fns) {
+      const r = fn.range();
+      if (r.start.index === ar.start.index && r.end.index === ar.end.index) continue;
+      if (functionRebindsName(fn, ctxName)) {
+        ranges.push([r.start.index, r.end.index]);
+      }
+    }
+  }
+  return ranges;
+}
+
 function findResolverBodyArrow(call: SgNode): SgNode | null {
   const args = call.field("arguments");
   if (!args) return null;
@@ -166,23 +245,6 @@ function transformResolverBody(arrowNode: SgNode, edits: Edit[]): void {
   const body = arrowNode.field("body");
   if (!params || !body) return;
 
-  const userPatterns = params.findAll({
-    rule: { kind: "shorthand_property_identifier_pattern", regex: "^user$" },
-  });
-  if (userPatterns.length > 0) {
-    const shadowRanges = collectShadowBlockRanges(body, "user");
-    for (const p of userPatterns) {
-      edits.push(p.replace("caller"));
-    }
-    const refs = body.findAll({ rule: { kind: "identifier", regex: "^user$" } });
-    for (const ref of refs) {
-      const pos = ref.range().start.index;
-      if (isInsideAnyRange(pos, shadowRanges)) continue;
-      edits.push(ref.replace("caller"));
-    }
-    return;
-  }
-
   const firstParam = params
     .children()
     .find(
@@ -193,18 +255,48 @@ function transformResolverBody(arrowNode: SgNode, edits: Edit[]): void {
         c.kind() === "object_pattern",
     );
   if (!firstParam) return;
-  if (firstParam.kind() === "object_pattern") return;
 
-  let paramIdent: SgNode | undefined;
-  if (firstParam.kind() === "identifier") {
-    paramIdent = firstParam;
+  let pattern: SgNode | undefined;
+  if (firstParam.kind() === "object_pattern" || firstParam.kind() === "identifier") {
+    pattern = firstParam;
   } else {
-    const pattern = firstParam.field("pattern");
-    if (pattern && pattern.kind() === "identifier") paramIdent = pattern;
+    const inner = firstParam.field("pattern");
+    if (inner) pattern = inner;
   }
-  if (!paramIdent) return;
+  if (!pattern) return;
 
-  const ctxName = paramIdent.text();
+  if (pattern.kind() === "object_pattern") {
+    let renamedShorthandUser = false;
+    // Only iterate top-level pattern children so nested destructures like
+    // `({ input: { user } })` are not mistaken for the resolver context user.
+    for (const child of pattern.children()) {
+      const kind = child.kind();
+      if (kind === "shorthand_property_identifier_pattern" && child.text() === "user") {
+        edits.push(child.replace("caller"));
+        renamedShorthandUser = true;
+      } else if (kind === "pair_pattern") {
+        const key = child.field("key");
+        if (key && key.text() === "user") {
+          edits.push(key.replace("caller"));
+        }
+      }
+    }
+    if (renamedShorthandUser) {
+      const shadowRanges = collectShadowBlockRanges(body, "user");
+      const refs = body.findAll({ rule: { kind: "identifier", regex: "^user$" } });
+      for (const ref of refs) {
+        const pos = ref.range().start.index;
+        if (isInsideAnyRange(pos, shadowRanges)) continue;
+        edits.push(ref.replace("caller"));
+      }
+    }
+    return;
+  }
+
+  // Single identifier param: rewrite `<ctx>.user` → `<ctx>.caller`, but skip
+  // member accesses that sit inside a nested function which re-binds `<ctx>`.
+  const ctxName = pattern.text();
+  const ctxShadowRanges = collectCtxShadowRanges(body, ctxName, arrowNode);
   const propertyAccesses = body.findAll({
     rule: { kind: "property_identifier", regex: "^user$" },
   });
@@ -212,9 +304,10 @@ function transformResolverBody(arrowNode: SgNode, edits: Edit[]): void {
     const parent = propId.parent();
     if (!parent || parent.kind() !== "member_expression") continue;
     const obj = parent.field("object");
-    if (obj && obj.kind() === "identifier" && obj.text() === ctxName) {
-      edits.push(propId.replace("caller"));
-    }
+    if (!(obj && obj.kind() === "identifier" && obj.text() === ctxName)) continue;
+    const pos = obj.range().start.index;
+    if (isInsideAnyRange(pos, ctxShadowRanges)) continue;
+    edits.push(propId.replace("caller"));
   }
 }
 
@@ -222,10 +315,15 @@ function transformResolverBody(arrowNode: SgNode, edits: Edit[]): void {
  * Migrate user/actor/invoker types and identifiers to the unified TailorPrincipal.
  *
  * - Renames `TailorUser` / `TailorActor` / `TailorInvoker` type references to `TailorPrincipal`.
- * - Rewrites SDK imports to use `TailorPrincipal` (with dedupe) and drops `unauthenticatedTailorUser`.
- * - Replaces value references to `unauthenticatedTailorUser` with `null`.
- * - Renames `user` to `caller` inside `createResolver({ body })` parameters and bodies, and
- *   `<ctx>.user` to `<ctx>.caller` for non-destructured single-param resolver bodies.
+ * - Rewrites SDK imports (including the `/test` subpath) to use `TailorPrincipal` (deduped
+ *   across statements) and drops `unauthenticatedTailorUser`.
+ * - Replaces standalone references to `unauthenticatedTailorUser` with `null`. Member-access
+ *   forms like `unauthenticatedTailorUser.id` are left alone on purpose so the resulting TS
+ *   error after the import is removed points the author at the broken access.
+ * - Renames `user` to `caller` for top-level destructured resolver bodies (`{ input, user }`),
+ *   handles aliased pairs (`{ user: currentUser }`) by rewriting only the property name, and
+ *   rewrites `<ctx>.user` for non-destructured single-param bodies — respecting variable
+ *   shadowing in both directions.
  * @param source - TypeScript source text.
  * @returns Transformed source or null when nothing matched.
  */
@@ -249,12 +347,13 @@ export default function transform(source: string): string | null {
   const sdkImports = tree.findAll({
     rule: {
       kind: "import_statement",
-      has: { kind: "string", regex: "^[\"']@tailor-platform/sdk[\"']$" },
+      has: { kind: "string", regex: "^[\"']@tailor-platform/sdk(/test)?[\"']$" },
     },
   });
   let importRemoved = false;
+  const globalEmittedRenamed = new Set<string>();
   for (const importStmt of sdkImports) {
-    const { newText, touched } = rebuildImportStatement(importStmt);
+    const { newText, touched } = rebuildImportStatement(importStmt, globalEmittedRenamed);
     if (!touched) continue;
     edits.push(importStmt.replace(newText));
     if (newText === "") importRemoved = true;
@@ -268,6 +367,7 @@ export default function transform(source: string): string | null {
   });
   for (const id of uauIds) {
     if (isInsideImportStatement(id)) continue;
+    if (isMemberExpressionObject(id)) continue;
     edits.push(id.replace("null"));
   }
 
