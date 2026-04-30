@@ -7,6 +7,8 @@ type ImportNode = {
   start: number;
   end: number;
   source: { value: string } | null;
+  specifiers?: Array<{ type?: string; exported?: { name: string } | null }>;
+  exported?: { name: string } | null;
 };
 
 function transformWith(
@@ -14,10 +16,13 @@ function transformWith(
   code: string,
   body: ImportNode[],
   id: string,
-  testConfig: { include?: string[]; setupFiles?: string | string[] } = { include: [] },
+  testConfig: { include?: string[]; setupFiles?: string | string[]; root?: string } = {
+    include: [],
+  },
 ) {
   const parseCtx = { parse: () => ({ body }) };
-  (plugin.configResolved as any)({ test: testConfig });
+  const root = testConfig.root ?? "/";
+  (plugin.configResolved as any)({ root, test: { ...testConfig, root } });
   return (plugin.transform as any).call(parseCtx, code, id);
 }
 
@@ -81,9 +86,9 @@ describe("createBlockPlugin", () => {
     expect(result.code).not.toContain("randomUUID");
   });
 
-  test("handles re-exports from blocked modules", () => {
+  test("rewrites named re-exports to per-binding stub exports", () => {
     const plugin = createBlockPlugin();
-    const code = `export { foo } from "node:crypto";`;
+    const code = `export { foo, bar as baz } from "node:crypto";`;
     const result = transformWith(
       plugin,
       code,
@@ -93,11 +98,77 @@ describe("createBlockPlugin", () => {
           start: 0,
           end: code.length,
           source: { value: "node:crypto" },
+          specifiers: [
+            { type: "ExportSpecifier", exported: { name: "foo" } },
+            { type: "ExportSpecifier", exported: { name: "baz" } },
+          ],
         },
       ],
       "/src/file.ts",
     );
-    expect(result.code).toMatch(/throw new Error\(/);
+    expect(result.code).toMatch(/export const foo = \(\(\) => \{ throw new Error\(/);
+    expect(result.code).toMatch(/export const baz = \(\(\) => \{ throw new Error\(/);
+    expect(result.code).not.toContain("bar");
+  });
+
+  test("rewrites default re-export to a default-stub export", () => {
+    const plugin = createBlockPlugin();
+    const code = `export { default } from "node:crypto";`;
+    const result = transformWith(
+      plugin,
+      code,
+      [
+        {
+          type: "ExportNamedDeclaration",
+          start: 0,
+          end: code.length,
+          source: { value: "node:crypto" },
+          specifiers: [{ type: "ExportSpecifier", exported: { name: "default" } }],
+        },
+      ],
+      "/src/file.ts",
+    );
+    expect(result.code).toMatch(/export default \(\(\) => \{ throw new Error\(/);
+  });
+
+  test("rewrites namespaced re-export `export * as ns` to a stub export", () => {
+    const plugin = createBlockPlugin();
+    const code = `export * as crypto from "node:crypto";`;
+    const result = transformWith(
+      plugin,
+      code,
+      [
+        {
+          type: "ExportAllDeclaration",
+          start: 0,
+          end: code.length,
+          source: { value: "node:crypto" },
+          exported: { name: "crypto" },
+        },
+      ],
+      "/src/file.ts",
+    );
+    expect(result.code).toMatch(/export const crypto = \(\(\) => \{ throw new Error\(/);
+  });
+
+  test("falls back to throw for bare `export *` re-exports (no enumerable bindings)", () => {
+    const plugin = createBlockPlugin();
+    const code = `export * from "node:crypto";`;
+    const result = transformWith(
+      plugin,
+      code,
+      [
+        {
+          type: "ExportAllDeclaration",
+          start: 0,
+          end: code.length,
+          source: { value: "node:crypto" },
+          exported: null,
+        },
+      ],
+      "/src/file.ts",
+    );
+    expect(result.code).toMatch(/^throw new Error\(/);
   });
 
   test("handles bare imports of blocked modules", () => {
@@ -152,6 +223,36 @@ describe("createBlockPlugin", () => {
         },
       ],
       "/src/file.ts",
+    );
+    expect(result).toBeUndefined();
+  });
+
+  test("exempts test files when matched via root-relative include glob", () => {
+    const plugin = createBlockPlugin();
+    const root = "/abs/project";
+    const testFile = "/abs/project/tests/foo.test.ts";
+    const code = `import { randomUUID } from "node:crypto";`;
+    const result = transformWith(
+      plugin,
+      code,
+      [{ type: "ImportDeclaration", start: 0, end: code.length, source: { value: "node:crypto" } }],
+      testFile,
+      { include: ["tests/**/*.test.ts"], root },
+    );
+    expect(result).toBeUndefined();
+  });
+
+  test("skips files outside the project root (e.g. symlinked workspace deps)", () => {
+    const plugin = createBlockPlugin();
+    const root = "/abs/project";
+    const externalId = "/abs/other/packages/sdk/dist/index.mjs";
+    const code = `import { randomUUID } from "node:crypto";`;
+    const result = transformWith(
+      plugin,
+      code,
+      [{ type: "ImportDeclaration", start: 0, end: code.length, source: { value: "node:crypto" } }],
+      externalId,
+      { include: ["tests/**/*.test.ts"], root },
     );
     expect(result).toBeUndefined();
   });

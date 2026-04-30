@@ -1,15 +1,22 @@
-import { dirname, matchesGlob, resolve } from "node:path";
+import { dirname, isAbsolute, matchesGlob, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isBlockedModule, getBlockedMessage } from "./blocked-modules";
 import type { Plugin, ResolvedConfig } from "vite";
 
 const DEFAULT_TEST_INCLUDE = ["**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}"];
 
+interface ExportSpecifierNode {
+  type?: string;
+  exported?: { name?: unknown } | null;
+}
+
 interface ImportLikeNode {
   type: string;
   start: number;
   end: number;
   source?: { value?: unknown } | null;
+  specifiers?: ExportSpecifierNode[] | null;
+  exported?: { name?: unknown } | null;
 }
 
 const IMPORT_LIKE_TYPES = new Set([
@@ -18,12 +25,48 @@ const IMPORT_LIKE_TYPES = new Set([
   "ExportAllDeclaration",
 ]);
 
+function buildBlockedReplacement(node: ImportLikeNode, message: string): string {
+  const throwStmt = `throw new Error("${message}");`;
+  const throwExpr = `(() => { throw new Error("${message}"); })()`;
+
+  if (node.type === "ExportNamedDeclaration") {
+    const specs = node.specifiers ?? [];
+    const stubs: string[] = [];
+    for (const spec of specs) {
+      const exportedName = spec.exported?.name;
+      if (typeof exportedName !== "string") continue;
+      stubs.push(
+        exportedName === "default"
+          ? `export default ${throwExpr};`
+          : `export const ${exportedName} = ${throwExpr};`,
+      );
+    }
+    return stubs.length > 0 ? stubs.join(" ") : throwStmt;
+  }
+
+  if (node.type === "ExportAllDeclaration") {
+    const exportedName = node.exported?.name;
+    if (typeof exportedName === "string") {
+      return `export const ${exportedName} = ${throwExpr};`;
+    }
+    return throwStmt;
+  }
+
+  return throwStmt;
+}
+
 /**
  * Vite plugin that blocks Node.js built-in module imports from production code.
  *
  * Uses the `transform` hook to walk the Rollup-provided AST of non-test source
- * files for static `node:*` imports and re-exports, replacing each declaration
- * with code that throws a helpful error at runtime.
+ * files for static `node:*` imports and re-exports.
+ * `ImportDeclaration` and bare `export * from "..."` are replaced with a
+ * `throw new Error(...)` statement so the failure surfaces at evaluation time.
+ * `ExportNamedDeclaration` (`export { x, y as z } from "..."`) and namespaced
+ * `export * as ns from "..."` are rewritten to per-binding stub exports
+ * (`export const x = (() => { throw new Error(...) })();`), preserving the
+ * declared export bindings so consumers fail at use rather than at module
+ * instantiation with an opaque "missing export" error.
  * Vitest treats `node:*` as external SSR modules (skipping `resolveId`), so
  * source-level transformation is the only reliable interception point.
  * Runs in the default phase (no `enforce: "pre"`) so esbuild's TypeScript
@@ -37,6 +80,7 @@ const IMPORT_LIKE_TYPES = new Set([
  */
 export function createBlockPlugin(): Plugin {
   let isTestFile: (id: string) => boolean = () => false;
+  let isUserSourceFile: (id: string) => boolean = () => false;
 
   return {
     name: "tailor-runtime-block-node",
@@ -44,9 +88,10 @@ export function createBlockPlugin(): Plugin {
     configResolved(config: ResolvedConfig) {
       const testConfig = (
         config as ResolvedConfig & {
-          test?: { include?: string[]; setupFiles?: string | string[] };
+          test?: { include?: string[]; setupFiles?: string | string[]; root?: string };
         }
       ).test;
+      const root = testConfig?.root ?? config.root;
       const patterns = testConfig?.include ?? DEFAULT_TEST_INCLUDE;
       const setupFiles = new Set(
         (Array.isArray(testConfig?.setupFiles)
@@ -54,15 +99,27 @@ export function createBlockPlugin(): Plugin {
           : testConfig?.setupFiles
             ? [testConfig.setupFiles]
             : []
-        ).map((f) => resolve(f)),
+        ).map((f) => resolve(root, f)),
       );
-      isTestFile = (id: string) =>
-        setupFiles.has(id) || patterns.some((pattern) => matchesGlob(id, pattern));
+      isTestFile = (id: string) => {
+        if (setupFiles.has(id)) return true;
+        const candidate = isAbsolute(id) ? relative(root, id) : id;
+        return patterns.some((pattern) => matchesGlob(candidate, pattern));
+      };
+      // Only transform files inside the project root. With pnpm workspaces,
+      // dependencies are symlinked and Vite resolves them to absolute paths
+      // outside `node_modules`, so the substring check alone is insufficient.
+      isUserSourceFile = (id: string) => {
+        if (!isAbsolute(id)) return true;
+        const rel = relative(root, id);
+        return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
+      };
     },
 
     transform(code, id) {
       if (isTestFile(id)) return undefined;
       if (id.includes("node_modules")) return undefined;
+      if (!isUserSourceFile(id)) return undefined;
 
       let ast: { body: ImportLikeNode[] };
       try {
@@ -72,13 +129,18 @@ export function createBlockPlugin(): Plugin {
         return undefined;
       }
 
-      const replacements: { start: number; end: number; specifier: string }[] = [];
+      const replacements: { start: number; end: number; replacement: string }[] = [];
       for (const node of ast.body) {
         if (!IMPORT_LIKE_TYPES.has(node.type)) continue;
         const specifier = node.source?.value;
         if (typeof specifier !== "string") continue;
         if (isBlockedModule(specifier)) {
-          replacements.push({ start: node.start, end: node.end, specifier });
+          const message = getBlockedMessage(specifier).replace(/"/g, '\\"');
+          replacements.push({
+            start: node.start,
+            end: node.end,
+            replacement: buildBlockedReplacement(node, message),
+          });
         }
       }
 
@@ -86,11 +148,7 @@ export function createBlockPlugin(): Plugin {
 
       let transformed = code;
       for (const r of replacements.sort((a, b) => b.start - a.start)) {
-        const message = getBlockedMessage(r.specifier).replace(/"/g, '\\"');
-        transformed =
-          transformed.slice(0, r.start) +
-          `throw new Error("${message}");` +
-          transformed.slice(r.end);
+        transformed = transformed.slice(0, r.start) + r.replacement + transformed.slice(r.end);
       }
 
       return { code: transformed, map: null };
