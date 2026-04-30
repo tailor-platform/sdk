@@ -3,7 +3,7 @@ import { z } from "zod";
 import { defineAppCommand } from "@/cli/shared/command";
 import { readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
-import ml from "../../../utils/multiline";
+import ml from "@/utils/multiline";
 
 export const switchCommand = defineAppCommand({
   name: "switch",

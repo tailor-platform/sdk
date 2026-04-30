@@ -6,7 +6,7 @@ import * as path from "pathe";
 import { lt as semverLt } from "semver";
 import { xdgConfig } from "xdg-basedir";
 import { z } from "zod";
-import ml from "../../utils/multiline";
+import ml from "@/utils/multiline";
 import { initOAuth2Client } from "./client";
 import { logger } from "./logger";
 import { readPackageJson } from "./package-json";

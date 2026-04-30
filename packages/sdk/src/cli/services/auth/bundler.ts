@@ -11,7 +11,7 @@ import {
   serializeTriggerContext,
   type TriggerContext,
 } from "@/cli/shared/trigger-context";
-import ml from "../../../utils/multiline";
+import ml from "@/utils/multiline";
 
 /**
  * Options for bundling auth hooks

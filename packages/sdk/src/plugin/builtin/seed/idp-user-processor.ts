@@ -1,4 +1,4 @@
-import ml from "../../../utils/multiline";
+import ml from "@/utils/multiline";
 import type { GeneratorAuthInput } from "@/types/plugin-generation";
 
 export interface IdpUserMetadata {

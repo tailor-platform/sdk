@@ -22,7 +22,7 @@ import {
   type PluginInjectMap,
   type PluginExecutorContext,
 } from "@/types/plugin";
-import ml from "../../../utils/multiline";
+import ml from "@/utils/multiline";
 import type {
   PluginExecutorInfoExtended,
   PluginTypeGenerationResult,

@@ -13,7 +13,7 @@ import {
   serializeTriggerContext,
   type TriggerContext,
 } from "@/cli/shared/trigger-context";
-import ml from "../../../utils/multiline";
+import ml from "@/utils/multiline";
 import { loadExecutor } from "./loader";
 
 interface ExecutorInfo {

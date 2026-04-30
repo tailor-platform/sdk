@@ -17,4 +17,5 @@ allowBuilds:
   "@swc/core": true
   esbuild: true
   lefthook: true
+  multiline-ts: true
   oxc-resolver: true

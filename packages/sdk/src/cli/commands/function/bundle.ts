@@ -13,7 +13,7 @@ import * as rolldown from "rolldown";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { resolveInlineSourcemap } from "@/cli/shared/inline-sourcemap";
 import { INVOKER_EXPR } from "@/cli/shared/runtime-exprs";
-import ml from "../../../utils/multiline";
+import ml from "@/utils/multiline";
 import type { DetectedFunction } from "./detect";
 
 /** Machine user info resolved from config and API for bundle-time user context. */

@@ -21,7 +21,7 @@ import { loadConfig, type LoadedConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { prompt } from "@/cli/shared/prompt";
-import ml from "../../utils/multiline";
+import ml from "@/utils/multiline";
 
 export interface RemoveOptions {
   workspaceId?: string;

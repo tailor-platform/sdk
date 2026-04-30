@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { PipelineResolverView } from "@tailor-platform/tailor-proto/pipeline_pb";
 import { gql } from "graphql-request";
+import ml from "multiline-ts";
 import { describe, expect, inject, test } from "vitest";
 import { filterByMetadata, pipelineTrn } from "./metadata";
 import { createGraphQLClient, createOperatorClient } from "./utils";
@@ -30,8 +31,11 @@ describe("controlplane", async () => {
     const stepChain = pipelineResolvers.find((e) => e.name === "stepChain");
     expect(stepChain).toMatchObject({
       name: "stepChain",
-      description:
-        "Step chain operation with nested validation\n\nReturns:\nResult of step chain operation",
+      description: ml`
+        Step chain operation with nested validation
+
+        Returns:
+        Result of step chain operation`,
       operationType: "query",
       authorization: "true==true",
       inputs: [
@@ -89,7 +93,11 @@ describe("controlplane", async () => {
     const add = pipelineResolvers.find((e) => e.name === "add");
     expect(add).toMatchObject({
       name: "add",
-      description: "Addition operation\n\nReturns:\nSum of the two input numbers",
+      description: ml`
+        Addition operation
+
+        Returns:
+        Sum of the two input numbers`,
       operationType: "query",
       authorization: "true==true",
       inputs: [

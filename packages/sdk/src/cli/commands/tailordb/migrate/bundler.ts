@@ -9,7 +9,7 @@ import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { getDistDir } from "@/cli/shared/dist-dir";
-import ml from "../../../../utils/multiline";
+import ml from "@/utils/multiline";
 
 export interface MigrationBundleResult {
   namespace: string;

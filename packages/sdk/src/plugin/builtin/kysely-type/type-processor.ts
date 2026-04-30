@@ -1,4 +1,4 @@
-import multiline from "../../../utils/multiline";
+import multiline from "@/utils/multiline";
 import { type KyselyNamespaceMetadata, type KyselyTypeMetadata } from "./types";
 import type { OperatorFieldConfig, TailorDBType } from "@/types/tailordb";
 
