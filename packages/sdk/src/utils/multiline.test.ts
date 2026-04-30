@@ -64,4 +64,15 @@ two`);
 
 two`);
   });
+
+  test("strips only one trailing newline, preserving extras", () => {
+    const result = multiline`
+      one
+      two
+
+    `;
+    expect(result).toBe(`one
+two
+`);
+  });
 });
