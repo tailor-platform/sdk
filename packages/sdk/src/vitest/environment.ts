@@ -1,12 +1,23 @@
-import globals from "globals";
+import * as globals from "globals";
 import { STATE_KEY, injectMocks, cleanupMocks } from "./mock";
+
+// Normalize the `globals` module shape across CJS/ESM interop so the
+// whitelist build doesn't crash if the default export is unavailable or
+// the year-keyed sets are missing. Mirrors src/cli/services/tailordb/es-builtins.ts.
+type GlobalsShape = {
+  es2025?: Record<string, boolean>;
+  browser?: Record<string, boolean>;
+};
+const globalsMap: GlobalsShape =
+  (globals as unknown as { default?: GlobalsShape }).default ??
+  (globals as unknown as GlobalsShape);
 
 // Globals allowed in the Tailor Platform runtime.
 // Platform API mocks (tailor, tailordb, etc.) are not listed here — they are
 // injected by injectMocks() after the whitelist cleanup, so they are never removed.
 const ALLOWED_GLOBALS = new Set([
-  ...Object.keys(globals.es2025),
-  ...Object.keys(globals.browser),
+  ...Object.keys(globalsMap.es2025 ?? {}),
+  ...Object.keys(globalsMap.browser ?? {}),
 
   // Mock state key (used by setup.ts to detect tailor-runtime environment)
   STATE_KEY,
