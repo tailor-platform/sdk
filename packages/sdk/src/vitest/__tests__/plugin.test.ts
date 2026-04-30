@@ -395,6 +395,65 @@ describe("createBlockPlugin", () => {
     expect(result).toBeUndefined();
   });
 
+  test("exempts per-project setupFiles / globalSetup (Vitest projects)", () => {
+    // Regression guard: Vitest `test.projects[i].test.setupFiles` and
+    // `test.projects[i].test.globalSetup` also run in the host runner, not
+    // the emulated runtime. They must be exempt from the node:* transform.
+    const plugin = createBlockPlugin();
+    const projectSetup = "/abs/path/project/setup.ts";
+    const projectGlobal = "/abs/path/project/global-setup.ts";
+    const code = `import { pathToFileURL } from "node:url";\nexport const x = pathToFileURL("/x").href;`;
+    const node = {
+      type: "ImportDeclaration" as const,
+      start: 0,
+      end: 41,
+      source: { value: "node:url" },
+    };
+    (plugin.configResolved as any)({
+      root: "/",
+      test: {
+        include: [],
+        projects: [{ test: { setupFiles: [projectSetup], globalSetup: projectGlobal } }],
+      },
+    });
+    const parseCtx = { parse: () => ({ body: [node] }) };
+    expect((plugin.transform as any).call(parseCtx, code, projectSetup)).toBeUndefined();
+    expect((plugin.transform as any).call(parseCtx, code, projectGlobal)).toBeUndefined();
+  });
+
+  test("resolves per-project setup paths against the project's own root", () => {
+    // When a project sets its own `test.root`, relative setupFiles must be
+    // resolved against that root — not the top-level vite root — so projects
+    // outside cwd correctly exempt their host files.
+    const plugin = createBlockPlugin();
+    const code = `import { pathToFileURL } from "node:url";\nexport const x = pathToFileURL("/x").href;`;
+    const node = {
+      type: "ImportDeclaration" as const,
+      start: 0,
+      end: 41,
+      source: { value: "node:url" },
+    };
+    (plugin.configResolved as any)({
+      root: "/top-root",
+      test: {
+        include: [],
+        projects: [
+          {
+            test: {
+              root: "/proj-root",
+              setupFiles: ["./host-setup.ts"],
+            },
+          },
+        ],
+      },
+    });
+    const parseCtx = { parse: () => ({ body: [node] }) };
+    // Resolved as /proj-root/host-setup.ts (NOT /top-root/host-setup.ts).
+    expect(
+      (plugin.transform as any).call(parseCtx, code, "/proj-root/host-setup.ts"),
+    ).toBeUndefined();
+  });
+
   test("exempts files listed in test.globalSetup (string and array forms)", () => {
     const code = `import { pathToFileURL } from "node:url";\nexport const x = pathToFileURL("/x").href;`;
     const node = {

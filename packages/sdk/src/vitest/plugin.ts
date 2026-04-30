@@ -169,26 +169,43 @@ export function createBlockPlugin(): Plugin {
     name: "tailor-runtime-block-node",
 
     configResolved(config) {
+      type HostFileTestConfig = {
+        setupFiles?: string | string[];
+        globalSetup?: string | string[];
+        root?: string;
+      };
       const testConfig = (
         config as typeof config & {
-          test?: {
+          test?: HostFileTestConfig & {
             include?: string[];
-            setupFiles?: string | string[];
-            globalSetup?: string | string[];
-            root?: string;
+            projects?: { test?: HostFileTestConfig }[];
           };
         }
       ).test;
       const root = testConfig?.root ?? config.root;
       const patterns = testConfig?.include ?? DEFAULT_TEST_INCLUDE;
       // Setup files and global-setup files run in the Vitest host (not the
-      // emulated runtime), so they may freely import node:* modules.
-      const toAbsoluteSet = (value: string | string[] | undefined) =>
-        new Set((Array.isArray(value) ? value : value ? [value] : []).map((f) => resolve(root, f)));
-      const exemptHostFiles = new Set([
-        ...toAbsoluteSet(testConfig?.setupFiles),
-        ...toAbsoluteSet(testConfig?.globalSetup),
+      // emulated runtime), so they may freely import node:* modules. Collect
+      // them from the top-level config AND from each `test.projects[i]` —
+      // per-project setup files run in the host too and would otherwise be
+      // transformed as production code, breaking node:* imports inside them.
+      const toAbsolutePaths = (value: string | string[] | undefined, baseRoot: string) =>
+        (Array.isArray(value) ? value : value ? [value] : []).map((f) => resolve(baseRoot, f));
+      const exemptHostFiles = new Set<string>([
+        ...toAbsolutePaths(testConfig?.setupFiles, root),
+        ...toAbsolutePaths(testConfig?.globalSetup, root),
       ]);
+      for (const project of testConfig?.projects ?? []) {
+        const projectTest = project?.test;
+        if (!projectTest) continue;
+        const projectRoot = projectTest.root ?? root;
+        for (const f of toAbsolutePaths(projectTest.setupFiles, projectRoot)) {
+          exemptHostFiles.add(f);
+        }
+        for (const f of toAbsolutePaths(projectTest.globalSetup, projectRoot)) {
+          exemptHostFiles.add(f);
+        }
+      }
       isTestFile = (id: string) => {
         if (exemptHostFiles.has(id)) return true;
         const candidate = isAbsolute(id) ? relative(root, id) : id;
