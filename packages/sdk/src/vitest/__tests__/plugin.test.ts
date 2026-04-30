@@ -277,6 +277,33 @@ describe("createBlockPlugin", () => {
     );
     expect(result).toBeUndefined();
   });
+
+  test("exempts files listed in test.globalSetup (string and array forms)", () => {
+    const code = `import { pathToFileURL } from "node:url";\nexport const x = pathToFileURL("/x").href;`;
+    const node = {
+      type: "ImportDeclaration" as const,
+      start: 0,
+      end: 41,
+      source: { value: "node:url" },
+    };
+
+    const stringForm = createBlockPlugin();
+    const stringPath = "/abs/path/global-setup.ts";
+    const stringResult = transformWith(stringForm, code, [node], stringPath, {
+      include: [],
+      // Cast: `transformWith` only types known fields, but plugin reads globalSetup.
+      ...({ globalSetup: stringPath } as any),
+    });
+    expect(stringResult).toBeUndefined();
+
+    const arrayForm = createBlockPlugin();
+    const arrayPath = "/abs/path/global-setup-2.ts";
+    const arrayResult = transformWith(arrayForm, code, [node], arrayPath, {
+      include: [],
+      ...({ globalSetup: [arrayPath] } as any),
+    });
+    expect(arrayResult).toBeUndefined();
+  });
 });
 
 describe("createEnvironmentPlugin", () => {
@@ -343,5 +370,28 @@ describe("createEnvironmentPlugin", () => {
     (plugin.config as any).call({}, { test: { environment: "tailor-runtime" } });
 
     expect(process.env[ENV_VAR]).toBeUndefined();
+  });
+
+  test("normalizes a user-provided string setupFiles into an array", () => {
+    const plugin = createEnvironmentPlugin();
+    const userConfig = {
+      test: { environment: "tailor-runtime", setupFiles: "./user-setup.ts" },
+    };
+    (plugin.config as any).call({}, userConfig);
+
+    // Vite's array-concat merge needs both sides as arrays so the user's
+    // string form is not replaced by ours.
+    expect(userConfig.test.setupFiles).toEqual(["./user-setup.ts"]);
+  });
+
+  test("leaves a user-provided array setupFiles untouched", () => {
+    const plugin = createEnvironmentPlugin();
+    const original = ["./a.ts", "./b.ts"];
+    const userConfig = { test: { environment: "tailor-runtime", setupFiles: original } };
+    (plugin.config as any).call({}, userConfig);
+
+    // Plugin should not duplicate or reorder user entries; Vite concatenates
+    // the user array with our returned [setupPath] at merge time.
+    expect(userConfig.test.setupFiles).toBe(original);
   });
 });

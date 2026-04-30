@@ -75,9 +75,10 @@ function buildBlockedReplacement(node: ImportLikeNode, message: string): string 
  * transform strips `import type` first; only runtime imports reach this hook.
  * Node.js globals not in the platform runtime are removed by the environment (whitelist-based).
  * Test file patterns are read from the resolved Vitest config (`test.include`).
- * Vitest setup files (`test.setupFiles`) are also exempted: they run in the
- * test runner host, not in the emulated platform runtime, so they may freely
- * use `node:*` modules (e.g. `node:url` for `pathToFileURL`).
+ * Vitest setup files (`test.setupFiles`) and global-setup files
+ * (`test.globalSetup`) are also exempted: they run in the test runner host,
+ * not in the emulated platform runtime, so they may freely use `node:*`
+ * modules (e.g. `node:url` for `pathToFileURL`).
  * @returns Vite plugin
  */
 export function createBlockPlugin(): Plugin {
@@ -90,21 +91,26 @@ export function createBlockPlugin(): Plugin {
     configResolved(config: ResolvedConfig) {
       const testConfig = (
         config as ResolvedConfig & {
-          test?: { include?: string[]; setupFiles?: string | string[]; root?: string };
+          test?: {
+            include?: string[];
+            setupFiles?: string | string[];
+            globalSetup?: string | string[];
+            root?: string;
+          };
         }
       ).test;
       const root = testConfig?.root ?? config.root;
       const patterns = testConfig?.include ?? DEFAULT_TEST_INCLUDE;
-      const setupFiles = new Set(
-        (Array.isArray(testConfig?.setupFiles)
-          ? testConfig.setupFiles
-          : testConfig?.setupFiles
-            ? [testConfig.setupFiles]
-            : []
-        ).map((f) => resolve(root, f)),
-      );
+      // Setup files and global-setup files run in the Vitest host (not the
+      // emulated runtime), so they may freely import node:* modules.
+      const toAbsoluteSet = (value: string | string[] | undefined) =>
+        new Set((Array.isArray(value) ? value : value ? [value] : []).map((f) => resolve(root, f)));
+      const exemptHostFiles = new Set([
+        ...toAbsoluteSet(testConfig?.setupFiles),
+        ...toAbsoluteSet(testConfig?.globalSetup),
+      ]);
       isTestFile = (id: string) => {
-        if (setupFiles.has(id)) return true;
+        if (exemptHostFiles.has(id)) return true;
         const candidate = isAbsolute(id) ? relative(root, id) : id;
         return patterns.some((pattern) => matchesGlob(candidate, pattern));
       };
@@ -182,7 +188,10 @@ export function createEnvironmentPlugin(options?: { config?: string }): Plugin {
 
     config(config) {
       const testConfig = config.test as
-        | (Record<string, unknown> & { projects?: Record<string, unknown>[] })
+        | (Record<string, unknown> & {
+            projects?: Record<string, unknown>[];
+            setupFiles?: string | string[];
+          })
         | undefined;
 
       // Rewrite environment name to absolute path at top-level
@@ -204,6 +213,14 @@ export function createEnvironmentPlugin(options?: { config?: string }): Plugin {
       if (options?.config) {
         const configAbsPath = resolve(process.cwd(), options.config);
         process.env.__TAILOR_RUNTIME_CONFIG = configAbsPath;
+      }
+
+      // Normalize a user-provided string `setupFiles` into an array so Vite's
+      // array-concat merge sees both sides as arrays (the string form would
+      // otherwise be replaced rather than concatenated by some merge paths).
+      // Vite then concatenates the user's array with our [setupPath].
+      if (testConfig && typeof testConfig.setupFiles === "string") {
+        testConfig.setupFiles = [testConfig.setupFiles];
       }
 
       return {

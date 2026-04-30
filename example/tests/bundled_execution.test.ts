@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { tailordbMock, workflowMock } from "@tailor-platform/sdk/vitest";
 import { format as formatDate } from "date-fns";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
@@ -20,8 +20,10 @@ function createImportMain(baseDir: string): (relativePath: string) => Promise<Ma
   };
 }
 
+const here = path.dirname(fileURLToPath(import.meta.url));
+
 describe("bundled execution tests", () => {
-  const actualDir = path.join(__dirname, "fixtures/plugins");
+  const actualDir = path.join(here, "fixtures/plugins");
 
   const fixedSystemTime = new Date("2025-10-06T12:34:56.000Z");
   const formatExpectation = formatDate(fixedSystemTime, "yyyy-MM-dd HH:mm:ss");
