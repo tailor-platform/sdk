@@ -5,23 +5,34 @@ import type { Plugin, ResolvedConfig } from "vite";
 
 const DEFAULT_TEST_INCLUDE = ["**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}"];
 
-// Matches static import/export declarations with string specifiers.
-// `[^;]*?` (instead of `[\s\S]*?`) prevents cross-matching across statements,
-// e.g. `export const x = 1;\nimport { y } from "node:crypto"` would otherwise
-// match as a single span and destroy the preceding `export` line on replacement.
-const IMPORT_RE = /\b(?:import|export)\s+(?:[^;]*?\s+from\s+)?["']([^"']+)["']/g;
+interface ImportLikeNode {
+  type: string;
+  start: number;
+  end: number;
+  source?: { value?: unknown } | null;
+}
+
+const IMPORT_LIKE_TYPES = new Set([
+  "ImportDeclaration",
+  "ExportNamedDeclaration",
+  "ExportAllDeclaration",
+]);
 
 /**
  * Vite plugin that blocks Node.js built-in module imports from production code.
  *
- * Uses the `transform` hook to scan non-test source files for `node:*` imports
- * and replaces them with code that throws a helpful error at runtime.
+ * Uses the `transform` hook to walk the Rollup-provided AST of non-test source
+ * files for static `node:*` imports and re-exports, replacing each declaration
+ * with code that throws a helpful error at runtime.
  * Vitest treats `node:*` as external SSR modules (skipping `resolveId`), so
  * source-level transformation is the only reliable interception point.
  * Runs in the default phase (no `enforce: "pre"`) so esbuild's TypeScript
  * transform strips `import type` first; only runtime imports reach this hook.
  * Node.js globals not in the platform runtime are removed by the environment (whitelist-based).
  * Test file patterns are read from the resolved Vitest config (`test.include`).
+ * Vitest setup files (`test.setupFiles`) are also exempted: they run in the
+ * test runner host, not in the emulated platform runtime, so they may freely
+ * use `node:*` modules (e.g. `node:url` for `pathToFileURL`).
  * @returns Vite plugin
  */
 export function createBlockPlugin(): Plugin {
@@ -31,29 +42,58 @@ export function createBlockPlugin(): Plugin {
     name: "tailor-runtime-block-node",
 
     configResolved(config: ResolvedConfig) {
-      const testConfig = (config as ResolvedConfig & { test?: { include?: string[] } }).test;
+      const testConfig = (
+        config as ResolvedConfig & {
+          test?: { include?: string[]; setupFiles?: string | string[] };
+        }
+      ).test;
       const patterns = testConfig?.include ?? DEFAULT_TEST_INCLUDE;
-      isTestFile = (id: string) => patterns.some((pattern) => matchesGlob(id, pattern));
+      const setupFiles = new Set(
+        (Array.isArray(testConfig?.setupFiles)
+          ? testConfig.setupFiles
+          : testConfig?.setupFiles
+            ? [testConfig.setupFiles]
+            : []
+        ).map((f) => resolve(f)),
+      );
+      isTestFile = (id: string) =>
+        setupFiles.has(id) || patterns.some((pattern) => matchesGlob(id, pattern));
     },
 
     transform(code, id) {
-      // Skip test files — they may freely use node:* modules
       if (isTestFile(id)) return undefined;
-      // Skip node_modules
       if (id.includes("node_modules")) return undefined;
 
-      let hasBlocked = false;
+      let ast: { body: ImportLikeNode[] };
+      try {
+        ast = this.parse(code) as unknown as { body: ImportLikeNode[] };
+      } catch {
+        // Not parseable as ESM (e.g. JSON, asset). Let other plugins handle it.
+        return undefined;
+      }
 
-      const transformed = code.replace(IMPORT_RE, (match, specifier: string) => {
+      const replacements: { start: number; end: number; specifier: string }[] = [];
+      for (const node of ast.body) {
+        if (!IMPORT_LIKE_TYPES.has(node.type)) continue;
+        const specifier = node.source?.value;
+        if (typeof specifier !== "string") continue;
         if (isBlockedModule(specifier)) {
-          hasBlocked = true;
-          const message = getBlockedMessage(specifier).replace(/"/g, '\\"');
-          return `throw new Error("${message}")`;
+          replacements.push({ start: node.start, end: node.end, specifier });
         }
-        return match;
-      });
+      }
 
-      return hasBlocked ? { code: transformed, map: null } : undefined;
+      if (replacements.length === 0) return undefined;
+
+      let transformed = code;
+      for (const r of replacements.sort((a, b) => b.start - a.start)) {
+        const message = getBlockedMessage(r.specifier).replace(/"/g, '\\"');
+        transformed =
+          transformed.slice(0, r.start) +
+          `throw new Error("${message}");` +
+          transformed.slice(r.end);
+      }
+
+      return { code: transformed, map: null };
     },
   };
 }

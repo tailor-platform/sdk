@@ -1,10 +1,22 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { parse } from "acorn";
 import { describe, expect, test } from "vitest";
 import { createBlockPlugin } from "../plugin";
 
-function transformWith(plugin: ReturnType<typeof createBlockPlugin>, code: string, id: string) {
-  (plugin.configResolved as any)({ test: { include: [] } });
-  return (plugin.transform as any).call({}, code, id);
+const parseCtx = {
+  parse(code: string) {
+    return parse(code, { ecmaVersion: "latest", sourceType: "module" });
+  },
+};
+
+function transformWith(
+  plugin: ReturnType<typeof createBlockPlugin>,
+  code: string,
+  id: string,
+  testConfig: { include?: string[]; setupFiles?: string | string[] } = { include: [] },
+) {
+  (plugin.configResolved as any)({ test: testConfig });
+  return (plugin.transform as any).call(parseCtx, code, id);
 }
 
 describe("createBlockPlugin", () => {
@@ -91,6 +103,57 @@ import { z } from "node:crypto";`,
       `import { foo } from "@tailor-platform/sdk";
 export const x = 1;`,
       "/src/file.ts",
+    );
+    expect(result).toBeUndefined();
+  });
+
+  test("does not match import-like text inside string literals", () => {
+    const plugin = createBlockPlugin();
+    const result = transformWith(
+      plugin,
+      `export const code = 'import { randomUUID } from "node:crypto"';
+export const note = "see export { x } from \\"node:fs\\"";`,
+      "/src/file.ts",
+    );
+    expect(result).toBeUndefined();
+  });
+
+  test("does not match import-like text inside comments", () => {
+    const plugin = createBlockPlugin();
+    const result = transformWith(
+      plugin,
+      `// import { randomUUID } from "node:crypto";
+/* export { foo } from "node:fs"; */
+export const x = 1;`,
+      "/src/file.ts",
+    );
+    expect(result).toBeUndefined();
+  });
+
+  test("ignores dynamic import() expressions of blocked modules", () => {
+    const plugin = createBlockPlugin();
+    const result = transformWith(
+      plugin,
+      `export async function load() {
+  const m = await import("node:crypto");
+  return m;
+}`,
+      "/src/file.ts",
+    );
+    // Dynamic imports are deliberately not rewritten; module-level static
+    // imports are the only target.
+    expect(result).toBeUndefined();
+  });
+
+  test("exempts files listed in test.setupFiles", () => {
+    const plugin = createBlockPlugin();
+    const setupPath = "/abs/path/setup.ts";
+    const result = transformWith(
+      plugin,
+      `import { pathToFileURL } from "node:url";
+export const x = pathToFileURL("/x").href;`,
+      setupPath,
+      { include: [], setupFiles: [setupPath] },
     );
     expect(result).toBeUndefined();
   });
