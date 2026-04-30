@@ -32,7 +32,7 @@ export default defineConfig({
     "src/vitest/setup.ts",
   ],
   format: ["esm"],
-  target: "node18",
+  target: "node22",
   platform: "node",
   clean: true,
   dts: true,
