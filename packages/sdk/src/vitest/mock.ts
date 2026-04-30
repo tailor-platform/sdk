@@ -662,7 +662,14 @@ function resolveIdpCall(method: string, args: unknown[], namespace: string): unk
   state.idpCalls.push({ method, args, namespace });
   if (state.idpResultQueue.length > 0) return state.idpResultQueue.shift();
   const resolved = state.idpResolver(method, args, namespace);
-  return resolved ?? IDP_DEFAULTS[method];
+  // Treat null and undefined alike as "no override" — resolvers commonly
+  // `return null` for unmatched methods.
+  if (resolved != null) return resolved;
+  // Clone the default so a test mutating the returned value (e.g.
+  // `result.users.push(x)`) cannot corrupt the shared module-level object
+  // for subsequent tests in the same worker.
+  const fallback = IDP_DEFAULTS[method];
+  return fallback === undefined ? undefined : structuredClone(fallback);
 }
 
 class MockIdpClient {
@@ -831,7 +838,14 @@ function resolveFileCall(
   state.fileCalls.push(call);
   if (state.fileResultQueue.length > 0) return state.fileResultQueue.shift();
   const resolved = state.fileResolver(method, call);
-  return resolved ?? FILE_DEFAULTS[method];
+  // Treat null and undefined alike as "no override" — resolvers commonly
+  // `return null` for unmatched methods.
+  if (resolved != null) return resolved;
+  // Clone the default so a test mutating the returned value (e.g. the
+  // `data: Uint8Array` payload from `download`) cannot corrupt the shared
+  // module-level object for subsequent tests in the same worker.
+  const fallback = FILE_DEFAULTS[method];
+  return fallback === undefined ? undefined : structuredClone(fallback);
 }
 
 const mockTailordbFile = {

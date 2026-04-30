@@ -264,7 +264,12 @@ export default defineConfig({
   plugins: [tailorRuntime()],
   test: {
     projects: [
+      // `extends: true` is required so each project inherits the root-level
+      // `tailorRuntime()` plugin (transform hook + injected setup file).
+      // Without it, only the environment name rewrite applies — node:* import
+      // blocking and per-test global cleanup will silently not run.
       {
+        extends: true,
         test: {
           name: "unit",
           environment: "tailor-runtime",
@@ -272,6 +277,7 @@ export default defineConfig({
         },
       },
       {
+        extends: true,
         test: {
           name: "e2e",
           include: ["e2e/**/*.test.ts"],

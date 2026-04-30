@@ -353,6 +353,17 @@ describe("mock", () => {
       idpMock.reset();
       expect(idpMock.calls).toHaveLength(0);
     });
+
+    test("default fallback is cloned so test mutations cannot leak across tests", async () => {
+      // resolveIdpCall returns IDP_DEFAULTS[method] when no enqueue/resolver
+      // is configured. Without cloning, mutating the returned `users` array
+      // would persist across tests in the same worker.
+      const client = new (globalThis as any).tailor.idp.Client({ namespace: "ns" });
+      const first = (await client.users()) as { users: unknown[] };
+      first.users.push({ id: "leaked", name: "leak", disabled: false });
+      const second = (await client.users()) as { users: unknown[] };
+      expect(second.users).toEqual([]);
+    });
   });
 
   describe("fileMock", () => {
@@ -426,6 +437,22 @@ describe("mock", () => {
       const chunks: unknown[] = [];
       for await (const chunk of stream) chunks.push(chunk);
       expect(chunks).toEqual([a, b]);
+    });
+
+    test("default fallback is cloned so test mutations cannot leak across tests", async () => {
+      // resolveFileCall returns FILE_DEFAULTS[method] when no enqueue/resolver
+      // is configured. Without cloning, mutating the returned `data` payload
+      // would persist across tests in the same worker.
+      const first = (await (globalThis as any).tailordb.file.download("ns", "T", "f", "r")) as {
+        data: Uint8Array;
+        metadata: { fileSize: number };
+      };
+      first.metadata.fileSize = 9999;
+      const second = (await (globalThis as any).tailordb.file.download("ns", "T", "f", "r")) as {
+        data: Uint8Array;
+        metadata: { fileSize: number };
+      };
+      expect(second.metadata.fileSize).toBe(0);
     });
   });
 
