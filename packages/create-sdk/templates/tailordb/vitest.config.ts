@@ -7,6 +7,7 @@ export default defineConfig({
     watch: false,
     projects: [
       {
+        extends: true,
         test: {
           name: { label: "unit", color: "blue" },
           environment: "tailor-runtime",
