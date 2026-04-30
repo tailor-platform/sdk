@@ -40,17 +40,27 @@ beforeAll(async () => {
     // Find the defineConfig default export and extract secrets
     const appConfig = config.default;
     const secrets = appConfig?.secrets ?? config.secrets;
-    if (secrets && typeof secrets === "object") {
-      // Extract enumerable properties (vault data, not get/getAll methods)
-      const store: Record<string, Record<string, string>> = {};
-      for (const [vaultName, vaultData] of Object.entries(secrets)) {
-        if (typeof vaultData === "object" && vaultData !== null) {
-          store[vaultName] = { ...(vaultData as Record<string, string>) };
-        }
+    if (!secrets || typeof secrets !== "object") return;
+
+    // `defineSecretManager()` returns `{ vaults, options, get, getAll }` (get/getAll
+    // are non-enumerable). When that shape is present, the actual vaults live
+    // under `.vaults`. Otherwise fall back to treating the object itself as the
+    // vault map (for plain object configs).
+    const source =
+      "vaults" in secrets &&
+      typeof (secrets as { vaults?: unknown }).vaults === "object" &&
+      (secrets as { vaults?: unknown }).vaults !== null
+        ? ((secrets as { vaults: Record<string, unknown> }).vaults as Record<string, unknown>)
+        : (secrets as Record<string, unknown>);
+
+    const store: Record<string, Record<string, string>> = {};
+    for (const [vaultName, vaultData] of Object.entries(source)) {
+      if (typeof vaultData === "object" && vaultData !== null) {
+        store[vaultName] = { ...(vaultData as Record<string, string>) };
       }
-      if (Object.keys(store).length > 0) {
-        secretmanagerMock.setSecrets(store);
-      }
+    }
+    if (Object.keys(store).length > 0) {
+      secretmanagerMock.setSecrets(store);
     }
   } catch {
     // Config loading failed — ignore, user can set secrets manually
