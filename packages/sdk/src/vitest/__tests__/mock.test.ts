@@ -436,6 +436,16 @@ describe("mock", () => {
       expect(binResult).toBeInstanceOf(Uint8Array);
       expect(binResult).toHaveLength(0);
     });
+
+    test("resolver returning undefined falls back to default", () => {
+      // Resolvers using early-return style (`if (...) return;`) implicitly
+      // return undefined for unhandled methods. That should fall through to
+      // the type-consistent default rather than leaking undefined.
+      iconvMock.setResolver(() => undefined as unknown as null);
+      const result = (globalThis as any).tailor.iconv.convert("hi", "UTF-8", "Shift_JIS");
+      expect(result).toBeInstanceOf(Uint8Array);
+      expect(result).toHaveLength(0);
+    });
   });
 
   describe("workflowMock extended", () => {

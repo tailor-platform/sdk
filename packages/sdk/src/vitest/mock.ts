@@ -583,6 +583,13 @@ function mockWait(key: string, payload?: unknown): unknown {
   return state.waitResult;
 }
 
+// Records the resolve call but does not invoke the callback. This mirrors
+// platform semantics: tailor.workflow.resolve enqueues the callback against
+// the wait point and returns immediately; the callback runs only when a
+// later wait() consumes the payload. Tests that need to verify callback
+// behavior can retrieve it from workflowMock.calls and invoke it directly,
+// or use setupWaitPointMock from @tailor-platform/sdk/test for end-to-end
+// resolve→wait wiring.
 async function mockResolve(
   executionId: string,
   key: string,
@@ -736,7 +743,10 @@ function resolveIconvCall(method: string, args: unknown[]): unknown {
   state.iconvCalls.push({ method, args: [...args] });
   if (state.iconvResolver) {
     const result = state.iconvResolver(method, args);
-    if (result !== null) return result;
+    // Treat both null and undefined as "no override" so resolvers using
+    // implicit returns (e.g. early `return;` for unhandled methods) still
+    // fall through to the type-consistent default.
+    if (result != null) return result;
   }
   return defaultIconvResult(method, args);
 }

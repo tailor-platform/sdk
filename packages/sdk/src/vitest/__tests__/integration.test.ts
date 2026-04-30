@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -25,7 +25,18 @@ interface VitestJsonReport {
   success: boolean;
 }
 
+interface ExecError extends Error {
+  stdout?: string | Buffer;
+  stderr?: string | Buffer;
+}
+
+function asString(buf: string | Buffer | undefined): string {
+  if (buf == null) return "";
+  return typeof buf === "string" ? buf : buf.toString("utf-8");
+}
+
 function runVitest(jsonOutputPath: string): VitestJsonReport {
+  let execError: ExecError | undefined;
   try {
     execFileSync(
       process.execPath,
@@ -46,9 +57,22 @@ function runVitest(jsonOutputPath: string): VitestJsonReport {
         stdio: "pipe",
       },
     );
-  } catch {
+  } catch (err) {
     // Vitest exits non-zero when any test fails. The JSON report is still
-    // written, so swallow the exit code and parse the file below.
+    // written in that case, so we parse it below. But if Vitest crashed
+    // before producing a report (e.g. config error, timeout, native fault),
+    // we need to surface its stdout/stderr instead of hiding it behind an
+    // ENOENT or JSON.parse error.
+    execError = err as ExecError;
+  }
+  if (!existsSync(jsonOutputPath)) {
+    const stdout = asString(execError?.stdout);
+    const stderr = asString(execError?.stderr);
+    throw new Error(
+      `Vitest did not produce a JSON report at ${jsonOutputPath}.\n` +
+        `--- stdout ---\n${stdout}\n` +
+        `--- stderr ---\n${stderr}`,
+    );
   }
   return JSON.parse(readFileSync(jsonOutputPath, "utf-8")) as VitestJsonReport;
 }
