@@ -1,7 +1,7 @@
 import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
 import { tailordbMock } from "@tailor-platform/sdk/vitest";
 import { beforeEach, describe, expect, test } from "vitest";
-import resolver from "./queryUser";
+import resolver from "./incrementUserAge";
 
 describe("incrementUserAge resolver", () => {
   beforeEach(() => {
