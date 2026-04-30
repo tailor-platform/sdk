@@ -1,9 +1,24 @@
 import fs from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { tailordbMock, workflowMock } from "@tailor-platform/sdk/vitest";
 import { format as formatDate } from "date-fns";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
-import { createImportMain } from "./createImportMain";
+
+type MainFunction = (args: Record<string, unknown>) => unknown | Promise<unknown>;
+
+function createImportMain(baseDir: string): (relativePath: string) => Promise<MainFunction> {
+  return async (relativePath: string): Promise<MainFunction> => {
+    const fileUrl = pathToFileURL(path.join(baseDir, relativePath));
+    fileUrl.searchParams.set("v", `${Date.now()}-${Math.random()}`);
+    const module = (await import(fileUrl.href)) as { main?: unknown };
+    const main = module.main;
+    if (typeof main !== "function") {
+      throw new Error(`Expected "main" to be a function in ${relativePath}, got ${typeof main}`);
+    }
+    return main as MainFunction;
+  };
+}
 
 describe("bundled execution tests", () => {
   const actualDir = path.join(__dirname, "fixtures/plugins");
