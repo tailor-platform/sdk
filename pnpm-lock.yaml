@@ -96,6 +96,9 @@ importers:
       graphql-request:
         specifier: 7.4.0
         version: 7.4.0(graphql@16.13.2)
+      multiline-ts:
+        specifier: 4.0.1
+        version: 4.0.1
       oxfmt:
         specifier: 0.46.0
         version: 0.46.0
@@ -599,9 +602,6 @@ importers:
       mime-types:
         specifier: 3.0.2
         version: 3.0.2
-      multiline-ts:
-        specifier: 4.0.1
-        version: 4.0.1
       open:
         specifier: 11.0.0
         version: 11.0.0

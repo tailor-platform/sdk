@@ -286,6 +286,17 @@
               {
                 "group": ["**/plugin/**", "@/plugin/**"],
                 "message": "Configure module should not import from plugin module."
+              },
+              {
+                "group": [
+                  "**/utils/**",
+                  "@/utils/**",
+                  "!**/utils/brand",
+                  "!@/utils/brand",
+                  "!**/utils/test/**",
+                  "!@/utils/test/**"
+                ],
+                "message": "Configure module can only import `brand` or `test/*` from utils module."
               }
             ]
           }

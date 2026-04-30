@@ -6,9 +6,9 @@
  */
 
 import * as fs from "node:fs";
-import ml from "multiline-ts";
 import * as path from "pathe";
 import { logger, styles } from "@/cli/shared/logger";
+import ml from "@/utils/multiline";
 import type { PluginGeneratedTypeInfo, PluginTypeGenerationResult } from "@/plugin/manager";
 import type { PluginGeneratedType } from "@/types/plugin";
 

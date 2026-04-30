@@ -14,7 +14,6 @@ allowBuilds:
   "@swc/core": true
   "@tailor-platform/sdk": true
   esbuild: true
-  multiline-ts: true
   protobufjs: true
 `;
 

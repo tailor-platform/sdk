@@ -1,6 +1,6 @@
-import ml from "multiline-ts";
 import { styles, logger } from "@/cli/shared/logger";
 import { prompt } from "@/cli/shared/prompt";
+import ml from "@/utils/multiline";
 
 export interface OwnerConflict {
   resourceType: string;
