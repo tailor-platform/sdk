@@ -2,7 +2,12 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { extractVaultStore, loadSecretsFromConfig } from "../setup";
+import {
+  extractVaultStore,
+  loadSecretsFromConfig,
+  removeBlockedGlobals,
+  restoreBlockedGlobals,
+} from "../setup";
 
 describe("extractVaultStore", () => {
   test("unwraps a defineSecretManager() shape via the .vaults field", () => {
@@ -125,5 +130,68 @@ describe("loadSecretsFromConfig", () => {
     );
     const store = await loadSecretsFromConfig(path);
     expect(store).toEqual({ aws: { K: "ts-v" } });
+  });
+});
+
+describe("removeBlockedGlobals", () => {
+  test("deletes configurable properties and returns their descriptors", () => {
+    const g: Record<string, unknown> = {};
+    Object.defineProperty(g, "performance", {
+      value: { now: () => 1 },
+      configurable: true,
+      writable: true,
+      enumerable: true,
+    });
+    const removed = removeBlockedGlobals(g, ["performance"]);
+    expect("performance" in g).toBe(false);
+    expect(removed.performance?.value).toEqual({ now: expect.any(Function) });
+  });
+
+  test("silently skips non-configurable properties so the caller does not crash", () => {
+    // Regression guard: in strict-mode runtimes (or platforms that lock down
+    // `performance`), `delete g.performance` throws TypeError. The helper
+    // must skip the deletion AND must not record a descriptor — otherwise
+    // afterEach would try to redefine a property that was never removed.
+    const g: Record<string, unknown> = {};
+    const value = { now: () => 1 };
+    Object.defineProperty(g, "performance", {
+      value,
+      configurable: false,
+      writable: false,
+      enumerable: true,
+    });
+    expect(() => removeBlockedGlobals(g, ["performance"])).not.toThrow();
+    const removed = removeBlockedGlobals(g, ["performance"]);
+    // Property still present, descriptor not recorded.
+    expect(g.performance).toBe(value);
+    expect(removed.performance).toBeUndefined();
+  });
+
+  test("ignores keys that are not present at all", () => {
+    const g: Record<string, unknown> = {};
+    const removed = removeBlockedGlobals(g, ["missing"]);
+    expect(removed.missing).toBeUndefined();
+  });
+});
+
+describe("restoreBlockedGlobals", () => {
+  test("re-defines previously-removed properties", () => {
+    const g: Record<string, unknown> = {};
+    Object.defineProperty(g, "performance", {
+      value: { now: () => 7 },
+      configurable: true,
+      writable: true,
+      enumerable: true,
+    });
+    const saved = removeBlockedGlobals(g, ["performance"]);
+    expect("performance" in g).toBe(false);
+    restoreBlockedGlobals(g, saved);
+    expect((g.performance as { now: () => number }).now()).toBe(7);
+  });
+
+  test("is a no-op when the saved map is empty (e.g. all keys were skipped)", () => {
+    const g: Record<string, unknown> = { other: 1 };
+    expect(() => restoreBlockedGlobals(g, {})).not.toThrow();
+    expect(g.other).toBe(1);
   });
 });

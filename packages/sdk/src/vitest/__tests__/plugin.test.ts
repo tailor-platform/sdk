@@ -405,6 +405,29 @@ describe("createEnvironmentPlugin", () => {
     expect(isAbsolute(process.env[ENV_VAR] ?? "")).toBe(true);
   });
 
+  test("resolves a relative options.config against config.root, not process.cwd()", () => {
+    // Vitest projects can set their own `root` (different from cwd) so a
+    // bare relative options.config must be anchored to that root — otherwise
+    // the env var points at a file in the wrong directory.
+    const plugin = createEnvironmentPlugin({ config: "./tailor.config.ts" });
+    const customRoot = "/abs/custom/project-root";
+    (plugin.config as any).call({}, { root: customRoot, test: { environment: "tailor-runtime" } });
+
+    expect(process.env[ENV_VAR]).toBe(`${customRoot}/tailor.config.ts`);
+  });
+
+  test("preserves an absolute options.config regardless of config.root", () => {
+    // Absolute paths must pass through `resolve` unchanged so users can pin
+    // a config location explicitly.
+    const plugin = createEnvironmentPlugin({ config: "/abs/elsewhere/tailor.config.ts" });
+    (plugin.config as any).call(
+      {},
+      { root: "/abs/custom/project-root", test: { environment: "tailor-runtime" } },
+    );
+
+    expect(process.env[ENV_VAR]).toBe("/abs/elsewhere/tailor.config.ts");
+  });
+
   test("does not set the env var when options.config is omitted", () => {
     const plugin = createEnvironmentPlugin();
     (plugin.config as any).call({}, { test: { environment: "tailor-runtime" } });

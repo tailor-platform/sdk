@@ -92,23 +92,57 @@ beforeAll(async () => {
   }
 });
 
+/**
+ * Remove the given globals from `globalObj`, returning the descriptors that
+ * were actually deleted so `restoreBlockedGlobals` can put them back.
+ *
+ * Mirrors environment.ts: non-configurable properties are skipped instead of
+ * deleted, so `delete` never throws in strict-mode runtimes that lock them
+ * down. Only properties whose deletion actually happened are returned, so the
+ * caller restores nothing for the skipped case.
+ * @param globalObj - Target object (typically `globalThis`)
+ * @param keys - Property names to remove
+ * @returns Map of removed descriptors keyed by property name
+ */
+export function removeBlockedGlobals(
+  globalObj: Record<string, unknown>,
+  keys: readonly string[],
+): SavedGlobals {
+  const removed: SavedGlobals = {};
+  for (const key of keys) {
+    const descriptor = Object.getOwnPropertyDescriptor(globalObj, key);
+    if (descriptor?.configurable) {
+      removed[key] = descriptor;
+      delete globalObj[key];
+    }
+  }
+  return removed;
+}
+
+/**
+ * Restore previously-removed globals onto `globalObj` from a `SavedGlobals`
+ * map produced by `removeBlockedGlobals`.
+ * @param globalObj - Target object (typically `globalThis`)
+ * @param saved - Descriptors to re-define
+ */
+export function restoreBlockedGlobals(
+  globalObj: Record<string, unknown>,
+  saved: SavedGlobals,
+): void {
+  for (const [key, descriptor] of Object.entries(saved)) {
+    if (descriptor) {
+      Object.defineProperty(globalObj, key, descriptor);
+    }
+  }
+}
+
 beforeEach(() => {
   if (!isTailorRuntime()) return;
-  const g = globalThis as Record<string, unknown>;
-  saved = {};
-  for (const key of BLOCKED_GLOBALS) {
-    saved[key] = Object.getOwnPropertyDescriptor(g, key);
-    delete g[key];
-  }
+  saved = removeBlockedGlobals(globalThis as Record<string, unknown>, BLOCKED_GLOBALS);
 });
 
 afterEach(() => {
   if (!isTailorRuntime()) return;
-  const g = globalThis as Record<string, unknown>;
-  for (const [key, descriptor] of Object.entries(saved)) {
-    if (descriptor) {
-      Object.defineProperty(g, key, descriptor);
-    }
-  }
+  restoreBlockedGlobals(globalThis as Record<string, unknown>, saved);
   saved = {};
 });
