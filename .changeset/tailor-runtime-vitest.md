@@ -1,9 +1,7 @@
 ---
-"@tailor-platform/sdk": major
+"@tailor-platform/sdk": minor
 "@tailor-platform/create-sdk": patch
 ---
-
-Raise the minimum supported Node.js version to 22 (declared via `engines.node`). Consumers running Node 18 or 20 must upgrade. The new Vitest plugin uses Node 22+ APIs (e.g. `path.matchesGlob`), and the SDK build target is now `node22`.
 
 Add `@tailor-platform/sdk/vitest` (beta) — a Vitest plugin and environment that emulates the Tailor Platform function runtime locally. Catches `node:*` imports and Node.js globals usage that would fail at deploy time, and provides mock control objects (`tailordbMock`, `workflowMock`, `secretmanagerMock`, `authconnectionMock`, `idpMock`, `fileMock`, `iconvMock`) for all platform APIs with response configuration and call recording.
 
