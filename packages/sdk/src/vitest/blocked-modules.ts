@@ -5,6 +5,7 @@
  * These Node.js modules are not available and should be replaced with
  * the suggested alternatives.
  */
+import { builtinModules } from "node:module";
 
 // Suggestions keyed by bare specifier. Lookup also checks with "node:" prefix stripped.
 const SUGGESTIONS: Record<string, string> = {
@@ -24,8 +25,6 @@ const SUGGESTIONS: Record<string, string> = {
   querystring: "Use URLSearchParams instead.",
   string_decoder: "Use TextDecoder instead.",
 };
-
-import { builtinModules } from "node:module";
 
 const BLOCKED_MODULES = new Set<string>();
 for (const mod of builtinModules) {
