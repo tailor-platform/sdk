@@ -26,43 +26,69 @@ function isTailorRuntime(): boolean {
   return RUNTIME_FLAG_KEY in globalThis;
 }
 
+/**
+ * Extract a vault store from a secrets-shaped value.
+ *
+ * `defineSecretManager()` returns `{ vaults, options, get, getAll }` (get/getAll
+ * are non-enumerable). When that shape is present, the actual vaults live
+ * under `.vaults`. Otherwise fall back to treating the object itself as the
+ * vault map (for plain object configs).
+ * @param secrets - Value from `appConfig.secrets` or `config.secrets`
+ * @returns Vault store, or null if the value is unusable
+ */
+export function extractVaultStore(secrets: unknown): Record<string, Record<string, string>> | null {
+  if (!secrets || typeof secrets !== "object") return null;
+
+  const source =
+    "vaults" in secrets &&
+    typeof (secrets as { vaults?: unknown }).vaults === "object" &&
+    (secrets as { vaults?: unknown }).vaults !== null
+      ? ((secrets as { vaults: Record<string, unknown> }).vaults as Record<string, unknown>)
+      : (secrets as Record<string, unknown>);
+
+  const store: Record<string, Record<string, string>> = {};
+  for (const [vaultName, vaultData] of Object.entries(source)) {
+    if (typeof vaultData === "object" && vaultData !== null) {
+      store[vaultName] = { ...(vaultData as Record<string, string>) };
+    }
+  }
+  return Object.keys(store).length > 0 ? store : null;
+}
+
+/**
+ * Load and parse secrets from a tailor.config.ts file.
+ *
+ * Returns a vault store on success, or `null` on any failure (missing config,
+ * import failure, missing/invalid secrets shape). Errors are swallowed so a
+ * misconfigured project still boots — the user can set secrets manually via
+ * `secretmanagerMock.setSecrets()`.
+ * @param configPath - Absolute path to tailor.config.ts
+ * @returns Vault store keyed by vault name, or null if unavailable
+ */
+export async function loadSecretsFromConfig(
+  configPath: string,
+): Promise<Record<string, Record<string, string>> | null> {
+  try {
+    // Convert to file URL so absolute Windows paths (e.g. "C:\...") parse as
+    // valid ESM specifiers.
+    const config = await import(pathToFileURL(configPath).href);
+    const appConfig = config.default;
+    const secrets = appConfig?.secrets ?? config.secrets;
+    return extractVaultStore(secrets);
+  } catch {
+    return null;
+  }
+}
+
 // Load secrets from tailor.config.ts if config path is provided via env var
 beforeAll(async () => {
   if (!isTailorRuntime()) return;
   const configPath = process.env.__TAILOR_RUNTIME_CONFIG;
   if (!configPath) return;
 
-  try {
-    // Convert to file URL so absolute Windows paths (e.g. "C:\...") parse as
-    // valid ESM specifiers.
-    const config = await import(pathToFileURL(configPath).href);
-    // Find the defineConfig default export and extract secrets
-    const appConfig = config.default;
-    const secrets = appConfig?.secrets ?? config.secrets;
-    if (!secrets || typeof secrets !== "object") return;
-
-    // `defineSecretManager()` returns `{ vaults, options, get, getAll }` (get/getAll
-    // are non-enumerable). When that shape is present, the actual vaults live
-    // under `.vaults`. Otherwise fall back to treating the object itself as the
-    // vault map (for plain object configs).
-    const source =
-      "vaults" in secrets &&
-      typeof (secrets as { vaults?: unknown }).vaults === "object" &&
-      (secrets as { vaults?: unknown }).vaults !== null
-        ? ((secrets as { vaults: Record<string, unknown> }).vaults as Record<string, unknown>)
-        : (secrets as Record<string, unknown>);
-
-    const store: Record<string, Record<string, string>> = {};
-    for (const [vaultName, vaultData] of Object.entries(source)) {
-      if (typeof vaultData === "object" && vaultData !== null) {
-        store[vaultName] = { ...(vaultData as Record<string, string>) };
-      }
-    }
-    if (Object.keys(store).length > 0) {
-      secretmanagerMock.setSecrets(store);
-    }
-  } catch {
-    // Config loading failed — ignore, user can set secrets manually
+  const store = await loadSecretsFromConfig(configPath);
+  if (store) {
+    secretmanagerMock.setSecrets(store);
   }
 });
 

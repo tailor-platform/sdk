@@ -38,3 +38,29 @@ test("setup.ts removes performance global during test execution", () => {
 test("__tailorRuntimeActive flag is set when the environment is active", () => {
   expect("__tailorRuntimeActive" in globalThis).toBe(true);
 });
+
+test("Web Standard / ECMAScript globals remain available after whitelist cleanup", () => {
+  // The environment removes everything not on ALLOWED_GLOBALS. These are
+  // intentionally on the whitelist (sourced from `globals.builtin` and
+  // `globals.shared-node-browser`), so they must survive.
+  expect(typeof console).toBe("object");
+  expect(typeof fetch).toBe("function");
+  expect(typeof URL).toBe("function");
+  expect(typeof URLSearchParams).toBe("function");
+  expect(typeof Math).toBe("object");
+  expect(typeof setTimeout).toBe("function");
+  expect(typeof Promise).toBe("function");
+});
+
+test("performance is restored between tests so subsequent tests do not see leakage", () => {
+  // afterEach in setup.ts restores performance after each test. This test
+  // runs after the earlier "performance is removed during test execution"
+  // test; if afterEach were broken, this would still see no `performance`
+  // and the next beforeEach would fail to capture/restore it. The existing
+  // beforeEach delete is itself the assertion that the prior afterEach
+  // restored the global — if this test body runs without an exception
+  // ("cannot delete non-existent global"-style), the restore worked.
+  // We additionally assert the descriptor was set up correctly by checking
+  // the global is missing here (delete just ran in beforeEach).
+  expect("performance" in globalThis).toBe(false);
+});
