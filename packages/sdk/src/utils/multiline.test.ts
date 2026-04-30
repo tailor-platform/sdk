@@ -8,7 +8,9 @@ describe("multiline", () => {
       second
       third
     `;
-    expect(result).toBe("first\nsecond\nthird");
+    expect(result).toBe(`first
+second
+third`);
   });
 
   test("preserves relative indentation between lines", () => {
@@ -17,25 +19,39 @@ describe("multiline", () => {
         inner
       outer
     `;
-    expect(result).toBe("outer\n  inner\nouter");
+    expect(result).toBe(`outer
+  inner
+outer`);
   });
 
   test("indents multi-line interpolations to the placeholder's indent", () => {
-    const inner = "a\nb\nc";
+    const inner = `a
+b
+c`;
     const result = multiline`
       header
         ${inner}
       footer
     `;
-    expect(result).toBe("header\n  a\n  b\n  c\nfooter");
+    expect(result).toBe(`header
+  a
+  b
+  c
+footer`);
   });
 
   test("returns single-line strings unchanged", () => {
-    expect(multiline`hello`).toBe("hello");
+    expect(multiline`hello`).toBe(`hello`);
   });
 
   test("accepts a plain string argument", () => {
-    expect(multiline("\n  one\n  two\n")).toBe("one\ntwo");
+    expect(
+      multiline(`
+  one
+  two
+`),
+    ).toBe(`one
+two`);
   });
 
   test("preserves blank lines inside the block", () => {
@@ -44,6 +60,8 @@ describe("multiline", () => {
 
       two
     `;
-    expect(result).toBe("one\n\ntwo");
+    expect(result).toBe(`one
+
+two`);
   });
 });
