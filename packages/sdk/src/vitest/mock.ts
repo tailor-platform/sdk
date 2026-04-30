@@ -927,6 +927,13 @@ function toFileStream(value: unknown): FileStream {
   ) {
     return value as FileStream;
   }
+  // Binary chunk shorthand: a single ArrayBuffer / TypedArray (e.g. Uint8Array)
+  // should be delivered as one chunk, not iterated as a sequence of numbers.
+  // Tests passing `[chunk1, chunk2]` continue to work via the iterable branch
+  // below.
+  if (value instanceof ArrayBuffer || ArrayBuffer.isView(value)) {
+    return toFileStream([value]);
+  }
   // Iterable (array, sync iterator, etc.): wrap as a chunked async iterator
   // so `fileMock.enqueueResult([chunk1, chunk2])` controls stream contents.
   if (

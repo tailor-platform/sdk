@@ -392,6 +392,39 @@ describe("mock", () => {
       fileMock.reset();
       expect(fileMock.calls).toHaveLength(0);
     });
+
+    test("openDownloadStream with Uint8Array enqueued yields single chunk", async () => {
+      // Uint8Array is iterable as numbers; the mock must wrap it as one
+      // binary chunk instead of iterating byte-by-byte.
+      const bytes = new Uint8Array([1, 2, 3]);
+      fileMock.enqueueResult(bytes);
+      const stream = await (globalThis as any).tailordb.file.openDownloadStream(
+        "ns",
+        "T",
+        "f",
+        "r",
+      );
+      const chunks: unknown[] = [];
+      for await (const chunk of stream) chunks.push(chunk);
+      expect(chunks).toHaveLength(1);
+      expect(chunks[0]).toBeInstanceOf(Uint8Array);
+      expect(chunks[0]).toEqual(bytes);
+    });
+
+    test("openDownloadStream with array of Uint8Array yields chunks in order", async () => {
+      const a = new Uint8Array([1, 2]);
+      const b = new Uint8Array([3, 4]);
+      fileMock.enqueueResult([a, b]);
+      const stream = await (globalThis as any).tailordb.file.openDownloadStream(
+        "ns",
+        "T",
+        "f",
+        "r",
+      );
+      const chunks: unknown[] = [];
+      for await (const chunk of stream) chunks.push(chunk);
+      expect(chunks).toEqual([a, b]);
+    });
   });
 
   describe("iconvMock", () => {
