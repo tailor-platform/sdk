@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { isAbsolute } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { createBlockPlugin, createEnvironmentPlugin } from "../plugin";
 
@@ -380,8 +381,7 @@ describe("createEnvironmentPlugin", () => {
 
     expect(process.env[ENV_VAR]).toBeDefined();
     expect(process.env[ENV_VAR]).toMatch(/tailor\.config\.ts$/);
-    // Resolved to an absolute path.
-    expect(process.env[ENV_VAR]?.startsWith("/")).toBe(true);
+    expect(isAbsolute(process.env[ENV_VAR] ?? "")).toBe(true);
   });
 
   test("does not set the env var when options.config is omitted", () => {
