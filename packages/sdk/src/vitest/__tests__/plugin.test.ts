@@ -422,6 +422,25 @@ describe("createEnvironmentPlugin", () => {
     expect(process.env[ENV_VAR]).toBeUndefined();
   });
 
+  test("clears a pre-existing env var when opting out (no tailor-runtime selection)", () => {
+    process.env[ENV_VAR] = "/old/stale/path.ts";
+
+    const plugin = createEnvironmentPlugin({ config: "./tailor.config.ts" });
+    (plugin.config as any).call({}, { test: { environment: "node" } });
+
+    // Stale value from a prior watch-mode iteration must not survive.
+    expect(process.env[ENV_VAR]).toBeUndefined();
+  });
+
+  test("clears a pre-existing env var when options.config is omitted", () => {
+    process.env[ENV_VAR] = "/old/stale/path.ts";
+
+    const plugin = createEnvironmentPlugin();
+    (plugin.config as any).call({}, { test: { environment: "tailor-runtime" } });
+
+    expect(process.env[ENV_VAR]).toBeUndefined();
+  });
+
   test("sets the env var when at least one project selects tailor-runtime", () => {
     const plugin = createEnvironmentPlugin({ config: "./tailor.config.ts" });
     (plugin.config as any).call(

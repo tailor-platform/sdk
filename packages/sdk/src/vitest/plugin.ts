@@ -219,9 +219,13 @@ export function createEnvironmentPlugin(options?: { config?: string }): Plugin {
       }
 
       // Pass config path to setup.ts via env var (cross-process compatible).
-      // Only set when tailor-runtime is actually selected somewhere in the
-      // config tree, so the env var does not leak into unrelated projects/runs
-      // sharing the same parent process.
+      // Always clear first, then set only when tailor-runtime is actually
+      // selected. This makes the env var deterministic across Vite config
+      // reloads (watch mode, programmatic re-init): a stale value from a
+      // prior iteration cannot make setup.ts load secrets from an old config.
+      // The leading `__` marks this as plugin-private, so deleting any
+      // pre-existing value is safe.
+      delete process.env.__TAILOR_RUNTIME_CONFIG;
       if (options?.config && usesTailorRuntime) {
         const configAbsPath = resolve(process.cwd(), options.config);
         process.env.__TAILOR_RUNTIME_CONFIG = configAbsPath;
