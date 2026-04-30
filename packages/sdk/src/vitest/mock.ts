@@ -707,14 +707,29 @@ class MockIdpClient {
 // Mock: tailor.iconv
 // ---------------------------------------------------------------------------
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const ICONV_DEFAULTS: Record<string, any> = {
-  convert: "",
-  convertBuffer: "",
-  decode: "",
-  encode: "",
-  encodings: [],
-};
+// Iconv methods return `string` for UTF-8 target encodings and `Uint8Array`
+// for any other byte-producing encoding (the platform API mirrors this).
+// Default returns must respect that contract so tests that don't configure a
+// resolver still get type-consistent values.
+function isUtf8(encoding: unknown): boolean {
+  return encoding === "UTF8" || encoding === "UTF-8";
+}
+
+function defaultIconvResult(method: string, args: unknown[]): unknown {
+  switch (method) {
+    case "convert":
+    case "convertBuffer":
+      return isUtf8(args[2]) ? "" : new Uint8Array();
+    case "decode":
+      return "";
+    case "encode":
+      return isUtf8(args[1]) ? "" : new Uint8Array();
+    case "encodings":
+      return [];
+    default:
+      return undefined;
+  }
+}
 
 function resolveIconvCall(method: string, args: unknown[]): unknown {
   const state = getState();
@@ -723,7 +738,7 @@ function resolveIconvCall(method: string, args: unknown[]): unknown {
     const result = state.iconvResolver(method, args);
     if (result !== null) return result;
   }
-  return ICONV_DEFAULTS[method] ?? "";
+  return defaultIconvResult(method, args);
 }
 
 function mockConvert<T extends string>(

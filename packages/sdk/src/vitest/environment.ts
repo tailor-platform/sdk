@@ -3,21 +3,25 @@ import { STATE_KEY, injectMocks, cleanupMocks } from "./mock";
 
 // Normalize the `globals` module shape across CJS/ESM interop so the
 // whitelist build doesn't crash if the default export is unavailable or
-// the year-keyed sets are missing. Mirrors src/cli/services/tailordb/es-builtins.ts.
+// the keyed sets are missing. Mirrors src/cli/services/tailordb/es-builtins.ts.
 type GlobalsShape = {
-  es2025?: Record<string, boolean>;
-  browser?: Record<string, boolean>;
+  builtin?: Record<string, boolean>;
+  "shared-node-browser"?: Record<string, boolean>;
 };
 const globalsMap: GlobalsShape =
   (globals as unknown as { default?: GlobalsShape }).default ??
   (globals as unknown as GlobalsShape);
 
 // Globals allowed in the Tailor Platform runtime.
+// Mirrors ES_BUILTINS in src/cli/services/tailordb/es-builtins.ts so the
+// emulated runtime exposes exactly the same identifiers as the production
+// platform's free-variable allowlist (ECMAScript builtins + shared
+// Node/browser runtime globals like console, fetch, setTimeout).
 // Platform API mocks (tailor, tailordb, etc.) are not listed here — they are
 // injected by injectMocks() after the whitelist cleanup, so they are never removed.
 const ALLOWED_GLOBALS = new Set([
-  ...Object.keys(globalsMap.es2025 ?? {}),
-  ...Object.keys(globalsMap.browser ?? {}),
+  ...Object.keys(globalsMap.builtin ?? {}),
+  ...Object.keys(globalsMap["shared-node-browser"] ?? {}),
 
   // Mock state key (used by setup.ts to detect tailor-runtime environment)
   STATE_KEY,

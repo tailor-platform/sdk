@@ -420,6 +420,22 @@ describe("mock", () => {
       iconvMock.reset();
       expect(iconvMock.calls).toHaveLength(0);
     });
+
+    test("default convert returns string for UTF-8 target, Uint8Array otherwise", () => {
+      const utf8Result = (globalThis as any).tailor.iconv.convert("hi", "Shift_JIS", "UTF-8");
+      expect(utf8Result).toBe("");
+      const binResult = (globalThis as any).tailor.iconv.convert("hi", "UTF-8", "Shift_JIS");
+      expect(binResult).toBeInstanceOf(Uint8Array);
+      expect(binResult).toHaveLength(0);
+    });
+
+    test("default encode returns string for UTF-8 target, Uint8Array otherwise", () => {
+      const utf8Result = (globalThis as any).tailor.iconv.encode("hi", "UTF-8");
+      expect(utf8Result).toBe("");
+      const binResult = (globalThis as any).tailor.iconv.encode("hi", "Shift_JIS");
+      expect(binResult).toBeInstanceOf(Uint8Array);
+      expect(binResult).toHaveLength(0);
+    });
   });
 
   describe("workflowMock extended", () => {

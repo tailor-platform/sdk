@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,6 +10,12 @@ const currentDir = dirname(fileURLToPath(import.meta.url));
 const integrationDir = resolve(currentDir, "integration");
 const configPath = resolve(integrationDir, "vitest.config.ts");
 const sdkDir = resolve(currentDir, "../..");
+
+// Resolve the workspace's installed Vitest entry rather than relying on `npx`,
+// which may perform online package resolution and slow down / destabilize CI.
+const require = createRequire(import.meta.url);
+const vitestPackageJson = require.resolve("vitest/package.json");
+const vitestBin = resolve(dirname(vitestPackageJson), "vitest.mjs");
 
 interface VitestJsonReport {
   numTotalTests: number;
@@ -21,9 +28,9 @@ interface VitestJsonReport {
 function runVitest(jsonOutputPath: string): VitestJsonReport {
   try {
     execFileSync(
-      "npx",
+      process.execPath,
       [
-        "vitest",
+        vitestBin,
         "run",
         "--config",
         configPath,
