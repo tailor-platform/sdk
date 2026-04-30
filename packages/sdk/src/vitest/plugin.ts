@@ -64,9 +64,11 @@ function buildBlockedReplacement(node: ImportLikeNode, message: string): string 
  * `throw new Error(...)` statement so the failure surfaces at evaluation time.
  * `ExportNamedDeclaration` (`export { x, y as z } from "..."`) and namespaced
  * `export * as ns from "..."` are rewritten to per-binding stub exports
- * (`export const x = (() => { throw new Error(...) })();`), preserving the
- * declared export bindings so consumers fail at use rather than at module
- * instantiation with an opaque "missing export" error.
+ * (`export const x = (() => { throw new Error(...) })();`). The IIFE throws
+ * eagerly during module evaluation (same timing as a top-level `throw`), but
+ * preserving the declared export bindings ensures the surfaced error is the
+ * actual "node:* not available" message rather than an opaque
+ * "missing export" raised by the loader.
  * Vitest treats `node:*` as external SSR modules (skipping `resolveId`), so
  * source-level transformation is the only reliable interception point.
  * Runs in the default phase (no `enforce: "pre"`) so esbuild's TypeScript

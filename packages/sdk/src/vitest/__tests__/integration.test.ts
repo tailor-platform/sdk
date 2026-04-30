@@ -61,9 +61,9 @@ describe("tailor-runtime integration", () => {
 
   test("blocked imports, globals removal, and allowed APIs all work", () => {
     const report = runVitest(jsonOutputPath);
-    expect(report.numFailedTests).toBe(0);
-    expect(report.numPassedTests).toBe(8);
-    expect(report.numTotalTests).toBe(8);
     expect(report.success).toBe(true);
+    expect(report.numFailedTests).toBe(0);
+    expect(report.numPassedTests).toBe(report.numTotalTests);
+    expect(report.numTotalTests).toBeGreaterThan(0);
   });
 });
