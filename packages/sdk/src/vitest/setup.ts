@@ -20,7 +20,46 @@ const BLOCKED_GLOBALS = ["performance"] as const;
 
 type SavedGlobals = Record<string, PropertyDescriptor | undefined>;
 
-let saved: SavedGlobals = {};
+/**
+ * Reference-counted lifecycle for blocked globals.
+ *
+ * Concurrent tests in the same Vitest worker (`test.concurrent`) interleave
+ * their beforeEach/afterEach hooks: a naive `let saved` shared across hooks
+ * would let one test's `afterEach` restore `performance` mid-execution of
+ * another test. Reference counting keeps the globals removed for the union
+ * of all overlapping test scopes — the property is removed on first entry
+ * and restored only when the last test exits.
+ * @returns Lifecycle hooks
+ */
+export function createBlockedGlobalsLifecycle(): {
+  enter: (globalObj: Record<string, unknown>, keys: readonly string[]) => void;
+  exit: (globalObj: Record<string, unknown>) => void;
+  readonly active: number;
+} {
+  let active = 0;
+  let saved: SavedGlobals = {};
+  return {
+    get active() {
+      return active;
+    },
+    enter(globalObj, keys) {
+      if (active === 0) saved = removeBlockedGlobals(globalObj, keys);
+      active++;
+    },
+    exit(globalObj) {
+      // Defensive guard — in practice every `enter` is paired with `exit`,
+      // but a hook crash could desync the counter.
+      if (active === 0) return;
+      active--;
+      if (active === 0) {
+        restoreBlockedGlobals(globalObj, saved);
+        saved = {};
+      }
+    },
+  };
+}
+
+const lifecycle = createBlockedGlobalsLifecycle();
 
 function isTailorRuntime(): boolean {
   return RUNTIME_FLAG_KEY in globalThis;
@@ -138,11 +177,10 @@ export function restoreBlockedGlobals(
 
 beforeEach(() => {
   if (!isTailorRuntime()) return;
-  saved = removeBlockedGlobals(globalThis as Record<string, unknown>, BLOCKED_GLOBALS);
+  lifecycle.enter(globalThis as Record<string, unknown>, BLOCKED_GLOBALS);
 });
 
 afterEach(() => {
   if (!isTailorRuntime()) return;
-  restoreBlockedGlobals(globalThis as Record<string, unknown>, saved);
-  saved = {};
+  lifecycle.exit(globalThis as Record<string, unknown>);
 });

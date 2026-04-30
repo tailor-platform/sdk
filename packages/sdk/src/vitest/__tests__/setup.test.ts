@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import {
+  createBlockedGlobalsLifecycle,
   extractVaultStore,
   loadSecretsFromConfig,
   removeBlockedGlobals,
@@ -193,5 +194,94 @@ describe("restoreBlockedGlobals", () => {
     const g: Record<string, unknown> = { other: 1 };
     expect(() => restoreBlockedGlobals(g, {})).not.toThrow();
     expect(g.other).toBe(1);
+  });
+});
+
+describe("createBlockedGlobalsLifecycle (concurrent-test safety)", () => {
+  // Helper: build a global with a configurable `performance` property.
+  function withPerformance(): Record<string, unknown> {
+    const g: Record<string, unknown> = {};
+    Object.defineProperty(g, "performance", {
+      value: { now: () => 1 },
+      configurable: true,
+      writable: true,
+      enumerable: true,
+    });
+    return g;
+  }
+
+  test("removes globals on first enter and restores on matching exit", () => {
+    const g = withPerformance();
+    const lifecycle = createBlockedGlobalsLifecycle();
+    lifecycle.enter(g, ["performance"]);
+    expect("performance" in g).toBe(false);
+    lifecycle.exit(g);
+    expect("performance" in g).toBe(true);
+  });
+
+  test("nested enter does NOT re-snapshot or re-delete; the union is kept removed", () => {
+    // Regression guard for `test.concurrent`: when test B's beforeEach runs
+    // while test A is still mid-flight, the property must stay removed and
+    // the descriptor saved on A's enter must be the one ultimately restored.
+    const g = withPerformance();
+    const originalDescriptor = Object.getOwnPropertyDescriptor(g, "performance");
+    const lifecycle = createBlockedGlobalsLifecycle();
+
+    lifecycle.enter(g, ["performance"]); // test A starts
+    expect("performance" in g).toBe(false);
+    lifecycle.enter(g, ["performance"]); // test B starts
+    expect("performance" in g).toBe(false);
+
+    lifecycle.exit(g); // test B finishes — must NOT restore yet
+    expect("performance" in g).toBe(false);
+
+    lifecycle.exit(g); // test A finishes — final exit restores
+    expect(Object.getOwnPropertyDescriptor(g, "performance")?.value).toBe(
+      originalDescriptor?.value,
+    );
+  });
+
+  test("active counter reflects the number of overlapping scopes", () => {
+    const g = withPerformance();
+    const lifecycle = createBlockedGlobalsLifecycle();
+    expect(lifecycle.active).toBe(0);
+    lifecycle.enter(g, ["performance"]);
+    expect(lifecycle.active).toBe(1);
+    lifecycle.enter(g, ["performance"]);
+    expect(lifecycle.active).toBe(2);
+    lifecycle.exit(g);
+    expect(lifecycle.active).toBe(1);
+    lifecycle.exit(g);
+    expect(lifecycle.active).toBe(0);
+  });
+
+  test("exit is a no-op when active is already 0 (defensive against desynced hooks)", () => {
+    const g = withPerformance();
+    const lifecycle = createBlockedGlobalsLifecycle();
+    expect(() => lifecycle.exit(g)).not.toThrow();
+    expect(lifecycle.active).toBe(0);
+    expect("performance" in g).toBe(true);
+  });
+
+  test("after a complete cycle, a new enter starts a fresh snapshot", () => {
+    // Cycle 1: enter→exit must clear saved state so cycle 2 captures the
+    // CURRENT descriptor, not the stale one from cycle 1.
+    const g = withPerformance();
+    const lifecycle = createBlockedGlobalsLifecycle();
+
+    lifecycle.enter(g, ["performance"]);
+    lifecycle.exit(g);
+
+    // Replace `performance` between cycles — cycle 2 must snapshot the new value.
+    Object.defineProperty(g, "performance", {
+      value: { now: () => 999 },
+      configurable: true,
+      writable: true,
+      enumerable: true,
+    });
+
+    lifecycle.enter(g, ["performance"]);
+    lifecycle.exit(g);
+    expect((g.performance as { now: () => number }).now()).toBe(999);
   });
 });
