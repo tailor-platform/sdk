@@ -162,9 +162,11 @@ function createDefaultState(): MockState {
  * });
  *
  * test("order-based", () => {
- *   tailordbMock.enqueueResult();           // BEGIN (empty result)
- *   tailordbMock.enqueueResult({ age: 30 }); // SELECT (one row)
- *   tailordbMock.enqueueResult();           // COMMIT (empty result)
+ *   tailordbMock.enqueueResults(
+ *     [],            // BEGIN (empty result)
+ *     [{ age: 30 }], // SELECT (one row)
+ *     [],            // COMMIT (empty result)
+ *   );
  * });
  * ```
  */
@@ -178,13 +180,24 @@ export const tailordbMock = {
   },
 
   /**
-   * Enqueue a single query response. Arguments are the row objects returned by `queryObject`.
-   * Call with no arguments for an empty result. Consumed in FIFO order; when the queue is
-   * exhausted, subsequent calls fall back to `setQueryResolver` (default: empty rows).
+   * Enqueue rows for the next `queryObject` call. Arguments are the row objects returned
+   * by that single query. Call with no arguments for an empty result. Consumed in FIFO
+   * order; when the queue is exhausted, subsequent calls fall back to `setQueryResolver`
+   * (default: empty rows). Use `enqueueResults` to stage rows for multiple queries in one
+   * call.
    * @param rows - Row objects to return from the next `queryObject` call
    */
   enqueueResult(...rows: unknown[]): void {
     getState().queryResultQueue.push(rows);
+  },
+
+  /**
+   * Enqueue rows for multiple subsequent `queryObject` calls. Each argument is a rows
+   * array for one query, consumed in FIFO order.
+   * @param rowsList - Rows arrays, one per upcoming query
+   */
+  enqueueResults(...rowsList: unknown[][]): void {
+    getState().queryResultQueue.push(...rowsList);
   },
 
   /**
@@ -235,7 +248,7 @@ export const tailordbMock = {
  * });
  *
  * test("ordered results", () => {
- *   workflowMock.enqueueResult({ valid: true }, { txnId: "txn-1" });
+ *   workflowMock.enqueueResults({ valid: true }, { txnId: "txn-1" });
  * });
  * ```
  */
@@ -249,11 +262,20 @@ export const workflowMock = {
   },
 
   /**
-   * Enqueue results to be returned by subsequent `triggerJobFunction` calls.
-   * Each argument becomes one response, consumed in FIFO order before falling back to the job handler.
-   * @param results - One or more results to enqueue
+   * Enqueue a single result for the next `triggerJobFunction` call. Consumed in FIFO
+   * order; when the queue is exhausted, subsequent calls fall back to `setJobHandler`
+   * (default: null). Use `enqueueResults` to stage multiple results in one call.
+   * @param result - Result to return from the next `triggerJobFunction` call
    */
-  enqueueResult(...results: unknown[]): void {
+  enqueueResult(result: unknown): void {
+    getState().jobResultQueue.push(result);
+  },
+
+  /**
+   * Enqueue results for multiple subsequent `triggerJobFunction` calls.
+   * @param results - Results to enqueue, one per upcoming call
+   */
+  enqueueResults(...results: unknown[]): void {
     const queue = getState().jobResultQueue;
     for (const result of results) {
       queue.push(result);
@@ -356,7 +378,20 @@ export const idpMock = {
     getState().idpResolver = resolver;
   },
 
-  enqueueResult(...results: unknown[]): void {
+  /**
+   * Enqueue a single result for the next IDP call. Consumed in FIFO order; falls back
+   * to `setResolver` when exhausted. Use `enqueueResults` to stage multiple in one call.
+   * @param result - Result to return from the next IDP call
+   */
+  enqueueResult(result: unknown): void {
+    getState().idpResultQueue.push(result);
+  },
+
+  /**
+   * Enqueue results for multiple subsequent IDP calls.
+   * @param results - Results to enqueue, one per upcoming call
+   */
+  enqueueResults(...results: unknown[]): void {
     const queue = getState().idpResultQueue;
     for (const result of results) {
       queue.push(result);
@@ -385,7 +420,21 @@ export const fileMock = {
     getState().fileResolver = resolver;
   },
 
-  enqueueResult(...results: unknown[]): void {
+  /**
+   * Enqueue a single result for the next `tailordb.file` call. Consumed in FIFO order;
+   * falls back to `setResolver` when exhausted. Use `enqueueResults` to stage multiple
+   * in one call.
+   * @param result - Result to return from the next file call
+   */
+  enqueueResult(result: unknown): void {
+    getState().fileResultQueue.push(result);
+  },
+
+  /**
+   * Enqueue results for multiple subsequent `tailordb.file` calls.
+   * @param results - Results to enqueue, one per upcoming call
+   */
+  enqueueResults(...results: unknown[]): void {
     const queue = getState().fileResultQueue;
     for (const result of results) {
       queue.push(result);

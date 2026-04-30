@@ -130,8 +130,8 @@ describe("mock", () => {
       expect(result).toEqual({ valid: true });
     });
 
-    test("enqueueResult provides order-based responses", () => {
-      workflowMock.enqueueResult({ step: 1 }, { step: 2 });
+    test("enqueueResults provides order-based responses", () => {
+      workflowMock.enqueueResults({ step: 1 }, { step: 2 });
 
       const trigger = (globalThis as any).tailor.workflow.triggerJobFunction;
       expect(trigger("job1", {})).toEqual({ step: 1 });
@@ -318,8 +318,8 @@ describe("mock", () => {
       expect(idpMock.calls).toEqual([{ method: "user", args: ["u-1"], namespace: "ns" }]);
     });
 
-    test("enqueueResult provides ordered responses", async () => {
-      idpMock.enqueueResult({ id: "u-1", name: "alice", disabled: false }, true);
+    test("enqueueResults provides ordered responses", async () => {
+      idpMock.enqueueResults({ id: "u-1", name: "alice", disabled: false }, true);
 
       const client = new (globalThis as any).tailor.idp.Client({ namespace: "ns" });
       const user = await client.user("u-1");

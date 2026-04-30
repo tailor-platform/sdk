@@ -66,10 +66,12 @@ beforeEach(() => {
 });
 
 test("resolver queries the database", async () => {
-  // Order-based: each call enqueues one query response
-  tailordbMock.enqueueResult(); // BEGIN (empty result)
-  tailordbMock.enqueueResult({ age: 30 }); // SELECT (one row)
-  tailordbMock.enqueueResult(); // COMMIT
+  // Order-based: stage rows for each upcoming query in one call
+  tailordbMock.enqueueResults(
+    [], // BEGIN (empty result)
+    [{ age: 30 }], // SELECT (one row)
+    [], // COMMIT
+  );
 
   const result = await resolver.body({ input: { email: "test@example.com" } });
 
@@ -79,9 +81,10 @@ test("resolver queries the database", async () => {
 });
 ```
 
-Two response modes:
+Three response modes:
 
-- **`enqueueResult(...rows)`** — Order-based. Each call enqueues one query response. Arguments are row objects (`enqueueResult()` for empty, `enqueueResult({ id: "1" })` for one row, `enqueueResult({ a: 1 }, { a: 2 })` for multiple rows). Consumed in FIFO order.
+- **`enqueueResult(...rows)`** — Order-based, single query. Arguments are the row objects returned by the next `queryObject` call (`enqueueResult()` for empty, `enqueueResult({ id: "1" })` for one row, `enqueueResult({ a: 1 }, { a: 2 })` for multiple rows). Consumed in FIFO order.
+- **`enqueueResults(...rowsArrays)`** — Order-based, multiple queries. Each argument is a rows array for one upcoming query. Equivalent to calling `enqueueResult` for each entry but easier to read for transactional sequences.
 - **`setQueryResolver((query, params) => rows)`** — Content-based fallback. Called when the queue is empty.
 
 ```typescript
@@ -124,10 +127,14 @@ test("workflow triggers jobs", async () => {
 });
 ```
 
-`workflowMock` also supports `enqueueResult()`:
+`workflowMock` also supports order-based responses:
 
 ```typescript
-workflowMock.enqueueResult({ valid: true }, { txnId: "txn-1" });
+// Single response for the next triggerJobFunction call
+workflowMock.enqueueResult({ valid: true });
+
+// Multiple responses for subsequent calls (FIFO)
+workflowMock.enqueueResults({ valid: true }, { txnId: "txn-1" });
 ```
 
 ### SecretManager Mock
