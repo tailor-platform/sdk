@@ -412,6 +412,34 @@ describe("createEnvironmentPlugin", () => {
     expect(process.env[ENV_VAR]).toBeUndefined();
   });
 
+  test("does not set the env var when no project selects tailor-runtime (avoid leaking config across projects)", () => {
+    const plugin = createEnvironmentPlugin({ config: "./tailor.config.ts" });
+    // Even with options.config, the env var must not be set if the user only
+    // configured non-tailor environments — otherwise it would leak into
+    // unrelated projects/runs sharing the same parent process.
+    (plugin.config as any).call({}, { test: { environment: "node" } });
+
+    expect(process.env[ENV_VAR]).toBeUndefined();
+  });
+
+  test("sets the env var when at least one project selects tailor-runtime", () => {
+    const plugin = createEnvironmentPlugin({ config: "./tailor.config.ts" });
+    (plugin.config as any).call(
+      {},
+      {
+        test: {
+          projects: [
+            { test: { environment: "node", name: "e2e" } },
+            { test: { environment: "tailor-runtime", name: "unit" } },
+          ],
+        },
+      },
+    );
+
+    expect(process.env[ENV_VAR]).toBeDefined();
+    expect(isAbsolute(process.env[ENV_VAR] ?? "")).toBe(true);
+  });
+
   test("normalizes a user-provided string setupFiles into an array", () => {
     const plugin = createEnvironmentPlugin();
     const userConfig = {

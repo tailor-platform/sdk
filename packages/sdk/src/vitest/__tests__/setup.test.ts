@@ -111,4 +111,19 @@ describe("loadSecretsFromConfig", () => {
     writeFileSync(path, `this is not valid javascript {{{`, "utf8");
     expect(await loadSecretsFromConfig(path)).toBeNull();
   });
+
+  test("loads a TypeScript config via the Vitest module loader", async () => {
+    // The documented usage is `tailorRuntime({ config: "./tailor.config.ts" })`.
+    // Vitest's worker installs a vite-node loader that intercepts dynamic
+    // `import()` and transforms .ts files on the fly, so this path must work.
+    // Regression guard against switching to a native Node-only loader.
+    const path = join(tmpDir, "config.ts");
+    writeFileSync(
+      path,
+      `type Vault = Record<string, string>;\nexport default { secrets: { aws: { K: "ts-v" } as Vault } };`,
+      "utf8",
+    );
+    const store = await loadSecretsFromConfig(path);
+    expect(store).toEqual({ aws: { K: "ts-v" } });
+  });
 });

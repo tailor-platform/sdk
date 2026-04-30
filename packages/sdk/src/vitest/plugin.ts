@@ -201,8 +201,10 @@ export function createEnvironmentPlugin(options?: { config?: string }): Plugin {
         | undefined;
 
       // Rewrite environment name to absolute path at top-level
+      let usesTailorRuntime = false;
       if (testConfig?.environment === ENVIRONMENT_NAME) {
         testConfig.environment = environmentPath;
+        usesTailorRuntime = true;
       }
 
       // Rewrite in each project config
@@ -211,12 +213,16 @@ export function createEnvironmentPlugin(options?: { config?: string }): Plugin {
           const projectTest = project.test as Record<string, unknown> | undefined;
           if (projectTest?.environment === ENVIRONMENT_NAME) {
             projectTest.environment = environmentPath;
+            usesTailorRuntime = true;
           }
         }
       }
 
-      // Pass config path to setup.ts via env var (cross-process compatible)
-      if (options?.config) {
+      // Pass config path to setup.ts via env var (cross-process compatible).
+      // Only set when tailor-runtime is actually selected somewhere in the
+      // config tree, so the env var does not leak into unrelated projects/runs
+      // sharing the same parent process.
+      if (options?.config && usesTailorRuntime) {
         const configAbsPath = resolve(process.cwd(), options.config);
         process.env.__TAILOR_RUNTIME_CONFIG = configAbsPath;
       }
