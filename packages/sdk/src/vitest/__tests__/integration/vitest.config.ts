@@ -1,14 +1,17 @@
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 import { createBlockPlugin } from "../../plugin";
+
+const here = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   plugins: [createBlockPlugin()],
   test: {
     watch: false,
-    environment: resolve(__dirname, "../../environment.ts"),
-    setupFiles: [resolve(__dirname, "../../setup.ts")],
+    environment: resolve(here, "../../environment.ts"),
+    setupFiles: [resolve(here, "../../setup.ts")],
     include: ["./**/*.test.ts"],
-    root: __dirname,
+    root: here,
   },
 });
