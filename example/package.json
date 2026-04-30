@@ -33,7 +33,7 @@
     "@connectrpc/connect": "2.1.1",
     "@connectrpc/connect-node": "2.1.1",
     "@types/node": "24.12.2",
-    "@typescript/native-preview": "7.0.0-dev.20260424.2",
+    "@typescript/native-preview": "7.0.0-dev.20260426.1",
     "eslint-plugin-oxlint": "1.61.0",
     "graphql": "16.13.2",
     "graphql-request": "7.4.0",
