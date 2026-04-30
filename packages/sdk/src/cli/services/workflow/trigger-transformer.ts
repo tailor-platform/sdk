@@ -416,7 +416,10 @@ export function transformFunctionTriggers(
       // Resolve the import path relative to the current file. Strip a trailing
       // extension (e.g. `./simple.mjs` from a `.mts` source) so it can match
       // workflowFileMap keys, which are stored without extensions.
-      const resolvedPath = resolvePath(currentDir, importSource).replace(/\.(ts|mts|cts|js|mjs|cjs)$/, "");
+      const resolvedPath = resolvePath(currentDir, importSource).replace(
+        /\.(ts|mts|cts|js|mjs|cjs)$/,
+        "",
+      );
       const workflowName = workflowFileMap.get(resolvedPath);
       if (workflowName) {
         localWorkflowNameMap.set(localName, workflowName);
