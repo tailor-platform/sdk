@@ -164,7 +164,8 @@ describe("mock", () => {
 
       expect(err.name).toBe("TailorErrors");
       expect(err.errors).toEqual([{ message: "invalid", path: ["field"] }]);
-      const parsed = JSON.parse(err.message);
+      expect(err.message).toMatch(/^TailorErrors: /);
+      const parsed = JSON.parse(err.message.replace(/^TailorErrors: /, ""));
       expect(parsed.errors).toEqual([{ message: "invalid", path: ["field"] }]);
     });
 

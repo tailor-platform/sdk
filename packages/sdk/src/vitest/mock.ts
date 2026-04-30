@@ -914,7 +914,10 @@ class TailorErrorsMock extends Error {
       }
       return { message: e.message, path: e.path };
     });
-    super(JSON.stringify({ errors: validated }));
+    // Match the PF runtime's TailorErrors serialization, which prefixes the
+    // JSON payload with "TailorErrors: ". Other SDK code (e.g. apply
+    // integration fixtures) strips this prefix before JSON.parse.
+    super(`TailorErrors: ${JSON.stringify({ errors: validated })}`);
     this.name = "TailorErrors";
     this.errors = validated;
   }

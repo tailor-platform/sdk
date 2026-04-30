@@ -11,13 +11,11 @@
  */
 import { pathToFileURL } from "node:url";
 import { afterEach, beforeAll, beforeEach } from "vitest";
-import { secretmanagerMock } from "./mock";
+import { STATE_KEY, secretmanagerMock } from "./mock";
 
 // Globals that Vitest internals depend on but don't exist in the platform runtime.
 // Removed before each test, restored after.
 const BLOCKED_GLOBALS = ["performance"] as const;
-
-const STATE_KEY = "__tailorMockState";
 
 type SavedGlobals = Record<string, PropertyDescriptor | undefined>;
 
