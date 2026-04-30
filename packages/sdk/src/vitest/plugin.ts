@@ -117,8 +117,11 @@ export function createBlockPlugin(): Plugin {
       // Only transform files inside the project root. With pnpm workspaces,
       // dependencies are symlinked and Vite resolves them to absolute paths
       // outside `node_modules`, so the substring check alone is insufficient.
+      // Non-absolute ids are Vite-internal: virtual modules (`\0...`,
+      // `virtual:...`), bare specifiers, etc. Those are never user source
+      // files and must not be parsed/transformed.
       isUserSourceFile = (id: string) => {
-        if (!isAbsolute(id)) return true;
+        if (!isAbsolute(id)) return false;
         const rel = relative(root, id);
         return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
       };

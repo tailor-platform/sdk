@@ -90,11 +90,14 @@ describe("tailor-runtime integration", () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
+  // The nested `vitest run` subprocess is allowed up to 30s by execFileSync
+  // (see runVitest above). Set the outer test timeout comfortably above that
+  // so a slow CI doesn't fail this test before the subprocess returns.
   test("blocked imports, globals removal, and allowed APIs all work", () => {
     const report = runVitest(jsonOutputPath);
     expect(report.success).toBe(true);
     expect(report.numFailedTests).toBe(0);
     expect(report.numPassedTests).toBe(report.numTotalTests);
     expect(report.numTotalTests).toBeGreaterThan(0);
-  });
+  }, 60_000);
 });

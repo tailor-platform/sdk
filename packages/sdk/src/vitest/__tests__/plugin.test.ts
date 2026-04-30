@@ -257,6 +257,25 @@ describe("createBlockPlugin", () => {
     expect(result).toBeUndefined();
   });
 
+  test("skips Vite virtual / non-absolute ids (e.g. \\0..., virtual:..., bare specifiers)", () => {
+    const plugin = createBlockPlugin();
+    const root = "/abs/project";
+    const code = `import { randomUUID } from "node:crypto";`;
+    const node = {
+      type: "ImportDeclaration" as const,
+      start: 0,
+      end: code.length,
+      source: { value: "node:crypto" },
+    };
+    for (const id of ["\0vite/preload-helper.js", "virtual:my-mod", "vite/dist/client/env.mjs"]) {
+      const result = transformWith(plugin, code, [node], id, {
+        include: ["tests/**/*.test.ts"],
+        root,
+      });
+      expect(result).toBeUndefined();
+    }
+  });
+
   test("exempts files listed in test.setupFiles", () => {
     const plugin = createBlockPlugin();
     const setupPath = "/abs/path/setup.ts";
