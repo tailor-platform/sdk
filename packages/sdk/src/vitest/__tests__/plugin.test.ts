@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { describe, expect, test } from "vitest";
-import { createBlockPlugin } from "../plugin";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { createBlockPlugin, createEnvironmentPlugin } from "../plugin";
 
 type ImportNode = {
   type: "ImportDeclaration" | "ExportNamedDeclaration" | "ExportAllDeclaration";
@@ -276,5 +276,72 @@ describe("createBlockPlugin", () => {
       { include: [], setupFiles: [setupPath] },
     );
     expect(result).toBeUndefined();
+  });
+});
+
+describe("createEnvironmentPlugin", () => {
+  const ENV_VAR = "__TAILOR_RUNTIME_CONFIG";
+  let originalConfig: string | undefined;
+
+  beforeEach(() => {
+    originalConfig = process.env[ENV_VAR];
+    delete process.env[ENV_VAR];
+  });
+
+  afterEach(() => {
+    if (originalConfig === undefined) delete process.env[ENV_VAR];
+    else process.env[ENV_VAR] = originalConfig;
+  });
+
+  test("rewrites top-level `environment: 'tailor-runtime'` to an absolute file path", () => {
+    const plugin = createEnvironmentPlugin();
+    const userConfig = { test: { environment: "tailor-runtime" } };
+    const merged = (plugin.config as any).call({}, userConfig);
+
+    expect(userConfig.test.environment).toMatch(/environment\.mjs$/);
+    expect(merged.test.setupFiles).toHaveLength(1);
+    expect(merged.test.setupFiles[0]).toMatch(/setup\.mjs$/);
+  });
+
+  test("rewrites per-project `environment: 'tailor-runtime'` to an absolute file path", () => {
+    const plugin = createEnvironmentPlugin();
+    const userConfig = {
+      test: {
+        projects: [
+          { test: { environment: "tailor-runtime", name: "unit" } },
+          { test: { environment: "node", name: "e2e" } },
+        ],
+      },
+    };
+    (plugin.config as any).call({}, userConfig);
+
+    expect(userConfig.test.projects[0].test.environment).toMatch(/environment\.mjs$/);
+    // Other environments untouched.
+    expect(userConfig.test.projects[1].test.environment).toBe("node");
+  });
+
+  test("leaves non-tailor environments untouched", () => {
+    const plugin = createEnvironmentPlugin();
+    const userConfig = { test: { environment: "node" } };
+    (plugin.config as any).call({}, userConfig);
+
+    expect(userConfig.test.environment).toBe("node");
+  });
+
+  test("propagates options.config to process.env.__TAILOR_RUNTIME_CONFIG", () => {
+    const plugin = createEnvironmentPlugin({ config: "./tailor.config.ts" });
+    (plugin.config as any).call({}, { test: { environment: "tailor-runtime" } });
+
+    expect(process.env[ENV_VAR]).toBeDefined();
+    expect(process.env[ENV_VAR]).toMatch(/tailor\.config\.ts$/);
+    // Resolved to an absolute path.
+    expect(process.env[ENV_VAR]?.startsWith("/")).toBe(true);
+  });
+
+  test("does not set the env var when options.config is omitted", () => {
+    const plugin = createEnvironmentPlugin();
+    (plugin.config as any).call({}, { test: { environment: "tailor-runtime" } });
+
+    expect(process.env[ENV_VAR]).toBeUndefined();
   });
 });
