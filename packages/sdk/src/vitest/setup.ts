@@ -9,6 +9,7 @@
  * This file is auto-injected by tailorRuntime() but only activates when
  * the tailor-runtime environment is active (detected via __tailorMockState).
  */
+import { pathToFileURL } from "node:url";
 import { afterEach, beforeAll, beforeEach } from "vitest";
 import { secretmanagerMock } from "./mock";
 
@@ -33,7 +34,9 @@ beforeAll(async () => {
   if (!configPath) return;
 
   try {
-    const config = await import(configPath);
+    // Convert to file URL so absolute Windows paths (e.g. "C:\...") parse as
+    // valid ESM specifiers.
+    const config = await import(pathToFileURL(configPath).href);
     // Find the defineConfig default export and extract secrets
     const appConfig = config.default;
     const secrets = appConfig?.secrets ?? config.secrets;

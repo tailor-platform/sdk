@@ -186,11 +186,19 @@
     "zinfer": "0.1.8"
   },
   "peerDependencies": {
+    "vite": "^6.0.0 || ^7.0.0 || ^8.0.0",
     "vitest": ">=4"
   },
   "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    },
     "vitest": {
       "optional": true
     }
+  },
+  "engines": {
+    "bun": ">=1.2.0",
+    "node": ">=22"
   }
 }
