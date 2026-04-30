@@ -10,6 +10,8 @@ import {
   iconvMock,
   injectMocks,
   cleanupMocks,
+  STATE_KEY,
+  RUNTIME_FLAG_KEY,
 } from "../mock";
 
 describe("mock", () => {
@@ -520,6 +522,32 @@ describe("mock", () => {
       expect((globalThis as any).TailorErrors).toBeUndefined();
       expect((globalThis as any).TailorErrorMessage).toBeUndefined();
       expect((globalThis as any).TailorDBFileError).toBeUndefined();
+      expect((globalThis as any)[STATE_KEY]).toBeUndefined();
+      expect((globalThis as any)[RUNTIME_FLAG_KEY]).toBeUndefined();
+    });
+
+    test("injectMocks sets the runtime-active flag", () => {
+      // beforeEach already called injectMocks, so the flag must be set here.
+      expect(RUNTIME_FLAG_KEY in globalThis).toBe(true);
+    });
+
+    test("mock helpers do not set the runtime-active flag", () => {
+      // Regression test: previously, setup.ts detected the tailor-runtime
+      // environment via STATE_KEY. STATE_KEY is created lazily by getState()
+      // whenever any mock helper runs, so a non-tailor-runtime project that
+      // simply imported and used mocks would trip the detection. The flag
+      // must only be raised by injectMocks() — not by mock helpers.
+      cleanupMocks(globalThis);
+      expect(RUNTIME_FLAG_KEY in globalThis).toBe(false);
+
+      tailordbMock.reset();
+      // STATE_KEY should now be lazily created by getState()...
+      expect(STATE_KEY in globalThis).toBe(true);
+      // ...but the runtime flag must remain unset.
+      expect(RUNTIME_FLAG_KEY in globalThis).toBe(false);
+
+      // Restore for the afterEach cleanupMocks.
+      injectMocks(globalThis);
     });
   });
 });

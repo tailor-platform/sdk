@@ -27,3 +27,14 @@ test("platform API mocks are injected into globalThis", () => {
   expect(g.TailorErrorMessage).toBeTypeOf("function");
   expect(g.TailorDBFileError).toBeTypeOf("function");
 });
+
+test("setup.ts removes performance global during test execution", () => {
+  // setup.ts deletes Vitest-host globals that are not present in the platform
+  // runtime. `performance` is removed in beforeEach and restored in
+  // afterEach, so within the test body it must be absent.
+  expect("performance" in globalThis).toBe(false);
+});
+
+test("__tailorRuntimeActive flag is set when the environment is active", () => {
+  expect("__tailorRuntimeActive" in globalThis).toBe(true);
+});

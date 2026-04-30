@@ -41,6 +41,27 @@ describe("createBlockPlugin", () => {
     expect(result.code).not.toContain('"node:crypto"');
   });
 
+  test("emitted throw statement is syntactically valid JS even when the message contains quotes", () => {
+    // getBlockedMessage embeds the specifier inside double quotes
+    // (`"node:crypto" is not available...`). Regression guard for the
+    // JSON.stringify-based escape: a naive `replace(/"/g, '\\"')` would still
+    // produce valid code here, but a missing escape would not. Verifying that
+    // the result parses as a statement protects against future message
+    // changes (e.g. backslashes, newlines, control chars).
+    const plugin = createBlockPlugin();
+    const code = `import { randomUUID } from "node:crypto";`;
+    const result = transformWith(
+      plugin,
+      code,
+      [{ type: "ImportDeclaration", start: 0, end: code.length, source: { value: "node:crypto" } }],
+      "/src/file.ts",
+    );
+    expect(() => new Function(result.code)).not.toThrow();
+    // The escaped specifier must appear inside the literal so the runtime
+    // error message is helpful.
+    expect(result.code).toContain('\\"node:crypto\\"');
+  });
+
   test("only replaces the blocked import when mixed with allowed declarations", () => {
     const plugin = createBlockPlugin();
     const stmt1 = `import { foo } from "@tailor-platform/sdk";`;
