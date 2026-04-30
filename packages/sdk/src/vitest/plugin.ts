@@ -26,8 +26,12 @@ const IMPORT_LIKE_TYPES = new Set([
 ]);
 
 function buildBlockedReplacement(node: ImportLikeNode, message: string): string {
-  const throwStmt = `throw new Error("${message}");`;
-  const throwExpr = `(() => { throw new Error("${message}"); })()`;
+  // JSON.stringify yields a fully-escaped string literal (including the
+  // surrounding quotes), so we don't need to manually handle backslashes,
+  // newlines, or other control characters that may appear in the message.
+  const literal = JSON.stringify(message);
+  const throwStmt = `throw new Error(${literal});`;
+  const throwExpr = `(() => { throw new Error(${literal}); })()`;
 
   if (node.type === "ExportNamedDeclaration") {
     const specs = node.specifiers ?? [];
@@ -146,11 +150,10 @@ export function createBlockPlugin(): Plugin {
         const specifier = node.source?.value;
         if (typeof specifier !== "string") continue;
         if (isBlockedModule(specifier)) {
-          const message = getBlockedMessage(specifier).replace(/"/g, '\\"');
           replacements.push({
             start: node.start,
             end: node.end,
-            replacement: buildBlockedReplacement(node, message),
+            replacement: buildBlockedReplacement(node, getBlockedMessage(specifier)),
           });
         }
       }

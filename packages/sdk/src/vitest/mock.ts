@@ -491,10 +491,6 @@ class MockQueryResult {
 }
 
 class MockTransaction {
-  constructor(_connectionId: string) {
-    // connectionId reserved for future use
-  }
-
   async begin(): Promise<void> {
     /* noop */
   }
@@ -511,14 +507,10 @@ class MockTransaction {
 }
 
 class MockTailordbClient {
-  #namespace: string | undefined;
   #record: CreatedClient;
-  #connectionId: string;
 
   constructor(config?: { namespace?: string }) {
-    this.#namespace = config?.namespace;
-    this.#record = { namespace: this.#namespace, ended: false };
-    this.#connectionId = `mock-${Math.random().toString(36).slice(2)}`;
+    this.#record = { namespace: config?.namespace, ended: false };
     getState().createdClients.push(this.#record);
   }
 
@@ -538,7 +530,7 @@ class MockTailordbClient {
     if (!name) {
       throw new Error("Transaction name must be a non-empty string");
     }
-    return new MockTransaction(this.#connectionId);
+    return new MockTransaction();
   }
 }
 
