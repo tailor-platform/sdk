@@ -25,6 +25,79 @@ const IMPORT_LIKE_TYPES = new Set([
   "ExportAllDeclaration",
 ]);
 
+// Re-export specifiers (`export { x as Y } from "..."`) accept any
+// `IdentifierName` for `Y` — including reserved words like `delete`. But
+// `export const Y = ...` requires a `BindingIdentifier`, which forbids
+// reserved words and the strict-mode-banned `arguments` / `eval`. Synthesizing
+// `export const delete = ...` would yield a syntax error, so we fall back to
+// plain `throw` for unsafe names.
+const UNSAFE_BINDING_NAMES = new Set([
+  // ReservedWord (ES2022+)
+  "break",
+  "case",
+  "catch",
+  "class",
+  "const",
+  "continue",
+  "debugger",
+  "default",
+  "delete",
+  "do",
+  "else",
+  "enum",
+  "export",
+  "extends",
+  "false",
+  "finally",
+  "for",
+  "function",
+  "if",
+  "import",
+  "in",
+  "instanceof",
+  "new",
+  "null",
+  "return",
+  "super",
+  "switch",
+  "this",
+  "throw",
+  "true",
+  "try",
+  "typeof",
+  "var",
+  "void",
+  "while",
+  "with",
+  "yield",
+  // Strict-mode reserved (ESM is always strict)
+  "let",
+  "static",
+  "implements",
+  "interface",
+  "package",
+  "private",
+  "protected",
+  "public",
+  // Module-specific reserved
+  "await",
+  // Banned as binding names in strict mode
+  "arguments",
+  "eval",
+]);
+
+const ID_START = /^[A-Za-z_$]/;
+const ID_CONT = /^[A-Za-z0-9_$]*$/;
+
+function isSafeBindingName(name: string): boolean {
+  if (UNSAFE_BINDING_NAMES.has(name)) return false;
+  if (name.length === 0) return false;
+  // Restrict to ASCII identifiers — Unicode bindings are valid JS but rare
+  // for re-exports of node:* modules, and a regex over the full
+  // ID_Start/ID_Continue sets adds substantial weight for marginal gain.
+  return ID_START.test(name[0] ?? "") && ID_CONT.test(name.slice(1));
+}
+
 function buildBlockedReplacement(node: ImportLikeNode, message: string): string {
   // JSON.stringify yields a fully-escaped string literal (including the
   // surrounding quotes), so we don't need to manually handle backslashes,
@@ -39,18 +112,21 @@ function buildBlockedReplacement(node: ImportLikeNode, message: string): string 
     for (const spec of specs) {
       const exportedName = spec.exported?.name;
       if (typeof exportedName !== "string") continue;
-      stubs.push(
-        exportedName === "default"
-          ? `export default ${throwExpr};`
-          : `export const ${exportedName} = ${throwExpr};`,
-      );
+      if (exportedName === "default") {
+        stubs.push(`export default ${throwExpr};`);
+        continue;
+      }
+      // Reserved words can be re-export names but not binding names.
+      // Bail to a plain throw rather than emit invalid syntax.
+      if (!isSafeBindingName(exportedName)) return throwStmt;
+      stubs.push(`export const ${exportedName} = ${throwExpr};`);
     }
     return stubs.length > 0 ? stubs.join(" ") : throwStmt;
   }
 
   if (node.type === "ExportAllDeclaration") {
     const exportedName = node.exported?.name;
-    if (typeof exportedName === "string") {
+    if (typeof exportedName === "string" && isSafeBindingName(exportedName)) {
       return `export const ${exportedName} = ${throwExpr};`;
     }
     return throwStmt;

@@ -153,6 +153,82 @@ describe("createBlockPlugin", () => {
     expect(result.code).toMatch(/export default \(\(\) => \{ throw new Error\(/);
   });
 
+  test("falls back to plain throw when a re-export name is a reserved word (e.g. `as delete`)", () => {
+    // `export { x as delete } from "node:crypto"` is valid ES syntax (export
+    // names accept any IdentifierName), but `export const delete = ...` is
+    // a syntax error (binding names cannot be reserved words). The plugin
+    // must detect that and emit a plain `throw` so the transformed module
+    // still parses.
+    const plugin = createBlockPlugin();
+    const code = `export { x as delete } from "node:crypto";`;
+    const result = transformWith(
+      plugin,
+      code,
+      [
+        {
+          type: "ExportNamedDeclaration",
+          start: 0,
+          end: code.length,
+          source: { value: "node:crypto" },
+          specifiers: [{ type: "ExportSpecifier", exported: { name: "delete" } }],
+        },
+      ],
+      "/src/file.ts",
+    );
+    expect(result.code).toMatch(/^throw new Error\(/);
+    // The whole replacement must parse as a top-level statement.
+    expect(() => new Function(result.code)).not.toThrow();
+  });
+
+  test("falls back to plain throw when ANY re-export name in a group is a reserved word", () => {
+    // Mixed safe/unsafe names: even though `foo` could be stubbed, emitting
+    // `export const foo = ...; export const delete = ...;` would still fail
+    // to parse. The plugin must bail to a plain throw for the whole group.
+    const plugin = createBlockPlugin();
+    const code = `export { foo, x as delete } from "node:crypto";`;
+    const result = transformWith(
+      plugin,
+      code,
+      [
+        {
+          type: "ExportNamedDeclaration",
+          start: 0,
+          end: code.length,
+          source: { value: "node:crypto" },
+          specifiers: [
+            { type: "ExportSpecifier", exported: { name: "foo" } },
+            { type: "ExportSpecifier", exported: { name: "delete" } },
+          ],
+        },
+      ],
+      "/src/file.ts",
+    );
+    expect(result.code).toMatch(/^throw new Error\(/);
+    expect(result.code).not.toContain("export const foo");
+    expect(() => new Function(result.code)).not.toThrow();
+  });
+
+  test("falls back to plain throw for `export * as <reserved>` re-exports", () => {
+    const plugin = createBlockPlugin();
+    const code = `export * as delete from "node:crypto";`;
+    const result = transformWith(
+      plugin,
+      code,
+      [
+        {
+          type: "ExportAllDeclaration",
+          start: 0,
+          end: code.length,
+          source: { value: "node:crypto" },
+          exported: { name: "delete" },
+        },
+      ],
+      "/src/file.ts",
+    );
+    expect(result.code).toMatch(/^throw new Error\(/);
+    expect(() => new Function(result.code)).not.toThrow();
+  });
+
   test("rewrites namespaced re-export `export * as ns` to a stub export", () => {
     const plugin = createBlockPlugin();
     const code = `export * as crypto from "node:crypto";`;
