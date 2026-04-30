@@ -1,7 +1,7 @@
 import { dirname, isAbsolute, matchesGlob, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isBlockedModule, getBlockedMessage } from "./blocked-modules";
-import type { Plugin, ResolvedConfig } from "vite";
+import type { Plugin } from "vitest/config";
 
 const DEFAULT_TEST_INCLUDE = ["**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}"];
 
@@ -168,9 +168,9 @@ export function createBlockPlugin(): Plugin {
   return {
     name: "tailor-runtime-block-node",
 
-    configResolved(config: ResolvedConfig) {
+    configResolved(config) {
       const testConfig = (
-        config as ResolvedConfig & {
+        config as typeof config & {
           test?: {
             include?: string[];
             setupFiles?: string | string[];

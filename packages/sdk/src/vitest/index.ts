@@ -1,5 +1,5 @@
 import { createBlockPlugin, createEnvironmentPlugin } from "./plugin";
-import type { Plugin } from "vite";
+import type { Plugin } from "vitest/config";
 
 /**
  * Creates Vitest plugins that emulate the Tailor Platform function runtime environment.
