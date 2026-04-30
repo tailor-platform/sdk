@@ -712,10 +712,18 @@ function mockEncodings(): string[] {
 }
 
 class MockIconv {
-  constructor(_fromEncoding: string, _toEncoding: string) {}
+  #fromEncoding: string;
+  #toEncoding: string;
 
-  convert(_input: string | Uint8Array | ArrayBuffer): string | Uint8Array {
-    return "";
+  constructor(fromEncoding: string, toEncoding: string) {
+    this.#fromEncoding = fromEncoding;
+    this.#toEncoding = toEncoding;
+  }
+
+  convert(input: string | Uint8Array | ArrayBuffer): string | Uint8Array {
+    return resolveIconvCall("convert", [input, this.#fromEncoding, this.#toEncoding]) as
+      | string
+      | Uint8Array;
   }
 }
 
@@ -822,19 +830,64 @@ const mockTailordbFile = {
     fieldName: string,
     recordId: string,
   ): Promise<AsyncIterableIterator<unknown> & { close(): Promise<void> }> {
-    resolveFileCall("openDownloadStream", namespace, typeName, fieldName, recordId);
-    const iterator: AsyncIterableIterator<unknown> & { close(): Promise<void> } = {
+    const resolved = resolveFileCall(
+      "openDownloadStream",
+      namespace,
+      typeName,
+      fieldName,
+      recordId,
+    );
+    return Promise.resolve(toFileStream(resolved));
+  },
+};
+
+type FileStream = AsyncIterableIterator<unknown> & { close(): Promise<void> };
+
+function toFileStream(value: unknown): FileStream {
+  // Already a complete stream-like object: pass through.
+  if (
+    value !== null &&
+    typeof value === "object" &&
+    Symbol.asyncIterator in value &&
+    typeof (value as { close?: unknown }).close === "function"
+  ) {
+    return value as FileStream;
+  }
+  // Iterable (array, sync iterator, etc.): wrap as a chunked async iterator
+  // so `fileMock.enqueueResult([chunk1, chunk2])` controls stream contents.
+  if (
+    value !== null &&
+    typeof value === "object" &&
+    (Symbol.iterator in value || Symbol.asyncIterator in value)
+  ) {
+    const source = value as Iterable<unknown> | AsyncIterable<unknown>;
+    const inner =
+      Symbol.asyncIterator in source
+        ? (source as AsyncIterable<unknown>)[Symbol.asyncIterator]()
+        : (source as Iterable<unknown>)[Symbol.iterator]();
+    const stream: FileStream = {
       async next() {
-        return { done: true as const, value: undefined };
+        const r = await inner.next();
+        return r.done ? { done: true as const, value: undefined } : r;
       },
       async close() {},
       [Symbol.asyncIterator]() {
-        return iterator;
+        return stream;
       },
     };
-    return Promise.resolve(iterator);
-  },
-};
+    return stream;
+  }
+  const empty: FileStream = {
+    async next() {
+      return { done: true as const, value: undefined };
+    },
+    async close() {},
+    [Symbol.asyncIterator]() {
+      return empty;
+    },
+  };
+  return empty;
+}
 
 // ---------------------------------------------------------------------------
 // Error class mocks
