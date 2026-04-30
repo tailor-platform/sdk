@@ -104,6 +104,13 @@ interface MockState {
 
 export const STATE_KEY = "__tailorMockState";
 
+// Sentinel set by the tailor-runtime environment in injectMocks() and cleared
+// in cleanupMocks(). Distinct from STATE_KEY, which is created lazily by
+// getState() whenever a mock helper runs (even from a non-tailor-runtime
+// project that happens to import the mocks). Use this flag to detect whether
+// the environment itself is active.
+export const RUNTIME_FLAG_KEY = "__tailorRuntimeActive";
+
 function getState(): MockState {
   const g = globalThis as Record<string, unknown>;
   if (!g[STATE_KEY]) {
@@ -1027,8 +1034,11 @@ class TailorDBFileErrorMock extends Error {
 export function injectMocks(global: typeof globalThis): void {
   const g = global as Record<string, unknown>;
 
-  // Ensure fresh state
+  // Ensure fresh state and mark the environment as active so setup.ts can
+  // distinguish "tailor-runtime is selected" from "some test code happened
+  // to read a mock helper and lazily created STATE_KEY".
   g[STATE_KEY] = createDefaultState();
+  g[RUNTIME_FLAG_KEY] = true;
 
   g.tailordb = {
     Client: MockTailordbClient,
@@ -1081,4 +1091,5 @@ export function cleanupMocks(global: typeof globalThis): void {
   delete g.TailorErrorMessage;
   delete g.TailorDBFileError;
   delete g[STATE_KEY];
+  delete g[RUNTIME_FLAG_KEY];
 }

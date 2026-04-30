@@ -1,5 +1,5 @@
 import * as globals from "globals";
-import { STATE_KEY, injectMocks, cleanupMocks } from "./mock";
+import { STATE_KEY, RUNTIME_FLAG_KEY, injectMocks, cleanupMocks } from "./mock";
 
 // Normalize the `globals` module shape across CJS/ESM interop so the
 // whitelist build doesn't crash if the default export is unavailable or
@@ -23,8 +23,11 @@ const ALLOWED_GLOBALS = new Set([
   ...Object.keys(globalsMap.builtin ?? {}),
   ...Object.keys(globalsMap["shared-node-browser"] ?? {}),
 
-  // Mock state key (used by setup.ts to detect tailor-runtime environment)
+  // Mock state key (lazily populated by mock helpers) and the
+  // environment-active flag (set in injectMocks, used by setup.ts to detect
+  // the tailor-runtime environment).
   STATE_KEY,
+  RUNTIME_FLAG_KEY,
 
   // Used by Vitest internally — not in the platform runtime, but removing breaks the test runner
   "process",

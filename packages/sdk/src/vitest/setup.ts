@@ -7,11 +7,12 @@
  * they are only removed during user test code execution.
  *
  * This file is auto-injected by tailorRuntime() but only activates when
- * the tailor-runtime environment is active (detected via __tailorMockState).
+ * the tailor-runtime environment is active (detected via __tailorRuntimeActive,
+ * a flag set by injectMocks() during environment setup).
  */
 import { pathToFileURL } from "node:url";
 import { afterEach, beforeAll, beforeEach } from "vitest";
-import { STATE_KEY, secretmanagerMock } from "./mock";
+import { RUNTIME_FLAG_KEY, secretmanagerMock } from "./mock";
 
 // Globals that Vitest internals depend on but don't exist in the platform runtime.
 // Removed before each test, restored after.
@@ -22,7 +23,7 @@ type SavedGlobals = Record<string, PropertyDescriptor | undefined>;
 let saved: SavedGlobals = {};
 
 function isTailorRuntime(): boolean {
-  return STATE_KEY in globalThis;
+  return RUNTIME_FLAG_KEY in globalThis;
 }
 
 // Load secrets from tailor.config.ts if config path is provided via env var
