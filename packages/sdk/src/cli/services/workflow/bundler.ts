@@ -336,7 +336,7 @@ async function bundleSingleJob(
         transform: {
           filter: {
             id: {
-              include: [/\.ts$/, /\.js$/],
+              include: [/\.(ts|mts|cts|js|mjs|cjs)$/],
             },
           },
           handler(code, id) {
