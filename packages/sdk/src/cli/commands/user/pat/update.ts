@@ -1,9 +1,9 @@
-import ml from "multiline-ts";
 import { arg } from "politty";
 import { z } from "zod";
 import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { fetchLatestToken, readPlatformConfig } from "@/cli/shared/context";
+import ml from "../../../../utils/multiline";
 import { getScopesFromWriteFlag, printCreatedToken } from "./transform";
 
 export const updateCommand = defineAppCommand({

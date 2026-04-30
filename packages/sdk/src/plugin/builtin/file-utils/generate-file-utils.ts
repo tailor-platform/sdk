@@ -1,4 +1,4 @@
-import multiline from "multiline-ts";
+import multiline from "../../../utils/multiline";
 import type { FileUtilMetadata } from "./types";
 
 /**

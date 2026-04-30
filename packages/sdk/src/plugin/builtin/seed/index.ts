@@ -1,5 +1,5 @@
-import ml from "multiline-ts";
 import * as path from "pathe";
+import ml from "../../../utils/multiline";
 import {
   processIdpUser,
   generateIdpUserSchemaFile,

@@ -1,5 +1,4 @@
 import * as fs from "node:fs";
-import ml from "multiline-ts";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
@@ -14,6 +13,7 @@ import {
   serializeTriggerContext,
   type TriggerContext,
 } from "@/cli/shared/trigger-context";
+import ml from "../../../utils/multiline";
 import { loadResolver } from "./loader";
 
 interface ResolverInfo {

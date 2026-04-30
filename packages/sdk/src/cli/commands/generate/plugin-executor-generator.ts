@@ -7,7 +7,6 @@
 
 import * as fs from "node:fs";
 import { createRequire } from "node:module";
-import ml from "multiline-ts";
 import * as path from "pathe";
 import { logger, styles } from "@/cli/shared/logger";
 import {
@@ -23,6 +22,7 @@ import {
   type PluginInjectMap,
   type PluginExecutorContext,
 } from "@/types/plugin";
+import ml from "../../../utils/multiline";
 import type {
   PluginExecutorInfoExtended,
   PluginTypeGenerationResult,

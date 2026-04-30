@@ -1,10 +1,10 @@
-import ml from "multiline-ts";
 import {
   isPluginGeneratedType,
   type PluginGeneratedTypeSource,
   type TailorDBType,
   type TypeSourceInfoEntry,
 } from "@/types/tailordb";
+import ml from "../../../utils/multiline";
 import type { LinesDbMetadata } from "./types";
 import type { ForeignKeyDefinition, IndexDefinition } from "@toiroakr/lines-db";
 
