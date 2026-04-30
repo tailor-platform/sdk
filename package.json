@@ -33,7 +33,7 @@
     "eslint-import-resolver-typescript": "4.4.4",
     "eslint-plugin-import-x": "4.16.2",
     "globals": "17.5.0",
-    "knip": "6.6.3",
+    "knip": "6.7.0",
     "lefthook": "2.1.6",
     "oxfmt": "0.46.0",
     "pkg-pr-new": "0.0.66",
