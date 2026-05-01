@@ -1,7 +1,13 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { createChangeSet } from "./change-set";
-import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
+import {
+  buildMetaRequest,
+  hasMatchingSdkVersion,
+  isOwnedByApp,
+  sdkNameLabelKey,
+  type WithLabel,
+} from "./label";
 import { hashValue, loadSecretsState, saveSecretsState } from "./secrets-state";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
@@ -104,26 +110,27 @@ export async function planSecretManager(context: PlanContext) {
       const existing = existingVaults[vaultName];
 
       if (existing) {
-        const metaRequest = await buildMetaRequest(
-          vaultTrn(workspaceId, vaultName),
-          application.name,
-        );
-        if (!existing.label) {
-          unmanaged.push({
-            resourceType: "Secret Manager vault",
-            resourceName: vaultName,
-          });
-        } else if (existing.label !== application.name) {
-          conflicts.push({
-            resourceType: "Secret Manager vault",
-            resourceName: vaultName,
-            currentOwner: existing.label,
-          });
+        const metaRequest = await buildMetaRequest({
+          trn: vaultTrn(workspaceId, vaultName),
+          appName: application.name,
+          appId: application.id,
+        });
+        const owned = isOwnedByApp(existing.allLabels, application.name, application.id);
+        if (!owned) {
+          if (!existing.label) {
+            unmanaged.push({
+              resourceType: "Secret Manager vault",
+              resourceName: vaultName,
+            });
+          } else {
+            conflicts.push({
+              resourceType: "Secret Manager vault",
+              resourceName: vaultName,
+              currentOwner: existing.label,
+            });
+          }
         }
-        if (
-          existing.label === application.name &&
-          hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)
-        ) {
+        if (owned && hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)) {
           vaultChangeSet.unchanged.push({ name: vaultName });
         } else {
           vaultChangeSet.updates.push({
@@ -212,10 +219,11 @@ export async function planSecretManager(context: PlanContext) {
   for (const [name, entry] of Object.entries(existingVaults)) {
     if (!entry) continue;
     const label = entry.label;
-    if (label && label !== application.name) {
+    const owned = isOwnedByApp(entry.allLabels, application.name, application.id);
+    if (label && !owned) {
       resourceOwners.add(label);
     }
-    if (label === application.name) {
+    if (owned) {
       // Delete secrets inside the vault before deleting the vault itself
       const secrets = await fetchAll(async (pageToken, maxPageSize) => {
         try {
@@ -281,10 +289,11 @@ export async function applySecretManager(
           secretmanagerVaultName: create.name,
         });
         if (application) {
-          const metaRequest = await buildMetaRequest(
-            vaultTrn(create.workspaceId, create.name),
-            application.name,
-          );
+          const metaRequest = await buildMetaRequest({
+            trn: vaultTrn(create.workspaceId, create.name),
+            appName: application.name,
+            appId: application.id,
+          });
           await client.setMetadata(metaRequest);
         }
       }),
@@ -294,10 +303,11 @@ export async function applySecretManager(
     if (application) {
       await Promise.all(
         vaultChangeSet.updates.map(async (update) => {
-          const metaRequest = await buildMetaRequest(
-            vaultTrn(update.workspaceId, update.name),
-            application.name,
-          );
+          const metaRequest = await buildMetaRequest({
+            trn: vaultTrn(update.workspaceId, update.name),
+            appName: application.name,
+            appId: application.id,
+          });
           await client.setMetadata(metaRequest);
         }),
       );

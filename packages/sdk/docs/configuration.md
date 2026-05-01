@@ -19,6 +19,7 @@ For service-specific documentation, see:
 import { defineConfig } from "@tailor-platform/sdk";
 
 export default defineConfig({
+  // id: "app-<uuid>" — written here automatically on first run; do not edit
   name: "my-app",
   cors: ["https://example.com"],
   allowedIpAddresses: ["192.168.1.0/24"],
@@ -27,6 +28,8 @@ export default defineConfig({
 ```
 
 **Name**: Set the application name.
+
+**Id (auto-managed)**: On first `apply` (or `generate`), the SDK injects an `id: "app-<uuid>"` field into your `defineConfig({...})` call and commits it to `tailor.config.ts`. This stable id is stamped onto every managed resource as the `sdk-app-id` metadata label so the SDK can recognize ownership across renames — change `name` (or any resource name) and the next apply will delete the old resources and create the new ones cleanly. Treat the generated id like a lock file entry: keep it under version control, do not edit it by hand. If the field is missing, the SDK will regenerate it on the next run. If `tailor.config.ts` is just a wrapper that re-exports `defineConfig` from another file, the SDK injects the id into that file instead.
 
 **CORS**: Specify CORS settings as an array. You can also include Static Website URL references (e.g. `website.url`) in this array; see [Static Website](./services/staticwebsite.md).
 

@@ -26,7 +26,13 @@ import {
   type GroupedDisplayEntry,
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
-import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
+import {
+  buildMetaRequest,
+  hasMatchingSdkVersion,
+  isOwnedByApp,
+  sdkNameLabelKey,
+  type WithLabel,
+} from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
 import type { Application } from "@/cli/services/application";
@@ -130,24 +136,31 @@ export async function planExecutor(context: PlanContext) {
   const executors = forRemoval ? {} : ((await application.executorService?.loadExecutors()) ?? {});
   for (const executor of Object.values(executors)) {
     const existing = existingExecutors[executor.name];
-    const metaRequest = await buildMetaRequest(trn(workspaceId, executor.name), application.name);
+    const metaRequest = await buildMetaRequest({
+      trn: trn(workspaceId, executor.name),
+      appName: application.name,
+      appId: application.id,
+    });
     const desiredExecutor = protoExecutor(application, executor);
     if (existing) {
-      if (!existing.label) {
-        unmanaged.push({
-          resourceType: "Executor",
-          resourceName: executor.name,
-        });
-      } else if (existing.label !== application.name) {
-        conflicts.push({
-          resourceType: "Executor",
-          resourceName: executor.name,
-          currentOwner: existing.label,
-        });
+      const owned = isOwnedByApp(existing.allLabels, application.name, application.id);
+      if (!owned) {
+        if (!existing.label) {
+          unmanaged.push({
+            resourceType: "Executor",
+            resourceName: executor.name,
+          });
+        } else {
+          conflicts.push({
+            resourceType: "Executor",
+            resourceName: executor.name,
+            currentOwner: existing.label,
+          });
+        }
       }
 
       if (
-        existing.label === application.name &&
+        owned &&
         hasMatchingSdkVersion(existing.allLabels, metaRequest.labels) &&
         areExecutorsEqual(existing.resource, desiredExecutor)
       ) {
@@ -175,12 +188,13 @@ export async function planExecutor(context: PlanContext) {
     }
   }
   Object.entries(existingExecutors).forEach(([name]) => {
-    const label = existingExecutors[name]?.label;
-    if (label && label !== application.name) {
+    const entry = existingExecutors[name];
+    const label = entry?.label;
+    const owned = isOwnedByApp(entry?.allLabels, application.name, application.id);
+    if (label && !owned) {
       resourceOwners.add(label);
     }
-    // Only delete executors managed by this application
-    if (label === application.name) {
+    if (owned) {
       changeSet.deletes.push({
         name,
         request: {

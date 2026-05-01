@@ -4,7 +4,13 @@ import { AuthConnection_Type } from "@tailor-proto/tailor/v1/auth_resource_pb";
 import { type AuthService } from "@/cli/services/auth/service";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { createChangeSet } from "./change-set";
-import { buildMetaRequest, sdkNameLabelKey, trnPrefix, type WithLabel } from "./label";
+import {
+  buildMetaRequest,
+  isOwnedByApp,
+  sdkNameLabelKey,
+  trnPrefix,
+  type WithLabel,
+} from "./label";
 import { hashValue, loadSecretsState, saveSecretsState } from "./secrets-state";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase } from "@/cli/commands/apply/apply";
@@ -109,6 +115,7 @@ function hasNonSecretFieldChanged(
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
  * @param appName - Application name for ownership
+ * @param appId - Stable application id (when managed by SDK)
  * @param auths - Auth services with connection configs
  * @returns Planned changes for auth connections
  */
@@ -116,6 +123,7 @@ export async function planAuthConnections(
   client: OperatorClient,
   workspaceId: string,
   appName: string,
+  appId: string | undefined,
   auths: ReadonlyArray<Readonly<AuthService>>,
 ) {
   const changeSet = createChangeSet<CreateConnection, never, DeleteConnection, ReplaceConnection>(
@@ -166,6 +174,7 @@ export async function planAuthConnections(
         existingConnections[resource.name] = {
           resource,
           label: metadata?.labels[sdkNameLabelKey],
+          allLabels: metadata?.labels,
         };
       } catch (error) {
         if (error instanceof ConnectError && error.code === Code.InvalidArgument) {
@@ -187,21 +196,28 @@ export async function planAuthConnections(
   for (const [name, config] of Object.entries(desiredConnections)) {
     const existing = existingConnections[name];
     const metaRequest = metadataSupported
-      ? await buildMetaRequest(connectionTrn(workspaceId, name), appName)
+      ? await buildMetaRequest({
+          trn: connectionTrn(workspaceId, name),
+          appName,
+          appId,
+        })
       : undefined;
 
     if (existing) {
-      if (metadataSupported && !existing.label) {
-        unmanaged.push({
-          resourceType: "Auth connection",
-          resourceName: name,
-        });
-      } else if (existing.label && existing.label !== appName) {
-        conflicts.push({
-          resourceType: "Auth connection",
-          resourceName: name,
-          currentOwner: existing.label,
-        });
+      const owned = isOwnedByApp(existing.allLabels, appName, appId);
+      if (!owned) {
+        if (metadataSupported && !existing.label) {
+          unmanaged.push({
+            resourceType: "Auth connection",
+            resourceName: name,
+          });
+        } else if (existing.label) {
+          conflicts.push({
+            resourceType: "Auth connection",
+            resourceName: name,
+            currentOwner: existing.label,
+          });
+        }
       }
 
       // Check if config has changed
@@ -233,12 +249,13 @@ export async function planAuthConnections(
   // Remaining existing connections owned by this app should be deleted
   for (const [name, entry] of Object.entries(existingConnections)) {
     if (!entry) continue;
-    if (entry.label && entry.label !== appName) {
+    const owned = isOwnedByApp(entry.allLabels, appName, appId);
+    if (entry.label && !owned) {
       resourceOwners.add(entry.label);
       continue;
     }
     // Delete if owned by this app, or if metadata is not supported (no ownership tracking)
-    if (entry.label === appName || !metadataSupported) {
+    if (owned || !metadataSupported) {
       changeSet.deletes.push({
         name,
         request: { workspaceId, connectionName: name },

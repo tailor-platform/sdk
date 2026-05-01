@@ -34,7 +34,7 @@ import {
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
-import { buildMetaRequest, sdkNameLabelKey, type WithLabel } from "./label";
+import { buildMetaRequest, isOwnedByApp, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
 import type { AuthAttributeValue } from "@/types/auth";
@@ -291,7 +291,14 @@ export async function planAuth(context: PlanContext) {
     conflicts,
     unmanaged,
     resourceOwners,
-  } = await planServices(client, workspaceId, application.name, auths, forceApplyAll);
+  } = await planServices(
+    client,
+    workspaceId,
+    application.name,
+    application.id,
+    auths,
+    forceApplyAll,
+  );
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
   const expectedLocalWebsites = new Set(
     application.staticWebsiteServices.map((website) => website.name),
@@ -322,7 +329,7 @@ export async function planAuth(context: PlanContext) {
     ),
     planSCIMConfigs(client, workspaceId, auths, deletedServices),
     planSCIMResources(client, workspaceId, auths, deletedServices),
-    planAuthConnections(client, workspaceId, application.name, auths),
+    planAuthConnections(client, workspaceId, application.name, application.id, auths),
   ]);
 
   return {
@@ -369,6 +376,7 @@ async function planServices(
   client: OperatorClient,
   workspaceId: string,
   appName: string,
+  appId: string | undefined,
   auths: ReadonlyArray<Readonly<AuthService>>,
   forceApplyAll = false,
 ) {
@@ -404,6 +412,7 @@ async function planServices(
       existingServices[resource.namespace.name] = {
         resource,
         label: metadata?.labels[sdkNameLabelKey],
+        allLabels: metadata?.labels,
       };
     }),
   );
@@ -411,31 +420,37 @@ async function planServices(
   for (const auth of auths) {
     const { parsedConfig: config } = auth;
     const existing = existingServices[config.name];
-    const metaRequest = await buildMetaRequest(trn(workspaceId, config.name), appName);
+    const metaRequest = await buildMetaRequest({
+      trn: trn(workspaceId, config.name),
+      appName,
+      appId,
+    });
     const request = {
       workspaceId,
       namespaceName: config.name,
       publishSessionEvents: config.publishSessionEvents,
     };
     if (existing) {
-      const isManagedByApp = existing.label === appName;
-      if (!existing.label) {
-        unmanaged.push({
-          resourceType: "Auth service",
-          resourceName: config.name,
-        });
-      } else if (existing.label !== appName) {
-        conflicts.push({
-          resourceType: "Auth service",
-          resourceName: config.name,
-          currentOwner: existing.label,
-        });
+      const owned = isOwnedByApp(existing.allLabels, appName, appId);
+      if (!owned) {
+        if (!existing.label) {
+          unmanaged.push({
+            resourceType: "Auth service",
+            resourceName: config.name,
+          });
+        } else {
+          conflicts.push({
+            resourceType: "Auth service",
+            resourceName: config.name,
+            currentOwner: existing.label,
+          });
+        }
       }
 
       if (
         !forceApplyAll &&
         existing.resource.publishSessionEvents === (config.publishSessionEvents ?? false) &&
-        isManagedByApp
+        owned
       ) {
         changeSet.unchanged.push({ name: config.name });
       } else {
@@ -455,12 +470,13 @@ async function planServices(
     }
   }
   Object.entries(existingServices).forEach(([namespaceName]) => {
-    const label = existingServices[namespaceName]?.label;
-    if (label && label !== appName) {
+    const entry = existingServices[namespaceName];
+    const label = entry?.label;
+    const owned = isOwnedByApp(entry?.allLabels, appName, appId);
+    if (label && !owned) {
       resourceOwners.add(label);
     }
-    // Only delete services managed by this application
-    if (label === appName) {
+    if (owned) {
       changeSet.deletes.push({
         name: namespaceName,
         request: {

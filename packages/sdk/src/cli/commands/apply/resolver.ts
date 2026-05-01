@@ -28,7 +28,13 @@ import {
   type GroupedDisplayEntry,
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
-import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
+import {
+  buildMetaRequest,
+  hasMatchingSdkVersion,
+  isOwnedByApp,
+  sdkNameLabelKey,
+  type WithLabel,
+} from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
 import type { Executor } from "@/types/executor.generated";
@@ -120,7 +126,7 @@ export async function planPipeline(context: PlanContext) {
     conflicts,
     unmanaged,
     resourceOwners,
-  } = await planServices(client, workspaceId, application.name, pipelines);
+  } = await planServices(client, workspaceId, application.name, application.id, pipelines);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
   const { changeSet: resolverChangeSet } = await planResolvers(
     client,
@@ -169,6 +175,7 @@ async function planServices(
   client: OperatorClient,
   workspaceId: string,
   appName: string,
+  appId: string | undefined,
   pipelines: ReadonlyArray<Readonly<ResolverService>>,
 ) {
   const changeSet = createChangeSet<CreateService, UpdateService, DeleteService>(
@@ -212,25 +219,29 @@ async function planServices(
 
   for (const pipeline of pipelines) {
     const existing = existingServices[pipeline.namespace];
-    const metaRequest = await buildMetaRequest(trn(workspaceId, pipeline.namespace), appName);
+    const metaRequest = await buildMetaRequest({
+      trn: trn(workspaceId, pipeline.namespace),
+      appName,
+      appId,
+    });
     if (existing) {
-      if (!existing.label) {
-        unmanaged.push({
-          resourceType: "Pipeline service",
-          resourceName: pipeline.namespace,
-        });
-      } else if (existing.label !== appName) {
-        conflicts.push({
-          resourceType: "Pipeline service",
-          resourceName: pipeline.namespace,
-          currentOwner: existing.label,
-        });
+      const owned = isOwnedByApp(existing.allLabels, appName, appId);
+      if (!owned) {
+        if (!existing.label) {
+          unmanaged.push({
+            resourceType: "Pipeline service",
+            resourceName: pipeline.namespace,
+          });
+        } else {
+          conflicts.push({
+            resourceType: "Pipeline service",
+            resourceName: pipeline.namespace,
+            currentOwner: existing.label,
+          });
+        }
       }
 
-      if (
-        existing.label === appName &&
-        hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)
-      ) {
+      if (owned && hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)) {
         changeSet.unchanged.push({ name: pipeline.namespace });
       } else {
         changeSet.updates.push({
@@ -255,12 +266,14 @@ async function planServices(
     }
   }
   Object.entries(existingServices).forEach(([namespaceName]) => {
-    const label = existingServices[namespaceName]?.label;
-    if (label && label !== appName) {
+    const entry = existingServices[namespaceName];
+    const label = entry?.label;
+    const owned = isOwnedByApp(entry?.allLabels, appName, appId);
+    if (label && !owned) {
       resourceOwners.add(label);
     }
-    // Only delete services managed by this application
-    if (label === appName) {
+    // Only delete services managed by this application (by name or stable id)
+    if (owned) {
       changeSet.deletes.push({
         name: namespaceName,
         request: {

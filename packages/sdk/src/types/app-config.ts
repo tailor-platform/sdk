@@ -40,6 +40,12 @@ export interface AppConfig<
 > {
   /** Application name (required). */
   name: string;
+  /**
+   * Stable identifier used to track the application across renames.
+   * Managed by the SDK: auto-generated and written into `tailor.config.ts`
+   * on first `apply`. Delete this field to start a new identity.
+   */
+  id?: string;
   /** Environment variables accessible via `context.env` in resolvers and via the second argument `{ env }` in workflow job bodies. */
   env?: Env;
   /** Allowed CORS origins. Must be an array of strings, e.g. `["https://example.com"]`. */

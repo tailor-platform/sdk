@@ -41,6 +41,7 @@ export type SecretVault = {
 
 export type Application = {
   readonly name: string;
+  readonly id: string | undefined;
   readonly config: AppConfig;
   readonly subgraphs: ReadonlyArray<{ Type: string; Name: string }>;
   readonly tailorDBServices: ReadonlyArray<TailorDBService>;
@@ -296,6 +297,7 @@ function buildApplication(params: {
 }): Application {
   const application: Application = {
     name: params.config.name,
+    id: params.config.id,
     config: params.config,
     subgraphs: [
       ...params.tailordbResult.subgraphs,

@@ -6,8 +6,9 @@ import { hashFile } from "@/cli/cache/hasher";
 import { createCacheManager } from "@/cli/cache/manager";
 import { loadApplication, type Application } from "@/cli/services/application";
 import { initOperatorClient } from "@/cli/shared/client";
+import { ensureConfigId } from "@/cli/shared/config-id-injector";
 import { loadConfig } from "@/cli/shared/config-loader";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
+import { loadAccessToken, loadConfigPath, loadWorkspaceId } from "@/cli/shared/context";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { logger, styles } from "@/cli/shared/logger";
 import { readPackageJson } from "@/cli/shared/package-json";
@@ -166,7 +167,11 @@ async function shouldForceApplyAll(
   functionEntries: ReadonlyArray<{ name: string }>,
 ) {
   const desiredLabels = (
-    await buildMetaRequest(applicationTrn(workspaceId, application.name), application.name)
+    await buildMetaRequest({
+      trn: applicationTrn(workspaceId, application.name),
+      appName: application.name,
+      appId: application.id,
+    })
   ).labels;
   const candidateTrns = new Set<string>();
 
@@ -408,9 +413,16 @@ export async function apply(options?: ApplyOptions) {
     const { config, application, workflowBuildResult, bundledScripts, buildOnly } = await withSpan(
       "build",
       async () => {
-        const { config, plugins } = await withSpan("build.loadConfig", () =>
-          loadConfig(options?.configPath),
-        );
+        const { config, plugins } = await withSpan("build.loadConfig", async () => {
+          const foundPath = loadConfigPath(options?.configPath);
+          if (foundPath) {
+            const resolvedPath = path.resolve(process.cwd(), foundPath);
+            if (fs.existsSync(resolvedPath)) {
+              await ensureConfigId(resolvedPath);
+            }
+          }
+          return loadConfig(options?.configPath);
+        });
 
         const dryRun = options?.dryRun ?? false;
         const buildOnly =
@@ -539,7 +551,13 @@ export async function apply(options?: ApplyOptions) {
         idpUserTriggerTargets,
       };
       const functionRegistry = await withSpan("plan.functionRegistry", () =>
-        planFunctionRegistry(client, workspaceId, application.name, functionEntries),
+        planFunctionRegistry(
+          client,
+          workspaceId,
+          application.name,
+          application.id,
+          functionEntries,
+        ),
       );
       const unchangedWorkflowJobs = new Set(
         functionRegistry.changeSet.unchanged
@@ -560,6 +578,7 @@ export async function apply(options?: ApplyOptions) {
               client,
               workspaceId,
               application.name,
+              application.id,
               workflowService?.workflows ?? {},
               workflowBuildResult?.mainJobDeps ?? {},
               unchangedWorkflowJobs,
