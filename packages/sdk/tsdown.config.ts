@@ -27,9 +27,12 @@ export default defineConfig({
     "src/plugin/builtin/file-utils/index.ts",
     "src/plugin/builtin/seed/index.ts",
     "src/seed/index.ts",
+    "src/vitest/index.ts",
+    "src/vitest/environment.ts",
+    "src/vitest/setup.ts",
   ],
   format: ["esm"],
-  target: "node18",
+  target: "node22",
   platform: "node",
   clean: true,
   dts: true,
@@ -43,6 +46,7 @@ export default defineConfig({
   banner: {
     dts: '/// <reference types="@tailor-platform/function-types" />',
   },
+  external: ["vite", "vitest"], // peer dependencies: prevent bundling, resolve at runtime
   sourcemap: true,
   plugins: [
     yamlText(),

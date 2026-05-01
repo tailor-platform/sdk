@@ -73,6 +73,16 @@
       "types": "./dist/seed/index.d.mts",
       "import": "./dist/seed/index.mjs",
       "default": "./dist/seed/index.mjs"
+    },
+    "./vitest": {
+      "types": "./dist/vitest/index.d.mts",
+      "import": "./dist/vitest/index.mjs",
+      "default": "./dist/vitest/index.mjs"
+    },
+    "./vitest/environment": {
+      "types": "./dist/vitest/environment.d.mts",
+      "import": "./dist/vitest/environment.mjs",
+      "default": "./dist/vitest/environment.mjs"
     }
   },
   "scripts": {
@@ -173,5 +183,21 @@
     "typescript-eslint": "8.59.0",
     "vitest": "4.1.5",
     "zinfer": "0.1.8"
+  },
+  "peerDependencies": {
+    "vite": "^6.0.0 || ^7.0.0 || ^8.0.0",
+    "vitest": ">=4"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    },
+    "vitest": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "bun": ">=1.2.0",
+    "node": ">=22"
   }
 }

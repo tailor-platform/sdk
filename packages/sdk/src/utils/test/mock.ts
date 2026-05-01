@@ -52,6 +52,7 @@ const GlobalThis = globalThis as TailordbGlobal & TailorErrorsGlobal;
 
 /**
  * Sets up a mock for `globalThis.tailordb.Client` used in bundled resolver/executor tests.
+ * @deprecated Use `tailordbMock` from `@tailor-platform/sdk/vitest` with the `tailor-runtime` environment instead.
  * @param resolver - Optional function to resolve query results. Defaults to returning empty arrays.
  * @returns Object containing arrays of executed queries and created clients for assertions.
  */
@@ -95,6 +96,7 @@ export function setupTailordbMock(resolver: QueryResolver = () => []): {
  * Sets up a mock for `globalThis.tailor.workflow.triggerJobFunction` used in bundled workflow tests.
  * `wait`/`resolve` are stubbed to throw a helpful error directing to `setupWaitPointMock()`,
  * so mistakenly calling wait without wait-point mocks produces a clear message instead of a TypeError.
+ * @deprecated Use `workflowMock` from `@tailor-platform/sdk/vitest` with the `tailor-runtime` environment instead.
  * @param handler - Function that handles triggered job calls and returns results.
  * @returns Object containing an array of triggered jobs for assertions.
  */
@@ -128,6 +130,7 @@ export function setupWorkflowMock(handler: JobHandler): {
 /**
  * Sets up a mock for `globalThis.tailor.context.getInvoker` used in bundled
  * resolver/executor/workflow tests.
+ * @deprecated With the `tailor-runtime` environment from `@tailor-platform/sdk/vitest`, drive the invoker via `vi.spyOn(globalThis.tailor.context, "getInvoker").mockReturnValue(...)` for bundled tests, or pass `invoker` directly to `.body()` when unit-testing resolvers/executors/workflow jobs against the TypeScript source.
  * @param invoker - The `TailorInvoker` value to return, or `null` for anonymous.
  */
 export function setupInvokerMock(invoker: TailorInvoker): void {
@@ -152,6 +155,7 @@ export function setupInvokerMock(invoker: TailorInvoker): void {
 /**
  * Sets up a mock for `globalThis.TailorErrors` used in bundled resolver tests.
  * Mimics the PF runtime's TailorErrors class that serializes errors with the `TailorErrors: ` prefix.
+ * @deprecated Use the `tailor-runtime` environment from `@tailor-platform/sdk/vitest` which auto-injects TailorErrors.
  */
 export function setupTailorErrorsMock(): void {
   GlobalThis.TailorErrors = class TailorErrors extends Error {
@@ -213,6 +217,9 @@ export function setupWaitPointMock(config?: { onWait?: WaitHandler; onResolve?: 
  * Used to test bundled output from `apply --buildOnly`.
  * @param baseDir - Base directory where bundled files are located.
  * @returns An async function that takes a relative path and returns the `main` function.
+ * @deprecated This is an SDK-internal testing helper. Bundling integrity is the SDK's responsibility,
+ * not the application's — verify your code through unit tests against the TypeScript source and
+ * E2E tests against a deployed application instead. This export will be removed in a future release.
  */
 export function createImportMain(baseDir: string): (relativePath: string) => Promise<MainFunction> {
   return async (relativePath: string): Promise<MainFunction> => {
