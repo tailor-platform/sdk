@@ -16,7 +16,286 @@
  * exposes typed wrappers that cover the same surface without relying on globals.
  */
 
-/* eslint-disable @typescript-eslint/no-namespace, jsdoc/require-param, jsdoc/require-returns, jsdoc/require-param-description */
+/* eslint-disable @typescript-eslint/no-namespace, @typescript-eslint/no-explicit-any, jsdoc/require-param, jsdoc/require-returns, jsdoc/require-param-description */
+
+// ---------------------------------------------------------------------------
+// Module-scope types (exported, non-global)
+//
+// These types describe the data shapes used by the platform runtime. The
+// `declare global` block below aliases each of them into the appropriate
+// `tailor.*` / global namespace, so callers who opt into the globals see the
+// same surface they always did. Callers who do not opt in can still import
+// these types directly via `@tailor-platform/sdk/runtime/*` — none of the
+// types below reference globals, so they are self-contained.
+// ---------------------------------------------------------------------------
+
+// --- Tailordb -------------------------------------------------------------
+
+/** Result of a single `queryObject` call against the TailorDB driver. */
+export interface TailordbQueryResult<T> {
+  rows: T[];
+  command: TailordbCommandType;
+  rowCount: number;
+}
+
+/** SQL command type recorded on a {@link TailordbQueryResult}. */
+export type TailordbCommandType =
+  | "INSERT"
+  | "DELETE"
+  | "UPDATE"
+  | "SELECT"
+  | "MOVE"
+  | "FETCH"
+  | "COPY"
+  | "CREATE";
+
+// --- TailorDB file API ---------------------------------------------------
+
+/** Upload response metadata. */
+export interface UploadMetadata {
+  fileSize: number;
+  sha256sum: string;
+}
+
+/** Download response metadata. */
+export interface DownloadMetadata {
+  contentType: string;
+  fileSize: number;
+  sha256sum: string;
+  lastUploadedAt: string;
+}
+
+/** File metadata (for `getMetadata`). */
+export interface FileMetadata {
+  contentType: string;
+  fileSize: number;
+  sha256sum: string;
+  urlPath: string;
+  lastUploadedAt?: string;
+}
+
+/** Stream metadata (first chunk). */
+export interface StreamMetadata {
+  contentType: string;
+  fileSize: number;
+  sha256sum: string;
+}
+
+/** Upload options. */
+export interface FileUploadOptions {
+  contentType?: string;
+}
+
+/** Upload response. */
+export interface FileUploadResponse {
+  metadata: UploadMetadata;
+}
+
+/** Download response. */
+export interface FileDownloadResponse {
+  data: Uint8Array;
+  metadata: DownloadMetadata;
+}
+
+/** Download-as-Base64 response. */
+export interface FileDownloadAsBase64Response {
+  data: string;
+  metadata: DownloadMetadata;
+}
+
+/** Stream chunk types. */
+export type StreamValue =
+  | { type: "metadata"; metadata: StreamMetadata }
+  | { type: "chunk"; data: Uint8Array; position: number }
+  | { type: "complete" };
+
+/** Stream iterator interface. */
+export interface FileStreamIterator extends AsyncIterableIterator<StreamValue> {
+  next(): Promise<IteratorResult<StreamValue>>;
+  close(): Promise<void>;
+}
+
+/** TailorDB File API surface. */
+export interface TailorDBFileAPI {
+  upload(
+    namespace: string,
+    typeName: string,
+    fieldName: string,
+    recordId: string,
+    data: string | ArrayBuffer | Uint8Array | number[],
+    options?: FileUploadOptions,
+  ): Promise<FileUploadResponse>;
+
+  download(
+    namespace: string,
+    typeName: string,
+    fieldName: string,
+    recordId: string,
+  ): Promise<FileDownloadResponse>;
+
+  downloadAsBase64(
+    namespace: string,
+    typeName: string,
+    fieldName: string,
+    recordId: string,
+  ): Promise<FileDownloadAsBase64Response>;
+
+  delete(namespace: string, typeName: string, fieldName: string, recordId: string): Promise<void>;
+
+  getMetadata(
+    namespace: string,
+    typeName: string,
+    fieldName: string,
+    recordId: string,
+  ): Promise<FileMetadata>;
+
+  openDownloadStream(
+    namespace: string,
+    typeName: string,
+    fieldName: string,
+    recordId: string,
+  ): Promise<FileStreamIterator>;
+}
+
+/** Error code emitted by `TailorDBFileError`. */
+export type TailorDBFileErrorCode =
+  | "INVALID_PARAMS"
+  | "INVALID_DATA_TYPE"
+  | "OPERATION_FAILED"
+  | "DELETE_FAILED"
+  | "STREAM_OPEN_FAILED"
+  | "STREAM_READ_ERROR"
+  | "STREAM_ERROR"
+  | "FILE_TOO_LARGE";
+
+/**
+ * Type-only shape of the `TailorDBFileError` runtime class. The class itself
+ * is declared globally below; this interface mirrors it so callers can use
+ * `import type { TailorDBFileError } from "@tailor-platform/sdk/runtime/file"`
+ * without depending on the global declaration.
+ */
+export interface TailorDBFileError extends Error {
+  name: "TailorDBFileError";
+  code?: TailorDBFileErrorCode;
+  cause?: unknown;
+}
+
+// --- tailor.idp -----------------------------------------------------------
+
+/** Configuration for creating an IDP Client. */
+export interface IdpClientConfig {
+  namespace: string;
+}
+
+/** User object returned from IDP operations. */
+export interface IdpUser {
+  id: string;
+  name: string;
+  disabled: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/** Query options for filtering users. */
+export interface IdpUserQuery {
+  /** Filter by user IDs */
+  ids?: string[];
+  /** Filter by user names */
+  names?: string[];
+}
+
+/** Options for listing users. */
+export interface IdpListUsersOptions {
+  /** Maximum number of users to return */
+  first?: number;
+  /** Page token for pagination */
+  after?: string;
+  /** Query filter for users */
+  query?: IdpUserQuery;
+}
+
+/** Response from listing users. */
+export interface IdpListUsersResponse {
+  users: IdpUser[];
+  nextPageToken: string | null;
+  totalCount: number;
+}
+
+/** Input for creating a new user. */
+export interface IdpCreateUserInput {
+  /** The user's name (typically email) */
+  name: string;
+  /** The user's password. If omitted, the user is created without a password (cannot log in with any password). */
+  password?: string;
+  /** Whether the user is disabled */
+  disabled?: boolean;
+}
+
+/** Input for updating an existing user. */
+export interface IdpUpdateUserInput {
+  /** The user's ID */
+  id: string;
+  /** New name for the user */
+  name?: string;
+  /** New password for the user. Cannot be used with clearPassword. */
+  password?: string;
+  /** If true, remove the user's password. Cannot be used with password. */
+  clearPassword?: boolean;
+  /** New disabled status for the user */
+  disabled?: boolean;
+}
+
+/** Input for sending a password reset email. */
+export interface IdpSendPasswordResetEmailInput {
+  /** The ID of the user */
+  userId: string;
+  /** The URI to redirect to after password reset */
+  redirectUri: string;
+  /** The sender display name. Defaults to 'Tailor Platform IdP'. */
+  fromName?: string;
+  /** The email subject line. Defaults to the localized default subject. */
+  subject?: string;
+}
+
+// --- tailor.workflow -----------------------------------------------------
+
+/**
+ * Specifies the machine user that should be used to execute the workflow.
+ * This allows workflows to run with specific authentication context.
+ */
+export interface WorkflowAuthInvoker {
+  /** The namespace where the machine user is defined */
+  namespace: string;
+  /** The name of the machine user to use for workflow execution */
+  machineUserName: string;
+}
+
+/** Options for triggering a workflow. */
+export interface WorkflowTriggerWorkflowOptions {
+  /** Optional authentication invoker to specify which machine user should execute the workflow */
+  authInvoker?: WorkflowAuthInvoker;
+}
+
+// --- tailor.context -------------------------------------------------------
+
+/** Information about the invoker of the current function execution. */
+export interface ContextInvoker {
+  /** The invoker's ID */
+  id: string;
+  /** The invoker's type */
+  type: "user" | "machine_user";
+  /** The workspace ID */
+  workspaceId: string;
+  /** The invoker's attribute IDs */
+  attributes: string[];
+  /** The invoker's attribute map */
+  attributeMap: Record<string, unknown>;
+}
+
+// ---------------------------------------------------------------------------
+// Ambient globals — alias the module-scope types into the runtime namespaces
+// ---------------------------------------------------------------------------
+
 declare global {
   namespace Tailordb {
     class Client {
@@ -26,21 +305,8 @@ declare global {
       queryObject<O>(sql: string, args?: readonly unknown[]): Promise<QueryResult<O>>;
     }
 
-    interface QueryResult<T> {
-      rows: T[];
-      command: CommandType;
-      rowCount: number;
-    }
-
-    type CommandType =
-      | "INSERT"
-      | "DELETE"
-      | "UPDATE"
-      | "SELECT"
-      | "MOVE"
-      | "FETCH"
-      | "COPY"
-      | "CREATE";
+    type QueryResult<T> = TailordbQueryResult<T>;
+    type CommandType = TailordbCommandType;
   }
 
   // eslint-disable-next-line no-var
@@ -78,7 +344,6 @@ declare global {
      * getConnectionToken returns the access token for an auth connection
      * @param connectionName
      */
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     function getConnectionToken(connectionName: string): Promise<any>;
   }
 
@@ -138,267 +403,22 @@ declare global {
     }
   }
 
-  // TailorDB File Extension Types
-
-  /**
-   * Custom error class for TailorDB File operations
-   */
+  /** Custom error class for TailorDB File operations. */
   class TailorDBFileError extends Error {
     name: "TailorDBFileError";
-    code?:
-      | "INVALID_PARAMS"
-      | "INVALID_DATA_TYPE"
-      | "OPERATION_FAILED"
-      | "DELETE_FAILED"
-      | "STREAM_OPEN_FAILED"
-      | "STREAM_READ_ERROR"
-      | "STREAM_ERROR"
-      | "FILE_TOO_LARGE";
+    code?: TailorDBFileErrorCode;
     cause?: unknown;
   }
 
-  /**
-   * Upload response metadata
-   */
-  interface UploadMetadata {
-    fileSize: number;
-    sha256sum: string;
-  }
-
-  /**
-   * Download response metadata
-   */
-  interface DownloadMetadata {
-    contentType: string;
-    fileSize: number;
-    sha256sum: string;
-    lastUploadedAt: string;
-  }
-
-  /**
-   * File metadata (for getMetadata API)
-   */
-  interface FileMetadata {
-    contentType: string;
-    fileSize: number;
-    sha256sum: string;
-    urlPath: string;
-    lastUploadedAt?: string;
-  }
-
-  /**
-   * Stream metadata (first chunk)
-   */
-  interface StreamMetadata {
-    contentType: string;
-    fileSize: number;
-    sha256sum: string;
-  }
-
-  /**
-   * Upload options interface
-   */
-  interface FileUploadOptions {
-    contentType?: string;
-  }
-
-  /**
-   * Upload response interface
-   */
-  interface FileUploadResponse {
-    metadata: UploadMetadata;
-  }
-
-  /**
-   * Download response interface
-   */
-  interface FileDownloadResponse {
-    data: Uint8Array;
-    metadata: DownloadMetadata;
-  }
-
-  /**
-   * Download as Base64 response interface
-   */
-  interface FileDownloadAsBase64Response {
-    data: string;
-    metadata: DownloadMetadata;
-  }
-
-  /**
-   * Stream chunk types
-   */
-  type StreamValue =
-    | { type: "metadata"; metadata: StreamMetadata }
-    | { type: "chunk"; data: Uint8Array; position: number }
-    | { type: "complete" };
-
-  /**
-   * Stream iterator interface
-   */
-  interface FileStreamIterator extends AsyncIterableIterator<StreamValue> {
-    next(): Promise<IteratorResult<StreamValue>>;
-    close(): Promise<void>;
-  }
-
-  /**
-   * TailorDB File API
-   */
-  interface TailorDBFileAPI {
-    /**
-     * Upload a file to TailorDB
-     */
-    upload(
-      namespace: string,
-      typeName: string,
-      fieldName: string,
-      recordId: string,
-      data: string | ArrayBuffer | Uint8Array | number[],
-      options?: FileUploadOptions,
-    ): Promise<FileUploadResponse>;
-
-    /**
-     * Download a file from TailorDB
-     * @throws {TailorDBFileError} FILE_TOO_LARGE if file exceeds 10MB - use openDownloadStream() for large files
-     */
-    download(
-      namespace: string,
-      typeName: string,
-      fieldName: string,
-      recordId: string,
-    ): Promise<FileDownloadResponse>;
-
-    /**
-     * Download a file from TailorDB as Base64 string.
-     * Unlike download which returns decoded binary data (Uint8Array),
-     * this returns the raw Base64-encoded string for use cases requiring
-     * Base64 format (e.g., embedding in JSON responses, data URIs).
-     * @throws {TailorDBFileError} FILE_TOO_LARGE if file exceeds 10MB - use openDownloadStream() for large files
-     */
-    downloadAsBase64(
-      namespace: string,
-      typeName: string,
-      fieldName: string,
-      recordId: string,
-    ): Promise<FileDownloadAsBase64Response>;
-
-    /**
-     * Delete a file from TailorDB
-     */
-    delete(namespace: string, typeName: string, fieldName: string, recordId: string): Promise<void>;
-
-    /**
-     * Get file metadata from TailorDB
-     */
-    getMetadata(
-      namespace: string,
-      typeName: string,
-      fieldName: string,
-      recordId: string,
-    ): Promise<FileMetadata>;
-
-    /**
-     * Open a download stream for large files
-     */
-    openDownloadStream(
-      namespace: string,
-      typeName: string,
-      fieldName: string,
-      recordId: string,
-    ): Promise<FileStreamIterator>;
-  }
-
   namespace tailor.idp {
-    /**
-     * Configuration for creating an IDP Client
-     */
-    interface ClientConfig {
-      namespace: string;
-    }
-
-    /**
-     * User object returned from IDP operations
-     */
-    interface User {
-      id: string;
-      name: string;
-      disabled: boolean;
-      createdAt?: string;
-      updatedAt?: string;
-    }
-
-    /**
-     * Query options for filtering users
-     */
-    interface UserQuery {
-      /** Filter by user IDs */
-      ids?: string[];
-      /** Filter by user names */
-      names?: string[];
-    }
-
-    /**
-     * Options for listing users
-     */
-    interface ListUsersOptions {
-      /** Maximum number of users to return */
-      first?: number;
-      /** Page token for pagination */
-      after?: string;
-      /** Query filter for users */
-      query?: UserQuery;
-    }
-
-    /**
-     * Response from listing users
-     */
-    interface ListUsersResponse {
-      users: User[];
-      nextPageToken: string | null;
-      totalCount: number;
-    }
-
-    /**
-     * Input for creating a new user
-     */
-    interface CreateUserInput {
-      /** The user's name (typically email) */
-      name: string;
-      /** The user's password. If omitted, the user is created without a password (cannot log in with any password). */
-      password?: string;
-      /** Whether the user is disabled */
-      disabled?: boolean;
-    }
-
-    /**
-     * Input for updating an existing user
-     */
-    interface UpdateUserInput {
-      /** The user's ID */
-      id: string;
-      /** New name for the user */
-      name?: string;
-      /** New password for the user. Cannot be used with clearPassword. */
-      password?: string;
-      /** If true, remove the user's password. Cannot be used with password. */
-      clearPassword?: boolean;
-      /** New disabled status for the user */
-      disabled?: boolean;
-    }
-
-    /**
-     * Input for sending a password reset email
-     */
-    interface SendPasswordResetEmailInput {
-      /** The ID of the user */
-      userId: string;
-      /** The URI to redirect to after password reset */
-      redirectUri: string;
-      /** The sender display name. Defaults to 'Tailor Platform IdP'. */
-      fromName?: string;
-      /** The email subject line. Defaults to the localized default subject. */
-      subject?: string;
-    }
+    type ClientConfig = IdpClientConfig;
+    type User = IdpUser;
+    type UserQuery = IdpUserQuery;
+    type ListUsersOptions = IdpListUsersOptions;
+    type ListUsersResponse = IdpListUsersResponse;
+    type CreateUserInput = IdpCreateUserInput;
+    type UpdateUserInput = IdpUpdateUserInput;
+    type SendPasswordResetEmailInput = IdpSendPasswordResetEmailInput;
 
     /**
      * IDP Client for user management operations
@@ -446,24 +466,8 @@ declare global {
   }
 
   namespace tailor.workflow {
-    /**
-     * Specifies the machine user that should be used to execute the workflow.
-     * This allows workflows to run with specific authentication context.
-     */
-    interface AuthInvoker {
-      /** The namespace where the machine user is defined */
-      namespace: string;
-      /** The name of the machine user to use for workflow execution */
-      machineUserName: string;
-    }
-
-    /**
-     * Options for triggering a workflow
-     */
-    interface TriggerWorkflowOptions {
-      /** Optional authentication invoker to specify which machine user should execute the workflow */
-      authInvoker?: AuthInvoker;
-    }
+    type AuthInvoker = WorkflowAuthInvoker;
+    type TriggerWorkflowOptions = WorkflowTriggerWorkflowOptions;
 
     /**
      * Triggers a workflow and returns its execution ID.
@@ -473,7 +477,6 @@ declare global {
      */
     function triggerWorkflow(
       workflow_name: string,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       args?: any,
       options?: TriggerWorkflowOptions,
     ): Promise<string>;
@@ -483,22 +486,17 @@ declare global {
      * @param job_name
      * @param args
      */
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     function triggerJobFunction(job_name: string, args?: any): any;
 
     /**
      * Suspends the current workflow execution and waits for an external signal to resume.
-     * The workflow will be parked in "Waiting" status until resolved via `resolve()`.
      * @param key
      * @param payload
      */
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     function wait(key: string, payload?: any): any;
 
     /**
      * Resolves a waiting workflow execution, causing it to resume.
-     * The callback receives the wait payload and must return a JSON-serializable result
-     * that will be passed back to the `wait()` caller.
      * @param executionId
      * @param key
      * @param callback
@@ -506,27 +504,12 @@ declare global {
     function resolve(
       executionId: string,
       key: string,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       callback: (waitPayload: any) => any,
     ): Promise<void>;
   }
 
   namespace tailor.context {
-    /**
-     * Information about the invoker of the current function execution.
-     */
-    interface Invoker {
-      /** The invoker's ID */
-      id: string;
-      /** The invoker's type */
-      type: "user" | "machine_user";
-      /** The workspace ID */
-      workspaceId: string;
-      /** The invoker's attribute IDs */
-      attributes: string[];
-      /** The invoker's attribute map */
-      attributeMap: Record<string, unknown>;
-    }
+    type Invoker = ContextInvoker;
 
     /**
      * Returns information about the invoker of the current function execution,

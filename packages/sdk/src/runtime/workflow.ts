@@ -11,12 +11,13 @@
  */
 
 import "./globals";
+import type { WorkflowAuthInvoker, WorkflowTriggerWorkflowOptions } from "./globals";
 
 /** {@link triggerWorkflow} option type. */
-export type AuthInvoker = tailor.workflow.AuthInvoker;
+export type AuthInvoker = WorkflowAuthInvoker;
 
 /** {@link triggerWorkflow} option bag. */
-export type TriggerWorkflowOptions = tailor.workflow.TriggerWorkflowOptions;
+export type TriggerWorkflowOptions = WorkflowTriggerWorkflowOptions;
 
 /**
  * Triggers a workflow and returns its execution ID.

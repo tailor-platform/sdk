@@ -10,17 +10,12 @@
  * const secret = await secretmanager.getSecret("my-vault", "API_KEY");
  * const client = new idp.Client({ namespace: "my-namespace" });
  *
- * Importing this module also makes the global `tailor.*` / `tailordb` types
- * available, so existing code that calls `tailor.iconv.convert(...)` directly
- * continues to type-check without any additional `@tailor-platform/sdk/runtime/globals`
- * import.
+ * Importing this entry does NOT activate the ambient `tailor.*` / `tailordb`
+ * global types — the wrappers and their associated types are self-contained.
+ * If you want to call `tailor.iconv.convert(...)` directly, add a side-effect
+ * import of `@tailor-platform/sdk/runtime/globals` (or list it in tsconfig
+ * `compilerOptions.types`).
  */
-
-// Re-export the sentinel from globals so the bundler retains the
-// `declare global` chunk in the emitted `.d.mts`. Importing this entry
-// therefore activates the ambient `tailor.*` / `tailordb` types without
-// any additional `@tailor-platform/sdk/runtime/globals` import.
-export { __TAILOR_RUNTIME_GLOBALS_LOADED__ } from "./globals";
 
 export * as iconv from "./iconv";
 export * as secretmanager from "./secretmanager";

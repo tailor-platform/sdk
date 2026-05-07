@@ -93,6 +93,41 @@
       "types": "./dist/runtime/globals.d.mts",
       "import": "./dist/runtime/globals.mjs",
       "default": "./dist/runtime/globals.mjs"
+    },
+    "./runtime/iconv": {
+      "types": "./dist/runtime/iconv.d.mts",
+      "import": "./dist/runtime/iconv.mjs",
+      "default": "./dist/runtime/iconv.mjs"
+    },
+    "./runtime/secretmanager": {
+      "types": "./dist/runtime/secretmanager.d.mts",
+      "import": "./dist/runtime/secretmanager.mjs",
+      "default": "./dist/runtime/secretmanager.mjs"
+    },
+    "./runtime/authconnection": {
+      "types": "./dist/runtime/authconnection.d.mts",
+      "import": "./dist/runtime/authconnection.mjs",
+      "default": "./dist/runtime/authconnection.mjs"
+    },
+    "./runtime/idp": {
+      "types": "./dist/runtime/idp.d.mts",
+      "import": "./dist/runtime/idp.mjs",
+      "default": "./dist/runtime/idp.mjs"
+    },
+    "./runtime/workflow": {
+      "types": "./dist/runtime/workflow.d.mts",
+      "import": "./dist/runtime/workflow.mjs",
+      "default": "./dist/runtime/workflow.mjs"
+    },
+    "./runtime/context": {
+      "types": "./dist/runtime/context.d.mts",
+      "import": "./dist/runtime/context.mjs",
+      "default": "./dist/runtime/context.mjs"
+    },
+    "./runtime/file": {
+      "types": "./dist/runtime/file.d.mts",
+      "import": "./dist/runtime/file.mjs",
+      "default": "./dist/runtime/file.mjs"
     }
   },
   "scripts": {

@@ -14,9 +14,10 @@
  */
 
 import "./globals";
+import type { ContextInvoker } from "./globals";
 
-/** Re-exported invoker type from the global runtime. */
-export type Invoker = tailor.context.Invoker;
+/** Information about the invoker of the current function execution. */
+export type Invoker = ContextInvoker;
 
 /**
  * Returns information about the invoker of the current function execution,

@@ -6,6 +6,9 @@
  * responses and assert on recorded calls via the exported mock objects.
  */
 
+import "../runtime/globals";
+import type { ContextInvoker, IdpUser } from "../runtime/globals";
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -66,6 +69,10 @@ interface WorkflowCall {
   args: unknown[];
 }
 
+interface ContextCall {
+  method: "getInvoker";
+}
+
 interface MockState {
   // TailorDB
   queryResolver: QueryResolver;
@@ -96,6 +103,9 @@ interface MockState {
   // Iconv
   iconvResolver: IconvResolver | null;
   iconvCalls: IconvCall[];
+  // Context
+  invoker: ContextInvoker | null;
+  contextCalls: ContextCall[];
 }
 
 // ---------------------------------------------------------------------------
@@ -143,6 +153,8 @@ function createDefaultState(): MockState {
     fileCalls: [],
     iconvResolver: null,
     iconvCalls: [],
+    invoker: null,
+    contextCalls: [],
   };
 }
 
@@ -336,6 +348,28 @@ export const workflowMock = {
 // ---------------------------------------------------------------------------
 // SecretManager Mock
 // ---------------------------------------------------------------------------
+
+/** Mock control for `tailor.context` — invoker store and call recording. */
+export const contextMock = {
+  /**
+   * Set the invoker returned by `tailor.context.getInvoker()`. Pass `null` to
+   * simulate an anonymous (unauthenticated) caller — the default.
+   * @param invoker - Invoker to return, or `null` for anonymous
+   */
+  setInvoker(invoker: ContextInvoker | null): void {
+    getState().invoker = invoker;
+  },
+
+  get calls(): ContextCall[] {
+    return getState().contextCalls;
+  },
+
+  reset(): void {
+    const state = getState();
+    state.invoker = null;
+    state.contextCalls.length = 0;
+  },
+};
 
 /** Mock control for `tailor.secretmanager` — secret store and call recording. */
 export const secretmanagerMock = {
@@ -602,8 +636,10 @@ async function mockResolve(
 // Mock: tailor.context
 // ---------------------------------------------------------------------------
 
-function mockGetInvoker(): tailor.context.Invoker | null {
-  return null;
+function mockGetInvoker(): ContextInvoker | null {
+  const state = getState();
+  state.contextCalls.push({ method: "getInvoker" });
+  return state.invoker;
 }
 
 // ---------------------------------------------------------------------------
@@ -681,23 +717,23 @@ class MockIdpClient {
     first?: number;
     after?: string;
     query?: { ids?: string[]; names?: string[] };
-  }): Promise<{ users: tailor.idp.User[]; nextPageToken: string | null; totalCount: number }> {
+  }): Promise<{ users: IdpUser[]; nextPageToken: string | null; totalCount: number }> {
     return resolveIdpCall("users", [options], this.#namespace) as Awaited<
       ReturnType<typeof this.users>
     >;
   }
-  async user(userId: string): Promise<tailor.idp.User> {
-    return resolveIdpCall("user", [userId], this.#namespace) as tailor.idp.User;
+  async user(userId: string): Promise<IdpUser> {
+    return resolveIdpCall("user", [userId], this.#namespace) as IdpUser;
   }
-  async userByName(name: string): Promise<tailor.idp.User> {
-    return resolveIdpCall("userByName", [name], this.#namespace) as tailor.idp.User;
+  async userByName(name: string): Promise<IdpUser> {
+    return resolveIdpCall("userByName", [name], this.#namespace) as IdpUser;
   }
   async createUser(input: {
     name: string;
     password?: string;
     disabled?: boolean;
-  }): Promise<tailor.idp.User> {
-    return resolveIdpCall("createUser", [input], this.#namespace) as tailor.idp.User;
+  }): Promise<IdpUser> {
+    return resolveIdpCall("createUser", [input], this.#namespace) as IdpUser;
   }
   async updateUser(input: {
     id: string;
@@ -705,8 +741,8 @@ class MockIdpClient {
     password?: string;
     clearPassword?: boolean;
     disabled?: boolean;
-  }): Promise<tailor.idp.User> {
-    return resolveIdpCall("updateUser", [input], this.#namespace) as tailor.idp.User;
+  }): Promise<IdpUser> {
+    return resolveIdpCall("updateUser", [input], this.#namespace) as IdpUser;
   }
   async deleteUser(userId: string): Promise<boolean> {
     return resolveIdpCall("deleteUser", [userId], this.#namespace) as boolean;

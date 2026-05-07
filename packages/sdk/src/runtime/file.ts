@@ -17,18 +17,35 @@
  */
 
 import "./globals";
+import type {
+  UploadMetadata,
+  DownloadMetadata,
+  FileMetadata,
+  StreamMetadata,
+  FileUploadOptions,
+  FileUploadResponse,
+  FileDownloadResponse,
+  FileDownloadAsBase64Response,
+  StreamValue,
+  FileStreamIterator,
+  TailorDBFileError,
+  TailorDBFileErrorCode,
+} from "./globals";
 
-export type UploadMetadata = globalThis.UploadMetadata;
-export type DownloadMetadata = globalThis.DownloadMetadata;
-export type FileMetadata = globalThis.FileMetadata;
-export type StreamMetadata = globalThis.StreamMetadata;
-export type FileUploadOptions = globalThis.FileUploadOptions;
-export type FileUploadResponse = globalThis.FileUploadResponse;
-export type FileDownloadResponse = globalThis.FileDownloadResponse;
-export type FileDownloadAsBase64Response = globalThis.FileDownloadAsBase64Response;
-export type StreamValue = globalThis.StreamValue;
-export type FileStreamIterator = globalThis.FileStreamIterator;
-export type TailorDBFileError = globalThis.TailorDBFileError;
+export type {
+  UploadMetadata,
+  DownloadMetadata,
+  FileMetadata,
+  StreamMetadata,
+  FileUploadOptions,
+  FileUploadResponse,
+  FileDownloadResponse,
+  FileDownloadAsBase64Response,
+  StreamValue,
+  FileStreamIterator,
+  TailorDBFileError,
+  TailorDBFileErrorCode,
+};
 
 /**
  * Upload a file to TailorDB.

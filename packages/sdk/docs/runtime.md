@@ -6,7 +6,7 @@
 - Get IDE-friendly imports (`iconv.convert`, `idp.Client`, …) instead of unmemorable `tailor.iconv.convert(...)` calls
 - Use the same module surface in resolvers, executors, and workflows
 
-Importing this module also activates the ambient `tailor.*` / `tailordb` global types as a side effect — code that calls `tailor.iconv.convert(...)` directly continues to type-check.
+The wrappers and their associated types are self-contained — you do not need to activate any ambient globals to use them. If you also want `tailor.iconv.convert(...)` calls to type-check, opt into the globals via the [Activating the global types](#activating-the-global-types) section below.
 
 ## Quick Start
 
@@ -50,9 +50,15 @@ import type { ListUsersResponse, ClientConfig } from "@tailor-platform/sdk/runti
 
 ## Activating the global types
 
-Most users do not need to touch the globals entry. Importing `@tailor-platform/sdk/runtime` once anywhere in your project is enough — the side-effect import wires up the `declare global { … }` block so that calls like `tailor.iconv.convert(...)` and `new tailordb.Client(...)` type-check from any other file.
+Most users do not need to touch the globals entry — `@tailor-platform/sdk/runtime` (and its subpath modules) cover the same surface without depending on any ambient declaration.
 
-If you prefer to enable the globals without an `import`, register them in `tsconfig.json`:
+If you do want unqualified calls like `tailor.iconv.convert(...)` and `new tailordb.Client(...)` to type-check, opt in by adding a single side-effect import anywhere in your project:
+
+```ts
+import "@tailor-platform/sdk/runtime/globals";
+```
+
+Or register the entry in `tsconfig.json`:
 
 ```jsonc
 {

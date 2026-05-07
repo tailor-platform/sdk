@@ -1,16 +1,6 @@
 import { t as _t } from "@/configure/types";
 import type * as helperTypes from "@/types/helpers";
 
-/**
- * Re-exported so the bundled `.d.mts` keeps a value-level reference to
- * `@/runtime/globals`, which forces the rolldown dts emitter to include the
- * vendored ambient `tailor.*` / `tailordb` declarations alongside the SDK
- * main entry. Importing anything from `@tailor-platform/sdk` therefore
- * activates those globals automatically.
- * @internal
- */
-export { __TAILOR_RUNTIME_GLOBALS_LOADED__ } from "@/runtime/globals";
-
 type TailorOutput<T> = helperTypes.output<T>;
 
 export type infer<T> = TailorOutput<T>;

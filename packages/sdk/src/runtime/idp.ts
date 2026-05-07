@@ -12,30 +12,40 @@
  */
 
 import "./globals";
+import type {
+  IdpClientConfig,
+  IdpUser,
+  IdpUserQuery,
+  IdpListUsersOptions,
+  IdpListUsersResponse,
+  IdpCreateUserInput,
+  IdpUpdateUserInput,
+  IdpSendPasswordResetEmailInput,
+} from "./globals";
 
 /** Configuration object for {@link Client}. */
-export type ClientConfig = tailor.idp.ClientConfig;
+export type ClientConfig = IdpClientConfig;
 
 /** User record returned by IDP operations. */
-export type User = tailor.idp.User;
+export type User = IdpUser;
 
 /** Filter options for {@link Client.users}. */
-export type UserQuery = tailor.idp.UserQuery;
+export type UserQuery = IdpUserQuery;
 
 /** Pagination/filter options for {@link Client.users}. */
-export type ListUsersOptions = tailor.idp.ListUsersOptions;
+export type ListUsersOptions = IdpListUsersOptions;
 
 /** Response shape for {@link Client.users}. */
-export type ListUsersResponse = tailor.idp.ListUsersResponse;
+export type ListUsersResponse = IdpListUsersResponse;
 
 /** Input for {@link Client.createUser}. */
-export type CreateUserInput = tailor.idp.CreateUserInput;
+export type CreateUserInput = IdpCreateUserInput;
 
 /** Input for {@link Client.updateUser}. */
-export type UpdateUserInput = tailor.idp.UpdateUserInput;
+export type UpdateUserInput = IdpUpdateUserInput;
 
 /** Input for {@link Client.sendPasswordResetEmail}. */
-export type SendPasswordResetEmailInput = tailor.idp.SendPasswordResetEmailInput;
+export type SendPasswordResetEmailInput = IdpSendPasswordResetEmailInput;
 
 /**
  * IDP Client for user management operations.
@@ -43,10 +53,10 @@ export type SendPasswordResetEmailInput = tailor.idp.SendPasswordResetEmailInput
  * Wraps the platform-provided `tailor.idp.Client` and exposes the same surface.
  */
 export class Client {
-  private impl: tailor.idp.Client;
+  #impl: tailor.idp.Client;
 
   constructor(config: ClientConfig) {
-    this.impl = new tailor.idp.Client(config);
+    this.#impl = new tailor.idp.Client(config);
   }
 
   /**
@@ -55,7 +65,7 @@ export class Client {
    * @returns Page of users with `nextPageToken` and `totalCount`
    */
   users(options?: ListUsersOptions): Promise<ListUsersResponse> {
-    return this.impl.users(options);
+    return this.#impl.users(options);
   }
 
   /**
@@ -64,7 +74,7 @@ export class Client {
    * @returns The matching user
    */
   user(userId: string): Promise<User> {
-    return this.impl.user(userId);
+    return this.#impl.user(userId);
   }
 
   /**
@@ -73,7 +83,7 @@ export class Client {
    * @returns The matching user
    */
   userByName(name: string): Promise<User> {
-    return this.impl.userByName(name);
+    return this.#impl.userByName(name);
   }
 
   /**
@@ -82,7 +92,7 @@ export class Client {
    * @returns The newly created user
    */
   createUser(input: CreateUserInput): Promise<User> {
-    return this.impl.createUser(input);
+    return this.#impl.createUser(input);
   }
 
   /**
@@ -91,7 +101,7 @@ export class Client {
    * @returns The updated user
    */
   updateUser(input: UpdateUserInput): Promise<User> {
-    return this.impl.updateUser(input);
+    return this.#impl.updateUser(input);
   }
 
   /**
@@ -100,7 +110,7 @@ export class Client {
    * @returns `true` when the user was deleted
    */
   deleteUser(userId: string): Promise<boolean> {
-    return this.impl.deleteUser(userId);
+    return this.#impl.deleteUser(userId);
   }
 
   /**
@@ -109,6 +119,6 @@ export class Client {
    * @returns `true` when the email was queued
    */
   sendPasswordResetEmail(input: SendPasswordResetEmailInput): Promise<boolean> {
-    return this.impl.sendPasswordResetEmail(input);
+    return this.#impl.sendPasswordResetEmail(input);
   }
 }
