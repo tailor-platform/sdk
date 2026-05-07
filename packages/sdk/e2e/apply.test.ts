@@ -43,7 +43,7 @@ describe("E2E: Service deletion order", () => {
   // suite so resources keep being recognized as owned across re-applies, even
   // though each apply targets a different config file (a workaround for
   // Node.js module caching).
-  const sharedTestAppId = `app-${crypto.randomUUID()}`;
+  const sharedTestAppId = crypto.randomUUID();
 
   beforeAll(async () => {
     // Initialize client (supports both TAILOR_PLATFORM_TOKEN env var and platform config login)
