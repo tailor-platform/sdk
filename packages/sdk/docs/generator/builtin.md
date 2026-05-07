@@ -75,7 +75,7 @@ createResolver({
   body: async ({ input }) => {
     const db = getDB("tailordb");
     const { rows } = await sql<{ state: string; count: number }>`
-      SELECT state, COUNT(*)::int AS count
+      SELECT state, COUNT(*) AS count
         FROM "Supplier"
        WHERE country = ${input.country}
     GROUP BY state
