@@ -31,7 +31,7 @@
     "diff": "9.0.0",
     "pathe": "2.0.3",
     "picomatch": "4.0.4",
-    "pkg-types": "2.3.0",
+    "pkg-types": "2.3.1",
     "politty": "0.4.15",
     "semver": "7.7.4",
     "zod": "4.3.6"
