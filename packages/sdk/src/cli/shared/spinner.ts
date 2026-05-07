@@ -21,7 +21,6 @@ function visibleLength(s: string): number {
 }
 
 export type SpinnerOptions = {
-  text?: string;
   indent?: number;
   stream?: NodeJS.WriteStream;
 };
@@ -75,7 +74,7 @@ export class Spinner {
   #started = false;
 
   constructor(options: SpinnerOptions = {}) {
-    this.text = options.text ?? "";
+    this.text = "";
     this.#indent = options.indent ?? 0;
     this.#stream = options.stream ?? process.stderr;
     this.#isEnabled = Boolean(this.#stream.isTTY);
@@ -195,8 +194,8 @@ export class Spinner {
 }
 
 /**
- * Create a terminal spinner. In non-TTY environments the spinner falls back to
- * a single line write so output remains useful in CI logs.
+ * Create a terminal spinner. Falls back to a single line write in non-TTY
+ * environments so output stays useful in CI logs.
  * @param options - Spinner options
  * @returns A Spinner instance
  */
