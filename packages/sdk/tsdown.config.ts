@@ -30,6 +30,8 @@ export default defineConfig({
     "src/vitest/index.ts",
     "src/vitest/environment.ts",
     "src/vitest/setup.ts",
+    "src/runtime/index.ts",
+    "src/runtime/globals.ts",
   ],
   format: ["esm"],
   target: "node22",
@@ -43,9 +45,6 @@ export default defineConfig({
     js: ".mjs",
     dts: ".d.mts",
   }),
-  banner: {
-    dts: '/// <reference types="@tailor-platform/function-types" />',
-  },
   external: ["vite", "vitest"], // peer dependencies: prevent bundling, resolve at runtime
   sourcemap: true,
   plugins: [

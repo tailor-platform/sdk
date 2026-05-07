@@ -9,8 +9,7 @@
     "paths": {
       "@/*": ["./src/*"],
       "@tailor-proto/*": ["../tailor-proto/src/*"]
-    },
-    "types": ["@tailor-platform/function-types"]
+    }
   },
   "include": [
     "./src/**/*.ts",
