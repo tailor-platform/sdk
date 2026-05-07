@@ -315,7 +315,10 @@ async function waitWithSpinner(
   interval: number,
   json: boolean,
 ): Promise<WorkflowExecutionDetailInfo> {
-  const spinner = !json ? ora().start("Waiting for workflow to complete...") : null;
+  // discardStdin: false keeps stdin in cooked mode so the terminal delivers SIGINT on Ctrl+C.
+  const spinner = !json
+    ? ora({ discardStdin: false }).start("Waiting for workflow to complete...")
+    : null;
 
   const updateInterval = setInterval(() => {
     if (spinner) {

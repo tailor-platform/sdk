@@ -309,7 +309,8 @@ export async function watchExecutorJob<E extends ExecutorLike>(
   });
 
   const interval = options.interval ?? 3000;
-  const spinner = ora().start("Waiting for executor job to complete...");
+  // discardStdin: false keeps stdin in cooked mode so the terminal delivers SIGINT on Ctrl+C.
+  const spinner = ora({ discardStdin: false }).start("Waiting for executor job to complete...");
 
   try {
     // Get executor details to determine target type

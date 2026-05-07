@@ -120,10 +120,9 @@ export async function waitForExecution(
 
   let lastStatus: WorkflowExecution_Status | undefined;
   let lastRunningJobs: string | undefined;
+  // discardStdin: false keeps stdin in cooked mode so the terminal delivers SIGINT on Ctrl+C.
   const spinner = showProgress
-    ? ora({
-        indent: 2,
-      }).start("Waiting for workflow to complete...")
+    ? ora({ indent: 2, discardStdin: false }).start("Waiting for workflow to complete...")
     : null;
 
   try {
