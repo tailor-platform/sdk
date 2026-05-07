@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import { parseSync } from "oxc-parser";
-import { logger } from "./logger";
+import { logger } from "@/cli/shared/logger";
 import type { CallExpression, ObjectExpression, ObjectProperty } from "@oxc-project/types";
 
 export interface EnsureConfigIdResult {

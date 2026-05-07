@@ -6,7 +6,6 @@ import { hashFile } from "@/cli/cache/hasher";
 import { createCacheManager } from "@/cli/cache/manager";
 import { loadApplication, type Application } from "@/cli/services/application";
 import { initOperatorClient } from "@/cli/shared/client";
-import { ensureConfigId } from "@/cli/shared/config-id-injector";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadConfigPath, loadWorkspaceId } from "@/cli/shared/context";
 import { getDistDir } from "@/cli/shared/dist-dir";
@@ -24,6 +23,7 @@ import {
   type HasName,
   type PlanSummary,
 } from "./change-set";
+import { ensureConfigId } from "./config-id-injector";
 import {
   confirmImportantResourceDeletion,
   confirmOwnerConflict,
