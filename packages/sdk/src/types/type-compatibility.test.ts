@@ -10,6 +10,8 @@ import type {
   TailorField as FullTailorField,
   TailorAnyField as FullTailorAnyField,
 } from "@/configure/types/type";
+import type { AppConfig as FullAppConfig } from "@/types/app-config";
+import type { AppConfigParsed as MinimalAppConfig } from "@/types/app-config.generated";
 import type {
   TailorDBField as MinimalTailorDBField,
   TailorAnyDBField as MinimalTailorAnyDBField,
@@ -49,5 +51,9 @@ describe("configure/ full types extend types/ minimal structural interfaces", ()
 
   it("TailorDBInstance (full) extends TailorDBInstance (minimal)", () => {
     expectTypeOf<FullTailorDBInstance>().toExtend<MinimalTailorDBInstance>();
+  });
+
+  it("AppConfig (full) extends AppConfig (minimal)", () => {
+    expectTypeOf<FullAppConfig>().toExtend<MinimalAppConfig>();
   });
 });
