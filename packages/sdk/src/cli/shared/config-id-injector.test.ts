@@ -101,6 +101,20 @@ export default defineConfig({
     await expect(ensureConfigId(filePath)).rejects.toThrow(/non-empty string literal/);
   });
 
+  test("throws when id violates the metadata label format", async () => {
+    const filePath = await writeConfig(
+      `import { defineConfig } from "@tailor-platform/sdk";
+
+export default defineConfig({
+  id: "1-starts-with-digit",
+  name: "my-app",
+});
+`,
+    );
+
+    await expect(ensureConfigId(filePath)).rejects.toThrow(/lowercase alnum/);
+  });
+
   test("throws when defineConfig is called more than once", async () => {
     const filePath = await writeConfig(
       `import { defineConfig } from "@tailor-platform/sdk";

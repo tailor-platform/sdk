@@ -10,6 +10,10 @@ export interface EnsureConfigIdResult {
 
 type ASTNode = Record<string, unknown>;
 
+// Mirrors the platform metadata label value regex so that the generated id
+// is always a valid label value when stamped onto resources.
+const labelValueRegex = /^[a-z][a-z0-9_-]{0,62}$/;
+
 interface ConfigCallSite {
   callExpr: CallExpression;
   configObj: ObjectExpression | null;
@@ -94,6 +98,11 @@ export async function ensureConfigId(configPath: string): Promise<EnsureConfigId
     if (typeof literalValue !== "string" || literalValue === "") {
       throw new Error(
         `'id' field in ${configPath} must be a non-empty string literal. Delete the field to regenerate.`,
+      );
+    }
+    if (!labelValueRegex.test(literalValue)) {
+      throw new Error(
+        `'id' field in ${configPath} must match ${labelValueRegex} (lowercase alnum, '-', '_'; start with a letter; max 63 chars). Delete the field to regenerate.`,
       );
     }
     return { id: literalValue, injected: false };

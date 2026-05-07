@@ -16,9 +16,7 @@ import {
   type Application,
 } from "@/cli/services/application";
 import { createExecutorService } from "@/cli/services/executor/service";
-import { ensureConfigId } from "@/cli/shared/config-id-injector";
 import { loadConfig, type LoadedConfig, type Generator } from "@/cli/shared/config-loader";
-import { loadConfigPath } from "@/cli/shared/context";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { logger, styles } from "@/cli/shared/logger";
 import { generateUserTypes } from "@/cli/shared/type-generator";
@@ -788,13 +786,6 @@ export async function generate(options?: GenerateOptions) {
   return withSpan("generate", async (rootSpan) => {
     // Load and validate options
     const { config, generators, plugins } = await withSpan("generate.loadConfig", async () => {
-      const foundPath = loadConfigPath(options?.configPath);
-      if (foundPath) {
-        const resolvedPath = path.resolve(process.cwd(), foundPath);
-        if (fs.existsSync(resolvedPath)) {
-          await ensureConfigId(resolvedPath);
-        }
-      }
       return loadConfig(options?.configPath);
     });
     const watch = options?.watch ?? false;
