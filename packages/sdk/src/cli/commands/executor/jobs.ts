@@ -12,7 +12,6 @@ import {
   FilterSchema,
   PageDirection,
 } from "@tailor-proto/tailor/v1/resource_pb";
-import ora from "ora";
 import { arg } from "politty";
 import { z } from "zod";
 import {
@@ -30,6 +29,7 @@ import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { formatKeyValueTable } from "@/cli/shared/format";
 import { functionExecutionStatusToString } from "@/cli/shared/function-execution";
 import { logger, styles } from "@/cli/shared/logger";
+import { spinner as createSpinner } from "@/cli/shared/spinner";
 import { getWorkflowExecution } from "../workflow/executions";
 import { waitForExecution } from "../workflow/start";
 import {
@@ -309,8 +309,7 @@ export async function watchExecutorJob<E extends ExecutorLike>(
   });
 
   const interval = options.interval ?? 3000;
-  // discardStdin: false keeps stdin in cooked mode so the terminal delivers SIGINT on Ctrl+C.
-  const spinner = ora({ discardStdin: false }).start("Waiting for executor job to complete...");
+  const spinner = createSpinner().start("Waiting for executor job to complete...");
 
   try {
     // Get executor details to determine target type

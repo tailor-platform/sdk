@@ -7,7 +7,6 @@
 import * as fs from "node:fs";
 import { create } from "@bufbuild/protobuf";
 import { AuthInvokerSchema, type AuthInvoker } from "@tailor-proto/tailor/v1/auth_resource_pb";
-import ora from "ora";
 import { bundleMigrationScript } from "@/cli/commands/tailordb/migrate/bundler";
 import { type NamespaceWithMigrations } from "@/cli/commands/tailordb/migrate/config";
 import {
@@ -24,6 +23,7 @@ import {
 import { type OperatorClient } from "@/cli/shared/client";
 import { logger, styles } from "@/cli/shared/logger";
 import { executeScript } from "@/cli/shared/script-executor";
+import { spinner as createSpinner } from "@/cli/shared/spinner";
 import { trnPrefix } from "../label";
 import type { TailorDBServiceConfig } from "@/types/tailordb.generated";
 
@@ -281,9 +281,8 @@ export async function executeMigrations(
 
     for (const migration of namespaceMigrations) {
       const migrationLabel = `${migration.namespace}/${formatMigrationNumber(migration.number)}`;
-      const spinner = ora({
+      const spinner = createSpinner({
         text: `Executing migration ${migrationLabel}...`,
-        prefixText: "",
       }).start();
 
       const result = await executeSingleMigration(options, migration);

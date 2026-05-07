@@ -5,7 +5,6 @@ import {
   WorkflowExecution_Status,
   WorkflowJobExecution_Status,
 } from "@tailor-proto/tailor/v1/workflow_resource_pb";
-import ora from "ora";
 import { arg } from "politty";
 import { z } from "zod";
 import { deploymentArgs, parseDuration } from "@/cli/shared/args";
@@ -14,6 +13,7 @@ import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger, styles } from "@/cli/shared/logger";
+import { spinner as createSpinner } from "@/cli/shared/spinner";
 import { nameArgs, waitArgs } from "./args";
 import { getWorkflowExecution, printExecutionWithLogs } from "./executions";
 import { resolveWorkflow } from "./get";
@@ -120,9 +120,8 @@ export async function waitForExecution(
 
   let lastStatus: WorkflowExecution_Status | undefined;
   let lastRunningJobs: string | undefined;
-  // discardStdin: false keeps stdin in cooked mode so the terminal delivers SIGINT on Ctrl+C.
   const spinner = showProgress
-    ? ora({ indent: 2, discardStdin: false }).start("Waiting for workflow to complete...")
+    ? createSpinner({ indent: 2 }).start("Waiting for workflow to complete...")
     : null;
 
   try {

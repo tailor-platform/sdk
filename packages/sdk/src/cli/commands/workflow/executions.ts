@@ -5,7 +5,6 @@ import {
   FilterSchema,
 } from "@tailor-proto/tailor/v1/resource_pb";
 import { WorkflowExecution_Status } from "@tailor-proto/tailor/v1/workflow_resource_pb";
-import ora from "ora";
 import { arg } from "politty";
 import { z } from "zod";
 import {
@@ -20,6 +19,7 @@ import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { formatKeyValueTable } from "@/cli/shared/format";
 import { styles, logger } from "@/cli/shared/logger";
+import { spinner as createSpinner } from "@/cli/shared/spinner";
 import { waitArgs } from "./args";
 import { isWorkflowExecutionTerminalStatus } from "./status";
 import {
@@ -315,10 +315,7 @@ async function waitWithSpinner(
   interval: number,
   json: boolean,
 ): Promise<WorkflowExecutionDetailInfo> {
-  // discardStdin: false keeps stdin in cooked mode so the terminal delivers SIGINT on Ctrl+C.
-  const spinner = !json
-    ? ora({ discardStdin: false }).start("Waiting for workflow to complete...")
-    : null;
+  const spinner = !json ? createSpinner().start("Waiting for workflow to complete...") : null;
 
   const updateInterval = setInterval(() => {
     if (spinner) {
