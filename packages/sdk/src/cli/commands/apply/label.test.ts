@@ -3,17 +3,17 @@ import { hasMatchingSdkVersion, isOwnedByApp } from "./label";
 
 describe("isOwnedByApp", () => {
   test("returns false when labels are undefined", () => {
-    expect(isOwnedByApp(undefined, "my-app", "app-1")).toBe(false);
+    expect(isOwnedByApp(undefined, "my-app", "id-1")).toBe(false);
   });
 
-  test("returns true when sdk-app-id matches the provided id", () => {
-    const labels = { "sdk-app-id": "app-1", "sdk-name": "different-name" };
-    expect(isOwnedByApp(labels, "my-app", "app-1")).toBe(true);
+  test("returns true when sdk-app-id matches the provided id with app- prefix applied", () => {
+    const labels = { "sdk-app-id": "app-id-1", "sdk-name": "different-name" };
+    expect(isOwnedByApp(labels, "my-app", "id-1")).toBe(true);
   });
 
   test("returns false when sdk-app-id mismatches even if name matches", () => {
-    const labels = { "sdk-app-id": "app-2", "sdk-name": "my-app" };
-    expect(isOwnedByApp(labels, "my-app", "app-1")).toBe(false);
+    const labels = { "sdk-app-id": "app-id-2", "sdk-name": "my-app" };
+    expect(isOwnedByApp(labels, "my-app", "id-1")).toBe(false);
   });
 
   test("falls back to sdk-name when no app id is provided", () => {
@@ -23,12 +23,12 @@ describe("isOwnedByApp", () => {
 
   test("falls back to sdk-name when label has no sdk-app-id", () => {
     const labels = { "sdk-name": "my-app" };
-    expect(isOwnedByApp(labels, "my-app", "app-1")).toBe(true);
+    expect(isOwnedByApp(labels, "my-app", "id-1")).toBe(true);
   });
 
   test("returns false when neither id nor name matches", () => {
-    const labels = { "sdk-name": "other-app", "sdk-app-id": "app-2" };
-    expect(isOwnedByApp(labels, "my-app", "app-1")).toBe(false);
+    const labels = { "sdk-name": "other-app", "sdk-app-id": "app-id-2" };
+    expect(isOwnedByApp(labels, "my-app", "id-1")).toBe(false);
   });
 });
 

@@ -10,9 +10,10 @@ export interface EnsureConfigIdResult {
 
 type ASTNode = Record<string, unknown>;
 
-// Mirrors the platform metadata label value regex so that the generated id
-// is always a valid label value when stamped onto resources.
-const labelValueRegex = /^[a-z][a-z0-9_-]{0,62}$/;
+// The user-facing id is a plain UUID. A label-compatible prefix is added
+// at the metadata boundary in `cli/commands/apply/label.ts`, so the
+// in-config value does not need to satisfy the platform label-value regex.
+const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface ConfigCallSite {
   callExpr: CallExpression;
@@ -100,17 +101,15 @@ export async function ensureConfigId(configPath: string): Promise<EnsureConfigId
         `'id' field in ${configPath} must be a non-empty string literal. Delete the field to regenerate.`,
       );
     }
-    if (!labelValueRegex.test(literalValue)) {
+    if (!uuidRegex.test(literalValue)) {
       throw new Error(
-        `'id' field in ${configPath} must match ${labelValueRegex} (lowercase alnum, '-', '_'; start with a letter; max 63 chars). Delete the field to regenerate.`,
+        `'id' field in ${configPath} must be a UUID. Delete the field to regenerate.`,
       );
     }
     return { id: literalValue, injected: false };
   }
 
-  // Prefix with `app-` so the value satisfies the metadata label
-  // regex `^[a-z][a-z0-9_-]{0,62}$` (UUIDs may start with a digit).
-  const id = `app-${crypto.randomUUID()}`;
+  const id = crypto.randomUUID();
   const newSource = insertIdProperty(source, configObj, id);
   await fs.promises.writeFile(configPath, newSource, "utf-8");
 

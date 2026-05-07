@@ -26,6 +26,16 @@ export const sdkNameLabelKey = "sdk-name";
 export const sdkVersionLabelKey = "sdk-version";
 export const sdkAppIdLabelKey = "sdk-app-id";
 
+// The metadata label value regex requires a leading lowercase letter, while
+// the auto-generated app id is a plain UUID (which may start with a digit).
+// The `app-` prefix is added at the metadata boundary so the user-facing id
+// in `tailor.config.ts` can stay a plain UUID.
+const appIdLabelPrefix = "app-";
+
+function toAppIdLabelValue(appId: string): string {
+  return `${appIdLabelPrefix}${appId}`;
+}
+
 /**
  * Check whether existing metadata was produced by the current SDK version.
  * @param existingLabels - Labels currently stored on the remote resource
@@ -58,7 +68,7 @@ export function isOwnedByApp(
   if (!labels) return false;
   const labelAppId = labels[sdkAppIdLabelKey];
   if (labelAppId) {
-    return appId !== undefined && labelAppId === appId;
+    return appId !== undefined && labelAppId === toAppIdLabelValue(appId);
   }
   return labels[sdkNameLabelKey] === appName;
 }
@@ -95,7 +105,7 @@ export async function buildMetaRequest(
       ...(existingLabels ?? {}),
       [sdkNameLabelKey]: appName,
       [sdkVersionLabelKey]: sdkVersion,
-      ...(appId ? { [sdkAppIdLabelKey]: appId } : {}),
+      ...(appId ? { [sdkAppIdLabelKey]: toAppIdLabelValue(appId) } : {}),
     },
   };
 }

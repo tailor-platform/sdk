@@ -19,7 +19,7 @@ vi.mock("./label", async (importOriginal) => {
           labels: {
             "sdk-name": appName,
             "sdk-version": "v1-0-0",
-            ...(appId ? { "sdk-app-id": appId } : {}),
+            ...(appId ? { "sdk-app-id": `app-${appId}` } : {}),
           },
         }),
       ),
@@ -108,7 +108,7 @@ function createMockClient(
             ? {
                 "sdk-name": application.label ?? appName,
                 "sdk-version": application.sdkVersion ?? "v1-0-0",
-                ...(application.sdkAppId ? { "sdk-app-id": application.sdkAppId } : {}),
+                ...(application.sdkAppId ? { "sdk-app-id": `app-${application.sdkAppId}` } : {}),
               }
             : {},
         },
@@ -244,7 +244,7 @@ describe("planApplication", () => {
 
   describe("rename detection via sdk-app-id", () => {
     test("creates new app and deletes old when name changed but id matches", async () => {
-      const appId = "app-stable-id";
+      const appId = "stable-id";
       const oldName = "old-app-name";
       const client = createMockClient([
         {
@@ -269,7 +269,7 @@ describe("planApplication", () => {
     });
 
     test("ignores apps with the same id when name still matches", async () => {
-      const appId = "app-stable-id";
+      const appId = "stable-id";
       const client = createMockClient([
         {
           name: appName,
@@ -309,7 +309,7 @@ describe("planApplication", () => {
           sdkAppId: "different-id",
         },
       ]);
-      const application = createMockApplication({ name: appName, id: "app-stable-id" });
+      const application = createMockApplication({ name: appName, id: "stable-id" });
 
       const result = await planApplication(createContext(client, application));
 
@@ -318,7 +318,7 @@ describe("planApplication", () => {
     });
 
     test("forRemoval also deletes id-matched renamed apps", async () => {
-      const appId = "app-stable-id";
+      const appId = "stable-id";
       const oldName = "old-app-name";
       const client = createMockClient([
         {

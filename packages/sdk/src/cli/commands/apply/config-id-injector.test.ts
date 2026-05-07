@@ -35,7 +35,7 @@ export default defineConfig({
 
     expect(result).not.toBeNull();
     expect(result?.injected).toBe(true);
-    expect(result?.id).toMatch(/^app-[0-9a-f-]{36}$/);
+    expect(result?.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
 
     const updated = await fs.promises.readFile(filePath, "utf-8");
     expect(updated).toContain(`id: "${result?.id}"`);
@@ -43,7 +43,7 @@ export default defineConfig({
   });
 
   test("returns the existing id when already present", async () => {
-    const existingId = "app-existing-id";
+    const existingId = "c98794dd-9bf1-480f-a5c9-bf92b3679d42";
     const filePath = await writeConfig(
       `import { defineConfig } from "@tailor-platform/sdk";
 
@@ -101,18 +101,18 @@ export default defineConfig({
     await expect(ensureConfigId(filePath)).rejects.toThrow(/non-empty string literal/);
   });
 
-  test("throws when id violates the metadata label format", async () => {
+  test("throws when id is not a UUID", async () => {
     const filePath = await writeConfig(
       `import { defineConfig } from "@tailor-platform/sdk";
 
 export default defineConfig({
-  id: "1-starts-with-digit",
+  id: "not-a-uuid",
   name: "my-app",
 });
 `,
     );
 
-    await expect(ensureConfigId(filePath)).rejects.toThrow(/lowercase alnum/);
+    await expect(ensureConfigId(filePath)).rejects.toThrow(/UUID/);
   });
 
   test("throws when defineConfig is called more than once", async () => {

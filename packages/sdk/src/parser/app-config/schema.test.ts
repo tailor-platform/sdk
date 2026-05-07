@@ -7,17 +7,17 @@ describe("AppConfigSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  test("accepts a config with auto-generated id", () => {
+  test("accepts a config with auto-generated UUID id", () => {
     const result = AppConfigSchema.safeParse({
-      id: "app-c98794dd-9bf1-480f-a5c9-bf92b3679d42",
+      id: "c98794dd-9bf1-480f-a5c9-bf92b3679d42",
       name: "my-app",
     });
     expect(result.success).toBe(true);
   });
 
-  test("rejects an id that does not match the label format", () => {
+  test("rejects an id that is not a UUID", () => {
     const result = AppConfigSchema.safeParse({
-      id: "1-starts-with-digit",
+      id: "not-a-uuid",
       name: "my-app",
     });
     expect(result.success).toBe(false);
