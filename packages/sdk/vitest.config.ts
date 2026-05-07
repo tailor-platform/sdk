@@ -24,6 +24,7 @@ export default defineConfig({
             "**/__test_fixtures__/**",
             "**/__tests__/fixtures/**",
             "src/plugin/compat.test.ts",
+            "src/vitest/__tests__/integration/**",
           ],
         },
       },
