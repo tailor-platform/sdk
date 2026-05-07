@@ -1,8 +1,8 @@
-import ml from "multiline-ts";
 import { z } from "zod";
 import { defineAppCommand } from "@/cli/shared/command";
 import { readPlatformConfig } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
+import ml from "@/utils/multiline";
 import type { ProfileInfo } from ".";
 
 export const listCommand = defineAppCommand({

@@ -1,5 +1,13 @@
 # @tailor-platform/sdk
 
+## 1.45.1
+
+### Patch Changes
+
+- [#1110](https://github.com/tailor-platform/sdk/pull/1110) [`ba93ca3`](https://github.com/tailor-platform/sdk/commit/ba93ca3543c2927857dc79616ec680ed2b008ad1) Thanks [@toiroakr](https://github.com/toiroakr)! - Drop the `multiline-ts` dependency in favour of an in-tree implementation. The upstream package ships a `preinstall: npx only-allow pnpm` hook that, when a fresh copy is resolved (e.g. `npx create-tailor-sdk@latest`), causes npm's exec lock to time out with `ECOMPROMISED`. Replacing the dependency removes that failure path. Also drops `multiline-ts` from the `pnpm-workspace.yaml` `allowBuilds` list emitted by `create-tailor-sdk`.
+
+- [#1109](https://github.com/tailor-platform/sdk/pull/1109) [`9965ba5`](https://github.com/tailor-platform/sdk/commit/9965ba5f3aefee43119d979fb827fef0160d618a) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix workflow job bundling to also transform `workflow.trigger()` and `job.trigger()` calls in `.mts`, `.cts`, `.mjs`, and `.cjs` files. Previously the rolldown transform plugin only matched `.ts` and `.js`, so trigger calls in non-default extensions were silently left as raw method calls and failed at runtime. The default-import resolver also strips trailing extensions so `import wf from "./simple.mjs"` resolves to the same workflow as `import wf from "./simple"`.
+
 ## 1.45.0
 
 ### Minor Changes

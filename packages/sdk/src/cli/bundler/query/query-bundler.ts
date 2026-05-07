@@ -1,9 +1,9 @@
 import * as fs from "node:fs";
-import ml from "multiline-ts";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { getDistDir } from "@/cli/shared/dist-dir";
+import ml from "@/utils/multiline";
 import type { QueryEngine } from "@/cli/query";
 
 function createSqlEntry(): string {

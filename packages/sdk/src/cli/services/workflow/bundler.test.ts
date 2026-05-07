@@ -102,5 +102,80 @@ export default createWorkflow({
       // The raw simpleWorkflow.trigger() should NOT remain in the bundle
       expect(callerCode).not.toContain("simpleWorkflow.trigger");
     });
+
+    it("transforms workflow.trigger() in .mts dependency files", async () => {
+      tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "bundler-test-")));
+
+      // simple.mts: exports a workflow as default export with .mts extension
+      const simpleFile = path.join(tmpDir, "simple.mts");
+      fs.writeFileSync(
+        simpleFile,
+        `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+
+export const step1 = createWorkflowJob({
+  name: "step1",
+  body: (args: { input: number }) => {
+    return { result: args.input + 1 };
+  },
+});
+
+export default createWorkflow({
+  name: "simple-workflow",
+  mainJob: step1,
+});
+`,
+      );
+
+      // caller.mts: imports the workflow via default export and calls .trigger()
+      const callerFile = path.join(tmpDir, "caller.mts");
+      fs.writeFileSync(
+        callerFile,
+        `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+import simpleWorkflow from "./simple.mjs";
+
+export const callerJob = createWorkflowJob({
+  name: "caller-job",
+  body: async () => {
+    const executionId = await simpleWorkflow.trigger({ input: 0 }, { authInvoker: "admin" });
+    return { executionId };
+  },
+});
+
+export default createWorkflow({
+  name: "caller-workflow",
+  mainJob: callerJob,
+});
+`,
+      );
+
+      const allJobs = [
+        { name: "step1", exportName: "step1", sourceFile: simpleFile },
+        { name: "caller-job", exportName: "callerJob", sourceFile: callerFile },
+      ];
+      const mainJobNames = ["caller-job"];
+
+      const workflowFileMap = new Map<string, string>([
+        [normalizeFilePath(simpleFile), "simple-workflow"],
+      ]);
+      const triggerContext = {
+        workflowNameMap: new Map<string, string>(),
+        jobNameMap: new Map<string, string>([
+          ["step1", "step1"],
+          ["callerJob", "caller-job"],
+        ]),
+        workflowFileMap,
+        authNamespace: "default",
+      };
+
+      const result = await bundleWorkflowJobs(allJobs, mainJobNames, {}, triggerContext);
+
+      expect(result.bundledCode.has("caller-job")).toBe(true);
+      const callerCode = result.bundledCode.get("caller-job")!;
+
+      expect(callerCode).toContain("triggerWorkflow");
+      expect(callerCode).not.toContain("simpleWorkflow.trigger");
+    });
   });
 });
