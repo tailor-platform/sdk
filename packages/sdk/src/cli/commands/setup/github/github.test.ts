@@ -58,14 +58,11 @@ describe("renderDeploy", () => {
     organizationId: "org-123",
     folderId: "folder-456",
     packageManager: "pnpm" as const,
-    actionsRef: "980aeba08963f4322b2b48ca7a920f4e14876842",
   };
 
   it("references the composite action", () => {
     const content = renderDeploy(baseParams);
-    expect(content).toContain(
-      "uses: tailor-platform/actions/deploy@980aeba08963f4322b2b48ca7a920f4e14876842",
-    );
+    expect(content).toMatch(/uses: tailor-platform\/actions\/deploy@[a-f0-9]+ # v\d+\.\d+\.\d+/);
   });
 
   it("includes setup steps in correct order", () => {
@@ -83,6 +80,7 @@ describe("renderDeploy", () => {
     expect(content).toMatch(/uses: actions\/checkout@[a-f0-9]+ # v\d+\.\d+\.\d+/);
     expect(content).toMatch(/uses: pnpm\/action-setup@[a-f0-9]+ # v\d+\.\d+\.\d+/);
     expect(content).toMatch(/uses: actions\/setup-node@[a-f0-9]+ # v\d+\.\d+\.\d+/);
+    expect(content).toMatch(/uses: tailor-platform\/actions\/deploy@[a-f0-9]+ # v\d+\.\d+\.\d+/);
   });
 
   it("generates pnpm setup steps", () => {

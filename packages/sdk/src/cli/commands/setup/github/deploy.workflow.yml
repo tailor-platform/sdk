@@ -23,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       # __SETUP_STEPS__
-      - uses: tailor-platform/actions/deploy@__ACTIONS_REF__
+      - uses: tailor-platform/actions/deploy@e63ed98630a23fa21ee0636abf0f7fb75fcdce40 # v1.1.0
         with:
           workspace-name: __WORKSPACE_NAME__
           workspace-region: __WORKSPACE_REGION__

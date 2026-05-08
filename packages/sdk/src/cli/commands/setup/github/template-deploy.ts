@@ -16,7 +16,6 @@ type DeployParams = {
   folderId: string;
   workingDirectory?: string;
   packageManager: PackageManager;
-  actionsRef: string;
   withPlan?: boolean;
 };
 
@@ -55,22 +54,19 @@ export function detectPackageManager(dir: string): PackageManager {
  * @param params - Configuration for plan job
  * @param params.workingDirectory - Working directory for monorepo setups
  * @param params.packageManager - Package manager to use
- * @param params.actionsRef - Git ref for tailor-platform/actions
  * @returns Plan job YAML content
  */
 function renderPlanJob(params: {
   workingDirectory?: string;
   packageManager: PackageManager;
-  actionsRef: string;
 }): string {
-  const { workingDirectory, packageManager, actionsRef } = params;
+  const { workingDirectory, packageManager } = params;
 
   const workingDirectoryLine = workingDirectory
     ? `          working-directory: ${workingDirectory}\n`
     : "";
 
   return planJobTemplate
-    .replaceAll("__ACTIONS_REF__", () => actionsRef)
     .replace(/ *# __WORKING_DIRECTORY__\n/, () => workingDirectoryLine)
     .replace(/^ *# __SETUP_STEPS__$/m, () => indentSnippet(setupSteps[packageManager], 6));
 }
@@ -95,7 +91,6 @@ export function renderDeploy(params: DeployParams): string {
     folderId,
     workingDirectory,
     packageManager,
-    actionsRef,
     withPlan,
   } = params;
 
@@ -103,16 +98,13 @@ export function renderDeploy(params: DeployParams): string {
     ? `          working-directory: ${workingDirectory}\n`
     : "";
 
-  const planJobContent = withPlan
-    ? renderPlanJob({ workingDirectory, packageManager, actionsRef }) + "\n"
-    : "";
+  const planJobContent = withPlan ? renderPlanJob({ workingDirectory, packageManager }) + "\n" : "";
 
   return deployTemplate
     .replaceAll("__WORKSPACE_NAME__", () => workspaceName)
     .replaceAll("__WORKSPACE_REGION__", () => workspaceRegion)
     .replaceAll("__ORGANIZATION_ID__", () => organizationId)
     .replaceAll("__FOLDER_ID__", () => folderId)
-    .replaceAll("__ACTIONS_REF__", () => actionsRef)
     .replace(/ *# __WORKING_DIRECTORY__\n/, () => workingDirectoryLine)
     .replace(/^ *# __SETUP_STEPS__$/m, () => indentSnippet(setupSteps[packageManager], 6))
     .replace(/^ *# __PLAN_JOB__\n/m, () =>

@@ -9,7 +9,7 @@ plan:
       with:
         fetch-depth: 0
     # __SETUP_STEPS__
-    - uses: tailor-platform/actions/plan@__ACTIONS_REF__
+    - uses: tailor-platform/actions/plan@e63ed98630a23fa21ee0636abf0f7fb75fcdce40 # v1.1.0
       with:
         workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
         # __WORKING_DIRECTORY__
