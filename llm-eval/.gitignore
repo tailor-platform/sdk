@@ -1,0 +1,7 @@
+dist/
+node_modules/
+.tmp/
+variants/
+!variants/.gitkeep
+reports/
+!reports/.gitkeep

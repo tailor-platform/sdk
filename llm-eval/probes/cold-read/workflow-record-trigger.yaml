@@ -1,0 +1,30 @@
+id: cold-read.workflow.record-trigger
+category: cold-read
+targetApis:
+  - "@tailor-platform/sdk:createExecutor"
+  - "@tailor-platform/sdk:recordCreatedTrigger"
+  - "@tailor-platform/sdk:createWorkflow"
+  - "@tailor-platform/sdk:createWorkflowJob"
+prompt: |
+  `@tailor-platform/sdk` を使って、TailorDB の `Order` レコードが作成されたら
+  ワークフローを起動する仕組みを書いてください。
+
+  - workflow ファイル: `processOrder` という mainJob を持つ workflow を default export
+    - mainJob は `{ orderId: string }` を受け取って `console.log` するだけで OK
+  - executor ファイル: `recordCreatedTrigger` で `Order` 型レコード作成を監視し、
+    operation で `processOrder` を起動する
+  - `Order` 型は `../tailordb/order` から `order` という名前で import できると仮定してよい
+
+  importを含めて、最初に書くコードをそのまま 2 つの ts コードブロック（workflow と executor）で書いてください。
+  推測した点があれば該当行の上に `// GUESS: <理由>` コメントを付けてください。
+expectedSymbols:
+  current:
+    - createWorkflow
+    - createWorkflowJob
+    - createExecutor
+    - recordCreatedTrigger
+checks:
+  - imports
+  - halluc
+  - patterns
+  - ast-distance

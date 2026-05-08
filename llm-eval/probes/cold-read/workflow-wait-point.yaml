@@ -1,0 +1,28 @@
+id: cold-read.workflow.wait-point
+category: cold-read
+targetApis:
+  - "@tailor-platform/sdk:createWorkflow"
+  - "@tailor-platform/sdk:createWorkflowJob"
+  - "@tailor-platform/sdk:defineWaitPoints"
+prompt: |
+  `@tailor-platform/sdk` を使って、人手の承認を待つワークフローを定義してください。
+
+  - `defineWaitPoints` で `approval` という wait point を定義する
+    - payload: `{ message: string; requestId: string }`
+    - response: `{ approved: boolean }`
+  - mainJob は `{ orderId: string }` を受け取り、approval.wait(...) で承認を待つ
+  - 承認結果に応じて `{ status: "approved" }` または `{ status: "rejected" }` を返す
+  - workflow は default export してください
+
+  importを含めて、最初に書くコードをそのまま 1 つの ts コードブロックで書いてください。
+  推測した点があれば該当行の上に `// GUESS: <理由>` コメントを付けてください。
+expectedSymbols:
+  current:
+    - createWorkflow
+    - createWorkflowJob
+    - defineWaitPoints
+checks:
+  - imports
+  - halluc
+  - patterns
+  - ast-distance

@@ -1,0 +1,22 @@
+id: cold-read.workflow.basic
+category: cold-read
+targetApis:
+  - "@tailor-platform/sdk:createWorkflow"
+  - "@tailor-platform/sdk:createWorkflowJob"
+prompt: |
+  `@tailor-platform/sdk` を使って、毎日 1 回起動する単純なワークフローを定義してください。
+  - mainJob で「Hello, world」とログを出すだけで構いません
+  - schedule trigger を使ってください
+
+  importを含めて、最初に書くコードをそのまま 1 つの ts コードブロックで書いてください。
+  推測した点があれば該当行の上に `// GUESS: <理由>` コメントを付けてください。
+expectedSymbols:
+  current:
+    - createWorkflow
+    - createWorkflowJob
+    - scheduleTrigger
+checks:
+  - imports
+  - halluc
+  - patterns
+  - ast-distance

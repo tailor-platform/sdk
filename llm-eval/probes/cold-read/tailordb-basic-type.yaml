@@ -1,0 +1,23 @@
+id: cold-read.tailordb.basic-type
+category: cold-read
+targetApis:
+  - "@tailor-platform/sdk:db.type"
+  - "@tailor-platform/sdk:t"
+prompt: |
+  以下のフィールドを持つ `User` 型を `@tailor-platform/sdk` の tailordb で定義してください。
+  - name: required string
+  - age: optional int
+  - email: required string, unique
+
+  importを含めて、最初に書くコードをそのまま 1 つの ts コードブロックで書いてください。
+  推測した点があれば該当行の上に `// GUESS: <理由>` コメントを付けてください。
+expectedSymbols:
+  current:
+    - db
+    - t
+checks:
+  - imports
+  - halluc
+  - patterns
+  - typecheck
+  - ast-distance

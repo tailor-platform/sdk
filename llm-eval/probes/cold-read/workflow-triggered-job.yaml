@@ -1,0 +1,26 @@
+id: cold-read.workflow.triggered-job
+category: cold-read
+targetApis:
+  - "@tailor-platform/sdk:createWorkflow"
+  - "@tailor-platform/sdk:createWorkflowJob"
+prompt: |
+  `@tailor-platform/sdk` を使って、子ジョブを起動するワークフローを定義してください。
+
+  - `fetchCustomer` ジョブ: 入力 `{ customerId: string }` を受け取り、`{ id: string; email: string }` を返す
+  - mainJob: 入力 `{ orderId: string; customerId: string }` を受け取り、
+    `fetchCustomer` を `.trigger()` で呼び出して `email` を取り出し、
+    `{ orderId, email }` を返す
+  - `.trigger()` の結果は Promise なので必ず await すること
+  - workflow は default export してください
+
+  importを含めて、最初に書くコードをそのまま 1 つの ts コードブロックで書いてください。
+  推測した点があれば該当行の上に `// GUESS: <理由>` コメントを付けてください。
+expectedSymbols:
+  current:
+    - createWorkflow
+    - createWorkflowJob
+checks:
+  - imports
+  - halluc
+  - patterns
+  - ast-distance

@@ -12,6 +12,7 @@ packages:
   - packages/create-sdk/templates/*
   - example
   - llm-challenge
+  - llm-eval
 
 allowBuilds:
   "@swc/core": true

@@ -1,0 +1,26 @@
+id: cold-read.workflow.multi-job
+category: cold-read
+targetApis:
+  - "@tailor-platform/sdk:createWorkflow"
+  - "@tailor-platform/sdk:createWorkflowJob"
+prompt: |
+  `@tailor-platform/sdk` を使って、注文処理ワークフローを定義してください。
+
+  - `validateOrder` ジョブ: 入力 `{ orderId: string }` を受け取り、検証結果を返す
+  - `chargePayment` ジョブ: 入力 `{ orderId: string; amount: number }` を受け取り、請求結果を返す
+  - mainJob: 上記 2 つを順番に呼び出して結果をまとめる
+  - すべてのジョブは named export してください
+  - workflow は default export してください
+
+  importを含めて、最初に書くコードをそのまま 1 つの ts コードブロックで書いてください。
+  推測した点があれば該当行の上に `// GUESS: <理由>` コメントを付けてください。
+expectedSymbols:
+  current:
+    - createWorkflow
+    - createWorkflowJob
+checks:
+  - imports
+  - halluc
+  - patterns
+  - typecheck
+  - ast-distance
