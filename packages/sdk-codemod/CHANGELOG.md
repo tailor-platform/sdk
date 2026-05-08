@@ -1,5 +1,11 @@
 # @tailor-platform/sdk-codemod
 
+## 0.1.5
+
+### Patch Changes
+
+- [#1127](https://github.com/tailor-platform/sdk/pull/1127) [`79050d4`](https://github.com/tailor-platform/sdk/commit/79050d4606dc695522f2eaa65a0079b20c3d51c8) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency pkg-types to v2.3.1
+
 ## 0.1.4
 
 ### Patch Changes
