@@ -5,7 +5,6 @@ import {
   FilterSchema,
 } from "@tailor-proto/tailor/v1/resource_pb";
 import { WorkflowExecution_Status } from "@tailor-proto/tailor/v1/workflow_resource_pb";
-import ora from "ora";
 import { arg } from "politty";
 import { z } from "zod";
 import {
@@ -20,6 +19,7 @@ import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { formatKeyValueTable } from "@/cli/shared/format";
 import { styles, logger } from "@/cli/shared/logger";
+import { spinner } from "@/cli/shared/spinner";
 import { waitArgs } from "./args";
 import { isWorkflowExecutionTerminalStatus } from "./status";
 import {
@@ -315,12 +315,12 @@ async function waitWithSpinner(
   interval: number,
   json: boolean,
 ): Promise<WorkflowExecutionDetailInfo> {
-  const spinner = !json ? ora().start("Waiting for workflow to complete...") : null;
+  const sp = !json ? spinner().start("Waiting for workflow to complete...") : null;
 
   const updateInterval = setInterval(() => {
-    if (spinner) {
+    if (sp) {
       const now = formatTime(new Date());
-      spinner.text = `Waiting for workflow to complete... (${now})`;
+      sp.text = `Waiting for workflow to complete... (${now})`;
     }
   }, interval);
 
@@ -330,14 +330,14 @@ async function waitWithSpinner(
       WorkflowExecution_Status[result.status as keyof typeof WorkflowExecution_Status],
     );
     if (result.status === "SUCCESS") {
-      spinner?.succeed(`Completed: ${coloredStatus}`);
+      sp?.succeed(`Completed: ${coloredStatus}`);
     } else {
-      spinner?.fail(`Completed: ${coloredStatus}`);
+      sp?.fail(`Completed: ${coloredStatus}`);
     }
     return result;
   } finally {
     clearInterval(updateInterval);
-    spinner?.stop();
+    sp?.stop();
   }
 }
 
