@@ -281,7 +281,7 @@ export const tailordbMock = {
  * });
  *
  * test("wait point", () => {
- *   workflowMock.setWaitHandler((key, _payload) => ({ approved: true }));
+ *   workflowMock.setWaitHandler(() => ({ approved: true }));
  *   // …
  *   expect(workflowMock.waitCalls).toEqual([{ key: "approval", payload: undefined }]);
  * });
