@@ -13,7 +13,7 @@ Demonstrates all resolver patterns with comprehensive testing approaches.
 ## Testing Approaches
 
 1. **Direct `body()` call** - Simple resolvers with `unauthenticatedTailorUser`
-2. **Mock `tailordb.Client`** - Database resolvers via `vi.stubGlobal`
+2. **Mock `tailordb.Client`** - Database resolvers via `tailordbMock` from `@tailor-platform/sdk/vitest`
 3. **Dependency injection** - Extract `DbOperations` interface for testability
 
 ## Getting Started
