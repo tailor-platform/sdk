@@ -56,7 +56,7 @@ Key files:
 - `.trigger()` returns a `Promise` — always use `await` to get the result
 - On the server, the calling job suspends until the triggered job completes (synchronous execution), but the TypeScript API is `Promise`-based
 - `defineWaitPoints(define => ({ key: define<P, R>() }))` creates typed wait/resolve points
-- Wait/resolve methods runtime-delegate to `tailor.workflow.wait/resolve` on the platform; use `setupWaitPointMock` to mock in tests
+- Wait/resolve methods runtime-delegate to `tailor.workflow.wait/resolve` on the platform; use `workflowMock.setWaitHandler` / `workflowMock.setResolveHandler` from `@tailor-platform/sdk/vitest` (with the `tailor-runtime` environment) to mock in tests — see [testing.md](packages/sdk/docs/testing.md#jobs-that-wait-on-approval)
 - Use `wps.key.wait()` for namespaced access, or `export const { key } = defineWaitPoints(...)` for destructured 2-level access
 
 ### Executors
