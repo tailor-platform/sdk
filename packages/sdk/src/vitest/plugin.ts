@@ -225,9 +225,15 @@ export function createBlockPlugin(): Plugin {
     },
 
     transform(code, id) {
-      if (isTestFile(id)) return undefined;
-      if (id.includes("node_modules")) return undefined;
-      if (!isUserSourceFile(id)) return undefined;
+      // Vite can pass ids with query/hash suffixes (e.g. `file.ts?import`,
+      // `file.ts?v=hash`). Strip them so exact-path lookups (Set membership,
+      // glob matching, absolute-path checks) match what callers configured.
+      const queryIdx = id.search(/[?#]/);
+      const cleanId = queryIdx === -1 ? id : id.slice(0, queryIdx);
+
+      if (isTestFile(cleanId)) return undefined;
+      if (cleanId.includes("node_modules")) return undefined;
+      if (!isUserSourceFile(cleanId)) return undefined;
 
       let ast: { body: ImportLikeNode[] };
       try {

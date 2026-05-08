@@ -480,6 +480,31 @@ describe("createBlockPlugin", () => {
     });
     expect(arrayResult).toBeUndefined();
   });
+
+  test("strips query/hash suffixes from id before path lookups", () => {
+    // Vite can hand transform() ids like `file.ts?import`, `file.ts?v=hash`,
+    // or `file.ts#fragment`. The exemption logic compares ids against
+    // configured paths via Set membership / glob match / absolute-path check
+    // — all exact-string operations that would silently miss a suffixed id
+    // and re-transform a setup file, blowing up its node:* imports.
+    const plugin = createBlockPlugin();
+    const setupPath = "/abs/path/setup.ts";
+    const code = `import { pathToFileURL } from "node:url";\nexport const x = pathToFileURL("/x").href;`;
+    const node = {
+      type: "ImportDeclaration" as const,
+      start: 0,
+      end: 41,
+      source: { value: "node:url" },
+    };
+    (plugin.configResolved as any)({
+      root: "/",
+      test: { include: [], setupFiles: [setupPath] },
+    });
+    const parseCtx = { parse: () => ({ body: [node] }) };
+    for (const suffix of ["?import", "?direct", "?raw", "?v=abc123", "#frag"]) {
+      expect((plugin.transform as any).call(parseCtx, code, setupPath + suffix)).toBeUndefined();
+    }
+  });
 });
 
 describe("createEnvironmentPlugin", () => {
