@@ -25,7 +25,11 @@ interface AssertWritableOptions {
  * @returns Resolves when the profile permits writes
  */
 export async function assertWritable(opts?: AssertWritableOptions): Promise<void> {
-  const profileName = opts?.profile ?? process.env.TAILOR_PLATFORM_PROFILE;
+  // Truthy fallback (||, not ??) so an empty `--profile ""` flag falls
+  // through to TAILOR_PLATFORM_PROFILE — same semantics as loadAccessToken
+  // / loadWorkspaceId. Otherwise the loaders would still resolve a readonly
+  // profile from the env var while this guard returns silently.
+  const profileName = opts?.profile || process.env.TAILOR_PLATFORM_PROFILE;
   if (!profileName) return;
   const config = await readPlatformConfig();
   const profile = config.profiles[profileName];

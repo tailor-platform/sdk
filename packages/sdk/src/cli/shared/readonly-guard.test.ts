@@ -253,6 +253,14 @@ describe("assertWritable", () => {
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", "rw");
     await expect(assertWritable({ profile: "ro" })).rejects.toThrow('Profile "ro" is read-only.');
   });
+
+  it("empty opts.profile falls through to env to match loader semantics", async () => {
+    // loadAccessToken / loadWorkspaceId use truthy fallback (||), so an empty
+    // --profile "" flag still ends up resolving to TAILOR_PLATFORM_PROFILE.
+    // The guard must mirror that or it leaves a bypass.
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", "ro");
+    await expect(assertWritable({ profile: "" })).rejects.toThrow('Profile "ro" is read-only.');
+  });
 });
 
 describe("write command coverage", () => {
