@@ -67,6 +67,16 @@ const allCodemods: CodemodPackage[] = [
     scriptPath: "v2/cli-rename/scripts/transform.js",
     filePatterns: ["**/package.json", "**/*.{sh,bash,zsh,yml,yaml}", "**/*.md"],
   },
+  {
+    id: "v2/auth-invoker-unwrap",
+    name: 'auth.invoker("name") → "name"',
+    description:
+      'Replace `auth.invoker("name")` calls with the bare `"name"` string and drop the `auth` import when no other reference remains. The `auth.invoker()` helper is deprecated in v2 because importing `auth` from `tailor.config.ts` into runtime files pulls Node-only modules into the bundle.',
+    since: "1.0.0",
+    until: "2.0.0",
+    scriptPath: "v2/auth-invoker-unwrap/scripts/transform.js",
+    legacyPatterns: ["auth.invoker"],
+  },
 ];
 
 /**

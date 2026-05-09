@@ -86,4 +86,8 @@ describe("codemod transforms", () => {
   it("v2/cli-rename transforms correctly", async () => {
     await runFixtureCases("v2/cli-rename");
   });
+
+  it("v2/auth-invoker-unwrap transforms correctly", async () => {
+    await runFixtureCases("v2/auth-invoker-unwrap");
+  });
 });

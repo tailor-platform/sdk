@@ -23,6 +23,8 @@ export default defineConfig([
       "v2/principal-unify/scripts/transform": "codemods/v2/principal-unify/scripts/transform.ts",
       "v2/apply-to-deploy/scripts/transform": "codemods/v2/apply-to-deploy/scripts/transform.ts",
       "v2/cli-rename/scripts/transform": "codemods/v2/cli-rename/scripts/transform.ts",
+      "v2/auth-invoker-unwrap/scripts/transform":
+        "codemods/v2/auth-invoker-unwrap/scripts/transform.ts",
     },
     format: ["esm"],
     target: "node18",
