@@ -1,0 +1,9 @@
+{
+  "name": "my-app",
+  "version": "1.0.0",
+  "scripts": {
+    "report:tail": "tailor-sdk crashreport tail --job-id latest",
+    "exec:show": "tailor-sdk executor show --executor-name onUserCreated --execution-id abc",
+    "build": "tsc"
+  }
+}

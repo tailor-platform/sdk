@@ -82,4 +82,8 @@ describe("codemod transforms", () => {
   it("v2/apply-to-deploy transforms correctly", async () => {
     await runFixtureCases("v2/apply-to-deploy");
   });
+
+  it("v2/cli-rename transforms correctly", async () => {
+    await runFixtureCases("v2/cli-rename");
+  });
 });

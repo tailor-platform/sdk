@@ -1,0 +1,10 @@
+name: Show executor logs
+on: workflow_dispatch
+jobs:
+  logs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pnpm install
+      - run: pnpm exec tailor-sdk crash-report tail --jobId latest
+      - run: pnpm exec tailor-sdk executor show --executorName onUserCreated --executionId abc

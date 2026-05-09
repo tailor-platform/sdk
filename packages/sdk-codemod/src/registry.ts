@@ -57,6 +57,16 @@ const allCodemods: CodemodPackage[] = [
     scriptPath: "v2/apply-to-deploy/scripts/transform.js",
     filePatterns: ["**/package.json", "**/*.{sh,bash,zsh,yml,yaml}", "**/*.md"],
   },
+  {
+    id: "v2/cli-rename",
+    name: "v2 CLI rename (single-word commands, kebab-case options)",
+    description:
+      "Rewrite `tailor-sdk crash-report` → `crashreport` and camelCase long options (`--executionId`, `--executorName`, `--jobId`) to their kebab-case form across package.json scripts, shell scripts, CI configs, and docs",
+    since: "1.0.0",
+    until: "2.0.0",
+    scriptPath: "v2/cli-rename/scripts/transform.js",
+    filePatterns: ["**/package.json", "**/*.{sh,bash,zsh,yml,yaml}", "**/*.md"],
+  },
 ];
 
 /**
