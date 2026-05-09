@@ -59,7 +59,7 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   // via client.testExecScript, so a readonly profile must block it.
   // Generate (local code generation)
   "generate/index.ts",
-  // Machine user (read-only — token retrieval only fetches, does not mutate)
+  // Machine user (read-only; token retrieval only fetches, does not mutate)
   "machineuser/index.ts",
   "machineuser/list.ts",
   "machineuser/token.ts",
@@ -67,7 +67,7 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   "oauth2client/index.ts",
   "oauth2client/get.ts",
   "oauth2client/list.ts",
-  // Organization (read-only branches; folder/update is write — guarded separately)
+  // Organization (read-only branches; folder/update is write, guarded separately)
   "organization/index.ts",
   "organization/get.ts",
   "organization/list.ts",
@@ -75,7 +75,7 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   "organization/folder/index.ts",
   "organization/folder/get.ts",
   "organization/folder/list.ts",
-  // Profile management — local config only, never platform state
+  // Profile management (local config only, never platform state)
   "profile/index.ts",
   "profile/create.ts",
   "profile/delete.ts",
@@ -249,7 +249,7 @@ describe("assertWritable", () => {
     await expect(assertWritable({ profile: "rw" })).resolves.toBeUndefined();
   });
 
-  it("opts.profile takes precedence over env (ro opts loses to rw env? no — opts wins, throws)", async () => {
+  it("opts.profile takes precedence over env (ro opts wins over rw env, throws)", async () => {
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", "rw");
     await expect(assertWritable({ profile: "ro" })).rejects.toThrow('Profile "ro" is read-only.');
   });

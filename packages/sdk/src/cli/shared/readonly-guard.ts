@@ -21,20 +21,18 @@ interface AssertWritableOptions {
  * If the resolved profile cannot be found in the config, this function returns
  * silently and lets downstream loaders surface the not-found error.
  * @param opts - Options
- * @param opts.profile - Optional explicit profile name
- * @returns Resolves when the profile permits writes
+ * @param opts.profile - Optional explicit profile name from command args
  */
 export async function assertWritable(opts?: AssertWritableOptions): Promise<void> {
   // Truthy fallback (||, not ??) so an empty `--profile ""` flag falls
-  // through to TAILOR_PLATFORM_PROFILE — same semantics as loadAccessToken
-  // / loadWorkspaceId. Otherwise the loaders would still resolve a readonly
+  // through to TAILOR_PLATFORM_PROFILE, matching loadAccessToken /
+  // loadWorkspaceId. Otherwise the loaders would still resolve a readonly
   // profile from the env var while this guard returns silently.
   const profileName = opts?.profile || process.env.TAILOR_PLATFORM_PROFILE;
   if (!profileName) return;
   const config = await readPlatformConfig();
   const profile = config.profiles[profileName];
-  if (!profile) return;
-  if (profile.readonly !== true) return;
+  if (!profile || profile.readonly !== true) return;
   throw CLIError({
     code: "PROFILE_READONLY",
     message: `Profile "${profileName}" is read-only.`,

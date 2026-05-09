@@ -50,7 +50,7 @@ export const updateCommand = defineAppCommand({
     // Skip remote validation when neither user nor workspace is changing.
     // This keeps `profile update <name> --readonly` / `--no-readonly` working
     // offline and when the saved token is expired or the workspace has been
-    // removed — important so a user can always lift their own readonly flag.
+    // removed, important so a user can always lift their own readonly flag.
     if (args.user !== undefined || args["workspace-id"] !== undefined) {
       // Check if user exists
       const token = await fetchLatestToken(config, newUser);
