@@ -240,10 +240,11 @@ tailor-sdk profile create [options] <name>
 
 **Options**
 
-| Option                          | Alias | Description  | Required | Default |
-| ------------------------------- | ----- | ------------ | -------- | ------- |
-| `--user <USER>`                 | `-u`  | User email   | Yes      | -       |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID | Yes      | -       |
+| Option                          | Alias | Description                                                   | Required | Default |
+| ------------------------------- | ----- | ------------------------------------------------------------- | -------- | ------- |
+| `--user <USER>`                 | `-u`  | User email                                                    | Yes      | -       |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                  | Yes      | -       |
+| `--readonly`                    | -     | Create as a read-only profile that blocks all write commands. | No       | `false` |
 
 <!-- politty:command:profile create:options:end -->
 
@@ -318,10 +319,11 @@ tailor-sdk profile update [options] <name>
 
 **Options**
 
-| Option                          | Alias | Description      | Required | Default |
-| ------------------------------- | ----- | ---------------- | -------- | ------- |
-| `--user <USER>`                 | `-u`  | New user email   | No       | -       |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | New workspace ID | No       | -       |
+| Option                          | Alias | Description                                            | Required | Default |
+| ------------------------------- | ----- | ------------------------------------------------------ | -------- | ------- |
+| `--user <USER>`                 | `-u`  | New user email                                         | No       | -       |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | New workspace ID                                       | No       | -       |
+| `--readonly`                    | -     | Toggle read-only mode. Pass --no-readonly to clear it. | No       | -       |
 
 <!-- politty:command:profile update:options:end -->
 

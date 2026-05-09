@@ -8,6 +8,7 @@ export interface ProfileInfo {
   name: string;
   user: string;
   workspaceId: string;
+  readonly: boolean;
 }
 
 export const profileCommand = defineCommand({

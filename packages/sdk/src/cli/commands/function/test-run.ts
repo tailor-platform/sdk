@@ -17,6 +17,7 @@ import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger, styles } from "@/cli/shared/logger";
+import { assertWritable } from "@/cli/shared/readonly-guard";
 import { executeScript } from "@/cli/shared/script-executor";
 import { formatErrorWithSourcemap } from "@/cli/shared/stack-trace";
 import { bundleForTestRun, type ResolvedMachineUser } from "./bundle";
@@ -70,6 +71,7 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
     },
   ],
   run: async (args) => {
+    await assertWritable({ profile: args.profile });
     // 1. Resolve and validate file path
     const filePath = path.resolve(args.file);
     if (!fs.existsSync(filePath)) {

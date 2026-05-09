@@ -4,6 +4,7 @@ import { initOperatorClient, type OperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
+import { assertWritable } from "@/cli/shared/readonly-guard";
 import { workspaceInfo, type WorkspaceInfo } from "./transform";
 import type { ProfileInfo } from "../profile";
 
@@ -104,6 +105,7 @@ export const createCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
+    await assertWritable();
     // Execute workspace create logic
     const workspace = await createWorkspace({
       name: args.name,
@@ -142,6 +144,7 @@ export const createCommand = defineAppCommand({
         name: profileName,
         user: profileUser,
         workspaceId: workspace.id,
+        readonly: false,
       };
 
       if (!args.json) {

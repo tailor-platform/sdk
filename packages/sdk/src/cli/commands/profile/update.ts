@@ -23,6 +23,9 @@ export const updateCommand = defineAppCommand({
         alias: "w",
         description: "New workspace ID",
       }),
+      readonly: arg(z.boolean().optional(), {
+        description: "Toggle read-only mode. Pass --no-readonly to clear it.",
+      }),
     })
     .strict(),
   run: async (args) => {
@@ -34,7 +37,7 @@ export const updateCommand = defineAppCommand({
     }
 
     // Check if at least one property is provided
-    if (!args.user && !args["workspace-id"]) {
+    if (!args.user && !args["workspace-id"] && args.readonly === undefined) {
       throw new Error("Please provide at least one property to update.");
     }
 
@@ -64,6 +67,11 @@ export const updateCommand = defineAppCommand({
     // Update properties
     profile.user = newUser;
     profile.workspace_id = newWorkspaceId;
+    if (args.readonly === true) {
+      profile.readonly = true;
+    } else if (args.readonly === false) {
+      delete profile.readonly;
+    }
     writePlatformConfig(config);
     if (!args.json) {
       logger.success(`Profile "${args.name}" updated successfully`);
@@ -74,6 +82,7 @@ export const updateCommand = defineAppCommand({
       name: args.name,
       user: newUser,
       workspaceId: newWorkspaceId,
+      readonly: profile.readonly === true,
     };
     logger.out(profileInfo);
   },

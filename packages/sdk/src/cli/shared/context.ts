@@ -20,6 +20,7 @@ import {
 const pfProfileSchema = z.object({
   user: z.string(),
   workspace_id: z.string(),
+  readonly: z.boolean().optional(),
 });
 
 const pfUserSchemaV1 = z.object({

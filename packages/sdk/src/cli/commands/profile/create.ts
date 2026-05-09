@@ -23,6 +23,9 @@ export const createCommand = defineAppCommand({
         alias: "w",
         description: "Workspace ID",
       }),
+      readonly: arg(z.boolean().default(false), {
+        description: "Create as a read-only profile that blocks all write commands.",
+      }),
     })
     .strict(),
   run: async (args) => {
@@ -55,6 +58,7 @@ export const createCommand = defineAppCommand({
     config.profiles[args.name] = {
       user: args.user,
       workspace_id: args["workspace-id"],
+      ...(args.readonly ? { readonly: true } : {}),
     };
     writePlatformConfig(config);
 
@@ -67,6 +71,7 @@ export const createCommand = defineAppCommand({
       name: args.name,
       user: args.user,
       workspaceId: args["workspace-id"],
+      readonly: args.readonly,
     };
     logger.out(profileInfo);
   },

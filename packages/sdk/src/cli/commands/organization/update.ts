@@ -5,6 +5,7 @@ import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
+import { assertWritable } from "@/cli/shared/readonly-guard";
 import { organizationInfo, type OrganizationInfo } from "./transform";
 
 const updateOrganizationOptionsSchema = z.object({
@@ -55,6 +56,7 @@ export const updateCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
+    await assertWritable();
     const organization = await updateOrganization({
       organizationId: args["organization-id"],
       name: args.name,
