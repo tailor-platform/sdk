@@ -1,0 +1,130 @@
+import * as fs from "node:fs";
+import * as path from "pathe";
+import { runCommand } from "politty";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { fetchAll, initOperatorClient } from "@/cli/shared/client";
+import { fetchLatestToken, readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
+import { resetKeyringState } from "@/cli/shared/token-store";
+import { updateCommand } from "./update";
+
+const xdgTempDir = vi.hoisted(() => `/tmp/tailor-profile-update-${Date.now()}-${Math.random()}`);
+
+vi.mock("xdg-basedir", () => ({
+  xdgConfig: xdgTempDir,
+}));
+
+vi.mock("@napi-rs/keyring", () => ({
+  Entry: class {
+    setPassword() {}
+    getPassword(): string | null {
+      return null;
+    }
+    deletePassword() {}
+  },
+}));
+
+vi.mock("@/cli/shared/client", async (importOriginal) => ({
+  ...(await importOriginal()),
+  initOperatorClient: vi.fn(),
+  fetchAll: vi.fn(),
+}));
+
+// Mock fetchLatestToken without disturbing readPlatformConfig / writePlatformConfig,
+// which the run handler also uses and which we want to round-trip on disk.
+vi.mock("@/cli/shared/context", async (importOriginal) => ({
+  ...(await importOriginal()),
+  fetchLatestToken: vi.fn(),
+}));
+
+const validUUID = "12345678-1234-4abc-8def-123456789012";
+
+beforeAll(() => {
+  fs.mkdirSync(xdgTempDir, { recursive: true });
+});
+
+afterAll(() => {
+  fs.rmSync(xdgTempDir, { recursive: true, force: true });
+});
+
+describe("profile update --readonly", () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    resetKeyringState();
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
+    // Silence logger output during tests so the table renderer doesn't
+    // pollute stdout.
+    const { logger } = await import("@/cli/shared/logger");
+    vi.spyOn(logger, "out").mockImplementation(() => {});
+    vi.spyOn(logger, "success").mockImplementation(() => {});
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        rw: { user: "u@example.com", workspace_id: validUUID },
+        ro: { user: "u@example.com", workspace_id: validUUID, readonly: true },
+      },
+      current_user: null,
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    // Clean up the on-disk config between tests so prior writes don't leak.
+    const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
+    if (fs.existsSync(configPath)) fs.rmSync(configPath);
+  });
+
+  it("sets readonly: true on disk and skips remote validation when only --readonly is passed", async () => {
+    await runCommand(updateCommand, ["rw", "--readonly"]);
+
+    const config = await readPlatformConfig();
+    expect(config.profiles.rw?.readonly).toBe(true);
+
+    // Key behavioral guarantee: no token / workspace lookup happens for a
+    // pure readonly toggle. Otherwise users could not lift readonly when
+    // their saved token has expired or the workspace has been removed.
+    expect(vi.mocked(fetchLatestToken)).not.toHaveBeenCalled();
+    expect(vi.mocked(initOperatorClient)).not.toHaveBeenCalled();
+    expect(vi.mocked(fetchAll)).not.toHaveBeenCalled();
+  });
+
+  it("clears readonly when --no-readonly is passed and skips remote validation", async () => {
+    await runCommand(updateCommand, ["ro", "--no-readonly"]);
+
+    const config = await readPlatformConfig();
+    // We don't store readonly: false; the field should be absent.
+    expect(config.profiles.ro?.readonly).toBeUndefined();
+
+    expect(vi.mocked(fetchLatestToken)).not.toHaveBeenCalled();
+    expect(vi.mocked(initOperatorClient)).not.toHaveBeenCalled();
+  });
+
+  it("performs remote validation when --user is also passed (readonly does not bypass it)", async () => {
+    vi.mocked(fetchLatestToken).mockResolvedValue("mock-token");
+    vi.mocked(fetchAll).mockResolvedValue([{ id: validUUID }]);
+    vi.mocked(initOperatorClient).mockResolvedValue({
+      listWorkspaces: vi.fn(),
+    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        rw: { user: "old@example.com", workspace_id: validUUID },
+      },
+      current_user: null,
+    });
+
+    await runCommand(updateCommand, ["rw", "--user", "new@example.com", "--readonly"]);
+
+    expect(vi.mocked(fetchLatestToken)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(fetchLatestToken)).toHaveBeenCalledWith(expect.anything(), "new@example.com");
+    expect(vi.mocked(initOperatorClient)).toHaveBeenCalledTimes(1);
+
+    const config = await readPlatformConfig();
+    expect(config.profiles.rw?.user).toBe("new@example.com");
+    expect(config.profiles.rw?.readonly).toBe(true);
+  });
+});
