@@ -152,6 +152,41 @@ describe("renderDeploy", () => {
     const content = renderDeploy(baseParams);
     expect(content).toContain("group: tailor-my-app-");
   });
+
+  it("strips plan job by default", () => {
+    const content = renderDeploy(baseParams);
+    expect(content).not.toContain("tailor-platform/actions/plan@");
+    expect(content).not.toContain("TAILOR_PLATFORM_WORKSPACE_ID");
+    expect(content).not.toContain("__PLAN_JOB_START__");
+    expect(content).not.toContain("__PLAN_JOB_END__");
+    expect(content).toContain("tailor-platform/actions/deploy@");
+  });
+
+  it("includes plan job when withPlan is true", () => {
+    const content = renderDeploy({ ...baseParams, withPlan: true });
+    expect(content).toContain("tailor-platform/actions/plan@");
+    expect(content).toContain("workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}");
+    expect(content).toContain("github-token: ${{ secrets.GITHUB_TOKEN }}");
+    expect(content).toContain("tailor-platform/actions/deploy@");
+    expect(content).not.toContain("__PLAN_JOB_START__");
+    expect(content).not.toContain("__PLAN_JOB_END__");
+  });
+
+  it("includes setup steps in both plan and deploy jobs when withPlan is true", () => {
+    const content = renderDeploy({ ...baseParams, withPlan: true });
+    const matches = content.match(/uses: pnpm\/action-setup@/g) ?? [];
+    expect(matches).toHaveLength(2);
+  });
+
+  it("propagates working-directory to plan job when withPlan is true", () => {
+    const content = renderDeploy({
+      ...baseParams,
+      withPlan: true,
+      workingDirectory: "apps/foo",
+    });
+    const matches = content.match(/working-directory: apps\/foo/g) ?? [];
+    expect(matches).toHaveLength(2);
+  });
 });
 
 describe("buildFiles", () => {

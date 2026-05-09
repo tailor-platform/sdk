@@ -1,7 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import deployTemplate from "./deploy.workflow.yml";
-import planJobTemplate from "./plan-job.yml";
 import setupBun from "./setup-bun.yml";
 import setupNpm from "./setup-npm.yml";
 import setupPnpm from "./setup-pnpm.yml";
@@ -50,28 +49,6 @@ export function detectPackageManager(dir: string): PackageManager {
 }
 
 /**
- * Render the plan job YAML snippet.
- * @param params - Configuration for plan job
- * @param params.workingDirectory - Working directory for monorepo setups
- * @param params.packageManager - Package manager to use
- * @returns Plan job YAML content
- */
-function renderPlanJob(params: {
-  workingDirectory?: string;
-  packageManager: PackageManager;
-}): string {
-  const { workingDirectory, packageManager } = params;
-
-  const workingDirectoryLine = workingDirectory
-    ? `          working-directory: ${workingDirectory}\n`
-    : "";
-
-  return planJobTemplate
-    .replace(/ *# __WORKING_DIRECTORY__\n/, () => workingDirectoryLine)
-    .replace(/^ *# __SETUP_STEPS__$/m, () => indentSnippet(setupSteps[packageManager], 6));
-}
-
-/**
  * Render the deploy workflow YAML.
  *
  * Generates a workflow that calls the composite deploy action
@@ -80,6 +57,8 @@ function renderPlanJob(params: {
  * detected package manager.
  *
  * If withPlan is true, also includes a plan job that runs on pull requests.
+ * Otherwise, the plan job section delimited by __PLAN_JOB_START__ /
+ * __PLAN_JOB_END__ markers is stripped from the template.
  * @param params - Workspace and deployment configuration
  * @returns Workflow YAML content
  */
@@ -98,16 +77,16 @@ export function renderDeploy(params: DeployParams): string {
     ? `          working-directory: ${workingDirectory}\n`
     : "";
 
-  const planJobContent = withPlan ? renderPlanJob({ workingDirectory, packageManager }) + "\n" : "";
+  const stripPlanSection = (content: string): string =>
+    withPlan
+      ? content.replace(/^ *# __PLAN_JOB_(?:START|END)__\n/gm, "")
+      : content.replace(/^ *# __PLAN_JOB_START__\n[\s\S]*?^ *# __PLAN_JOB_END__\n/m, "");
 
-  return deployTemplate
+  return stripPlanSection(deployTemplate)
     .replaceAll("__WORKSPACE_NAME__", () => workspaceName)
     .replaceAll("__WORKSPACE_REGION__", () => workspaceRegion)
     .replaceAll("__ORGANIZATION_ID__", () => organizationId)
     .replaceAll("__FOLDER_ID__", () => folderId)
-    .replace(/ *# __WORKING_DIRECTORY__\n/, () => workingDirectoryLine)
-    .replace(/^ *# __SETUP_STEPS__$/m, () => indentSnippet(setupSteps[packageManager], 6))
-    .replace(/^ *# __PLAN_JOB__\n/m, () =>
-      planJobContent ? indentSnippet(planJobContent, 2) : "",
-    );
+    .replace(/ *# __WORKING_DIRECTORY__\n/g, () => workingDirectoryLine)
+    .replace(/^ *# __SETUP_STEPS__$/gm, () => indentSnippet(setupSteps[packageManager], 6));
 }
