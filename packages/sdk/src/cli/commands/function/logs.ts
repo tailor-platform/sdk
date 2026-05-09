@@ -313,7 +313,7 @@ export const logsCommand = defineAppCommand({
   description: "List or get function execution logs.",
   notes: `When viewing a specific execution that failed, the command displays error details with the stack trace mapped back to original source files via the inline sourcemap (clickable file links and code snippets, matching \`function test-run\` output).
 
-When the deployed script cannot be downloaded or the function has been redeployed since the execution, the command falls back to a plain-text error display to avoid showing misleading source locations.`,
+The download is pinned to the bundle that actually ran using the execution's content hash, so stack traces stay accurate across redeploys when the server retains old bundles. The command falls back to a plain-text error display when the pinned bundle cannot be retrieved, or for older servers that do not report a content hash when the function was redeployed after the execution.`,
   examples: [
     {
       cmd: "",
