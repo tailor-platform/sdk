@@ -48,3 +48,17 @@ jobs:
           createGithubReleases: true
         env:
           GITHUB_TOKEN: ${{ steps.get_access_token.outputs.token }}
+
+      - name: Notify Slack on failure
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_SDK_WEBHOOK_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          COMMIT_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          jq -n \
+            --arg run "$RUN_URL" \
+            --arg sha "$COMMIT_SHA" \
+            '{text: ":rotating_light: Release workflow <\($run)|failed in \($sha[0:7])>"}' \
+            | curl -fsS -X POST -H 'Content-Type: application/json' --data @- "$SLACK_WEBHOOK_URL"

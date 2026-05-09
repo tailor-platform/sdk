@@ -147,6 +147,17 @@ export default defineConfig([
               message: "Configure module should not import from plugin module.",
             },
             {
+              group: [
+                "**/utils/**",
+                "@/utils/**",
+                "!**/utils/brand",
+                "!@/utils/brand",
+                "!**/utils/test/**",
+                "!@/utils/test/**",
+              ],
+              message: "Configure module can only import `brand` or `test/*` from utils module.",
+            },
+            {
               group: ["zod"],
               allowTypeImports: true,
               message: "Configure module can import only types from zod module.",

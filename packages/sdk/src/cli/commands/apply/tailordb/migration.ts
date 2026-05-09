@@ -7,7 +7,6 @@
 import * as fs from "node:fs";
 import { create } from "@bufbuild/protobuf";
 import { AuthInvokerSchema, type AuthInvoker } from "@tailor-proto/tailor/v1/auth_resource_pb";
-import ora from "ora";
 import { bundleMigrationScript } from "@/cli/commands/tailordb/migrate/bundler";
 import { type NamespaceWithMigrations } from "@/cli/commands/tailordb/migrate/config";
 import {
@@ -24,6 +23,7 @@ import {
 import { type OperatorClient } from "@/cli/shared/client";
 import { logger, styles } from "@/cli/shared/logger";
 import { executeScript } from "@/cli/shared/script-executor";
+import { spinner } from "@/cli/shared/spinner";
 import { trnPrefix } from "../label";
 import type { TailorDBServiceConfig } from "@/types/tailordb.generated";
 
@@ -281,22 +281,19 @@ export async function executeMigrations(
 
     for (const migration of namespaceMigrations) {
       const migrationLabel = `${migration.namespace}/${formatMigrationNumber(migration.number)}`;
-      const spinner = ora({
-        text: `Executing migration ${migrationLabel}...`,
-        prefixText: "",
-      }).start();
+      const sp = spinner().start(`Executing migration ${migrationLabel}...`);
 
       const result = await executeSingleMigration(options, migration);
 
       if (result.success) {
-        spinner.succeed(`Migration ${migrationLabel} completed successfully`);
+        sp.succeed(`Migration ${migrationLabel} completed successfully`);
 
         // Show logs if any
         if (result.logs && result.logs.trim()) {
           logger.log(`Logs:\n${result.logs}`);
         }
       } else {
-        spinner.fail(`Migration ${migrationLabel} failed`);
+        sp.fail(`Migration ${migrationLabel} failed`);
         if (result.logs) {
           logger.error(`Logs:\n${result.logs}`);
         }

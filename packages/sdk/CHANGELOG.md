@@ -1,5 +1,29 @@
 # @tailor-platform/sdk
 
+## 1.45.2
+
+### Patch Changes
+
+- [#1108](https://github.com/tailor-platform/sdk/pull/1108) [`430cba0`](https://github.com/tailor-platform/sdk/commit/430cba050400af0ef673035791fe4132b5323b90) Thanks [@toiroakr](https://github.com/toiroakr)! - Document how to use the re-exported Kysely `sql` tag from `@tailor-platform/sdk/kysely` to write raw SQL queries against the Kysely instance returned by `getDB()`. This was already supported; only documentation is added.
+
+- [#1133](https://github.com/tailor-platform/sdk/pull/1133) [`3457fe7`](https://github.com/tailor-platform/sdk/commit/3457fe77efa90b5443b51c0cbb2fb6d1942b346f) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `workflow executions --wait`, `workflow start --wait`, and `executor jobs --wait` not responding to Ctrl+C in some terminals.
+
+- [#1124](https://github.com/tailor-platform/sdk/pull/1124) [`82152a9`](https://github.com/tailor-platform/sdk/commit/82152a96753c8719472387e6d79f8454211074c7) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency es-toolkit to v1.46.1
+
+- [#1125](https://github.com/tailor-platform/sdk/pull/1125) [`15a0023`](https://github.com/tailor-platform/sdk/commit/15a0023018ca67d53220e82281d51d633b16b0d5) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency kysely to v0.28.17
+
+- [#1127](https://github.com/tailor-platform/sdk/pull/1127) [`79050d4`](https://github.com/tailor-platform/sdk/commit/79050d4606dc695522f2eaa65a0079b20c3d51c8) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency pkg-types to v2.3.1
+
+- [#1128](https://github.com/tailor-platform/sdk/pull/1128) [`5596283`](https://github.com/tailor-platform/sdk/commit/5596283bd09cddee10488606122ddebe57c58a75) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency rolldown to v1.0.0-rc.18
+
+## 1.45.1
+
+### Patch Changes
+
+- [#1110](https://github.com/tailor-platform/sdk/pull/1110) [`ba93ca3`](https://github.com/tailor-platform/sdk/commit/ba93ca3543c2927857dc79616ec680ed2b008ad1) Thanks [@toiroakr](https://github.com/toiroakr)! - Drop the `multiline-ts` dependency in favour of an in-tree implementation. The upstream package ships a `preinstall: npx only-allow pnpm` hook that, when a fresh copy is resolved (e.g. `npx create-tailor-sdk@latest`), causes npm's exec lock to time out with `ECOMPROMISED`. Replacing the dependency removes that failure path. Also drops `multiline-ts` from the `pnpm-workspace.yaml` `allowBuilds` list emitted by `create-tailor-sdk`.
+
+- [#1109](https://github.com/tailor-platform/sdk/pull/1109) [`9965ba5`](https://github.com/tailor-platform/sdk/commit/9965ba5f3aefee43119d979fb827fef0160d618a) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix workflow job bundling to also transform `workflow.trigger()` and `job.trigger()` calls in `.mts`, `.cts`, `.mjs`, and `.cjs` files. Previously the rolldown transform plugin only matched `.ts` and `.js`, so trigger calls in non-default extensions were silently left as raw method calls and failed at runtime. The default-import resolver also strips trailing extensions so `import wf from "./simple.mjs"` resolves to the same workflow as `import wf from "./simple"`.
+
 ## 1.45.0
 
 ### Minor Changes

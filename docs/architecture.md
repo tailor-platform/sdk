@@ -26,6 +26,13 @@ These modules have strict import boundaries enforced by ESLint. See [`packages/s
 
 The essential constraint: **configure cannot depend on parser/cli at runtime**, because configure code is bundled into user output (resolvers, executors, workflows). Any runtime dependency pulled into configure inflates user bundle sizes.
 
+The configure module's import boundaries enforced by ESLint:
+
+1. **Cannot import from `cli/`** — CLI is deployment tooling, not user runtime
+2. **Cannot import from `parser/`** (use `@/types/` instead) — prevents Zod from leaking into user bundles
+3. **Cannot import from `plugin/`** — prevents plugin system code from bundling into user output
+4. **Can only import `utils/brand` or `utils/test/*`** — other utils helpers may have dependencies that would inflate user bundle sizes
+
 ## Design Decisions
 
 ### Schema/Types Separation (Zod Bundling Prevention)

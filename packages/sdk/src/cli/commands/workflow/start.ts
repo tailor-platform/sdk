@@ -5,7 +5,6 @@ import {
   WorkflowExecution_Status,
   WorkflowJobExecution_Status,
 } from "@tailor-proto/tailor/v1/workflow_resource_pb";
-import ora from "ora";
 import { arg } from "politty";
 import { z } from "zod";
 import { deploymentArgs, parseDuration } from "@/cli/shared/args";
@@ -14,6 +13,7 @@ import { defineAppCommand } from "@/cli/shared/command";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger, styles } from "@/cli/shared/logger";
+import { spinner } from "@/cli/shared/spinner";
 import { nameArgs, waitArgs } from "./args";
 import { getWorkflowExecution, printExecutionWithLogs } from "./executions";
 import { resolveWorkflow } from "./get";
@@ -120,10 +120,8 @@ export async function waitForExecution(
 
   let lastStatus: WorkflowExecution_Status | undefined;
   let lastRunningJobs: string | undefined;
-  const spinner = showProgress
-    ? ora({
-        indent: 2,
-      }).start("Waiting for workflow to complete...")
+  const sp = showProgress
+    ? spinner({ indent: 2 }).start("Waiting for workflow to complete...")
     : null;
 
   try {
@@ -134,7 +132,7 @@ export async function waitForExecution(
       });
 
       if (!execution) {
-        spinner?.fail(`Execution '${executionId}' not found.`);
+        sp?.fail(`Execution '${executionId}' not found.`);
         throw new Error(`Execution '${executionId}' not found.`);
       }
 
@@ -144,12 +142,12 @@ export async function waitForExecution(
       // Show workflow status change (persist previous line)
       if (execution.status !== lastStatus) {
         if (showProgress) {
-          spinner?.stop();
+          sp?.stop();
           logger.info(`Status: ${coloredStatus}`, {
             mode: "stream",
             indent: 2,
           });
-          spinner?.start(`Waiting for workflow to complete...`);
+          sp?.start(`Waiting for workflow to complete...`);
         }
         lastStatus = execution.status;
       }
@@ -159,29 +157,29 @@ export async function waitForExecution(
         const runningJobs = getRunningJobs(execution);
         if (runningJobs && runningJobs !== lastRunningJobs) {
           if (showProgress) {
-            spinner?.stop();
+            sp?.stop();
             logger.info(`Job | ${runningJobs}: ${coloredStatus}`, {
               mode: "stream",
               indent: 2,
             });
-            spinner?.start(`Waiting for workflow to complete...`);
+            sp?.start(`Waiting for workflow to complete...`);
           }
           lastRunningJobs = runningJobs;
         }
       }
 
-      if (spinner) {
-        spinner.text = `Waiting for workflow to complete... (${now})`;
+      if (sp) {
+        sp.text = `Waiting for workflow to complete... (${now})`;
       }
 
       // Terminal states: SUCCESS, FAILED, or PENDING_RESUME
       if (isTerminalStatus(execution.status)) {
         if (execution.status === WorkflowExecution_Status.SUCCESS) {
-          spinner?.succeed(`Completed: ${coloredStatus}`);
+          sp?.succeed(`Completed: ${coloredStatus}`);
         } else if (execution.status === WorkflowExecution_Status.FAILED) {
-          spinner?.fail(`Completed: ${coloredStatus}`);
+          sp?.fail(`Completed: ${coloredStatus}`);
         } else {
-          spinner?.warn(`Completed: ${coloredStatus}`);
+          sp?.warn(`Completed: ${coloredStatus}`);
         }
         return toWorkflowExecutionInfo(execution);
       }
@@ -189,7 +187,7 @@ export async function waitForExecution(
       await sleep(interval);
     }
   } catch (error) {
-    spinner?.stop();
+    sp?.stop();
     throw error;
   }
 }
