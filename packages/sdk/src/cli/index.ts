@@ -6,7 +6,7 @@ import { z } from "zod";
 import { apiCommand } from "./commands/api";
 import { applyCommand } from "./commands/apply";
 import { authconnectionCommand } from "./commands/authconnection";
-import { crashReportCommand } from "./commands/crash-report";
+import { crashReportCommand } from "./commands/crashreport";
 import { executorCommand } from "./commands/executor";
 import { functionCommand } from "./commands/function";
 import { generateCommand } from "./commands/generate";
@@ -62,7 +62,7 @@ export const mainCommand = withCompletionCommand(
       api: apiCommand,
       apply: applyCommand,
       authconnection: authconnectionCommand,
-      "crash-report": crashReportCommand,
+      crashreport: crashReportCommand,
       executor: executorCommand,
       function: functionCommand,
       generate: generateCommand,

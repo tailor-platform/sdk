@@ -139,7 +139,7 @@ List or get function execution logs.
 **Usage**
 
 ```
-tailor-sdk function logs [options] [executionId]
+tailor-sdk function logs [options] [execution-id]
 ```
 
 <!-- politty:command:function logs:usage:end -->
@@ -148,9 +148,9 @@ tailor-sdk function logs [options] [executionId]
 
 **Arguments**
 
-| Argument      | Description                                         | Required |
-| ------------- | --------------------------------------------------- | -------- |
-| `executionId` | Execution ID (if provided, shows details with logs) | No       |
+| Argument       | Description                                         | Required |
+| -------------- | --------------------------------------------------- | -------- |
+| `execution-id` | Execution ID (if provided, shows details with logs) | No       |
 
 <!-- politty:command:function logs:arguments:end -->
 

@@ -3,7 +3,8 @@ import { listCommand } from "./list";
 import { sendCommand } from "./send";
 
 export const crashReportCommand = defineCommand({
-  name: "crash-report",
+  name: "crashreport",
+  aliases: ["crash-report"],
   description: "Manage crash reports.",
   subCommands: {
     list: listCommand,

@@ -255,14 +255,14 @@ Commands for managing and deploying static websites.
 | [staticwebsite list](./cli/staticwebsite.md#staticwebsite-list)     | List all static websites in a workspace.              |
 | [staticwebsite get](./cli/staticwebsite.md#staticwebsite-get)       | Get details of a specific static website.             |
 
-### [Crash Report Commands](./cli/crash-report.md)
+### [Crash Report Commands](./cli/crashreport.md)
 
 Commands for managing crash reports.
 
-| Command                                                      | Description                                    |
-| ------------------------------------------------------------ | ---------------------------------------------- |
-| [crash-report list](./cli/crash-report.md#crash-report-list) | List local crash report files.                 |
-| [crash-report send](./cli/crash-report.md#crash-report-send) | Submit a crash report to help improve the SDK. |
+| Command                                                   | Description                                    |
+| --------------------------------------------------------- | ---------------------------------------------- |
+| [crashreport list](./cli/crashreport.md#crashreport-list) | List local crash report files.                 |
+| [crashreport send](./cli/crashreport.md#crashreport-send) | Submit a crash report to help improve the SDK. |
 
 ### [Setup Commands](./cli/setup.md)
 

@@ -397,7 +397,7 @@ export const executionsCommand = defineAppCommand({
     .object({
       ...workspaceArgs,
       ...pagedLogArgs,
-      executionId: arg(z.string().optional(), {
+      "execution-id": arg(z.string().optional(), {
         positional: true,
         description: "Execution ID (if provided, shows details)",
       }),
@@ -425,10 +425,10 @@ export const executionsCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    if (args.executionId) {
+    if (args["execution-id"]) {
       const interval = parseDuration(args.interval);
       const { execution, wait } = await getWorkflowExecution({
-        executionId: args.executionId,
+        executionId: args["execution-id"],
         workspaceId: args["workspace-id"],
         profile: args.profile,
         interval,

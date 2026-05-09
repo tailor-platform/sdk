@@ -294,7 +294,7 @@ When the deployed script cannot be downloaded or the function has been redeploye
     .object({
       ...workspaceArgs,
       ...pagedLogArgs,
-      executionId: arg(z.string().optional(), {
+      "execution-id": arg(z.string().optional(), {
         positional: true,
         description: "Execution ID (if provided, shows details with logs)",
       }),
@@ -311,14 +311,14 @@ When the deployed script cannot be downloaded or the function has been redeploye
       profile: args.profile,
     });
 
-    if (args.executionId) {
+    if (args["execution-id"]) {
       const { execution } = await client.getFunctionExecution({
         workspaceId,
-        executionId: args.executionId,
+        executionId: args["execution-id"],
       });
 
       if (!execution) {
-        throw new Error(`Function execution '${args.executionId}' not found.`);
+        throw new Error(`Function execution '${args["execution-id"]}' not found.`);
       }
 
       const detail = toFunctionExecutionDetailInfo(execution);

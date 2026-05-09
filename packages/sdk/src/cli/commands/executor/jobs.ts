@@ -551,11 +551,11 @@ export const jobsCommand = defineAppCommand({
   args: z
     .object({
       ...workspaceArgs,
-      executorName: arg(z.string(), {
+      "executor-name": arg(z.string(), {
         positional: true,
         description: "Executor name",
       }),
-      jobId: arg(z.string().optional(), {
+      "job-id": arg(z.string().optional(), {
         positional: true,
         description: "Job ID (if provided, shows job details)",
       }),
@@ -587,11 +587,11 @@ export const jobsCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    if (args.jobId) {
+    if (args["job-id"]) {
       if (args.wait) {
         const result = await watchExecutorJob({
-          executorName: args.executorName,
-          jobId: args.jobId,
+          executorName: args["executor-name"],
+          jobId: args["job-id"],
           workspaceId: args["workspace-id"],
           profile: args.profile,
           interval: parseDuration(args.interval),
@@ -652,8 +652,8 @@ export const jobsCommand = defineAppCommand({
       }
 
       const job = await getExecutorJob({
-        executorName: args.executorName,
-        jobId: args.jobId,
+        executorName: args["executor-name"],
+        jobId: args["job-id"],
         attempts: args.attempts,
         workspaceId: args["workspace-id"],
         profile: args.profile,
@@ -668,7 +668,7 @@ export const jobsCommand = defineAppCommand({
         logger.warn("--wait flag is ignored in list mode. Specify a job ID to wait.");
       }
       const jobs = await listExecutorJobs({
-        executorName: args.executorName,
+        executorName: args["executor-name"],
         status: args.status,
         order: args.order,
         limit: args.limit,

@@ -79,7 +79,7 @@ export const resumeCommand = defineAppCommand({
   args: z
     .object({
       ...workspaceArgs,
-      executionId: arg(z.string(), {
+      "execution-id": arg(z.string(), {
         positional: true,
         description: "Failed execution ID",
       }),
@@ -88,7 +88,7 @@ export const resumeCommand = defineAppCommand({
     .strict(),
   run: async (args) => {
     const { executionId, wait } = await resumeWorkflow({
-      executionId: args.executionId,
+      executionId: args["execution-id"],
       workspaceId: args["workspace-id"],
       profile: args.profile,
       interval: parseDuration(args.interval),
