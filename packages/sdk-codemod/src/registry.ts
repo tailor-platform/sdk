@@ -47,6 +47,16 @@ const allCodemods: CodemodPackage[] = [
     scriptPath: "v2/principal-unify/scripts/transform.js",
     legacyPatterns: ["TailorUser", "TailorActor", "TailorInvoker", "unauthenticatedTailorUser"],
   },
+  {
+    id: "v2/apply-to-deploy",
+    name: "tailor-sdk apply → tailor-sdk deploy",
+    description:
+      "Rewrite `tailor-sdk apply` invocations in package.json scripts, shell scripts, CI configs, and docs to the v2-recommended `tailor-sdk deploy` alias",
+    since: "1.0.0",
+    until: "2.0.0",
+    scriptPath: "v2/apply-to-deploy/scripts/transform.js",
+    filePatterns: ["**/package.json", "**/*.{sh,bash,zsh,yml,yaml}", "**/*.md"],
+  },
 ];
 
 /**

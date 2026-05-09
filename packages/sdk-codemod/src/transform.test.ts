@@ -78,4 +78,8 @@ describe("codemod transforms", () => {
   it("v2/principal-unify transforms correctly", async () => {
     await runFixtureCases("v2/principal-unify");
   });
+
+  it("v2/apply-to-deploy transforms correctly", async () => {
+    await runFixtureCases("v2/apply-to-deploy");
+  });
 });
