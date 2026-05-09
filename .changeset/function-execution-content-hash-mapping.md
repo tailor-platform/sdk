@@ -2,4 +2,4 @@
 "@tailor-platform/sdk": patch
 ---
 
-Pin function execution log sourcemap mapping to `FunctionExecution.contentHash` so stack traces map against the exact bundle that ran, even after redeploys. Older servers that do not populate `contentHash` continue to use the existing `updatedAt` staleness fallback.
+Stack traces shown by `tailor-sdk function logs <id>` now map back to original sources even after the deployed function has been updated. The `FunctionExecution.contentHash` reported by the server is used to download the exact bundle that ran, so source locations stay accurate across redeploys. Older servers that do not report `contentHash` keep using the existing `updatedAt` staleness fallback.
