@@ -8,7 +8,7 @@ vi.mock("std-env", () => ({
   isCI: false,
 }));
 
-describe("crash-report list command", () => {
+describe("crashreport list command", () => {
   let tmpDir: string;
 
   beforeEach(() => {

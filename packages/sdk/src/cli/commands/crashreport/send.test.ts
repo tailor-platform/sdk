@@ -27,7 +27,7 @@ function makeCrashReport(): CrashReport {
   };
 }
 
-describe("crash-report send command", () => {
+describe("crashreport send command", () => {
   let tmpDir: string;
   const originalFetch = globalThis.fetch;
 
