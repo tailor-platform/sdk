@@ -1,4 +1,4 @@
-name: "Workspace Apply Test"
+name: "Workspace Deploy Test"
 
 on:
   pull_request:
@@ -24,13 +24,13 @@ jobs:
         with:
           filters: |
             changes:
-              - .github/workflows/apply.yml
+              - .github/workflows/deploy.yml
               - example/**
               - packages/**
               - package.json
               - pnpm-lock.yaml
 
-  apply:
+  deploy:
     needs: changes
     if: needs.changes.outputs.should_run == 'true'
     strategy:
@@ -46,7 +46,7 @@ jobs:
             name: Windows
             slug: win
     runs-on: ${{ matrix.os }}
-    name: Apply (${{ matrix.name }})
+    name: Deploy (${{ matrix.name }})
     permissions:
       contents: read
     timeout-minutes: 15
@@ -92,9 +92,9 @@ jobs:
         working-directory: example
         run: pnpm run generate
 
-      - name: Apply workspace
+      - name: Deploy workspace
         working-directory: example
-        run: pnpm run apply
+        run: pnpm run deploy
         env:
           TAILOR_PLATFORM_SDK_BUILD_ONLY: ${{ runner.os == 'Windows' && 'true' || '' }}
 
@@ -108,7 +108,7 @@ jobs:
 
           # Check for pending migrations
           if echo "$STATUS" | grep -q "Pending migrations:"; then
-            echo "❌ ERROR: Pending migrations found after apply"
+            echo "❌ ERROR: Pending migrations found after deploy"
             exit 1
           fi
 
@@ -137,8 +137,8 @@ jobs:
         working-directory: example
         run: pnpm tailor-sdk workspace delete --workspace-id "${{ env.TAILOR_PLATFORM_WORKSPACE_ID }}" --yes
 
-  apply-result:
-    needs: [changes, apply]
+  deploy-result:
+    needs: [changes, deploy]
     if: always()
     runs-on: ubuntu-latest
     permissions: {}
@@ -150,8 +150,8 @@ jobs:
             echo "Skipped - no relevant changes"
             exit 0
           fi
-          if [[ "${{ needs.apply.result }}" != "success" ]]; then
-            echo "Apply jobs failed"
+          if [[ "${{ needs.deploy.result }}" != "success" ]]; then
+            echo "Deploy jobs failed"
             exit 1
           fi
-          echo "All apply jobs succeeded"
+          echo "All deploy jobs succeeded"

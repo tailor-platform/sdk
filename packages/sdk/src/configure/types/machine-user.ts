@@ -6,7 +6,7 @@ export interface MachineUserNameRegistry {}
 /**
  * Machine user name.
  *
- * When `tailor.d.ts` is generated (via `tailor-sdk apply`/`generate`), this is narrowed
+ * When `tailor.d.ts` is generated (via `tailor-sdk deploy`/`generate`), this is narrowed
  * to the union of defined machine user names. When no machine users are registered yet,
  * falls back to `string` to avoid blocking editing before the first generate run.
  */

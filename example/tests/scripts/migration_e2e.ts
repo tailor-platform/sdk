@@ -44,8 +44,8 @@ const runTailorSdk = (args: string[]) => {
   });
 };
 
-const runApply = () => {
-  runTailorSdk(["apply", "-c", configPath, "--yes"]);
+const runDeploy = () => {
+  runTailorSdk(["deploy", "-c", configPath, "--yes"]);
 };
 
 const runMigrateGenerate = () => {
@@ -229,7 +229,7 @@ runMigrateGenerate();
 ensureInitialSnapshot();
 
 console.log("Applying base schema (0000)...");
-runApply();
+runDeploy();
 
 const accessToken = await loadAccessToken();
 const workspaceId = await loadWorkspaceId();
@@ -303,7 +303,7 @@ for (const stepId of ["0001", "0002"]) {
   ensureMigrationCreated(stepId);
 
   console.log(`Applying migration ${stepId}...`);
-  runApply();
+  runDeploy();
 }
 
 console.log("Generating migration 0003...");
@@ -313,7 +313,7 @@ ensureMigrationCreated("0003");
 copyMigrationScript("0003");
 
 console.log("Applying migration 0003...");
-runApply();
+runDeploy();
 
 console.log("Generating migration 0004...");
 syncSchemaStep("0004");
@@ -321,7 +321,7 @@ runMigrateGenerate();
 ensureMigrationCreated("0004");
 
 console.log("Applying migration 0004...");
-runApply();
+runDeploy();
 
 await runAssertionScript("assert_roles_populated.ts", "assert-roles-populated");
 assertSchemaAfter0004(await fetchTypes());
@@ -336,7 +336,7 @@ ensureMigrationCreated("0005");
 copyMigrationScript("0005");
 
 console.log("Applying migration 0005...");
-runApply();
+runDeploy();
 
 await runAssertionScript("assert_after_0005.ts", "assert-after-0005");
 assertSchemaAfter0005(await fetchTypes());
@@ -348,7 +348,7 @@ ensureMigrationCreated("0006");
 copyMigrationScript("0006");
 
 console.log("Applying migration 0006...");
-runApply();
+runDeploy();
 
 await runAssertionScript("assert_no_duplicate_names.ts", "assert-no-duplicates");
 
@@ -358,7 +358,7 @@ runMigrateGenerate();
 ensureMigrationCreated("0007");
 
 console.log("Applying migration 0007...");
-runApply();
+runDeploy();
 
 assertSchemaAfterFinal(await fetchTypes());
 

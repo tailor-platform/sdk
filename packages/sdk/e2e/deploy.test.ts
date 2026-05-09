@@ -19,7 +19,7 @@ import { fileURLToPath } from "node:url";
 import { describe, test, expect, beforeAll } from "vitest";
 import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
-import { apply } from "../src/cli/commands/apply/apply";
+import { deploy } from "../src/cli/commands/deploy/deploy";
 import { trackWorkspace, trackTempDir } from "./globalSetup";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -221,7 +221,7 @@ export default defineConfig({
 `;
 
     const configPath = createTestConfig(baseConfig);
-    await apply({
+    await deploy({
       workspaceId,
       configPath,
       yes: true,
@@ -259,7 +259,7 @@ export default defineConfig({
 `;
 
     const configPath1 = createTestConfig(configWithExtra);
-    await apply({
+    await deploy({
       workspaceId,
       configPath: configPath1,
       yes: true,
@@ -291,7 +291,7 @@ export default defineConfig({
     const configPath2 = createTestConfig(configWithoutExtra);
 
     // Step 3: Apply - this should delete the extra TailorDB without error
-    await apply({
+    await deploy({
       workspaceId,
       configPath: configPath2,
       yes: true,
@@ -332,7 +332,7 @@ export default defineConfig({
 `;
 
     const configPath1 = createTestConfig(configWithIdP);
-    await apply({
+    await deploy({
       workspaceId,
       configPath: configPath1,
       yes: true,
@@ -359,7 +359,7 @@ export default defineConfig({
     // Step 3: Apply - this should delete IdP without error
     // Before the fix, this would fail with:
     // "Failed to delete IdPService: idp xxx is used by gateway(s)"
-    await apply({
+    await deploy({
       workspaceId,
       configPath: configPath2,
       yes: true,
@@ -413,7 +413,7 @@ export default defineConfig({
 `;
 
     const configPath1 = createTestConfig(configWithAuth);
-    await apply({
+    await deploy({
       workspaceId,
       configPath: configPath1,
       yes: true,
@@ -452,7 +452,7 @@ export default defineConfig({
     // Step 3: Apply - this should delete Auth without error
     // Before the fix, this would fail with:
     // "Failed to delete AuthService: auth xxx is used by gateway(s)"
-    await apply({
+    await deploy({
       workspaceId,
       configPath: configPath2,
       yes: true,
@@ -536,7 +536,7 @@ export default defineConfig({
 
     // Without --no-schema-check, this should fail due to schema diff
     await expect(
-      apply({
+      deploy({
         workspaceId,
         configPath,
         yes: true,
@@ -546,7 +546,7 @@ export default defineConfig({
 
     // With --no-schema-check, this should succeed despite schema diff
     await expect(
-      apply({
+      deploy({
         workspaceId,
         configPath,
         yes: true,
@@ -587,7 +587,7 @@ export default defineConfig({
 `;
 
     const configPath = createTestConfig(cleanupConfig);
-    await apply({
+    await deploy({
       workspaceId,
       configPath,
       yes: true,

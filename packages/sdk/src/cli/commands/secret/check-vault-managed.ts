@@ -1,4 +1,4 @@
-import { sdkNameLabelKey, trnPrefix } from "@/cli/commands/apply/label";
+import { sdkNameLabelKey, trnPrefix } from "@/cli/commands/deploy/label";
 import { logger } from "@/cli/shared/logger";
 import type { OperatorClient } from "@/cli/shared/client";
 

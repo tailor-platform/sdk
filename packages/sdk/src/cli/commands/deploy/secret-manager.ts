@@ -4,7 +4,7 @@ import { createChangeSet } from "./change-set";
 import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
 import { hashValue, loadSecretsState, saveSecretsState } from "./secrets-state";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
+import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/deploy";
 import type { Application } from "@/cli/services/application";
 
 type CreateVault = {
