@@ -47,21 +47,27 @@ export const updateCommand = defineAppCommand({
     const oldWorkspaceId = profile.workspace_id;
     const newWorkspaceId = args["workspace-id"] || oldWorkspaceId;
 
-    // Check if user exists
-    const token = await fetchLatestToken(config, newUser);
+    // Skip remote validation when neither user nor workspace is changing.
+    // This keeps `profile update <name> --readonly` / `--no-readonly` working
+    // offline and when the saved token is expired or the workspace has been
+    // removed — important so a user can always lift their own readonly flag.
+    if (args.user !== undefined || args["workspace-id"] !== undefined) {
+      // Check if user exists
+      const token = await fetchLatestToken(config, newUser);
 
-    // Check if workspace exists
-    const client = await initOperatorClient(token);
-    const workspaces = await fetchAll(async (pageToken, maxPageSize) => {
-      const { workspaces, nextPageToken } = await client.listWorkspaces({
-        pageToken,
-        pageSize: maxPageSize,
+      // Check if workspace exists
+      const client = await initOperatorClient(token);
+      const workspaces = await fetchAll(async (pageToken, maxPageSize) => {
+        const { workspaces, nextPageToken } = await client.listWorkspaces({
+          pageToken,
+          pageSize: maxPageSize,
+        });
+        return [workspaces, nextPageToken];
       });
-      return [workspaces, nextPageToken];
-    });
-    const workspace = workspaces.find((ws) => ws.id === newWorkspaceId);
-    if (!workspace) {
-      throw new Error(`Workspace "${newWorkspaceId}" not found.`);
+      const workspace = workspaces.find((ws) => ws.id === newWorkspaceId);
+      if (!workspace) {
+        throw new Error(`Workspace "${newWorkspaceId}" not found.`);
+      }
     }
 
     // Update properties

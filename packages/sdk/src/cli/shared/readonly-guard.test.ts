@@ -7,6 +7,14 @@ import { assertWritable } from "./readonly-guard";
 import { resetKeyringState } from "./token-store";
 
 /**
+ * Runnable command modules that live outside `src/cli/commands/`. They must
+ * be checked for `assertWritable` too because the main CLI registers them
+ * as top-level subcommands. Add a path here when a new top-level command
+ * is wired up outside `commands/`.
+ */
+const ADDITIONAL_RUNNABLE_COMMAND_PATHS = ["query/index.ts"];
+
+/**
  * Allowlist of command files that do NOT touch platform state, plus the
  * subcommand routers that only delegate to children. Every other command
  * file under `commands/` must call `assertWritable` so a readonly profile
@@ -23,8 +31,9 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   "logout.ts",
   "open.ts",
   "show.ts",
-  // API introspection (read-only)
-  "api/index.ts",
+  // API introspection sub-commands (read-only). The parent `api/index.ts`
+  // is NOT here because its `run` calls arbitrary OperatorService methods
+  // (including Create*/Update*/Delete*) and must guard.
   "api/inspect.ts",
   "api/list.ts",
   // Auth connections (read-only)
@@ -247,7 +256,8 @@ describe("assertWritable", () => {
 });
 
 describe("write command coverage", () => {
-  const commandsDir = path.resolve(__dirname, "..", "commands");
+  const cliDir = path.resolve(__dirname, "..");
+  const commandsDir = path.join(cliDir, "commands");
 
   it("every runnable command not on the read-only allowlist calls assertWritable", () => {
     // Must match an actual call site, not just the import statement, so that
@@ -257,6 +267,13 @@ describe("write command coverage", () => {
     for (const relativePath of listCommandSourceFiles(commandsDir)) {
       if (READ_OR_LOCAL_COMMAND_PATHS.has(relativePath)) continue;
       const source = fs.readFileSync(path.join(commandsDir, relativePath), "utf-8");
+      if (!isRunnableCommandFile(source)) continue;
+      if (!callPattern.test(source)) {
+        offenders.push(`commands/${relativePath}`);
+      }
+    }
+    for (const relativePath of ADDITIONAL_RUNNABLE_COMMAND_PATHS) {
+      const source = fs.readFileSync(path.join(cliDir, relativePath), "utf-8");
       if (!isRunnableCommandFile(source)) continue;
       if (!callPattern.test(source)) {
         offenders.push(relativePath);
@@ -269,6 +286,11 @@ describe("write command coverage", () => {
     const missing: string[] = [];
     for (const relativePath of READ_OR_LOCAL_COMMAND_PATHS) {
       if (!fs.existsSync(path.join(commandsDir, relativePath))) {
+        missing.push(relativePath);
+      }
+    }
+    for (const relativePath of ADDITIONAL_RUNNABLE_COMMAND_PATHS) {
+      if (!fs.existsSync(path.join(cliDir, relativePath))) {
         missing.push(relativePath);
       }
     }
