@@ -59,9 +59,9 @@ const allCodemods: CodemodPackage[] = [
   },
   {
     id: "v2/cli-rename",
-    name: "v2 CLI rename (single-word commands, kebab-case options)",
+    name: "v2 CLI rename (single-word commands)",
     description:
-      "Rewrite `tailor-sdk crash-report` → `crashreport` and camelCase long options (`--executionId`, `--executorName`, `--jobId`) to their kebab-case form across package.json scripts, shell scripts, CI configs, and docs",
+      "Rewrite `tailor-sdk crash-report` invocations to the v2 single-word `tailor-sdk crashreport` form across package.json scripts, shell scripts, CI configs, and docs",
     since: "1.0.0",
     until: "2.0.0",
     scriptPath: "v2/cli-rename/scripts/transform.js",

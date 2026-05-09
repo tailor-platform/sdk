@@ -2,8 +2,8 @@
   "name": "my-app",
   "version": "1.0.0",
   "scripts": {
-    "report:tail": "tailor-sdk crash-report tail --jobId latest",
-    "exec:show": "tailor-sdk executor show --executorName onUserCreated --executionId abc",
+    "report:tail": "tailor-sdk crash-report list",
+    "report:send": "tailor-sdk crash-report send --file ./latest.crash.log",
     "build": "tsc"
   }
 }
