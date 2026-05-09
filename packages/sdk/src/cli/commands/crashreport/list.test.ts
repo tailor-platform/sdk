@@ -24,7 +24,7 @@ describe("crash-report list command", () => {
   });
 
   test("lists crash report files sorted newest first", async () => {
-    vi.doMock("@/cli/crash-report/config", () => ({
+    vi.doMock("@/cli/crashreport/config", () => ({
       parseCrashReportConfig: () => ({
         localEnabled: true,
         remoteEnabled: false,
@@ -36,7 +36,7 @@ describe("crash-report list command", () => {
     fs.writeFileSync(path.join(tmpDir, "2026-03-02T00-00-00.crash.log"), "report 2");
     fs.writeFileSync(path.join(tmpDir, "not-a-crash.txt"), "other file");
 
-    const { parseCrashReportConfig } = await import("@/cli/crash-report/config");
+    const { parseCrashReportConfig } = await import("@/cli/crashreport/config");
     const config = parseCrashReportConfig();
 
     const files = fs
@@ -49,7 +49,7 @@ describe("crash-report list command", () => {
   });
 
   test("returns empty list when no crash reports exist", async () => {
-    vi.doMock("@/cli/crash-report/config", () => ({
+    vi.doMock("@/cli/crashreport/config", () => ({
       parseCrashReportConfig: () => ({
         localEnabled: true,
         remoteEnabled: false,
@@ -57,7 +57,7 @@ describe("crash-report list command", () => {
       }),
     }));
 
-    const { parseCrashReportConfig } = await import("@/cli/crash-report/config");
+    const { parseCrashReportConfig } = await import("@/cli/crashreport/config");
     const config = parseCrashReportConfig();
 
     const files = fs.readdirSync(config.localDir!).filter((f) => f.endsWith(".crash.log"));
@@ -68,7 +68,7 @@ describe("crash-report list command", () => {
   test("handles non-existent directory gracefully", async () => {
     const nonExistentDir = path.join(tmpDir, "does-not-exist");
 
-    vi.doMock("@/cli/crash-report/config", () => ({
+    vi.doMock("@/cli/crashreport/config", () => ({
       parseCrashReportConfig: () => ({
         localEnabled: true,
         remoteEnabled: false,
@@ -76,7 +76,7 @@ describe("crash-report list command", () => {
       }),
     }));
 
-    const { parseCrashReportConfig } = await import("@/cli/crash-report/config");
+    const { parseCrashReportConfig } = await import("@/cli/crashreport/config");
     const config = parseCrashReportConfig();
 
     expect(fs.existsSync(config.localDir!)).toBe(false);
