@@ -47,6 +47,20 @@ afterEach(() => {
 });
 
 describe("runApiCheck", () => {
+  it("returns undefined when the problem has no apiCheck config", () => {
+    const workDir = makeTempWorkDir();
+    const meta: ProblemMeta = {
+      id: "999",
+      name: "no-api-check",
+      difficulty: "easy",
+      category: "integration",
+      scoring: { generate: 1, typecheck: 1, tests: 1 },
+      files: { implement: ["tailordb/user.ts"], scaffold: [] },
+    };
+
+    expect(runApiCheck(workDir, meta)).toBeUndefined();
+  });
+
   it("passes when required SDK imports are present and exported by the package", () => {
     const workDir = makeTempWorkDir();
     fs.mkdirSync(path.join(workDir, "tailordb"), { recursive: true });

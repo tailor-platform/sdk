@@ -60,6 +60,26 @@ describe("applyContextProfile", () => {
     expect(fs.existsSync(path.join(sdkDir, "CHANGELOG.md"))).toBe(false);
     expect(fs.existsSync(path.join(sdkDir, "skills", "tailor-sdk", "SKILL.md"))).toBe(true);
   });
+
+  it("leaves the SDK package untouched for full-package", () => {
+    const workDir = makeSdkPackage();
+
+    applyContextProfile(workDir, "full-package");
+
+    const sdkDir = path.join(workDir, "node_modules", "@tailor-platform", "sdk");
+    expect(fs.existsSync(path.join(sdkDir, "docs", "configuration.md"))).toBe(true);
+    expect(fs.existsSync(path.join(sdkDir, "README.md"))).toBe(true);
+    expect(fs.existsSync(path.join(sdkDir, "CHANGELOG.md"))).toBe(true);
+    expect(fs.existsSync(path.join(sdkDir, "skills", "tailor-sdk", "SKILL.md"))).toBe(true);
+  });
+
+  it("no-ops when the SDK package is not installed locally under workDir", () => {
+    // workDir has no node_modules/@tailor-platform/sdk -- nothing to do, and no throw.
+    const workDir = fs.mkdtempSync(path.join(os.tmpdir(), "llm-context-profile-empty-"));
+    tmpDirs.push(workDir);
+
+    expect(() => applyContextProfile(workDir, "types-only")).not.toThrow();
+  });
 });
 
 describe("buildContextProfileInstructions", () => {
@@ -70,5 +90,35 @@ describe("buildContextProfileInstructions", () => {
 
     expect(instructions).toContain("tailor-sdk skill");
     expect(instructions).toContain("# Skill");
+  });
+
+  it("omits the installed skill section when SKILL.md is not present", () => {
+    const workDir = fs.mkdtempSync(path.join(os.tmpdir(), "llm-context-profile-no-skill-"));
+    tmpDirs.push(workDir);
+
+    const instructions = buildContextProfileInstructions(workDir, "tailor-sdk-skill");
+
+    expect(instructions).toContain("tailor-sdk skill");
+    expect(instructions).not.toContain("## Installed tailor-sdk skill");
+  });
+
+  it("describes the types-only profile without referencing docs or skills", () => {
+    const instructions = buildContextProfileInstructions(makeSdkPackage(), "types-only");
+
+    expect(instructions).toContain("types-only");
+    expect(instructions).toContain("TypeScript package API");
+  });
+
+  it("describes the docs-only profile and forbids the tailor-sdk skill", () => {
+    const instructions = buildContextProfileInstructions(makeSdkPackage(), "docs-only");
+
+    expect(instructions).toContain("docs-only");
+    expect(instructions).toContain("tailor-sdk skill");
+  });
+
+  it("describes the full-package profile", () => {
+    const instructions = buildContextProfileInstructions(makeSdkPackage(), "full-package");
+
+    expect(instructions).toContain("full-package");
   });
 });
