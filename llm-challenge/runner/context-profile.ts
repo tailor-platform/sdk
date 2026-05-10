@@ -26,7 +26,8 @@ function isLocalInstalledPackage(workDir: string, sdkDir: string): boolean {
   return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
 }
 
-function removePackageEntries(workDir: string, entries: readonly string[]): void {
+export function applyContextProfile(workDir: string, profile: ContextProfile): void {
+  const entries = removableEntriesByProfile[profile];
   if (entries.length === 0) {
     return;
   }
@@ -37,10 +38,6 @@ function removePackageEntries(workDir: string, entries: readonly string[]): void
   for (const entry of entries) {
     fs.rmSync(path.join(sdkDir, entry), { recursive: true, force: true });
   }
-}
-
-export function applyContextProfile(workDir: string, profile: ContextProfile): void {
-  removePackageEntries(workDir, removableEntriesByProfile[profile]);
 }
 
 function readInstalledTailorSdkSkill(workDir: string): string | undefined {

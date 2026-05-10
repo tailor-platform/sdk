@@ -209,13 +209,11 @@ function collectSdkImports(workDir: string, files: string[]): SdkImportSummary {
     const source = sourceFileFor(filePath);
     const fileNamespaceAliases: string[] = [];
     for (const statement of source.statements) {
-      if (!ts.isImportDeclaration(statement)) {
-        continue;
-      }
-      if (!ts.isStringLiteral(statement.moduleSpecifier)) {
-        continue;
-      }
-      if (statement.moduleSpecifier.text !== "@tailor-platform/sdk") {
+      if (
+        !ts.isImportDeclaration(statement) ||
+        !ts.isStringLiteral(statement.moduleSpecifier) ||
+        statement.moduleSpecifier.text !== "@tailor-platform/sdk"
+      ) {
         continue;
       }
       const clause = statement.importClause;
@@ -398,14 +396,12 @@ function checkUnknownSdkImports(
 function collectImportSpecifierRanges(source: ts.SourceFile): Array<[number, number]> {
   const ranges: Array<[number, number]> = [];
   for (const statement of source.statements) {
-    if (ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier)) {
-      ranges.push([statement.moduleSpecifier.getStart(source), statement.moduleSpecifier.getEnd()]);
-    } else if (
-      ts.isExportDeclaration(statement) &&
-      statement.moduleSpecifier &&
-      ts.isStringLiteral(statement.moduleSpecifier)
-    ) {
-      ranges.push([statement.moduleSpecifier.getStart(source), statement.moduleSpecifier.getEnd()]);
+    const moduleSpecifier =
+      ts.isImportDeclaration(statement) || ts.isExportDeclaration(statement)
+        ? statement.moduleSpecifier
+        : undefined;
+    if (moduleSpecifier && ts.isStringLiteral(moduleSpecifier)) {
+      ranges.push([moduleSpecifier.getStart(source), moduleSpecifier.getEnd()]);
     }
   }
   return ranges;
@@ -491,6 +487,7 @@ function checkPatterns(
   fileAliases: FileSdkAliases,
   namespaceAliasesByFile: Map<string, string[]>,
 ): CheckResult[] {
+  const isRequired = kind === "required";
   return (patterns ?? []).map((item) => {
     const source = readCandidateSource(
       workDir,
@@ -501,14 +498,13 @@ function checkPatterns(
       namespaceAliasesByFile,
     );
     const matched = new RegExp(item.pattern, "m").test(source);
-    const passed = kind === "required" ? matched : !matched;
-    const passMessage =
-      kind === "required"
-        ? `Found required pattern: ${item.name}`
-        : `Did not find forbidden pattern: ${item.name}`;
+    const passed = isRequired ? matched : !matched;
+    const passMessage = isRequired
+      ? `Found required pattern: ${item.name}`
+      : `Did not find forbidden pattern: ${item.name}`;
     const failMessage =
       item.message ??
-      (kind === "required"
+      (isRequired
         ? `Missing required pattern: ${item.name}`
         : `Forbidden pattern matched: ${item.name}`);
     return {
@@ -568,17 +564,13 @@ export function runApiCheck(
     ),
   ];
 
-  const testsTotal = checks.length;
-  const testsPassed = checks.filter((check) => check.passed).length;
   const failed = checks.filter((check) => !check.passed);
+  const messageSource = failed.length === 0 ? checks : failed;
   return {
     stage: "apiCheck",
     passed: failed.length === 0,
-    output:
-      failed.length === 0
-        ? checks.map((check) => check.message).join("\n")
-        : failed.map((check) => check.message).join("\n"),
-    testsPassed,
-    testsTotal,
+    output: messageSource.map((check) => check.message).join("\n"),
+    testsPassed: checks.length - failed.length,
+    testsTotal: checks.length,
   };
 }

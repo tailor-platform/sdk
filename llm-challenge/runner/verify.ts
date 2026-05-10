@@ -158,13 +158,12 @@ function earlyReturn(
   skipReason: string,
   meta: ProblemMeta,
 ): StageInput[] {
+  const skipped = `Skipped (${skipReason})`;
   return [
     generateStage,
-    ...(meta.apiCheck
-      ? [{ stage: "apiCheck" as const, passed: false, output: `Skipped (${skipReason})` }]
-      : []),
-    { stage: "typecheck", passed: false, output: `Skipped (${skipReason})` },
-    { stage: "tests", passed: false, output: `Skipped (${skipReason})` },
+    ...(meta.apiCheck ? [{ stage: "apiCheck" as const, passed: false, output: skipped }] : []),
+    { stage: "typecheck", passed: false, output: skipped },
+    { stage: "tests", passed: false, output: skipped },
   ];
 }
 
