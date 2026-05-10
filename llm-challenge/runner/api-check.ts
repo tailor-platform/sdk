@@ -191,9 +191,10 @@ function escapeRegExp(value: string): string {
 }
 
 /**
- * Detect forbidden SDK symbols that are used through a namespace import alias,
- * e.g. `sdk.createExecutor(...)`. Returns the set of forbidden symbols whose
- * `<alias>.<symbol>` member access appears in the candidate sources.
+ * Detect forbidden SDK symbols that are used through a namespace import alias.
+ * Catches both direct member access (`sdk.createExecutor(...)`) and object
+ * destructuring (`const { createExecutor } = sdk`) so submissions cannot bypass
+ * forbidden checks by routing the symbol through the namespace alias.
  */
 function findNamespaceForbiddenUsages(
   workDir: string,
@@ -205,10 +206,14 @@ function findNamespaceForbiddenUsages(
   if (namespaceAliases.length === 0 || forbiddenSymbols.length === 0) {
     return found;
   }
+  const aliasSet = new Set(namespaceAliases);
+  const forbiddenSet = new Set(forbiddenSymbols);
   for (const file of files) {
     const filePath = path.join(workDir, file);
     if (!fs.existsSync(filePath)) continue;
-    const stripped = stripCommentsAndStringBodies(fs.readFileSync(filePath, "utf-8"));
+    const raw = fs.readFileSync(filePath, "utf-8");
+    const stripped = stripCommentsAndStringBodies(raw);
+
     for (const alias of namespaceAliases) {
       for (const symbol of forbiddenSymbols) {
         if (found.has(symbol)) continue;
@@ -218,6 +223,33 @@ function findNamespaceForbiddenUsages(
         }
       }
     }
+
+    const sourceFile = ts.createSourceFile(file, raw, ts.ScriptTarget.Latest, true);
+    const visit = (node: ts.Node): void => {
+      if (
+        ts.isVariableDeclaration(node) &&
+        ts.isObjectBindingPattern(node.name) &&
+        node.initializer &&
+        ts.isIdentifier(node.initializer) &&
+        aliasSet.has(node.initializer.text)
+      ) {
+        for (const element of node.name.elements) {
+          // `propertyName` is set when renaming during destructuring (`{ a: b } = sdk`).
+          // The exported source name we care about is `propertyName ?? name`.
+          const exportedName =
+            element.propertyName && ts.isIdentifier(element.propertyName)
+              ? element.propertyName.text
+              : ts.isIdentifier(element.name)
+                ? element.name.text
+                : undefined;
+          if (exportedName && forbiddenSet.has(exportedName)) {
+            found.add(exportedName);
+          }
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sourceFile);
   }
   return found;
 }

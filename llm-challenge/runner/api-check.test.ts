@@ -354,6 +354,35 @@ describe("runApiCheck", () => {
     );
   });
 
+  it("flags forbidden symbols destructured from a namespace alias", () => {
+    const workDir = makeTempWorkDir();
+    fs.mkdirSync(path.join(workDir, "tailordb"), { recursive: true });
+    fs.writeFileSync(
+      path.join(workDir, "tailordb", "user.ts"),
+      [
+        'import * as sdk from "@tailor-platform/sdk";',
+        "const { createExecutor } = sdk;",
+        "export const user = sdk.db.type('User', { name: sdk.db.string() });",
+        "createExecutor({});",
+        "",
+      ].join("\n"),
+    );
+
+    const result = runApiCheck(
+      workDir,
+      makeMeta({
+        forbiddenSdkImports: ["createExecutor"],
+      }),
+    );
+
+    expect(result).toBeDefined();
+    if (!result) throw new Error("api check result should exist");
+    expect(result.passed).toBe(false);
+    expect(result.output).toContain(
+      "Forbidden @tailor-platform/sdk usage via namespace import: createExecutor",
+    );
+  });
+
   it("still flags forbidden named imports alongside a namespace import", () => {
     const workDir = makeTempWorkDir();
     fs.mkdirSync(path.join(workDir, "tailordb"), { recursive: true });
