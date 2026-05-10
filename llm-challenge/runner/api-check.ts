@@ -483,7 +483,8 @@ function readCandidateSource(
     .join("\n");
 }
 
-function checkRequiredPatterns(
+function checkPatterns(
+  kind: "required" | "forbidden",
   workDir: string,
   patterns: ApiCheckPattern[] | undefined,
   implementFiles: string[],
@@ -499,42 +500,21 @@ function checkRequiredPatterns(
       fileAliases,
       namespaceAliasesByFile,
     );
-    const pattern = new RegExp(item.pattern, "m");
-    const passed = pattern.test(source);
-    return {
-      name: `required-pattern:${item.name}`,
-      passed,
-      message: passed
+    const matched = new RegExp(item.pattern, "m").test(source);
+    const passed = kind === "required" ? matched : !matched;
+    const passMessage =
+      kind === "required"
         ? `Found required pattern: ${item.name}`
-        : (item.message ?? `Missing required pattern: ${item.name}`),
-    };
-  });
-}
-
-function checkForbiddenPatterns(
-  workDir: string,
-  patterns: ApiCheckPattern[] | undefined,
-  implementFiles: string[],
-  fileAliases: FileSdkAliases,
-  namespaceAliasesByFile: Map<string, string[]>,
-): CheckResult[] {
-  return (patterns ?? []).map((item) => {
-    const source = readCandidateSource(
-      workDir,
-      item.files,
-      implementFiles,
-      item.searchScope,
-      fileAliases,
-      namespaceAliasesByFile,
-    );
-    const pattern = new RegExp(item.pattern, "m");
-    const passed = !pattern.test(source);
+        : `Did not find forbidden pattern: ${item.name}`;
+    const failMessage =
+      item.message ??
+      (kind === "required"
+        ? `Missing required pattern: ${item.name}`
+        : `Forbidden pattern matched: ${item.name}`);
     return {
-      name: `forbidden-pattern:${item.name}`,
+      name: `${kind}-pattern:${item.name}`,
       passed,
-      message: passed
-        ? `Did not find forbidden pattern: ${item.name}`
-        : (item.message ?? `Forbidden pattern matched: ${item.name}`),
+      message: passed ? passMessage : failMessage,
     };
   });
 }
@@ -570,14 +550,16 @@ export function runApiCheck(
     ...checkUnknownSdkImports(imports, publicExports, meta.apiCheck),
     ...checkRequiredSdkImports(importedSymbols, meta.apiCheck, hasNamespaceImport),
     ...checkForbiddenSdkImports(importedSymbols, meta.apiCheck, namespaceForbiddenUsages),
-    ...checkRequiredPatterns(
+    ...checkPatterns(
+      "required",
       workDir,
       meta.apiCheck.requiredPatterns,
       meta.files.implement,
       fileAliases,
       namespaceAliasesByFile,
     ),
-    ...checkForbiddenPatterns(
+    ...checkPatterns(
+      "forbidden",
       workDir,
       meta.apiCheck.forbiddenPatterns,
       meta.files.implement,

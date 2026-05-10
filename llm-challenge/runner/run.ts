@@ -38,6 +38,17 @@ const execAsync = promisify(exec);
 
 const challengeRoot = path.resolve(import.meta.dirname, "..");
 
+const contextProfileValues = [
+  "types-only",
+  "docs-only",
+  "tailor-sdk-skill",
+  "full-package",
+] as const satisfies readonly ContextProfile[];
+
+function isContextProfile(value: unknown): value is ContextProfile {
+  return typeof value === "string" && (contextProfileValues as readonly string[]).includes(value);
+}
+
 function parseArgs(): {
   problem?: string;
   all: boolean;
@@ -135,14 +146,9 @@ function parseArgs(): {
         break;
       case "--context-profile": {
         const value = requireArg(args, i, "--context-profile");
-        if (
-          value !== "types-only" &&
-          value !== "docs-only" &&
-          value !== "tailor-sdk-skill" &&
-          value !== "full-package"
-        ) {
+        if (!isContextProfile(value)) {
           console.error(
-            'Error: --context-profile must be one of "types-only", "docs-only", "tailor-sdk-skill", or "full-package"',
+            `Error: --context-profile must be one of ${contextProfileValues.map((v) => `"${v}"`).join(", ")}`,
           );
           process.exit(1);
         }
@@ -187,17 +193,6 @@ function parseArgs(): {
     contextProfile,
     contextProfileExplicit,
   };
-}
-
-const contextProfileValues = [
-  "types-only",
-  "docs-only",
-  "tailor-sdk-skill",
-  "full-package",
-] as const satisfies readonly ContextProfile[];
-
-function isContextProfile(value: unknown): value is ContextProfile {
-  return typeof value === "string" && (contextProfileValues as readonly string[]).includes(value);
 }
 
 /**
