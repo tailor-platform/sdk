@@ -18,6 +18,8 @@ type SdkImport = {
 type SdkImportSummary = {
   imports: SdkImport[];
   hasNamespaceImport: boolean;
+  // Local names bound to `import * as <name> from "@tailor-platform/sdk"`.
+  namespaceAliases: string[];
 };
 
 // Per-file map of local alias name → exported SDK symbol name, e.g. `tailorDb → db`.
@@ -135,6 +137,7 @@ function rewriteSdkAliases(source: string, aliases: Map<string, string>): string
 
 function collectSdkImports(workDir: string, files: string[]): SdkImportSummary {
   const imports: SdkImport[] = [];
+  const namespaceAliases: string[] = [];
   let hasNamespaceImport = false;
   for (const file of files) {
     const filePath = path.join(workDir, file);
@@ -164,9 +167,10 @@ function collectSdkImports(workDir: string, files: string[]): SdkImportSummary {
         continue;
       }
       if (ts.isNamespaceImport(bindings)) {
-        // `import * as sdk from "@tailor-platform/sdk"` — call sites use sdk.x.
-        // We do not analyze member access, so import-shape checks are skipped below.
+        // `import * as sdk from "@tailor-platform/sdk"` — record the local alias
+        // so forbidden symbol usage like `sdk.createExecutor` can still be flagged.
         hasNamespaceImport = true;
+        namespaceAliases.push(bindings.name.text);
         continue;
       }
       if (!ts.isNamedImports(bindings)) {
@@ -179,7 +183,43 @@ function collectSdkImports(workDir: string, files: string[]): SdkImportSummary {
       }
     }
   }
-  return { imports, hasNamespaceImport };
+  return { imports, hasNamespaceImport, namespaceAliases };
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Detect forbidden SDK symbols that are used through a namespace import alias,
+ * e.g. `sdk.createExecutor(...)`. Returns the set of forbidden symbols whose
+ * `<alias>.<symbol>` member access appears in the candidate sources.
+ */
+function findNamespaceForbiddenUsages(
+  workDir: string,
+  files: string[],
+  namespaceAliases: string[],
+  forbiddenSymbols: string[],
+): Set<string> {
+  const found = new Set<string>();
+  if (namespaceAliases.length === 0 || forbiddenSymbols.length === 0) {
+    return found;
+  }
+  for (const file of files) {
+    const filePath = path.join(workDir, file);
+    if (!fs.existsSync(filePath)) continue;
+    const stripped = stripCommentsAndStringBodies(fs.readFileSync(filePath, "utf-8"));
+    for (const alias of namespaceAliases) {
+      for (const symbol of forbiddenSymbols) {
+        if (found.has(symbol)) continue;
+        const re = new RegExp(`\\b${escapeRegExp(alias)}\\.${escapeRegExp(symbol)}\\b`);
+        if (re.test(stripped)) {
+          found.add(symbol);
+        }
+      }
+    }
+  }
+  return found;
 }
 
 function checkRequiredSdkImports(
@@ -208,14 +248,26 @@ function checkRequiredSdkImports(
 function checkForbiddenSdkImports(
   importedSymbols: Set<string>,
   config: ApiCheckConfig,
+  namespaceUsages: Set<string>,
 ): CheckResult[] {
-  return (config.forbiddenSdkImports ?? []).map((symbol) => ({
-    name: `forbidden-sdk-import:${symbol}`,
-    passed: !importedSymbols.has(symbol),
-    message: importedSymbols.has(symbol)
-      ? `Forbidden @tailor-platform/sdk import: ${symbol}`
-      : `Did not find forbidden @tailor-platform/sdk import: ${symbol}`,
-  }));
+  return (config.forbiddenSdkImports ?? []).map((symbol) => {
+    const named = importedSymbols.has(symbol);
+    const namespaced = namespaceUsages.has(symbol);
+    const passed = !named && !namespaced;
+    let message: string;
+    if (passed) {
+      message = `Did not find forbidden @tailor-platform/sdk import: ${symbol}`;
+    } else if (named) {
+      message = `Forbidden @tailor-platform/sdk import: ${symbol}`;
+    } else {
+      message = `Forbidden @tailor-platform/sdk usage via namespace import: ${symbol}`;
+    }
+    return {
+      name: `forbidden-sdk-import:${symbol}`,
+      passed,
+      message,
+    };
+  });
 }
 
 function checkUnknownSdkImports(
@@ -372,18 +424,28 @@ export function runApiCheck(
     return undefined;
   }
 
-  const { imports, hasNamespaceImport } = collectSdkImports(workDir, meta.files.implement);
+  const { imports, hasNamespaceImport, namespaceAliases } = collectSdkImports(
+    workDir,
+    meta.files.implement,
+  );
   const importedSymbols = new Set(imports.map((item) => item.symbol));
   const publicExports = collectPublicSdkExports(workDir, challengeRoot);
   const fileAliases = collectSdkAliasesByFile(workDir, meta.files.implement);
+  const namespaceForbiddenUsages = findNamespaceForbiddenUsages(
+    workDir,
+    meta.files.implement,
+    namespaceAliases,
+    meta.apiCheck.forbiddenSdkImports ?? [],
+  );
   // Namespace imports (`import * as sdk from "@tailor-platform/sdk"`) bring every
-  // export into scope, so required-symbol checks pass through them. Forbidden and
-  // unknown checks still evaluate the collected named imports so a submission that
-  // mixes `import * as sdk` with `import { createResolver }` cannot bypass scoring.
+  // export into scope, so required-symbol checks pass through them. Forbidden checks
+  // still evaluate the collected named imports plus `<namespaceAlias>.<symbol>` usage
+  // so a submission cannot bypass scoring by routing forbidden APIs through a
+  // namespace alias. Unknown checks only see explicit named imports.
   const checks = [
     ...checkUnknownSdkImports(imports, publicExports, meta.apiCheck),
     ...checkRequiredSdkImports(importedSymbols, meta.apiCheck, hasNamespaceImport),
-    ...checkForbiddenSdkImports(importedSymbols, meta.apiCheck),
+    ...checkForbiddenSdkImports(importedSymbols, meta.apiCheck, namespaceForbiddenUsages),
     ...checkRequiredPatterns(
       workDir,
       meta.apiCheck.requiredPatterns,
