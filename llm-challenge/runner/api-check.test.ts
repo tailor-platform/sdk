@@ -120,6 +120,41 @@ describe("runApiCheck", () => {
     expect(result.output).toContain("Missing required @tailor-platform/sdk import: defineConfig");
   });
 
+  it("rewrites aliased local names to the exported name when matching patterns", () => {
+    const workDir = makeTempWorkDir();
+    fs.mkdirSync(path.join(workDir, "tailordb"), { recursive: true });
+    fs.writeFileSync(
+      path.join(workDir, "tailordb", "user.ts"),
+      [
+        'import { db as tailorDb } from "@tailor-platform/sdk";',
+        "export const user = tailorDb",
+        "  .type('User', { name: tailorDb.string() })",
+        "  .hooks({});",
+        "",
+      ].join("\n"),
+    );
+
+    const result = runApiCheck(
+      workDir,
+      makeMeta({
+        requiredPatterns: [
+          {
+            name: "type-level-hooks",
+            pattern: "db\\s*\\.type\\([\\s\\S]*?\\.hooks\\s*\\(",
+            message: "Need db.type(...).hooks()",
+          },
+        ],
+      }),
+    );
+
+    expect(result).toMatchObject({
+      stage: "apiCheck",
+      passed: true,
+      testsPassed: 1,
+      testsTotal: 1,
+    });
+  });
+
   it("ignores comments and string literals when matching API patterns", () => {
     const workDir = makeTempWorkDir();
     fs.mkdirSync(path.join(workDir, "tailordb"), { recursive: true });

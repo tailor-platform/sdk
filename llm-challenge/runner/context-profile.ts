@@ -4,6 +4,10 @@ import type { ContextProfile } from "../shared/helpers";
 
 const removableForTypesOnly = ["README.md", "CHANGELOG.md", "docs", "skills"];
 const removableForDocsOnly = ["skills"];
+// tailor-sdk-skill keeps the installed `skills/` directory so the skill is the
+// only narrative guidance; README/CHANGELOG/docs are removed to isolate it from
+// the wider docs surface that `full-package` exposes.
+const removableForTailorSdkSkill = ["README.md", "CHANGELOG.md", "docs"];
 
 function getInstalledSdkDir(workDir: string): string {
   return path.join(workDir, "node_modules", "@tailor-platform", "sdk");
@@ -38,6 +42,8 @@ export function applyContextProfile(workDir: string, profile: ContextProfile): v
       removePackageEntries(workDir, removableForDocsOnly);
       return;
     case "tailor-sdk-skill":
+      removePackageEntries(workDir, removableForTailorSdkSkill);
+      return;
     case "full-package":
       return;
   }

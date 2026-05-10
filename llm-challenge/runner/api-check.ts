@@ -20,6 +20,9 @@ type SdkImportSummary = {
   hasNamespaceImport: boolean;
 };
 
+// Per-file map of local alias name → exported SDK symbol name, e.g. `tailorDb → db`.
+type FileSdkAliases = Map<string, Map<string, string>>;
+
 function sourceFileFor(filePath: string): ts.SourceFile {
   return ts.createSourceFile(
     filePath,
@@ -88,6 +91,46 @@ function collectPublicSdkExports(workDir: string, challengeRoot?: string): Set<s
   }
 
   return exports;
+}
+
+function collectSdkAliasesByFile(workDir: string, files: string[]): FileSdkAliases {
+  const result: FileSdkAliases = new Map();
+  for (const file of files) {
+    const filePath = path.join(workDir, file);
+    if (!fs.existsSync(filePath)) continue;
+    const source = sourceFileFor(filePath);
+    const aliasMap = new Map<string, string>();
+    for (const statement of source.statements) {
+      if (
+        !ts.isImportDeclaration(statement) ||
+        !ts.isStringLiteral(statement.moduleSpecifier) ||
+        statement.moduleSpecifier.text !== "@tailor-platform/sdk"
+      ) {
+        continue;
+      }
+      const bindings = statement.importClause?.namedBindings;
+      if (!bindings || !ts.isNamedImports(bindings)) continue;
+      for (const element of bindings.elements) {
+        if (element.propertyName) {
+          aliasMap.set(element.name.text, element.propertyName.text);
+        }
+      }
+    }
+    if (aliasMap.size > 0) result.set(file, aliasMap);
+  }
+  return result;
+}
+
+// Rewrite `tailorDb.type(...)` back to `db.type(...)` so user-chosen aliases do not
+// hide otherwise-valid API usage from required/forbidden pattern checks. Uses a
+// function replacer so the exported name is treated as a literal string, even if
+// it ever contains regex specials like `$&`.
+function rewriteSdkAliases(source: string, aliases: Map<string, string>): string {
+  let out = source;
+  for (const [local, exported] of aliases) {
+    out = out.replace(new RegExp(`\\b${local}\\b`, "g"), () => exported);
+  }
+  return out;
 }
 
 function collectSdkImports(workDir: string, files: string[]): SdkImportSummary {
@@ -253,6 +296,7 @@ function readCandidateSource(
   files: string[] | undefined,
   implementFiles: string[],
   searchScope: ApiCheckPattern["searchScope"],
+  fileAliases: FileSdkAliases,
 ): string {
   const targetFiles = files ?? implementFiles;
   return targetFiles
@@ -260,7 +304,9 @@ function readCandidateSource(
       const filePath = path.join(workDir, file);
       if (!fs.existsSync(filePath)) return "";
       const raw = fs.readFileSync(filePath, "utf-8");
-      return searchScope === "raw" ? raw : stripCommentsAndStringBodies(raw);
+      const text = searchScope === "raw" ? raw : stripCommentsAndStringBodies(raw);
+      const aliases = fileAliases.get(file);
+      return aliases && aliases.size > 0 ? rewriteSdkAliases(text, aliases) : text;
     })
     .join("\n");
 }
@@ -269,9 +315,16 @@ function checkRequiredPatterns(
   workDir: string,
   patterns: ApiCheckPattern[] | undefined,
   implementFiles: string[],
+  fileAliases: FileSdkAliases,
 ): CheckResult[] {
   return (patterns ?? []).map((item) => {
-    const source = readCandidateSource(workDir, item.files, implementFiles, item.searchScope);
+    const source = readCandidateSource(
+      workDir,
+      item.files,
+      implementFiles,
+      item.searchScope,
+      fileAliases,
+    );
     const pattern = new RegExp(item.pattern, "m");
     const passed = pattern.test(source);
     return {
@@ -288,9 +341,16 @@ function checkForbiddenPatterns(
   workDir: string,
   patterns: ApiCheckPattern[] | undefined,
   implementFiles: string[],
+  fileAliases: FileSdkAliases,
 ): CheckResult[] {
   return (patterns ?? []).map((item) => {
-    const source = readCandidateSource(workDir, item.files, implementFiles, item.searchScope);
+    const source = readCandidateSource(
+      workDir,
+      item.files,
+      implementFiles,
+      item.searchScope,
+      fileAliases,
+    );
     const pattern = new RegExp(item.pattern, "m");
     const passed = !pattern.test(source);
     return {
@@ -315,6 +375,7 @@ export function runApiCheck(
   const { imports, hasNamespaceImport } = collectSdkImports(workDir, meta.files.implement);
   const importedSymbols = new Set(imports.map((item) => item.symbol));
   const publicExports = collectPublicSdkExports(workDir, challengeRoot);
+  const fileAliases = collectSdkAliasesByFile(workDir, meta.files.implement);
   // Namespace imports (`import * as sdk from "@tailor-platform/sdk"`) bring every
   // export into scope, so required-symbol checks pass through them. Forbidden and
   // unknown checks still evaluate the collected named imports so a submission that
@@ -323,8 +384,18 @@ export function runApiCheck(
     ...checkUnknownSdkImports(imports, publicExports, meta.apiCheck),
     ...checkRequiredSdkImports(importedSymbols, meta.apiCheck, hasNamespaceImport),
     ...checkForbiddenSdkImports(importedSymbols, meta.apiCheck),
-    ...checkRequiredPatterns(workDir, meta.apiCheck.requiredPatterns, meta.files.implement),
-    ...checkForbiddenPatterns(workDir, meta.apiCheck.forbiddenPatterns, meta.files.implement),
+    ...checkRequiredPatterns(
+      workDir,
+      meta.apiCheck.requiredPatterns,
+      meta.files.implement,
+      fileAliases,
+    ),
+    ...checkForbiddenPatterns(
+      workDir,
+      meta.apiCheck.forbiddenPatterns,
+      meta.files.implement,
+      fileAliases,
+    ),
   ];
 
   const testsTotal = checks.length;

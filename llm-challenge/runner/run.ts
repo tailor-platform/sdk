@@ -324,10 +324,10 @@ async function installDependencies(
     applyContextProfile(workDir, contextProfile);
   }
   // For filtered profiles drop the source tarball so solvers cannot reinstall
-  // the unfiltered SDK and recover docs/skills the profile removed. Profiles that
-  // do not filter (full-package, tailor-sdk-skill) keep the tarball so solvers can
-  // refresh dependencies via `pnpm install` if needed.
-  if (tarballPath && (contextProfile === "types-only" || contextProfile === "docs-only")) {
+  // the unfiltered SDK and recover docs/skills the profile removed. Only
+  // `full-package` is unfiltered and keeps the tarball so solvers can refresh
+  // dependencies via `pnpm install` if needed.
+  if (tarballPath && contextProfile && contextProfile !== "full-package") {
     fs.rmSync(path.join(workDir, ".sdk"), { recursive: true, force: true });
   }
 }

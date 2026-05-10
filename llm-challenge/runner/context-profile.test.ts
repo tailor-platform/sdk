@@ -48,6 +48,18 @@ describe("applyContextProfile", () => {
     expect(fs.existsSync(path.join(sdkDir, "README.md"))).toBe(true);
     expect(fs.existsSync(path.join(sdkDir, "skills"))).toBe(false);
   });
+
+  it("removes docs and README but keeps skills for tailor-sdk-skill", () => {
+    const workDir = makeSdkPackage();
+
+    applyContextProfile(workDir, "tailor-sdk-skill");
+
+    const sdkDir = path.join(workDir, "node_modules", "@tailor-platform", "sdk");
+    expect(fs.existsSync(path.join(sdkDir, "docs"))).toBe(false);
+    expect(fs.existsSync(path.join(sdkDir, "README.md"))).toBe(false);
+    expect(fs.existsSync(path.join(sdkDir, "CHANGELOG.md"))).toBe(false);
+    expect(fs.existsSync(path.join(sdkDir, "skills", "tailor-sdk", "SKILL.md"))).toBe(true);
+  });
 });
 
 describe("buildContextProfileInstructions", () => {
