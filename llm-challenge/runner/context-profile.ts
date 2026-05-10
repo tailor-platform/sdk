@@ -2,12 +2,15 @@ import fs from "node:fs";
 import path from "node:path";
 import type { ContextProfile } from "../shared/helpers";
 
-const removableForTypesOnly = ["README.md", "CHANGELOG.md", "docs", "skills"];
-const removableForDocsOnly = ["skills"];
 // tailor-sdk-skill keeps the installed `skills/` directory so the skill is the
 // only narrative guidance; README/CHANGELOG/docs are removed to isolate it from
 // the wider docs surface that `full-package` exposes.
-const removableForTailorSdkSkill = ["README.md", "CHANGELOG.md", "docs"];
+const removableEntriesByProfile: Record<ContextProfile, readonly string[]> = {
+  "types-only": ["README.md", "CHANGELOG.md", "docs", "skills"],
+  "docs-only": ["skills"],
+  "tailor-sdk-skill": ["README.md", "CHANGELOG.md", "docs"],
+  "full-package": [],
+};
 
 function getInstalledSdkDir(workDir: string): string {
   return path.join(workDir, "node_modules", "@tailor-platform", "sdk");
@@ -23,7 +26,10 @@ function isLocalInstalledPackage(workDir: string, sdkDir: string): boolean {
   return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
 }
 
-function removePackageEntries(workDir: string, entries: string[]): void {
+function removePackageEntries(workDir: string, entries: readonly string[]): void {
+  if (entries.length === 0) {
+    return;
+  }
   const sdkDir = getInstalledSdkDir(workDir);
   if (!isLocalInstalledPackage(workDir, sdkDir)) {
     return;
@@ -34,19 +40,7 @@ function removePackageEntries(workDir: string, entries: string[]): void {
 }
 
 export function applyContextProfile(workDir: string, profile: ContextProfile): void {
-  switch (profile) {
-    case "types-only":
-      removePackageEntries(workDir, removableForTypesOnly);
-      return;
-    case "docs-only":
-      removePackageEntries(workDir, removableForDocsOnly);
-      return;
-    case "tailor-sdk-skill":
-      removePackageEntries(workDir, removableForTailorSdkSkill);
-      return;
-    case "full-package":
-      return;
-  }
+  removePackageEntries(workDir, removableEntriesByProfile[profile]);
 }
 
 function readInstalledTailorSdkSkill(workDir: string): string | undefined {

@@ -1191,14 +1191,8 @@ async function main(): Promise<void> {
     elapsedMs: Date.now() - runStartTime,
   });
 
-  let modelLabelRaw: string;
-  if (solve) {
-    modelLabelRaw = `${solveModelLabel ?? "solve"}-${contextProfile}`;
-  } else if (useSolution) {
-    modelLabelRaw = `solution-${contextProfile}`;
-  } else {
-    modelLabelRaw = `impl-${contextProfile}`;
-  }
+  const baseLabel = solve ? (solveModelLabel ?? "solve") : useSolution ? "solution" : "impl";
+  const modelLabelRaw = `${baseLabel}-${contextProfile}`;
   writeReport(resultsDir, report, modelLabelRaw, sdkVersion);
 }
 
