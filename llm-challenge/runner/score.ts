@@ -199,10 +199,15 @@ export function calculateScore(meta: ProblemMeta, stages: StageInput[]): StageRe
     // Partial scoring for stages with test counts (generate and tests stages)
     if (s.testsTotal != null && s.testsTotal > 0) {
       const testsPassed = s.testsPassed ?? 0;
+      // Clamp at 0 so an unweighted (`maxScore === 0`) failing partial does not
+      // produce a negative `maxScore - 1`.
       const score =
         testsPassed === s.testsTotal
           ? maxScore
-          : Math.min(Math.round((testsPassed / s.testsTotal) * maxScore), maxScore - 1);
+          : Math.max(
+              0,
+              Math.min(Math.round((testsPassed / s.testsTotal) * maxScore), maxScore - 1),
+            );
       return { ...s, score, maxScore, category };
     }
 
