@@ -115,7 +115,9 @@ function collectSdkImports(workDir: string, files: string[]): SdkImport[] {
         continue;
       }
       for (const element of bindings.elements) {
-        imports.push({ file, symbol: element.name.text });
+        // Resolve to the exported name; element.propertyName is set when aliased
+        // (`import { db as tailorDb }` → propertyName=db, name=tailorDb).
+        imports.push({ file, symbol: (element.propertyName ?? element.name).text });
       }
     }
   }

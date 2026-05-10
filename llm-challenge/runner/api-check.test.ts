@@ -70,6 +70,29 @@ describe("runApiCheck", () => {
     });
   });
 
+  it("resolves aliased imports to the exported symbol name", () => {
+    const workDir = makeTempWorkDir();
+    fs.mkdirSync(path.join(workDir, "tailordb"), { recursive: true });
+    fs.writeFileSync(
+      path.join(workDir, "tailordb", "user.ts"),
+      [
+        'import { db as tailorDb, defineConfig } from "@tailor-platform/sdk";',
+        "export const user = tailorDb.type('User', { name: tailorDb.string() });",
+        "defineConfig({ name: 'x' });",
+        "",
+      ].join("\n"),
+    );
+
+    const result = runApiCheck(workDir, makeMeta({ requiredSdkImports: ["db", "defineConfig"] }));
+
+    expect(result).toMatchObject({
+      stage: "apiCheck",
+      passed: true,
+      testsPassed: 2,
+      testsTotal: 2,
+    });
+  });
+
   it("fails unknown and forbidden SDK imports before typecheck", () => {
     const workDir = makeTempWorkDir();
     fs.mkdirSync(path.join(workDir, "tailordb"), { recursive: true });

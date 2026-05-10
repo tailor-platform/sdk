@@ -55,6 +55,7 @@ function parseArgs(): {
   rerunInfra: boolean;
   concurrency: number;
   contextProfile: ContextProfile;
+  contextProfileExplicit: boolean;
 } {
   const args = process.argv.slice(2);
   let problem: string | undefined;
@@ -73,6 +74,7 @@ function parseArgs(): {
   let rerunInfra = false;
   let concurrency = os.availableParallelism();
   let contextProfile: ContextProfile = "full-package";
+  let contextProfileExplicit = false;
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
@@ -145,6 +147,7 @@ function parseArgs(): {
           process.exit(1);
         }
         contextProfile = value;
+        contextProfileExplicit = true;
         i++;
         break;
       }
@@ -182,7 +185,19 @@ function parseArgs(): {
     rerunInfra,
     concurrency: Math.trunc(concurrency),
     contextProfile,
+    contextProfileExplicit,
   };
+}
+
+const contextProfileValues = [
+  "types-only",
+  "docs-only",
+  "tailor-sdk-skill",
+  "full-package",
+] as const satisfies readonly ContextProfile[];
+
+function isContextProfile(value: unknown): value is ContextProfile {
+  return typeof value === "string" && (contextProfileValues as readonly string[]).includes(value);
 }
 
 /**
@@ -845,8 +860,10 @@ async function main(): Promise<void> {
     resume,
     rerunInfra,
     concurrency,
-    contextProfile,
+    contextProfile: contextProfileArg,
+    contextProfileExplicit,
   } = parseArgs();
+  let contextProfile = contextProfileArg;
 
   if (!problem && !all && !rerunInfra) {
     console.error("Usage:");
@@ -918,6 +935,13 @@ async function main(): Promise<void> {
     if (infraProblems.length === 0) {
       console.log("No infrastructure failures found in latest report. Nothing to rerun.");
       process.exit(0);
+    }
+
+    // Without an explicit --context-profile, inherit the original report's profile
+    // so the rerun keeps the same SDK context as the original benchmark.
+    if (!contextProfileExplicit && isContextProfile(latestReport.contextProfile)) {
+      contextProfile = latestReport.contextProfile;
+      console.log(`Using context profile from previous report: ${contextProfile}`);
     }
 
     // Honor explicit flags; otherwise reuse the model/agent from the latest report.
