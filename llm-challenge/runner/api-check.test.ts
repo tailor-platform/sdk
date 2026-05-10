@@ -155,6 +155,62 @@ describe("runApiCheck", () => {
     });
   });
 
+  it("scopes namespace alias prefix stripping per file", () => {
+    const workDir = makeTempWorkDir();
+    fs.mkdirSync(path.join(workDir, "tailordb"), { recursive: true });
+    // File A: namespace import of SDK with alias `sdk`
+    fs.writeFileSync(
+      path.join(workDir, "tailordb", "user.ts"),
+      [
+        'import * as sdk from "@tailor-platform/sdk";',
+        "export const user = sdk.db.type('User', { name: sdk.db.string() });",
+        "",
+      ].join("\n"),
+    );
+    // File B: no SDK namespace import; an unrelated local `sdk` object exists
+    fs.writeFileSync(
+      path.join(workDir, "tailordb", "other.ts"),
+      ["const sdk = { fakeApi: () => ({}) };", "export const helper = sdk.fakeApi();", ""].join(
+        "\n",
+      ),
+    );
+
+    const meta: ProblemMeta = {
+      id: "999",
+      name: "api-check-fixture",
+      difficulty: "easy",
+      category: "api-design",
+      apiSurfaces: ["tailordb.field"],
+      scoring: { generate: 1, apiCheck: 4, typecheck: 1, tests: 1 },
+      files: {
+        implement: ["tailordb/user.ts", "tailordb/other.ts"],
+        scaffold: [],
+      },
+      apiCheck: {
+        // If the alias-strip leaks across files, `sdk.` would be removed from
+        // other.ts and this required pattern would fail to find `sdk.fakeApi(`.
+        requiredPatterns: [
+          {
+            name: "uses-db-type",
+            pattern: "db\\s*\\.type\\(",
+            files: ["tailordb/user.ts"],
+            message: "Need db.type",
+          },
+          {
+            name: "preserves-local-sdk",
+            pattern: "sdk\\.fakeApi\\(",
+            files: ["tailordb/other.ts"],
+            message: "Local sdk.fakeApi must not be alias-stripped",
+          },
+        ],
+      },
+    };
+
+    const result = runApiCheck(workDir, meta);
+
+    expect(result).toMatchObject({ stage: "apiCheck", passed: true });
+  });
+
   it("strips namespace alias prefix when matching patterns", () => {
     const workDir = makeTempWorkDir();
     fs.mkdirSync(path.join(workDir, "tailordb"), { recursive: true });

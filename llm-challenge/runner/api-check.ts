@@ -18,8 +18,9 @@ type SdkImport = {
 type SdkImportSummary = {
   imports: SdkImport[];
   hasNamespaceImport: boolean;
-  // Local names bound to `import * as <name> from "@tailor-platform/sdk"`.
-  namespaceAliases: string[];
+  // Local names bound to `import * as <name> from "@tailor-platform/sdk"`,
+  // grouped by file so an alias declared in one file does not leak into another.
+  namespaceAliasesByFile: Map<string, string[]>;
 };
 
 // Per-file map of local alias name → exported SDK symbol name, e.g. `tailorDb → db`.
@@ -198,7 +199,7 @@ function unwrapTrivialParens(source: string): string {
 
 function collectSdkImports(workDir: string, files: string[]): SdkImportSummary {
   const imports: SdkImport[] = [];
-  const namespaceAliases: string[] = [];
+  const namespaceAliasesByFile = new Map<string, string[]>();
   let hasNamespaceImport = false;
   for (const file of files) {
     const filePath = path.join(workDir, file);
@@ -206,6 +207,7 @@ function collectSdkImports(workDir: string, files: string[]): SdkImportSummary {
       continue;
     }
     const source = sourceFileFor(filePath);
+    const fileNamespaceAliases: string[] = [];
     for (const statement of source.statements) {
       if (!ts.isImportDeclaration(statement)) {
         continue;
@@ -231,7 +233,7 @@ function collectSdkImports(workDir: string, files: string[]): SdkImportSummary {
         // `import * as sdk from "@tailor-platform/sdk"` — record the local alias
         // so forbidden symbol usage like `sdk.createExecutor` can still be flagged.
         hasNamespaceImport = true;
-        namespaceAliases.push(bindings.name.text);
+        fileNamespaceAliases.push(bindings.name.text);
         continue;
       }
       if (!ts.isNamedImports(bindings)) {
@@ -243,8 +245,11 @@ function collectSdkImports(workDir: string, files: string[]): SdkImportSummary {
         imports.push({ file, symbol: (element.propertyName ?? element.name).text });
       }
     }
+    if (fileNamespaceAliases.length > 0) {
+      namespaceAliasesByFile.set(file, fileNamespaceAliases);
+    }
   }
-  return { imports, hasNamespaceImport, namespaceAliases };
+  return { imports, hasNamespaceImport, namespaceAliasesByFile };
 }
 
 function escapeRegExp(value: string): string {
@@ -261,19 +266,22 @@ function escapeRegExp(value: string): string {
 function findNamespaceForbiddenUsages(
   workDir: string,
   files: string[],
-  namespaceAliases: string[],
+  namespaceAliasesByFile: Map<string, string[]>,
   forbiddenSymbols: string[],
 ): Set<string> {
   const found = new Set<string>();
-  if (namespaceAliases.length === 0 || forbiddenSymbols.length === 0) {
+  if (namespaceAliasesByFile.size === 0 || forbiddenSymbols.length === 0) {
     return found;
   }
-  const aliasSet = new Set(namespaceAliases);
   const forbiddenSet = new Set(forbiddenSymbols);
-  const isAliasIdentifier = (node: ts.Node): node is ts.Identifier =>
-    ts.isIdentifier(node) && aliasSet.has(node.text);
 
   for (const file of files) {
+    const fileAliases = namespaceAliasesByFile.get(file);
+    if (!fileAliases || fileAliases.length === 0) continue;
+    const aliasSet = new Set(fileAliases);
+    const isAliasIdentifier = (node: ts.Node): node is ts.Identifier =>
+      ts.isIdentifier(node) && aliasSet.has(node.text);
+
     const filePath = path.join(workDir, file);
     if (!fs.existsSync(filePath)) continue;
     const raw = fs.readFileSync(filePath, "utf-8");
@@ -449,7 +457,7 @@ function readCandidateSource(
   implementFiles: string[],
   searchScope: ApiCheckPattern["searchScope"],
   fileAliases: FileSdkAliases,
-  namespaceAliases: string[],
+  namespaceAliasesByFile: Map<string, string[]>,
 ): string {
   const targetFiles = files ?? implementFiles;
   return targetFiles
@@ -464,7 +472,10 @@ function readCandidateSource(
       let text = stripCommentsAndStringBodies(raw);
       const aliases = fileAliases.get(file);
       if (aliases && aliases.size > 0) text = rewriteSdkAliases(text, aliases);
-      if (namespaceAliases.length > 0) text = stripNamespacePrefix(text, namespaceAliases);
+      const fileNamespaceAliases = namespaceAliasesByFile.get(file);
+      if (fileNamespaceAliases && fileNamespaceAliases.length > 0) {
+        text = stripNamespacePrefix(text, fileNamespaceAliases);
+      }
       text = inlineDbFieldChainAliases(text);
       text = unwrapTrivialParens(text);
       return text;
@@ -477,7 +488,7 @@ function checkRequiredPatterns(
   patterns: ApiCheckPattern[] | undefined,
   implementFiles: string[],
   fileAliases: FileSdkAliases,
-  namespaceAliases: string[],
+  namespaceAliasesByFile: Map<string, string[]>,
 ): CheckResult[] {
   return (patterns ?? []).map((item) => {
     const source = readCandidateSource(
@@ -486,7 +497,7 @@ function checkRequiredPatterns(
       implementFiles,
       item.searchScope,
       fileAliases,
-      namespaceAliases,
+      namespaceAliasesByFile,
     );
     const pattern = new RegExp(item.pattern, "m");
     const passed = pattern.test(source);
@@ -505,7 +516,7 @@ function checkForbiddenPatterns(
   patterns: ApiCheckPattern[] | undefined,
   implementFiles: string[],
   fileAliases: FileSdkAliases,
-  namespaceAliases: string[],
+  namespaceAliasesByFile: Map<string, string[]>,
 ): CheckResult[] {
   return (patterns ?? []).map((item) => {
     const source = readCandidateSource(
@@ -514,7 +525,7 @@ function checkForbiddenPatterns(
       implementFiles,
       item.searchScope,
       fileAliases,
-      namespaceAliases,
+      namespaceAliasesByFile,
     );
     const pattern = new RegExp(item.pattern, "m");
     const passed = !pattern.test(source);
@@ -537,7 +548,7 @@ export function runApiCheck(
     return undefined;
   }
 
-  const { imports, hasNamespaceImport, namespaceAliases } = collectSdkImports(
+  const { imports, hasNamespaceImport, namespaceAliasesByFile } = collectSdkImports(
     workDir,
     meta.files.implement,
   );
@@ -547,7 +558,7 @@ export function runApiCheck(
   const namespaceForbiddenUsages = findNamespaceForbiddenUsages(
     workDir,
     meta.files.implement,
-    namespaceAliases,
+    namespaceAliasesByFile,
     meta.apiCheck.forbiddenSdkImports ?? [],
   );
   // Namespace imports (`import * as sdk from "@tailor-platform/sdk"`) bring every
@@ -564,14 +575,14 @@ export function runApiCheck(
       meta.apiCheck.requiredPatterns,
       meta.files.implement,
       fileAliases,
-      namespaceAliases,
+      namespaceAliasesByFile,
     ),
     ...checkForbiddenPatterns(
       workDir,
       meta.apiCheck.forbiddenPatterns,
       meta.files.implement,
       fileAliases,
-      namespaceAliases,
+      namespaceAliasesByFile,
     ),
   ];
 
