@@ -34,9 +34,9 @@
       },
       {
         "name": "config-uses-defineConfig",
-        "pattern": "defineConfig\\s*\\(",
+        "pattern": "export\\s+default\\s+defineConfig\\s*\\(",
         "files": ["tailor.config.ts"],
-        "message": "tailor.config.ts must export the result of defineConfig(...), not a plain object"
+        "message": "tailor.config.ts must `export default defineConfig(...)`, not a plain object"
       }
     ],
     "forbiddenPatterns": [

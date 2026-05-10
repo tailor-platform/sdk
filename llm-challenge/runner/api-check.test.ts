@@ -506,6 +506,40 @@ describe("runApiCheck", () => {
     expect(result.output).toContain("Forbidden @tailor-platform/sdk import: createResolver");
   });
 
+  it("flags field-level hooks routed through a local variable", () => {
+    const workDir = makeTempWorkDir();
+    fs.mkdirSync(path.join(workDir, "tailordb"), { recursive: true });
+    fs.writeFileSync(
+      path.join(workDir, "tailordb", "user.ts"),
+      [
+        'import { db } from "@tailor-platform/sdk";',
+        "const slugBase = db.string().unique();",
+        "const slug = slugBase.hooks({ create: ({ value }) => value });",
+        "export const user = db.type('User', { slug });",
+        "",
+      ].join("\n"),
+    );
+
+    const result = runApiCheck(
+      workDir,
+      makeMeta({
+        forbiddenPatterns: [
+          {
+            name: "field-level-hooks",
+            pattern:
+              "db\\s*\\.(?!type\\b)\\w+\\([^()]*\\)(\\s*\\.\\w+\\([^()]*\\))*\\s*\\.hooks\\s*\\(",
+            message: "no field-level hooks",
+          },
+        ],
+      }),
+    );
+
+    expect(result).toBeDefined();
+    if (!result) throw new Error("api check result should exist");
+    expect(result.passed).toBe(false);
+    expect(result.output).toContain("no field-level hooks");
+  });
+
   it("flags parenthesized field-level hooks via paren unwrapping", () => {
     const workDir = makeTempWorkDir();
     fs.mkdirSync(path.join(workDir, "tailordb"), { recursive: true });

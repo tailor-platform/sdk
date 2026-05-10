@@ -146,6 +146,40 @@ function stripNamespacePrefix(source: string, namespaceAliases: string[]): strin
 }
 
 /**
+ * Inline assignments of `db.<field>(...)` chains into their later uses so a
+ * forbidden chain cannot be hidden behind a temporary, e.g.
+ *   const slugBase = db.string().unique();
+ *   const slug = slugBase.hooks({ ... });
+ * becomes
+ *   ...
+ *   const slug = db.string().unique().hooks({ ... });
+ * for pattern matching only. Same-file scope, simple `const X = <chain>;` cases.
+ */
+function inlineDbFieldChainAliases(source: string): string {
+  const sourceFile = ts.createSourceFile("__inline__.ts", source, ts.ScriptTarget.Latest, true);
+  const aliases = new Map<string, string>();
+  const dbFieldChainStarter = /^db\s*\.(?!type\b)\w+\(/;
+  const visit = (node: ts.Node): void => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
+      const text = node.initializer.getText(sourceFile).trim();
+      if (dbFieldChainStarter.test(text)) {
+        aliases.set(node.name.text, text);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  if (aliases.size === 0) return source;
+
+  let out = source;
+  for (const [local, expansion] of aliases) {
+    // Replace standalone identifier occurrences only, never substring matches.
+    out = out.replace(new RegExp(`\\b${escapeRegExp(local)}\\b`, "g"), () => expansion);
+  }
+  return out;
+}
+
+/**
  * Unwrap trivial parentheses around chained call expressions, e.g.
  * `(db.string().unique()).hooks(...)` → `db.string().unique().hooks(...)`. This is
  * narrowly intended to defeat paren-based bypasses of pattern checks; it is not a
@@ -431,6 +465,7 @@ function readCandidateSource(
       const aliases = fileAliases.get(file);
       if (aliases && aliases.size > 0) text = rewriteSdkAliases(text, aliases);
       if (namespaceAliases.length > 0) text = stripNamespacePrefix(text, namespaceAliases);
+      text = inlineDbFieldChainAliases(text);
       text = unwrapTrivialParens(text);
       return text;
     })
