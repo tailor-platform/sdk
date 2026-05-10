@@ -478,6 +478,40 @@ describe("runApiCheck", () => {
     expect(result.output).toContain("Forbidden @tailor-platform/sdk import: createResolver");
   });
 
+  it("flags parenthesized field-level hooks via paren unwrapping", () => {
+    const workDir = makeTempWorkDir();
+    fs.mkdirSync(path.join(workDir, "tailordb"), { recursive: true });
+    fs.writeFileSync(
+      path.join(workDir, "tailordb", "user.ts"),
+      [
+        'import { db } from "@tailor-platform/sdk";',
+        "export const user = db.type('User', {",
+        "  slug: (db.string().unique()).hooks({ create: ({ value }) => value }),",
+        "});",
+        "",
+      ].join("\n"),
+    );
+
+    const result = runApiCheck(
+      workDir,
+      makeMeta({
+        forbiddenPatterns: [
+          {
+            name: "field-level-hooks",
+            pattern:
+              "db\\s*\\.(?!type\\b)\\w+\\([^()]*\\)(\\s*\\.\\w+\\([^()]*\\))*\\s*\\.hooks\\s*\\(",
+            message: "no field-level hooks",
+          },
+        ],
+      }),
+    );
+
+    expect(result).toBeDefined();
+    if (!result) throw new Error("api check result should exist");
+    expect(result.passed).toBe(false);
+    expect(result.output).toContain("no field-level hooks");
+  });
+
   it("does not credit required patterns that only appear in comments", () => {
     const workDir = makeTempWorkDir();
     fs.mkdirSync(path.join(workDir, "tailordb"), { recursive: true });

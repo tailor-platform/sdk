@@ -145,6 +145,23 @@ function stripNamespacePrefix(source: string, namespaceAliases: string[]): strin
   return out;
 }
 
+/**
+ * Unwrap trivial parentheses around chained call expressions, e.g.
+ * `(db.string().unique()).hooks(...)` → `db.string().unique().hooks(...)`. This is
+ * narrowly intended to defeat paren-based bypasses of pattern checks; it is not a
+ * general expression unwrapper. Iterates until a fixed point.
+ */
+function unwrapTrivialParens(source: string): string {
+  const re = /\(\s*((?:\w+(?:\([^()]*\))?(?:\s*\.\s*\w+(?:\([^()]*\))?)*)\s*)\)/g;
+  let prev = "";
+  let cur = source;
+  while (prev !== cur) {
+    prev = cur;
+    cur = cur.replace(re, (_match, inner: string) => inner);
+  }
+  return cur;
+}
+
 function collectSdkImports(workDir: string, files: string[]): SdkImportSummary {
   const imports: SdkImport[] = [];
   const namespaceAliases: string[] = [];
@@ -407,6 +424,7 @@ function readCandidateSource(
       const aliases = fileAliases.get(file);
       if (aliases && aliases.size > 0) text = rewriteSdkAliases(text, aliases);
       if (namespaceAliases.length > 0) text = stripNamespacePrefix(text, namespaceAliases);
+      text = unwrapTrivialParens(text);
       return text;
     })
     .join("\n");

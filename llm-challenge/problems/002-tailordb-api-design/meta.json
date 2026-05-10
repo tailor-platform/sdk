@@ -31,6 +31,12 @@
         "pattern": "db\\s*\\.type\\([\\s\\S]*?\\.validate\\s*\\(",
         "files": ["tailordb/product.ts"],
         "message": "Use db.type(...).validate() (type-level chain), not field-level validate"
+      },
+      {
+        "name": "config-uses-defineConfig",
+        "pattern": "defineConfig\\s*\\(",
+        "files": ["tailor.config.ts"],
+        "message": "tailor.config.ts must export the result of defineConfig(...), not a plain object"
       }
     ],
     "forbiddenPatterns": [
