@@ -142,14 +142,24 @@ function collectSdkImports(workDir: string, files: string[]): SdkImportSummary {
 function checkRequiredSdkImports(
   importedSymbols: Set<string>,
   config: ApiCheckConfig,
+  hasNamespaceImport: boolean,
 ): CheckResult[] {
-  return (config.requiredSdkImports ?? []).map((symbol) => ({
-    name: `required-sdk-import:${symbol}`,
-    passed: importedSymbols.has(symbol),
-    message: importedSymbols.has(symbol)
-      ? `Found required @tailor-platform/sdk import: ${symbol}`
-      : `Missing required @tailor-platform/sdk import: ${symbol}`,
-  }));
+  return (config.requiredSdkImports ?? []).map((symbol) => {
+    const namedHit = importedSymbols.has(symbol);
+    // A namespace import (`import * as sdk`) brings every export into scope, so
+    // required-symbol presence cannot be denied. Forbidden / unknown checks still
+    // evaluate the collected named imports.
+    const passed = namedHit || hasNamespaceImport;
+    return {
+      name: `required-sdk-import:${symbol}`,
+      passed,
+      message: passed
+        ? namedHit
+          ? `Found required @tailor-platform/sdk import: ${symbol}`
+          : `Required @tailor-platform/sdk import satisfied via namespace: ${symbol}`
+        : `Missing required @tailor-platform/sdk import: ${symbol}`,
+    };
+  });
 }
 
 function checkForbiddenSdkImports(
@@ -306,19 +316,13 @@ export function runApiCheck(
   const importedSymbols = new Set(imports.map((item) => item.symbol));
   const publicExports = collectPublicSdkExports(workDir, challengeRoot);
   // Namespace imports (`import * as sdk from "@tailor-platform/sdk"`) bring every
-  // export into scope. We do not analyze member access, so import-shape rules
-  // (required/forbidden/unknown by symbol name) cannot reliably classify them and
-  // are skipped; typecheck and tests still validate actual usage. Pattern checks
-  // remain enabled because they target call shape rather than import names.
-  const importShapeChecks = hasNamespaceImport
-    ? []
-    : [
-        ...checkUnknownSdkImports(imports, publicExports, meta.apiCheck),
-        ...checkRequiredSdkImports(importedSymbols, meta.apiCheck),
-        ...checkForbiddenSdkImports(importedSymbols, meta.apiCheck),
-      ];
+  // export into scope, so required-symbol checks pass through them. Forbidden and
+  // unknown checks still evaluate the collected named imports so a submission that
+  // mixes `import * as sdk` with `import { createResolver }` cannot bypass scoring.
   const checks = [
-    ...importShapeChecks,
+    ...checkUnknownSdkImports(imports, publicExports, meta.apiCheck),
+    ...checkRequiredSdkImports(importedSymbols, meta.apiCheck, hasNamespaceImport),
+    ...checkForbiddenSdkImports(importedSymbols, meta.apiCheck),
     ...checkRequiredPatterns(workDir, meta.apiCheck.requiredPatterns, meta.files.implement),
     ...checkForbiddenPatterns(workDir, meta.apiCheck.forbiddenPatterns, meta.files.implement),
   ];

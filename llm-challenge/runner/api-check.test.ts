@@ -263,7 +263,7 @@ describe("runApiCheck", () => {
     expect(result.output).toContain("Use @tailor-platform/kysely-type");
   });
 
-  it("skips import-shape checks for namespace imports", () => {
+  it("treats namespace import as satisfying required imports", () => {
     const workDir = makeTempWorkDir();
     fs.mkdirSync(path.join(workDir, "tailordb"), { recursive: true });
     fs.writeFileSync(
@@ -280,14 +280,42 @@ describe("runApiCheck", () => {
       workDir,
       makeMeta({
         requiredSdkImports: ["db", "defineConfig"],
-        forbiddenSdkImports: ["createExecutor"],
+      }),
+    );
+
+    expect(result).toMatchObject({
+      stage: "apiCheck",
+      passed: true,
+      testsPassed: 2,
+      testsTotal: 2,
+    });
+  });
+
+  it("still flags forbidden named imports alongside a namespace import", () => {
+    const workDir = makeTempWorkDir();
+    fs.mkdirSync(path.join(workDir, "tailordb"), { recursive: true });
+    fs.writeFileSync(
+      path.join(workDir, "tailordb", "user.ts"),
+      [
+        'import * as sdk from "@tailor-platform/sdk";',
+        'import { createResolver } from "@tailor-platform/sdk";',
+        "export const user = sdk.db.type('User', { name: sdk.db.string() });",
+        "",
+      ].join("\n"),
+    );
+
+    const result = runApiCheck(
+      workDir,
+      makeMeta({
+        requiredSdkImports: ["db"],
+        forbiddenSdkImports: ["createResolver"],
       }),
     );
 
     expect(result).toBeDefined();
     if (!result) throw new Error("api check result should exist");
-    expect(result.passed).toBe(true);
-    expect(result.testsTotal).toBe(0);
+    expect(result.passed).toBe(false);
+    expect(result.output).toContain("Forbidden @tailor-platform/sdk import: createResolver");
   });
 
   it("does not credit required patterns that only appear in comments", () => {
