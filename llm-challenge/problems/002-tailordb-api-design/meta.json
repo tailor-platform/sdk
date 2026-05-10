@@ -41,15 +41,15 @@
       },
       {
         "name": "field-level-hooks",
-        "pattern": "db\\s*\\.\\w+\\([^)]*\\)\\s*\\.hooks\\s*\\(",
+        "pattern": "db\\s*\\.(?!type\\b)\\w+\\([^()]*\\)(\\s*\\.\\w+\\([^()]*\\))*\\s*\\.hooks\\s*\\(",
         "files": ["tailordb/product.ts"],
-        "message": "hooks must be on db.type(...).hooks(), not on individual db.* field builders"
+        "message": "hooks must be on db.type(...).hooks(), not chained off db.<field>(...)"
       },
       {
         "name": "field-level-validate",
-        "pattern": "db\\s*\\.\\w+\\([^)]*\\)\\s*\\.validate\\s*\\(",
+        "pattern": "db\\s*\\.(?!type\\b)\\w+\\([^()]*\\)(\\s*\\.\\w+\\([^()]*\\))*\\s*\\.validate\\s*\\(",
         "files": ["tailordb/product.ts"],
-        "message": "validate must be on db.type(...).validate(), not on individual db.* field builders"
+        "message": "validate must be on db.type(...).validate(), not chained off db.<field>(...)"
       }
     ]
   }

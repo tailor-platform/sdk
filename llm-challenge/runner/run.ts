@@ -323,9 +323,11 @@ async function installDependencies(
   if (contextProfile) {
     applyContextProfile(workDir, contextProfile);
   }
-  // Drop the source tarball so solvers cannot reinstall the unfiltered SDK and
-  // recover docs/skills that the context profile removed from node_modules.
-  if (tarballPath) {
+  // For filtered profiles drop the source tarball so solvers cannot reinstall
+  // the unfiltered SDK and recover docs/skills the profile removed. Profiles that
+  // do not filter (full-package, tailor-sdk-skill) keep the tarball so solvers can
+  // refresh dependencies via `pnpm install` if needed.
+  if (tarballPath && (contextProfile === "types-only" || contextProfile === "docs-only")) {
     fs.rmSync(path.join(workDir, ".sdk"), { recursive: true, force: true });
   }
 }

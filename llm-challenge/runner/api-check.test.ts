@@ -163,6 +163,72 @@ describe("runApiCheck", () => {
     });
   });
 
+  it("flags field-level hooks chained off db.<field>() as forbidden", () => {
+    const workDir = makeTempWorkDir();
+    fs.mkdirSync(path.join(workDir, "tailordb"), { recursive: true });
+    fs.writeFileSync(
+      path.join(workDir, "tailordb", "user.ts"),
+      [
+        'import { db } from "@tailor-platform/sdk";',
+        "export const user = db.type('User', {",
+        "  slug: db.string().unique().hooks({ create: ({ value }) => value }),",
+        "});",
+        "",
+      ].join("\n"),
+    );
+
+    const result = runApiCheck(
+      workDir,
+      makeMeta({
+        forbiddenPatterns: [
+          {
+            name: "field-level-hooks",
+            pattern:
+              "db\\s*\\.(?!type\\b)\\w+\\([^()]*\\)(\\s*\\.\\w+\\([^()]*\\))*\\s*\\.hooks\\s*\\(",
+            message: "no field-level hooks",
+          },
+        ],
+      }),
+    );
+
+    expect(result).toBeDefined();
+    if (!result) throw new Error("api check result should exist");
+    expect(result.passed).toBe(false);
+    expect(result.output).toContain("no field-level hooks");
+  });
+
+  it("preserves forbidden module specifiers when stripping string bodies", () => {
+    const workDir = makeTempWorkDir();
+    fs.mkdirSync(path.join(workDir, "tailordb"), { recursive: true });
+    fs.writeFileSync(
+      path.join(workDir, "tailordb", "user.ts"),
+      [
+        'import { db } from "@tailor-platform/sdk";',
+        'import "@tailor-platform/kysely-types";',
+        "export const user = db.type('User', { name: db.string() });",
+        "",
+      ].join("\n"),
+    );
+
+    const result = runApiCheck(
+      workDir,
+      makeMeta({
+        forbiddenPatterns: [
+          {
+            name: "legacy-package",
+            pattern: "@tailor-platform/kysely-types",
+            message: "Use @tailor-platform/kysely-type",
+          },
+        ],
+      }),
+    );
+
+    expect(result).toBeDefined();
+    if (!result) throw new Error("api check result should exist");
+    expect(result.passed).toBe(false);
+    expect(result.output).toContain("Use @tailor-platform/kysely-type");
+  });
+
   it("does not credit required patterns that only appear in comments", () => {
     const workDir = makeTempWorkDir();
     fs.mkdirSync(path.join(workDir, "tailordb"), { recursive: true });

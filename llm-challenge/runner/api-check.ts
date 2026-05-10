@@ -167,13 +167,36 @@ function checkUnknownSdkImports(
     }));
 }
 
+function collectImportSpecifierRanges(source: ts.SourceFile): Array<[number, number]> {
+  const ranges: Array<[number, number]> = [];
+  for (const statement of source.statements) {
+    if (ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier)) {
+      ranges.push([statement.moduleSpecifier.getStart(source), statement.moduleSpecifier.getEnd()]);
+    } else if (
+      ts.isExportDeclaration(statement) &&
+      statement.moduleSpecifier &&
+      ts.isStringLiteral(statement.moduleSpecifier)
+    ) {
+      ranges.push([statement.moduleSpecifier.getStart(source), statement.moduleSpecifier.getEnd()]);
+    }
+  }
+  return ranges;
+}
+
 /**
  * Replace comments and string/template literal bodies with same-length whitespace
  * so pattern matching cannot be tricked by harmless mentions in comments
  * (`// don't use createResolver`) or string literals (`"db.type().hooks("`).
+ * Import/export module specifiers are preserved so forbidden-package patterns
+ * such as `@tailor-platform/kysely-types` still match the import source.
  * Length preservation keeps regex offsets compatible with `m` flag semantics.
  */
 function stripCommentsAndStringBodies(source: string): string {
+  const sourceFile = ts.createSourceFile("__check__.ts", source, ts.ScriptTarget.Latest, true);
+  const importSpecifierRanges = collectImportSpecifierRanges(sourceFile);
+  const isInImportSpecifier = (pos: number): boolean =>
+    importSpecifierRanges.some(([start, end]) => pos >= start && pos < end);
+
   const scanner = ts.createScanner(ts.ScriptTarget.Latest, false);
   scanner.setText(source);
   const out: string[] = [];
@@ -181,15 +204,17 @@ function stripCommentsAndStringBodies(source: string): string {
     const token = scanner.scan();
     if (token === ts.SyntaxKind.EndOfFileToken) break;
     const text = scanner.getTokenText();
-    if (
+    const tokenStart = scanner.getTokenStart();
+    const isComment =
       token === ts.SyntaxKind.SingleLineCommentTrivia ||
-      token === ts.SyntaxKind.MultiLineCommentTrivia ||
+      token === ts.SyntaxKind.MultiLineCommentTrivia;
+    const isStringLike =
       token === ts.SyntaxKind.StringLiteral ||
       token === ts.SyntaxKind.NoSubstitutionTemplateLiteral ||
       token === ts.SyntaxKind.TemplateHead ||
       token === ts.SyntaxKind.TemplateMiddle ||
-      token === ts.SyntaxKind.TemplateTail
-    ) {
+      token === ts.SyntaxKind.TemplateTail;
+    if (isComment || (isStringLike && !isInImportSpecifier(tokenStart))) {
       out.push(text.replace(/[^\n]/g, " "));
     } else {
       out.push(text);

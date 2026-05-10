@@ -20,6 +20,16 @@ function extractValidateFn(validate: any): (input: any) => boolean {
   throw new Error("Could not extract validate function");
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- challenge tests inspect generated SDK metadata
+function extractValidateMessage(validate: any): string | undefined {
+  const first = Array.isArray(validate) ? validate[0] : undefined;
+  if (Array.isArray(first) && typeof first[1] === "string") return first[1];
+  if (typeof first === "object" && first !== null && typeof first.message === "string") {
+    return first.message;
+  }
+  return undefined;
+}
+
 describe.skipIf(!workDirReady)("002-tailordb-api-design", () => {
   test("product model has the expected fields", async () => {
     const mod = await importPath(path.join(workDir, "tailordb/product.ts"));
@@ -55,13 +65,14 @@ describe.skipIf(!workDirReady)("002-tailordb-api-design", () => {
     expect(hook({ value: null, data: {}, user: {} })).toBe("");
   });
 
-  test("price validation rejects negative values", async () => {
+  test("price validation rejects negative values with the required message", async () => {
     const mod = await importPath(path.join(workDir, "tailordb/product.ts"));
     const validate = mod.product.fields.price.metadata.validate;
     expect(validate).toBeDefined();
     const fn = extractValidateFn(validate);
     expect(fn({ value: 0, data: {}, user: {} })).toBe(true);
     expect(fn({ value: -1, data: {}, user: {} })).toBe(false);
+    expect(extractValidateMessage(validate)).toBe("price must be >= 0");
   });
 
   test("product has a non-empty description", async () => {
