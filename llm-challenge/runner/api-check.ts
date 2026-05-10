@@ -219,9 +219,10 @@ function escapeRegExp(value: string): string {
 
 /**
  * Detect forbidden SDK symbols that are used through a namespace import alias.
- * Catches both direct member access (`sdk.createExecutor(...)`) and object
- * destructuring (`const { createExecutor } = sdk`) so submissions cannot bypass
- * forbidden checks by routing the symbol through the namespace alias.
+ * Walks the AST so that direct (`sdk.createExecutor`), computed
+ * (`sdk["createExecutor"]`), and destructuring (`const { createExecutor } = sdk`)
+ * forms are all caught — relying on string grep would miss the bracket form
+ * once string bodies are blanked elsewhere.
  */
 function findNamespaceForbiddenUsages(
   workDir: string,
@@ -235,34 +236,40 @@ function findNamespaceForbiddenUsages(
   }
   const aliasSet = new Set(namespaceAliases);
   const forbiddenSet = new Set(forbiddenSymbols);
+  const isAliasIdentifier = (node: ts.Node): node is ts.Identifier =>
+    ts.isIdentifier(node) && aliasSet.has(node.text);
+
   for (const file of files) {
     const filePath = path.join(workDir, file);
     if (!fs.existsSync(filePath)) continue;
     const raw = fs.readFileSync(filePath, "utf-8");
-    const stripped = stripCommentsAndStringBodies(raw);
-
-    for (const alias of namespaceAliases) {
-      for (const symbol of forbiddenSymbols) {
-        if (found.has(symbol)) continue;
-        const re = new RegExp(`\\b${escapeRegExp(alias)}\\.${escapeRegExp(symbol)}\\b`);
-        if (re.test(stripped)) {
-          found.add(symbol);
-        }
-      }
-    }
-
     const sourceFile = ts.createSourceFile(file, raw, ts.ScriptTarget.Latest, true);
     const visit = (node: ts.Node): void => {
+      // sdk.createExecutor
+      if (
+        ts.isPropertyAccessExpression(node) &&
+        isAliasIdentifier(node.expression) &&
+        forbiddenSet.has(node.name.text)
+      ) {
+        found.add(node.name.text);
+      }
+      // sdk["createExecutor"]
+      if (
+        ts.isElementAccessExpression(node) &&
+        isAliasIdentifier(node.expression) &&
+        ts.isStringLiteralLike(node.argumentExpression) &&
+        forbiddenSet.has(node.argumentExpression.text)
+      ) {
+        found.add(node.argumentExpression.text);
+      }
+      // const { createExecutor } = sdk;  (also handles `{ a: b } = sdk` rename)
       if (
         ts.isVariableDeclaration(node) &&
         ts.isObjectBindingPattern(node.name) &&
         node.initializer &&
-        ts.isIdentifier(node.initializer) &&
-        aliasSet.has(node.initializer.text)
+        isAliasIdentifier(node.initializer)
       ) {
         for (const element of node.name.elements) {
-          // `propertyName` is set when renaming during destructuring (`{ a: b } = sdk`).
-          // The exported source name we care about is `propertyName ?? name`.
           const exportedName =
             element.propertyName && ts.isIdentifier(element.propertyName)
               ? element.propertyName.text
