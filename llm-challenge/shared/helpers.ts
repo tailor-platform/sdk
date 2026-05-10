@@ -2,13 +2,36 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
+export type ChallengeStage = "generate" | "apiCheck" | "typecheck" | "tests";
+
+export type ContextProfile = "types-only" | "docs-only" | "tailor-sdk-skill" | "full-package";
+
+export type ApiCheckPattern = {
+  name: string;
+  pattern: string;
+  message?: string;
+  files?: string[];
+};
+
+export type ApiCheckConfig = {
+  checkUnknownSdkImports?: boolean;
+  requiredSdkImports?: string[];
+  forbiddenSdkImports?: string[];
+  requiredPatterns?: ApiCheckPattern[];
+  forbiddenPatterns?: ApiCheckPattern[];
+};
+
 export type ProblemMeta = {
   id: string;
   name: string;
   difficulty: "easy" | "medium" | "hard";
   category: string;
+  apiSurfaces?: string[];
+  evaluationGoal?: "api-design" | "integration";
+  contextProfiles?: ContextProfile[];
   scoring: {
     generate: number;
+    apiCheck?: number;
     typecheck: number;
     tests: number;
   };
@@ -16,6 +39,7 @@ export type ProblemMeta = {
     implement: string[];
     scaffold: string[];
   };
+  apiCheck?: ApiCheckConfig;
 };
 
 export function loadMeta(problemDir: string): ProblemMeta {

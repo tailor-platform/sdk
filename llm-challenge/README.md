@@ -15,13 +15,15 @@ SDK improvement proposals based on benchmark results are tracked in [`.claude/IM
 
 ## Problems
 
-| ID  | Name                       | Category    | Difficulty | Scoring (G/T/Te) | Total |
-| --- | -------------------------- | ----------- | ---------- | ---------------- | ----- |
-| 001 | saas-subscription-platform | integration | hard       | 30 / 30 / 240    | 300   |
+| ID  | Name                       | Category    | Difficulty | Scoring (G/A/T/Te) | Total |
+| --- | -------------------------- | ----------- | ---------- | ------------------ | ----- |
+| 001 | saas-subscription-platform | integration | hard       | 30 / 20 / 30 / 240 | 320   |
+| 002 | tailordb-api-design        | api-design  | easy       | 10 / 10 / 10 / 70  | 100   |
 
-**Scoring column**: Generate / Typecheck / Tests
+**Scoring column**: Generate / API Check / Typecheck / Tests
 
 - **001**: Full-stack integration covering TailorDB models (5 types), resolvers, executors, workflows, and application config. Uses `db.type()` fluent API.
+- **002**: Small TailorDB-only problem for measuring whether models are expressed through the correct `db.type()` and `db.*` API surface.
 
 ## Prerequisites
 
@@ -41,10 +43,10 @@ pnpm challenge:verify-solution
 pnpm test:runner
 
 # Solve all problems using Claude Code (default)
-pnpm challenge:solve [--agent claude] [--model sonnet] [--max-budget 5.00]
+pnpm challenge:solve [--agent claude] [--model sonnet] [--max-budget 5.00] [--context-profile types-only]
 
 # Solve all problems using Codex
-pnpm challenge:solve --agent codex [--model gpt-5-codex]
+pnpm challenge:solve --agent codex [--model gpt-5-codex] [--context-profile types-only]
 
 # Solve with retry on failure
 pnpm challenge:solve --retry 2 [--agent claude|codex] [--model sonnet] [--max-budget 5.00]
@@ -52,7 +54,7 @@ pnpm challenge:solve --retry 2 [--agent claude|codex] [--model sonnet] [--max-bu
 # Run a single problem
 pnpm challenge --problem 001 --use-solution
 pnpm challenge --problem 001 --impl ./path/to/impl
-pnpm challenge --problem 001 --solve [--agent claude|codex]
+pnpm challenge --problem 001 --solve [--agent claude|codex] [--context-profile types-only]
 
 # Run all problems with external implementations
 pnpm challenge --all --impl-dir ./path/to/outputs
@@ -65,17 +67,19 @@ pnpm challenge --all --impl-dir ./path/to/outputs
 - `--max-budget <usd>` — Spending cap per problem in USD (default: `5.00`, must be positive)
 - `--retry <n>` — Number of retry attempts on failure (default: `0`, must be non-negative). On failure, error output is fed back to the AI for correction.
 - `--concurrency <n>` — Number of problems to run in parallel (default: CPU count, must be positive)
+- `--context-profile <types-only|docs-only|tailor-sdk-skill|full-package>` — SDK context available to solve agents (default: `full-package`). Use `types-only` as the API design baseline and compare with `tailor-sdk-skill` to measure skill/docs uplift.
 - `--clean` — Remove work directories after execution
 
 ## How Verification Works
 
-Each problem is verified through a 3-stage pipeline. If a stage fails, subsequent stages are skipped.
+Each problem is verified through a 4-stage pipeline. If generate fails, subsequent stages are skipped.
 
-| Stage         | Points | What it does                                     |
-| ------------- | ------ | ------------------------------------------------ |
-| **Generate**  | varies | Runs SDK code generation (`tailor-sdk generate`) |
-| **Typecheck** | varies | Runs TypeScript type checking (`tsc --noEmit`)   |
-| **Tests**     | varies | Runs Vitest unit tests                           |
+| Stage         | Points | What it does                                                           |
+| ------------- | ------ | ---------------------------------------------------------------------- |
+| **Generate**  | varies | Runs SDK code generation (`tailor-sdk generate`)                       |
+| **API Check** | varies | Statically checks SDK import/API usage shape before TypeScript compile |
+| **Typecheck** | varies | Runs TypeScript type checking (`tsc --noEmit`)                         |
+| **Tests**     | varies | Runs Vitest unit tests                                                 |
 
 Each problem's scoring weights are defined in its `meta.json`.
 
@@ -115,6 +119,7 @@ When a stage fails, the output is automatically classified into a failure catego
 | `generate_error` | SDK code generation failed                  |
 | `logic_error`    | Test failures (default for test stage)      |
 | `api_misuse`     | SDK API validation errors during generation |
+| `api_design`     | Static API usage check failed               |
 
 Skipped stages (due to earlier stage failure) are not classified.
 
@@ -137,6 +142,7 @@ Cost from all attempts (initial + retries) is tracked in the report.
 JSON reports include metadata for comparison tracking:
 
 - `model` — Claude model used (when solving)
+- `contextProfile` — SDK context available to the solve agent
 - `sdkVersion` — SDK package version
 - `timestamp` — When the run was executed
 
@@ -148,6 +154,7 @@ Reports include analytics for identifying SDK improvement areas:
 
 - **Failure distribution** — Count of each failure category
 - **Category/difficulty/stage success rates** — Pass rates by grouping
+- **API surface/context profile success rates** — Pass rates by SDK API surface and context profile
 - **Common failure patterns** — Recurring failure category + stage combinations with suggested documentation fixes
 - **Retry analysis** — Which failure categories are self-correctable vs persistent
 

@@ -1,0 +1,44 @@
+{
+  "id": "002",
+  "name": "tailordb-api-design",
+  "difficulty": "easy",
+  "category": "api-design",
+  "evaluationGoal": "api-design",
+  "apiSurfaces": ["tailordb.field", "tailordb.hook", "tailordb.validation", "config"],
+  "contextProfiles": ["types-only", "docs-only", "tailor-sdk-skill", "full-package"],
+  "scoring": {
+    "generate": 10,
+    "apiCheck": 10,
+    "typecheck": 10,
+    "tests": 70
+  },
+  "files": {
+    "implement": ["tailordb/product.ts", "tailor.config.ts"],
+    "scaffold": ["tailor.config.ts"]
+  },
+  "apiCheck": {
+    "requiredSdkImports": ["db", "defineConfig"],
+    "forbiddenSdkImports": ["t", "createResolver", "createExecutor"],
+    "requiredPatterns": [
+      {
+        "name": "fluent-hooks-api",
+        "pattern": "\\.hooks\\s*\\(",
+        "files": ["tailordb/product.ts"],
+        "message": "Use db.type().hooks() for field hooks"
+      },
+      {
+        "name": "fluent-validate-api",
+        "pattern": "\\.validate\\s*\\(",
+        "files": ["tailordb/product.ts"],
+        "message": "Use db.type().validate() for field validation"
+      }
+    ],
+    "forbiddenPatterns": [
+      {
+        "name": "resolver-style-schema",
+        "pattern": "t\\.object|t\\.string|createResolver",
+        "message": "TailorDB models should use db.* field builders, not resolver t.* schemas"
+      }
+    ]
+  }
+}

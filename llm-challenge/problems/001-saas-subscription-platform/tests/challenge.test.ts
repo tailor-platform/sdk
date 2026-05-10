@@ -721,7 +721,8 @@ describe.skipIf(!workDirReady)("001-saas-subscription-platform", () => {
     });
 
     test("trigger is recordCreated on Invoice", () => {
-      expect(executor.trigger.kind).toBe("recordCreated");
+      expect(executor.trigger.kind).toBe("tailordb");
+      expect(executor.trigger.events).toEqual(["tailordb.type_record.created"]);
       expect(executor.trigger.typeName).toBe("Invoice");
     });
 
@@ -783,7 +784,8 @@ describe.skipIf(!workDirReady)("001-saas-subscription-platform", () => {
     });
 
     test("trigger is recordUpdated on Subscription", () => {
-      expect(executor.trigger.kind).toBe("recordUpdated");
+      expect(executor.trigger.kind).toBe("tailordb");
+      expect(executor.trigger.events).toEqual(["tailordb.type_record.updated"]);
       expect(executor.trigger.typeName).toBe("Subscription");
     });
 

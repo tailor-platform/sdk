@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import {
+  type ContextProfile,
   copyDir,
   formatDuration,
   getSdkVersion,
@@ -21,6 +22,7 @@ import {
   formatReportTable,
   isInfraFailure,
 } from "./score";
+import { applyContextProfile } from "./context-profile";
 import { checkPodmanAvailability } from "./solver/container";
 import type { ChallengeReport, ProblemResult, ScaffoldChange, StageResult } from "./score";
 import {
@@ -52,6 +54,7 @@ function parseArgs(): {
   resume: boolean;
   rerunInfra: boolean;
   concurrency: number;
+  contextProfile: ContextProfile;
 } {
   const args = process.argv.slice(2);
   let problem: string | undefined;
@@ -69,6 +72,7 @@ function parseArgs(): {
   let resume = false;
   let rerunInfra = false;
   let concurrency = os.availableParallelism();
+  let contextProfile: ContextProfile = "full-package";
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
@@ -127,6 +131,23 @@ function parseArgs(): {
         concurrency = Number(requireArg(args, i, "--concurrency"));
         i++;
         break;
+      case "--context-profile": {
+        const value = requireArg(args, i, "--context-profile");
+        if (
+          value !== "types-only" &&
+          value !== "docs-only" &&
+          value !== "tailor-sdk-skill" &&
+          value !== "full-package"
+        ) {
+          console.error(
+            'Error: --context-profile must be one of "types-only", "docs-only", "tailor-sdk-skill", or "full-package"',
+          );
+          process.exit(1);
+        }
+        contextProfile = value;
+        i++;
+        break;
+      }
     }
   }
 
@@ -160,6 +181,7 @@ function parseArgs(): {
     resume,
     rerunInfra,
     concurrency: Math.trunc(concurrency),
+    contextProfile,
   };
 }
 
@@ -272,6 +294,7 @@ async function installDependencies(
   workDir: string,
   verbose: boolean,
   tarballPath?: string,
+  contextProfile?: ContextProfile,
 ): Promise<void> {
   if (verbose) {
     console.log("  Installing dependencies...");
@@ -282,9 +305,12 @@ async function installDependencies(
     encoding: "utf-8",
     timeout: 120_000,
   });
+  if (contextProfile) {
+    applyContextProfile(workDir, contextProfile);
+  }
 }
 
-const allStages = ["generate", "typecheck", "tests"] as const;
+const allStages = ["generate", "apiCheck", "typecheck", "tests"] as const;
 
 function sumStageScores(stages: StageResult[]): { totalScore: number; maxScore: number } {
   return stages.reduce(
@@ -298,12 +324,13 @@ function makeSkippedStages(
   output: string,
   category: "infra_failure" | "runner_error",
 ): StageResult[] {
-  return allStages.map((stage) => ({
+  const stages = meta.apiCheck ? allStages : allStages.filter((stage) => stage !== "apiCheck");
+  return stages.map((stage) => ({
     stage,
     passed: false,
     output,
     score: 0,
-    maxScore: meta.scoring[stage],
+    maxScore: meta.scoring[stage] ?? 0,
     category,
   }));
 }
@@ -375,6 +402,7 @@ async function runProblem(
     clean: boolean;
     verbose: boolean;
     tarballPath?: string;
+    contextProfile: ContextProfile;
   },
 ): Promise<ProblemResult> {
   const problemStartTime = Date.now();
@@ -388,7 +416,9 @@ async function runProblem(
   const isSolveMode = !!options.solve;
   const workDir = setupWorkDir(problemDir, options.implDir, isSolveMode);
   try {
-    await installLimiter(() => installDependencies(workDir, options.verbose, options.tarballPath));
+    await installLimiter(() =>
+      installDependencies(workDir, options.verbose, options.tarballPath, options.contextProfile),
+    );
   } catch (err) {
     // Clean up temporary solve directory on setup/install failure
     if (isSolveMode) {
@@ -420,6 +450,7 @@ async function runProblem(
       agent: options.solve.agent,
       model: normalizedModel,
       maxBudget: options.solve.maxBudget,
+      contextProfile: options.contextProfile,
     });
     if (options.verbose) {
       let icon = "FAIL";
@@ -453,6 +484,8 @@ async function runProblem(
       problemName: meta.name,
       difficulty: meta.difficulty,
       category: meta.category,
+      apiSurfaces: meta.apiSurfaces,
+      contextProfile: options.contextProfile,
       stages,
       totalScore: 0,
       maxScore: sumStageScores(stages).maxScore,
@@ -539,6 +572,7 @@ async function runProblem(
         model: normalizedModel,
         maxBudget: remainingBudget,
         errorOutput,
+        contextProfile: options.contextProfile,
       });
       retrySolveResults.push(retryResult);
       cumulativeCost += retryResult.costUsd;
@@ -620,6 +654,8 @@ async function runProblem(
     problemName: meta.name,
     difficulty: meta.difficulty,
     category: meta.category,
+    apiSurfaces: meta.apiSurfaces,
+    contextProfile: options.contextProfile,
     stages,
     totalScore,
     maxScore,
@@ -809,6 +845,7 @@ async function main(): Promise<void> {
     resume,
     rerunInfra,
     concurrency,
+    contextProfile,
   } = parseArgs();
 
   if (!problem && !all && !rerunInfra) {
@@ -816,11 +853,11 @@ async function main(): Promise<void> {
     console.error("  tsx runner/run.ts --problem 001 --impl ./path/to/impl");
     console.error("  tsx runner/run.ts --problem 001 --use-solution");
     console.error(
-      "  tsx runner/run.ts --problem 001 --solve [--agent claude|codex] [--model sonnet] [--max-budget 2.00]",
+      "  tsx runner/run.ts --problem 001 --solve [--agent claude|codex] [--model sonnet] [--max-budget 2.00] [--context-profile types-only]",
     );
     console.error("  tsx runner/run.ts --all --use-solution [--clean] [--concurrency <n>]");
     console.error(
-      "  tsx runner/run.ts --all --solve [--agent claude|codex] [--model sonnet] [--max-budget 2.00] [--retry 2] [--clean] [--concurrency <n>]",
+      "  tsx runner/run.ts --all --solve [--agent claude|codex] [--model sonnet] [--max-budget 2.00] [--retry 2] [--clean] [--concurrency <n>] [--context-profile types-only]",
     );
     console.error("  tsx runner/run.ts --all --impl-dir ./path/to/all-outputs");
     console.error("  tsx runner/run.ts --all --solve --resume [--clean]");
@@ -919,6 +956,7 @@ async function main(): Promise<void> {
               clean,
               verbose,
               tarballPath,
+              contextProfile,
             });
             completed++;
             if (!verbose) {
@@ -963,6 +1001,7 @@ async function main(): Promise<void> {
     }
     const report = createReport(mergedResults, {
       model: reportModel,
+      contextProfile,
       sdkVersion,
       elapsedMs: Date.now() - rerunStartTime,
     });
@@ -992,7 +1031,12 @@ async function main(): Promise<void> {
   let completedIds = new Set<string>();
   const problemSet = new Set(problems);
   if (resume) {
-    const partialResults = loadPartialResults(resultsDir, solveModelLabel, !!solve, implSource);
+    const partialResults = loadPartialResults(
+      resultsDir,
+      solveModelLabel,
+      !!solve,
+      `${implSource}:${contextProfile}`,
+    );
     // Filter to only include results for problems in the current target set
     const relevantResults = partialResults.filter((r) =>
       problemSet.has(problemKey(r.problemId, r.problemName)),
@@ -1051,6 +1095,7 @@ async function main(): Promise<void> {
             clean,
             verbose,
             tarballPath,
+            contextProfile,
           });
 
           // Push result (safe: Node.js single-threaded)
@@ -1066,7 +1111,13 @@ async function main(): Promise<void> {
 
           // Save partial results after each problem
           if (all) {
-            savePartialResults(resultsDir, results, solveModelLabel, !!solve, implSource);
+            savePartialResults(
+              resultsDir,
+              results,
+              solveModelLabel,
+              !!solve,
+              `${implSource}:${contextProfile}`,
+            );
           }
         } catch (err) {
           const errorMsg = err instanceof Error ? err.message : String(err);
@@ -1084,6 +1135,8 @@ async function main(): Promise<void> {
             problemName: meta.name,
             difficulty: meta.difficulty,
             category: meta.category,
+            apiSurfaces: meta.apiSurfaces,
+            contextProfile,
             stages,
             totalScore: 0,
             maxScore: sumStageScores(stages).maxScore,
@@ -1107,17 +1160,18 @@ async function main(): Promise<void> {
 
   const report = createReport(results, {
     model: solveModelLabel,
+    contextProfile,
     sdkVersion,
     elapsedMs: Date.now() - runStartTime,
   });
 
   let modelLabelRaw: string;
   if (solve) {
-    modelLabelRaw = solveModelLabel ?? "solve";
+    modelLabelRaw = `${solveModelLabel ?? "solve"}-${contextProfile}`;
   } else if (useSolution) {
-    modelLabelRaw = "solution";
+    modelLabelRaw = `solution-${contextProfile}`;
   } else {
-    modelLabelRaw = "impl";
+    modelLabelRaw = `impl-${contextProfile}`;
   }
   writeReport(resultsDir, report, modelLabelRaw, sdkVersion);
 }

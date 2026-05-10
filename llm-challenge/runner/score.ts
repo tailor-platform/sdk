@@ -1,5 +1,5 @@
 import { problemKey } from "../shared/helpers";
-import type { ProblemMeta } from "../shared/helpers";
+import type { ChallengeStage, ProblemMeta } from "../shared/helpers";
 import type { SolveResult } from "./solve";
 import type { TestDetail, StageInput } from "./verify";
 
@@ -10,11 +10,12 @@ export type FailureCategory =
   | "generate_error"
   | "logic_error"
   | "api_misuse"
+  | "api_design"
   | "infra_failure"
   | "runner_error";
 
 export type StageResult = {
-  stage: "generate" | "typecheck" | "tests";
+  stage: ChallengeStage;
   passed: boolean;
   output: string;
   score: number;
@@ -37,6 +38,8 @@ export type ProblemResult = {
   problemName: string;
   difficulty: string;
   category: string;
+  apiSurfaces?: string[];
+  contextProfile?: string;
   stages: StageResult[];
   totalScore: number;
   maxScore: number;
@@ -68,6 +71,8 @@ type Analytics = {
   failureDistribution: Partial<Record<FailureCategory, number>>;
   categorySuccessRates: Record<string, SuccessRate>;
   difficultySuccessRates: Record<string, SuccessRate>;
+  apiSurfaceSuccessRates: Record<string, SuccessRate>;
+  contextProfileSuccessRates: Record<string, SuccessRate>;
   stagePassRates: Record<string, SuccessRate>;
   commonFailurePatterns: FailurePattern[];
   retryAnalysis?: RetryAnalysis;
@@ -76,6 +81,7 @@ type Analytics = {
 export type ChallengeReport = {
   timestamp: string;
   model?: string;
+  contextProfile?: string;
   sdkVersion?: string;
   results: ProblemResult[];
   totalScore: number;
@@ -109,6 +115,18 @@ const failureDocSuggestions: Record<string, Record<FailureCategory, string>> = {
     generate_error: "Improve code generation error messages with fix suggestions",
     logic_error: "Add more configuration pattern examples",
     api_misuse: "Improve SDK API validation messages with expected format hints",
+    api_design: "Make SDK entrypoints and public exports easier to discover from types",
+    infra_failure: "Infrastructure failure - not an SDK issue",
+    runner_error: "Runner error - investigate runner bug or problem setup",
+  },
+  apiCheck: {
+    missing_file: "Add file structure documentation",
+    import_error: "Document SDK import paths and public entrypoints",
+    type_error: "Add type-level guidance for SDK entrypoints",
+    generate_error: "Runner error - apiCheck should not classify generate errors",
+    logic_error: "Add examples for the expected API usage shape",
+    api_misuse: "Improve SDK API usage examples",
+    api_design: "Make SDK entrypoints and public exports easier to discover from types",
     infra_failure: "Infrastructure failure - not an SDK issue",
     runner_error: "Runner error - investigate runner bug or problem setup",
   },
@@ -119,6 +137,7 @@ const failureDocSuggestions: Record<string, Record<FailureCategory, string>> = {
     generate_error: "Ensure generated types include all required fields",
     logic_error: "Add type usage patterns for complex SDK APIs",
     api_misuse: "Add type-level validation with better error messages",
+    api_design: "Make SDK types guide users toward the correct API shape",
     infra_failure: "Infrastructure failure - not an SDK issue",
     runner_error: "Runner error - investigate runner bug or problem setup",
   },
@@ -129,6 +148,7 @@ const failureDocSuggestions: Record<string, Record<FailureCategory, string>> = {
     generate_error: "Improve generated code correctness",
     logic_error: "Add more logic examples (resolver body, executor handler, workflow jobs)",
     api_misuse: "Add API usage examples with edge cases and error handling",
+    api_design: "Make runtime object shapes more consistent with SDK examples",
     infra_failure: "Infrastructure failure - not an SDK issue",
     runner_error: "Runner error - investigate runner bug or problem setup",
   },
@@ -140,10 +160,7 @@ function getSuggestedDocFix(stage: string, category: FailureCategory): string {
   );
 }
 
-function classifyFailure(
-  stage: "generate" | "typecheck" | "tests",
-  output: string,
-): FailureCategory | undefined {
+function classifyFailure(stage: ChallengeStage, output: string): FailureCategory | undefined {
   // Skipped stages (due to earlier stage failure) should not be classified
   if (/^Skipped\b/.test(output)) {
     return undefined;
@@ -165,6 +182,9 @@ function classifyFailure(
     }
     return "generate_error";
   }
+  if (stage === "apiCheck") {
+    return "api_design";
+  }
   if (stage === "typecheck") {
     return "type_error";
   }
@@ -173,7 +193,7 @@ function classifyFailure(
 
 export function calculateScore(meta: ProblemMeta, stages: StageInput[]): StageResult[] {
   return stages.map((s) => {
-    const maxScore = meta.scoring[s.stage];
+    const maxScore = meta.scoring[s.stage] ?? 0;
     const category = s.passed ? undefined : classifyFailure(s.stage, s.output);
 
     // Partial scoring for stages with test counts (generate and tests stages)
@@ -233,6 +253,19 @@ function computeAnalytics(results: ProblemResult[]): Analytics {
   const isPerfectScore = (r: ProblemResult): boolean => r.totalScore === r.maxScore;
   const categorySuccessRates = computeSuccessRates(results, (r) => r.category, isPerfectScore);
   const difficultySuccessRates = computeSuccessRates(results, (r) => r.difficulty, isPerfectScore);
+  const apiSurfaceItems = results.flatMap((r) =>
+    (r.apiSurfaces ?? []).map((surface) => ({ result: r, surface })),
+  );
+  const apiSurfaceSuccessRates = computeSuccessRates(
+    apiSurfaceItems,
+    (item) => item.surface,
+    (item) => isPerfectScore(item.result),
+  );
+  const contextProfileSuccessRates = computeSuccessRates(
+    results,
+    (r) => r.contextProfile ?? "unspecified",
+    isPerfectScore,
+  );
 
   // Stage pass rates (exclude skipped stages from totals)
   const stageItems: { stage: string; passed: boolean }[] = [];
@@ -313,6 +346,8 @@ function computeAnalytics(results: ProblemResult[]): Analytics {
     failureDistribution,
     categorySuccessRates,
     difficultySuccessRates,
+    apiSurfaceSuccessRates,
+    contextProfileSuccessRates,
     stagePassRates,
     commonFailurePatterns,
     retryAnalysis,
@@ -346,7 +381,7 @@ export function computeAdjustedScore(result: ProblemResult): number {
 
 export function createReport(
   results: ProblemResult[],
-  metadata?: { model?: string; sdkVersion?: string; elapsedMs?: number },
+  metadata?: { model?: string; contextProfile?: string; sdkVersion?: string; elapsedMs?: number },
 ): ChallengeReport {
   const infraFailureCount = results.filter(isInfraFailure).length;
   const validResults = results.filter((r) => !isInfraFailure(r));
@@ -388,6 +423,7 @@ export function createReport(
   return {
     timestamp: new Date().toISOString(),
     model: metadata?.model,
+    contextProfile: metadata?.contextProfile,
     sdkVersion: metadata?.sdkVersion,
     results,
     totalScore,

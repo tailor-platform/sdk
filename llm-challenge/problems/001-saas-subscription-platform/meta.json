@@ -3,8 +3,21 @@
   "name": "saas-subscription-platform",
   "difficulty": "hard",
   "category": "integration",
+  "evaluationGoal": "integration",
+  "apiSurfaces": [
+    "tailordb.field",
+    "tailordb.hook",
+    "tailordb.permission",
+    "resolver",
+    "executor.trigger",
+    "executor.operation",
+    "workflow",
+    "config"
+  ],
+  "contextProfiles": ["types-only", "docs-only", "tailor-sdk-skill", "full-package"],
   "scoring": {
     "generate": 30,
+    "apiCheck": 20,
     "typecheck": 30,
     "tests": 240
   },
@@ -24,5 +37,32 @@
       "tailor.config.ts"
     ],
     "scaffold": ["tailor.config.ts"]
+  },
+  "apiCheck": {
+    "requiredSdkImports": [
+      "db",
+      "t",
+      "createResolver",
+      "createExecutor",
+      "recordCreatedTrigger",
+      "recordUpdatedTrigger",
+      "resolverExecutedTrigger",
+      "scheduleTrigger",
+      "createWorkflow",
+      "createWorkflowJob",
+      "defineAuth",
+      "defineConfig",
+      "defineGenerators",
+      "defineIdp",
+      "defineStaticWebSite"
+    ],
+    "forbiddenSdkImports": ["defineResolver", "defineWorkflow", "defineExecutor"],
+    "forbiddenPatterns": [
+      {
+        "name": "legacy-hyphenated-generator-package",
+        "pattern": "@tailor-platform/kysely-types",
+        "message": "Use @tailor-platform/kysely-type, not @tailor-platform/kysely-types"
+      }
+    ]
   }
 }

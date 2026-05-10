@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 import type { ProblemMeta } from "../shared/helpers";
+import { runApiCheck } from "./api-check";
 
 const execAsync = promisify(exec);
 
@@ -27,7 +28,7 @@ export type TestDetail = {
 };
 
 export type StageInput = {
-  stage: "generate" | "typecheck" | "tests";
+  stage: "generate" | "apiCheck" | "typecheck" | "tests";
   passed: boolean;
   output: string;
   durationMs?: number;
@@ -152,9 +153,16 @@ function parseVitestJson(output: string): ParsedVitestResult | undefined {
   }
 }
 
-function earlyReturn(generateStage: StageInput, skipReason: string): StageInput[] {
+function earlyReturn(
+  generateStage: StageInput,
+  skipReason: string,
+  meta: ProblemMeta,
+): StageInput[] {
   return [
     generateStage,
+    ...(meta.apiCheck
+      ? [{ stage: "apiCheck" as const, passed: false, output: `Skipped (${skipReason})` }]
+      : []),
     { stage: "typecheck", passed: false, output: `Skipped (${skipReason})` },
     { stage: "tests", passed: false, output: `Skipped (${skipReason})` },
   ];
@@ -173,7 +181,7 @@ export async function verifyProblem(
   const sdkBin = path.join(challengeRoot, "..", "packages", "sdk", "dist", "cli", "index.mjs");
   if (!fs.existsSync(sdkBin)) {
     const msg = `SDK binary not found at ${sdkBin}. Run 'pnpm -C packages/sdk build' first.`;
-    return earlyReturn({ stage: "generate", passed: false, output: msg }, "generate failed");
+    return earlyReturn({ stage: "generate", passed: false, output: msg }, "generate failed", meta);
   }
   const generateResult = await runCommand(`node "${sdkBin}" generate -c tailor.config.ts`, workDir);
   if (!generateResult.success) {
@@ -205,7 +213,7 @@ export async function verifyProblem(
       }
     }
 
-    return earlyReturn(generateStage, "generate failed");
+    return earlyReturn(generateStage, "generate failed", meta);
   }
   // Verify all required implementation files exist even when generate succeeds.
   // This catches fix-broken submissions that delete or rename required target files.
@@ -221,6 +229,7 @@ export async function verifyProblem(
         testsTotal: GENERATE_PARTIAL_TOTAL,
       },
       "missing files",
+      meta,
     );
   }
 
@@ -230,6 +239,8 @@ export async function verifyProblem(
     output: generateResult.output,
     durationMs: generateResult.durationMs,
   };
+
+  const apiCheckStage = runApiCheck(workDir, meta, challengeRoot);
 
   // Stage 2: typecheck
   const typecheckResult = await runCommand("npx tsc --noEmit", workDir);
@@ -267,5 +278,5 @@ export async function verifyProblem(
     testStage.passed = parsed.total > 0 && parsed.passed === parsed.total;
   }
 
-  return [generateStage, typecheckStage, testStage];
+  return [generateStage, ...(apiCheckStage ? [apiCheckStage] : []), typecheckStage, testStage];
 }

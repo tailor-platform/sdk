@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { getSdkVersion } from "../shared/helpers";
-import type { ProblemMeta } from "../shared/helpers";
+import type { ContextProfile, ProblemMeta } from "../shared/helpers";
+import { buildContextProfileInstructions } from "./context-profile";
 import { createClaudeAdapter } from "./solver/claude";
 import { createCodexAdapter } from "./solver/codex";
 import type { AuthCheckResult, SolveAdapter, SolveAgent, SolveResult } from "./solver/types";
@@ -97,7 +98,12 @@ function buildPromptSections(
   };
 }
 
-function buildPrompt(problemDir: string, meta: ProblemMeta, workDir: string): string {
+function buildPrompt(
+  problemDir: string,
+  meta: ProblemMeta,
+  workDir: string,
+  contextProfileName: ContextProfile,
+): string {
   const { problemMd, existingFilesList, filesToFix, filesToCreate, mode } = buildPromptSections(
     problemDir,
     meta,
@@ -105,6 +111,7 @@ function buildPrompt(problemDir: string, meta: ProblemMeta, workDir: string): st
   );
 
   const systemPrompt = buildSystemPrompt(mode);
+  const contextProfile = buildContextProfileInstructions(workDir, contextProfileName);
 
   const filesSection =
     mode === "hybrid"
@@ -129,6 +136,10 @@ function buildPrompt(problemDir: string, meta: ProblemMeta, workDir: string): st
     "The following files already exist in the project:",
     existingFilesList,
     "",
+    "## SDK Context",
+    "",
+    contextProfile,
+    "",
     "## Task",
     "",
     problemMd,
@@ -144,6 +155,7 @@ function buildRetryPrompt(
   meta: ProblemMeta,
   workDir: string,
   errorOutput: string,
+  contextProfileName: ContextProfile,
 ): string {
   const { problemMd, existingFilesList, filesList } = buildPromptSections(
     problemDir,
@@ -152,12 +164,17 @@ function buildRetryPrompt(
   );
 
   const systemPrompt = buildSystemPrompt("fix");
+  const contextProfile = buildContextProfileInstructions(workDir, contextProfileName);
 
   const userPrompt = [
     "## Existing Files",
     "",
     "The following files already exist in the project:",
     existingFilesList,
+    "",
+    "## SDK Context",
+    "",
+    contextProfile,
     "",
     "## Task",
     "",
@@ -247,9 +264,11 @@ export function retrySolveProblem(options: {
   model?: string;
   maxBudget: number;
   errorOutput: string;
+  contextProfile: ContextProfile;
 }): Promise<SolveResult> {
-  const { workDir, problemDir, meta, agent, model, maxBudget, errorOutput } = options;
-  const prompt = buildRetryPrompt(problemDir, meta, workDir, errorOutput);
+  const { workDir, problemDir, meta, agent, model, maxBudget, errorOutput, contextProfile } =
+    options;
+  const prompt = buildRetryPrompt(problemDir, meta, workDir, errorOutput, contextProfile);
   return runSolver({ agent, prompt, workDir, model, maxBudget });
 }
 
@@ -260,9 +279,10 @@ export function solveProblem(options: {
   agent: SolveAgent;
   model?: string;
   maxBudget: number;
+  contextProfile: ContextProfile;
 }): Promise<SolveResult> {
-  const { workDir, problemDir, meta, agent, model, maxBudget } = options;
-  const prompt = buildPrompt(problemDir, meta, workDir);
+  const { workDir, problemDir, meta, agent, model, maxBudget, contextProfile } = options;
+  const prompt = buildPrompt(problemDir, meta, workDir, contextProfile);
   return runSolver({ agent, prompt, workDir, model, maxBudget });
 }
 
