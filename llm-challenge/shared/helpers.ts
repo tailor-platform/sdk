@@ -11,6 +11,15 @@ export type ApiCheckPattern = {
   pattern: string;
   message?: string;
   files?: string[];
+  /**
+   * What text the pattern is applied to.
+   * - `"code"` (default): comments and string/template bodies are blanked, import/export
+   *   module specifiers are preserved. Use this for API-shape patterns to avoid false
+   *   positives from comments and string contents.
+   * - `"raw"`: the original source is matched verbatim. Use this when the pattern targets
+   *   string-valued config (e.g. legacy package names passed to `defineGenerators`).
+   */
+  searchScope?: "code" | "raw";
 };
 
 export type ApiCheckConfig = {

@@ -15,6 +15,11 @@ type SdkImport = {
   symbol: string;
 };
 
+type SdkImportSummary = {
+  imports: SdkImport[];
+  hasNamespaceImport: boolean;
+};
+
 function sourceFileFor(filePath: string): ts.SourceFile {
   return ts.createSourceFile(
     filePath,
@@ -85,8 +90,9 @@ function collectPublicSdkExports(workDir: string, challengeRoot?: string): Set<s
   return exports;
 }
 
-function collectSdkImports(workDir: string, files: string[]): SdkImport[] {
+function collectSdkImports(workDir: string, files: string[]): SdkImportSummary {
   const imports: SdkImport[] = [];
+  let hasNamespaceImport = false;
   for (const file of files) {
     const filePath = path.join(workDir, file);
     if (!fs.existsSync(filePath)) {
@@ -111,7 +117,16 @@ function collectSdkImports(workDir: string, files: string[]): SdkImport[] {
         imports.push({ file, symbol: "default" });
       }
       const bindings = clause.namedBindings;
-      if (!bindings || !ts.isNamedImports(bindings)) {
+      if (!bindings) {
+        continue;
+      }
+      if (ts.isNamespaceImport(bindings)) {
+        // `import * as sdk from "@tailor-platform/sdk"` — call sites use sdk.x.
+        // We do not analyze member access, so import-shape checks are skipped below.
+        hasNamespaceImport = true;
+        continue;
+      }
+      if (!ts.isNamedImports(bindings)) {
         continue;
       }
       for (const element of bindings.elements) {
@@ -121,7 +136,7 @@ function collectSdkImports(workDir: string, files: string[]): SdkImport[] {
       }
     }
   }
-  return imports;
+  return { imports, hasNamespaceImport };
 }
 
 function checkRequiredSdkImports(
@@ -227,13 +242,15 @@ function readCandidateSource(
   workDir: string,
   files: string[] | undefined,
   implementFiles: string[],
+  searchScope: ApiCheckPattern["searchScope"],
 ): string {
   const targetFiles = files ?? implementFiles;
   return targetFiles
     .map((file) => {
       const filePath = path.join(workDir, file);
       if (!fs.existsSync(filePath)) return "";
-      return stripCommentsAndStringBodies(fs.readFileSync(filePath, "utf-8"));
+      const raw = fs.readFileSync(filePath, "utf-8");
+      return searchScope === "raw" ? raw : stripCommentsAndStringBodies(raw);
     })
     .join("\n");
 }
@@ -244,7 +261,7 @@ function checkRequiredPatterns(
   implementFiles: string[],
 ): CheckResult[] {
   return (patterns ?? []).map((item) => {
-    const source = readCandidateSource(workDir, item.files, implementFiles);
+    const source = readCandidateSource(workDir, item.files, implementFiles, item.searchScope);
     const pattern = new RegExp(item.pattern, "m");
     const passed = pattern.test(source);
     return {
@@ -263,7 +280,7 @@ function checkForbiddenPatterns(
   implementFiles: string[],
 ): CheckResult[] {
   return (patterns ?? []).map((item) => {
-    const source = readCandidateSource(workDir, item.files, implementFiles);
+    const source = readCandidateSource(workDir, item.files, implementFiles, item.searchScope);
     const pattern = new RegExp(item.pattern, "m");
     const passed = !pattern.test(source);
     return {
@@ -285,13 +302,23 @@ export function runApiCheck(
     return undefined;
   }
 
-  const imports = collectSdkImports(workDir, meta.files.implement);
+  const { imports, hasNamespaceImport } = collectSdkImports(workDir, meta.files.implement);
   const importedSymbols = new Set(imports.map((item) => item.symbol));
   const publicExports = collectPublicSdkExports(workDir, challengeRoot);
+  // Namespace imports (`import * as sdk from "@tailor-platform/sdk"`) bring every
+  // export into scope. We do not analyze member access, so import-shape rules
+  // (required/forbidden/unknown by symbol name) cannot reliably classify them and
+  // are skipped; typecheck and tests still validate actual usage. Pattern checks
+  // remain enabled because they target call shape rather than import names.
+  const importShapeChecks = hasNamespaceImport
+    ? []
+    : [
+        ...checkUnknownSdkImports(imports, publicExports, meta.apiCheck),
+        ...checkRequiredSdkImports(importedSymbols, meta.apiCheck),
+        ...checkForbiddenSdkImports(importedSymbols, meta.apiCheck),
+      ];
   const checks = [
-    ...checkUnknownSdkImports(imports, publicExports, meta.apiCheck),
-    ...checkRequiredSdkImports(importedSymbols, meta.apiCheck),
-    ...checkForbiddenSdkImports(importedSymbols, meta.apiCheck),
+    ...importShapeChecks,
     ...checkRequiredPatterns(workDir, meta.apiCheck.requiredPatterns, meta.files.implement),
     ...checkForbiddenPatterns(workDir, meta.apiCheck.forbiddenPatterns, meta.files.implement),
   ];

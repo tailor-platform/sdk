@@ -61,6 +61,7 @@
       {
         "name": "legacy-hyphenated-generator-package",
         "pattern": "@tailor-platform/kysely-types",
+        "searchScope": "raw",
         "message": "Use @tailor-platform/kysely-type, not @tailor-platform/kysely-types"
       }
     ]

@@ -229,6 +229,67 @@ describe("runApiCheck", () => {
     expect(result.output).toContain("Use @tailor-platform/kysely-type");
   });
 
+  it("matches forbidden patterns against raw source when searchScope is raw", () => {
+    const workDir = makeTempWorkDir();
+    fs.mkdirSync(path.join(workDir, "tailordb"), { recursive: true });
+    fs.writeFileSync(
+      path.join(workDir, "tailordb", "user.ts"),
+      [
+        'import { db, defineConfig } from "@tailor-platform/sdk";',
+        "export const user = db.type('User', { name: db.string() });",
+        "// Generator config below intentionally uses the legacy hyphenated name.",
+        'defineConfig({ name: "x", plugins: { name: "@tailor-platform/kysely-types" } });',
+        "",
+      ].join("\n"),
+    );
+
+    const result = runApiCheck(
+      workDir,
+      makeMeta({
+        forbiddenPatterns: [
+          {
+            name: "legacy-package",
+            pattern: "@tailor-platform/kysely-types",
+            searchScope: "raw",
+            message: "Use @tailor-platform/kysely-type",
+          },
+        ],
+      }),
+    );
+
+    expect(result).toBeDefined();
+    if (!result) throw new Error("api check result should exist");
+    expect(result.passed).toBe(false);
+    expect(result.output).toContain("Use @tailor-platform/kysely-type");
+  });
+
+  it("skips import-shape checks for namespace imports", () => {
+    const workDir = makeTempWorkDir();
+    fs.mkdirSync(path.join(workDir, "tailordb"), { recursive: true });
+    fs.writeFileSync(
+      path.join(workDir, "tailordb", "user.ts"),
+      [
+        'import * as sdk from "@tailor-platform/sdk";',
+        "export const user = sdk.db.type('User', { name: sdk.db.string() });",
+        "sdk.defineConfig({ name: 'x' });",
+        "",
+      ].join("\n"),
+    );
+
+    const result = runApiCheck(
+      workDir,
+      makeMeta({
+        requiredSdkImports: ["db", "defineConfig"],
+        forbiddenSdkImports: ["createExecutor"],
+      }),
+    );
+
+    expect(result).toBeDefined();
+    if (!result) throw new Error("api check result should exist");
+    expect(result.passed).toBe(true);
+    expect(result.testsTotal).toBe(0);
+  });
+
   it("does not credit required patterns that only appear in comments", () => {
     const workDir = makeTempWorkDir();
     fs.mkdirSync(path.join(workDir, "tailordb"), { recursive: true });
