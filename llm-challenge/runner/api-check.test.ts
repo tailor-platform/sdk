@@ -464,6 +464,63 @@ describe("runApiCheck", () => {
     });
   });
 
+  it("does not flag unrelated namespace members when nothing forbidden is used", () => {
+    const workDir = makeTempWorkDir();
+    fs.mkdirSync(path.join(workDir, "tailordb"), { recursive: true });
+    fs.writeFileSync(
+      path.join(workDir, "tailordb", "user.ts"),
+      [
+        'import * as sdk from "@tailor-platform/sdk";',
+        "export const user = sdk.db.type('User', { name: sdk.db.string() });",
+        "sdk.defineConfig({ name: 'x' });",
+        "",
+      ].join("\n"),
+    );
+
+    const result = runApiCheck(
+      workDir,
+      makeMeta({
+        forbiddenSdkImports: ["createExecutor"],
+      }),
+    );
+
+    expect(result).toMatchObject({ stage: "apiCheck", passed: true });
+    if (!result) throw new Error("api check result should exist");
+    expect(result.output).not.toContain("Forbidden @tailor-platform/sdk");
+  });
+
+  it("does not inline db chains across function-parameter shadowing", () => {
+    const workDir = makeTempWorkDir();
+    fs.mkdirSync(path.join(workDir, "tailordb"), { recursive: true });
+    fs.writeFileSync(
+      path.join(workDir, "tailordb", "user.ts"),
+      [
+        'import { db } from "@tailor-platform/sdk";',
+        "function format(slug: string) { return slug.toLowerCase(); }",
+        "export const user = db",
+        "  .type('User', { slug: db.string().unique() })",
+        "  .hooks({ slug: { create: ({ value }) => format(value ?? '') } });",
+        "",
+      ].join("\n"),
+    );
+
+    const result = runApiCheck(
+      workDir,
+      makeMeta({
+        forbiddenPatterns: [
+          {
+            name: "field-level-hooks",
+            pattern:
+              "db\\s*\\.(?!type\\b)\\w+\\([^()]*\\)(\\s*\\.\\w+\\([^()]*\\))*\\s*\\.hooks\\s*\\(",
+            message: "no field-level hooks",
+          },
+        ],
+      }),
+    );
+
+    expect(result).toMatchObject({ stage: "apiCheck", passed: true });
+  });
+
   it("flags forbidden symbols accessed through a namespace alias", () => {
     const workDir = makeTempWorkDir();
     fs.mkdirSync(path.join(workDir, "tailordb"), { recursive: true });
