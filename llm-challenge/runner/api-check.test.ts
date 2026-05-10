@@ -155,6 +155,74 @@ describe("runApiCheck", () => {
     });
   });
 
+  it("strips namespace alias prefix when matching patterns", () => {
+    const workDir = makeTempWorkDir();
+    fs.mkdirSync(path.join(workDir, "tailordb"), { recursive: true });
+    fs.writeFileSync(
+      path.join(workDir, "tailordb", "user.ts"),
+      [
+        'import * as sdk from "@tailor-platform/sdk";',
+        "export const user = sdk.db",
+        "  .type('User', { name: sdk.db.string() })",
+        "  .hooks({});",
+        "",
+      ].join("\n"),
+    );
+
+    const result = runApiCheck(
+      workDir,
+      makeMeta({
+        requiredPatterns: [
+          {
+            name: "type-level-hooks",
+            pattern: "db\\s*\\.type\\([\\s\\S]*?\\.hooks\\s*\\(",
+            message: "Need db.type(...).hooks()",
+          },
+        ],
+      }),
+    );
+
+    expect(result).toMatchObject({
+      stage: "apiCheck",
+      passed: true,
+      testsPassed: 1,
+      testsTotal: 1,
+    });
+  });
+
+  it("does not rewrite aliases when searchScope is raw", () => {
+    const workDir = makeTempWorkDir();
+    fs.mkdirSync(path.join(workDir, "tailordb"), { recursive: true });
+    fs.writeFileSync(
+      path.join(workDir, "tailordb", "user.ts"),
+      [
+        'import { db as kysely } from "@tailor-platform/sdk";',
+        'import "@tailor-platform/kysely-types";',
+        "export const user = kysely.type('User', {});",
+        "",
+      ].join("\n"),
+    );
+
+    const result = runApiCheck(
+      workDir,
+      makeMeta({
+        forbiddenPatterns: [
+          {
+            name: "legacy-package",
+            pattern: "@tailor-platform/kysely-types",
+            searchScope: "raw",
+            message: "Use @tailor-platform/kysely-type",
+          },
+        ],
+      }),
+    );
+
+    expect(result).toBeDefined();
+    if (!result) throw new Error("api check result should exist");
+    expect(result.passed).toBe(false);
+    expect(result.output).toContain("Use @tailor-platform/kysely-type");
+  });
+
   it("ignores comments and string literals when matching API patterns", () => {
     const workDir = makeTempWorkDir();
     fs.mkdirSync(path.join(workDir, "tailordb"), { recursive: true });

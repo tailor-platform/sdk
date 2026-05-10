@@ -130,7 +130,17 @@ function collectSdkAliasesByFile(workDir: string, files: string[]): FileSdkAlias
 function rewriteSdkAliases(source: string, aliases: Map<string, string>): string {
   let out = source;
   for (const [local, exported] of aliases) {
-    out = out.replace(new RegExp(`\\b${local}\\b`, "g"), () => exported);
+    out = out.replace(new RegExp(`\\b${escapeRegExp(local)}\\b`, "g"), () => exported);
+  }
+  return out;
+}
+
+// Strip namespace prefixes (`sdk.db.type` → `db.type`) so patterns expressed against
+// the exported names (`db\.type\(`) still match valid namespace-import submissions.
+function stripNamespacePrefix(source: string, namespaceAliases: string[]): string {
+  let out = source;
+  for (const alias of namespaceAliases) {
+    out = out.replace(new RegExp(`\\b${escapeRegExp(alias)}\\.`, "g"), () => "");
   }
   return out;
 }
@@ -381,6 +391,7 @@ function readCandidateSource(
   implementFiles: string[],
   searchScope: ApiCheckPattern["searchScope"],
   fileAliases: FileSdkAliases,
+  namespaceAliases: string[],
 ): string {
   const targetFiles = files ?? implementFiles;
   return targetFiles
@@ -388,9 +399,15 @@ function readCandidateSource(
       const filePath = path.join(workDir, file);
       if (!fs.existsSync(filePath)) return "";
       const raw = fs.readFileSync(filePath, "utf-8");
-      const text = searchScope === "raw" ? raw : stripCommentsAndStringBodies(raw);
+      // Raw mode is documented as verbatim — alias rewriting must not mutate the
+      // string contents (e.g. an alias that happens to appear inside a forbidden
+      // package literal would otherwise be rewritten and miss the match).
+      if (searchScope === "raw") return raw;
+      let text = stripCommentsAndStringBodies(raw);
       const aliases = fileAliases.get(file);
-      return aliases && aliases.size > 0 ? rewriteSdkAliases(text, aliases) : text;
+      if (aliases && aliases.size > 0) text = rewriteSdkAliases(text, aliases);
+      if (namespaceAliases.length > 0) text = stripNamespacePrefix(text, namespaceAliases);
+      return text;
     })
     .join("\n");
 }
@@ -400,6 +417,7 @@ function checkRequiredPatterns(
   patterns: ApiCheckPattern[] | undefined,
   implementFiles: string[],
   fileAliases: FileSdkAliases,
+  namespaceAliases: string[],
 ): CheckResult[] {
   return (patterns ?? []).map((item) => {
     const source = readCandidateSource(
@@ -408,6 +426,7 @@ function checkRequiredPatterns(
       implementFiles,
       item.searchScope,
       fileAliases,
+      namespaceAliases,
     );
     const pattern = new RegExp(item.pattern, "m");
     const passed = pattern.test(source);
@@ -426,6 +445,7 @@ function checkForbiddenPatterns(
   patterns: ApiCheckPattern[] | undefined,
   implementFiles: string[],
   fileAliases: FileSdkAliases,
+  namespaceAliases: string[],
 ): CheckResult[] {
   return (patterns ?? []).map((item) => {
     const source = readCandidateSource(
@@ -434,6 +454,7 @@ function checkForbiddenPatterns(
       implementFiles,
       item.searchScope,
       fileAliases,
+      namespaceAliases,
     );
     const pattern = new RegExp(item.pattern, "m");
     const passed = !pattern.test(source);
@@ -483,12 +504,14 @@ export function runApiCheck(
       meta.apiCheck.requiredPatterns,
       meta.files.implement,
       fileAliases,
+      namespaceAliases,
     ),
     ...checkForbiddenPatterns(
       workDir,
       meta.apiCheck.forbiddenPatterns,
       meta.files.implement,
       fileAliases,
+      namespaceAliases,
     ),
   ];
 
