@@ -323,6 +323,11 @@ async function installDependencies(
   if (contextProfile) {
     applyContextProfile(workDir, contextProfile);
   }
+  // Drop the source tarball so solvers cannot reinstall the unfiltered SDK and
+  // recover docs/skills that the context profile removed from node_modules.
+  if (tarballPath) {
+    fs.rmSync(path.join(workDir, ".sdk"), { recursive: true, force: true });
+  }
 }
 
 const allStages = ["generate", "apiCheck", "typecheck", "tests"] as const;

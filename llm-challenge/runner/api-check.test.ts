@@ -119,4 +119,79 @@ describe("runApiCheck", () => {
     expect(result.output).toContain("Forbidden @tailor-platform/sdk import: createExecutor");
     expect(result.output).toContain("Missing required @tailor-platform/sdk import: defineConfig");
   });
+
+  it("ignores comments and string literals when matching API patterns", () => {
+    const workDir = makeTempWorkDir();
+    fs.mkdirSync(path.join(workDir, "tailordb"), { recursive: true });
+    fs.writeFileSync(
+      path.join(workDir, "tailordb", "user.ts"),
+      [
+        'import { db } from "@tailor-platform/sdk";',
+        "// Note: do not use createResolver or t.object here.",
+        'const docExample = "createResolver should not be used";',
+        "export const user = db.type('User', { name: db.string() });",
+        "",
+      ].join("\n"),
+    );
+
+    const result = runApiCheck(
+      workDir,
+      makeMeta({
+        requiredSdkImports: ["db"],
+        forbiddenPatterns: [
+          {
+            name: "no-create-resolver",
+            pattern: "createResolver",
+            message: "Do not use createResolver",
+          },
+        ],
+        requiredPatterns: [
+          {
+            name: "uses-db-type",
+            pattern: "db\\.type\\(",
+            message: "Must call db.type",
+          },
+        ],
+      }),
+    );
+
+    expect(result).toMatchObject({
+      stage: "apiCheck",
+      passed: true,
+      testsPassed: 3,
+      testsTotal: 3,
+    });
+  });
+
+  it("does not credit required patterns that only appear in comments", () => {
+    const workDir = makeTempWorkDir();
+    fs.mkdirSync(path.join(workDir, "tailordb"), { recursive: true });
+    fs.writeFileSync(
+      path.join(workDir, "tailordb", "user.ts"),
+      [
+        'import { db } from "@tailor-platform/sdk";',
+        "// We should call db.type('User', ...) somewhere.",
+        "export const user = db.string();",
+        "",
+      ].join("\n"),
+    );
+
+    const result = runApiCheck(
+      workDir,
+      makeMeta({
+        requiredPatterns: [
+          {
+            name: "uses-db-type",
+            pattern: "db\\.type\\(",
+            message: "Must call db.type",
+          },
+        ],
+      }),
+    );
+
+    expect(result).toBeDefined();
+    if (!result) throw new Error("api check result should exist");
+    expect(result.passed).toBe(false);
+    expect(result.output).toContain("Must call db.type");
+  });
 });

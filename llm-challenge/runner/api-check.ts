@@ -167,6 +167,37 @@ function checkUnknownSdkImports(
     }));
 }
 
+/**
+ * Replace comments and string/template literal bodies with same-length whitespace
+ * so pattern matching cannot be tricked by harmless mentions in comments
+ * (`// don't use createResolver`) or string literals (`"db.type().hooks("`).
+ * Length preservation keeps regex offsets compatible with `m` flag semantics.
+ */
+function stripCommentsAndStringBodies(source: string): string {
+  const scanner = ts.createScanner(ts.ScriptTarget.Latest, false);
+  scanner.setText(source);
+  const out: string[] = [];
+  while (true) {
+    const token = scanner.scan();
+    if (token === ts.SyntaxKind.EndOfFileToken) break;
+    const text = scanner.getTokenText();
+    if (
+      token === ts.SyntaxKind.SingleLineCommentTrivia ||
+      token === ts.SyntaxKind.MultiLineCommentTrivia ||
+      token === ts.SyntaxKind.StringLiteral ||
+      token === ts.SyntaxKind.NoSubstitutionTemplateLiteral ||
+      token === ts.SyntaxKind.TemplateHead ||
+      token === ts.SyntaxKind.TemplateMiddle ||
+      token === ts.SyntaxKind.TemplateTail
+    ) {
+      out.push(text.replace(/[^\n]/g, " "));
+    } else {
+      out.push(text);
+    }
+  }
+  return out.join("");
+}
+
 function readCandidateSource(
   workDir: string,
   files: string[] | undefined,
@@ -176,7 +207,8 @@ function readCandidateSource(
   return targetFiles
     .map((file) => {
       const filePath = path.join(workDir, file);
-      return fs.existsSync(filePath) ? fs.readFileSync(filePath, "utf-8") : "";
+      if (!fs.existsSync(filePath)) return "";
+      return stripCommentsAndStringBodies(fs.readFileSync(filePath, "utf-8"));
     })
     .join("\n");
 }
