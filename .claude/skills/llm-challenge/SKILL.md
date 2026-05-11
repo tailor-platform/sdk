@@ -67,3 +67,27 @@ Structure: `problems/<id>-<name>/` with `meta.json`, `problem.md`, `scaffold/`, 
 2. Improve SDK source (NOT problem descriptions)
 3. `pnpm -C packages/sdk build` → `pnpm -C llm-challenge challenge:verify-solution`
 4. Re-run benchmark to measure improvement
+
+## Parallel Runs
+
+Reports and per-run work trees are isolated per `(agent, model, context-profile)`, so multiple `pnpm challenge:solve` invocations can run concurrently from separate shells without clobbering each other.
+
+When sweeping multiple context profiles for the same agent/model, launch each in its own background process and wait for all to finish:
+
+```bash
+for profile in types-only docs-only tailor-sdk-skill full-package; do
+  pnpm -C llm-challenge challenge:solve \
+    --agent claude --model opus --retry 3 \
+    --context-profile "$profile" \
+    > ".agent/tmp/llm-challenge-logs/$profile.log" 2>&1 &
+done
+wait
+```
+
+Caveats:
+
+- Pre-build the SDK once (`pnpm -C packages/sdk build`) before launching parallel runs; concurrent builds race.
+- The container image (`llm-challenge-runner`) auto-builds on first use — kick off one solve and let it finish that build, then fan out, or pre-build manually.
+- API rate limits apply per credential — running N profiles in parallel multiplies concurrent agent sessions roughly by N.
+
+After parallel runs finish, use `pnpm -C llm-challenge challenge:analyze --groups` to list per-config groups and `--trend --context-profile <profile>` to inspect a single config's history.

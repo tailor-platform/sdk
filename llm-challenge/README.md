@@ -155,7 +155,24 @@ JSON reports include metadata for comparison tracking:
 - `sdkVersion` — SDK package version
 - `timestamp` — When the run was executed
 
-Results are printed as a summary table and saved as JSON to `results/`.
+Results are printed as a summary table and saved as JSON to `results/<agent-model-context-profile>/report-<sdkVersion>-<runId>.json`. Each `(agent, model, context-profile)` combination gets its own subdirectory, so parallel solve runs do not clobber each other.
+
+### Analyzing Reports
+
+```bash
+# Compare the last 2 reports within the most recently active group
+pnpm challenge:analyze
+
+# List all (agent, model, context-profile) groups and the latest score in each
+pnpm challenge:analyze -- --groups
+
+# Restrict comparison or trend to a specific group
+pnpm challenge:analyze -- --agent claude --model opus --context-profile types-only
+pnpm challenge:analyze -- --trend --agent claude --model opus
+
+# Compare against an explicit baseline file
+pnpm challenge:analyze -- --baseline path/to/report.json --agent claude --context-profile docs-only
+```
 
 ### Analytics
 
