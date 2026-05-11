@@ -1,5 +1,5 @@
 ---
-"@tailor-platform/sdk": major
+"@tailor-platform/sdk": minor
 ---
 
 Rename the `apply` CLI command to `deploy`. `tailor-sdk deploy` is the canonical
