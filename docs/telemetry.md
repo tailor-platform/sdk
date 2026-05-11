@@ -104,7 +104,7 @@ curl -s "http://localhost:16686/api/traces?service=tailor-sdk&limit=2" | jq '
   [.data[] | {
     traceID: .traceID,
     spans: [.spans[]
-      | select(.operationName == "apply" or .operationName == "plan" or .operationName == "build")
+      | select(.operationName == "deploy" or .operationName == "plan" or .operationName == "build")
       | {operationName, duration_ms: (.duration / 1000 | . * 100 | round / 100)}
     ]
   }]
@@ -113,11 +113,11 @@ curl -s "http://localhost:16686/api/traces?service=tailor-sdk&limit=2" | jq '
 
 ## Architecture
 
-| File                                            | Role                                                       |
-| ----------------------------------------------- | ---------------------------------------------------------- |
-| `packages/sdk/src/cli/telemetry/config.ts`      | Parse `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable   |
-| `packages/sdk/src/cli/telemetry/index.ts`       | `initTelemetry()`, `shutdownTelemetry()`, `withSpan()`     |
-| `packages/sdk/src/cli/telemetry/interceptor.ts` | Connect-RPC interceptor for automatic RPC tracing          |
-| `packages/sdk/src/cli/args.ts`                  | Telemetry lifecycle (init in handler, shutdown in finally) |
-| `packages/sdk/src/cli/client.ts`                | Tracing interceptor registration                           |
-| `packages/sdk/src/cli/apply/index.ts`           | `withSpan()` instrumentation of apply phases               |
+| File                                             | Role                                                       |
+| ------------------------------------------------ | ---------------------------------------------------------- |
+| `packages/sdk/src/cli/telemetry/config.ts`       | Parse `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable   |
+| `packages/sdk/src/cli/telemetry/index.ts`        | `initTelemetry()`, `shutdownTelemetry()`, `withSpan()`     |
+| `packages/sdk/src/cli/telemetry/interceptor.ts`  | Connect-RPC interceptor for automatic RPC tracing          |
+| `packages/sdk/src/cli/args.ts`                   | Telemetry lifecycle (init in handler, shutdown in finally) |
+| `packages/sdk/src/cli/client.ts`                 | Tracing interceptor registration                           |
+| `packages/sdk/src/cli/commands/deploy/deploy.ts` | `withSpan()` instrumentation of deploy phases              |
