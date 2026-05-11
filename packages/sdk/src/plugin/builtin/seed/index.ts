@@ -22,6 +22,17 @@ export const SeedGeneratorID = "@tailor-platform/seed";
 type SeedPluginOptions = {
   distPath: string;
   machineUserName?: string;
+  /**
+   * Require every userProfile row to have a matching `_User` row during seed
+   * validation. Defaults to `true`, which mirrors the historical behavior of
+   * generating a foreign key from the userProfile type to `_User`.
+   *
+   * Set to `false` when the project needs to seed userProfile rows whose IdP
+   * credential does not yet exist (e.g. invited-but-not-registered users).
+   * The `_User -> userProfile` foreign key is always emitted regardless of
+   * this option.
+   */
+  strictIdpUserSync?: boolean;
 };
 
 type NamespaceConfig = {
@@ -735,6 +746,7 @@ ${namespaceSelfRefEntries}
  * @param options - Plugin options
  * @param options.distPath - Output directory path for generated seed files
  * @param options.machineUserName - Default machine user name for authentication
+ * @param options.strictIdpUserSync - When `true` (default), generate a foreign key from the userProfile type to `_User` so seed validation rejects userProfile rows without a matching `_User` row. Set to `false` to allow seeding pre-registration states (e.g. invited users).
  * @returns Plugin instance with onTailorDBReady hook
  */
 export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPluginOptions> {
@@ -750,6 +762,7 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
       // Process IdP user early so we can add reverse FK to the user profile type
       const idpUser = ctx.auth ? (processIdpUser(ctx.auth) ?? null) : null;
       const hasIdpUser = idpUser !== null;
+      const strictIdpUserSync = ctx.pluginConfig.strictIdpUserSync ?? true;
 
       for (const ns of ctx.tailordb) {
         const types: string[] = [];
@@ -761,8 +774,8 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
           const typeInfo = processSeedTypeInfo(type, ns.namespace);
           const linesDb = processLinesDb(type, source);
 
-          // Add reverse FK from userProfile type to _User
-          if (idpUser && typeName === idpUser.schema.userTypeName) {
+          // Add reverse FK from userProfile type to _User (opt-out via strictIdpUserSync: false)
+          if (strictIdpUserSync && idpUser && typeName === idpUser.schema.userTypeName) {
             linesDb.foreignKeys.push({
               column: idpUser.schema.usernameField,
               references: {

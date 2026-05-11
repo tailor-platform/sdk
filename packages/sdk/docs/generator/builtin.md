@@ -183,10 +183,41 @@ Generates seed data configuration files for database initialization.
 ["@tailor-platform/seed", { distPath: "./seed", machineUserName: "admin" }];
 ```
 
-| Option            | Type     | Description                                              |
-| ----------------- | -------- | -------------------------------------------------------- |
-| `distPath`        | `string` | Output directory path (required)                         |
-| `machineUserName` | `string` | Default machine user name (can be overridden at runtime) |
+| Option              | Type      | Description                                                                                                                                                       |
+| ------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `distPath`          | `string`  | Output directory path (required)                                                                                                                                  |
+| `machineUserName`   | `string`  | Default machine user name (can be overridden at runtime)                                                                                                          |
+| `strictIdpUserSync` | `boolean` | Enforce that every userProfile row has a matching `_User` row during seed validation (default `true`). See [IdP user synchronization](#idp-user-synchronization). |
+
+### IdP user synchronization
+
+When `auth.userProfile` is configured, the seed plugin treats the userProfile
+type (e.g. `User`) and the IdP-managed `_User` table as a pair. To help
+`validate` catch mistakes such as creating an IdP credential without a
+corresponding application user, the plugin always emits a foreign key from
+`_User.name` to `<userProfile>.<usernameField>`.
+
+By default (`strictIdpUserSync: true`) the plugin also emits the reverse
+foreign key — from `<userProfile>.<usernameField>` to `_User.name` — so that a
+userProfile row without a matching `_User` row is rejected as well. This is the
+right default for seed data that is expected to keep both tables in lockstep.
+
+The reverse direction is not enforced by the runtime: in production it is
+normal to have a userProfile row whose IdP credential does not exist yet
+(typical example: a user who has been invited but has not finished signing
+up). To seed such states, set `strictIdpUserSync: false`:
+
+```ts
+seedPlugin({
+  distPath: "./seed",
+  machineUserName: "admin",
+  strictIdpUserSync: false,
+}),
+```
+
+With this option, only the `_User → userProfile` foreign key is generated, and
+the `validate` command accepts userProfile rows that do not have a matching
+`_User` row.
 
 ### Output
 
