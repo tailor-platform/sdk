@@ -65,7 +65,7 @@ pnpm challenge --all --impl-dir ./path/to/outputs
 - `--agent <claude|codex>` — Solver agent to use (default: `claude`)
 - `--model <name>` — Model name to use (`claude`: default `sonnet`, `codex`: default CLI model)
 - `--max-budget <usd>` — Spending cap per problem in USD (default: `5.00`, must be positive)
-- `--retry <n>` — Number of retry attempts on failure (default: `0`, must be non-negative). On failure, error output is fed back to the AI for correction.
+- `--retry <n>` — Number of retry attempts on failure (default: `3`, must be non-negative). On failure, error output is fed back to the AI for correction.
 - `--concurrency <n>` — Number of problems to run in parallel (default: CPU count, must be positive)
 - `--context-profile <types-only|docs-only|tailor-sdk-skill|full-package>` — SDK context available to solve agents (default: `full-package`). Use `types-only` as the API design baseline and compare with `tailor-sdk-skill` to measure skill/docs uplift.
 - `--clean` — Remove work directories after execution

@@ -11,6 +11,7 @@
     "dist",
     "problems/*/work",
     "problems/*/solution",
-    "problems/*/scaffold"
+    "problems/*/scaffold",
+    "results/artifacts/**"
   ]
 }

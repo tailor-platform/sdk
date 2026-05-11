@@ -81,7 +81,7 @@ function parseArgs(): {
   let modelExplicit = false;
   let maxBudget = 5.0;
   let clean = false;
-  let retry = 0;
+  let retry = 3;
   let resume = false;
   let rerunInfra = false;
   let concurrency = os.availableParallelism();
@@ -942,11 +942,11 @@ async function main(): Promise<void> {
     console.error("  tsx runner/run.ts --problem 001 --impl ./path/to/impl");
     console.error("  tsx runner/run.ts --problem 001 --use-solution");
     console.error(
-      "  tsx runner/run.ts --problem 001 --solve [--agent claude|codex] [--model sonnet] [--max-budget 2.00] [--context-profile types-only]",
+      "  tsx runner/run.ts --problem 001 --solve [--agent claude|codex] [--model sonnet] [--max-budget 5.00] [--context-profile types-only]",
     );
     console.error("  tsx runner/run.ts --all --use-solution [--clean] [--concurrency <n>]");
     console.error(
-      "  tsx runner/run.ts --all --solve [--agent claude|codex] [--model sonnet] [--max-budget 2.00] [--retry 2] [--clean] [--concurrency <n>] [--context-profile types-only]",
+      "  tsx runner/run.ts --all --solve [--agent claude|codex] [--model sonnet] [--max-budget 5.00] [--retry 3] [--clean] [--concurrency <n>] [--context-profile types-only]",
     );
     console.error("  tsx runner/run.ts --all --impl-dir ./path/to/all-outputs");
     console.error("  tsx runner/run.ts --all --solve --resume [--clean]");

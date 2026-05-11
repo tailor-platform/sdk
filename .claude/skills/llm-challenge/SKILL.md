@@ -63,7 +63,7 @@ Structure: `problems/<id>-<name>/` with `meta.json`, `problem.md`, `scaffold/`, 
 
 ## SDK Improvement Cycle
 
-1. `pnpm -C llm-challenge challenge:solve --retry 2` → analyze failures
+1. `pnpm -C llm-challenge challenge:solve --retry 3` → analyze failures
 2. Improve SDK source (NOT problem descriptions)
 3. `pnpm -C packages/sdk build` → `pnpm -C llm-challenge challenge:verify-solution`
 4. Re-run benchmark to measure improvement
