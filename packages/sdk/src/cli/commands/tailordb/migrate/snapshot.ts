@@ -45,6 +45,26 @@ export const DB_TYPES_FILE_NAME = "db.ts";
  */
 export const MIGRATION_NUMBER_PATTERN = /^\d{4}$/;
 
+/**
+ * Platform default scale for decimal fields when scale is not explicitly specified.
+ * Mirrors `DefaultDecimalScale` in platform-core-services
+ * (service/tailordb/internal/schema/type_config.go).
+ */
+export const DEFAULT_DECIMAL_SCALE = 6;
+
+/**
+ * Resolve the effective scale of a field for comparison purposes.
+ * Decimal fields without an explicit scale are stored on the platform with the
+ * default scale, so we normalize unset values to the default to avoid false drift.
+ * @param {SnapshotFieldConfig} field - Field configuration
+ * @returns {number | undefined} Effective scale, or undefined for non-decimal fields without scale
+ */
+function getEffectiveScale(field: SnapshotFieldConfig): number | undefined {
+  if (field.scale !== undefined) return field.scale;
+  if (field.type === "decimal") return DEFAULT_DECIMAL_SCALE;
+  return undefined;
+}
+
 // Re-export SCHEMA_SNAPSHOT_VERSION for convenience
 export { SCHEMA_SNAPSHOT_VERSION };
 
@@ -1022,7 +1042,7 @@ function areFieldsDifferent(oldField: SnapshotFieldConfig, newField: SnapshotFie
     if ((oldSerial.format ?? "") !== (newSerial.format ?? "")) return true;
   }
 
-  if (oldField.scale !== newField.scale) return true;
+  if (getEffectiveScale(oldField) !== getEffectiveScale(newField)) return true;
 
   const oldFields = oldField.fields ?? {};
   const newFields = newField.fields ?? {};
@@ -1902,8 +1922,10 @@ function compareFields(
     differences.push(`vector: remote=${remoteVector}, expected=${snapshotVector}`);
   }
 
-  if (remoteField.scale !== snapshotField.scale) {
-    differences.push(`scale: remote=${remoteField.scale}, expected=${snapshotField.scale}`);
+  const remoteScale = getEffectiveScale(remoteField);
+  const snapshotScale = getEffectiveScale(snapshotField);
+  if (remoteScale !== snapshotScale) {
+    differences.push(`scale: remote=${remoteScale}, expected=${snapshotScale}`);
   }
 
   if (differences.length > 0) {
