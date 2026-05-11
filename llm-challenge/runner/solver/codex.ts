@@ -277,6 +277,11 @@ async function runCodex(options: SolveRunOptions): Promise<SolveResult> {
         output: errorOutput,
         error: errorOutput,
         infraFailure: detectInfraFailure(errorOutput),
+        rawTranscript: {
+          prompt,
+          stdout: Buffer.concat(stdoutChunks).toString("utf-8"),
+          stderr,
+        },
       });
     });
 
@@ -295,6 +300,11 @@ async function runCodex(options: SolveRunOptions): Promise<SolveResult> {
           output: output || "Process timed out",
           error: "Process timed out",
           infraFailure: true,
+          rawTranscript: {
+            prompt,
+            stdout,
+            stderr,
+          },
         });
         return;
       }
@@ -309,6 +319,11 @@ async function runCodex(options: SolveRunOptions): Promise<SolveResult> {
         output: interpreted.message,
         error: interpreted.error,
         infraFailure: interpreted.infraFailure,
+        rawTranscript: {
+          prompt,
+          stdout,
+          stderr,
+        },
       });
     });
   });

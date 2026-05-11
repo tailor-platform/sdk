@@ -137,6 +137,15 @@ A retry penalty is applied: `adjusted_score = base_score * (1 - 0.1 * retry_coun
 
 Cost from all attempts (initial + retries) is tracked in the report.
 
+### Solve Artifacts
+
+Solve-mode runs save per-problem artifacts under `results/artifacts/<run>/`:
+
+- `attempt-0/`, `attempt-1/`, ... — Prompt, raw stdout/stderr, parsed solve result, and work snapshot for each solve attempt
+- `final-work/` — Final work tree after verification/retries, excluding dependency artifacts such as `node_modules/` and `.sdk/`
+
+The JSON report links these paths through `results[].artifacts`, `results[].solveResult.artifact`, and `results[].retrySolveResults[].artifact`. Raw transcripts are written to artifact files and are removed from the report JSON to keep reports compact.
+
 ### Report Metadata
 
 JSON reports include metadata for comparison tracking:

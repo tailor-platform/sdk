@@ -22,6 +22,7 @@ import {
   formatReportTable,
   isInfraFailure,
 } from "./score";
+import { persistFinalWorkSnapshot, persistSolveAttemptArtifact } from "./artifacts";
 import { applyContextProfile } from "./context-profile";
 import { checkPodmanAvailability } from "./solver/container";
 import type { ChallengeReport, ProblemResult, ScaffoldChange, StageResult } from "./score";
@@ -411,6 +412,31 @@ function restoreScaffoldFiles(workDir: string, snapshot: Map<string, string>): S
 // Serialize pnpm install to avoid root node_modules race conditions
 const installLimiter = createLimiter(1);
 
+function createRunId(): string {
+  return new Date().toISOString().replace(/:/g, "-").slice(0, 19);
+}
+
+function createRunArtifactRoot(
+  resultsDir: string,
+  modelLabel: string,
+  sdkVersion: string | undefined,
+  runId: string,
+): string {
+  const versionLabel = sdkVersion ?? "unknown";
+  const safeName = sanitizeForFilename(modelLabel);
+  return path.join(resultsDir, "artifacts", `${safeName}-${versionLabel}-${runId}`);
+}
+
+function createProblemArtifactRoot(
+  runArtifactRoot: string | undefined,
+  meta: ProblemMeta,
+): string | undefined {
+  if (!runArtifactRoot) {
+    return undefined;
+  }
+  return path.join(runArtifactRoot, sanitizeForFilename(problemKey(meta.id, meta.name)));
+}
+
 async function runProblem(
   problemName: string,
   options: {
@@ -420,6 +446,7 @@ async function runProblem(
     verbose: boolean;
     tarballPath?: string;
     contextProfile: ContextProfile;
+    runArtifactRoot?: string;
   },
 ): Promise<ProblemResult> {
   const problemStartTime = Date.now();
@@ -432,6 +459,7 @@ async function runProblem(
 
   const isSolveMode = !!options.solve;
   const workDir = setupWorkDir(problemDir, options.implDir, isSolveMode);
+  const problemArtifactRoot = createProblemArtifactRoot(options.runArtifactRoot, meta);
   try {
     await installLimiter(() =>
       installDependencies(workDir, options.verbose, options.tarballPath, options.contextProfile),
@@ -452,6 +480,7 @@ async function runProblem(
 
   let solveResult: SolveResult | undefined;
   const retrySolveResults: SolveResult[] = [];
+  let finalWorkSnapshotDir: string | undefined;
   const normalizedModel = options.solve
     ? normalizeModelForAgent(options.solve.agent, options.solve.model)
     : undefined;
@@ -469,6 +498,14 @@ async function runProblem(
       maxBudget: options.solve.maxBudget,
       contextProfile: options.contextProfile,
     });
+    if (problemArtifactRoot) {
+      persistSolveAttemptArtifact({
+        rootDir: problemArtifactRoot,
+        attemptName: "attempt-0",
+        result: solveResult,
+        workDir,
+      });
+    }
     if (options.verbose) {
       let icon = "FAIL";
       if (solveResult.success) {
@@ -493,6 +530,12 @@ async function runProblem(
     const stages = makeSkippedStages(meta, "Skipped (infrastructure failure)", "infra_failure");
 
     if (isSolveMode || options.clean) {
+      if (problemArtifactRoot) {
+        finalWorkSnapshotDir = persistFinalWorkSnapshot({
+          rootDir: problemArtifactRoot,
+          workDir,
+        });
+      }
       fs.rmSync(workDir, { recursive: true });
     }
 
@@ -508,6 +551,12 @@ async function runProblem(
       maxScore: sumStageScores(stages).maxScore,
       solveResult,
       totalDurationMs: Date.now() - problemStartTime,
+      artifacts: problemArtifactRoot
+        ? {
+            directory: problemArtifactRoot,
+            ...(finalWorkSnapshotDir !== undefined ? { finalWorkSnapshotDir } : {}),
+          }
+        : undefined,
     };
   }
 
@@ -592,6 +641,14 @@ async function runProblem(
         contextProfile: options.contextProfile,
       });
       retrySolveResults.push(retryResult);
+      if (problemArtifactRoot) {
+        persistSolveAttemptArtifact({
+          rootDir: problemArtifactRoot,
+          attemptName: `attempt-${attempt}`,
+          result: retryResult,
+          workDir,
+        });
+      }
       cumulativeCost += retryResult.costUsd;
       if (options.verbose) {
         const retryIcon = retryResult.success ? "ok" : "FAIL";
@@ -654,6 +711,13 @@ async function runProblem(
   }
 
   // Clean up work artifacts if --clean is specified
+  if (problemArtifactRoot) {
+    finalWorkSnapshotDir = persistFinalWorkSnapshot({
+      rootDir: problemArtifactRoot,
+      workDir,
+    });
+  }
+
   if (options.clean) {
     if (isSolveMode) {
       // Remove symlink and tmpdir
@@ -683,6 +747,12 @@ async function runProblem(
     retrySolveResults: retrySolveResults.length > 0 ? retrySolveResults : undefined,
     totalDurationMs: Date.now() - problemStartTime,
     scaffoldChanges: scaffoldChanges.length > 0 ? scaffoldChanges : undefined,
+    artifacts: problemArtifactRoot
+      ? {
+          directory: problemArtifactRoot,
+          ...(finalWorkSnapshotDir !== undefined ? { finalWorkSnapshotDir } : {}),
+        }
+      : undefined,
   };
   result.adjustedScore = computeAdjustedScore(result);
   return result;
@@ -833,14 +903,14 @@ function writeReport(
   report: ChallengeReport,
   modelLabel: string,
   sdkVersion: string | undefined,
+  runId: string = createRunId(),
 ): void {
   console.log("\n" + formatReportTable(report));
 
   fs.mkdirSync(resultsDir, { recursive: true });
   const safeName = sanitizeForFilename(modelLabel);
   const versionLabel = sdkVersion ?? "unknown";
-  const dateLabel = new Date().toISOString().replace(/:/g, "-").slice(0, 19);
-  const jsonPath = path.join(resultsDir, `report-${safeName}-${versionLabel}-${dateLabel}.json`);
+  const jsonPath = path.join(resultsDir, `report-${safeName}-${versionLabel}-${runId}.json`);
   fs.writeFileSync(jsonPath, JSON.stringify(report, null, 2));
   console.log(`\nResults written to: ${jsonPath}`);
 }
@@ -969,6 +1039,14 @@ async function main(): Promise<void> {
     );
 
     const rerunStartTime = Date.now();
+    const rerunRunId = createRunId();
+    const rerunModelLabel = formatSolveModelLabel(rerunAgent, rerunModel);
+    const rerunArtifactRoot = createRunArtifactRoot(
+      resultsDir,
+      `${rerunModelLabel}-${contextProfile}`,
+      latestReport.sdkVersion,
+      rerunRunId,
+    );
     const limit = createLimiter(concurrency);
     const total = infraProblems.length;
     let completed = 0;
@@ -983,6 +1061,7 @@ async function main(): Promise<void> {
               verbose,
               tarballPath,
               contextProfile,
+              runArtifactRoot: rerunArtifactRoot,
             });
             completed++;
             if (!verbose) {
@@ -1013,7 +1092,6 @@ async function main(): Promise<void> {
 
     const sdkVersion = latestReport.sdkVersion;
     const originalModel = latestReport.model;
-    const rerunModelLabel = formatSolveModelLabel(rerunAgent, rerunModel);
     // When --model is explicit and differs from the original, create a composite label.
     // When --model is not explicit, preserve the original report's model label as-is
     // (it may already be composite from prior reruns).
@@ -1032,7 +1110,7 @@ async function main(): Promise<void> {
       elapsedMs: Date.now() - rerunStartTime,
     });
 
-    writeReport(resultsDir, report, reportModel, sdkVersion);
+    writeReport(resultsDir, report, reportModel, sdkVersion, rerunRunId);
     return;
   }
 
@@ -1110,6 +1188,13 @@ async function main(): Promise<void> {
   const total = tasks.length + results.length;
   let completed = results.length;
   const runStartTime = Date.now();
+  const sdkVersion = getSdkVersion(challengeRoot);
+  const baseLabel = solve ? (solveModelLabel ?? "solve") : useSolution ? "solution" : "impl";
+  const modelLabelRaw = `${baseLabel}-${contextProfile}`;
+  const runId = createRunId();
+  const runArtifactRoot = solve
+    ? createRunArtifactRoot(resultsDir, modelLabelRaw, sdkVersion, runId)
+    : undefined;
 
   await Promise.all(
     tasks.map((task) =>
@@ -1122,6 +1207,7 @@ async function main(): Promise<void> {
             verbose,
             tarballPath,
             contextProfile,
+            runArtifactRoot,
           });
 
           // Push result (safe: Node.js single-threaded)
@@ -1182,8 +1268,6 @@ async function main(): Promise<void> {
     cleanPartialResults(resultsDir);
   }
 
-  const sdkVersion = getSdkVersion(challengeRoot);
-
   const report = createReport(results, {
     model: solveModelLabel,
     contextProfile,
@@ -1191,9 +1275,7 @@ async function main(): Promise<void> {
     elapsedMs: Date.now() - runStartTime,
   });
 
-  const baseLabel = solve ? (solveModelLabel ?? "solve") : useSolution ? "solution" : "impl";
-  const modelLabelRaw = `${baseLabel}-${contextProfile}`;
-  writeReport(resultsDir, report, modelLabelRaw, sdkVersion);
+  writeReport(resultsDir, report, modelLabelRaw, sdkVersion, runId);
 }
 
 function findProblem(id: string): string {

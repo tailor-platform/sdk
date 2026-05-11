@@ -33,6 +33,11 @@ export type ScaffoldChange = {
   modified: string;
 };
 
+export type ProblemArtifacts = {
+  directory: string;
+  finalWorkSnapshotDir?: string;
+};
+
 export type ProblemResult = {
   problemId: string;
   problemName: string;
@@ -51,6 +56,7 @@ export type ProblemResult = {
   retrySolveResults?: SolveResult[];
   totalDurationMs?: number;
   scaffoldChanges?: ScaffoldChange[];
+  artifacts?: ProblemArtifacts;
 };
 
 export type SuccessRate = { passed: number; total: number; rate: number };

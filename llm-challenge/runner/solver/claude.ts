@@ -127,6 +127,11 @@ async function runClaude(options: SolveRunOptions): Promise<SolveResult> {
         output: errorOutput,
         error: errorOutput,
         infraFailure: detectInfraFailure(errorOutput),
+        rawTranscript: {
+          prompt,
+          stdout: Buffer.concat(stdoutChunks).toString("utf-8"),
+          stderr,
+        },
       });
     });
 
@@ -146,6 +151,11 @@ async function runClaude(options: SolveRunOptions): Promise<SolveResult> {
           output: output || "Process timed out",
           error: "Process timed out",
           infraFailure: true,
+          rawTranscript: {
+            prompt,
+            stdout,
+            stderr,
+          },
         });
         return;
       }
@@ -162,6 +172,11 @@ async function runClaude(options: SolveRunOptions): Promise<SolveResult> {
           infraFailure: !success
             ? detectInfraFailure(parsed.result) || detectInfraFailure(stderr)
             : false,
+          rawTranscript: {
+            prompt,
+            stdout,
+            stderr,
+          },
         });
       } else {
         resolve({
@@ -171,6 +186,11 @@ async function runClaude(options: SolveRunOptions): Promise<SolveResult> {
           output,
           error: output || "Failed to parse Claude Code JSON output",
           infraFailure: detectInfraFailure(output),
+          rawTranscript: {
+            prompt,
+            stdout,
+            stderr,
+          },
         });
       }
     });

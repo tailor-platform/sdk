@@ -1,3 +1,18 @@
+export type SolveRawTranscript = {
+  prompt: string;
+  stdout: string;
+  stderr: string;
+};
+
+export type SolveArtifact = {
+  directory: string;
+  promptPath: string;
+  stdoutPath: string;
+  stderrPath: string;
+  resultPath: string;
+  workSnapshotDir: string;
+};
+
 export type SolveResult = {
   success: boolean;
   costUsd: number;
@@ -5,6 +20,8 @@ export type SolveResult = {
   output: string;
   error?: string;
   infraFailure?: boolean;
+  artifact?: SolveArtifact;
+  rawTranscript?: SolveRawTranscript;
 };
 
 export type SolveAgent = "claude" | "codex";
