@@ -173,6 +173,7 @@ function earlyReturn(
  */
 export async function verifyProblem(
   workDir: string,
+  problemDir: string,
   meta: ProblemMeta,
   challengeRoot: string,
 ): Promise<StageInput[]> {
@@ -251,7 +252,6 @@ export async function verifyProblem(
   };
 
   // Stage 3: tests (run even if typecheck failed for partial scoring)
-  const problemDir = path.dirname(workDir);
   const testsDir = path.join(problemDir, "tests");
   const testResult = await runCommand(
     `npx vitest run --reporter=json --config "${path.join(challengeRoot, "vitest.config.ts")}" --root "${challengeRoot}" "${testsDir}"`,

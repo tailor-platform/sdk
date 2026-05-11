@@ -226,8 +226,12 @@ function cleanupWorkArtifacts(problemDir: string): void {
 }
 
 function setupWorkDir(problemDir: string, implDir?: string, useTmpDir?: boolean): string {
-  // Clean previous work directory or symlink
-  cleanupWorkArtifacts(problemDir);
+  // For non-solve modes, work lives at problems/<id>/work and is shared; clean leftover state.
+  // For solve mode, we mkdtemp a fresh directory so parallel runs do not collide on shared paths,
+  // and we do not touch problems/<id>/work (older symlinks from past runs are harmless).
+  if (!useTmpDir) {
+    cleanupWorkArtifacts(problemDir);
+  }
 
   let workDir: string;
   if (useTmpDir) {
@@ -472,8 +476,8 @@ async function runProblem(
     throw err;
   }
 
-  // In solve mode, workDir is a tmpdir. We'll create a symlink later for verify.
-  const symlinkPath = path.join(problemDir, "work");
+  // In solve mode, workDir is a tmpdir; problemDir is passed directly to verify (no symlink needed),
+  // which keeps parallel solve runs on the same problem from clobbering each other's work tree.
 
   // Snapshot scaffold files after install (before solve) to detect modifications
   const scaffoldSnapshot = isSolveMode ? snapshotScaffoldFiles(workDir) : new Map<string, string>();
@@ -568,20 +572,9 @@ async function runProblem(
     console.log(`  WARNING: Scaffold files modified during solve: ${files} (restored)`);
   }
 
-  // In solve mode, create symlink: problems/<name>/work → tmpdir
-  // This ensures verify's path.dirname(workDir) resolves to problemDir for test paths
-  if (isSolveMode) {
-    try {
-      fs.symlinkSync(workDir, symlinkPath);
-    } catch {
-      // Fallback to junction for Windows environments without symlink privileges
-      fs.symlinkSync(workDir, symlinkPath, "junction");
-    }
-  }
-  const verifyWorkDir = isSolveMode ? symlinkPath : workDir;
-
-  // Run verification stages
-  let rawStages = await verifyProblem(verifyWorkDir, meta, challengeRoot);
+  // Run verification stages. workDir is either the per-run tmpdir (solve) or problems/<id>/work.
+  // problemDir is passed explicitly so verify does not need path.dirname() heuristics.
+  let rawStages = await verifyProblem(workDir, problemDir, meta, challengeRoot);
   let stages = calculateScore(meta, rawStages);
   let { totalScore, maxScore } = sumStageScores(stages);
 
@@ -684,8 +677,7 @@ async function runProblem(
         }
       }
 
-      // Re-verify using symlink path
-      rawStages = await verifyProblem(verifyWorkDir, meta, challengeRoot);
+      rawStages = await verifyProblem(workDir, problemDir, meta, challengeRoot);
       stages = calculateScore(meta, rawStages);
       ({ totalScore, maxScore } = sumStageScores(stages));
 
@@ -718,13 +710,10 @@ async function runProblem(
     });
   }
 
-  if (options.clean) {
-    if (isSolveMode) {
-      // Remove symlink and tmpdir
-      cleanupWorkArtifacts(problemDir);
-    } else {
-      fs.rmSync(workDir, { recursive: true });
-    }
+  // Solve mode tmpdirs have no other referrer (the final state is saved to artifacts/), so
+  // always remove them to avoid os.tmpdir() leaks. Non-solve modes only clean when asked.
+  if (isSolveMode || options.clean) {
+    fs.rmSync(workDir, { recursive: true, force: true });
   }
 
   // Exclude infra failure retries from retry count so they don't penalize adjusted score
@@ -758,8 +747,12 @@ async function runProblem(
   return result;
 }
 
-function getPartialResultsPath(resultsDir: string): string {
-  return path.join(resultsDir, ".partial-results.json");
+function getRunResultsDir(resultsDir: string, modelLabelRaw: string): string {
+  return path.join(resultsDir, sanitizeForFilename(modelLabelRaw));
+}
+
+function getPartialResultsPath(runResultsDir: string): string {
+  return path.join(runResultsDir, ".partial-results.json");
 }
 
 type PartialResultsFile = {
@@ -770,12 +763,12 @@ type PartialResultsFile = {
 };
 
 function loadPartialResults(
-  resultsDir: string,
+  runResultsDir: string,
   expectedModel?: string,
   expectedSolve?: boolean,
   expectedImplSource?: string,
 ): ProblemResult[] {
-  const partialPath = getPartialResultsPath(resultsDir);
+  const partialPath = getPartialResultsPath(runResultsDir);
   if (!fs.existsSync(partialPath)) {
     return [];
   }
@@ -813,34 +806,45 @@ function loadPartialResults(
 }
 
 function savePartialResults(
-  resultsDir: string,
+  runResultsDir: string,
   results: ProblemResult[],
   model?: string,
   solve?: boolean,
   implSource?: string,
 ): void {
-  fs.mkdirSync(resultsDir, { recursive: true });
+  fs.mkdirSync(runResultsDir, { recursive: true });
   const data: PartialResultsFile = { model, solve: solve ?? false, implSource, results };
-  fs.writeFileSync(getPartialResultsPath(resultsDir), JSON.stringify(data, null, 2));
+  fs.writeFileSync(getPartialResultsPath(runResultsDir), JSON.stringify(data, null, 2));
 }
 
-function cleanPartialResults(resultsDir: string): void {
-  const partialPath = getPartialResultsPath(resultsDir);
+function cleanPartialResults(runResultsDir: string): void {
+  const partialPath = getPartialResultsPath(runResultsDir);
   if (fs.existsSync(partialPath)) {
     fs.rmSync(partialPath);
   }
+}
+
+function listReportFilesRecursive(dir: string): string[] {
+  if (!fs.existsSync(dir)) return [];
+  const out: string[] = [];
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  for (const ent of entries) {
+    const full = path.join(dir, ent.name);
+    if (ent.isDirectory()) {
+      if (ent.name === "artifacts") continue; // run-artifact tree, no reports here
+      out.push(...listReportFilesRecursive(full));
+    } else if (ent.isFile() && ent.name.startsWith("report-") && ent.name.endsWith(".json")) {
+      out.push(full);
+    }
+  }
+  return out;
 }
 
 function findLatestReport(
   resultsDir: string,
   options?: { solveOnly?: boolean },
 ): ChallengeReport | undefined {
-  if (!fs.existsSync(resultsDir)) {
-    return undefined;
-  }
-  const files = fs
-    .readdirSync(resultsDir)
-    .filter((f) => f.startsWith("report-") && f.endsWith(".json"));
+  const files = listReportFilesRecursive(resultsDir);
   if (files.length === 0) {
     return undefined;
   }
@@ -849,9 +853,7 @@ function findLatestReport(
   let latestTime = -1;
   for (const f of files) {
     try {
-      const report = JSON.parse(
-        fs.readFileSync(path.join(resultsDir, f), "utf-8"),
-      ) as ChallengeReport;
+      const report = JSON.parse(fs.readFileSync(f, "utf-8")) as ChallengeReport;
       if (options?.solveOnly && report.model === undefined) {
         continue;
       }
@@ -907,10 +909,10 @@ function writeReport(
 ): void {
   console.log("\n" + formatReportTable(report));
 
-  fs.mkdirSync(resultsDir, { recursive: true });
-  const safeName = sanitizeForFilename(modelLabel);
+  const runResultsDir = getRunResultsDir(resultsDir, modelLabel);
+  fs.mkdirSync(runResultsDir, { recursive: true });
   const versionLabel = sdkVersion ?? "unknown";
-  const jsonPath = path.join(resultsDir, `report-${safeName}-${versionLabel}-${runId}.json`);
+  const jsonPath = path.join(runResultsDir, `report-${versionLabel}-${runId}.json`);
   fs.writeFileSync(jsonPath, JSON.stringify(report, null, 2));
   console.log(`\nResults written to: ${jsonPath}`);
 }
@@ -1130,13 +1132,17 @@ async function main(): Promise<void> {
     implSource = implDir ?? "unknown";
   }
 
+  const baseLabel = solve ? (solveModelLabel ?? "solve") : useSolution ? "solution" : "impl";
+  const modelLabelRaw = `${baseLabel}-${contextProfile}`;
+  const runResultsDir = getRunResultsDir(resultsDir, modelLabelRaw);
+
   // Resume support: load partial results and skip already-completed problems
   const results: ProblemResult[] = [];
   let completedIds = new Set<string>();
   const problemSet = new Set(problems);
   if (resume) {
     const partialResults = loadPartialResults(
-      resultsDir,
+      runResultsDir,
       solveModelLabel,
       !!solve,
       `${implSource}:${contextProfile}`,
@@ -1189,8 +1195,6 @@ async function main(): Promise<void> {
   let completed = results.length;
   const runStartTime = Date.now();
   const sdkVersion = getSdkVersion(challengeRoot);
-  const baseLabel = solve ? (solveModelLabel ?? "solve") : useSolution ? "solution" : "impl";
-  const modelLabelRaw = `${baseLabel}-${contextProfile}`;
   const runId = createRunId();
   const runArtifactRoot = solve
     ? createRunArtifactRoot(resultsDir, modelLabelRaw, sdkVersion, runId)
@@ -1224,7 +1228,7 @@ async function main(): Promise<void> {
           // Save partial results after each problem
           if (all) {
             savePartialResults(
-              resultsDir,
+              runResultsDir,
               results,
               solveModelLabel,
               !!solve,
@@ -1265,7 +1269,7 @@ async function main(): Promise<void> {
 
   // Clean up partial results only when running all problems
   if (all) {
-    cleanPartialResults(resultsDir);
+    cleanPartialResults(runResultsDir);
   }
 
   const report = createReport(results, {
