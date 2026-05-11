@@ -3,7 +3,7 @@ import { Subgraph_ServiceType } from "@tailor-proto/tailor/v1/application_resour
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { logger } from "@/cli/shared/logger";
 import { planApplication } from "./application";
-import type { PlanContext } from "./apply";
+import type { PlanContext } from "./deploy";
 import type { Application } from "@/cli/services/application";
 import type { OperatorClient } from "@/cli/shared/client";
 

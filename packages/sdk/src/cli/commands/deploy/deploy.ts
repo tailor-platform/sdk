@@ -62,7 +62,7 @@ import { applyWorkflow, formatWorkflowChangeEntries, planWorkflow } from "./work
 import type { OperatorClient } from "@/cli/shared/client";
 import type { LoadedConfig } from "@/cli/shared/config-loader";
 
-export interface ApplyOptions {
+export interface DeployOptions {
   workspaceId?: string;
   profile?: string;
   configPath?: string;
@@ -396,13 +396,13 @@ export function summarizePlanResults(
 }
 
 /**
- * Apply the configured application to the Tailor platform.
- * @param options - Options for apply execution
+ * Deploy the configured application to the Tailor platform.
+ * @param options - Options for deploy execution
  * @returns Promise that resolves to `{ bundledScripts }` when `buildOnly` is true, otherwise void
  */
-export async function apply(options?: ApplyOptions) {
-  return withSpan("apply", async (rootSpan) => {
-    rootSpan.setAttribute("apply.dry_run", options?.dryRun ?? false);
+export async function deploy(options?: DeployOptions) {
+  return withSpan("deploy", async (rootSpan) => {
+    rootSpan.setAttribute("deploy.dry_run", options?.dryRun ?? false);
 
     // Phase 0: Build
     const { config, application, workflowBuildResult, bundledScripts, buildOnly } = await withSpan(

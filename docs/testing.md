@@ -23,7 +23,7 @@ pnpm test -t "pattern"         # Pattern match
 
 E2E tests require a deployed workspace. The `globalSetup` provisions a workspace before tests run.
 
-Located in `packages/sdk/e2e/`. CI runs these in the `apply.yml` workflow on Linux and Windows (PowerShell + CMD).
+Located in `packages/sdk/e2e/`. CI runs these in the `deploy.yml` workflow on Linux and Windows (PowerShell + CMD).
 
 ## Conventions
 

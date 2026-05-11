@@ -5,7 +5,7 @@ import { logger } from "@/cli/shared/logger";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
 import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { ApplyPhase } from "@/cli/commands/apply/apply";
+import type { ApplyPhase } from "@/cli/commands/deploy/deploy";
 import type { Application } from "@/cli/services/application";
 import type { CollectedJob } from "@/cli/services/workflow/service";
 import type { MessageInitShape } from "@bufbuild/protobuf";

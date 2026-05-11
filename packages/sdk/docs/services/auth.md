@@ -388,7 +388,7 @@ export const auth = defineAuth("my-auth", {
 });
 ```
 
-After `tailor-sdk apply`, authorize the connection:
+After `tailor-sdk deploy`, authorize the connection:
 
 ```bash
 tailor-sdk authconnection authorize --name google-connection \
@@ -448,7 +448,7 @@ tailor-sdk authconnection list
 tailor-sdk authconnection revoke --name google-connection
 ```
 
-Connection creation is handled by `tailor-sdk apply` via the config.
+Connection creation is handled by `tailor-sdk deploy` via the config.
 
 See [Auth Resource Commands](../cli/auth.md) for full CLI documentation.
 

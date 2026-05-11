@@ -25,7 +25,7 @@ import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
+import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/deploy";
 import type {
   IdPPermissionOperand,
   StandardIdPActionPermission,

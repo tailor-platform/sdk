@@ -9,7 +9,7 @@ import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "@/cli/s
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey } from "./label";
-import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
+import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/deploy";
 import type { Application } from "@/cli/services/application";
 import type {
   DeleteApplicationRequestSchema,
