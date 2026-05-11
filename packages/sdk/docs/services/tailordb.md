@@ -102,6 +102,18 @@ db.decimal({ scale: 2 });
 db.decimal({ scale: 4, optional: true });
 ```
 
+Values are rounded half-up to fit the configured scale before being stored.
+Negative values follow the same rule based on absolute magnitude:
+
+| Input         | Scale | Stored       |
+| ------------- | ----- | ------------ |
+| `"1.234"`     | 2     | `"1.23"`     |
+| `"1.235"`     | 2     | `"1.24"`     |
+| `"-1.235"`    | 2     | `"-1.24"`    |
+| `"1.5"`       | 0     | `"2"`        |
+| `"1.123456"`  | 6     | `"1.123456"` |
+| `"1.1234567"` | 6     | `"1.123457"` |
+
 ### Enum Fields
 
 ```typescript
