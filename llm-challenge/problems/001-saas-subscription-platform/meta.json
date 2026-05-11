@@ -3,17 +3,6 @@
   "name": "saas-subscription-platform",
   "difficulty": "hard",
   "category": "integration",
-  "evaluationGoal": "integration",
-  "apiSurfaces": [
-    "tailordb.field",
-    "tailordb.hook",
-    "tailordb.permission",
-    "resolver",
-    "executor.trigger",
-    "executor.operation",
-    "workflow",
-    "config"
-  ],
   "contextProfiles": ["types-only", "docs-only", "tailor-sdk-skill", "full-package"],
   "scoring": {
     "generate": 30,

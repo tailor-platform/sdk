@@ -3,8 +3,6 @@
   "name": "tailordb-api-design",
   "difficulty": "easy",
   "category": "api-design",
-  "evaluationGoal": "api-design",
-  "apiSurfaces": ["tailordb.field", "tailordb.hook", "tailordb.validation", "config"],
   "contextProfiles": ["types-only", "docs-only", "tailor-sdk-skill", "full-package"],
   "scoring": {
     "generate": 10,

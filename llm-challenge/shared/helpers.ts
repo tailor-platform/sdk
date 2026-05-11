@@ -35,8 +35,6 @@ export type ProblemMeta = {
   name: string;
   difficulty: "easy" | "medium" | "hard";
   category: string;
-  apiSurfaces?: string[];
-  evaluationGoal?: "api-design" | "integration";
   contextProfiles?: ContextProfile[];
   scoring: {
     generate: number;

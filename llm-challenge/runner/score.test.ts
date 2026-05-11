@@ -90,71 +90,17 @@ function makeProblemResult(overrides: Partial<ProblemResult> = {}): ProblemResul
 }
 
 describe("createReport", () => {
-  it("aggregates apiSurface and contextProfile success rates", () => {
-    const results: ProblemResult[] = [
-      makeProblemResult({
-        problemId: "001",
-        apiSurfaces: ["tailordb.field", "tailordb.hook"],
-        contextProfile: "types-only",
-        totalScore: 10,
-        maxScore: 10,
-      }),
-      makeProblemResult({
-        problemId: "002",
-        apiSurfaces: ["tailordb.field"],
-        contextProfile: "types-only",
-        totalScore: 5,
-        maxScore: 10,
-      }),
-      makeProblemResult({
-        problemId: "003",
-        apiSurfaces: ["tailordb.hook"],
-        contextProfile: "docs-only",
-        totalScore: 10,
-        maxScore: 10,
-      }),
-    ];
-
-    const report = createReport(results, { contextProfile: "mixed" });
-
-    expect(report.contextProfile).toBe("mixed");
-    // `tailordb.field`: 001 passes, 002 fails → 1/2
-    expect(report.analytics.apiSurfaceSuccessRates["tailordb.field"]).toEqual({
-      passed: 1,
-      total: 2,
-      rate: 50,
-    });
-    // `tailordb.hook`: 001 and 003 both pass → 2/2
-    expect(report.analytics.apiSurfaceSuccessRates["tailordb.hook"]).toEqual({
-      passed: 2,
-      total: 2,
-      rate: 100,
-    });
-    expect(report.analytics.contextProfileSuccessRates["types-only"]).toEqual({
-      passed: 1,
-      total: 2,
-      rate: 50,
-    });
-    expect(report.analytics.contextProfileSuccessRates["docs-only"]).toEqual({
-      passed: 1,
-      total: 1,
-      rate: 100,
-    });
-  });
-
-  it("groups results without a contextProfile under 'unspecified'", () => {
+  it("propagates contextProfile metadata onto the report", () => {
     const results: ProblemResult[] = [
       makeProblemResult({ totalScore: 10, maxScore: 10 }),
       makeProblemResult({ problemId: "002", totalScore: 0, maxScore: 10 }),
     ];
 
-    const report = createReport(results);
+    const report = createReport(results, { contextProfile: "mixed" });
 
-    expect(report.contextProfile).toBeUndefined();
-    expect(report.analytics.contextProfileSuccessRates["unspecified"]).toEqual({
-      passed: 1,
-      total: 2,
-      rate: 50,
-    });
+    expect(report.contextProfile).toBe("mixed");
+    expect(report.totalScore).toBe(10);
+    expect(report.maxScore).toBe(20);
+    expect(report.percentage).toBe(50);
   });
 });

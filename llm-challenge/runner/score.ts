@@ -43,7 +43,6 @@ export type ProblemResult = {
   problemName: string;
   difficulty: string;
   category: string;
-  apiSurfaces?: string[];
   contextProfile?: string;
   stages: StageResult[];
   totalScore: number;
@@ -68,20 +67,12 @@ type FailurePattern = {
   suggestedDocFix: string;
 };
 
-type RetryAnalysis = {
-  selfCorrectedCategories: Partial<Record<FailureCategory, number>>;
-  persistentCategories: Partial<Record<FailureCategory, number>>;
-};
-
 type Analytics = {
   failureDistribution: Partial<Record<FailureCategory, number>>;
   categorySuccessRates: Record<string, SuccessRate>;
   difficultySuccessRates: Record<string, SuccessRate>;
-  apiSurfaceSuccessRates: Record<string, SuccessRate>;
-  contextProfileSuccessRates: Record<string, SuccessRate>;
   stagePassRates: Record<string, SuccessRate>;
   commonFailurePatterns: FailurePattern[];
-  retryAnalysis?: RetryAnalysis;
 };
 
 export type ChallengeReport = {
@@ -95,9 +86,6 @@ export type ChallengeReport = {
   percentage: number;
   adjustedScore: number;
   adjustedPercentage: number;
-  weightedScore: number;
-  weightedMaxScore: number;
-  weightedPercentage: number;
   totalCostUsd: number;
   scorePerDollar?: number;
   avgCostPerPoint?: number;
@@ -105,12 +93,6 @@ export type ChallengeReport = {
   validPercentage: number;
   totalDurationMs: number;
   analytics: Analytics;
-};
-
-const difficultyWeights: Record<string, number> = {
-  easy: 1.0,
-  medium: 1.5,
-  hard: 2.5,
 };
 
 const failureDocSuggestions: Record<string, Record<FailureCategory, string>> = {
@@ -264,19 +246,6 @@ function computeAnalytics(results: ProblemResult[]): Analytics {
   const isPerfectScore = (r: ProblemResult): boolean => r.totalScore === r.maxScore;
   const categorySuccessRates = computeSuccessRates(results, (r) => r.category, isPerfectScore);
   const difficultySuccessRates = computeSuccessRates(results, (r) => r.difficulty, isPerfectScore);
-  const apiSurfaceItems = results.flatMap((r) =>
-    (r.apiSurfaces ?? []).map((surface) => ({ result: r, surface })),
-  );
-  const apiSurfaceSuccessRates = computeSuccessRates(
-    apiSurfaceItems,
-    (item) => item.surface,
-    (item) => isPerfectScore(item.result),
-  );
-  const contextProfileSuccessRates = computeSuccessRates(
-    results,
-    (r) => r.contextProfile ?? "unspecified",
-    isPerfectScore,
-  );
 
   // Stage pass rates (exclude skipped stages from totals)
   const stageItems: { stage: string; passed: boolean }[] = [];
@@ -321,47 +290,12 @@ function computeAnalytics(results: ProblemResult[]): Analytics {
     }
   }
 
-  // Retry analysis
-  let retryAnalysis: RetryAnalysis | undefined;
-  const hasRetries = results.some((r) => r.retrySolveResults && r.retrySolveResults.length > 0);
-  if (hasRetries) {
-    const selfCorrected: Partial<Record<FailureCategory, number>> = {};
-    const persistent: Partial<Record<FailureCategory, number>> = {};
-
-    for (const r of results) {
-      if (!r.retrySolveResults || r.retrySolveResults.length === 0) {
-        continue;
-      }
-      // Skip infra-only retries: when retryCount is 0 or firstAttemptStages is absent,
-      // all retries were infra failures and should not affect retry analytics
-      if ((r.retryCount ?? 0) === 0 || !r.firstAttemptStages) {
-        continue;
-      }
-      const failedCategories = (stages: StageResult[]): Set<FailureCategory> =>
-        new Set(stages.filter((s) => !s.passed && s.category).map((s) => s.category!));
-      const preRetryCategories = failedCategories(r.firstAttemptStages ?? r.stages);
-      const postRetryCategories = failedCategories(r.stages);
-      for (const cat of preRetryCategories) {
-        if (postRetryCategories.has(cat)) {
-          persistent[cat] = (persistent[cat] ?? 0) + 1;
-        } else {
-          selfCorrected[cat] = (selfCorrected[cat] ?? 0) + 1;
-        }
-      }
-    }
-
-    retryAnalysis = { selfCorrectedCategories: selfCorrected, persistentCategories: persistent };
-  }
-
   return {
     failureDistribution,
     categorySuccessRates,
     difficultySuccessRates,
-    apiSurfaceSuccessRates,
-    contextProfileSuccessRates,
     stagePassRates,
     commonFailurePatterns,
-    retryAnalysis,
   };
 }
 
@@ -411,15 +345,6 @@ export function createReport(
   const validMaxScore = validResults.reduce((sum, r) => sum + r.maxScore, 0);
   const validPercentage = validMaxScore > 0 ? Math.round((validScore / validMaxScore) * 100) : 0;
 
-  // Weighted scoring
-  let weightedScore = 0;
-  let weightedMaxScore = 0;
-  for (const r of results) {
-    const weight = difficultyWeights[r.difficulty] ?? 1.0;
-    weightedScore += r.totalScore * weight;
-    weightedMaxScore += r.maxScore * weight;
-  }
-
   // Cost efficiency (based on valid results only)
   const scorePerDollar = totalCostUsd > 0 ? validScore / totalCostUsd : undefined;
   const avgCostPerPoint =
@@ -442,10 +367,6 @@ export function createReport(
     percentage: maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0,
     adjustedScore,
     adjustedPercentage: maxScore > 0 ? Math.round((adjustedScore / maxScore) * 100) : 0,
-    weightedScore: Math.round(weightedScore * 10) / 10,
-    weightedMaxScore: Math.round(weightedMaxScore * 10) / 10,
-    weightedPercentage:
-      weightedMaxScore > 0 ? Math.round((weightedScore / weightedMaxScore) * 100) : 0,
     totalCostUsd,
     scorePerDollar,
     avgCostPerPoint,
@@ -536,11 +457,6 @@ export function formatReportTable(report: ChallengeReport): string {
       `${"Adjusted (retry penalty)".padEnd(30)}${"".padEnd(12)}${`${report.adjustedScore}/${report.maxScore}`.padEnd(15)}${`${report.adjustedPercentage}%`}`,
     );
   }
-
-  // Weighted score
-  lines.push(
-    `${"Weighted".padEnd(30)}${"".padEnd(12)}${`${report.weightedScore}/${report.weightedMaxScore}`.padEnd(15)}${`${report.weightedPercentage}%`}`,
-  );
 
   // Valid score (excluding infra failures)
   if (report.infraFailureCount > 0) {

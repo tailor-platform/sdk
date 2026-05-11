@@ -30,7 +30,6 @@ function makeMeta(apiCheck: ProblemMeta["apiCheck"]): ProblemMeta {
     name: "api-check-fixture",
     difficulty: "easy",
     category: "api-design",
-    apiSurfaces: ["tailordb.field"],
     scoring: { generate: 1, apiCheck: 4, typecheck: 1, tests: 1 },
     files: {
       implement: ["tailordb/user.ts"],
@@ -194,7 +193,6 @@ describe("runApiCheck", () => {
       name: "api-check-fixture",
       difficulty: "easy",
       category: "api-design",
-      apiSurfaces: ["tailordb.field"],
       scoring: { generate: 1, apiCheck: 4, typecheck: 1, tests: 1 },
       files: {
         implement: ["tailordb/user.ts", "tailordb/other.ts"],

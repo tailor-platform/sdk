@@ -97,16 +97,6 @@ For the generate stage, partial scoring considers:
 - File import check (60% of generate score)
 - Full generation success (100%)
 
-### Weighted Scoring
-
-Problems are weighted by difficulty for the weighted score:
-
-| Difficulty | Weight |
-| ---------- | ------ |
-| easy       | 1.0x   |
-| medium     | 1.5x   |
-| hard       | 2.5x   |
-
 ### Failure Categories
 
 When a stage fails, the output is automatically classified into a failure category:
