@@ -3,7 +3,7 @@ import * as path from "node:path";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { setupInvokerMock, setupTailordbMock, setupTailorErrorsMock } from "@/utils/test/mock";
 import { prepareFixtures } from "./prepare";
-import type { BundledScripts } from "@/cli/commands/apply/function-registry";
+import type { BundledScripts } from "@/cli/commands/deploy/function-registry";
 
 type MainFunction = (args: Record<string, unknown>) => unknown | Promise<unknown>;
 
@@ -25,7 +25,7 @@ async function importFromCode(code: string, name: string): Promise<MainFunction>
   return main;
 }
 
-describe("apply command integration tests", () => {
+describe("deploy command integration tests", () => {
   let outputDir: string;
   let bundledScripts: BundledScripts;
 

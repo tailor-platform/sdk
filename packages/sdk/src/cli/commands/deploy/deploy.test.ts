@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { summarizePlanResults } from "./apply";
 import { createChangeSet } from "./change-set";
+import { summarizePlanResults } from "./deploy";
 import type { GroupedDisplayEntry, NamespaceAction } from "./grouped-display";
 
 type PlanResults = Parameters<typeof summarizePlanResults>[0];

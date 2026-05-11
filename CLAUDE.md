@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `pnpm exec turbo run test` - Run all tests
 - `pnpm exec turbo run check` - Run format, lint:fix, typecheck:go, and knip in sequence
 - `pnpm exec turbo run generate` - Run code generation
-- `pnpm exec turbo run apply` - Deploy to the Tailor Platform
+- `pnpm exec turbo run deploy` - Deploy to the Tailor Platform
 
 ### Package-specific (in packages/sdk)
 

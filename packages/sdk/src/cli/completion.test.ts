@@ -23,7 +23,7 @@ describe("shell completion", () => {
       const result = generateCandidates(ctx);
 
       const values = result.candidates.map((c) => c.value);
-      expect(values).toContain("apply");
+      expect(values).toContain("deploy");
       expect(values).toContain("generate");
       expect(values).toContain("tailordb");
       expect(values).toContain("workspace");
@@ -42,8 +42,8 @@ describe("shell completion", () => {
   });
 
   describe("option name completion", () => {
-    it("completes option names for apply command", () => {
-      const ctx = parseCompletionContext(["apply", "--"], mainCommand);
+    it("completes option names for deploy command", () => {
+      const ctx = parseCompletionContext(["deploy", "--"], mainCommand);
       const result = generateCandidates(ctx);
 
       const values = result.candidates.map((c) => c.value);
@@ -66,7 +66,7 @@ describe("shell completion", () => {
 
   describe("file completion", () => {
     it("triggers file completion with extension filter for --config", () => {
-      const ctx = parseCompletionContext(["apply", "--config", ""], mainCommand);
+      const ctx = parseCompletionContext(["deploy", "--config", ""], mainCommand);
       const result = generateCandidates(ctx);
 
       // With extensions set, politty uses @ext: metadata instead of FileCompletion directive
@@ -98,14 +98,14 @@ describe("shell completion", () => {
 
   describe("no file completion", () => {
     it("suppresses file completion for --workspace-id", () => {
-      const ctx = parseCompletionContext(["apply", "--workspace-id", ""], mainCommand);
+      const ctx = parseCompletionContext(["deploy", "--workspace-id", ""], mainCommand);
       const result = generateCandidates(ctx);
 
       expect(result.directive & CompletionDirective.NoFileCompletion).toBeTruthy();
     });
 
     it("suppresses file completion for --profile", () => {
-      const ctx = parseCompletionContext(["apply", "--profile", ""], mainCommand);
+      const ctx = parseCompletionContext(["deploy", "--profile", ""], mainCommand);
       const result = generateCandidates(ctx);
 
       expect(result.directive & CompletionDirective.NoFileCompletion).toBeTruthy();

@@ -1,13 +1,14 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { apply } from "@/cli/commands/apply/apply";
+import { deploy } from "@/cli/commands/deploy/deploy";
 import { confirmationArgs, deploymentArgs } from "@/cli/shared/args";
 import { defineAppCommand } from "@/cli/shared/command";
 import { assertWritable } from "@/cli/shared/readonly-guard";
 
-export const applyCommand = defineAppCommand({
-  name: "apply",
-  description: "Apply Tailor configuration to deploy your application.",
+export const deployCommand = defineAppCommand({
+  name: "deploy",
+  aliases: ["apply"],
+  description: "Deploy your application by applying the Tailor configuration.",
   args: z
     .object({
       ...deploymentArgs,
@@ -31,7 +32,7 @@ export const applyCommand = defineAppCommand({
     await assertWritable({ profile: args.profile });
     const { initTelemetry } = await import("@/cli/telemetry");
     await initTelemetry();
-    await apply({
+    await deploy({
       workspaceId: args["workspace-id"],
       profile: args.profile,
       configPath: args.config,

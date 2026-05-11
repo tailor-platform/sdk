@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import url from "node:url";
-import { generate, apply } from "@tailor-platform/sdk/cli";
+import { generate, deploy } from "@tailor-platform/sdk/cli";
 
 // Disable inline sourcemaps during test fixture generation so that snapshot
 // comparisons remain stable across environments.
@@ -102,9 +102,9 @@ export async function generateCompatFiles(): Promise<void> {
   await generate({ configPath: "./tests/tailor.config.generators-compat.ts" });
   await generate({ configPath: "./tests/tailor.config.plugins-compat.ts" });
 
-  // Also run apply --buildOnly for plugins-compat (used by bundled_execution tests)
+  // Also run deploy --buildOnly for plugins-compat (used by bundled_execution tests)
   process.env.TAILOR_SDK_OUTPUT_DIR = pluginsCompatDir;
-  const result = await apply({
+  const result = await deploy({
     configPath: "./tests/tailor.config.plugins-compat.ts",
     buildOnly: true,
   });

@@ -28,7 +28,7 @@ import {
 } from "./grouped-display";
 import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { ApplyPhase, PlanContext } from "@/cli/commands/apply/apply";
+import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/deploy";
 import type { Application } from "@/cli/services/application";
 import type { Executor } from "@/types/executor.generated";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
