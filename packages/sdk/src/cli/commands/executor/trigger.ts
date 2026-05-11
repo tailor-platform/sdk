@@ -229,17 +229,17 @@ The \`--logs\` option displays logs from the downstream execution when available
 
     const { executor } = await client.getExecutorExecutor({
       workspaceId,
-      name: args["executor-name"],
+      name: args.executorName,
     });
 
     if (!executor) {
-      throw new Error(`Executor '${args["executor-name"]}' not found.`);
+      throw new Error(`Executor '${args.executorName}' not found.`);
     }
 
     // EVENT trigger type cannot be triggered manually
     if (executor.triggerType === ExecutorTriggerType.EVENT) {
       throw new Error(
-        `Executor '${args["executor-name"]}' has '${executorTriggerTypeToString(executor.triggerType)}' trigger type and cannot be triggered manually. ` +
+        `Executor '${args.executorName}' has '${executorTriggerTypeToString(executor.triggerType)}' trigger type and cannot be triggered manually. ` +
           `Only executors with 'INCOMING_WEBHOOK' or 'SCHEDULE' triggers can be triggered manually.`,
       );
     }
@@ -247,7 +247,7 @@ The \`--logs\` option displays logs from the downstream execution when available
     // SCHEDULE trigger type does not accept --data or --header options
     if (executor.triggerType === ExecutorTriggerType.SCHEDULE && (args.data || args.header)) {
       throw new Error(
-        `Executor '${args["executor-name"]}' has 'SCHEDULE' trigger type. ` +
+        `Executor '${args.executorName}' has 'SCHEDULE' trigger type. ` +
           `The --data and --header options are only available for 'INCOMING_WEBHOOK' trigger type.`,
       );
     }
@@ -271,14 +271,14 @@ The \`--logs\` option displays logs from the downstream execution when available
     }
 
     const result = await triggerExecutorByName({
-      executorName: args["executor-name"],
+      executorName: args.executorName,
       payload,
       workspaceId: args["workspace-id"],
       profile: args.profile,
     });
 
     if (!result.jobId) {
-      logger.success(`Executor '${args["executor-name"]}' triggered successfully.`);
+      logger.success(`Executor '${args.executorName}' triggered successfully.`);
       if (args.wait) {
         logger.warn("Cannot watch: job ID not available. The API may need to be updated.");
       }
@@ -286,12 +286,12 @@ The \`--logs\` option displays logs from the downstream execution when available
     }
 
     logger.success(
-      `Executor '${args["executor-name"]}' triggered successfully. Job ID: ${result.jobId}`,
+      `Executor '${args.executorName}' triggered successfully. Job ID: ${result.jobId}`,
     );
 
     if (args.wait) {
       const watchResult = await watchExecutorJob({
-        executorName: args["executor-name"],
+        executorName: args.executorName,
         jobId: result.jobId,
         workspaceId: args["workspace-id"],
         profile: args.profile,

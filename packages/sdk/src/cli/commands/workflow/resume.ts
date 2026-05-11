@@ -88,7 +88,7 @@ export const resumeCommand = defineAppCommand({
     .strict(),
   run: async (args) => {
     const { executionId, wait } = await resumeWorkflow({
-      executionId: args["execution-id"],
+      executionId: args.executionId,
       workspaceId: args["workspace-id"],
       profile: args.profile,
       interval: parseDuration(args.interval),

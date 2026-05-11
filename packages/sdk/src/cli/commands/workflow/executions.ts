@@ -425,10 +425,10 @@ export const executionsCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    if (args["execution-id"]) {
+    if (args.executionId) {
       const interval = parseDuration(args.interval);
       const { execution, wait } = await getWorkflowExecution({
-        executionId: args["execution-id"],
+        executionId: args.executionId,
         workspaceId: args["workspace-id"],
         profile: args.profile,
         interval,

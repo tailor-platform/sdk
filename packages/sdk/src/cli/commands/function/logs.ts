@@ -311,14 +311,14 @@ When the deployed script cannot be downloaded or the function has been redeploye
       profile: args.profile,
     });
 
-    if (args["execution-id"]) {
+    if (args.executionId) {
       const { execution } = await client.getFunctionExecution({
         workspaceId,
-        executionId: args["execution-id"],
+        executionId: args.executionId,
       });
 
       if (!execution) {
-        throw new Error(`Function execution '${args["execution-id"]}' not found.`);
+        throw new Error(`Function execution '${args.executionId}' not found.`);
       }
 
       const detail = toFunctionExecutionDetailInfo(execution);
