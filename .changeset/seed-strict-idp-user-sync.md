@@ -3,26 +3,39 @@
 ---
 
 Add `strictIdpUserSync` option to `seedPlugin` for opting out of the
-userProfile → `_User` foreign key.
+`_User <-> userProfile` foreign keys emitted into the generated seed schema.
 
-The seed plugin generates a foreign key from the userProfile type (e.g. `User`)
-to `_User` so that `validate` rejects userProfile rows without a matching
-`_User` row. This is helpful when the seed is expected to keep both tables in
-sync, but it makes it impossible to seed pre-registration states such as
-invited-but-not-registered users, where the TailorDB row exists before the
-IdP credential.
+The seed plugin emits two foreign keys when `auth.userProfile` is configured
+so that `validate` rejects rows on either side that lack a matching
+counterpart:
 
-The new `strictIdpUserSync` option defaults to `true` (existing behavior).
-Set it to `false` in `tailor.config.ts` to skip emitting the
-userProfile → `_User` foreign key:
+- `_User.name → <userProfile>.<usernameField>` (`idpToUser`)
+- `<userProfile>.<usernameField> → _User.name` (`userToIdp`)
+
+Both default to `true`, matching the previous behavior. Neither direction is
+enforced by the runtime, so it can be useful to relax one or both when
+seeding asymmetric production-like states such as invited-but-not-registered
+users.
+
+Boolean shorthand toggles both directions together, while the object form
+controls each direction individually:
 
 ```ts
+// Disable both directions
 seedPlugin({
   distPath: "./seed",
-  machineUserName: "admin",
   strictIdpUserSync: false,
 }),
-```
 
-The `_User` → userProfile foreign key is always emitted, so creating an IdP
-user without a matching userProfile row continues to be rejected.
+// Allow seeding invited userProfile rows without a _User row
+seedPlugin({
+  distPath: "./seed",
+  strictIdpUserSync: { userToIdp: false },
+}),
+
+// Allow seeding _User rows whose userProfile row does not exist yet
+seedPlugin({
+  distPath: "./seed",
+  strictIdpUserSync: { idpToUser: false },
+}),
+```

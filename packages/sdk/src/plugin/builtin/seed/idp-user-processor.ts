@@ -117,13 +117,51 @@ export function generateIdpTruncateScriptCode(idpNamespace: string): string {
   `;
 }
 
+type GenerateIdpUserSchemaFileOptions = {
+  usernameField: string;
+  userTypeName: string;
+  /**
+   * When `true` (default), emit a foreign key from `_User.name` to the
+   * userProfile type's username field so that seed validation rejects `_User`
+   * rows without a matching userProfile row. Set to `false` to seed `_User`
+   * rows that do not yet have a corresponding userProfile row.
+   */
+  includeUserProfileFK?: boolean;
+};
+
 /**
  * Generates the schema file content for IdP users with foreign key
- * @param usernameField - Username field name
- * @param userTypeName - TailorDB user type name
+ * @param options - Schema generation options
+ * @param options.usernameField - Username field name
+ * @param options.userTypeName - TailorDB user type name
+ * @param options.includeUserProfileFK - Whether to emit the `_User -> userProfile` foreign key (default `true`)
  * @returns Schema file contents
  */
-export function generateIdpUserSchemaFile(usernameField: string, userTypeName: string): string {
+export function generateIdpUserSchemaFile(options: GenerateIdpUserSchemaFileOptions): string {
+  const { usernameField, userTypeName, includeUserProfileFK = true } = options;
+  const schemaBody = includeUserProfileFK
+    ? ml`
+      primaryKey: "name",
+      indexes: [
+        { name: "_user_name_unique_idx", columns: ["name"], unique: true },
+      ],
+      foreignKeys: [
+        {
+          column: "name",
+          references: {
+            table: "${userTypeName}",
+            column: "${usernameField}",
+          },
+        },
+      ],
+    `
+    : ml`
+      primaryKey: "name",
+      indexes: [
+        { name: "_user_name_unique_idx", columns: ["name"], unique: true },
+      ],
+    `;
+
   return ml /* ts */ `
     import { t } from "@tailor-platform/sdk";
     import { defineSchema } from "@tailor-platform/sdk/seed";
@@ -140,19 +178,7 @@ export function generateIdpUserSchemaFile(usernameField: string, userTypeName: s
     export const schema = defineSchema(
       createStandardSchema(schemaType, hook),
       {
-        primaryKey: "name",
-        indexes: [
-          { name: "_user_name_unique_idx", columns: ["name"], unique: true },
-        ],
-        foreignKeys: [
-          {
-            column: "name",
-            references: {
-              table: "${userTypeName}",
-              column: "${usernameField}",
-            },
-          },
-        ],
+        ${schemaBody}
       }
     );
 
