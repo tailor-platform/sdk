@@ -43,10 +43,10 @@ Both `--env-file` and `--env-file-if-exists` can be specified multiple times and
 
 ```bash
 # Load .env (required) and .env.local (optional, if exists)
-tailor-sdk apply --env-file .env --env-file-if-exists .env.local
+tailor-sdk deploy --env-file .env --env-file-if-exists .env.local
 
 # Load multiple files
-tailor-sdk apply --env-file .env --env-file .env.production
+tailor-sdk deploy --env-file .env --env-file .env.production
 ```
 
 ## Environment Variables
@@ -99,7 +99,7 @@ Commands for managing Tailor Platform applications (work with `tailor.config.ts`
 | ----------------------------------------------- | ------------------------------------------------------------------- |
 | [init](./cli/application.md#init)               | Initialize a new project using create-sdk.                          |
 | [generate](./cli/application.md#generate)       | Generate files using Tailor configuration.                          |
-| [apply](./cli/application.md#apply)             | Apply Tailor configuration to deploy your application.              |
+| [deploy](./cli/application.md#deploy)           | Deploy your application by applying the Tailor configuration.       |
 | [remove](./cli/application.md#remove)           | Remove all resources managed by the application from the workspace. |
 | [show](./cli/application.md#show)               | Show information about the deployed application.                    |
 | [open](./cli/application.md#open)               | Open Tailor Platform Console.                                       |

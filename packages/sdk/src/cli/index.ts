@@ -4,9 +4,9 @@ import { defineCommand, runMain } from "politty";
 import { withCompletionCommand } from "politty/completion";
 import { z } from "zod";
 import { apiCommand } from "./commands/api";
-import { applyCommand } from "./commands/apply";
 import { authconnectionCommand } from "./commands/authconnection";
 import { crashReportCommand } from "./commands/crashreport";
+import { deployCommand } from "./commands/deploy";
 import { executorCommand } from "./commands/executor";
 import { functionCommand } from "./commands/function";
 import { generateCommand } from "./commands/generate";
@@ -60,9 +60,9 @@ export const mainCommand = withCompletionCommand(
       packageJson.description || "Tailor CLI for managing Tailor Platform SDK applications",
     subCommands: {
       api: apiCommand,
-      apply: applyCommand,
       authconnection: authconnectionCommand,
       crashreport: crashReportCommand,
+      deploy: deployCommand,
       executor: executorCommand,
       function: functionCommand,
       generate: generateCommand,

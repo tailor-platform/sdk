@@ -34,11 +34,11 @@ Secrets are key-value pairs stored within a vault. Secret values are encrypted a
 
 ## Managing Secrets
 
-There are two ways to manage secrets: declaratively via `defineSecretManager()` in `tailor.config.ts`, or imperatively via the [CLI](#cli-management). Management is scoped per vault — **do not mix both approaches for the same vault**. When a vault is defined in config, the config becomes the source of truth: any secrets in that vault not present in the config will be deleted on `tailor-sdk apply`.
+There are two ways to manage secrets: declaratively via `defineSecretManager()` in `tailor.config.ts`, or imperatively via the [CLI](#cli-management). Management is scoped per vault — **do not mix both approaches for the same vault**. When a vault is defined in config, the config becomes the source of truth: any secrets in that vault not present in the config will be deleted on `tailor-sdk deploy`.
 
 ### Declarative Configuration
 
-Define your secrets in `tailor.config.ts` using `defineSecretManager()`. Each key is a vault name, and its value is a record of secret names to their values. These values are deployed to each vault on `tailor-sdk apply`.
+Define your secrets in `tailor.config.ts` using `defineSecretManager()`. Each key is a vault name, and its value is a record of secret names to their values. These values are deployed to each vault on `tailor-sdk deploy`.
 
 Since secret values should not be committed to source control, use environment variables:
 
@@ -87,7 +87,7 @@ When `ignoreNullishValues: true`:
 - Skipped secrets are shown in the deploy output for visibility
 - Secrets removed from the config entirely are still deleted (orphan cleanup)
 
-This allows you to set secret values once (e.g., via local `tailor-sdk apply` or the CLI) and then deploy from CI without needing the actual values in CI environment variables.
+This allows you to set secret values once (e.g., via local `tailor-sdk deploy` or the CLI) and then deploy from CI without needing the actual values in CI environment variables.
 
 ## Using Secrets
 
@@ -175,7 +175,7 @@ At runtime, these references are replaced with the actual secret values.
 
 Use the CLI to manage vaults that are **not** defined in `defineSecretManager()`. If you attempt to modify a vault that is managed by the config, the CLI will show a warning and ask for confirmation. Once confirmed, the CLI releases the vault's ownership label so it is no longer managed by config.
 
-After ownership is released, the next `tailor-sdk apply` will treat the vault as an unmanaged resource and prompt for confirmation before taking any action on it.
+After ownership is released, the next `tailor-sdk deploy` will treat the vault as an unmanaged resource and prompt for confirmation before taking any action on it.
 
 ### Create a Vault
 

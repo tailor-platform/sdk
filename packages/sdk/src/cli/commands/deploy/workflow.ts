@@ -1,4 +1,4 @@
-import { type ApplyPhase } from "@/cli/commands/apply/apply";
+import { type ApplyPhase } from "@/cli/commands/deploy/deploy";
 import { parseDuration } from "@/cli/shared/args";
 import { type OperatorClient, fetchAll } from "@/cli/shared/client";
 import { createChangeSet, type ChangeSet } from "./change-set";

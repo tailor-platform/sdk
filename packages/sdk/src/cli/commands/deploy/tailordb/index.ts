@@ -73,8 +73,8 @@ import {
   updateMigrationLabel,
   type MigrationContext,
 } from "./migration";
-import type { ApplyPhase, PlanContext } from "../apply";
 import type { OwnerConflict, UnmanagedResource } from "../confirm";
+import type { ApplyPhase, PlanContext } from "../deploy";
 import type {
   PendingMigration,
   RemoteSchemaVerificationResult,

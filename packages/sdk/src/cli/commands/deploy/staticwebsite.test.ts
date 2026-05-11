@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 import { planStaticWebsite } from "./staticwebsite";
-import type { PlanContext } from "./apply";
+import type { PlanContext } from "./deploy";
 import type { Application } from "@/cli/services/application";
 import type { OperatorClient } from "@/cli/shared/client";
 
