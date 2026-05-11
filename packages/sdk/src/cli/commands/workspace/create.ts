@@ -102,9 +102,15 @@ export const createCommand = defineAppCommand({
       "profile-user": arg(z.string().optional(), {
         description: "User email for the profile (defaults to current user)",
       }),
+      readonly: arg(z.boolean().default(false), {
+        description:
+          "Create the profile as read-only (requires --profile-name). Blocks all write commands while the profile is active.",
+      }),
     })
     .strict(),
   run: async (args) => {
+    // This command does not expose `--profile`, so the guard resolves the
+    // active profile from `TAILOR_PLATFORM_PROFILE` only.
     await assertWritable();
     // Execute workspace create logic
     const workspace = await createWorkspace({
@@ -138,13 +144,14 @@ export const createCommand = defineAppCommand({
       config.profiles[profileName] = {
         user: profileUser,
         workspace_id: workspace.id,
+        ...(args.readonly ? { readonly: true } : {}),
       };
       writePlatformConfig(config);
       profileInfo = {
         name: profileName,
         user: profileUser,
         workspaceId: workspace.id,
-        readonly: false,
+        readonly: args.readonly,
       };
 
       if (!args.json) {
