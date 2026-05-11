@@ -13,20 +13,10 @@ counterpart:
 - `<userProfile>.<usernameField> → _User.name` (`userToIdp`)
 
 Both default to `true`, matching the previous behavior. Neither direction is
-enforced by the runtime, so it can be useful to relax one or both when
-seeding asymmetric production-like states such as invited-but-not-registered
-users.
-
-Boolean shorthand toggles both directions together, while the object form
-controls each direction individually:
+enforced by the runtime, so it can be useful to relax one when seeding
+asymmetric production-like states such as invited-but-not-registered users.
 
 ```ts
-// Disable both directions
-seedPlugin({
-  distPath: "./seed",
-  strictIdpUserSync: false,
-}),
-
 // Allow seeding invited userProfile rows without a _User row
 seedPlugin({
   distPath: "./seed",

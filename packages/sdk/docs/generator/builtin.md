@@ -183,11 +183,11 @@ Generates seed data configuration files for database initialization.
 ["@tailor-platform/seed", { distPath: "./seed", machineUserName: "admin" }];
 ```
 
-| Option              | Type                                                      | Description                                                                                                                                                                          |
-| ------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `distPath`          | `string`                                                  | Output directory path (required)                                                                                                                                                     |
-| `machineUserName`   | `string`                                                  | Default machine user name (can be overridden at runtime)                                                                                                                             |
-| `strictIdpUserSync` | `boolean \| { userToIdp?: boolean; idpToUser?: boolean }` | Control `_User <-> userProfile` foreign keys emitted into the generated seed schema (default `true` for both directions). See [IdP user synchronization](#idp-user-synchronization). |
+| Option              | Type                                           | Description                                                                                                                                                                          |
+| ------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `distPath`          | `string`                                       | Output directory path (required)                                                                                                                                                     |
+| `machineUserName`   | `string`                                       | Default machine user name (can be overridden at runtime)                                                                                                                             |
+| `strictIdpUserSync` | `{ userToIdp?: boolean; idpToUser?: boolean }` | Control `_User <-> userProfile` foreign keys emitted into the generated seed schema (default `true` for both directions). See [IdP user synchronization](#idp-user-synchronization). |
 
 ### IdP user synchronization
 
@@ -204,20 +204,8 @@ either table that does not have a matching counterpart:
 Neither direction is enforced by the runtime. In production it is normal for
 one side to exist without the other — for example a userProfile row exists
 the moment a user is invited, but the corresponding `_User` row appears only
-after the user finishes signing up. To seed such states, relax the relevant
-direction via `strictIdpUserSync`.
-
-Boolean shorthand toggles both directions together:
-
-```ts
-// Disable both _User <-> userProfile FKs
-seedPlugin({
-  distPath: "./seed",
-  strictIdpUserSync: false,
-}),
-```
-
-Object form lets you opt out of a single direction:
+after the user finishes signing up. To seed such states, set the relevant
+direction in `strictIdpUserSync` to `false`:
 
 ```ts
 // Allow seeding invited-but-not-registered userProfile rows.

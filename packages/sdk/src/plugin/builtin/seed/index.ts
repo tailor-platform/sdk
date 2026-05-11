@@ -47,21 +47,19 @@ type SeedPluginOptions = {
    * Control whether seed validation enforces a one-to-one correspondence
    * between userProfile rows and `_User` rows.
    *
-   * Defaults to `true` (both directions enforced), mirroring the historical
-   * behavior. Set a boolean to toggle both directions together, or pass an
-   * object to control each direction individually.
+   * Both directions default to `true`, mirroring the historical behavior.
+   * Opt out of a single direction (for example to seed invited users that
+   * do not yet have an IdP credential) by setting that direction to `false`.
    */
-  strictIdpUserSync?: boolean | IdpUserSyncDirections;
+  strictIdpUserSync?: IdpUserSyncDirections;
 };
 
 function resolveIdpUserSync(
   option: SeedPluginOptions["strictIdpUserSync"],
 ): Required<IdpUserSyncDirections> {
-  if (option === undefined) return { userToIdp: true, idpToUser: true };
-  if (typeof option === "boolean") return { userToIdp: option, idpToUser: option };
   return {
-    userToIdp: option.userToIdp ?? true,
-    idpToUser: option.idpToUser ?? true,
+    userToIdp: option?.userToIdp ?? true,
+    idpToUser: option?.idpToUser ?? true,
   };
 }
 
@@ -776,7 +774,7 @@ ${namespaceSelfRefEntries}
  * @param options - Plugin options
  * @param options.distPath - Output directory path for generated seed files
  * @param options.machineUserName - Default machine user name for authentication
- * @param options.strictIdpUserSync - Control which `_User <-> userProfile` foreign keys are emitted. Defaults to `true` (both directions). Pass a boolean to toggle both directions together, or an object `{ userToIdp?, idpToUser? }` to control each direction individually.
+ * @param options.strictIdpUserSync - Control which `_User <-> userProfile` foreign keys are emitted. Both `userToIdp` and `idpToUser` default to `true`; set a direction to `false` to relax that side.
  * @returns Plugin instance with onTailorDBReady hook
  */
 export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPluginOptions> {
