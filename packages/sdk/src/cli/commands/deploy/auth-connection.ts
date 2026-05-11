@@ -7,7 +7,7 @@ import { createChangeSet } from "./change-set";
 import { buildMetaRequest, sdkNameLabelKey, trnPrefix, type WithLabel } from "./label";
 import { hashValue, loadSecretsState, saveSecretsState } from "./secrets-state";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { ApplyPhase } from "@/cli/commands/apply/apply";
+import type { ApplyPhase } from "@/cli/commands/deploy/deploy";
 import type { AuthConnectionConfig } from "@/types/auth-connection.generated";
 import type {
   CreateAuthConnectionRequestSchema,

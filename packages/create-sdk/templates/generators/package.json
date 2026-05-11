@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "generate": "tailor-sdk generate",
-    "deploy": "tailor-sdk apply",
+    "deploy": "tailor-sdk deploy",
     "test": "vitest --project unit",
     "test:unit": "vitest --project unit",
     "format": "oxfmt --write .",

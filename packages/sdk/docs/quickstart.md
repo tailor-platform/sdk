@@ -46,7 +46,7 @@ npx tailor-sdk workspace list
 
 ### Deploy Your App
 
-Run the apply command to deploy your project:
+Run the deploy command to deploy your project:
 
 ```bash
 cd example-app

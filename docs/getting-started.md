@@ -44,7 +44,7 @@ In `packages/sdk/`:
 ```bash
 cd example
 pnpm generate        # Generate types
-pnpm apply           # Deploy to platform (requires workspace)
+pnpm deploy          # Deploy to platform (requires workspace)
 pnpm test            # Run generator tests
 pnpm test:e2e        # Run E2E tests (requires deployed workspace)
 ```

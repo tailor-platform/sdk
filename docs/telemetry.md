@@ -27,7 +27,7 @@ docker run -d --name jaeger-otlp \
 
 ```bash
 cd example
-OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 pnpm tailor-sdk apply --dry-run
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 pnpm tailor-sdk deploy --dry-run
 ```
 
 ### 3. View traces
@@ -36,10 +36,10 @@ Open http://localhost:16686, select service **tailor-sdk**, and click **Find Tra
 
 ## Span Hierarchy
 
-The `apply` command emits the following span tree:
+The `deploy` command emits the following span tree:
 
 ```
-apply
+deploy
 ├── build
 │   ├── build.loadConfig
 │   ├── build.generateUserTypes

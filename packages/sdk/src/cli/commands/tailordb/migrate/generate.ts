@@ -299,7 +299,7 @@ async function generateDiffFromSnapshot(
     }
     logger.newline();
     logger.log("A migration script was generated for breaking changes.");
-    logger.log("Please review and edit the script before running 'tailor-sdk apply'.");
+    logger.log("Please review and edit the script before running 'tailor-sdk deploy'.");
 
     const editor = getConfiguredEditorCommand();
     if (!editor) {
