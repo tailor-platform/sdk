@@ -207,20 +207,14 @@ the moment a user is invited, but the corresponding `_User` row appears only
 after the user finishes signing up. To seed such states, set the relevant
 direction in `disableIdpUserSync` to `true`:
 
-```ts
+```typescript
 // Allow seeding invited-but-not-registered userProfile rows.
 // Still rejects _User rows without a matching userProfile row.
-seedPlugin({
-  distPath: "./seed",
-  disableIdpUserSync: { userToIdp: true },
-}),
+["@tailor-platform/seed", { distPath: "./seed", disableIdpUserSync: { userToIdp: true } }];
 
 // Allow seeding _User rows whose userProfile does not exist yet.
 // Still rejects userProfile rows without a matching _User row.
-seedPlugin({
-  distPath: "./seed",
-  disableIdpUserSync: { idpToUser: true },
-}),
+["@tailor-platform/seed", { distPath: "./seed", disableIdpUserSync: { idpToUser: true } }];
 ```
 
 Omitted directions default to `false` (FK emitted).

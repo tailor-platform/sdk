@@ -52,12 +52,12 @@ type SeedPluginOptions = {
 };
 
 function resolveIdpUserSyncFKs(option: SeedPluginOptions["disableIdpUserSync"]): {
-  userToIdp: boolean;
-  idpToUser: boolean;
+  emitUserToIdpFK: boolean;
+  emitIdpToUserFK: boolean;
 } {
   return {
-    userToIdp: !(option?.userToIdp ?? false),
-    idpToUser: !(option?.idpToUser ?? false),
+    emitUserToIdpFK: !(option?.userToIdp ?? false),
+    emitIdpToUserFK: !(option?.idpToUser ?? false),
   };
 }
 
@@ -801,7 +801,11 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
           const linesDb = processLinesDb(type, source);
 
           // Add reverse FK from userProfile type to _User (opt-out via disableIdpUserSync.userToIdp: true)
-          if (idpUserSyncFKs.userToIdp && idpUser && typeName === idpUser.schema.userTypeName) {
+          if (
+            idpUserSyncFKs.emitUserToIdpFK &&
+            idpUser &&
+            typeName === idpUser.schema.userTypeName
+          ) {
             linesDb.foreignKeys.push({
               column: idpUser.schema.usernameField,
               references: {
@@ -895,7 +899,7 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
           content: generateIdpUserSchemaFile({
             usernameField: idpUser.schema.usernameField,
             userTypeName: idpUser.schema.userTypeName,
-            includeUserProfileFK: idpUserSyncFKs.idpToUser,
+            includeUserProfileFK: idpUserSyncFKs.emitIdpToUserFK,
           }),
         });
       }

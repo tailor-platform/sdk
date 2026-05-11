@@ -130,7 +130,10 @@ type GenerateIdpUserSchemaFileOptions = {
 };
 
 /**
- * Generates the schema file content for IdP users with foreign key
+ * Generates the schema file content for IdP users. Emits the
+ * `_User.name -> <userProfile>.<usernameField>` foreign key by default; pass
+ * `includeUserProfileFK: false` to omit it (e.g. when seeding `_User` rows
+ * that do not yet have a corresponding userProfile row).
  * @param options - Schema generation options
  * @param options.usernameField - Username field name
  * @param options.userTypeName - TailorDB user type name
