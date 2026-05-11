@@ -37,7 +37,7 @@ export async function assertWritable(opts?: AssertWritableOptions): Promise<void
     code: "PROFILE_READONLY",
     message: `Profile "${profileName}" is read-only.`,
     details:
-      "This profile blocks all write operations (apply, create/update/delete, deploy, trigger, etc.).",
+      "This profile blocks platform-state mutations (apply, create/update/delete, deploy, etc.). Application-data operations remain available because their permissions are governed by the machine user.",
     suggestion: `Use a different profile, unset TAILOR_PLATFORM_PROFILE, or run 'tailor-sdk profile update ${profileName} --no-readonly'.`,
   });
 }

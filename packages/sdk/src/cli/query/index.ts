@@ -23,7 +23,6 @@ import { getEditorCommand, openInEditor } from "../shared/editor";
 import { isCLIError } from "../shared/errors";
 import { logger } from "../shared/logger";
 import { parseBoolean } from "../shared/parse-boolean";
-import { assertWritable } from "../shared/readonly-guard";
 import { executeScript } from "../shared/script-executor";
 import { resolveTypeNamespaces } from "../shared/tailordb-namespace";
 import { mapQueryExecutionError } from "./errors";
@@ -783,10 +782,6 @@ export const queryCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    // SQL/GraphQL submitted here is forwarded as-is; we cannot reliably
-    // classify a statement as read-only, so block the whole command under a
-    // readonly profile.
-    await assertWritable({ profile: args.profile });
     const mode = await resolveQueryCommandInput({
       query: args.query,
       file: args.file,

@@ -7,12 +7,14 @@ import { assertWritable } from "./readonly-guard";
 import { resetKeyringState } from "./token-store";
 
 /**
- * Runnable command modules that live outside `src/cli/commands/`. They must
- * be checked for `assertWritable` too because the main CLI registers them
- * as top-level subcommands. Add a path here when a new top-level command
- * is wired up outside `commands/`.
+ * Runnable command modules that live outside `src/cli/commands/` whose `run`
+ * mutates platform state and so must call `assertWritable`. Add a path here
+ * when a new top-level command is wired up outside `commands/`.
+ *
+ * (Note: `query/index.ts` lives outside `commands/` but is exempt from the
+ * guard because it executes under a machine user, so it is not listed.)
  */
-const ADDITIONAL_RUNNABLE_COMMAND_PATHS = ["query/index.ts"];
+const ADDITIONAL_RUNNABLE_COMMAND_PATHS: string[] = [];
 
 /**
  * Allowlist of command files that do NOT touch platform state, plus the
@@ -43,20 +45,23 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   "crash-report/index.ts",
   "crash-report/list.ts",
   "crash-report/send.ts",
-  // Executor (read-only)
+  // Executor (read-only). `executor/trigger.ts` calls the production
+  // `TriggerExecutor` RPC with the operator token (it creates a platform-side
+  // job record), so it stays guarded.
   "executor/index.ts",
   "executor/get.ts",
   "executor/jobs.ts",
   "executor/list.ts",
   "executor/webhook.ts",
-  // Function (read-only / local execution)
+  // Function (read-only / local execution). `function/test-run.ts` is exempt
+  // because it runs under a machine user via `testExecScript` whose own
+  // permissions gate any application-data effects.
   "function/index.ts",
   "function/bundle.ts",
   "function/get.ts",
   "function/list.ts",
   "function/logs.ts",
-  // function/test-run.ts is NOT here: it runs user code on the platform server
-  // via client.testExecScript, so a readonly profile must block it.
+  "function/test-run.ts",
   // Generate (local code generation)
   "generate/index.ts",
   // Machine user (read-only; token retrieval only fetches, does not mutate)
@@ -113,11 +118,15 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   "user/switch.ts",
   "user/pat/index.ts",
   "user/pat/list.ts",
-  // Workflow (read-only branches)
+  // Workflow (read-only branches). `workflow/start.ts` and `workflow/resume.ts`
+  // are exempt because their execution runs under a machine user whose own
+  // permissions gate any application-data effects.
   "workflow/index.ts",
   "workflow/executions.ts",
   "workflow/get.ts",
   "workflow/list.ts",
+  "workflow/resume.ts",
+  "workflow/start.ts",
   // Workspace (read-only branches)
   "workspace/index.ts",
   "workspace/get.ts",
