@@ -6,12 +6,15 @@ Rename the `apply` CLI command to `deploy`. `tailor-sdk deploy` is the canonical
 command name; `tailor-sdk apply` continues to work as an alias for backward
 compatibility on the command line.
 
-The programmatic API exported from `@tailor-platform/sdk/cli` has been renamed
-to match. Migrate your imports:
+The programmatic API exported from `@tailor-platform/sdk/cli` is also available
+under the new name. `deploy` / `DeployOptions` are now the canonical exports,
+while `apply` / `ApplyOptions` continue to be re-exported as aliases so existing
+imports keep working:
 
-- `import { apply } from "@tailor-platform/sdk/cli"` → `import { deploy } from "@tailor-platform/sdk/cli"`
-- `import type { ApplyOptions } from "@tailor-platform/sdk/cli"` → `import type { DeployOptions } from "@tailor-platform/sdk/cli"`
+- `import { apply } from "@tailor-platform/sdk/cli"` — still works (alias for `deploy`)
+- `import type { ApplyOptions } from "@tailor-platform/sdk/cli"` — still works (alias for `DeployOptions`)
 
-The OpenTelemetry root span name also changed from `apply` to `deploy`. Inner
-spans of the apply pipeline (`apply.createUpdateServices`, `apply.cleanup`,
-etc.) are unchanged.
+Migration is optional but recommended:
+
+- `apply` → `deploy`
+- `ApplyOptions` → `DeployOptions`

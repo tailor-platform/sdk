@@ -8,8 +8,8 @@ if (!isNativeTypeScriptRuntime()) {
   register("tsx", import.meta.url, { data: {} });
 }
 
-export { deploy } from "./commands/deploy/deploy";
-export type { DeployOptions } from "./commands/deploy/deploy";
+export { deploy, deploy as apply } from "./commands/deploy/deploy";
+export type { DeployOptions, DeployOptions as ApplyOptions } from "./commands/deploy/deploy";
 export type { BundledScripts } from "./commands/deploy/function-registry";
 export { generate } from "./commands/generate/service";
 export type { GenerateOptions } from "./commands/generate/options";
