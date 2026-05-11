@@ -6,13 +6,26 @@ import type { ChallengeReport, FailureCategory, SuccessRate } from "./score";
 
 const challengeRoot = path.resolve(import.meta.dirname, "..");
 
-function parseArgs(): {
+type Filters = {
+  agent?: string;
+  model?: string;
+  contextProfile?: string;
+};
+
+type ParsedArgs = Filters & {
   baseline?: string;
   trend: boolean;
-} {
+  groups: boolean;
+};
+
+function parseArgs(): ParsedArgs {
   const args = process.argv.slice(2);
   let baseline: string | undefined;
   let trend = false;
+  let groups = false;
+  let agent: string | undefined;
+  let model: string | undefined;
+  let contextProfile: string | undefined;
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
@@ -23,38 +36,104 @@ function parseArgs(): {
       case "--trend":
         trend = true;
         break;
+      case "--groups":
+        groups = true;
+        break;
+      case "--agent":
+        agent = requireArg(args, i, "--agent");
+        i++;
+        break;
+      case "--model":
+        model = requireArg(args, i, "--model");
+        i++;
+        break;
+      case "--context-profile":
+        contextProfile = requireArg(args, i, "--context-profile");
+        i++;
+        break;
     }
   }
 
-  return { baseline, trend };
+  return { baseline, trend, groups, agent, model, contextProfile };
 }
 
-function loadReports(): ChallengeReport[] {
+type GroupKey = {
+  agent: string;
+  model: string;
+  contextProfile: string;
+};
+
+function getGroupKey(report: ChallengeReport): GroupKey {
+  // model field is "agent:model" (e.g. "claude:opus"), null/undefined/"" for solution-verify.
+  // Composite labels like "claude:opus+codex:default" reduce to the primary segment.
+  const raw = report.model || "solution:verify";
+  const primary = raw.split("+")[0] ?? raw;
+  const colonIndex = primary.indexOf(":");
+  const agent = colonIndex === -1 ? primary : primary.slice(0, colonIndex);
+  const model = colonIndex === -1 ? "default" : primary.slice(colonIndex + 1);
+  return {
+    agent: agent || "unknown",
+    model: model || "default",
+    contextProfile: report.contextProfile || "unknown",
+  };
+}
+
+function formatGroupKey(key: GroupKey): string {
+  return `${key.agent}:${key.model} / ${key.contextProfile}`;
+}
+
+function groupKeyId(key: GroupKey): string {
+  return `${key.agent}|${key.model}|${key.contextProfile}`;
+}
+
+function matchesFilters(key: GroupKey, filters: Filters): boolean {
+  if (filters.agent && key.agent !== filters.agent) return false;
+  if (filters.model && key.model !== filters.model) return false;
+  if (filters.contextProfile && key.contextProfile !== filters.contextProfile) return false;
+  return true;
+}
+
+function loadReports(filters: Filters = {}): ChallengeReport[] {
   const resultsDir = path.join(challengeRoot, "results");
   if (!fs.existsSync(resultsDir)) {
     console.error("No results directory found");
     process.exit(1);
   }
 
-  const files = fs
-    .readdirSync(resultsDir)
-    .filter((f) => f.startsWith("report-") && f.endsWith(".json"));
+  const files = listReportFiles(resultsDir);
 
   if (files.length === 0) {
-    console.error("No report files found in results/");
+    console.error("No report files found under results/");
     process.exit(1);
   }
 
   const reports: ChallengeReport[] = [];
   for (const f of files) {
     try {
-      const content = fs.readFileSync(path.join(resultsDir, f), "utf-8");
-      reports.push(JSON.parse(content) as ChallengeReport);
+      const content = fs.readFileSync(f, "utf-8");
+      const report = JSON.parse(content) as ChallengeReport;
+      if (!matchesFilters(getGroupKey(report), filters)) continue;
+      reports.push(report);
     } catch {
-      console.warn(`Skipping malformed report file: ${f}`);
+      console.warn(`Skipping malformed report file: ${path.relative(resultsDir, f)}`);
     }
   }
   return reports.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+}
+
+function listReportFiles(dir: string): string[] {
+  const out: string[] = [];
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  for (const ent of entries) {
+    const full = path.join(dir, ent.name);
+    if (ent.isDirectory()) {
+      if (ent.name === "artifacts") continue;
+      out.push(...listReportFiles(full));
+    } else if (ent.isFile() && ent.name.startsWith("report-") && ent.name.endsWith(".json")) {
+      out.push(full);
+    }
+  }
+  return out;
 }
 
 function loadReport(filePath: string): ChallengeReport {
@@ -143,6 +222,7 @@ function showComparison(before: ChallengeReport, after: ChallengeReport): void {
   console.log("Report Comparison");
   console.log("=".repeat(width));
   console.log("");
+  console.log(`  Group: ${formatGroupKey(getGroupKey(after))}`);
   console.log(
     `  Before: ${formatTimestamp(before.timestamp)}${before.model ? ` (${before.model})` : ""}`,
   );
@@ -254,10 +334,10 @@ function showComparison(before: ChallengeReport, after: ChallengeReport): void {
   console.log("=".repeat(width));
 }
 
-function showTrend(reports: ChallengeReport[]): void {
+function showTrend(reports: ChallengeReport[], groupLabel: string): void {
   const width = 80;
   console.log("=".repeat(width));
-  console.log("Score Trend");
+  console.log(`Score Trend — ${groupLabel}`);
   console.log("=".repeat(width));
   console.log("");
 
@@ -324,32 +404,130 @@ function showTrend(reports: ChallengeReport[]): void {
   console.log("=".repeat(width));
 }
 
-function main(): void {
-  const { baseline, trend } = parseArgs();
+function showGroupsOverview(reports: ChallengeReport[]): void {
+  const groups = new Map<string, { key: GroupKey; reports: ChallengeReport[] }>();
+  for (const r of reports) {
+    const key = getGroupKey(r);
+    const id = groupKeyId(key);
+    const existing = groups.get(id);
+    if (existing) {
+      existing.reports.push(r);
+    } else {
+      groups.set(id, { key, reports: [r] });
+    }
+  }
 
-  if (trend) {
+  const width = 80;
+  console.log("=".repeat(width));
+  console.log("Report Groups");
+  console.log("=".repeat(width));
+  console.log("");
+  console.log("Group".padEnd(50) + "Reports".padEnd(10) + "Latest".padEnd(22) + "Latest score");
+  console.log("-".repeat(width));
+
+  const sorted = [...groups.values()].sort((a, b) => {
+    const ta = Math.max(...a.reports.map((r) => new Date(r.timestamp).getTime()));
+    const tb = Math.max(...b.reports.map((r) => new Date(r.timestamp).getTime()));
+    return tb - ta;
+  });
+
+  for (const { key, reports: rs } of sorted) {
+    const latest = rs.reduce((acc, r) =>
+      new Date(r.timestamp).getTime() > new Date(acc.timestamp).getTime() ? r : acc,
+    );
+    const label = formatGroupKey(key).slice(0, 49).padEnd(50);
+    const count = String(rs.length).padEnd(10);
+    const ts = formatTimestamp(latest.timestamp).padEnd(22);
+    const score = `${latest.totalScore}/${latest.maxScore} (${latest.percentage}%)`;
+    console.log(`${label}${count}${ts}${score}`);
+  }
+  console.log("-".repeat(width));
+  console.log("");
+  console.log(
+    "Tip: narrow with --agent / --model / --context-profile, or use --trend to see history.",
+  );
+}
+
+function describeFilters(filters: Filters): string {
+  const parts: string[] = [];
+  if (filters.agent) parts.push(`agent=${filters.agent}`);
+  if (filters.model) parts.push(`model=${filters.model}`);
+  if (filters.contextProfile) parts.push(`context-profile=${filters.contextProfile}`);
+  return parts.length === 0 ? "any" : parts.join(", ");
+}
+
+function main(): void {
+  const { baseline, trend, groups, agent, model, contextProfile } = parseArgs();
+  const filters: Filters = { agent, model, contextProfile };
+
+  if (groups) {
     const reports = loadReports();
-    showTrend(reports);
+    showGroupsOverview(reports);
     return;
   }
 
   if (baseline) {
     const baselineReport = loadReport(baseline);
-    const reports = loadReports();
-    const latest = reports[reports.length - 1]!;
+    const reports = loadReports(filters);
+    const latest = reports[reports.length - 1];
+    if (!latest) {
+      console.error(`No reports match filters (${describeFilters(filters)}).`);
+      process.exit(1);
+    }
     showComparison(baselineReport, latest);
     return;
   }
 
-  // Default: compare latest 2 reports
-  const reports = loadReports();
-  if (reports.length < 2) {
-    console.error("Need at least 2 reports for comparison. Use --trend for single report view.");
+  const filtered = loadReports(filters);
+
+  if (trend) {
+    if (filtered.length === 0) {
+      console.error(`No reports match filters (${describeFilters(filters)}).`);
+      console.error("Run 'pnpm challenge:analyze --groups' to list available groups.");
+      process.exit(1);
+    }
+    showTrend(filtered, describeFilters(filters));
+    return;
+  }
+
+  // Default: compare last 2 reports within a single group.
+  // If filters narrow to one group, use that. Otherwise pick the most recently active group.
+  const groupsMap = new Map<string, { key: GroupKey; reports: ChallengeReport[] }>();
+  for (const r of filtered) {
+    const key = getGroupKey(r);
+    const id = groupKeyId(key);
+    const existing = groupsMap.get(id);
+    if (existing) {
+      existing.reports.push(r);
+    } else {
+      groupsMap.set(id, { key, reports: [r] });
+    }
+  }
+
+  const eligible = [...groupsMap.values()].filter((g) => g.reports.length >= 2);
+  if (eligible.length === 0) {
+    console.error(
+      `No (agent, model, context-profile) group has >= 2 reports matching filters (${describeFilters(filters)}).`,
+    );
+    console.error("Run 'pnpm challenge:analyze --groups' to see what's available.");
+    console.error(
+      "Use --baseline <file> to compare against a specific report, or --trend to see single-run history.",
+    );
     process.exit(1);
   }
 
-  const before = reports[reports.length - 2]!;
-  const after = reports[reports.length - 1]!;
+  // Pick group with most recent activity (last report timestamp)
+  eligible.sort((a, b) => {
+    const ta = new Date(a.reports[a.reports.length - 1]!.timestamp).getTime();
+    const tb = new Date(b.reports[b.reports.length - 1]!.timestamp).getTime();
+    return tb - ta;
+  });
+  const chosen = eligible[0]!;
+  const sorted = [...chosen.reports].sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+  );
+  const before = sorted[sorted.length - 2]!;
+  const after = sorted[sorted.length - 1]!;
   showComparison(before, after);
 }
 
