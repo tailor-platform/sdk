@@ -19,22 +19,20 @@ import type { GeneratorResult, TailorDBReadyContext } from "@/types/plugin-gener
 /** Unique identifier for the seed generator plugin. */
 export const SeedGeneratorID = "@tailor-platform/seed";
 
-type IdpUserSyncDirections = {
+type DisableIdpUserSyncDirections = {
   /**
-   * Emit a foreign key from `<userProfile>.<usernameField>` to `_User.name`.
-   * Rejects userProfile rows without a matching `_User` row.
-   * Defaults to `true`.
+   * Skip emitting the foreign key from `<userProfile>.<usernameField>` to
+   * `_User.name`. Defaults to `false` (FK emitted).
    *
-   * Set to `false` to seed pre-registration states such as
+   * Set to `true` to seed pre-registration states such as
    * invited-but-not-registered users.
    */
   userToIdp?: boolean;
   /**
-   * Emit a foreign key from `_User.name` to `<userProfile>.<usernameField>`.
-   * Rejects `_User` rows without a matching userProfile row.
-   * Defaults to `true`.
+   * Skip emitting the foreign key from `_User.name` to
+   * `<userProfile>.<usernameField>`. Defaults to `false` (FK emitted).
    *
-   * Set to `false` to seed `_User` rows that do not yet have a corresponding
+   * Set to `true` to seed `_User` rows that do not yet have a corresponding
    * userProfile row.
    */
   idpToUser?: boolean;
@@ -44,22 +42,22 @@ type SeedPluginOptions = {
   distPath: string;
   machineUserName?: string;
   /**
-   * Control whether seed validation enforces a one-to-one correspondence
-   * between userProfile rows and `_User` rows.
+   * Disable individual `_User <-> userProfile` foreign keys emitted into
+   * the generated seed schema. Both directions are emitted by default.
    *
-   * Both directions default to `true`, mirroring the historical behavior.
-   * Opt out of a single direction (for example to seed invited users that
-   * do not yet have an IdP credential) by setting that direction to `false`.
+   * Set a direction to `true` to relax it — for example to seed invited
+   * users that do not yet have an IdP credential.
    */
-  strictIdpUserSync?: IdpUserSyncDirections;
+  disableIdpUserSync?: DisableIdpUserSyncDirections;
 };
 
-function resolveIdpUserSync(
-  option: SeedPluginOptions["strictIdpUserSync"],
-): Required<IdpUserSyncDirections> {
+function resolveIdpUserSyncFKs(option: SeedPluginOptions["disableIdpUserSync"]): {
+  userToIdp: boolean;
+  idpToUser: boolean;
+} {
   return {
-    userToIdp: option?.userToIdp ?? true,
-    idpToUser: option?.idpToUser ?? true,
+    userToIdp: !(option?.userToIdp ?? false),
+    idpToUser: !(option?.idpToUser ?? false),
   };
 }
 
@@ -774,7 +772,7 @@ ${namespaceSelfRefEntries}
  * @param options - Plugin options
  * @param options.distPath - Output directory path for generated seed files
  * @param options.machineUserName - Default machine user name for authentication
- * @param options.strictIdpUserSync - Control which `_User <-> userProfile` foreign keys are emitted. Both `userToIdp` and `idpToUser` default to `true`; set a direction to `false` to relax that side.
+ * @param options.disableIdpUserSync - Skip emitting individual `_User <-> userProfile` foreign keys. Both directions are emitted by default; set a direction to `true` to relax that side.
  * @returns Plugin instance with onTailorDBReady hook
  */
 export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPluginOptions> {
@@ -790,7 +788,7 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
       // Process IdP user early so we can add reverse FK to the user profile type
       const idpUser = ctx.auth ? (processIdpUser(ctx.auth) ?? null) : null;
       const hasIdpUser = idpUser !== null;
-      const idpUserSync = resolveIdpUserSync(ctx.pluginConfig.strictIdpUserSync);
+      const idpUserSyncFKs = resolveIdpUserSyncFKs(ctx.pluginConfig.disableIdpUserSync);
 
       for (const ns of ctx.tailordb) {
         const types: string[] = [];
@@ -802,8 +800,8 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
           const typeInfo = processSeedTypeInfo(type, ns.namespace);
           const linesDb = processLinesDb(type, source);
 
-          // Add reverse FK from userProfile type to _User (opt-out via strictIdpUserSync.userToIdp: false)
-          if (idpUserSync.userToIdp && idpUser && typeName === idpUser.schema.userTypeName) {
+          // Add reverse FK from userProfile type to _User (opt-out via disableIdpUserSync.userToIdp: true)
+          if (idpUserSyncFKs.userToIdp && idpUser && typeName === idpUser.schema.userTypeName) {
             linesDb.foreignKeys.push({
               column: idpUser.schema.usernameField,
               references: {
@@ -891,13 +889,13 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
           skipIfExists: true,
         });
 
-        // Generate schema file with foreign key (opt-out via strictIdpUserSync.idpToUser: false)
+        // Generate schema file with foreign key (opt-out via disableIdpUserSync.idpToUser: true)
         files.push({
           path: path.join(ctx.pluginConfig.distPath, "data", `${idpUser.name}.schema.ts`),
           content: generateIdpUserSchemaFile({
             usernameField: idpUser.schema.usernameField,
             userTypeName: idpUser.schema.userTypeName,
-            includeUserProfileFK: idpUserSync.idpToUser,
+            includeUserProfileFK: idpUserSyncFKs.idpToUser,
           }),
         });
       }
