@@ -294,7 +294,7 @@ When the deployed script cannot be downloaded or the function has been redeploye
     .object({
       ...workspaceArgs,
       ...pagedLogArgs,
-      executionId: arg(z.string().optional(), {
+      "execution-id": arg(z.string().optional(), {
         positional: true,
         description: "Execution ID (if provided, shows details with logs)",
       }),

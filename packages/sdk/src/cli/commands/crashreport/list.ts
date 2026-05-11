@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import { z } from "zod";
-import { parseCrashReportConfig } from "@/cli/crash-report/config";
-import { CRASH_LOG_EXTENSION } from "@/cli/crash-report/writer";
+import { parseCrashReportConfig } from "@/cli/crashreport/config";
+import { CRASH_LOG_EXTENSION } from "@/cli/crashreport/writer";
 import { type Order, paginationArgs } from "@/cli/shared/args";
 import { defineAppCommand } from "@/cli/shared/command";
 import { logger } from "@/cli/shared/logger";

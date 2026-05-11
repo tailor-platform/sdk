@@ -105,10 +105,10 @@ const files: Record<string, FileConfig> = {
     commands: ["staticwebsite"],
     render: defaultRender,
   },
-  "docs/cli/crash-report.md": {
+  "docs/cli/crashreport.md": {
     title: "Crash Report Commands",
     description: "Commands for managing crash reports.",
-    commands: ["crash-report"],
+    commands: ["crashreport"],
     render: defaultRender,
   },
   "docs/cli/setup.md": {

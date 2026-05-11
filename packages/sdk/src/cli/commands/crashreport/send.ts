@@ -1,12 +1,12 @@
 import * as fs from "node:fs";
 import { arg } from "politty";
 import { z } from "zod";
-import { sendCrashReport } from "@/cli/crash-report/sender";
-import { JSON_FOOTER_MARKER } from "@/cli/crash-report/writer";
+import { sendCrashReport } from "@/cli/crashreport/sender";
+import { JSON_FOOTER_MARKER } from "@/cli/crashreport/writer";
 import { userAgent } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { logger } from "@/cli/shared/logger";
-import type { CrashReport } from "@/cli/crash-report/report";
+import type { CrashReport } from "@/cli/crashreport/report";
 
 export const sendCommand = defineAppCommand({
   name: "send",
