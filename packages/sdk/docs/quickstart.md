@@ -16,7 +16,7 @@ The SDK requires Node.js 22 or later. Install Node.js via your package manager b
 
 Alternatively, you can use [Bun](https://bun.sh/) as the runtime.
 
-> **Note:** Bun has a known issue with HTTP/2 connections that may cause intermittent failures during `apply` or `generate` commands ([bun#14249](https://github.com/oven-sh/bun/issues/14249), [bun#26719](https://github.com/oven-sh/bun/issues/26719)). If you encounter a connection error, retry the command.
+> **Note:** Bun has a known issue with HTTP/2 connections that may cause intermittent failures during `deploy` or `generate` commands ([bun#14249](https://github.com/oven-sh/bun/issues/14249), [bun#26719](https://github.com/oven-sh/bun/issues/26719)). If you encounter a connection error, retry the command.
 
 ### Create an Example App
 
@@ -46,7 +46,7 @@ npx tailor-sdk workspace list
 
 ### Deploy Your App
 
-Run the apply command to deploy your project:
+Run the deploy command to deploy your project:
 
 ```bash
 cd example-app

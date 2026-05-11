@@ -8,9 +8,9 @@ if (!isNativeTypeScriptRuntime()) {
   register("tsx", import.meta.url, { data: {} });
 }
 
-export { apply } from "./commands/apply/apply";
-export type { ApplyOptions } from "./commands/apply/apply";
-export type { BundledScripts } from "./commands/apply/function-registry";
+export { deploy, deploy as apply } from "./commands/deploy/deploy";
+export type { DeployOptions, DeployOptions as ApplyOptions } from "./commands/deploy/deploy";
+export type { BundledScripts } from "./commands/deploy/function-registry";
 export { generate } from "./commands/generate/service";
 export type { GenerateOptions } from "./commands/generate/options";
 export { loadConfig, type LoadedConfig } from "./shared/config-loader";
