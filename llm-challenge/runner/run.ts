@@ -298,20 +298,32 @@ function setupWorkDir(problemDir: string, implDir?: string, useTmpDir?: boolean)
   return workDir;
 }
 
-function packSdkTarball(): string {
+type PackedSdkTarball = {
+  /** Path to the .tgz file `rewriteWorkspaceRefs` copies into each workDir. */
+  tarballPath: string;
+  /** Parent directory created via mkdtemp; callers must rm it when done. */
+  packDir: string;
+};
+
+function packSdkTarball(): PackedSdkTarball {
   const sdkDir = path.resolve(challengeRoot, "..", "packages", "sdk");
   const packDir = fs.mkdtempSync(path.join(os.tmpdir(), "sdk-pack-"));
-  // Use execFileSync (no shell) to avoid command injection via TMPDIR.
-  execFileSync("pnpm", ["pack", "--pack-destination", packDir], {
-    cwd: sdkDir,
-    stdio: "pipe",
-    timeout: 60_000,
-  });
-  const files = fs.readdirSync(packDir).filter((f) => f.endsWith(".tgz"));
-  if (files.length === 0) {
-    throw new Error("pnpm pack produced no tarball");
+  try {
+    // Use execFileSync (no shell) to avoid command injection via TMPDIR.
+    execFileSync("pnpm", ["pack", "--pack-destination", packDir], {
+      cwd: sdkDir,
+      stdio: "pipe",
+      timeout: 60_000,
+    });
+    const files = fs.readdirSync(packDir).filter((f) => f.endsWith(".tgz"));
+    if (files.length === 0) {
+      throw new Error("pnpm pack produced no tarball");
+    }
+    return { tarballPath: path.join(packDir, files[0]!), packDir };
+  } catch (err) {
+    fs.rmSync(packDir, { recursive: true, force: true });
+    throw err;
   }
-  return path.join(packDir, files[0]!);
 }
 
 function rewriteWorkspaceRefs(workDir: string, tarballPath?: string): void {
@@ -580,7 +592,7 @@ async function runProblem(
           workDir,
         });
       }
-      fs.rmSync(workDir, { recursive: true });
+      fs.rmSync(workDir, { recursive: true, force: true });
     }
 
     return {
@@ -1031,10 +1043,22 @@ async function main(): Promise<void> {
 
   // Pack SDK tarball once for all solve-mode problems (eliminates link: path leaks).
   // Skip when --rerun-infra: packing is deferred until rerun targets are confirmed.
+  // The mkdtemp parent must be removed before process exit; main() has many early
+  // returns and process.exit() paths, so register a process-level cleanup.
   let tarballPath: string | undefined;
+  let packDir: string | undefined;
+  const cleanupPackDir = (): void => {
+    if (packDir) {
+      fs.rmSync(packDir, { recursive: true, force: true });
+      packDir = undefined;
+    }
+  };
+  process.on("exit", cleanupPackDir);
   if (solve && !rerunInfra) {
     console.log("Packing SDK tarball...");
-    tarballPath = packSdkTarball();
+    const packed = packSdkTarball();
+    tarballPath = packed.tarballPath;
+    packDir = packed.packDir;
     console.log(`SDK tarball: ${tarballPath}`);
   }
 
@@ -1096,7 +1120,9 @@ async function main(): Promise<void> {
 
     // Pack SDK tarball for rerun (deferred until rerun targets are confirmed)
     console.log("Packing SDK tarball...");
-    tarballPath = packSdkTarball();
+    const packedRerun = packSdkTarball();
+    tarballPath = packedRerun.tarballPath;
+    packDir = packedRerun.packDir;
     console.log(`SDK tarball: ${tarballPath}`);
 
     console.log(
