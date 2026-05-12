@@ -254,14 +254,14 @@ function cleanupWorkArtifacts(problemDir: string): void {
       const normalizedTmpdir = fs.realpathSync(os.tmpdir());
       const rel = path.relative(normalizedTmpdir, target);
       if (rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel) && fs.existsSync(target)) {
-        fs.rmSync(target, { recursive: true });
+        fs.rmSync(target, { recursive: true, force: true });
       }
     } catch {
       // Broken symlink, just remove it
     }
-    fs.rmSync(workPath);
+    fs.rmSync(workPath, { force: true });
   } else {
-    fs.rmSync(workPath, { recursive: true });
+    fs.rmSync(workPath, { recursive: true, force: true });
   }
 }
 
@@ -872,7 +872,7 @@ function savePartialResults(
 function cleanPartialResults(runResultsDir: string): void {
   const partialPath = getPartialResultsPath(runResultsDir);
   if (fs.existsSync(partialPath)) {
-    fs.rmSync(partialPath);
+    fs.rmSync(partialPath, { force: true });
   }
 }
 
