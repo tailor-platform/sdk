@@ -1,13 +1,30 @@
 import { spawn } from "node:child_process";
 import { buildContainerRunArgs, ensureImage } from "./container";
 import { detectInfraFailure, infraFailurePatterns } from "./shared";
-import type { AuthCheckResult, SolveAdapter, SolveResult, SolveRunOptions } from "./types";
+import type {
+  AuthCheckResult,
+  SolveAdapter,
+  SolveResult,
+  SolveRunOptions,
+  SolveUsage,
+} from "./types";
+
+type ClaudeUsageJson = {
+  input_tokens?: number;
+  output_tokens?: number;
+  cache_read_input_tokens?: number;
+  cache_creation_input_tokens?: number;
+};
 
 type ClaudeCodeOutput = {
   result: string;
   is_error: boolean;
   total_cost_usd: number;
   duration_ms: number;
+  /** Claude Code's --output-format json reports per-turn token usage here. */
+  usage?: ClaudeUsageJson;
+  /** Number of agent turns (assistant invocations). */
+  num_turns?: number;
 };
 
 type ClaudeJsonParseResult = {
@@ -16,7 +33,30 @@ type ClaudeJsonParseResult = {
   result: string;
   costUsd: number;
   durationMs?: number;
+  usage?: SolveUsage;
 };
+
+function extractClaudeUsage(parsed: ClaudeCodeOutput): SolveUsage | undefined {
+  const raw = parsed.usage;
+  const numTurns = parsed.num_turns;
+  if (!raw && numTurns === undefined) {
+    return undefined;
+  }
+  const usage: SolveUsage = {};
+  if (typeof raw?.input_tokens === "number") {
+    usage.inputTokens = raw.input_tokens;
+  }
+  if (typeof raw?.output_tokens === "number") {
+    usage.outputTokens = raw.output_tokens;
+  }
+  if (typeof raw?.cache_read_input_tokens === "number") {
+    usage.cacheReadTokens = raw.cache_read_input_tokens;
+  }
+  if (typeof numTurns === "number") {
+    usage.numTurns = numTurns;
+  }
+  return Object.keys(usage).length > 0 ? usage : undefined;
+}
 
 type ClaudeAuthStatusInput = {
   code: number | null;
@@ -27,12 +67,14 @@ type ClaudeAuthStatusInput = {
 export function parseClaudeJsonOutput(output: string): ClaudeJsonParseResult {
   try {
     const parsed = JSON.parse(output) as ClaudeCodeOutput;
+    const usage = extractClaudeUsage(parsed);
     return {
       parsed: true,
       isError: parsed.is_error,
       result: parsed.result ?? output,
       costUsd: parsed.total_cost_usd ?? 0,
       durationMs: parsed.duration_ms,
+      ...(usage ? { usage } : {}),
     };
   } catch {
     return {
@@ -177,6 +219,7 @@ async function runClaude(options: SolveRunOptions): Promise<SolveResult> {
             stdout,
             stderr,
           },
+          ...(parsed.usage ? { usage: parsed.usage } : {}),
         });
       } else {
         resolve({

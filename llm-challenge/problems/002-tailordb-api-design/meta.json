@@ -3,6 +3,7 @@
   "name": "tailordb-api-design",
   "difficulty": "easy",
   "category": "api-design",
+  "split": "train",
   "contextProfiles": ["types-only", "docs-only", "tailor-sdk-skill", "full-package"],
   "scoring": {
     "generate": 10,

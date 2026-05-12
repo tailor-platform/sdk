@@ -3,6 +3,7 @@
   "name": "saas-subscription-platform",
   "difficulty": "hard",
   "category": "integration",
+  "split": "train",
   "contextProfiles": ["types-only", "docs-only", "tailor-sdk-skill", "full-package"],
   "scoring": {
     "generate": 30,

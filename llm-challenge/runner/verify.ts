@@ -5,6 +5,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import type { ProblemMeta } from "../shared/helpers";
 import { runApiCheck } from "./api-check";
+import type { OmissionDetail } from "./api-check";
 
 const execAsync = promisify(exec);
 
@@ -35,6 +36,12 @@ export type StageInput = {
   testsPassed?: number;
   testsTotal?: number;
   testDetails?: TestDetail[];
+  /**
+   * Per-file omissions detected by apiCheck's required-symbols pass. Populated
+   * only when `meta.apiCheck.requiredSymbols` is configured and at least one
+   * symbol is missing.
+   */
+  omissions?: OmissionDetail[];
 };
 
 async function runCommand(

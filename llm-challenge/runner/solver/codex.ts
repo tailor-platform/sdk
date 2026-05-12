@@ -1,7 +1,13 @@
 import { spawn } from "node:child_process";
 import { CONTAINER_WORK_DIR, buildContainerRunArgs, ensureImage } from "./container";
 import { detectInfraFailure } from "./shared";
-import type { AuthCheckResult, SolveAdapter, SolveResult, SolveRunOptions } from "./types";
+import type {
+  AuthCheckResult,
+  SolveAdapter,
+  SolveResult,
+  SolveRunOptions,
+  SolveUsage,
+} from "./types";
 
 type CodexJsonlEvent = {
   type?: unknown;
@@ -48,6 +54,14 @@ type CodexJsonlParseResult = {
   message: string;
   error?: string;
   usage?: CodexUsage;
+  /**
+   * Number of `turn.completed` events in the JSONL stream. Used as the
+   * Codex-side `numTurns` proxy when reporting SolveUsage, paralleling Claude
+   * Code's `num_turns` JSON field. Counts every completed turn — including
+   * intermediate ones whose usage figures are later overwritten — so a
+   * single-turn run reports `1`, multi-turn `>= 2`.
+   */
+  numTurns?: number;
 };
 
 type CodexRunStatusInput = {
@@ -62,6 +76,7 @@ type CodexRunStatus = {
   message: string;
   error?: string;
   usage?: CodexUsage;
+  numTurns?: number;
   infraFailure: boolean;
 };
 
@@ -97,6 +112,7 @@ export function parseCodexJsonlOutput(output: string): CodexJsonlParseResult {
   let sawTurnCompleted = false;
   let sawTurnFailed = false;
   let usage: CodexUsage | undefined;
+  let numTurns = 0;
 
   for (const line of lines) {
     const trimmed = line.trim();
@@ -143,6 +159,7 @@ export function parseCodexJsonlOutput(output: string): CodexJsonlParseResult {
       }
       case "turn.completed": {
         sawTurnCompleted = true;
+        numTurns += 1;
         if (parsed.usage && typeof parsed.usage === "object") {
           const usageRaw = parsed.usage as {
             input_tokens?: unknown;
@@ -167,6 +184,7 @@ export function parseCodexJsonlOutput(output: string): CodexJsonlParseResult {
     message: latestMessage,
     error: success ? undefined : latestError,
     usage,
+    ...(numTurns > 0 ? { numTurns } : {}),
   };
 }
 
@@ -198,6 +216,7 @@ export function interpretCodexRunStatus(input: CodexRunStatusInput): CodexRunSta
     message: parsed.message || output,
     error,
     usage: parsed.usage,
+    ...(parsed.numTurns !== undefined ? { numTurns: parsed.numTurns } : {}),
     infraFailure: success ? false : detectInfraFailure(errorSignal),
   };
 }
@@ -311,6 +330,22 @@ async function runCodex(options: SolveRunOptions): Promise<SolveResult> {
 
       const interpreted = interpretCodexRunStatus({ code, stdout, stderr, output });
       const estimatedCostUsd = estimateCodexUsageCostUsd(interpreted.usage);
+      // Codex's `cached_input_tokens` is its prompt-cache read counter, which
+      // aligns with Anthropic's `cache_read_input_tokens` semantics (tokens
+      // read from cache, not tokens written into cache). Codex does not
+      // surface a separate cache-creation counter, so the cross-adapter
+      // `cacheReadTokens` aggregate is read-only for both vendors.
+      let solveUsage: SolveUsage | undefined;
+      if (interpreted.usage) {
+        solveUsage = {
+          inputTokens: interpreted.usage.inputTokens,
+          outputTokens: interpreted.usage.outputTokens,
+          cacheReadTokens: interpreted.usage.cachedInputTokens,
+          ...(interpreted.numTurns !== undefined ? { numTurns: interpreted.numTurns } : {}),
+        };
+      } else if (interpreted.numTurns !== undefined) {
+        solveUsage = { numTurns: interpreted.numTurns };
+      }
 
       resolve({
         success: interpreted.success,
@@ -324,6 +359,7 @@ async function runCodex(options: SolveRunOptions): Promise<SolveResult> {
           stdout,
           stderr,
         },
+        ...(solveUsage ? { usage: solveUsage } : {}),
       });
     });
   });

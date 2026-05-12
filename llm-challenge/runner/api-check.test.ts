@@ -730,4 +730,177 @@ describe("runApiCheck", () => {
     expect(result.passed).toBe(false);
     expect(result.output).toContain("Must call db.type");
   });
+
+  it("passes requiredSymbols when every named symbol is referenced in the target file", () => {
+    const workDir = makeTempWorkDir();
+    fs.mkdirSync(path.join(workDir, "tailordb"), { recursive: true });
+    fs.writeFileSync(
+      path.join(workDir, "tailordb", "user.ts"),
+      [
+        'import { db, createResolver } from "@tailor-platform/sdk";',
+        "createResolver({ name: 'noop' });",
+        "export const user = db.type('User', { name: db.string() });",
+        "",
+      ].join("\n"),
+    );
+
+    const result = runApiCheck(
+      workDir,
+      makeMeta({
+        requiredSymbols: {
+          "tailordb/user.ts": ["createResolver", "db"],
+        },
+      }),
+    );
+
+    expect(result).toBeDefined();
+    if (!result) throw new Error("api check result should exist");
+    expect(result.passed).toBe(true);
+    expect(result.omissions).toBeUndefined();
+  });
+
+  it("fails requiredSymbols and surfaces a per-file omissions list when symbols are missing", () => {
+    const workDir = makeTempWorkDir();
+    fs.mkdirSync(path.join(workDir, "tailordb"), { recursive: true });
+    fs.writeFileSync(
+      path.join(workDir, "tailordb", "user.ts"),
+      [
+        'import { db } from "@tailor-platform/sdk";',
+        "export const user = db.type('User', { name: db.string() });",
+        "",
+      ].join("\n"),
+    );
+
+    const result = runApiCheck(
+      workDir,
+      makeMeta({
+        requiredSymbols: {
+          "tailordb/user.ts": ["createResolver", "createExecutor"],
+        },
+      }),
+    );
+
+    expect(result).toBeDefined();
+    if (!result) throw new Error("api check result should exist");
+    expect(result.passed).toBe(false);
+    expect(result.output).toContain('Missing required symbol "createResolver"');
+    expect(result.output).toContain('Missing required symbol "createExecutor"');
+    expect(result.omissions).toEqual([
+      { file: "tailordb/user.ts", missingSymbols: ["createResolver", "createExecutor"] },
+    ]);
+  });
+
+  it("does not credit a symbol that only appears in a comment or string literal", () => {
+    const workDir = makeTempWorkDir();
+    fs.mkdirSync(path.join(workDir, "tailordb"), { recursive: true });
+    fs.writeFileSync(
+      path.join(workDir, "tailordb", "user.ts"),
+      [
+        'import { db } from "@tailor-platform/sdk";',
+        "// Note: use createResolver when wiring custom logic",
+        'const note = "createResolver is required for custom GraphQL resolvers";',
+        "export const user = db.type('User', { name: db.string() });",
+        "void note;",
+        "",
+      ].join("\n"),
+    );
+
+    const result = runApiCheck(
+      workDir,
+      makeMeta({
+        requiredSymbols: {
+          "tailordb/user.ts": ["createResolver"],
+        },
+      }),
+    );
+
+    expect(result).toBeDefined();
+    if (!result) throw new Error("api check result should exist");
+    expect(result.passed).toBe(false);
+    expect(result.output).toContain('Missing required symbol "createResolver"');
+  });
+
+  it("does not credit an imported-but-unused symbol toward requiredSymbols", () => {
+    const workDir = makeTempWorkDir();
+    fs.mkdirSync(path.join(workDir, "tailordb"), { recursive: true });
+    fs.writeFileSync(
+      path.join(workDir, "tailordb", "user.ts"),
+      [
+        // createResolver is imported but never referenced in the body. An
+        // import alone should not satisfy a requiredSymbols check.
+        'import { db, createResolver } from "@tailor-platform/sdk";',
+        "export const user = db.type('User', { name: db.string() });",
+        "",
+      ].join("\n"),
+    );
+
+    const result = runApiCheck(
+      workDir,
+      makeMeta({
+        requiredSymbols: {
+          "tailordb/user.ts": ["createResolver"],
+        },
+      }),
+    );
+
+    expect(result).toBeDefined();
+    if (!result) throw new Error("api check result should exist");
+    expect(result.passed).toBe(false);
+    expect(result.output).toContain('Missing required symbol "createResolver"');
+  });
+
+  it("does not credit a symbol that only appears in an aliased import to requiredSymbols", () => {
+    const workDir = makeTempWorkDir();
+    fs.mkdirSync(path.join(workDir, "tailordb"), { recursive: true });
+    fs.writeFileSync(
+      path.join(workDir, "tailordb", "user.ts"),
+      [
+        // The exported name `createResolver` only appears as the property
+        // side of an aliased import. The body only uses the local alias `r`.
+        'import { db, createResolver as r } from "@tailor-platform/sdk";',
+        "r({ name: 'noop' });",
+        "export const user = db.type('User', { name: db.string() });",
+        "",
+      ].join("\n"),
+    );
+
+    const result = runApiCheck(
+      workDir,
+      makeMeta({
+        requiredSymbols: {
+          "tailordb/user.ts": ["createResolver"],
+        },
+      }),
+    );
+
+    expect(result).toBeDefined();
+    if (!result) throw new Error("api check result should exist");
+    expect(result.passed).toBe(false);
+    expect(result.output).toContain('Missing required symbol "createResolver"');
+  });
+
+  it("flags a requiredSymbols entry that points outside files.implement as misconfigured", () => {
+    const workDir = makeTempWorkDir();
+    fs.mkdirSync(path.join(workDir, "tailordb"), { recursive: true });
+    fs.writeFileSync(
+      path.join(workDir, "tailordb", "user.ts"),
+      ['import { db } from "@tailor-platform/sdk";', "export const user = db;"].join("\n"),
+    );
+
+    const result = runApiCheck(
+      workDir,
+      makeMeta({
+        requiredSymbols: {
+          "elsewhere/never-listed.ts": ["createResolver"],
+        },
+      }),
+    );
+
+    expect(result).toBeDefined();
+    if (!result) throw new Error("api check result should exist");
+    expect(result.passed).toBe(false);
+    expect(result.output).toContain(
+      'required-symbols entry references "elsewhere/never-listed.ts" which is not in files.implement',
+    );
+  });
 });

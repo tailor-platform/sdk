@@ -22,19 +22,45 @@ export type ApiCheckPattern = {
   searchScope?: "code" | "raw";
 };
 
+/**
+ * Per-file required identifiers. AST-precise check that complements the
+ * regex-based `requiredPatterns`: while a pattern matches a shape (e.g.
+ * `db.type(...).hooks(...)`), `requiredSymbols` asserts that a specific name
+ * appears in a specific file. Inspired by Anthropic's "what agents omit"
+ * principle in writing-tools-for-agents — surfaces missing symbols as a
+ * first-class signal rather than letting them hide behind a downstream
+ * typecheck or test failure.
+ *
+ * Keys are workDir-relative file paths from `files.implement`; values are
+ * identifier names that must appear as a reference (any Identifier AST node)
+ * in that file.
+ */
+export type RequiredSymbolsConfig = Record<string, string[]>;
+
 export type ApiCheckConfig = {
   checkUnknownSdkImports?: boolean;
   requiredSdkImports?: string[];
   forbiddenSdkImports?: string[];
   requiredPatterns?: ApiCheckPattern[];
   forbiddenPatterns?: ApiCheckPattern[];
+  requiredSymbols?: RequiredSymbolsConfig;
 };
+
+/**
+ * Held-out split for overfit detection. Adapted from Anthropic's
+ * "writing-tools-for-agents" methodology: optimize against `train`, verify
+ * against `holdout`. `regression` is for problems that already pass and exist
+ * to guard against regressions when API changes land. Defaults to `train` when
+ * omitted so the existing problem set keeps current semantics.
+ */
+export type ProblemSplit = "train" | "holdout" | "regression";
 
 export type ProblemMeta = {
   id: string;
   name: string;
   difficulty: "easy" | "medium" | "hard";
   category: string;
+  split?: ProblemSplit;
   contextProfiles?: ContextProfile[];
   scoring: {
     generate: number;
@@ -48,6 +74,10 @@ export type ProblemMeta = {
   };
   apiCheck?: ApiCheckConfig;
 };
+
+export function getProblemSplit(meta: ProblemMeta): ProblemSplit {
+  return meta.split ?? "train";
+}
 
 export function loadMeta(problemDir: string): ProblemMeta {
   const metaPath = path.join(problemDir, "meta.json");

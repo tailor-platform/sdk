@@ -1,13 +1,23 @@
 import fs from "node:fs";
 import path from "node:path";
 import ts from "typescript";
-import type { ApiCheckConfig, ApiCheckPattern, ProblemMeta } from "../shared/helpers";
+import type {
+  ApiCheckConfig,
+  ApiCheckPattern,
+  ProblemMeta,
+  RequiredSymbolsConfig,
+} from "../shared/helpers";
 import type { StageInput } from "./verify";
 
 type CheckResult = {
   name: string;
   passed: boolean;
   message: string;
+};
+
+export type OmissionDetail = {
+  file: string;
+  missingSymbols: string[];
 };
 
 type SdkImport = {
@@ -515,6 +525,85 @@ function checkPatterns(
   });
 }
 
+/**
+ * Walk all `Identifier` AST nodes in a file's body and return the set of names
+ * that appear as a reference. Used by `checkRequiredSymbols` to detect
+ * omissions with more precision than a regex match.
+ *
+ * Import and export declarations are skipped so a bare
+ * `import { createResolver as r } from "@tailor-platform/sdk"` does not
+ * satisfy a `requiredSymbols: ["createResolver"]` check unless the imported
+ * symbol is actually referenced in the body. This keeps omission detection
+ * aligned with Anthropic's "what agents omit" principle: importing a symbol
+ * without using it is itself an omission.
+ */
+function collectUsedIdentifiers(workDir: string, file: string): Set<string> {
+  const filePath = path.join(workDir, file);
+  const out = new Set<string>();
+  if (!fs.existsSync(filePath)) {
+    return out;
+  }
+  const source = sourceFileFor(filePath);
+  const visit = (node: ts.Node): void => {
+    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
+      // Import/export specifiers introduce Identifier nodes that do not
+      // represent body references; skip the whole subtree.
+      return;
+    }
+    if (ts.isIdentifier(node)) {
+      out.add(node.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return out;
+}
+
+function checkRequiredSymbols(
+  workDir: string,
+  required: RequiredSymbolsConfig | undefined,
+  implementFiles: string[],
+): { checks: CheckResult[]; omissions: OmissionDetail[] } {
+  const checks: CheckResult[] = [];
+  const omissions: OmissionDetail[] = [];
+  if (!required) {
+    return { checks, omissions };
+  }
+  const implementSet = new Set(implementFiles);
+  for (const [file, names] of Object.entries(required)) {
+    if (!implementSet.has(file)) {
+      // Required-symbol entries that point outside `files.implement` are a
+      // problem-authoring mistake; surface the misconfiguration as a check
+      // failure so it does not silently no-op.
+      checks.push({
+        name: `required-symbol-config:${file}`,
+        passed: false,
+        message: `required-symbols entry references "${file}" which is not in files.implement`,
+      });
+      continue;
+    }
+    const used = collectUsedIdentifiers(workDir, file);
+    const missing: string[] = [];
+    for (const name of names) {
+      const passed = used.has(name);
+      checks.push({
+        name: `required-symbol:${file}:${name}`,
+        passed,
+        message: passed
+          ? `Symbol "${name}" referenced in ${file}`
+          : `Missing required symbol "${name}" in ${file}`,
+      });
+      if (!passed) {
+        missing.push(name);
+      }
+    }
+    if (missing.length > 0) {
+      omissions.push({ file, missingSymbols: missing });
+    }
+  }
+  return { checks, omissions };
+}
+
 export function runApiCheck(
   workDir: string,
   meta: ProblemMeta,
@@ -542,6 +631,11 @@ export function runApiCheck(
   // still evaluate the collected named imports plus `<namespaceAlias>.<symbol>` usage
   // so a submission cannot bypass scoring by routing forbidden APIs through a
   // namespace alias. Unknown checks only see explicit named imports.
+  const symbolCheckResult = checkRequiredSymbols(
+    workDir,
+    meta.apiCheck.requiredSymbols,
+    meta.files.implement,
+  );
   const checks = [
     ...checkUnknownSdkImports(imports, publicExports, meta.apiCheck),
     ...checkRequiredSdkImports(importedSymbols, meta.apiCheck, hasNamespaceImport),
@@ -562,15 +656,20 @@ export function runApiCheck(
       fileAliases,
       namespaceAliasesByFile,
     ),
+    ...symbolCheckResult.checks,
   ];
 
   const failed = checks.filter((check) => !check.passed);
   const messageSource = failed.length === 0 ? checks : failed;
-  return {
+  const result: StageInput = {
     stage: "apiCheck",
     passed: failed.length === 0,
     output: messageSource.map((check) => check.message).join("\n"),
     testsPassed: checks.length - failed.length,
     testsTotal: checks.length,
   };
+  if (symbolCheckResult.omissions.length > 0) {
+    result.omissions = symbolCheckResult.omissions;
+  }
+  return result;
 }

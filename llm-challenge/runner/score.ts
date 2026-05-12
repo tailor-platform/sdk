@@ -1,5 +1,8 @@
 import { problemKey } from "../shared/helpers";
-import type { ChallengeStage, ProblemMeta } from "../shared/helpers";
+import type { ChallengeStage, ProblemMeta, ProblemSplit } from "../shared/helpers";
+import { classifyAffordance, getRedesignSuggestion } from "./affordance";
+import type { FailureAffordance } from "./affordance";
+import type { OmissionDetail } from "./api-check";
 import type { SolveResult } from "./solve";
 import type { TestDetail, StageInput } from "./verify";
 
@@ -22,9 +25,20 @@ export type StageResult = {
   maxScore: number;
   durationMs?: number;
   category?: FailureCategory;
+  /**
+   * Anthropic-style affordance label: what kind of SDK redesign would most
+   * likely prevent this failure. Orthogonal to `category` (the surface).
+   */
+  affordance?: FailureAffordance;
   testsPassed?: number;
   testsTotal?: number;
   testDetails?: TestDetail[];
+  /**
+   * Per-file omissions detected by the apiCheck stage's required-symbols pass.
+   * Surfaces "what the agent forgot to do" as a first-class signal so analytics
+   * can correlate failures with specific missing identifiers.
+   */
+  omissions?: OmissionDetail[];
 };
 
 export type ScaffoldChange = {
@@ -43,6 +57,13 @@ export type ProblemResult = {
   problemName: string;
   difficulty: string;
   category: string;
+  /**
+   * Held-out split label inherited from the problem's meta.json. Optional in
+   * the type for backward compatibility with reports written before splits
+   * existed; new results always populate it. Analytics treats a missing split
+   * as `"train"`.
+   */
+  split?: ProblemSplit;
   contextProfile?: string;
   stages: StageResult[];
   totalScore: number;
@@ -64,15 +85,50 @@ type FailurePattern = {
   pattern: string;
   count: number;
   affectedProblems: string[];
+  /** Primary remediation message. For non-`docs_only` affordances this echoes `apiChange`. */
   suggestedDocFix: string;
+  affordance?: FailureAffordance;
+  apiChange?: string;
+  docFallback?: string;
+  anthropicAnalog?: string;
+};
+
+type SplitAggregate = {
+  totalScore: number;
+  maxScore: number;
+  problemCount: number;
+  percentage: number;
 };
 
 type Analytics = {
   failureDistribution: Partial<Record<FailureCategory, number>>;
+  affordanceDistribution: Partial<Record<FailureAffordance, number>>;
   categorySuccessRates: Record<string, SuccessRate>;
   difficultySuccessRates: Record<string, SuccessRate>;
   stagePassRates: Record<string, SuccessRate>;
+  splitAggregates: Partial<Record<ProblemSplit, SplitAggregate>>;
+  /**
+   * Anthropic-style overfit warning: positive when train score outpaces holdout
+   * score by more than a threshold (10 percentage points). Negative or absent
+   * when there is no signal (e.g. one split missing). Computed only when both
+   * `train` and `holdout` splits have at least one valid problem.
+   */
+  overfitGap?: number;
   commonFailurePatterns: FailurePattern[];
+};
+
+/**
+ * Aggregate token usage across every solve attempt in the run. All fields are
+ * optional: usage is best-effort and may be missing for adapters or older
+ * reports that did not record it.
+ */
+export type UsageSummary = {
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadTokens?: number;
+  numTurns?: number;
+  /** Total tokens (input + output + cache reads) divided by total score. Tokens-per-point. */
+  tokensPerPoint?: number;
 };
 
 export type ChallengeReport = {
@@ -93,60 +149,9 @@ export type ChallengeReport = {
   validPercentage: number;
   totalDurationMs: number;
   analytics: Analytics;
+  /** Run-level token usage summary. Undefined when no adapter reported usage. */
+  usageSummary?: UsageSummary;
 };
-
-const failureDocSuggestions: Record<string, Record<FailureCategory, string>> = {
-  generate: {
-    missing_file: "Add file scaffolding examples to getting-started guide",
-    import_error: "Clarify SDK import paths in CLAUDE.md and package docs",
-    type_error: "Add type annotation examples for SDK configuration objects",
-    generate_error: "Improve code generation error messages with fix suggestions",
-    logic_error: "Add more configuration pattern examples",
-    api_misuse: "Improve SDK API validation messages with expected format hints",
-    api_design: "Make SDK entrypoints and public exports easier to discover from types",
-    infra_failure: "Infrastructure failure - not an SDK issue",
-    runner_error: "Runner error - investigate runner bug or problem setup",
-  },
-  apiCheck: {
-    missing_file: "Add file structure documentation",
-    import_error: "Document SDK import paths and public entrypoints",
-    type_error: "Add type-level guidance for SDK entrypoints",
-    generate_error: "Runner error - apiCheck should not classify generate errors",
-    logic_error: "Add examples for the expected API usage shape",
-    api_misuse: "Improve SDK API usage examples",
-    api_design: "Make SDK entrypoints and public exports easier to discover from types",
-    infra_failure: "Infrastructure failure - not an SDK issue",
-    runner_error: "Runner error - investigate runner bug or problem setup",
-  },
-  typecheck: {
-    missing_file: "Add file creation checklist to problem scaffold",
-    import_error: "Document all SDK export paths and re-exports",
-    type_error: "Add JSDoc with @example to SDK types (especially generics)",
-    generate_error: "Ensure generated types include all required fields",
-    logic_error: "Add type usage patterns for complex SDK APIs",
-    api_misuse: "Add type-level validation with better error messages",
-    api_design: "Make SDK types guide users toward the correct API shape",
-    infra_failure: "Infrastructure failure - not an SDK issue",
-    runner_error: "Runner error - investigate runner bug or problem setup",
-  },
-  tests: {
-    missing_file: "Add file structure documentation",
-    import_error: "Document module resolution for generated files",
-    type_error: "Add runtime type checking examples",
-    generate_error: "Improve generated code correctness",
-    logic_error: "Add more logic examples (resolver body, executor handler, workflow jobs)",
-    api_misuse: "Add API usage examples with edge cases and error handling",
-    api_design: "Make runtime object shapes more consistent with SDK examples",
-    infra_failure: "Infrastructure failure - not an SDK issue",
-    runner_error: "Runner error - investigate runner bug or problem setup",
-  },
-};
-
-function getSuggestedDocFix(stage: string, category: FailureCategory): string {
-  return (
-    failureDocSuggestions[stage]?.[category] ?? `Improve ${category} documentation for ${stage}`
-  );
-}
 
 function classifyFailure(stage: ChallengeStage, output: string): FailureCategory | undefined {
   // Skipped stages (due to earlier stage failure) should not be classified
@@ -183,6 +188,10 @@ export function calculateScore(meta: ProblemMeta, stages: StageInput[]): StageRe
   return stages.map((s) => {
     const maxScore = meta.scoring[s.stage] ?? 0;
     const category = s.passed ? undefined : classifyFailure(s.stage, s.output);
+    const failedTestNames = s.testDetails?.filter((t) => t.status === "failed").map((t) => t.name);
+    const affordance = s.passed
+      ? undefined
+      : classifyAffordance({ stage: s.stage, output: s.output, category, failedTestNames });
 
     // Partial scoring for stages with test counts (generate and tests stages)
     if (s.testsTotal != null && s.testsTotal > 0) {
@@ -196,7 +205,7 @@ export function calculateScore(meta: ProblemMeta, stages: StageInput[]): StageRe
               0,
               Math.min(Math.round((testsPassed / s.testsTotal) * maxScore), maxScore - 1),
             );
-      return { ...s, score, maxScore, category };
+      return { ...s, score, maxScore, category, affordance };
     }
 
     return {
@@ -204,6 +213,7 @@ export function calculateScore(meta: ProblemMeta, stages: StageInput[]): StageRe
       score: s.passed ? maxScore : 0,
       maxScore,
       category,
+      affordance,
     };
   });
 }
@@ -233,12 +243,19 @@ export function computeSuccessRates<T>(
 }
 
 function computeAnalytics(results: ProblemResult[]): Analytics {
-  // Failure distribution
+  // Failure / affordance distributions
   const failureDistribution: Partial<Record<FailureCategory, number>> = {};
+  const affordanceDistribution: Partial<Record<FailureAffordance, number>> = {};
   for (const r of results) {
     for (const s of r.stages) {
-      if (!s.passed && s.category) {
+      if (s.passed) {
+        continue;
+      }
+      if (s.category) {
         failureDistribution[s.category] = (failureDistribution[s.category] ?? 0) + 1;
+      }
+      if (s.affordance) {
+        affordanceDistribution[s.affordance] = (affordanceDistribution[s.affordance] ?? 0) + 1;
       }
     }
   }
@@ -262,39 +279,102 @@ function computeAnalytics(results: ProblemResult[]): Analytics {
     (s) => s.passed,
   );
 
-  // Common failure patterns: same FailureCategory+stage appears 2+ times in same problem category
-  const patternCounts: Record<string, { count: number; problems: string[]; stage: string }> = {};
+  // Common failure patterns are now keyed on **affordance** (or category when no
+  // affordance was inferred), so the report surfaces "the kind of API redesign
+  // that would help" rather than just "the kind of error that appeared".
+  type PatternEntry = {
+    count: number;
+    problems: string[];
+    stage: ChallengeStage;
+    category: FailureCategory;
+    affordance?: FailureAffordance;
+  };
+  const patternCounts: Record<string, PatternEntry> = {};
   for (const r of results) {
     for (const s of r.stages) {
-      if (!s.passed && s.category) {
-        const key = `${r.category}:${s.stage}:${s.category}`;
-        const entry = (patternCounts[key] ??= { count: 0, problems: [], stage: s.stage });
-        entry.count++;
-        const label = problemKey(r.problemId, r.problemName);
-        if (!entry.problems.includes(label)) {
-          entry.problems.push(label);
-        }
+      if (s.passed || !s.category) {
+        continue;
+      }
+      const affordancePart = s.affordance ?? "(unclassified)";
+      const key = `${r.category}:${s.stage}:${s.category}:${affordancePart}`;
+      const entry = (patternCounts[key] ??= {
+        count: 0,
+        problems: [],
+        stage: s.stage,
+        category: s.category,
+        ...(s.affordance ? { affordance: s.affordance } : {}),
+      });
+      entry.count++;
+      const label = problemKey(r.problemId, r.problemName);
+      if (!entry.problems.includes(label)) {
+        entry.problems.push(label);
       }
     }
   }
   const commonFailurePatterns: FailurePattern[] = [];
-  for (const [key, entry] of Object.entries(patternCounts)) {
-    if (entry.count >= 2) {
-      const [category, , failureCategory] = key.split(":") as [string, string, FailureCategory];
-      commonFailurePatterns.push({
-        pattern: `${failureCategory} in ${entry.stage} stage of ${category} problems`,
-        count: entry.count,
-        affectedProblems: entry.problems,
-        suggestedDocFix: getSuggestedDocFix(entry.stage, failureCategory),
-      });
+  for (const entry of Object.values(patternCounts)) {
+    if (entry.count < 2) {
+      continue;
     }
+    const redesign = entry.affordance ? getRedesignSuggestion(entry.affordance) : undefined;
+    const label = entry.affordance
+      ? `${entry.affordance} (${entry.category}) in ${entry.stage}`
+      : `${entry.category} in ${entry.stage}`;
+    commonFailurePatterns.push({
+      pattern: label,
+      count: entry.count,
+      affectedProblems: entry.problems,
+      suggestedDocFix: redesign?.apiChange ?? `Document recovery for ${entry.category}`,
+      ...(redesign
+        ? {
+            affordance: redesign.affordance,
+            apiChange: redesign.apiChange,
+            docFallback: redesign.docFallback,
+            anthropicAnalog: redesign.anthropicAnalog,
+          }
+        : {}),
+    });
+  }
+  // Highest-impact patterns first.
+  commonFailurePatterns.sort((a, b) => b.count - a.count);
+
+  // Per-split aggregates and overfit gap (train pct - holdout pct).
+  // Historic reports may omit `split`; default to `"train"` so that legacy
+  // reports continue to aggregate without producing a spurious "undefined"
+  // bucket.
+  const splitAggregates: Partial<Record<ProblemSplit, SplitAggregate>> = {};
+  for (const r of results) {
+    const split: ProblemSplit = r.split ?? "train";
+    const agg = (splitAggregates[split] ??= {
+      totalScore: 0,
+      maxScore: 0,
+      problemCount: 0,
+      percentage: 0,
+    });
+    agg.totalScore += r.totalScore;
+    agg.maxScore += r.maxScore;
+    agg.problemCount += 1;
+  }
+  for (const agg of Object.values(splitAggregates)) {
+    if (agg) {
+      agg.percentage = agg.maxScore > 0 ? Math.round((agg.totalScore / agg.maxScore) * 100) : 0;
+    }
+  }
+  let overfitGap: number | undefined;
+  const trainAgg = splitAggregates.train;
+  const holdoutAgg = splitAggregates.holdout;
+  if (trainAgg && holdoutAgg && trainAgg.problemCount > 0 && holdoutAgg.problemCount > 0) {
+    overfitGap = trainAgg.percentage - holdoutAgg.percentage;
   }
 
   return {
     failureDistribution,
+    affordanceDistribution,
     categorySuccessRates,
     difficultySuccessRates,
     stagePassRates,
+    splitAggregates,
+    ...(overfitGap !== undefined ? { overfitGap } : {}),
     commonFailurePatterns,
   };
 }
@@ -309,6 +389,42 @@ function computeProblemCost(result: ProblemResult): number {
     cost += result.retrySolveResults.reduce((s, rs) => s + rs.costUsd, 0);
   }
   return cost;
+}
+
+function addUsage(acc: UsageSummary, usage: SolveResult["usage"]): void {
+  if (!usage) return;
+  if (usage.inputTokens !== undefined) {
+    acc.inputTokens = (acc.inputTokens ?? 0) + usage.inputTokens;
+  }
+  if (usage.outputTokens !== undefined) {
+    acc.outputTokens = (acc.outputTokens ?? 0) + usage.outputTokens;
+  }
+  if (usage.cacheReadTokens !== undefined) {
+    acc.cacheReadTokens = (acc.cacheReadTokens ?? 0) + usage.cacheReadTokens;
+  }
+  if (usage.numTurns !== undefined) {
+    acc.numTurns = (acc.numTurns ?? 0) + usage.numTurns;
+  }
+}
+
+function summarizeUsage(results: ProblemResult[], totalScore: number): UsageSummary | undefined {
+  const acc: UsageSummary = {};
+  for (const r of results) {
+    addUsage(acc, r.solveResult?.usage);
+    if (r.retrySolveResults) {
+      for (const retry of r.retrySolveResults) {
+        addUsage(acc, retry.usage);
+      }
+    }
+  }
+  if (Object.keys(acc).length === 0) {
+    return undefined;
+  }
+  const totalTokens = (acc.inputTokens ?? 0) + (acc.outputTokens ?? 0) + (acc.cacheReadTokens ?? 0);
+  if (totalTokens > 0 && totalScore > 0) {
+    acc.tokensPerPoint = Math.round(totalTokens / totalScore);
+  }
+  return acc;
 }
 
 /**
@@ -355,6 +471,7 @@ export function createReport(
     metadata?.elapsedMs ?? results.reduce((sum, r) => sum + (r.totalDurationMs ?? 0), 0);
 
   const analytics = computeAnalytics(validResults);
+  const usageSummary = summarizeUsage(validResults, validScore);
 
   return {
     timestamp: new Date().toISOString(),
@@ -374,6 +491,7 @@ export function createReport(
     validPercentage,
     totalDurationMs,
     analytics,
+    ...(usageSummary ? { usageSummary } : {}),
   };
 }
 
@@ -434,12 +552,18 @@ export function formatReportTable(report: ChallengeReport): string {
           stageStatus = "PARTIAL";
         }
         const categoryLabel = s.category ? ` [${s.category}]` : "";
+        const affordanceLabel = s.affordance ? ` <${s.affordance}>` : "";
         const testCountLabel =
           s.testsTotal != null ? ` (${s.testsPassed ?? 0}/${s.testsTotal} tests)` : "";
         const durationLabel = s.durationMs != null ? ` ${(s.durationMs / 1000).toFixed(1)}s` : "";
         lines.push(
-          `${stageName}${"".padEnd(12)}${stageScore}${stageStatus}${categoryLabel}${testCountLabel}${durationLabel}`,
+          `${stageName}${"".padEnd(12)}${stageScore}${stageStatus}${categoryLabel}${affordanceLabel}${testCountLabel}${durationLabel}`,
         );
+        if (s.omissions && s.omissions.length > 0) {
+          for (const omission of s.omissions) {
+            lines.push(`      omitted in ${omission.file}: ${omission.missingSymbols.join(", ")}`);
+          }
+        }
       }
     }
   }
@@ -471,6 +595,22 @@ export function formatReportTable(report: ChallengeReport): string {
     lines.push(
       `Cost efficiency: ${report.scorePerDollar.toFixed(1)} pts/$  |  $${report.avgCostPerPoint?.toFixed(4)}/pt`,
     );
+  }
+
+  // Token usage (Anthropic-style context-bloat sensor).
+  if (report.usageSummary) {
+    const u = report.usageSummary;
+    const parts: string[] = [];
+    if (u.inputTokens !== undefined) parts.push(`input=${u.inputTokens.toLocaleString()}`);
+    if (u.outputTokens !== undefined) parts.push(`output=${u.outputTokens.toLocaleString()}`);
+    if (u.cacheReadTokens !== undefined)
+      parts.push(`cacheRead=${u.cacheReadTokens.toLocaleString()}`);
+    if (u.numTurns !== undefined) parts.push(`turns=${u.numTurns}`);
+    if (u.tokensPerPoint !== undefined)
+      parts.push(`tokens/pt=${u.tokensPerPoint.toLocaleString()}`);
+    if (parts.length > 0) {
+      lines.push(`Token usage:    ${parts.join("  |  ")}`);
+    }
   }
 
   // Total duration
@@ -532,12 +672,57 @@ export function formatReportTable(report: ChallengeReport): string {
   appendRateSection("Difficulty Success Rates:", analytics.difficultySuccessRates);
   appendRateSection("Stage Pass Rates:", analytics.stagePassRates);
 
-  // Common failure patterns
+  // Affordance distribution: which kinds of SDK redesign would most likely help.
+  const affordanceEntries = Object.entries(analytics.affordanceDistribution);
+  if (affordanceEntries.length > 0) {
+    lines.push("");
+    lines.push("Affordance Distribution (kind of SDK redesign that would help):");
+    const sortedAffordances = affordanceEntries.sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0));
+    for (const [affordance, count] of sortedAffordances) {
+      lines.push(`  ${affordance.padEnd(28)} ${count}`);
+    }
+  }
+
+  // Per-split aggregates and Anthropic-style overfit gap warning.
+  const splitEntries = Object.entries(analytics.splitAggregates);
+  if (splitEntries.length > 0) {
+    lines.push("");
+    lines.push("Per-Split Scores:");
+    const splitOrder: ProblemSplit[] = ["train", "holdout", "regression"];
+    const ordered = splitEntries.sort(
+      ([a], [b]) => splitOrder.indexOf(a as ProblemSplit) - splitOrder.indexOf(b as ProblemSplit),
+    );
+    for (const [split, agg] of ordered) {
+      if (!agg) continue;
+      lines.push(
+        `  ${split.padEnd(12)} ${agg.totalScore}/${agg.maxScore} (${agg.percentage}%) over ${agg.problemCount} problem(s)`,
+      );
+    }
+    if (analytics.overfitGap !== undefined) {
+      const sign = analytics.overfitGap > 0 ? "+" : "";
+      const warning = analytics.overfitGap > 10 ? " (WARNING: possible overfit to train)" : "";
+      lines.push(`  overfit gap   train - holdout = ${sign}${analytics.overfitGap}%${warning}`);
+    }
+  }
+
+  // Common failure patterns rendered with their API-redesign suggestion.
   if (analytics.commonFailurePatterns.length > 0) {
     lines.push("");
-    lines.push("Common Failure Patterns:");
+    lines.push("Suggested API Redesigns (from repeated failure patterns):");
     for (const p of analytics.commonFailurePatterns) {
-      lines.push(`  ${p.pattern} (${p.count}x) -> ${p.suggestedDocFix}`);
+      lines.push(`  ${p.pattern} (${p.count}x)`);
+      if (p.apiChange) {
+        lines.push(`    API:   ${p.apiChange}`);
+      }
+      if (p.docFallback) {
+        lines.push(`    Docs:  ${p.docFallback}`);
+      }
+      if (p.anthropicAnalog && p.anthropicAnalog !== "—") {
+        lines.push(`    Cf.:   ${p.anthropicAnalog}`);
+      }
+      if (!p.apiChange) {
+        lines.push(`    -> ${p.suggestedDocFix}`);
+      }
     }
   }
 

@@ -331,6 +331,70 @@ function showComparison(before: ChallengeReport, after: ChallengeReport): void {
     }
   }
 
+  // Affordance distribution changes — which redesign categories shifted.
+  const bAff = before.analytics?.affordanceDistribution ?? {};
+  const aAff = after.analytics?.affordanceDistribution ?? {};
+  const allAffordances = [...new Set([...Object.keys(bAff), ...Object.keys(aAff)])].sort();
+  if (allAffordances.length > 0) {
+    console.log("Affordance Distribution:");
+    for (const aff of allAffordances) {
+      const bCount = bAff[aff as keyof typeof bAff] ?? 0;
+      const aCount = aAff[aff as keyof typeof aAff] ?? 0;
+      const delta = aCount - bCount;
+      console.log(`  ${aff}: ${bCount} -> ${aCount} (${formatDelta(delta)})`);
+    }
+    console.log("");
+  }
+
+  // Token usage delta. Anthropic uses token efficiency as a context-bloat
+  // signal: if accuracy improves but tokens-per-point also rises, the agent is
+  // brute-forcing rather than getting better at the API.
+  const bUsage = before.usageSummary;
+  const aUsage = after.usageSummary;
+  if (bUsage || aUsage) {
+    console.log("Token Usage:");
+    const showField = (label: string, before?: number, after?: number): void => {
+      if (before === undefined && after === undefined) return;
+      const bLabel = before !== undefined ? before.toLocaleString() : "N/A";
+      const aLabel = after !== undefined ? after.toLocaleString() : "N/A";
+      const delta =
+        before !== undefined && after !== undefined ? ` (${formatDelta(after - before)})` : "";
+      console.log(`  ${label}: ${bLabel} -> ${aLabel}${delta}`);
+    };
+    showField("input", bUsage?.inputTokens, aUsage?.inputTokens);
+    showField("output", bUsage?.outputTokens, aUsage?.outputTokens);
+    showField("cache reads", bUsage?.cacheReadTokens, aUsage?.cacheReadTokens);
+    showField("turns", bUsage?.numTurns, aUsage?.numTurns);
+    showField("tokens/pt", bUsage?.tokensPerPoint, aUsage?.tokensPerPoint);
+    console.log("");
+  }
+
+  // Per-split percentage comparison. Surfaces the overfit gap shift directly:
+  // if train improves while holdout stagnates, the optimization loop is likely
+  // gaming the train problems.
+  const bSplit = before.analytics?.splitAggregates ?? {};
+  const aSplit = after.analytics?.splitAggregates ?? {};
+  const allSplits = [...new Set([...Object.keys(bSplit), ...Object.keys(aSplit)])].sort();
+  if (allSplits.length > 0) {
+    console.log("Per-Split Percentages:");
+    for (const split of allSplits) {
+      const bAgg = bSplit[split as keyof typeof bSplit];
+      const aAgg = aSplit[split as keyof typeof aSplit];
+      const bPct = bAgg ? `${bAgg.percentage}%` : "N/A";
+      const aPct = aAgg ? `${aAgg.percentage}%` : "N/A";
+      const delta = bAgg && aAgg ? ` (${formatDelta(aAgg.percentage - bAgg.percentage, "%")})` : "";
+      console.log(`  ${split}: ${bPct} -> ${aPct}${delta}`);
+    }
+    const bGap = before.analytics?.overfitGap;
+    const aGap = after.analytics?.overfitGap;
+    if (bGap !== undefined || aGap !== undefined) {
+      const bLabel = bGap !== undefined ? `${formatDelta(bGap, "%")}` : "N/A";
+      const aLabel = aGap !== undefined ? `${formatDelta(aGap, "%")}` : "N/A";
+      console.log(`  overfit gap (train - holdout): ${bLabel} -> ${aLabel}`);
+    }
+    console.log("");
+  }
+
   console.log("=".repeat(width));
 }
 

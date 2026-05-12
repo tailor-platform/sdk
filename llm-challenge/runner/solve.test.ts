@@ -20,6 +20,52 @@ describe("parseClaudeJsonOutput", () => {
     });
   });
 
+  it("extracts usage when Claude JSON output includes per-turn token stats", () => {
+    const output = JSON.stringify({
+      result: "done",
+      is_error: false,
+      total_cost_usd: 0.05,
+      duration_ms: 9000,
+      num_turns: 12,
+      usage: {
+        input_tokens: 1500,
+        output_tokens: 800,
+        cache_read_input_tokens: 20000,
+        cache_creation_input_tokens: 4000,
+      },
+    });
+
+    expect(parseClaudeJsonOutput(output).usage).toEqual({
+      inputTokens: 1500,
+      outputTokens: 800,
+      cacheReadTokens: 20000,
+      numTurns: 12,
+    });
+  });
+
+  it("omits usage when neither usage nor num_turns are present", () => {
+    const output = JSON.stringify({
+      result: "ok",
+      is_error: false,
+      total_cost_usd: 0,
+      duration_ms: 0,
+    });
+
+    expect(parseClaudeJsonOutput(output).usage).toBeUndefined();
+  });
+
+  it("captures numTurns even when the usage block is missing", () => {
+    const output = JSON.stringify({
+      result: "ok",
+      is_error: false,
+      total_cost_usd: 0,
+      duration_ms: 0,
+      num_turns: 4,
+    });
+
+    expect(parseClaudeJsonOutput(output).usage).toEqual({ numTurns: 4 });
+  });
+
   it("returns parsed=false for non-JSON output", () => {
     expect(parseClaudeJsonOutput("not-json")).toEqual({
       parsed: false,
@@ -48,7 +94,23 @@ describe("parseCodexJsonlOutput", () => {
         cachedInputTokens: 20,
         outputTokens: 30,
       },
+      numTurns: 1,
     });
+  });
+
+  it("counts turn.completed events across multi-turn Codex runs", () => {
+    const output = [
+      '{"type":"turn.started"}',
+      '{"type":"turn.completed","usage":{"input_tokens":10,"cached_input_tokens":0,"output_tokens":5}}',
+      '{"type":"turn.started"}',
+      '{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"final"}}',
+      '{"type":"turn.completed","usage":{"input_tokens":20,"cached_input_tokens":5,"output_tokens":7}}',
+    ].join("\n");
+
+    const parsed = parseCodexJsonlOutput(output);
+    expect(parsed.numTurns).toBe(2);
+    // The usage from the LAST turn wins; this is documented behavior.
+    expect(parsed.usage).toEqual({ inputTokens: 20, cachedInputTokens: 5, outputTokens: 7 });
   });
 
   it("marks output as failure when turn.failed is present", () => {

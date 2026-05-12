@@ -5,8 +5,10 @@ import path from "node:path";
 import { promisify } from "node:util";
 import {
   type ContextProfile,
+  type ProblemSplit,
   copyDir,
   formatDuration,
+  getProblemSplit,
   getSdkVersion,
   listProblems,
   loadMeta,
@@ -50,6 +52,36 @@ function isContextProfile(value: unknown): value is ContextProfile {
   return typeof value === "string" && (contextProfileValues as readonly string[]).includes(value);
 }
 
+const splitValues = ["train", "holdout", "regression"] as const satisfies readonly ProblemSplit[];
+
+function isProblemSplit(value: unknown): value is ProblemSplit {
+  return typeof value === "string" && (splitValues as readonly string[]).includes(value);
+}
+
+/**
+ * Parse a `--split` argument. Accepts a single split (`train`), a comma-list
+ * (`train,holdout`), or `all` (equivalent to no filter). Returns `undefined`
+ * when no filter is requested so downstream code keeps the existing behaviour.
+ */
+function parseSplitFilter(raw: string): Set<ProblemSplit> | undefined {
+  const trimmed = raw.trim();
+  if (trimmed === "" || trimmed === "all") {
+    return undefined;
+  }
+  const out = new Set<ProblemSplit>();
+  for (const segment of trimmed.split(",")) {
+    const s = segment.trim();
+    if (!isProblemSplit(s)) {
+      console.error(
+        `Error: --split must be a comma list of ${splitValues.map((v) => `"${v}"`).join(", ")} (or "all")`,
+      );
+      process.exit(1);
+    }
+    out.add(s);
+  }
+  return out;
+}
+
 function parseArgs(): {
   problem?: string;
   all: boolean;
@@ -68,6 +100,7 @@ function parseArgs(): {
   concurrency: number;
   contextProfile: ContextProfile;
   contextProfileExplicit: boolean;
+  splitFilter?: Set<ProblemSplit>;
 } {
   const args = process.argv.slice(2);
   let problem: string | undefined;
@@ -87,6 +120,7 @@ function parseArgs(): {
   let concurrency = os.availableParallelism();
   let contextProfile: ContextProfile = "full-package";
   let contextProfileExplicit = false;
+  let splitFilter: Set<ProblemSplit> | undefined;
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
@@ -158,6 +192,11 @@ function parseArgs(): {
         i++;
         break;
       }
+      case "--split": {
+        splitFilter = parseSplitFilter(requireArg(args, i, "--split"));
+        i++;
+        break;
+      }
     }
   }
 
@@ -193,6 +232,7 @@ function parseArgs(): {
     concurrency: Math.trunc(concurrency),
     contextProfile,
     contextProfileExplicit,
+    ...(splitFilter ? { splitFilter } : {}),
   };
 }
 
@@ -548,6 +588,7 @@ async function runProblem(
       problemName: meta.name,
       difficulty: meta.difficulty,
       category: meta.category,
+      split: getProblemSplit(meta),
       contextProfile: options.contextProfile,
       stages,
       totalScore: 0,
@@ -723,6 +764,7 @@ async function runProblem(
     problemName: meta.name,
     difficulty: meta.difficulty,
     category: meta.category,
+    split: getProblemSplit(meta),
     contextProfile: options.contextProfile,
     stages,
     totalScore,
@@ -934,6 +976,7 @@ async function main(): Promise<void> {
     concurrency,
     contextProfile: contextProfileArg,
     contextProfileExplicit,
+    splitFilter,
   } = parseArgs();
   let contextProfile = contextProfileArg;
 
@@ -997,6 +1040,16 @@ async function main(): Promise<void> {
 
   // --rerun-infra mode: extract infra failure problems from latest report
   if (rerunInfra) {
+    if (splitFilter) {
+      // The rerun set is constrained to the previous report's infra failures,
+      // not to the current problem list, so a split filter would lie about
+      // what is actually rerun. Refuse rather than apply the filter silently.
+      console.error(
+        "Error: --split is incompatible with --rerun-infra. Drop --split or run a fresh sweep with --split <set> --solve.",
+      );
+      process.exit(1);
+    }
+
     const latestReport = findLatestReport(resultsDir, { solveOnly: true });
     if (!latestReport) {
       console.error("No solve-mode report found. Run a full benchmark with --solve first.");
@@ -1082,12 +1135,29 @@ async function main(): Promise<void> {
       ),
     );
 
-    // Merge with existing results
+    // Merge with existing results. When a non-rerun `existing` entry comes
+    // from a report written before the held-out-split feature existed, its
+    // `split` is undefined. Re-derive it from the current problem meta so
+    // analytics (`splitAggregates`, `overfitGap`) does not silently route the
+    // legacy entry to `"train"` regardless of what the meta now declares.
     const mergedResults = latestReport.results.map((existing) => {
       const rerun = rerunResults.find(
         (r) => r.problemId === existing.problemId && r.problemName === existing.problemName,
       );
-      return rerun ?? existing;
+      if (rerun) {
+        return rerun;
+      }
+      if (existing.split !== undefined) {
+        return existing;
+      }
+      const problemDirName = problemKey(existing.problemId, existing.problemName);
+      const problemDir = path.join(challengeRoot, "problems", problemDirName);
+      try {
+        const meta = loadMeta(problemDir);
+        return { ...existing, split: getProblemSplit(meta) };
+      } catch {
+        return existing;
+      }
     });
 
     const sdkVersion = latestReport.sdkVersion;
@@ -1114,7 +1184,23 @@ async function main(): Promise<void> {
     return;
   }
 
-  const problems = all ? listProblems(challengeRoot) : [findProblem(problem!)];
+  let problems = all ? listProblems(challengeRoot) : [findProblem(problem!)];
+
+  // Apply --split filter when present. Filtering is opt-in: omitting --split
+  // keeps the previous behaviour where every problem in `problems/` runs.
+  if (splitFilter) {
+    const before = problems.length;
+    problems = problems.filter((p) => {
+      const meta = loadMeta(path.join(challengeRoot, "problems", p));
+      return splitFilter.has(getProblemSplit(meta));
+    });
+    const requested = [...splitFilter].sort().join(",");
+    console.log(`Split filter: ${requested} (${before} -> ${problems.length} problems)`);
+    if (problems.length === 0) {
+      console.error(`No problems match split filter: ${requested}`);
+      process.exit(1);
+    }
+  }
 
   if (all) {
     console.log(`Running ${problems.length} problem(s) (concurrency: ${concurrency})...`);
@@ -1249,6 +1335,7 @@ async function main(): Promise<void> {
             problemName: meta.name,
             difficulty: meta.difficulty,
             category: meta.category,
+            split: getProblemSplit(meta),
             contextProfile,
             stages,
             totalScore: 0,
