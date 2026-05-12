@@ -128,9 +128,6 @@ const pluginAssumption = /kyselyTypePlugin|kysely_type|definePlugins|getDB\(\)/i
 
 const awaitOmission = /Promise<.+>|expected.*await|missing.*await/i;
 
-const exactOptionalMarkers =
-  /exactOptional|not assignable to parameter|Object literal may only specify known properties|excess property/i;
-
 /**
  * Best-effort classifier mapping a failure to the **kind of SDK redesign** that
  * would most likely prevent it. The classifier is heuristic by design: it
@@ -181,16 +178,12 @@ export function classifyAffordance(ctx: AffordanceContext): FailureAffordance | 
 
   if (category === "type_error") {
     // Check too-loose first so an implicit-any error is not pre-empted by the
-    // broader excess-property heuristic.
+    // broader default. All other type errors map to `type_too_strict` because
+    // the SDK historically rejects more inputs than it accepts (e.g. exactOptional,
+    // excess properties). Revisit when new type-error subcategories diverge.
     if (/implicitly has |implicit any|Type 'any'|Type 'unknown'/i.test(output)) {
       return "type_too_loose";
     }
-    if (exactOptionalMarkers.test(output)) {
-      return "type_too_strict";
-    }
-    // Default for unmatched type errors: bias toward `type_too_strict` because
-    // the SDK historically rejects more inputs than it accepts. Revisit this
-    // default when new type-error subcategories are added.
     return "type_too_strict";
   }
 
