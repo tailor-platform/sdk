@@ -879,6 +879,43 @@ describe("runApiCheck", () => {
     expect(result.output).toContain('Missing required symbol "createResolver"');
   });
 
+  it("does not credit a local declaration or property key as a reference", () => {
+    const workDir = makeTempWorkDir();
+    fs.mkdirSync(path.join(workDir, "tailordb"), { recursive: true });
+    fs.writeFileSync(
+      path.join(workDir, "tailordb", "user.ts"),
+      [
+        'import { db } from "@tailor-platform/sdk";',
+        // None of these positions actually reference `createResolver`:
+        // - object literal property key
+        // - function declaration name
+        // - class declaration name
+        // - type alias name
+        "const flags = { createResolver: false };",
+        "function createResolverFactory() { return flags; }",
+        "class CreateResolverContainer { createResolver = 1; }",
+        "type createResolver = string;",
+        "createResolverFactory(); new CreateResolverContainer();",
+        "export const user = db.type('User', { name: db.string() });",
+        "",
+      ].join("\n"),
+    );
+
+    const result = runApiCheck(
+      workDir,
+      makeMeta({
+        requiredSymbols: {
+          "tailordb/user.ts": ["createResolver"],
+        },
+      }),
+    );
+
+    expect(result).toBeDefined();
+    if (!result) throw new Error("api check result should exist");
+    expect(result.passed).toBe(false);
+    expect(result.output).toContain('Missing required symbol "createResolver"');
+  });
+
   it("flags a requiredSymbols entry that points outside files.implement as misconfigured", () => {
     const workDir = makeTempWorkDir();
     fs.mkdirSync(path.join(workDir, "tailordb"), { recursive: true });

@@ -537,6 +537,49 @@ function checkPatterns(
  * aligned with Anthropic's "what agents omit" principle: importing a symbol
  * without using it is itself an omission.
  */
+/**
+ * Identifier positions whose `.name` slot binds a *new* symbol rather than
+ * referencing an existing one. We must skip these or the requiredSymbols
+ * check passes on incidental name collisions like `const createResolver = 1`
+ * or `{ createResolver: false }`.
+ *
+ * `ShorthandPropertyAssignment` is intentionally absent: in `{ foo }` the
+ * identifier reads the local `foo`, so it counts as a reference.
+ */
+function isDeclarationNamePosition(node: ts.Identifier): boolean {
+  const parent = node.parent;
+  if (!parent) return false;
+  if (
+    ts.isVariableDeclaration(parent) ||
+    ts.isParameter(parent) ||
+    ts.isBindingElement(parent) ||
+    ts.isPropertyAssignment(parent) ||
+    ts.isPropertyDeclaration(parent) ||
+    ts.isPropertySignature(parent) ||
+    ts.isMethodDeclaration(parent) ||
+    ts.isMethodSignature(parent) ||
+    ts.isGetAccessorDeclaration(parent) ||
+    ts.isSetAccessorDeclaration(parent) ||
+    ts.isFunctionDeclaration(parent) ||
+    ts.isFunctionExpression(parent) ||
+    ts.isClassDeclaration(parent) ||
+    ts.isClassExpression(parent) ||
+    ts.isInterfaceDeclaration(parent) ||
+    ts.isTypeAliasDeclaration(parent) ||
+    ts.isEnumDeclaration(parent) ||
+    ts.isEnumMember(parent) ||
+    ts.isModuleDeclaration(parent) ||
+    ts.isTypeParameterDeclaration(parent)
+  ) {
+    return parent.name === node;
+  }
+  if (ts.isLabeledStatement(parent)) {
+    // LabeledStatement uses `.label`, not `.name`; labels are declarations.
+    return parent.label === node;
+  }
+  return false;
+}
+
 function collectUsedIdentifiers(workDir: string, file: string): Set<string> {
   const filePath = path.join(workDir, file);
   const out = new Set<string>();
@@ -550,7 +593,7 @@ function collectUsedIdentifiers(workDir: string, file: string): Set<string> {
       // represent body references; skip the whole subtree.
       return;
     }
-    if (ts.isIdentifier(node)) {
+    if (ts.isIdentifier(node) && !isDeclarationNamePosition(node)) {
       out.add(node.text);
     }
     ts.forEachChild(node, visit);
