@@ -16,9 +16,14 @@ export type WorkDirContext = {
 /**
  * Create a work directory context for a problem test suite.
  * Returns the resolved workDir path and whether it has node_modules installed.
+ *
+ * Solve mode runs in a per-run tmpdir; the runner exports `LLM_CHALLENGE_WORK_DIR`
+ * so tests see the freshly-solved tree instead of a stale `problems/<id>/work`.
  */
 export function createWorkDirContext(testDirname: string): WorkDirContext {
-  const workDir = path.resolve(testDirname, "..", "work");
+  const override = process.env.LLM_CHALLENGE_WORK_DIR;
+  const workDir =
+    override && override.length > 0 ? override : path.resolve(testDirname, "..", "work");
   const workDirReady = fs.existsSync(path.join(workDir, "node_modules"));
   return { workDir, workDirReady };
 }

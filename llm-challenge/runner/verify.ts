@@ -47,6 +47,7 @@ export type StageInput = {
 async function runCommand(
   command: string,
   cwd: string,
+  env?: NodeJS.ProcessEnv,
 ): Promise<{ success: boolean; output: string; durationMs: number }> {
   const start = performance.now();
   try {
@@ -55,6 +56,7 @@ async function runCommand(
       encoding: "utf-8",
       timeout: 60_000,
       maxBuffer: 10 * 1024 * 1024,
+      ...(env !== undefined ? { env } : {}),
     });
     return { success: true, output: stdout, durationMs: Math.round(performance.now() - start) };
   } catch (err) {
@@ -259,10 +261,14 @@ export async function verifyProblem(
   };
 
   // Stage 3: tests (run even if typecheck failed for partial scoring)
+  // In solve mode workDir is a per-run tmpdir; export it so the test helper's
+  // createWorkDirContext() reads the freshly-solved tree instead of a stale
+  // problems/<id>/work left over from earlier runs.
   const testsDir = path.join(problemDir, "tests");
   const testResult = await runCommand(
     `npx vitest run --reporter=json --config "${path.join(challengeRoot, "vitest.config.ts")}" --root "${challengeRoot}" "${testsDir}"`,
     challengeRoot,
+    { ...process.env, LLM_CHALLENGE_WORK_DIR: workDir },
   );
 
   const testStage: StageInput = {
