@@ -44,6 +44,7 @@ tailor.d.ts
 .claude/*
 !.claude/rules/
 !.claude/skills/
+!.claude/IMPROVEMENTS.md
 .claude/skills/*
 !.claude/skills/llm-challenge/
 !.claude/skills/docs-check/

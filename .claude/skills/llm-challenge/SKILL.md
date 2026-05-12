@@ -64,9 +64,22 @@ Structure: `problems/<id>-<name>/` with `meta.json`, `problem.md`, `scaffold/`, 
 ## SDK Improvement Cycle
 
 1. `pnpm -C llm-challenge challenge:solve --retry 3` → analyze failures
-2. Improve SDK source (NOT problem descriptions)
-3. `pnpm -C packages/sdk build` → `pnpm -C llm-challenge challenge:verify-solution`
-4. Re-run benchmark to measure improvement
+2. Read the report's "Affordance Distribution" and "Suggested API Redesigns" sections; promote concrete proposals to `.claude/IMPROVEMENTS.md`
+3. Improve SDK source (NOT problem descriptions). Prefer the affordance's `apiChange` over the `docFallback` unless the change is too invasive
+4. `pnpm -C packages/sdk build` → `pnpm -C llm-challenge challenge:verify-solution`
+5. Re-run benchmark on the same `(agent, model, context-profile)` to measure improvement; `pnpm challenge:analyze` will diff failure / affordance distributions and token usage between the last two reports
+6. Once held-out problems exist, run `--split holdout` to verify the change did not overfit train. Report's `analytics.overfitGap > 10` warns of overfit
+
+## Anthropic-Style Affordances
+
+Failed stages carry a `category` (surface) and an `affordance` (remedy). The
+affordance vocabulary follows Anthropic's
+[Writing effective tools for AI agents](https://www.anthropic.com/engineering/writing-tools-for-agents):
+`consolidation_candidate`, `naming_bias`, `context_bloat`, `missing_namespace`,
+`param_confusion`, `missing_action_verb`, `type_too_loose`, `type_too_strict`,
+`redundant_call_pattern`, `implicit_assumption`, `error_message_opaque`,
+`docs_only`. See `runner/affordance.ts` for the per-affordance `apiChange` /
+`docFallback` / `anthropicAnalog` table that the report consumes.
 
 ## Parallel Runs
 

@@ -68,6 +68,7 @@ pnpm challenge --all --impl-dir ./path/to/outputs
 - `--retry <n>` — Number of retry attempts on failure (default: `3`, must be non-negative). On failure, error output is fed back to the AI for correction.
 - `--concurrency <n>` — Number of problems to run in parallel (default: CPU count, must be positive)
 - `--context-profile <types-only|docs-only|tailor-sdk-skill|full-package>` — SDK context available to solve agents (default: `full-package`). Use `types-only` as the API design baseline and compare with `tailor-sdk-skill` to measure skill/docs uplift.
+- `--split <train|holdout|regression|all>` — Filter problems by held-out split (comma-list accepted, e.g. `train,holdout`). Omit or pass `all` for the previous "run everything" behaviour. Use `train` while iterating on SDK improvements; verify with `holdout` to catch overfit.
 - `--clean` — Remove work directories after execution
 
 ## How Verification Works
@@ -112,6 +113,54 @@ When a stage fails, the output is automatically classified into a failure catego
 | `api_design`     | Static API usage check failed               |
 
 Skipped stages (due to earlier stage failure) are not classified.
+
+### Failure Affordances (Anthropic-style)
+
+Alongside the failure category, each failed stage carries an **affordance**
+label that names the kind of SDK redesign that would most likely prevent the
+failure. The vocabulary is adapted from Anthropic's
+[Writing effective tools for AI agents](https://www.anthropic.com/engineering/writing-tools-for-agents)
+and is orthogonal to the category surface.
+
+| Affordance                | What it suggests                                                                                           |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `consolidation_candidate` | Sibling APIs should be merged (e.g. `recordCreatedTrigger/Updated/Deleted` -> `recordTrigger({ events })`) |
+| `naming_bias`             | Rename to match the verb agents reach for (`list*` -> `search*` when filtered)                             |
+| `context_bloat`           | Add a `response_format` enum / shrink default response                                                     |
+| `missing_namespace`       | Disambiguate sibling APIs with a service prefix or parent object                                           |
+| `param_confusion`         | Tighten / disambiguate parameter names (`user` -> `user_id`)                                               |
+| `missing_action_verb`     | Add a workflow-shaped action API instead of forcing primitive chains                                       |
+| `type_too_loose`          | Replace `any` / `unknown` with discriminated unions                                                        |
+| `type_too_strict`         | Relax types that reject valid agent inputs                                                                 |
+| `redundant_call_pattern`  | Add idempotency / batching                                                                                 |
+| `implicit_assumption`     | Make preconditions (e.g. `kyselyTypePlugin`) compile-time required or fail-fast                            |
+| `error_message_opaque`    | Rewrite errors to name the next concrete action                                                            |
+| `docs_only`               | Pure documentation gap                                                                                     |
+
+Reports render the affordance distribution as well as a per-affordance
+"Suggested API Redesigns" section that quotes the recommended API change, a
+documentation fallback, and the Anthropic analog. See
+[`runner/affordance.ts`](runner/affordance.ts) for the canonical mapping.
+
+### Required Symbols (Per-File Omission Detection)
+
+Each problem's `apiCheck` config supports `requiredSymbols: { <file>: [<name>, ...] }`.
+The apiCheck stage parses the listed file with TypeScript and asserts each
+identifier appears as a reference (not just in a comment or string literal).
+This complements the regex-based `requiredPatterns` with AST-precise per-file
+detection — useful for surfacing **what the agent omitted**.
+
+When a required symbol is missing, the apiCheck stage's `output` includes the
+message and the stage result carries an `omissions: [{ file, missingSymbols }]`
+field that downstream analytics can consume.
+
+### Held-Out Splits
+
+Each problem's `meta.json` may declare `split: "train" | "holdout" | "regression"`
+(default `train`). The `--split` CLI filter selects only matching problems, and
+the report's `analytics.splitAggregates` plus `analytics.overfitGap` surface
+the train-vs-holdout gap. A gap larger than 10% warns of possible overfit to
+the train set.
 
 ### Retry Mode
 
@@ -169,10 +218,12 @@ pnpm challenge:analyze -- --baseline path/to/report.json --agent claude --contex
 Reports include analytics for identifying SDK improvement areas:
 
 - **Failure distribution** — Count of each failure category
+- **Affordance distribution** — Count of each Anthropic-style affordance (kind of SDK redesign)
+- **Suggested API redesigns** — Repeated failure patterns rendered with `apiChange` / `docFallback` / `anthropicAnalog`
 - **Category/difficulty/stage success rates** — Pass rates by grouping
-- **API surface/context profile success rates** — Pass rates by SDK API surface and context profile
-- **Common failure patterns** — Recurring failure category + stage combinations with suggested documentation fixes
-- **Retry analysis** — Which failure categories are self-correctable vs persistent
+- **Per-split aggregates** — Scores broken out by `train` / `holdout` / `regression`
+- **Overfit gap** — `trainPercentage - holdoutPercentage`; warning fires when > 10%
+- **Token usage summary** — Run-level `inputTokens` / `outputTokens` / `cacheReadTokens` / `numTurns` / `tokensPerPoint` (Anthropic-style context-bloat sensor; populated when the solver adapter reports usage)
 
 ## Problem Structure
 
