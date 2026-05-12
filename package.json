@@ -39,7 +39,7 @@
     "pkg-pr-new": "0.0.70",
     "publint": "0.3.18",
     "tsx": "4.21.0",
-    "turbo": "2.9.8",
+    "turbo": "2.9.10",
     "typescript": "5.9.3",
     "typescript-eslint": "8.59.1"
   },
