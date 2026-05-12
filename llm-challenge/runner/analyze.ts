@@ -361,8 +361,8 @@ function showComparison(before: ChallengeReport, after: ChallengeReport): void {
     const bGap = before.analytics?.overfitGap;
     const aGap = after.analytics?.overfitGap;
     if (bGap !== undefined || aGap !== undefined) {
-      const bLabel = bGap !== undefined ? `${formatDelta(bGap, "%")}` : "N/A";
-      const aLabel = aGap !== undefined ? `${formatDelta(aGap, "%")}` : "N/A";
+      const bLabel = bGap !== undefined ? formatDelta(bGap, "%") : "N/A";
+      const aLabel = aGap !== undefined ? formatDelta(aGap, "%") : "N/A";
       console.log(`  overfit gap (train - holdout): ${bLabel} -> ${aLabel}`);
     }
     console.log("");

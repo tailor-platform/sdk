@@ -22,8 +22,7 @@ export type WorkDirContext = {
  */
 export function createWorkDirContext(testDirname: string): WorkDirContext {
   const override = process.env.LLM_CHALLENGE_WORK_DIR;
-  const workDir =
-    override && override.length > 0 ? override : path.resolve(testDirname, "..", "work");
+  const workDir = override || path.resolve(testDirname, "..", "work");
   const workDirReady = fs.existsSync(path.join(workDir, "node_modules"));
   return { workDir, workDirReady };
 }
