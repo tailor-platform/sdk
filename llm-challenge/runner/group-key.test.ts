@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getGroupKey } from "./group-key";
+import { formatGroupKey, getGroupKey, groupKeyId } from "./group-key";
 import type { ChallengeReport } from "./score";
 
 function makeReport(overrides: Partial<ChallengeReport>): ChallengeReport {
@@ -89,5 +89,35 @@ describe("getGroupKey", () => {
       model: "default",
       contextProfile: "unknown",
     });
+  });
+
+  it("falls back to unknown when contextProfile is an empty string", () => {
+    // Reports occasionally serialize `contextProfile: ""` rather than omitting it;
+    // both should route to the sentinel so empty values do not create a distinct
+    // "" bucket in analyze --groups.
+    const report = makeReport({ model: "claude:opus", contextProfile: "" });
+    expect(getGroupKey(report).contextProfile).toBe("unknown");
+  });
+});
+
+describe("formatGroupKey", () => {
+  it("renders agent:model and context profile separated by a slash", () => {
+    expect(formatGroupKey({ agent: "claude", model: "opus", contextProfile: "types-only" })).toBe(
+      "claude:opus / types-only",
+    );
+  });
+});
+
+describe("groupKeyId", () => {
+  it("produces a pipe-joined identifier suitable for map keys", () => {
+    expect(groupKeyId({ agent: "codex", model: "default", contextProfile: "full-package" })).toBe(
+      "codex|default|full-package",
+    );
+  });
+
+  it("distinguishes two groups that share an agent but differ in context profile", () => {
+    const a = groupKeyId({ agent: "claude", model: "opus", contextProfile: "types-only" });
+    const b = groupKeyId({ agent: "claude", model: "opus", contextProfile: "docs-only" });
+    expect(a).not.toBe(b);
   });
 });
