@@ -49,7 +49,7 @@ pnpm challenge:solve [--agent claude] [--model sonnet] [--max-budget 5.00] [--co
 pnpm challenge:solve --agent codex [--model gpt-5-codex] [--context-profile types-only]
 
 # Solve with retry on failure
-pnpm challenge:solve --retry 2 [--agent claude|codex] [--model sonnet] [--max-budget 5.00]
+pnpm challenge:solve --retry 3 [--agent claude|codex] [--model sonnet] [--max-budget 5.00]
 
 # Run a single problem
 pnpm challenge --problem 001 --use-solution
