@@ -498,7 +498,11 @@ function main(): void {
   const filters: Filters = { agent, model, contextProfile };
 
   if (groups) {
-    const reports = loadReports();
+    const reports = loadReports(filters);
+    if (reports.length === 0) {
+      console.error(`No report groups match filters (${describeFilters(filters)}).`);
+      process.exit(1);
+    }
     showGroupsOverview(reports);
     return;
   }
