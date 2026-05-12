@@ -441,7 +441,9 @@ function showTrend(reports: ChallengeReport[], groupLabel: string): void {
   console.log("=".repeat(width));
 }
 
-function showGroupsOverview(reports: ChallengeReport[]): void {
+function groupReports(
+  reports: ChallengeReport[],
+): Map<string, { key: GroupKey; reports: ChallengeReport[] }> {
   const groups = new Map<string, { key: GroupKey; reports: ChallengeReport[] }>();
   for (const r of reports) {
     const key = getGroupKey(r);
@@ -453,6 +455,11 @@ function showGroupsOverview(reports: ChallengeReport[]): void {
       groups.set(id, { key, reports: [r] });
     }
   }
+  return groups;
+}
+
+function showGroupsOverview(reports: ChallengeReport[]): void {
+  const groups = groupReports(reports);
 
   const width = 80;
   console.log("=".repeat(width));
@@ -533,19 +540,7 @@ function main(): void {
 
   // Default: compare last 2 reports within a single group.
   // If filters narrow to one group, use that. Otherwise pick the most recently active group.
-  const groupsMap = new Map<string, { key: GroupKey; reports: ChallengeReport[] }>();
-  for (const r of filtered) {
-    const key = getGroupKey(r);
-    const id = groupKeyId(key);
-    const existing = groupsMap.get(id);
-    if (existing) {
-      existing.reports.push(r);
-    } else {
-      groupsMap.set(id, { key, reports: [r] });
-    }
-  }
-
-  const eligible = [...groupsMap.values()].filter((g) => g.reports.length >= 2);
+  const eligible = [...groupReports(filtered).values()].filter((g) => g.reports.length >= 2);
   if (eligible.length === 0) {
     console.error(
       `No (agent, model, context-profile) group has >= 2 reports matching filters (${describeFilters(filters)}).`,

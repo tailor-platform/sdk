@@ -194,11 +194,7 @@ export function classifyAffordance(ctx: AffordanceContext): FailureAffordance | 
     return "type_too_strict";
   }
 
-  if (category === "api_misuse") {
-    return "error_message_opaque";
-  }
-
-  if (category === "generate_error") {
+  if (category === "api_misuse" || category === "generate_error") {
     return "error_message_opaque";
   }
 
