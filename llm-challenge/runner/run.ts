@@ -1064,9 +1064,21 @@ async function main(): Promise<void> {
 
     // Without an explicit --context-profile, inherit the original report's profile
     // so the rerun keeps the same SDK context as the original benchmark.
+    // With an explicit profile that disagrees with the source report, the merged
+    // report would mix scores produced under two different SDK contexts under a
+    // single profile label; refuse rather than silently mislabel the rerun.
     if (!contextProfileExplicit && isContextProfile(latestReport.contextProfile)) {
       contextProfile = latestReport.contextProfile;
       console.log(`Using context profile from previous report: ${contextProfile}`);
+    } else if (
+      contextProfileExplicit &&
+      isContextProfile(latestReport.contextProfile) &&
+      latestReport.contextProfile !== contextProfile
+    ) {
+      console.error(
+        `Error: --context-profile=${contextProfile} disagrees with the latest solve report (${latestReport.contextProfile}). Drop --context-profile to inherit, or run a fresh sweep with --solve --context-profile ${contextProfile}.`,
+      );
+      process.exit(1);
     }
 
     // Honor explicit flags; otherwise reuse the model/agent from the latest report.

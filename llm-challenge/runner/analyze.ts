@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { problemKey, requireArg } from "../shared/helpers";
+import { formatGroupKey, getGroupKey, groupKeyId } from "./group-key";
+import type { GroupKey } from "./group-key";
 import { computeSuccessRates, isInfraFailure } from "./score";
 import type { ChallengeReport, FailureCategory, SuccessRate } from "./score";
 
@@ -55,35 +57,6 @@ function parseArgs(): ParsedArgs {
   }
 
   return { baseline, trend, groups, agent, model, contextProfile };
-}
-
-type GroupKey = {
-  agent: string;
-  model: string;
-  contextProfile: string;
-};
-
-function getGroupKey(report: ChallengeReport): GroupKey {
-  // model field is "agent:model" (e.g. "claude:opus"), null/undefined/"" for solution-verify.
-  // Composite labels like "claude:opus+codex:default" reduce to the primary segment.
-  const raw = report.model || "solution:verify";
-  const primary = raw.split("+")[0] ?? raw;
-  const colonIndex = primary.indexOf(":");
-  const agent = colonIndex === -1 ? primary : primary.slice(0, colonIndex);
-  const model = colonIndex === -1 ? "default" : primary.slice(colonIndex + 1);
-  return {
-    agent: agent || "unknown",
-    model: model || "default",
-    contextProfile: report.contextProfile || "unknown",
-  };
-}
-
-function formatGroupKey(key: GroupKey): string {
-  return `${key.agent}:${key.model} / ${key.contextProfile}`;
-}
-
-function groupKeyId(key: GroupKey): string {
-  return `${key.agent}|${key.model}|${key.contextProfile}`;
 }
 
 function matchesFilters(key: GroupKey, filters: Filters): boolean {
