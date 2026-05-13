@@ -108,12 +108,12 @@ Pass the `names` argument as a `const` tuple to narrow the result keys: `getSecr
 
 ### `workflow`
 
-| Function             | Description                                       |
-| -------------------- | ------------------------------------------------- |
-| `triggerWorkflow`    | Trigger a workflow and return its execution ID    |
-| `triggerJobFunction` | Synchronously trigger a job and return its result |
-| `wait`               | Suspend a job at a wait point                     |
-| `resolve`            | Resolve a wait point on a running execution       |
+| Function             | Description                                    |
+| -------------------- | ---------------------------------------------- |
+| `triggerWorkflow`    | Trigger a workflow and return its execution ID |
+| `triggerJobFunction` | Trigger a job and return its result            |
+| `wait`               | Suspend a job at a wait point                  |
+| `resolve`            | Resolve a wait point on a running execution    |
 
 ### `context`
 

@@ -36,9 +36,6 @@ export function triggerWorkflow(
 
 /**
  * Triggers a job function and returns its result.
- *
- * The TypeScript signature returns `any` to mirror the platform contract; the
- * underlying call is synchronous on the server but `Promise`-based in the API.
  * @param job_name - Job name as defined in the workflow
  * @param args - Arguments forwarded to the job
  * @returns The job's return value
