@@ -397,7 +397,7 @@ export const executionsCommand = defineAppCommand({
     .object({
       ...workspaceArgs,
       ...pagedLogArgs,
-      executionId: arg(z.string().optional(), {
+      "execution-id": arg(z.string().optional(), {
         positional: true,
         description: "Execution ID (if provided, shows details)",
       }),

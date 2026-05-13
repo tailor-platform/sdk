@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/sdk",
-  "version": "1.45.2",
+  "version": "1.46.0",
   "description": "Tailor Platform SDK - The SDK to work with Tailor Platform",
   "license": "MIT",
   "repository": {
@@ -73,6 +73,16 @@
       "types": "./dist/seed/index.d.mts",
       "import": "./dist/seed/index.mjs",
       "default": "./dist/seed/index.mjs"
+    },
+    "./vitest": {
+      "types": "./dist/vitest/index.d.mts",
+      "import": "./dist/vitest/index.mjs",
+      "default": "./dist/vitest/index.mjs"
+    },
+    "./vitest/environment": {
+      "types": "./dist/vitest/environment.d.mts",
+      "import": "./dist/vitest/environment.mjs",
+      "default": "./dist/vitest/environment.mjs"
     }
   },
   "scripts": {
@@ -106,11 +116,11 @@
     "@inquirer/prompts": "8.4.2",
     "@jridgewell/trace-mapping": "0.3.31",
     "@liam-hq/cli": "0.7.24",
-    "@napi-rs/keyring": "1.2.0",
+    "@napi-rs/keyring": "1.3.0",
     "@opentelemetry/api": "1.9.1",
-    "@opentelemetry/exporter-trace-otlp-proto": "0.215.0",
-    "@opentelemetry/resources": "2.7.0",
-    "@opentelemetry/sdk-trace-node": "2.7.0",
+    "@opentelemetry/exporter-trace-otlp-proto": "0.216.0",
+    "@opentelemetry/resources": "2.7.1",
+    "@opentelemetry/sdk-trace-node": "2.7.1",
     "@opentelemetry/semantic-conventions": "1.40.0",
     "@oxc-project/types": "0.127.0",
     "@standard-schema/spec": "1.1.0",
@@ -152,7 +162,7 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
-    "@opentelemetry/sdk-trace-base": "2.7.0",
+    "@opentelemetry/sdk-trace-base": "2.7.1",
     "@types/madge": "5.0.3",
     "@types/mime-types": "3.0.1",
     "@types/node": "24.12.2",
@@ -171,5 +181,21 @@
     "typescript-eslint": "8.59.1",
     "vitest": "4.1.5",
     "zinfer": "0.1.8"
+  },
+  "peerDependencies": {
+    "vite": "^6.0.0 || ^7.0.0 || ^8.0.0",
+    "vitest": ">=4"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    },
+    "vitest": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "bun": ">=1.2.0",
+    "node": ">=22"
   }
 }

@@ -1,0 +1,596 @@
+/**
+ * E2E tests for service deletion order
+ *
+ * These tests verify that subgraph services (TailorDB, Pipeline, Auth, IdP)
+ * can be deleted without errors. The issue (#570) was that services couldn't
+ * be deleted because the Application (gateway) was still referencing them.
+ *
+ * The fix ensures services are deleted AFTER the Application is deleted.
+ *
+ * Prerequisites:
+ * - Authentication via TAILOR_PLATFORM_TOKEN env var or `tailor-sdk login`
+ * - TAILOR_PLATFORM_ORGANIZATION_ID environment variable must be set
+ */
+
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
+import { describe, test, expect, beforeAll } from "vitest";
+import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
+import { loadAccessToken } from "../src/cli/shared/context";
+import { deploy } from "../src/cli/commands/deploy/deploy";
+import { trackWorkspace, trackTempDir } from "./globalSetup";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Generate unique test identifiers (include GITHUB_RUN_ID in CI to avoid cross-run cleanup conflicts)
+const ciRunId = process.env.GITHUB_RUN_ID ?? "";
+const testRunId = Date.now().toString(36);
+const testAppName = `e2e-test-${testRunId}`;
+const testWorkspaceName = `e2e-ws-${ciRunId ? `${ciRunId}-` : ""}${testRunId}`;
+
+// Shared service names used across tests
+const sharedTailordbName = `shared-db-${testRunId}`;
+
+describe("E2E: Service deletion order", () => {
+  let workspaceId: string;
+  let client: OperatorClient;
+  let tempDir: string;
+  let configCounter = 0;
+
+  beforeAll(async () => {
+    // Initialize client (supports both TAILOR_PLATFORM_TOKEN env var and platform config login)
+    const accessToken = await loadAccessToken({ useProfile: false });
+    client = await initOperatorClient(accessToken);
+
+    // Get available regions and use the first one
+    const regionsResp = await client.listAvailableWorkspaceRegions({});
+    const region = regionsResp.regions[0];
+    if (!region) {
+      throw new Error("No available regions found");
+    }
+
+    // Create workspace dynamically
+    console.log(`Creating workspace "${testWorkspaceName}" in region "${region}"...`);
+    const createResp = await client.createWorkspace({
+      workspaceName: testWorkspaceName,
+      workspaceRegion: region,
+      deleteProtection: false,
+      organizationId: process.env.TAILOR_PLATFORM_ORGANIZATION_ID,
+      folderId: process.env.TAILOR_PLATFORM_FOLDER_ID,
+    });
+    workspaceId = createResp.workspace!.id!;
+    trackWorkspace(workspaceId);
+    console.log(`Workspace created: ${workspaceId}`);
+
+    // Set workspace ID for apply operations
+    process.env.TAILOR_PLATFORM_WORKSPACE_ID = workspaceId;
+
+    // Create temp directory and symlink @tailor-platform/sdk for module resolution
+    const sdkRoot = path.resolve(__dirname, "..");
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "e2e-test-"));
+    trackTempDir(tempDir);
+
+    const nodeModulesDir = path.join(tempDir, "node_modules", "@tailor-platform");
+    fs.mkdirSync(nodeModulesDir, { recursive: true });
+    fs.symlinkSync(sdkRoot, path.join(nodeModulesDir, "sdk"));
+  }, 120000); // 2 minute timeout for workspace creation
+
+  /**
+   * Helper to create a test config file with unique name to avoid Node.js module caching
+   * @param config - Config file contents
+   * @returns Path to the created config file
+   */
+  function createTestConfig(config: string): string {
+    configCounter++;
+    const configPath = path.join(tempDir, `config-${configCounter}.ts`);
+    fs.writeFileSync(configPath, config);
+    return configPath;
+  }
+
+  /**
+   * Helper to list all TailorDB service namespaces in the workspace
+   * @returns List of TailorDB service namespace names
+   */
+  async function listTailorDBServiceNames(): Promise<string[]> {
+    const services: string[] = [];
+    let pageToken = "";
+    do {
+      const resp = await client.listTailorDBServices({ workspaceId, pageToken });
+      for (const svc of resp.tailordbServices) {
+        if (svc.namespace?.name) {
+          services.push(svc.namespace.name);
+        }
+      }
+      pageToken = resp.nextPageToken;
+    } while (pageToken);
+    return services;
+  }
+
+  /**
+   * Helper to list all TailorDB type names in a namespace
+   * @param namespace - TailorDB namespace name
+   * @returns List of type names in the namespace
+   */
+  async function listTailorDBTypeNames(namespace: string): Promise<string[]> {
+    const types: string[] = [];
+    let pageToken = "";
+    do {
+      const resp = await client.listTailorDBTypes({
+        workspaceId,
+        namespaceName: namespace,
+        pageToken,
+      });
+      for (const t of resp.tailordbTypes) {
+        if (t.name) {
+          types.push(t.name);
+        }
+      }
+      pageToken = resp.nextPageToken;
+    } while (pageToken);
+    return types;
+  }
+
+  /**
+   * Helper to list all IdP service names in the workspace
+   * @returns List of IdP service namespace names
+   */
+  async function listIdPServiceNames(): Promise<string[]> {
+    const services: string[] = [];
+    let pageToken = "";
+    do {
+      const resp = await client.listIdPServices({ workspaceId, pageToken });
+      for (const svc of resp.idpServices) {
+        if (svc.namespace?.name) {
+          services.push(svc.namespace.name);
+        }
+      }
+      pageToken = resp.nextPageToken;
+    } while (pageToken);
+    return services;
+  }
+
+  /**
+   * Helper to list all Auth service names in the workspace
+   * @returns List of Auth service namespace names
+   */
+  async function listAuthServiceNames(): Promise<string[]> {
+    const services: string[] = [];
+    let pageToken = "";
+    do {
+      const resp = await client.listAuthServices({ workspaceId, pageToken });
+      for (const svc of resp.authServices) {
+        if (svc.namespace?.name) {
+          services.push(svc.namespace.name);
+        }
+      }
+      pageToken = resp.nextPageToken;
+    } while (pageToken);
+    return services;
+  }
+
+  /**
+   * Helper to get the absolute path pattern for tailordb files
+   * This is needed because file patterns are resolved from process.cwd(), not config file location
+   * @returns Absolute path pattern for tailordb files
+   */
+  function getTailordbFilesPattern(): string {
+    return path.join(tempDir, "tailordb", "*.ts").replace(/\\/g, "/");
+  }
+
+  /**
+   * Helper to create TailorDB type file
+   */
+  function createTailorDBTypeFile(): void {
+    const tailordbDir = path.join(tempDir, "tailordb");
+    fs.mkdirSync(tailordbDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(tailordbDir, "user.ts"),
+      `
+import { db } from "@tailor-platform/sdk";
+
+export const user = db.type("User", {
+  name: db.string(),
+  email: db.string(),
+  role: db.string({ optional: true }),
+});
+
+export type user = typeof user;
+`,
+    );
+  }
+
+  /**
+   * Setup test: Create the base application with shared TailorDB
+   * This TailorDB will be kept throughout all tests to satisfy the "at least one subgraph" requirement
+   */
+  test("setup: create base application with shared TailorDB", async () => {
+    createTailorDBTypeFile();
+
+    const baseConfig = `
+import { defineConfig } from "@tailor-platform/sdk";
+
+export default defineConfig({
+  name: "${testAppName}",
+  db: {
+    "${sharedTailordbName}": { files: ["${getTailordbFilesPattern()}"] },
+  },
+});
+`;
+
+    const configPath = createTestConfig(baseConfig);
+    await deploy({
+      workspaceId,
+      configPath,
+      yes: true,
+    });
+
+    // Verify: TailorDB service should exist
+    const services = await listTailorDBServiceNames();
+    expect(services).toContain(sharedTailordbName);
+
+    // Verify: User type should exist in the namespace
+    const types = await listTailorDBTypeNames(sharedTailordbName);
+    expect(types).toContain("User");
+  }, 120000);
+
+  /**
+   * Test: Deleting an additional TailorDB service should not fail
+   *
+   * This test verifies that a TailorDB service can be deleted when there are
+   * other subgraphs remaining in the Application.
+   */
+  test("should delete additional tailordb service after application is updated", async () => {
+    const additionalTailordbName = `extra-db-${testRunId}`;
+
+    // Step 1: Add an additional TailorDB service
+    const configWithExtra = `
+import { defineConfig } from "@tailor-platform/sdk";
+
+export default defineConfig({
+  name: "${testAppName}",
+  db: {
+    "${sharedTailordbName}": { files: ["${getTailordbFilesPattern()}"] },
+    "${additionalTailordbName}": { files: ["${getTailordbFilesPattern()}"] },
+  },
+});
+`;
+
+    const configPath1 = createTestConfig(configWithExtra);
+    await deploy({
+      workspaceId,
+      configPath: configPath1,
+      yes: true,
+    });
+
+    // Verify: Both TailorDB services should exist
+    const servicesAfterAdd = await listTailorDBServiceNames();
+    expect(servicesAfterAdd).toContain(sharedTailordbName);
+    expect(servicesAfterAdd).toContain(additionalTailordbName);
+
+    // Verify: User type should exist in both namespaces
+    const typesInShared = await listTailorDBTypeNames(sharedTailordbName);
+    expect(typesInShared).toContain("User");
+    const typesInAdditional = await listTailorDBTypeNames(additionalTailordbName);
+    expect(typesInAdditional).toContain("User");
+
+    // Step 2: Remove the additional TailorDB (keep shared one)
+    const configWithoutExtra = `
+import { defineConfig } from "@tailor-platform/sdk";
+
+export default defineConfig({
+  name: "${testAppName}",
+  db: {
+    "${sharedTailordbName}": { files: ["${getTailordbFilesPattern()}"] },
+  },
+});
+`;
+
+    const configPath2 = createTestConfig(configWithoutExtra);
+
+    // Step 3: Apply - this should delete the extra TailorDB without error
+    await deploy({
+      workspaceId,
+      configPath: configPath2,
+      yes: true,
+    });
+
+    // Verify: Additional TailorDB service should be deleted
+    const servicesAfterDelete = await listTailorDBServiceNames();
+    expect(servicesAfterDelete).toContain(sharedTailordbName);
+    expect(servicesAfterDelete).not.toContain(additionalTailordbName);
+  }, 120000);
+
+  /**
+   * Test: Deleting IdP service should not fail
+   */
+  test("should delete idp service after application is updated", async () => {
+    const idpName = `test-idp-${testRunId}`;
+
+    // Step 1: Add IdP service to the application
+    const configWithIdP = `
+import {
+  defineConfig,
+  defineIdp,
+  unsafeAllowAllIdPPermission,
+} from "@tailor-platform/sdk";
+
+const idp = defineIdp("${idpName}", {
+  clients: ["default-idp-client"],
+  permission: unsafeAllowAllIdPPermission,
+});
+
+export default defineConfig({
+  name: "${testAppName}",
+  db: {
+    "${sharedTailordbName}": { files: ["${getTailordbFilesPattern()}"] },
+  },
+  idp: [idp],
+});
+`;
+
+    const configPath1 = createTestConfig(configWithIdP);
+    await deploy({
+      workspaceId,
+      configPath: configPath1,
+      yes: true,
+    });
+
+    // Verify: IdP service should exist
+    const idpServicesAfterAdd = await listIdPServiceNames();
+    expect(idpServicesAfterAdd).toContain(idpName);
+
+    // Step 2: Remove IdP from config (keep TailorDB)
+    const configWithoutIdP = `
+import { defineConfig } from "@tailor-platform/sdk";
+
+export default defineConfig({
+  name: "${testAppName}",
+  db: {
+    "${sharedTailordbName}": { files: ["${getTailordbFilesPattern()}"] },
+  },
+});
+`;
+
+    const configPath2 = createTestConfig(configWithoutIdP);
+
+    // Step 3: Apply - this should delete IdP without error
+    // Before the fix, this would fail with:
+    // "Failed to delete IdPService: idp xxx is used by gateway(s)"
+    await deploy({
+      workspaceId,
+      configPath: configPath2,
+      yes: true,
+    });
+
+    // Verify: IdP service should be deleted
+    const idpServicesAfterDelete = await listIdPServiceNames();
+    expect(idpServicesAfterDelete).not.toContain(idpName);
+  }, 120000);
+
+  /**
+   * Test: Deleting Auth service should not fail
+   *
+   * This test reproduces the original issue (#570) where deleting an Auth
+   * service would fail with:
+   * "Failed to delete AuthService: auth user-auth is used by gateway(s)"
+   *
+   * Note: Using Auth without userProfile to avoid SDL composition issues
+   * with dynamic config generation.
+   */
+  test("should delete auth service after application is updated", async () => {
+    const authName = `test-auth-${testRunId}`;
+    const idpName = `test-idp-auth-${testRunId}`;
+
+    // Step 1: Add Auth service (without userProfile to avoid SDL composition issues)
+    const configWithAuth = `
+import {
+  defineConfig,
+  defineAuth,
+  defineIdp,
+  unsafeAllowAllIdPPermission,
+} from "@tailor-platform/sdk";
+
+const idp = defineIdp("${idpName}", {
+  clients: ["default-idp-client"],
+  permission: unsafeAllowAllIdPPermission,
+});
+
+const auth = defineAuth("${authName}", {
+  idProvider: idp.provider("default", "default-idp-client"),
+});
+
+export default defineConfig({
+  name: "${testAppName}",
+  db: {
+    "${sharedTailordbName}": { files: ["${getTailordbFilesPattern()}"] },
+  },
+  idp: [idp],
+  auth,
+});
+`;
+
+    const configPath1 = createTestConfig(configWithAuth);
+    await deploy({
+      workspaceId,
+      configPath: configPath1,
+      yes: true,
+    });
+
+    // Verify: Auth and IdP services should exist
+    const authServicesAfterAdd = await listAuthServiceNames();
+    expect(authServicesAfterAdd).toContain(authName);
+    const idpServicesAfterAdd = await listIdPServiceNames();
+    expect(idpServicesAfterAdd).toContain(idpName);
+
+    // Step 2: Remove Auth from config (keep TailorDB and IdP)
+    const configWithoutAuth = `
+import {
+  defineConfig,
+  defineIdp,
+  unsafeAllowAllIdPPermission,
+} from "@tailor-platform/sdk";
+
+const idp = defineIdp("${idpName}", {
+  clients: ["default-idp-client"],
+  permission: unsafeAllowAllIdPPermission,
+});
+
+export default defineConfig({
+  name: "${testAppName}",
+  db: {
+    "${sharedTailordbName}": { files: ["${getTailordbFilesPattern()}"] },
+  },
+  idp: [idp],
+});
+`;
+
+    const configPath2 = createTestConfig(configWithoutAuth);
+
+    // Step 3: Apply - this should delete Auth without error
+    // Before the fix, this would fail with:
+    // "Failed to delete AuthService: auth xxx is used by gateway(s)"
+    await deploy({
+      workspaceId,
+      configPath: configPath2,
+      yes: true,
+    });
+
+    // Verify: Auth service should be deleted, IdP should remain
+    const authServicesAfterDelete = await listAuthServiceNames();
+    expect(authServicesAfterDelete).not.toContain(authName);
+    const idpServicesAfterDelete = await listIdPServiceNames();
+    expect(idpServicesAfterDelete).toContain(idpName);
+  }, 120000);
+
+  /**
+   * Test: --no-schema-check option should skip schema validation
+   *
+   * This test verifies that the --no-schema-check flag properly skips
+   * schema diff validation against migration snapshots.
+   */
+  test("should skip schema check with --no-schema-check option", async () => {
+    // Create a config with migrations enabled
+    const migrationsDir = path.join(tempDir, "migrations");
+    fs.mkdirSync(migrationsDir, { recursive: true });
+
+    // Create initial snapshot (0000/schema.json)
+    const initialSnapshotDir = path.join(migrationsDir, "0000");
+    fs.mkdirSync(initialSnapshotDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(initialSnapshotDir, "schema.json"),
+      JSON.stringify({
+        version: 2,
+        namespace: sharedTailordbName,
+        createdAt: new Date().toISOString(),
+        types: {
+          User: {
+            name: "User",
+            fields: {
+              name: { type: "string", required: true },
+              email: { type: "string", required: true },
+              role: { type: "string", required: false },
+            },
+          },
+        },
+      }),
+    );
+
+    // Update type file to add a new field (causing schema diff)
+    const tailordbDir = path.join(tempDir, "tailordb");
+    fs.writeFileSync(
+      path.join(tailordbDir, "user.ts"),
+      `
+import { db } from "@tailor-platform/sdk";
+
+export const user = db.type("User", {
+  name: db.string(),
+  email: db.string(),
+  role: db.string({ optional: true }),
+  newField: db.string({ optional: true }), // New field added
+});
+
+export type user = typeof user;
+`,
+    );
+
+    const configWithMigrations = `
+import { defineConfig } from "@tailor-platform/sdk";
+
+export default defineConfig({
+  name: "${testAppName}",
+  db: {
+    "${sharedTailordbName}": {
+      files: ["${getTailordbFilesPattern()}"],
+      migration: {
+        directory: "${migrationsDir.replace(/\\/g, "\\\\")}",
+      },
+    },
+  },
+});
+`;
+
+    const configPath = createTestConfig(configWithMigrations);
+
+    // Without --no-schema-check, this should fail due to schema diff
+    await expect(
+      deploy({
+        workspaceId,
+        configPath,
+        yes: true,
+        noSchemaCheck: false,
+      }),
+    ).rejects.toThrow(/Schema migration check failed/);
+
+    // With --no-schema-check, this should succeed despite schema diff
+    await expect(
+      deploy({
+        workspaceId,
+        configPath,
+        yes: true,
+        noSchemaCheck: true,
+      }),
+    ).resolves.not.toThrow();
+
+    // Reset user type file to original state for cleanup
+    fs.writeFileSync(
+      path.join(tailordbDir, "user.ts"),
+      `
+import { db } from "@tailor-platform/sdk";
+
+export const user = db.type("User", {
+  name: db.string(),
+  email: db.string(),
+  role: db.string({ optional: true }),
+});
+
+export type user = typeof user;
+`,
+    );
+  }, 120000);
+
+  /**
+   * Cleanup test: Keep only the shared TailorDB
+   */
+  test("cleanup: remove remaining services", async () => {
+    const cleanupConfig = `
+import { defineConfig } from "@tailor-platform/sdk";
+
+export default defineConfig({
+  name: "${testAppName}",
+  db: {
+    "${sharedTailordbName}": { files: ["${getTailordbFilesPattern()}"] },
+  },
+});
+`;
+
+    const configPath = createTestConfig(cleanupConfig);
+    await deploy({
+      workspaceId,
+      configPath,
+      yes: true,
+    });
+  }, 120000);
+});

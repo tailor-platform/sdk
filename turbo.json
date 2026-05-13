@@ -27,7 +27,7 @@
       "dependsOn": ["build"],
       "cache": false
     },
-    "apply": {
+    "deploy": {
       "dependsOn": ["build"],
       "cache": false
     },

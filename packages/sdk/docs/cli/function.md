@@ -139,7 +139,7 @@ List or get function execution logs.
 **Usage**
 
 ```
-tailor-sdk function logs [options] [executionId]
+tailor-sdk function logs [options] [execution-id]
 ```
 
 <!-- politty:command:function logs:usage:end -->
@@ -148,9 +148,9 @@ tailor-sdk function logs [options] [executionId]
 
 **Arguments**
 
-| Argument      | Description                                         | Required |
-| ------------- | --------------------------------------------------- | -------- |
-| `executionId` | Execution ID (if provided, shows details with logs) | No       |
+| Argument       | Description                                         | Required |
+| -------------- | --------------------------------------------------- | -------- |
+| `execution-id` | Execution ID (if provided, shows details with logs) | No       |
 
 <!-- politty:command:function logs:arguments:end -->
 
@@ -209,7 +209,7 @@ $ tailor-sdk function logs <execution-id> --json
 
 When viewing a specific execution that failed, the command displays error details with the stack trace mapped back to original source files via the inline sourcemap (clickable file links and code snippets, matching `function test-run` output).
 
-When the deployed script cannot be downloaded or the function has been redeployed since the execution, the command falls back to a plain-text error display to avoid showing misleading source locations.
+The download is pinned to the bundle that actually ran using the execution's content hash, so stack traces stay accurate across redeploys when the server retains old bundles. The command falls back to a plain-text error display when the pinned bundle cannot be retrieved, or when the execution was recorded before content hashes started being tracked and the function was redeployed after it ran.
 
 <!-- politty:command:function logs:notes:end -->
 

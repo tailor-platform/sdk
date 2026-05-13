@@ -1,6 +1,8 @@
+import { tailorRuntime } from "@tailor-platform/sdk/vitest";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  plugins: [tailorRuntime()],
   test: {
     watch: false,
     outputFile: { json: "tests/results.json" },
@@ -11,13 +13,15 @@ export default defineConfig({
     },
     projects: [
       {
+        extends: true,
         test: {
           name: { label: "generator", color: "blue" },
-          environment: "node",
+          environment: "tailor-runtime",
           include: ["tests/**/*.{test,spec}.ts"],
         },
       },
       {
+        extends: true,
         test: {
           name: { label: "e2e", color: "green" },
           environment: "node",

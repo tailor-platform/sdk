@@ -4,11 +4,9 @@
   "type": "module",
   "scripts": {
     "generate": "tailor-sdk generate",
-    "deploy": "tailor-sdk apply",
+    "deploy": "tailor-sdk deploy",
     "test": "vitest --project unit",
     "test:unit": "vitest --project unit",
-    "test:bundled:prepare": "TAILOR_PLATFORM_SDK_BUILD_ONLY=true tailor-sdk apply -c tailor.config.ts",
-    "test:bundled": "pnpm test:bundled:prepare && vitest --project bundled",
     "test:e2e": "vitest --project e2e",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",

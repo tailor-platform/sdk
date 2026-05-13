@@ -1,5 +1,5 @@
 import {
-  apply,
+  deploy,
   getMachineUserToken,
   show,
   createWorkspace,
@@ -31,7 +31,7 @@ async function setupWorkspace(name: string, region: string): Promise<WorkspaceIn
 
 async function deployApplication(): Promise<void> {
   console.log("Deploying application...");
-  await apply();
+  await deploy();
   console.log("Application deployed successfully.");
 }
 

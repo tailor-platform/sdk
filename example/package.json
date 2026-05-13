@@ -7,7 +7,7 @@
   "scripts": {
     "generate": "tailor-sdk generate -c tailor.config.ts",
     "generate:watch": "tailor-sdk generate -c tailor.config.ts --watch",
-    "apply": "tailor-sdk apply -c tailor.config.ts",
+    "deploy": "tailor-sdk deploy -c tailor.config.ts",
     "test": "pnpm test:generator",
     "test:all": "pnpm test:generator:prepare && vitest",
     "test:generator": "pnpm test:generator:prepare && vitest --project generator",

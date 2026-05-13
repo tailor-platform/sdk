@@ -202,7 +202,7 @@ List or get workflow executions.
 **Usage**
 
 ```
-tailor-sdk workflow executions [options] [executionId]
+tailor-sdk workflow executions [options] [execution-id]
 ```
 
 <!-- politty:command:workflow executions:usage:end -->
@@ -211,9 +211,9 @@ tailor-sdk workflow executions [options] [executionId]
 
 **Arguments**
 
-| Argument      | Description                               | Required |
-| ------------- | ----------------------------------------- | -------- |
-| `executionId` | Execution ID (if provided, shows details) | No       |
+| Argument       | Description                               | Required |
+| -------------- | ----------------------------------------- | -------- |
+| `execution-id` | Execution ID (if provided, shows details) | No       |
 
 <!-- politty:command:workflow executions:arguments:end -->
 
@@ -257,7 +257,7 @@ Resume a failed or pending workflow execution.
 **Usage**
 
 ```
-tailor-sdk workflow resume [options] <executionId>
+tailor-sdk workflow resume [options] <execution-id>
 ```
 
 <!-- politty:command:workflow resume:usage:end -->
@@ -266,9 +266,9 @@ tailor-sdk workflow resume [options] <executionId>
 
 **Arguments**
 
-| Argument      | Description         | Required |
-| ------------- | ------------------- | -------- |
-| `executionId` | Failed execution ID | Yes      |
+| Argument       | Description         | Required |
+| -------------- | ------------------- | -------- |
+| `execution-id` | Failed execution ID | Yes      |
 
 <!-- politty:command:workflow resume:arguments:end -->
 

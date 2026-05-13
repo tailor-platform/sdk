@@ -79,7 +79,7 @@ export const resumeCommand = defineAppCommand({
   args: z
     .object({
       ...workspaceArgs,
-      executionId: arg(z.string(), {
+      "execution-id": arg(z.string(), {
         positional: true,
         description: "Failed execution ID",
       }),
