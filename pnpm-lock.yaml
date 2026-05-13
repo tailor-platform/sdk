@@ -9006,7 +9006,7 @@ snapshots:
 
   json-schema-to-ts@3.1.1:
     dependencies:
-      '@babel/runtime': 7.29.2
+      '@babel/runtime': 7.28.6
       ts-algebra: 2.0.0
 
   json-schema-traverse@0.4.1: {}
