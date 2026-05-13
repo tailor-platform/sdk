@@ -183,22 +183,6 @@
       }
     },
     {
-      "files": ["src/parser/service/tailordb/runtime.ts"],
-      "rules": {
-        "no-restricted-imports": [
-          "error",
-          {
-            "patterns": [
-              {
-                "group": ["**/cli/**", "@/cli/**"],
-                "message": "Parser module should not import from cli module."
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
       "files": ["src/parser/**/*.test.ts"],
       "rules": {
         "no-restricted-imports": "off"
