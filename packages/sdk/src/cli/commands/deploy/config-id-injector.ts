@@ -118,17 +118,19 @@ export async function ensureConfigId(configPath: string): Promise<EnsureConfigId
   return { id, injected: true };
 }
 
+const idComment = "// SDK-managed id: do not edit or delete";
+
 function insertIdProperty(source: string, configObj: ObjectExpression, id: string): string {
   const idLiteral = `id: ${JSON.stringify(id)}`;
   if (configObj.properties.length > 0) {
     const firstProp = configObj.properties[0];
     const lineStart = source.lastIndexOf("\n", firstProp.start - 1) + 1;
     const indent = source.slice(lineStart, firstProp.start);
-    const insertion = `${idLiteral},\n${indent}`;
+    const insertion = `${idComment}\n${indent}${idLiteral},\n${indent}`;
     return source.slice(0, firstProp.start) + insertion + source.slice(firstProp.start);
   }
   // Empty object: insert just inside the braces
   const openBracePos = configObj.start + 1;
-  const insertion = ` ${idLiteral} `;
+  const insertion = ` ${idComment} ${idLiteral} `;
   return source.slice(0, openBracePos) + insertion + source.slice(openBracePos);
 }

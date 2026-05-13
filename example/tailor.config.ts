@@ -90,6 +90,7 @@ export const auth = defineAuth("my-auth", {
 });
 
 export default defineConfig({
+  // SDK-managed id: do not edit or delete
   id: "d0a3398a-f79c-4c2e-be1e-b81469bb0a43",
   name: "my-app",
   env: {
