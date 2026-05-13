@@ -92,8 +92,8 @@ describe("bundled execution tests", () => {
         id: "f1e2d3c4-b5a6-4798-89a0-1b2c3d4e5f60",
         type: "machine_user",
         workspaceId: "b39bdd61-d442-4a4e-8599-33a78a4e19ab",
-        attributes: [],
-        attributeMap: { role: "MANAGER" },
+        attributes: { role: "MANAGER" },
+        attributeList: [],
       });
 
       const main = await importActualMain("resolvers/showUserInfo.js");

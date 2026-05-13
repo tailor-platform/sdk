@@ -7,6 +7,7 @@
  */
 
 import type { ContextInvoker, IdpUser } from "../runtime/_runtime";
+import type { Invoker } from "../runtime/context";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -425,10 +426,24 @@ export const contextMock = {
   /**
    * Set the invoker returned by `tailor.context.getInvoker()`. Pass `null` to
    * simulate an anonymous (unauthenticated) caller — the default.
-   * @param invoker - Invoker to return, or `null` for anonymous
+   *
+   * Accepts the SDK-friendly shape (`attributes` map + `attributeList` array)
+   * to match `TailorUser` / `TailorActor`. Internally this is converted back to
+   * the raw platform shape (`attributeMap` + `attributes` array) so the value
+   * surfaced by the ambient `tailor.context.getInvoker()` stays compatible with
+   * the resolver pipeline's invoker transform.
+   * @param invoker - Invoker to return (SDK shape), or `null` for anonymous
    */
-  setInvoker(invoker: ContextInvoker | null): void {
-    getState().invoker = invoker;
+  setInvoker(invoker: Invoker | null): void {
+    getState().invoker = invoker
+      ? {
+          id: invoker.id,
+          type: invoker.type,
+          workspaceId: invoker.workspaceId,
+          attributes: invoker.attributeList,
+          attributeMap: invoker.attributes,
+        }
+      : null;
   },
 
   get calls(): ContextCall[] {

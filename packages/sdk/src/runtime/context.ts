@@ -4,25 +4,56 @@
  * Thin typed wrapper around the platform-provided `tailor.context` runtime API.
  * At runtime this delegates to `globalThis.tailor.context`. Use `contextMock`
  * from `@tailor-platform/sdk/vitest` to mock these calls in unit tests.
+ *
+ * The platform's raw `tailor.context.getInvoker()` returns
+ * `{ attributes: string[]; attributeMap: Record<string, unknown> }`. This wrapper
+ * normalizes that into the SDK-friendly shape used by `TailorUser` and
+ * `TailorActor` (`attributes` is the attribute map, `attributeList` is the array
+ * of attribute IDs), so code touching invokers stays uniform across the SDK.
  * @example
  * import { context } from "@tailor-platform/sdk/runtime";
  *
  * const invoker = context.getInvoker();
  * if (invoker) {
- *   console.log(invoker.id, invoker.type);
+ *   console.log(invoker.id, invoker.type, invoker.attributes, invoker.attributeList);
  * }
  */
 
-import { runtime, type ContextInvoker } from "./_runtime";
+import { runtime } from "./_runtime";
 
-/** Information about the invoker of the current function execution. */
-export type Invoker = ContextInvoker;
+/**
+ * Information about the invoker of the current function execution.
+ *
+ * Uses the SDK-friendly shape — `attributes` is the attribute map and
+ * `attributeList` is the array of attribute IDs. This matches `TailorUser`
+ * and `TailorActor`.
+ */
+export interface Invoker {
+  /** The invoker's ID */
+  id: string;
+  /** The invoker's type */
+  type: "user" | "machine_user";
+  /** The workspace ID */
+  workspaceId: string;
+  /** A map of the invoker's attributes */
+  attributes: Record<string, unknown>;
+  /** The list of attribute IDs */
+  attributeList: string[];
+}
 
 /**
  * Returns information about the invoker of the current function execution,
  * or `null` for anonymous invocations.
- * @returns Invoker details, or `null` when the call is anonymous
+ * @returns Invoker details (SDK shape), or `null` when the call is anonymous
  */
 export function getInvoker(): Invoker | null {
-  return runtime.tailor.context.getInvoker();
+  const raw = runtime.tailor.context.getInvoker();
+  if (!raw) return null;
+  return {
+    id: raw.id,
+    type: raw.type,
+    workspaceId: raw.workspaceId,
+    attributes: raw.attributeMap,
+    attributeList: raw.attributes,
+  };
 }

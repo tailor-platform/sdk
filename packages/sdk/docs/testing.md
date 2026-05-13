@@ -26,6 +26,8 @@ Platform API mocks under `@tailor-platform/sdk/vitest` (auto-injected by the [`t
 - `workflowMock` — `tailor.workflow` job / wait / resolve mocks
 - `secretmanagerMock`, `authconnectionMock`, `idpMock`, `fileMock`, `iconvMock`, `contextMock` — corresponding platform API mocks
 
+> The examples below call `tailor.*` / `tailordb.*` via the ambient globals. To make these snippets type-check in a fresh TypeScript project, either opt into the globals once (`import "@tailor-platform/sdk/runtime/globals"` in a setup file, or list it in `tsconfig.json`'s `compilerOptions.types`), or call the typed wrappers from `@tailor-platform/sdk/runtime/*` instead.
+
 For tighter alignment with the production runtime — Node.js module blocking, Web-only globals, and platform API mocks — pair the resolver helpers with the [`tailor-runtime` Vitest environment](#runtime-environment-emulation-beta) below.
 
 Three starter templates demonstrate the patterns below in a working project:
@@ -249,8 +251,11 @@ test("mock encoding conversion", () => {
 
 ### Context Mock
 
+`contextMock.setInvoker()` accepts the SDK-friendly shape — `attributes` is the attribute map and `attributeList` is the array of attribute IDs (matching `TailorUser` / `TailorActor`). Internally it is converted back to the raw platform shape, so resolver pipelines that read `tailor.context.getInvoker()` continue to receive the on-platform layout.
+
 ```typescript
 import { contextMock } from "@tailor-platform/sdk/vitest";
+import { context } from "@tailor-platform/sdk/runtime";
 
 beforeEach(() => contextMock.reset());
 
@@ -259,18 +264,20 @@ test("returns invoker information", () => {
     id: "f1e2d3c4-b5a6-4798-89a0-1b2c3d4e5f60",
     type: "machine_user",
     workspaceId: "b39bdd61-d442-4a4e-8599-33a78a4e19ab",
+    attributes: { role: "MANAGER" },
+    attributeList: ["role"],
   });
 
-  const invoker = tailor.context.getInvoker();
+  const invoker = context.getInvoker();
   expect(invoker?.type).toBe("machine_user");
+  expect(invoker?.attributes).toEqual({ role: "MANAGER" });
   expect(contextMock.calls).toHaveLength(1);
 });
 
 test("anonymous caller", () => {
   contextMock.setInvoker(null); // null is the default
 
-  const invoker = tailor.context.getInvoker();
-  expect(invoker).toBeNull();
+  expect(context.getInvoker()).toBeNull();
 });
 ```
 
