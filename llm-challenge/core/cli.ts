@@ -96,7 +96,13 @@ export function deriveProblemName(meta: ProblemMeta, dirName: string): string {
 }
 
 type ParsedArgs = {
-  problem?: string;
+  /**
+   * Problem IDs explicitly requested via one or more `--problem <id>` flags.
+   * Empty when `--all` is used. Supports multiple flags so callers (notably
+   * `core/experiment.ts` forwarding `--problems m05,m18`) can target a
+   * subset of problems for A/B candidate validation.
+   */
+  problemIds: string[];
   all: boolean;
   implDir?: string;
   useSolution: boolean;
@@ -124,7 +130,7 @@ type ParsedArgs = {
 
 function parseArgs(): ParsedArgs {
   const args = process.argv.slice(2);
-  let problem: string | undefined;
+  const problemIds: string[] = [];
   let all = false;
   let implDir: string | undefined;
   let useSolution = false;
@@ -141,7 +147,7 @@ function parseArgs(): ParsedArgs {
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
       case "--problem":
-        problem = requireArg(args, i, "--problem");
+        problemIds.push(requireArg(args, i, "--problem"));
         i++;
         break;
       case "--all":
@@ -225,7 +231,7 @@ function parseArgs(): ParsedArgs {
   }
 
   return {
-    problem,
+    problemIds,
     all,
     implDir,
     useSolution,
@@ -986,7 +992,7 @@ function findProblem(id: string): string {
 
 async function main(): Promise<void> {
   const {
-    problem,
+    problemIds,
     all,
     implDir,
     useSolution,
@@ -1001,12 +1007,12 @@ async function main(): Promise<void> {
     sdkBranch,
   } = parseArgs();
 
-  if (!problem && !all) {
+  if (problemIds.length === 0 && !all) {
     console.error("Usage:");
     console.error("  tsx core/cli.ts --problem 001 --impl ./path/to/impl");
     console.error("  tsx core/cli.ts --problem 001 --use-solution");
     console.error(
-      "  tsx core/cli.ts --problem 001 --solve [--agent claude|codex] [--model sonnet] [--max-budget 5.00] [--context-profile types-only] [--iterations 3] [--sdk-branch <ref>]",
+      "  tsx core/cli.ts --problem 001 [--problem 002 ...] --solve [--agent claude|codex] [--model sonnet] [--max-budget 5.00] [--context-profile types-only] [--iterations 3] [--sdk-branch <ref>]",
     );
     console.error("  tsx core/cli.ts --all --use-solution [--clean] [--concurrency <n>]");
     console.error(
@@ -1017,7 +1023,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  if (problem && all) {
+  if (problemIds.length > 0 && all) {
     console.error("Error: --problem and --all are mutually exclusive.");
     process.exit(1);
   }
@@ -1080,7 +1086,7 @@ async function main(): Promise<void> {
     }
   }
 
-  const problems = all ? listProblems(challengeRoot) : [findProblem(problem!)];
+  const problems = all ? listProblems(challengeRoot) : problemIds.map((id) => findProblem(id));
 
   if (all) {
     console.log(`Running ${problems.length} problem(s) (concurrency: ${concurrency})...`);
