@@ -1,7 +1,7 @@
 {
   "id": "h10-config-multi-idp-cross-wire",
   "title": "Wire defineAuth.idProvider to the correct IdP across two defineIdp definitions",
-  "hypothesizedAffordance": "missing_namespace",
+  "designNote": "missing_namespace",
   "sdkSurface": "config",
   "contextProfiles": ["types-only", "full-package"],
   "hint": "auth は単数。idp は配列。idProvider は staff IdP の provider() を使う"

@@ -1,7 +1,7 @@
 {
   "id": "m06-db-type-permission-role-gate",
   "title": "Gate read/create to logged-in users and update/delete to ADMIN role",
-  "hypothesizedAffordance": "type_too_strict",
+  "designNote": "type_too_strict",
   "sdkSurface": "db-type",
   "contextProfiles": ["types-only", "full-package"],
   "hint": "permission の condition は tuple 型 [operand, operator, operand]"

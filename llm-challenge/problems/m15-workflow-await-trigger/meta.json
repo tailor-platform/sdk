@@ -1,7 +1,7 @@
 {
   "id": "m15-workflow-await-trigger",
   "title": "Await a child job's .trigger() result inside a workflow",
-  "hypothesizedAffordance": "param_confusion",
+  "designNote": "param_confusion",
   "sdkSurface": "workflow",
   "contextProfiles": ["types-only", "full-package"],
   "hint": ".trigger() は Promise — await でアンラップする"

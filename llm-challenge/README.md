@@ -15,7 +15,7 @@ This iteration of the harness is a radical rebuild around three ideas:
 
 1. **Micro-problems** (5-15 turns each) that isolate one affordance per problem, so failures are diagnostic.
 2. **Behaviour trace** — every agent run streams `tool_use` events to `trace.jsonl` so we measure what the agent actually did, not just whether it succeeded.
-3. **LLM-as-judge** — failed runs are diagnosed by a separate Claude Haiku call that returns a structured affordance label plus an `apiChange`/`docFallback` suggestion.
+3. **Profile diff + iteration variance** — comparing types-only vs full-package pass rates across N≥3 iterations is the primary docs-vs-types-gap detector.
 
 ## Problems
 
@@ -37,7 +37,7 @@ Coverage by SDK surface:
 | idp + auth                    | 1     | m21         |
 | CLI / runtime                 | 4     | m22-m25     |
 
-See [`.agent/tmp/2026-05-13-micro-problem-inventory.md`](../.agent/tmp/2026-05-13-micro-problem-inventory.md) for the full design matrix mapping each problem to a `hypothesizedAffordance` label.
+See [`.agent/tmp/2026-05-13-micro-problem-inventory.md`](../.agent/tmp/2026-05-13-micro-problem-inventory.md) for the full design matrix mapping each problem to its `designNote`.
 
 ## Prerequisites
 
@@ -46,13 +46,12 @@ See [`.agent/tmp/2026-05-13-micro-problem-inventory.md`](../.agent/tmp/2026-05-1
 pnpm -C packages/sdk build
 ```
 
-Solve mode and judge mode each need their own credentials:
+Solve mode needs its own credentials:
 
 - **Podman** — Solve mode runs each problem inside an ephemeral container.
   On macOS: `podman machine start`.
 - **Claude agent** — `claude setup-token`, then export `CLAUDE_CODE_OAUTH_TOKEN`.
 - **Codex agent** — `codex login` (writes `~/.codex/auth.json`, which is mounted into the container).
-- **Judge** — reuses `CLAUDE_CODE_OAUTH_TOKEN` (the same credential as the Claude solver) by shelling out to `claude -p` on the host (not inside podman). Without a working `claude` CLI on PATH, judging is skipped with a warning; set `LLM_CHALLENGE_DISABLE_JUDGE=1` to silence the warning intentionally.
 
 ## Commands
 
@@ -116,65 +115,17 @@ When `--solve` runs, the Claude solver is invoked with `--output-format stream-j
 
 Aggregated min/median/max/mean across the run land in `analytics.metricsSummary` of the report.
 
-## LLM-as-judge
-
-After all solves finish, every **failed** problem is fed to a pinned Claude Haiku model (`claude-haiku-4-5-20251001`) via [`core/judge.ts`](core/judge.ts). The judge receives:
-
-- the problem markdown the agent saw,
-- a unified diff (`scaffold/` → final work tree),
-- a compact slice of the trace (`tool_use` calls),
-- the failing test output, and
-- (optionally) the problem's `hypothesizedAffordance`.
-
-The judge replies with a single JSON object:
-
-```json
-{
-  "affordanceLabel": "implicit_assumption",
-  "apiChange": "make kyselyTypePlugin precondition compile-time required",
-  "docFallback": "add a getDB precondition note to docs/plugins.md",
-  "diagnosis": "Agent looped on tsc until adding kyselyTypePlugin; the precondition was only in JSDoc."
-}
-```
-
-Per-problem judge output lands at `<artifact-dir>/judge.json`; the run-level aggregate is `results/artifacts/<run>/improvement-candidates.jsonl`, one candidate per failed problem. Its relative path is recorded in `report.analytics.improvementCandidatesPath`.
-
-> Note: the JSONL only has entries when there are failing problems **and** the `claude` CLI is available on PATH (authenticated via `CLAUDE_CODE_OAUTH_TOKEN`). Solution-verify runs and 100%-pass solve runs produce no candidates by design.
-
-## Affordance Taxonomy
-
-The judge prompt seeds the original 12 affordance labels as suggestions; free-form labels are permitted when none of these fit. Source: [`core/judge.ts`](core/judge.ts) (`SEED_AFFORDANCE_LABELS`).
-
-| Label                     | What it suggests                                                                                |
-| ------------------------- | ----------------------------------------------------------------------------------------------- |
-| `consolidation_candidate` | Merge sibling APIs (e.g. `recordCreated/Updated/DeletedTrigger` → `recordTrigger({ events })`). |
-| `naming_bias`             | Rename to match the verb the agent reaches for (`list*` vs `search*` when filtered).            |
-| `context_bloat`           | Shrink default response; add a `response_format` enum.                                          |
-| `missing_namespace`       | Disambiguate sibling APIs with a service prefix or parent object.                               |
-| `param_confusion`         | Tighten or rename parameters (`user` → `user_id`).                                              |
-| `missing_action_verb`     | Add a workflow-shaped action API instead of forcing primitive chains.                           |
-| `type_too_loose`          | Replace `any`/`unknown` with discriminated unions.                                              |
-| `type_too_strict`         | Relax types that reject valid agent inputs.                                                     |
-| `redundant_call_pattern`  | Add idempotency or batching.                                                                    |
-| `implicit_assumption`     | Promote runtime preconditions (e.g. `kyselyTypePlugin`) to compile-time.                        |
-| `error_message_opaque`    | Rewrite errors to name the next concrete action.                                                |
-| `docs_only`               | Pure documentation gap.                                                                         |
-
-The judge can also return `uncategorized` when no single root cause fits the evidence.
-
 ## Reports & Analytics
 
 Each run writes `results/<agent-model-context-profile>/report-<sdkVersion>-<runId>.json`. Report shape (see [`core/report.ts`](core/report.ts)):
 
-- `results[]` — per-problem result (`problemId`, `passed`, `stages[]`, `metrics?`, `judge?`, `solveResult?`).
+- `results[]` — per-problem result (`problemId`, `passed`, `stages[]`, `metrics?`, `solveResult?`).
 - `analytics.stagePassRates` — pass rate per stage across the run.
 - `analytics.metricsSummary` — min/median/max/mean of `turns`, `readSdkDts`, `readDocs`, `bashRetries` across problems with traces.
-- `analytics.affordanceDistribution` — frequency map of `judge.affordanceLabel` values; empty when no judge calls fired.
-- `analytics.improvementCandidatesPath` — relative path to `improvement-candidates.jsonl` when it was written.
 - `usageSummary` — aggregate `inputTokens` / `outputTokens` / `cacheReadTokens` / `numTurns` (context-bloat sensor).
 - `model`, `contextProfile`, `sdkVersion`, `timestamp` — one-liner metadata for trend grouping.
 
-The terminal table summarises per-problem stage status, the trace line (`turns=… read_sdk=… read_docs=… bash_retries=…`), and the top-3 affordance labels.
+The terminal table summarises per-problem stage status and the trace line (`turns=… read_sdk=… read_docs=… bash_retries=…`).
 
 ## A/B Experiments
 
@@ -188,7 +139,7 @@ This:
 
 1. Runs the full problem set against the **current working tree** (baseline) with N iterations per problem.
 2. `git worktree add`s the `--sdk-branch` ref into `.agent/tmp/sdk-branch-<ref>-XXXXXX/`, builds the SDK there, `pnpm pack`s it, then runs the same problem set against that tarball.
-3. Writes `results/experiments/<exp-id>/{baseline,candidate,delta}.json` where `delta.json` is the structured A/B diff (per-problem `passRateDelta`, `costMedianDelta`, `metricsDelta`, plus an affordance distribution delta).
+3. Writes `results/experiments/<exp-id>/{baseline,candidate,delta}.json` where `delta.json` is the structured A/B diff (per-problem `passRateDelta`, `costMedianDelta`, `metricsDelta`).
 
 Run the diff alone against two existing reports (no new solves):
 
@@ -221,12 +172,14 @@ problems/
 {
   "id": "m01-db-field-unique-required",
   "title": "Add a required + unique string field to a TailorDB type",
-  "hypothesizedAffordance": "implicit_assumption",
+  "designNote": "implicit_assumption",
   "sdkSurface": "db-field",
   "contextProfiles": ["types-only", "full-package"],
   "hint": "db.string() is required by default; chain .unique()."
 }
 ```
+
+`designNote` is a free-form author note about the affordance gap the problem exercises; it is documentation only and is not read by the runner.
 
 Scaffold resolution is a four-layer overlay (later layers shadow earlier ones at file granularity):
 
@@ -244,7 +197,6 @@ Solve runs persist per-problem evidence under `results/artifacts/<run>/<problem>
 - `attempt-0/result.json` — parsed `SolveResult` (cost, usage, duration).
 - `attempt-0/trace.jsonl` — the behaviour trace stream.
 - `attempt-0/work/` — final work tree snapshot (excludes `node_modules/`, `.sdk/`, `.git/`).
-- `judge.json` — judge output (failed problems only).
 
 There is no `final-work/` snapshot anymore; `attempt-0/work/` is the canonical final state.
 
@@ -283,4 +235,4 @@ pnpm challenge:analyze --groups
 pnpm challenge:analyze --trend --agent claude --model opus --context-profile types-only
 ```
 
-The trend view diffs the first and last reports in the chosen group, including a per-affordance delta when the distributions are populated. The previous `--baseline <path>` flag is gone — trend within a group covers the same use cases.
+The trend view diffs the first and last reports in the chosen group. The previous `--baseline <path>` flag is gone — trend within a group covers the same use cases.

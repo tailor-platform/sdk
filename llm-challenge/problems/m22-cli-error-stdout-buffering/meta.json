@@ -1,7 +1,7 @@
 {
   "id": "m22-cli-error-stdout-buffering",
   "title": "Recover a tailor-sdk generate run that fails because of a mismatched files glob",
-  "hypothesizedAffordance": "context_bloat",
+  "designNote": "context_bloat",
   "sdkSurface": "cli-runtime",
   "contextProfiles": ["types-only", "full-package"],
   "hint": "tailor.config.ts の db.tailordb.files glob を実ファイル拡張子と合わせる"

@@ -1,7 +1,7 @@
 {
   "id": "h07-workflow-job-chain-with-tailordb",
   "title": "Chain three workflow jobs that share TailorDB state through getDB",
-  "hypothesizedAffordance": "context_bloat",
+  "designNote": "context_bloat",
   "sdkSurface": "workflow + plugin + tailordb",
   "contextProfiles": ["types-only", "full-package"],
   "hint": "3 つの job + plugin + getDB を 1 ファイルに並べる。export 種別と await 漏れで詰みやすい"

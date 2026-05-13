@@ -1,7 +1,7 @@
 {
   "id": "h13-cli-shadowed-config-error",
   "title": "Recover from a shadowed config export that hides defineConfig from the CLI",
-  "hypothesizedAffordance": "error_message_opaque",
+  "designNote": "error_message_opaque",
   "sdkSurface": "cli",
   "contextProfiles": ["types-only", "full-package"],
   "hint": "loadConfig は default export を要求する。`export const config = ...` ではなく `export default ...` に直す"

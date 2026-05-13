@@ -228,41 +228,7 @@ function showTrend(reports: ChallengeReport[], groupLabel: string): void {
     console.log("");
   }
 
-  // Compare affordance distribution between the first (baseline) and last
-  // (latest) reports. Only emit when at least one of them carries non-empty
-  // distribution data — otherwise the section is just noise.
-  if (reports.length >= 2) {
-    const baseline = reports[0]!;
-    const latest = reports[reports.length - 1]!;
-    const baselineDist = baseline.analytics?.affordanceDistribution ?? {};
-    const latestDist = latest.analytics?.affordanceDistribution ?? {};
-    showAffordanceDelta(baselineDist, latestDist);
-  }
-
   console.log("=".repeat(width));
-}
-
-function showAffordanceDelta(
-  baseline: Record<string, number>,
-  latest: Record<string, number>,
-): void {
-  const labels = new Set([...Object.keys(baseline), ...Object.keys(latest)]);
-  if (labels.size === 0) return;
-
-  console.log("Affordance Distribution (baseline -> latest):");
-  const rows: { label: string; base: number; cur: number; delta: number }[] = [];
-  for (const label of labels) {
-    const base = baseline[label] ?? 0;
-    const cur = latest[label] ?? 0;
-    rows.push({ label, base, cur, delta: cur - base });
-  }
-  // Sort by largest absolute delta, then by current count.
-  rows.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta) || b.cur - a.cur);
-  for (const row of rows) {
-    const deltaLabel = row.delta === 0 ? "0" : row.delta > 0 ? `+${row.delta}` : `${row.delta}`;
-    console.log(`  ${row.label.padEnd(28)} ${row.base} -> ${row.cur} (${deltaLabel})`);
-  }
-  console.log("");
 }
 
 function groupReports(
@@ -377,11 +343,6 @@ export type DiffReport = {
    * from `iterations` when present, falling back to per-problem `solveResult.costUsd`.
    */
   totalCostDelta: number;
-  /**
-   * Affordance label delta: for each label present in either report,
-   * (countB − countA). Includes labels with zero on one side.
-   */
-  affordanceDelta: Record<string, { a: number; b: number; delta: number }>;
   warnings: string[];
 };
 
@@ -519,16 +480,6 @@ export function computeReportDiff(
     totalCostDelta += getCost(indexB.get(key)!) - getCost(indexA.get(key)!);
   }
 
-  const distA = reportA.analytics?.affordanceDistribution ?? {};
-  const distB = reportB.analytics?.affordanceDistribution ?? {};
-  const labels = new Set<string>([...Object.keys(distA), ...Object.keys(distB)]);
-  const affordanceDelta: DiffReport["affordanceDelta"] = {};
-  for (const label of labels) {
-    const aCount = distA[label] ?? 0;
-    const bCount = distB[label] ?? 0;
-    affordanceDelta[label] = { a: aCount, b: bCount, delta: bCount - aCount };
-  }
-
   const warnings: string[] = [];
   if (
     reportA.iterationCount !== undefined &&
@@ -562,7 +513,6 @@ export function computeReportDiff(
     rows,
     overallPassRateDelta,
     totalCostDelta,
-    affordanceDelta,
     warnings,
   };
 }
@@ -646,19 +596,6 @@ function showDiff(diff: DiffReport, json: boolean): void {
   console.log(`Total ΔcostUSD:    ${formatDelta(diff.totalCostDelta, 4)}`);
   console.log("");
 
-  const labels = Object.keys(diff.affordanceDelta);
-  if (labels.length > 0) {
-    console.log("Affordance distribution (A → B):");
-    const sorted = [...Object.entries(diff.affordanceDelta)].sort(
-      (x, y) => Math.abs(y[1].delta) - Math.abs(x[1].delta) || y[1].b - x[1].b,
-    );
-    for (const [label, counts] of sorted) {
-      const deltaLabel =
-        counts.delta === 0 ? "0" : counts.delta > 0 ? `+${counts.delta}` : `${counts.delta}`;
-      console.log(`  ${label.padEnd(28)} ${counts.a} -> ${counts.b} (${deltaLabel})`);
-    }
-    console.log("");
-  }
   console.log("=".repeat(width));
 }
 

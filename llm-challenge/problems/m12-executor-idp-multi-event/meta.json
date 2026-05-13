@@ -1,7 +1,7 @@
 {
   "id": "m12-executor-idp-multi-event",
   "title": "Handle IdP user created+deleted events with a single idpUserTrigger({events})",
-  "hypothesizedAffordance": "consolidation_candidate",
+  "designNote": "consolidation_candidate",
   "sdkSurface": "executor-non-record-trigger",
   "contextProfiles": ["types-only", "full-package"],
   "hint": "record と同じ統合パターンが idp/auth にも存在"

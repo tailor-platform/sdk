@@ -32,14 +32,6 @@ import {
   finalizeStages,
   formatReportTable,
 } from "./report";
-import {
-  computeWorkDiff,
-  extractFailedTestOutput,
-  judgeFailure,
-  readTraceEvents,
-  resolveScaffoldLayers,
-} from "./judge";
-import type { JudgeResult } from "./judge";
 import { formatSolveModelLabel, normalizeModelForAgent } from "./solve-model";
 import { checkAuthStatus, solveProblem } from "./solve";
 import type { SolveAgent, SolveResult } from "./solve";
@@ -58,8 +50,8 @@ const challengeRoot = path.resolve(import.meta.dirname, "..");
  * for forward compatibility but is currently unused.
  *
  * Phase 2 micro-problems use a narrower schema (only `id`, `title`,
- * `hypothesizedAffordance`, `sdkSurface`, `contextProfiles`, `hint`); legacy
- * fields are optional so the same loader handles both eras.
+ * `designNote`, `sdkSurface`, `contextProfiles`, `hint`); legacy fields are
+ * optional so the same loader handles both eras.
  */
 export type ProblemMeta = {
   id: string;
@@ -67,10 +59,11 @@ export type ProblemMeta = {
   /** Phase 2 micro-problems: human-readable title. */
   title?: string;
   /**
-   * Phase 2 micro-problems: affordance hypothesis the problem is designed to
-   * exercise. Cross-referenced with judge output to validate the taxonomy.
+   * Phase 2 micro-problems: free-form note from the problem author describing
+   * the affordance gap the problem is designed to exercise. Not read by the
+   * runner; preserved as documentation of authorial intent.
    */
-  hypothesizedAffordance?: string;
+  designNote?: string;
   /** Phase 2 micro-problems: SDK surface area the problem targets. */
   sdkSurface?: string;
   /** Phase 2 micro-problems: short hint surfaced in problem.md or prompt. */
@@ -846,193 +839,6 @@ async function ensureAuthenticated(agent: SolveAgent, targetModel?: string): Pro
   console.log("Authentication: ok");
 }
 
-type ImprovementCandidate = {
-  runId: string;
-  problemId: string;
-  problemName: string;
-  agent?: string;
-  model?: string;
-  contextProfile?: string;
-  hypothesizedAffordance?: string;
-  judge: JudgeResult;
-};
-
-/**
- * Resolve the directory where `judge.json` should live for a problem result.
- * We prefer the per-attempt directory (where `trace.jsonl` already lives) so
- * everything diagnostic for one solve sits next to each other; fall back to
- * the problem artifact root when no attempt directory exists.
- */
-function resolveJudgeOutputDir(result: ProblemResult): string | undefined {
-  const attemptDir = result.solveResult?.artifact?.directory;
-  if (attemptDir && fs.existsSync(attemptDir)) {
-    return attemptDir;
-  }
-  const problemDir = result.artifacts?.directory;
-  if (problemDir) {
-    fs.mkdirSync(problemDir, { recursive: true });
-    return problemDir;
-  }
-  return undefined;
-}
-
-/**
- * Mutate each failed `ProblemResult` to attach a judge diagnosis (when judging
- * is enabled and the Anthropic API key is present). Writes `judge.json` next
- * to the per-problem trace and appends one line per candidate to the run-level
- * `improvement-candidates.jsonl`. Returns the relative path of the JSONL file
- * for inclusion in the report; undefined when no candidates were emitted.
- *
- * Runs outside the solve concurrency limiter — judge calls are independent of
- * Podman/agent throughput and serialising them keeps API spend predictable.
- */
-async function runJudgePostProcessing(
-  results: ProblemResult[],
-  runArtifactRoot: string | undefined,
-  runId: string,
-  runMeta: { agent?: SolveAgent; model?: string; contextProfile?: string },
-): Promise<string | undefined> {
-  if (process.env["LLM_CHALLENGE_DISABLE_JUDGE"] === "1") {
-    return undefined;
-  }
-
-  const failed = results.filter((r) => !r.passed);
-  if (failed.length === 0) {
-    return undefined;
-  }
-
-  // Pre-flight: confirm the `claude` CLI is on PATH so we fail fast and skip
-  // judging rather than spamming the same error per failed problem.
-  try {
-    execFileSync("claude", ["--version"], { stdio: "pipe", timeout: 10_000 });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.warn(
-      `[judge] claude CLI not available (${message.split("\n")[0] ?? "unknown"}); ` +
-        "skipping LLM-as-judge diagnosis. Run `claude setup-token` and export " +
-        "CLAUDE_CODE_OAUTH_TOKEN, or set LLM_CHALLENGE_DISABLE_JUDGE=1 to silence this warning.",
-    );
-    return undefined;
-  }
-
-  const candidates: ImprovementCandidate[] = [];
-  for (const result of failed) {
-    const problemDir = findProblemDirByResult(result);
-    if (!problemDir) {
-      console.warn(`[judge] Could not locate problem dir for ${result.problemId}; skipping.`);
-      continue;
-    }
-    const meta = loadMeta(problemDir);
-    const problemMdPath = path.join(problemDir, "problem.md");
-    let problemMd = "";
-    try {
-      problemMd = fs.readFileSync(problemMdPath, "utf-8");
-    } catch {
-      // problem.md missing — fall back to empty so judge can still run.
-    }
-
-    const tracePath = result.solveResult?.artifact?.directory
-      ? path.join(result.solveResult.artifact.directory, "trace.jsonl")
-      : undefined;
-    const traceEvents = tracePath ? readTraceEvents(tracePath) : [];
-
-    const scaffoldLayers = resolveScaffoldLayers(challengeRoot, problemDir);
-    const workSnapshotDir = result.solveResult?.artifact?.workSnapshotDir;
-    const diff =
-      workSnapshotDir && scaffoldLayers.length > 0
-        ? computeJudgeDiff(scaffoldLayers, workSnapshotDir)
-        : "";
-
-    const failedTestOutput = extractFailedTestOutput(result.stages);
-
-    try {
-      const judgeResult = await judgeFailure({
-        problemId: result.problemId,
-        problemMd,
-        diff,
-        traceEvents,
-        failedTestOutput,
-        ...(meta.hypothesizedAffordance
-          ? { hypothesizedAffordance: meta.hypothesizedAffordance }
-          : {}),
-      });
-      result.judge = judgeResult;
-
-      const outDir = resolveJudgeOutputDir(result);
-      if (outDir) {
-        fs.writeFileSync(path.join(outDir, "judge.json"), JSON.stringify(judgeResult, null, 2));
-      }
-
-      candidates.push({
-        runId,
-        problemId: result.problemId,
-        problemName: result.problemName,
-        ...(runMeta.agent ? { agent: runMeta.agent } : {}),
-        ...(runMeta.model ? { model: runMeta.model } : {}),
-        ...(runMeta.contextProfile ? { contextProfile: runMeta.contextProfile } : {}),
-        ...(meta.hypothesizedAffordance
-          ? { hypothesizedAffordance: meta.hypothesizedAffordance }
-          : {}),
-        judge: judgeResult,
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.warn(`[judge] ${result.problemId}: ${message}`);
-    }
-  }
-
-  if (candidates.length === 0 || !runArtifactRoot) {
-    return undefined;
-  }
-
-  fs.mkdirSync(runArtifactRoot, { recursive: true });
-  const jsonlPath = path.join(runArtifactRoot, "improvement-candidates.jsonl");
-  fs.writeFileSync(jsonlPath, candidates.map((c) => JSON.stringify(c)).join("\n") + "\n");
-  return jsonlPath;
-}
-
-/**
- * Merge the scaffold layers into one temp tree, run `git diff` against the
- * work snapshot, and remove the temp tree. Falls back to an empty string on
- * any error so judge calls do not crash when the diff machinery breaks.
- */
-function computeJudgeDiff(scaffoldLayers: string[], workSnapshotDir: string): string {
-  let mergedScaffold: string | undefined;
-  try {
-    mergedScaffold = fs.mkdtempSync(path.join(os.tmpdir(), "judge-scaffold-"));
-    applyScaffoldLayers(mergedScaffold, scaffoldLayers);
-    return computeWorkDiff(mergedScaffold, workSnapshotDir);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.warn(`[judge] computeWorkDiff failed: ${message}`);
-    return "";
-  } finally {
-    if (mergedScaffold) {
-      fs.rmSync(mergedScaffold, { recursive: true, force: true });
-    }
-  }
-}
-
-/**
- * Map a `ProblemResult` back to its source `problems/<dir>` by scanning all
- * problem directories and matching on `id`. Returns undefined when no match
- * is found (should not happen in practice).
- */
-function findProblemDirByResult(result: ProblemResult): string | undefined {
-  const dirs = listProblems(challengeRoot);
-  for (const d of dirs) {
-    try {
-      const meta = loadMeta(path.join(challengeRoot, "problems", d));
-      if (meta.id === result.problemId) {
-        return path.join(challengeRoot, "problems", d);
-      }
-    } catch {
-      // skip unreadable meta
-    }
-  }
-  return undefined;
-}
-
 function writeReport(
   resultsDir: string,
   report: ChallengeReport,
@@ -1309,26 +1115,11 @@ async function main(): Promise<void> {
 
   results.sort((a, b) => a.problemId.localeCompare(b.problemId));
 
-  // Phase 3 post-processing: LLM-as-judge for failed solves. Runs sequentially
-  // (outside the solve concurrency limiter) so judge API calls do not contend
-  // with podman-bound solves and so spend stays bounded.
-  let improvementCandidatesPath: string | undefined;
-  if (solve) {
-    improvementCandidatesPath = await runJudgePostProcessing(results, runArtifactRoot, runId, {
-      agent,
-      model,
-      contextProfile,
-    });
-  }
-
   const report = createReport(results, {
     model: solveModelLabel,
     contextProfile,
     sdkVersion,
     elapsedMs: Date.now() - runStartTime,
-    ...(improvementCandidatesPath
-      ? { improvementCandidatesPath: path.relative(resultsDir, improvementCandidatesPath) }
-      : {}),
     ...(sdkBranch ? { sdkBranch } : {}),
     iterationCount: iterations,
   });

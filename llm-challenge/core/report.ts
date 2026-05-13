@@ -1,5 +1,4 @@
 import { problemKey } from "../shared/helpers";
-import type { JudgeResult } from "./judge";
 import { type MetricsSummary, type TraceMetrics, summarizeMetrics } from "./metrics";
 import type { SolveResult } from "./solver/types";
 import type { ChallengeStage, StageInput, TestDetail } from "./verify";
@@ -82,13 +81,6 @@ export type ProblemResult = {
    */
   metrics?: TraceMetrics;
   /**
-   * LLM-as-judge diagnosis for failed problems. Populated by Phase 3 post-
-   * processing when the `claude` CLI is available on PATH (authenticated via
-   * `CLAUDE_CODE_OAUTH_TOKEN`) and judging is not disabled. Absent on
-   * `--use-solution` runs and for passing problems.
-   */
-  judge?: JudgeResult;
-  /**
    * Multi-iteration aggregate (Phase 4). Present only when the same task was
    * run with `--iterations N` (N > 1) so the variance bounds are available
    * for A/B comparisons. Single-iteration runs leave this undefined.
@@ -106,18 +98,6 @@ type Analytics = {
    * `--use-solution` runs).
    */
   metricsSummary?: MetricsSummary;
-  /**
-   * Frequency of judge-supplied affordance labels across failed problems in
-   * this run. Empty when no judge calls fired (e.g. `--use-solution`, no
-   * `claude` CLI on PATH, no failures).
-   */
-  affordanceDistribution: Record<string, number>;
-  /**
-   * Relative path (from the run's results subdirectory) to the aggregated
-   * `improvement-candidates.jsonl` written by the judge post-processor.
-   * Absent when no candidates were emitted.
-   */
-  improvementCandidatesPath?: string;
 };
 
 /**
@@ -323,17 +303,9 @@ function computeAnalytics(results: ProblemResult[]): Analytics {
     .filter((m): m is TraceMetrics => m !== undefined);
   const metricsSummary = summarizeMetrics(metricsList);
 
-  const affordanceDistribution: Record<string, number> = {};
-  for (const r of results) {
-    const label = r.judge?.affordanceLabel;
-    if (!label) continue;
-    affordanceDistribution[label] = (affordanceDistribution[label] ?? 0) + 1;
-  }
-
   return {
     stagePassRates,
     ...(metricsSummary ? { metricsSummary } : {}),
-    affordanceDistribution,
   };
 }
 
@@ -375,11 +347,6 @@ export function createReport(
     contextProfile?: string;
     sdkVersion?: string;
     elapsedMs?: number;
-    /**
-     * When set, recorded in `analytics.improvementCandidatesPath`. Caller is
-     * responsible for actually creating the file at this path.
-     */
-    improvementCandidatesPath?: string;
     /** Git ref this run packed the SDK from. Undefined when no `--sdk-branch` was used. */
     sdkBranch?: string;
     /** Number of solve iterations per problem (1 for single-run mode). */
@@ -407,9 +374,6 @@ export function createReport(
     metadata?.elapsedMs ?? results.reduce((sum, r) => sum + (r.totalDurationMs ?? 0), 0);
 
   const analytics = computeAnalytics(validResults);
-  if (metadata?.improvementCandidatesPath) {
-    analytics.improvementCandidatesPath = metadata.improvementCandidatesPath;
-  }
   const usageSummary = summarizeUsage(validResults);
 
   return {
@@ -584,12 +548,6 @@ export function formatReportTable(report: ChallengeReport): string {
     for (const [key, rate] of stageEntries) {
       lines.push(`  ${key.padEnd(25)} ${rate.passed}/${rate.total} (${rate.rate}%)`);
     }
-    // When the judge fired and produced affordance labels, surface the top 3
-    // as a single short line right under the stage rates.
-    const topLabels = topAffordances(analytics.affordanceDistribution, 3);
-    if (topLabels) {
-      lines.push(`  Top affordances:          ${topLabels}`);
-    }
   }
 
   if (analytics.metricsSummary) {
@@ -604,20 +562,6 @@ export function formatReportTable(report: ChallengeReport): string {
   }
 
   return lines.join("\n");
-}
-
-/**
- * Format the top-N affordance labels as `label=count, ...`. Returns undefined
- * when the distribution is empty so callers can suppress the line entirely.
- */
-function topAffordances(distribution: Record<string, number>, limit: number): string | undefined {
-  const entries = Object.entries(distribution);
-  if (entries.length === 0) return undefined;
-  entries.sort((a, b) => b[1] - a[1]);
-  return entries
-    .slice(0, limit)
-    .map(([label, count]) => `${label}=${count}`)
-    .join(", ");
 }
 
 /**

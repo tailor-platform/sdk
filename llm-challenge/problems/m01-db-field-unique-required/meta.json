@@ -1,7 +1,7 @@
 {
   "id": "m01-db-field-unique-required",
   "title": "Add a required + unique string field to a TailorDB model",
-  "hypothesizedAffordance": "implicit_assumption",
+  "designNote": "implicit_assumption",
   "sdkSurface": "db-field",
   "contextProfiles": ["types-only", "full-package"],
   "hint": "db.string() chain で .unique() が生える"

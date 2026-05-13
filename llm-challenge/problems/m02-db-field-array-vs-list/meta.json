@@ -1,7 +1,7 @@
 {
   "id": "m02-db-field-array-vs-list",
   "title": "Write an optional string array field using db.string options",
-  "hypothesizedAffordance": "naming_bias",
+  "designNote": "naming_bias",
   "sdkSurface": "db-field",
   "contextProfiles": ["types-only", "full-package"],
   "hint": ".array() ではなく option 渡し"

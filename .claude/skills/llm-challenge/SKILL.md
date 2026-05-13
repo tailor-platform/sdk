@@ -3,7 +3,7 @@ name: llm-challenge
 description: >
   Manage the LLM Challenge benchmark: run benchmarks, create/modify
   micro-problems, analyze results, run A/B experiments, and improve SDK based
-  on judge-surfaced affordance gaps.
+  on profile-diff and iteration-variance signals.
   Use when user mentions "llm-challenge", "challenge", "benchmark", or "lc".
 metadata:
   internal: true
@@ -13,7 +13,7 @@ metadata:
 
 Benchmark for `@tailor-platform/sdk` AI-friendliness. Located at `llm-challenge/`.
 
-Read `llm-challenge/README.md` for the full command surface, report shape, and the affordance taxonomy.
+Read `llm-challenge/README.md` for the full command surface and report shape.
 
 ## Core Rule
 
@@ -23,7 +23,6 @@ When AI fails a challenge, **improve the SDK** (JSDoc, error messages, types, CL
 
 - ALWAYS build the SDK before running: `pnpm -C packages/sdk build`
 - ALWAYS run `pnpm install` at repo root before benchmarks (stale workspace deps break the verify pipeline)
-- The post-solve judge reuses `CLAUDE_CODE_OAUTH_TOKEN` (same credential as the Claude solver) by shelling out to `claude -p` on the host (not inside podman). Without a working `claude` CLI, judging is skipped and `improvement-candidates.jsonl` is not written
 
 ### Solve Mode (Podman)
 
@@ -44,7 +43,7 @@ Structure: `problems/<id>-<slug>/` with `meta.json`, `problem.md`, `scaffold/`, 
 {
   "id": "m01-db-field-unique-required",
   "title": "Add a required + unique string field to a TailorDB type",
-  "hypothesizedAffordance": "implicit_assumption",
+  "designNote": "implicit_assumption",
   "sdkSurface": "db-field",
   "contextProfiles": ["types-only", "full-package"],
   "hint": "db.string() is required by default; chain .unique()."
@@ -52,10 +51,10 @@ Structure: `problems/<id>-<slug>/` with `meta.json`, `problem.md`, `scaffold/`, 
 ```
 
 - `id`: `m<NN>-<slug>` (sequential; next free is `m26+`).
-- `hypothesizedAffordance`: one of the 12 seeded labels (see below) or free-form.
+- `designNote`: free-form author note about the affordance gap the problem exercises. Documentation only; the runner does not read it.
 - `sdkSurface`: closed enum — `db-field`, `db-type`, `resolver`, `executor-record-trigger`, `executor-non-record-trigger`, `executor`, `workflow`, `config`, `plugin`, `auth-idp`, `cli-runtime`.
 - `contextProfiles`: subset of `["types-only", "full-package"]`.
-- `hint`: optional one-line hint; omit for `docs_only` problems where docs absence IS the test.
+- `hint`: optional one-line hint; omit for pure docs-gap problems where docs absence IS the test.
 
 **problem.md rules**:
 
@@ -82,32 +81,12 @@ Structure: `problems/<id>-<slug>/` with `meta.json`, `problem.md`, `scaffold/`, 
 ## SDK Improvement Cycle
 
 1. `pnpm -C llm-challenge challenge:solve --context-profile types-only` (and again with `--context-profile full-package`)
-2. Open `results/artifacts/<run>/improvement-candidates.jsonl`; cluster entries by `affordanceLabel`
-3. Pick the top cluster and read 1-2 candidates' `judge.diagnosis` + `trace.jsonl` to confirm the root cause
-4. Propose SDK changes — prefer the candidate's `apiChange` over `docFallback` unless the change is too invasive
+2. `pnpm challenge:analyze --trend --context-profile types-only` and `--context-profile full-package` to see pass-rate history per profile
+3. For problems where `full-package` passes but `types-only` fails (or where iteration pass rate is in `(0, 1)`), open the failing iteration's `trace.jsonl` and the per-attempt `work/` snapshot to identify the root cause manually
+4. Propose SDK changes — prefer compile-time/JSDoc/error-message changes over docs-only fixes
 5. `pnpm -C packages/sdk build`, then re-run `challenge:solve` on the same `(agent, model, profile)` to measure delta
-6. `pnpm challenge:analyze --trend --agent claude --context-profile types-only` to see pass-rate and affordance distribution diff
 
 A/B experiments via `pnpm challenge:experiment --sdk-branch <ref> --iterations <n>` run the benchmark twice (baseline tree + candidate ref), copy both reports into `results/experiments/<exp-id>/`, and emit a `delta.json` plus a printed ΔpassRate / ΔcostUSD summary. Forwarded flags (`--problem`, `--agent`, `--model`, `--context-profile`, `--concurrency`, …) are passed through to both child runs after the reserved flags are stripped.
-
-## Affordance Taxonomy
-
-The judge prompt seeds these 12 labels; free-form labels are accepted when none fit.
-
-- `consolidation_candidate` — merge sibling APIs
-- `naming_bias` — rename to the verb agents reach for
-- `context_bloat` — shrink default response
-- `missing_namespace` — add a parent object or prefix
-- `param_confusion` — tighten / rename parameters
-- `missing_action_verb` — add a workflow-shaped action API
-- `type_too_loose` — replace `any` / `unknown` with discriminated unions
-- `type_too_strict` — relax types that reject valid agent inputs
-- `redundant_call_pattern` — add idempotency / batching
-- `implicit_assumption` — promote runtime preconditions to compile-time
-- `error_message_opaque` — rewrite errors to name the next action
-- `docs_only` — pure documentation gap
-
-Source: `llm-challenge/core/judge.ts` (`SEED_AFFORDANCE_LABELS`).
 
 ## Parallel Runs
 

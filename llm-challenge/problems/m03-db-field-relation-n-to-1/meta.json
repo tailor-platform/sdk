@@ -1,7 +1,7 @@
 {
   "id": "m03-db-field-relation-n-to-1",
   "title": "Define a many-to-one relation field from Membership to Organization",
-  "hypothesizedAffordance": "docs_only",
+  "designNote": "docs_only",
   "sdkSurface": "db-field",
   "contextProfiles": ["types-only", "full-package"]
 }

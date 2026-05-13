@@ -1,7 +1,7 @@
 {
   "id": "h04-resolver-context-input-namespace",
   "title": "Destructure input + user from the resolver body's single context arg",
-  "hypothesizedAffordance": "missing_namespace",
+  "designNote": "missing_namespace",
   "sdkSurface": "resolver",
   "contextProfiles": ["types-only", "full-package"],
   "hint": "resolver body は (ctx) => ... の 1 引数で、input/user/env/invoker は ctx 配下の namespace"

@@ -1,7 +1,7 @@
 {
   "id": "m16-workflow-wait-point-resolve",
   "title": "Define a typed wait point and use it to gate a workflow job",
-  "hypothesizedAffordance": "missing_action_verb",
+  "designNote": "missing_action_verb",
   "sdkSurface": "workflow",
   "contextProfiles": ["types-only", "full-package"],
   "hint": "wait point は workflow と一緒に default export しない"

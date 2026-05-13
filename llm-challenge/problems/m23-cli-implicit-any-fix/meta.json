@@ -1,7 +1,7 @@
 {
   "id": "m23-cli-implicit-any-fix",
   "title": "Fix an implicit any on the resolver context by completing the resolver schema",
-  "hypothesizedAffordance": "type_too_loose",
+  "designNote": "type_too_loose",
   "sdkSurface": "cli-runtime",
   "contextProfiles": ["types-only", "full-package"],
   "hint": "input schema を埋めて createResolver の generic に ctx 型を推論させる"

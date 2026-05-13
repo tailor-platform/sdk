@@ -1,7 +1,7 @@
 {
   "id": "m05-db-type-hooks-create",
   "title": "Normalize slug to lowercase via a type-level create hook",
-  "hypothesizedAffordance": "naming_bias",
+  "designNote": "naming_bias",
   "sdkSurface": "db-type",
   "contextProfiles": ["types-only", "full-package"],
   "hint": "hooks は db.type().hooks() で type-level に登録する"

@@ -20,7 +20,6 @@ function makeReport(overrides: Partial<ChallengeReport> = {}): ChallengeReport {
     totalDurationMs: 0,
     analytics: {
       stagePassRates: {},
-      affordanceDistribution: {},
     },
     ...overrides,
   };
@@ -172,28 +171,6 @@ describe("computeReportDiff", () => {
     expect(diff.rows[0]!.costMedianB).toBeCloseTo(0.3, 10);
     expect(diff.rows[0]!.costMedianDelta).toBeCloseTo(0.2, 10);
     expect(diff.totalCostDelta).toBeCloseTo(0.2, 10);
-  });
-
-  it("computes affordance distribution delta", () => {
-    const reportA = makeReport({
-      analytics: {
-        stagePassRates: {},
-        affordanceDistribution: { missing_action_verb: 3, context_bloat: 1 },
-      },
-    });
-    const reportB = makeReport({
-      analytics: {
-        stagePassRates: {},
-        affordanceDistribution: { missing_action_verb: 1, type_too_loose: 2 },
-      },
-    });
-
-    const diff = computeReportDiff(reportA, reportB);
-    expect(diff.affordanceDelta).toEqual({
-      missing_action_verb: { a: 3, b: 1, delta: -2 },
-      context_bloat: { a: 1, b: 0, delta: -1 },
-      type_too_loose: { a: 0, b: 2, delta: 2 },
-    });
   });
 
   it("surfaces a warning when context profile differs between reports", () => {

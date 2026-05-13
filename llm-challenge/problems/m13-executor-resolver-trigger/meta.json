@@ -1,7 +1,7 @@
 {
   "id": "m13-executor-resolver-trigger",
   "title": "Trigger an executor when a specific resolver runs",
-  "hypothesizedAffordance": "missing_namespace",
+  "designNote": "missing_namespace",
   "sdkSurface": "executor-non-record-trigger",
   "contextProfiles": ["types-only", "full-package"],
   "hint": "trigger は resolver instance を取る (string ではない)"
