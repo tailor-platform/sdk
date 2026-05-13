@@ -9,7 +9,7 @@ const envValueSchema = z.union([z.string(), z.number(), z.boolean()]);
  * as opaque values, since their internal shapes are validated by their
  * own factory functions and parser-level schemas.
  *
- * The `id` is auto-managed by `apply` and stored as a plain UUID. A
+ * The `id` is auto-managed by `deploy` and stored as a plain UUID. A
  * label-compatible prefix is added at the metadata boundary, so user-facing
  * configs only need to carry a UUID.
  */

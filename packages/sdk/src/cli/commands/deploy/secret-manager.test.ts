@@ -42,7 +42,7 @@ vi.mock("./label", async (importOriginal) => {
         labels: {
           "sdk-name": params.appName,
           "sdk-version": "v1-0-0",
-          ...(params.appId ? { "sdk-app-id": params.appId } : {}),
+          ...(params.appId ? { "sdk-app-id": `app-${params.appId}` } : {}),
         },
       })),
   };

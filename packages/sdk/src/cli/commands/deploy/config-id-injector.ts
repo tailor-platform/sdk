@@ -118,7 +118,7 @@ export async function ensureConfigId(configPath: string): Promise<EnsureConfigId
   return { id, injected: true };
 }
 
-const idComment = "// SDK-managed id: do not edit or delete";
+const idComment = "// SDK-managed id: do not edit (delete to regenerate)";
 
 function insertIdProperty(source: string, configObj: ObjectExpression, id: string): string {
   const idLiteral = `id: ${JSON.stringify(id)}`;
