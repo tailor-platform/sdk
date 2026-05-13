@@ -1,0 +1,53 @@
+import * as fs from "node:fs";
+import { z } from "zod";
+import { parseCrashReportConfig } from "@/cli/crashreport/config";
+import { CRASH_LOG_EXTENSION } from "@/cli/crashreport/writer";
+import { type Order, paginationArgs } from "@/cli/shared/args";
+import { defineAppCommand } from "@/cli/shared/command";
+import { logger } from "@/cli/shared/logger";
+
+export function orderAndLimitCrashReports(
+  entries: string[],
+  options: { order?: Order; limit?: number },
+): string[] {
+  const sorted = entries.filter((f) => f.endsWith(CRASH_LOG_EXTENSION)).sort();
+  const ordered = options.order === "asc" ? sorted : sorted.reverse();
+  return options.limit && options.limit > 0 ? ordered.slice(0, options.limit) : ordered;
+}
+
+export const listCommand = defineAppCommand({
+  name: "list",
+  description: "List local crash report files.",
+  args: z
+    .object({
+      ...paginationArgs(),
+    })
+    .strict(),
+  run: async (args) => {
+    const config = parseCrashReportConfig();
+    if (!config.localDir) {
+      logger.info("Crash report directory not available.");
+      return;
+    }
+
+    let entries: string[];
+    try {
+      entries = fs.readdirSync(config.localDir);
+    } catch {
+      logger.info("No crash reports found.");
+      return;
+    }
+
+    const files = orderAndLimitCrashReports(entries, { order: args.order, limit: args.limit });
+
+    if (files.length === 0) {
+      logger.info("No crash reports found.");
+      return;
+    }
+
+    logger.info(`${files.length} crash report(s) in ${config.localDir}:`);
+    for (const file of files) {
+      logger.log(`  ${file}`);
+    }
+  },
+});

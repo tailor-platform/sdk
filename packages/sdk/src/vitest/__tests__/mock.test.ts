@@ -522,21 +522,78 @@ describe("mock", () => {
       ]);
     });
 
-    test("setWorkflowExecutionId controls triggerWorkflow response", async () => {
-      workflowMock.setWorkflowExecutionId("exec-123");
+    test("setTriggerHandler with string controls triggerWorkflow response", async () => {
+      workflowMock.setTriggerHandler("exec-123");
       const result = await (globalThis as any).tailor.workflow.triggerWorkflow("wf");
       expect(result).toBe("exec-123");
+    });
+
+    test("setTriggerHandler with function receives name/args/options", async () => {
+      const seen: unknown[] = [];
+      workflowMock.setTriggerHandler((name, args, options) => {
+        seen.push({ name, args, options });
+        return `exec-${name}`;
+      });
+      const result = await (globalThis as any).tailor.workflow.triggerWorkflow(
+        "wf",
+        { key: "val" },
+        { authInvoker: { namespace: "ns", machineUserName: "mu" } },
+      );
+      expect(result).toBe("exec-wf");
+      expect(seen).toEqual([
+        {
+          name: "wf",
+          args: { key: "val" },
+          options: { authInvoker: { namespace: "ns", machineUserName: "mu" } },
+        },
+      ]);
     });
 
     test("records wait calls", () => {
       (globalThis as any).tailor.workflow.wait("key", { data: 1 });
       expect(workflowMock.calls).toEqual([{ method: "wait", args: ["key", { data: 1 }] }]);
+      expect(workflowMock.waitCalls).toEqual([{ key: "key", payload: { data: 1 } }]);
     });
 
-    test("setWaitResult controls wait response", () => {
-      workflowMock.setWaitResult({ approved: true });
+    test("setWaitHandler with value controls wait response", () => {
+      workflowMock.setWaitHandler({ approved: true });
       const result = (globalThis as any).tailor.workflow.wait("key");
       expect(result).toEqual({ approved: true });
+    });
+
+    test("setWaitHandler with function receives key/payload", () => {
+      workflowMock.setWaitHandler((key: string, payload: unknown) => ({ key, payload }));
+      const result = (globalThis as any).tailor.workflow.wait("approval", { reason: "ok" });
+      expect(result).toEqual({ key: "approval", payload: { reason: "ok" } });
+    });
+
+    test("setResolveHandler invokes the user callback", async () => {
+      const calls: unknown[] = [];
+      workflowMock.setResolveHandler((executionId, key, callback) => {
+        calls.push({ executionId, key });
+        return callback({ approved: true });
+      });
+      await (globalThis as any).tailor.workflow.resolve(
+        "exec-1",
+        "approval",
+        (payload: unknown) => {
+          calls.push({ payload });
+        },
+      );
+      expect(calls).toEqual([
+        { executionId: "exec-1", key: "approval" },
+        { payload: { approved: true } },
+      ]);
+      expect(workflowMock.resolveCalls).toEqual([{ executionId: "exec-1", key: "approval" }]);
+    });
+
+    test("resolve is recorded but callback is not invoked by default", async () => {
+      let callbackRan = false;
+      await (globalThis as any).tailor.workflow.resolve("exec-1", "approval", () => {
+        callbackRan = true;
+      });
+      expect(callbackRan).toBe(false);
+      expect(workflowMock.resolveCalls).toEqual([{ executionId: "exec-1", key: "approval" }]);
     });
   });
 

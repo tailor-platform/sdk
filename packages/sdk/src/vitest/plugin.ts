@@ -170,6 +170,7 @@ export function createBlockPlugin(): Plugin {
 
     configResolved(config) {
       type HostFileTestConfig = {
+        include?: string[];
         setupFiles?: string | string[];
         globalSetup?: string | string[];
         root?: string;
@@ -177,13 +178,11 @@ export function createBlockPlugin(): Plugin {
       const testConfig = (
         config as typeof config & {
           test?: HostFileTestConfig & {
-            include?: string[];
             projects?: { test?: HostFileTestConfig }[];
           };
         }
       ).test;
       const root = testConfig?.root ?? config.root;
-      const patterns = testConfig?.include ?? DEFAULT_TEST_INCLUDE;
       // Setup files and global-setup files run in the Vitest host (not the
       // emulated runtime), so they may freely import node:* modules. Collect
       // them from the top-level config AND from each `test.projects[i]` —
@@ -195,6 +194,15 @@ export function createBlockPlugin(): Plugin {
         ...toAbsolutePaths(testConfig?.setupFiles, root),
         ...toAbsolutePaths(testConfig?.globalSetup, root),
       ]);
+      // Vitest projects can each define their own `test.include` (and root).
+      // A project that uses non-default patterns (e.g. `tests/**/*.spec.ts`)
+      // must also be considered when classifying test files — otherwise its
+      // tests would be treated as production code and have node:* imports
+      // rewritten. Build a list of (root, patterns) pairs covering top-level
+      // + every project, and accept a file if any pair matches.
+      const includePairs: { root: string; patterns: string[] }[] = [
+        { root, patterns: testConfig?.include ?? DEFAULT_TEST_INCLUDE },
+      ];
       for (const project of testConfig?.projects ?? []) {
         const projectTest = project?.test;
         if (!projectTest) continue;
@@ -205,11 +213,17 @@ export function createBlockPlugin(): Plugin {
         for (const f of toAbsolutePaths(projectTest.globalSetup, projectRoot)) {
           exemptHostFiles.add(f);
         }
+        includePairs.push({
+          root: projectRoot,
+          patterns: projectTest.include ?? DEFAULT_TEST_INCLUDE,
+        });
       }
       isTestFile = (id: string) => {
         if (exemptHostFiles.has(id)) return true;
-        const candidate = isAbsolute(id) ? relative(root, id) : id;
-        return patterns.some((pattern) => matchesGlob(candidate, pattern));
+        return includePairs.some(({ root: r, patterns }) => {
+          const candidate = isAbsolute(id) ? relative(r, id) : id;
+          return patterns.some((pattern) => matchesGlob(candidate, pattern));
+        });
       };
       // Only transform files inside the project root. With pnpm workspaces,
       // dependencies are symlinked and Vite resolves them to absolute paths
@@ -225,9 +239,15 @@ export function createBlockPlugin(): Plugin {
     },
 
     transform(code, id) {
-      if (isTestFile(id)) return undefined;
-      if (id.includes("node_modules")) return undefined;
-      if (!isUserSourceFile(id)) return undefined;
+      // Vite can pass ids with query/hash suffixes (e.g. `file.ts?import`,
+      // `file.ts?v=hash`). Strip them so exact-path lookups (Set membership,
+      // glob matching, absolute-path checks) match what callers configured.
+      const queryIdx = id.search(/[?#]/);
+      const cleanId = queryIdx === -1 ? id : id.slice(0, queryIdx);
+
+      if (isTestFile(cleanId)) return undefined;
+      if (cleanId.includes("node_modules")) return undefined;
+      if (!isUserSourceFile(cleanId)) return undefined;
 
       let ast: { body: ImportLikeNode[] };
       try {

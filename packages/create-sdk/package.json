@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/create-sdk",
-  "version": "1.45.1",
+  "version": "1.46.0",
   "description": "A CLI tool to quickly create a new Tailor Platform SDK project",
   "license": "MIT",
   "repository": {
@@ -26,7 +26,7 @@
     "publint": "publint --strict"
   },
   "dependencies": {
-    "@clack/prompts": "1.2.0",
+    "@clack/prompts": "1.3.0",
     "execa": "9.6.1",
     "picocolors": "1.1.1",
     "pkg-types": "2.3.1",

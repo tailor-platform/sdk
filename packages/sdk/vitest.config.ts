@@ -33,7 +33,7 @@ export default defineConfig({
         test: {
           name: "integration",
           include: [
-            "src/cli/commands/apply/__test_fixtures__/**/*.test.ts",
+            "src/cli/commands/deploy/__test_fixtures__/**/*.test.ts",
             "src/plugin/compat.test.ts",
           ],
           testTimeout: 60000,

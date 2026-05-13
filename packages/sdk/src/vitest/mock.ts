@@ -19,6 +19,30 @@ type IdpResolver = (method: string, args: unknown[], namespace: string) => unkno
 type FileResolver = (method: string, call: FileCall) => unknown;
 type IconvResolver = (method: string, args: unknown[]) => unknown;
 
+type TriggerWorkflowOptions = {
+  authInvoker?: { namespace: string; machineUserName: string };
+};
+type TriggerHandlerFn = (
+  workflowName: string,
+  args: unknown,
+  options?: TriggerWorkflowOptions,
+) => string;
+type WaitHandlerFn = (key: string, payload: unknown) => unknown;
+type ResolveHandler = (
+  executionId: string,
+  key: string,
+  callback: (payload: unknown) => unknown,
+) => unknown | Promise<unknown>;
+
+// Overloaded so TypeScript narrows to WaitHandlerFn first (giving inferred
+// `(key: string, payload: unknown) => …` for callers) before falling back
+// to the static-value form. A union type would let `unknown` swallow the
+// function variant and break inference.
+type SetWaitHandler = {
+  (handler: WaitHandlerFn): void;
+  (handler: unknown): void;
+};
+
 interface ExecutedQuery {
   query: string;
   params: unknown[];
@@ -83,8 +107,9 @@ interface MockState {
   jobHandler: JobHandler;
   jobResultQueue: unknown[];
   triggeredJobs: TriggeredJob[];
-  workflowExecutionId: string;
-  waitResult: unknown;
+  triggerHandler: string | TriggerHandlerFn;
+  waitHandler: unknown | WaitHandlerFn;
+  resolveHandler: ResolveHandler | null;
   workflowCalls: WorkflowCall[];
   // SecretManager
   secretStore: Record<string, Record<string, string>>;
@@ -138,8 +163,9 @@ function createDefaultState(): MockState {
     jobHandler: () => null,
     jobResultQueue: [],
     triggeredJobs: [],
-    workflowExecutionId: "mock-execution-id",
-    waitResult: null,
+    triggerHandler: "mock-execution-id",
+    waitHandler: null,
+    resolveHandler: null,
     workflowCalls: [],
     secretStore: {},
     secretCalls: [],
@@ -266,8 +292,20 @@ export const tailordbMock = {
  *   });
  * });
  *
- * test("ordered results", () => {
- *   workflowMock.enqueueResults({ valid: true }, { txnId: "txn-1" });
+ * test("wait point", () => {
+ *   workflowMock.setWaitHandler(() => ({ approved: true }));
+ *   // …
+ *   expect(workflowMock.waitCalls).toEqual([{ key: "approval", payload: undefined }]);
+ * });
+ *
+ * test("resolve point", () => {
+ *   workflowMock.setResolveHandler((_executionId, _key, callback) =>
+ *     callback({ approved: true }),
+ *   );
+ *   // …
+ *   expect(workflowMock.resolveCalls).toEqual([
+ *     { executionId: "mock-execution-id", key: "approval" },
+ *   ]);
  * });
  * ```
  */
@@ -310,19 +348,32 @@ export const workflowMock = {
   },
 
   /**
-   * Set the execution ID returned by triggerWorkflow.
-   * @param id - Execution ID string
+   * Configure what `tailor.workflow.triggerWorkflow` returns. Pass a string to return
+   * the same execution ID for every call, or a function `(name, args, options) => string`
+   * to compute one per call. Default: `"mock-execution-id"`.
+   * @param handler - Static execution ID or a function that returns one
    */
-  setWorkflowExecutionId(id: string): void {
-    getState().workflowExecutionId = id;
+  setTriggerHandler(handler: string | TriggerHandlerFn): void {
+    getState().triggerHandler = handler;
   },
 
   /**
-   * Set the result returned by wait.
-   * @param result - Value to return from wait calls
+   * Configure what `tailor.workflow.wait` returns. Pass a function `(key, payload) => unknown`
+   * to compute one per call, or any other value to return it for every call. Default: `null`.
+   * @param handler - Static value or a function that returns one
    */
-  setWaitResult(result: unknown): void {
-    getState().waitResult = result;
+  setWaitHandler: ((handler: unknown) => {
+    getState().waitHandler = handler;
+  }) as SetWaitHandler,
+
+  /**
+   * Configure how `tailor.workflow.resolve` runs the user-supplied callback. The handler
+   * receives `(executionId, key, callback)` — invoke `callback(payload)` to drive
+   * resolve→wait wiring in tests. Default: callback is not invoked (records the call only).
+   * @param handler - Function invoked per `resolve` call
+   */
+  setResolveHandler(handler: ResolveHandler): void {
+    getState().resolveHandler = handler;
   },
 
   /**
@@ -333,14 +384,35 @@ export const workflowMock = {
     return getState().workflowCalls;
   },
 
+  /**
+   * `tailor.workflow.wait` calls reshaped as `{ key, payload }` for assertions.
+   * @returns Wait call records
+   */
+  get waitCalls(): { key: string; payload: unknown }[] {
+    return getState()
+      .workflowCalls.filter((c) => c.method === "wait")
+      .map((c) => ({ key: c.args[0] as string, payload: c.args[1] }));
+  },
+
+  /**
+   * `tailor.workflow.resolve` calls reshaped as `{ executionId, key }` for assertions.
+   * @returns Resolve call records
+   */
+  get resolveCalls(): { executionId: string; key: string }[] {
+    return getState()
+      .workflowCalls.filter((c) => c.method === "resolve")
+      .map((c) => ({ executionId: c.args[0] as string, key: c.args[1] as string }));
+  },
+
   /** Reset all workflow mock state. Call in `beforeEach`. */
   reset(): void {
     const state = getState();
     state.jobHandler = () => null;
     state.jobResultQueue.length = 0;
     state.triggeredJobs.length = 0;
-    state.workflowExecutionId = "mock-execution-id";
-    state.waitResult = null;
+    state.triggerHandler = "mock-execution-id";
+    state.waitHandler = null;
+    state.resolveHandler = null;
     state.workflowCalls.length = 0;
   },
 };
@@ -603,26 +675,27 @@ function mockTriggerJobFunction(jobName: string, args?: unknown): unknown {
 async function mockTriggerWorkflow(
   workflowName: string,
   args?: unknown,
-  options?: { authInvoker?: { namespace: string; machineUserName: string } },
+  options?: TriggerWorkflowOptions,
 ): Promise<string> {
   const state = getState();
   state.workflowCalls.push({ method: "triggerWorkflow", args: [workflowName, args, options] });
-  return state.workflowExecutionId;
+  const handler = state.triggerHandler;
+  return typeof handler === "function" ? handler(workflowName, args, options) : handler;
 }
 
 function mockWait(key: string, payload?: unknown): unknown {
   const state = getState();
   state.workflowCalls.push({ method: "wait", args: [key, payload] });
-  return state.waitResult;
+  const handler = state.waitHandler;
+  return typeof handler === "function" ? (handler as WaitHandlerFn)(key, payload) : handler;
 }
 
-// Records the resolve call but does not invoke the callback. This mirrors
-// platform semantics: tailor.workflow.resolve enqueues the callback against
-// the wait point and returns immediately; the callback runs only when a
-// later wait() consumes the payload. Tests that need to verify callback
-// behavior can retrieve it from workflowMock.calls and invoke it directly,
-// or use setupWaitPointMock from @tailor-platform/sdk/test for end-to-end
-// resolve→wait wiring.
+// Records the resolve call. By default the callback is not invoked, mirroring
+// platform semantics where tailor.workflow.resolve enqueues the callback
+// against the wait point and returns immediately. Tests that need
+// resolve→wait wiring can register a handler via workflowMock.setResolveHandler
+// — the handler receives `(executionId, key, callback)` and decides whether to
+// invoke the callback (typically with a synthesized payload).
 async function mockResolve(
   executionId: string,
   key: string,
@@ -630,6 +703,9 @@ async function mockResolve(
 ): Promise<void> {
   const state = getState();
   state.workflowCalls.push({ method: "resolve", args: [executionId, key, callback] });
+  if (state.resolveHandler) {
+    await state.resolveHandler(executionId, key, callback);
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -18,10 +18,15 @@ Unit-test entrypoints exposed by the SDK:
 Helpers under `@tailor-platform/sdk/test`:
 
 - `unauthenticatedTailorUser` — default `user` value for resolver contexts
-- `setupWaitPointMock({ onWait?, onResolve? })` — stubs `globalThis.tailor.workflow.wait` / `.resolve`
 - `WORKFLOW_TEST_ENV_KEY` — env key consumed by `.trigger()` when run locally
 
-For tighter alignment with the production runtime — Node.js module blocking, Web-only globals, and platform API mocks — pair these helpers with the [`tailor-runtime` Vitest environment](#runtime-environment-emulation-beta) below.
+Platform API mocks under `@tailor-platform/sdk/vitest` (auto-injected by the [`tailor-runtime` Vitest environment](#runtime-environment-emulation-beta) below):
+
+- `tailordbMock` — TailorDB query stubs and call recording
+- `workflowMock` — `tailor.workflow` job / wait / resolve mocks
+- `secretmanagerMock`, `authconnectionMock`, `idpMock`, `fileMock`, `iconvMock` — corresponding platform API mocks
+
+For tighter alignment with the production runtime — Node.js module blocking, Web-only globals, and platform API mocks — pair the resolver helpers with the [`tailor-runtime` Vitest environment](#runtime-environment-emulation-beta) below.
 
 Three starter templates demonstrate the patterns below in a working project:
 
@@ -425,26 +430,23 @@ describe("decrementUserAge", () => {
 
 #### Resolvers that resume a workflow
 
-Resolvers that call `waitPoint.resolve(...)` delegate to `tailor.workflow.resolve` at runtime. Use `setupWaitPointMock` to supply an `onResolve` handler and inspect the recorded calls:
+Resolvers that call `waitPoint.resolve(...)` delegate to `tailor.workflow.resolve` at runtime. With the `tailor-runtime` environment active, use `workflowMock.setResolveHandler` to drive the user-supplied callback and inspect `workflowMock.resolveCalls`:
 
 ```typescript
-import { setupWaitPointMock, unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
-import { afterEach, describe, expect, test } from "vitest";
+import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
+import { workflowMock } from "@tailor-platform/sdk/vitest";
+import { beforeEach, describe, expect, test } from "vitest";
 import resolver from "./resolveApproval";
 
-const TailorGlobal = globalThis as { tailor?: { workflow?: Record<string, unknown> } };
-
 describe("resolveApproval resolver", () => {
-  afterEach(() => {
-    delete TailorGlobal.tailor;
+  beforeEach(() => {
+    workflowMock.reset();
   });
 
   test("resolves approval with approved=true", async () => {
-    const { resolveCalls } = setupWaitPointMock({
-      onResolve: (_executionId, _key, callback) => {
-        const result = callback({ message: "Please approve order order-1", orderId: "order-1" });
-        expect(result).toEqual({ approved: true });
-      },
+    workflowMock.setResolveHandler((_executionId, _key, callback) => {
+      const result = callback({ message: "Please approve order order-1", orderId: "order-1" });
+      expect(result).toEqual({ approved: true });
     });
 
     const result = await resolver.body({
@@ -454,13 +456,12 @@ describe("resolveApproval resolver", () => {
     });
 
     expect(result).toEqual({ resolved: true });
-    expect(resolveCalls).toHaveLength(1);
-    expect(resolveCalls[0]).toEqual({ executionId: "exec-1", key: "approval" });
+    expect(workflowMock.resolveCalls).toEqual([{ executionId: "exec-1", key: "approval" }]);
   });
 });
 ```
 
-`onResolve` lets you assert the callback behavior (the value passed back to the suspended job). Clean `globalThis.tailor` in `afterEach` so tests stay isolated.
+`setResolveHandler` receives `(executionId, key, callback)` and decides whether to invoke the callback — that's how you assert the value returned to the suspended job.
 
 ### Testing Executors
 
@@ -565,36 +566,32 @@ describe("fulfillOrder", () => {
 
 #### Jobs that wait on approval
 
-`.wait()` calls delegate to `tailor.workflow.wait`. Use `setupWaitPointMock` with `onWait` to drive each branch:
+`.wait()` calls delegate to `tailor.workflow.wait`. With the `tailor-runtime` environment active, use `workflowMock.setWaitHandler` to drive each branch and inspect `workflowMock.waitCalls`:
 
 ```typescript
-import { setupWaitPointMock } from "@tailor-platform/sdk/test";
-import { afterEach, describe, expect, test } from "vitest";
+import { workflowMock } from "@tailor-platform/sdk/vitest";
+import { beforeEach, describe, expect, test } from "vitest";
 import { processWithApproval } from "./approval";
 
-const TailorGlobal = globalThis as { tailor?: { workflow?: Record<string, unknown> } };
-
 describe("processWithApproval", () => {
-  afterEach(() => {
-    delete TailorGlobal.tailor;
+  beforeEach(() => {
+    workflowMock.reset();
   });
 
   test("returns approved status when .wait() resolves positively", async () => {
-    const { waitCalls } = setupWaitPointMock({
-      onWait: () => ({ approved: true }),
-    });
+    workflowMock.setWaitHandler({ approved: true });
 
     const result = await processWithApproval.body({ orderId: "order-1" }, { env: {} });
 
     expect(result).toEqual({ orderId: "order-1", status: "approved" });
-    expect(waitCalls[0]).toEqual({
+    expect(workflowMock.waitCalls[0]).toEqual({
       key: "approval",
       payload: { message: "Please approve order order-1", orderId: "order-1" },
     });
   });
 
   test("returns rejected status when .wait() resolves negatively", async () => {
-    setupWaitPointMock({ onWait: () => ({ approved: false }) });
+    workflowMock.setWaitHandler({ approved: false });
 
     const result = await processWithApproval.body({ orderId: "order-2" }, { env: {} });
 
@@ -603,7 +600,7 @@ describe("processWithApproval", () => {
 });
 ```
 
-`onWait` controls what each `.wait()` returns; `waitCalls` captures the `key` and `payload` passed in.
+`setWaitHandler` accepts a static value (returned from every `.wait()` call) or a function `(key, payload) => unknown` to compute one per call. `waitCalls` captures the `key` and `payload` passed in.
 
 #### Running a full workflow locally
 

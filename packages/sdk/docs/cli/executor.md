@@ -151,7 +151,7 @@ List or get executor jobs.
 **Usage**
 
 ```
-tailor-sdk executor jobs [options] <executorName> [jobId]
+tailor-sdk executor jobs [options] <executor-name> [job-id]
 ```
 
 <!-- politty:command:executor jobs:usage:end -->
@@ -160,10 +160,10 @@ tailor-sdk executor jobs [options] <executorName> [jobId]
 
 **Arguments**
 
-| Argument       | Description                             | Required |
-| -------------- | --------------------------------------- | -------- |
-| `executorName` | Executor name                           | Yes      |
-| `jobId`        | Job ID (if provided, shows job details) | No       |
+| Argument        | Description                             | Required |
+| --------------- | --------------------------------------- | -------- |
+| `executor-name` | Executor name                           | Yes      |
+| `job-id`        | Job ID (if provided, shows job details) | No       |
 
 <!-- politty:command:executor jobs:arguments:end -->
 
@@ -256,7 +256,7 @@ Trigger an executor manually.
 **Usage**
 
 ```
-tailor-sdk executor trigger [options] <executorName>
+tailor-sdk executor trigger [options] <executor-name>
 ```
 
 <!-- politty:command:executor trigger:usage:end -->
@@ -265,9 +265,9 @@ tailor-sdk executor trigger [options] <executorName>
 
 **Arguments**
 
-| Argument       | Description   | Required |
-| -------------- | ------------- | -------- |
-| `executorName` | Executor name | Yes      |
+| Argument        | Description   | Required |
+| --------------- | ------------- | -------- |
+| `executor-name` | Executor name | Yes      |
 
 <!-- politty:command:executor trigger:arguments:end -->
 

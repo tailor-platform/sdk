@@ -480,6 +480,65 @@ describe("createBlockPlugin", () => {
     });
     expect(arrayResult).toBeUndefined();
   });
+
+  test("exempts test files matched only by per-project test.include patterns", () => {
+    // Vitest projects can each set their own `test.include` (and root). A
+    // project that uses non-default patterns — e.g. `e2e/**/*.spec.ts` under
+    // a sibling project root — must still be recognised as test code, or its
+    // node:* imports will be rewritten as if it were production source.
+    const plugin = createBlockPlugin();
+    const code = `import { randomUUID } from "node:crypto";`;
+    const node = {
+      type: "ImportDeclaration" as const,
+      start: 0,
+      end: code.length,
+      source: { value: "node:crypto" },
+    };
+    (plugin.configResolved as any)({
+      root: "/top-root",
+      test: {
+        // Top-level patterns intentionally do NOT cover the project file.
+        include: ["src/**/*.test.ts"],
+        projects: [
+          {
+            test: {
+              root: "/proj-root",
+              include: ["e2e/**/*.spec.ts"],
+            },
+          },
+        ],
+      },
+    });
+    const parseCtx = { parse: () => ({ body: [node] }) };
+    expect(
+      (plugin.transform as any).call(parseCtx, code, "/proj-root/e2e/foo.spec.ts"),
+    ).toBeUndefined();
+  });
+
+  test("strips query/hash suffixes from id before path lookups", () => {
+    // Vite can hand transform() ids like `file.ts?import`, `file.ts?v=hash`,
+    // or `file.ts#fragment`. The exemption logic compares ids against
+    // configured paths via Set membership / glob match / absolute-path check
+    // — all exact-string operations that would silently miss a suffixed id
+    // and re-transform a setup file, blowing up its node:* imports.
+    const plugin = createBlockPlugin();
+    const setupPath = "/abs/path/setup.ts";
+    const code = `import { pathToFileURL } from "node:url";\nexport const x = pathToFileURL("/x").href;`;
+    const node = {
+      type: "ImportDeclaration" as const,
+      start: 0,
+      end: 41,
+      source: { value: "node:url" },
+    };
+    (plugin.configResolved as any)({
+      root: "/",
+      test: { include: [], setupFiles: [setupPath] },
+    });
+    const parseCtx = { parse: () => ({ body: [node] }) };
+    for (const suffix of ["?import", "?direct", "?raw", "?v=abc123", "#frag"]) {
+      expect((plugin.transform as any).call(parseCtx, code, setupPath + suffix)).toBeUndefined();
+    }
+  });
 });
 
 describe("createEnvironmentPlugin", () => {

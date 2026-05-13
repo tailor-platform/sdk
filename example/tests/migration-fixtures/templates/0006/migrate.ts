@@ -4,7 +4,7 @@
  * This script handles data migration for breaking schema changes.
  * Edit this file to implement your data migration logic.
  *
- * The transaction is managed by the apply command.
+ * The transaction is managed by the deploy command.
  * If any operation fails, all changes will be rolled back.
  */
 

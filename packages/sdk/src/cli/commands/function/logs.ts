@@ -208,12 +208,20 @@ interface DownloadScriptForMappingOptions {
    */
   executionType: FunctionExecution_Type;
   /**
-   * When the execution started. Used to detect redeploys that happened
-   * after the execution: if the current registry entry's `updatedAt`
-   * is strictly newer, the downloaded bundle may differ from what was
-   * actually executed, so mapping is skipped to avoid misleading
-   * source locations. `FunctionExecution` carries no bundle version
-   * today, so this timestamp comparison is the best available signal.
+   * FunctionExecution.contentHash. When non-empty, the registry
+   * download is pinned to this exact bundle so the stack trace maps
+   * against the code that actually ran, regardless of subsequent
+   * redeploys. Empty on older servers that did not populate the
+   * field; in that case the caller falls back to a timestamp-based
+   * staleness check using `executionStartedAt`.
+   */
+  executionContentHash: string;
+  /**
+   * When the execution started. Used as a fallback staleness signal
+   * only when `executionContentHash` is empty: if the current registry
+   * entry's `updatedAt` is strictly newer, the downloaded bundle may
+   * differ from what was actually executed, so mapping is skipped to
+   * avoid misleading source locations.
    */
   executionStartedAt: Date | null;
 }
@@ -224,6 +232,11 @@ interface DownloadScriptForMappingOptions {
  * to a plain-text format when the script cannot be retrieved or when
  * the current registry entry is stale relative to the execution.
  *
+ * When `executionContentHash` is non-empty, the download is pinned to
+ * that exact bundle so mapping stays correct across redeploys. When
+ * empty (older servers), falls back to comparing `registryUpdatedAt`
+ * against `executionStartedAt`.
+ *
  * `FunctionExecution.scriptName` does not match the function registry
  * name directly; `scriptNameToRegistryName` translates between the two
  * formats.
@@ -232,13 +245,21 @@ interface DownloadScriptForMappingOptions {
  * @param options.workspaceId - Workspace ID
  * @param options.scriptName - Script name (matches FunctionExecution.scriptName)
  * @param options.executionType - Execution type used to discriminate registry name translation
- * @param options.executionStartedAt - Execution start timestamp used for staleness check
+ * @param options.executionContentHash - Content hash of the bundle that ran; pins the download when non-empty
+ * @param options.executionStartedAt - Execution start timestamp used as fallback staleness signal
  * @returns Bundled script content, or null when unavailable / stale
  */
 export async function downloadScriptForMapping(
   options: DownloadScriptForMappingOptions,
 ): Promise<string | null> {
-  const { client, workspaceId, scriptName, executionType, executionStartedAt } = options;
+  const {
+    client,
+    workspaceId,
+    scriptName,
+    executionType,
+    executionContentHash,
+    executionStartedAt,
+  } = options;
   const registryName = scriptNameToRegistryName(scriptName, executionType);
   if (registryName == null) {
     logger.debug(
@@ -246,6 +267,27 @@ export async function downloadScriptForMapping(
     );
     return null;
   }
+
+  if (executionContentHash !== "") {
+    const pinned = await downloadFunctionScript({
+      client,
+      workspaceId,
+      name: registryName,
+      contentHash: executionContentHash,
+    });
+    if (pinned == null) {
+      logger.debug(
+        `Could not download pinned script "${scriptName}" (registry: "${registryName}", contentHash: "${executionContentHash}") for stack trace mapping; showing raw stack trace.`,
+      );
+      return null;
+    }
+    return pinned.code;
+  }
+
+  // Fallback for older servers that did not populate
+  // FunctionExecution.contentHash: download the current bundle and
+  // skip mapping if the registry was updated after the execution
+  // started.
   const result = await downloadFunctionScript({ client, workspaceId, name: registryName });
   if (result == null) {
     logger.debug(
@@ -271,7 +313,7 @@ export const logsCommand = defineAppCommand({
   description: "List or get function execution logs.",
   notes: `When viewing a specific execution that failed, the command displays error details with the stack trace mapped back to original source files via the inline sourcemap (clickable file links and code snippets, matching \`function test-run\` output).
 
-When the deployed script cannot be downloaded or the function has been redeployed since the execution, the command falls back to a plain-text error display to avoid showing misleading source locations.`,
+The download is pinned to the bundle that actually ran using the execution's content hash, so stack traces stay accurate across redeploys when the server retains old bundles. The command falls back to a plain-text error display when the pinned bundle cannot be retrieved, or when the execution was recorded before content hashes started being tracked and the function was redeployed after it ran.`,
   examples: [
     {
       cmd: "",
@@ -294,7 +336,7 @@ When the deployed script cannot be downloaded or the function has been redeploye
     .object({
       ...workspaceArgs,
       ...pagedLogArgs,
-      executionId: arg(z.string().optional(), {
+      "execution-id": arg(z.string().optional(), {
         positional: true,
         description: "Execution ID (if provided, shows details with logs)",
       }),
@@ -336,6 +378,7 @@ When the deployed script cannot be downloaded or the function has been redeploye
               workspaceId,
               scriptName: detail.scriptName,
               executionType: execution.type,
+              executionContentHash: execution.contentHash,
               executionStartedAt: detail.startedAt,
             })
           : null;
