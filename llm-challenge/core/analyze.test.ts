@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeReportDiff } from "./analyze";
+import { computeReportDiff, resolveActiveProfilePair } from "./analyze";
 import type { ReadTargetClass, TraceMetrics } from "./metrics";
 import type { ChallengeReport, IterationAggregate, ProblemResult } from "./report";
 
@@ -324,5 +324,266 @@ describe("computeReportDiff", () => {
     expect(diff.rows[0]!.metricsDelta.readSdkDts).toBeNull();
     expect(diff.rows[0]!.metricsDelta.readDocs).toBeNull();
     expect(diff.rows[0]!.metricsDelta.bashRetries).toBeNull();
+  });
+
+  it("computes per-bucket readTargets deltas when iteration medians have per-class fields", () => {
+    const reportA = makeReport({
+      iterationCount: 3,
+      results: [
+        makeIterResult("m05", 1, 0.1, {
+          iterations: {
+            count: 3,
+            passedCount: 3,
+            passRate: 1,
+            passedByIteration: [true, true, true],
+            costMedian: 0.1,
+            costStdev: 0,
+            // types-only: read sdk-docs once, no sdk-dts.
+            metricsMedian: mkIterMetrics({
+              turns: 21,
+              readSdkDts: 0,
+              readDocs: 0,
+              "sdk-dts": 0,
+              "sdk-docs": 0,
+              "problem-files": 2,
+            }),
+            metricsStdev: mkIterMetrics({ turns: 1.7 }),
+          },
+        }),
+      ],
+    });
+    const reportB = makeReport({
+      iterationCount: 3,
+      results: [
+        makeIterResult("m05", 1 / 3, 0.05, {
+          iterations: {
+            count: 3,
+            passedCount: 1,
+            passRate: 1 / 3,
+            passedByIteration: [true, false, false],
+            costMedian: 0.05,
+            costStdev: 0,
+            // full-package: agent now reads sdk-docs and pokes around problem-files.
+            metricsMedian: mkIterMetrics({
+              turns: 10,
+              readSdkDts: 0,
+              readDocs: 1,
+              "sdk-dts": 0,
+              "sdk-docs": 1,
+              "problem-files": 5,
+            }),
+            metricsStdev: mkIterMetrics({ turns: 3.7 }),
+          },
+        }),
+      ],
+    });
+
+    const diff = computeReportDiff(reportA, reportB);
+    expect(diff.rows[0]!.readDeltas["sdk-dts"]).toBe(0);
+    expect(diff.rows[0]!.readDeltas["sdk-docs"]).toBe(1);
+    expect(diff.rows[0]!.readDeltas["problem-files"]).toBe(3);
+    expect(diff.rows[0]!.stdevTurnsA).toBeCloseTo(1.7, 10);
+    expect(diff.rows[0]!.stdevTurnsB).toBeCloseTo(3.7, 10);
+  });
+
+  it("falls back to legacy readSdkDts/readDocs when per-bucket fields are absent", () => {
+    // Pre-Phase-5b reports stored only the legacy aggregates. The diff must
+    // still surface a meaningful sdk-dts / sdk-docs delta so historical
+    // comparisons keep working — Phase 5c calls this fallback path.
+    const reportA = makeReport({
+      results: [
+        makeResult("m18", true, {
+          metrics: {
+            turns: 40,
+            toolCallCounts: {},
+            readTargets: {
+              "sdk-dts": 0,
+              "sdk-package-src": 0,
+              "sdk-docs": 0,
+              "problem-files": 0,
+              other: 0,
+            },
+            readSdkDts: 0,
+            readDocs: 0,
+            bashRetries: 2,
+          },
+        }),
+      ],
+    });
+    const reportB = makeReport({
+      results: [
+        makeResult("m18", false, {
+          metrics: {
+            turns: 43,
+            toolCallCounts: {},
+            readTargets: {
+              "sdk-dts": 0,
+              "sdk-package-src": 0,
+              "sdk-docs": 0,
+              "problem-files": 0,
+              other: 0,
+            },
+            readSdkDts: 0,
+            readDocs: 3,
+            bashRetries: 4,
+          },
+        }),
+      ],
+    });
+    const diff = computeReportDiff(reportA, reportB);
+    // sdk-docs delta comes through the readTargets map (= 0 directly), but
+    // the legacy field fallback only kicks in when readTargets is absent.
+    expect(diff.rows[0]!.readDeltas["sdk-docs"]).toBe(0);
+    // Drop readTargets entirely on side B and the legacy field should fill in:
+    const reportC = makeReport({
+      results: [
+        makeResult("m18", true, {
+          metrics: mkMetrics({ readDocs: 0 }),
+        }),
+      ],
+    });
+    const reportD = makeReport({
+      results: [
+        makeResult("m18", false, {
+          // No readTargets map — emulating a legacy report on disk.
+          metrics: {
+            turns: 43,
+            toolCallCounts: {},
+            readTargets: undefined as unknown as TraceMetrics["readTargets"],
+            readSdkDts: 0,
+            readDocs: 3,
+            bashRetries: 4,
+          },
+        }),
+      ],
+    });
+    const diff2 = computeReportDiff(reportC, reportD);
+    expect(diff2.rows[0]!.readDeltas["sdk-docs"]).toBe(3);
+  });
+
+  it("captures stdevTurnsA/B from iteration metrics", () => {
+    const reportA = makeReport({
+      iterationCount: 3,
+      results: [
+        makeIterResult("m01", 1, 0.1, {
+          iterations: {
+            count: 3,
+            passedCount: 3,
+            passRate: 1,
+            passedByIteration: [true, true, true],
+            costMedian: 0.1,
+            costStdev: 0,
+            metricsMedian: mkIterMetrics({ turns: 15 }),
+            metricsStdev: mkIterMetrics({ turns: 2.5 }),
+          },
+        }),
+      ],
+    });
+    const reportB = makeReport({
+      results: [makeResult("m01", true)],
+    });
+    const diff = computeReportDiff(reportA, reportB);
+    expect(diff.rows[0]!.stdevTurnsA).toBeCloseTo(2.5, 10);
+    // reportB is single-iteration: no stdev available.
+    expect(diff.rows[0]!.stdevTurnsB).toBeNull();
+  });
+});
+
+describe("resolveActiveProfilePair", () => {
+  function makeProfileReport(
+    profile: "types-only" | "full-package",
+    timestamp: string,
+    overrides: Partial<ChallengeReport> = {},
+  ): ChallengeReport {
+    return {
+      timestamp,
+      model: "claude:sonnet",
+      contextProfile: profile,
+      results: [],
+      problemsPassed: 0,
+      problemsTotal: 0,
+      percentage: 0,
+      totalCostUsd: 0,
+      infraFailureCount: 0,
+      validPercentage: 0,
+      totalDurationMs: 0,
+      analytics: { stagePassRates: {} },
+      ...overrides,
+    };
+  }
+
+  it("returns the latest report per profile within the most-recent complete group", () => {
+    const typesOnlyOld = makeProfileReport("types-only", "2026-05-13T06:00:00Z");
+    const typesOnlyNew = makeProfileReport("types-only", "2026-05-13T07:00:00Z");
+    const fullPackage = makeProfileReport("full-package", "2026-05-13T07:30:00Z");
+    const result = resolveActiveProfilePair([typesOnlyOld, typesOnlyNew, fullPackage]);
+    expect(result.kind).toBe("ok");
+    if (result.kind === "ok") {
+      expect(result.typesOnly.report.timestamp).toBe("2026-05-13T07:00:00Z");
+      expect(result.fullPackage.report.timestamp).toBe("2026-05-13T07:30:00Z");
+    }
+  });
+
+  it("prefers the report with more results when timestamps differ", () => {
+    // Single-problem reruns should not displace the full sweep that happened
+    // earlier — the diff is more meaningful when both sides cover the same
+    // problem set.
+    const fullSweep = makeProfileReport("full-package", "2026-05-13T07:30:00Z", {
+      results: Array.from({ length: 25 }, (_, i) => ({
+        problemId: `m${String(i + 1).padStart(2, "0")}`,
+        problemName: `m${String(i + 1).padStart(2, "0")}`,
+        difficulty: "easy",
+        category: "micro",
+        stages: [],
+        passed: true,
+      })),
+    });
+    const singleProblem = makeProfileReport("full-package", "2026-05-13T14:00:00Z", {
+      results: [
+        {
+          problemId: "m18",
+          problemName: "m18",
+          difficulty: "easy",
+          category: "micro",
+          stages: [],
+          passed: true,
+        },
+      ],
+    });
+    const typesOnly = makeProfileReport("types-only", "2026-05-13T07:00:00Z");
+    const result = resolveActiveProfilePair([fullSweep, singleProblem, typesOnly]);
+    expect(result.kind).toBe("ok");
+    if (result.kind === "ok") {
+      expect(result.fullPackage.report.timestamp).toBe("2026-05-13T07:30:00Z");
+      expect(result.fullPackage.report.results.length).toBe(25);
+    }
+  });
+
+  it("returns missing when only one profile has reports for the active group", () => {
+    const typesOnly = makeProfileReport("types-only", "2026-05-13T06:00:00Z");
+    const result = resolveActiveProfilePair([typesOnly]);
+    expect(result.kind).toBe("missing");
+    if (result.kind === "missing") {
+      expect(result.reason).toMatch(/full-package/);
+    }
+  });
+
+  it("excludes reports with sdkBranch set (those are A/B candidate runs)", () => {
+    const typesOnly = makeProfileReport("types-only", "2026-05-13T07:00:00Z");
+    const fullPackage = makeProfileReport("full-package", "2026-05-13T07:30:00Z");
+    // Newer report but with sdkBranch — should be filtered out.
+    const candidate = makeProfileReport("full-package", "2026-05-13T14:00:00Z", {
+      sdkBranch: "feat/some-experiment",
+    });
+    const result = resolveActiveProfilePair([typesOnly, fullPackage, candidate]);
+    expect(result.kind).toBe("ok");
+    if (result.kind === "ok") {
+      expect(result.fullPackage.report.timestamp).toBe("2026-05-13T07:30:00Z");
+    }
+  });
+
+  it("returns missing on an empty input", () => {
+    const result = resolveActiveProfilePair([]);
+    expect(result.kind).toBe("missing");
   });
 });

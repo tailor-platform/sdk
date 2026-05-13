@@ -24,22 +24,42 @@ import type { ChallengeReport } from "./report";
  *     baseline.json   # baseline ChallengeReport
  *     candidate.json  # candidate ChallengeReport
  *     delta.json      # computeReportDiff() output
+ *
+ * Phase 5c bumped {@link DEFAULT_ITERATIONS} from 3 to 5 because the Phase 5b
+ * validation showed several problems have variance that swamps the N=3
+ * estimate (notably m18 stdev=16.2 turns vs median ~43). N=5 is the smallest
+ * value that empirically keeps `stdev / median` below ~0.5 on the flaky-est
+ * problems without doubling runtime cost.
  */
 
 const challengeRoot = path.resolve(import.meta.dirname, "..");
+
+/**
+ * Default iteration count when `--iterations` is not specified. Bumped from
+ * 3 to 5 in Phase 5c to keep inter-iteration variance bounds tight enough
+ * for A/B significance reads.
+ */
+export const DEFAULT_ITERATIONS = 5;
 
 type ParsedArgs = {
   sdkBranch: string;
   iterations: number;
   forward: string[];
   expId?: string;
+  /**
+   * Comma-separated problem IDs forwarded to both child invocations as
+   * multiple `--problem <id>` flags. When undefined, the children run the
+   * full problem set (subject to whatever filters are in `forward`).
+   */
+  problems?: string[];
 };
 
-function parseArgs(): ParsedArgs {
+export function parseArgs(): ParsedArgs {
   const args = process.argv.slice(2);
   let sdkBranch: string | undefined;
   let iterations: number | undefined;
   let expId: string | undefined;
+  let problems: string[] | undefined;
   const forward: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
@@ -56,6 +76,15 @@ function parseArgs(): ParsedArgs {
         expId = requireArg(args, i, "--exp-id");
         i++;
         break;
+      case "--problems": {
+        const value = requireArg(args, i, "--problems");
+        i++;
+        problems = value
+          .split(",")
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0);
+        break;
+      }
       default:
         // Everything else flows to both child cli.ts invocations.
         forward.push(args[i]!);
@@ -68,10 +97,14 @@ function parseArgs(): ParsedArgs {
     process.exit(1);
   }
   if (iterations === undefined) {
-    iterations = 3;
+    iterations = DEFAULT_ITERATIONS;
   }
   if (!Number.isInteger(iterations) || iterations < 1) {
     console.error("Error: --iterations must be a positive integer");
+    process.exit(1);
+  }
+  if (problems && problems.length === 0) {
+    console.error("Error: --problems must list at least one problem ID");
     process.exit(1);
   }
   // Drop user-supplied --solve / --iterations / --sdk-branch from forward; we
@@ -83,12 +116,19 @@ function parseArgs(): ParsedArgs {
     iterations,
     forward: filtered,
     ...(expId ? { expId } : {}),
+    ...(problems ? { problems } : {}),
   };
 }
 
 function filterReservedFlags(args: string[]): string[] {
-  const reserved = new Set(["--solve", "--use-solution", "--sdk-branch", "--iterations"]);
-  const reservedWithValue = new Set(["--sdk-branch", "--iterations"]);
+  const reserved = new Set([
+    "--solve",
+    "--use-solution",
+    "--sdk-branch",
+    "--iterations",
+    "--problems",
+  ]);
+  const reservedWithValue = new Set(["--sdk-branch", "--iterations", "--problems"]);
   const out: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i]!;
@@ -99,6 +139,35 @@ function filterReservedFlags(args: string[]): string[] {
     out.push(a);
   }
   return out;
+}
+
+/**
+ * Materialise the forward args + problem-list selector into the final argv
+ * array passed to `tsx core/cli.ts`. When `problems` is non-empty we emit
+ * multiple `--problem <id>` flags (cli.ts currently keeps only the last
+ * value, so this is forward-looking — see Phase 5c notes); when undefined
+ * we leave the forward args untouched so existing `--all` / `--problem`
+ * flags can flow through.
+ *
+ * Exported for unit tests so we can assert the argv composition without
+ * spawning a real child process.
+ */
+export function buildChildArgs(
+  iterations: number,
+  forward: string[],
+  options: { sdkBranch?: string; problems?: string[] } = {},
+): string[] {
+  const args: string[] = ["--solve", "--iterations", String(iterations)];
+  if (options.sdkBranch) {
+    args.push("--sdk-branch", options.sdkBranch);
+  }
+  if (options.problems && options.problems.length > 0) {
+    for (const id of options.problems) {
+      args.push("--problem", id);
+    }
+  }
+  args.push(...forward);
+  return args;
 }
 
 async function runChild(args: string[]): Promise<void> {
@@ -146,7 +215,7 @@ export function findLatestReport(
 }
 
 async function main(): Promise<void> {
-  const { sdkBranch, iterations, forward, expId } = parseArgs();
+  const { sdkBranch, iterations, forward, expId, problems } = parseArgs();
   const resolvedExpId = expId ?? createTimestampId();
 
   const resultsDir = path.join(challengeRoot, "results");
@@ -156,6 +225,7 @@ async function main(): Promise<void> {
   console.log(`Experiment: ${resolvedExpId}`);
   console.log(`  sdkBranch:  ${sdkBranch}`);
   console.log(`  iterations: ${iterations}`);
+  console.log(`  problems:   ${problems ? problems.join(",") : "(all)"}`);
   console.log(`  forward:    ${forward.join(" ") || "(none)"}`);
   console.log(`  output:     ${path.relative(challengeRoot, experimentDir)}`);
   console.log("");
@@ -163,7 +233,7 @@ async function main(): Promise<void> {
   // Baseline: current working tree.
   console.log("=== Baseline (current tree) ===");
   const baselineStart = new Date();
-  await runChild(["--solve", "--iterations", String(iterations), ...forward]);
+  await runChild(buildChildArgs(iterations, forward, problems ? { problems } : {}));
   const baselinePath = findLatestReport(resultsDir, "", baselineStart);
   if (!baselinePath) {
     console.error("Could not locate baseline report after run.");
@@ -176,14 +246,9 @@ async function main(): Promise<void> {
   // Candidate: --sdk-branch <ref>.
   console.log(`=== Candidate (sdk-branch ${sdkBranch}) ===`);
   const candidateStart = new Date();
-  await runChild([
-    "--solve",
-    "--iterations",
-    String(iterations),
-    "--sdk-branch",
-    sdkBranch,
-    ...forward,
-  ]);
+  await runChild(
+    buildChildArgs(iterations, forward, { sdkBranch, ...(problems ? { problems } : {}) }),
+  );
   const candidatePath = findLatestReport(resultsDir, "", candidateStart);
   if (!candidatePath) {
     console.error("Could not locate candidate report after run.");

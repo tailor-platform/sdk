@@ -131,15 +131,19 @@ The terminal table summarises per-problem stage status and the trace line (`turn
 
 ```bash
 # Pack tarballs from the current tree and the candidate branch, run both.
-pnpm challenge:experiment --sdk-branch feat/exec-description-required --iterations 3 \
+pnpm challenge:experiment --sdk-branch feat/exec-description-required \
   --all --agent claude --context-profile types-only
+
+# Narrow to specific problems (forwarded as multiple --problem flags).
+pnpm challenge:experiment --sdk-branch feat/exec-description-required \
+  --problems m05,m18 --agent claude --context-profile types-only
 ```
 
 This:
 
-1. Runs the full problem set against the **current working tree** (baseline) with N iterations per problem.
+1. Runs the full problem set against the **current working tree** (baseline) with N iterations per problem. Default `N = 5` (Phase 5c bumped this from 3 to keep per-problem stdev tight enough for A/B significance).
 2. `git worktree add`s the `--sdk-branch` ref into `.agent/tmp/sdk-branch-<ref>-XXXXXX/`, builds the SDK there, `pnpm pack`s it, then runs the same problem set against that tarball.
-3. Writes `results/experiments/<exp-id>/{baseline,candidate,delta}.json` where `delta.json` is the structured A/B diff (per-problem `passRateDelta`, `costMedianDelta`, `metricsDelta`).
+3. Writes `results/experiments/<exp-id>/{baseline,candidate,delta}.json` where `delta.json` is the structured A/B diff (per-problem `passRateDelta`, `costMedianDelta`, `metricsDelta`, `readDeltas`).
 
 Run the diff alone against two existing reports (no new solves):
 
@@ -149,7 +153,7 @@ pnpm challenge:analyze --diff path/to/baseline.json path/to/candidate.json [--js
 
 As a working manual interpretation example, an acceptable improvement is one where `passRate` rises and the per-problem `costStdev` / `metricsStdev.turns` stays below `median × 0.3` — i.e., the change is large relative to inter-iteration noise. **This threshold is a guideline for manual review; it is not enforced by the harness.**
 
-Forward flags (`--all`, `--problem <id>`, `--agent`, `--model`, `--context-profile`, `--concurrency`, `--max-budget`, `--clean`) are passed through to both child runs by `pnpm challenge:experiment` after stripping the reserved flags it owns (`--solve`, `--iterations`, `--sdk-branch`).
+Forward flags (`--all`, `--problem <id>`, `--agent`, `--model`, `--context-profile`, `--concurrency`, `--max-budget`, `--clean`) are passed through to both child runs by `pnpm challenge:experiment` after stripping the reserved flags it owns (`--solve`, `--iterations`, `--sdk-branch`, `--problems`). When `--problems <ids>` is set, the driver expands it into multiple `--problem <id>` arguments on both child invocations.
 
 ## Problem Structure
 
@@ -224,15 +228,44 @@ After parallel runs finish, use `pnpm challenge:analyze --groups` to list per-co
 
 ## Analyzing Reports
 
+### Default analyze workflow
+
+`pnpm challenge:analyze` with no flags is the recommended starting point. It chains two views:
+
+1. **Trend** within the most recently active `(agent, model, context-profile)` group — the time series of pass rate and cost across reports in that group.
+2. **Profile diff** — the latest representative reports from the `types-only` and `full-package` profiles for the same `(agent, model)` are diffed against each other. This surfaces docs-vs-types affordance gaps automatically; if one profile has no reports yet the section is skipped with a single warning.
+
 ```bash
-# Default: trend within the most recently active matching group.
+# Default: trend + profile diff for the active group.
 pnpm challenge:analyze
+
+# Manual profile diff only (no trend section).
+pnpm challenge:analyze --profile-diff
+
+# Ad-hoc A/B comparison between two specific reports.
+pnpm challenge:analyze --diff path/to/baseline.json path/to/candidate.json [--json]
+
+# Time-series trend within a specific group.
+pnpm challenge:analyze --trend --agent claude --model sonnet --context-profile types-only
 
 # List every (agent, model, context-profile) group with its latest pass rate.
 pnpm challenge:analyze --groups
-
-# Restrict trend to a specific slice.
-pnpm challenge:analyze --trend --agent claude --model opus --context-profile types-only
 ```
 
 The trend view diffs the first and last reports in the chosen group. The previous `--baseline <path>` flag is gone — trend within a group covers the same use cases.
+
+### Reading the profile-diff table
+
+Per-problem rows include `passA`, `passB`, `Δpass`, `stdevA`, `stdevB` (`iterations.metricsStdev.turns` from each side, when present), `ΔcostUSD`, and `Δturns`. When a problem has at least one non-zero per-bucket readTargets delta, a compact line is rendered directly under the row:
+
+```
+read deltas: sdk-dts=+2 sdk-pkg-src=±0 sdk-docs=-1 problem-files=+3 other=±0
+```
+
+Buckets with `null` data (e.g. pre-Phase-5b reports that lack the per-class fields) are omitted from the line. The `sdk-dts` and `sdk-docs` buckets fall back to the legacy `readSdkDts` / `readDocs` aggregates when the per-bucket data is unavailable, so historical comparisons keep working.
+
+Interpretation: a positive `sdk-docs` delta means "the candidate solver consulted SDK docs more often"; a positive `problem-files` delta means "the candidate spent more time exploring the problem's own scaffold and tests". When `Δpass` is negative but a single bucket spiked, the spike is the affordance-gap candidate to investigate.
+
+### Iter-diff artifact
+
+When a problem is flaky (passRate strictly between 0 and 1 across the N iterations) the harness writes `<runArtifactRoot>/iter-diff/<problemId>.diff` — a `git diff --no-index` between the first failing iteration's work snapshot and the first passing one. This is the canonical "what did the agent do differently between attempts" surface for manual review; pair it with the read-deltas line to triangulate which inputs actually changed.

@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { problemKey, requireArg } from "../shared/helpers";
+import { READ_TARGET_CLASSES, type ReadTargetClass } from "./metrics";
 import { ITERATION_METRIC_KEYS, type IterationMetricKey } from "./report";
 import type { ChallengeReport, ProblemResult } from "./report";
 import { parseSolveModelLabel } from "./solve-model";
@@ -58,6 +59,12 @@ type Filters = {
 type ParsedArgs = Filters & {
   trend: boolean;
   groups: boolean;
+  /**
+   * When true, locate the most-recent `claude-<model>-types-only` and
+   * `claude-<model>-full-package` reports for the active group and emit the
+   * diff between them. Surfaces the docs-vs-types-gap signal automatically.
+   */
+  profileDiff: boolean;
   /** When set, treat these two paths as the A/B pair to diff. */
   diffPair?: [string, string];
   /** When true, emit JSON instead of the table. Only honored by --diff. */
@@ -68,6 +75,7 @@ function parseArgs(): ParsedArgs {
   const args = process.argv.slice(2);
   let trend = false;
   let groups = false;
+  let profileDiff = false;
   let agent: string | undefined;
   let model: string | undefined;
   let contextProfile: string | undefined;
@@ -81,6 +89,9 @@ function parseArgs(): ParsedArgs {
         break;
       case "--groups":
         groups = true;
+        break;
+      case "--profile-diff":
+        profileDiff = true;
         break;
       case "--diff": {
         const a = requireArg(args, i, "--diff");
@@ -111,6 +122,7 @@ function parseArgs(): ParsedArgs {
   return {
     trend,
     groups,
+    profileDiff,
     agent,
     model,
     contextProfile,
@@ -296,6 +308,17 @@ function describeFilters(filters: Filters): string {
  * `iterations.count > 1`) or the binary `passed` flag (= 0 or 1) for
  * single-iteration reports.
  *
+ * `stdevTurnsA` / `stdevTurnsB` carry `iterations.metricsStdev.turns` so the
+ * table reader can sanity-check delta magnitude against inter-iteration noise.
+ * Both are null when the corresponding side did not run multiple iterations.
+ *
+ * `readDeltas` exposes the per-bucket `readTargets` deltas
+ * ({@link ReadTargetClass}). Phase 5b validation showed the `readTargets`
+ * signal is multi-bucket (m05 differs on `sdk-docs`, m18 on `sdk-dts` +
+ * `problem-files`), so summarising to `turns` alone hides the affordance gap.
+ * Buckets missing from either side fall back to 0, letting pre-Phase-5b
+ * reports surface as no-delta rather than crashing.
+ *
  * `status` is `"added"` when the problem only appears in B, `"removed"` when
  * only in A, otherwise `"present"` — callers render the table accordingly.
  */
@@ -308,12 +331,17 @@ export type DiffRow = {
   costMedianA: number | null;
   costMedianB: number | null;
   costMedianDelta: number | null;
+  /** `iterations.metricsStdev.turns` from A (null for single-iteration reports). */
+  stdevTurnsA: number | null;
+  /** `iterations.metricsStdev.turns` from B (null for single-iteration reports). */
+  stdevTurnsB: number | null;
   metricsDelta: {
     turns: number | null;
     readSdkDts: number | null;
     readDocs: number | null;
     bashRetries: number | null;
   };
+  readDeltas: Record<ReadTargetClass, number | null>;
 };
 
 export type DiffReport = {
@@ -371,6 +399,56 @@ function getMetric(result: ProblemResult, key: IterationMetricKey): number | nul
     return result.metrics[key];
   }
   return null;
+}
+
+/**
+ * Extract the per-bucket readTargets count for diff purposes. Prefers the
+ * iteration median when present; falls back to the single-iteration
+ * `metrics.readTargets` map when available.
+ *
+ * For pre-Phase-5b reports that have no per-bucket data we fall back to the
+ * legacy `readSdkDts` / `readDocs` aggregates for the `sdk-dts` / `sdk-docs`
+ * buckets respectively, so the read-deltas line still surfaces SOMETHING
+ * useful instead of a flat row. Buckets without a legacy equivalent stay
+ * null (and the renderer omits them from the line).
+ */
+function getReadTargetCount(result: ProblemResult, bucket: ReadTargetClass): number | null {
+  const legacyKey: Partial<Record<ReadTargetClass, IterationMetricKey>> = {
+    "sdk-dts": "readSdkDts",
+    "sdk-docs": "readDocs",
+  };
+  if (result.iterations) {
+    const direct = result.iterations.metricsMedian[bucket];
+    if (typeof direct === "number") return direct;
+    const legacy = legacyKey[bucket];
+    if (legacy) {
+      const value = result.iterations.metricsMedian[legacy];
+      return typeof value === "number" ? value : null;
+    }
+    return null;
+  }
+  if (result.metrics?.readTargets) {
+    const direct = result.metrics.readTargets[bucket];
+    if (typeof direct === "number") return direct;
+  }
+  if (result.metrics) {
+    const legacy = legacyKey[bucket];
+    if (legacy) {
+      const value = result.metrics[legacy];
+      return typeof value === "number" ? value : null;
+    }
+  }
+  return null;
+}
+
+/**
+ * Pull `iterations.metricsStdev.turns` from a result, returning null when no
+ * iteration aggregate exists (single-iteration runs have no variance metric).
+ */
+function getTurnsStdev(result: ProblemResult): number | null {
+  if (!result.iterations) return null;
+  const value = result.iterations.metricsStdev.turns;
+  return typeof value === "number" ? value : null;
 }
 
 function indexResultsByKey(report: ChallengeReport): Map<string, ProblemResult> {
@@ -448,6 +526,21 @@ export function computeReportDiff(
       }
     }
 
+    const readDeltas: DiffRow["readDeltas"] = {
+      "sdk-dts": null,
+      "sdk-package-src": null,
+      "sdk-docs": null,
+      "problem-files": null,
+      other: null,
+    };
+    if (a && b) {
+      for (const bucket of READ_TARGET_CLASSES) {
+        const ra = getReadTargetCount(a, bucket);
+        const rb = getReadTargetCount(b, bucket);
+        readDeltas[bucket] = ra !== null && rb !== null ? rb - ra : null;
+      }
+    }
+
     rows.push({
       problemKey: key,
       status,
@@ -457,7 +550,10 @@ export function computeReportDiff(
       costMedianA,
       costMedianB,
       costMedianDelta,
+      stdevTurnsA: a ? getTurnsStdev(a) : null,
+      stdevTurnsB: b ? getTurnsStdev(b) : null,
       metricsDelta,
+      readDeltas,
     });
   }
 
@@ -517,6 +613,138 @@ export function computeReportDiff(
   };
 }
 
+/**
+ * Resolve the active `types-only` vs `full-package` report pair for the
+ * profile-diff mode. Implementation strategy:
+ *
+ * 1. Load every report and group by `(agent, model)` (the contextProfile is
+ *    intentionally dropped from the grouping so the two profile variants land
+ *    in the same bucket).
+ * 2. Pick the bucket whose latest timestamp across either profile is most
+ *    recent — that is the "active group".
+ * 3. Within the bucket, pick the latest report per contextProfile.
+ *
+ * Returns `{ kind: "ok", … }` when both profiles have at least one report,
+ * otherwise `{ kind: "missing", … }` with a human-readable warning so the
+ * caller can fall back to the trend view instead of crashing.
+ */
+type ProfilePairResult =
+  | {
+      kind: "ok";
+      typesOnly: { report: ChallengeReport; path: string };
+      fullPackage: { report: ChallengeReport; path: string };
+    }
+  | { kind: "missing"; reason: string };
+
+export function resolveActiveProfilePair(reports: ChallengeReport[]): ProfilePairResult {
+  if (reports.length === 0) {
+    return { kind: "missing", reason: "no reports found under results/" };
+  }
+  // Reports that ran against a non-default `--sdk-branch` are A/B experiment
+  // candidate runs, not part of the main solver history. Excluding them here
+  // keeps profile-diff focused on apples-to-apples comparisons.
+  const mainReports = reports.filter((r) => r.sdkBranch === undefined);
+  if (mainReports.length === 0) {
+    return {
+      kind: "missing",
+      reason: "no main-line reports (every report has --sdk-branch set)",
+    };
+  }
+  type Bucket = { typesOnly?: ChallengeReport; fullPackage?: ChallengeReport };
+  const buckets = new Map<string, Bucket>();
+  // Per-profile selection: prefer the report with the largest result set
+  // (i.e. a full sweep over the problem list rather than a single-problem
+  // rerun), tie-broken by recency. This keeps the auto-resolved diff
+  // representative even when ad-hoc one-off solves are written into the
+  // same results directory after a full sweep.
+  function isBetter(candidate: ChallengeReport, existing: ChallengeReport | undefined): boolean {
+    if (!existing) return true;
+    if (candidate.results.length !== existing.results.length) {
+      return candidate.results.length > existing.results.length;
+    }
+    return new Date(candidate.timestamp).getTime() > new Date(existing.timestamp).getTime();
+  }
+  for (const r of mainReports) {
+    const { agent, model } = getGroupKey(r);
+    const id = `${agent}|${model}`;
+    const profile = r.contextProfile;
+    if (profile !== "types-only" && profile !== "full-package") continue;
+    const bucket = buckets.get(id) ?? {};
+    const slot = profile === "types-only" ? "typesOnly" : "fullPackage";
+    if (isBetter(r, bucket[slot])) {
+      bucket[slot] = r;
+    }
+    buckets.set(id, bucket);
+  }
+  if (buckets.size === 0) {
+    return {
+      kind: "missing",
+      reason: "no reports with contextProfile types-only or full-package",
+    };
+  }
+  // Active group: bucket with the most-recent timestamp across either slot,
+  // restricted to buckets where BOTH profiles are present. We deliberately
+  // skip half-populated buckets (e.g. `solution:verify` runs that only emit
+  // full-package reports) so we never report "active group has X but missing
+  // Y" for a group whose intent isn't even cross-profile.
+  const complete: { id: string; bucket: Bucket; latest: number }[] = [];
+  for (const [id, bucket] of buckets) {
+    if (!bucket.typesOnly || !bucket.fullPackage) continue;
+    const ts = Math.max(
+      new Date(bucket.typesOnly.timestamp).getTime(),
+      new Date(bucket.fullPackage.timestamp).getTime(),
+    );
+    complete.push({ id, bucket, latest: ts });
+  }
+  if (complete.length === 0) {
+    // Fall back to surfacing the most-recent half-populated bucket so the
+    // caller learns which side is missing — better diagnostic than a
+    // generic "no complete groups" message.
+    let halfActive: { id: string; bucket: Bucket; latest: number } | undefined;
+    for (const [id, bucket] of buckets) {
+      const ts = Math.max(
+        bucket.typesOnly ? new Date(bucket.typesOnly.timestamp).getTime() : 0,
+        bucket.fullPackage ? new Date(bucket.fullPackage.timestamp).getTime() : 0,
+      );
+      if (!halfActive || ts > halfActive.latest) {
+        halfActive = { id, bucket, latest: ts };
+      }
+    }
+    const bucket = halfActive!.bucket;
+    const present = bucket.typesOnly ? "types-only" : "full-package";
+    const missing = bucket.typesOnly ? "full-package" : "types-only";
+    return {
+      kind: "missing",
+      reason: `active group has ${present} reports but no ${missing} reports`,
+    };
+  }
+  complete.sort((a, b) => b.latest - a.latest);
+  // `complete` is filtered to only buckets with both slots present, so the
+  // non-null assertions here are safe.
+  const bucket = complete[0]!.bucket;
+  const typesOnly = bucket.typesOnly!;
+  const fullPackage = bucket.fullPackage!;
+  return {
+    kind: "ok",
+    typesOnly: { report: typesOnly, path: deriveReportPath(typesOnly) },
+    fullPackage: { report: fullPackage, path: deriveReportPath(fullPackage) },
+  };
+}
+
+/**
+ * Re-derive a report's filesystem path from its in-memory contents. Used to
+ * label `--profile-diff` outputs with the original `results/<group>/report-*.json`
+ * paths. Returns the conventional layout used by `cli.ts:getRunResultsDir`.
+ */
+function deriveReportPath(report: ChallengeReport): string {
+  const { agent, model } = getGroupKey(report);
+  const profile = report.contextProfile ?? "unknown";
+  const dir = `${agent}-${model}-${profile}`;
+  const version = report.sdkVersion ?? "unknown";
+  const ts = report.timestamp.replace(/:/g, "-").slice(0, 19);
+  return path.join("results", dir, `report-${version}-${ts}.json`);
+}
+
 function loadReportFile(filePath: string): ChallengeReport {
   if (!fs.existsSync(filePath)) {
     console.error(`Report not found: ${filePath}`);
@@ -545,12 +773,42 @@ function formatPct(value: number | null): string {
   return `${Math.round(value * 100)}%`;
 }
 
+/**
+ * Render the per-bucket readTargets delta as a compact one-line summary.
+ * Returns undefined when every bucket delta is null or zero — keeps the table
+ * tight by suppressing rows whose readTargets are flat.
+ *
+ * Format: `read deltas: sdk-dts=+2 sdk-pkg-src=±0 sdk-docs=-1 problem-files=+0 other=±0`
+ *
+ * Buckets with null deltas (one side missing the data) are omitted from the
+ * line entirely rather than printed as `null`.
+ */
+function formatReadDeltas(deltas: DiffRow["readDeltas"]): string | undefined {
+  const labels: Record<ReadTargetClass, string> = {
+    "sdk-dts": "sdk-dts",
+    "sdk-package-src": "sdk-pkg-src",
+    "sdk-docs": "sdk-docs",
+    "problem-files": "problem-files",
+    other: "other",
+  };
+  const parts: string[] = [];
+  let hasNonZero = false;
+  for (const bucket of READ_TARGET_CLASSES) {
+    const value = deltas[bucket];
+    if (value === null) continue;
+    if (value !== 0) hasNonZero = true;
+    parts.push(`${labels[bucket]}=${formatDelta(value, 0)}`);
+  }
+  if (!hasNonZero) return undefined;
+  return `read deltas: ${parts.join(" ")}`;
+}
+
 function showDiff(diff: DiffReport, json: boolean): void {
   if (json) {
     console.log(JSON.stringify(diff, null, 2));
     return;
   }
-  const width = 96;
+  const width = 110;
   console.log("=".repeat(width));
   console.log("A/B Diff");
   console.log("=".repeat(width));
@@ -571,11 +829,14 @@ function showDiff(diff: DiffReport, json: boolean): void {
   }
   console.log("");
 
+  // Columns: Problem | passA | passB | Δpass | stdevA | stdevB | ΔcostUSD | Δturns
   console.log(
     "Problem".padEnd(38) +
       "passA".padEnd(8) +
       "passB".padEnd(8) +
       "Δpass".padEnd(10) +
+      "stdevA".padEnd(9) +
+      "stdevB".padEnd(9) +
       "ΔcostUSD".padEnd(12) +
       "Δturns",
   );
@@ -585,11 +846,22 @@ function showDiff(diff: DiffReport, json: boolean): void {
     const passA = formatPct(row.passRateA).padEnd(8);
     const passB = formatPct(row.passRateB).padEnd(8);
     const dpass = row.passRateDelta !== null ? formatDelta(row.passRateDelta, 2) : "  -  ";
+    const stdA = row.stdevTurnsA !== null ? row.stdevTurnsA.toFixed(1) : "  -  ";
+    const stdB = row.stdevTurnsB !== null ? row.stdevTurnsB.toFixed(1) : "  -  ";
     const dcost = row.costMedianDelta !== null ? formatDelta(row.costMedianDelta, 4) : "  -  ";
     const dturns =
       row.metricsDelta.turns !== null ? formatDelta(row.metricsDelta.turns, 1) : "  -  ";
     const tag = row.status === "present" ? "" : `  [${row.status}]`;
-    console.log(`${key}${passA}${passB}${dpass.padEnd(10)}${dcost.padEnd(12)}${dturns}${tag}`);
+    console.log(
+      `${key}${passA}${passB}${dpass.padEnd(10)}${stdA.padEnd(9)}${stdB.padEnd(9)}${dcost.padEnd(12)}${dturns}${tag}`,
+    );
+
+    // Per-bucket readTargets delta. Surfaced only when at least one bucket
+    // has a non-zero delta so the table stays scannable for flat rows.
+    const readLine = formatReadDeltas(row.readDeltas);
+    if (readLine) {
+      console.log(`  ${readLine}`);
+    }
   }
   console.log("-".repeat(width));
   console.log(`Overall ΔpassRate: ${formatDelta(diff.overallPassRateDelta, 3)}`);
@@ -599,8 +871,44 @@ function showDiff(diff: DiffReport, json: boolean): void {
   console.log("=".repeat(width));
 }
 
+/**
+ * Run the profile-diff path: types-only vs full-package for the active group.
+ * Emits the diff via `showDiff`, or prints a single-line warning when one of
+ * the two profiles has no reports yet.
+ *
+ * `showHeading` toggles the "Profile Diff" banner; the default code path
+ * (which chains trend + profile-diff) sets it true so the two sections are
+ * visually separated.
+ */
+function runProfileDiff(filters: Filters, json: boolean, showHeading: boolean): boolean {
+  // contextProfile filter would exclude one of the two profiles we need to
+  // diff, so we strip it here. agent/model are still honored so callers can
+  // narrow to a specific solver when multiple coexist.
+  const profileSafeFilters: Filters = { ...filters };
+  delete profileSafeFilters.contextProfile;
+  const reports = loadReports(profileSafeFilters);
+  const pair = resolveActiveProfilePair(reports);
+  if (pair.kind === "missing") {
+    console.log(`(profile-diff skipped: ${pair.reason})`);
+    return false;
+  }
+  if (showHeading) {
+    const width = 110;
+    console.log("");
+    console.log("=".repeat(width));
+    console.log("Profile Diff (types-only -> full-package)");
+    console.log("=".repeat(width));
+  }
+  const diff = computeReportDiff(pair.typesOnly.report, pair.fullPackage.report, {
+    a: pair.typesOnly.path,
+    b: pair.fullPackage.path,
+  });
+  showDiff(diff, json);
+  return true;
+}
+
 function main(): void {
-  const { trend, groups, agent, model, contextProfile, diffPair, json } = parseArgs();
+  const { trend, groups, profileDiff, agent, model, contextProfile, diffPair, json } = parseArgs();
   const filters: Filters = { agent, model, contextProfile };
 
   if (diffPair) {
@@ -622,6 +930,16 @@ function main(): void {
     return;
   }
 
+  if (profileDiff) {
+    const ok = runProfileDiff(filters, json, false);
+    if (!ok) process.exit(1);
+    return;
+  }
+
+  // `--context-profile` is intentionally ignored when picking trend reports
+  // below if the caller is in the default path, because the default path also
+  // emits a profile-diff that needs both profiles. We still respect
+  // agent/model filters since those select WHICH solver to look at.
   const filtered = loadReports(filters);
 
   if (trend) {
@@ -634,7 +952,10 @@ function main(): void {
     return;
   }
 
-  // Default: trend within the most recently active matching group.
+  // Default: trend within the most recently active matching group, followed
+  // by a profile-diff section (when both profiles have reports). Either
+  // signal alone is useful; rendering both surfaces docs-vs-types gaps next
+  // to time-series progression.
   const eligible = [...groupReports(filtered).values()].filter((g) => g.reports.length >= 1);
   if (eligible.length === 0) {
     console.error(`No reports match filters (${describeFilters(filters)}).`);
@@ -652,6 +973,10 @@ function main(): void {
     (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
   );
   showTrend(sorted, formatGroupKey(chosen.key));
+
+  // Then surface the profile-diff. Skipped silently when one of the two
+  // contextProfiles has no reports yet.
+  runProfileDiff(filters, json, true);
 }
 
 // Only auto-run when invoked directly via `tsx core/analyze.ts`, so importing

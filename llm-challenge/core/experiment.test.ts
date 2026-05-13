@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { findLatestReport } from "./experiment";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { DEFAULT_ITERATIONS, buildChildArgs, findLatestReport, parseArgs } from "./experiment";
 
 describe("findLatestReport", () => {
   let tempDir: string;
@@ -70,5 +70,128 @@ describe("findLatestReport", () => {
     // not blow up readdirSync(... withFileTypes: true) routing.
     fs.writeFileSync(path.join(tempDir, "report-stray.json"), "{}");
     expect(findLatestReport(tempDir, "", new Date(0))).toBeUndefined();
+  });
+});
+
+describe("DEFAULT_ITERATIONS", () => {
+  it("is 5 (Phase 5c bumped the default from 3 to keep variance tight)", () => {
+    // This is intentionally a literal assertion: bumping the default again
+    // should be a deliberate decision documented in the README + CHANGELOG.
+    expect(DEFAULT_ITERATIONS).toBe(5);
+  });
+});
+
+describe("parseArgs", () => {
+  let originalArgv: string[];
+  beforeEach(() => {
+    originalArgv = process.argv;
+  });
+  afterEach(() => {
+    process.argv = originalArgv;
+  });
+
+  function setArgv(args: string[]): void {
+    process.argv = ["node", "experiment.ts", ...args];
+  }
+
+  it("defaults iterations to DEFAULT_ITERATIONS when --iterations is omitted", () => {
+    setArgv(["--sdk-branch", "feat/foo"]);
+    const args = parseArgs();
+    expect(args.iterations).toBe(DEFAULT_ITERATIONS);
+  });
+
+  it("parses --problems as a comma-separated list and strips whitespace", () => {
+    setArgv(["--sdk-branch", "feat/foo", "--problems", "m05, m18 ,m07"]);
+    const args = parseArgs();
+    expect(args.problems).toEqual(["m05", "m18", "m07"]);
+  });
+
+  it("exits when --problems is empty (empty string between commas only)", () => {
+    setArgv(["--sdk-branch", "feat/foo", "--problems", ", ,"]);
+    const exit = vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+      throw new Error(`exit:${code ?? 0}`);
+    }) as never);
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(() => parseArgs()).toThrow(/exit:1/);
+    expect(err).toHaveBeenCalledWith(expect.stringContaining("at least one problem ID"));
+    exit.mockRestore();
+    err.mockRestore();
+  });
+
+  it("strips --problems out of the forwarded args (reserved by the experiment driver)", () => {
+    setArgv([
+      "--sdk-branch",
+      "feat/foo",
+      "--problems",
+      "m05",
+      "--agent",
+      "claude",
+      "--context-profile",
+      "types-only",
+    ]);
+    const args = parseArgs();
+    expect(args.problems).toEqual(["m05"]);
+    expect(args.forward).toEqual(["--agent", "claude", "--context-profile", "types-only"]);
+    // Must not leak the reserved flag downstream.
+    expect(args.forward).not.toContain("--problems");
+  });
+});
+
+describe("buildChildArgs", () => {
+  it("emits --solve --iterations <n> and forwards extra args verbatim", () => {
+    const args = buildChildArgs(5, ["--agent", "claude", "--context-profile", "types-only"]);
+    expect(args).toEqual([
+      "--solve",
+      "--iterations",
+      "5",
+      "--agent",
+      "claude",
+      "--context-profile",
+      "types-only",
+    ]);
+  });
+
+  it("appends --sdk-branch <ref> when set", () => {
+    const args = buildChildArgs(3, [], { sdkBranch: "feat/exec-description-required" });
+    expect(args).toEqual([
+      "--solve",
+      "--iterations",
+      "3",
+      "--sdk-branch",
+      "feat/exec-description-required",
+    ]);
+  });
+
+  it("expands a problems[] list as multiple --problem <id> flags", () => {
+    const args = buildChildArgs(5, [], { problems: ["m05", "m18"] });
+    // The test asserts a specific order so child argv composition stays
+    // deterministic; if you change buildChildArgs ordering you must update
+    // every cli.ts caller that relies on the cli precedence.
+    expect(args).toEqual(["--solve", "--iterations", "5", "--problem", "m05", "--problem", "m18"]);
+  });
+
+  it("supports both --sdk-branch and --problems at once", () => {
+    const args = buildChildArgs(5, ["--agent", "claude"], {
+      sdkBranch: "feat/foo",
+      problems: ["m05", "m18"],
+    });
+    expect(args).toEqual([
+      "--solve",
+      "--iterations",
+      "5",
+      "--sdk-branch",
+      "feat/foo",
+      "--problem",
+      "m05",
+      "--problem",
+      "m18",
+      "--agent",
+      "claude",
+    ]);
+  });
+
+  it("omits --problem flags when the problems list is empty", () => {
+    const args = buildChildArgs(5, [], { problems: [] });
+    expect(args).toEqual(["--solve", "--iterations", "5"]);
   });
 });
