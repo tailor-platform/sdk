@@ -7,8 +7,6 @@
     "deploy": "tailor-sdk deploy",
     "test": "vitest --project unit",
     "test:unit": "vitest --project unit",
-    "test:bundled:prepare": "TAILOR_PLATFORM_SDK_BUILD_ONLY=true tailor-sdk deploy -c tailor.config.ts",
-    "test:bundled": "pnpm test:bundled:prepare && vitest --project bundled",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "lint": "oxlint --type-aware . && eslint --cache .",
