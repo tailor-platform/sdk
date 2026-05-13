@@ -1094,6 +1094,9 @@ function toFileStream(value: unknown): FileStream {
     const stream: FileStream = {
       async next() {
         const r = await inner.next();
+        if (!r.done) {
+          assertStreamValue(r.value);
+        }
         return r.done ? { done: true as const, value: undefined } : r;
       },
       async close() {},
@@ -1113,6 +1116,29 @@ function toFileStream(value: unknown): FileStream {
     },
   };
   return empty;
+}
+
+function assertStreamValue(v: unknown): void {
+  if (v === null || typeof v !== "object") {
+    throw new TypeError(
+      'fileMock.openDownloadStream expected a StreamValue item ({ type: "metadata" | "chunk" | "complete", ... }); ' +
+        `got ${typeof v === "object" ? "null" : typeof v}.`,
+    );
+  }
+  // ArrayBuffer / TypedArray are objects but never valid StreamValue items.
+  if (v instanceof ArrayBuffer || ArrayBuffer.isView(v)) {
+    throw new TypeError(
+      "fileMock.openDownloadStream expected a StreamValue item, got raw bytes. " +
+        'Wrap the bytes in a structured chunk first (e.g. { type: "chunk", data, position }).',
+    );
+  }
+  const type = (v as { type?: unknown }).type;
+  if (type !== "metadata" && type !== "chunk" && type !== "complete") {
+    throw new TypeError(
+      'fileMock.openDownloadStream expected a StreamValue item with type "metadata" | "chunk" | "complete"; ' +
+        `got ${JSON.stringify(type)}.`,
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -413,6 +413,18 @@ describe("mock", () => {
       ).rejects.toThrow(/iterable of StreamValue items/);
     });
 
+    test("openDownloadStream rejects non-StreamValue elements yielded by the iterable", async () => {
+      // Uint8Array[] is iterable but its elements aren't StreamValue items.
+      fileMock.enqueueResult([new Uint8Array([1]), new Uint8Array([2])]);
+      const stream = await (globalThis as any).tailordb.file.openDownloadStream(
+        "ns",
+        "T",
+        "f",
+        "r",
+      );
+      await expect(stream.next()).rejects.toThrow(/StreamValue/);
+    });
+
     test("openDownloadStream yields the enqueued StreamValue sequence", async () => {
       const bytes = new Uint8Array([1, 2, 3]);
       const sequence = [

@@ -151,6 +151,31 @@ declare global {
     cause?: unknown;
   }
 
+  /** Individual error entry attached to {@link TailorErrors}. */
+  interface TailorErrorItem {
+    message: string;
+    path: (string | number)[];
+  }
+
+  /**
+   * Aggregate validation error raised by the Tailor Platform Function runtime.
+   * The runtime serializes the items into the `message` (`"TailorErrors: {...}"`)
+   * and also exposes them on `.errors`.
+   */
+  class TailorErrors extends Error {
+    constructor(errors: TailorErrorItem[]);
+    name: "TailorErrors";
+    errors: TailorErrorItem[];
+  }
+
+  /**
+   * Single-message error raised by the Tailor Platform Function runtime.
+   */
+  class TailorErrorMessage extends Error {
+    constructor(message: string);
+    name: "TailorErrorMessage";
+  }
+
   namespace tailor.idp {
     type ClientConfig = IdpClientConfig;
     type User = IdpUser;

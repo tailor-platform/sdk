@@ -120,12 +120,15 @@ describe("@tailor-platform/sdk/runtime/file", () => {
   test("TailorDBFileError type alias resolves to globalThis class", () => {
     const TailorDBFileError = (
       globalThis as unknown as {
-        TailorDBFileError: new (m: string, c?: string) => Error & { code?: string };
+        TailorDBFileError: new (
+          m: string,
+          c?: file.TailorDBFileErrorCode,
+        ) => Error & { code?: file.TailorDBFileErrorCode };
       }
     ).TailorDBFileError;
-    const err = new TailorDBFileError("not found", "NOT_FOUND");
+    const err = new TailorDBFileError("operation failed", "OPERATION_FAILED");
     expect(err.name).toBe("TailorDBFileError");
-    expect(err.code).toBe("NOT_FOUND");
+    expect(err.code).toBe("OPERATION_FAILED");
     // Type-level: file.TailorDBFileError is the global class
     const _typed: file.TailorDBFileError = err as file.TailorDBFileError;
     expect(_typed).toBe(err);
