@@ -1,0 +1,8 @@
+{
+  "id": "h11-config-multi-staticwebsite-cors-redirect",
+  "title": "Wire CORS and OAuth2 redirect URIs across two static websites without cross-mixing origins",
+  "hypothesizedAffordance": "implicit_assumption",
+  "sdkSurface": "config",
+  "contextProfiles": ["types-only", "full-package"],
+  "hint": "site.url は `${name}:url` の placeholder。各 OAuth2 client の redirect は対応する site の url のみ"
+}
