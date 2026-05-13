@@ -193,13 +193,10 @@ async function main(): Promise<void> {
   console.log(`Candidate report: ${candidatePath}`);
   console.log("");
 
-  // Diff.
-  const baselineReport = JSON.parse(
-    fs.readFileSync(path.join(experimentDir, "baseline.json"), "utf-8"),
-  ) as ChallengeReport;
-  const candidateReport = JSON.parse(
-    fs.readFileSync(path.join(experimentDir, "candidate.json"), "utf-8"),
-  ) as ChallengeReport;
+  // Diff. Read back from the experiment copies so a failure in fs.copyFileSync
+  // surfaces here rather than from a stale in-memory parse of the source path.
+  const baselineReport = JSON.parse(fs.readFileSync(baselinePath, "utf-8")) as ChallengeReport;
+  const candidateReport = JSON.parse(fs.readFileSync(candidatePath, "utf-8")) as ChallengeReport;
   const delta = computeReportDiff(baselineReport, candidateReport, {
     a: path.relative(experimentDir, baselinePath),
     b: path.relative(experimentDir, candidatePath),

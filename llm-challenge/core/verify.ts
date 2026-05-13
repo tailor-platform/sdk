@@ -89,15 +89,10 @@ function parseVitestJson(output: string): ParsedVitestResult | undefined {
   // vitest --reporter=json outputs JSON to stdout, possibly mixed with other output
   // Try to find the JSON object in the output
   const jsonMatch = output.match(/\{"numTotalTestSuites"\s*:/);
-  if (!jsonMatch) {
+  if (!jsonMatch || jsonMatch.index === undefined) {
     return undefined;
   }
-
-  // Find the start of the JSON object
-  const startIdx = output.indexOf(jsonMatch[0]);
-  if (startIdx === -1) {
-    return undefined;
-  }
+  const startIdx = jsonMatch.index;
 
   // Try to parse from the start of the JSON object, skipping string literals
   let depth = 0;

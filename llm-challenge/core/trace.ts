@@ -207,18 +207,15 @@ function parseClaudeAssistantMessage(message: unknown): TraceEvent | null {
   if (thinking) return thinking;
   if (sawText) {
     const usage = typed.usage;
+    const inputTokens = pickNumber(usage?.input_tokens);
+    const outputTokens = pickNumber(usage?.output_tokens);
+    const cacheReadTokens = pickNumber(usage?.cache_read_input_tokens);
     return {
       kind: "turn_summary",
       turnIndex: 0, // caller may overwrite when ordering across the run
-      ...(pickNumber(usage?.input_tokens) !== undefined
-        ? { inputTokens: pickNumber(usage?.input_tokens) }
-        : {}),
-      ...(pickNumber(usage?.output_tokens) !== undefined
-        ? { outputTokens: pickNumber(usage?.output_tokens) }
-        : {}),
-      ...(pickNumber(usage?.cache_read_input_tokens) !== undefined
-        ? { cacheReadTokens: pickNumber(usage?.cache_read_input_tokens) }
-        : {}),
+      ...(inputTokens !== undefined ? { inputTokens } : {}),
+      ...(outputTokens !== undefined ? { outputTokens } : {}),
+      ...(cacheReadTokens !== undefined ? { cacheReadTokens } : {}),
     };
   }
   return null;
@@ -245,26 +242,21 @@ function parseClaudeUserMessage(message: unknown): TraceEvent | null {
 
 function parseClaudeResult(envelope: ClaudeStreamEnvelope): ResultEvent {
   const usage = envelope.usage;
+  const durationMs = pickNumber(envelope.duration_ms);
+  const numTurns = pickNumber(envelope.num_turns);
+  const inputTokens = pickNumber(usage?.input_tokens);
+  const outputTokens = pickNumber(usage?.output_tokens);
+  const cacheReadTokens = pickNumber(usage?.cache_read_input_tokens);
   return {
     kind: "result",
     isError: envelope.is_error === true,
     text: pickString(envelope.result) ?? "",
     costUsd: pickNumber(envelope.total_cost_usd) ?? 0,
-    ...(pickNumber(envelope.duration_ms) !== undefined
-      ? { durationMs: pickNumber(envelope.duration_ms) }
-      : {}),
-    ...(pickNumber(envelope.num_turns) !== undefined
-      ? { numTurns: pickNumber(envelope.num_turns) }
-      : {}),
-    ...(pickNumber(usage?.input_tokens) !== undefined
-      ? { inputTokens: pickNumber(usage?.input_tokens) }
-      : {}),
-    ...(pickNumber(usage?.output_tokens) !== undefined
-      ? { outputTokens: pickNumber(usage?.output_tokens) }
-      : {}),
-    ...(pickNumber(usage?.cache_read_input_tokens) !== undefined
-      ? { cacheReadTokens: pickNumber(usage?.cache_read_input_tokens) }
-      : {}),
+    ...(durationMs !== undefined ? { durationMs } : {}),
+    ...(numTurns !== undefined ? { numTurns } : {}),
+    ...(inputTokens !== undefined ? { inputTokens } : {}),
+    ...(outputTokens !== undefined ? { outputTokens } : {}),
+    ...(cacheReadTokens !== undefined ? { cacheReadTokens } : {}),
   };
 }
 
@@ -356,8 +348,7 @@ function parseCodexItem(item: unknown): TraceEvent | null {
   if (!itemType) return null;
 
   if (itemType === "agent_message") {
-    const text = pickString(ci.text) ?? "";
-    return { kind: "turn_summary", turnIndex: 0, ...(text ? {} : {}) };
+    return { kind: "turn_summary", turnIndex: 0 };
   }
 
   if (itemType === "reasoning") {
