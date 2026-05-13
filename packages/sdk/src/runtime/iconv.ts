@@ -15,7 +15,45 @@
  * const out = conv.convert(sjisBuffer);
  */
 
-import { runtime, type IconvInstance } from "./_runtime";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+import { runtime } from "./internal";
+
+/** Instance methods exposed by `tailor.iconv.Iconv`. */
+export interface IconvInstance {
+  convert(input: string | Uint8Array | ArrayBuffer): string | Uint8Array;
+}
+
+/** Constructor shape for `tailor.iconv.Iconv`. */
+export interface IconvConstructor {
+  new (fromEncoding: string, toEncoding: string): IconvInstance;
+}
+
+/**
+ * Platform API surface for `tailor.iconv`. Describes the shape the platform
+ * runtime injects on `globalThis.tailor.iconv` so the wrapper and ambient
+ * globals stay in sync.
+ * @internal
+ */
+export interface TailorIconvAPI {
+  convert<T extends string>(
+    str: string | Uint8Array | ArrayBuffer,
+    fromEncoding: string,
+    toEncoding: T,
+  ): T extends "UTF8" | "UTF-8" ? string : Uint8Array;
+  convertBuffer<T extends string>(
+    buffer: Uint8Array | ArrayBuffer,
+    fromEncoding: string,
+    toEncoding: T,
+  ): T extends "UTF8" | "UTF-8" ? string : Uint8Array;
+  decode(buffer: Uint8Array | ArrayBuffer, encoding: string): string;
+  encode<T extends string>(
+    str: string,
+    encoding: T,
+  ): T extends "UTF8" | "UTF-8" ? string : Uint8Array;
+  encodings(): string[];
+  Iconv: IconvConstructor;
+}
 
 /**
  * Convert a string or buffer between encodings.

@@ -16,36 +16,140 @@
  * );
  */
 
-import {
-  runtime,
-  type DownloadMetadata,
-  type FileDownloadAsBase64Response,
-  type FileDownloadResponse,
-  type FileMetadata,
-  type FileStreamIterator,
-  type FileUploadOptions,
-  type FileUploadResponse,
-  type StreamMetadata,
-  type StreamValue,
-  type TailorDBFileError,
-  type TailorDBFileErrorCode,
-  type UploadMetadata,
-} from "./_runtime";
+import { runtime } from "./internal";
 
-export type {
-  UploadMetadata,
-  DownloadMetadata,
-  FileMetadata,
-  StreamMetadata,
-  FileUploadOptions,
-  FileUploadResponse,
-  FileDownloadResponse,
-  FileDownloadAsBase64Response,
-  StreamValue,
-  FileStreamIterator,
-  TailorDBFileError,
-  TailorDBFileErrorCode,
-};
+/** Upload response metadata. */
+export interface UploadMetadata {
+  fileSize: number;
+  sha256sum: string;
+}
+
+/** Download response metadata. */
+export interface DownloadMetadata {
+  contentType: string;
+  fileSize: number;
+  sha256sum: string;
+  lastUploadedAt: string;
+}
+
+/** File metadata (for {@link getMetadata}). */
+export interface FileMetadata {
+  contentType: string;
+  fileSize: number;
+  sha256sum: string;
+  urlPath: string;
+  lastUploadedAt?: string;
+}
+
+/** Stream metadata (first chunk emitted by {@link openDownloadStream}). */
+export interface StreamMetadata {
+  contentType: string;
+  fileSize: number;
+  sha256sum: string;
+}
+
+/** Upload options. */
+export interface FileUploadOptions {
+  contentType?: string;
+}
+
+/** Upload response. */
+export interface FileUploadResponse {
+  metadata: UploadMetadata;
+}
+
+/** Download response. */
+export interface FileDownloadResponse {
+  data: Uint8Array;
+  metadata: DownloadMetadata;
+}
+
+/** Download-as-Base64 response. */
+export interface FileDownloadAsBase64Response {
+  data: string;
+  metadata: DownloadMetadata;
+}
+
+/** Stream chunk types emitted by {@link FileStreamIterator}. */
+export type StreamValue =
+  | { type: "metadata"; metadata: StreamMetadata }
+  | { type: "chunk"; data: Uint8Array; position: number }
+  | { type: "complete" };
+
+/** Stream iterator returned by {@link openDownloadStream}. */
+export interface FileStreamIterator extends AsyncIterableIterator<StreamValue> {
+  next(): Promise<IteratorResult<StreamValue>>;
+  close(): Promise<void>;
+}
+
+/** Error code emitted by {@link TailorDBFileError}. */
+export type TailorDBFileErrorCode =
+  | "INVALID_PARAMS"
+  | "INVALID_DATA_TYPE"
+  | "OPERATION_FAILED"
+  | "DELETE_FAILED"
+  | "STREAM_OPEN_FAILED"
+  | "STREAM_READ_ERROR"
+  | "STREAM_ERROR"
+  | "FILE_TOO_LARGE";
+
+/**
+ * Type-only shape of the `TailorDBFileError` runtime class. The class itself
+ * is provided by the platform runtime (and by `injectMocks` in tests); this
+ * interface mirrors it so callers can `import type { TailorDBFileError }` from
+ * the wrapper module without depending on any ambient declaration.
+ */
+export interface TailorDBFileError extends Error {
+  name: "TailorDBFileError";
+  code?: TailorDBFileErrorCode;
+  cause?: unknown;
+}
+
+/**
+ * Platform API surface for `tailordb.file`. Describes the shape the platform
+ * runtime injects on `globalThis.tailordb.file`.
+ * @internal
+ */
+export interface TailorDBFileAPI {
+  upload(
+    namespace: string,
+    typeName: string,
+    fieldName: string,
+    recordId: string,
+    data: string | ArrayBuffer | Uint8Array | number[],
+    options?: FileUploadOptions,
+  ): Promise<FileUploadResponse>;
+
+  download(
+    namespace: string,
+    typeName: string,
+    fieldName: string,
+    recordId: string,
+  ): Promise<FileDownloadResponse>;
+
+  downloadAsBase64(
+    namespace: string,
+    typeName: string,
+    fieldName: string,
+    recordId: string,
+  ): Promise<FileDownloadAsBase64Response>;
+
+  delete(namespace: string, typeName: string, fieldName: string, recordId: string): Promise<void>;
+
+  getMetadata(
+    namespace: string,
+    typeName: string,
+    fieldName: string,
+    recordId: string,
+  ): Promise<FileMetadata>;
+
+  openDownloadStream(
+    namespace: string,
+    typeName: string,
+    fieldName: string,
+    recordId: string,
+  ): Promise<FileStreamIterator>;
+}
 
 /**
  * Upload a file to TailorDB.

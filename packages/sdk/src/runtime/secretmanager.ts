@@ -12,7 +12,20 @@
  * const all = await secretmanager.getSecrets("my-vault", ["A", "B"] as const);
  */
 
-import { runtime } from "./_runtime";
+import { runtime } from "./internal";
+
+/**
+ * Platform API surface for `tailor.secretmanager`. Describes the shape the
+ * platform runtime injects on `globalThis.tailor.secretmanager`.
+ * @internal
+ */
+export interface TailorSecretmanagerAPI {
+  getSecrets<const T extends readonly string[]>(
+    vault: string,
+    names: T,
+  ): Promise<Partial<Record<T[number], string>>>;
+  getSecret(vault: string, name: string): Promise<string | undefined>;
+}
 
 /**
  * Returns multiple secrets from a vault. Missing names are omitted from the result.

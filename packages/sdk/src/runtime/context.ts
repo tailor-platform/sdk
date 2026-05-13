@@ -13,7 +13,7 @@
  * }
  */
 
-import { runtime } from "./_runtime";
+import { runtime } from "./internal";
 
 /**
  * Information about the invoker of the current function execution.
@@ -32,6 +32,33 @@ export interface Invoker {
   attributes: Record<string, unknown>;
   /** The list of attribute IDs */
   attributeList: string[];
+}
+
+/**
+ * Raw platform-side invoker payload returned by `tailor.context.getInvoker()`.
+ * The wrapper normalizes this into {@link Invoker}.
+ * @internal
+ */
+export interface ContextInvoker {
+  /** The invoker's ID */
+  id: string;
+  /** The invoker's type */
+  type: "user" | "machine_user";
+  /** The workspace ID */
+  workspaceId: string;
+  /** The invoker's attribute IDs */
+  attributes: string[];
+  /** The invoker's attribute map */
+  attributeMap: Record<string, unknown>;
+}
+
+/**
+ * Platform API surface for `tailor.context`. Describes the shape the platform
+ * runtime injects on `globalThis.tailor.context`.
+ * @internal
+ */
+export interface TailorContextAPI {
+  getInvoker(): ContextInvoker | null;
 }
 
 /**

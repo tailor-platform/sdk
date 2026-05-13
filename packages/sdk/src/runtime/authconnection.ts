@@ -10,7 +10,18 @@
  * const token = await authconnection.getConnectionToken("my-connection");
  */
 
-import { runtime } from "./_runtime";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+import { runtime } from "./internal";
+
+/**
+ * Platform API surface for `tailor.authconnection`. Describes the shape the
+ * platform runtime injects on `globalThis.tailor.authconnection`.
+ * @internal
+ */
+export interface TailorAuthconnectionAPI {
+  getConnectionToken(connectionName: string): Promise<any>;
+}
 
 /**
  * Returns the access token for the given auth connection.

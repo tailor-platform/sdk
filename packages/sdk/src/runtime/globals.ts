@@ -18,23 +18,23 @@
 
 /* eslint-disable @typescript-eslint/no-namespace, @typescript-eslint/no-explicit-any, jsdoc/require-param, jsdoc/require-returns, jsdoc/require-param-description */
 
+import type { ContextInvoker } from "./context";
+import type { TailorDBFileAPI, TailorDBFileErrorCode } from "./file";
 import type {
-  ContextInvoker,
-  IdpClientConfig,
-  IdpCreateUserInput,
-  IdpListUsersOptions,
-  IdpListUsersResponse,
-  IdpSendPasswordResetEmailInput,
-  IdpUpdateUserInput,
-  IdpUser,
-  IdpUserQuery,
-  TailorDBFileAPI,
-  TailorDBFileErrorCode,
-  TailordbCommandType,
-  TailordbQueryResult,
-  WorkflowAuthInvoker,
-  WorkflowTriggerWorkflowOptions,
-} from "./_runtime";
+  ClientConfig as IdpClientConfig,
+  CreateUserInput as IdpCreateUserInput,
+  ListUsersOptions as IdpListUsersOptions,
+  ListUsersResponse as IdpListUsersResponse,
+  SendPasswordResetEmailInput as IdpSendPasswordResetEmailInput,
+  UpdateUserInput as IdpUpdateUserInput,
+  User as IdpUser,
+  UserQuery as IdpUserQuery,
+} from "./idp";
+import type { TailordbCommandType, TailordbQueryResult } from "./internal";
+import type {
+  AuthInvoker as WorkflowAuthInvoker,
+  TriggerWorkflowOptions as WorkflowTriggerWorkflowOptions,
+} from "./workflow";
 
 declare global {
   namespace Tailordb {

@@ -6,8 +6,9 @@
  * responses and assert on recorded calls via the exported mock objects.
  */
 
-import type { ContextInvoker, IdpUser, TailorDBFileErrorCode } from "../runtime/_runtime";
-import type { Invoker } from "../runtime/context";
+import type { ContextInvoker, Invoker } from "../runtime/context";
+import type { TailorDBFileErrorCode } from "../runtime/file";
+import type { User as IdpUser } from "../runtime/idp";
 
 // ---------------------------------------------------------------------------
 // Types

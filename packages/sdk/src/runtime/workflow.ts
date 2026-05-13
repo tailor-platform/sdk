@@ -10,13 +10,42 @@
  * const executionId = await workflow.triggerWorkflow("myWorkflow", { data: "value" });
  */
 
-import { runtime, type WorkflowAuthInvoker, type WorkflowTriggerWorkflowOptions } from "./_runtime";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
-/** {@link triggerWorkflow} option type. */
-export type AuthInvoker = WorkflowAuthInvoker;
+import { runtime } from "./internal";
 
-/** {@link triggerWorkflow} option bag. */
-export type TriggerWorkflowOptions = WorkflowTriggerWorkflowOptions;
+/**
+ * Specifies the machine user that should be used to execute the workflow.
+ * This allows workflows to run with specific authentication context.
+ */
+export interface AuthInvoker {
+  /** The namespace where the machine user is defined */
+  namespace: string;
+  /** The name of the machine user to use for workflow execution */
+  machineUserName: string;
+}
+
+/** Options for {@link triggerWorkflow}. */
+export interface TriggerWorkflowOptions {
+  /** Optional authentication invoker to specify which machine user should execute the workflow */
+  authInvoker?: AuthInvoker;
+}
+
+/**
+ * Platform API surface for `tailor.workflow`. Describes the shape the platform
+ * runtime injects on `globalThis.tailor.workflow`.
+ * @internal
+ */
+export interface TailorWorkflowAPI {
+  triggerWorkflow(
+    workflow_name: string,
+    args?: any,
+    options?: TriggerWorkflowOptions,
+  ): Promise<string>;
+  triggerJobFunction(job_name: string, args?: any): any;
+  wait(key: string, payload?: any): any;
+  resolve(executionId: string, key: string, callback: (waitPayload: any) => any): Promise<void>;
+}
 
 /**
  * Triggers a workflow and returns its execution ID.
