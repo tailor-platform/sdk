@@ -17,7 +17,7 @@ describe("@tailor-platform/sdk/runtime/workflow", () => {
   });
 
   test("triggerWorkflow forwards args and returns Promise<string>", async () => {
-    workflowMock.setWorkflowExecutionId("exec-42");
+    workflowMock.setTriggerHandler("exec-42");
 
     const promise = workflow.triggerWorkflow("my-workflow", { a: 1 });
 
@@ -52,7 +52,7 @@ describe("@tailor-platform/sdk/runtime/workflow", () => {
   });
 
   test("wait records the call and returns the configured result", () => {
-    workflowMock.setWaitResult({ resumed: true });
+    workflowMock.setWaitHandler({ resumed: true });
 
     const result = workflow.wait("key-1", { p: 1 });
 
