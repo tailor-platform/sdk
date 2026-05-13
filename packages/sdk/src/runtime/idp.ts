@@ -11,17 +11,18 @@
  * const { users } = await client.users({ first: 10 });
  */
 
-import "./globals";
-import type {
-  IdpClientConfig,
-  IdpUser,
-  IdpUserQuery,
-  IdpListUsersOptions,
-  IdpListUsersResponse,
-  IdpCreateUserInput,
-  IdpUpdateUserInput,
-  IdpSendPasswordResetEmailInput,
-} from "./globals";
+import {
+  runtime,
+  type IdpClientConfig,
+  type IdpClientInstance,
+  type IdpCreateUserInput,
+  type IdpListUsersOptions,
+  type IdpListUsersResponse,
+  type IdpSendPasswordResetEmailInput,
+  type IdpUpdateUserInput,
+  type IdpUser,
+  type IdpUserQuery,
+} from "./_runtime";
 
 /** Configuration object for {@link Client}. */
 export type ClientConfig = IdpClientConfig;
@@ -53,10 +54,10 @@ export type SendPasswordResetEmailInput = IdpSendPasswordResetEmailInput;
  * Wraps the platform-provided `tailor.idp.Client` and exposes the same surface.
  */
 export class Client {
-  #impl: tailor.idp.Client;
+  #impl: IdpClientInstance;
 
   constructor(config: ClientConfig) {
-    this.#impl = new tailor.idp.Client(config);
+    this.#impl = new runtime.tailor.idp.Client(config);
   }
 
   /**

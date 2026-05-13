@@ -13,8 +13,7 @@
  * }
  */
 
-import "./globals";
-import type { ContextInvoker } from "./globals";
+import { runtime, type ContextInvoker } from "./_runtime";
 
 /** Information about the invoker of the current function execution. */
 export type Invoker = ContextInvoker;
@@ -25,5 +24,5 @@ export type Invoker = ContextInvoker;
  * @returns Invoker details, or `null` when the call is anonymous
  */
 export function getInvoker(): Invoker | null {
-  return tailor.context.getInvoker();
+  return runtime.tailor.context.getInvoker();
 }

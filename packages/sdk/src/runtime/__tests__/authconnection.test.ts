@@ -1,7 +1,6 @@
 /**
  * Tests for `@tailor-platform/sdk/runtime/authconnection` typed wrappers.
  */
-import "@/runtime/globals";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import * as authconnection from "@/runtime/authconnection";
 import { authconnectionMock, cleanupMocks, injectMocks } from "@/vitest/mock";

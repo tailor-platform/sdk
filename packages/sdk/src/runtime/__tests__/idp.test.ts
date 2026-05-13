@@ -4,7 +4,6 @@
  * Verifies that {@link idp.Client} forwards each method to the platform's
  * `tailor.idp.Client` and records calls with method, args, and namespace.
  */
-import "@/runtime/globals";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import * as idp from "@/runtime/idp";
 import { cleanupMocks, idpMock, injectMocks } from "@/vitest/mock";

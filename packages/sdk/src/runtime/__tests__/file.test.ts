@@ -1,7 +1,6 @@
 /**
  * Tests for `@tailor-platform/sdk/runtime/file` typed wrappers.
  */
-import "@/runtime/globals";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import * as file from "@/runtime/file";
 import { cleanupMocks, fileMock, injectMocks } from "@/vitest/mock";

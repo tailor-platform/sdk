@@ -5,7 +5,6 @@
  * via `iconvMock.calls`) and that the return-type narrowing (`UTF-8` →
  * `string`, otherwise `Uint8Array`) holds at the type level.
  */
-import "@/runtime/globals";
 import { afterEach, beforeEach, describe, expect, expectTypeOf, test } from "vitest";
 import * as iconv from "@/runtime/iconv";
 import { cleanupMocks, iconvMock, injectMocks } from "@/vitest/mock";

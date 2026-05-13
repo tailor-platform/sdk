@@ -1,7 +1,6 @@
 /**
  * Tests for `@tailor-platform/sdk/runtime/workflow` typed wrappers.
  */
-import "@/runtime/globals";
 import { afterEach, beforeEach, describe, expect, expectTypeOf, test } from "vitest";
 import * as workflow from "@/runtime/workflow";
 import { cleanupMocks, injectMocks, workflowMock } from "@/vitest/mock";

@@ -1,16 +1,15 @@
 /**
- * Type-level tests confirming that importing the runtime entries activates
- * the ambient `tailor.*` / `tailordb` globals declared in
- * `src/runtime/globals.ts`.
+ * Type-level tests confirming that opting into `@tailor-platform/sdk/runtime/globals`
+ * activates the ambient `tailor.*` / `tailordb` declarations.
  *
  * These assertions are type-only — they reference `tailor`, `tailordb`, and
  * `TailorDBFileError` solely through `typeof` so the test does not require
  * the platform runtime to inject those values into the unit test environment.
  */
-import "@/runtime";
+import "@/runtime/globals";
 import { describe, expectTypeOf, test } from "vitest";
 
-describe("@tailor-platform/sdk/runtime activates ambient globals", () => {
+describe("@tailor-platform/sdk/runtime/globals activates ambient globals", () => {
   test("tailor.iconv.convert is declared as a function", () => {
     expectTypeOf<typeof tailor.iconv.convert>().toBeFunction();
   });

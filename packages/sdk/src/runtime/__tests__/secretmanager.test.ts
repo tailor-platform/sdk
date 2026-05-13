@@ -1,7 +1,6 @@
 /**
  * Tests for `@tailor-platform/sdk/runtime/secretmanager` typed wrappers.
  */
-import "@/runtime/globals";
 import { afterEach, beforeEach, describe, expect, expectTypeOf, test } from "vitest";
 import * as secretmanager from "@/runtime/secretmanager";
 import { cleanupMocks, injectMocks, secretmanagerMock } from "@/vitest/mock";

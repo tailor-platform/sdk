@@ -6,8 +6,7 @@
  * responses and assert on recorded calls via the exported mock objects.
  */
 
-import "../runtime/globals";
-import type { ContextInvoker, IdpUser } from "../runtime/globals";
+import type { ContextInvoker, IdpUser } from "../runtime/_runtime";
 
 // ---------------------------------------------------------------------------
 // Types

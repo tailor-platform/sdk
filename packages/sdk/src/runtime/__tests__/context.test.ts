@@ -1,7 +1,6 @@
 /**
  * Tests for `@tailor-platform/sdk/runtime/context` typed wrappers.
  */
-import "@/runtime/globals";
 import { afterEach, beforeEach, describe, expect, expectTypeOf, test } from "vitest";
 import * as context from "@/runtime/context";
 import { cleanupMocks, injectMocks } from "@/vitest/mock";

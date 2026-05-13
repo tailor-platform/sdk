@@ -10,7 +10,7 @@
  * const token = await authconnection.getConnectionToken("my-connection");
  */
 
-import "./globals";
+import { runtime } from "./_runtime";
 
 /**
  * Returns the access token for the given auth connection.
@@ -19,5 +19,5 @@ import "./globals";
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function getConnectionToken(connectionName: string): Promise<any> {
-  return tailor.authconnection.getConnectionToken(connectionName);
+  return runtime.tailor.authconnection.getConnectionToken(connectionName);
 }

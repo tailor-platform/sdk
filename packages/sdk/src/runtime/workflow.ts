@@ -10,8 +10,7 @@
  * const executionId = await workflow.triggerWorkflow("myWorkflow", { data: "value" });
  */
 
-import "./globals";
-import type { WorkflowAuthInvoker, WorkflowTriggerWorkflowOptions } from "./globals";
+import { runtime, type WorkflowAuthInvoker, type WorkflowTriggerWorkflowOptions } from "./_runtime";
 
 /** {@link triggerWorkflow} option type. */
 export type AuthInvoker = WorkflowAuthInvoker;
@@ -32,7 +31,7 @@ export function triggerWorkflow(
   args?: any,
   options?: TriggerWorkflowOptions,
 ): Promise<string> {
-  return tailor.workflow.triggerWorkflow(workflow_name, args, options);
+  return runtime.tailor.workflow.triggerWorkflow(workflow_name, args, options);
 }
 
 /**
@@ -46,7 +45,7 @@ export function triggerWorkflow(
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function triggerJobFunction(job_name: string, args?: any): any {
-  return tailor.workflow.triggerJobFunction(job_name, args);
+  return runtime.tailor.workflow.triggerJobFunction(job_name, args);
 }
 
 /**
@@ -57,7 +56,7 @@ export function triggerJobFunction(job_name: string, args?: any): any {
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function wait(key: string, payload?: any): any {
-  return tailor.workflow.wait(key, payload);
+  return runtime.tailor.workflow.wait(key, payload);
 }
 
 /**
@@ -73,5 +72,5 @@ export function resolve(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   callback: (waitPayload: any) => any,
 ): Promise<void> {
-  return tailor.workflow.resolve(executionId, key, callback);
+  return runtime.tailor.workflow.resolve(executionId, key, callback);
 }

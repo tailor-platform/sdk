@@ -16,21 +16,21 @@
  * );
  */
 
-import "./globals";
-import type {
-  UploadMetadata,
-  DownloadMetadata,
-  FileMetadata,
-  StreamMetadata,
-  FileUploadOptions,
-  FileUploadResponse,
-  FileDownloadResponse,
-  FileDownloadAsBase64Response,
-  StreamValue,
-  FileStreamIterator,
-  TailorDBFileError,
-  TailorDBFileErrorCode,
-} from "./globals";
+import {
+  runtime,
+  type DownloadMetadata,
+  type FileDownloadAsBase64Response,
+  type FileDownloadResponse,
+  type FileMetadata,
+  type FileStreamIterator,
+  type FileUploadOptions,
+  type FileUploadResponse,
+  type StreamMetadata,
+  type StreamValue,
+  type TailorDBFileError,
+  type TailorDBFileErrorCode,
+  type UploadMetadata,
+} from "./_runtime";
 
 export type {
   UploadMetadata,
@@ -65,7 +65,7 @@ export function upload(
   data: string | ArrayBuffer | Uint8Array | number[],
   options?: FileUploadOptions,
 ): Promise<FileUploadResponse> {
-  return tailordb.file.upload(namespace, typeName, fieldName, recordId, data, options);
+  return runtime.tailordb.file.upload(namespace, typeName, fieldName, recordId, data, options);
 }
 
 /**
@@ -85,7 +85,7 @@ export function download(
   fieldName: string,
   recordId: string,
 ): Promise<FileDownloadResponse> {
-  return tailordb.file.download(namespace, typeName, fieldName, recordId);
+  return runtime.tailordb.file.download(namespace, typeName, fieldName, recordId);
 }
 
 /**
@@ -105,7 +105,7 @@ export function downloadAsBase64(
   fieldName: string,
   recordId: string,
 ): Promise<FileDownloadAsBase64Response> {
-  return tailordb.file.downloadAsBase64(namespace, typeName, fieldName, recordId);
+  return runtime.tailordb.file.downloadAsBase64(namespace, typeName, fieldName, recordId);
 }
 
 /**
@@ -122,7 +122,7 @@ function deleteFile(
   fieldName: string,
   recordId: string,
 ): Promise<void> {
-  return tailordb.file.delete(namespace, typeName, fieldName, recordId);
+  return runtime.tailordb.file.delete(namespace, typeName, fieldName, recordId);
 }
 
 /**
@@ -139,7 +139,7 @@ export function getMetadata(
   fieldName: string,
   recordId: string,
 ): Promise<FileMetadata> {
-  return tailordb.file.getMetadata(namespace, typeName, fieldName, recordId);
+  return runtime.tailordb.file.getMetadata(namespace, typeName, fieldName, recordId);
 }
 
 /**
@@ -156,7 +156,7 @@ export function openDownloadStream(
   fieldName: string,
   recordId: string,
 ): Promise<FileStreamIterator> {
-  return tailordb.file.openDownloadStream(namespace, typeName, fieldName, recordId);
+  return runtime.tailordb.file.openDownloadStream(namespace, typeName, fieldName, recordId);
 }
 
 export { deleteFile as delete };
