@@ -1,0 +1,8 @@
+{
+  "id": "h01-tailordb-hooks-null-update-cascade",
+  "title": "Handle nullable inputs in update hooks across multiple fields",
+  "hypothesizedAffordance": "implicit_assumption",
+  "sdkSurface": "db-type",
+  "contextProfiles": ["types-only", "full-package"],
+  "hint": "update hook の value は T | null。null を受けたら fallback を返す"
+}

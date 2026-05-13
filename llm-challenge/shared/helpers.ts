@@ -88,9 +88,10 @@ export function loadMeta(problemDir: string): ProblemMeta {
 /**
  * List all problem directories sorted by ID.
  *
- * Accepts both legacy three-digit IDs (`001-foo`) and micro-problem IDs
- * (`m01-foo`). Directories beginning with `_` (e.g. `_shared`) are excluded —
- * they hold cross-problem assets, not runnable problems.
+ * Accepts legacy three-digit IDs (`001-foo`), Phase 2 micro-problem IDs
+ * (`m01-foo`), and Phase 2.5 harder-tier IDs (`h01-foo`). Directories beginning
+ * with `_` (e.g. `_shared`) are excluded — they hold cross-problem assets, not
+ * runnable problems.
  */
 export function listProblems(baseDir: string): string[] {
   const problemsDir = path.join(baseDir, "problems");
@@ -99,7 +100,7 @@ export function listProblems(baseDir: string): string[] {
   }
   return fs
     .readdirSync(problemsDir, { withFileTypes: true })
-    .filter((d) => d.isDirectory() && !d.name.startsWith("_") && /^(\d{3}|m\d+)-/.test(d.name))
+    .filter((d) => d.isDirectory() && !d.name.startsWith("_") && /^(\d{3}|m\d+|h\d+)-/.test(d.name))
     .map((d) => d.name)
     .sort();
 }
