@@ -463,9 +463,10 @@ const mainJob = createWorkflowJob({
         allJobsMap,
       );
 
-      // trigger call is transformed
+      // trigger call is wrapped in Promise.resolve so the runtime value matches
+      // the `Promise<Awaited<Output>>` static type
       expect(result).toContain(
-        'tailor.workflow.triggerJobFunction("fetch-data", { id: input.id })',
+        'Promise.resolve(tailor.workflow.triggerJobFunction("fetch-data", { id: input.id }))',
       );
       // fetchData declaration is removed (const fetchData = ...)
       expect(result).not.toContain("const fetchData");
@@ -510,7 +511,9 @@ const mainJob = createWorkflowJob({
       // mainJob body is preserved
       expect(result).toContain('result: "main"');
       // trigger is transformed (job name appears in triggerJobFunction call)
-      expect(result).toContain('tailor.workflow.triggerJobFunction("heavy-job", undefined)');
+      expect(result).toContain(
+        'Promise.resolve(tailor.workflow.triggerJobFunction("heavy-job", undefined))',
+      );
     });
 
     it("removes declarations of multiple other jobs", () => {
@@ -557,8 +560,12 @@ const mainJob = createWorkflowJob({
       // heavy code is removed (part of job1/job2 body)
       expect(result).not.toContain("heavy code");
       // triggers are transformed (job names appear in triggerJobFunction calls)
-      expect(result).toContain('tailor.workflow.triggerJobFunction("job-one", undefined)');
-      expect(result).toContain('tailor.workflow.triggerJobFunction("job-two", undefined)');
+      expect(result).toContain(
+        'Promise.resolve(tailor.workflow.triggerJobFunction("job-one", undefined))',
+      );
+      expect(result).toContain(
+        'Promise.resolve(tailor.workflow.triggerJobFunction("job-two", undefined))',
+      );
     });
 
     it("does not modify jobs without trigger calls", () => {
@@ -1000,8 +1007,8 @@ async function processOrder(orderId: string) {
     });
   });
 
-  describe("await removal for job triggers", () => {
-    it("removes await keyword when transforming job.trigger() calls", () => {
+  describe("Promise.resolve wrapping for job triggers", () => {
+    it("wraps job.trigger() in Promise.resolve and preserves await", () => {
       const source = `
 const customer = await fetchCustomer.trigger({ customerId: "123" });
 console.log(customer);
@@ -1011,15 +1018,14 @@ console.log(customer);
 
       const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
-      // Should NOT have await before triggerJobFunction since it's synchronous
-      expect(result).not.toContain("await tailor.workflow.triggerJobFunction");
-      // Should have the function call without await
+      // The raw triggerJobFunction value is wrapped in Promise.resolve so the
+      // runtime type matches the `Promise<Awaited<Output>>` static type.
       expect(result).toContain(
-        'const customer = tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" })',
+        'const customer = await Promise.resolve(tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" }))',
       );
     });
 
-    it("removes await keyword for multiple job.trigger() calls", () => {
+    it("wraps multiple job.trigger() calls in Promise.resolve", () => {
       const source = `
 const customer = await fetchCustomer.trigger({ customerId: "123" });
 const notification = await sendNotification.trigger({ message: "Hello" });
@@ -1032,14 +1038,15 @@ const notification = await sendNotification.trigger({ message: "Hello" });
 
       const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
-      // Should NOT have await
-      expect(result).not.toContain("await tailor.workflow.triggerJobFunction");
-      // Both calls should be transformed
-      expect(result).toContain('tailor.workflow.triggerJobFunction("fetch-customer"');
-      expect(result).toContain('tailor.workflow.triggerJobFunction("send-notification"');
+      expect(result).toContain(
+        'Promise.resolve(tailor.workflow.triggerJobFunction("fetch-customer"',
+      );
+      expect(result).toContain(
+        'Promise.resolve(tailor.workflow.triggerJobFunction("send-notification"',
+      );
     });
 
-    it("does not remove await for workflow.trigger() calls (async)", () => {
+    it("does not wrap workflow.trigger() calls (already async)", () => {
       const source = `
 const executionId = await orderWorkflow.trigger({ orderId: "123" }, { authInvoker });
 `;
@@ -1048,23 +1055,24 @@ const executionId = await orderWorkflow.trigger({ orderId: "123" }, { authInvoke
 
       const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
-      // Workflow trigger is async, so await should remain (not removed)
-      // The transformation replaces only the call expression, not the await
+      // Workflow trigger is already async, so await stays and no Promise.resolve wrap
       expect(result).toContain('await tailor.workflow.triggerWorkflow("order-processing"');
+      expect(result).not.toContain("Promise.resolve(tailor.workflow.triggerWorkflow");
     });
 
-    it("handles job.trigger() without await correctly", () => {
+    it("wraps job.trigger() without await so it still returns a Promise", () => {
       const source = `
-const customer = fetchCustomer.trigger({ customerId: "123" });
+const customerPromise = fetchCustomer.trigger({ customerId: "123" });
 `;
       const workflowNameMap = new Map<string, string>();
       const jobNameMap = new Map([["fetchCustomer", "fetch-customer"]]);
 
       const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
-      // Should transform normally without adding await
+      // Without await the call must still resolve to a Promise so the value
+      // matches the `Promise<Awaited<Output>>` static type.
       expect(result).toContain(
-        'const customer = tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" })',
+        'const customerPromise = Promise.resolve(tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" }))',
       );
       expect(result).not.toContain("await");
     });

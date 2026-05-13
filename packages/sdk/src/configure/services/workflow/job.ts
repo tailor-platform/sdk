@@ -44,14 +44,17 @@ export interface WorkflowJob<Name extends string = string, Input = undefined, Ou
    * Trigger this job with the given input.
    * At runtime, this is a placeholder that calls the body function.
    * During bundling, calls to .trigger() are transformed to
-   * tailor.workflow.triggerJobFunction("<job-name>", args).
+   * Promise.resolve(tailor.workflow.triggerJobFunction("<job-name>", args)).
    *
-   * Inside a workflow job body, .trigger() calls are transformed by the bundler
-   * into synchronous `triggerJobFunction` calls. You may use `await` for
-   * readability — the bundler strips it automatically at build time.
+   * On the platform, `triggerJobFunction` is synchronous (the calling job
+   * suspends until the triggered job completes), so the bundler wraps the
+   * raw value in `Promise.resolve` to keep the runtime value aligned with the
+   * `Promise<Awaited<Output>>` static type. `await` is therefore optional —
+   * both `await jobA.trigger(...)` and `jobA.trigger(...)` produce values
+   * consistent with their declared types.
    * @example
-   * // Both styles work — await is stripped by the bundler:
    * body: async (input) => {
+   *   // Sequential — either style works:
    *   const a = await jobA.trigger({ id: input.id });
    *   const b = await jobB.trigger({ id: input.id });
    *   return { a, b };
@@ -98,7 +101,7 @@ interface CreateWorkflowJobConfig<Name extends string, I, O> {
  * });
  * @example
  * // Orchestrator job that fans out to other jobs.
- * // await is optional — the bundler strips it at build time.
+ * // await is optional — `.trigger()` is wrapped in Promise.resolve by the bundler.
  * export const orchestrate = createWorkflowJob({
  *   name: "orchestrate",
  *   body: async (input: { orderId: string }) => {
