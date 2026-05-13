@@ -83,8 +83,9 @@ export type ProblemResult = {
   metrics?: TraceMetrics;
   /**
    * LLM-as-judge diagnosis for failed problems. Populated by Phase 3 post-
-   * processing when the run has `ANTHROPIC_API_KEY` set and judging is not
-   * disabled. Absent on `--use-solution` runs and for passing problems.
+   * processing when the `claude` CLI is available on PATH (authenticated via
+   * `CLAUDE_CODE_OAUTH_TOKEN`) and judging is not disabled. Absent on
+   * `--use-solution` runs and for passing problems.
    */
   judge?: JudgeResult;
   /**
@@ -108,7 +109,7 @@ type Analytics = {
   /**
    * Frequency of judge-supplied affordance labels across failed problems in
    * this run. Empty when no judge calls fired (e.g. `--use-solution`, no
-   * `ANTHROPIC_API_KEY`, no failures).
+   * `claude` CLI on PATH, no failures).
    */
   affordanceDistribution: Record<string, number>;
   /**

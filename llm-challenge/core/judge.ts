@@ -1,8 +1,8 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import Anthropic from "@anthropic-ai/sdk";
 import type { StageResult } from "./report";
+import { parseClaudeJsonOutput } from "./solver/claude";
 import type { TraceEvent } from "./trace";
 
 /**
@@ -37,6 +37,12 @@ const MAX_FAILED_TEST_CHARS = 3000;
 const MAX_DIFF_CHARS = 8000;
 const MAX_PROBLEM_MD_CHARS = 4000;
 
+/** Per-judge-call budget cap for the underlying `claude -p` invocation. */
+const JUDGE_MAX_BUDGET_USD = 0.5;
+
+/** Hard wall-clock timeout for a single `claude -p` invocation (ms). */
+const JUDGE_TIMEOUT_MS = 120_000;
+
 export type JudgeInput = {
   problemId: string;
   problemMd: string;
@@ -56,6 +62,10 @@ export type JudgeResult = {
 /**
  * System prompt template. Persisted as an exported const so future tweaks can
  * be reviewed in diff and so the test suite can assert against its shape.
+ *
+ * Note: temperature is no longer settable on `claude -p`; the determinism
+ * constraint ("JSON only, no prose, no fences") is encoded in the prompt
+ * itself.
  */
 export const JUDGE_SYSTEM_PROMPT = `You are an SDK API affordance diagnostician. Your job is to look at a single failed micro-problem produced by an autonomous coding agent ("the AI") that was asked to write code against @tailor-platform/sdk, and identify ONE root affordance gap that explains why the AI got stuck.
 
@@ -82,38 +92,24 @@ Field semantics:
 
 If the AI's behaviour does not match any single root cause, return affordanceLabel "uncategorized" and explain in diagnosis. Never invent evidence not present in the input.`;
 
-type AnthropicLike = {
-  messages: {
-    create: (params: {
-      model: string;
-      max_tokens: number;
-      temperature: number;
-      system: string;
-      messages: { role: "user"; content: string }[];
-    }) => Promise<{
-      content: Array<{ type: string; text?: string }>;
-    }>;
-  };
-};
+/**
+ * Pluggable invocation function. Production code spawns `claude -p`; tests
+ * replace this with a mock that returns canned stdout/stderr/exit-code
+ * without touching the real CLI.
+ */
+export type JudgeCliRunner = (params: {
+  systemPrompt: string;
+  userPrompt: string;
+}) => Promise<string>;
+
+let runnerOverride: JudgeCliRunner | null = null;
 
 /**
- * Test seam: tests inject a mock via `setJudgeClientFactory`. Production code
- * leaves this `null` so the real `Anthropic` constructor is used.
+ * Test seam: tests inject a mock via `setJudgeCliRunner`. Production code
+ * leaves this `null` so the real `claude -p` spawn path is used.
  */
-let clientFactoryOverride: (() => AnthropicLike) | null = null;
-export function setJudgeClientFactory(factory: (() => AnthropicLike) | null): void {
-  clientFactoryOverride = factory;
-}
-
-function buildClient(): AnthropicLike {
-  if (clientFactoryOverride) return clientFactoryOverride();
-  const apiKey = process.env["ANTHROPIC_API_KEY"];
-  if (!apiKey) {
-    throw new Error(
-      "ANTHROPIC_API_KEY is not set. Set it in your environment or run with LLM_CHALLENGE_DISABLE_JUDGE=1 to skip judging.",
-    );
-  }
-  return new Anthropic({ apiKey }) as unknown as AnthropicLike;
+export function setJudgeCliRunner(runner: JudgeCliRunner | null): void {
+  runnerOverride = runner;
 }
 
 function truncate(text: string, limit: number, tail = "\n[...truncated]"): string {
@@ -198,38 +194,138 @@ export function extractJudgeJson(raw: string): JudgeResult | null {
   return null;
 }
 
-async function callJudge(
-  client: AnthropicLike,
-  systemPrompt: string,
-  userPrompt: string,
-): Promise<string> {
-  const response = await client.messages.create({
-    model: JUDGE_MODEL,
-    max_tokens: 1024,
-    temperature: 0,
-    system: systemPrompt,
-    messages: [{ role: "user", content: userPrompt }],
-  });
-  const text = response.content
-    .filter((block) => block.type === "text")
-    .map((block) => block.text ?? "")
-    .join("")
-    .trim();
-  return text;
+/**
+ * Verify the `claude` CLI is on PATH and runnable. Auth (OAuth token /
+ * keychain) is *not* checked here — that surfaces at the actual `claude -p`
+ * call with a descriptive stderr message. We just want a fast pre-flight so
+ * users get a clear error if the CLI is missing entirely.
+ */
+function ensureClaudeCliAvailable(): void {
+  try {
+    execFileSync("claude", ["--version"], { stdio: "pipe", timeout: 10_000 });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `claude CLI not available (${message.split("\n")[0] ?? "unknown"}). ` +
+        "Install Claude Code and run `claude setup-token`, then export CLAUDE_CODE_OAUTH_TOKEN. " +
+        "Alternatively run with LLM_CHALLENGE_DISABLE_JUDGE=1 to skip judging.",
+    );
+  }
 }
 
 /**
- * Diagnose a failed micro-problem using Claude Haiku. Returns a parsed
- * `JudgeResult` on success; falls back to a placeholder with the raw response
- * as the diagnosis when both the primary call and the strict retry fail to
- * yield valid JSON.
+ * Spawn `claude -p` with the given prompts, capture stdout, and return the
+ * extracted assistant message text. Throws on non-zero exit or unparseable
+ * output so the caller can decide whether to retry or surface the error.
+ *
+ * Runs on the host (NOT inside podman) because the judge does not execute
+ * any solver-generated SDK code — it only reads pre-captured failure
+ * evidence. Host invocation lets us reuse the user's `CLAUDE_CODE_OAUTH_TOKEN`
+ * directly without a container mount.
+ */
+async function runClaudeCli(systemPrompt: string, userPrompt: string): Promise<string> {
+  const args = [
+    "-p",
+    userPrompt,
+    "--output-format",
+    "json",
+    "--append-system-prompt",
+    systemPrompt,
+    "--model",
+    JUDGE_MODEL,
+    "--max-budget-usd",
+    String(JUDGE_MAX_BUDGET_USD),
+    "--no-session-persistence",
+    // Disable all tools — judge is pure inference, no file/bash access needed.
+    "--tools",
+    "",
+  ];
+
+  return new Promise<string>((resolve, reject) => {
+    const proc = spawn("claude", args, { stdio: ["ignore", "pipe", "pipe"] });
+    const stdoutChunks: Buffer[] = [];
+    const stderrChunks: Buffer[] = [];
+    let timedOut = false;
+
+    proc.stdout.on("data", (chunk: Buffer) => stdoutChunks.push(chunk));
+    proc.stderr.on("data", (chunk: Buffer) => stderrChunks.push(chunk));
+
+    const timer = setTimeout(() => {
+      timedOut = true;
+      proc.kill("SIGTERM");
+    }, JUDGE_TIMEOUT_MS);
+
+    proc.on("error", (err) => {
+      clearTimeout(timer);
+      reject(new Error(`claude CLI spawn failed: ${err.message}`));
+    });
+
+    proc.on("close", (code) => {
+      clearTimeout(timer);
+      const stdout = Buffer.concat(stdoutChunks).toString("utf-8");
+      const stderr = Buffer.concat(stderrChunks).toString("utf-8");
+
+      if (timedOut) {
+        reject(new Error(`claude CLI timed out after ${JUDGE_TIMEOUT_MS}ms`));
+        return;
+      }
+
+      if (code !== 0) {
+        reject(
+          new Error(
+            `claude CLI exited with code ${code}: ${(stderr || stdout).slice(0, 500) || "no output"}`,
+          ),
+        );
+        return;
+      }
+
+      const parsed = parseClaudeJsonOutput(stdout);
+      if (!parsed.parsed) {
+        reject(
+          new Error(
+            `claude CLI returned unparseable output: ${(stdout || stderr).slice(0, 500) || "empty"}`,
+          ),
+        );
+        return;
+      }
+      if (parsed.isError) {
+        reject(new Error(`claude CLI reported error: ${parsed.result.slice(0, 500)}`));
+        return;
+      }
+      resolve(parsed.result.trim());
+    });
+  });
+}
+
+async function callJudge(systemPrompt: string, userPrompt: string): Promise<string> {
+  if (runnerOverride) {
+    return runnerOverride({ systemPrompt, userPrompt });
+  }
+  return runClaudeCli(systemPrompt, userPrompt);
+}
+
+/**
+ * Diagnose a failed micro-problem using Claude Haiku via the `claude -p`
+ * CLI. Returns a parsed `JudgeResult` on success; falls back to a placeholder
+ * with the raw response as the diagnosis when both the primary call and the
+ * strict retry fail to yield valid JSON.
+ *
+ * Throws synchronously (before any CLI spawn) when the `claude` CLI is not
+ * on PATH. Callers should catch and either retry without judging or surface
+ * the error to the user.
  */
 export async function judgeFailure(input: JudgeInput): Promise<JudgeResult> {
-  const client = buildClient();
+  // Pre-flight: only run the CLI presence check when no test-runner override
+  // is installed. Tests stub the runner and have no business spawning
+  // `claude --version`.
+  if (!runnerOverride) {
+    ensureClaudeCliAvailable();
+  }
+
   const traceSummary = summarizeTraceForJudge(input.traceEvents);
   const userPrompt = buildUserPrompt(input, traceSummary);
 
-  const firstResponse = await callJudge(client, JUDGE_SYSTEM_PROMPT, userPrompt);
+  const firstResponse = await callJudge(JUDGE_SYSTEM_PROMPT, userPrompt);
   const parsed = extractJudgeJson(firstResponse);
   if (parsed) return parsed;
 
@@ -237,7 +333,7 @@ export async function judgeFailure(input: JudgeInput): Promise<JudgeResult> {
   const stricterSystem =
     JUDGE_SYSTEM_PROMPT +
     "\n\nIMPORTANT RETRY: the previous response could not be parsed as JSON. Respond with ONLY the raw JSON object. No prose. No code fences.";
-  const secondResponse = await callJudge(client, stricterSystem, userPrompt);
+  const secondResponse = await callJudge(stricterSystem, userPrompt);
   const parsedRetry = extractJudgeJson(secondResponse);
   if (parsedRetry) return parsedRetry;
 

@@ -23,7 +23,7 @@ When AI fails a challenge, **improve the SDK** (JSDoc, error messages, types, CL
 
 - ALWAYS build the SDK before running: `pnpm -C packages/sdk build`
 - ALWAYS run `pnpm install` at repo root before benchmarks (stale workspace deps break the verify pipeline)
-- Set `ANTHROPIC_API_KEY` so the post-solve judge can run. Without it, judging is skipped and `improvement-candidates.jsonl` is not written
+- The post-solve judge reuses `CLAUDE_CODE_OAUTH_TOKEN` (same credential as the Claude solver) by shelling out to `claude -p` on the host (not inside podman). Without a working `claude` CLI, judging is skipped and `improvement-candidates.jsonl` is not written
 
 ### Solve Mode (Podman)
 

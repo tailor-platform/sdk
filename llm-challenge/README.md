@@ -52,7 +52,7 @@ Solve mode and judge mode each need their own credentials:
   On macOS: `podman machine start`.
 - **Claude agent** — `claude setup-token`, then export `CLAUDE_CODE_OAUTH_TOKEN`.
 - **Codex agent** — `codex login` (writes `~/.codex/auth.json`, which is mounted into the container).
-- **Judge** — `export ANTHROPIC_API_KEY=…` so the post-solve judge can call Claude Haiku. Without it, judging is skipped with a warning; set `LLM_CHALLENGE_DISABLE_JUDGE=1` to silence the warning intentionally.
+- **Judge** — reuses `CLAUDE_CODE_OAUTH_TOKEN` (the same credential as the Claude solver) by shelling out to `claude -p` on the host (not inside podman). Without a working `claude` CLI on PATH, judging is skipped with a warning; set `LLM_CHALLENGE_DISABLE_JUDGE=1` to silence the warning intentionally.
 
 ## Commands
 
@@ -139,7 +139,7 @@ The judge replies with a single JSON object:
 
 Per-problem judge output lands at `<artifact-dir>/judge.json`; the run-level aggregate is `results/artifacts/<run>/improvement-candidates.jsonl`, one candidate per failed problem. Its relative path is recorded in `report.analytics.improvementCandidatesPath`.
 
-> Note: the JSONL only has entries when there are failing problems **and** `ANTHROPIC_API_KEY` is set. Solution-verify runs and 100%-pass solve runs produce no candidates by design.
+> Note: the JSONL only has entries when there are failing problems **and** the `claude` CLI is available on PATH (authenticated via `CLAUDE_CODE_OAUTH_TOKEN`). Solution-verify runs and 100%-pass solve runs produce no candidates by design.
 
 ## Affordance Taxonomy
 

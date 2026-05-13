@@ -895,16 +895,23 @@ async function runJudgePostProcessing(
   if (process.env["LLM_CHALLENGE_DISABLE_JUDGE"] === "1") {
     return undefined;
   }
-  if (!process.env["ANTHROPIC_API_KEY"]) {
-    console.warn(
-      "[judge] ANTHROPIC_API_KEY not set; skipping LLM-as-judge diagnosis. " +
-        "Set LLM_CHALLENGE_DISABLE_JUDGE=1 to silence this warning.",
-    );
-    return undefined;
-  }
 
   const failed = results.filter((r) => !r.passed);
   if (failed.length === 0) {
+    return undefined;
+  }
+
+  // Pre-flight: confirm the `claude` CLI is on PATH so we fail fast and skip
+  // judging rather than spamming the same error per failed problem.
+  try {
+    execFileSync("claude", ["--version"], { stdio: "pipe", timeout: 10_000 });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(
+      `[judge] claude CLI not available (${message.split("\n")[0] ?? "unknown"}); ` +
+        "skipping LLM-as-judge diagnosis. Run `claude setup-token` and export " +
+        "CLAUDE_CODE_OAUTH_TOKEN, or set LLM_CHALLENGE_DISABLE_JUDGE=1 to silence this warning.",
+    );
     return undefined;
   }
 

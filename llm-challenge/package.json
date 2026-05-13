@@ -15,7 +15,6 @@
     "typecheck:go": "tsgo"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "0.94.0",
     "@tailor-platform/sdk": "workspace:^"
   },
   "devDependencies": {

@@ -12,16 +12,10 @@ import {
   judgeFailure,
   readTraceEvents,
   resolveScaffoldLayers,
-  setJudgeClientFactory,
+  setJudgeCliRunner,
   summarizeTraceForJudge,
 } from "./judge";
 import type { TraceEvent } from "./trace";
-
-type MockResponse = { content: Array<{ type: string; text?: string }> };
-
-function textResponse(text: string): MockResponse {
-  return { content: [{ type: "text", text }] };
-}
 
 function makeInput(overrides: Partial<JudgeInput> = {}): JudgeInput {
   return {
@@ -35,23 +29,21 @@ function makeInput(overrides: Partial<JudgeInput> = {}): JudgeInput {
 }
 
 afterEach(() => {
-  setJudgeClientFactory(null);
+  setJudgeCliRunner(null);
   vi.unstubAllEnvs();
 });
 
 describe("judgeFailure", () => {
   it("returns parsed result when the first response is valid JSON", async () => {
-    const create = vi.fn().mockResolvedValueOnce(
-      textResponse(
-        JSON.stringify({
-          affordanceLabel: "missing_action_verb",
-          apiChange: "Make foo required.",
-          docFallback: "Add an example.",
-          diagnosis: "AI did not know foo existed.",
-        }),
-      ),
+    const runner = vi.fn().mockResolvedValueOnce(
+      JSON.stringify({
+        affordanceLabel: "missing_action_verb",
+        apiChange: "Make foo required.",
+        docFallback: "Add an example.",
+        diagnosis: "AI did not know foo existed.",
+      }),
     );
-    setJudgeClientFactory(() => ({ messages: { create } }));
+    setJudgeCliRunner(runner);
 
     const result = await judgeFailure(makeInput());
 
@@ -61,40 +53,38 @@ describe("judgeFailure", () => {
       docFallback: "Add an example.",
       diagnosis: "AI did not know foo existed.",
     });
-    expect(create).toHaveBeenCalledTimes(1);
+    expect(runner).toHaveBeenCalledTimes(1);
   });
 
   it("retries once when the first response is not valid JSON", async () => {
-    const create = vi
+    const runner = vi
       .fn()
-      .mockResolvedValueOnce(textResponse("not json"))
+      .mockResolvedValueOnce("not json")
       .mockResolvedValueOnce(
-        textResponse(
-          JSON.stringify({
-            affordanceLabel: "context_bloat",
-            apiChange: "",
-            docFallback: "",
-            diagnosis: "Read too many d.ts files.",
-          }),
-        ),
+        JSON.stringify({
+          affordanceLabel: "context_bloat",
+          apiChange: "",
+          docFallback: "",
+          diagnosis: "Read too many d.ts files.",
+        }),
       );
-    setJudgeClientFactory(() => ({ messages: { create } }));
+    setJudgeCliRunner(runner);
 
     const result = await judgeFailure(makeInput());
 
     expect(result.affordanceLabel).toBe("context_bloat");
-    expect(create).toHaveBeenCalledTimes(2);
+    expect(runner).toHaveBeenCalledTimes(2);
     // Second call should use the stricter system prompt.
-    const secondCall = create.mock.calls[1]?.[0] as { system: string };
-    expect(secondCall.system).toContain("IMPORTANT RETRY");
+    const secondCall = runner.mock.calls[1]?.[0] as { systemPrompt: string };
+    expect(secondCall.systemPrompt).toContain("IMPORTANT RETRY");
   });
 
   it("returns a placeholder when both calls fail to yield JSON", async () => {
-    const create = vi
+    const runner = vi
       .fn()
-      .mockResolvedValueOnce(textResponse("still not json"))
-      .mockResolvedValueOnce(textResponse("yet again not json"));
-    setJudgeClientFactory(() => ({ messages: { create } }));
+      .mockResolvedValueOnce("still not json")
+      .mockResolvedValueOnce("yet again not json");
+    setJudgeCliRunner(runner);
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const result = await judgeFailure(makeInput());
@@ -105,17 +95,24 @@ describe("judgeFailure", () => {
     warn.mockRestore();
   });
 
-  it("throws a descriptive error when ANTHROPIC_API_KEY is missing", async () => {
-    // Use the real client path by clearing the factory override and unsetting the env var.
-    setJudgeClientFactory(null);
-    vi.stubEnv("ANTHROPIC_API_KEY", "");
+  it("propagates a descriptive error when the runner throws (e.g. CLI missing)", async () => {
+    const runner = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("claude CLI spawn failed: spawn claude ENOENT"));
+    setJudgeCliRunner(runner);
 
-    await expect(judgeFailure(makeInput())).rejects.toThrow(/ANTHROPIC_API_KEY/);
+    await expect(judgeFailure(makeInput())).rejects.toThrow(/claude CLI/);
   });
 
-  it("error message mentions both ANTHROPIC_API_KEY and the disable escape hatch", async () => {
-    setJudgeClientFactory(null);
-    vi.stubEnv("ANTHROPIC_API_KEY", "");
+  it("error message hints at how to authenticate when the runner reports auth failure", async () => {
+    const runner = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new Error(
+          "claude CLI reported error: Not logged in. Run `claude setup-token` and export CLAUDE_CODE_OAUTH_TOKEN.",
+        ),
+      );
+    setJudgeCliRunner(runner);
 
     let err: unknown;
     try {
@@ -123,37 +120,32 @@ describe("judgeFailure", () => {
     } catch (e) {
       err = e;
     }
-    expect(String(err)).toContain("ANTHROPIC_API_KEY");
-    expect(String(err)).toContain("LLM_CHALLENGE_DISABLE_JUDGE");
+    expect(String(err)).toContain("CLAUDE_CODE_OAUTH_TOKEN");
   });
 
   it("includes hypothesized affordance in the user prompt when provided", async () => {
-    const create = vi.fn().mockResolvedValueOnce(
-      textResponse(
-        JSON.stringify({
-          affordanceLabel: "missing_action_verb",
-          apiChange: "",
-          docFallback: "",
-          diagnosis: "ok",
-        }),
-      ),
+    const runner = vi.fn().mockResolvedValueOnce(
+      JSON.stringify({
+        affordanceLabel: "missing_action_verb",
+        apiChange: "",
+        docFallback: "",
+        diagnosis: "ok",
+      }),
     );
-    setJudgeClientFactory(() => ({ messages: { create } }));
+    setJudgeCliRunner(runner);
 
     await judgeFailure(makeInput({ hypothesizedAffordance: "naming_bias" }));
 
-    const firstCall = create.mock.calls[0]?.[0] as { messages: { content: string }[] };
-    expect(firstCall.messages[0]?.content).toContain("hypothesizedAffordance: naming_bias");
+    const firstCall = runner.mock.calls[0]?.[0] as { userPrompt: string };
+    expect(firstCall.userPrompt).toContain("hypothesizedAffordance: naming_bias");
   });
 
   it("survives missing optional fields in the model response", async () => {
-    const create = vi.fn().mockResolvedValueOnce(
-      textResponse(
-        // Only affordanceLabel present — others should default to empty strings.
-        JSON.stringify({ affordanceLabel: "implicit_assumption" }),
-      ),
+    const runner = vi.fn().mockResolvedValueOnce(
+      // Only affordanceLabel present — others should default to empty strings.
+      JSON.stringify({ affordanceLabel: "implicit_assumption" }),
     );
-    setJudgeClientFactory(() => ({ messages: { create } }));
+    setJudgeCliRunner(runner);
 
     const result = await judgeFailure(makeInput());
 
