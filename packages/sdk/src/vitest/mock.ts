@@ -424,15 +424,9 @@ export const workflowMock = {
 /** Mock control for `tailor.context` — invoker store and call recording. */
 export const contextMock = {
   /**
-   * Set the invoker returned by `tailor.context.getInvoker()`. Pass `null` to
-   * simulate an anonymous (unauthenticated) caller — the default.
-   *
-   * Accepts the SDK-friendly shape (`attributes` map + `attributeList` array)
-   * to match `TailorUser` / `TailorActor`. Internally this is converted back to
-   * the raw platform shape (`attributeMap` + `attributes` array) so the value
-   * surfaced by the ambient `tailor.context.getInvoker()` stays compatible with
-   * the resolver pipeline's invoker transform.
-   * @param invoker - Invoker to return (SDK shape), or `null` for anonymous
+   * Set the invoker returned by `context.getInvoker()`. Pass `null` to simulate
+   * an anonymous (unauthenticated) caller — the default.
+   * @param invoker - Invoker to return, or `null` for anonymous
    */
   setInvoker(invoker: Invoker | null): void {
     getState().invoker = invoker

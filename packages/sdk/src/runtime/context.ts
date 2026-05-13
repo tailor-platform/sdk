@@ -4,12 +4,6 @@
  * Thin typed wrapper around the platform-provided `tailor.context` runtime API.
  * At runtime this delegates to `globalThis.tailor.context`. Use `contextMock`
  * from `@tailor-platform/sdk/vitest` to mock these calls in unit tests.
- *
- * The platform's raw `tailor.context.getInvoker()` returns
- * `{ attributes: string[]; attributeMap: Record<string, unknown> }`. This wrapper
- * normalizes that into the SDK-friendly shape used by `TailorUser` and
- * `TailorActor` (`attributes` is the attribute map, `attributeList` is the array
- * of attribute IDs), so code touching invokers stays uniform across the SDK.
  * @example
  * import { context } from "@tailor-platform/sdk/runtime";
  *
@@ -24,9 +18,8 @@ import { runtime } from "./_runtime";
 /**
  * Information about the invoker of the current function execution.
  *
- * Uses the SDK-friendly shape — `attributes` is the attribute map and
- * `attributeList` is the array of attribute IDs. This matches `TailorUser`
- * and `TailorActor`.
+ * Matches the shape of `TailorUser` and `TailorActor` — `attributes` is the
+ * attribute map and `attributeList` is the array of attribute IDs.
  */
 export interface Invoker {
   /** The invoker's ID */
@@ -44,7 +37,7 @@ export interface Invoker {
 /**
  * Returns information about the invoker of the current function execution,
  * or `null` for anonymous invocations.
- * @returns Invoker details (SDK shape), or `null` when the call is anonymous
+ * @returns Invoker details, or `null` when the call is anonymous
  */
 export function getInvoker(): Invoker | null {
   const raw = runtime.tailor.context.getInvoker();

@@ -272,7 +272,7 @@ test("mock encoding conversion", () => {
 
 ### Context Mock
 
-`contextMock.setInvoker()` accepts the SDK-friendly shape — `attributes` is the attribute map and `attributeList` is the array of attribute IDs (matching `TailorUser` / `TailorActor`). Internally it is converted back to the raw platform shape, so resolver pipelines that read `tailor.context.getInvoker()` continue to receive the on-platform layout.
+Pass the invoker shape that matches `TailorUser` / `TailorActor`: `attributes` is the attribute map and `attributeList` is the array of attribute IDs. Pass `null` for an anonymous caller (the default).
 
 ```typescript
 import { contextMock } from "@tailor-platform/sdk/vitest";

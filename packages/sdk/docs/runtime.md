@@ -125,7 +125,7 @@ Pass the `names` argument as a `const` tuple to narrow the result keys: `getSecr
 
 ### `file`
 
-`tailordb.file` BLOB API. Internally implemented as `deleteFile` to avoid the reserved keyword; exported as `delete`.
+`tailordb.file` BLOB API.
 
 | Function             | Description                                        |
 | -------------------- | -------------------------------------------------- |
