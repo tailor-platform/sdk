@@ -14,3 +14,8 @@ const { metadata } = await file.upload("ns", "Document", "attachment", recordId,
 ```
 
 The SDK no longer depends on the external `@tailor-platform/function-types` package; its declarations are now vendored inside the SDK. For backwards compatibility the ambient `tailor.*` / `tailordb.*` types are still activated automatically when you import from `@tailor-platform/sdk`, so existing code keeps type-checking with no changes. This implicit activation will be removed in v2.0 — new code is encouraged to use the typed wrappers from `@tailor-platform/sdk/runtime`, or to opt into the globals explicitly via `import "@tailor-platform/sdk/runtime/globals"` (or by listing the entry in `tsconfig.json`'s `compilerOptions.types`).
+
+Other test-mock changes from `@tailor-platform/sdk/vitest`:
+
+- New `contextMock` — control the invoker returned by `tailor.context.getInvoker()` and inspect call history. See the Testing Guide for usage.
+- Breaking: `fileMock.enqueueResult(...)` now rejects raw `Uint8Array` / `ArrayBuffer` payloads for `openDownloadStream`. Enqueue a structured iterable of `StreamValue` items (`{ type: "metadata" }`, `{ type: "chunk", data, position }`, `{ type: "complete" }`) so test streams stay aligned with the platform's structured stream contract. The shorthand `Uint8Array` enqueue is still accepted by `download` / `downloadAsBase64`.

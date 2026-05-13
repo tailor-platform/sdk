@@ -418,7 +418,7 @@ export const workflowMock = {
 };
 
 // ---------------------------------------------------------------------------
-// SecretManager Mock
+// Context Mock
 // ---------------------------------------------------------------------------
 
 /** Mock control for `tailor.context` — invoker store and call recording. */
@@ -456,6 +456,10 @@ export const contextMock = {
     state.contextCalls.length = 0;
   },
 };
+
+// ---------------------------------------------------------------------------
+// SecretManager Mock
+// ---------------------------------------------------------------------------
 
 /** Mock control for `tailor.secretmanager` — secret store and call recording. */
 export const secretmanagerMock = {
