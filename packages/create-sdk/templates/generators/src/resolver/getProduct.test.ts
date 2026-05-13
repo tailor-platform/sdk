@@ -1,47 +1,27 @@
 import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
-import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vitest";
+import { tailordbMock } from "@tailor-platform/sdk/vitest";
+import { beforeEach, describe, expect, test } from "vitest";
 import resolver from "./getProduct";
 
 describe("getProduct resolver", () => {
-  const mockQueryObject = vi.fn();
-  beforeAll(() => {
-    vi.stubGlobal("tailordb", {
-      Client: vi.fn(
-        class {
-          connect = vi.fn();
-          end = vi.fn();
-          queryObject = mockQueryObject;
-        },
-      ),
-    });
-  });
-  afterAll(() => {
-    vi.unstubAllGlobals();
-  });
-  afterEach(() => {
-    mockQueryObject.mockReset();
+  beforeEach(() => {
+    tailordbMock.reset();
   });
 
   test("returns product with category", async () => {
     // Select product
-    mockQueryObject.mockResolvedValueOnce({
-      rows: [
-        {
-          id: "product-1",
-          name: "Widget",
-          price: 9.99,
-          status: "ACTIVE",
-          categoryId: "cat-1",
-          description: null,
-          createdAt: new Date(),
-          updatedAt: null,
-        },
-      ],
+    tailordbMock.enqueueResult({
+      id: "product-1",
+      name: "Widget",
+      price: 9.99,
+      status: "ACTIVE",
+      categoryId: "cat-1",
+      description: null,
+      createdAt: new Date(),
+      updatedAt: null,
     });
     // Select category
-    mockQueryObject.mockResolvedValueOnce({
-      rows: [{ name: "Gadgets" }],
-    });
+    tailordbMock.enqueueResult({ name: "Gadgets" });
 
     const result = await resolver.body({
       input: { productId: "product-1" },
@@ -55,24 +35,20 @@ describe("getProduct resolver", () => {
       status: "ACTIVE",
       categoryName: "Gadgets",
     });
-    expect(mockQueryObject).toHaveBeenCalledTimes(2);
+    expect(tailordbMock.executedQueries).toHaveLength(2);
   });
 
   test("returns product without category", async () => {
     // Select product (no categoryId)
-    mockQueryObject.mockResolvedValueOnce({
-      rows: [
-        {
-          id: "product-2",
-          name: "Standalone Item",
-          price: 19.99,
-          status: "DRAFT",
-          categoryId: null,
-          description: null,
-          createdAt: new Date(),
-          updatedAt: null,
-        },
-      ],
+    tailordbMock.enqueueResult({
+      id: "product-2",
+      name: "Standalone Item",
+      price: 19.99,
+      status: "DRAFT",
+      categoryId: null,
+      description: null,
+      createdAt: new Date(),
+      updatedAt: null,
     });
 
     const result = await resolver.body({
@@ -87,6 +63,6 @@ describe("getProduct resolver", () => {
       status: "DRAFT",
       categoryName: null,
     });
-    expect(mockQueryObject).toHaveBeenCalledTimes(1);
+    expect(tailordbMock.executedQueries).toHaveLength(1);
   });
 });

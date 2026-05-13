@@ -20,7 +20,7 @@ pnpm generate
 pnpm generate:watch
 
 # Deploy to Tailor Platform
-pnpm apply
+pnpm deploy
 
 # Type checking
 pnpm typecheck

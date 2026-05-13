@@ -1,18 +1,18 @@
 import { z } from "zod";
-import { applyApplication, planApplication } from "@/cli/commands/apply/application";
-import { type PlanContext } from "@/cli/commands/apply/apply";
-import { applyAuth, planAuth } from "@/cli/commands/apply/auth";
-import { applyExecutor, planExecutor } from "@/cli/commands/apply/executor";
+import { applyApplication, planApplication } from "@/cli/commands/deploy/application";
+import { applyAuth, planAuth } from "@/cli/commands/deploy/auth";
+import { type PlanContext } from "@/cli/commands/deploy/deploy";
+import { applyExecutor, planExecutor } from "@/cli/commands/deploy/executor";
 import {
   applyFunctionRegistry,
   planFunctionRegistry,
-} from "@/cli/commands/apply/function-registry";
-import { applyIdP, planIdP } from "@/cli/commands/apply/idp";
-import { applyPipeline, planPipeline } from "@/cli/commands/apply/resolver";
-import { applySecretManager, planSecretManager } from "@/cli/commands/apply/secret-manager";
-import { applyStaticWebsite, planStaticWebsite } from "@/cli/commands/apply/staticwebsite";
-import { applyTailorDB, planTailorDB } from "@/cli/commands/apply/tailordb";
-import { applyWorkflow, planWorkflow } from "@/cli/commands/apply/workflow";
+} from "@/cli/commands/deploy/function-registry";
+import { applyIdP, planIdP } from "@/cli/commands/deploy/idp";
+import { applyPipeline, planPipeline } from "@/cli/commands/deploy/resolver";
+import { applySecretManager, planSecretManager } from "@/cli/commands/deploy/secret-manager";
+import { applyStaticWebsite, planStaticWebsite } from "@/cli/commands/deploy/staticwebsite";
+import { applyTailorDB, planTailorDB } from "@/cli/commands/deploy/tailordb";
+import { applyWorkflow, planWorkflow } from "@/cli/commands/deploy/workflow";
 import { type Application, defineApplication } from "@/cli/services/application";
 import { confirmationArgs, deploymentArgs } from "@/cli/shared/args";
 import { initOperatorClient, type OperatorClient } from "@/cli/shared/client";

@@ -12,7 +12,6 @@ import {
   FilterSchema,
   PageDirection,
 } from "@tailor-proto/tailor/v1/resource_pb";
-import ora from "ora";
 import { arg } from "politty";
 import { z } from "zod";
 import {
@@ -30,6 +29,7 @@ import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { formatKeyValueTable } from "@/cli/shared/format";
 import { functionExecutionStatusToString } from "@/cli/shared/function-execution";
 import { logger, styles } from "@/cli/shared/logger";
+import { spinner } from "@/cli/shared/spinner";
 import { getWorkflowExecution } from "../workflow/executions";
 import { waitForExecution } from "../workflow/start";
 import {
@@ -309,7 +309,7 @@ export async function watchExecutorJob<E extends ExecutorLike>(
   });
 
   const interval = options.interval ?? 3000;
-  const spinner = ora().start("Waiting for executor job to complete...");
+  const sp = spinner().start("Waiting for executor job to complete...");
 
   try {
     // Get executor details to determine target type
@@ -343,7 +343,7 @@ export async function watchExecutorJob<E extends ExecutorLike>(
         break;
       }
 
-      spinner.text = `Waiting for executor job... (${formatTime(new Date())})`;
+      sp.text = `Waiting for executor job... (${formatTime(new Date())})`;
       await setTimeout(interval);
     }
 
@@ -351,9 +351,9 @@ export async function watchExecutorJob<E extends ExecutorLike>(
     const coloredStatus = colorizeExecutorJobStatus(jobInfo.status);
 
     if (job.status === ExecutorJobStatus.SUCCESS) {
-      spinner.succeed(`Executor job completed: ${coloredStatus}`);
+      sp.succeed(`Executor job completed: ${coloredStatus}`);
     } else {
-      spinner.fail(`Executor job completed: ${coloredStatus}`);
+      sp.fail(`Executor job completed: ${coloredStatus}`);
     }
 
     // Get attempts to find operationReference
@@ -382,7 +382,7 @@ export async function watchExecutorJob<E extends ExecutorLike>(
       switch (targetType) {
         case ExecutorTargetType.WORKFLOW: {
           // Wait for workflow execution with progress display
-          spinner.stop();
+          sp.stop();
 
           try {
             // Use waitForExecution with progress display (same as workflow start)
@@ -438,7 +438,7 @@ export async function watchExecutorJob<E extends ExecutorLike>(
         case ExecutorTargetType.JOB_FUNCTION:
           {
             // Wait for function execution
-            spinner.start(`Waiting for function execution ${operationReference}...`);
+            sp.start(`Waiting for function execution ${operationReference}...`);
 
             try {
               while (true) {
@@ -455,9 +455,9 @@ export async function watchExecutorJob<E extends ExecutorLike>(
                   const statusStr = functionExecutionStatusToString(execution.status);
                   const coloredFnStatus = colorizeFunctionExecutionStatus(statusStr);
                   if (execution.status === FunctionExecution_Status.SUCCESS) {
-                    spinner.succeed(`Function execution completed: ${coloredFnStatus}`);
+                    sp.succeed(`Function execution completed: ${coloredFnStatus}`);
                   } else {
-                    spinner.fail(`Function execution completed: ${coloredFnStatus}`);
+                    sp.fail(`Function execution completed: ${coloredFnStatus}`);
                   }
                   return {
                     job: jobDetail,
@@ -468,11 +468,11 @@ export async function watchExecutorJob<E extends ExecutorLike>(
                   };
                 }
 
-                spinner.text = `Waiting for function execution... (${formatTime(new Date())})`;
+                sp.text = `Waiting for function execution... (${formatTime(new Date())})`;
                 await setTimeout(interval);
               }
             } catch (error) {
-              spinner.warn(
+              sp.warn(
                 `Could not track function execution: ${error instanceof Error ? error.message : error}`,
               );
               return {
@@ -491,7 +491,7 @@ export async function watchExecutorJob<E extends ExecutorLike>(
 
     return { job: jobDetail, targetType: targetTypeStr };
   } finally {
-    spinner.stop();
+    sp.stop();
   }
 }
 
@@ -551,11 +551,11 @@ export const jobsCommand = defineAppCommand({
   args: z
     .object({
       ...workspaceArgs,
-      executorName: arg(z.string(), {
+      "executor-name": arg(z.string(), {
         positional: true,
         description: "Executor name",
       }),
-      jobId: arg(z.string().optional(), {
+      "job-id": arg(z.string().optional(), {
         positional: true,
         description: "Job ID (if provided, shows job details)",
       }),

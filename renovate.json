@@ -13,10 +13,11 @@
   "customManagers": [
     {
       "customType": "regex",
-      "managerFilePatterns": ["packages/sdk/src/cli/commands/setup/github/.+\\.ya?ml$"],
+      "managerFilePatterns": ["/^packages/sdk/src/cli/commands/setup/github/.+\\.ya?ml$/"],
       "matchStrings": [
-        "uses:\\s+(?<depName>[\\w-]+/[\\w-]+)@(?<currentDigest>[a-f0-9]+)\\s+#\\s+(?<currentValue>v[\\d.]+)"
+        "uses:\\s+(?<depName>[\\w-]+/[\\w-]+)(?<subpath>(?:/[\\w-]+)?)@(?<currentDigest>[a-f0-9]+)\\s+#\\s+(?<currentValue>v[\\d.]+)"
       ],
+      "autoReplaceStringTemplate": "uses: {{depName}}{{subpath}}@{{newDigest}} # {{newValue}}",
       "datasourceTemplate": "github-tags"
     }
   ],

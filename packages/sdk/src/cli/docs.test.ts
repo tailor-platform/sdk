@@ -36,7 +36,7 @@ const files: Record<string, FileConfig> = {
     title: "Application Commands",
     description:
       "Commands for managing Tailor Platform applications (work with `tailor.config.ts`).",
-    commands: ["init", "generate", "apply", "remove", "show", "open", "api"],
+    commands: ["init", "generate", "deploy", "remove", "show", "open", "api"],
     render: defaultRender,
   },
   "docs/cli/tailordb.md": {
@@ -105,10 +105,10 @@ const files: Record<string, FileConfig> = {
     commands: ["staticwebsite"],
     render: defaultRender,
   },
-  "docs/cli/crash-report.md": {
+  "docs/cli/crashreport.md": {
     title: "Crash Report Commands",
     description: "Commands for managing crash reports.",
-    commands: ["crash-report"],
+    commands: ["crashreport"],
     render: defaultRender,
   },
   "docs/cli/setup.md": {

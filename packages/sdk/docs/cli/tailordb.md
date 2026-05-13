@@ -135,7 +135,7 @@ Manage TailorDB schema migrations.
 
 <!-- politty:command:tailordb migration:description:end -->
 
-Note: Migration scripts are automatically executed during `tailor-sdk apply`. See [Automatic Migration Execution](../services/tailordb-migration.md#automatic-migration-execution) for details.
+Note: Migration scripts are automatically executed during `tailor-sdk deploy`. See [Automatic Migration Execution](../services/tailordb-migration.md#automatic-migration-execution) for details.
 
 <!-- politty:command:tailordb migration:usage:start -->
 

@@ -89,29 +89,31 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 <!-- politty:command:generate:global-options-link:end -->
 
-<!-- politty:command:apply:heading:start -->
+<!-- politty:command:deploy:heading:start -->
 
-## apply
+## deploy
 
-<!-- politty:command:apply:heading:end -->
+<!-- politty:command:deploy:heading:end -->
 
-<!-- politty:command:apply:description:start -->
+<!-- politty:command:deploy:description:start -->
 
-Apply Tailor configuration to deploy your application.
+Deploy your application by applying the Tailor configuration.
 
-<!-- politty:command:apply:description:end -->
+**Aliases:** `apply`
 
-<!-- politty:command:apply:usage:start -->
+<!-- politty:command:deploy:description:end -->
+
+<!-- politty:command:deploy:usage:start -->
 
 **Usage**
 
 ```
-tailor-sdk apply [options]
+tailor-sdk deploy [options]
 ```
 
-<!-- politty:command:apply:usage:end -->
+<!-- politty:command:deploy:usage:end -->
 
-<!-- politty:command:apply:options:start -->
+<!-- politty:command:deploy:options:start -->
 
 **Options**
 
@@ -126,21 +128,21 @@ tailor-sdk apply [options]
 | `--no-cache`                    | -     | Disable bundle caching for this run                | No       | -                    | -                                 |
 | `--clean-cache`                 | -     | Clean the bundle cache before building             | No       | -                    | -                                 |
 
-<!-- politty:command:apply:options:end -->
+<!-- politty:command:deploy:options:end -->
 
-<!-- politty:command:apply:global-options-link:start -->
+<!-- politty:command:deploy:global-options-link:start -->
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
-<!-- politty:command:apply:global-options-link:end -->
+<!-- politty:command:deploy:global-options-link:end -->
 
 **Config File Modification:**
 
-On first run, `apply` automatically injects a stable `id: "<uuid>"` field into your `defineConfig({...})` call in `tailor.config.ts`. This UUID is used to track your application across renames so the SDK can recognize ownership across renames. Commit the generated id to version control. See [Configuration](../configuration.md#application-settings) for details.
+On first run, `deploy` automatically injects a stable `id: "<uuid>"` field into your `defineConfig({...})` call in `tailor.config.ts`. This UUID is used to track your application across renames so the SDK can recognize ownership across renames. Commit the generated id to version control. See [Configuration](../configuration.md#application-settings) for details.
 
 **Migration Handling:**
 
-When migrations are configured (`db.tailordb.migration` in config), the `apply` command automatically:
+When migrations are configured (`db.tailordb.migration` in config), the `deploy` command automatically:
 
 1. Detects pending migration scripts that haven't been executed
 2. Applies schema changes in a safe order (pre-migration → script execution → post-migration)
@@ -151,18 +153,18 @@ See [TailorDB Commands](./tailordb.md#automatic-migration-execution) for details
 
 **Schema Check:**
 
-By default, `apply` performs two verification steps:
+By default, `deploy` performs two verification steps:
 
 1. **Local schema check**: Verifies that local schema changes match the migration files. This ensures migrations are properly generated before deployment.
 2. **Remote schema check**: Verifies that the remote schema matches the expected state based on migration history. This detects schema drift caused by manual changes or other developers.
 
-If remote schema drift is detected, the apply will fail with an error showing the differences. This helps prevent applying migrations to an inconsistent state.
+If remote schema drift is detected, the deploy will fail with an error showing the differences. This helps prevent applying migrations to an inconsistent state.
 
 Use `--no-schema-check` to skip both verifications (not recommended for production).
 
 **Plan Output:**
 
-Before applying changes, `apply` shows a preview of the planned resource changes.
+Before applying changes, `deploy` shows a preview of the planned resource changes.
 
 - `+` means the resource will be created
 - `~` means the resource will be updated

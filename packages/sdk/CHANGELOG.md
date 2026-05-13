@@ -1,5 +1,51 @@
 # @tailor-platform/sdk
 
+## 1.46.0
+
+### Minor Changes
+
+- [#1144](https://github.com/tailor-platform/sdk/pull/1144) [`ade6a39`](https://github.com/tailor-platform/sdk/commit/ade6a39dd46a5c48ca274718203628a30f0ba843) Thanks [@dqn](https://github.com/dqn)! - Rename the `apply` CLI command to `deploy`. `tailor-sdk deploy` is the canonical
+  command name; `tailor-sdk apply` continues to work as an alias for backward
+  compatibility on the command line.
+
+  The programmatic API exported from `@tailor-platform/sdk/cli` is also available
+  under the new name. `deploy` / `DeployOptions` are now the canonical exports,
+  while `apply` / `ApplyOptions` continue to be re-exported as aliases so existing
+  imports keep working:
+
+  - `import { apply } from "@tailor-platform/sdk/cli"` — still works (alias for `deploy`)
+  - `import type { ApplyOptions } from "@tailor-platform/sdk/cli"` — still works (alias for `DeployOptions`)
+
+  Migration is optional but recommended:
+
+  - `apply` → `deploy`
+  - `ApplyOptions` → `DeployOptions`
+
+- [#1145](https://github.com/tailor-platform/sdk/pull/1145) [`847284a`](https://github.com/tailor-platform/sdk/commit/847284ab50313bfffed03905173b3d868f7e7fce) Thanks [@dqn](https://github.com/dqn)! - Apply consistent CLI naming conventions:
+
+  - Rename the `crash-report` subcommand to `crashreport` to match the single-word convention used by other multi-word commands (`authconnection`, `staticwebsite`). The legacy `crash-report` name is preserved as a native alias and still works.
+  - Rename the positional arguments `executionId`, `executorName`, and `jobId` to their kebab-case form (`execution-id`, `executor-name`, `job-id`) on `function logs`, `workflow resume`, `workflow executions`, `executor jobs`, and `executor trigger`. Help output and generated docs now show the kebab-case form. Existing positional invocations are unaffected because positional arguments are referenced by position, not by name.
+
+### Patch Changes
+
+- [#1146](https://github.com/tailor-platform/sdk/pull/1146) [`a49a6ef`](https://github.com/tailor-platform/sdk/commit/a49a6efd62d0d374b3b73cf80bab897f8bcaa5d4) Thanks [@dqn](https://github.com/dqn)! - Stack traces shown by `tailor-sdk function logs <id>` now map back to original sources even after the deployed function has been updated. The `FunctionExecution.contentHash` reported by the server is used to download the exact bundle that ran, so source locations stay accurate across redeploys. Older servers that do not report `contentHash` keep using the existing `updatedAt` staleness fallback.
+
+## 1.45.2
+
+### Patch Changes
+
+- [#1108](https://github.com/tailor-platform/sdk/pull/1108) [`430cba0`](https://github.com/tailor-platform/sdk/commit/430cba050400af0ef673035791fe4132b5323b90) Thanks [@toiroakr](https://github.com/toiroakr)! - Document how to use the re-exported Kysely `sql` tag from `@tailor-platform/sdk/kysely` to write raw SQL queries against the Kysely instance returned by `getDB()`. This was already supported; only documentation is added.
+
+- [#1133](https://github.com/tailor-platform/sdk/pull/1133) [`3457fe7`](https://github.com/tailor-platform/sdk/commit/3457fe77efa90b5443b51c0cbb2fb6d1942b346f) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `workflow executions --wait`, `workflow start --wait`, and `executor jobs --wait` not responding to Ctrl+C in some terminals.
+
+- [#1124](https://github.com/tailor-platform/sdk/pull/1124) [`82152a9`](https://github.com/tailor-platform/sdk/commit/82152a96753c8719472387e6d79f8454211074c7) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency es-toolkit to v1.46.1
+
+- [#1125](https://github.com/tailor-platform/sdk/pull/1125) [`15a0023`](https://github.com/tailor-platform/sdk/commit/15a0023018ca67d53220e82281d51d633b16b0d5) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency kysely to v0.28.17
+
+- [#1127](https://github.com/tailor-platform/sdk/pull/1127) [`79050d4`](https://github.com/tailor-platform/sdk/commit/79050d4606dc695522f2eaa65a0079b20c3d51c8) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency pkg-types to v2.3.1
+
+- [#1128](https://github.com/tailor-platform/sdk/pull/1128) [`5596283`](https://github.com/tailor-platform/sdk/commit/5596283bd09cddee10488606122ddebe57c58a75) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency rolldown to v1.0.0-rc.18
+
 ## 1.45.1
 
 ### Patch Changes

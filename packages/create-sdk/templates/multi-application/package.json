@@ -4,8 +4,8 @@
   "type": "module",
   "scripts": {
     "deploy": "pnpm run deploy:user && pnpm run deploy:admin",
-    "deploy:user": "tailor-sdk apply -c apps/user/tailor.config.ts",
-    "deploy:admin": "tailor-sdk apply -c apps/admin/tailor.config.ts",
+    "deploy:user": "tailor-sdk deploy -c apps/user/tailor.config.ts",
+    "deploy:admin": "tailor-sdk deploy -c apps/admin/tailor.config.ts",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "lint": "oxlint --type-aware . && eslint --cache .",
@@ -16,12 +16,12 @@
     "@eslint/js": "10.0.1",
     "@tailor-platform/sdk": "workspace:^",
     "@types/node": "24.12.2",
-    "eslint": "10.2.1",
+    "eslint": "10.3.0",
     "eslint-plugin-oxlint": "1.61.0",
     "oxfmt": "0.46.0",
     "oxlint": "1.61.0",
-    "oxlint-tsgolint": "0.22.0",
+    "oxlint-tsgolint": "0.22.1",
     "typescript": "5.9.3",
-    "typescript-eslint": "8.59.0"
+    "typescript-eslint": "8.59.1"
   }
 }
