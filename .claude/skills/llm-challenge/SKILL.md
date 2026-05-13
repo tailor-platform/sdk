@@ -88,7 +88,7 @@ Structure: `problems/<id>-<slug>/` with `meta.json`, `problem.md`, `scaffold/`, 
 5. `pnpm -C packages/sdk build`, then re-run `challenge:solve` on the same `(agent, model, profile)` to measure delta
 6. `pnpm challenge:analyze --trend --agent claude --context-profile types-only` to see pass-rate and affordance distribution diff
 
-A/B experiments via `pnpm challenge:experiment --sdk-branch <ref>` are planned (Phase 4) but not yet wired; until then, switch branches manually between runs.
+A/B experiments via `pnpm challenge:experiment --sdk-branch <ref> --iterations <n>` run the benchmark twice (baseline tree + candidate ref), copy both reports into `results/experiments/<exp-id>/`, and emit a `delta.json` plus a printed ΔpassRate / ΔcostUSD summary. Forwarded flags (`--problem`, `--agent`, `--model`, `--context-profile`, `--concurrency`, …) are passed through to both child runs after the reserved flags are stripped.
 
 ## Affordance Taxonomy
 
