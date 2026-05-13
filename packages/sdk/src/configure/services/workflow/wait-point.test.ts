@@ -83,7 +83,7 @@ describe("defineWaitPoints", () => {
     const wps = defineWaitPoints((define) => ({
       approval: define<undefined, { ok: boolean }>(),
     }));
-    expect(() => wps.approval.wait()).toThrow("setupWaitPointMock()");
+    expect(() => wps.approval.wait()).toThrow("workflowMock");
   });
 
   it("throws a helpful error when only setupWorkflowMock is active (wait/resolve auto-stubbed)", () => {
@@ -91,7 +91,7 @@ describe("defineWaitPoints", () => {
     const wps = defineWaitPoints((define) => ({
       approval: define<undefined, { ok: boolean }>(),
     }));
-    expect(() => wps.approval.wait()).toThrow("setupWaitPointMock()");
+    expect(() => wps.approval.wait()).toThrow("workflowMock");
   });
 
   it("rejects Result = undefined (callback must return a value)", () => {
@@ -176,7 +176,7 @@ describe("defineWaitPoint", () => {
 
   it("throws without platform API or mock", () => {
     const wp = defineWaitPoint<undefined, { ok: boolean }>("my-step");
-    expect(() => wp.wait()).toThrow("setupWaitPointMock()");
+    expect(() => wp.wait()).toThrow("workflowMock");
   });
 
   it("rejects Result = undefined (callback must return a value)", () => {

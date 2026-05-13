@@ -94,7 +94,7 @@ export function setupTailordbMock(resolver: QueryResolver = () => []): {
 
 /**
  * Sets up a mock for `globalThis.tailor.workflow.triggerJobFunction` used in bundled workflow tests.
- * `wait`/`resolve` are stubbed to throw a helpful error directing to `setupWaitPointMock()`,
+ * `wait`/`resolve` are stubbed to throw a helpful error directing to `workflowMock`,
  * so mistakenly calling wait without wait-point mocks produces a clear message instead of a TypeError.
  * @deprecated Use `workflowMock` from `@tailor-platform/sdk/vitest` with the `tailor-runtime` environment instead.
  * @param handler - Function that handles triggered job calls and returns results.
@@ -109,11 +109,13 @@ export function setupWorkflowMock(handler: JobHandler): {
     ...GlobalThis.tailor,
     workflow: {
       wait: () => {
-        throw new Error("tailor.workflow.wait is not mocked. Use setupWaitPointMock() in tests.");
+        throw new Error(
+          "tailor.workflow.wait is not mocked. Use workflowMock from @tailor-platform/sdk/vitest in tests.",
+        );
       },
       resolve: async () => {
         throw new Error(
-          "tailor.workflow.resolve is not mocked. Use setupWaitPointMock() in tests.",
+          "tailor.workflow.resolve is not mocked. Use workflowMock from @tailor-platform/sdk/vitest in tests.",
         );
       },
       ...GlobalThis.tailor?.workflow,
