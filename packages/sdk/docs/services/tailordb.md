@@ -62,18 +62,19 @@ db.type("User", "User in the system", {
 
 ## Field Types
 
-| Method                          | TailorDB | TypeScript     |
-| ------------------------------- | -------- | -------------- |
-| `db.string()`                   | String   | string         |
-| `db.int()`                      | Integer  | number         |
-| `db.float()`                    | Float    | number         |
-| `db.bool()`                     | Boolean  | boolean        |
-| `db.date()`                     | Date     | string         |
-| `db.datetime()`                 | DateTime | string \| Date |
-| `db.time()`                     | Time     | string         |
-| `db.uuid()`                     | UUID     | string         |
-| [`db.enum()`](#enum-fields)     | Enum     | string         |
-| [`db.object()`](#object-fields) | Nested   | object         |
+| Method                            | TailorDB | TypeScript     |
+| --------------------------------- | -------- | -------------- |
+| `db.string()`                     | String   | string         |
+| `db.int()`                        | Integer  | number         |
+| `db.float()`                      | Float    | number         |
+| [`db.decimal()`](#decimal-fields) | Decimal  | string         |
+| `db.bool()`                       | Boolean  | boolean        |
+| `db.date()`                       | Date     | string         |
+| `db.datetime()`                   | DateTime | string \| Date |
+| `db.time()`                       | Time     | string         |
+| `db.uuid()`                       | UUID     | string         |
+| [`db.enum()`](#enum-fields)       | Enum     | string         |
+| [`db.object()`](#object-fields)   | Nested   | object         |
 
 ### Optional and Array Fields
 
@@ -82,6 +83,36 @@ db.string({ optional: true });
 db.string({ array: true });
 db.string({ optional: true, array: true });
 ```
+
+### Decimal Fields
+
+Decimal fields are stored as strings to preserve precision. The optional `scale`
+parameter sets the number of digits after the decimal point and must be an
+integer between 0 and 12. When `scale` is omitted, the platform default of 6 is
+used.
+
+```typescript
+// Default scale (6 decimal places)
+db.decimal();
+
+// Custom scale (2 decimal places)
+db.decimal({ scale: 2 });
+
+// Optional with custom scale
+db.decimal({ scale: 4, optional: true });
+```
+
+Values are rounded half-up to fit the configured scale before being stored.
+Negative values follow the same rule based on absolute magnitude:
+
+| Input         | Scale | Stored       |
+| ------------- | ----- | ------------ |
+| `"1.234"`     | 2     | `"1.23"`     |
+| `"1.235"`     | 2     | `"1.24"`     |
+| `"-1.235"`    | 2     | `"-1.24"`    |
+| `"1.5"`       | 0     | `"2"`        |
+| `"1.123456"`  | 6     | `"1.123456"` |
+| `"1.1234567"` | 6     | `"1.123457"` |
 
 ### Enum Fields
 
