@@ -72,6 +72,7 @@ tailor-sdk setup github [options]
 | `--organization-id <ORGANIZATION_ID>`   | `-o`  | Organization ID                     | Yes      | -       |
 | `--folder-id <FOLDER_ID>`               | `-f`  | Folder ID                           | Yes      | -       |
 | `--dir <DIR>`                           | `-d`  | App directory (for monorepo setups) | No       | `"."`   |
+| `--with-plan`                           | `-p`  | Include plan job for PR previews    | No       | `false` |
 
 <!-- politty:command:setup github:options:end -->
 

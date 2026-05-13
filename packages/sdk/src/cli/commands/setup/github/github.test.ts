@@ -62,9 +62,7 @@ describe("renderDeploy", () => {
 
   it("references the composite action", () => {
     const content = renderDeploy(baseParams);
-    expect(content).toContain(
-      "uses: tailor-platform/actions/deploy@980aeba08963f4322b2b48ca7a920f4e14876842 # v1.0.0",
-    );
+    expect(content).toMatch(/uses: tailor-platform\/actions\/deploy@[a-f0-9]+ # v\d+\.\d+\.\d+/);
   });
 
   it("includes setup steps in correct order", () => {
@@ -82,6 +80,7 @@ describe("renderDeploy", () => {
     expect(content).toMatch(/uses: actions\/checkout@[a-f0-9]+ # v\d+\.\d+\.\d+/);
     expect(content).toMatch(/uses: pnpm\/action-setup@[a-f0-9]+ # v\d+\.\d+\.\d+/);
     expect(content).toMatch(/uses: actions\/setup-node@[a-f0-9]+ # v\d+\.\d+\.\d+/);
+    expect(content).toMatch(/uses: tailor-platform\/actions\/deploy@[a-f0-9]+ # v\d+\.\d+\.\d+/);
   });
 
   it("generates pnpm setup steps", () => {
@@ -151,8 +150,42 @@ describe("renderDeploy", () => {
 
   it("parameterizes concurrency group with workspace name", () => {
     const content = renderDeploy(baseParams);
-    expect(content).toContain("group: deploy-my-app");
-    expect(content).not.toContain("group: deploy\n");
+    expect(content).toContain("group: tailor-my-app-");
+  });
+
+  it("strips plan job by default", () => {
+    const content = renderDeploy(baseParams);
+    expect(content).not.toContain("tailor-platform/actions/plan@");
+    expect(content).not.toContain("TAILOR_PLATFORM_WORKSPACE_ID");
+    expect(content).not.toContain("__PLAN_JOB_START__");
+    expect(content).not.toContain("__PLAN_JOB_END__");
+    expect(content).toContain("tailor-platform/actions/deploy@");
+  });
+
+  it("includes plan job when withPlan is true", () => {
+    const content = renderDeploy({ ...baseParams, withPlan: true });
+    expect(content).toContain("tailor-platform/actions/plan@");
+    expect(content).toContain("workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}");
+    expect(content).toContain("github-token: ${{ secrets.GITHUB_TOKEN }}");
+    expect(content).toContain("tailor-platform/actions/deploy@");
+    expect(content).not.toContain("__PLAN_JOB_START__");
+    expect(content).not.toContain("__PLAN_JOB_END__");
+  });
+
+  it("includes setup steps in both plan and deploy jobs when withPlan is true", () => {
+    const content = renderDeploy({ ...baseParams, withPlan: true });
+    const matches = content.match(/uses: pnpm\/action-setup@/g) ?? [];
+    expect(matches).toHaveLength(2);
+  });
+
+  it("propagates working-directory to plan job when withPlan is true", () => {
+    const content = renderDeploy({
+      ...baseParams,
+      withPlan: true,
+      workingDirectory: "apps/foo",
+    });
+    const matches = content.match(/working-directory: apps\/foo/g) ?? [];
+    expect(matches).toHaveLength(2);
   });
 });
 
@@ -178,7 +211,7 @@ describe("buildFiles", () => {
       outputDir: testDir,
     });
     expect(files).toHaveLength(1);
-    expect(files[0]!.path).toBe(path.join(testDir, ".github/workflows/deploy-my-app.yml"));
+    expect(files[0]!.path).toBe(path.join(testDir, ".github/workflows/tailor-my-app.yml"));
   });
 
   it("detects package manager from project directory", () => {

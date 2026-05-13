@@ -30,6 +30,10 @@ export const githubCommand = defineAppCommand({
         alias: "d",
         description: "App directory (for monorepo setups)",
       }),
+      "with-plan": arg(z.boolean().default(false), {
+        alias: "p",
+        description: "Include plan job for PR previews",
+      }),
     })
     .strict(),
   run: (args) => {
@@ -40,6 +44,7 @@ export const githubCommand = defineAppCommand({
       folderId: args["folder-id"],
       dir: args.dir,
       outputDir: process.cwd(),
+      withPlan: args["with-plan"],
     });
   },
 });
