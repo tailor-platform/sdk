@@ -2,9 +2,9 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { formatCrashReport } from "@/cli/crash-report/writer";
+import { formatCrashReport } from "@/cli/crashreport/writer";
 import { parseCrashLogFile } from "./send";
-import type { CrashReport } from "@/cli/crash-report/report";
+import type { CrashReport } from "@/cli/crashreport/report";
 
 function makeCrashReport(): CrashReport {
   return {
@@ -27,7 +27,7 @@ function makeCrashReport(): CrashReport {
   };
 }
 
-describe("crash-report send command", () => {
+describe("crashreport send command", () => {
   let tmpDir: string;
   const originalFetch = globalThis.fetch;
 

@@ -1,5 +1,35 @@
 # @tailor-platform/sdk
 
+## 1.46.0
+
+### Minor Changes
+
+- [#1144](https://github.com/tailor-platform/sdk/pull/1144) [`ade6a39`](https://github.com/tailor-platform/sdk/commit/ade6a39dd46a5c48ca274718203628a30f0ba843) Thanks [@dqn](https://github.com/dqn)! - Rename the `apply` CLI command to `deploy`. `tailor-sdk deploy` is the canonical
+  command name; `tailor-sdk apply` continues to work as an alias for backward
+  compatibility on the command line.
+
+  The programmatic API exported from `@tailor-platform/sdk/cli` is also available
+  under the new name. `deploy` / `DeployOptions` are now the canonical exports,
+  while `apply` / `ApplyOptions` continue to be re-exported as aliases so existing
+  imports keep working:
+
+  - `import { apply } from "@tailor-platform/sdk/cli"` — still works (alias for `deploy`)
+  - `import type { ApplyOptions } from "@tailor-platform/sdk/cli"` — still works (alias for `DeployOptions`)
+
+  Migration is optional but recommended:
+
+  - `apply` → `deploy`
+  - `ApplyOptions` → `DeployOptions`
+
+- [#1145](https://github.com/tailor-platform/sdk/pull/1145) [`847284a`](https://github.com/tailor-platform/sdk/commit/847284ab50313bfffed03905173b3d868f7e7fce) Thanks [@dqn](https://github.com/dqn)! - Apply consistent CLI naming conventions:
+
+  - Rename the `crash-report` subcommand to `crashreport` to match the single-word convention used by other multi-word commands (`authconnection`, `staticwebsite`). The legacy `crash-report` name is preserved as a native alias and still works.
+  - Rename the positional arguments `executionId`, `executorName`, and `jobId` to their kebab-case form (`execution-id`, `executor-name`, `job-id`) on `function logs`, `workflow resume`, `workflow executions`, `executor jobs`, and `executor trigger`. Help output and generated docs now show the kebab-case form. Existing positional invocations are unaffected because positional arguments are referenced by position, not by name.
+
+### Patch Changes
+
+- [#1146](https://github.com/tailor-platform/sdk/pull/1146) [`a49a6ef`](https://github.com/tailor-platform/sdk/commit/a49a6efd62d0d374b3b73cf80bab897f8bcaa5d4) Thanks [@dqn](https://github.com/dqn)! - Stack traces shown by `tailor-sdk function logs <id>` now map back to original sources even after the deployed function has been updated. The `FunctionExecution.contentHash` reported by the server is used to download the exact bundle that ran, so source locations stay accurate across redeploys. Older servers that do not report `contentHash` keep using the existing `updatedAt` staleness fallback.
+
 ## 1.45.2
 
 ### Patch Changes

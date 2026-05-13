@@ -551,11 +551,11 @@ export const jobsCommand = defineAppCommand({
   args: z
     .object({
       ...workspaceArgs,
-      executorName: arg(z.string(), {
+      "executor-name": arg(z.string(), {
         positional: true,
         description: "Executor name",
       }),
-      jobId: arg(z.string().optional(), {
+      "job-id": arg(z.string().optional(), {
         positional: true,
         description: "Job ID (if provided, shows job details)",
       }),
