@@ -1,5 +1,11 @@
 import { problemKey } from "../shared/helpers";
-import { type MetricsSummary, type TraceMetrics, summarizeMetrics } from "./metrics";
+import {
+  type MetricsSummary,
+  READ_TARGET_CLASSES,
+  type ReadTargetClass,
+  type TraceMetrics,
+  summarizeMetrics,
+} from "./metrics";
 import type { SolveResult } from "./solver/types";
 import type { ChallengeStage, StageInput, TestDetail } from "./verify";
 
@@ -29,9 +35,11 @@ export type ProblemArtifacts = {
  * mode); single-iteration runs leave this undefined.
  *
  * `passRate` is the fraction of iterations that passed (passedCount / count).
- * `metricsMedian` / `metricsStdev` summarise the four behavioural counters
- * (turns, readSdkDts, readDocs, bashRetries). `costMedian` / `costStdev`
- * summarise per-iteration `solveResult.costUsd`.
+ * `metricsMedian` / `metricsStdev` summarise the legacy behavioural counters
+ * (`turns`, `readSdkDts`, `readDocs`, `bashRetries`) AND the five per-class
+ * `readTargets` buckets ({@link ReadTargetClass}). The new bucket-level
+ * fields are populated alongside the legacy fields for back-compat.
+ * `costMedian` / `costStdev` summarise per-iteration `solveResult.costUsd`.
  */
 export type IterationAggregate = {
   count: number;
@@ -45,13 +53,13 @@ export type IterationAggregate = {
     readSdkDts: number;
     readDocs: number;
     bashRetries: number;
-  };
+  } & Record<ReadTargetClass, number>;
   metricsStdev: {
     turns: number;
     readSdkDts: number;
     readDocs: number;
     bashRetries: number;
-  };
+  } & Record<ReadTargetClass, number>;
 };
 
 export type ProblemResult = {
@@ -221,17 +229,36 @@ export function aggregateIterations(perIteration: ProblemResult[]): ProblemResul
     readDocs: [],
     bashRetries: [],
   };
+  const readTargetValues: Record<ReadTargetClass, number[]> = {
+    "sdk-dts": [],
+    "sdk-package-src": [],
+    "sdk-docs": [],
+    "problem-files": [],
+    other: [],
+  };
   for (const r of perIteration) {
     if (!r.metrics) continue;
     for (const k of ITERATION_METRIC_KEYS) {
       metricsValues[k].push(r.metrics[k]);
     }
+    for (const cls of READ_TARGET_CLASSES) {
+      // Tolerate trace files written before readTargets was added — fall
+      // back to 0 so older fixtures and pre-Phase-5b reports still merge.
+      readTargetValues[cls].push(r.metrics.readTargets?.[cls] ?? 0);
+    }
   }
-  const mapMetrics = <T>(fn: (values: number[]) => T): Record<IterationMetricKey, T> => ({
+  const mapMetrics = <T>(
+    fn: (values: number[]) => T,
+  ): Record<IterationMetricKey, T> & Record<ReadTargetClass, T> => ({
     turns: fn(metricsValues.turns),
     readSdkDts: fn(metricsValues.readSdkDts),
     readDocs: fn(metricsValues.readDocs),
     bashRetries: fn(metricsValues.bashRetries),
+    "sdk-dts": fn(readTargetValues["sdk-dts"]),
+    "sdk-package-src": fn(readTargetValues["sdk-package-src"]),
+    "sdk-docs": fn(readTargetValues["sdk-docs"]),
+    "problem-files": fn(readTargetValues["problem-files"]),
+    other: fn(readTargetValues.other),
   });
 
   const iterations: IterationAggregate = {

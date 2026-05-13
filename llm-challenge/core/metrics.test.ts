@@ -2,7 +2,15 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { aggregateTraceMetrics, computeTraceMetrics, summarizeMetrics } from "./metrics";
+import {
+  aggregateTraceMetrics,
+  classifyReadTarget,
+  computeTraceMetrics,
+  READ_TARGET_CLASSES,
+  type ReadTargetClass,
+  summarizeMetrics,
+  type TraceMetrics,
+} from "./metrics";
 import type { TraceEvent } from "./trace";
 
 function toolUse(name: string, input: Record<string, unknown>): TraceEvent {
@@ -17,15 +25,118 @@ function bash(command: string): TraceEvent {
   return toolUse("Bash", { command });
 }
 
+function emptyReadTargets(): Record<ReadTargetClass, number> {
+  return {
+    "sdk-dts": 0,
+    "sdk-package-src": 0,
+    "sdk-docs": 0,
+    "problem-files": 0,
+    other: 0,
+  };
+}
+
+/** Convenience: build a TraceMetrics literal for test assertions. */
+function mkMetrics(partial: Partial<TraceMetrics>): TraceMetrics {
+  return {
+    turns: 0,
+    toolCallCounts: {},
+    readTargets: emptyReadTargets(),
+    readSdkDts: 0,
+    readDocs: 0,
+    bashRetries: 0,
+    ...partial,
+  };
+}
+
+describe("classifyReadTarget", () => {
+  it("classifies SDK .d.ts files as sdk-dts (declaration files)", () => {
+    expect(classifyReadTarget("node_modules/@tailor-platform/sdk/dist/index.d.ts")).toBe("sdk-dts");
+    expect(
+      classifyReadTarget("/workspace/node_modules/@tailor-platform/sdk/dist/plugin/x.d.ts"),
+    ).toBe("sdk-dts");
+    expect(classifyReadTarget("node_modules/@tailor-platform/sdk/dist/index.d.mts")).toBe(
+      "sdk-dts",
+    );
+    expect(classifyReadTarget("node_modules/@tailor-platform/sdk/dist/index.d.cts")).toBe(
+      "sdk-dts",
+    );
+  });
+
+  it("classifies non-declaration SDK source files as sdk-package-src", () => {
+    expect(classifyReadTarget("node_modules/@tailor-platform/sdk/dist/index.js")).toBe(
+      "sdk-package-src",
+    );
+    expect(classifyReadTarget("node_modules/@tailor-platform/sdk/dist/cli/types.ts")).toBe(
+      "sdk-package-src",
+    );
+    expect(classifyReadTarget("node_modules/@tailor-platform/sdk/dist/index.mjs")).toBe(
+      "sdk-package-src",
+    );
+    expect(classifyReadTarget("node_modules/@tailor-platform/sdk/dist/index.cjs")).toBe(
+      "sdk-package-src",
+    );
+  });
+
+  it("classifies SDK .md, docs/, and README* paths as sdk-docs", () => {
+    // SDK package .md file
+    expect(classifyReadTarget("node_modules/@tailor-platform/sdk/README.md")).toBe("sdk-docs");
+    // docs/ anywhere
+    expect(classifyReadTarget("docs/architecture.md")).toBe("sdk-docs");
+    expect(classifyReadTarget("packages/sdk/docs/changeset.md")).toBe("sdk-docs");
+    expect(classifyReadTarget("/abs/path/docs/cli/tailordb.md")).toBe("sdk-docs");
+    // README at any level
+    expect(classifyReadTarget("README.md")).toBe("sdk-docs");
+    expect(classifyReadTarget("packages/sdk/README")).toBe("sdk-docs");
+    expect(classifyReadTarget("subdir/README_old.md")).toBe("sdk-docs");
+  });
+
+  it("classifies project-tree problem files as problem-files", () => {
+    expect(classifyReadTarget("tests/foo.test.ts")).toBe("problem-files");
+    expect(classifyReadTarget("/workspace/tests/foo.test.ts")).toBe("problem-files");
+    expect(classifyReadTarget("tailor.config.ts")).toBe("problem-files");
+    expect(classifyReadTarget("/workspace/tailor.config.ts")).toBe("problem-files");
+    expect(classifyReadTarget("scaffold/tailor.config.ts")).toBe("problem-files");
+    expect(classifyReadTarget("problems/m05/scaffold/tailordb/User.ts")).toBe("problem-files");
+    expect(classifyReadTarget("problem.md")).toBe("problem-files");
+    expect(classifyReadTarget("problems/m05/problem.md")).toBe("problem-files");
+  });
+
+  it("classifies remainder as other", () => {
+    expect(classifyReadTarget("tailordb/User.ts")).toBe("other");
+    expect(classifyReadTarget("package.json")).toBe("other");
+    expect(classifyReadTarget("tsconfig.json")).toBe("other");
+    expect(classifyReadTarget("pnpm-lock.yaml")).toBe("other");
+    // node_modules NOT under tailor-platform sdk, non-d.ts
+    expect(classifyReadTarget("node_modules/@types/node/fs.d.ts")).toBe("other");
+    expect(classifyReadTarget("node_modules/typescript/lib/lib.d.ts")).toBe("other");
+  });
+
+  it("respects precedence: sdk-dts > sdk-package-src > sdk-docs > problem-files > other", () => {
+    // A .d.ts inside the SDK package wins over the generic 'd.ts in node_modules' classification.
+    expect(classifyReadTarget("node_modules/@tailor-platform/sdk/dist/index.d.ts")).toBe("sdk-dts");
+    // A .ts inside the SDK package classifies as package-src even though tests/* also matches —
+    // SDK package wins because it's checked first.
+    expect(classifyReadTarget("node_modules/@tailor-platform/sdk/tests/x.ts")).toBe(
+      "sdk-package-src",
+    );
+    // tests/ under node_modules (not under the SDK package) is NOT problem-files (the guard
+    // explicitly excludes node_modules from problem-files).
+    expect(classifyReadTarget("node_modules/other-pkg/tests/x.ts")).toBe("other");
+    // docs/ anywhere wins over problem-files (docs/* is checked first).
+    expect(classifyReadTarget("docs/scaffold/foo.md")).toBe("sdk-docs");
+  });
+
+  it("normalizes Windows backslashes for cross-platform classification", () => {
+    expect(classifyReadTarget("node_modules\\@tailor-platform\\sdk\\dist\\index.d.ts")).toBe(
+      "sdk-dts",
+    );
+    expect(classifyReadTarget("docs\\architecture.md")).toBe("sdk-docs");
+  });
+});
+
 describe("aggregateTraceMetrics", () => {
   it("returns empty metrics for an empty trace", () => {
-    expect(aggregateTraceMetrics([])).toEqual({
-      turns: 0,
-      toolCallCounts: {},
-      readSdkDts: 0,
-      readDocs: 0,
-      bashRetries: 0,
-    });
+    expect(aggregateTraceMetrics([])).toEqual(mkMetrics({}));
   });
 
   it("counts tool_use events as turns and per-tool counts", () => {
@@ -65,32 +176,45 @@ describe("aggregateTraceMetrics", () => {
     expect(metrics.toolCallCounts).toEqual({ Read: 1 });
   });
 
-  it("counts Read of SDK .d.ts via the dedicated bucket", () => {
+  it("classifies Read events into the readTargets per-class map", () => {
     const metrics = aggregateTraceMetrics([
       readFile("node_modules/@tailor-platform/sdk/dist/index.d.ts"),
       readFile("node_modules/@tailor-platform/sdk/dist/plugin/kysely-type.d.ts"),
-      // non-d.ts in same package: should NOT count
-      readFile("node_modules/@tailor-platform/sdk/dist/index.js"),
-      // different package .d.ts: should NOT count
-      readFile("node_modules/@types/node/fs.d.ts"),
-      // direct project file: should NOT count
+      readFile("node_modules/@tailor-platform/sdk/dist/cli/configure.js"),
+      readFile("docs/architecture.md"),
+      readFile("README.md"),
+      readFile("tests/foo.test.ts"),
       readFile("tailor.config.ts"),
+      readFile("package.json"),
     ]);
-    expect(metrics.readSdkDts).toBe(2);
+    expect(metrics.readTargets).toEqual({
+      "sdk-dts": 2,
+      "sdk-package-src": 1,
+      "sdk-docs": 2,
+      "problem-files": 2,
+      other: 1,
+    });
   });
 
-  it("counts Read of docs/ and README files via the dedicated bucket", () => {
+  it("derives legacy readSdkDts / readDocs from the readTargets map", () => {
     const metrics = aggregateTraceMetrics([
+      readFile("node_modules/@tailor-platform/sdk/dist/index.d.ts"),
+      readFile("node_modules/@tailor-platform/sdk/dist/plugin/kysely-type.d.ts"),
       readFile("docs/architecture.md"),
-      readFile("docs/cli/tailordb.md"),
       readFile("README.md"),
-      readFile("packages/sdk/README"),
-      // non-docs: should NOT count
-      readFile("tailor.config.ts"),
-      // documentation in a subpath: should count via /docs/
-      readFile("packages/sdk/docs/changeset.md"),
     ]);
-    expect(metrics.readDocs).toBe(5);
+    // Legacy fields are derived: match the new buckets exactly.
+    expect(metrics.readSdkDts).toBe(metrics.readTargets["sdk-dts"]);
+    expect(metrics.readSdkDts).toBe(2);
+    expect(metrics.readDocs).toBe(metrics.readTargets["sdk-docs"]);
+    expect(metrics.readDocs).toBe(2);
+  });
+
+  it("aggregates readTargets sums across many Read events", () => {
+    const events = Array.from({ length: 10 }, () => readFile("docs/foo.md"));
+    const metrics = aggregateTraceMetrics(events);
+    expect(metrics.readTargets["sdk-docs"]).toBe(10);
+    expect(metrics.readDocs).toBe(10);
   });
 
   it("counts Bash retries when commands hit known re-run patterns", () => {
@@ -129,6 +253,18 @@ describe("aggregateTraceMetrics", () => {
     expect(metrics.readSdkDts).toBe(2);
     expect(metrics.readDocs).toBe(1);
     expect(metrics.bashRetries).toBe(2);
+    expect(metrics.readTargets["sdk-dts"]).toBe(2);
+    expect(metrics.readTargets["sdk-docs"]).toBe(1);
+    expect(metrics.readTargets.other).toBe(1); // tailordb/User.ts
+  });
+
+  it("populates every readTargets bucket key even when unused", () => {
+    const metrics = aggregateTraceMetrics([]);
+    // All five buckets must be present (with zero value) so downstream code
+    // does not need to gate on optional keys.
+    for (const cls of READ_TARGET_CLASSES) {
+      expect(metrics.readTargets[cls]).toBe(0);
+    }
   });
 });
 
@@ -145,13 +281,7 @@ describe("computeTraceMetrics", () => {
 
   it("returns empty metrics when the trace file does not exist", () => {
     const missing = path.join(tempDir, "missing.jsonl");
-    expect(computeTraceMetrics(missing)).toEqual({
-      turns: 0,
-      toolCallCounts: {},
-      readSdkDts: 0,
-      readDocs: 0,
-      bashRetries: 0,
-    });
+    expect(computeTraceMetrics(missing)).toEqual(mkMetrics({}));
   });
 
   it("parses a JSONL trace file and aggregates events", () => {
@@ -173,6 +303,8 @@ describe("computeTraceMetrics", () => {
     expect(metrics.readDocs).toBe(1);
     expect(metrics.readSdkDts).toBe(1);
     expect(metrics.bashRetries).toBe(1);
+    expect(metrics.readTargets["sdk-dts"]).toBe(1);
+    expect(metrics.readTargets["sdk-docs"]).toBe(1);
   });
 
   it("tolerates malformed lines and blank lines", () => {
@@ -199,27 +331,25 @@ describe("summarizeMetrics", () => {
 
   it("computes min/max/median/mean per metric", () => {
     const summary = summarizeMetrics([
-      {
+      mkMetrics({
         turns: 5,
         toolCallCounts: { Read: 3, Bash: 2 },
         readSdkDts: 1,
-        readDocs: 0,
-        bashRetries: 0,
-      },
-      {
+      }),
+      mkMetrics({
         turns: 10,
         toolCallCounts: { Read: 6, Bash: 4 },
         readSdkDts: 2,
         readDocs: 1,
         bashRetries: 1,
-      },
-      {
+      }),
+      mkMetrics({
         turns: 15,
         toolCallCounts: { Read: 9, Bash: 6 },
         readSdkDts: 3,
         readDocs: 2,
         bashRetries: 2,
-      },
+      }),
     ]);
 
     expect(summary).toBeDefined();
@@ -243,20 +373,8 @@ describe("summarizeMetrics", () => {
 
   it("treats absent tool counts as zero across runs", () => {
     const summary = summarizeMetrics([
-      {
-        turns: 1,
-        toolCallCounts: { Read: 1 },
-        readSdkDts: 0,
-        readDocs: 0,
-        bashRetries: 0,
-      },
-      {
-        turns: 1,
-        toolCallCounts: { Bash: 1 },
-        readSdkDts: 0,
-        readDocs: 0,
-        bashRetries: 0,
-      },
+      mkMetrics({ turns: 1, toolCallCounts: { Read: 1 } }),
+      mkMetrics({ turns: 1, toolCallCounts: { Bash: 1 } }),
     ]);
 
     expect(summary!.toolCalls.Read).toEqual({

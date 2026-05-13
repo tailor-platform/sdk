@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { ReadTargetClass, TraceMetrics } from "./metrics";
 import {
   type ProblemResult,
   type StageResult,
@@ -9,6 +10,28 @@ import {
   formatReportTable,
   isInfraFailure,
 } from "./report";
+
+function emptyReadTargets(): Record<ReadTargetClass, number> {
+  return {
+    "sdk-dts": 0,
+    "sdk-package-src": 0,
+    "sdk-docs": 0,
+    "problem-files": 0,
+    other: 0,
+  };
+}
+
+function mkMetrics(partial: Partial<TraceMetrics>): TraceMetrics {
+  return {
+    turns: 0,
+    toolCallCounts: {},
+    readTargets: emptyReadTargets(),
+    readSdkDts: 0,
+    readDocs: 0,
+    bashRetries: 0,
+    ...partial,
+  };
+}
 
 function makeProblemResult(overrides: Partial<ProblemResult> = {}): ProblemResult {
   return {
@@ -503,13 +526,13 @@ describe("formatReportTable", () => {
       makeProblemResult({
         stages: [passing],
         passed: true,
-        metrics: {
+        metrics: mkMetrics({
           turns: 12,
           toolCallCounts: { Read: 5, Bash: 3, Edit: 4 },
           readSdkDts: 4,
           readDocs: 2,
           bashRetries: 3,
-        },
+        }),
       }),
     ]);
 
@@ -527,13 +550,7 @@ describe("formatReportTable", () => {
       makeProblemResult({
         stages: [passing],
         passed: true,
-        metrics: {
-          turns: 0,
-          toolCallCounts: {},
-          readSdkDts: 0,
-          readDocs: 0,
-          bashRetries: 0,
-        },
+        metrics: mkMetrics({}),
       }),
     ]);
 
@@ -547,25 +564,25 @@ describe("formatReportTable", () => {
         problemId: "001",
         stages: [passing],
         passed: true,
-        metrics: {
+        metrics: mkMetrics({
           turns: 8,
           toolCallCounts: { Read: 4, Bash: 2, Edit: 2 },
           readSdkDts: 2,
           readDocs: 1,
           bashRetries: 1,
-        },
+        }),
       }),
       makeProblemResult({
         problemId: "002",
         stages: [passing],
         passed: true,
-        metrics: {
+        metrics: mkMetrics({
           turns: 14,
           toolCallCounts: { Read: 8, Bash: 4, Edit: 2 },
           readSdkDts: 4,
           readDocs: 0,
           bashRetries: 3,
-        },
+        }),
       }),
     ]);
 
@@ -624,21 +641,21 @@ describe("aggregateIterations", () => {
         stages: [passing],
         passed: true,
         solveResult: { success: true, costUsd: 0.1, durationMs: 0, output: "" },
-        metrics: { turns: 10, toolCallCounts: {}, readSdkDts: 2, readDocs: 1, bashRetries: 0 },
+        metrics: mkMetrics({ turns: 10, readSdkDts: 2, readDocs: 1, bashRetries: 0 }),
       }),
       makeProblemResult({
         problemId: "m01",
         stages: [failing],
         passed: false,
         solveResult: { success: true, costUsd: 0.2, durationMs: 0, output: "" },
-        metrics: { turns: 14, toolCallCounts: {}, readSdkDts: 3, readDocs: 1, bashRetries: 2 },
+        metrics: mkMetrics({ turns: 14, readSdkDts: 3, readDocs: 1, bashRetries: 2 }),
       }),
       makeProblemResult({
         problemId: "m01",
         stages: [passing],
         passed: true,
         solveResult: { success: true, costUsd: 0.3, durationMs: 0, output: "" },
-        metrics: { turns: 12, toolCallCounts: {}, readSdkDts: 4, readDocs: 1, bashRetries: 1 },
+        metrics: mkMetrics({ turns: 12, readSdkDts: 4, readDocs: 1, bashRetries: 1 }),
       }),
     ];
 
@@ -730,8 +747,28 @@ describe("formatReportTable (iterations)", () => {
         passedByIteration: [true, false, true],
         costMedian: 0.234,
         costStdev: 0.012,
-        metricsMedian: { turns: 12, readSdkDts: 3, readDocs: 2, bashRetries: 4 },
-        metricsStdev: { turns: 1.8, readSdkDts: 0.5, readDocs: 0, bashRetries: 2.1 },
+        metricsMedian: {
+          turns: 12,
+          readSdkDts: 3,
+          readDocs: 2,
+          bashRetries: 4,
+          "sdk-dts": 3,
+          "sdk-package-src": 0,
+          "sdk-docs": 2,
+          "problem-files": 1,
+          other: 0,
+        },
+        metricsStdev: {
+          turns: 1.8,
+          readSdkDts: 0.5,
+          readDocs: 0,
+          bashRetries: 2.1,
+          "sdk-dts": 0.5,
+          "sdk-package-src": 0,
+          "sdk-docs": 0,
+          "problem-files": 0,
+          other: 0,
+        },
       },
     };
     const report = createReport([result]);

@@ -1,4 +1,4 @@
-import { exec, execFileSync } from "node:child_process";
+import { exec, execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -808,6 +808,108 @@ function getRunResultsDir(resultsDir: string, modelLabelRaw: string): string {
   return path.join(resultsDir, sanitizeForFilename(modelLabelRaw));
 }
 
+/**
+ * Recover the `work/` snapshot directory for a single iteration's artifact.
+ * Returns `undefined` when the snapshot is missing (e.g. the iteration failed
+ * before persistSolveAttemptArtifact could copy the work tree). The path
+ * shape mirrors {@link persistSolveAttemptArtifact}: each iteration writes a
+ * single `attempt-0/` per problem, so the work snapshot lives at
+ * `<problemArtifactRoot>/attempt-0/work`.
+ */
+function getIterationWorkSnapshot(result: ProblemResult): string | undefined {
+  const dir = result.artifacts?.directory;
+  if (!dir) return undefined;
+  const candidate = path.join(dir, "attempt-0", "work");
+  return fs.existsSync(candidate) ? candidate : undefined;
+}
+
+/**
+ * Compute and persist a `git diff --no-index <failingWork> <passingWork>` between
+ * the first failing iteration's work snapshot and the first passing one for a
+ * flaky problem (passRate strictly between 0 and 1). Writes to
+ * `<runArtifactRoot>/iter-diff/<problemId>.diff`. No-op when:
+ *
+ * - the problem is not flaky (every iteration passed, or every one failed);
+ * - either side has no work snapshot on disk (e.g. infra failure);
+ * - `git diff --no-index` reports the two trees are identical (exit 0).
+ *
+ * `git diff --no-index` exits with code 1 when a diff exists — that is the
+ * success case here; we only treat exit ≥ 2 as a real failure.
+ *
+ * Exposed for test injection: callers can pass a mock `runner` to avoid
+ * spawning a real subprocess. In production code the default
+ * `spawnSync('git', …)` is used.
+ */
+export type GitDiffRunner = (failingWork: string, passingWork: string) => GitDiffResult;
+export type GitDiffResult = {
+  status: number | null;
+  stdout: string;
+  stderr: string;
+};
+
+const defaultGitDiffRunner: GitDiffRunner = (failingWork, passingWork) => {
+  const result = spawnSync("git", ["diff", "--no-index", "--", failingWork, passingWork], {
+    encoding: "utf-8",
+    maxBuffer: 50 * 1024 * 1024, // 50 MiB; work snapshots are small but Tailor configs can balloon
+  });
+  return {
+    status: result.status,
+    stdout: result.stdout ?? "",
+    stderr: result.stderr ?? "",
+  };
+};
+
+export type EmitIterDiffOptions = {
+  perIteration: ProblemResult[];
+  runArtifactRoot: string;
+  /** Override for tests. Defaults to a real `spawnSync('git', …)` call. */
+  runner?: GitDiffRunner;
+};
+
+export type EmitIterDiffResult =
+  | { kind: "skipped"; reason: string }
+  | { kind: "no-diff" }
+  | { kind: "written"; diffPath: string };
+
+export function emitIterDiff(options: EmitIterDiffOptions): EmitIterDiffResult {
+  const { perIteration, runArtifactRoot } = options;
+  const runner = options.runner ?? defaultGitDiffRunner;
+  if (perIteration.length < 2) {
+    return { kind: "skipped", reason: "need at least 2 iterations" };
+  }
+  const passing = perIteration.find((r) => r.passed);
+  const failing = perIteration.find((r) => !r.passed);
+  if (!passing || !failing) {
+    return { kind: "skipped", reason: "not flaky (all passed or all failed)" };
+  }
+  const passingWork = getIterationWorkSnapshot(passing);
+  const failingWork = getIterationWorkSnapshot(failing);
+  if (!passingWork || !failingWork) {
+    return { kind: "skipped", reason: "missing work snapshot for at least one iteration" };
+  }
+
+  const diff = runner(failingWork, passingWork);
+  // git diff --no-index: 0 = no diff, 1 = diff, ≥2 = error.
+  if (diff.status === 0) {
+    return { kind: "no-diff" };
+  }
+  if (diff.status !== 1) {
+    return {
+      kind: "skipped",
+      reason: `git diff exited with status ${diff.status ?? "<null>"}${diff.stderr ? `: ${diff.stderr.trim().split("\n")[0]}` : ""}`,
+    };
+  }
+
+  // Use the first iteration's problemId for the file name; every iteration of
+  // the same task has the same problemId by construction.
+  const problemId = perIteration[0]!.problemId;
+  const diffDir = path.join(runArtifactRoot, "iter-diff");
+  fs.mkdirSync(diffDir, { recursive: true });
+  const diffPath = path.join(diffDir, `${sanitizeForFilename(problemId)}.diff`);
+  fs.writeFileSync(diffPath, diff.stdout);
+  return { kind: "written", diffPath };
+}
+
 const authErrorPatterns = [
   /Not logged in/i,
   /API key/i,
@@ -1064,6 +1166,26 @@ async function main(): Promise<void> {
         }),
       );
     }
+
+    // When the problem is partially passing (flaky), capture the file-system
+    // delta between the first failing iteration's work tree and the first
+    // passing one. This is the post-Phase-5a replacement for the affordance
+    // judge: surface the *actual* code change that flipped the outcome, so
+    // operators can read it directly without an LLM intermediary.
+    if (runArtifactRoot) {
+      try {
+        const outcome = emitIterDiff({ perIteration, runArtifactRoot });
+        if (verbose && outcome.kind === "written") {
+          console.log(`  iter-diff: ${path.relative(runArtifactRoot, outcome.diffPath)}`);
+        }
+      } catch (err) {
+        // Diagnostic only — never let an emitter failure mask the actual
+        // benchmark result.
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`  iter-diff emit failed: ${msg}`);
+      }
+    }
+
     return aggregateIterations(perIteration);
   }
 

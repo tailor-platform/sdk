@@ -1,6 +1,51 @@
 import { describe, expect, it } from "vitest";
 import { computeReportDiff } from "./analyze";
-import type { ChallengeReport, ProblemResult } from "./report";
+import type { ReadTargetClass, TraceMetrics } from "./metrics";
+import type { ChallengeReport, IterationAggregate, ProblemResult } from "./report";
+
+function emptyReadTargets(): Record<ReadTargetClass, number> {
+  return {
+    "sdk-dts": 0,
+    "sdk-package-src": 0,
+    "sdk-docs": 0,
+    "problem-files": 0,
+    other: 0,
+  };
+}
+
+function mkMetrics(partial: Partial<TraceMetrics>): TraceMetrics {
+  return {
+    turns: 0,
+    toolCallCounts: {},
+    readTargets: emptyReadTargets(),
+    readSdkDts: 0,
+    readDocs: 0,
+    bashRetries: 0,
+    ...partial,
+  };
+}
+
+/**
+ * Helper: build an IterationAggregate metricsMedian/Stdev object. Defaults
+ * every readTargets bucket to 0; pass the legacy fields and any per-bucket
+ * overrides as needed.
+ */
+function mkIterMetrics(
+  partial: Partial<IterationAggregate["metricsMedian"]>,
+): IterationAggregate["metricsMedian"] {
+  return {
+    turns: 0,
+    readSdkDts: 0,
+    readDocs: 0,
+    bashRetries: 0,
+    "sdk-dts": 0,
+    "sdk-package-src": 0,
+    "sdk-docs": 0,
+    "problem-files": 0,
+    other: 0,
+    ...partial,
+  };
+}
 
 /**
  * Build a minimal `ChallengeReport` for diff tests. Defaults mirror what
@@ -57,8 +102,8 @@ function makeIterResult(
       passedByIteration: Array.from({ length: count }, (_, i) => i < passedCount),
       costMedian,
       costStdev: 0,
-      metricsMedian: { turns: 10, readSdkDts: 3, readDocs: 1, bashRetries: 1 },
-      metricsStdev: { turns: 0, readSdkDts: 0, readDocs: 0, bashRetries: 0 },
+      metricsMedian: mkIterMetrics({ turns: 10, readSdkDts: 3, readDocs: 1, bashRetries: 1 }),
+      metricsStdev: mkIterMetrics({}),
     },
     ...extra,
   });
@@ -219,8 +264,8 @@ describe("computeReportDiff", () => {
             passedByIteration: [true, true, true],
             costMedian: 0.1,
             costStdev: 0,
-            metricsMedian: { turns: 15, readSdkDts: 5, readDocs: 2, bashRetries: 3 },
-            metricsStdev: { turns: 0, readSdkDts: 0, readDocs: 0, bashRetries: 0 },
+            metricsMedian: mkIterMetrics({ turns: 15, readSdkDts: 5, readDocs: 2, bashRetries: 3 }),
+            metricsStdev: mkIterMetrics({}),
           },
         }),
       ],
@@ -236,8 +281,8 @@ describe("computeReportDiff", () => {
             passedByIteration: [true, true, true],
             costMedian: 0.1,
             costStdev: 0,
-            metricsMedian: { turns: 10, readSdkDts: 3, readDocs: 2, bashRetries: 1 },
-            metricsStdev: { turns: 0, readSdkDts: 0, readDocs: 0, bashRetries: 0 },
+            metricsMedian: mkIterMetrics({ turns: 10, readSdkDts: 3, readDocs: 2, bashRetries: 1 }),
+            metricsStdev: mkIterMetrics({}),
           },
         }),
       ],
@@ -254,14 +299,14 @@ describe("computeReportDiff", () => {
     const reportA = makeReport({
       results: [
         makeResult("m01", true, {
-          metrics: { turns: 20, toolCallCounts: {}, readSdkDts: 5, readDocs: 2, bashRetries: 3 },
+          metrics: mkMetrics({ turns: 20, readSdkDts: 5, readDocs: 2, bashRetries: 3 }),
         }),
       ],
     });
     const reportB = makeReport({
       results: [
         makeResult("m01", true, {
-          metrics: { turns: 10, toolCallCounts: {}, readSdkDts: 2, readDocs: 1, bashRetries: 1 },
+          metrics: mkMetrics({ turns: 10, readSdkDts: 2, readDocs: 1, bashRetries: 1 }),
         }),
       ],
     });
