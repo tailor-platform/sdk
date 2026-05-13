@@ -33,7 +33,7 @@ const auth = defineAuth("my-auth", {
     usernameField: "email",
     attributes: { role: true },
   },
-  // Optional when you don't define userProfile:
+  // Required when you don't define userProfile (mutually exclusive with userProfile):
   // machineUserAttributes: {
   //   role: t.string(),
   // },

@@ -80,12 +80,26 @@ export default defineConfig({
 
 ### OAuth2 Redirect URIs
 
+The same `website.url` placeholder can be reused in `defineAuth`'s OAuth2 redirect URIs. Pick exactly one of `userProfile` or `machineUserAttributes` on `defineAuth` (they are mutually exclusive). The snippet below uses the machine-user-only shape so it compiles standalone.
+
 ```typescript
+import { defineAuth, defineStaticWebSite, t } from "@tailor-platform/sdk";
+
 const website = defineStaticWebSite("my-frontend", {
   description: "Frontend application",
 });
 
 const auth = defineAuth("my-auth", {
+  // `machineUserAttributes` is required whenever you use `machineUsers`
+  // without a `userProfile`. It types every `machineUsers[*].attributes`.
+  machineUserAttributes: {
+    role: t.string(),
+  },
+  machineUsers: {
+    runner: {
+      attributes: { role: "RUNNER" },
+    },
+  },
   oauth2Clients: {
     "my-client": {
       redirectURIs: [
