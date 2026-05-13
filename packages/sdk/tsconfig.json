@@ -20,5 +20,5 @@
     "./vitest.config.ts",
     "./zinfer.config.ts"
   ],
-  "exclude": ["node_modules", "dist", "e2e/fixtures"]
+  "exclude": ["node_modules", "dist", "e2e/fixtures", "**/__test_fixtures__/**"]
 }
