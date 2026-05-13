@@ -53,7 +53,7 @@ Key files:
 - `createWorkflow()` result **must** be default exported
 - All jobs **must** be named exports (including mainJob and triggered jobs)
 - Job names must be unique across the entire project
-- `.trigger()` returns a `Promise` — always use `await` to get the result
+- `.trigger()` returns a `Promise` — `await` is optional but recommended for readability (the bundler wraps the call in `Promise.resolve(...)` so the runtime value always matches the `Promise<Awaited<Output>>` type)
 - On the server, the calling job suspends until the triggered job completes (synchronous execution), but the TypeScript API is `Promise`-based
 - `defineWaitPoints(define => ({ key: define<P, R>() }))` creates typed wait/resolve points
 - Wait/resolve methods runtime-delegate to `tailor.workflow.wait/resolve` on the platform; use `workflowMock.setWaitHandler` / `workflowMock.setResolveHandler` from `@tailor-platform/sdk/vitest` (with the `tailor-runtime` environment) to mock in tests — see [testing.md](packages/sdk/docs/testing.md#jobs-that-wait-on-approval)
