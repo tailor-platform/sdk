@@ -1,3 +1,6 @@
+// Activates the legacy `tailor.*` / `tailordb.*` ambient globals. Remove in v2.0.
+export * from "@/runtime/globals";
+
 import { t as _t } from "@/configure/types";
 import type * as helperTypes from "@/types/helpers";
 

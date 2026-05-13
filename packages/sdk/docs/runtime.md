@@ -52,7 +52,9 @@ import type { ListUsersResponse, ClientConfig } from "@tailor-platform/sdk/runti
 
 Most users do not need to touch the globals entry — `@tailor-platform/sdk/runtime` (and its subpath modules) cover the same surface without depending on any ambient declaration.
 
-If you do want unqualified calls like `tailor.iconv.convert(...)` and `new tailordb.Client(...)` to type-check, opt in by adding a single side-effect import anywhere in your project:
+For backwards compatibility with the previous `@tailor-platform/function-types`-based setup, the SDK still activates the ambient `tailor.*` / `tailordb.*` types automatically when you import from `@tailor-platform/sdk`. **This implicit activation will be removed in v2.0**; new code should prefer the typed wrappers from `@tailor-platform/sdk/runtime`.
+
+If you want to opt into the globals explicitly (or you are migrating ahead of v2.0), add a single side-effect import anywhere in your project:
 
 ```ts
 import "@tailor-platform/sdk/runtime/globals";
