@@ -6,7 +6,7 @@
  * responses and assert on recorded calls via the exported mock objects.
  */
 
-import type { ContextInvoker, IdpUser } from "../runtime/_runtime";
+import type { ContextInvoker, IdpUser, TailorDBFileErrorCode } from "../runtime/_runtime";
 import type { Invoker } from "../runtime/context";
 
 // ---------------------------------------------------------------------------
@@ -1037,7 +1037,7 @@ const mockTailordbFile = {
       ReturnType<typeof this.getMetadata>
     >;
   },
-  openDownloadStream(
+  async openDownloadStream(
     namespace: string,
     typeName: string,
     fieldName: string,
@@ -1050,7 +1050,7 @@ const mockTailordbFile = {
       fieldName,
       recordId,
     );
-    return Promise.resolve(toFileStream(resolved));
+    return toFileStream(resolved);
   },
 };
 
@@ -1066,15 +1066,21 @@ function toFileStream(value: unknown): FileStream {
   ) {
     return value as FileStream;
   }
-  // Binary chunk shorthand: a single ArrayBuffer / TypedArray (e.g. Uint8Array)
-  // should be delivered as one chunk, not iterated as a sequence of numbers.
-  // Tests passing `[chunk1, chunk2]` continue to work via the iterable branch
-  // below.
+  // Guard against passing raw bytes directly: `Uint8Array` is iterable as
+  // numbers, which would silently yield byte values as chunks. The platform's
+  // stream protocol emits structured `StreamValue` items, so callers must
+  // enqueue an iterable of `StreamValue` instead.
   if (value instanceof ArrayBuffer || ArrayBuffer.isView(value)) {
-    return toFileStream([value]);
+    throw new TypeError(
+      "fileMock.openDownloadStream expects an iterable of StreamValue items " +
+        '(e.g. [{ type: "chunk", data, position }, { type: "complete" }]); ' +
+        "got raw bytes. Wrap the bytes in a structured chunk first.",
+    );
   }
   // Iterable (array, sync iterator, etc.): wrap as a chunked async iterator
-  // so `fileMock.enqueueResult([chunk1, chunk2])` controls stream contents.
+  // so `fileMock.enqueueResult([{ type: "metadata", ... }, { type: "chunk", ... }, ...])`
+  // controls stream contents. The platform emits structured StreamValue items;
+  // tests should enqueue an iterable of StreamValue to mirror that contract.
   if (
     value !== null &&
     typeof value === "object" &&
@@ -1151,10 +1157,10 @@ class TailorErrorMessageMock extends Error {
 }
 
 class TailorDBFileErrorMock extends Error {
-  code?: string;
+  code?: TailorDBFileErrorCode;
   override cause: unknown;
 
-  constructor(message: string, code?: string, cause?: unknown) {
+  constructor(message: string, code?: TailorDBFileErrorCode, cause?: unknown) {
     super(message);
     this.name = "TailorDBFileError";
     this.code = code;

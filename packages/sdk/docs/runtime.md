@@ -42,7 +42,7 @@ const { metadata } = await file.upload("my-namespace", "Document", "attachment",
 Each namespace can also be imported individually so you only pull what you need:
 
 ```ts
-import { iconv } from "@tailor-platform/sdk/runtime";
+import * as iconv from "@tailor-platform/sdk/runtime/iconv";
 import type { ListUsersResponse, ClientConfig } from "@tailor-platform/sdk/runtime/idp";
 ```
 
@@ -123,7 +123,7 @@ Pass the `names` argument as a `const` tuple to narrow the result keys: `getSecr
 
 ### `file`
 
-`tailordb.file` BLOB API. The exported `delete` function is renamed from `deleteFile` to avoid the reserved keyword.
+`tailordb.file` BLOB API. Internally implemented as `deleteFile` to avoid the reserved keyword; exported as `delete`.
 
 | Function             | Description                                        |
 | -------------------- | -------------------------------------------------- |

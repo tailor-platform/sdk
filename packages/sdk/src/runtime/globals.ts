@@ -145,6 +145,7 @@ declare global {
 
   /** Custom error class for TailorDB File operations. */
   class TailorDBFileError extends Error {
+    constructor(message: string, code?: TailorDBFileErrorCode, cause?: unknown);
     name: "TailorDBFileError";
     code?: TailorDBFileErrorCode;
     cause?: unknown;

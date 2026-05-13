@@ -406,28 +406,24 @@ describe("mock", () => {
       expect(fileMock.calls).toHaveLength(0);
     });
 
-    test("openDownloadStream with Uint8Array enqueued yields single chunk", async () => {
-      // Uint8Array is iterable as numbers; the mock must wrap it as one
-      // binary chunk instead of iterating byte-by-byte.
-      const bytes = new Uint8Array([1, 2, 3]);
-      fileMock.enqueueResult(bytes);
-      const stream = await (globalThis as any).tailordb.file.openDownloadStream(
-        "ns",
-        "T",
-        "f",
-        "r",
-      );
-      const chunks: unknown[] = [];
-      for await (const chunk of stream) chunks.push(chunk);
-      expect(chunks).toHaveLength(1);
-      expect(chunks[0]).toBeInstanceOf(Uint8Array);
-      expect(chunks[0]).toEqual(bytes);
+    test("openDownloadStream rejects raw bytes to guide callers to structured chunks", async () => {
+      fileMock.enqueueResult(new Uint8Array([1, 2, 3]));
+      await expect(
+        (globalThis as any).tailordb.file.openDownloadStream("ns", "T", "f", "r"),
+      ).rejects.toThrow(/iterable of StreamValue items/);
     });
 
-    test("openDownloadStream with array of Uint8Array yields chunks in order", async () => {
-      const a = new Uint8Array([1, 2]);
-      const b = new Uint8Array([3, 4]);
-      fileMock.enqueueResult([a, b]);
+    test("openDownloadStream yields the enqueued StreamValue sequence", async () => {
+      const bytes = new Uint8Array([1, 2, 3]);
+      const sequence = [
+        {
+          type: "metadata" as const,
+          metadata: { contentType: "application/octet-stream", fileSize: 3, sha256sum: "h" },
+        },
+        { type: "chunk" as const, data: bytes, position: 0 },
+        { type: "complete" as const },
+      ];
+      fileMock.enqueueResult(sequence);
       const stream = await (globalThis as any).tailordb.file.openDownloadStream(
         "ns",
         "T",
@@ -436,7 +432,7 @@ describe("mock", () => {
       );
       const chunks: unknown[] = [];
       for await (const chunk of stream) chunks.push(chunk);
-      expect(chunks).toEqual([a, b]);
+      expect(chunks).toEqual(sequence);
     });
 
     test("default fallback is cloned so test mutations cannot leak across tests", async () => {
