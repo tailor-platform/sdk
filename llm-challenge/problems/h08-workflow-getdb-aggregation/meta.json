@@ -1,0 +1,8 @@
+{
+  "id": "h08-workflow-getdb-aggregation",
+  "title": "Aggregate TailorDB rows from a workflow job via the generated getDB helper",
+  "hypothesizedAffordance": "implicit_assumption",
+  "sdkSurface": "workflow",
+  "contextProfiles": ["types-only", "full-package"],
+  "hint": "kyselyTypePlugin を tailor.config.ts に配線してから generated/tailordb から getDB を import する"
+}
