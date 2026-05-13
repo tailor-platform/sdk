@@ -466,7 +466,7 @@ const mainJob = createWorkflowJob({
       // trigger call is wrapped in Promise.resolve so the runtime value matches
       // the `Promise<Awaited<Output>>` static type
       expect(result).toContain(
-        'Promise.resolve(tailor.workflow.triggerJobFunction("fetch-data", { id: input.id }))',
+        'Promise.resolve().then(() => tailor.workflow.triggerJobFunction("fetch-data", { id: input.id }))',
       );
       // fetchData declaration is removed (const fetchData = ...)
       expect(result).not.toContain("const fetchData");
@@ -512,7 +512,7 @@ const mainJob = createWorkflowJob({
       expect(result).toContain('result: "main"');
       // trigger is transformed (job name appears in triggerJobFunction call)
       expect(result).toContain(
-        'Promise.resolve(tailor.workflow.triggerJobFunction("heavy-job", undefined))',
+        'Promise.resolve().then(() => tailor.workflow.triggerJobFunction("heavy-job", undefined))',
       );
     });
 
@@ -561,10 +561,10 @@ const mainJob = createWorkflowJob({
       expect(result).not.toContain("heavy code");
       // triggers are transformed (job names appear in triggerJobFunction calls)
       expect(result).toContain(
-        'Promise.resolve(tailor.workflow.triggerJobFunction("job-one", undefined))',
+        'Promise.resolve().then(() => tailor.workflow.triggerJobFunction("job-one", undefined))',
       );
       expect(result).toContain(
-        'Promise.resolve(tailor.workflow.triggerJobFunction("job-two", undefined))',
+        'Promise.resolve().then(() => tailor.workflow.triggerJobFunction("job-two", undefined))',
       );
     });
 
@@ -1021,7 +1021,7 @@ console.log(customer);
       // The raw triggerJobFunction value is wrapped in Promise.resolve so the
       // runtime type matches the `Promise<Awaited<Output>>` static type.
       expect(result).toContain(
-        'const customer = await Promise.resolve(tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" }))',
+        'const customer = await Promise.resolve().then(() => tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" }))',
       );
     });
 
@@ -1039,10 +1039,10 @@ const notification = await sendNotification.trigger({ message: "Hello" });
       const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain(
-        'Promise.resolve(tailor.workflow.triggerJobFunction("fetch-customer"',
+        'Promise.resolve().then(() => tailor.workflow.triggerJobFunction("fetch-customer"',
       );
       expect(result).toContain(
-        'Promise.resolve(tailor.workflow.triggerJobFunction("send-notification"',
+        'Promise.resolve().then(() => tailor.workflow.triggerJobFunction("send-notification"',
       );
     });
 
@@ -1072,7 +1072,7 @@ const customerPromise = fetchCustomer.trigger({ customerId: "123" });
       // Without await the call must still resolve to a Promise so the value
       // matches the `Promise<Awaited<Output>>` static type.
       expect(result).toContain(
-        'const customerPromise = Promise.resolve(tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" }))',
+        'const customerPromise = Promise.resolve().then(() => tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" }))',
       );
       expect(result).not.toMatch(/\bawait\b/);
     });
@@ -1095,10 +1095,10 @@ const [customer, notification] = await Promise.all([
       // Each array element must be a Promise.resolve(...) so Promise.all
       // receives valid thenables.
       expect(result).toContain(
-        'Promise.resolve(tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" }))',
+        'Promise.resolve().then(() => tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" }))',
       );
       expect(result).toContain(
-        'Promise.resolve(tailor.workflow.triggerJobFunction("send-notification", { message: "Hello" }))',
+        'Promise.resolve().then(() => tailor.workflow.triggerJobFunction("send-notification", { message: "Hello" }))',
       );
       expect(result).toContain("await Promise.all([");
     });
@@ -1116,7 +1116,7 @@ fetchCustomer.trigger({ customerId: "123" }).then((customer) => {
 
       // The wrapped value exposes .then so the chain stays valid.
       expect(result).toContain(
-        'Promise.resolve(tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" })).then(',
+        'Promise.resolve().then(() => tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" })).then(',
       );
     });
   });

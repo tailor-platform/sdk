@@ -466,10 +466,11 @@ export function transformFunctionTriggers(
       const jobName = jobNameMap.get(call.identifierName);
       if (jobName) {
         // triggerJobFunction is synchronous on the platform, but the .trigger()
-        // type signature is `Promise<Awaited<Output>>`. Wrap in Promise.resolve
-        // so the runtime value matches the static type whether or not the
+        // type signature is `Promise<Awaited<Output>>`. Defer the call through
+        // Promise.resolve().then so synchronous throws surface as rejections
+        // and the runtime value matches the static type whether or not the
         // caller writes `await`.
-        const transformedCall = `Promise.resolve(tailor.workflow.triggerJobFunction("${jobName}", ${call.argsText || "undefined"}))`;
+        const transformedCall = `Promise.resolve().then(() => tailor.workflow.triggerJobFunction("${jobName}", ${call.argsText || "undefined"}))`;
 
         replacements.push({
           start: call.callRange.start,

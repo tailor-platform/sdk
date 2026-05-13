@@ -106,10 +106,6 @@ import { sendNotification } from "./jobs/send-notification";
 export const mainJob = createWorkflowJob({
   name: "main-job",
   body: async (input: { customerId: string }) => {
-    // On the platform, triggerJobFunction is synchronous (the calling job
-    // suspends until the triggered job completes), so the bundler wraps the
-    // raw value in Promise.resolve to keep the runtime value aligned with the
-    // Promise<Awaited<Output>> static type. `await` is therefore optional.
     const customer = await fetchCustomer.trigger({
       customerId: input.customerId,
     });
@@ -122,7 +118,7 @@ export const mainJob = createWorkflowJob({
 });
 ```
 
-**Important:** On the Tailor runtime, job triggers are executed synchronously (the calling job suspends until the triggered job completes). The bundler wraps each call in `Promise.resolve(...)` so the static `Promise<Awaited<Output>>` type stays accurate, but the underlying execution model is still sequential — `Promise.all([jobA.trigger(), jobB.trigger()])` will not run jobs in parallel.
+**Important:** On the Tailor runtime, job triggers are executed synchronously: the calling job suspends until the triggered job completes. This means `Promise.all([jobA.trigger(), jobB.trigger()])` will not run jobs in parallel — they still run sequentially.
 
 ### Deterministic Execution Requirement
 
