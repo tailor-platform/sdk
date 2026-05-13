@@ -47,8 +47,7 @@ export const MIGRATION_NUMBER_PATTERN = /^\d{4}$/;
 
 /**
  * Platform default scale for decimal fields when scale is not explicitly specified.
- * Mirrors `DefaultDecimalScale` in platform-core-services
- * (service/tailordb/internal/schema/type_config.go).
+ * Must stay in sync with the platform's default decimal scale.
  */
 export const DEFAULT_DECIMAL_SCALE = 6;
 
