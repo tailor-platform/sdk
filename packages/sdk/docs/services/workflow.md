@@ -118,8 +118,6 @@ export const mainJob = createWorkflowJob({
 });
 ```
 
-**Important:** On the Tailor runtime, job triggers are executed synchronously: the calling job suspends until the triggered job completes. This means `Promise.all([jobA.trigger(), jobB.trigger()])` will not run jobs in parallel — they still run sequentially.
-
 ### Deterministic Execution Requirement
 
 Workflow jobs use a **suspend/resume execution model**. When a job calls `.trigger()`, the runtime suspends the current job, executes the triggered job, and then **re-executes the calling job from the beginning** with cached results from previous triggers.

@@ -43,11 +43,6 @@ export interface WorkflowJob<Name extends string = string, Input = undefined, Ou
   /**
    * Trigger this job with the given input. Returns a Promise that resolves
    * to the job's output value.
-   *
-   * On the Tailor runtime, job triggers are executed synchronously: the
-   * calling job suspends until the triggered job completes. This means
-   * `Promise.all([jobA.trigger(), jobB.trigger()])` does not run jobs in
-   * parallel — they still run sequentially.
    * @example
    * body: async (input) => {
    *   const a = await jobA.trigger({ id: input.id });
@@ -95,8 +90,7 @@ interface CreateWorkflowJobConfig<Name extends string, I, O> {
  *   },
  * });
  * @example
- * // Orchestrator job that fans out to other jobs (executed sequentially on
- * // the runtime, even when composed with Promise.all).
+ * // Orchestrator job that fans out to other jobs.
  * export const orchestrate = createWorkflowJob({
  *   name: "orchestrate",
  *   body: async (input: { orderId: string }) => {

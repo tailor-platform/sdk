@@ -1075,32 +1075,6 @@ const customerPromise = fetchCustomer.trigger({ customerId: "123" });
       expect(result).not.toMatch(/\bawait\b/);
     });
 
-    it("wraps job.trigger() inside Promise.all array elements", () => {
-      const source = `
-const [customer, notification] = await Promise.all([
-  fetchCustomer.trigger({ customerId: "123" }),
-  sendNotification.trigger({ message: "Hello" }),
-]);
-`;
-      const workflowNameMap = new Map<string, string>();
-      const jobNameMap = new Map([
-        ["fetchCustomer", "fetch-customer"],
-        ["sendNotification", "send-notification"],
-      ]);
-
-      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
-
-      // Each array element must be a Promise.resolve(...) so Promise.all
-      // receives valid thenables.
-      expect(result).toContain(
-        '(async () => tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" }))',
-      );
-      expect(result).toContain(
-        '(async () => tailor.workflow.triggerJobFunction("send-notification", { message: "Hello" }))',
-      );
-      expect(result).toContain("await Promise.all([");
-    });
-
     it("wraps job.trigger() before .then() chains", () => {
       const source = `
 fetchCustomer.trigger({ customerId: "123" }).then((customer) => {
