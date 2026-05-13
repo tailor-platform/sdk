@@ -1,0 +1,8 @@
+{
+  "id": "m14-executor-description-required",
+  "title": "Author an executor with a non-empty description",
+  "hypothesizedAffordance": "missing_action_verb",
+  "sdkSurface": "executor",
+  "contextProfiles": ["types-only", "full-package"],
+  "hint": "description は optional 型だが運用上必須"
+}

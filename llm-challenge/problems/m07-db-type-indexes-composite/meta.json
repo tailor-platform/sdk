@@ -1,0 +1,7 @@
+{
+  "id": "m07-db-type-indexes-composite",
+  "title": "Define a composite [status, createdAt] index on the Order model",
+  "hypothesizedAffordance": "docs_only",
+  "sdkSurface": "db-type",
+  "contextProfiles": ["types-only", "full-package"]
+}

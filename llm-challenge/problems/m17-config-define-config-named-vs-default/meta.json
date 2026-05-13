@@ -1,0 +1,8 @@
+{
+  "id": "m17-config-define-config-named-vs-default",
+  "title": "Default-export a tailor.config.ts wrapped in defineConfig()",
+  "hypothesizedAffordance": "naming_bias",
+  "sdkSurface": "config",
+  "contextProfiles": ["types-only", "full-package"],
+  "hint": "plain object はだめ、defineConfig(...) でラップ"
+}

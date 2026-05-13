@@ -1,0 +1,8 @@
+{
+  "id": "m18-config-static-website-url",
+  "title": "Reuse a static website's deployment URL across CORS and OAuth2 redirect URIs",
+  "hypothesizedAffordance": "implicit_assumption",
+  "sdkSurface": "config",
+  "contextProfiles": ["types-only", "full-package"],
+  "hint": "defineStaticWebSite(...).url は deployment time に resolve される placeholder。string literal をハードコードせず、同じ .url を CORS と oauth2 redirect の両方に流す"
+}

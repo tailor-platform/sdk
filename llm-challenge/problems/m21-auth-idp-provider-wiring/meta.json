@@ -1,0 +1,8 @@
+{
+  "id": "m21-auth-idp-provider-wiring",
+  "title": "Wire defineIdp's provider() factory into defineAuth.idProvider",
+  "hypothesizedAffordance": "missing_namespace",
+  "sdkSurface": "auth-idp",
+  "contextProfiles": ["types-only", "full-package"],
+  "hint": "idp.provider(\"providerName\", \"clientName\") は method call。object 直渡しではない"
+}

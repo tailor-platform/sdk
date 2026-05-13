@@ -87,6 +87,10 @@ export function loadMeta(problemDir: string): ProblemMeta {
 
 /**
  * List all problem directories sorted by ID.
+ *
+ * Accepts both legacy three-digit IDs (`001-foo`) and micro-problem IDs
+ * (`m01-foo`). Directories beginning with `_` (e.g. `_shared`) are excluded —
+ * they hold cross-problem assets, not runnable problems.
  */
 export function listProblems(baseDir: string): string[] {
   const problemsDir = path.join(baseDir, "problems");
@@ -95,7 +99,7 @@ export function listProblems(baseDir: string): string[] {
   }
   return fs
     .readdirSync(problemsDir, { withFileTypes: true })
-    .filter((d) => d.isDirectory() && /^\d{3}-/.test(d.name))
+    .filter((d) => d.isDirectory() && !d.name.startsWith("_") && /^(\d{3}|m\d+)-/.test(d.name))
     .map((d) => d.name)
     .sort();
 }
@@ -128,8 +132,18 @@ export function importPath(filePath: string): Promise<Record<string, any>> {
 
 /**
  * Build a problem key string from ID and name, used consistently across runner files.
+ *
+ * Phase 2 micro-problem IDs (e.g. `m01-db-field-unique-required`) already
+ * include the slug, so when `problemName` repeats the slug portion we collapse
+ * to just `problemId` to avoid `m01-db-field-unique-required-db-field-unique-required`.
  */
 export function problemKey(problemId: string, problemName: string): string {
+  if (!problemName) {
+    return problemId;
+  }
+  if (problemId === problemName || problemId.endsWith(`-${problemName}`)) {
+    return problemId;
+  }
   return `${problemId}-${problemName}`;
 }
 
@@ -173,4 +187,14 @@ export function getSdkVersion(challengeRoot: string): string | undefined {
  */
 export function sanitizeForFilename(label: string): string {
   return label.replace(/[/\\:*?"<>|]/g, "-");
+}
+
+/**
+ * Filesystem-safe ISO timestamp (`YYYY-MM-DDTHH-MM-SS`) used to derive run IDs
+ * and experiment IDs. Colons in standard ISO 8601 break file paths on Windows
+ * (and look ugly elsewhere), so we replace them with dashes and drop the
+ * milliseconds + Z suffix for compactness.
+ */
+export function createTimestampId(): string {
+  return new Date().toISOString().replace(/:/g, "-").slice(0, 19);
 }

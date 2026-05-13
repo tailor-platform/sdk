@@ -1,0 +1,8 @@
+{
+  "id": "m11-executor-record-trigger-consolidated",
+  "title": "Handle created+updated record events with a single recordTrigger({events})",
+  "hypothesizedAffordance": "consolidation_candidate",
+  "sdkSurface": "executor-record-trigger",
+  "contextProfiles": ["types-only", "full-package"],
+  "hint": "2 つの recordCreatedTrigger/recordUpdatedTrigger を書かない"
+}

@@ -1,0 +1,1340 @@
+import { exec, execFileSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+import { promisify } from "node:util";
+import {
+  copyDir,
+  createTimestampId,
+  formatDuration,
+  getSdkVersion,
+  listProblems,
+  problemKey,
+  requireArg,
+  sanitizeForFilename,
+} from "../shared/helpers";
+import { persistSolveAttemptArtifact } from "./artifacts";
+import {
+  type ContextProfile,
+  applyContextProfile,
+  contextProfileValues,
+  isContextProfile,
+} from "./context-profile";
+import { type TraceMetrics, computeTraceMetrics } from "./metrics";
+import {
+  type ChallengeReport,
+  type ProblemResult,
+  type ScaffoldChange,
+  type StageResult,
+  aggregateIterations,
+  createReport,
+  finalizeStages,
+  formatReportTable,
+} from "./report";
+import {
+  computeWorkDiff,
+  extractFailedTestOutput,
+  judgeFailure,
+  readTraceEvents,
+  resolveScaffoldLayers,
+} from "./judge";
+import type { JudgeResult } from "./judge";
+import { formatSolveModelLabel, normalizeModelForAgent } from "./solve-model";
+import { checkAuthStatus, solveProblem } from "./solve";
+import type { SolveAgent, SolveResult } from "./solve";
+import { checkPodmanAvailability } from "./solver/container";
+import { verifyProblem } from "./verify";
+
+const execAsync = promisify(exec);
+
+const challengeRoot = path.resolve(import.meta.dirname, "..");
+
+/**
+ * Per-problem metadata read from `problems/<id>/meta.json`.
+ *
+ * Slim schema for the new core: no scoring weights, no apiCheck, no failure
+ * categories. Pass/fail is binary per stage. `split` is preserved on the wire
+ * for forward compatibility but is currently unused.
+ *
+ * Phase 2 micro-problems use a narrower schema (only `id`, `title`,
+ * `hypothesizedAffordance`, `sdkSurface`, `contextProfiles`, `hint`); legacy
+ * fields are optional so the same loader handles both eras.
+ */
+export type ProblemMeta = {
+  id: string;
+  name?: string;
+  /** Phase 2 micro-problems: human-readable title. */
+  title?: string;
+  /**
+   * Phase 2 micro-problems: affordance hypothesis the problem is designed to
+   * exercise. Cross-referenced with judge output to validate the taxonomy.
+   */
+  hypothesizedAffordance?: string;
+  /** Phase 2 micro-problems: SDK surface area the problem targets. */
+  sdkSurface?: string;
+  /** Phase 2 micro-problems: short hint surfaced in problem.md or prompt. */
+  hint?: string;
+  difficulty?: "easy" | "medium" | "hard";
+  category?: string;
+  split?: string;
+  contextProfiles?: ContextProfile[];
+  files?: {
+    implement: string[];
+    scaffold: string[];
+  };
+};
+
+function loadMeta(problemDir: string): ProblemMeta {
+  const metaPath = path.join(problemDir, "meta.json");
+  const content = fs.readFileSync(metaPath, "utf-8");
+  return JSON.parse(content) as ProblemMeta;
+}
+
+/**
+ * Derive a fallback `name` (everything after the `<id>-` prefix) from the
+ * directory name. Used for Phase 2 micro-problems whose `meta.json` drops the
+ * `name` field; `problemKey` and artifact paths still need a non-empty label.
+ */
+export function deriveProblemName(meta: ProblemMeta, dirName: string): string {
+  if (meta.name) return meta.name;
+  const prefix = `${meta.id}-`;
+  return dirName.startsWith(prefix) ? dirName.slice(prefix.length) : dirName;
+}
+
+type ParsedArgs = {
+  problem?: string;
+  all: boolean;
+  implDir?: string;
+  useSolution: boolean;
+  solve: boolean;
+  agent: SolveAgent;
+  model?: string;
+  maxBudget: number;
+  clean: boolean;
+  concurrency: number;
+  contextProfile: ContextProfile;
+  /**
+   * Number of repeat solve attempts per (problem, agent, model, profile).
+   * Defaults to 1 (single-run, backwards compatible). When > 1 the runner
+   * loops the same task N times and aggregates variance into the new
+   * `iterations` field of `ProblemResult`.
+   */
+  iterations: number;
+  /**
+   * Optional git ref to `git worktree add` and `pnpm pack` instead of the
+   * current working tree. Enables A/B benchmarking of SDK candidate branches
+   * against the current branch (Phase 4 plan section "A/B 実験 + 統計化").
+   */
+  sdkBranch?: string;
+};
+
+function parseArgs(): ParsedArgs {
+  const args = process.argv.slice(2);
+  let problem: string | undefined;
+  let all = false;
+  let implDir: string | undefined;
+  let useSolution = false;
+  let solve = false;
+  let agent: SolveAgent = "claude";
+  let model: string | undefined;
+  let maxBudget = 5.0;
+  let clean = false;
+  let concurrency = os.availableParallelism();
+  let contextProfile: ContextProfile = "full-package";
+  let iterations: number | undefined;
+  let sdkBranch: string | undefined;
+
+  for (let i = 0; i < args.length; i++) {
+    switch (args[i]) {
+      case "--problem":
+        problem = requireArg(args, i, "--problem");
+        i++;
+        break;
+      case "--all":
+        all = true;
+        break;
+      case "--impl":
+      case "--impl-dir":
+        implDir = requireArg(args, i, args[i]!);
+        i++;
+        break;
+      case "--use-solution":
+        useSolution = true;
+        break;
+      case "--solve":
+        solve = true;
+        break;
+      case "--model":
+        model = requireArg(args, i, "--model");
+        i++;
+        break;
+      case "--agent": {
+        const value = requireArg(args, i, "--agent");
+        if (value !== "claude" && value !== "codex") {
+          console.error(`Error: --agent must be either "claude" or "codex" (received: ${value})`);
+          process.exit(1);
+        }
+        agent = value;
+        i++;
+        break;
+      }
+      case "--max-budget":
+        maxBudget = Number(requireArg(args, i, "--max-budget"));
+        i++;
+        break;
+      case "--clean":
+        clean = true;
+        break;
+      case "--concurrency":
+        concurrency = Number(requireArg(args, i, "--concurrency"));
+        i++;
+        break;
+      case "--context-profile": {
+        const value = requireArg(args, i, "--context-profile");
+        if (!isContextProfile(value)) {
+          console.error(
+            `Error: --context-profile must be one of ${contextProfileValues.map((v) => `"${v}"`).join(", ")}`,
+          );
+          process.exit(1);
+        }
+        contextProfile = value;
+        i++;
+        break;
+      }
+      case "--iterations":
+        iterations = Number(requireArg(args, i, "--iterations"));
+        i++;
+        break;
+      case "--sdk-branch":
+        sdkBranch = requireArg(args, i, "--sdk-branch");
+        i++;
+        break;
+    }
+  }
+
+  if (!Number.isInteger(concurrency) || concurrency < 1) {
+    console.error("Error: --concurrency must be a positive integer");
+    process.exit(1);
+  }
+  if (!Number.isFinite(maxBudget) || maxBudget <= 0) {
+    console.error("Error: --max-budget must be a positive number");
+    process.exit(1);
+  }
+  // --iterations: default to 3 in solve mode (per Phase 4 spec D 採点ベクトル
+  // "N=3 反復"), default to 1 in verify modes for backward compat.
+  if (iterations === undefined) {
+    iterations = solve ? 3 : 1;
+  }
+  if (!Number.isInteger(iterations) || iterations < 1) {
+    console.error("Error: --iterations must be a positive integer");
+    process.exit(1);
+  }
+
+  return {
+    problem,
+    all,
+    implDir,
+    useSolution,
+    solve,
+    agent,
+    model: model ?? (agent === "claude" ? "sonnet" : undefined),
+    maxBudget,
+    clean,
+    concurrency: Math.trunc(concurrency),
+    contextProfile,
+    iterations,
+    ...(sdkBranch ? { sdkBranch } : {}),
+  };
+}
+
+/**
+ * Clean up previous work artifacts (symlink + tmpdir, or regular directory).
+ */
+function cleanupWorkArtifacts(problemDir: string): void {
+  const workPath = path.join(problemDir, "work");
+  let stat: fs.Stats;
+  try {
+    stat = fs.lstatSync(workPath);
+  } catch {
+    return; // Path doesn't exist at all
+  }
+  if (stat.isSymbolicLink()) {
+    // Remove tmpdir target first, then symlink — only if target lives under os.tmpdir()
+    try {
+      const target = fs.realpathSync(fs.readlinkSync(workPath));
+      const normalizedTmpdir = fs.realpathSync(os.tmpdir());
+      const rel = path.relative(normalizedTmpdir, target);
+      if (rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel) && fs.existsSync(target)) {
+        fs.rmSync(target, { recursive: true, force: true });
+      }
+    } catch {
+      // Broken symlink, just remove it
+    }
+    fs.rmSync(workPath, { force: true });
+  } else {
+    fs.rmSync(workPath, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Apply a list of source directories onto `workDir` in order. Each layer copies
+ * its entire tree on top of the previous one; subsequent layers overwrite same-
+ * named files at the destination (file-level shadowing). Non-existent source
+ * directories are silently skipped, which lets callers express optional layers
+ * (e.g. a micro-problem with no per-problem scaffold).
+ */
+export function applyScaffoldLayers(workDir: string, layers: readonly string[]): void {
+  for (const layer of layers) {
+    if (fs.existsSync(layer)) {
+      copyDir(layer, workDir);
+    }
+  }
+}
+
+/**
+ * Layered scaffold setup. Order matters — later layers shadow earlier ones at
+ * file level, so a micro-problem's `scaffold/` always wins over `_shared/`.
+ *
+ * 1. `shared/scaffold/` — legacy global scaffold (package.json + tsconfig.json).
+ * 2. `problems/_shared/scaffold/` — Phase 2 micro-problem common layer
+ *    (tailor.config.ts + empty tailordb/).
+ * 3. `problems/<id>/scaffold/` — per-problem overrides (may be absent or empty).
+ * 4. `implDir` (optional) — solution / impl files for verify mode.
+ */
+function setupWorkDir(problemDir: string, implDir?: string, useTmpDir?: boolean): string {
+  // For non-solve modes, work lives at problems/<id>/work and is shared; clean leftover state.
+  // For solve mode, mkdtemp a fresh directory so parallel runs do not collide.
+  if (!useTmpDir) {
+    cleanupWorkArtifacts(problemDir);
+  }
+
+  let workDir: string;
+  if (useTmpDir) {
+    workDir = fs.mkdtempSync(path.join(os.tmpdir(), "sdk-ws-"));
+  } else {
+    workDir = path.join(problemDir, "work");
+  }
+
+  const layers = [
+    path.join(challengeRoot, "shared", "scaffold"),
+    path.join(challengeRoot, "problems", "_shared", "scaffold"),
+    path.join(problemDir, "scaffold"),
+    ...(implDir ? [implDir] : []),
+  ];
+  applyScaffoldLayers(workDir, layers);
+
+  return workDir;
+}
+
+export type PackedSdkTarball = {
+  /** Path to the .tgz file `rewriteWorkspaceRefs` copies into each workDir. */
+  tarballPath: string;
+  /** Parent directory created via mkdtemp; callers must rm it when done. */
+  packDir: string;
+  /**
+   * Optional ephemeral git worktree directory created by `packSdkFromRef`.
+   * Callers must `git worktree remove --force` this path when done so the
+   * candidate branch checkout is not left dangling.
+   */
+  worktreeDir?: string;
+};
+
+/**
+ * Repo root (one level up from `packages/sdk/`) used as the cwd for `git`
+ * commands that mutate the parent repository's worktree list.
+ */
+function sdkRepoRoot(): string {
+  return path.resolve(challengeRoot, "..");
+}
+
+function packSdkTarball(): PackedSdkTarball {
+  const sdkDir = path.resolve(challengeRoot, "..", "packages", "sdk");
+  return packSdkAt(sdkDir);
+}
+
+/**
+ * Run `pnpm pack` in `sdkDir` and capture the resulting .tgz. Extracted so
+ * both the in-tree and branch-checkout flows share a single tarball-shape
+ * contract.
+ */
+function packSdkAt(sdkDir: string): PackedSdkTarball {
+  const packDir = fs.mkdtempSync(path.join(os.tmpdir(), "sdk-pack-"));
+  try {
+    execFileSync("pnpm", ["pack", "--pack-destination", packDir], {
+      cwd: sdkDir,
+      stdio: "pipe",
+      timeout: 60_000,
+    });
+    const files = fs.readdirSync(packDir).filter((f) => f.endsWith(".tgz"));
+    if (files.length === 0) {
+      throw new Error("pnpm pack produced no tarball");
+    }
+    return { tarballPath: path.join(packDir, files[0]!), packDir };
+  } catch (err) {
+    fs.rmSync(packDir, { recursive: true, force: true });
+    throw err;
+  }
+}
+
+/**
+ * Result of a `git rev-parse --verify` call. Discriminates between a missing
+ * ref (recoverable: surface a clear error) and any other failure mode.
+ */
+type RefCheckResult = { ok: true; sha: string } | { ok: false; reason: string };
+
+function checkRefExists(repoRoot: string, ref: string): RefCheckResult {
+  try {
+    const stdout = execFileSync("git", ["rev-parse", "--verify", `${ref}^{commit}`], {
+      cwd: repoRoot,
+      stdio: ["ignore", "pipe", "pipe"],
+      encoding: "utf-8",
+      timeout: 10_000,
+    });
+    return { ok: true, sha: stdout.trim() };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, reason: message };
+  }
+}
+
+/**
+ * Create an ephemeral `git worktree` at the given ref, build the SDK there,
+ * `pnpm pack` it, and return both the tarball path and the worktree dir so
+ * the caller can clean it up. On any failure the worktree and its tmp dir
+ * are removed.
+ *
+ * Edge cases:
+ * - Missing ref: fails fast with a clear message.
+ * - Stale worktree (e.g. previous run was killed mid-run): `git worktree prune`
+ *   then retry once. We do NOT auto-`worktree remove` to avoid clobbering an
+ *   in-progress concurrent run.
+ */
+export function packSdkFromRef(ref: string): PackedSdkTarball {
+  const repoRoot = sdkRepoRoot();
+  const refCheck = checkRefExists(repoRoot, ref);
+  if (!refCheck.ok) {
+    throw new Error(
+      `[sdk-branch] Ref "${ref}" not found in repository (${refCheck.reason.split("\n")[0] ?? "unknown"})`,
+    );
+  }
+
+  // Place worktree under .agent/tmp/ as suggested by Phase 4 plan. The dir
+  // is gitignored at repo level (.agent/ is a conventional scratch path).
+  const tmpRoot = path.join(repoRoot, ".agent", "tmp");
+  fs.mkdirSync(tmpRoot, { recursive: true });
+  // Use mkdtemp so concurrent invocations against the same ref don't collide.
+  const worktreeDir = fs.mkdtempSync(path.join(tmpRoot, `sdk-branch-${sanitizeForFilename(ref)}-`));
+  // mkdtempSync creates the dir; git worktree add needs the target NOT to
+  // exist yet (git treats existing non-empty dirs as ambiguous). Remove the
+  // empty tmp dir and let git recreate it at the same path.
+  fs.rmdirSync(worktreeDir);
+
+  const addWorktree = (): void => {
+    execFileSync("git", ["worktree", "add", "--detach", worktreeDir, refCheck.sha], {
+      cwd: repoRoot,
+      stdio: "pipe",
+      timeout: 30_000,
+    });
+  };
+
+  try {
+    addWorktree();
+  } catch (err) {
+    // Retry once after pruning stale worktrees.
+    try {
+      execFileSync("git", ["worktree", "prune"], {
+        cwd: repoRoot,
+        stdio: "pipe",
+        timeout: 10_000,
+      });
+      addWorktree();
+    } catch (retryErr) {
+      const message = retryErr instanceof Error ? retryErr.message : String(retryErr);
+      throw new Error(
+        `[sdk-branch] git worktree add failed for ref "${ref}": ${message.split("\n")[0] ?? "unknown"}`,
+      );
+    }
+  }
+
+  try {
+    // Build the SDK in the new worktree before packing, since pnpm pack only
+    // includes whatever is on disk.
+    execFileSync("pnpm", ["-C", path.join(worktreeDir, "packages", "sdk"), "build"], {
+      cwd: worktreeDir,
+      stdio: "pipe",
+      timeout: 300_000,
+    });
+    const packed = packSdkAt(path.join(worktreeDir, "packages", "sdk"));
+    return { ...packed, worktreeDir };
+  } catch (err) {
+    cleanupWorktree(repoRoot, worktreeDir);
+    throw err;
+  }
+}
+
+/**
+ * Remove an ephemeral worktree created by `packSdkFromRef`. Best effort —
+ * swallows errors so cleanup never throws on the happy path.
+ */
+export function cleanupWorktree(repoRoot: string, worktreeDir: string): void {
+  if (!fs.existsSync(worktreeDir)) {
+    // Already cleaned up; nothing to do.
+    return;
+  }
+  try {
+    execFileSync("git", ["worktree", "remove", "--force", worktreeDir], {
+      cwd: repoRoot,
+      stdio: "pipe",
+      timeout: 30_000,
+    });
+  } catch {
+    // Fallback: rm the dir directly. Worktree metadata is salvaged by
+    // `git worktree prune` on the next git invocation.
+    fs.rmSync(worktreeDir, { recursive: true, force: true });
+  }
+}
+
+function rewriteWorkspaceRefs(workDir: string, tarballPath?: string): void {
+  const pkgPath = path.join(workDir, "package.json");
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8")) as Record<string, unknown>;
+
+  let ref: string;
+  if (tarballPath) {
+    // Copy the tarball into workDir so it remains accessible inside the Podman container.
+    const sdkDir = path.join(workDir, ".sdk");
+    fs.mkdirSync(sdkDir, { recursive: true });
+    fs.copyFileSync(tarballPath, path.join(sdkDir, "sdk.tgz"));
+    ref = "file:./.sdk/sdk.tgz";
+  } else {
+    const sdkPath = path.resolve(challengeRoot, "..", "packages", "sdk");
+    ref = `link:${sdkPath.replace(/\\/g, "/")}`;
+  }
+
+  for (const section of ["dependencies", "devDependencies"] as const) {
+    const deps = pkg[section] as Record<string, string> | undefined;
+    if (!deps) continue;
+    for (const [key, value] of Object.entries(deps)) {
+      if (value === "workspace:^") {
+        deps[key] = ref;
+      }
+    }
+  }
+  fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + "\n");
+}
+
+async function installDependencies(
+  workDir: string,
+  verbose: boolean,
+  tarballPath?: string,
+  contextProfile?: ContextProfile,
+): Promise<void> {
+  if (verbose) {
+    console.log("  Installing dependencies...");
+  }
+  rewriteWorkspaceRefs(workDir, tarballPath);
+  await execAsync("pnpm install --no-lockfile --ignore-workspace", {
+    cwd: workDir,
+    encoding: "utf-8",
+    timeout: 120_000,
+  });
+  if (contextProfile) {
+    applyContextProfile(workDir, contextProfile);
+  }
+  // For filtered profiles drop the source tarball so solvers cannot reinstall
+  // the unfiltered SDK. Only `full-package` keeps the tarball.
+  if (tarballPath && contextProfile && contextProfile !== "full-package") {
+    fs.rmSync(path.join(workDir, ".sdk"), { recursive: true, force: true });
+  }
+}
+
+const allStages = ["generate", "typecheck", "tests"] as const;
+
+function makeSkippedStages(reason: string): StageResult[] {
+  const skipped = `Skipped (${reason})`;
+  return allStages.map((stage) => ({ stage, passed: false, output: skipped }));
+}
+
+function createLimiter(concurrency: number) {
+  let active = 0;
+  const queue: Array<() => void> = [];
+  return <T>(fn: () => Promise<T>): Promise<T> =>
+    new Promise<T>((resolve, reject) => {
+      const run = () => {
+        active++;
+        fn()
+          .then(resolve, reject)
+          .finally(() => {
+            active--;
+            if (queue.length > 0) queue.shift()!();
+          });
+      };
+      if (active < concurrency) run();
+      else queue.push(run);
+    });
+}
+
+const scaffoldFilenames = ["tsconfig.json", "package.json"];
+
+function snapshotScaffoldFiles(workDir: string): Map<string, string> {
+  const snapshot = new Map<string, string>();
+  for (const f of scaffoldFilenames) {
+    const fp = path.join(workDir, f);
+    if (fs.existsSync(fp)) {
+      snapshot.set(f, fs.readFileSync(fp, "utf-8"));
+    }
+  }
+  return snapshot;
+}
+
+function restoreScaffoldFiles(workDir: string, snapshot: Map<string, string>): ScaffoldChange[] {
+  const changes: ScaffoldChange[] = [];
+  for (const [f, original] of snapshot) {
+    const fp = path.join(workDir, f);
+    if (!fs.existsSync(fp)) {
+      changes.push({ file: f, original, modified: "(deleted)" });
+      fs.writeFileSync(fp, original);
+    } else {
+      const current = fs.readFileSync(fp, "utf-8");
+      if (current !== original) {
+        changes.push({ file: f, original, modified: current });
+        fs.writeFileSync(fp, original);
+      }
+    }
+  }
+  return changes;
+}
+
+// Serialize pnpm install to avoid root node_modules race conditions
+const installLimiter = createLimiter(1);
+
+const createRunId = createTimestampId;
+
+function createRunArtifactRoot(
+  resultsDir: string,
+  modelLabel: string,
+  sdkVersion: string | undefined,
+  runId: string,
+): string {
+  const versionLabel = sdkVersion ?? "unknown";
+  const safeName = sanitizeForFilename(modelLabel);
+  return path.join(resultsDir, "artifacts", `${safeName}-${versionLabel}-${runId}`);
+}
+
+function createProblemArtifactRoot(
+  runArtifactRoot: string | undefined,
+  meta: ProblemMeta,
+  dirName: string,
+): string | undefined {
+  if (!runArtifactRoot) {
+    return undefined;
+  }
+  return path.join(
+    runArtifactRoot,
+    sanitizeForFilename(problemKey(meta.id, deriveProblemName(meta, dirName))),
+  );
+}
+
+async function runProblem(
+  problemName: string,
+  options: {
+    implDir?: string;
+    solve?: { agent: SolveAgent; model?: string; maxBudget: number };
+    clean: boolean;
+    verbose: boolean;
+    tarballPath?: string;
+    contextProfile: ContextProfile;
+    runArtifactRoot?: string;
+  },
+): Promise<ProblemResult> {
+  const problemStartTime = Date.now();
+  const problemDir = path.join(challengeRoot, "problems", problemName);
+  const meta = loadMeta(problemDir);
+  const resolvedName = deriveProblemName(meta, problemName);
+  const resolvedDifficulty = meta.difficulty ?? "easy";
+  const resolvedCategory = meta.category ?? meta.sdkSurface ?? "micro";
+
+  if (options.verbose) {
+    console.log(`\n--- Running problem: ${problemName} (${resolvedDifficulty}) ---`);
+  }
+
+  const isSolveMode = !!options.solve;
+  const workDir = setupWorkDir(problemDir, options.implDir, isSolveMode);
+  const problemArtifactRoot = createProblemArtifactRoot(options.runArtifactRoot, meta, problemName);
+  try {
+    await installLimiter(() =>
+      installDependencies(workDir, options.verbose, options.tarballPath, options.contextProfile),
+    );
+  } catch (err) {
+    if (isSolveMode) {
+      fs.rmSync(workDir, { recursive: true, force: true });
+    }
+    throw err;
+  }
+
+  // Snapshot scaffold files after install (before solve) to detect modifications
+  const scaffoldSnapshot = isSolveMode ? snapshotScaffoldFiles(workDir) : new Map<string, string>();
+
+  let solveResult: SolveResult | undefined;
+  let metrics: TraceMetrics | undefined;
+  const normalizedModel = options.solve
+    ? normalizeModelForAgent(options.solve.agent, options.solve.model)
+    : undefined;
+  // Behaviour trace lives at <workDir>/.trace.jsonl during solve, then moves
+  // to <artifactDir>/trace.jsonl after persistSolveAttemptArtifact creates
+  // the attempt directory. Writing under workDir keeps the trace alive
+  // through persistSolveAttemptArtifact's rmSync on the artifact dir.
+  const traceWorkPath = options.solve ? path.join(workDir, ".trace.jsonl") : undefined;
+  if (options.solve) {
+    if (options.verbose) {
+      const agentLabel = options.solve.agent === "claude" ? "Claude Code" : "Codex";
+      console.log(`  Solving with ${agentLabel} (model: ${options.solve.model ?? "default"})...`);
+    }
+    solveResult = await solveProblem({
+      workDir,
+      problemDir,
+      meta,
+      agent: options.solve.agent,
+      model: normalizedModel,
+      maxBudget: options.solve.maxBudget,
+      contextProfile: options.contextProfile,
+      ...(traceWorkPath ? { tracePath: traceWorkPath } : {}),
+    });
+    if (problemArtifactRoot) {
+      const artifact = persistSolveAttemptArtifact({
+        rootDir: problemArtifactRoot,
+        attemptName: "attempt-0",
+        result: solveResult,
+        workDir,
+      });
+      // Move the in-workDir trace into the per-attempt artifact dir so it
+      // survives workDir cleanup. Compute metrics from the final location.
+      if (traceWorkPath && fs.existsSync(traceWorkPath)) {
+        const targetTracePath = path.join(artifact.directory, "trace.jsonl");
+        try {
+          fs.renameSync(traceWorkPath, targetTracePath);
+        } catch {
+          // rename across devices can fail (workDir may be a tmpfs); fall back
+          // to copy + remove rather than losing the trace.
+          fs.copyFileSync(traceWorkPath, targetTracePath);
+          fs.rmSync(traceWorkPath, { force: true });
+        }
+        metrics = computeTraceMetrics(targetTracePath);
+      }
+    } else if (traceWorkPath && fs.existsSync(traceWorkPath)) {
+      // No artifact dir (legacy non-artifact runs): compute metrics in-place,
+      // then drop the file with workDir.
+      metrics = computeTraceMetrics(traceWorkPath);
+    }
+    if (options.verbose) {
+      let icon = "FAIL";
+      if (solveResult.success) {
+        icon = "ok";
+      } else if (solveResult.infraFailure) {
+        icon = "INFRA";
+      }
+      console.log(
+        `  Solve: ${icon} ($${solveResult.costUsd.toFixed(4)}, ${(solveResult.durationMs / 1000).toFixed(1)}s)`,
+      );
+      if (solveResult.error) {
+        console.log(`  Error: ${solveResult.error.slice(0, 200)}`);
+      }
+    }
+  }
+
+  // If infra failure detected, skip verification entirely
+  if (solveResult?.infraFailure) {
+    if (options.verbose) {
+      console.log("  Skipping verification (infrastructure failure)");
+    }
+    const stages = makeSkippedStages("infrastructure failure");
+
+    if (isSolveMode || options.clean) {
+      fs.rmSync(workDir, { recursive: true, force: true });
+    }
+
+    return {
+      problemId: meta.id,
+      problemName: resolvedName,
+      difficulty: resolvedDifficulty,
+      category: resolvedCategory,
+      ...(meta.split !== undefined ? { split: meta.split } : {}),
+      contextProfile: options.contextProfile,
+      stages,
+      passed: false,
+      solveResult,
+      totalDurationMs: Date.now() - problemStartTime,
+      ...(problemArtifactRoot ? { artifacts: { directory: problemArtifactRoot } } : {}),
+      ...(metrics ? { metrics } : {}),
+    };
+  }
+
+  // Detect and restore scaffold file modifications after solve
+  const scaffoldChanges =
+    isSolveMode && scaffoldSnapshot.size > 0 ? restoreScaffoldFiles(workDir, scaffoldSnapshot) : [];
+  if (scaffoldChanges.length > 0 && options.verbose) {
+    const files = scaffoldChanges.map((c) => c.file).join(", ");
+    console.log(`  WARNING: Scaffold files modified during solve: ${files} (restored)`);
+  }
+
+  // Run verification stages.
+  const rawStages = await verifyProblem(workDir, problemDir, meta, challengeRoot);
+  const stages = finalizeStages(rawStages);
+  const passed = stages.every((s) => s.passed);
+
+  if (options.verbose) {
+    for (const s of stages) {
+      const icon = s.passed ? "ok" : "FAIL";
+      console.log(`  ${s.stage}: ${icon}`);
+    }
+  }
+
+  // Solve mode tmpdirs have no other referrer; always remove. Non-solve modes only clean when asked.
+  if (isSolveMode || options.clean) {
+    fs.rmSync(workDir, { recursive: true, force: true });
+  }
+
+  return {
+    problemId: meta.id,
+    problemName: resolvedName,
+    difficulty: resolvedDifficulty,
+    category: resolvedCategory,
+    ...(meta.split !== undefined ? { split: meta.split } : {}),
+    contextProfile: options.contextProfile,
+    stages,
+    passed,
+    solveResult,
+    totalDurationMs: Date.now() - problemStartTime,
+    ...(scaffoldChanges.length > 0 ? { scaffoldChanges } : {}),
+    ...(problemArtifactRoot ? { artifacts: { directory: problemArtifactRoot } } : {}),
+    ...(metrics ? { metrics } : {}),
+  };
+}
+
+function getRunResultsDir(resultsDir: string, modelLabelRaw: string): string {
+  return path.join(resultsDir, sanitizeForFilename(modelLabelRaw));
+}
+
+const authErrorPatterns = [
+  /Not logged in/i,
+  /API key/i,
+  /authentication.*failed/i,
+  /unauthorized/i,
+  /codex login/i,
+];
+
+async function ensureAuthenticated(agent: SolveAgent, targetModel?: string): Promise<void> {
+  console.log("Checking authentication status...");
+  const authCheck = await checkAuthStatus({ agent, model: targetModel });
+  if (!authCheck.ok) {
+    console.error(`Authentication check failed: ${authCheck.error}`);
+    const tool = agent === "claude" ? "Claude Code" : "Codex";
+    if (authErrorPatterns.some((p) => p.test(authCheck.error ?? ""))) {
+      console.error(`Please log in to ${tool} before running solve mode.`);
+    } else {
+      console.error(`Please check your ${tool} setup and try again.`);
+    }
+    if (agent === "claude") {
+      console.error(
+        'Hint: Run "claude setup-token" and set CLAUDE_CODE_OAUTH_TOKEN in your environment.',
+      );
+    } else {
+      console.error('Hint: Run "codex login" to store credentials in ~/.codex/auth.json.');
+    }
+    process.exit(1);
+  }
+  console.log("Authentication: ok");
+}
+
+type ImprovementCandidate = {
+  runId: string;
+  problemId: string;
+  problemName: string;
+  agent?: string;
+  model?: string;
+  contextProfile?: string;
+  hypothesizedAffordance?: string;
+  judge: JudgeResult;
+};
+
+/**
+ * Resolve the directory where `judge.json` should live for a problem result.
+ * We prefer the per-attempt directory (where `trace.jsonl` already lives) so
+ * everything diagnostic for one solve sits next to each other; fall back to
+ * the problem artifact root when no attempt directory exists.
+ */
+function resolveJudgeOutputDir(result: ProblemResult): string | undefined {
+  const attemptDir = result.solveResult?.artifact?.directory;
+  if (attemptDir && fs.existsSync(attemptDir)) {
+    return attemptDir;
+  }
+  const problemDir = result.artifacts?.directory;
+  if (problemDir) {
+    fs.mkdirSync(problemDir, { recursive: true });
+    return problemDir;
+  }
+  return undefined;
+}
+
+/**
+ * Mutate each failed `ProblemResult` to attach a judge diagnosis (when judging
+ * is enabled and the Anthropic API key is present). Writes `judge.json` next
+ * to the per-problem trace and appends one line per candidate to the run-level
+ * `improvement-candidates.jsonl`. Returns the relative path of the JSONL file
+ * for inclusion in the report; undefined when no candidates were emitted.
+ *
+ * Runs outside the solve concurrency limiter — judge calls are independent of
+ * Podman/agent throughput and serialising them keeps API spend predictable.
+ */
+async function runJudgePostProcessing(
+  results: ProblemResult[],
+  runArtifactRoot: string | undefined,
+  runId: string,
+  runMeta: { agent?: SolveAgent; model?: string; contextProfile?: string },
+): Promise<string | undefined> {
+  if (process.env["LLM_CHALLENGE_DISABLE_JUDGE"] === "1") {
+    return undefined;
+  }
+  if (!process.env["ANTHROPIC_API_KEY"]) {
+    console.warn(
+      "[judge] ANTHROPIC_API_KEY not set; skipping LLM-as-judge diagnosis. " +
+        "Set LLM_CHALLENGE_DISABLE_JUDGE=1 to silence this warning.",
+    );
+    return undefined;
+  }
+
+  const failed = results.filter((r) => !r.passed);
+  if (failed.length === 0) {
+    return undefined;
+  }
+
+  const candidates: ImprovementCandidate[] = [];
+  for (const result of failed) {
+    const problemDir = findProblemDirByResult(result);
+    if (!problemDir) {
+      console.warn(`[judge] Could not locate problem dir for ${result.problemId}; skipping.`);
+      continue;
+    }
+    const meta = loadMeta(problemDir);
+    const problemMdPath = path.join(problemDir, "problem.md");
+    let problemMd = "";
+    try {
+      problemMd = fs.readFileSync(problemMdPath, "utf-8");
+    } catch {
+      // problem.md missing — fall back to empty so judge can still run.
+    }
+
+    const tracePath = result.solveResult?.artifact?.directory
+      ? path.join(result.solveResult.artifact.directory, "trace.jsonl")
+      : undefined;
+    const traceEvents = tracePath ? readTraceEvents(tracePath) : [];
+
+    const scaffoldLayers = resolveScaffoldLayers(challengeRoot, problemDir);
+    const workSnapshotDir = result.solveResult?.artifact?.workSnapshotDir;
+    const diff =
+      workSnapshotDir && scaffoldLayers.length > 0
+        ? computeJudgeDiff(scaffoldLayers, workSnapshotDir)
+        : "";
+
+    const failedTestOutput = extractFailedTestOutput(result.stages);
+
+    try {
+      const judgeResult = await judgeFailure({
+        problemId: result.problemId,
+        problemMd,
+        diff,
+        traceEvents,
+        failedTestOutput,
+        ...(meta.hypothesizedAffordance
+          ? { hypothesizedAffordance: meta.hypothesizedAffordance }
+          : {}),
+      });
+      result.judge = judgeResult;
+
+      const outDir = resolveJudgeOutputDir(result);
+      if (outDir) {
+        fs.writeFileSync(path.join(outDir, "judge.json"), JSON.stringify(judgeResult, null, 2));
+      }
+
+      candidates.push({
+        runId,
+        problemId: result.problemId,
+        problemName: result.problemName,
+        ...(runMeta.agent ? { agent: runMeta.agent } : {}),
+        ...(runMeta.model ? { model: runMeta.model } : {}),
+        ...(runMeta.contextProfile ? { contextProfile: runMeta.contextProfile } : {}),
+        ...(meta.hypothesizedAffordance
+          ? { hypothesizedAffordance: meta.hypothesizedAffordance }
+          : {}),
+        judge: judgeResult,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(`[judge] ${result.problemId}: ${message}`);
+    }
+  }
+
+  if (candidates.length === 0 || !runArtifactRoot) {
+    return undefined;
+  }
+
+  fs.mkdirSync(runArtifactRoot, { recursive: true });
+  const jsonlPath = path.join(runArtifactRoot, "improvement-candidates.jsonl");
+  fs.writeFileSync(jsonlPath, candidates.map((c) => JSON.stringify(c)).join("\n") + "\n");
+  return jsonlPath;
+}
+
+/**
+ * Merge the scaffold layers into one temp tree, run `git diff` against the
+ * work snapshot, and remove the temp tree. Falls back to an empty string on
+ * any error so judge calls do not crash when the diff machinery breaks.
+ */
+function computeJudgeDiff(scaffoldLayers: string[], workSnapshotDir: string): string {
+  let mergedScaffold: string | undefined;
+  try {
+    mergedScaffold = fs.mkdtempSync(path.join(os.tmpdir(), "judge-scaffold-"));
+    applyScaffoldLayers(mergedScaffold, scaffoldLayers);
+    return computeWorkDiff(mergedScaffold, workSnapshotDir);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(`[judge] computeWorkDiff failed: ${message}`);
+    return "";
+  } finally {
+    if (mergedScaffold) {
+      fs.rmSync(mergedScaffold, { recursive: true, force: true });
+    }
+  }
+}
+
+/**
+ * Map a `ProblemResult` back to its source `problems/<dir>` by scanning all
+ * problem directories and matching on `id`. Returns undefined when no match
+ * is found (should not happen in practice).
+ */
+function findProblemDirByResult(result: ProblemResult): string | undefined {
+  const dirs = listProblems(challengeRoot);
+  for (const d of dirs) {
+    try {
+      const meta = loadMeta(path.join(challengeRoot, "problems", d));
+      if (meta.id === result.problemId) {
+        return path.join(challengeRoot, "problems", d);
+      }
+    } catch {
+      // skip unreadable meta
+    }
+  }
+  return undefined;
+}
+
+function writeReport(
+  resultsDir: string,
+  report: ChallengeReport,
+  modelLabel: string,
+  sdkVersion: string | undefined,
+  runId: string = createRunId(),
+): void {
+  console.log("\n" + formatReportTable(report));
+
+  const runResultsDir = getRunResultsDir(resultsDir, modelLabel);
+  fs.mkdirSync(runResultsDir, { recursive: true });
+  const versionLabel = sdkVersion ?? "unknown";
+  const jsonPath = path.join(runResultsDir, `report-${versionLabel}-${runId}.json`);
+  fs.writeFileSync(jsonPath, JSON.stringify(report, null, 2));
+  console.log(`\nResults written to: ${jsonPath}`);
+}
+
+function findProblem(id: string): string {
+  const problems = listProblems(challengeRoot);
+  const exact = problems.find((p) => p === id);
+  if (exact) {
+    return exact;
+  }
+  const prefixDash = problems.filter((p) => p.startsWith(`${id}-`));
+  if (prefixDash.length === 1) {
+    return prefixDash[0]!;
+  }
+  if (prefixDash.length > 1) {
+    console.error(`Ambiguous problem ID "${id}" matches: ${prefixDash.join(", ")}`);
+    process.exit(1);
+  }
+  const prefix = problems.filter((p) => p.startsWith(id));
+  if (prefix.length === 1) {
+    return prefix[0]!;
+  }
+  if (prefix.length > 1) {
+    console.error(`Ambiguous problem ID "${id}" matches: ${prefix.join(", ")}`);
+    process.exit(1);
+  }
+  console.error(`Problem not found: ${id}`);
+  process.exit(1);
+}
+
+async function main(): Promise<void> {
+  const {
+    problem,
+    all,
+    implDir,
+    useSolution,
+    solve,
+    agent,
+    model,
+    maxBudget,
+    clean,
+    concurrency,
+    contextProfile,
+    iterations,
+    sdkBranch,
+  } = parseArgs();
+
+  if (!problem && !all) {
+    console.error("Usage:");
+    console.error("  tsx core/cli.ts --problem 001 --impl ./path/to/impl");
+    console.error("  tsx core/cli.ts --problem 001 --use-solution");
+    console.error(
+      "  tsx core/cli.ts --problem 001 --solve [--agent claude|codex] [--model sonnet] [--max-budget 5.00] [--context-profile types-only] [--iterations 3] [--sdk-branch <ref>]",
+    );
+    console.error("  tsx core/cli.ts --all --use-solution [--clean] [--concurrency <n>]");
+    console.error(
+      "  tsx core/cli.ts --all --solve [--agent claude|codex] [--model sonnet] [--max-budget 5.00] [--clean] [--concurrency <n>] [--context-profile types-only] [--iterations 3] [--sdk-branch <ref>]",
+    );
+    console.error("  tsx core/cli.ts --all --impl-dir ./path/to/all-outputs");
+    console.error("\nNote: --solve requires Podman. On macOS, run 'podman machine start' first.");
+    process.exit(1);
+  }
+
+  if (problem && all) {
+    console.error("Error: --problem and --all are mutually exclusive.");
+    process.exit(1);
+  }
+  const implModes = [solve, useSolution, implDir].filter(Boolean).length;
+  if (implModes > 1) {
+    console.error("Error: --solve, --use-solution, and --impl are mutually exclusive.");
+    process.exit(1);
+  }
+  if (sdkBranch && !solve) {
+    console.error(
+      "Error: --sdk-branch requires --solve (only solve mode rebuilds the SDK tarball).",
+    );
+    process.exit(1);
+  }
+
+  const resultsDir = path.join(challengeRoot, "results");
+  const verbose = concurrency === 1;
+  const solveModelLabel = solve ? formatSolveModelLabel(agent, model) : undefined;
+
+  if (solve) {
+    const podmanStatus = checkPodmanAvailability();
+    if (!podmanStatus.available) {
+      console.error(`Error: ${podmanStatus.error}`);
+      process.exit(1);
+    }
+  }
+
+  if (solve) {
+    await ensureAuthenticated(agent, normalizeModelForAgent(agent, model));
+  }
+
+  let tarballPath: string | undefined;
+  let packDir: string | undefined;
+  let worktreeDir: string | undefined;
+  const cleanupPackDir = (): void => {
+    if (packDir) {
+      fs.rmSync(packDir, { recursive: true, force: true });
+      packDir = undefined;
+    }
+    if (worktreeDir) {
+      cleanupWorktree(sdkRepoRoot(), worktreeDir);
+      worktreeDir = undefined;
+    }
+  };
+  process.on("exit", cleanupPackDir);
+  if (solve) {
+    if (sdkBranch) {
+      console.log(`Packing SDK tarball from branch "${sdkBranch}"...`);
+      const packed = packSdkFromRef(sdkBranch);
+      tarballPath = packed.tarballPath;
+      packDir = packed.packDir;
+      worktreeDir = packed.worktreeDir;
+      console.log(`SDK tarball: ${tarballPath} (worktree: ${worktreeDir})`);
+    } else {
+      console.log("Packing SDK tarball...");
+      const packed = packSdkTarball();
+      tarballPath = packed.tarballPath;
+      packDir = packed.packDir;
+      console.log(`SDK tarball: ${tarballPath}`);
+    }
+  }
+
+  const problems = all ? listProblems(challengeRoot) : [findProblem(problem!)];
+
+  if (all) {
+    console.log(`Running ${problems.length} problem(s) (concurrency: ${concurrency})...`);
+  }
+
+  const baseLabel = solve ? (solveModelLabel ?? "solve") : useSolution ? "solution" : "impl";
+  // Suffix with the SDK branch (when set) so baseline vs candidate runs land in
+  // distinct results subdirs and the analyze --diff mode can pick them up
+  // without conflating the two histories.
+  const branchSuffix = sdkBranch ? `-sdk@${sanitizeForFilename(sdkBranch)}` : "";
+  const modelLabelRaw = `${baseLabel}-${contextProfile}${branchSuffix}`;
+
+  type ProblemTask = { problemName: string; implDir?: string };
+  const tasks: ProblemTask[] = [];
+  for (const p of problems) {
+    if (solve) {
+      tasks.push({ problemName: p });
+    } else {
+      const problemDir = path.join(challengeRoot, "problems", p);
+      let impl: string;
+
+      if (useSolution) {
+        impl = path.join(problemDir, "solution");
+      } else if (implDir) {
+        impl = all ? path.join(implDir, p) : implDir;
+      } else {
+        console.error(`No implementation specified for problem ${p}`);
+        process.exit(1);
+      }
+
+      if (!fs.existsSync(impl)) {
+        console.error(`Implementation directory not found: ${impl}`);
+        process.exit(1);
+      }
+
+      tasks.push({ problemName: p, implDir: impl });
+    }
+  }
+
+  const results: ProblemResult[] = [];
+  const limit = createLimiter(concurrency);
+  const total = tasks.length;
+  let completed = 0;
+  const runStartTime = Date.now();
+  const sdkVersion = getSdkVersion(challengeRoot);
+  const runId = createRunId();
+  const runArtifactRoot = solve
+    ? createRunArtifactRoot(resultsDir, modelLabelRaw, sdkVersion, runId)
+    : undefined;
+
+  /**
+   * Run a single problem `iterations` times sequentially (inside the
+   * concurrency slot so we do not multiply Podman load by N). Returns the
+   * aggregated `ProblemResult` — when iterations == 1 this is the raw single
+   * result; when > 1 the `iterations` field carries variance bounds.
+   *
+   * Iterations are sequential within a slot because:
+   * 1. Running N parallel solves of the same problem multiplies podman load.
+   * 2. The artifact directory layout uses per-iteration suffixes; doing them
+   *    in order lets us write `iter-1`, `iter-2`, ... predictably.
+   */
+  async function runProblemWithIterations(task: ProblemTask): Promise<ProblemResult> {
+    const baseOptions = {
+      implDir: task.implDir,
+      solve: solve ? { agent, model, maxBudget } : undefined,
+      clean,
+      verbose,
+      tarballPath,
+      contextProfile,
+    } as const;
+    if (iterations === 1) {
+      return runProblem(task.problemName, { ...baseOptions, runArtifactRoot });
+    }
+    const perIteration: ProblemResult[] = [];
+    for (let i = 0; i < iterations; i++) {
+      // Place each iteration's artifact under a sub-dir so the trace.jsonl /
+      // workSnapshot of iter-1 isn't overwritten by iter-2.
+      const iterRoot = runArtifactRoot ? path.join(runArtifactRoot, `iter-${i}`) : undefined;
+      perIteration.push(
+        await runProblem(task.problemName, {
+          ...baseOptions,
+          ...(iterRoot ? { runArtifactRoot: iterRoot } : {}),
+        }),
+      );
+    }
+    return aggregateIterations(perIteration);
+  }
+
+  await Promise.all(
+    tasks.map((task) =>
+      limit(async () => {
+        try {
+          const result = await runProblemWithIterations(task);
+
+          results.push(result);
+          completed++;
+
+          if (!verbose) {
+            let status: string;
+            if (result.iterations) {
+              status = `${result.iterations.passedCount}/${result.iterations.count} passed`;
+            } else if (result.passed) {
+              status = "PASS";
+            } else {
+              status = "FAIL";
+            }
+            console.log(
+              `[${completed}/${total}] ${task.problemName}: ${status} [${formatDuration(result.totalDurationMs ?? 0)}]`,
+            );
+          }
+        } catch (err) {
+          const errorMsg = err instanceof Error ? err.message : String(err);
+          console.error(`[ERROR] ${task.problemName}: ${errorMsg}`);
+
+          const problemDir = path.join(challengeRoot, "problems", task.problemName);
+          const meta = loadMeta(problemDir);
+          const stages = makeSkippedStages(`runner error: ${errorMsg}`);
+          results.push({
+            problemId: meta.id,
+            problemName: deriveProblemName(meta, task.problemName),
+            difficulty: meta.difficulty ?? "easy",
+            category: meta.category ?? meta.sdkSurface ?? "micro",
+            ...(meta.split !== undefined ? { split: meta.split } : {}),
+            contextProfile,
+            stages,
+            passed: false,
+            totalDurationMs: 0,
+          });
+          completed++;
+        }
+      }),
+    ),
+  );
+
+  results.sort((a, b) => a.problemId.localeCompare(b.problemId));
+
+  // Phase 3 post-processing: LLM-as-judge for failed solves. Runs sequentially
+  // (outside the solve concurrency limiter) so judge API calls do not contend
+  // with podman-bound solves and so spend stays bounded.
+  let improvementCandidatesPath: string | undefined;
+  if (solve) {
+    improvementCandidatesPath = await runJudgePostProcessing(results, runArtifactRoot, runId, {
+      agent,
+      model,
+      contextProfile,
+    });
+  }
+
+  const report = createReport(results, {
+    model: solveModelLabel,
+    contextProfile,
+    sdkVersion,
+    elapsedMs: Date.now() - runStartTime,
+    ...(improvementCandidatesPath
+      ? { improvementCandidatesPath: path.relative(resultsDir, improvementCandidatesPath) }
+      : {}),
+    ...(sdkBranch ? { sdkBranch } : {}),
+    iterationCount: iterations,
+  });
+
+  writeReport(resultsDir, report, modelLabelRaw, sdkVersion, runId);
+}
+
+// Only auto-run when invoked directly via `tsx core/cli.ts` etc., so importing
+// from tests (vitest) does not kick off the full challenge runner.
+const invokedPath = process.argv[1];
+if (invokedPath && import.meta.url === pathToFileURL(invokedPath).href) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

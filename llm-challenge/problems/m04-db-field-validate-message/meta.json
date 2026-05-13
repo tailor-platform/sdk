@@ -1,0 +1,8 @@
+{
+  "id": "m04-db-field-validate-message",
+  "title": "Attach a type-level validate rule with a custom error message",
+  "hypothesizedAffordance": "param_confusion",
+  "sdkSurface": "db-field",
+  "contextProfiles": ["types-only", "full-package"],
+  "hint": "validate は field chain ではなく db.type().validate()"
+}

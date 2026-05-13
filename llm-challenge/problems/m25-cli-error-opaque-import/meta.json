@@ -1,0 +1,8 @@
+{
+  "id": "m25-cli-error-opaque-import",
+  "title": "Correct a kyselyTypePlugin import path that mimics a legacy package name",
+  "hypothesizedAffordance": "error_message_opaque",
+  "sdkSurface": "cli-runtime",
+  "contextProfiles": ["types-only", "full-package"],
+  "hint": "kyselyTypePlugin は @tailor-platform/sdk/plugin/kysely-type の sub-path export"
+}

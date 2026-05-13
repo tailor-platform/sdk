@@ -1,0 +1,8 @@
+{
+  "id": "m08-resolver-output-shape",
+  "title": "Write a query resolver whose output is t.object({ ok: t.bool() })",
+  "hypothesizedAffordance": "naming_bias",
+  "sdkSurface": "resolver",
+  "contextProfiles": ["types-only", "full-package"],
+  "hint": "resolver の output は t.* で書く (db.* ではない)"
+}

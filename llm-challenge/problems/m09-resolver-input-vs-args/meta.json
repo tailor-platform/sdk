@@ -1,0 +1,8 @@
+{
+  "id": "m09-resolver-input-vs-args",
+  "title": "Write a mutation resolver with a typed input that flows through body",
+  "hypothesizedAffordance": "missing_namespace",
+  "sdkSurface": "resolver",
+  "contextProfiles": ["types-only", "full-package"],
+  "hint": "input は object 形式の schema、body は context.input から受け取る"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "m10-resolver-structured-error",
+  "title": "Return typed { success, error } results from a cancel resolver instead of throwing",
+  "hypothesizedAffordance": "param_confusion",
+  "sdkSurface": "resolver",
+  "contextProfiles": ["types-only", "full-package"],
+  "hint": "throw でなく { success: false, error: '...' } を返す"
+}
