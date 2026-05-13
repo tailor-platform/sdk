@@ -258,7 +258,7 @@ type User {
 
 Add hooks to execute functions during data creation or update. Hooks receive three arguments:
 
-- `value`: User input if provided, otherwise existing value on update or null on create
+- `value`: Field input value, **typed as `T | null`**. It is `null` when the user omitted the field on create; on update, it is `null` when the user did not include the field in the mutation input (existing values are not auto-injected). Always handle the `null` case (e.g. `value ?? ""`) before calling string/number methods on it.
 - `data`: Entire record data (for accessing other field values)
 - `user`: User performing the operation
 
@@ -268,8 +268,14 @@ Set hooks directly on individual fields:
 
 ```typescript
 db.string().hooks({
+  // `value` is `string | null`, so fall back to "" before calling string methods.
+  create: ({ value }) => (value ?? "").toLowerCase(),
+  update: ({ value }) => (value ?? "").toLowerCase(),
+});
+
+// Hooks can also derive a value from other inputs and ignore `value` entirely.
+db.uuid().hooks({
   create: ({ user }) => user.id,
-  update: ({ value }) => value,
 });
 ```
 
