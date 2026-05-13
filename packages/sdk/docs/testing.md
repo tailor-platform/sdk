@@ -230,14 +230,14 @@ test("mock file download", async () => {
 });
 ```
 
-For `openDownloadStream`, enqueue an iterable of `StreamValue` items — `metadata`, one or more `chunk` items, and a terminal `complete` (or `error`). Raw `Uint8Array` / `ArrayBuffer` chunks are rejected so tests stay aligned with the platform's structured stream contract.
+For `openDownloadStream`, enqueue an iterable of `StreamValue` items — `metadata`, one or more `chunk` items, and a terminal `complete`. Raw `Uint8Array` / `ArrayBuffer` chunks are rejected so tests stay aligned with the platform's structured stream contract.
 
 ```typescript
 test("mock file download stream", async () => {
   fileMock.enqueueResult([
     {
       type: "metadata",
-      metadata: { contentType: "image/png", fileSize: 3, sha256sum: "abc", lastUploadedAt: "" },
+      metadata: { contentType: "image/png", fileSize: 3, sha256sum: "abc" },
     },
     { type: "chunk", data: new Uint8Array([1, 2]), position: 0 },
     { type: "chunk", data: new Uint8Array([3]), position: 2 },
