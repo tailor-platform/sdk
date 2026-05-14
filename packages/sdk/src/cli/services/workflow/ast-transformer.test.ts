@@ -463,9 +463,6 @@ const mainJob = createWorkflowJob({
         allJobsMap,
       );
 
-      // trigger call is wrapped in an async IIFE so the runtime value matches
-      // the `Promise<Awaited<Output>>` static type. The trailing `()` is required
-      // so the call is invoked rather than returning the function itself.
       expect(result).toContain(
         '(async () => tailor.workflow.triggerJobFunction("fetch-data", { id: input.id }))()',
       );
@@ -1019,9 +1016,6 @@ console.log(customer);
 
       const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
-      // The triggerJobFunction call is wrapped in an async IIFE so the runtime
-      // type matches the `Promise<Awaited<Output>>` static type. The trailing
-      // `()` invokes the IIFE; without it the value would be the function itself.
       expect(result).toContain(
         'const customer = await (async () => tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" }))()',
       );
@@ -1055,7 +1049,6 @@ const executionId = await orderWorkflow.trigger({ orderId: "123" }, { authInvoke
 
       const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
-      // Workflow trigger is already async, so await stays and no IIFE wrap.
       expect(result).toContain('await tailor.workflow.triggerWorkflow("order-processing"');
       expect(result).not.toContain("(async () => tailor.workflow.triggerWorkflow");
     });
@@ -1069,13 +1062,34 @@ const customerPromise = fetchCustomer.trigger({ customerId: "123" });
 
       const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
-      // Without await the call must still resolve to a Promise so the value
-      // matches the `Promise<Awaited<Output>>` static type. The trailing `()`
-      // invokes the IIFE so the assignment receives the Promise, not the function.
       expect(result).toContain(
         'const customerPromise = (async () => tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" }))()',
       );
       expect(result).not.toMatch(/\bawait\b/);
+    });
+
+    it("wraps job.trigger() inside Promise.all array elements", () => {
+      const source = `
+const [customer, notification] = await Promise.all([
+  fetchCustomer.trigger({ customerId: "123" }),
+  sendNotification.trigger({ message: "Hello" }),
+]);
+`;
+      const workflowNameMap = new Map<string, string>();
+      const jobNameMap = new Map([
+        ["fetchCustomer", "fetch-customer"],
+        ["sendNotification", "send-notification"],
+      ]);
+
+      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
+
+      expect(result).toContain(
+        '(async () => tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" }))()',
+      );
+      expect(result).toContain(
+        '(async () => tailor.workflow.triggerJobFunction("send-notification", { message: "Hello" }))()',
+      );
+      expect(result).toContain("await Promise.all([");
     });
 
     it("wraps job.trigger() before .then() chains", () => {
@@ -1089,8 +1103,6 @@ fetchCustomer.trigger({ customerId: "123" }).then((customer) => {
 
       const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
-      // The IIFE is invoked (note the trailing `()`) so the returned Promise
-      // exposes .then and the chain stays valid.
       expect(result).toContain(
         '(async () => tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" }))().then(',
       );

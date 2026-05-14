@@ -462,14 +462,8 @@ export function transformFunctionTriggers(
         );
       }
     } else if (call.kind === "job") {
-      // Job trigger - get job name from map
       const jobName = jobNameMap.get(call.identifierName);
       if (jobName) {
-        // triggerJobFunction is synchronous on the platform, but the .trigger()
-        // type signature is `Promise<Awaited<Output>>`. Wrap in an async IIFE so
-        // the runtime value matches the static type: the body runs synchronously
-        // (preserving the platform's synchronous suspend semantics) and any
-        // synchronous throws surface as Promise rejections.
         const transformedCall = `(async () => tailor.workflow.triggerJobFunction("${jobName}", ${call.argsText || "undefined"}))()`;
 
         replacements.push({

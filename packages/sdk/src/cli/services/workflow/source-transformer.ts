@@ -214,13 +214,7 @@ export function transformWorkflowSource(
   }
 
   // Step 4: Transform .trigger() calls to tailor.workflow.triggerJobFunction()
-  // Only transform trigger calls that are NOT inside ranges being removed.
-  // triggerJobFunction is synchronous on the platform, but the .trigger()
-  // type signature is `Promise<Awaited<Output>>`. Wrap in an async IIFE so the
-  // body runs synchronously (preserving the platform's synchronous suspend
-  // semantics) and any synchronous throws surface as Promise rejections.
   for (const call of triggerCalls) {
-    // Skip trigger calls inside removed job declarations
     if (isInsideRemovedRange(call.callRange.start)) {
       continue;
     }

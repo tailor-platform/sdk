@@ -146,11 +146,6 @@ export function detectTriggerCalls(program: Program, sourceText: string): Trigge
         ) {
           const identifierName = (memberExpr.object as IdentifierReference).name;
 
-          // Extract the first argument's text. The `.trigger()` type signature
-          // accepts at most one argument, and the transformer emits exactly one
-          // positional argument to `triggerJobFunction`. Slicing only the first
-          // argument keeps the output well-formed even if untyped callers pass
-          // extras by mistake.
           let argsText = "";
           if (callExpr.arguments.length > 0) {
             const firstArg = callExpr.arguments[0];
