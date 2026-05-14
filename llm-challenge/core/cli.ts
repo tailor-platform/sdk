@@ -67,7 +67,7 @@ export type ProblemMeta = {
   designNote?: string;
   /** Phase 2 micro-problems: SDK surface area the problem targets. */
   sdkSurface?: string;
-  /** Phase 2 micro-problems: short hint surfaced in problem.md or prompt. */
+  /** Phase 2 micro-problems: author-only memo describing the affordance gap; not surfaced to solvers. */
   hint?: string;
   difficulty?: "easy" | "medium" | "hard";
   category?: string;
