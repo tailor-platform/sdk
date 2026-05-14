@@ -39,4 +39,9 @@ builder across all three files. Preserve each file's existing model shape:
 ## Reference
 
 Refer to the installed SDK package for the available TailorDB field builders.
-No external documentation is required for this task.
+
+## CLI Reference
+
+`packages/sdk/docs/cli-reference.md` covers the `tailor-sdk generate` flow.
+Before running typecheck three times, grep `db.text(` across the workspace to
+surface every cascade site in one read.

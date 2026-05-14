@@ -34,4 +34,10 @@ introduce additional files, or change `Order`'s field definitions.
 ## Reference
 
 Refer to the installed SDK package and `tailordb/order.ts` to confirm the
-expected glob pattern. No external documentation is required for this task.
+expected glob pattern.
+
+## CLI Reference
+
+If unsure about `tailor-sdk generate` semantics, consult
+`packages/sdk/docs/cli-reference.md` (or `tailor-sdk generate --help`) before
+guessing flag combinations.

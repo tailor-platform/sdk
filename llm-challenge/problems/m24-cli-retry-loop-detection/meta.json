@@ -4,5 +4,5 @@
   "designNote": "redundant_call_pattern",
   "sdkSurface": "cli-runtime",
   "contextProfiles": ["types-only", "full-package"],
-  "hint": "同じ間違いが 2 か所あるので一括置換。grep してから直す"
+  "_hintAuthorOnly": "同じ間違いが 2 か所あるので一括置換。grep してから直す"
 }

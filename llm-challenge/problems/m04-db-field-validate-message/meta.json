@@ -4,5 +4,5 @@
   "designNote": "param_confusion",
   "sdkSurface": "db-field",
   "contextProfiles": ["types-only", "full-package"],
-  "hint": "validate は field chain ではなく db.type().validate()"
+  "_hintAuthorOnly": "validate は field chain ではなく db.type().validate()"
 }

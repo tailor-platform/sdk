@@ -37,4 +37,10 @@ The model exports `article` named `"Article"` with two fields:
 ## Reference
 
 Refer to the installed SDK package for the available TailorDB field builders.
-No external documentation is required for this task.
+
+## CLI Reference
+
+If you find yourself running `tsc --noEmit` repeatedly to discover sibling
+errors, prefer a single grep before the first run. `packages/sdk/docs/cli-reference.md`
+lists no flag for "fail on all errors" — the cascade is best avoided by
+proactive search.

@@ -40,4 +40,10 @@ scaffold. The resolver should:
 ## Reference
 
 Refer to the installed SDK package for the `createResolver` signature and the
-input schema helpers. No external documentation is required for this task.
+input schema helpers.
+
+## CLI Reference
+
+The verify pipeline runs `tailor-sdk generate` before `tsc --noEmit`; consult
+`packages/sdk/docs/cli-reference.md` if you need to understand which files
+the CLI scans.

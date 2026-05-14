@@ -1,5 +1,13 @@
-import { describe, expect, it } from "vitest";
-import { computeReportDiff, resolveActiveProfilePair } from "./analyze";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  buildAliasMap,
+  canonicalProblemId,
+  computeReportDiff,
+  resolveActiveProfilePair,
+} from "./analyze";
 import type { ReadTargetClass, TraceMetrics } from "./metrics";
 import type { ChallengeReport, IterationAggregate, ProblemResult } from "./report";
 
@@ -585,5 +593,50 @@ describe("resolveActiveProfilePair", () => {
   it("returns missing on an empty input", () => {
     const result = resolveActiveProfilePair([]);
     expect(result.kind).toBe("missing");
+  });
+});
+
+describe("buildAliasMap / canonicalProblemId", () => {
+  let tempRoot: string;
+
+  beforeEach(() => {
+    tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llm-alias-test-"));
+    fs.mkdirSync(path.join(tempRoot, "problems"), { recursive: true });
+  });
+
+  afterEach(() => {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  });
+
+  const writeProblem = (dirName: string, meta: { id: string; aliases?: string[] }): void => {
+    const dir = path.join(tempRoot, "problems", dirName);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "meta.json"), JSON.stringify(meta));
+  };
+
+  it("maps each alias to the canonical id of the problem that owns it", () => {
+    writeProblem("m22-new", { id: "m22-new", aliases: ["m22-old"] });
+    writeProblem("h13-renamed", { id: "h13-renamed", aliases: ["h13-shadow", "h13-shadowed"] });
+    const map = buildAliasMap(tempRoot);
+    expect(map.get("m22-old")).toBe("m22-new");
+    expect(map.get("h13-shadow")).toBe("h13-renamed");
+    expect(map.get("h13-shadowed")).toBe("h13-renamed");
+  });
+
+  it("skips problem dirs without meta.json or with malformed JSON", () => {
+    writeProblem("m01", { id: "m01" });
+    fs.mkdirSync(path.join(tempRoot, "problems", "no-meta"), { recursive: true });
+    const badDir = path.join(tempRoot, "problems", "bad-meta");
+    fs.mkdirSync(badDir, { recursive: true });
+    fs.writeFileSync(path.join(badDir, "meta.json"), "{not json");
+    // Should not throw, and m01 should still load (no aliases declared).
+    const map = buildAliasMap(tempRoot);
+    expect(map.size).toBe(0);
+  });
+
+  it("canonicalProblemId returns the alias target when present, original otherwise", () => {
+    const map = new Map([["m22-old", "m22-new"]]);
+    expect(canonicalProblemId("m22-old", map)).toBe("m22-new");
+    expect(canonicalProblemId("h01", map)).toBe("h01");
   });
 });

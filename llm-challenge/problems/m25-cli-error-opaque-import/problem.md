@@ -34,4 +34,9 @@ export, the `plugins` export, and the plugin options
 ## Reference
 
 Refer to the installed SDK package's `package.json` exports map for available
-sub-paths. No external documentation is required for this task.
+sub-paths.
+
+## CLI Reference
+
+`packages/sdk/docs/cli-reference.md` lists the plugin sub-paths used by the
+CLI; cross-check that resource if a "module not found" error is opaque.

@@ -4,5 +4,5 @@
   "designNote": "missing_namespace",
   "sdkSurface": "resolver",
   "contextProfiles": ["types-only", "full-package"],
-  "hint": "input は object 形式の schema、body は context.input から受け取る"
+  "_hintAuthorOnly": "input は object 形式の schema、body は context.input から受け取る"
 }

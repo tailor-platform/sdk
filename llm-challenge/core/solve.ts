@@ -82,9 +82,15 @@ function deriveFilesFromSolution(
   return { implement, scaffold };
 }
 
+// Compile-time guard: any prompt-building function takes a meta payload with
+// `_hintAuthorOnly` stripped, so a stray `meta._hintAuthorOnly` reference in
+// prompt construction is a type error. The runtime SKILL.md rule is reinforced
+// by this static check.
+export type PromptSafeMeta = Omit<ProblemMeta, "_hintAuthorOnly">;
+
 function buildPromptSections(
   problemDir: string,
-  meta: ProblemMeta,
+  meta: PromptSafeMeta,
   workDir: string,
 ): {
   problemMd: string;
@@ -120,7 +126,7 @@ function buildPromptSections(
 
 export function buildPrompt(
   problemDir: string,
-  meta: ProblemMeta,
+  meta: PromptSafeMeta,
   workDir: string,
   contextProfileName: ContextProfile,
 ): string {

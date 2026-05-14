@@ -4,5 +4,5 @@
   "designNote": "missing_namespace",
   "sdkSurface": "resolver",
   "contextProfiles": ["types-only", "full-package"],
-  "hint": "resolver body は (ctx) => ... の 1 引数で、input/user/env/invoker は ctx 配下の namespace"
+  "_hintAuthorOnly": "resolver body は (ctx) => ... の 1 引数で、input/user/env/invoker は ctx 配下の namespace"
 }

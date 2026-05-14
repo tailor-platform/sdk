@@ -4,5 +4,5 @@
   "designNote": "type_too_loose",
   "sdkSurface": "cli-runtime",
   "contextProfiles": ["types-only", "full-package"],
-  "hint": "input schema を埋めて createResolver の generic に ctx 型を推論させる"
+  "_hintAuthorOnly": "input schema を埋めて createResolver の generic に ctx 型を推論させる"
 }

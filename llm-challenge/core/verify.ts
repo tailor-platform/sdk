@@ -21,7 +21,7 @@ export type TestDetail = {
   failureMessage?: string;
 };
 
-export type ChallengeStage = "generate" | "typecheck" | "tests";
+export type ChallengeStage = "generate" | "verify-commands" | "typecheck" | "tests";
 
 export type StageInput = {
   stage: ChallengeStage;
@@ -210,6 +210,34 @@ export async function verifyProblem(
     durationMs: generateResult.durationMs,
   };
 
+  // Optional Stage 1.5: extra CLI commands declared by meta.verifyCommands.
+  // Aggregated into a single `verify-commands` stage so the binary pass/fail
+  // surface is unchanged. First failure surfaces its output verbatim and
+  // short-circuits remaining commands; tests and typecheck still run so
+  // operators see what other stages would have said.
+  let verifyCommandsStage: StageInput | undefined;
+  const extraCommands = meta.verifyCommands ?? [];
+  if (extraCommands.length > 0) {
+    let combinedOutput = "";
+    let allPassed = true;
+    let totalMs = 0;
+    for (const command of extraCommands) {
+      const r = await runCommand(command, workDir);
+      combinedOutput += `$ ${command}\n${r.output}\n`;
+      totalMs += r.durationMs;
+      if (!r.success) {
+        allPassed = false;
+        break;
+      }
+    }
+    verifyCommandsStage = {
+      stage: "verify-commands",
+      passed: allPassed,
+      output: combinedOutput,
+      durationMs: totalMs,
+    };
+  }
+
   // Stage 2: typecheck
   const typecheckResult = await runCommand("npx tsc --noEmit", workDir);
   const typecheckStage: StageInput = {
@@ -249,5 +277,8 @@ export async function verifyProblem(
     testStage.passed = parsed.total > 0 && parsed.passed === parsed.total;
   }
 
-  return [generateStage, typecheckStage, testStage];
+  const stages: StageInput[] = [generateStage];
+  if (verifyCommandsStage) stages.push(verifyCommandsStage);
+  stages.push(typecheckStage, testStage);
+  return stages;
 }

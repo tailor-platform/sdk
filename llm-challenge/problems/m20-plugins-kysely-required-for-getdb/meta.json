@@ -4,5 +4,5 @@
   "designNote": "implicit_assumption",
   "sdkSurface": "plugin",
   "contextProfiles": ["types-only", "full-package"],
-  "hint": "getDB は generated/tailordb.ts に依存する。tailor.config.ts で kyselyTypePlugin を有効化"
+  "_hintAuthorOnly": "getDB は generated/tailordb.ts に依存する。tailor.config.ts で kyselyTypePlugin を有効化"
 }

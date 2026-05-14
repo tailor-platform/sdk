@@ -4,5 +4,5 @@
   "designNote": "missing_namespace",
   "sdkSurface": "auth-idp",
   "contextProfiles": ["types-only", "full-package"],
-  "hint": "idp.provider(\"providerName\", \"clientName\") は method call。object 直渡しではない"
+  "_hintAuthorOnly": "idp.provider(\"providerName\", \"clientName\") は method call。object 直渡しではない"
 }

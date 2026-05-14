@@ -4,5 +4,5 @@
   "designNote": "implicit_assumption",
   "sdkSurface": "config",
   "contextProfiles": ["types-only", "full-package"],
-  "hint": "defineStaticWebSite(...).url は deployment time に resolve される placeholder。string literal をハードコードせず、同じ .url を CORS と oauth2 redirect の両方に流す"
+  "_hintAuthorOnly": "defineStaticWebSite(...).url は deployment time に resolve される placeholder。string literal をハードコードせず、同じ .url を CORS と oauth2 redirect の両方に流す"
 }

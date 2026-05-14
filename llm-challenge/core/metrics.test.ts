@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   aggregateTraceMetrics,
   classifyReadTarget,
+  computeLocStats,
   computeTraceMetrics,
+  parseShortstat,
   READ_TARGET_CLASSES,
   type ReadTargetClass,
   summarizeMetrics,
@@ -39,6 +41,7 @@ function emptyReadTargets(): Record<ReadTargetClass, number> {
 function mkMetrics(partial: Partial<TraceMetrics>): TraceMetrics {
   return {
     turns: 0,
+    toolUseCount: 0,
     toolCallCounts: {},
     readTargets: emptyReadTargets(),
     readSdkDts: 0,
@@ -390,6 +393,84 @@ describe("summarizeMetrics", () => {
       max: 1,
       median: 0.5,
       mean: 0.5,
+    });
+  });
+});
+
+describe("parseShortstat", () => {
+  it("parses the full summary form: N files / M insertions / K deletions", () => {
+    expect(parseShortstat(" 2 files changed, 5 insertions(+), 3 deletions(-)\n")).toEqual({
+      filesChanged: 2,
+      linesAdded: 5,
+      linesRemoved: 3,
+    });
+  });
+
+  it("parses the insertions-only form (no deletions clause)", () => {
+    expect(parseShortstat(" 1 file changed, 11 insertions(+)\n")).toEqual({
+      filesChanged: 1,
+      linesAdded: 11,
+      linesRemoved: 0,
+    });
+  });
+
+  it("parses the deletions-only form (no insertions clause)", () => {
+    expect(parseShortstat(" 1 file changed, 4 deletions(-)\n")).toEqual({
+      filesChanged: 1,
+      linesAdded: 0,
+      linesRemoved: 4,
+    });
+  });
+
+  it("returns zeros on an empty / non-shortstat string", () => {
+    expect(parseShortstat("")).toEqual({ filesChanged: 0, linesAdded: 0, linesRemoved: 0 });
+    expect(parseShortstat("warning: foo\n")).toEqual({
+      filesChanged: 0,
+      linesAdded: 0,
+      linesRemoved: 0,
+    });
+  });
+});
+
+describe("computeLocStats", () => {
+  let baseDir: string;
+  let workDir: string;
+
+  beforeEach(() => {
+    baseDir = fs.mkdtempSync(path.join(os.tmpdir(), "llm-loc-base-"));
+    workDir = fs.mkdtempSync(path.join(os.tmpdir(), "llm-loc-work-"));
+  });
+
+  afterEach(() => {
+    fs.rmSync(baseDir, { recursive: true, force: true });
+    fs.rmSync(workDir, { recursive: true, force: true });
+  });
+
+  it("returns zeros when one of the two directories does not exist", () => {
+    fs.rmSync(workDir, { recursive: true, force: true });
+    expect(computeLocStats(baseDir, workDir)).toEqual({
+      filesChanged: 0,
+      linesAdded: 0,
+      linesRemoved: 0,
+    });
+  });
+
+  it("counts insertions vs deletions correctly against a baseline tree", () => {
+    fs.writeFileSync(path.join(baseDir, "a.ts"), "line1\nline2\nline3\n");
+    fs.writeFileSync(path.join(workDir, "a.ts"), "line1\nline2_changed\nline3\nline4_new\n");
+    const result = computeLocStats(baseDir, workDir);
+    expect(result.filesChanged).toBe(1);
+    expect(result.linesAdded).toBeGreaterThan(0);
+    expect(result.linesRemoved).toBeGreaterThan(0);
+  });
+
+  it("returns zeros when both trees are identical", () => {
+    fs.writeFileSync(path.join(baseDir, "a.ts"), "hello\n");
+    fs.writeFileSync(path.join(workDir, "a.ts"), "hello\n");
+    expect(computeLocStats(baseDir, workDir)).toEqual({
+      filesChanged: 0,
+      linesAdded: 0,
+      linesRemoved: 0,
     });
   });
 });

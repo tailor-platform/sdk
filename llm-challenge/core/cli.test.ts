@@ -9,6 +9,7 @@ import {
   deriveProblemName,
   emitFailVsSolutionDiff,
   emitIterDiff,
+  filterExcludedFromDiff,
   packSdkFromRef,
   shouldAutoExtend,
   shouldEarlyStop,
@@ -915,5 +916,53 @@ describe("shouldEarlyStop", () => {
         }),
       ).toBe(false);
     });
+  });
+});
+
+describe("filterExcludedFromDiff", () => {
+  const block = (aPath: string, bPath: string, body = "@@ -1 +1 @@\n-old\n+new\n") =>
+    `diff --git a/${aPath} b/${bPath}\nindex 1111111..2222222 100644\n--- a/${aPath}\n+++ b/${bPath}\n${body}`;
+
+  it("returns input unchanged when there are no diff --git headers", () => {
+    expect(filterExcludedFromDiff("")).toBe("");
+    expect(filterExcludedFromDiff("warning: something\n")).toBe("warning: something\n");
+  });
+
+  it("drops package.json file blocks", () => {
+    const stdout =
+      block("work/package.json", "work/package.json") + block("work/src/a.ts", "work/src/a.ts");
+    const filtered = filterExcludedFromDiff(stdout);
+    expect(filtered).not.toContain("package.json");
+    expect(filtered).toContain("a.ts");
+  });
+
+  it("drops tsconfig.json, pnpm-lock.yaml, .gitkeep, .sdk/**, node_modules/**", () => {
+    const stdout = [
+      block("w/tsconfig.json", "w/tsconfig.json"),
+      block("w/pnpm-lock.yaml", "w/pnpm-lock.yaml"),
+      block("w/dir/.gitkeep", "w/dir/.gitkeep"),
+      block("w/.sdk/sdk.tgz", "w/.sdk/sdk.tgz"),
+      block("w/node_modules/foo/index.js", "w/node_modules/foo/index.js"),
+      block("w/src/keep.ts", "w/src/keep.ts"),
+    ].join("");
+    const filtered = filterExcludedFromDiff(stdout);
+    expect(filtered).not.toMatch(/tsconfig\.json|pnpm-lock\.yaml|\.gitkeep|\.sdk\/|node_modules\//);
+    expect(filtered).toContain("keep.ts");
+  });
+
+  it("preserves a leading preamble before the first diff --git header", () => {
+    const stdout = "warning: blah\n" + block("w/src/a.ts", "w/src/a.ts");
+    expect(filterExcludedFromDiff(stdout)).toMatch(/^warning: blah\n/);
+  });
+
+  it("preserves the block when neither a- nor b- path matches an excluded fragment", () => {
+    const stdout = block("w/tailordb/account.ts", "w/tailordb/account.ts");
+    expect(filterExcludedFromDiff(stdout)).toContain("account.ts");
+  });
+
+  it("filters based on either a- or b- path (rename across excluded fragments)", () => {
+    // Suppose a file was renamed from src/keep.ts to package.json — exclude.
+    const stdout = block("w/src/keep.ts", "w/package.json");
+    expect(filterExcludedFromDiff(stdout)).toBe("");
   });
 });

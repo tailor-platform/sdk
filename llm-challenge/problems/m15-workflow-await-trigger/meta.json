@@ -4,5 +4,5 @@
   "designNote": "param_confusion",
   "sdkSurface": "workflow",
   "contextProfiles": ["types-only", "full-package"],
-  "hint": ".trigger() は Promise — await でアンラップする"
+  "_hintAuthorOnly": ".trigger() は Promise — await でアンラップする"
 }

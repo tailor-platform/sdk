@@ -4,5 +4,5 @@
   "designNote": "naming_bias",
   "sdkSurface": "db-type",
   "contextProfiles": ["types-only", "full-package"],
-  "hint": "toward.as は source 側 (Post) からターゲットを辿るアクセサ名、backward は target 側 (Author) から逆引きするアクセサ名"
+  "_hintAuthorOnly": "toward.as は source 側 (Post) からターゲットを辿るアクセサ名、backward は target 側 (Author) から逆引きするアクセサ名"
 }

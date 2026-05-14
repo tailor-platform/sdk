@@ -17,7 +17,7 @@ Read `llm-challenge/README.md` for the full command surface and report shape.
 
 ## Core Rule
 
-When AI fails a challenge, **improve the SDK** (JSDoc, error messages, types, CLAUDE.md) — NEVER add hints to `problem.md`.
+When AI fails a challenge, **improve the SDK** (JSDoc, error messages, types, CLAUDE.md) — NEVER add hints to `problem.md`. The `_hintAuthorOnly` field on `meta.json` is an author-only memo and MUST NOT be referenced from `core/solve.ts`; the `PromptSafeMeta = Omit<ProblemMeta, "_hintAuthorOnly">` constraint on `buildPrompt()` enforces this at compile time.
 
 ## Prerequisites
 
@@ -46,7 +46,7 @@ Structure: `problems/<id>-<slug>/` with `meta.json`, `problem.md`, `scaffold/`, 
   "designNote": "implicit_assumption",
   "sdkSurface": "db-field",
   "contextProfiles": ["types-only", "full-package"],
-  "hint": "db.string() is required by default; chain .unique()."
+  "_hintAuthorOnly": "db.string() is required by default; chain .unique()."
 }
 ```
 
@@ -54,7 +54,9 @@ Structure: `problems/<id>-<slug>/` with `meta.json`, `problem.md`, `scaffold/`, 
 - `designNote`: free-form author note about the affordance gap the problem exercises. Documentation only; the runner does not read it.
 - `sdkSurface`: closed enum — `db-field`, `db-type`, `resolver`, `executor-record-trigger`, `executor-non-record-trigger`, `executor`, `workflow`, `config`, `plugin`, `auth-idp`, `cli-runtime`.
 - `contextProfiles`: subset of `["types-only", "full-package"]`.
-- `hint`: optional one-line hint; omit for pure docs-gap problems where docs absence IS the test.
+- `_hintAuthorOnly`: optional one-line author memo. NEVER read by the runner — kept in `meta.json` purely as documentation of authorial intent. The leading underscore signals "do not surface" to both future authors and the type system (`PromptSafeMeta` omits it). Legacy `hint` field is read as a fallback so older problems still load.
+- `aliases`: optional list of older problem IDs that were renamed to this one. Off-default for trend/diff aggregation; pass `--unify-aliases` to follow.
+- `verifyCommands`: optional shell commands to run after `tailor-sdk generate` but before `tsc --noEmit`, exposed as a `verify-commands` stage. Use to evaluate CLI subcommand operation (e.g. `node packages/sdk/dist/cli/index.mjs tailordb migration generate --dry-run`). Binary pass/fail per command; first failure short-circuits remaining commands but typecheck/tests still run.
 
 **problem.md rules**:
 
@@ -77,6 +79,21 @@ Structure: `problems/<id>-<slug>/` with `meta.json`, `problem.md`, `scaffold/`, 
 4. Add per-problem `scaffold/` overrides only when shared scaffold is insufficient
 5. Verify: `pnpm -C llm-challenge challenge --problem m<NN> --use-solution` → must pass all three stages
 6. Manually solve the problem once with Claude to confirm it lands in the 5-15 turn range
+
+## Problem Lifecycle
+
+To prevent the ceiling-effect that comes from keeping uniformly-passing problems in active rotation, problems graduate through three states:
+
+- **active** — `problems/<id>/` (default). Included in every `challenge:solve` run.
+- **archived** — `problems/archived/<id>/`. Excluded from `challenge:solve` (the loader skips this subtree) but still picked up by `challenge:analyze --include-archived` so historical trend lines stay continuous.
+
+**Graduation rule.** Move a problem into `archived/` once it shows **5 consecutive runs** with `passRate = 1.0` AND `metricsStdev.turns / metricsMedian.turns < 0.1` on the **types-only** profile (the stricter one). At that point the SDK affordance is well-enough surfaced that further evaluation cost on this problem is wasteful. The decision is reversible: move the directory back if a later SDK regression flips the outcome.
+
+**Bookkeeping.** When moving:
+
+1. `mv llm-challenge/problems/<id> llm-challenge/problems/archived/<id>`
+2. Add a line under "## Archived" in the problem's `problem.md` (if present) noting the run that graduated it.
+3. If a renamed successor exists, add `<id>` to that successor's `meta.json` `aliases` list so `--unify-aliases` can stitch the history.
 
 ## SDK Improvement Cycle
 

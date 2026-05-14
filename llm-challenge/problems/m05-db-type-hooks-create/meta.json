@@ -4,5 +4,5 @@
   "designNote": "naming_bias",
   "sdkSurface": "db-type",
   "contextProfiles": ["types-only", "full-package"],
-  "hint": "hooks は db.type().hooks() で type-level に登録する"
+  "_hintAuthorOnly": "hooks は db.type().hooks() で type-level に登録する"
 }

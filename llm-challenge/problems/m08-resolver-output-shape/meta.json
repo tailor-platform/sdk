@@ -4,5 +4,5 @@
   "designNote": "naming_bias",
   "sdkSurface": "resolver",
   "contextProfiles": ["types-only", "full-package"],
-  "hint": "resolver の output は t.* で書く (db.* ではない)"
+  "_hintAuthorOnly": "resolver の output は t.* で書く (db.* ではない)"
 }

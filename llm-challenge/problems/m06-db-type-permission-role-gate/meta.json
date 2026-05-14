@@ -4,5 +4,5 @@
   "designNote": "type_too_strict",
   "sdkSurface": "db-type",
   "contextProfiles": ["types-only", "full-package"],
-  "hint": "permission の condition は tuple 型 [operand, operator, operand]"
+  "_hintAuthorOnly": "permission の condition は tuple 型 [operand, operator, operand]"
 }

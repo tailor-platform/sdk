@@ -9,6 +9,65 @@ import { parseSolveModelLabel } from "./solve-model";
 
 const challengeRoot = path.resolve(import.meta.dirname, "..");
 
+/**
+ * Walk every `problems/<id>/meta.json` and produce a map from each declared
+ * alias (older problem ID) to the current canonical ID. With
+ * `--unify-aliases`, the analyzer rewrites historical report rows through
+ * this map so renamed problems show a single continuous history.
+ */
+export function buildAliasMap(root: string = challengeRoot): Map<string, string> {
+  const out = new Map<string, string>();
+  const problemsDir = path.join(root, "problems");
+  if (!fs.existsSync(problemsDir)) return out;
+  for (const ent of fs.readdirSync(problemsDir, { withFileTypes: true })) {
+    if (!ent.isDirectory()) continue;
+    const metaPath = path.join(problemsDir, ent.name, "meta.json");
+    if (!fs.existsSync(metaPath)) continue;
+    try {
+      const meta = JSON.parse(fs.readFileSync(metaPath, "utf-8")) as {
+        id?: string;
+        aliases?: string[];
+      };
+      const id = meta.id;
+      if (!id) continue;
+      for (const alias of meta.aliases ?? []) {
+        out.set(alias, id);
+      }
+    } catch {
+      // tolerate malformed meta.json — analyzer should not crash on it
+    }
+  }
+  return out;
+}
+
+export function canonicalProblemId(id: string, aliasMap: Map<string, string>): string {
+  return aliasMap.get(id) ?? id;
+}
+
+/**
+ * Set of problem IDs that have been moved to `problems/archived/`. Used by
+ * default to filter out graduated problems from trend / diff renderers so
+ * they don't dilute the active-set signal. Surfaced as an `--include-archived`
+ * flag for the rare case an operator wants the full historical pass-rate.
+ */
+export function buildArchivedIdSet(root: string = challengeRoot): Set<string> {
+  const out = new Set<string>();
+  const archivedDir = path.join(root, "problems", "archived");
+  if (!fs.existsSync(archivedDir)) return out;
+  for (const ent of fs.readdirSync(archivedDir, { withFileTypes: true })) {
+    if (!ent.isDirectory()) continue;
+    const metaPath = path.join(archivedDir, ent.name, "meta.json");
+    if (!fs.existsSync(metaPath)) continue;
+    try {
+      const meta = JSON.parse(fs.readFileSync(metaPath, "utf-8")) as { id?: string };
+      if (meta.id) out.add(meta.id);
+    } catch {
+      // tolerate malformed meta.json
+    }
+  }
+  return out;
+}
+
 type GroupKey = {
   agent: string;
   model: string;
@@ -69,6 +128,20 @@ type ParsedArgs = Filters & {
   diffPair?: [string, string];
   /** When true, emit JSON instead of the table. Only honored by --diff. */
   json: boolean;
+  /**
+   * When true, resolve each report's `problemId` through the alias map built
+   * from current `meta.json` files (`aliases?: string[]`). Lets trend/diff
+   * aggregate the same logical problem across rename boundaries. Off by
+   * default so analyzers see the raw IDs that landed in the report.
+   */
+  unifyAliases: boolean;
+  /**
+   * When true, include archived problems (under `problems/archived/`) in
+   * the analysis. Default omits them — graduated problems are not part of
+   * active rotation. Useful when stitching trend lines across a graduation
+   * boundary.
+   */
+  includeArchived: boolean;
 };
 
 function parseArgs(): ParsedArgs {
@@ -81,6 +154,8 @@ function parseArgs(): ParsedArgs {
   let contextProfile: string | undefined;
   let diffPair: [string, string] | undefined;
   let json = false;
+  let unifyAliases = false;
+  let includeArchived = false;
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
@@ -116,6 +191,12 @@ function parseArgs(): ParsedArgs {
         contextProfile = requireArg(args, i, "--context-profile");
         i++;
         break;
+      case "--unify-aliases":
+        unifyAliases = true;
+        break;
+      case "--include-archived":
+        includeArchived = true;
+        break;
     }
   }
 
@@ -128,6 +209,8 @@ function parseArgs(): ParsedArgs {
     contextProfile,
     ...(diffPair ? { diffPair } : {}),
     json,
+    unifyAliases,
+    includeArchived,
   };
 }
 
@@ -138,7 +221,10 @@ function matchesFilters(key: GroupKey, filters: Filters): boolean {
   return true;
 }
 
-function loadReports(filters: Filters = {}): ChallengeReport[] {
+function loadReports(
+  filters: Filters = {},
+  options: { includeArchived?: boolean } = {},
+): ChallengeReport[] {
   const resultsDir = path.join(challengeRoot, "results");
   if (!fs.existsSync(resultsDir)) {
     console.error("No results directory found");
@@ -152,12 +238,22 @@ function loadReports(filters: Filters = {}): ChallengeReport[] {
     process.exit(1);
   }
 
+  const archivedIds = options.includeArchived ? null : buildArchivedIdSet();
+
   const reports: ChallengeReport[] = [];
   for (const f of files) {
     try {
       const content = fs.readFileSync(f, "utf-8");
       const report = JSON.parse(content) as ChallengeReport;
       if (!matchesFilters(getGroupKey(report), filters)) continue;
+      // Strip archived problem results so trend / diff renderers see the
+      // active set only. The report's aggregate counters (problemsPassed,
+      // percentage) still reflect the original numbers — analyzers care
+      // about the per-problem rows, not the headline pass rate, when
+      // archived filtering is meaningful.
+      if (archivedIds && archivedIds.size > 0) {
+        report.results = report.results.filter((r) => !archivedIds.has(r.problemId));
+      }
       reports.push(report);
     } catch {
       console.warn(`Skipping malformed report file: ${path.relative(resultsDir, f)}`);
@@ -186,7 +282,11 @@ function formatTimestamp(ts: string): string {
   return d.toISOString().replace("T", " ").slice(0, 19);
 }
 
-function showTrend(reports: ChallengeReport[], groupLabel: string): void {
+function showTrend(
+  reports: ChallengeReport[],
+  groupLabel: string,
+  aliasMap?: Map<string, string>,
+): void {
   const width = 80;
   console.log("=".repeat(width));
   console.log(`Pass-Rate Trend -- ${groupLabel}`);
@@ -210,11 +310,16 @@ function showTrend(reports: ChallengeReport[], groupLabel: string): void {
   console.log("-".repeat(width));
   console.log("");
 
-  // Per-problem trend
+  // Per-problem trend. With aliasMap, normalize each result's problemId so a
+  // renamed problem (m22-old → m22-new) appears on one row across history.
+  const canonicalKey = (r: ProblemResult): string => {
+    const id = aliasMap ? canonicalProblemId(r.problemId, aliasMap) : r.problemId;
+    return problemKey(id, r.problemName);
+  };
   const problemKeySet = new Set<string>();
   for (const r of reports) {
     for (const p of r.results) {
-      problemKeySet.add(problemKey(p.problemId, p.problemName));
+      problemKeySet.add(canonicalKey(p));
     }
   }
   const allProblemKeys = [...problemKeySet].sort();
@@ -228,7 +333,7 @@ function showTrend(reports: ChallengeReport[], groupLabel: string): void {
     for (const key of allProblemKeys) {
       let line = key.slice(0, 29).padEnd(30);
       for (const report of reports) {
-        const result = report.results.find((r) => problemKey(r.problemId, r.problemName) === key);
+        const result = report.results.find((r) => canonicalKey(r) === key);
         let cell = "-";
         if (result) {
           cell = result.passed ? "PASS" : "FAIL";
@@ -451,10 +556,14 @@ function getTurnsStdev(result: ProblemResult): number | null {
   return typeof value === "number" ? value : null;
 }
 
-function indexResultsByKey(report: ChallengeReport): Map<string, ProblemResult> {
+function indexResultsByKey(
+  report: ChallengeReport,
+  aliasMap?: Map<string, string>,
+): Map<string, ProblemResult> {
   const out = new Map<string, ProblemResult>();
   for (const r of report.results) {
-    out.set(problemKey(r.problemId, r.problemName), r);
+    const id = aliasMap ? canonicalProblemId(r.problemId, aliasMap) : r.problemId;
+    out.set(problemKey(id, r.problemName), r);
   }
   return out;
 }
@@ -486,9 +595,10 @@ export function computeReportDiff(
   reportA: ChallengeReport,
   reportB: ChallengeReport,
   paths: { a: string; b: string } = { a: "<reportA>", b: "<reportB>" },
+  options: { aliasMap?: Map<string, string> } = {},
 ): DiffReport {
-  const indexA = indexResultsByKey(reportA);
-  const indexB = indexResultsByKey(reportB);
+  const indexA = indexResultsByKey(reportA, options.aliasMap);
+  const indexB = indexResultsByKey(reportB, options.aliasMap);
   const allKeys = new Set<string>([...indexA.keys(), ...indexB.keys()]);
   const rows: DiffRow[] = [];
   const overlapKeys: string[] = [];
@@ -880,13 +990,19 @@ function showDiff(diff: DiffReport, json: boolean): void {
  * (which chains trend + profile-diff) sets it true so the two sections are
  * visually separated.
  */
-function runProfileDiff(filters: Filters, json: boolean, showHeading: boolean): boolean {
+function runProfileDiff(
+  filters: Filters,
+  json: boolean,
+  showHeading: boolean,
+  aliasMap?: Map<string, string>,
+  loadOpts: { includeArchived?: boolean } = {},
+): boolean {
   // contextProfile filter would exclude one of the two profiles we need to
   // diff, so we strip it here. agent/model are still honored so callers can
   // narrow to a specific solver when multiple coexist.
   const profileSafeFilters: Filters = { ...filters };
   delete profileSafeFilters.contextProfile;
-  const reports = loadReports(profileSafeFilters);
+  const reports = loadReports(profileSafeFilters, loadOpts);
   const pair = resolveActiveProfilePair(reports);
   if (pair.kind === "missing") {
     console.log(`(profile-diff skipped: ${pair.reason})`);
@@ -899,29 +1015,49 @@ function runProfileDiff(filters: Filters, json: boolean, showHeading: boolean): 
     console.log("Profile Diff (types-only -> full-package)");
     console.log("=".repeat(width));
   }
-  const diff = computeReportDiff(pair.typesOnly.report, pair.fullPackage.report, {
-    a: pair.typesOnly.path,
-    b: pair.fullPackage.path,
-  });
+  const diff = computeReportDiff(
+    pair.typesOnly.report,
+    pair.fullPackage.report,
+    { a: pair.typesOnly.path, b: pair.fullPackage.path },
+    aliasMap ? { aliasMap } : {},
+  );
   showDiff(diff, json);
   return true;
 }
 
 function main(): void {
-  const { trend, groups, profileDiff, agent, model, contextProfile, diffPair, json } = parseArgs();
+  const {
+    trend,
+    groups,
+    profileDiff,
+    agent,
+    model,
+    contextProfile,
+    diffPair,
+    json,
+    unifyAliases,
+    includeArchived,
+  } = parseArgs();
   const filters: Filters = { agent, model, contextProfile };
+  const aliasMap = unifyAliases ? buildAliasMap() : undefined;
+  const loadOpts = { includeArchived };
 
   if (diffPair) {
     const [pathA, pathB] = diffPair;
     const reportA = loadReportFile(pathA);
     const reportB = loadReportFile(pathB);
-    const diff = computeReportDiff(reportA, reportB, { a: pathA, b: pathB });
+    const diff = computeReportDiff(
+      reportA,
+      reportB,
+      { a: pathA, b: pathB },
+      aliasMap ? { aliasMap } : {},
+    );
     showDiff(diff, json);
     return;
   }
 
   if (groups) {
-    const reports = loadReports(filters);
+    const reports = loadReports(filters, loadOpts);
     if (reports.length === 0) {
       console.error(`No report groups match filters (${describeFilters(filters)}).`);
       process.exit(1);
@@ -931,7 +1067,7 @@ function main(): void {
   }
 
   if (profileDiff) {
-    const ok = runProfileDiff(filters, json, false);
+    const ok = runProfileDiff(filters, json, false, aliasMap, loadOpts);
     if (!ok) process.exit(1);
     return;
   }
@@ -940,7 +1076,7 @@ function main(): void {
   // below if the caller is in the default path, because the default path also
   // emits a profile-diff that needs both profiles. We still respect
   // agent/model filters since those select WHICH solver to look at.
-  const filtered = loadReports(filters);
+  const filtered = loadReports(filters, loadOpts);
 
   if (trend) {
     if (filtered.length === 0) {
@@ -948,7 +1084,7 @@ function main(): void {
       console.error("Run 'pnpm challenge:analyze --groups' to list available groups.");
       process.exit(1);
     }
-    showTrend(filtered, describeFilters(filters));
+    showTrend(filtered, describeFilters(filters), aliasMap);
     return;
   }
 
@@ -972,11 +1108,11 @@ function main(): void {
   const sorted = [...chosen.reports].sort(
     (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
   );
-  showTrend(sorted, formatGroupKey(chosen.key));
+  showTrend(sorted, formatGroupKey(chosen.key), aliasMap);
 
   // Then surface the profile-diff. Skipped silently when one of the two
   // contextProfiles has no reports yet.
-  runProfileDiff(filters, json, true);
+  runProfileDiff(filters, json, true, aliasMap, loadOpts);
 }
 
 // Only auto-run when invoked directly via `tsx core/analyze.ts`, so importing

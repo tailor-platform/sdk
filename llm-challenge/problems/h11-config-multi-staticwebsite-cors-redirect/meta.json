@@ -4,5 +4,5 @@
   "designNote": "implicit_assumption",
   "sdkSurface": "config",
   "contextProfiles": ["types-only", "full-package"],
-  "hint": "site.url は `${name}:url` の placeholder。各 OAuth2 client の redirect は対応する site の url のみ"
+  "_hintAuthorOnly": "site.url は `${name}:url` の placeholder。各 OAuth2 client の redirect は対応する site の url のみ"
 }

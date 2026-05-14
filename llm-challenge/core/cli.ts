@@ -16,12 +16,21 @@ import {
 } from "../shared/helpers";
 import { persistSolveAttemptArtifact } from "./artifacts";
 import {
+  appendCheckpoint,
+  checkpointPath,
+  deleteCheckpoint,
+  groupCheckpoint,
+  isCheckpointReusable,
+  readCheckpoint,
+} from "./checkpoint";
+import {
   type ContextProfile,
   applyContextProfile,
   contextProfileValues,
   isContextProfile,
 } from "./context-profile";
-import { type TraceMetrics, computeTraceMetrics } from "./metrics";
+import { type TraceMetrics, computeLocStats, computeTraceMetrics } from "./metrics";
+import { computeCanonicalnessStats } from "./metrics-canonicalness";
 import {
   type ChallengeReport,
   type ProblemResult,
@@ -37,6 +46,7 @@ import { formatSolveModelLabel, normalizeModelForAgent } from "./solve-model";
 import { checkAuthStatus, solveProblem } from "./solve";
 import type { SolveAgent, SolveResult } from "./solve";
 import { checkPodmanAvailability } from "./solver/container";
+import { extractRateLimitResetMs, isRateLimitError } from "./solver/shared";
 import { verifyProblem } from "./verify";
 
 const execAsync = promisify(exec);
@@ -67,22 +77,52 @@ export type ProblemMeta = {
   designNote?: string;
   /** Phase 2 micro-problems: SDK surface area the problem targets. */
   sdkSurface?: string;
-  /** Phase 2 micro-problems: author-only memo describing the affordance gap; not surfaced to solvers. */
-  hint?: string;
+  /**
+   * Author-only memo describing the affordance gap. The leading underscore
+   * and the `Omit<…, "_hintAuthorOnly">` constraint on `buildPrompt`
+   * (`solve.ts`) together prevent this field from being included in any
+   * prompt sent to the agent. Updating problems must keep this field out of
+   * `problem.md` text — that surface IS visible to the agent.
+   */
+  _hintAuthorOnly?: string;
   difficulty?: "easy" | "medium" | "hard";
   category?: string;
   split?: string;
   contextProfiles?: ContextProfile[];
+  /**
+   * Optional list of older problem IDs that referred to the same logical
+   * task before a rename. Report aggregation can unify history across
+   * renames by following this chain. Off by default — analyze pass through
+   * `--unify-aliases` to opt in.
+   */
+  aliases?: string[];
   files?: {
     implement: string[];
     scaffold: string[];
   };
+  /**
+   * Optional extra CLI commands to run after `tailor-sdk generate` but
+   * before `tsc --noEmit`. Each entry runs in the workDir as a binary
+   * pass/fail stage; failure short-circuits subsequent stages. Targets
+   * problems that exercise CLI subcommands beyond `generate` (e.g.
+   * `tailor-sdk tailordb dump`, `tailor-sdk auth ...`).
+   */
+  verifyCommands?: string[];
 };
 
 function loadMeta(problemDir: string): ProblemMeta {
   const metaPath = path.join(problemDir, "meta.json");
   const content = fs.readFileSync(metaPath, "utf-8");
-  return JSON.parse(content) as ProblemMeta;
+  const raw = JSON.parse(content) as ProblemMeta & { hint?: string };
+  // Backwards compat: legacy `hint` field on meta.json is read as
+  // `_hintAuthorOnly` so old problems continue to load. The TS type drops
+  // `hint`, so downstream consumers cannot accidentally route it into a
+  // prompt. New problems should write `_hintAuthorOnly` directly.
+  if (raw.hint !== undefined && raw._hintAuthorOnly === undefined) {
+    raw._hintAuthorOnly = raw.hint;
+  }
+  delete raw.hint;
+  return raw;
 }
 
 /**
@@ -110,7 +150,17 @@ type ParsedArgs = {
   solve: boolean;
   agent: SolveAgent;
   model?: string;
+  /** Per-problem budget cap (USD). The solver kills the agent run once a
+   * single problem's spend crosses this number. */
   maxBudget: number;
+  /**
+   * Optional aggregate budget cap (USD) across the entire run. When set, the
+   * problem loop breaks once `totalCostUsd` crosses this threshold and the
+   * remaining tasks are recorded as `infraFailure: true (budget_exceeded)`
+   * so a resume can pick them up later. Independent of `--max-budget`,
+   * which only governs a single problem.
+   */
+  maxBudgetTotal?: number;
   clean: boolean;
   concurrency: number;
   contextProfile: ContextProfile;
@@ -147,6 +197,14 @@ type ParsedArgs = {
    * against the current branch (Phase 4 plan section "A/B 実験 + 統計化").
    */
   sdkBranch?: string;
+  /**
+   * Reuse the runId of a prior interrupted run. When set, the runner reads a
+   * sidecar checkpoint file (`checkpoint-<runId>.jsonl`) under the same
+   * results dir and skips (problem, iteration) pairs that already have a
+   * non-infraFailure result. Missing or infraFailure iterations are re-run
+   * into the same runId so the final report stitches old + new attempts.
+   */
+  resume?: string;
 };
 
 function parseArgs(): ParsedArgs {
@@ -159,6 +217,7 @@ function parseArgs(): ParsedArgs {
   let agent: SolveAgent = "claude";
   let model: string | undefined;
   let maxBudget = 5.0;
+  let maxBudgetTotal: number | undefined;
   let clean = false;
   let concurrency = os.availableParallelism();
   let contextProfile: ContextProfile = "full-package";
@@ -166,6 +225,7 @@ function parseArgs(): ParsedArgs {
   let noAutoExtend = false;
   let noEarlyStop = false;
   let sdkBranch: string | undefined;
+  let resume: string | undefined;
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
@@ -202,7 +262,12 @@ function parseArgs(): ParsedArgs {
         break;
       }
       case "--max-budget":
-        maxBudget = Number(requireArg(args, i, "--max-budget"));
+      case "--max-budget-per-problem":
+        maxBudget = Number(requireArg(args, i, args[i]!));
+        i++;
+        break;
+      case "--max-budget-total":
+        maxBudgetTotal = Number(requireArg(args, i, "--max-budget-total"));
         i++;
         break;
       case "--clean":
@@ -238,6 +303,10 @@ function parseArgs(): ParsedArgs {
         sdkBranch = requireArg(args, i, "--sdk-branch");
         i++;
         break;
+      case "--resume":
+        resume = requireArg(args, i, "--resume");
+        i++;
+        break;
     }
   }
 
@@ -247,6 +316,10 @@ function parseArgs(): ParsedArgs {
   }
   if (!Number.isFinite(maxBudget) || maxBudget <= 0) {
     console.error("Error: --max-budget must be a positive number");
+    process.exit(1);
+  }
+  if (maxBudgetTotal !== undefined && (!Number.isFinite(maxBudgetTotal) || maxBudgetTotal <= 0)) {
+    console.error("Error: --max-budget-total must be a positive number");
     process.exit(1);
   }
   // --iterations: default to 3 in solve mode (per Phase 4 spec D 採点ベクトル
@@ -277,6 +350,8 @@ function parseArgs(): ParsedArgs {
     noAutoExtend,
     noEarlyStop,
     ...(sdkBranch ? { sdkBranch } : {}),
+    ...(resume ? { resume } : {}),
+    ...(maxBudgetTotal !== undefined ? { maxBudgetTotal } : {}),
   };
 }
 
@@ -758,6 +833,29 @@ async function runProblem(
       // then drop the file with workDir.
       metrics = computeTraceMetrics(traceWorkPath);
     }
+    // Measure LoC delta against the scaffold tree (the input the AI saw).
+    // Built lazily in a tmpdir from the same layers setupWorkDir uses so a
+    // raw `problems/<id>/scaffold` (which lacks shared layers) does not skew
+    // the count. Skip on infra failure since workDir may be empty.
+    if (metrics && !solveResult.infraFailure) {
+      const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), "llm-loc-base-"));
+      try {
+        applyScaffoldLayers(tmpBase, [
+          path.join(challengeRoot, "shared", "scaffold"),
+          path.join(challengeRoot, "problems", "_shared", "scaffold"),
+          path.join(problemDir, "scaffold"),
+        ]);
+        const loc = computeLocStats(tmpBase, workDir);
+        metrics = { ...metrics, ...loc };
+      } finally {
+        fs.rmSync(tmpBase, { recursive: true, force: true });
+      }
+      // Canonicalness: walk the work tree, classify @tailor-platform/* imports.
+      // Ratio of 1.0 = every import is canonical; lower = invented or internal
+      // sub-paths. Cheap regex scan, no AST.
+      const canon = computeCanonicalnessStats(workDir);
+      metrics = { ...metrics, canonicalImportRatio: canon.canonicalImportRatio };
+    }
     if (options.verbose) {
       let icon = "FAIL";
       if (solveResult.success) {
@@ -886,14 +984,78 @@ export type GitDiffResult = {
   stderr: string;
 };
 
+// Files filtered out of every iter-diff / fail-vs-solution.diff. These appear
+// in every work tree (scaffold setup) and add no signal about how the AI
+// deviated from the reference solution: package.json/tsconfig.json are
+// scaffold boilerplate, .sdk holds the packed SDK tarball + extracted modules,
+// .gitkeep markers flip on directory existence rather than content.
+//
+// Each entry matches any path containing the substring. `git diff --no-index`
+// does not accept pathspec excludes, so we post-filter the stdout per-block.
+export const EXCLUDED_DIFF_PATH_FRAGMENTS = [
+  "/package.json",
+  "/pnpm-lock.yaml",
+  "/tsconfig.json",
+  "/.sdk/",
+  "/node_modules/",
+  "/.gitkeep",
+];
+
+/**
+ * Drop file-blocks from a unified `git diff --no-index` output whose
+ * a/-side or b/-side path contains any fragment in
+ * `EXCLUDED_DIFF_PATH_FRAGMENTS`. A "block" starts at a `diff --git ` line and
+ * runs until the next one (or end-of-input). Anything before the first
+ * `diff --git ` (e.g. a leading warning line) is preserved.
+ */
+export function filterExcludedFromDiff(stdout: string): string {
+  if (!stdout.includes("diff --git ")) {
+    return stdout;
+  }
+  const headerRegex = /^diff --git a\/(.+?) b\/(.+?)$/m;
+  const blocks: string[] = [];
+  // Split keeps the delimiter on the next chunk; use a manual scan instead.
+  let cursor = 0;
+  let preamble = "";
+  const text = stdout;
+  // Capture preamble before first header.
+  const firstIdx = text.indexOf("diff --git ");
+  if (firstIdx > 0) {
+    preamble = text.slice(0, firstIdx);
+    cursor = firstIdx;
+  }
+  while (cursor < text.length) {
+    const next = text.indexOf("\ndiff --git ", cursor + 1);
+    const end = next === -1 ? text.length : next + 1;
+    blocks.push(text.slice(cursor, end));
+    cursor = end;
+  }
+  const kept = blocks.filter((block) => {
+    const m = block.match(headerRegex);
+    if (!m) return true;
+    const aPath = m[1] ?? "";
+    const bPath = m[2] ?? "";
+    return !EXCLUDED_DIFF_PATH_FRAGMENTS.some(
+      (frag) => aPath.includes(frag) || bPath.includes(frag),
+    );
+  });
+  return preamble + kept.join("");
+}
+
 const defaultGitDiffRunner: GitDiffRunner = (failingWork, passingWork) => {
   const result = spawnSync("git", ["diff", "--no-index", "--", failingWork, passingWork], {
     encoding: "utf-8",
     maxBuffer: 50 * 1024 * 1024, // 50 MiB; work snapshots are small but Tailor configs can balloon
   });
+  const rawStdout = result.stdout ?? "";
+  const stdout = filterExcludedFromDiff(rawStdout);
+  // After filtering, the diff may be empty even though git returned status 1.
+  // Normalise to status 0 so emit* functions report "no-diff" instead of
+  // writing a zero-byte diff file.
+  const status = stdout.length === 0 && result.status === 1 ? 0 : result.status;
   return {
-    status: result.status,
-    stdout: result.stdout ?? "",
+    status,
+    stdout,
     stderr: result.stderr ?? "",
   };
 };
@@ -1243,6 +1405,8 @@ async function main(): Promise<void> {
     noAutoExtend,
     noEarlyStop,
     sdkBranch,
+    resume: resumeRunId,
+    maxBudgetTotal,
   } = parseArgs();
 
   if (problemIds.length === 0 && !all) {
@@ -1250,11 +1414,11 @@ async function main(): Promise<void> {
     console.error("  tsx core/cli.ts --problem 001 --impl ./path/to/impl");
     console.error("  tsx core/cli.ts --problem 001 --use-solution");
     console.error(
-      "  tsx core/cli.ts --problem 001 [--problem 002 ...] --solve [--agent claude|codex] [--model sonnet] [--max-budget 5.00] [--context-profile types-only] [--iterations 3] [--no-auto-extend] [--no-early-stop] [--sdk-branch <ref>]",
+      "  tsx core/cli.ts --problem 001 [--problem 002 ...] --solve [--agent claude|codex] [--model sonnet] [--max-budget 5.00] [--max-budget-total 50.00] [--context-profile types-only] [--iterations 3] [--no-auto-extend] [--no-early-stop] [--sdk-branch <ref>] [--resume <runId>]",
     );
     console.error("  tsx core/cli.ts --all --use-solution [--clean] [--concurrency <n>]");
     console.error(
-      "  tsx core/cli.ts --all --solve [--agent claude|codex] [--model sonnet] [--max-budget 5.00] [--clean] [--concurrency <n>] [--context-profile types-only] [--iterations 3] [--no-auto-extend] [--no-early-stop] [--sdk-branch <ref>]",
+      "  tsx core/cli.ts --all --solve [--agent claude|codex] [--model sonnet] [--max-budget 5.00] [--max-budget-total 50.00] [--clean] [--concurrency <n>] [--context-profile types-only] [--iterations 3] [--no-auto-extend] [--no-early-stop] [--sdk-branch <ref>] [--resume <runId>]",
     );
     console.error("  tsx core/cli.ts --all --impl-dir ./path/to/all-outputs");
     console.error("\nNote: --solve requires Podman. On macOS, run 'podman machine start' first.");
@@ -1370,10 +1534,84 @@ async function main(): Promise<void> {
   let completed = 0;
   const runStartTime = Date.now();
   const sdkVersion = getSdkVersion(challengeRoot);
-  const runId = createRunId();
+  // When --resume is set, reuse the prior runId so artifact paths and
+  // checkpoint file lookup line up. Otherwise mint a new one.
+  const runId = resumeRunId ?? createRunId();
   const runArtifactRoot = solve
     ? createRunArtifactRoot(resultsDir, modelLabelRaw, sdkVersion, runId)
     : undefined;
+  // Per-iteration checkpoint sidecar. Append after each iteration so a
+  // crashed or rate-limited run can resume by re-using non-infra-failure
+  // entries. Path scheme matches the final report's runResultsDir so
+  // operators can find both side-by-side.
+  const checkpointFile = checkpointPath(getRunResultsDir(resultsDir, modelLabelRaw), runId);
+  const checkpointMap = resumeRunId
+    ? groupCheckpoint(readCheckpoint(checkpointFile))
+    : new Map<string, Map<number, ProblemResult>>();
+  if (resumeRunId) {
+    const reusable = Array.from(checkpointMap.values())
+      .flatMap((m) => Array.from(m.values()))
+      .filter(isCheckpointReusable).length;
+    console.log(
+      `Resuming runId=${resumeRunId}: ${reusable} iteration result(s) reused from ${checkpointFile}`,
+    );
+  }
+
+  /**
+   * Wrap `runProblem` so that rate-limit infra failures (Claude / Codex quota
+   * exhaustion, HTTP 429) are retried with backoff instead of permanently
+   * skipping the problem. Auth / config infra failures are NOT retried
+   * because re-running them without operator intervention burns budget
+   * without changing the outcome.
+   *
+   * Sleep strategy (in order of preference):
+   * 1. If the error message carries a "resets <time>" hint that
+   *    `extractRateLimitResetMs` can parse, sleep until that wall-clock
+   *    moment + 30s grace.
+   * 2. Otherwise, exponential-ish backoff at 60s / 120s / 300s.
+   *
+   * Capped at `maxAttempts` total runs (1 initial + retries) so a permanent
+   * quota hit still exits in bounded time.
+   */
+  async function runProblemWithRateLimitRetry(args: {
+    problemName: string;
+    baseOptions: Parameters<typeof runProblem>[1];
+    verbose: boolean;
+    maxAttempts?: number;
+    sleeper?: (ms: number) => Promise<void>;
+    now?: () => Date;
+  }): Promise<ProblemResult> {
+    const maxAttempts = args.maxAttempts ?? 4;
+    const sleeper = args.sleeper ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+    const nowFn = args.now ?? (() => new Date());
+    const fixedBackoffMs = [60_000, 120_000, 300_000];
+    let lastResult: ProblemResult | undefined;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const result = await runProblem(args.problemName, args.baseOptions);
+      lastResult = result;
+      const solveErr = result.solveResult?.error ?? "";
+      const isRateLimit = result.solveResult?.infraFailure === true && isRateLimitError(solveErr);
+      if (!isRateLimit || attempt === maxAttempts - 1) {
+        return result;
+      }
+      const now = nowFn();
+      const resetMs = extractRateLimitResetMs(solveErr, now);
+      const sleepMs =
+        resetMs !== null
+          ? Math.max(0, resetMs - now.getTime()) + 30_000
+          : (fixedBackoffMs[attempt] ?? fixedBackoffMs.at(-1)!);
+      if (args.verbose) {
+        const reason = resetMs !== null ? `reset hint +30s` : `backoff #${attempt + 1}`;
+        console.log(
+          `  rate-limit on ${args.problemName} — sleeping ${Math.round(sleepMs / 1000)}s (${reason}) before retry`,
+        );
+      }
+      await sleeper(sleepMs);
+    }
+    // Unreachable in practice (the for loop returns on the last attempt) but
+    // narrows the type for TS.
+    return lastResult!;
+  }
 
   /**
    * Run a single problem `iterations` times sequentially (inside the
@@ -1396,19 +1634,59 @@ async function main(): Promise<void> {
       contextProfile,
     } as const;
     if (iterations === 1) {
-      return runProblem(task.problemName, { ...baseOptions, runArtifactRoot });
+      // Single-iteration shortcut: still honour the checkpoint, so a resume
+      // of a non-iteration run can reuse a prior pass result.
+      const cached = checkpointMap.get(task.problemName)?.get(0);
+      if (cached && isCheckpointReusable(cached)) {
+        if (verbose) {
+          console.log(`  resume: reusing iter-0 result for ${task.problemName} from checkpoint`);
+        }
+        return cached;
+      }
+      const result = await runProblemWithRateLimitRetry({
+        problemName: task.problemName,
+        baseOptions: { ...baseOptions, runArtifactRoot },
+        verbose,
+      });
+      appendCheckpoint(checkpointFile, {
+        problemName: task.problemName,
+        iter: 0,
+        result,
+      });
+      return result;
     }
     const perIteration: ProblemResult[] = [];
     const runOneIteration = async (i: number): Promise<void> => {
+      // Reuse a prior non-infra checkpoint entry for the same (problem, iter)
+      // pair when resuming. Re-run otherwise.
+      const cached = checkpointMap.get(task.problemName)?.get(i);
+      if (cached && isCheckpointReusable(cached)) {
+        if (verbose) {
+          console.log(`  resume: reusing iter-${i} result for ${task.problemName} from checkpoint`);
+        }
+        perIteration.push(cached);
+        return;
+      }
       // Place each iteration's artifact under a sub-dir so the trace.jsonl /
       // workSnapshot of iter-1 isn't overwritten by iter-2.
       const iterRoot = runArtifactRoot ? path.join(runArtifactRoot, `iter-${i}`) : undefined;
-      perIteration.push(
-        await runProblem(task.problemName, {
+      // Wrap runProblem in a rate-limit retry: when the agent returns an
+      // infra-failure caused by rate-limit / 429 / quota, sleep and try
+      // again. Cap retries so a permanent quota hit can still exit.
+      const result = await runProblemWithRateLimitRetry({
+        problemName: task.problemName,
+        baseOptions: {
           ...baseOptions,
           ...(iterRoot ? { runArtifactRoot: iterRoot } : {}),
-        }),
-      );
+        },
+        verbose,
+      });
+      appendCheckpoint(checkpointFile, {
+        problemName: task.problemName,
+        iter: i,
+        result,
+      });
+      perIteration.push(result);
     };
     for (let i = 0; i < iterations; i++) {
       await runOneIteration(i);
@@ -1510,14 +1788,57 @@ async function main(): Promise<void> {
     return aggregateIterations(perIteration);
   }
 
+  // Aggregate cost across all completed problems. Compared against
+  // `maxBudgetTotal` at each task's slot-open moment so a single overrun
+  // problem can still finish — only subsequent tasks see the cap. costUsd
+  // from the aggregated `solveResult` for iteration runs is the sum across
+  // all iterations of that problem (set by aggregateIterations).
+  let totalSpentUsd = 0;
+  const budgetExceededResult = (taskName: string): ProblemResult => {
+    const problemDir = path.join(challengeRoot, "problems", taskName);
+    const meta = loadMeta(problemDir);
+    return {
+      problemId: meta.id,
+      problemName: deriveProblemName(meta, taskName),
+      difficulty: meta.difficulty ?? "easy",
+      category: meta.category ?? meta.sdkSurface ?? "micro",
+      ...(meta.split !== undefined ? { split: meta.split } : {}),
+      contextProfile,
+      stages: makeSkippedStages("budget exceeded"),
+      passed: false,
+      solveResult: {
+        success: false,
+        costUsd: 0,
+        durationMs: 0,
+        output: "",
+        error: `budget_exceeded: totalSpentUsd=${totalSpentUsd.toFixed(4)} >= --max-budget-total=${maxBudgetTotal}`,
+        infraFailure: true,
+      },
+      totalDurationMs: 0,
+    };
+  };
+
   await Promise.all(
     tasks.map((task) =>
       limit(async () => {
         try {
+          if (maxBudgetTotal !== undefined && totalSpentUsd >= maxBudgetTotal) {
+            const skipped = budgetExceededResult(task.problemName);
+            results.push(skipped);
+            completed++;
+            if (!verbose) {
+              console.log(
+                `[${completed}/${total}] ${task.problemName}: BUDGET_EXCEEDED (spent $${totalSpentUsd.toFixed(2)})`,
+              );
+            }
+            return;
+          }
+
           const result = await runProblemWithIterations(task);
 
           results.push(result);
           completed++;
+          totalSpentUsd += result.solveResult?.costUsd ?? 0;
 
           if (!verbose) {
             let status: string;
@@ -1568,6 +1889,12 @@ async function main(): Promise<void> {
   });
 
   writeReport(resultsDir, report, modelLabelRaw, sdkVersion, runId);
+  // Once the final report exists, the checkpoint is redundant. Best-effort
+  // delete so the runResultsDir does not accumulate dead JSONL files. A
+  // future resume into the same runId would now see no checkpoint and
+  // re-run from scratch — but that is by design (final report present means
+  // the run completed).
+  deleteCheckpoint(checkpointFile);
 }
 
 // Only auto-run when invoked directly via `tsx core/cli.ts` etc., so importing

@@ -4,5 +4,5 @@
   "designNote": "redundant_call_pattern",
   "sdkSurface": "cli",
   "contextProfiles": ["types-only", "full-package"],
-  "hint": "3 ファイルに同じ typo がある。grep で全箇所を発見 → 1 度に置換"
+  "_hintAuthorOnly": "3 ファイルに同じ typo がある。grep で全箇所を発見 → 1 度に置換"
 }

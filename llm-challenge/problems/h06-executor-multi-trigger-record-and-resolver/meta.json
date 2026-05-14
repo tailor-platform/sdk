@@ -4,5 +4,5 @@
   "designNote": "consolidation_candidate",
   "sdkSurface": "executor + helper",
   "contextProfiles": ["types-only", "full-package"],
-  "hint": "1 つの executor は 1 種類の trigger しか取らない。record と resolver を 1 体で受けたければ executor 2 体 + 共有 helper"
+  "_hintAuthorOnly": "1 つの executor は 1 種類の trigger しか取らない。record と resolver を 1 体で受けたければ executor 2 体 + 共有 helper"
 }

@@ -4,5 +4,5 @@
   "designNote": "param_confusion",
   "sdkSurface": "resolver + db-type",
   "contextProfiles": ["types-only", "full-package"],
-  "hint": "resolver の input 型 (t.*) と db.type の validate ルール (field.parse) を二段で組み合わせる"
+  "_hintAuthorOnly": "resolver の input 型 (t.*) と db.type の validate ルール (field.parse) を二段で組み合わせる"
 }

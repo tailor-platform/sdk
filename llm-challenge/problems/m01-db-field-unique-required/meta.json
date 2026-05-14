@@ -4,5 +4,5 @@
   "designNote": "implicit_assumption",
   "sdkSurface": "db-field",
   "contextProfiles": ["types-only", "full-package"],
-  "hint": "db.string() chain で .unique() が生える"
+  "_hintAuthorOnly": "db.string() chain で .unique() が生える"
 }

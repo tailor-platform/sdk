@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import type { TraceEvent } from "./trace";
 
@@ -132,12 +133,44 @@ export function classifyReadTarget(filePath: string): ReadTargetClass {
  */
 export type TraceMetrics = {
   turns: number;
+  /**
+   * Cross-agent normalized tool-use event count. By construction equals
+   * `turns` (both count `tool_use` events from the parsed trace), but
+   * surfaced as a separate field so analyzers can compare across agents
+   * without depending on the legacy `turns` semantics, which historically
+   * carried "num_turns × tools-per-turn" connotation for Claude. New
+   * code should prefer `toolUseCount` for cross-agent comparison; `turns`
+   * is kept for backwards compatibility with older reports.
+   *
+   * Optional on the wire so reports written by earlier versions still
+   * deserialise; readers fall back to `turns` when missing.
+   */
+  toolUseCount?: number;
   toolCallCounts: Record<string, number>;
   readTargets: Record<ReadTargetClass, number>;
   readSdkDts: number;
   readDocs: number;
   bashRetries: number;
   totalDurationMs?: number;
+  /**
+   * `git diff --no-index --shortstat <scaffold> <workDir>` after solve.
+   * Surfaces the size of the AI's edit relative to the input scaffold so
+   * "passing but verbose" solutions can be told apart from minimal ones.
+   * All three default to 0 when the diff cannot be computed (e.g. work
+   * tree missing on infra failure). Optional on the wire so older reports
+   * remain backwards-compatible.
+   */
+  linesAdded?: number;
+  linesRemoved?: number;
+  filesChanged?: number;
+  /**
+   * Ratio of canonical `@tailor-platform/sdk` (incl. canonical sub-paths)
+   * imports over all `@tailor-platform/...` imports in the AI's work tree.
+   * 1.0 = every import uses a canonical specifier; lower = invented or
+   * internal paths. Defaults to 1.0 when zero SDK imports are present
+   * (no opportunity to violate). Optional on the wire.
+   */
+  canonicalImportRatio?: number;
 };
 
 const BASH_RETRY_COMMANDS = [
@@ -161,11 +194,16 @@ function emptyReadTargets(): Record<ReadTargetClass, number> {
 function emptyMetrics(): TraceMetrics {
   return {
     turns: 0,
+    toolUseCount: 0,
     toolCallCounts: {},
     readTargets: emptyReadTargets(),
     readSdkDts: 0,
     readDocs: 0,
     bashRetries: 0,
+    // linesAdded/Removed/filesChanged left undefined here; populated by the
+    // caller after `computeLocStats`. Leaving them undefined keeps the
+    // computeTraceMetrics output shape backwards-compatible (older reports
+    // never carried these fields).
   };
 }
 
@@ -204,7 +242,51 @@ export function aggregateTraceMetrics(events: Iterable<TraceEvent>): TraceMetric
   // readers (older report renderers, analyse tool) keep working.
   metrics.readSdkDts = metrics.readTargets["sdk-dts"];
   metrics.readDocs = metrics.readTargets["sdk-docs"];
+  // Cross-agent normalized count equals turns by construction (both count
+  // tool_use events). Surfacing it as a separate field signals that
+  // analyzers comparing across agents should use this name.
+  metrics.toolUseCount = metrics.turns;
   return metrics;
+}
+
+export type LocStats = { linesAdded: number; linesRemoved: number; filesChanged: number };
+
+/**
+ * Parse a `git diff --shortstat` summary line into a structured count.
+ * Exposed for unit testing; production callers should prefer
+ * {@link computeLocStats}.
+ */
+export function parseShortstat(stdout: string): LocStats {
+  const match = stdout.match(
+    /(\d+)\s+files?\s+changed(?:,\s+(\d+)\s+insertion[^,]*)?(?:,\s+(\d+)\s+deletion)?/,
+  );
+  if (!match) return { linesAdded: 0, linesRemoved: 0, filesChanged: 0 };
+  return {
+    filesChanged: Number.parseInt(match[1] ?? "0", 10),
+    linesAdded: Number.parseInt(match[2] ?? "0", 10),
+    linesRemoved: Number.parseInt(match[3] ?? "0", 10),
+  };
+}
+
+/**
+ * Run `git diff --no-index --shortstat <baseDir> <workDir>` to measure the
+ * size of the AI's edit relative to a baseline tree. Silent fallback to
+ * zeros when either side is missing or git is unavailable.
+ */
+export function computeLocStats(baseDir: string, workDir: string): LocStats {
+  if (!fs.existsSync(baseDir) || !fs.existsSync(workDir)) {
+    return { linesAdded: 0, linesRemoved: 0, filesChanged: 0 };
+  }
+  const r = spawnSync("git", ["diff", "--no-index", "--shortstat", "--", baseDir, workDir], {
+    encoding: "utf-8",
+    maxBuffer: 10 * 1024 * 1024,
+  });
+  // git diff exits 0 (no diff) or 1 (diff) for normal operation; >=2 is an
+  // error we want to surface as zeros rather than crashing the run.
+  if (r.status !== 0 && r.status !== 1) {
+    return { linesAdded: 0, linesRemoved: 0, filesChanged: 0 };
+  }
+  return parseShortstat(r.stdout ?? "");
 }
 
 /**
@@ -243,9 +325,14 @@ export type MetricsAggregate = {
 
 export type MetricsSummary = {
   turns: MetricsAggregate;
+  toolUseCount: MetricsAggregate;
   readSdkDts: MetricsAggregate;
   readDocs: MetricsAggregate;
   bashRetries: MetricsAggregate;
+  linesAdded: MetricsAggregate;
+  linesRemoved: MetricsAggregate;
+  filesChanged: MetricsAggregate;
+  canonicalImportRatio: MetricsAggregate;
   /** Per-tool call counts aggregated as min/max/median across runs. */
   toolCalls: Record<string, MetricsAggregate>;
 };
@@ -283,9 +370,14 @@ export function summarizeMetrics(metricsList: TraceMetrics[]): MetricsSummary | 
   }
   return {
     turns: aggregate(metricsList.map((m) => m.turns)),
+    toolUseCount: aggregate(metricsList.map((m) => m.toolUseCount ?? m.turns)),
     readSdkDts: aggregate(metricsList.map((m) => m.readSdkDts)),
     readDocs: aggregate(metricsList.map((m) => m.readDocs)),
     bashRetries: aggregate(metricsList.map((m) => m.bashRetries)),
+    linesAdded: aggregate(metricsList.map((m) => m.linesAdded ?? 0)),
+    linesRemoved: aggregate(metricsList.map((m) => m.linesRemoved ?? 0)),
+    filesChanged: aggregate(metricsList.map((m) => m.filesChanged ?? 0)),
+    canonicalImportRatio: aggregate(metricsList.map((m) => m.canonicalImportRatio ?? 1.0)),
     toolCalls,
   };
 }

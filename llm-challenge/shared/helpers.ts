@@ -91,18 +91,35 @@ export function loadMeta(problemDir: string): ProblemMeta {
  * Accepts legacy three-digit IDs (`001-foo`), Phase 2 micro-problem IDs
  * (`m01-foo`), and Phase 2.5 harder-tier IDs (`h01-foo`). Directories beginning
  * with `_` (e.g. `_shared`) are excluded — they hold cross-problem assets, not
- * runnable problems.
+ * runnable problems. The `archived/` sub-directory is also excluded by
+ * default: graduated problems (5 consecutive passRate=1.0) live there and
+ * are skipped by `challenge:solve`. Pass `{ includeArchived: true }` to
+ * re-include them — useful for `challenge:analyze --include-archived` so
+ * trend lines remain continuous past a graduation.
  */
-export function listProblems(baseDir: string): string[] {
+export function listProblems(
+  baseDir: string,
+  options: { includeArchived?: boolean } = {},
+): string[] {
   const problemsDir = path.join(baseDir, "problems");
   if (!fs.existsSync(problemsDir)) {
     return [];
   }
-  return fs
+  const idRegex = /^(\d{3}|m\d+|h\d+)-/;
+  const active = fs
     .readdirSync(problemsDir, { withFileTypes: true })
-    .filter((d) => d.isDirectory() && !d.name.startsWith("_") && /^(\d{3}|m\d+|h\d+)-/.test(d.name))
-    .map((d) => d.name)
-    .sort();
+    .filter((d) => d.isDirectory() && !d.name.startsWith("_") && idRegex.test(d.name))
+    .map((d) => d.name);
+  if (!options.includeArchived) return active.sort();
+  const archivedDir = path.join(problemsDir, "archived");
+  let archived: string[] = [];
+  if (fs.existsSync(archivedDir)) {
+    archived = fs
+      .readdirSync(archivedDir, { withFileTypes: true })
+      .filter((d) => d.isDirectory() && idRegex.test(d.name))
+      .map((d) => path.join("archived", d.name));
+  }
+  return [...active, ...archived].sort();
 }
 
 /**

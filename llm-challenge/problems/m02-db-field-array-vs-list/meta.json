@@ -4,5 +4,5 @@
   "designNote": "naming_bias",
   "sdkSurface": "db-field",
   "contextProfiles": ["types-only", "full-package"],
-  "hint": ".array() ではなく option 渡し"
+  "_hintAuthorOnly": ".array() ではなく option 渡し"
 }

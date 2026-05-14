@@ -4,5 +4,5 @@
   "designNote": "error_message_opaque",
   "sdkSurface": "cli-runtime",
   "contextProfiles": ["types-only", "full-package"],
-  "hint": "kyselyTypePlugin は @tailor-platform/sdk/plugin/kysely-type の sub-path export"
+  "_hintAuthorOnly": "kyselyTypePlugin は @tailor-platform/sdk/plugin/kysely-type の sub-path export"
 }

@@ -4,5 +4,5 @@
   "designNote": "consolidation_candidate",
   "sdkSurface": "plugin",
   "contextProfiles": ["types-only", "full-package"],
-  "hint": "definePlugins(a, b, c) は rest args。defineGenerators は deprecated"
+  "_hintAuthorOnly": "definePlugins(a, b, c) は rest args。defineGenerators は deprecated"
 }

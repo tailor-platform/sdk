@@ -4,5 +4,5 @@
   "designNote": "missing_namespace",
   "sdkSurface": "config",
   "contextProfiles": ["types-only", "full-package"],
-  "hint": "auth は単数。idp は配列。idProvider は staff IdP の provider() を使う"
+  "_hintAuthorOnly": "auth は単数。idp は配列。idProvider は staff IdP の provider() を使う"
 }

@@ -4,5 +4,5 @@
   "designNote": "param_confusion",
   "sdkSurface": "resolver",
   "contextProfiles": ["types-only", "full-package"],
-  "hint": "throw でなく { success: false, error: '...' } を返す"
+  "_hintAuthorOnly": "throw でなく { success: false, error: '...' } を返す"
 }

@@ -42,4 +42,11 @@ mechanical once the solver maps the error to the export shape.
 ## Reference
 
 Refer to the installed SDK package for the config loader's expectations on the
-configuration file shape. No external documentation is required for this task.
+configuration file shape.
+
+## CLI Reference
+
+`packages/sdk/docs/cli-reference.md` describes which file the CLI consults
+and how the `-c <path>` flag overrides it. The error message names the
+exact missing piece — "default export not found" — so the fix is to align
+the export shape, not the CLI invocation.
