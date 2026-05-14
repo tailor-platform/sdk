@@ -17,4 +17,4 @@ The SDK no longer depends on the external `@tailor-platform/function-types` pack
 
 Other test-mock changes from `@tailor-platform/sdk/vitest`:
 
-- Breaking: `fileMock.enqueueResult(...)` now rejects raw `Uint8Array` / `ArrayBuffer` payloads for `openDownloadStream`. Enqueue a structured iterable of `StreamValue` items (`{ type: "metadata" }`, `{ type: "chunk", data, position }`, `{ type: "complete" }`) so test streams stay aligned with the platform's structured stream contract. The shorthand `Uint8Array` enqueue is still accepted by `download` / `downloadAsBase64`.
+- Breaking: when an `openDownloadStream` (or `toFileStream()`) call consumes a queued mock result, raw `Uint8Array` / `ArrayBuffer` payloads are now rejected. Enqueue a structured iterable of `StreamValue` items (`{ type: "metadata" }`, `{ type: "chunk", data, position }`, `{ type: "complete" }`) so test streams stay aligned with the platform's structured stream contract. The shorthand `Uint8Array` enqueue is still accepted by `download` / `downloadAsBase64`.

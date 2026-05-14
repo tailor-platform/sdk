@@ -11,7 +11,8 @@ import { loadYamlText } from "./scripts/yaml-text-plugin.mjs";
 // (`@tailor-platform/sdk/runtime`, `/vitest`, /plugin`, etc.) stay self-contained.
 function stripBannerExceptConfigureEntry(outDir: string): void {
   const pattern = /^\/\/\/ <reference types="@tailor-platform\/sdk\/runtime\/globals" \/>\n/;
-  const keep = path.resolve(outDir, "configure/index.d.mts");
+  const root = path.resolve(outDir);
+  const keep = path.join(root, "configure", "index.d.mts");
   const walk = (dir: string): void => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const full = path.join(dir, entry.name);
@@ -24,7 +25,7 @@ function stripBannerExceptConfigureEntry(outDir: string): void {
       }
     }
   };
-  walk(outDir);
+  walk(root);
 }
 
 function yamlText() {
