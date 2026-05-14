@@ -413,9 +413,15 @@ export async function deploy(options?: DeployOptions) {
     const { config, application, workflowBuildResult, bundledScripts, buildOnly } = await withSpan(
       "build",
       async () => {
+        const dryRun = options?.dryRun ?? false;
+        const buildOnly =
+          options?.buildOnly ?? parseBoolean(process.env.TAILOR_PLATFORM_SDK_BUILD_ONLY) === true;
+
         const { config, plugins } = await withSpan("build.loadConfig", async () => {
           const foundPath = loadConfigPath(options?.configPath);
-          if (foundPath) {
+          // Skip id injection in dry-run / build-only flows: those modes are
+          // expected to have no on-disk side effects.
+          if (foundPath && !dryRun && !buildOnly) {
             const resolvedPath = path.resolve(process.cwd(), foundPath);
             if (fs.existsSync(resolvedPath)) {
               await ensureConfigId(resolvedPath);
@@ -424,9 +430,6 @@ export async function deploy(options?: DeployOptions) {
           return loadConfig(options?.configPath);
         });
 
-        const dryRun = options?.dryRun ?? false;
-        const buildOnly =
-          options?.buildOnly ?? parseBoolean(process.env.TAILOR_PLATFORM_SDK_BUILD_ONLY) === true;
         const noCache = options?.noCache ?? false;
 
         // Initialize cache manager
