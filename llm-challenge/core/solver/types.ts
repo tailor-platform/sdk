@@ -43,13 +43,18 @@ export type SolveResult = {
   usage?: SolveUsage;
 };
 
-export type SolveAgent = "claude" | "codex";
+export type SolveAgent = "claude" | "codex" | "oss";
 
 export type SolveRunOptions = {
   prompt: string;
   workDir: string;
   model?: string;
   maxBudget: number;
+  /**
+   * Per-iteration sampling seed. The OSS adapter forwards this to Ollama via
+   * the per-run `opencode.json`. Cloud adapters (claude / codex) ignore it.
+   */
+  seed?: number;
   /**
    * Optional path where the adapter should append a JSONL behaviour trace
    * (one `TraceEvent` per line; see `core/trace.ts`). Adapters that cannot

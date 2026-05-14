@@ -253,8 +253,10 @@ function parseArgs(): ParsedArgs {
         break;
       case "--agent": {
         const value = requireArg(args, i, "--agent");
-        if (value !== "claude" && value !== "codex") {
-          console.error(`Error: --agent must be either "claude" or "codex" (received: ${value})`);
+        if (value !== "claude" && value !== "codex" && value !== "oss") {
+          console.error(
+            `Error: --agent must be one of "claude", "codex", "oss" (received: ${value})`,
+          );
           process.exit(1);
         }
         agent = value;
@@ -340,7 +342,7 @@ function parseArgs(): ParsedArgs {
     useSolution,
     solve,
     agent,
-    model: model ?? (agent === "claude" ? "sonnet" : undefined),
+    model: model ?? (agent === "claude" ? "sonnet" : agent === "oss" ? "gpt-oss:20b" : undefined),
     maxBudget,
     clean,
     concurrency: Math.trunc(concurrency),
@@ -746,7 +748,7 @@ async function runProblem(
   problemName: string,
   options: {
     implDir?: string;
-    solve?: { agent: SolveAgent; model?: string; maxBudget: number };
+    solve?: { agent: SolveAgent; model?: string; maxBudget: number; seed?: number };
     clean: boolean;
     verbose: boolean;
     tarballPath?: string;
@@ -794,7 +796,12 @@ async function runProblem(
   const traceWorkPath = options.solve ? path.join(workDir, ".trace.jsonl") : undefined;
   if (options.solve) {
     if (options.verbose) {
-      const agentLabel = options.solve.agent === "claude" ? "Claude Code" : "Codex";
+      const agentLabel =
+        options.solve.agent === "claude"
+          ? "Claude Code"
+          : options.solve.agent === "oss"
+            ? "opencode (OSS)"
+            : "Codex";
       console.log(`  Solving with ${agentLabel} (model: ${options.solve.model ?? "default"})...`);
     }
     solveResult = await solveProblem({
@@ -805,6 +812,7 @@ async function runProblem(
       model: normalizedModel,
       maxBudget: options.solve.maxBudget,
       contextProfile: options.contextProfile,
+      ...(options.solve.seed !== undefined ? { seed: options.solve.seed } : {}),
       ...(traceWorkPath ? { tracePath: traceWorkPath } : {}),
     });
     if (problemArtifactRoot) {
@@ -1326,7 +1334,7 @@ async function ensureAuthenticated(agent: SolveAgent, targetModel?: string): Pro
   const authCheck = await checkAuthStatus({ agent, model: targetModel });
   if (!authCheck.ok) {
     console.error(`Authentication check failed: ${authCheck.error}`);
-    const tool = agent === "claude" ? "Claude Code" : "Codex";
+    const tool = agent === "claude" ? "Claude Code" : agent === "oss" ? "Ollama (local)" : "Codex";
     if (authErrorPatterns.some((p) => p.test(authCheck.error ?? ""))) {
       console.error(`Please log in to ${tool} before running solve mode.`);
     } else {
@@ -1335,6 +1343,10 @@ async function ensureAuthenticated(agent: SolveAgent, targetModel?: string): Pro
     if (agent === "claude") {
       console.error(
         'Hint: Run "claude setup-token" and set CLAUDE_CODE_OAUTH_TOKEN in your environment.',
+      );
+    } else if (agent === "oss") {
+      console.error(
+        "Hint: brew install ollama && ollama pull gpt-oss:20b && OLLAMA_NUM_PARALLEL=1 OLLAMA_CONTEXT_LENGTH=32768 ollama serve",
       );
     } else {
       console.error('Hint: Run "codex login" to store credentials in ~/.codex/auth.json.');
@@ -1414,11 +1426,11 @@ async function main(): Promise<void> {
     console.error("  tsx core/cli.ts --problem 001 --impl ./path/to/impl");
     console.error("  tsx core/cli.ts --problem 001 --use-solution");
     console.error(
-      "  tsx core/cli.ts --problem 001 [--problem 002 ...] --solve [--agent claude|codex] [--model sonnet] [--max-budget 5.00] [--max-budget-total 50.00] [--context-profile types-only] [--iterations 3] [--no-auto-extend] [--no-early-stop] [--sdk-branch <ref>] [--resume <runId>]",
+      "  tsx core/cli.ts --problem 001 [--problem 002 ...] --solve [--agent claude|codex|oss] [--model sonnet] [--max-budget 5.00] [--max-budget-total 50.00] [--context-profile types-only] [--iterations 3] [--no-auto-extend] [--no-early-stop] [--sdk-branch <ref>] [--resume <runId>]",
     );
     console.error("  tsx core/cli.ts --all --use-solution [--clean] [--concurrency <n>]");
     console.error(
-      "  tsx core/cli.ts --all --solve [--agent claude|codex] [--model sonnet] [--max-budget 5.00] [--max-budget-total 50.00] [--clean] [--concurrency <n>] [--context-profile types-only] [--iterations 3] [--no-auto-extend] [--no-early-stop] [--sdk-branch <ref>] [--resume <runId>]",
+      "  tsx core/cli.ts --all --solve [--agent claude|codex|oss] [--model sonnet] [--max-budget 5.00] [--max-budget-total 50.00] [--clean] [--concurrency <n>] [--context-profile types-only] [--iterations 3] [--no-auto-extend] [--no-early-stop] [--sdk-branch <ref>] [--resume <runId>]",
     );
     console.error("  tsx core/cli.ts --all --impl-dir ./path/to/all-outputs");
     console.error("\nNote: --solve requires Podman. On macOS, run 'podman machine start' first.");
@@ -1645,7 +1657,11 @@ async function main(): Promise<void> {
       }
       const result = await runProblemWithRateLimitRetry({
         problemName: task.problemName,
-        baseOptions: { ...baseOptions, runArtifactRoot },
+        baseOptions: {
+          ...baseOptions,
+          solve: baseOptions.solve ? { ...baseOptions.solve, seed: 0 } : undefined,
+          runArtifactRoot,
+        },
         verbose,
       });
       appendCheckpoint(checkpointFile, {
@@ -1677,6 +1693,7 @@ async function main(): Promise<void> {
         problemName: task.problemName,
         baseOptions: {
           ...baseOptions,
+          solve: baseOptions.solve ? { ...baseOptions.solve, seed: i } : undefined,
           ...(iterRoot ? { runArtifactRoot: iterRoot } : {}),
         },
         verbose,

@@ -9,8 +9,17 @@ describe("getContainerfileContent", () => {
     expect(content).toContain("FROM node:22-slim");
     expect(content).toContain("claude-code");
     expect(content).toContain("codex");
+    expect(content).toContain("opencode-ai");
     expect(content).toContain("pnpm");
     expect(content).toContain("ca-certificates");
+  });
+
+  it("pre-creates the opencode config + state dirs as the node user", () => {
+    const content = getContainerfileContent();
+    // Both XDG dirs must be writable by the runtime user; otherwise opencode's
+    // first-run sqlite migration fails inside the container.
+    expect(content).toContain("/home/node/.config/opencode");
+    expect(content).toContain("/home/node/.local/share/opencode");
   });
 
   it("runs as non-root user", () => {
@@ -110,5 +119,53 @@ describe("buildContainerRunArgs", () => {
     expect(args).toContain("--volume");
     expect(args).toContain(expectedMount);
     expect(expectedMount).toMatch(/:ro,Z$/);
+  });
+
+  it("adds host-loopback for the oss agent and mounts no credentials", () => {
+    const args = buildContainerRunArgs("oss", ["run", "--format", "json"], {
+      workDir: "/tmp/sdk-ws-oss",
+      executable: "opencode",
+    });
+
+    // Host-loopback is what lets the container reach the host's `ollama serve`
+    // via http://host.containers.internal:11434 — verified in the Phase 2
+    // smoke test.
+    const hostIdx = args.indexOf("--add-host");
+    expect(hostIdx).toBeGreaterThan(-1);
+    expect(args[hostIdx + 1]).toBe("host.containers.internal:host-gateway");
+
+    // No cloud credentials should be passed in for the OSS path.
+    expect(args).not.toContain("CLAUDE_CODE_OAUTH_TOKEN");
+    const volumes = args.filter((_, i) => i > 0 && args[i - 1] === "--volume");
+    for (const v of volumes) {
+      expect(v).not.toContain(".codex/auth.json");
+      expect(v).not.toContain(".claude");
+    }
+  });
+
+  it("mounts the opencode.json read-only when opencodeConfigPath is provided", () => {
+    const args = buildContainerRunArgs("oss", ["run", "--format", "json"], {
+      workDir: "/tmp/sdk-ws-oss",
+      opencodeConfigPath: "/var/folders/x/T/llm-oss-cfg-abc/opencode.json",
+      executable: "opencode",
+    });
+    const volumes = args.filter((_, i) => i > 0 && args[i - 1] === "--volume");
+    const configMount = volumes.find((v) => v.includes("/.config/opencode/opencode.json"));
+    expect(configMount).toBe(
+      "/var/folders/x/T/llm-oss-cfg-abc/opencode.json:/home/node/.config/opencode/opencode.json:ro,Z",
+    );
+  });
+
+  it("uses the executable override so the container runs `opencode`, not `oss`", () => {
+    const args = buildContainerRunArgs("oss", ["run", "--format", "json"], {
+      workDir: "/tmp/sdk-ws-oss",
+      executable: "opencode",
+    });
+    const imageIdx = args.indexOf("llm-challenge-runner");
+    expect(imageIdx).toBeGreaterThan(0);
+    // First positional after the image is the in-container executable; opencode
+    // has no `oss` sub-command, so the override is load-bearing.
+    expect(args[imageIdx + 1]).toBe("opencode");
+    expect(args[imageIdx + 2]).toBe("run");
   });
 });

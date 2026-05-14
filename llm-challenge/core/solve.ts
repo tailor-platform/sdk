@@ -6,6 +6,7 @@ import { buildContextProfileInstructions } from "./context-profile";
 import type { ProblemMeta } from "./cli";
 import { createClaudeAdapter } from "./solver/claude";
 import { createCodexAdapter } from "./solver/codex";
+import { createOpencodeAdapter } from "./solver/opencode";
 import type { AuthCheckResult, SolveAdapter, SolveAgent, SolveResult } from "./solver/types";
 
 const challengeRoot = path.resolve(import.meta.dirname, "..");
@@ -179,6 +180,7 @@ export function buildPrompt(
 const solveAdapters: Record<SolveAgent, SolveAdapter> = {
   claude: createClaudeAdapter(),
   codex: createCodexAdapter(),
+  oss: createOpencodeAdapter(),
 };
 
 function runSolver(options: {
@@ -187,6 +189,7 @@ function runSolver(options: {
   workDir: string;
   model?: string;
   maxBudget: number;
+  seed?: number;
   tracePath?: string;
 }): Promise<SolveResult> {
   const { agent, ...runOptions } = options;
@@ -201,10 +204,16 @@ export function solveProblem(options: {
   model?: string;
   maxBudget: number;
   contextProfile: ContextProfile;
+  /**
+   * Per-iteration sampling seed. Forwarded to the OSS adapter only — Claude
+   * and Codex paths ignore it (their solver CLIs don't expose a seed flag).
+   */
+  seed?: number;
   /** Optional JSONL path for behaviour trace. */
   tracePath?: string;
 }): Promise<SolveResult> {
-  const { workDir, problemDir, meta, agent, model, maxBudget, contextProfile, tracePath } = options;
+  const { workDir, problemDir, meta, agent, model, maxBudget, contextProfile, seed, tracePath } =
+    options;
   const prompt = buildPrompt(problemDir, meta, workDir, contextProfile);
   return runSolver({
     agent,
@@ -212,6 +221,7 @@ export function solveProblem(options: {
     workDir,
     model,
     maxBudget,
+    ...(seed !== undefined ? { seed } : {}),
     ...(tracePath !== undefined ? { tracePath } : {}),
   });
 }

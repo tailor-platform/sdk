@@ -5,6 +5,11 @@ describe("normalizeModelForAgent", () => {
   it("normalizes codex default model to undefined", () => {
     expect(normalizeModelForAgent("codex", "default")).toBeUndefined();
   });
+
+  it("normalizes oss default to gpt-oss:20b", () => {
+    expect(normalizeModelForAgent("oss", undefined)).toBe("gpt-oss:20b");
+    expect(normalizeModelForAgent("oss", "default")).toBe("gpt-oss:20b");
+  });
 });
 
 describe("formatSolveModelLabel", () => {
@@ -18,6 +23,10 @@ describe("formatSolveModelLabel", () => {
 
   it("falls back to default when codex model is undefined", () => {
     expect(formatSolveModelLabel("codex", undefined)).toBe("codex:default");
+  });
+
+  it("falls back to gpt-oss:20b when oss model is undefined", () => {
+    expect(formatSolveModelLabel("oss", undefined)).toBe("oss:gpt-oss:20b");
   });
 });
 
@@ -40,6 +49,15 @@ describe("parseSolveModelLabel", () => {
     expect(parseSolveModelLabel("codex:o3")).toEqual({
       agent: "codex",
       model: "o3",
+    });
+  });
+
+  it("parses oss:gpt-oss:20b without losing the colon in the model id", () => {
+    // The Ollama model id contains a `:`; rest.join(":") must survive it so
+    // analyze --groups can recover the full label from a results filename.
+    expect(parseSolveModelLabel("oss:gpt-oss:20b")).toEqual({
+      agent: "oss",
+      model: "gpt-oss:20b",
     });
   });
 });
