@@ -13,7 +13,7 @@ creating the new ones. The id is a plain UUID; the SDK adds the
 label-compatible `app-` prefix internally at the metadata boundary.
 
 If your `tailor.config.ts` is a wrapper that re-exports `defineConfig` from
-another file, the SDK skips id injection on the wrapper — point the CLI at
-the file that contains the `defineConfig({...})` call, or add the `id`
-field there manually. Existing deployments without the id continue to work
-and migrate transparently on the next `deploy` run.
+another file, the SDK skips id injection on the wrapper — add the `id`
+field manually to the file that contains the actual `defineConfig({...})`
+call. Existing deployments without the id continue to work and migrate
+transparently on the next `deploy` run.
