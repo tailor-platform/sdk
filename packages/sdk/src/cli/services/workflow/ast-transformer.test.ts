@@ -1107,6 +1107,21 @@ fetchCustomer.trigger({ customerId: "123" }).then((customer) => {
         '(async () => tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" }))().then(',
       );
     });
+
+    it("wraps job.trigger() nested inside an unknown .trigger() argument", () => {
+      const source = `
+unknown.trigger(fetchCustomer.trigger({ customerId: "123" }));
+`;
+      const workflowNameMap = new Map<string, string>();
+      const jobNameMap = new Map([["fetchCustomer", "fetch-customer"]]);
+
+      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
+
+      expect(result).toContain(
+        '(async () => tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" }))()',
+      );
+      expect(result).toContain("unknown.trigger(");
+    });
   });
 
   describe("dead default import removal", () => {

@@ -300,48 +300,39 @@ function detectExtendedTriggerCalls(
         const propertyName = !memberExpr.computed ? memberExpr.property.name : null;
 
         if (identifierName && propertyName === "trigger") {
-          // Only process if this is a known workflow or job
           const isWorkflow = workflowNames.has(identifierName);
           const isJob = jobNames.has(identifierName);
-          if (!isWorkflow && !isJob) {
-            // Skip unknown identifiers to prevent false positives
-            return;
-          }
+          if (isWorkflow || isJob) {
+            const argCount = callExpr.arguments.length;
 
-          const argCount = callExpr.arguments.length;
-
-          // Extract first argument text
-          let argsText = "";
-          if (argCount > 0) {
-            const firstArg = callExpr.arguments[0];
-            if (firstArg && "start" in firstArg && "end" in firstArg) {
-              argsText = sourceText.slice(firstArg.start as number, firstArg.end as number);
+            let argsText = "";
+            if (argCount > 0) {
+              const firstArg = callExpr.arguments[0];
+              if (firstArg && "start" in firstArg && "end" in firstArg) {
+                argsText = sourceText.slice(firstArg.start as number, firstArg.end as number);
+              }
             }
-          }
 
-          // Determine kind based on known identifier type
-          if (isWorkflow && argCount >= 2) {
-            // Workflow trigger requires 2 arguments (args, config)
-            const secondArg = callExpr.arguments[1];
-            // Extract authInvoker directly from the config object
-            const authInvoker = extractAuthInvokerInfo(secondArg, sourceText);
-            if (authInvoker) {
+            if (isWorkflow && argCount >= 2) {
+              const secondArg = callExpr.arguments[1];
+              const authInvoker = extractAuthInvokerInfo(secondArg, sourceText);
+              if (authInvoker) {
+                calls.push({
+                  kind: "workflow",
+                  identifierName,
+                  callRange: { start: callExpr.start, end: callExpr.end },
+                  argsText,
+                  authInvoker,
+                });
+              }
+            } else if (isJob) {
               calls.push({
-                kind: "workflow",
+                kind: "job",
                 identifierName,
                 callRange: { start: callExpr.start, end: callExpr.end },
                 argsText,
-                authInvoker,
               });
             }
-          } else if (isJob) {
-            // Job trigger (0-1 arguments)
-            calls.push({
-              kind: "job",
-              identifierName,
-              callRange: { start: callExpr.start, end: callExpr.end },
-              argsText,
-            });
           }
         }
       }
