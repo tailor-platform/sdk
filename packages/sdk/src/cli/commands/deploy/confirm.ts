@@ -15,6 +15,9 @@ export interface UnmanagedResource {
 
 /**
  * Confirm reassignment of resources when owner conflicts are detected.
+ * Splits into two scenarios: id regeneration (same sdk-name, different
+ * sdk-app-id) and name mismatch (different sdk-name). Each gets its own
+ * prompt because the user-facing meaning is different.
  * @param conflicts - Detected owner conflicts
  * @param appName - Target application name
  * @param yes - Whether to auto-confirm without prompting
@@ -27,6 +30,56 @@ export async function confirmOwnerConflict(
 ): Promise<void> {
   if (conflicts.length === 0) return;
 
+  // Same sdk-name as the target app -> the app's id was regenerated
+  // (typically because the user deleted the id from tailor.config.ts).
+  const idRegenerated = conflicts.filter((c) => c.currentOwner === appName);
+  const nameMismatches = conflicts.filter((c) => c.currentOwner !== appName);
+
+  if (idRegenerated.length > 0) {
+    await confirmIdRegeneration(idRegenerated, appName, yes);
+  }
+  if (nameMismatches.length > 0) {
+    await confirmNameMismatch(nameMismatches, appName, yes);
+  }
+}
+
+async function confirmIdRegeneration(
+  conflicts: OwnerConflict[],
+  appName: string,
+  yes: boolean,
+): Promise<void> {
+  logger.warn(`Application id was regenerated for "${appName}":`);
+  logger.log("  These resources still carry the previous id.");
+  logger.newline();
+  logger.log(`  ${styles.info("Resources")}:`);
+  for (const c of conflicts) {
+    logger.log(`    • ${styles.bold(c.resourceType)} ${styles.info(`"${c.resourceName}"`)}`);
+  }
+
+  if (yes) {
+    logger.success("Re-tagging resources with the new id (--yes flag specified)...", {
+      mode: "plain",
+    });
+    return;
+  }
+
+  const confirmed = await prompt.confirm({
+    message: `Re-tag these resources with the new id for "${appName}"?\n${styles.dim("(Common when the id was deleted from tailor.config.ts to reset identity)")}`,
+    default: false,
+  });
+  if (!confirmed) {
+    throw new Error(ml`
+      Apply cancelled. Resources remain tagged with the previous id.
+      To override, run again and confirm, or use --yes flag.
+    `);
+  }
+}
+
+async function confirmNameMismatch(
+  conflicts: OwnerConflict[],
+  appName: string,
+  yes: boolean,
+): Promise<void> {
   const currentOwners = [...new Set(conflicts.map((c) => c.currentOwner))];
 
   logger.warn("Application name mismatch detected:");
