@@ -11,6 +11,7 @@ import {
   emitIterDiff,
   packSdkFromRef,
   shouldAutoExtend,
+  shouldEarlyStop,
 } from "./cli";
 import type { ProblemResult, StageResult } from "./report";
 
@@ -746,5 +747,173 @@ describe("shouldAutoExtend", () => {
         noAutoExtend: false,
       }),
     ).toBe(false);
+  });
+});
+
+// Symmetric counterpart to shouldAutoExtend. Two phases:
+//  - main: stop at n=2 when both iterations agree (the 3rd would be redundant)
+//  - auto-extend: stop at n=4 when the 4th confirms majority (3/4 or 1/4);
+//    a 2/4 split keeps the 5th iteration to break the tie.
+describe("shouldEarlyStop", () => {
+  function fakeIter(passed: boolean): ProblemResult {
+    return {
+      problemId: "m05",
+      problemName: "fixture",
+      difficulty: "easy",
+      category: "micro",
+      stages: [{ stage: "tests", passed, output: passed ? "ok" : "fail" }],
+      passed,
+    };
+  }
+  const make = (passedFlags: boolean[]): ProblemResult[] => passedFlags.map(fakeIter);
+
+  describe("main phase", () => {
+    it("returns true when the first two iterations both pass", () => {
+      expect(
+        shouldEarlyStop({
+          perIteration: make([true, true]),
+          iterations: 3,
+          iterationsExplicit: false,
+          noEarlyStop: false,
+          phase: "main",
+        }),
+      ).toBe(true);
+    });
+
+    it("returns true when the first two iterations both fail", () => {
+      expect(
+        shouldEarlyStop({
+          perIteration: make([false, false]),
+          iterations: 3,
+          iterationsExplicit: false,
+          noEarlyStop: false,
+          phase: "main",
+        }),
+      ).toBe(true);
+    });
+
+    it("returns false when the first two iterations disagree", () => {
+      expect(
+        shouldEarlyStop({
+          perIteration: make([true, false]),
+          iterations: 3,
+          iterationsExplicit: false,
+          noEarlyStop: false,
+          phase: "main",
+        }),
+      ).toBe(false);
+    });
+
+    it("returns false at n=1 (sample too thin to short-circuit)", () => {
+      expect(
+        shouldEarlyStop({
+          perIteration: make([true]),
+          iterations: 3,
+          iterationsExplicit: false,
+          noEarlyStop: false,
+          phase: "main",
+        }),
+      ).toBe(false);
+    });
+
+    it("returns false at n=3 (main loop already exhausted)", () => {
+      expect(
+        shouldEarlyStop({
+          perIteration: make([true, true, true]),
+          iterations: 3,
+          iterationsExplicit: false,
+          noEarlyStop: false,
+          phase: "main",
+        }),
+      ).toBe(false);
+    });
+  });
+
+  describe("auto-extend phase", () => {
+    it("returns true at n=4 with cumulative 3/4 (original 2/3 confirmed by pass)", () => {
+      expect(
+        shouldEarlyStop({
+          perIteration: make([true, true, false, true]),
+          iterations: 3,
+          iterationsExplicit: false,
+          noEarlyStop: false,
+          phase: "auto-extend",
+        }),
+      ).toBe(true);
+    });
+
+    it("returns true at n=4 with cumulative 1/4 (original 1/3 confirmed by fail)", () => {
+      expect(
+        shouldEarlyStop({
+          perIteration: make([true, false, false, false]),
+          iterations: 3,
+          iterationsExplicit: false,
+          noEarlyStop: false,
+          phase: "auto-extend",
+        }),
+      ).toBe(true);
+    });
+
+    it("returns false at n=4 with cumulative 2/4 (split — keep iteration 5)", () => {
+      expect(
+        shouldEarlyStop({
+          perIteration: make([true, true, false, false]),
+          iterations: 3,
+          iterationsExplicit: false,
+          noEarlyStop: false,
+          phase: "auto-extend",
+        }),
+      ).toBe(false);
+    });
+
+    it("returns false at n=3 (extension hasn't produced a sample yet)", () => {
+      expect(
+        shouldEarlyStop({
+          perIteration: make([true, true, false]),
+          iterations: 3,
+          iterationsExplicit: false,
+          noEarlyStop: false,
+          phase: "auto-extend",
+        }),
+      ).toBe(false);
+    });
+  });
+
+  describe("flag guards", () => {
+    it("returns false when --iterations was set explicitly", () => {
+      expect(
+        shouldEarlyStop({
+          perIteration: make([true, true]),
+          iterations: 3,
+          iterationsExplicit: true,
+          noEarlyStop: false,
+          phase: "main",
+        }),
+      ).toBe(false);
+    });
+
+    it("returns false when --no-early-stop is set", () => {
+      expect(
+        shouldEarlyStop({
+          perIteration: make([true, true]),
+          iterations: 3,
+          iterationsExplicit: false,
+          noEarlyStop: true,
+          phase: "main",
+        }),
+      ).toBe(false);
+    });
+
+    it("returns false when iterations is not the default 3 (e.g. 5)", () => {
+      expect(
+        shouldEarlyStop({
+          perIteration: make([true, true]),
+          iterations: 5,
+          iterationsExplicit: false,
+          noEarlyStop: false,
+          phase: "main",
+        }),
+      ).toBe(false);
+    });
   });
 });

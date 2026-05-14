@@ -135,6 +135,13 @@ type ParsedArgs = {
    */
   noAutoExtend: boolean;
   /**
+   * True when `--no-early-stop` was passed. Suppresses the agreement-based
+   * early termination of the iteration loop, forcing every iteration to run.
+   * Useful for tests that need deterministic iteration counts or for variance
+   * audits where the full N samples are required.
+   */
+  noEarlyStop: boolean;
+  /**
    * Optional git ref to `git worktree add` and `pnpm pack` instead of the
    * current working tree. Enables A/B benchmarking of SDK candidate branches
    * against the current branch (Phase 4 plan section "A/B 実験 + 統計化").
@@ -157,6 +164,7 @@ function parseArgs(): ParsedArgs {
   let contextProfile: ContextProfile = "full-package";
   let iterations: number | undefined;
   let noAutoExtend = false;
+  let noEarlyStop = false;
   let sdkBranch: string | undefined;
 
   for (let i = 0; i < args.length; i++) {
@@ -223,6 +231,9 @@ function parseArgs(): ParsedArgs {
       case "--no-auto-extend":
         noAutoExtend = true;
         break;
+      case "--no-early-stop":
+        noEarlyStop = true;
+        break;
       case "--sdk-branch":
         sdkBranch = requireArg(args, i, "--sdk-branch");
         i++;
@@ -264,6 +275,7 @@ function parseArgs(): ParsedArgs {
     iterations,
     iterationsExplicit,
     noAutoExtend,
+    noEarlyStop,
     ...(sdkBranch ? { sdkBranch } : {}),
   };
 }
@@ -1092,6 +1104,53 @@ export function shouldAutoExtend(options: ShouldAutoExtendOptions): boolean {
   return passedCount >= 1 && passedCount <= iterations - 1;
 }
 
+/**
+ * Decide whether to stop the iteration loop early because the observed
+ * sequence has already settled. Symmetric counterpart to
+ * {@link shouldAutoExtend}; both gate on the same `iterations === 3`
+ * default-cadence assumption and respect `iterationsExplicit` /
+ * `noEarlyStop`.
+ *
+ * Two phases:
+ * - `main`: applied inside the primary 0..iterations loop. Stops at n=2 when
+ *   both observed iterations agree (0/2 or 2/2) — the 3rd iteration would
+ *   only confirm what's already a unanimous outcome.
+ * - `auto-extend`: applied during the +2 extension after the main loop hits a
+ *   flaky 1/3 or 2/3. Stops at n=4 when the 4th iteration confirms the
+ *   majority (3/4 or 1/4) — the 5th iteration cannot flip the majority.
+ *   When the 4th iteration produces an even split (2/4) the loop continues
+ *   so the 5th iteration breaks the tie.
+ *
+ * Extracted for unit testing the trigger conditions.
+ */
+export type ShouldEarlyStopOptions = {
+  perIteration: ProblemResult[];
+  iterations: number;
+  iterationsExplicit: boolean;
+  noEarlyStop: boolean;
+  phase: "main" | "auto-extend";
+};
+
+export function shouldEarlyStop(options: ShouldEarlyStopOptions): boolean {
+  const { perIteration, iterations, iterationsExplicit, noEarlyStop, phase } = options;
+  if (noEarlyStop) return false;
+  if (iterationsExplicit) return false;
+  if (iterations !== 3) return false;
+  const passedCount = perIteration.filter((r) => r.passed).length;
+  if (phase === "main") {
+    // Need exactly 2 observations: n=1 is too thin a sample to short-circuit,
+    // n>=3 means the main loop has already finished its assigned iterations.
+    if (perIteration.length !== 2) return false;
+    return passedCount === 0 || passedCount === 2;
+  }
+  // auto-extend phase: the main loop produced 3 results in [1, 2] passed, then
+  // we added one extra (n=4). Stop when the 4th iteration confirms the
+  // majority of the original 3 (cumulative 3/4 or 1/4); continue at 2/4 so
+  // the 5th iteration can break the tie.
+  if (perIteration.length !== 4) return false;
+  return passedCount === 1 || passedCount === 3;
+}
+
 const authErrorPatterns = [
   /Not logged in/i,
   /API key/i,
@@ -1182,6 +1241,7 @@ async function main(): Promise<void> {
     iterations,
     iterationsExplicit,
     noAutoExtend,
+    noEarlyStop,
     sdkBranch,
   } = parseArgs();
 
@@ -1190,11 +1250,11 @@ async function main(): Promise<void> {
     console.error("  tsx core/cli.ts --problem 001 --impl ./path/to/impl");
     console.error("  tsx core/cli.ts --problem 001 --use-solution");
     console.error(
-      "  tsx core/cli.ts --problem 001 [--problem 002 ...] --solve [--agent claude|codex] [--model sonnet] [--max-budget 5.00] [--context-profile types-only] [--iterations 3] [--no-auto-extend] [--sdk-branch <ref>]",
+      "  tsx core/cli.ts --problem 001 [--problem 002 ...] --solve [--agent claude|codex] [--model sonnet] [--max-budget 5.00] [--context-profile types-only] [--iterations 3] [--no-auto-extend] [--no-early-stop] [--sdk-branch <ref>]",
     );
     console.error("  tsx core/cli.ts --all --use-solution [--clean] [--concurrency <n>]");
     console.error(
-      "  tsx core/cli.ts --all --solve [--agent claude|codex] [--model sonnet] [--max-budget 5.00] [--clean] [--concurrency <n>] [--context-profile types-only] [--iterations 3] [--no-auto-extend] [--sdk-branch <ref>]",
+      "  tsx core/cli.ts --all --solve [--agent claude|codex] [--model sonnet] [--max-budget 5.00] [--clean] [--concurrency <n>] [--context-profile types-only] [--iterations 3] [--no-auto-extend] [--no-early-stop] [--sdk-branch <ref>]",
     );
     console.error("  tsx core/cli.ts --all --impl-dir ./path/to/all-outputs");
     console.error("\nNote: --solve requires Podman. On macOS, run 'podman machine start' first.");
@@ -1352,6 +1412,27 @@ async function main(): Promise<void> {
     };
     for (let i = 0; i < iterations; i++) {
       await runOneIteration(i);
+      // Agreement-based early stop: when the first two iterations of the
+      // default N=3 cadence agree (0/2 or 2/2), the 3rd iteration only
+      // confirms a unanimous outcome. Skipping it reclaims ~25% of solve
+      // cost on stable_pass / stable_fail problems without changing the
+      // passRate the report ultimately records.
+      if (
+        shouldEarlyStop({
+          perIteration,
+          iterations,
+          iterationsExplicit,
+          noEarlyStop,
+          phase: "main",
+        })
+      ) {
+        if (verbose) {
+          console.log(
+            `  early-stop: ${perIteration.filter((r) => r.passed).length}/${perIteration.length} → skipping remaining iteration(s)`,
+          );
+        }
+        break;
+      }
     }
 
     // Flaky middle-band auto-extend: with the default N=3, a 1/3 or 2/3 outcome
@@ -1367,6 +1448,25 @@ async function main(): Promise<void> {
       }
       for (let i = iterations; i < iterations + extra; i++) {
         await runOneIteration(i);
+        // Mid-extension early stop: once n=4 confirms the original majority
+        // (cumulative 3/4 or 1/4), the 5th iteration cannot flip the
+        // majority. A 2/4 split keeps running so iteration 5 breaks the tie.
+        if (
+          shouldEarlyStop({
+            perIteration,
+            iterations,
+            iterationsExplicit,
+            noEarlyStop,
+            phase: "auto-extend",
+          })
+        ) {
+          if (verbose) {
+            console.log(
+              `  early-stop (auto-extend): ${perIteration.filter((r) => r.passed).length}/${perIteration.length} → skipping remaining iteration(s)`,
+            );
+          }
+          break;
+        }
       }
     }
 

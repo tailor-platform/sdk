@@ -84,6 +84,7 @@ pnpm challenge:analyze --trend --agent claude --context-profile types-only
 - `--context-profile <types-only|full-package>` — what slice of the SDK is exposed inside the work tree. `types-only` is the API-design baseline; `full-package` ships the whole tarball.
 - `--concurrency <n>` — parallel problems (default = `os.availableParallelism()`).
 - `--iterations <n>` — repeat each `(problem, agent, model, profile)` task N times for variance bounds (default: `3` in solve mode, `1` in verify mode). When N > 1 the report's `results[].iterations` block carries pass rate, median cost, and median±stdev for the four behavioural metrics.
+- `--no-early-stop` — disable the agreement-based early termination of the iteration loop. By default, the runner stops after 2 iterations when both agree (0/2 or 2/2) and stops the auto-extension after 4 iterations once the majority is confirmed (1/4 or 3/4). Pass this flag to force every iteration to run, e.g. for variance audits. Only active at the default `--iterations 3` cadence; explicit `--iterations N` already disables early stop.
 - `--sdk-branch <ref>` — pack the SDK from a git ref instead of the current working tree. Spawns a detached `git worktree`, builds the SDK there, and `pnpm pack`s the result. Requires `--solve`.
 - `--clean` — remove work directories after the run.
 
