@@ -1,18 +1,18 @@
 /**
  * Tests for `@tailor-platform/sdk/runtime/context` typed wrappers.
  */
-import { afterEach, beforeEach, describe, expect, expectTypeOf, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, expectTypeOf, test, vi } from "vitest";
 import * as context from "@/runtime/context";
-import { cleanupMocks, contextMock, injectMocks } from "@/vitest/mock";
+import { cleanupMocks, injectMocks } from "@/vitest/mock";
 
 describe("@tailor-platform/sdk/runtime/context", () => {
   beforeEach(() => {
     injectMocks(globalThis);
-    contextMock.reset();
   });
 
   afterEach(() => {
     cleanupMocks(globalThis);
+    vi.restoreAllMocks();
   });
 
   test("getInvoker returns null for anonymous invocations", () => {
@@ -23,12 +23,12 @@ describe("@tailor-platform/sdk/runtime/context", () => {
   });
 
   test("getInvoker exposes SDK shape (attributes map + attributeList array)", () => {
-    contextMock.setInvoker({
+    vi.spyOn(globalThis.tailor.context, "getInvoker").mockReturnValue({
       id: "u-1",
       type: "machine_user",
       workspaceId: "ws-1",
-      attributes: { role: "MANAGER" },
-      attributeList: ["role"],
+      attributes: ["role"],
+      attributeMap: { role: "MANAGER" },
     });
 
     const invoker = context.getInvoker();

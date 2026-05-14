@@ -285,10 +285,4 @@ declare global {
   }
 }
 
-/**
- * Sentinel marker so that bundlers retain this module's `declare global` block
- * in the emitted `.d.mts` instead of tree-shaking it down to `export {}`.
- * Not part of the public SDK API.
- * @internal
- */
-export const __TAILOR_RUNTIME_GLOBALS_LOADED__: true = true;
+export {};

@@ -24,7 +24,7 @@ Platform API mocks under `@tailor-platform/sdk/vitest` (auto-injected by the [`t
 
 - `tailordbMock` — TailorDB query stubs and call recording
 - `workflowMock` — `tailor.workflow` job / wait / resolve mocks
-- `secretmanagerMock`, `authconnectionMock`, `idpMock`, `fileMock`, `iconvMock`, `contextMock` — corresponding platform API mocks
+- `secretmanagerMock`, `authconnectionMock`, `idpMock`, `fileMock`, `iconvMock` — corresponding platform API mocks
 
 > The examples below call `tailor.*` / `tailordb.*` via the ambient globals. To make these snippets type-check in a fresh TypeScript project, either opt into the globals once (`import "@tailor-platform/sdk/runtime/globals"` in a setup file, or list it in `tsconfig.json`'s `compilerOptions.types`), or call the typed wrappers from `@tailor-platform/sdk/runtime/*` instead.
 
@@ -267,38 +267,6 @@ test("mock encoding conversion", () => {
   const result = tailor.iconv.decode(new Uint8Array([0x48, 0x69]), "UTF-8");
   expect(result).toBe("decoded-text");
   expect(iconvMock.calls).toMatchObject([{ method: "decode" }]);
-});
-```
-
-### Context Mock
-
-Pass the invoker shape that matches `TailorUser` / `TailorActor`: `attributes` is the attribute map and `attributeList` is the array of attribute IDs. Pass `null` for an anonymous caller (the default).
-
-```typescript
-import { contextMock } from "@tailor-platform/sdk/vitest";
-import { context } from "@tailor-platform/sdk/runtime";
-
-beforeEach(() => contextMock.reset());
-
-test("returns invoker information", () => {
-  contextMock.setInvoker({
-    id: "f1e2d3c4-b5a6-4798-89a0-1b2c3d4e5f60",
-    type: "machine_user",
-    workspaceId: "b39bdd61-d442-4a4e-8599-33a78a4e19ab",
-    attributes: { role: "MANAGER" },
-    attributeList: ["role"],
-  });
-
-  const invoker = context.getInvoker();
-  expect(invoker?.type).toBe("machine_user");
-  expect(invoker?.attributes).toEqual({ role: "MANAGER" });
-  expect(contextMock.calls).toHaveLength(1);
-});
-
-test("anonymous caller", () => {
-  contextMock.setInvoker(null); // null is the default
-
-  expect(context.getInvoker()).toBeNull();
 });
 ```
 

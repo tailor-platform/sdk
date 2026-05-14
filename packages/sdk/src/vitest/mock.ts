@@ -6,7 +6,7 @@
  * responses and assert on recorded calls via the exported mock objects.
  */
 
-import type { ContextInvoker, Invoker } from "../runtime/context";
+import type { ContextInvoker } from "../runtime/context";
 import type { TailorDBFileErrorCode } from "../runtime/file";
 import type { User as IdpUser } from "../runtime/idp";
 
@@ -94,10 +94,6 @@ interface WorkflowCall {
   args: unknown[];
 }
 
-interface ContextCall {
-  method: "getInvoker";
-}
-
 interface MockState {
   // TailorDB
   queryResolver: QueryResolver;
@@ -129,9 +125,6 @@ interface MockState {
   // Iconv
   iconvResolver: IconvResolver | null;
   iconvCalls: IconvCall[];
-  // Context
-  invoker: ContextInvoker | null;
-  contextCalls: ContextCall[];
 }
 
 // ---------------------------------------------------------------------------
@@ -180,8 +173,6 @@ function createDefaultState(): MockState {
     fileCalls: [],
     iconvResolver: null,
     iconvCalls: [],
-    invoker: null,
-    contextCalls: [],
   };
 }
 
@@ -415,40 +406,6 @@ export const workflowMock = {
     state.waitHandler = null;
     state.resolveHandler = null;
     state.workflowCalls.length = 0;
-  },
-};
-
-// ---------------------------------------------------------------------------
-// Context Mock
-// ---------------------------------------------------------------------------
-
-/** Mock control for `tailor.context` — invoker store and call recording. */
-export const contextMock = {
-  /**
-   * Set the invoker returned by `context.getInvoker()`. Pass `null` to simulate
-   * an anonymous (unauthenticated) caller — the default.
-   * @param invoker - Invoker to return, or `null` for anonymous
-   */
-  setInvoker(invoker: Invoker | null): void {
-    getState().invoker = invoker
-      ? {
-          id: invoker.id,
-          type: invoker.type,
-          workspaceId: invoker.workspaceId,
-          attributes: invoker.attributeList,
-          attributeMap: invoker.attributes,
-        }
-      : null;
-  },
-
-  get calls(): ContextCall[] {
-    return getState().contextCalls;
-  },
-
-  reset(): void {
-    const state = getState();
-    state.invoker = null;
-    state.contextCalls.length = 0;
   },
 };
 
@@ -725,10 +682,11 @@ async function mockResolve(
 // Mock: tailor.context
 // ---------------------------------------------------------------------------
 
+// Stub-only injection. SDK consumers configure invokers at the body level
+// (resolver/executor/workflow `.body()` `invoker` arg) or, for bundled tests,
+// via `vi.spyOn(globalThis.tailor.context, "getInvoker")`.
 function mockGetInvoker(): ContextInvoker | null {
-  const state = getState();
-  state.contextCalls.push({ method: "getInvoker" });
-  return state.invoker;
+  return null;
 }
 
 // ---------------------------------------------------------------------------

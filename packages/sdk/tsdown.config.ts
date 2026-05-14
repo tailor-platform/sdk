@@ -1,6 +1,23 @@
+import { readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import Sonda from "sonda/rolldown";
 import { defineConfig, type TsdownPluginOption } from "tsdown";
 import { loadYamlText } from "./scripts/yaml-text-plugin.mjs";
+
+// `banner.dts` injects the triple-slash into every emitted d.mts, including
+// `runtime/globals.d.mts` itself. Strip it from that one file to avoid a
+// self-reference TS1006 when consumers typecheck with `skipLibCheck: false`.
+function stripSelfReferenceFromGlobalsDts(outDir: string): void {
+  const target = path.resolve(outDir, "runtime/globals.d.mts");
+  const content = readFileSync(target, "utf-8");
+  const cleaned = content.replace(
+    /^\/\/\/ <reference types="@tailor-platform\/sdk\/runtime\/globals" \/>\n/,
+    "",
+  );
+  if (cleaned !== content) {
+    writeFileSync(target, cleaned, "utf-8");
+  }
+}
 
 function yamlText() {
   return {
@@ -65,7 +82,14 @@ export default defineConfig({
     js: ".mjs",
     dts: ".d.mts",
   }),
+  // Remove in v2.0.
+  banner: {
+    dts: '/// <reference types="@tailor-platform/sdk/runtime/globals" />',
+  },
   external: ["vite", "vitest"], // peer dependencies: prevent bundling, resolve at runtime
   sourcemap: true,
   plugins,
+  onSuccess: (config) => {
+    stripSelfReferenceFromGlobalsDts(config.outDir);
+  },
 });

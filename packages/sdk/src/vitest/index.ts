@@ -22,7 +22,7 @@ import type { Plugin } from "vitest/config";
  *
  * 3. **Platform API mocks** (environment) — All platform APIs are auto-injected with
  *    control objects: `tailordbMock`, `workflowMock`, `secretmanagerMock`,
- *    `authconnectionMock`, `idpMock`, `fileMock`, `iconvMock`, `contextMock`. Each
+ *    `authconnectionMock`, `idpMock`, `fileMock`, `iconvMock`. Each
  *    provides response configuration, call recording, and reset.
  *
  * 4. **Environment resolution** — Rewrites `environment: "tailor-runtime"` to the
@@ -67,5 +67,4 @@ export {
   idpMock,
   fileMock,
   iconvMock,
-  contextMock,
 } from "./mock";

@@ -2,8 +2,7 @@
  * Execution context utilities.
  *
  * Thin typed wrapper around the platform-provided `tailor.context` runtime API.
- * At runtime this delegates to `globalThis.tailor.context`. Use `contextMock`
- * from `@tailor-platform/sdk/vitest` to mock these calls in unit tests.
+ * At runtime this delegates to `globalThis.tailor.context`.
  * @example
  * import { context } from "@tailor-platform/sdk/runtime";
  *
