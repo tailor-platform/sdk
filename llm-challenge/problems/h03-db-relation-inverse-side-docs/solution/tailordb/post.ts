@@ -5,7 +5,7 @@ export const post = db.type("Post", {
   title: db.string(),
   authorId: db.uuid().relation({
     type: "n-1",
-    toward: { type: author, as: "posts" },
-    backward: "author",
+    toward: { type: author, as: "author" },
+    backward: "posts",
   }),
 });

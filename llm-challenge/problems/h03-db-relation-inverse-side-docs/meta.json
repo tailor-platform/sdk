@@ -1,8 +1,8 @@
 {
   "id": "h03-db-relation-inverse-side-docs",
-  "title": "Name the inverse side of a many-to-one relation via toward.as",
-  "designNote": "docs_only",
+  "title": "Name both sides of a many-to-one relation via toward.as and backward",
+  "designNote": "naming_bias",
   "sdkSurface": "db-type",
   "contextProfiles": ["types-only", "full-package"],
-  "hint": "relation の inverse side は toward.as で命名する。backward は source 側のラベル"
+  "hint": "toward.as は source 側 (Post) からターゲットを辿るアクセサ名、backward は target 側 (Author) から逆引きするアクセサ名"
 }

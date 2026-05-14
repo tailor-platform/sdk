@@ -23,15 +23,15 @@ describe.skipIf(!workDirReady)("h03-db-relation-inverse-side-docs", () => {
     expect(["n-1", "manyToOne", "N-1"]).toContain(field.rawRelation.type);
   });
 
-  test("inverse-side handle is named 'posts' via toward.as", async () => {
+  test("forward-side handle is named 'author' via toward.as", async () => {
     const mod = await importPath(path.join(workDir, "tailordb/post.ts"));
     const field = mod.post.fields.authorId;
-    expect(field.rawRelation.toward.as).toBe("posts");
+    expect(field.rawRelation.toward.as).toBe("author");
   });
 
-  test("source-side handle is named 'author' via backward", async () => {
+  test("inverse-side handle is named 'posts' via backward", async () => {
     const mod = await importPath(path.join(workDir, "tailordb/post.ts"));
     const field = mod.post.fields.authorId;
-    expect(field.rawRelation.backward).toBe("author");
+    expect(field.rawRelation.backward).toBe("posts");
   });
 });
