@@ -10,6 +10,11 @@ on:
         description: "List candidates without deleting"
         type: boolean
         default: false
+  # TEMP: enable PR-driven runs so this workflow can be exercised before merge.
+  # Remove this `pull_request` trigger before merging.
+  pull_request:
+    paths:
+      - .github/workflows/cleanup-e2e-workspaces.yml
 
 concurrency:
   group: cleanup-e2e-workspaces
@@ -50,7 +55,8 @@ jobs:
         working-directory: packages/sdk
         env:
           GH_TOKEN: ${{ github.token }}
-          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+          # PR-driven runs (Phase A verification) are always dry-run.
+          DRY_RUN: ${{ (github.event_name == 'pull_request' || inputs.dry_run) && 'true' || 'false' }}
         run: |
           set -u
           deleted=0
