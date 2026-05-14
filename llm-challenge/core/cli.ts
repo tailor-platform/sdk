@@ -948,7 +948,7 @@ export function emitIterDiff(options: EmitIterDiffOptions): EmitIterDiffResult {
 }
 
 /**
- * Compute and persist a `git diff --no-index <failingWork> <referenceSolution>`
+ * Compute and persist a `git diff --no-index <scaffoldedSolution> <failingWork>`
  * for a stable-fail problem (every iteration failed verification, but the
  * solver itself completed without infra failures). Writes to
  * `<runArtifactRoot>/iter-diff/<problemId>.fail-vs-solution.diff`. No-op when:
@@ -961,11 +961,30 @@ export function emitIterDiff(options: EmitIterDiffOptions): EmitIterDiffResult {
  * - `git diff --no-index` reports the two trees are identical (exit 0).
  *
  * Surfaces "what the agent should have done differently" without an LLM judge.
+ *
+ * The diff base is the reference solution **overlaid on the same scaffold
+ * layers the solver saw** (`shared/scaffold` + `problems/_shared/scaffold` +
+ * per-problem `scaffold/` + per-problem `solution/`). Without that scaffold
+ * overlay, the raw `solution/` tree has only implementation files while the
+ * solver's `work/` tree has scaffold + impl, so every scaffold file shows up as
+ * "deleted" noise (70-80% of the resulting diff in production). Applying the
+ * scaffold to both sides leaves only the AI's actual deviation from reference.
  */
 export type EmitFailVsSolutionDiffOptions = {
   perIteration: ProblemResult[];
   problemDir: string;
   runArtifactRoot: string;
+  /**
+   * Additional scaffold layers to overlay onto the solution side before
+   * diffing, applied in order so later layers shadow earlier ones. Defaults to
+   * the same layers `setupWorkDir` uses for the solver:
+   *   1. `<challengeRoot>/shared/scaffold`
+   *   2. `<challengeRoot>/problems/_shared/scaffold`
+   *   3. `<problemDir>/scaffold`
+   * The solution layer (`<problemDir>/solution`) is always appended last.
+   * Tests inject custom layers to keep the fixture self-contained.
+   */
+  scaffoldLayers?: readonly string[];
   /** Override for tests. Defaults to the same `spawnSync('git', …)` runner. */
   runner?: GitDiffRunner;
 };
@@ -1008,23 +1027,39 @@ export function emitFailVsSolutionDiff(
     return { kind: "skipped", reason: `solution dir not found: ${solutionDir}` };
   }
 
-  const diff = runner(failingWork, solutionDir);
-  if (diff.status === 0) {
-    return { kind: "no-diff" };
-  }
-  if (diff.status !== 1) {
-    return {
-      kind: "skipped",
-      reason: `git diff exited with status ${diff.status ?? "<null>"}${diff.stderr ? `: ${diff.stderr.trim().split("\n")[0]}` : ""}`,
-    };
-  }
+  // Build the diff base in a tmpdir by overlaying scaffold layers + the
+  // reference solution. Without the scaffold overlay, raw solution/ is just
+  // impl files while failingWork has scaffold + impl, so the diff is mostly
+  // "deleted scaffold" noise rather than the AI's deviation from reference.
+  const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), "fail-vs-solution-"));
+  try {
+    const layers = options.scaffoldLayers ?? [
+      path.join(challengeRoot, "shared", "scaffold"),
+      path.join(challengeRoot, "problems", "_shared", "scaffold"),
+      path.join(problemDir, "scaffold"),
+    ];
+    applyScaffoldLayers(tmpBase, [...layers, solutionDir]);
 
-  const problemId = perIteration[0]!.problemId;
-  const diffDir = path.join(runArtifactRoot, "iter-diff");
-  fs.mkdirSync(diffDir, { recursive: true });
-  const diffPath = path.join(diffDir, `${sanitizeForFilename(problemId)}.fail-vs-solution.diff`);
-  fs.writeFileSync(diffPath, diff.stdout);
-  return { kind: "written", diffPath };
+    const diff = runner(tmpBase, failingWork);
+    if (diff.status === 0) {
+      return { kind: "no-diff" };
+    }
+    if (diff.status !== 1) {
+      return {
+        kind: "skipped",
+        reason: `git diff exited with status ${diff.status ?? "<null>"}${diff.stderr ? `: ${diff.stderr.trim().split("\n")[0]}` : ""}`,
+      };
+    }
+
+    const problemId = perIteration[0]!.problemId;
+    const diffDir = path.join(runArtifactRoot, "iter-diff");
+    fs.mkdirSync(diffDir, { recursive: true });
+    const diffPath = path.join(diffDir, `${sanitizeForFilename(problemId)}.fail-vs-solution.diff`);
+    fs.writeFileSync(diffPath, diff.stdout);
+    return { kind: "written", diffPath };
+  } finally {
+    fs.rmSync(tmpBase, { recursive: true, force: true });
+  }
 }
 
 /**

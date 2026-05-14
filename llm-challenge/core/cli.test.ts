@@ -415,10 +415,9 @@ describe("emitFailVsSolutionDiff", () => {
     fs.mkdirSync(runArtifactRoot, { recursive: true });
 
     const failingWork = path.join(iters[0]!.artifacts!.directory, "attempt-0", "work");
-    const solutionDir = path.join(problemDir, "solution");
     const runner = vi.fn().mockReturnValue({
       status: 1,
-      stdout: `--- a/${failingWork}/tailor.config.ts\n+++ b/${solutionDir}/tailor.config.ts\n@@ -1 +1 @@\n-// wrong attempt 1\n+// reference solution\n`,
+      stdout: `--- a/base/tailor.config.ts\n+++ b/${failingWork}/tailor.config.ts\n@@ -1 +1 @@\n-// reference solution\n+// wrong attempt 1\n`,
       stderr: "",
     });
 
@@ -426,6 +425,10 @@ describe("emitFailVsSolutionDiff", () => {
       perIteration: iters,
       problemDir,
       runArtifactRoot,
+      // Empty layer list keeps the fixture isolated from the real
+      // `<challengeRoot>/shared/scaffold` tree on disk; the solution layer is
+      // still appended by emitFailVsSolutionDiff itself.
+      scaffoldLayers: [],
       runner,
     });
 
@@ -436,8 +439,14 @@ describe("emitFailVsSolutionDiff", () => {
     );
     expect(fs.existsSync(outcome.diffPath)).toBe(true);
     expect(fs.readFileSync(outcome.diffPath, "utf-8")).toContain("// reference solution");
-    // Runner sees the failing work tree first, then the reference solution.
-    expect(runner.mock.calls[0]).toEqual([failingWork, solutionDir]);
+    // Runner sees the scaffolded solution base first, then the failing work
+    // tree. The base is an ephemeral tmpdir created by emitFailVsSolutionDiff;
+    // assert the shape rather than the exact path.
+    expect(runner).toHaveBeenCalledOnce();
+    const [base, work] = runner.mock.calls[0]!;
+    expect(work).toBe(failingWork);
+    expect(typeof base).toBe("string");
+    expect(base).not.toBe(failingWork);
   });
 
   it("skips when any iteration passed (flaky / stable-pass cases)", () => {
@@ -528,6 +537,124 @@ describe("emitFailVsSolutionDiff", () => {
       expect(outcome.reason).toContain("solution dir not found");
     }
     expect(runner).not.toHaveBeenCalled();
+  });
+
+  // Phase 5e T2: confirm the scaffold overlay actually strips scaffold noise.
+  // Before Phase 5e the diff base was raw solution/ (impl-only) while work/
+  // was scaffold + impl, so every scaffold file showed up as deleted in the
+  // resulting diff. After Phase 5e the solution side is overlaid on the same
+  // scaffold layers the solver saw, leaving only the AI's deviation from
+  // reference in the diff body. This test uses the real git runner (no mock)
+  // so the assertion exercises the genuine `git diff --no-index` semantics.
+  it("emits a diff containing only the AI deviation, not scaffold noise", () => {
+    const fakeChallengeRoot = path.join(tempDir, "challenge");
+    const sharedScaffold = path.join(fakeChallengeRoot, "shared", "scaffold");
+    const problemDir = path.join(fakeChallengeRoot, "problems", "m05");
+    const perProblemScaffold = path.join(problemDir, "scaffold");
+    const solutionDir = path.join(problemDir, "solution", "tailordb");
+    fs.mkdirSync(sharedScaffold, { recursive: true });
+    fs.mkdirSync(perProblemScaffold, { recursive: true });
+    fs.mkdirSync(solutionDir, { recursive: true });
+
+    // Scaffold layer: package.json (same content in both work/ and base/).
+    const packageJson = JSON.stringify({ name: "scaffold", private: true }, null, 2) + "\n";
+    fs.writeFileSync(path.join(sharedScaffold, "package.json"), packageJson);
+
+    // Reference solution: tailordb/x.ts with the correct hook implementation.
+    fs.writeFileSync(
+      path.join(solutionDir, "x.ts"),
+      "export const x = { onCreate: () => 'reference' };\n",
+    );
+
+    // Failing work tree: same scaffold (so a naïve diff would call it "noise")
+    // PLUS a different tailordb/x.ts (the actual AI deviation we want to see).
+    const iterDir = path.join(tempDir, "iter-0");
+    const workDir = path.join(iterDir, "attempt-0", "work");
+    const workTailordb = path.join(workDir, "tailordb");
+    fs.mkdirSync(workTailordb, { recursive: true });
+    fs.writeFileSync(path.join(workDir, "package.json"), packageJson);
+    fs.writeFileSync(
+      path.join(workTailordb, "x.ts"),
+      "export const x = { onCreate: () => 'AI got it wrong' };\n",
+    );
+
+    const iter: ProblemResult = {
+      problemId: "m05-db-type-hooks-create",
+      problemName: "db-type-hooks-create",
+      difficulty: "easy",
+      category: "micro",
+      stages: [{ stage: "tests", passed: false, output: "fail" }],
+      passed: false,
+      artifacts: { directory: iterDir },
+    };
+
+    const runArtifactRoot = path.join(tempDir, "run");
+    fs.mkdirSync(runArtifactRoot, { recursive: true });
+
+    // Real git runner — no mock. The whole point is to verify the genuine
+    // diff output, not just the runner-arg shape.
+    const outcome = emitFailVsSolutionDiff({
+      perIteration: [iter],
+      problemDir,
+      runArtifactRoot,
+      // Inject the fake scaffold layers so the test is fully self-contained
+      // and does not depend on the real `<challengeRoot>/shared/scaffold/`.
+      scaffoldLayers: [sharedScaffold, perProblemScaffold],
+    });
+
+    expect(outcome.kind).toBe("written");
+    if (outcome.kind !== "written") return;
+    const content = fs.readFileSync(outcome.diffPath, "utf-8");
+
+    // Real signal: the tailordb/x.ts deviation must be in the diff body.
+    expect(content).toContain("tailordb/x.ts");
+    expect(content).toContain("AI got it wrong");
+    expect(content).toContain("reference");
+
+    // Scaffold noise: package.json is the same on both sides, so it must NOT
+    // appear in the diff. (Pre-Phase-5e this line would have appeared as
+    // "deleted file mode" because solution side lacked the scaffold layer.)
+    expect(content).not.toContain("package.json");
+  });
+
+  // Phase 5e T2 cleanup contract: the function creates a tmp scaffold-overlay
+  // dir under os.tmpdir() and must remove it in a finally block so failed
+  // runs do not leak. Snapshot the tmpdir entries before/after and assert no
+  // new fail-vs-solution-* directory remains.
+  it("removes the ephemeral scaffold-overlay tmpdir after emit", () => {
+    const problemDir = makeProblemDir();
+    const iters = [
+      makeIteration("iter-0", false, "// wrong attempt\n"),
+      makeIteration("iter-1", false, "// wrong attempt\n"),
+    ];
+    const runArtifactRoot = path.join(tempDir, "run-cleanup");
+    fs.mkdirSync(runArtifactRoot, { recursive: true });
+    const runner = vi.fn().mockReturnValue({
+      status: 1,
+      stdout: "diff body\n",
+      stderr: "",
+    });
+
+    const before = new Set(
+      fs.readdirSync(os.tmpdir()).filter((n) => n.startsWith("fail-vs-solution-")),
+    );
+
+    emitFailVsSolutionDiff({
+      perIteration: iters,
+      problemDir,
+      runArtifactRoot,
+      scaffoldLayers: [],
+      runner,
+    });
+
+    const after = new Set(
+      fs.readdirSync(os.tmpdir()).filter((n) => n.startsWith("fail-vs-solution-")),
+    );
+    // No new tmpdir should be left behind. (A concurrent test could create
+    // its own — only assert that nothing leaked from THIS call.)
+    for (const name of after) {
+      expect(before.has(name)).toBe(true);
+    }
   });
 });
 
