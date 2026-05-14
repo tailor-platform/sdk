@@ -794,3 +794,137 @@ describe("formatReportTable (iterations)", () => {
     expect(formatReportTable(report)).not.toContain("iter pass=");
   });
 });
+
+// T3: persistent failures section surfaces stable-fail problems (every
+// iteration failed verification, solver completed) as SDK improvement
+// candidates. Infra failures are tagged separately so analyzers can ignore
+// them without losing the structured payload.
+describe("persistent failures", () => {
+  const passing: StageResult = { stage: "tests", passed: true, output: "ok" };
+  const failing: StageResult = { stage: "tests", passed: false, output: "fail" };
+  const infraStages: StageResult[] = [
+    { stage: "generate", passed: false, output: "Skipped (infrastructure failure)" },
+    { stage: "typecheck", passed: false, output: "Skipped (infrastructure failure)" },
+    { stage: "tests", passed: false, output: "Skipped (infrastructure failure)" },
+  ];
+
+  it("collects passRate=0 multi-iteration results as stable_fail (single-iteration falls through to !passed)", () => {
+    const report = createReport([
+      // Multi-iteration: passRate === 0 with passedCount tracked.
+      makeProblemResult({
+        problemId: "m05",
+        problemName: "db-type-hooks-create",
+        stages: [failing],
+        passed: false,
+        iterations: {
+          count: 3,
+          passedCount: 0,
+          passRate: 0,
+          passedByIteration: [false, false, false],
+          costMedian: 0,
+          costStdev: 0,
+          metricsMedian: {
+            turns: 0,
+            readSdkDts: 0,
+            readDocs: 0,
+            bashRetries: 0,
+            "sdk-dts": 0,
+            "sdk-package-src": 0,
+            "sdk-docs": 0,
+            "problem-files": 0,
+            other: 0,
+          },
+          metricsStdev: {
+            turns: 0,
+            readSdkDts: 0,
+            readDocs: 0,
+            bashRetries: 0,
+            "sdk-dts": 0,
+            "sdk-package-src": 0,
+            "sdk-docs": 0,
+            "problem-files": 0,
+            other: 0,
+          },
+        },
+      }),
+      // Single-iteration fail: no iterations field → falls back to !passed.
+      makeProblemResult({
+        problemId: "h12",
+        problemName: "cli-cascade-error-batch-fix",
+        stages: [failing],
+        passed: false,
+      }),
+      // Passing problem: must not appear in persistentFailures.
+      makeProblemResult({
+        problemId: "h01",
+        problemName: "tailordb-hooks-null-update-cascade",
+        stages: [passing],
+        passed: true,
+      }),
+    ]);
+
+    expect(report.analytics.persistentFailures).toEqual([
+      { problemId: "m05", reason: "stable_fail" },
+      { problemId: "h12", reason: "stable_fail" },
+    ]);
+  });
+
+  it("tags every-stage-infra-failure runs as infra_failure (not stable_fail)", () => {
+    const report = createReport([
+      makeProblemResult({
+        problemId: "m24",
+        problemName: "cli-retry-loop-detection",
+        stages: infraStages,
+        passed: false,
+        solveResult: {
+          success: false,
+          costUsd: 0,
+          durationMs: 0,
+          output: "",
+          infraFailure: true,
+        },
+      }),
+    ]);
+    expect(report.analytics.persistentFailures).toEqual([
+      { problemId: "m24", reason: "infra_failure" },
+    ]);
+  });
+
+  it("renders only stable_fail entries in the Persistent failures section", () => {
+    const report = createReport([
+      // stable_fail entry — should render
+      makeProblemResult({
+        problemId: "m05",
+        problemName: "db-type-hooks-create",
+        stages: [failing],
+        passed: false,
+      }),
+      // infra_failure entry — should NOT render in this section
+      makeProblemResult({
+        problemId: "m24",
+        problemName: "cli-retry-loop-detection",
+        stages: infraStages,
+        passed: false,
+        solveResult: {
+          success: false,
+          costUsd: 0,
+          durationMs: 0,
+          output: "",
+          infraFailure: true,
+        },
+      }),
+    ]);
+
+    const table = formatReportTable(report);
+    expect(table).toContain("Persistent failures (SDK improvement candidates):");
+    expect(table).toMatch(/Persistent failures[^]*m05/);
+    // The infra failure is logged via the WARNING line above, not in the
+    // SDK-improvement list.
+    expect(table).not.toMatch(/Persistent failures[^]*m24/);
+  });
+
+  it("omits the Persistent failures section when no stable_fail entries exist", () => {
+    const report = createReport([makeProblemResult({ stages: [passing], passed: true })]);
+    expect(formatReportTable(report)).not.toContain("Persistent failures");
+  });
+});

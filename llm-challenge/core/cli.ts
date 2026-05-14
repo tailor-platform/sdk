@@ -31,6 +31,7 @@ import {
   createReport,
   finalizeStages,
   formatReportTable,
+  isInfraFailure,
 } from "./report";
 import { formatSolveModelLabel, normalizeModelForAgent } from "./solve-model";
 import { checkAuthStatus, solveProblem } from "./solve";
@@ -121,6 +122,19 @@ type ParsedArgs = {
    */
   iterations: number;
   /**
+   * True iff the user passed `--iterations` explicitly. When true the runner
+   * never auto-extends — the explicit value is honoured verbatim. When false
+   * (default), flaky middle-band results (passedCount in [1, count-1]) get an
+   * extra 2 iterations to disambiguate variance.
+   */
+  iterationsExplicit: boolean;
+  /**
+   * True when `--no-auto-extend` was passed. Suppresses the flaky-middle-band
+   * auto-extension even when iterations are at the default. Primarily a test
+   * affordance.
+   */
+  noAutoExtend: boolean;
+  /**
    * Optional git ref to `git worktree add` and `pnpm pack` instead of the
    * current working tree. Enables A/B benchmarking of SDK candidate branches
    * against the current branch (Phase 4 plan section "A/B 実験 + 統計化").
@@ -142,6 +156,7 @@ function parseArgs(): ParsedArgs {
   let concurrency = os.availableParallelism();
   let contextProfile: ContextProfile = "full-package";
   let iterations: number | undefined;
+  let noAutoExtend = false;
   let sdkBranch: string | undefined;
 
   for (let i = 0; i < args.length; i++) {
@@ -205,6 +220,9 @@ function parseArgs(): ParsedArgs {
         iterations = Number(requireArg(args, i, "--iterations"));
         i++;
         break;
+      case "--no-auto-extend":
+        noAutoExtend = true;
+        break;
       case "--sdk-branch":
         sdkBranch = requireArg(args, i, "--sdk-branch");
         i++;
@@ -222,6 +240,7 @@ function parseArgs(): ParsedArgs {
   }
   // --iterations: default to 3 in solve mode (per Phase 4 spec D 採点ベクトル
   // "N=3 反復"), default to 1 in verify modes for backward compat.
+  const iterationsExplicit = iterations !== undefined;
   if (iterations === undefined) {
     iterations = solve ? 3 : 1;
   }
@@ -243,6 +262,8 @@ function parseArgs(): ParsedArgs {
     concurrency: Math.trunc(concurrency),
     contextProfile,
     iterations,
+    iterationsExplicit,
+    noAutoExtend,
     ...(sdkBranch ? { sdkBranch } : {}),
   };
 }
@@ -883,8 +904,18 @@ export function emitIterDiff(options: EmitIterDiffOptions): EmitIterDiffResult {
   if (perIteration.length < 2) {
     return { kind: "skipped", reason: "need at least 2 iterations" };
   }
+  // Strict flaky check: emit only when passRate is strictly between 0 and 1.
+  // - passRate === 0 (stable fail) is handled by `emitFailVsSolutionDiff`.
+  // - passRate === 1 (stable pass) needs no diff — nothing flipped.
+  const passedCount = perIteration.filter((r) => r.passed).length;
+  const passRate = passedCount / perIteration.length;
+  if (passRate <= 0 || passRate >= 1) {
+    return { kind: "skipped", reason: "not flaky (all passed or all failed)" };
+  }
   const passing = perIteration.find((r) => r.passed);
   const failing = perIteration.find((r) => !r.passed);
+  // Both must exist because passRate is strictly in (0, 1); guard for the type
+  // checker only.
   if (!passing || !failing) {
     return { kind: "skipped", reason: "not flaky (all passed or all failed)" };
   }
@@ -914,6 +945,116 @@ export function emitIterDiff(options: EmitIterDiffOptions): EmitIterDiffResult {
   const diffPath = path.join(diffDir, `${sanitizeForFilename(problemId)}.diff`);
   fs.writeFileSync(diffPath, diff.stdout);
   return { kind: "written", diffPath };
+}
+
+/**
+ * Compute and persist a `git diff --no-index <failingWork> <referenceSolution>`
+ * for a stable-fail problem (every iteration failed verification, but the
+ * solver itself completed without infra failures). Writes to
+ * `<runArtifactRoot>/iter-diff/<problemId>.fail-vs-solution.diff`. No-op when:
+ *
+ * - any iteration passed (use `emitIterDiff` instead);
+ * - every iteration is an infrastructure failure (auth / Podman / etc. —
+ *   nothing actionable about the SDK affordance to surface);
+ * - the first iteration has no work snapshot on disk;
+ * - the reference `solution/` directory does not exist;
+ * - `git diff --no-index` reports the two trees are identical (exit 0).
+ *
+ * Surfaces "what the agent should have done differently" without an LLM judge.
+ */
+export type EmitFailVsSolutionDiffOptions = {
+  perIteration: ProblemResult[];
+  problemDir: string;
+  runArtifactRoot: string;
+  /** Override for tests. Defaults to the same `spawnSync('git', …)` runner. */
+  runner?: GitDiffRunner;
+};
+
+export type EmitFailVsSolutionDiffResult =
+  | { kind: "skipped"; reason: string }
+  | { kind: "no-diff" }
+  | { kind: "written"; diffPath: string };
+
+export function emitFailVsSolutionDiff(
+  options: EmitFailVsSolutionDiffOptions,
+): EmitFailVsSolutionDiffResult {
+  const { perIteration, problemDir, runArtifactRoot } = options;
+  const runner = options.runner ?? defaultGitDiffRunner;
+  if (perIteration.length === 0) {
+    return { kind: "skipped", reason: "no iterations" };
+  }
+  // Only stable-fail (every iteration failed verification) qualifies.
+  const passedCount = perIteration.filter((r) => r.passed).length;
+  if (passedCount > 0) {
+    return { kind: "skipped", reason: "not stable-fail (at least one iteration passed)" };
+  }
+  // Skip infra failures: there is no SDK affordance signal in auth / Podman
+  // failures, and the solver never produced a useful work tree to diff.
+  if (perIteration.every((r) => isInfraFailure(r))) {
+    return { kind: "skipped", reason: "every iteration is an infra failure" };
+  }
+  // Pick the first iteration whose solver completed (success or stage-fail) so
+  // we diff actual agent output rather than an infra-failure stub.
+  const firstUsable = perIteration.find((r) => !isInfraFailure(r));
+  if (!firstUsable) {
+    return { kind: "skipped", reason: "every iteration is an infra failure" };
+  }
+  const failingWork = getIterationWorkSnapshot(firstUsable);
+  if (!failingWork) {
+    return { kind: "skipped", reason: "missing work snapshot for first iteration" };
+  }
+  const solutionDir = path.join(problemDir, "solution");
+  if (!fs.existsSync(solutionDir)) {
+    return { kind: "skipped", reason: `solution dir not found: ${solutionDir}` };
+  }
+
+  const diff = runner(failingWork, solutionDir);
+  if (diff.status === 0) {
+    return { kind: "no-diff" };
+  }
+  if (diff.status !== 1) {
+    return {
+      kind: "skipped",
+      reason: `git diff exited with status ${diff.status ?? "<null>"}${diff.stderr ? `: ${diff.stderr.trim().split("\n")[0]}` : ""}`,
+    };
+  }
+
+  const problemId = perIteration[0]!.problemId;
+  const diffDir = path.join(runArtifactRoot, "iter-diff");
+  fs.mkdirSync(diffDir, { recursive: true });
+  const diffPath = path.join(diffDir, `${sanitizeForFilename(problemId)}.fail-vs-solution.diff`);
+  fs.writeFileSync(diffPath, diff.stdout);
+  return { kind: "written", diffPath };
+}
+
+/**
+ * Decide whether to run additional iterations after the configured `iterations`
+ * count has been exhausted. Returns true only for the high-variance middle band
+ * (1 ≤ passedCount ≤ iterations-1) under the default iteration count when the
+ * user neither pinned `--iterations` nor passed `--no-auto-extend`. Extracted
+ * for unit testing the trigger conditions.
+ */
+export type ShouldAutoExtendOptions = {
+  perIteration: ProblemResult[];
+  iterations: number;
+  iterationsExplicit: boolean;
+  noAutoExtend: boolean;
+};
+
+export function shouldAutoExtend(options: ShouldAutoExtendOptions): boolean {
+  const { perIteration, iterations, iterationsExplicit, noAutoExtend } = options;
+  if (noAutoExtend) return false;
+  if (iterationsExplicit) return false;
+  // Only auto-extend at the default 3-iteration cadence — explicit higher
+  // values already over-sample, and lower values would auto-extend to >N which
+  // changes semantics in surprising ways.
+  if (iterations !== 3) return false;
+  if (perIteration.length !== iterations) return false;
+  const passedCount = perIteration.filter((r) => r.passed).length;
+  // 0/3 and 3/3 are zero-variance: more iterations cannot improve the signal.
+  // 1/3 and 2/3 are the flaky middle band where two more iterations cheaply
+  // disambiguate "frequently flaky" from "rarely flaky".
+  return passedCount >= 1 && passedCount <= iterations - 1;
 }
 
 const authErrorPatterns = [
@@ -1004,6 +1145,8 @@ async function main(): Promise<void> {
     concurrency,
     contextProfile,
     iterations,
+    iterationsExplicit,
+    noAutoExtend,
     sdkBranch,
   } = parseArgs();
 
@@ -1012,11 +1155,11 @@ async function main(): Promise<void> {
     console.error("  tsx core/cli.ts --problem 001 --impl ./path/to/impl");
     console.error("  tsx core/cli.ts --problem 001 --use-solution");
     console.error(
-      "  tsx core/cli.ts --problem 001 [--problem 002 ...] --solve [--agent claude|codex] [--model sonnet] [--max-budget 5.00] [--context-profile types-only] [--iterations 3] [--sdk-branch <ref>]",
+      "  tsx core/cli.ts --problem 001 [--problem 002 ...] --solve [--agent claude|codex] [--model sonnet] [--max-budget 5.00] [--context-profile types-only] [--iterations 3] [--no-auto-extend] [--sdk-branch <ref>]",
     );
     console.error("  tsx core/cli.ts --all --use-solution [--clean] [--concurrency <n>]");
     console.error(
-      "  tsx core/cli.ts --all --solve [--agent claude|codex] [--model sonnet] [--max-budget 5.00] [--clean] [--concurrency <n>] [--context-profile types-only] [--iterations 3] [--sdk-branch <ref>]",
+      "  tsx core/cli.ts --all --solve [--agent claude|codex] [--model sonnet] [--max-budget 5.00] [--clean] [--concurrency <n>] [--context-profile types-only] [--iterations 3] [--no-auto-extend] [--sdk-branch <ref>]",
     );
     console.error("  tsx core/cli.ts --all --impl-dir ./path/to/all-outputs");
     console.error("\nNote: --solve requires Podman. On macOS, run 'podman machine start' first.");
@@ -1161,7 +1304,7 @@ async function main(): Promise<void> {
       return runProblem(task.problemName, { ...baseOptions, runArtifactRoot });
     }
     const perIteration: ProblemResult[] = [];
-    for (let i = 0; i < iterations; i++) {
+    const runOneIteration = async (i: number): Promise<void> => {
       // Place each iteration's artifact under a sub-dir so the trace.jsonl /
       // workSnapshot of iter-1 isn't overwritten by iter-2.
       const iterRoot = runArtifactRoot ? path.join(runArtifactRoot, `iter-${i}`) : undefined;
@@ -1171,6 +1314,25 @@ async function main(): Promise<void> {
           ...(iterRoot ? { runArtifactRoot: iterRoot } : {}),
         }),
       );
+    };
+    for (let i = 0; i < iterations; i++) {
+      await runOneIteration(i);
+    }
+
+    // Flaky middle-band auto-extend: with the default N=3, a 1/3 or 2/3 outcome
+    // is the high-signal but high-noise zone. Run two more iterations to reach
+    // an N=5 sample so the passRate signal stabilises. Skip when the user set
+    // `--iterations` explicitly or passed `--no-auto-extend`.
+    if (shouldAutoExtend({ perIteration, iterations, iterationsExplicit, noAutoExtend })) {
+      const extra = 2;
+      if (verbose) {
+        console.log(
+          `  auto-extend: ${perIteration.filter((r) => r.passed).length}/${iterations} → running ${extra} more iteration(s)`,
+        );
+      }
+      for (let i = iterations; i < iterations + extra; i++) {
+        await runOneIteration(i);
+      }
     }
 
     // When the problem is partially passing (flaky), capture the file-system
@@ -1189,6 +1351,24 @@ async function main(): Promise<void> {
         // benchmark result.
         const msg = err instanceof Error ? err.message : String(err);
         console.error(`  iter-diff emit failed: ${msg}`);
+      }
+      // For stable-fail (every iteration failed verify but solver completed),
+      // surface the delta against the reference `solution/` so an operator can
+      // read "what the agent should have produced" without invoking an LLM
+      // judge.
+      try {
+        const problemDir = path.join(challengeRoot, "problems", task.problemName);
+        const outcome = emitFailVsSolutionDiff({
+          perIteration,
+          problemDir,
+          runArtifactRoot,
+        });
+        if (verbose && outcome.kind === "written") {
+          console.log(`  fail-vs-solution: ${path.relative(runArtifactRoot, outcome.diffPath)}`);
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`  fail-vs-solution emit failed: ${msg}`);
       }
     }
 

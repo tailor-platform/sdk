@@ -98,6 +98,20 @@ export type ProblemResult = {
 
 export type SuccessRate = { passed: number; total: number; rate: number };
 
+/**
+ * Reason for a problem failing every iteration. Surfaces the kind of "stable
+ * fail" so operators can act on it: `stable_fail` means the solver completed
+ * but every iteration failed verification (SDK improvement candidate);
+ * `infra_failure` means the solve infrastructure (auth / Podman / etc.)
+ * prevented the run from producing a meaningful signal.
+ */
+export type PersistentFailureReason = "stable_fail" | "infra_failure";
+
+export type PersistentFailure = {
+  problemId: string;
+  reason: PersistentFailureReason;
+};
+
 type Analytics = {
   stagePassRates: Record<string, SuccessRate>;
   /**
@@ -106,6 +120,14 @@ type Analytics = {
    * `--use-solution` runs).
    */
   metricsSummary?: MetricsSummary;
+  /**
+   * Problems that failed every iteration. `stable_fail` entries are SDK
+   * improvement candidates — the agent finished but could not solve them;
+   * `infra_failure` entries are excluded from rendering but kept in the
+   * structured payload for downstream tooling. Optional for forward / backward
+   * compatibility with reports persisted before this field existed.
+   */
+  persistentFailures?: PersistentFailure[];
 };
 
 /**
@@ -309,10 +331,21 @@ export function isPassed(result: ProblemResult): boolean {
   return result.passed;
 }
 
-function computeAnalytics(results: ProblemResult[]): Analytics {
+/**
+ * Compute analytics across the results in scope.
+ *
+ * - `validResults` is the infra-failure-stripped view used for behavioural
+ *   metrics and stage pass rates (infra failures carry no signal there).
+ * - `allResults` is the full set used to tag persistent failures so the
+ *   `infra_failure` bucket can be separated from `stable_fail`.
+ *   Defaults to `validResults` for backward compatibility with callers that
+ *   only have a single view.
+ */
+function computeAnalytics(validResults: ProblemResult[], allResults?: ProblemResult[]): Analytics {
+  const persistentSource = allResults ?? validResults;
   // Stage pass rates (exclude skipped stages from totals)
   const stageItems: { stage: string; passed: boolean }[] = [];
-  for (const r of results) {
+  for (const r of validResults) {
     for (const s of r.stages) {
       if (!isStageSkipped(s)) {
         stageItems.push({ stage: s.stage, passed: s.passed });
@@ -325,7 +358,7 @@ function computeAnalytics(results: ProblemResult[]): Analytics {
     (s) => s.passed,
   );
 
-  const metricsList = results
+  const metricsList = validResults
     .map((r) => r.metrics)
     .filter((m): m is TraceMetrics => m !== undefined);
   const metricsSummary = summarizeMetrics(metricsList);
@@ -333,7 +366,28 @@ function computeAnalytics(results: ProblemResult[]): Analytics {
   return {
     stagePassRates,
     ...(metricsSummary ? { metricsSummary } : {}),
+    persistentFailures: computePersistentFailures(persistentSource),
   };
+}
+
+/**
+ * Pick out problems that never passed in this run. Multi-iteration runs use
+ * `iterations.passRate === 0`; single-iteration runs fall back to `!passed`.
+ * Each failing problem is tagged `infra_failure` when every stage is the
+ * infra-failure sentinel — that bucket is surfaced separately because it
+ * carries no SDK-affordance signal.
+ */
+function computePersistentFailures(results: ProblemResult[]): PersistentFailure[] {
+  const out: PersistentFailure[] = [];
+  for (const r of results) {
+    const passRate = r.iterations?.passRate ?? (r.passed ? 1 : 0);
+    if (passRate > 0) continue;
+    out.push({
+      problemId: r.problemId,
+      reason: isInfraFailure(r) ? "infra_failure" : "stable_fail",
+    });
+  }
+  return out;
 }
 
 function computeProblemCost(result: ProblemResult): number {
@@ -400,7 +454,7 @@ export function createReport(
   const totalDurationMs =
     metadata?.elapsedMs ?? results.reduce((sum, r) => sum + (r.totalDurationMs ?? 0), 0);
 
-  const analytics = computeAnalytics(validResults);
+  const analytics = computeAnalytics(validResults, results);
   const usageSummary = summarizeUsage(validResults);
 
   return {
@@ -574,6 +628,20 @@ export function formatReportTable(report: ChallengeReport): string {
     lines.push("Stage Pass Rates:");
     for (const [key, rate] of stageEntries) {
       lines.push(`  ${key.padEnd(25)} ${rate.passed}/${rate.total} (${rate.rate}%)`);
+    }
+  }
+
+  // Persistent failures (SDK improvement candidates) — list only stable_fail
+  // entries; infra_failure is already summarised by the WARNING line above and
+  // carries no SDK-affordance signal.
+  const stableFailures = (analytics.persistentFailures ?? []).filter(
+    (p) => p.reason === "stable_fail",
+  );
+  if (stableFailures.length > 0) {
+    lines.push("");
+    lines.push("Persistent failures (SDK improvement candidates):");
+    for (const p of stableFailures) {
+      lines.push(`  ${p.problemId}`);
     }
   }
 

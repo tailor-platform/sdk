@@ -7,10 +7,12 @@ import {
   applyScaffoldLayers,
   cleanupWorktree,
   deriveProblemName,
+  emitFailVsSolutionDiff,
   emitIterDiff,
   packSdkFromRef,
+  shouldAutoExtend,
 } from "./cli";
-import type { ProblemResult } from "./report";
+import type { ProblemResult, StageResult } from "./report";
 
 describe("applyScaffoldLayers", () => {
   let tempDir: string;
@@ -305,5 +307,317 @@ describe("emitIterDiff", () => {
     if (outcome.kind === "skipped") {
       expect(outcome.reason).toContain("status 128");
     }
+  });
+
+  // T1 strict-trigger coverage: confirm that the three pass-rate regimes
+  // (stable fail / flaky / stable pass) each take the expected emit path so
+  // future refactors cannot silently broaden the trigger.
+  it("triggers strictly inside the open interval passRate in (0, 1) — passRate=0 skips", () => {
+    const allFailing = [
+      makeIteration("iter-0", false, "a\n").result,
+      makeIteration("iter-1", false, "b\n").result,
+      makeIteration("iter-2", false, "c\n").result,
+    ];
+    const runner = vi.fn();
+    const outcome = emitIterDiff({
+      perIteration: allFailing,
+      runArtifactRoot: path.join(tempDir, "run-zero"),
+      runner,
+    });
+    expect(outcome.kind).toBe("skipped");
+    expect(runner).not.toHaveBeenCalled();
+  });
+
+  it("triggers strictly inside the open interval passRate in (0, 1) — passRate=1/3 emits", () => {
+    const iters = [
+      makeIteration("iter-0", false, "fail\n").result,
+      makeIteration("iter-1", true, "pass\n").result,
+      makeIteration("iter-2", false, "fail2\n").result,
+    ];
+    const runArtifactRoot = path.join(tempDir, "run-onethird");
+    fs.mkdirSync(runArtifactRoot, { recursive: true });
+    const runner = vi.fn().mockReturnValue({ status: 1, stdout: "diff body\n", stderr: "" });
+
+    const outcome = emitIterDiff({ perIteration: iters, runArtifactRoot, runner });
+
+    expect(outcome.kind).toBe("written");
+    expect(runner).toHaveBeenCalledOnce();
+  });
+
+  it("triggers strictly inside the open interval passRate in (0, 1) — passRate=1 skips", () => {
+    const allPassing = [
+      makeIteration("iter-0", true, "a\n").result,
+      makeIteration("iter-1", true, "b\n").result,
+      makeIteration("iter-2", true, "c\n").result,
+    ];
+    const runner = vi.fn();
+    const outcome = emitIterDiff({
+      perIteration: allPassing,
+      runArtifactRoot: path.join(tempDir, "run-one"),
+      runner,
+    });
+    expect(outcome.kind).toBe("skipped");
+    expect(runner).not.toHaveBeenCalled();
+  });
+});
+
+// T2: stable-fail iterations need a separate diff against the reference
+// solution so an operator can read "what was the agent missing?" without
+// invoking an LLM judge. The cases below cover the three pass-rate regimes
+// plus the infra-failure escape hatch.
+describe("emitFailVsSolutionDiff", () => {
+  let tempDir: string;
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "llm-failvsoln-test-"));
+  });
+  afterEach(() => {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  function makeIteration(
+    label: string,
+    passed: boolean,
+    workContent: string,
+    overrides: Partial<ProblemResult> = {},
+  ): ProblemResult {
+    const artifactDir = path.join(tempDir, label);
+    const workDir = path.join(artifactDir, "attempt-0", "work");
+    fs.mkdirSync(workDir, { recursive: true });
+    fs.writeFileSync(path.join(workDir, "tailor.config.ts"), workContent);
+    return {
+      problemId: "m24-cli-retry-loop-detection",
+      problemName: "cli-retry-loop-detection",
+      difficulty: "hard",
+      category: "micro",
+      stages: [{ stage: "tests", passed, output: passed ? "ok" : "fail" }],
+      passed,
+      artifacts: { directory: artifactDir },
+      ...overrides,
+    };
+  }
+
+  function makeProblemDir(): string {
+    const problemDir = path.join(tempDir, "problem");
+    const solutionDir = path.join(problemDir, "solution");
+    fs.mkdirSync(solutionDir, { recursive: true });
+    fs.writeFileSync(path.join(solutionDir, "tailor.config.ts"), "// reference solution\n");
+    return problemDir;
+  }
+
+  it("emits a .fail-vs-solution.diff when every iteration fails but solver completed", () => {
+    const problemDir = makeProblemDir();
+    const iters = [
+      makeIteration("iter-0", false, "// wrong attempt 1\n"),
+      makeIteration("iter-1", false, "// wrong attempt 2\n"),
+      makeIteration("iter-2", false, "// wrong attempt 3\n"),
+    ];
+    const runArtifactRoot = path.join(tempDir, "run");
+    fs.mkdirSync(runArtifactRoot, { recursive: true });
+
+    const failingWork = path.join(iters[0]!.artifacts!.directory, "attempt-0", "work");
+    const solutionDir = path.join(problemDir, "solution");
+    const runner = vi.fn().mockReturnValue({
+      status: 1,
+      stdout: `--- a/${failingWork}/tailor.config.ts\n+++ b/${solutionDir}/tailor.config.ts\n@@ -1 +1 @@\n-// wrong attempt 1\n+// reference solution\n`,
+      stderr: "",
+    });
+
+    const outcome = emitFailVsSolutionDiff({
+      perIteration: iters,
+      problemDir,
+      runArtifactRoot,
+      runner,
+    });
+
+    expect(outcome.kind).toBe("written");
+    if (outcome.kind !== "written") return;
+    expect(outcome.diffPath).toBe(
+      path.join(runArtifactRoot, "iter-diff", "m24-cli-retry-loop-detection.fail-vs-solution.diff"),
+    );
+    expect(fs.existsSync(outcome.diffPath)).toBe(true);
+    expect(fs.readFileSync(outcome.diffPath, "utf-8")).toContain("// reference solution");
+    // Runner sees the failing work tree first, then the reference solution.
+    expect(runner.mock.calls[0]).toEqual([failingWork, solutionDir]);
+  });
+
+  it("skips when any iteration passed (flaky / stable-pass cases)", () => {
+    const problemDir = makeProblemDir();
+    const flaky = [
+      makeIteration("iter-0", false, "x\n"),
+      makeIteration("iter-1", true, "y\n"),
+      makeIteration("iter-2", false, "z\n"),
+    ];
+    const stablePass = [makeIteration("iter-3", true, "a\n"), makeIteration("iter-4", true, "b\n")];
+    const runner = vi.fn();
+
+    const flakyOutcome = emitFailVsSolutionDiff({
+      perIteration: flaky,
+      problemDir,
+      runArtifactRoot: path.join(tempDir, "run-flaky"),
+      runner,
+    });
+    const stableOutcome = emitFailVsSolutionDiff({
+      perIteration: stablePass,
+      problemDir,
+      runArtifactRoot: path.join(tempDir, "run-stable"),
+      runner,
+    });
+
+    expect(flakyOutcome.kind).toBe("skipped");
+    expect(stableOutcome.kind).toBe("skipped");
+    expect(runner).not.toHaveBeenCalled();
+  });
+
+  it("skips when every iteration is an infrastructure failure", () => {
+    const problemDir = makeProblemDir();
+    const infraStages: StageResult[] = [
+      { stage: "generate", passed: false, output: "Skipped (infrastructure failure)" },
+      { stage: "typecheck", passed: false, output: "Skipped (infrastructure failure)" },
+      { stage: "tests", passed: false, output: "Skipped (infrastructure failure)" },
+    ];
+    const infraIters: ProblemResult[] = [
+      { ...makeIteration("iter-0", false, "x\n"), stages: infraStages, passed: false },
+      { ...makeIteration("iter-1", false, "y\n"), stages: infraStages, passed: false },
+    ];
+    const runner = vi.fn();
+
+    const outcome = emitFailVsSolutionDiff({
+      perIteration: infraIters,
+      problemDir,
+      runArtifactRoot: path.join(tempDir, "run-infra"),
+      runner,
+    });
+
+    expect(outcome.kind).toBe("skipped");
+    if (outcome.kind === "skipped") {
+      expect(outcome.reason).toContain("infra");
+    }
+    expect(runner).not.toHaveBeenCalled();
+  });
+
+  it("returns kind=no-diff (no file written) when the reference solution matches the work tree", () => {
+    const problemDir = makeProblemDir();
+    const iters = [makeIteration("iter-0", false, "// matches solution\n")];
+    const runArtifactRoot = path.join(tempDir, "run-nodiff");
+    const runner = vi.fn().mockReturnValue({ status: 0, stdout: "", stderr: "" });
+
+    const outcome = emitFailVsSolutionDiff({
+      perIteration: iters,
+      problemDir,
+      runArtifactRoot,
+      runner,
+    });
+
+    expect(outcome.kind).toBe("no-diff");
+    expect(fs.existsSync(path.join(runArtifactRoot, "iter-diff"))).toBe(false);
+  });
+
+  it("skips when the reference solution directory is missing", () => {
+    const problemDir = path.join(tempDir, "problem-no-solution");
+    fs.mkdirSync(problemDir, { recursive: true });
+    const iters = [makeIteration("iter-0", false, "x\n")];
+    const runner = vi.fn();
+    const outcome = emitFailVsSolutionDiff({
+      perIteration: iters,
+      problemDir,
+      runArtifactRoot: path.join(tempDir, "run-missing"),
+      runner,
+    });
+    expect(outcome.kind).toBe("skipped");
+    if (outcome.kind === "skipped") {
+      expect(outcome.reason).toContain("solution dir not found");
+    }
+    expect(runner).not.toHaveBeenCalled();
+  });
+});
+
+// T4: auto-extend only fires under the default 3-iteration cadence for the
+// flaky middle band, and only when the user did not pin --iterations or pass
+// --no-auto-extend. The matrix below covers every passedByIteration shape and
+// every flag combination so future regressions are caught at the trigger level.
+describe("shouldAutoExtend", () => {
+  function fakeIter(passed: boolean): ProblemResult {
+    return {
+      problemId: "m05",
+      problemName: "fixture",
+      difficulty: "easy",
+      category: "micro",
+      stages: [{ stage: "tests", passed, output: passed ? "ok" : "fail" }],
+      passed,
+    };
+  }
+  const make = (passedFlags: boolean[]): ProblemResult[] => passedFlags.map(fakeIter);
+
+  it("returns false for the zero-variance cases 0/3 and 3/3", () => {
+    expect(
+      shouldAutoExtend({
+        perIteration: make([false, false, false]),
+        iterations: 3,
+        iterationsExplicit: false,
+        noAutoExtend: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldAutoExtend({
+        perIteration: make([true, true, true]),
+        iterations: 3,
+        iterationsExplicit: false,
+        noAutoExtend: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("returns true for the flaky middle band 1/3 and 2/3", () => {
+    expect(
+      shouldAutoExtend({
+        perIteration: make([true, false, false]),
+        iterations: 3,
+        iterationsExplicit: false,
+        noAutoExtend: false,
+      }),
+    ).toBe(true);
+    expect(
+      shouldAutoExtend({
+        perIteration: make([true, true, false]),
+        iterations: 3,
+        iterationsExplicit: false,
+        noAutoExtend: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("returns false when --iterations was set explicitly even for a flaky outcome", () => {
+    expect(
+      shouldAutoExtend({
+        perIteration: make([true, false, false]),
+        iterations: 3,
+        iterationsExplicit: true,
+        noAutoExtend: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("returns false when --no-auto-extend is set even for a flaky outcome", () => {
+    expect(
+      shouldAutoExtend({
+        perIteration: make([true, true, false]),
+        iterations: 3,
+        iterationsExplicit: false,
+        noAutoExtend: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("returns false when iterations is not the default 3 (e.g. 5)", () => {
+    // Even though 2/5 is technically a middle-band ratio, auto-extend is
+    // scoped to the default 3 to avoid surprise N=7 runs.
+    expect(
+      shouldAutoExtend({
+        perIteration: make([true, true, false, false, false]),
+        iterations: 5,
+        iterationsExplicit: false,
+        noAutoExtend: false,
+      }),
+    ).toBe(false);
   });
 });
