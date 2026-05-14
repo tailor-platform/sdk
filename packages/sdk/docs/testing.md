@@ -26,8 +26,6 @@ Platform API mocks under `@tailor-platform/sdk/vitest` (auto-injected by the [`t
 - `workflowMock` — `tailor.workflow` job / wait / resolve mocks
 - `secretmanagerMock`, `authconnectionMock`, `idpMock`, `fileMock`, `iconvMock` — corresponding platform API mocks
 
-> The examples below call `tailor.*` / `tailordb.*` via the ambient globals. To make these snippets type-check in a fresh TypeScript project, either opt into the globals once (`import "@tailor-platform/sdk/runtime/globals"` in a setup file, or list it in `tsconfig.json`'s `compilerOptions.types`), or call the typed wrappers from `@tailor-platform/sdk/runtime/*` instead.
-
 For tighter alignment with the production runtime — Node.js module blocking, Web-only globals, and platform API mocks — pair the resolver helpers with the [`tailor-runtime` Vitest environment](#runtime-environment-emulation-beta) below.
 
 Three starter templates demonstrate the patterns below in a working project:
