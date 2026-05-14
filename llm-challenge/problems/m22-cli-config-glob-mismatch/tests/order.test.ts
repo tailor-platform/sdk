@@ -4,7 +4,7 @@ import { createWorkDirContext, importPath } from "../../../shared/test-helpers.j
 
 const { workDir, workDirReady } = createWorkDirContext(import.meta.dirname);
 
-describe.skipIf(!workDirReady)("m22-cli-error-stdout-buffering", () => {
+describe.skipIf(!workDirReady)("m22-cli-config-glob-mismatch", () => {
   test("tailor.config.ts globs match the existing Order model file", async () => {
     const mod = await importPath(path.join(workDir, "tailor.config.ts"));
     const files: string[] = mod.default.db.tailordb.files;
