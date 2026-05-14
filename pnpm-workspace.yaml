@@ -1,11 +1,22 @@
+nodeLinker: hoisted
+autoInstallPeers: true
+
 minimumReleaseAge: 4320 # 3 days
+minimumReleaseAgeStrict: true
+minimumReleaseAgeIgnoreMissingTime: false
 minimumReleaseAgeExclude:
   - "@tailor-platform/*"
   - "@toiroakr/lines-db"
   - politty
   - zinfer
-  # Renovate security update: kysely@0.28.14
-  - kysely@0.28.14
+
+blockExoticSubdeps: true
+strictDepBuilds: true
+trustPolicy: no-downgrade
+trustPolicyExclude:
+  # Pre-existing version pulled in transitively via @liam-hq/cli.
+  # Earlier @swc/core versions had provenance attestation; this one does not.
+  - "@swc/core@1.12.11"
 
 packages:
   - packages/*
@@ -19,3 +30,7 @@ allowBuilds:
   lefthook: true
   multiline-ts: true
   oxc-resolver: true
+  # transitive deps whose postinstall is not needed for our workspace
+  "@prisma/engines": false
+  protobufjs: false
+  unrs-resolver: false
