@@ -55,8 +55,10 @@ jobs:
         working-directory: packages/sdk
         env:
           GH_TOKEN: ${{ github.token }}
-          # PR-driven runs (Phase A verification) are always dry-run.
-          DRY_RUN: ${{ (github.event_name == 'pull_request' || inputs.dry_run) && 'true' || 'false' }}
+          # TEMP: Phase A forced PR-driven runs to dry-run. Phase B verifies actual
+          # deletion by letting PR runs use the same logic as scheduled runs. Restore
+          # the `inputs.dry_run`-only expression before merging.
+          DRY_RUN: ${{ inputs.dry_run && 'true' || 'false' }}
         run: |
           set -u
           deleted=0
