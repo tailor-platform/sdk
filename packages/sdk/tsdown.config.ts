@@ -1,22 +1,30 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import Sonda from "sonda/rolldown";
 import { defineConfig, type TsdownPluginOption } from "tsdown";
 import { loadYamlText } from "./scripts/yaml-text-plugin.mjs";
 
-// `banner.dts` injects the triple-slash into every emitted d.mts, including
-// `runtime/globals.d.mts` itself. Strip it from that one file to avoid a
-// self-reference TS1006 when consumers typecheck with `skipLibCheck: false`.
-function stripSelfReferenceFromGlobalsDts(outDir: string): void {
-  const target = path.resolve(outDir, "runtime/globals.d.mts");
-  const content = readFileSync(target, "utf-8");
-  const cleaned = content.replace(
-    /^\/\/\/ <reference types="@tailor-platform\/sdk\/runtime\/globals" \/>\n/,
-    "",
-  );
-  if (cleaned !== content) {
-    writeFileSync(target, cleaned, "utf-8");
-  }
+// `banner.dts` injects the triple-slash into every emitted d.mts. Keep it only
+// on `configure/index.d.mts` (the `@tailor-platform/sdk` main entry) so that
+// the legacy ambient globals stay active for that import path through v2.0.
+// Strip it from every other `.d.mts` so subpath imports
+// (`@tailor-platform/sdk/runtime`, `/vitest`, /plugin`, etc.) stay self-contained.
+function stripBannerExceptConfigureEntry(outDir: string): void {
+  const pattern = /^\/\/\/ <reference types="@tailor-platform\/sdk\/runtime\/globals" \/>\n/;
+  const keep = path.resolve(outDir, "configure/index.d.mts");
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(full);
+      } else if (entry.isFile() && entry.name.endsWith(".d.mts") && full !== keep) {
+        const content = readFileSync(full, "utf-8");
+        const cleaned = content.replace(pattern, "");
+        if (cleaned !== content) writeFileSync(full, cleaned, "utf-8");
+      }
+    }
+  };
+  walk(outDir);
 }
 
 function yamlText() {
@@ -90,6 +98,6 @@ export default defineConfig({
   sourcemap: true,
   plugins,
   onSuccess: (config) => {
-    stripSelfReferenceFromGlobalsDts(config.outDir);
+    stripBannerExceptConfigureEntry(config.outDir);
   },
 });
