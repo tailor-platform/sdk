@@ -41,7 +41,7 @@ export default defineConfig({
     expect(updated).toContain(`id: "${result?.id}"`);
     expect(updated).toContain(`name: "my-app"`);
     expect(updated).toContain(
-      "// SDK-managed id: do not edit (delete to assign a new id on the next deploy)",
+      "// SDK-managed app id — do not edit, except when copying this config to a separate app.",
     );
   });
 

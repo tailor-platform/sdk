@@ -19,7 +19,7 @@ For service-specific documentation, see:
 import { defineConfig } from "@tailor-platform/sdk";
 
 export default defineConfig({
-  // SDK-managed id: do not edit (delete to assign a new id on the next deploy)
+  // SDK-managed app id — do not edit, except when copying this config to a separate app.
   // id: "<uuid>" — written here automatically on first run
   name: "my-app",
   cors: ["https://example.com"],
