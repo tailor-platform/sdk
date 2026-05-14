@@ -1,0 +1,82 @@
+import { describe, expect, it } from "vitest";
+import { HttpAdapterConfigSchema, HttpAdapterServiceInputSchema } from "./schema";
+
+const baseConfig = {
+  name: "get-user",
+  pathPattern: "/users/*",
+  methods: ["GET"],
+  input: (req: unknown) => ({ query: "{ me { id } }", variables: { req } }),
+};
+
+describe("HttpAdapterConfigSchema", () => {
+  it("accepts a minimal valid config", () => {
+    const result = HttpAdapterConfigSchema.safeParse(baseConfig);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.enabled).toBe(true);
+      expect(result.data.priority).toBe(0);
+    }
+  });
+
+  it("accepts a config with an output function", () => {
+    const result = HttpAdapterConfigSchema.safeParse({
+      ...baseConfig,
+      output: () => ({ body: "" }),
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a name that doesn't match the pattern", () => {
+    const result = HttpAdapterConfigSchema.safeParse({ ...baseConfig, name: "Invalid Name" });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a name shorter than 3 chars", () => {
+    const result = HttpAdapterConfigSchema.safeParse({ ...baseConfig, name: "ab" });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a name starting with a hyphen", () => {
+    const result = HttpAdapterConfigSchema.safeParse({ ...baseConfig, name: "-foo" });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects an empty methods array", () => {
+    const result = HttpAdapterConfigSchema.safeParse({ ...baseConfig, methods: [] });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects an unknown HTTP method", () => {
+    const result = HttpAdapterConfigSchema.safeParse({ ...baseConfig, methods: ["WHATEVER"] });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects an empty pathPattern", () => {
+    const result = HttpAdapterConfigSchema.safeParse({ ...baseConfig, pathPattern: "" });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a missing input function", () => {
+    const { input: _omit, ...without } = baseConfig;
+    void _omit;
+    const result = HttpAdapterConfigSchema.safeParse(without);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a non-function input", () => {
+    const result = HttpAdapterConfigSchema.safeParse({ ...baseConfig, input: "not a function" });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("HttpAdapterServiceInputSchema", () => {
+  it("accepts a config with files", () => {
+    const result = HttpAdapterServiceInputSchema.safeParse({ files: ["adapters/**/*.ts"] });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects an empty files array", () => {
+    const result = HttpAdapterServiceInputSchema.safeParse({ files: [] });
+    expect(result.success).toBe(false);
+  });
+});
