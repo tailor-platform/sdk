@@ -28,7 +28,7 @@
     "@changesets/cli": "2.31.0",
     "@eslint/js": "10.0.1",
     "@tailor-platform/sdk": "workspace:^",
-    "@types/node": "24.12.2",
+    "@types/node": "24.12.3",
     "eslint": "10.3.0",
     "eslint-import-resolver-typescript": "4.4.4",
     "eslint-plugin-import-x": "4.16.2",
