@@ -1,4 +1,5 @@
 import type { AuthConfig } from "./auth";
+import type { HttpAdapterServiceInput } from "./http-adapter";
 import type { IdPConfig } from "./idp";
 import type { SecretsConfig } from "./secrets-config";
 import type { StaticWebsiteConfig } from "./staticwebsite-config";
@@ -60,6 +61,8 @@ export interface AppConfig<
   executor?: ExecutorServiceInput;
   /** Workflow service configuration with workflow files. */
   workflow?: WorkflowServiceInput;
+  /** HTTP adapter service configuration with adapter files. */
+  httpAdapter?: HttpAdapterServiceInput;
   /** Static website configurations. Must be an array, e.g. `[website]`. */
   staticWebsites?: StaticWebsites;
   /** Secret Manager vault configurations. Keys are vault names, values are records of secret names to values. */

@@ -11,11 +11,13 @@ import { areNormalizedEqual } from "./compare";
 import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey } from "./label";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/deploy";
 import type { Application } from "@/cli/services/application";
+import type { HttpAdapterBundleResult } from "@/cli/services/http-adapter/bundler";
 import type {
   DeleteApplicationRequestSchema,
   CreateApplicationRequestSchema,
   UpdateApplicationRequestSchema,
 } from "@tailor-proto/tailor/v1/application_pb";
+import type { GatewayFilterSchema } from "@tailor-proto/tailor/v1/gateway_filter_resource_pb";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
 /**
@@ -82,14 +84,28 @@ type DeleteApplication = {
   request: MessageInitShape<typeof DeleteApplicationRequestSchema>;
 };
 
+type ComparableFilter = {
+  name: string;
+  pathPattern: string;
+  methods: string[];
+  inputFilterScript: string;
+  outputFilterScript: string;
+  enabled: boolean;
+  priority: number;
+};
+
 type ComparableApplication = {
   authNamespace: string;
   authIdpConfigName: string;
   cors: string[];
-  subgraphs: Array<{ serviceType: Subgraph_ServiceType; serviceNamespace: string }>;
+  subgraphs: Array<{
+    serviceType: Subgraph_ServiceType;
+    serviceNamespace: string;
+  }>;
   allowedIpAddresses: string[];
   disableIntrospection: boolean;
   disabled: boolean;
+  filters: ComparableFilter[];
 };
 
 function trn(workspaceId: string, name: string) {
@@ -116,6 +132,32 @@ function normalizeSubgraphs(
     });
 }
 
+function normalizeFilters(
+  filters:
+    | ReadonlyArray<{
+        name?: string;
+        pathPattern?: string;
+        methods?: string[];
+        inputFilterScript?: string;
+        outputFilterScript?: string;
+        enabled?: boolean;
+        priority?: number;
+      }>
+    | undefined,
+): ComparableFilter[] {
+  return [...(filters ?? [])]
+    .map((filter) => ({
+      name: filter.name ?? "",
+      pathPattern: filter.pathPattern ?? "",
+      methods: sortStrings(filter.methods),
+      inputFilterScript: filter.inputFilterScript ?? "",
+      outputFilterScript: filter.outputFilterScript ?? "",
+      enabled: filter.enabled ?? false,
+      priority: filter.priority ?? 0,
+    }))
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
 function toComparableApplication(
   input: Pick<
     ComparableApplication,
@@ -126,6 +168,7 @@ function toComparableApplication(
     | "allowedIpAddresses"
     | "disableIntrospection"
     | "disabled"
+    | "filters"
   >,
 ): ComparableApplication {
   return {
@@ -136,6 +179,7 @@ function toComparableApplication(
     allowedIpAddresses: sortStrings(input.allowedIpAddresses),
     disableIntrospection: input.disableIntrospection,
     disabled: input.disabled,
+    filters: [...input.filters],
   };
 }
 
@@ -144,6 +188,7 @@ function normalizeComparableApplication(
   authNamespace: string | undefined,
   authIdpConfigName: string | undefined,
   cors: string[],
+  filters: ReadonlyArray<MessageInitShape<typeof GatewayFilterSchema>>,
 ): ComparableApplication {
   return toComparableApplication({
     authNamespace: authNamespace ?? "",
@@ -153,6 +198,7 @@ function normalizeComparableApplication(
     allowedIpAddresses: application.config.allowedIpAddresses ?? [],
     disableIntrospection: application.config.disableIntrospection ?? false,
     disabled: false,
+    filters: normalizeFilters(filters),
   });
 }
 
@@ -165,6 +211,7 @@ function normalizeComparableExistingApplication(app: ProtoApplication): Comparab
     allowedIpAddresses: app.allowedIpAddresses,
     disableIntrospection: app.disableIntrospection,
     disabled: app.disabled,
+    filters: normalizeFilters(app.filters),
   });
 }
 
@@ -175,9 +222,13 @@ function areApplicationsEqual(existing: ProtoApplication, desired: ComparableApp
 /**
  * Plan application changes based on current and desired state.
  * @param context - Planning context
+ * @param httpAdapterBuildResult - Bundled HTTP adapter scripts to embed as gateway filters
  * @returns Planned changes
  */
-export async function planApplication(context: PlanContext) {
+export async function planApplication(
+  context: PlanContext,
+  httpAdapterBuildResult?: HttpAdapterBundleResult,
+) {
   const { client, workspaceId, application, forRemoval } = context;
   const changeSet = createChangeSet<CreateApplication, UpdateApplication, DeleteApplication>(
     "Applications",
@@ -261,11 +312,13 @@ export async function planApplication(context: PlanContext) {
     "CORS",
     { expectedLocalNames: expectedLocalWebsites },
   );
+  const filters = buildGatewayFilters(application, httpAdapterBuildResult);
   const desired = normalizeComparableApplication(
     application,
     authNamespace,
     authIdpConfigName,
     resolvedCors,
+    filters,
   );
   const request = {
     workspaceId,
@@ -276,6 +329,7 @@ export async function planApplication(context: PlanContext) {
     subgraphs: application.subgraphs.map((subgraph) => protoSubgraph(subgraph)),
     allowedIpAddresses: application.config.allowedIpAddresses,
     disableIntrospection: application.config.disableIntrospection,
+    filters,
   };
   const existing = existingApplications.find((app) => app.name === application.name);
 
@@ -307,6 +361,36 @@ export async function planApplication(context: PlanContext) {
   }
 
   return changeSet;
+}
+
+function buildGatewayFilters(
+  application: Readonly<Application>,
+  httpAdapterBuildResult: HttpAdapterBundleResult | undefined,
+): MessageInitShape<typeof GatewayFilterSchema>[] {
+  const adapters = application.httpAdapterService?.adapters ?? [];
+  if (adapters.length === 0) {
+    return [];
+  }
+  return adapters.map((loaded) => {
+    const inputScript = httpAdapterBuildResult?.bundledInputs.get(loaded.adapter.name);
+    if (!inputScript) {
+      throw new Error(
+        `HTTP adapter "${loaded.adapter.name}" was loaded but no bundled input script is available`,
+      );
+    }
+    const outputScript = loaded.hasOutput
+      ? (httpAdapterBuildResult?.bundledOutputs.get(loaded.adapter.name) ?? "")
+      : "";
+    return {
+      name: loaded.adapter.name,
+      pathPattern: loaded.adapter.pathPattern,
+      methods: loaded.adapter.methods,
+      inputFilterScript: inputScript,
+      outputFilterScript: outputScript,
+      enabled: loaded.adapter.enabled ?? true,
+      priority: loaded.adapter.priority ?? 0,
+    };
+  });
 }
 
 function protoSubgraph(

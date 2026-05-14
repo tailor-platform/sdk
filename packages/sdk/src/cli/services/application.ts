@@ -5,6 +5,14 @@ import { bundleAuthHooks } from "@/cli/services/auth/bundler";
 import { createAuthService, type AuthService } from "@/cli/services/auth/service";
 import { bundleExecutors } from "@/cli/services/executor/bundler";
 import { createExecutorService, type ExecutorService } from "@/cli/services/executor/service";
+import {
+  bundleHttpAdapters,
+  type HttpAdapterBundleResult,
+} from "@/cli/services/http-adapter/bundler";
+import {
+  createHttpAdapterService,
+  type HttpAdapterService,
+} from "@/cli/services/http-adapter/service";
 import { bundleResolvers } from "@/cli/services/resolver/bundler";
 import { createResolverService, type ResolverService } from "@/cli/services/resolver/service";
 import { createTailorDBService, type TailorDBService } from "@/cli/services/tailordb/service";
@@ -26,6 +34,7 @@ import {
   type WorkflowServiceConfig,
 } from "@/types/app-config";
 import { type AuthConfig } from "@/types/auth";
+import { type HttpAdapterServiceInput } from "@/types/http-adapter";
 import { type IdPConfig } from "@/types/idp";
 import { type TailorDBServiceInput } from "@/types/tailordb";
 import type { BundleCache } from "@/cli/cache/bundle-cache";
@@ -50,6 +59,7 @@ export type Application = {
   readonly authService: Readonly<AuthService> | undefined;
   readonly executorService: Readonly<ExecutorService> | undefined;
   readonly workflowService: Readonly<WorkflowService> | undefined;
+  readonly httpAdapterService: Readonly<HttpAdapterService> | undefined;
   readonly staticWebsiteServices: ReadonlyArray<StaticWebsite>;
   readonly secrets: ReadonlyArray<SecretVault>;
   readonly ignoreNullishValues: boolean;
@@ -65,6 +75,8 @@ export interface LoadApplicationResult {
   application: Application;
   /** Workflow bundling result (if workflows were bundled) */
   workflowBuildResult?: BundleWorkflowJobsResult;
+  /** HTTP adapter bundling result (if adapters were bundled) */
+  httpAdapterBuildResult?: HttpAdapterBundleResult;
   /** In-memory bundled scripts organized by kind */
   bundledScripts: BundledScripts;
 }
@@ -198,6 +210,15 @@ function defineWorkflow(config: WorkflowServiceConfig | undefined): WorkflowServ
   return createWorkflowService({ config });
 }
 
+function defineHttpAdapterService(
+  config: HttpAdapterServiceInput | undefined,
+): HttpAdapterService | undefined {
+  if (!config) {
+    return undefined;
+  }
+  return createHttpAdapterService({ config });
+}
+
 function defineStaticWebsites(
   websites: readonly StaticWebsiteInput[] | undefined,
 ): StaticWebsite[] {
@@ -289,6 +310,7 @@ function buildApplication(params: {
   authResult: DefineAuthResult;
   executorService: ExecutorService | undefined;
   workflowService: WorkflowService | undefined;
+  httpAdapterService: HttpAdapterService | undefined;
   staticWebsiteServices: StaticWebsite[];
   secrets: SecretVault[];
   ignoreNullishValues: boolean;
@@ -310,6 +332,7 @@ function buildApplication(params: {
     authService: params.authResult.authService,
     executorService: params.executorService,
     workflowService: params.workflowService,
+    httpAdapterService: params.httpAdapterService,
     staticWebsiteServices: params.staticWebsiteServices,
     secrets: params.secrets,
     ignoreNullishValues: params.ignoreNullishValues,
@@ -346,12 +369,14 @@ export function defineApplication(params: DefineApplicationParams): Application 
   // Plugin executors are not known at define-time; generate/apply flows handle them after type loading.
   const executorService = defineExecutor(config.executor, false);
   const workflowService = defineWorkflow(config.workflow);
+  const httpAdapterService = defineHttpAdapterService(config.httpAdapter);
 
   return buildApplication({
     config,
     ...services,
     executorService,
     workflowService,
+    httpAdapterService,
     env: config.env ?? {},
   });
 }
@@ -438,6 +463,12 @@ export async function loadApplication(
     await workflowService.loadWorkflows();
   }
 
+  // 5.5. Load and collect HTTP adapters
+  const httpAdapterService = defineHttpAdapterService(config.httpAdapter);
+  if (httpAdapterService) {
+    await httpAdapterService.loadAdapters();
+  }
+
   // 6. Build trigger context for workflow/job trigger transformation
   const triggerContext = await buildTriggerContext(
     config.workflow,
@@ -495,6 +526,19 @@ export async function loadApplication(
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }
 
+  // 9.25. Bundle HTTP adapters
+  let httpAdapterBuildResult: HttpAdapterBundleResult | undefined;
+  if (httpAdapterService && httpAdapterService.adapters.length > 0) {
+    httpAdapterBuildResult = await bundleHttpAdapters(
+      httpAdapterService.adapters.map((a) => ({
+        name: a.adapter.name,
+        sourceFile: a.sourceFile,
+        hasOutput: a.hasOutput,
+      })),
+      bundleCache,
+    );
+  }
+
   // 9.5. Bundle auth hooks
   if (authResult.authService?.config.hooks?.beforeLogin) {
     const authName = authResult.authService.config.name;
@@ -521,6 +565,9 @@ export async function loadApplication(
   if (workflowService) {
     workflowService.printLoadedWorkflows();
   }
+  if (httpAdapterService) {
+    httpAdapterService.printLoadedAdapters();
+  }
   logger.newline();
 
   // 11. Build immutable Application
@@ -532,11 +579,12 @@ export async function loadApplication(
     authResult,
     executorService,
     workflowService,
+    httpAdapterService,
     staticWebsiteServices,
     secrets,
     ignoreNullishValues,
     env: config.env ?? {},
   });
 
-  return { application, workflowBuildResult, bundledScripts };
+  return { application, workflowBuildResult, httpAdapterBuildResult, bundledScripts };
 }
