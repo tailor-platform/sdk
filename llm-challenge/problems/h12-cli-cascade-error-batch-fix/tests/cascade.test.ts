@@ -1,7 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, test } from "vitest";
-import { createWorkDirContext, expectFieldType, importPath } from "../../../shared/test-helpers.js";
+import {
+  createWorkDirContext,
+  expectFieldType,
+  importPath,
+  stripComments,
+} from "../../../shared/test-helpers.js";
 
 const { workDir, workDirReady } = createWorkDirContext(import.meta.dirname);
 
@@ -10,7 +15,7 @@ const targets = ["tailordb/article.ts", "tailordb/note.ts", "tailordb/post.ts"];
 describe.skipIf(!workDirReady)("h12-cli-cascade-error-batch-fix", () => {
   test("no file still calls the removed db.text() builder", () => {
     for (const target of targets) {
-      const source = fs.readFileSync(path.join(workDir, target), "utf-8");
+      const source = stripComments(fs.readFileSync(path.join(workDir, target), "utf-8"));
       expect(source, `${target} should not call db.text()`).not.toMatch(/db\.text\s*\(/);
     }
   });

@@ -103,4 +103,13 @@ export function expectNonEmptyDescription(executor: Record<string, any>): void {
   expect(executor.description.length).toBeGreaterThan(0);
 }
 
+/**
+ * Strip `//` line comments and `/* * /` block comments from TS/JS source so
+ * regex assertions about API shape (e.g. "no `db.text(`") don't falsely match
+ * scaffold BUG hint comments that the AI may preserve while fixing the code.
+ */
+export function stripComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+}
+
 export { importPath };
