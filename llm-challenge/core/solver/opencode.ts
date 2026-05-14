@@ -98,10 +98,9 @@ async function runOpencode(options: SolveRunOptions): Promise<SolveResult> {
     prompt,
   ];
 
-  const containerArgs = buildContainerRunArgs("oss", cliArgs, {
+  const containerArgs = buildContainerRunArgs(cliArgs, {
     workDir,
     opencodeConfigPath,
-    executable: "opencode",
   });
   const startTime = Date.now();
   const timeout = 3_600_000;
@@ -188,7 +187,6 @@ async function runOpencode(options: SolveRunOptions): Promise<SolveResult> {
       const errorOutput = stderr || err.message;
       resolve({
         success: false,
-        costUsd: 0,
         durationMs,
         output: errorOutput,
         error: errorOutput,
@@ -212,7 +210,6 @@ async function runOpencode(options: SolveRunOptions): Promise<SolveResult> {
           kind: "result",
           isError: timedOut || code !== 0,
           text: lastText,
-          costUsd: 0,
           durationMs,
           numTurns: stepCount,
           inputTokens: totalInputTokens,
@@ -227,7 +224,6 @@ async function runOpencode(options: SolveRunOptions): Promise<SolveResult> {
       if (timedOut) {
         resolve({
           success: false,
-          costUsd: 0,
           durationMs,
           output: stdout || stderr || "Process timed out",
           error: "Process timed out",
@@ -248,7 +244,6 @@ async function runOpencode(options: SolveRunOptions): Promise<SolveResult> {
 
       resolve({
         success,
-        costUsd: 0,
         durationMs,
         output: lastText || stdout,
         ...(errorText ? { error: errorText } : {}),

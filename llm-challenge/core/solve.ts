@@ -4,14 +4,14 @@ import { getSdkVersion } from "../shared/helpers";
 import type { ContextProfile } from "./context-profile";
 import { buildContextProfileInstructions } from "./context-profile";
 import type { ProblemMeta } from "./cli";
-import { createClaudeAdapter } from "./solver/claude";
-import { createCodexAdapter } from "./solver/codex";
 import { createOpencodeAdapter } from "./solver/opencode";
-import type { AuthCheckResult, SolveAdapter, SolveAgent, SolveResult } from "./solver/types";
+import type { AuthCheckResult, SolveAgent, SolveResult } from "./solver/types";
 
 const challengeRoot = path.resolve(import.meta.dirname, "..");
 
 export type { SolveAgent, SolveResult };
+
+const opencodeAdapter = createOpencodeAdapter();
 
 function listFilesRecursive(dir: string, base: string = dir): string[] {
   const files: string[] = [];
@@ -177,62 +177,32 @@ export function buildPrompt(
   return `${systemPrompt}\n\n${userPrompt}`;
 }
 
-const solveAdapters: Record<SolveAgent, SolveAdapter> = {
-  claude: createClaudeAdapter(),
-  codex: createCodexAdapter(),
-  oss: createOpencodeAdapter(),
-};
-
-function runSolver(options: {
-  agent: SolveAgent;
-  prompt: string;
-  workDir: string;
-  model?: string;
-  maxBudget: number;
-  seed?: number;
-  tracePath?: string;
-}): Promise<SolveResult> {
-  const { agent, ...runOptions } = options;
-  return solveAdapters[agent].run(runOptions);
-}
-
 export function solveProblem(options: {
   workDir: string;
   problemDir: string;
   meta: ProblemMeta;
-  agent: SolveAgent;
   model?: string;
-  maxBudget: number;
   contextProfile: ContextProfile;
-  /**
-   * Per-iteration sampling seed. Forwarded to the OSS adapter only — Claude
-   * and Codex paths ignore it (their solver CLIs don't expose a seed flag).
-   */
+  /** Per-iteration sampling seed forwarded to Ollama via opencode.json. */
   seed?: number;
   /** Optional JSONL path for behaviour trace. */
   tracePath?: string;
 }): Promise<SolveResult> {
-  const { workDir, problemDir, meta, agent, model, maxBudget, contextProfile, seed, tracePath } =
-    options;
+  const { workDir, problemDir, meta, model, contextProfile, seed, tracePath } = options;
   const prompt = buildPrompt(problemDir, meta, workDir, contextProfile);
-  return runSolver({
-    agent,
+  return opencodeAdapter.run({
     prompt,
     workDir,
-    model,
-    maxBudget,
+    ...(model !== undefined ? { model } : {}),
     ...(seed !== undefined ? { seed } : {}),
     ...(tracePath !== undefined ? { tracePath } : {}),
   });
 }
 
 /**
- * Check if solve agent can authenticate successfully.
- * Runs a lightweight prompt to verify auth status before starting a full solve run.
+ * Verify the OSS solver pre-requisites (host's Ollama daemon reachable) before
+ * starting a full solve run.
  */
-export function checkAuthStatus(options: {
-  agent: SolveAgent;
-  model?: string;
-}): Promise<AuthCheckResult> {
-  return solveAdapters[options.agent].checkAuth(options.model);
+export function checkAuthStatus(options: { model?: string }): Promise<AuthCheckResult> {
+  return opencodeAdapter.checkAuth(options.model);
 }

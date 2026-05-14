@@ -33,7 +33,6 @@ export type SolveUsage = {
 
 export type SolveResult = {
   success: boolean;
-  costUsd: number;
   durationMs: number;
   output: string;
   error?: string;
@@ -41,18 +40,23 @@ export type SolveResult = {
   artifact?: SolveArtifact;
   rawTranscript?: SolveRawTranscript;
   usage?: SolveUsage;
+  /**
+   * Legacy field kept optional so reports written before the OSS migration
+   * (when Claude/Codex adapters tracked dollar cost) still deserialise.
+   * Never written by the OSS adapter — local inference has no per-run cost.
+   */
+  costUsd?: number;
 };
 
-export type SolveAgent = "claude" | "codex" | "oss";
+export type SolveAgent = "oss";
 
 export type SolveRunOptions = {
   prompt: string;
   workDir: string;
   model?: string;
-  maxBudget: number;
   /**
-   * Per-iteration sampling seed. The OSS adapter forwards this to Ollama via
-   * the per-run `opencode.json`. Cloud adapters (claude / codex) ignore it.
+   * Per-iteration sampling seed. Forwarded to Ollama via the per-run
+   * `opencode.json`.
    */
   seed?: number;
   /**

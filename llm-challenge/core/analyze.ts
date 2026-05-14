@@ -287,24 +287,22 @@ function showTrend(
   groupLabel: string,
   aliasMap?: Map<string, string>,
 ): void {
-  const width = 80;
+  const width = 72;
   console.log("=".repeat(width));
   console.log(`Pass-Rate Trend -- ${groupLabel}`);
   console.log("=".repeat(width));
   console.log("");
 
-  const header =
-    "Timestamp".padEnd(22) + "Model".padEnd(14) + "Passed".padEnd(12) + "Pct".padEnd(8) + "Cost";
+  const header = "Timestamp".padEnd(22) + "Model".padEnd(20) + "Passed".padEnd(12) + "Pct";
   console.log(header);
   console.log("-".repeat(width));
 
   for (const r of reports) {
     const ts = formatTimestamp(r.timestamp);
-    const model = (r.model ?? "-").slice(0, 13).padEnd(14);
+    const model = (r.model ?? "-").slice(0, 19).padEnd(20);
     const passed = `${r.problemsPassed}/${r.problemsTotal}`.padEnd(12);
-    const pct = `${r.percentage}%`.padEnd(8);
-    const cost = r.totalCostUsd > 0 ? `$${r.totalCostUsd.toFixed(4)}` : "-";
-    console.log(`${ts}  ${model}${passed}${pct}${cost}`);
+    const pct = `${r.percentage}%`;
+    console.log(`${ts}  ${model}${passed}${pct}`);
   }
 
   console.log("-".repeat(width));
@@ -433,9 +431,6 @@ export type DiffRow = {
   passRateA: number | null;
   passRateB: number | null;
   passRateDelta: number | null;
-  costMedianA: number | null;
-  costMedianB: number | null;
-  costMedianDelta: number | null;
   /** `iterations.metricsStdev.turns` from A (null for single-iteration reports). */
   stdevTurnsA: number | null;
   /** `iterations.metricsStdev.turns` from B (null for single-iteration reports). */
@@ -471,11 +466,6 @@ export type DiffReport = {
   rows: DiffRow[];
   /** Aggregate pass-rate delta across overlapping problems (B − A). */
   overallPassRateDelta: number;
-  /**
-   * Cost delta (B − A) summed across overlapping problems. Honors the median
-   * from `iterations` when present, falling back to per-problem `solveResult.costUsd`.
-   */
-  totalCostDelta: number;
   warnings: string[];
 };
 
@@ -486,14 +476,6 @@ export type DiffReport = {
  */
 function getPassRate(result: ProblemResult): number {
   return result.iterations?.passRate ?? (result.passed ? 1 : 0);
-}
-
-/**
- * Extract the per-problem cost (preferring the iteration median when present
- * so single-shot vs N-iteration comparisons remain on the same scale).
- */
-function getCost(result: ProblemResult): number {
-  return result.iterations?.costMedian ?? result.solveResult?.costUsd ?? 0;
 }
 
 function getMetric(result: ProblemResult, key: IterationMetricKey): number | null {
@@ -617,11 +599,6 @@ export function computeReportDiff(
     const passRateB = b ? getPassRate(b) : null;
     const passRateDelta = passRateA !== null && passRateB !== null ? passRateB - passRateA : null;
 
-    const costMedianA = a ? getCost(a) : null;
-    const costMedianB = b ? getCost(b) : null;
-    const costMedianDelta =
-      costMedianA !== null && costMedianB !== null ? costMedianB - costMedianA : null;
-
     const metricsDelta: DiffRow["metricsDelta"] = {
       turns: null,
       readSdkDts: null,
@@ -657,9 +634,6 @@ export function computeReportDiff(
       passRateA,
       passRateB,
       passRateDelta,
-      costMedianA,
-      costMedianB,
-      costMedianDelta,
       stdevTurnsA: a ? getTurnsStdev(a) : null,
       stdevTurnsB: b ? getTurnsStdev(b) : null,
       metricsDelta,
@@ -678,12 +652,6 @@ export function computeReportDiff(
       sumB += getPassRate(indexB.get(key)!);
     }
     overallPassRateDelta = (sumB - sumA) / overlapKeys.length;
-  }
-
-  // Total cost delta over overlapping problems only (same reasoning).
-  let totalCostDelta = 0;
-  for (const key of overlapKeys) {
-    totalCostDelta += getCost(indexB.get(key)!) - getCost(indexA.get(key)!);
   }
 
   const warnings: string[] = [];
@@ -718,7 +686,6 @@ export function computeReportDiff(
     reportB: buildReportEnvelope(reportB, paths.b),
     rows,
     overallPassRateDelta,
-    totalCostDelta,
     warnings,
   };
 }
@@ -918,7 +885,7 @@ function showDiff(diff: DiffReport, json: boolean): void {
     console.log(JSON.stringify(diff, null, 2));
     return;
   }
-  const width = 110;
+  const width = 96;
   console.log("=".repeat(width));
   console.log("A/B Diff");
   console.log("=".repeat(width));
@@ -939,7 +906,7 @@ function showDiff(diff: DiffReport, json: boolean): void {
   }
   console.log("");
 
-  // Columns: Problem | passA | passB | Δpass | stdevA | stdevB | ΔcostUSD | Δturns
+  // Columns: Problem | passA | passB | Δpass | stdevA | stdevB | Δturns
   console.log(
     "Problem".padEnd(38) +
       "passA".padEnd(8) +
@@ -947,7 +914,6 @@ function showDiff(diff: DiffReport, json: boolean): void {
       "Δpass".padEnd(10) +
       "stdevA".padEnd(9) +
       "stdevB".padEnd(9) +
-      "ΔcostUSD".padEnd(12) +
       "Δturns",
   );
   console.log("-".repeat(width));
@@ -958,12 +924,11 @@ function showDiff(diff: DiffReport, json: boolean): void {
     const dpass = row.passRateDelta !== null ? formatDelta(row.passRateDelta, 2) : "  -  ";
     const stdA = row.stdevTurnsA !== null ? row.stdevTurnsA.toFixed(1) : "  -  ";
     const stdB = row.stdevTurnsB !== null ? row.stdevTurnsB.toFixed(1) : "  -  ";
-    const dcost = row.costMedianDelta !== null ? formatDelta(row.costMedianDelta, 4) : "  -  ";
     const dturns =
       row.metricsDelta.turns !== null ? formatDelta(row.metricsDelta.turns, 1) : "  -  ";
     const tag = row.status === "present" ? "" : `  [${row.status}]`;
     console.log(
-      `${key}${passA}${passB}${dpass.padEnd(10)}${stdA.padEnd(9)}${stdB.padEnd(9)}${dcost.padEnd(12)}${dturns}${tag}`,
+      `${key}${passA}${passB}${dpass.padEnd(10)}${stdA.padEnd(9)}${stdB.padEnd(9)}${dturns}${tag}`,
     );
 
     // Per-bucket readTargets delta. Surfaced only when at least one bucket
@@ -975,7 +940,6 @@ function showDiff(diff: DiffReport, json: boolean): void {
   }
   console.log("-".repeat(width));
   console.log(`Overall ΔpassRate: ${formatDelta(diff.overallPassRateDelta, 3)}`);
-  console.log(`Total ΔcostUSD:    ${formatDelta(diff.totalCostDelta, 4)}`);
   console.log("");
 
   console.log("=".repeat(width));

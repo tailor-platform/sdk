@@ -30,7 +30,7 @@ export type ProblemArtifacts = {
 };
 
 /**
- * Aggregate statistics across N iterations of the same (problem, agent, model,
+ * Aggregate statistics across N iterations of the same (problem, model,
  * profile) task. Populated only when `iterations.count > 1` (i.e. multi-run
  * mode); single-iteration runs leave this undefined.
  *
@@ -39,15 +39,20 @@ export type ProblemArtifacts = {
  * (`turns`, `readSdkDts`, `readDocs`, `bashRetries`) AND the five per-class
  * `readTargets` buckets ({@link ReadTargetClass}). The new bucket-level
  * fields are populated alongside the legacy fields for back-compat.
- * `costMedian` / `costStdev` summarise per-iteration `solveResult.costUsd`.
+ *
+ * `costMedian` / `costStdev` are optional legacy fields preserved so reports
+ * persisted before the OSS migration (Claude/Codex era) still deserialise.
+ * The OSS runner never writes them — local inference has no per-run cost.
  */
 export type IterationAggregate = {
   count: number;
   passedCount: number;
   passRate: number;
   passedByIteration: boolean[];
-  costMedian: number;
-  costStdev: number;
+  /** Legacy field — present only on pre-OSS-migration reports. */
+  costMedian?: number;
+  /** Legacy field — present only on pre-OSS-migration reports. */
+  costStdev?: number;
   metricsMedian: {
     turns: number;
     readSdkDts: number;
@@ -154,7 +159,7 @@ export type ChallengeReport = {
    */
   sdkBranch?: string;
   /**
-   * Number of solve iterations per (problem, agent, model, profile). 1 for
+   * Number of solve iterations per (problem, model, profile). 1 for
    * single-run mode (the default for verify/use-solution). Captured for A/B
    * comparisons so the analyze tool can warn on mismatched iteration counts.
    */
@@ -163,7 +168,12 @@ export type ChallengeReport = {
   problemsPassed: number;
   problemsTotal: number;
   percentage: number;
-  totalCostUsd: number;
+  /**
+   * Legacy USD cost aggregate. Optional so OSS-era reports omit it entirely
+   * while pre-OSS-migration reports (Claude/Codex era) still deserialise.
+   */
+  totalCostUsd?: number;
+  /** Legacy field — present only on pre-OSS-migration reports. */
   costPerPass?: number;
   infraFailureCount: number;
   validPercentage: number;
@@ -241,7 +251,6 @@ export function aggregateIterations(perIteration: ProblemResult[]): ProblemResul
   const first = perIteration[0]!;
   const passedByIteration = perIteration.map((r) => r.passed);
   const passedCount = passedByIteration.filter(Boolean).length;
-  const costs = perIteration.map((r) => r.solveResult?.costUsd ?? 0);
 
   // Drop iterations with no trace from the median/stdev sample so we don't
   // bias toward zero when --use-solution + --solve are mixed in one run.
@@ -288,8 +297,6 @@ export function aggregateIterations(perIteration: ProblemResult[]): ProblemResul
     passedCount,
     passRate: passedCount / perIteration.length,
     passedByIteration,
-    costMedian: median(costs),
-    costStdev: stdev(costs),
     metricsMedian: mapMetrics(median),
     metricsStdev: mapMetrics(stdev),
   };
@@ -390,10 +397,6 @@ function computePersistentFailures(results: ProblemResult[]): PersistentFailure[
   return out;
 }
 
-function computeProblemCost(result: ProblemResult): number {
-  return result.solveResult?.costUsd ?? 0;
-}
-
 function addUsage(acc: UsageSummary, usage: SolveResult["usage"]): void {
   if (!usage) return;
   if (usage.inputTokens !== undefined) {
@@ -440,15 +443,10 @@ export function createReport(
   const problemsTotal = results.length;
   const problemsPassed = results.filter(isPassed).length;
 
-  // Exclude infra failures from cost calculation
-  const totalCostUsd = validResults.reduce((sum, r) => sum + computeProblemCost(r), 0);
-
   // Valid-only pass rate (excluding infra failures)
   const validPassed = validResults.filter(isPassed).length;
   const validPercentage =
     validResults.length > 0 ? Math.round((validPassed / validResults.length) * 100) : 0;
-
-  const costPerPass = totalCostUsd > 0 && validPassed > 0 ? totalCostUsd / validPassed : undefined;
 
   // Total duration: prefer wall-clock elapsed time (accurate for parallel runs)
   const totalDurationMs =
@@ -468,8 +466,6 @@ export function createReport(
     problemsPassed,
     problemsTotal,
     percentage: problemsTotal > 0 ? Math.round((problemsPassed / problemsTotal) * 100) : 0,
-    totalCostUsd,
-    ...(costPerPass !== undefined ? { costPerPass } : {}),
     infraFailureCount,
     validPercentage,
     totalDurationMs,
@@ -479,8 +475,7 @@ export function createReport(
 }
 
 export function formatReportTable(report: ChallengeReport): string {
-  const hasCost = report.results.some((r) => r.solveResult !== undefined);
-  const width = hasCost ? 90 : 78;
+  const width = 78;
 
   const lines: string[] = [];
   lines.push("=".repeat(width));
@@ -488,10 +483,7 @@ export function formatReportTable(report: ChallengeReport): string {
   lines.push("=".repeat(width));
   lines.push("");
 
-  let header = "Problem".padEnd(36) + "Difficulty".padEnd(12) + "Status".padEnd(12);
-  if (hasCost) {
-    header += "Cost";
-  }
+  const header = "Problem".padEnd(36) + "Difficulty".padEnd(12) + "Status".padEnd(12);
   lines.push(header);
   lines.push("-".repeat(width));
 
@@ -507,10 +499,7 @@ export function formatReportTable(report: ChallengeReport): string {
       statusLabel = "PASS";
     }
     const status = statusLabel.padEnd(12);
-    let line = `${name}${diff}${status}`;
-    if (hasCost && r.solveResult && !infraFailed) {
-      line += `$${computeProblemCost(r).toFixed(4)}`;
-    }
+    const line = `${name}${diff}${status}`;
     lines.push(line);
 
     if (!infraFailed) {
@@ -546,10 +535,7 @@ export function formatReportTable(report: ChallengeReport): string {
   }
 
   lines.push("-".repeat(width));
-  let totalLine = `${"Total".padEnd(36)}${"".padEnd(12)}${`${report.problemsPassed}/${report.problemsTotal}`.padEnd(12)}${report.percentage}%`;
-  if (hasCost) {
-    totalLine += `  $${report.totalCostUsd.toFixed(4)}`;
-  }
+  const totalLine = `${"Total".padEnd(36)}${"".padEnd(12)}${`${report.problemsPassed}/${report.problemsTotal}`.padEnd(12)}${report.percentage}%`;
   lines.push(totalLine);
 
   // Valid score (excluding infra failures)
@@ -557,12 +543,6 @@ export function formatReportTable(report: ChallengeReport): string {
     lines.push(
       `${"Valid (excl. infra)".padEnd(36)}${"".padEnd(12)}${`${report.results.length - report.infraFailureCount}/${report.results.length}`.padEnd(12)}${report.validPercentage}%`,
     );
-  }
-
-  // Cost per passing problem
-  if (report.costPerPass != null) {
-    lines.push("");
-    lines.push(`Cost per pass: $${report.costPerPass.toFixed(4)}`);
   }
 
   // Token usage (context-bloat sensor).
@@ -670,8 +650,7 @@ function formatIterationSummary(iterations?: IterationAggregate): string[] | und
   if (!iterations || iterations.count <= 1) return undefined;
   const passPct = Math.round(iterations.passRate * 100);
   const lines: string[] = [];
-  const costLabel = `cost_median=$${iterations.costMedian.toFixed(4)} cost_stdev=$${iterations.costStdev.toFixed(4)}`;
-  lines.push(`iter pass=${iterations.passedCount}/${iterations.count} (${passPct}%) ${costLabel}`);
+  lines.push(`iter pass=${iterations.passedCount}/${iterations.count} (${passPct}%)`);
   const fmt = (key: "turns" | "readSdkDts" | "readDocs" | "bashRetries", label: string): string => {
     const med = iterations.metricsMedian[key];
     const sd = iterations.metricsStdev[key];

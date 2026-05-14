@@ -170,7 +170,6 @@ describe("aggregateTraceMetrics", () => {
         kind: "result",
         isError: false,
         text: "done",
-        costUsd: 0.1,
       },
     ];
 

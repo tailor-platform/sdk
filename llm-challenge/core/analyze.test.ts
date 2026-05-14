@@ -67,7 +67,6 @@ function makeReport(overrides: Partial<ChallengeReport> = {}): ChallengeReport {
     problemsPassed: 0,
     problemsTotal: 0,
     percentage: 0,
-    totalCostUsd: 0,
     infraFailureCount: 0,
     validPercentage: 0,
     totalDurationMs: 0,
@@ -97,7 +96,6 @@ function makeResult(
 function makeIterResult(
   problemId: string,
   passRate: number,
-  costMedian: number,
   extra: Partial<ProblemResult> = {},
 ): ProblemResult {
   const count = 3;
@@ -108,8 +106,6 @@ function makeIterResult(
       passedCount,
       passRate,
       passedByIteration: Array.from({ length: count }, (_, i) => i < passedCount),
-      costMedian,
-      costStdev: 0,
       metricsMedian: mkIterMetrics({ turns: 10, readSdkDts: 3, readDocs: 1, bashRetries: 1 }),
       metricsStdev: mkIterMetrics({}),
     },
@@ -158,7 +154,7 @@ describe("computeReportDiff", () => {
     // Multi-iteration: 2/3 passed = 0.667
     const reportB = makeReport({
       iterationCount: 3,
-      results: [makeIterResult("m01", 2 / 3, 0.1)],
+      results: [makeIterResult("m01", 2 / 3)],
     });
 
     const diff = computeReportDiff(reportA, reportB);
@@ -210,22 +206,6 @@ describe("computeReportDiff", () => {
     expect(diff.overallPassRateDelta).toBe(1);
   });
 
-  it("computes cost delta from iteration median when present", () => {
-    const reportA = makeReport({
-      iterationCount: 3,
-      results: [makeIterResult("m01", 1, 0.1)],
-    });
-    const reportB = makeReport({
-      iterationCount: 3,
-      results: [makeIterResult("m01", 1, 0.3)],
-    });
-    const diff = computeReportDiff(reportA, reportB);
-    expect(diff.rows[0]!.costMedianA).toBeCloseTo(0.1, 10);
-    expect(diff.rows[0]!.costMedianB).toBeCloseTo(0.3, 10);
-    expect(diff.rows[0]!.costMedianDelta).toBeCloseTo(0.2, 10);
-    expect(diff.totalCostDelta).toBeCloseTo(0.2, 10);
-  });
-
   it("surfaces a warning when context profile differs between reports", () => {
     const reportA = makeReport({ contextProfile: "types-only" });
     const reportB = makeReport({ contextProfile: "full-package" });
@@ -243,12 +223,12 @@ describe("computeReportDiff", () => {
   it("preserves report metadata (sdkBranch, iterationCount) in the diff envelope", () => {
     const reportA = makeReport({
       iterationCount: 3,
-      results: [makeIterResult("m01", 1, 0.1)],
+      results: [makeIterResult("m01", 1)],
     });
     const reportB = makeReport({
       iterationCount: 3,
       sdkBranch: "feat/exec-description-required",
-      results: [makeIterResult("m01", 1, 0.1)],
+      results: [makeIterResult("m01", 1)],
     });
     const diff = computeReportDiff(reportA, reportB, { a: "/tmp/a.json", b: "/tmp/b.json" });
 
@@ -264,14 +244,12 @@ describe("computeReportDiff", () => {
     const reportA = makeReport({
       iterationCount: 3,
       results: [
-        makeIterResult("m01", 1, 0.1, {
+        makeIterResult("m01", 1, {
           iterations: {
             count: 3,
             passedCount: 3,
             passRate: 1,
             passedByIteration: [true, true, true],
-            costMedian: 0.1,
-            costStdev: 0,
             metricsMedian: mkIterMetrics({ turns: 15, readSdkDts: 5, readDocs: 2, bashRetries: 3 }),
             metricsStdev: mkIterMetrics({}),
           },
@@ -281,14 +259,12 @@ describe("computeReportDiff", () => {
     const reportB = makeReport({
       iterationCount: 3,
       results: [
-        makeIterResult("m01", 1, 0.1, {
+        makeIterResult("m01", 1, {
           iterations: {
             count: 3,
             passedCount: 3,
             passRate: 1,
             passedByIteration: [true, true, true],
-            costMedian: 0.1,
-            costStdev: 0,
             metricsMedian: mkIterMetrics({ turns: 10, readSdkDts: 3, readDocs: 2, bashRetries: 1 }),
             metricsStdev: mkIterMetrics({}),
           },
@@ -338,14 +314,12 @@ describe("computeReportDiff", () => {
     const reportA = makeReport({
       iterationCount: 3,
       results: [
-        makeIterResult("m05", 1, 0.1, {
+        makeIterResult("m05", 1, {
           iterations: {
             count: 3,
             passedCount: 3,
             passRate: 1,
             passedByIteration: [true, true, true],
-            costMedian: 0.1,
-            costStdev: 0,
             // types-only: read sdk-docs once, no sdk-dts.
             metricsMedian: mkIterMetrics({
               turns: 21,
@@ -363,14 +337,12 @@ describe("computeReportDiff", () => {
     const reportB = makeReport({
       iterationCount: 3,
       results: [
-        makeIterResult("m05", 1 / 3, 0.05, {
+        makeIterResult("m05", 1 / 3, {
           iterations: {
             count: 3,
             passedCount: 1,
             passRate: 1 / 3,
             passedByIteration: [true, false, false],
-            costMedian: 0.05,
-            costStdev: 0,
             // full-package: agent now reads sdk-docs and pokes around problem-files.
             metricsMedian: mkIterMetrics({
               turns: 10,
@@ -473,14 +445,12 @@ describe("computeReportDiff", () => {
     const reportA = makeReport({
       iterationCount: 3,
       results: [
-        makeIterResult("m01", 1, 0.1, {
+        makeIterResult("m01", 1, {
           iterations: {
             count: 3,
             passedCount: 3,
             passRate: 1,
             passedByIteration: [true, true, true],
-            costMedian: 0.1,
-            costStdev: 0,
             metricsMedian: mkIterMetrics({ turns: 15 }),
             metricsStdev: mkIterMetrics({ turns: 2.5 }),
           },
@@ -505,13 +475,12 @@ describe("resolveActiveProfilePair", () => {
   ): ChallengeReport {
     return {
       timestamp,
-      model: "claude:sonnet",
+      model: "oss:gpt-oss:20b",
       contextProfile: profile,
       results: [],
       problemsPassed: 0,
       problemsTotal: 0,
       percentage: 0,
-      totalCostUsd: 0,
       infraFailureCount: 0,
       validPercentage: 0,
       totalDurationMs: 0,

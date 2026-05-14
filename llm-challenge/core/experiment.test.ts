@@ -38,15 +38,15 @@ describe("findLatestReport", () => {
   });
 
   it("filters out subdirectories that do not start with labelPrefix", () => {
-    fs.mkdirSync(path.join(tempDir, "claude-haiku-types"), { recursive: true });
-    fs.mkdirSync(path.join(tempDir, "codex-types"), { recursive: true });
-    fs.writeFileSync(path.join(tempDir, "claude-haiku-types", "report-1.json"), "{}");
-    fs.writeFileSync(path.join(tempDir, "codex-types", "report-2.json"), "{}");
+    fs.mkdirSync(path.join(tempDir, "oss-gpt-oss-types"), { recursive: true });
+    fs.mkdirSync(path.join(tempDir, "solution-types"), { recursive: true });
+    fs.writeFileSync(path.join(tempDir, "oss-gpt-oss-types", "report-1.json"), "{}");
+    fs.writeFileSync(path.join(tempDir, "solution-types", "report-2.json"), "{}");
 
-    const result = findLatestReport(tempDir, "claude-", new Date(0));
+    const result = findLatestReport(tempDir, "oss-", new Date(0));
     expect(result).toBeDefined();
-    expect(result).toContain("claude-haiku-types");
-    expect(result).not.toContain("codex-types");
+    expect(result).toContain("oss-gpt-oss-types");
+    expect(result).not.toContain("solution-types");
   });
 
   it("returns the newest report by mtime when multiple match", () => {
@@ -124,14 +124,13 @@ describe("parseArgs", () => {
       "feat/foo",
       "--problems",
       "m05",
-      "--agent",
-      "claude",
       "--context-profile",
       "types-only",
+      "--no-early-stop",
     ]);
     const args = parseArgs();
     expect(args.problems).toEqual(["m05"]);
-    expect(args.forward).toEqual(["--agent", "claude", "--context-profile", "types-only"]);
+    expect(args.forward).toEqual(["--context-profile", "types-only", "--no-early-stop"]);
     // Must not leak the reserved flag downstream.
     expect(args.forward).not.toContain("--problems");
   });
@@ -139,15 +138,14 @@ describe("parseArgs", () => {
 
 describe("buildChildArgs", () => {
   it("emits --solve --iterations <n> and forwards extra args verbatim", () => {
-    const args = buildChildArgs(5, ["--agent", "claude", "--context-profile", "types-only"]);
+    const args = buildChildArgs(5, ["--context-profile", "types-only", "--no-early-stop"]);
     expect(args).toEqual([
       "--solve",
       "--iterations",
       "5",
-      "--agent",
-      "claude",
       "--context-profile",
       "types-only",
+      "--no-early-stop",
     ]);
   });
 
@@ -171,7 +169,7 @@ describe("buildChildArgs", () => {
   });
 
   it("supports both --sdk-branch and --problems at once", () => {
-    const args = buildChildArgs(5, ["--agent", "claude"], {
+    const args = buildChildArgs(5, ["--context-profile", "types-only"], {
       sdkBranch: "feat/foo",
       problems: ["m05", "m18"],
     });
@@ -185,8 +183,8 @@ describe("buildChildArgs", () => {
       "m05",
       "--problem",
       "m18",
-      "--agent",
-      "claude",
+      "--context-profile",
+      "types-only",
     ]);
   });
 

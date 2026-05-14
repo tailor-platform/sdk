@@ -42,11 +42,10 @@ import {
   formatReportTable,
   isInfraFailure,
 } from "./report";
-import { formatSolveModelLabel, normalizeModelForAgent } from "./solve-model";
+import { formatSolveModelLabel, normalizeModel } from "./solve-model";
 import { checkAuthStatus, solveProblem } from "./solve";
-import type { SolveAgent, SolveResult } from "./solve";
+import type { SolveResult } from "./solve";
 import { checkPodmanAvailability } from "./solver/container";
-import { extractRateLimitResetMs, isRateLimitError } from "./solver/shared";
 import { verifyProblem } from "./verify";
 
 const execAsync = promisify(exec);
@@ -148,19 +147,7 @@ type ParsedArgs = {
   implDir?: string;
   useSolution: boolean;
   solve: boolean;
-  agent: SolveAgent;
   model?: string;
-  /** Per-problem budget cap (USD). The solver kills the agent run once a
-   * single problem's spend crosses this number. */
-  maxBudget: number;
-  /**
-   * Optional aggregate budget cap (USD) across the entire run. When set, the
-   * problem loop breaks once `totalCostUsd` crosses this threshold and the
-   * remaining tasks are recorded as `infraFailure: true (budget_exceeded)`
-   * so a resume can pick them up later. Independent of `--max-budget`,
-   * which only governs a single problem.
-   */
-  maxBudgetTotal?: number;
   clean: boolean;
   concurrency: number;
   contextProfile: ContextProfile;
@@ -214,10 +201,7 @@ function parseArgs(): ParsedArgs {
   let implDir: string | undefined;
   let useSolution = false;
   let solve = false;
-  let agent: SolveAgent = "claude";
   let model: string | undefined;
-  let maxBudget = 5.0;
-  let maxBudgetTotal: number | undefined;
   let clean = false;
   let concurrency = os.availableParallelism();
   let contextProfile: ContextProfile = "full-package";
@@ -249,27 +233,6 @@ function parseArgs(): ParsedArgs {
         break;
       case "--model":
         model = requireArg(args, i, "--model");
-        i++;
-        break;
-      case "--agent": {
-        const value = requireArg(args, i, "--agent");
-        if (value !== "claude" && value !== "codex" && value !== "oss") {
-          console.error(
-            `Error: --agent must be one of "claude", "codex", "oss" (received: ${value})`,
-          );
-          process.exit(1);
-        }
-        agent = value;
-        i++;
-        break;
-      }
-      case "--max-budget":
-      case "--max-budget-per-problem":
-        maxBudget = Number(requireArg(args, i, args[i]!));
-        i++;
-        break;
-      case "--max-budget-total":
-        maxBudgetTotal = Number(requireArg(args, i, "--max-budget-total"));
         i++;
         break;
       case "--clean":
@@ -316,14 +279,6 @@ function parseArgs(): ParsedArgs {
     console.error("Error: --concurrency must be a positive integer");
     process.exit(1);
   }
-  if (!Number.isFinite(maxBudget) || maxBudget <= 0) {
-    console.error("Error: --max-budget must be a positive number");
-    process.exit(1);
-  }
-  if (maxBudgetTotal !== undefined && (!Number.isFinite(maxBudgetTotal) || maxBudgetTotal <= 0)) {
-    console.error("Error: --max-budget-total must be a positive number");
-    process.exit(1);
-  }
   // --iterations: default to 3 in solve mode (per Phase 4 spec D 採点ベクトル
   // "N=3 反復"), default to 1 in verify modes for backward compat.
   const iterationsExplicit = iterations !== undefined;
@@ -341,9 +296,7 @@ function parseArgs(): ParsedArgs {
     implDir,
     useSolution,
     solve,
-    agent,
-    model: model ?? (agent === "claude" ? "sonnet" : agent === "oss" ? "gpt-oss:20b" : undefined),
-    maxBudget,
+    model: model ?? "gpt-oss:20b",
     clean,
     concurrency: Math.trunc(concurrency),
     contextProfile,
@@ -353,7 +306,6 @@ function parseArgs(): ParsedArgs {
     noEarlyStop,
     ...(sdkBranch ? { sdkBranch } : {}),
     ...(resume ? { resume } : {}),
-    ...(maxBudgetTotal !== undefined ? { maxBudgetTotal } : {}),
   };
 }
 
@@ -748,7 +700,7 @@ async function runProblem(
   problemName: string,
   options: {
     implDir?: string;
-    solve?: { agent: SolveAgent; model?: string; maxBudget: number; seed?: number };
+    solve?: { model?: string; seed?: number };
     clean: boolean;
     verbose: boolean;
     tarballPath?: string;
@@ -786,9 +738,7 @@ async function runProblem(
 
   let solveResult: SolveResult | undefined;
   let metrics: TraceMetrics | undefined;
-  const normalizedModel = options.solve
-    ? normalizeModelForAgent(options.solve.agent, options.solve.model)
-    : undefined;
+  const normalizedModel = options.solve ? normalizeModel(options.solve.model) : undefined;
   // Behaviour trace lives at <workDir>/.trace.jsonl during solve, then moves
   // to <artifactDir>/trace.jsonl after persistSolveAttemptArtifact creates
   // the attempt directory. Writing under workDir keeps the trace alive
@@ -796,21 +746,13 @@ async function runProblem(
   const traceWorkPath = options.solve ? path.join(workDir, ".trace.jsonl") : undefined;
   if (options.solve) {
     if (options.verbose) {
-      const agentLabel =
-        options.solve.agent === "claude"
-          ? "Claude Code"
-          : options.solve.agent === "oss"
-            ? "opencode (OSS)"
-            : "Codex";
-      console.log(`  Solving with ${agentLabel} (model: ${options.solve.model ?? "default"})...`);
+      console.log(`  Solving with opencode (OSS) (model: ${options.solve.model ?? "default"})...`);
     }
     solveResult = await solveProblem({
       workDir,
       problemDir,
       meta,
-      agent: options.solve.agent,
-      model: normalizedModel,
-      maxBudget: options.solve.maxBudget,
+      ...(normalizedModel !== undefined ? { model: normalizedModel } : {}),
       contextProfile: options.contextProfile,
       ...(options.solve.seed !== undefined ? { seed: options.solve.seed } : {}),
       ...(traceWorkPath ? { tracePath: traceWorkPath } : {}),
@@ -871,9 +813,7 @@ async function runProblem(
       } else if (solveResult.infraFailure) {
         icon = "INFRA";
       }
-      console.log(
-        `  Solve: ${icon} ($${solveResult.costUsd.toFixed(4)}, ${(solveResult.durationMs / 1000).toFixed(1)}s)`,
-      );
+      console.log(`  Solve: ${icon} (${(solveResult.durationMs / 1000).toFixed(1)}s)`);
       if (solveResult.error) {
         console.log(`  Error: ${solveResult.error.slice(0, 200)}`);
       }
@@ -1321,39 +1261,17 @@ export function shouldEarlyStop(options: ShouldEarlyStopOptions): boolean {
   return passedCount === 1 || passedCount === 3;
 }
 
-const authErrorPatterns = [
-  /Not logged in/i,
-  /API key/i,
-  /authentication.*failed/i,
-  /unauthorized/i,
-  /codex login/i,
-];
-
-async function ensureAuthenticated(agent: SolveAgent, targetModel?: string): Promise<void> {
-  console.log("Checking authentication status...");
-  const authCheck = await checkAuthStatus({ agent, model: targetModel });
+async function ensureAuthenticated(targetModel?: string): Promise<void> {
+  console.log("Checking Ollama daemon...");
+  const authCheck = await checkAuthStatus({ model: targetModel });
   if (!authCheck.ok) {
-    console.error(`Authentication check failed: ${authCheck.error}`);
-    const tool = agent === "claude" ? "Claude Code" : agent === "oss" ? "Ollama (local)" : "Codex";
-    if (authErrorPatterns.some((p) => p.test(authCheck.error ?? ""))) {
-      console.error(`Please log in to ${tool} before running solve mode.`);
-    } else {
-      console.error(`Please check your ${tool} setup and try again.`);
-    }
-    if (agent === "claude") {
-      console.error(
-        'Hint: Run "claude setup-token" and set CLAUDE_CODE_OAUTH_TOKEN in your environment.',
-      );
-    } else if (agent === "oss") {
-      console.error(
-        "Hint: brew install ollama && ollama pull gpt-oss:20b && OLLAMA_NUM_PARALLEL=1 OLLAMA_CONTEXT_LENGTH=32768 ollama serve",
-      );
-    } else {
-      console.error('Hint: Run "codex login" to store credentials in ~/.codex/auth.json.');
-    }
+    console.error(`Ollama readiness check failed: ${authCheck.error}`);
+    console.error(
+      "Hint: brew install ollama && ollama pull gpt-oss:20b && OLLAMA_NUM_PARALLEL=1 OLLAMA_CONTEXT_LENGTH=32768 ollama serve",
+    );
     process.exit(1);
   }
-  console.log("Authentication: ok");
+  console.log("Ollama: ok");
 }
 
 function writeReport(
@@ -1406,9 +1324,7 @@ async function main(): Promise<void> {
     implDir,
     useSolution,
     solve,
-    agent,
     model,
-    maxBudget,
     clean,
     concurrency,
     contextProfile,
@@ -1418,7 +1334,6 @@ async function main(): Promise<void> {
     noEarlyStop,
     sdkBranch,
     resume: resumeRunId,
-    maxBudgetTotal,
   } = parseArgs();
 
   if (problemIds.length === 0 && !all) {
@@ -1426,14 +1341,16 @@ async function main(): Promise<void> {
     console.error("  tsx core/cli.ts --problem 001 --impl ./path/to/impl");
     console.error("  tsx core/cli.ts --problem 001 --use-solution");
     console.error(
-      "  tsx core/cli.ts --problem 001 [--problem 002 ...] --solve [--agent claude|codex|oss] [--model sonnet] [--max-budget 5.00] [--max-budget-total 50.00] [--context-profile types-only] [--iterations 3] [--no-auto-extend] [--no-early-stop] [--sdk-branch <ref>] [--resume <runId>]",
+      "  tsx core/cli.ts --problem 001 [--problem 002 ...] --solve [--model gpt-oss:20b] [--context-profile types-only] [--iterations 3] [--no-auto-extend] [--no-early-stop] [--sdk-branch <ref>] [--resume <runId>]",
     );
     console.error("  tsx core/cli.ts --all --use-solution [--clean] [--concurrency <n>]");
     console.error(
-      "  tsx core/cli.ts --all --solve [--agent claude|codex|oss] [--model sonnet] [--max-budget 5.00] [--max-budget-total 50.00] [--clean] [--concurrency <n>] [--context-profile types-only] [--iterations 3] [--no-auto-extend] [--no-early-stop] [--sdk-branch <ref>] [--resume <runId>]",
+      "  tsx core/cli.ts --all --solve [--model gpt-oss:20b] [--clean] [--concurrency <n>] [--context-profile types-only] [--iterations 3] [--no-auto-extend] [--no-early-stop] [--sdk-branch <ref>] [--resume <runId>]",
     );
     console.error("  tsx core/cli.ts --all --impl-dir ./path/to/all-outputs");
-    console.error("\nNote: --solve requires Podman. On macOS, run 'podman machine start' first.");
+    console.error(
+      "\nNote: --solve requires Podman and a host-side Ollama daemon. On macOS, run 'podman machine start' and 'ollama serve' first.",
+    );
     process.exit(1);
   }
 
@@ -1455,7 +1372,7 @@ async function main(): Promise<void> {
 
   const resultsDir = path.join(challengeRoot, "results");
   const verbose = concurrency === 1;
-  const solveModelLabel = solve ? formatSolveModelLabel(agent, model) : undefined;
+  const solveModelLabel = solve ? formatSolveModelLabel(model) : undefined;
 
   if (solve) {
     const podmanStatus = checkPodmanAvailability();
@@ -1466,7 +1383,7 @@ async function main(): Promise<void> {
   }
 
   if (solve) {
-    await ensureAuthenticated(agent, normalizeModelForAgent(agent, model));
+    await ensureAuthenticated(normalizeModel(model));
   }
 
   let tarballPath: string | undefined;
@@ -1570,62 +1487,6 @@ async function main(): Promise<void> {
   }
 
   /**
-   * Wrap `runProblem` so that rate-limit infra failures (Claude / Codex quota
-   * exhaustion, HTTP 429) are retried with backoff instead of permanently
-   * skipping the problem. Auth / config infra failures are NOT retried
-   * because re-running them without operator intervention burns budget
-   * without changing the outcome.
-   *
-   * Sleep strategy (in order of preference):
-   * 1. If the error message carries a "resets <time>" hint that
-   *    `extractRateLimitResetMs` can parse, sleep until that wall-clock
-   *    moment + 30s grace.
-   * 2. Otherwise, exponential-ish backoff at 60s / 120s / 300s.
-   *
-   * Capped at `maxAttempts` total runs (1 initial + retries) so a permanent
-   * quota hit still exits in bounded time.
-   */
-  async function runProblemWithRateLimitRetry(args: {
-    problemName: string;
-    baseOptions: Parameters<typeof runProblem>[1];
-    verbose: boolean;
-    maxAttempts?: number;
-    sleeper?: (ms: number) => Promise<void>;
-    now?: () => Date;
-  }): Promise<ProblemResult> {
-    const maxAttempts = args.maxAttempts ?? 4;
-    const sleeper = args.sleeper ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
-    const nowFn = args.now ?? (() => new Date());
-    const fixedBackoffMs = [60_000, 120_000, 300_000];
-    let lastResult: ProblemResult | undefined;
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const result = await runProblem(args.problemName, args.baseOptions);
-      lastResult = result;
-      const solveErr = result.solveResult?.error ?? "";
-      const isRateLimit = result.solveResult?.infraFailure === true && isRateLimitError(solveErr);
-      if (!isRateLimit || attempt === maxAttempts - 1) {
-        return result;
-      }
-      const now = nowFn();
-      const resetMs = extractRateLimitResetMs(solveErr, now);
-      const sleepMs =
-        resetMs !== null
-          ? Math.max(0, resetMs - now.getTime()) + 30_000
-          : (fixedBackoffMs[attempt] ?? fixedBackoffMs.at(-1)!);
-      if (args.verbose) {
-        const reason = resetMs !== null ? `reset hint +30s` : `backoff #${attempt + 1}`;
-        console.log(
-          `  rate-limit on ${args.problemName} — sleeping ${Math.round(sleepMs / 1000)}s (${reason}) before retry`,
-        );
-      }
-      await sleeper(sleepMs);
-    }
-    // Unreachable in practice (the for loop returns on the last attempt) but
-    // narrows the type for TS.
-    return lastResult!;
-  }
-
-  /**
    * Run a single problem `iterations` times sequentially (inside the
    * concurrency slot so we do not multiply Podman load by N). Returns the
    * aggregated `ProblemResult` — when iterations == 1 this is the raw single
@@ -1639,7 +1500,7 @@ async function main(): Promise<void> {
   async function runProblemWithIterations(task: ProblemTask): Promise<ProblemResult> {
     const baseOptions = {
       implDir: task.implDir,
-      solve: solve ? { agent, model, maxBudget } : undefined,
+      solve: solve ? { model } : undefined,
       clean,
       verbose,
       tarballPath,
@@ -1655,14 +1516,10 @@ async function main(): Promise<void> {
         }
         return cached;
       }
-      const result = await runProblemWithRateLimitRetry({
-        problemName: task.problemName,
-        baseOptions: {
-          ...baseOptions,
-          solve: baseOptions.solve ? { ...baseOptions.solve, seed: 0 } : undefined,
-          runArtifactRoot,
-        },
-        verbose,
+      const result = await runProblem(task.problemName, {
+        ...baseOptions,
+        solve: baseOptions.solve ? { ...baseOptions.solve, seed: 0 } : undefined,
+        runArtifactRoot,
       });
       appendCheckpoint(checkpointFile, {
         problemName: task.problemName,
@@ -1686,17 +1543,10 @@ async function main(): Promise<void> {
       // Place each iteration's artifact under a sub-dir so the trace.jsonl /
       // workSnapshot of iter-1 isn't overwritten by iter-2.
       const iterRoot = runArtifactRoot ? path.join(runArtifactRoot, `iter-${i}`) : undefined;
-      // Wrap runProblem in a rate-limit retry: when the agent returns an
-      // infra-failure caused by rate-limit / 429 / quota, sleep and try
-      // again. Cap retries so a permanent quota hit can still exit.
-      const result = await runProblemWithRateLimitRetry({
-        problemName: task.problemName,
-        baseOptions: {
-          ...baseOptions,
-          solve: baseOptions.solve ? { ...baseOptions.solve, seed: i } : undefined,
-          ...(iterRoot ? { runArtifactRoot: iterRoot } : {}),
-        },
-        verbose,
+      const result = await runProblem(task.problemName, {
+        ...baseOptions,
+        solve: baseOptions.solve ? { ...baseOptions.solve, seed: i } : undefined,
+        ...(iterRoot ? { runArtifactRoot: iterRoot } : {}),
       });
       appendCheckpoint(checkpointFile, {
         problemName: task.problemName,
@@ -1805,57 +1655,14 @@ async function main(): Promise<void> {
     return aggregateIterations(perIteration);
   }
 
-  // Aggregate cost across all completed problems. Compared against
-  // `maxBudgetTotal` at each task's slot-open moment so a single overrun
-  // problem can still finish — only subsequent tasks see the cap. costUsd
-  // from the aggregated `solveResult` for iteration runs is the sum across
-  // all iterations of that problem (set by aggregateIterations).
-  let totalSpentUsd = 0;
-  const budgetExceededResult = (taskName: string): ProblemResult => {
-    const problemDir = path.join(challengeRoot, "problems", taskName);
-    const meta = loadMeta(problemDir);
-    return {
-      problemId: meta.id,
-      problemName: deriveProblemName(meta, taskName),
-      difficulty: meta.difficulty ?? "easy",
-      category: meta.category ?? meta.sdkSurface ?? "micro",
-      ...(meta.split !== undefined ? { split: meta.split } : {}),
-      contextProfile,
-      stages: makeSkippedStages("budget exceeded"),
-      passed: false,
-      solveResult: {
-        success: false,
-        costUsd: 0,
-        durationMs: 0,
-        output: "",
-        error: `budget_exceeded: totalSpentUsd=${totalSpentUsd.toFixed(4)} >= --max-budget-total=${maxBudgetTotal}`,
-        infraFailure: true,
-      },
-      totalDurationMs: 0,
-    };
-  };
-
   await Promise.all(
     tasks.map((task) =>
       limit(async () => {
         try {
-          if (maxBudgetTotal !== undefined && totalSpentUsd >= maxBudgetTotal) {
-            const skipped = budgetExceededResult(task.problemName);
-            results.push(skipped);
-            completed++;
-            if (!verbose) {
-              console.log(
-                `[${completed}/${total}] ${task.problemName}: BUDGET_EXCEEDED (spent $${totalSpentUsd.toFixed(2)})`,
-              );
-            }
-            return;
-          }
-
           const result = await runProblemWithIterations(task);
 
           results.push(result);
           completed++;
-          totalSpentUsd += result.solveResult?.costUsd ?? 0;
 
           if (!verbose) {
             let status: string;

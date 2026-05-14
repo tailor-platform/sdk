@@ -270,7 +270,6 @@ async function main(): Promise<void> {
   console.log(`Delta written to: ${path.join(experimentDir, "delta.json")}`);
   console.log("");
   console.log(`Overall ΔpassRate: ${formatDelta(delta.overallPassRateDelta, 3)}`);
-  console.log(`Total ΔcostUSD:    ${formatDelta(delta.totalCostDelta, 4)}`);
   for (const w of delta.warnings) {
     console.log(`WARNING: ${w}`);
   }

@@ -97,7 +97,6 @@ describe("createReport", () => {
         passed: true,
         solveResult: {
           success: true,
-          costUsd: 0,
           durationMs: 0,
           output: "",
           usage: {
@@ -113,7 +112,6 @@ describe("createReport", () => {
         passed: true,
         solveResult: {
           success: true,
-          costUsd: 0,
           durationMs: 0,
           output: "",
           usage: {
@@ -181,21 +179,22 @@ describe("createReport", () => {
     expect(report.percentage).toBe(0);
   });
 
-  it("leaves costPerPass undefined when totalCostUsd is 0 even if validPassed > 0", () => {
+  it("never writes the legacy totalCostUsd / costPerPass fields on a fresh OSS-era report", () => {
     const passing: StageResult = { stage: "tests", passed: true, output: "ok" };
     const results: ProblemResult[] = [
       makeProblemResult({
         problemId: "001",
         stages: [passing],
         passed: true,
-        solveResult: { success: true, costUsd: 0, durationMs: 0, output: "" },
+        solveResult: { success: true, durationMs: 0, output: "" },
       }),
     ];
 
     const report = createReport(results);
 
-    expect(report.totalCostUsd).toBe(0);
+    expect(report.totalCostUsd).toBeUndefined();
     expect(report.costPerPass).toBeUndefined();
+    expect("totalCostUsd" in report).toBe(false);
     expect("costPerPass" in report).toBe(false);
   });
 
@@ -218,18 +217,10 @@ describe("createReport", () => {
     expect(createReport(twoOfThree).percentage).toBe(67);
   });
 
-  it("excludes infra failures from cost calculation but includes them in problem count", () => {
+  it("separates infra failures from valid pass-rate calculations", () => {
     const infraStages: StageResult[] = [
-      {
-        stage: "generate",
-        passed: false,
-        output: "Skipped (infrastructure failure)",
-      },
-      {
-        stage: "typecheck",
-        passed: false,
-        output: "Skipped (infrastructure failure)",
-      },
+      { stage: "generate", passed: false, output: "Skipped (infrastructure failure)" },
+      { stage: "typecheck", passed: false, output: "Skipped (infrastructure failure)" },
       { stage: "tests", passed: false, output: "Skipped (infrastructure failure)" },
     ];
     const passing: StageResult = { stage: "tests", passed: true, output: "ok" };
@@ -239,27 +230,19 @@ describe("createReport", () => {
         problemId: "001",
         stages: [passing],
         passed: true,
-        solveResult: { success: true, costUsd: 0.5, durationMs: 0, output: "" },
+        solveResult: { success: true, durationMs: 0, output: "" },
       }),
       makeProblemResult({
         problemId: "002",
         stages: infraStages,
         passed: false,
-        solveResult: {
-          success: false,
-          costUsd: 0.1,
-          durationMs: 0,
-          output: "",
-          infraFailure: true,
-        },
+        solveResult: { success: false, durationMs: 0, output: "", infraFailure: true },
       }),
     ];
 
     const report = createReport(results);
 
     expect(report.infraFailureCount).toBe(1);
-    // Cost only counts the non-infra problem.
-    expect(report.totalCostUsd).toBe(0.5);
     // Valid percentage excludes the infra failure.
     expect(report.validPercentage).toBe(100);
     expect(report.problemsTotal).toBe(2);
@@ -318,24 +301,18 @@ describe("computeSuccessRates", () => {
 });
 
 describe("formatReportTable", () => {
-  it("includes a Cost column only when at least one result has a solveResult", () => {
+  it("never renders a Cost column or dollar figures (OSS-era reports have no cost)", () => {
     const passing: StageResult = { stage: "tests", passed: true, output: "ok" };
-    const withCost = createReport([
+    const report = createReport([
       makeProblemResult({
         stages: [passing],
         passed: true,
-        solveResult: { success: true, costUsd: 0.1234, durationMs: 0, output: "" },
+        solveResult: { success: true, durationMs: 0, output: "" },
       }),
     ]);
-    const withoutCost = createReport([makeProblemResult({ stages: [passing], passed: true })]);
-
-    const withCostTable = formatReportTable(withCost);
-    expect(withCostTable).toContain("Cost");
-    expect(withCostTable).toContain("$0.1234");
-
-    const withoutCostTable = formatReportTable(withoutCost);
-    expect(withoutCostTable).not.toContain("Cost");
-    expect(withoutCostTable).not.toContain("$");
+    const table = formatReportTable(report);
+    expect(table).not.toContain("Cost");
+    expect(table).not.toContain("$");
   });
 
   it("renders INFRA status when every stage is the infra-failure sentinel", () => {
@@ -351,7 +328,7 @@ describe("formatReportTable", () => {
         problemId: "002",
         stages: infraStages,
         passed: false,
-        solveResult: { success: false, costUsd: 0, durationMs: 0, output: "", infraFailure: true },
+        solveResult: { success: false, durationMs: 0, output: "", infraFailure: true },
       }),
     ]);
 
@@ -430,26 +407,16 @@ describe("formatReportTable", () => {
     expect(table).toContain("tailor.config.ts");
   });
 
-  it("renders the costPerPass line only when costPerPass is set", () => {
+  it("never renders the Cost per pass: line on fresh OSS-era reports", () => {
     const passing: StageResult = { stage: "tests", passed: true, output: "ok" };
-    const withCost = createReport([
+    const report = createReport([
       makeProblemResult({
         stages: [passing],
         passed: true,
-        solveResult: { success: true, costUsd: 0.5, durationMs: 0, output: "" },
+        solveResult: { success: true, durationMs: 0, output: "" },
       }),
     ]);
-    expect(formatReportTable(withCost)).toContain("Cost per pass:");
-
-    // No costPerPass when totalCostUsd is 0.
-    const zeroCost = createReport([
-      makeProblemResult({
-        stages: [passing],
-        passed: true,
-        solveResult: { success: true, costUsd: 0, durationMs: 0, output: "" },
-      }),
-    ]);
-    expect(formatReportTable(zeroCost)).not.toContain("Cost per pass:");
+    expect(formatReportTable(report)).not.toContain("Cost per pass:");
   });
 
   it("renders the usageSummary block when at least one solveResult reports usage", () => {
@@ -460,7 +427,6 @@ describe("formatReportTable", () => {
         passed: true,
         solveResult: {
           success: true,
-          costUsd: 0,
           durationMs: 0,
           output: "",
           usage: {
@@ -634,27 +600,27 @@ describe("aggregateIterations", () => {
     expect(() => aggregateIterations([])).toThrow(/empty input/);
   });
 
-  it("computes passRate, median cost, and stdev across N iterations", () => {
+  it("computes passRate and behavioural-metric median/stdev across N iterations", () => {
     const iters: ProblemResult[] = [
       makeProblemResult({
         problemId: "m01",
         stages: [passing],
         passed: true,
-        solveResult: { success: true, costUsd: 0.1, durationMs: 0, output: "" },
+        solveResult: { success: true, durationMs: 0, output: "" },
         metrics: mkMetrics({ turns: 10, readSdkDts: 2, readDocs: 1, bashRetries: 0 }),
       }),
       makeProblemResult({
         problemId: "m01",
         stages: [failing],
         passed: false,
-        solveResult: { success: true, costUsd: 0.2, durationMs: 0, output: "" },
+        solveResult: { success: true, durationMs: 0, output: "" },
         metrics: mkMetrics({ turns: 14, readSdkDts: 3, readDocs: 1, bashRetries: 2 }),
       }),
       makeProblemResult({
         problemId: "m01",
         stages: [passing],
         passed: true,
-        solveResult: { success: true, costUsd: 0.3, durationMs: 0, output: "" },
+        solveResult: { success: true, durationMs: 0, output: "" },
         metrics: mkMetrics({ turns: 12, readSdkDts: 4, readDocs: 1, bashRetries: 1 }),
       }),
     ];
@@ -664,9 +630,10 @@ describe("aggregateIterations", () => {
     expect(agg.iterations?.passedCount).toBe(2);
     expect(agg.iterations?.passRate).toBeCloseTo(2 / 3, 10);
     expect(agg.iterations?.passedByIteration).toEqual([true, false, true]);
-    // costs: [0.1, 0.2, 0.3] median=0.2, mean=0.2, stdev=sqrt((0.01+0+0.01)/3)
-    expect(agg.iterations?.costMedian).toBeCloseTo(0.2, 10);
-    expect(agg.iterations?.costStdev).toBeCloseTo(Math.sqrt(0.02 / 3), 10);
+    // cost aggregation has been retired; legacy fields are now optional and
+    // never written by the OSS runner.
+    expect(agg.iterations?.costMedian).toBeUndefined();
+    expect(agg.iterations?.costStdev).toBeUndefined();
     // turns: [10, 14, 12] median=12, mean=12, stdev=sqrt((4+4+0)/3)
     expect(agg.iterations?.metricsMedian.turns).toBe(12);
     expect(agg.iterations?.metricsStdev.turns).toBeCloseTo(Math.sqrt(8 / 3), 10);
@@ -745,8 +712,6 @@ describe("formatReportTable (iterations)", () => {
         passedCount: 2,
         passRate: 2 / 3,
         passedByIteration: [true, false, true],
-        costMedian: 0.234,
-        costStdev: 0.012,
         metricsMedian: {
           turns: 12,
           readSdkDts: 3,
@@ -774,7 +739,7 @@ describe("formatReportTable (iterations)", () => {
     const report = createReport([result]);
     const table = formatReportTable(report);
     expect(table).toContain("iter pass=2/3 (67%)");
-    expect(table).toContain("cost_median=$0.2340");
+    expect(table).not.toContain("cost_median");
     expect(table).toContain("turns=12.0±1.8");
     expect(table).toContain("bash_retries=4.0±2.1");
   });
@@ -821,8 +786,6 @@ describe("persistent failures", () => {
           passedCount: 0,
           passRate: 0,
           passedByIteration: [false, false, false],
-          costMedian: 0,
-          costStdev: 0,
           metricsMedian: {
             turns: 0,
             readSdkDts: 0,
@@ -876,13 +839,7 @@ describe("persistent failures", () => {
         problemName: "cli-retry-loop-detection",
         stages: infraStages,
         passed: false,
-        solveResult: {
-          success: false,
-          costUsd: 0,
-          durationMs: 0,
-          output: "",
-          infraFailure: true,
-        },
+        solveResult: { success: false, durationMs: 0, output: "", infraFailure: true },
       }),
     ]);
     expect(report.analytics.persistentFailures).toEqual([
@@ -905,13 +862,7 @@ describe("persistent failures", () => {
         problemName: "cli-retry-loop-detection",
         stages: infraStages,
         passed: false,
-        solveResult: {
-          success: false,
-          costUsd: 0,
-          durationMs: 0,
-          output: "",
-          infraFailure: true,
-        },
+        solveResult: { success: false, durationMs: 0, output: "", infraFailure: true },
       }),
     ]);
 
