@@ -48,7 +48,7 @@ interface WorkflowDefinition<Job extends WorkflowJob<any, any, any>> {
  * export const processData = createWorkflowJob({
  *   name: "process-data",
  *   body: async (input: { id: string }) => {
- *     const data = await fetchData.trigger({ id: input.id }); // await is optional — stripped by bundler
+ *     const data = await fetchData.trigger({ id: input.id });
  *     return { data };
  *   },
  * });

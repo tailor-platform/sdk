@@ -214,22 +214,17 @@ export function transformWorkflowSource(
   }
 
   // Step 4: Transform .trigger() calls to tailor.workflow.triggerJobFunction()
-  // Only transform trigger calls that are NOT inside ranges being removed
-  // Also remove await keyword since triggerJobFunction is synchronous
   for (const call of triggerCalls) {
-    // Skip trigger calls inside removed job declarations
     if (isInsideRemovedRange(call.callRange.start)) {
       continue;
     }
 
     const jobName = jobNameMap.get(call.identifierName);
     if (jobName) {
-      // Transform to tailor.workflow.triggerJobFunction
-      // triggerJobFunction is synchronous, so we use fullRange to remove await if present
-      const transformedCall = `tailor.workflow.triggerJobFunction("${jobName}", ${call.argsText || "undefined"})`;
+      const transformedCall = `(async () => tailor.workflow.triggerJobFunction("${jobName}", ${call.argsText || "undefined"}))()`;
       replacements.push({
-        start: call.fullRange.start,
-        end: call.fullRange.end,
+        start: call.callRange.start,
+        end: call.callRange.end,
         text: transformedCall,
       });
     }

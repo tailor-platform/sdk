@@ -6,7 +6,6 @@ import type {
   ObjectExpression,
   StaticMemberExpression,
   IdentifierReference,
-  AwaitExpression,
 } from "@oxc-project/types";
 
 export interface JobLocation {
@@ -22,10 +21,6 @@ export interface TriggerCall {
   identifierName: string;
   callRange: { start: number; end: number };
   argsText: string;
-  // If true, the call is wrapped in an await expression
-  hasAwait: boolean;
-  // The range including the await keyword (if present)
-  fullRange: { start: number; end: number };
 }
 
 /**
@@ -134,7 +129,7 @@ export function buildJobNameMap(jobs: JobLocation[]): Map<string, string> {
 export function detectTriggerCalls(program: Program, sourceText: string): TriggerCall[] {
   const calls: TriggerCall[] = [];
 
-  function walk(node: ASTNode | null | undefined, parent: ASTNode | null = null): void {
+  function walk(node: ASTNode | null | undefined): void {
     if (!node || typeof node !== "object") return;
 
     // Detect pattern: identifier.trigger(args)
@@ -151,30 +146,18 @@ export function detectTriggerCalls(program: Program, sourceText: string): Trigge
         ) {
           const identifierName = (memberExpr.object as IdentifierReference).name;
 
-          // Extract arguments text
           let argsText = "";
           if (callExpr.arguments.length > 0) {
             const firstArg = callExpr.arguments[0];
-            const lastArg = callExpr.arguments[callExpr.arguments.length - 1];
-            if (firstArg && lastArg && "start" in firstArg && "end" in lastArg) {
-              argsText = sourceText.slice(firstArg.start as number, lastArg.end as number);
+            if (firstArg && "start" in firstArg && "end" in firstArg) {
+              argsText = sourceText.slice(firstArg.start as number, firstArg.end as number);
             }
           }
 
-          // Check if this call is wrapped in an await expression
-          // triggerJobFunction is synchronous, so we need to remove await
-          const hasAwait = parent?.type === "AwaitExpression";
-          const awaitExpr = hasAwait ? (parent as unknown as AwaitExpression) : null;
-
-          const callRange = { start: callExpr.start, end: callExpr.end };
-          const fullRange = awaitExpr ? { start: awaitExpr.start, end: awaitExpr.end } : callRange;
-
           calls.push({
             identifierName,
-            callRange,
+            callRange: { start: callExpr.start, end: callExpr.end },
             argsText,
-            hasAwait,
-            fullRange,
           });
         }
       }
@@ -183,9 +166,9 @@ export function detectTriggerCalls(program: Program, sourceText: string): Trigge
     for (const key of Object.keys(node)) {
       const child = node[key] as unknown;
       if (Array.isArray(child)) {
-        child.forEach((c: unknown) => walk(c as ASTNode | null, node));
+        child.forEach((c: unknown) => walk(c as ASTNode | null));
       } else if (child && typeof child === "object") {
-        walk(child as ASTNode, node);
+        walk(child as ASTNode);
       }
     }
   }
