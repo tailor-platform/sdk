@@ -46,8 +46,6 @@ import * as iconv from "@tailor-platform/sdk/runtime/iconv";
 import type { ListUsersResponse, ClientConfig } from "@tailor-platform/sdk/runtime/idp";
 ```
 
-> Type-only re-exports follow the platform contract. If a future runtime release adds new fields, the SDK will publish them in lockstep — there is no separate `@tailor-platform/function-types` package to upgrade.
-
 ## Activating the global types
 
 Most users do not need to touch the globals entry — `@tailor-platform/sdk/runtime` (and its subpath modules) cover the same surface without depending on any ambient declaration.
