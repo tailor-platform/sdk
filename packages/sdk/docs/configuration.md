@@ -19,7 +19,7 @@ For service-specific documentation, see:
 import { defineConfig } from "@tailor-platform/sdk";
 
 export default defineConfig({
-  // SDK-managed id: do not edit (delete to regenerate)
+  // SDK-managed id: do not edit (delete to assign a new id on the next deploy)
   // id: "<uuid>" — written here automatically on first run
   name: "my-app",
   cors: ["https://example.com"],
@@ -30,7 +30,7 @@ export default defineConfig({
 
 **Name**: Set the application name.
 
-**Id (auto-managed)**: A stable identifier used to recognize resources managed by the SDK across renames. On first `deploy`, the SDK injects an `id: "<uuid>"` field into your `defineConfig({...})` call and commits it to `tailor.config.ts`. Keep it under version control; do not edit it by hand (delete it to regenerate the identity). If `tailor.config.ts` is just a wrapper that re-exports `defineConfig` from another file, the SDK skips injection on the wrapper — add the `id` field manually to the file that contains the actual `defineConfig({...})` call.
+**Id (auto-managed)**: A stable identifier used to recognize resources managed by the SDK across renames. On first `deploy`, the SDK injects an `id: "<uuid>"` field into your `defineConfig({...})` call and commits it to `tailor.config.ts`. Keep it under version control; do not edit it by hand. Delete it only if you want the SDK to assign a new id on the next `deploy` — typically when `tailor.config.ts` was copied from another project and the new application should not share the original's id. If `tailor.config.ts` is just a wrapper that re-exports `defineConfig` from another file, the SDK skips injection on the wrapper — add the `id` field manually to the file that contains the actual `defineConfig({...})` call.
 
 **CORS**: Specify CORS settings as an array. You can also include Static Website URL references (e.g. `website.url`) in this array; see [Static Website](./services/staticwebsite.md).
 

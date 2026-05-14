@@ -43,7 +43,11 @@ export interface AppConfig<
   /**
    * Stable identifier used to track the application across renames.
    * Managed by the SDK: auto-generated and written into `tailor.config.ts`
-   * on first `deploy`. Delete this field to start a new identity.
+   * on first `deploy`. Delete this field if you want the SDK to assign a
+   * new id on the next `deploy` — typical case: `tailor.config.ts` was
+   * copied from another project and the new application should not share
+   * the original's id. Existing resources are re-tagged with the new id;
+   * data is preserved.
    */
   id?: string;
   /** Environment variables accessible via `context.env` in resolvers and via the second argument `{ env }` in workflow job bodies. */

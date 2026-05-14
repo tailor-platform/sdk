@@ -64,7 +64,7 @@ async function confirmIdRegeneration(
   }
 
   const confirmed = await prompt.confirm({
-    message: `Re-tag these resources with the new id for "${appName}"?\n${styles.dim("(Common when the id was deleted from tailor.config.ts to reset identity)")}`,
+    message: `Re-tag these resources with the new id for "${appName}"?\n${styles.dim("(The id in tailor.config.ts was removed since the previous deploy, so a new one was generated)")}`,
     default: false,
   });
   if (!confirmed) {

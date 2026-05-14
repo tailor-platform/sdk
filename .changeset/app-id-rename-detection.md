@@ -12,11 +12,12 @@ app (or any of its resources) cleanly removes the old resources before
 creating the new ones. The id is a plain UUID; the SDK adds the
 label-compatible `app-` prefix internally at the metadata boundary.
 
-Deleting the `id` field (to reset identity) regenerates a new UUID on
-the next `deploy`. Existing resources keep their data and are re-tagged
-in place — `deploy` shows a dedicated confirmation prompt for this case
-("Application id was regenerated for ..."), separate from the
-rename/transfer confirmation.
+Deleting the `id` field regenerates a new UUID on the next `deploy` —
+typically done after copying `tailor.config.ts` from another project so
+the new application does not share the original's id. Existing
+resources keep their data and are re-tagged in place; `deploy` shows a
+dedicated confirmation prompt for this case ("Application id was
+regenerated for ..."), separate from the rename/transfer confirmation.
 
 If your `tailor.config.ts` is a wrapper that re-exports `defineConfig` from
 another file, the SDK skips id injection on the wrapper — add the `id`

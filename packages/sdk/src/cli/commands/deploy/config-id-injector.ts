@@ -92,18 +92,18 @@ export async function ensureConfigId(configPath: string): Promise<EnsureConfigId
     const value = idProp.value;
     if (value.type !== "Literal") {
       throw new Error(
-        `'id' field in ${configPath} must be a string literal. Delete the field to regenerate.`,
+        `'id' field in ${configPath} must be a string literal. Delete the field to assign a new id on the next deploy.`,
       );
     }
     const literalValue = (value as { value?: unknown }).value;
     if (typeof literalValue !== "string" || literalValue === "") {
       throw new Error(
-        `'id' field in ${configPath} must be a non-empty string literal. Delete the field to regenerate.`,
+        `'id' field in ${configPath} must be a non-empty string literal. Delete the field to assign a new id on the next deploy.`,
       );
     }
     if (!uuidRegex.test(literalValue)) {
       throw new Error(
-        `'id' field in ${configPath} must be a UUID. Delete the field to regenerate.`,
+        `'id' field in ${configPath} must be a UUID. Delete the field to assign a new id on the next deploy.`,
       );
     }
     return { id: literalValue, injected: false };
@@ -118,7 +118,7 @@ export async function ensureConfigId(configPath: string): Promise<EnsureConfigId
   return { id, injected: true };
 }
 
-const idComment = "// SDK-managed id: do not edit (delete to regenerate)";
+const idComment = "// SDK-managed id: do not edit (delete to assign a new id on the next deploy)";
 
 function insertIdProperty(source: string, configObj: ObjectExpression, id: string): string {
   const idLiteral = `id: ${JSON.stringify(id)}`;

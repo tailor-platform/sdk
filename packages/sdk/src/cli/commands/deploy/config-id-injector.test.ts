@@ -40,7 +40,9 @@ export default defineConfig({
     const updated = await fs.promises.readFile(filePath, "utf-8");
     expect(updated).toContain(`id: "${result?.id}"`);
     expect(updated).toContain(`name: "my-app"`);
-    expect(updated).toContain("// SDK-managed id: do not edit (delete to regenerate)");
+    expect(updated).toContain(
+      "// SDK-managed id: do not edit (delete to assign a new id on the next deploy)",
+    );
   });
 
   test("returns the existing id when already present", async () => {
