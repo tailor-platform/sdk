@@ -53,12 +53,20 @@ Solve mode requires three pieces of local infrastructure:
 - **Podman** — solve mode runs each problem inside an ephemeral container that isolates the work tree.
   On macOS: `podman machine start`. The runner image (`llm-challenge-runner`) auto-builds on first use.
 - **Ollama** — the inference server runs on the host (Metal-accelerated on Apple Silicon); the in-container `opencode` reaches it via `host.containers.internal:11434`.
+
   ```bash
   brew install ollama
   ollama pull gpt-oss:20b
-  OLLAMA_NUM_PARALLEL=1 OLLAMA_CONTEXT_LENGTH=32768 ollama serve
+  OLLAMA_FLASH_ATTENTION=1 OLLAMA_KV_CACHE_TYPE=q8_0 \
+    OLLAMA_NUM_PARALLEL=1 OLLAMA_CONTEXT_LENGTH=16384 ollama serve
   ```
-  The `OLLAMA_CONTEXT_LENGTH=32768` is required by opencode's tool-calling path — the default 2k window truncates tool-use turns mid-flow. `OLLAMA_NUM_PARALLEL=1` keeps RAM usage predictable; raising it multiplies host memory by N without speeding up our serialised solve loop.
+
+  Tune `OLLAMA_CONTEXT_LENGTH` to the host's RAM budget — opencode's tool-calling path needs more than the 2k default or it truncates tool-use turns mid-flow, but the KV cache scales linearly with context length:
+  - **18 GB Apple Silicon Mac**: keep it at `16384`. With `gpt-oss:20b` (≈13 GB resident) plus the Podman VM and macOS itself, a 32k KV cache pushes the system into swap and freezes the UI under sustained load (observed during Phase 4 bring-up).
+  - **24 GB+ host**: `32768` is safe and gives the model more headroom for long tool chains.
+
+  `OLLAMA_FLASH_ATTENTION=1` and `OLLAMA_KV_CACHE_TYPE=q8_0` shave further memory off the KV cache at no observable quality cost. `OLLAMA_NUM_PARALLEL=1` keeps memory predictable; raising it multiplies host RAM by N without speeding up our serialised solve loop.
+
 - **Default model** — `gpt-oss:20b` (MXFP4 quantisation, ≈13 GB on disk). Override with `--model <ollama-id>` to A/B against a different OSS model; the value is passed through to opencode as `ollama/<model-id>`.
 
 There are no cloud credentials to manage and no per-credential rate limits to budget against. The only enforcement is the per-problem wall-clock cap (`--max-seconds`, default `3600`).

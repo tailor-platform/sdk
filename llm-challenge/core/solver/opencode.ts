@@ -277,7 +277,7 @@ async function checkOpencodeAuthStatus(_model?: string): Promise<AuthCheckResult
       ok: false,
       error:
         `Ollama is not reachable on http://localhost:11434 (${message}). ` +
-        `Start it with: OLLAMA_NUM_PARALLEL=1 OLLAMA_CONTEXT_LENGTH=32768 ollama serve`,
+        `Start it with: OLLAMA_FLASH_ATTENTION=1 OLLAMA_KV_CACHE_TYPE=q8_0 OLLAMA_NUM_PARALLEL=1 OLLAMA_CONTEXT_LENGTH=16384 ollama serve  (use 32768 only on 24 GB+ hosts)`,
     };
   }
 }

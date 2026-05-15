@@ -1292,7 +1292,7 @@ async function ensureAuthenticated(targetModel?: string): Promise<void> {
   if (!authCheck.ok) {
     console.error(`Ollama readiness check failed: ${authCheck.error}`);
     console.error(
-      "Hint: brew install ollama && ollama pull gpt-oss:20b && OLLAMA_NUM_PARALLEL=1 OLLAMA_CONTEXT_LENGTH=32768 ollama serve",
+      "Hint: brew install ollama && ollama pull gpt-oss:20b && OLLAMA_FLASH_ATTENTION=1 OLLAMA_KV_CACHE_TYPE=q8_0 OLLAMA_NUM_PARALLEL=1 OLLAMA_CONTEXT_LENGTH=16384 ollama serve  # use 32768 only on 24 GB+ hosts; 16384 stays clear of swap on 18 GB Macs",
     );
     process.exit(1);
   }
