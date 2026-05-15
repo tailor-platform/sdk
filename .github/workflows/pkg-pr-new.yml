@@ -110,19 +110,10 @@ jobs:
       - name: Install deps
         uses: ./.github/actions/install-deps
 
-      # Reuse create-sdk's existing `prepare-templates.js` script: it rewrites
-      # each template's @tailor-platform/sdk dep to the pkg.pr.new URL and
-      # duplicates `.gitignore` as `__dot__gitignore` purely via fs writes,
-      # without invoking pnpm or mutating the lockfile.
-      #
-      # The build step then runs with `verify-deps-before-run=false` because
-      # the rewritten template manifests intentionally diverge from the
-      # lockfile (which still references the workspace SDK). pnpm 11's
-      # default `install` policy would otherwise force a fresh resolution of
-      # the pkg.pr.new tarball before each script and hang the job. The
-      # divergence is harmless here: create-sdk's `build` is just `tsdown`,
-      # which only reads create-sdk's own deps, and the subsequent
-      # `pkg-pr-new publish` packages files directly from disk.
+      # `prepare-templates.js` rewrites template manifests but leaves the
+      # lockfile untouched; pnpm 11's default `verifyDepsBeforeRun: install`
+      # would then auto-install the pkg.pr.new tarball before the build and
+      # hang the job. The build itself only needs create-sdk's own deps.
       - name: Build create-sdk with pkg.pr.new SDK
         env:
           TAILOR_SDK_VERSION: ${{ needs.publish-sdk.outputs.sdk_url }}
