@@ -47,6 +47,7 @@ function emptyResults(): PlanResults {
       context: {
         workspaceId: "ws",
         application: {} as PlanResults["tailorDB"]["context"]["application"],
+        tailorDBInputs: [],
         config: {} as PlanResults["tailorDB"]["context"]["config"],
         noSchemaCheck: false,
       },

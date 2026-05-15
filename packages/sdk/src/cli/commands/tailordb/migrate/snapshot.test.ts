@@ -374,7 +374,10 @@ describe("snapshot", () => {
       expect(diff.breakingChanges[0].reason).toContain("Field type changed");
     });
 
-    it("treats decimal field with unset scale as equivalent to platform default", () => {
+    it("treats decimal fields with the same normalized scale as equivalent", () => {
+      // Both sides are produced through createSnapshotType / loadSnapshot in
+      // production, which fills in the platform default scale for decimals.
+      // The comparison contract expects pre-normalized inputs.
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
         types: {
@@ -382,7 +385,7 @@ describe("snapshot", () => {
             name: "Order",
             fields: {
               id: { type: "uuid", required: true },
-              amount: { type: "decimal", required: true },
+              amount: { type: "decimal", required: true, scale: 6 },
             },
           },
         },
@@ -738,7 +741,8 @@ describe("snapshot", () => {
         }),
       };
 
-      const diff = compareLocalTypesWithSnapshot(previousSnapshot, localTypes, namespace);
+      const snapshotTypes = createSnapshotFromLocalTypes(localTypes, namespace).types;
+      const diff = compareLocalTypesWithSnapshot(previousSnapshot, snapshotTypes, namespace);
 
       expect(diff.changes.length).toBe(1);
       expect(diff.changes[0].kind).toBe("field_added");
@@ -1772,7 +1776,9 @@ describe("snapshot", () => {
       expect(drifts[0].details).toContain("allowedValues");
     });
 
-    it("treats decimal field with unset scale as platform default (no drift)", () => {
+    it("treats decimal field with normalized platform-default scale as equivalent (no drift)", () => {
+      // Snapshots loaded through loadSnapshot have scale normalized to the
+      // platform default (6) for decimal fields without an explicit scale.
       const snapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -1782,7 +1788,7 @@ describe("snapshot", () => {
             name: "Order",
             fields: {
               id: { type: "uuid", required: true },
-              amount: { type: "decimal", required: true },
+              amount: { type: "decimal", required: true, scale: 6 },
             },
           },
         },
@@ -1799,7 +1805,7 @@ describe("snapshot", () => {
       expect(drifts).toEqual([]);
     });
 
-    it("detects drift when decimal scale actually differs from platform default", () => {
+    it("detects drift when decimal scale differs from snapshot", () => {
       const snapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -1809,7 +1815,7 @@ describe("snapshot", () => {
             name: "Order",
             fields: {
               id: { type: "uuid", required: true },
-              amount: { type: "decimal", required: true },
+              amount: { type: "decimal", required: true, scale: 6 },
             },
           },
         },

@@ -52,16 +52,31 @@ export const MIGRATION_NUMBER_PATTERN = /^\d{4}$/;
 export const DEFAULT_DECIMAL_SCALE = 6;
 
 /**
- * Resolve the effective scale of a field for comparison purposes.
- * Decimal fields without an explicit scale are stored on the platform with the
- * default scale, so we normalize unset values to the default to avoid false drift.
- * @param {SnapshotFieldConfig} field - Field configuration
- * @returns {number | undefined} Effective scale, or undefined for non-decimal fields without scale
+ * Normalize a snapshot field in place so the snapshot becomes the canonical
+ * form for comparison. Currently fills in the platform default decimal scale
+ * when omitted, which avoids false drift between local schemas (where scale
+ * may be omitted) and the platform (which always materializes a scale).
+ * @param {SnapshotFieldConfig} field - Field configuration to normalize
  */
-function getEffectiveScale(field: SnapshotFieldConfig): number | undefined {
-  if (field.scale !== undefined) return field.scale;
-  if (field.type === "decimal") return DEFAULT_DECIMAL_SCALE;
-  return undefined;
+function normalizeSnapshotField(field: SnapshotFieldConfig): void {
+  if (field.type === "decimal" && field.scale === undefined) {
+    field.scale = DEFAULT_DECIMAL_SCALE;
+  }
+  if (field.fields) {
+    for (const nested of Object.values(field.fields)) {
+      normalizeSnapshotField(nested);
+    }
+  }
+}
+
+/**
+ * Normalize every field in a snapshot type in place.
+ * @param {SnapshotType} type - Snapshot type to normalize
+ */
+function normalizeSnapshotTypeFields(type: SnapshotType): void {
+  for (const field of Object.values(type.fields)) {
+    normalizeSnapshotField(field);
+  }
 }
 
 // Re-export SCHEMA_SNAPSHOT_VERSION for convenience
@@ -509,7 +524,7 @@ function createSnapshotFieldConfigFromOperatorConfig(
  * @param {TailorDBType} type - Parsed TailorDB type definition
  * @returns {SnapshotType} Snapshot type configuration
  */
-function createSnapshotType(type: TailorDBType): SnapshotType {
+export function createSnapshotType(type: TailorDBType): SnapshotType {
   const fields: Record<string, SnapshotFieldConfig> = {};
 
   for (const [fieldName, field] of Object.entries(type.fields)) {
@@ -616,6 +631,7 @@ function createSnapshotType(type: TailorDBType): SnapshotType {
     }
   }
 
+  normalizeSnapshotTypeFields(snapshotType);
   return snapshotType;
 }
 
@@ -669,7 +685,13 @@ export function createSnapshotFromLocalTypes(
  */
 export function loadSnapshot(filePath: string): SchemaSnapshot {
   const content = fs.readFileSync(filePath, "utf-8");
-  return JSON.parse(content) as SchemaSnapshot;
+  const snapshot = JSON.parse(content) as SchemaSnapshot;
+  // Older snapshots may omit scale on decimal fields. Normalize on load so all
+  // downstream comparisons can read field.scale directly without special cases.
+  for (const type of Object.values(snapshot.types)) {
+    normalizeSnapshotTypeFields(type);
+  }
+  return snapshot;
 }
 
 /**
@@ -1041,7 +1063,7 @@ function areFieldsDifferent(oldField: SnapshotFieldConfig, newField: SnapshotFie
     if ((oldSerial.format ?? "") !== (newSerial.format ?? "")) return true;
   }
 
-  if (getEffectiveScale(oldField) !== getEffectiveScale(newField)) return true;
+  if (oldField.scale !== newField.scale) return true;
 
   const oldFields = oldField.fields ?? {};
   const newFields = newField.fields ?? {};
@@ -1574,18 +1596,25 @@ export function compareSnapshots(previous: SchemaSnapshot, current: SchemaSnapsh
 }
 
 /**
- * Compare local types with a snapshot and generate a diff
+ * Compare a snapshot against canonical SnapshotType-shaped local types.
+ * Callers must pre-convert TailorDBService.types to SnapshotType via
+ * `createSnapshotType` so that all comparisons read the same normalized shape.
  * @param {SchemaSnapshot} snapshot - Schema snapshot to compare against
- * @param {Record<string, TailorDBType>} localTypes - Local type definitions
+ * @param {Record<string, SnapshotType>} localTypes - Local snapshot-shaped types
  * @param {string} namespace - Namespace for comparison
  * @returns {MigrationDiff} Migration diff
  */
 export function compareLocalTypesWithSnapshot(
   snapshot: SchemaSnapshot,
-  localTypes: Record<string, TailorDBType>,
+  localTypes: Record<string, SnapshotType>,
   namespace: string,
 ): MigrationDiff {
-  const currentSnapshot = createSnapshotFromLocalTypes(localTypes, namespace);
+  const currentSnapshot: SchemaSnapshot = {
+    version: SCHEMA_SNAPSHOT_VERSION,
+    namespace,
+    createdAt: new Date().toISOString(),
+    types: localTypes,
+  };
   return compareSnapshots(snapshot, currentSnapshot);
 }
 
@@ -1830,6 +1859,7 @@ function convertRemoteFieldsToSnapshot(
 
     // TODO: Add nested field conversion when remote API supports it
 
+    normalizeSnapshotField(config);
     fields[fieldName] = config;
   }
 
@@ -1921,10 +1951,8 @@ function compareFields(
     differences.push(`vector: remote=${remoteVector}, expected=${snapshotVector}`);
   }
 
-  const remoteScale = getEffectiveScale(remoteField);
-  const snapshotScale = getEffectiveScale(snapshotField);
-  if (remoteScale !== snapshotScale) {
-    differences.push(`scale: remote=${remoteScale}, expected=${snapshotScale}`);
+  if (remoteField.scale !== snapshotField.scale) {
+    differences.push(`scale: remote=${remoteField.scale}, expected=${snapshotField.scale}`);
   }
 
   if (differences.length > 0) {
