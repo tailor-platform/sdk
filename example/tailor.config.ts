@@ -118,6 +118,9 @@ export default defineConfig({
   workflow: {
     files: ["./workflows/**/*.ts"],
   },
+  httpAdapter: {
+    files: ["./adapters/**/*.ts"],
+  },
   staticWebsites: [website, erdSite],
 });
 
