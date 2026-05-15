@@ -111,20 +111,22 @@ jobs:
         uses: ./.github/actions/install-deps
 
       # Inline equivalent of create-sdk's `prepublish` hook, tailored for the
-      # PR preview flow: each template's @tailor-platform/sdk spec is pointed
-      # at the pkg.pr.new URL via `pnpm add` (which updates both manifest and
-      # lockfile, so the build step sees a consistent state), and `.gitignore`
-      # is duplicated as `__dot__gitignore` because npm strips `.gitignore`
-      # from publish payloads. `--ignore-scripts` is required because the SDK
-      # tarball ships a postinstall hook; `strictDepBuilds: true` would error
-      # out on it otherwise, and the script is meant for end-user projects (it
-      # generates types from `tailor.config.ts`), not the create-sdk build.
+      # PR preview flow:
+      # - Point every template's @tailor-platform/sdk spec at the pkg.pr.new
+      #   URL with a single `pnpm add` against the templates filter glob, so
+      #   manifests and lockfile update atomically. A per-template add loop
+      #   would re-verify workspace deps on every iteration and exceeded the
+      #   job timeout under pnpm 11.
+      # - `--ignore-scripts` skips the SDK tarball's postinstall (intended for
+      #   end-user projects); with `strictDepBuilds: true`, pnpm would
+      #   otherwise treat the ignored build as an error.
+      # - npm strips `.gitignore` from publish payloads, so each template's
+      #   `.gitignore` is duplicated as `__dot__gitignore`.
       - name: Build create-sdk with pkg.pr.new SDK
         run: |
           SDK_URL="${{ needs.publish-sdk.outputs.sdk_url }}"
+          pnpm --filter './packages/create-sdk/templates/*' add --ignore-scripts "@tailor-platform/sdk@$SDK_URL"
           for tpl in packages/create-sdk/templates/*/; do
-            name=$(node -p "require('./${tpl}package.json').name")
-            pnpm --filter "$name" add --ignore-scripts "@tailor-platform/sdk@$SDK_URL"
             if [ -f "${tpl}.gitignore" ]; then
               cp "${tpl}.gitignore" "${tpl}__dot__gitignore"
             fi
