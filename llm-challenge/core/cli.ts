@@ -192,6 +192,13 @@ type ParsedArgs = {
    * into the same runId so the final report stitches old + new attempts.
    */
   resume?: string;
+  /**
+   * Per-problem wall-clock cap in seconds. The solver kills the opencode
+   * subprocess if it has not finished by this deadline. Replaces the removed
+   * `--max-budget` flag (cost is no longer tracked under the OSS adapter).
+   * Defaults to 3600 (1 hour).
+   */
+  maxSeconds: number;
 };
 
 function parseArgs(): ParsedArgs {
@@ -203,13 +210,17 @@ function parseArgs(): ParsedArgs {
   let solve = false;
   let model: string | undefined;
   let clean = false;
-  let concurrency = os.availableParallelism();
+  // Default concurrency is 1: a single Ollama daemon on the host serialises
+  // requests anyway, and per-problem solves saturate one process group already.
+  // Override via `--concurrency <n>` when the host has spare capacity.
+  let concurrency = 1;
   let contextProfile: ContextProfile = "full-package";
   let iterations: number | undefined;
   let noAutoExtend = false;
   let noEarlyStop = false;
   let sdkBranch: string | undefined;
   let resume: string | undefined;
+  let maxSeconds = 3600;
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
@@ -272,6 +283,10 @@ function parseArgs(): ParsedArgs {
         resume = requireArg(args, i, "--resume");
         i++;
         break;
+      case "--max-seconds":
+        maxSeconds = Number(requireArg(args, i, "--max-seconds"));
+        i++;
+        break;
     }
   }
 
@@ -279,14 +294,22 @@ function parseArgs(): ParsedArgs {
     console.error("Error: --concurrency must be a positive integer");
     process.exit(1);
   }
-  // --iterations: default to 3 in solve mode (per Phase 4 spec D 採点ベクトル
-  // "N=3 反復"), default to 1 in verify modes for backward compat.
+  // --iterations: default to 5 in solve mode (decision #13 in the OSS
+  // migration plan — quality-first sampling means we run N=5 directly rather
+  // than relying on the legacy N=3 + auto-extend cadence). Verify modes keep
+  // N=1 for backward compat. Note: shouldEarlyStop / shouldAutoExtend remain
+  // gated on `iterations === 3` so they only kick in when a caller explicitly
+  // opts back into the legacy 3-cadence with `--iterations 3`.
   const iterationsExplicit = iterations !== undefined;
   if (iterations === undefined) {
-    iterations = solve ? 3 : 1;
+    iterations = solve ? 5 : 1;
   }
   if (!Number.isInteger(iterations) || iterations < 1) {
     console.error("Error: --iterations must be a positive integer");
+    process.exit(1);
+  }
+  if (!Number.isFinite(maxSeconds) || maxSeconds <= 0) {
+    console.error("Error: --max-seconds must be a positive number");
     process.exit(1);
   }
 
@@ -306,6 +329,7 @@ function parseArgs(): ParsedArgs {
     noEarlyStop,
     ...(sdkBranch ? { sdkBranch } : {}),
     ...(resume ? { resume } : {}),
+    maxSeconds,
   };
 }
 
@@ -700,7 +724,7 @@ async function runProblem(
   problemName: string,
   options: {
     implDir?: string;
-    solve?: { model?: string; seed?: number };
+    solve?: { model?: string; seed?: number; maxSeconds?: number };
     clean: boolean;
     verbose: boolean;
     tarballPath?: string;
@@ -756,6 +780,7 @@ async function runProblem(
       contextProfile: options.contextProfile,
       ...(options.solve.seed !== undefined ? { seed: options.solve.seed } : {}),
       ...(traceWorkPath ? { tracePath: traceWorkPath } : {}),
+      ...(options.solve.maxSeconds !== undefined ? { maxSeconds: options.solve.maxSeconds } : {}),
     });
     if (problemArtifactRoot) {
       const artifact = persistSolveAttemptArtifact({
@@ -1334,6 +1359,7 @@ async function main(): Promise<void> {
     noEarlyStop,
     sdkBranch,
     resume: resumeRunId,
+    maxSeconds,
   } = parseArgs();
 
   if (problemIds.length === 0 && !all) {
@@ -1341,11 +1367,11 @@ async function main(): Promise<void> {
     console.error("  tsx core/cli.ts --problem 001 --impl ./path/to/impl");
     console.error("  tsx core/cli.ts --problem 001 --use-solution");
     console.error(
-      "  tsx core/cli.ts --problem 001 [--problem 002 ...] --solve [--model gpt-oss:20b] [--context-profile types-only] [--iterations 3] [--no-auto-extend] [--no-early-stop] [--sdk-branch <ref>] [--resume <runId>]",
+      "  tsx core/cli.ts --problem 001 [--problem 002 ...] --solve [--model gpt-oss:20b] [--context-profile types-only] [--iterations 5] [--max-seconds 3600] [--no-auto-extend] [--no-early-stop] [--sdk-branch <ref>] [--resume <runId>]",
     );
     console.error("  tsx core/cli.ts --all --use-solution [--clean] [--concurrency <n>]");
     console.error(
-      "  tsx core/cli.ts --all --solve [--model gpt-oss:20b] [--clean] [--concurrency <n>] [--context-profile types-only] [--iterations 3] [--no-auto-extend] [--no-early-stop] [--sdk-branch <ref>] [--resume <runId>]",
+      "  tsx core/cli.ts --all --solve [--model gpt-oss:20b] [--clean] [--concurrency <n>] [--context-profile types-only] [--iterations 5] [--max-seconds 3600] [--no-auto-extend] [--no-early-stop] [--sdk-branch <ref>] [--resume <runId>]",
     );
     console.error("  tsx core/cli.ts --all --impl-dir ./path/to/all-outputs");
     console.error(
@@ -1500,7 +1526,7 @@ async function main(): Promise<void> {
   async function runProblemWithIterations(task: ProblemTask): Promise<ProblemResult> {
     const baseOptions = {
       implDir: task.implDir,
-      solve: solve ? { model } : undefined,
+      solve: solve ? { model, maxSeconds } : undefined,
       clean,
       verbose,
       tarballPath,

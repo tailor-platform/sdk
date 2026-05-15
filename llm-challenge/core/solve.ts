@@ -187,8 +187,10 @@ export function solveProblem(options: {
   seed?: number;
   /** Optional JSONL path for behaviour trace. */
   tracePath?: string;
+  /** Per-problem wall-clock cap in seconds. */
+  maxSeconds?: number;
 }): Promise<SolveResult> {
-  const { workDir, problemDir, meta, model, contextProfile, seed, tracePath } = options;
+  const { workDir, problemDir, meta, model, contextProfile, seed, tracePath, maxSeconds } = options;
   const prompt = buildPrompt(problemDir, meta, workDir, contextProfile);
   return opencodeAdapter.run({
     prompt,
@@ -196,6 +198,7 @@ export function solveProblem(options: {
     ...(model !== undefined ? { model } : {}),
     ...(seed !== undefined ? { seed } : {}),
     ...(tracePath !== undefined ? { tracePath } : {}),
+    ...(maxSeconds !== undefined ? { maxSeconds } : {}),
   });
 }
 

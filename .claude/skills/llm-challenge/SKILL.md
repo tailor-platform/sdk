@@ -24,14 +24,21 @@ When AI fails a challenge, **improve the SDK** (JSDoc, error messages, types, CL
 - ALWAYS build the SDK before running: `pnpm -C packages/sdk build`
 - ALWAYS run `pnpm install` at repo root before benchmarks (stale workspace deps break the verify pipeline)
 
-### Solve Mode (Podman)
+### Solve Mode (Podman + Ollama)
 
-Solve runs inside a Podman container for filesystem isolation.
+Solve runs `opencode` inside a Podman container; inference is served by a host-side Ollama daemon that the container reaches via `host.containers.internal:11434`.
 
-- **Podman required**: `podman machine start` on macOS
-- **Claude auth**: `claude setup-token` then `export CLAUDE_CODE_OAUTH_TOKEN=<token>`
-- **Codex auth**: `codex login` (stores credentials in `~/.codex/auth.json`, mounted into the container)
-- Container image auto-builds on first run (`llm-challenge-runner`)
+- **Podman required**: `podman machine start` on macOS. Container image auto-builds on first run (`llm-challenge-runner`).
+- **Ollama required** (host-side):
+  ```bash
+  brew install ollama
+  ollama pull gpt-oss:20b
+  OLLAMA_NUM_PARALLEL=1 OLLAMA_CONTEXT_LENGTH=32768 ollama serve
+  ```
+  `OLLAMA_CONTEXT_LENGTH=32768` is required by opencode's tool-calling path. The harness's `checkAuthStatus` probes `http://localhost:11434/api/tags` before launching a run and emits the same hint if the daemon is unreachable.
+- **No cloud credentials** — local inference, so no API spend and no rate limits. The only enforcement axis is `--max-seconds` (default `3600` per problem).
+- **Default model**: `gpt-oss:20b`. Override with `--model <ollama-id>`; the value is passed through as `ollama/<id>`.
+- **Reproducibility**: each iteration writes a per-run `opencode.json` carrying `temperature=0.2` and `seed=<iteration index>` under `provider.ollama.options`. Re-running the same `(problem, iteration)` pair is deterministic up to whatever non-determinism the Ollama runtime itself introduces.
 
 ## Problem Conventions
 
@@ -78,7 +85,7 @@ Structure: `problems/<id>-<slug>/` with `meta.json`, `problem.md`, `scaffold/`, 
 3. Write `tests/` against the solution
 4. Add per-problem `scaffold/` overrides only when shared scaffold is insufficient
 5. Verify: `pnpm -C llm-challenge challenge --problem m<NN> --use-solution` → must pass all three stages
-6. Manually solve the problem once with Claude to confirm it lands in the 5-15 turn range
+6. Manually solve the problem once with `--solve` to confirm it lands in the 5-15 turn range
 
 ## Problem Lifecycle
 
@@ -101,18 +108,17 @@ To prevent the ceiling-effect that comes from keeping uniformly-passing problems
 2. `pnpm challenge:analyze --trend --context-profile types-only` and `--context-profile full-package` to see pass-rate history per profile
 3. For problems where `full-package` passes but `types-only` fails (or where iteration pass rate is in `(0, 1)`), open the failing iteration's `trace.jsonl` and the per-attempt `work/` snapshot to identify the root cause manually
 4. Propose SDK changes — prefer compile-time/JSDoc/error-message changes over docs-only fixes
-5. `pnpm -C packages/sdk build`, then re-run `challenge:solve` on the same `(agent, model, profile)` to measure delta
+5. `pnpm -C packages/sdk build`, then re-run `challenge:solve` on the same `(model, profile)` to measure delta
 
-A/B experiments via `pnpm challenge:experiment --sdk-branch <ref> --iterations <n>` run the benchmark twice (baseline tree + candidate ref), copy both reports into `results/experiments/<exp-id>/`, and emit a `delta.json` plus a printed ΔpassRate / ΔcostUSD summary. Forwarded flags (`--problem`, `--agent`, `--model`, `--context-profile`, `--concurrency`, …) are passed through to both child runs after the reserved flags are stripped.
+A/B experiments via `pnpm challenge:experiment --sdk-branch <ref> --iterations <n>` run the benchmark twice (baseline tree + candidate ref), copy both reports into `results/experiments/<exp-id>/`, and emit a `delta.json` plus a printed ΔpassRate / Δturns summary. Forwarded flags (`--problem`, `--model`, `--context-profile`, `--concurrency`, `--max-seconds`, …) are passed through to both child runs after the reserved flags are stripped.
 
 ## Parallel Runs
 
-Reports and per-run work trees are isolated per `(agent, model, context-profile)`, so multiple `pnpm challenge:solve` invocations can run concurrently from separate shells:
+Reports and per-run work trees are isolated per `(model, context-profile)`, so multiple `pnpm challenge:solve` invocations can run concurrently from separate shells:
 
 ```bash
 for profile in types-only full-package; do
   pnpm -C llm-challenge challenge:solve \
-    --agent claude --model sonnet \
     --context-profile "$profile" \
     > ".agent/tmp/llm-challenge-logs/$profile.log" 2>&1 &
 done
@@ -123,6 +129,6 @@ Caveats:
 
 - Pre-build the SDK once before launching parallel runs; concurrent builds race
 - Let the container image build finish on a single solve before fanning out
-- API rate limits apply per credential — N profiles in parallel = N concurrent agent sessions
+- The host Ollama daemon serialises generations internally; N parallel solves divide effective throughput by N rather than multiplying it. Useful when the configs differ (e.g. `types-only` vs `full-package`) so the parallel work is genuinely independent.
 
 After parallel runs finish, use `pnpm -C llm-challenge challenge:analyze --groups` to list per-config groups and `--trend --context-profile <profile>` to inspect a single config's history.

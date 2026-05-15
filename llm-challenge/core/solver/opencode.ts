@@ -75,7 +75,7 @@ function writeTraceEventSync(filePath: string, event: TraceEvent): void {
 async function runOpencode(options: SolveRunOptions): Promise<SolveResult> {
   await ensureImage();
 
-  const { prompt, workDir, model, seed = 0, tracePath } = options;
+  const { prompt, workDir, model, seed = 0, tracePath, maxSeconds } = options;
   const resolvedModel = model || DEFAULT_OSS_MODEL;
 
   // Per-run tmpdir holds the generated `opencode.json`. `os.tmpdir()` resolves
@@ -103,7 +103,9 @@ async function runOpencode(options: SolveRunOptions): Promise<SolveResult> {
     opencodeConfigPath,
   });
   const startTime = Date.now();
-  const timeout = 3_600_000;
+  // Per-problem wall-clock cap. Defaults to 3600 s (60 min) when caller did
+  // not set --max-seconds; the same default the CLI applies.
+  const timeout = (maxSeconds ?? 3600) * 1000;
 
   if (tracePath) {
     try {

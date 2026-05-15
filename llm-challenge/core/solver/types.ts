@@ -66,6 +66,12 @@ export type SolveRunOptions = {
    * compatibility) should silently ignore this option.
    */
   tracePath?: string;
+  /**
+   * Per-problem wall-clock cap in seconds. The adapter must terminate the
+   * underlying agent process if it has not finished by this deadline.
+   * Defaults to 3600 (1 hour) when unset — see `--max-seconds` in `cli.ts`.
+   */
+  maxSeconds?: number;
 };
 
 export type AuthCheckResult = {
