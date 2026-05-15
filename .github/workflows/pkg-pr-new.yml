@@ -110,10 +110,22 @@ jobs:
       - name: Install deps
         uses: ./.github/actions/install-deps
 
+      # Inline equivalent of create-sdk's `prepublish` hook, tailored for the
+      # PR preview flow: each template's @tailor-platform/sdk spec is pointed
+      # at the pkg.pr.new URL via `pnpm add` (which updates both manifest and
+      # lockfile, so the build step sees a consistent state), and `.gitignore`
+      # is duplicated as `__dot__gitignore` because npm strips `.gitignore`
+      # from publish payloads.
       - name: Build create-sdk with pkg.pr.new SDK
         run: |
-          export TAILOR_SDK_VERSION="${{ needs.publish-sdk.outputs.sdk_url }}"
-          node packages/create-sdk/scripts/prepare-templates.js
+          SDK_URL="${{ needs.publish-sdk.outputs.sdk_url }}"
+          for tpl in packages/create-sdk/templates/*/; do
+            name=$(node -p "require('./${tpl}package.json').name")
+            pnpm --filter "$name" add "@tailor-platform/sdk@$SDK_URL"
+            if [ -f "${tpl}.gitignore" ]; then
+              cp "${tpl}.gitignore" "${tpl}__dot__gitignore"
+            fi
+          done
           pnpm --filter @tailor-platform/create-sdk build
 
       - name: Publish create-sdk to pkg.pr.new

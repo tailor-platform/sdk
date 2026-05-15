@@ -29,7 +29,9 @@ runs:
       run: pnpm exec turbo run build --filter @tailor-platform/sdk
       shell: bash
 
-    # Recreate .bin links after build
-    - name: Re-install to create bin links
-      run: pnpm install --frozen-lockfile
+    # Re-link .bin entries after build (pnpm 11 treats a same-lockfile re-install
+    # as a no-op, so a second `pnpm install` no longer regenerates bin links
+    # on Windows; `pnpm rebuild` forces the relink without touching the lockfile).
+    - name: Re-link bin entries after build
+      run: pnpm rebuild
       shell: bash
