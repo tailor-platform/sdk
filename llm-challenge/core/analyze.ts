@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { problemKey, requireArg } from "../shared/helpers";
+import { problemKey, requireArg, sanitizeForFilename } from "../shared/helpers";
 import { READ_TARGET_CLASSES, type ReadTargetClass } from "./metrics";
 import { ITERATION_METRIC_KEYS, type IterationMetricKey } from "./report";
 import type { ChallengeReport, ProblemResult } from "./report";
@@ -69,18 +69,13 @@ export function buildArchivedIdSet(root: string = challengeRoot): Set<string> {
 }
 
 type GroupKey = {
-  agent: string;
+  /** "solution-verify" for reference-impl runs, otherwise the OSS model id. */
   model: string;
   contextProfile: string;
 };
 
 /**
- * Derive an `(agent, model, contextProfile)` grouping key from a report.
- *
- * The `model` field follows two shapes:
- * - Solve runs use `"agent:model"` (e.g. `"claude:sonnet"`).
- * - Pre-`agent:` runs stored only the model (e.g. `"sonnet"`); recovered as
- *   `{ agent: "claude", model }`.
+ * Derive a `(model, contextProfile)` grouping key from a report.
  *
  * Reports without a `model` (solution-verify runs) are grouped under a
  * dedicated sentinel so they do not pollute solver groups.
@@ -88,29 +83,26 @@ type GroupKey = {
 function getGroupKey(report: ChallengeReport): GroupKey {
   if (!report.model) {
     return {
-      agent: "solution",
-      model: "verify",
+      model: "solution-verify",
       contextProfile: report.contextProfile || "unknown",
     };
   }
-  const { agent, model } = parseSolveModelLabel(report.model);
+  const { model } = parseSolveModelLabel(report.model);
   return {
-    agent,
-    model: model ?? "default",
+    model,
     contextProfile: report.contextProfile || "unknown",
   };
 }
 
 function formatGroupKey(key: GroupKey): string {
-  return `${key.agent}:${key.model} / ${key.contextProfile}`;
+  return `${key.model} / ${key.contextProfile}`;
 }
 
 function groupKeyId(key: GroupKey): string {
-  return `${key.agent}|${key.model}|${key.contextProfile}`;
+  return `${key.model}|${key.contextProfile}`;
 }
 
 type Filters = {
-  agent?: string;
   model?: string;
   contextProfile?: string;
 };
@@ -119,9 +111,9 @@ type ParsedArgs = Filters & {
   trend: boolean;
   groups: boolean;
   /**
-   * When true, locate the most-recent `claude-<model>-types-only` and
-   * `claude-<model>-full-package` reports for the active group and emit the
-   * diff between them. Surfaces the docs-vs-types-gap signal automatically.
+   * When true, locate the most-recent types-only and full-package reports
+   * for the active model group and emit the diff between them. Surfaces the
+   * docs-vs-types-gap signal automatically.
    */
   profileDiff: boolean;
   /** When set, treat these two paths as the A/B pair to diff. */
@@ -149,7 +141,6 @@ function parseArgs(): ParsedArgs {
   let trend = false;
   let groups = false;
   let profileDiff = false;
-  let agent: string | undefined;
   let model: string | undefined;
   let contextProfile: string | undefined;
   let diffPair: [string, string] | undefined;
@@ -179,10 +170,6 @@ function parseArgs(): ParsedArgs {
       case "--json":
         json = true;
         break;
-      case "--agent":
-        agent = requireArg(args, i, "--agent");
-        i++;
-        break;
       case "--model":
         model = requireArg(args, i, "--model");
         i++;
@@ -204,7 +191,6 @@ function parseArgs(): ParsedArgs {
     trend,
     groups,
     profileDiff,
-    agent,
     model,
     contextProfile,
     ...(diffPair ? { diffPair } : {}),
@@ -215,7 +201,6 @@ function parseArgs(): ParsedArgs {
 }
 
 function matchesFilters(key: GroupKey, filters: Filters): boolean {
-  if (filters.agent && key.agent !== filters.agent) return false;
   if (filters.model && key.model !== filters.model) return false;
   if (filters.contextProfile && key.contextProfile !== filters.contextProfile) return false;
   return true;
@@ -392,14 +377,11 @@ function showGroupsOverview(reports: ChallengeReport[]): void {
   }
   console.log("-".repeat(width));
   console.log("");
-  console.log(
-    "Tip: narrow with --agent / --model / --context-profile, or use --trend to see history.",
-  );
+  console.log("Tip: narrow with --model / --context-profile, or use --trend to see history.");
 }
 
 function describeFilters(filters: Filters): string {
   const parts: string[] = [];
-  if (filters.agent) parts.push(`agent=${filters.agent}`);
   if (filters.model) parts.push(`model=${filters.model}`);
   if (filters.contextProfile) parts.push(`context-profile=${filters.contextProfile}`);
   return parts.length === 0 ? "any" : parts.join(", ");
@@ -694,7 +676,7 @@ export function computeReportDiff(
  * Resolve the active `types-only` vs `full-package` report pair for the
  * profile-diff mode. Implementation strategy:
  *
- * 1. Load every report and group by `(agent, model)` (the contextProfile is
+ * 1. Load every report and group by `model` (the contextProfile is
  *    intentionally dropped from the grouping so the two profile variants land
  *    in the same bucket).
  * 2. Pick the bucket whose latest timestamp across either profile is most
@@ -742,8 +724,8 @@ export function resolveActiveProfilePair(reports: ChallengeReport[]): ProfilePai
     return new Date(candidate.timestamp).getTime() > new Date(existing.timestamp).getTime();
   }
   for (const r of mainReports) {
-    const { agent, model } = getGroupKey(r);
-    const id = `${agent}|${model}`;
+    const { model } = getGroupKey(r);
+    const id = model;
     const profile = r.contextProfile;
     if (profile !== "types-only" && profile !== "full-package") continue;
     const bucket = buckets.get(id) ?? {};
@@ -814,9 +796,13 @@ export function resolveActiveProfilePair(reports: ChallengeReport[]): ProfilePai
  * paths. Returns the conventional layout used by `cli.ts:getRunResultsDir`.
  */
 function deriveReportPath(report: ChallengeReport): string {
-  const { agent, model } = getGroupKey(report);
   const profile = report.contextProfile ?? "unknown";
-  const dir = `${agent}-${model}-${profile}`;
+  const baseLabel = report.model ?? "solution-verify";
+  // Mirror cli.ts:getRunResultsDir, which sanitizeForFilename's the model
+  // label (the `oss:` prefix written by formatSolveModelLabel becomes
+  // `oss-` after `:`-to-`-` replacement). Keeping the two paths in sync
+  // here lets profile-diff resolve its A/B sources correctly.
+  const dir = sanitizeForFilename(`${baseLabel}-${profile}`);
   const version = report.sdkVersion ?? "unknown";
   const ts = report.timestamp.replace(/:/g, "-").slice(0, 19);
   return path.join("results", dir, `report-${version}-${ts}.json`);
@@ -994,7 +980,6 @@ function main(): void {
     trend,
     groups,
     profileDiff,
-    agent,
     model,
     contextProfile,
     diffPair,
@@ -1002,7 +987,7 @@ function main(): void {
     unifyAliases,
     includeArchived,
   } = parseArgs();
-  const filters: Filters = { agent, model, contextProfile };
+  const filters: Filters = { model, contextProfile };
   const aliasMap = unifyAliases ? buildAliasMap() : undefined;
   const loadOpts = { includeArchived };
 

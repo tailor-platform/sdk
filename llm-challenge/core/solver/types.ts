@@ -40,12 +40,6 @@ export type SolveResult = {
   artifact?: SolveArtifact;
   rawTranscript?: SolveRawTranscript;
   usage?: SolveUsage;
-  /**
-   * Legacy field kept optional so reports written before the OSS migration
-   * (when Claude/Codex adapters tracked dollar cost) still deserialise.
-   * Never written by the OSS adapter — local inference has no per-run cost.
-   */
-  costUsd?: number;
 };
 
 export type SolveAgent = "oss";

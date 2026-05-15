@@ -179,25 +179,6 @@ describe("createReport", () => {
     expect(report.percentage).toBe(0);
   });
 
-  it("never writes the legacy totalCostUsd / costPerPass fields on a fresh OSS-era report", () => {
-    const passing: StageResult = { stage: "tests", passed: true, output: "ok" };
-    const results: ProblemResult[] = [
-      makeProblemResult({
-        problemId: "001",
-        stages: [passing],
-        passed: true,
-        solveResult: { success: true, durationMs: 0, output: "" },
-      }),
-    ];
-
-    const report = createReport(results);
-
-    expect(report.totalCostUsd).toBeUndefined();
-    expect(report.costPerPass).toBeUndefined();
-    expect("totalCostUsd" in report).toBe(false);
-    expect("costPerPass" in report).toBe(false);
-  });
-
   it("rounds percentage to the nearest integer (1 of 3 → 33, 2 of 3 → 67)", () => {
     const passing: StageResult = { stage: "tests", passed: true, output: "ok" };
     const failing: StageResult = { stage: "tests", passed: false, output: "fail" };
@@ -630,10 +611,6 @@ describe("aggregateIterations", () => {
     expect(agg.iterations?.passedCount).toBe(2);
     expect(agg.iterations?.passRate).toBeCloseTo(2 / 3, 10);
     expect(agg.iterations?.passedByIteration).toEqual([true, false, true]);
-    // cost aggregation has been retired; legacy fields are now optional and
-    // never written by the OSS runner.
-    expect(agg.iterations?.costMedian).toBeUndefined();
-    expect(agg.iterations?.costStdev).toBeUndefined();
     // turns: [10, 14, 12] median=12, mean=12, stdev=sqrt((4+4+0)/3)
     expect(agg.iterations?.metricsMedian.turns).toBe(12);
     expect(agg.iterations?.metricsStdev.turns).toBeCloseTo(Math.sqrt(8 / 3), 10);

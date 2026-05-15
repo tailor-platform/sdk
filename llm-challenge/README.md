@@ -148,8 +148,6 @@ Each run writes `results/<model-context-profile>/report-<sdkVersion>-<runId>.jso
 
 The terminal table summarises per-problem stage status and the trace line (`turns=… read_sdk=… read_docs=… bash_retries=…`).
 
-Cost-related fields (`costUsd`, `costMedian`, `totalCostUsd`, `costPerPass`) remain optional on the wire so historical reports written by the retired Claude/Codex adapters still deserialise, but the OSS adapter never writes them. `analyze --diff` and the trend view ignore those fields when both sides are absent.
-
 ## A/B Experiments
 
 ```bash
@@ -273,8 +271,6 @@ pnpm challenge:analyze --trend --model gpt-oss:20b --context-profile types-only
 # List every (model, context-profile) group with its latest pass rate.
 pnpm challenge:analyze --groups
 ```
-
-Historical reports written by the retired Claude/Codex adapters (label prefixes `claude-*` / `codex-*`) still show up under `--groups` and `--trend` alongside the new `oss-gpt-oss-20b-*` group; legacy-label parsing is preserved in `core/solve-model.ts` for exactly this reason.
 
 The trend view diffs the first and last reports in the chosen group. The previous `--baseline <path>` flag is gone — trend within a group covers the same use cases.
 

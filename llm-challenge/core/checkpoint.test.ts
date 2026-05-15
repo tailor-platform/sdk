@@ -22,7 +22,6 @@ const makeResult = (problemId: string, passed: boolean, infra = false): ProblemR
   passed,
   solveResult: {
     success: passed,
-    costUsd: 0,
     durationMs: 0,
     output: "",
     infraFailure: infra,

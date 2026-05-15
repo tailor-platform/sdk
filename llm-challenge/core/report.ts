@@ -35,24 +35,15 @@ export type ProblemArtifacts = {
  * mode); single-iteration runs leave this undefined.
  *
  * `passRate` is the fraction of iterations that passed (passedCount / count).
- * `metricsMedian` / `metricsStdev` summarise the legacy behavioural counters
+ * `metricsMedian` / `metricsStdev` summarise the behavioural counters
  * (`turns`, `readSdkDts`, `readDocs`, `bashRetries`) AND the five per-class
- * `readTargets` buckets ({@link ReadTargetClass}). The new bucket-level
- * fields are populated alongside the legacy fields for back-compat.
- *
- * `costMedian` / `costStdev` are optional legacy fields preserved so reports
- * persisted before the OSS migration (Claude/Codex era) still deserialise.
- * The OSS runner never writes them — local inference has no per-run cost.
+ * `readTargets` buckets ({@link ReadTargetClass}).
  */
 export type IterationAggregate = {
   count: number;
   passedCount: number;
   passRate: number;
   passedByIteration: boolean[];
-  /** Legacy field — present only on pre-OSS-migration reports. */
-  costMedian?: number;
-  /** Legacy field — present only on pre-OSS-migration reports. */
-  costStdev?: number;
   metricsMedian: {
     turns: number;
     readSdkDts: number;
@@ -168,13 +159,6 @@ export type ChallengeReport = {
   problemsPassed: number;
   problemsTotal: number;
   percentage: number;
-  /**
-   * Legacy USD cost aggregate. Optional so OSS-era reports omit it entirely
-   * while pre-OSS-migration reports (Claude/Codex era) still deserialise.
-   */
-  totalCostUsd?: number;
-  /** Legacy field — present only on pre-OSS-migration reports. */
-  costPerPass?: number;
   infraFailureCount: number;
   validPercentage: number;
   totalDurationMs: number;

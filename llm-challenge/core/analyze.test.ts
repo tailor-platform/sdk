@@ -214,8 +214,8 @@ describe("computeReportDiff", () => {
   });
 
   it("surfaces a warning when model labels differ between reports", () => {
-    const reportA = makeReport({ model: "claude:sonnet" });
-    const reportB = makeReport({ model: "codex:gpt-5-codex" });
+    const reportA = makeReport({ model: "oss:gpt-oss:20b" });
+    const reportB = makeReport({ model: "oss:qwen3-coder:30b" });
     const diff = computeReportDiff(reportA, reportB);
     expect(diff.warnings.some((w) => w.startsWith("model differs"))).toBe(true);
   });

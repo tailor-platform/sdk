@@ -23,7 +23,6 @@ describe("persistSolveAttemptArtifact", () => {
 
     const result: SolveResult = {
       success: true,
-      costUsd: 0.25,
       durationMs: 1234,
       output: "done",
       rawTranscript: {
@@ -56,7 +55,6 @@ describe("persistSolveAttemptArtifact", () => {
 
     const result: SolveResult = {
       success: false,
-      costUsd: 0,
       durationMs: 0,
       output: "no transcript",
     };
@@ -88,7 +86,6 @@ describe("persistSolveAttemptArtifact", () => {
 
     const result: SolveResult = {
       success: true,
-      costUsd: 0,
       durationMs: 0,
       output: "done",
     };
@@ -115,7 +112,6 @@ describe("persistSolveAttemptArtifact", () => {
 
     const result: SolveResult = {
       success: true,
-      costUsd: 0,
       durationMs: 0,
       output: "done",
     };
@@ -146,7 +142,6 @@ describe("persistSolveAttemptArtifact", () => {
 
     const result: SolveResult = {
       success: true,
-      costUsd: 0,
       durationMs: 0,
       output: "done",
     };

@@ -23,40 +23,17 @@ describe("formatSolveModelLabel", () => {
 });
 
 describe("parseSolveModelLabel", () => {
-  it("returns oss:gpt-oss:20b defaults when label is undefined", () => {
-    expect(parseSolveModelLabel(undefined)).toEqual({
-      agent: "oss",
-      model: "gpt-oss:20b",
-    });
+  it("returns the default model when label is undefined", () => {
+    expect(parseSolveModelLabel(undefined)).toEqual({ model: "gpt-oss:20b" });
   });
 
-  it("parses legacy claude:sonnet labels for analyze backwards-compat", () => {
-    expect(parseSolveModelLabel("claude:sonnet")).toEqual({
-      agent: "claude",
-      model: "sonnet",
-    });
-  });
-
-  it("parses legacy codex:o3 labels", () => {
-    expect(parseSolveModelLabel("codex:o3")).toEqual({
-      agent: "codex",
-      model: "o3",
-    });
-  });
-
-  it("parses oss:gpt-oss:20b without losing the colon in the model id", () => {
-    // The Ollama model id contains a `:`; rest.join(":") must survive it so
+  it("strips the oss: prefix and preserves colons inside the model id", () => {
+    // The Ollama model id contains a `:`; the parser must keep it intact so
     // analyze --groups can recover the full label from a results filename.
-    expect(parseSolveModelLabel("oss:gpt-oss:20b")).toEqual({
-      agent: "oss",
-      model: "gpt-oss:20b",
-    });
+    expect(parseSolveModelLabel("oss:gpt-oss:20b")).toEqual({ model: "gpt-oss:20b" });
   });
 
-  it("treats a bare legacy label without colon as the old claude default", () => {
-    expect(parseSolveModelLabel("sonnet")).toEqual({
-      agent: "claude",
-      model: "sonnet",
-    });
+  it("treats a bare label without the oss: prefix as the model id verbatim", () => {
+    expect(parseSolveModelLabel("gpt-oss:20b")).toEqual({ model: "gpt-oss:20b" });
   });
 });
