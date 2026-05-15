@@ -16,9 +16,15 @@ runs:
         standalone: true
         run_install: false
 
+    # `actions/setup-node` is used (instead of `pnpm runtime set node`) so that
+    # Node is on the system PATH for every spawned shell. `pnpm rebuild` on
+    # Windows does not propagate pnpm's internal runtime to subshells, which
+    # made postinstall scripts (lefthook, esbuild) fail with "'node' is not
+    # recognized" during the bin-link refresh step below.
     - name: Install Node.js
-      run: pnpm runtime set node ${{ inputs.node-version }} -g
-      shell: bash
+      uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      with:
+        node-version: ${{ inputs.node-version }}
 
     - name: Install dependencies
       run: pnpm install --frozen-lockfile

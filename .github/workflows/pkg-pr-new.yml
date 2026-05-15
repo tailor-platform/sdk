@@ -115,13 +115,16 @@ jobs:
       # at the pkg.pr.new URL via `pnpm add` (which updates both manifest and
       # lockfile, so the build step sees a consistent state), and `.gitignore`
       # is duplicated as `__dot__gitignore` because npm strips `.gitignore`
-      # from publish payloads.
+      # from publish payloads. `--ignore-scripts` is required because the SDK
+      # tarball ships a postinstall hook; `strictDepBuilds: true` would error
+      # out on it otherwise, and the script is meant for end-user projects (it
+      # generates types from `tailor.config.ts`), not the create-sdk build.
       - name: Build create-sdk with pkg.pr.new SDK
         run: |
           SDK_URL="${{ needs.publish-sdk.outputs.sdk_url }}"
           for tpl in packages/create-sdk/templates/*/; do
             name=$(node -p "require('./${tpl}package.json').name")
-            pnpm --filter "$name" add "@tailor-platform/sdk@$SDK_URL"
+            pnpm --filter "$name" add --ignore-scripts "@tailor-platform/sdk@$SDK_URL"
             if [ -f "${tpl}.gitignore" ]; then
               cp "${tpl}.gitignore" "${tpl}__dot__gitignore"
             fi
