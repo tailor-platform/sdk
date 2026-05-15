@@ -41,6 +41,7 @@ tailor-sdk tailordb [command]
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 <!-- politty:command:tailordb:global-options-link:end -->
+
 <!-- politty:command:tailordb truncate:heading:start -->
 
 ### tailordb truncate
@@ -156,6 +157,7 @@ tailor-sdk tailordb migration [command]
 | [`tailordb migration generate`](#tailordb-migration-generate) | Generate migration files by detecting schema differences between current local types and the previous migration snapshot. |
 | [`tailordb migration set`](#tailordb-migration-set)           | Set migration checkpoint to a specific number.                                                                            |
 | [`tailordb migration status`](#tailordb-migration-status)     | Show the current migration status for TailorDB namespaces, including applied and pending migrations.                      |
+| [`tailordb migration sync`](#tailordb-migration-sync)         | Sync remote TailorDB schema to a specific migration snapshot (recovery from --no-schema-check drift).                     |
 
 <!-- politty:command:tailordb migration:subcommands:end -->
 
@@ -295,6 +297,58 @@ tailor-sdk tailordb migration status [options]
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 <!-- politty:command:tailordb migration status:global-options-link:end -->
+
+<!-- politty:command:tailordb migration sync:heading:start -->
+
+#### tailordb migration sync
+
+<!-- politty:command:tailordb migration sync:heading:end -->
+
+<!-- politty:command:tailordb migration sync:description:start -->
+
+Sync remote TailorDB schema to a specific migration snapshot (recovery from --no-schema-check drift).
+
+<!-- politty:command:tailordb migration sync:description:end -->
+
+<!-- politty:command:tailordb migration sync:usage:start -->
+
+**Usage**
+
+```
+tailor-sdk tailordb migration sync [options] <number>
+```
+
+<!-- politty:command:tailordb migration sync:usage:end -->
+
+<!-- politty:command:tailordb migration sync:arguments:start -->
+
+**Arguments**
+
+| Argument | Description                                   | Required |
+| -------- | --------------------------------------------- | -------- |
+| `number` | Migration number to sync to (e.g., 0001 or 1) | Yes      |
+
+<!-- politty:command:tailordb migration sync:arguments:end -->
+
+<!-- politty:command:tailordb migration sync:options:start -->
+
+**Options**
+
+| Option                          | Alias | Description                                                       | Required | Default              | Env                               |
+| ------------------------------- | ----- | ----------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                      | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                 | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                           | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| `--yes`                         | `-y`  | Skip confirmation prompts                                         | No       | `false`              | -                                 |
+| `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (required if multiple namespaces exist) | No       | -                    | -                                 |
+
+<!-- politty:command:tailordb migration sync:options:end -->
+
+<!-- politty:command:tailordb migration sync:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:tailordb migration sync:global-options-link:end -->
 
 **See also:** For migration concepts, configuration, workflow, and troubleshooting, see the [TailorDB Migrations guide](../services/tailordb-migration.md).
 
