@@ -110,28 +110,25 @@ jobs:
       - name: Install deps
         uses: ./.github/actions/install-deps
 
-      # Inline equivalent of create-sdk's `prepublish` hook, tailored for the
-      # PR preview flow:
-      # - Point every template's @tailor-platform/sdk spec at the pkg.pr.new
-      #   URL with a single `pnpm add` against the templates filter glob, so
-      #   manifests and lockfile update atomically. A per-template add loop
-      #   would re-verify workspace deps on every iteration and exceeded the
-      #   job timeout under pnpm 11.
-      # - `--ignore-scripts` skips the SDK tarball's postinstall (intended for
-      #   end-user projects); with `strictDepBuilds: true`, pnpm would
-      #   otherwise treat the ignored build as an error.
-      # - npm strips `.gitignore` from publish payloads, so each template's
-      #   `.gitignore` is duplicated as `__dot__gitignore`.
+      # Reuse create-sdk's existing `prepare-templates.js` script: it rewrites
+      # each template's @tailor-platform/sdk dep to the pkg.pr.new URL and
+      # duplicates `.gitignore` as `__dot__gitignore` purely via fs writes,
+      # without invoking pnpm or mutating the lockfile.
+      #
+      # The build step then runs with `verify-deps-before-run=false` because
+      # the rewritten template manifests intentionally diverge from the
+      # lockfile (which still references the workspace SDK). pnpm 11's
+      # default `install` policy would otherwise force a fresh resolution of
+      # the pkg.pr.new tarball before each script and hang the job. The
+      # divergence is harmless here: create-sdk's `build` is just `tsdown`,
+      # which only reads create-sdk's own deps, and the subsequent
+      # `pkg-pr-new publish` packages files directly from disk.
       - name: Build create-sdk with pkg.pr.new SDK
+        env:
+          TAILOR_SDK_VERSION: ${{ needs.publish-sdk.outputs.sdk_url }}
         run: |
-          SDK_URL="${{ needs.publish-sdk.outputs.sdk_url }}"
-          pnpm --filter './packages/create-sdk/templates/*' add --ignore-scripts "@tailor-platform/sdk@$SDK_URL"
-          for tpl in packages/create-sdk/templates/*/; do
-            if [ -f "${tpl}.gitignore" ]; then
-              cp "${tpl}.gitignore" "${tpl}__dot__gitignore"
-            fi
-          done
-          pnpm --filter @tailor-platform/create-sdk build
+          node packages/create-sdk/scripts/prepare-templates.js
+          pnpm --config.verify-deps-before-run=false --filter @tailor-platform/create-sdk build
 
       - name: Publish create-sdk to pkg.pr.new
         id: publish
