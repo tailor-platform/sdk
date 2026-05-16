@@ -2,29 +2,29 @@ import { describe, expect, it } from "vitest";
 import { formatSolveModelLabel, normalizeModel, parseSolveModelLabel } from "./solve-model";
 
 describe("normalizeModel", () => {
-  it("defaults undefined / 'default' to gpt-oss:20b", () => {
-    expect(normalizeModel(undefined)).toBe("gpt-oss:20b");
-    expect(normalizeModel("default")).toBe("gpt-oss:20b");
+  it("defaults undefined / 'default' to qwen2.5-coder:7b", () => {
+    expect(normalizeModel(undefined)).toBe("qwen2.5-coder:7b");
+    expect(normalizeModel("default")).toBe("qwen2.5-coder:7b");
   });
 
   it("passes a concrete model id through unchanged", () => {
-    expect(normalizeModel("qwen3-coder:30b")).toBe("qwen3-coder:30b");
+    expect(normalizeModel("gpt-oss:20b")).toBe("gpt-oss:20b");
   });
 });
 
 describe("formatSolveModelLabel", () => {
   it("formats with the supplied model id", () => {
-    expect(formatSolveModelLabel("qwen3-coder:30b")).toBe("oss:qwen3-coder:30b");
+    expect(formatSolveModelLabel("gpt-oss:20b")).toBe("oss:gpt-oss:20b");
   });
 
-  it("falls back to gpt-oss:20b when model is undefined", () => {
-    expect(formatSolveModelLabel(undefined)).toBe("oss:gpt-oss:20b");
+  it("falls back to qwen2.5-coder:7b when model is undefined", () => {
+    expect(formatSolveModelLabel(undefined)).toBe("oss:qwen2.5-coder:7b");
   });
 });
 
 describe("parseSolveModelLabel", () => {
   it("returns the default model when label is undefined", () => {
-    expect(parseSolveModelLabel(undefined)).toEqual({ model: "gpt-oss:20b" });
+    expect(parseSolveModelLabel(undefined)).toEqual({ model: "qwen2.5-coder:7b" });
   });
 
   it("strips the oss: prefix and preserves colons inside the model id", () => {
@@ -34,6 +34,6 @@ describe("parseSolveModelLabel", () => {
   });
 
   it("treats a bare label without the oss: prefix as the model id verbatim", () => {
-    expect(parseSolveModelLabel("gpt-oss:20b")).toEqual({ model: "gpt-oss:20b" });
+    expect(parseSolveModelLabel("qwen2.5-coder:7b")).toEqual({ model: "qwen2.5-coder:7b" });
   });
 });

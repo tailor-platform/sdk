@@ -1,5 +1,5 @@
 /** Default Ollama model id when no `--model` is supplied. */
-const DEFAULT_OSS_MODEL = "gpt-oss:20b";
+const DEFAULT_OSS_MODEL = "qwen2.5-coder:7b";
 
 export function normalizeModel(model?: string): string {
   if (!model || model === "default") {

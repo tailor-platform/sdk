@@ -319,7 +319,7 @@ function parseArgs(): ParsedArgs {
     implDir,
     useSolution,
     solve,
-    model: model ?? "gpt-oss:20b",
+    model: model ?? "qwen2.5-coder:7b",
     clean,
     concurrency: Math.trunc(concurrency),
     contextProfile,
@@ -1292,7 +1292,7 @@ async function ensureAuthenticated(targetModel?: string): Promise<void> {
   if (!authCheck.ok) {
     console.error(`Ollama readiness check failed: ${authCheck.error}`);
     console.error(
-      "Hint: brew install ollama && ollama pull gpt-oss:20b && OLLAMA_FLASH_ATTENTION=1 OLLAMA_KV_CACHE_TYPE=q8_0 OLLAMA_NUM_PARALLEL=1 OLLAMA_CONTEXT_LENGTH=16384 ollama serve  # use 32768 only on 24 GB+ hosts; 16384 stays clear of swap on 18 GB Macs",
+      "Hint: brew install ollama && ollama pull qwen2.5-coder:7b && OLLAMA_FLASH_ATTENTION=1 OLLAMA_KV_CACHE_TYPE=q8_0 OLLAMA_NUM_PARALLEL=1 OLLAMA_CONTEXT_LENGTH=16384 ollama serve",
     );
     process.exit(1);
   }
@@ -1367,11 +1367,11 @@ async function main(): Promise<void> {
     console.error("  tsx core/cli.ts --problem 001 --impl ./path/to/impl");
     console.error("  tsx core/cli.ts --problem 001 --use-solution");
     console.error(
-      "  tsx core/cli.ts --problem 001 [--problem 002 ...] --solve [--model gpt-oss:20b] [--context-profile types-only] [--iterations 5] [--max-seconds 3600] [--no-auto-extend] [--no-early-stop] [--sdk-branch <ref>] [--resume <runId>]",
+      "  tsx core/cli.ts --problem 001 [--problem 002 ...] --solve [--model qwen2.5-coder:7b] [--context-profile types-only] [--iterations 5] [--max-seconds 3600] [--no-auto-extend] [--no-early-stop] [--sdk-branch <ref>] [--resume <runId>]",
     );
     console.error("  tsx core/cli.ts --all --use-solution [--clean] [--concurrency <n>]");
     console.error(
-      "  tsx core/cli.ts --all --solve [--model gpt-oss:20b] [--clean] [--concurrency <n>] [--context-profile types-only] [--iterations 5] [--max-seconds 3600] [--no-auto-extend] [--no-early-stop] [--sdk-branch <ref>] [--resume <runId>]",
+      "  tsx core/cli.ts --all --solve [--model qwen2.5-coder:7b] [--clean] [--concurrency <n>] [--context-profile types-only] [--iterations 5] [--max-seconds 3600] [--no-auto-extend] [--no-early-stop] [--sdk-branch <ref>] [--resume <runId>]",
     );
     console.error("  tsx core/cli.ts --all --impl-dir ./path/to/all-outputs");
     console.error(
