@@ -1,5 +1,5 @@
 /** Default Ollama model id when no `--model` is supplied. */
-const DEFAULT_OSS_MODEL = "qwen2.5-coder:7b";
+const DEFAULT_OSS_MODEL = "qwen3:8b";
 
 export function normalizeModel(model?: string): string {
   if (!model || model === "default") {

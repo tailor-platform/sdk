@@ -22,11 +22,15 @@ import type {
  *   18 GB Mac, would swap.
  * - Phase 4 bring-up: `gpt-oss:20b` (~13 GB MXFP4) — ran but pushed the host
  *   into swap once KV cache filled, freezing the UI under sustained load.
- * - Current: `qwen2.5-coder:7b` (~4.7 GB) — coding-specialised, stable
- *   tool-calling, leaves the host with comfortable headroom and 2-3× the
- *   throughput of the 20B variant on Apple Silicon.
+ * - `qwen2.5-coder:7b` attempt: model advertises `tools` capability in
+ *   `ollama show`, but the actual full benchmark produced 0 tool_use
+ *   events and 0/37 pass — opencode-side `tools=[...]` requests round-tripped
+ *   into prose `\`\`\`json {"name":"read", ...}\`\`\`` blocks instead of
+ *   native tool calls. Discarded the run and switched to qwen3:8b.
+ * - Current: `qwen3:8b` (~5.2 GB) — latest Qwen generation, native
+ *   tool-calling verified to work through opencode + Ollama.
  */
-const DEFAULT_OSS_MODEL = "qwen2.5-coder:7b";
+const DEFAULT_OSS_MODEL = "qwen3:8b";
 
 const OLLAMA_BASE_URL = "http://host.containers.internal:11434/v1";
 
@@ -282,7 +286,7 @@ async function checkOpencodeAuthStatus(_model?: string): Promise<AuthCheckResult
       ok: false,
       error:
         `Ollama is not reachable on http://localhost:11434 (${message}). ` +
-        `Start it with: OLLAMA_FLASH_ATTENTION=1 OLLAMA_KV_CACHE_TYPE=q8_0 OLLAMA_NUM_PARALLEL=1 OLLAMA_CONTEXT_LENGTH=16384 ollama serve  (default model: qwen2.5-coder:7b)`,
+        `Start it with: OLLAMA_FLASH_ATTENTION=1 OLLAMA_KV_CACHE_TYPE=q8_0 OLLAMA_NUM_PARALLEL=1 OLLAMA_CONTEXT_LENGTH=16384 ollama serve  (default model: qwen3:8b)`,
     };
   }
 }

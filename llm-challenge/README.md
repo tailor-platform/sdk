@@ -56,16 +56,16 @@ Solve mode requires three pieces of local infrastructure:
 
   ```bash
   brew install ollama
-  ollama pull qwen2.5-coder:7b
+  ollama pull qwen3:8b
   OLLAMA_FLASH_ATTENTION=1 OLLAMA_KV_CACHE_TYPE=q8_0 \
     OLLAMA_NUM_PARALLEL=1 OLLAMA_CONTEXT_LENGTH=16384 ollama serve
   ```
 
-  `OLLAMA_CONTEXT_LENGTH` must be raised above the 2k default for opencode's tool-calling path. `16384` is safe on an 18 GB Mac with the default `qwen2.5-coder:7b` (≈4.7 GB resident) and leaves comfortable headroom for the Podman VM. On a 24 GB+ host, `32768` is also safe and gives long tool chains more room.
+  `OLLAMA_CONTEXT_LENGTH` must be raised above the 2k default for opencode's tool-calling path. `16384` is safe on an 18 GB Mac with the default `qwen3:8b` (≈5.2 GB resident) and leaves comfortable headroom for the Podman VM. On a 24 GB+ host, `32768` is also safe and gives long tool chains more room.
 
   `OLLAMA_FLASH_ATTENTION=1` and `OLLAMA_KV_CACHE_TYPE=q8_0` shave further memory off the KV cache at no observable quality cost. `OLLAMA_NUM_PARALLEL=1` keeps memory predictable; raising it multiplies host RAM by N without speeding up our serialised solve loop.
 
-- **Default model** — `qwen2.5-coder:7b` (≈4.7 GB on disk). Coding-specialised, stable tool-calling, runs comfortably on an 18 GB Mac. Override with `--model <ollama-id>` to A/B against a different OSS model; the value is passed through to opencode as `ollama/<model-id>`. Heavier alternatives (`gpt-oss:20b`, `qwen3-coder:30b`) are viable on hosts with more RAM at the cost of throughput.
+- **Default model** — `qwen3:8b` (≈5.2 GB on disk). General-purpose Qwen 3 with native tool-calling that works through opencode + Ollama, fits comfortably on an 18 GB Mac. Override with `--model <ollama-id>` to A/B against a different OSS model; the value is passed through to opencode as `ollama/<model-id>`. Heavier alternatives (`gpt-oss:20b`, `qwen3-coder:30b`) are viable on hosts with more RAM at the cost of throughput. Note: `qwen2.5-coder:7b` advertises tool support but does NOT emit native tool calls through opencode (verified with a 0/37 full-bench run) — avoid it.
 
 There are no cloud credentials to manage and no per-credential rate limits to budget against. The only enforcement is the per-problem wall-clock cap (`--max-seconds`, default `3600`).
 
@@ -94,7 +94,7 @@ pnpm challenge:analyze --trend --context-profile types-only
 
 **Flags accepted by `--solve`:**
 
-- `--model <ollama-id>` — Ollama model id passed to opencode as `ollama/<id>`. Default: `qwen2.5-coder:7b`.
+- `--model <ollama-id>` — Ollama model id passed to opencode as `ollama/<id>`. Default: `qwen3:8b`.
 - `--max-seconds <n>` — per-problem wall-clock cap in seconds (default `3600`). Replaces the legacy `--max-budget` flag; local inference has no per-run dollar cost so wall clock is the only enforcement axis.
 - `--context-profile <types-only|full-package>` — what slice of the SDK is exposed inside the work tree. `types-only` is the API-design baseline; `full-package` ships the whole tarball.
 - `--concurrency <n>` — parallel problems (default `1`). A single host-side Ollama daemon serialises requests anyway, so raising this only helps when the host has spare GPU/CPU headroom for multiple in-flight solves at once.
@@ -104,7 +104,7 @@ pnpm challenge:analyze --trend --context-profile types-only
 - `--sdk-branch <ref>` — pack the SDK from a git ref instead of the current working tree. Spawns a detached `git worktree`, builds the SDK there, and `pnpm pack`s the result. Requires `--solve`.
 - `--clean` — remove work directories after the run.
 
-A full run at the defaults (`--iterations 5`, `--max-seconds 3600`, `--context-profile types-only`) takes roughly **3–6 hours** end-to-end on an Apple Silicon Mac with the default `qwen2.5-coder:7b` — about 2–3× faster than the previous `gpt-oss:20b` default. Heavier models trade throughput for pass-rate; budget accordingly.
+A full run at the defaults (`--iterations 5`, `--max-seconds 3600`, `--context-profile types-only`) takes roughly **3–6 hours** end-to-end on an Apple Silicon Mac with the default `qwen3:8b` — about 2–3× faster than the previous `gpt-oss:20b` default. Heavier models trade throughput for pass-rate; budget accordingly.
 
 ## How Verification Works
 
@@ -264,7 +264,7 @@ pnpm challenge:analyze --profile-diff
 pnpm challenge:analyze --diff path/to/baseline.json path/to/candidate.json [--json]
 
 # Time-series trend within a specific group.
-pnpm challenge:analyze --trend --model qwen2.5-coder:7b --context-profile types-only
+pnpm challenge:analyze --trend --model qwen3:8b --context-profile types-only
 
 # List every (model, context-profile) group with its latest pass rate.
 pnpm challenge:analyze --groups

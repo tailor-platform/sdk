@@ -32,13 +32,13 @@ Solve runs `opencode` inside a Podman container; inference is served by a host-s
 - **Ollama required** (host-side):
   ```bash
   brew install ollama
-  ollama pull qwen2.5-coder:7b
+  ollama pull qwen3:8b
   OLLAMA_FLASH_ATTENTION=1 OLLAMA_KV_CACHE_TYPE=q8_0 \
     OLLAMA_NUM_PARALLEL=1 OLLAMA_CONTEXT_LENGTH=16384 ollama serve
   ```
-  `OLLAMA_CONTEXT_LENGTH` must be raised above the 2k default for opencode's tool-calling path; `16384` is safe on an 18 GB Mac with `qwen2.5-coder:7b` (≈4.7 GB resident). 24 GB+ hosts can use `32768` for longer tool chains. The harness's `checkAuthStatus` probes `http://localhost:11434/api/tags` before launching a run and emits the same hint if the daemon is unreachable.
+  `OLLAMA_CONTEXT_LENGTH` must be raised above the 2k default for opencode's tool-calling path; `16384` is safe on an 18 GB Mac with `qwen3:8b` (≈5.2 GB resident). 24 GB+ hosts can use `32768` for longer tool chains. The harness's `checkAuthStatus` probes `http://localhost:11434/api/tags` before launching a run and emits the same hint if the daemon is unreachable.
 - **No cloud credentials** — local inference, so no API spend and no rate limits. The only enforcement axis is `--max-seconds` (default `3600` per problem).
-- **Default model**: `qwen2.5-coder:7b`. Override with `--model <ollama-id>`; the value is passed through as `ollama/<id>`. Heavier alternatives (`gpt-oss:20b`, `qwen3-coder:30b`) are viable on hosts with more RAM at the cost of throughput.
+- **Default model**: `qwen3:8b`. Override with `--model <ollama-id>`; the value is passed through as `ollama/<id>`. Heavier alternatives (`gpt-oss:20b`, `qwen3-coder:30b`) are viable on hosts with more RAM at the cost of throughput. Known bad: `qwen2.5-coder:7b` — advertises tools capability but does not emit native tool calls through opencode (0/37 full-bench).
 - **Reproducibility**: each iteration writes a per-run `opencode.json` carrying `temperature=0.2` and `seed=<iteration index>` under `provider.ollama.options`. Re-running the same `(problem, iteration)` pair is deterministic up to whatever non-determinism the Ollama runtime itself introduces.
 
 ## Problem Conventions
