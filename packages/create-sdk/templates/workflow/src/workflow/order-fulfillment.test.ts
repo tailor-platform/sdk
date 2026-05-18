@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { workflowMock } from "@tailor-platform/sdk/vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import workflow, {
   fulfillOrder,
   processPayment,
@@ -7,6 +8,10 @@ import workflow, {
 } from "./order-fulfillment";
 
 describe("order fulfillment workflow", () => {
+  beforeEach(() => {
+    workflowMock.reset();
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -113,6 +118,8 @@ describe("order fulfillment workflow", () => {
 
   describe("integration tests with .trigger()", () => {
     test("workflow.mainJob.trigger() executes all jobs", async () => {
+      workflowMock.setEnv({ STAGE: "test" });
+
       const result = await workflow.mainJob.trigger({
         orderId: "order-3",
         amount: 300,

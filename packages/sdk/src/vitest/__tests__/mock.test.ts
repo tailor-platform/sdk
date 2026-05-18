@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
   tailordbMock,
   workflowMock,
@@ -182,6 +182,35 @@ describe("mock", () => {
       workflowMock.reset();
 
       expect(await captureEnv.trigger()).toEqual({});
+    });
+
+    test("setEnv takes priority over WORKFLOW_TEST_ENV_KEY env var", async () => {
+      const { createWorkflowJob, WORKFLOW_TEST_ENV_KEY } =
+        await import("../../configure/services/workflow/job");
+      const captureEnv = createWorkflowJob({
+        name: "capture-env-priority",
+        body: (_input: undefined, ctx) => ctx.env,
+      });
+
+      vi.stubEnv(WORKFLOW_TEST_ENV_KEY, JSON.stringify({ STAGE: "fallback" }));
+      workflowMock.setEnv({ STAGE: "from-setenv" });
+
+      expect(await captureEnv.trigger()).toEqual({ STAGE: "from-setenv" });
+      vi.unstubAllEnvs();
+    });
+
+    test("falls back to WORKFLOW_TEST_ENV_KEY env var when setEnv not called", async () => {
+      const { createWorkflowJob, WORKFLOW_TEST_ENV_KEY } =
+        await import("../../configure/services/workflow/job");
+      const captureEnv = createWorkflowJob({
+        name: "capture-env-fallback",
+        body: (_input: undefined, ctx) => ctx.env,
+      });
+
+      vi.stubEnv(WORKFLOW_TEST_ENV_KEY, JSON.stringify({ STAGE: "from-env-var" }));
+
+      expect(await captureEnv.trigger()).toEqual({ STAGE: "from-env-var" });
+      vi.unstubAllEnvs();
     });
   });
 
