@@ -1,9 +1,35 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { brandValue } from "@/utils/brand";
+import { registerWorkflow } from "./registry";
 import type { WorkflowJob } from "./job";
 import type { AuthInvoker } from "../auth";
 import type { MachineUserName } from "@/configure/types/machine-user";
 import type { ConcurrencyPolicy, RetryPolicy } from "@/types/workflow.generated";
+
+type TriggerWorkflowOptions = {
+  authInvoker?: AuthInvoker<string> | MachineUserName;
+};
+
+function getPlatformWorkflow() {
+  const platform = globalThis as {
+    tailor?: {
+      workflow?: {
+        triggerWorkflow: (
+          name: string,
+          args?: unknown,
+          options?: TriggerWorkflowOptions,
+        ) => Promise<string>;
+      };
+    };
+  };
+  const workflow = platform.tailor?.workflow;
+  if (!workflow) {
+    throw new Error(
+      "tailor.workflow is not available. Use the tailor-runtime environment from @tailor-platform/sdk/vitest in tests.",
+    );
+  }
+  return workflow;
+}
 
 export type { ConcurrencyPolicy, RetryPolicy };
 
@@ -62,16 +88,15 @@ interface WorkflowDefinition<Job extends WorkflowJob<any, any, any>> {
 export function createWorkflow<Job extends WorkflowJob<any, any, any>>(
   config: WorkflowDefinition<Job>,
 ): Workflow<Job> {
+  registerWorkflow(config.name, config.mainJob.name);
+
   return brandValue(
     {
       ...config,
-      // For local execution, directly call mainJob.trigger()
-      // In production, bundler transforms this to tailor.workflow.triggerWorkflow()
-      trigger: async (args) => {
-        await config.mainJob.trigger(...([args] as unknown as []));
-        return "00000000-0000-0000-0000-000000000000";
+      trigger: async (args, options) => {
+        return await getPlatformWorkflow().triggerWorkflow(config.name, args, options);
       },
-    },
+    } as Workflow<Job>,
     "workflow",
   );
 }

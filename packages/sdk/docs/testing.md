@@ -18,7 +18,7 @@ Unit-test entrypoints exposed by the SDK:
 Helpers under `@tailor-platform/sdk/test`:
 
 - `unauthenticatedTailorUser` — default `user` value for resolver contexts
-- `WORKFLOW_TEST_ENV_KEY` — env key consumed by `.trigger()` when run locally
+- `WORKFLOW_TEST_ENV_KEY` — env key the workflow mock reads as the `env` argument when it executes a registered job body
 
 Platform API mocks under `@tailor-platform/sdk/vitest` (auto-injected by the [`tailor-runtime` Vitest environment](#runtime-environment-emulation-beta) below):
 
@@ -604,7 +604,7 @@ describe("processWithApproval", () => {
 
 #### Running a full workflow locally
 
-To exercise the full chain without any mocking, call `workflow.mainJob.trigger()`. Dependent jobs run their real `.body()` functions. Set `WORKFLOW_TEST_ENV_KEY` first so triggered jobs see the workflow env:
+To exercise the full chain without staging job responses, call `workflow.mainJob.trigger()` (or `workflow.trigger()`) under the `tailor-runtime` environment. Each `createWorkflowJob` registers its body at import time and the workflow mock falls back to running the registered body whenever no handler/result is configured for that name — so dependent jobs run their real `.body()` functions automatically. If a job reads `env`, stub `WORKFLOW_TEST_ENV_KEY` first so the mock can hand the deserialized object to the body:
 
 ```typescript
 import { WORKFLOW_TEST_ENV_KEY } from "@tailor-platform/sdk/test";
@@ -625,6 +625,8 @@ describe("order-fulfillment workflow", () => {
 ```
 
 **Use when:** you want to verify orchestration end to end without the cost of a real deployment.
+
+**Requires:** `environment: "tailor-runtime"`. Outside that environment `.trigger()` throws because `globalThis.tailor.workflow` is not injected.
 
 ## End-to-End (E2E) Tests
 

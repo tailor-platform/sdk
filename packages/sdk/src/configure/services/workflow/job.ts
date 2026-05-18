@@ -1,4 +1,5 @@
 import { brandValue } from "@/utils/brand";
+import { registerJob, type RegisteredJobBody } from "./registry";
 import type { TailorEnv } from "@/types/env";
 import type { JsonCompatible } from "@/types/helpers";
 import type { TailorInvoker } from "@/types/user";
@@ -67,6 +68,23 @@ interface CreateWorkflowJobConfig<Name extends string, I, O> {
   readonly body: JobBody<I, O>;
 }
 
+function getPlatformWorkflow() {
+  const platform = globalThis as {
+    tailor?: {
+      workflow?: {
+        triggerJobFunction: (name: string, args?: unknown) => unknown;
+      };
+    };
+  };
+  const workflow = platform.tailor?.workflow;
+  if (!workflow) {
+    throw new Error(
+      "tailor.workflow is not available. Use the tailor-runtime environment from @tailor-platform/sdk/vitest in tests.",
+    );
+  }
+  return workflow;
+}
+
 /**
  * Create a workflow job definition.
  *
@@ -104,12 +122,18 @@ export const createWorkflowJob = <const Name extends string, I = undefined, O = 
   config: CreateWorkflowJobConfig<Name, I, O>,
 ): WorkflowJob<Name, I, Awaited<O>> => {
   const body = config.body as (input: I, context: WorkflowJobContext) => O | Promise<O>;
+
+  // Register on the global job registry so the vitest mock can execute this
+  // body when `globalThis.tailor.workflow.triggerJobFunction(name, args)` is
+  // invoked. In production, the bundler rewrites `.trigger()` calls and the
+  // platform routes by name, so this registry is never read.
+  registerJob(config.name, body as RegisteredJobBody);
+
   return brandValue(
     {
       name: config.name,
       trigger: async (args?: unknown) => {
-        const env: TailorEnv = JSON.parse(process.env[WORKFLOW_TEST_ENV_KEY] || "{}");
-        return await body(args as I, { env, invoker: null });
+        return (await getPlatformWorkflow().triggerJobFunction(config.name, args)) as Awaited<O>;
       },
       body,
     } as WorkflowJob<Name, I, Awaited<O>>,

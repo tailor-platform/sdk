@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { createWorkflowJob } from "@/configure/services/workflow/job";
+import { createWorkflow } from "@/configure/services/workflow/workflow";
 import {
   tailordbMock,
   workflowMock,
@@ -113,45 +115,45 @@ describe("mock", () => {
       workflowMock.reset();
     });
 
-    test("records triggered jobs", () => {
+    test("records triggered jobs", async () => {
       const trigger = (globalThis as any).tailor.workflow.triggerJobFunction;
-      trigger("my-job", { key: "value" });
+      await trigger("my-job", { key: "value" });
 
       expect(workflowMock.triggeredJobs).toEqual([{ jobName: "my-job", args: { key: "value" } }]);
     });
 
-    test("setJobHandler provides content-based responses", () => {
+    test("setJobHandler provides content-based responses", async () => {
       workflowMock.setJobHandler((jobName) => {
         if (jobName === "validate") return { valid: true };
         return null;
       });
 
       const trigger = (globalThis as any).tailor.workflow.triggerJobFunction;
-      const result = trigger("validate", {});
+      const result = await trigger("validate", {});
 
       expect(result).toEqual({ valid: true });
     });
 
-    test("enqueueResults provides order-based responses", () => {
+    test("enqueueResults provides order-based responses", async () => {
       workflowMock.enqueueResults({ step: 1 }, { step: 2 });
 
       const trigger = (globalThis as any).tailor.workflow.triggerJobFunction;
-      expect(trigger("job1", {})).toEqual({ step: 1 });
-      expect(trigger("job2", {})).toEqual({ step: 2 });
+      expect(await trigger("job1", {})).toEqual({ step: 1 });
+      expect(await trigger("job2", {})).toEqual({ step: 2 });
     });
 
-    test("enqueueResult takes priority over jobHandler", () => {
+    test("enqueueResult takes priority over jobHandler", async () => {
       workflowMock.setJobHandler(() => ({ fallback: true }));
       workflowMock.enqueueResult({ queued: true });
 
       const trigger = (globalThis as any).tailor.workflow.triggerJobFunction;
-      expect(trigger("job1", {})).toEqual({ queued: true });
-      expect(trigger("job2", {})).toEqual({ fallback: true });
+      expect(await trigger("job1", {})).toEqual({ queued: true });
+      expect(await trigger("job2", {})).toEqual({ fallback: true });
     });
 
-    test("reset clears all state", () => {
+    test("reset clears all state", async () => {
       const trigger = (globalThis as any).tailor.workflow.triggerJobFunction;
-      trigger("job", {});
+      await trigger("job", {});
 
       workflowMock.reset();
 
@@ -594,6 +596,217 @@ describe("mock", () => {
       });
       expect(callbackRan).toBe(false);
       expect(workflowMock.resolveCalls).toEqual([{ executionId: "exec-1", key: "approval" }]);
+    });
+  });
+
+  // Round-trip tests: exercise createWorkflowJob / createWorkflow through the
+  // mock so the registry → globalThis.tailor.workflow → mock path is covered
+  // end-to-end. Names must be unique per-test to avoid clobbering the global
+  // registry across the suite.
+  describe("workflow delegation through globalThis.tailor.workflow", () => {
+    beforeEach(() => {
+      workflowMock.reset();
+    });
+
+    test("wjob.trigger() executes the registered body when no handler is set", async () => {
+      const seen: unknown[] = [];
+      const fn = createWorkflowJob({
+        name: "delegation-default-body",
+        body: (input: { id: string }) => {
+          seen.push(input);
+          return { received: input.id };
+        },
+      });
+      const result = await fn.trigger({ id: "x" });
+      expect(seen).toEqual([{ id: "x" }]);
+      expect(result).toEqual({ received: "x" });
+      expect(workflowMock.triggeredJobs).toEqual([
+        { jobName: "delegation-default-body", args: { id: "x" } },
+      ]);
+    });
+
+    test("setJobHandler opts out of the registered body fallback", async () => {
+      let bodyRan = false;
+      const fn = createWorkflowJob({
+        name: "delegation-handler-wins",
+        body: () => {
+          bodyRan = true;
+          return { fromBody: true };
+        },
+      });
+      workflowMock.setJobHandler(() => ({ fromHandler: true }));
+      const result = await fn.trigger();
+      expect(bodyRan).toBe(false);
+      expect(result).toEqual({ fromHandler: true });
+    });
+
+    test("enqueueResult wins over both handler and registered body", async () => {
+      let bodyRan = false;
+      const fn = createWorkflowJob({
+        name: "delegation-queue-wins",
+        body: () => {
+          bodyRan = true;
+          return { fromBody: true };
+        },
+      });
+      workflowMock.setJobHandler(() => ({ fromHandler: true }));
+      workflowMock.enqueueResult({ fromQueue: true });
+      const result = await fn.trigger();
+      expect(bodyRan).toBe(false);
+      expect(result).toEqual({ fromQueue: true });
+    });
+
+    test("wjob.trigger() args are platformSerialized before the body sees them", async () => {
+      let seen: unknown;
+      const fn = createWorkflowJob({
+        name: "delegation-serialize-args",
+        body: (input: { id: string }) => {
+          seen = input;
+          return { ok: true };
+        },
+      });
+      // platformSerialize strips properties whose value is undefined (matches
+      // JSON.stringify), so the body should see `{ id }` only — never the
+      // raw `extra: undefined` the caller passed.
+      await (fn.trigger as (a: unknown) => Promise<unknown>)({
+        id: "x",
+        extra: undefined,
+      });
+      expect(seen).toEqual({ id: "x" });
+    });
+
+    test("wjob.trigger() throws when args contain a class instance (Platform boundary)", async () => {
+      const fn = createWorkflowJob({
+        name: "delegation-class-args",
+        body: () => ({ ok: true }),
+      });
+      await expect(
+        (fn.trigger as (a: unknown) => Promise<unknown>)({ at: new Date() }),
+      ).rejects.toThrow(/non-plain object/);
+    });
+
+    test("wjob.trigger() throws when the body returns NaN (Platform boundary)", async () => {
+      const fn = createWorkflowJob({
+        name: "delegation-nan-output",
+        // NaN passes the static JsonCompatible check (it is `number`) but the
+        // runtime boundary still rejects it — mirroring Platform behavior.
+        body: () => ({ score: Number.NaN }),
+      });
+      await expect(fn.trigger()).rejects.toThrow(/NaN|non-finite/);
+    });
+
+    test("wf.trigger() executes the registered main job", async () => {
+      const mainSeen: unknown[] = [];
+      const main = createWorkflowJob({
+        name: "delegation-wf-main",
+        body: (input: { x: number }) => {
+          mainSeen.push(input);
+          return { doubled: input.x * 2 };
+        },
+      });
+      const wf = createWorkflow({
+        name: "delegation-wf",
+        mainJob: main,
+      });
+      const execId = await wf.trigger({ x: 21 });
+      expect(execId).toBe("mock-execution-id");
+      expect(mainSeen).toEqual([{ x: 21 }]);
+      expect(workflowMock.calls).toEqual([
+        { method: "triggerWorkflow", args: ["delegation-wf", { x: 21 }, undefined] },
+      ]);
+      // The main job invocation is also recorded as a regular triggered job
+      // since mockTriggerWorkflow routes through mockTriggerJobFunction.
+      expect(workflowMock.triggeredJobs).toEqual([
+        { jobName: "delegation-wf-main", args: { x: 21 } },
+      ]);
+    });
+
+    test("setJobHandler intercepts the main job when wf.trigger() runs", async () => {
+      let mainRan = false;
+      const main = createWorkflowJob({
+        name: "delegation-wf-main-stubbed",
+        body: (input: { id: string }) => {
+          mainRan = true;
+          return { fromBody: true, id: input.id };
+        },
+      });
+      const wf = createWorkflow({
+        name: "delegation-wf-main-stubbed-wf",
+        mainJob: main,
+      });
+      workflowMock.setJobHandler(() => ({ fromHandler: true }));
+      const execId = await wf.trigger({ id: "x" });
+      expect(execId).toBe("mock-execution-id");
+      expect(mainRan).toBe(false);
+    });
+
+    test("setTriggerHandler opts out of executing the registered main job", async () => {
+      let mainRan = false;
+      const main = createWorkflowJob({
+        name: "delegation-wf-handler-main",
+        body: (input: { id: string }) => {
+          mainRan = true;
+          return { id: input.id };
+        },
+      });
+      const wf = createWorkflow({
+        name: "delegation-wf-handler",
+        mainJob: main,
+      });
+      workflowMock.setTriggerHandler("custom-exec-id");
+      const execId = await wf.trigger({ id: "x" });
+      expect(mainRan).toBe(false);
+      expect(execId).toBe("custom-exec-id");
+    });
+
+    test("mockWait records the platform-serialized payload", () => {
+      // platformSerialize strips properties whose value is undefined — the
+      // handler and waitCalls should see the normalized payload, never the
+      // raw object the caller passed.
+      const seenInHandler: unknown[] = [];
+      workflowMock.setWaitHandler((key: string, payload: unknown) => {
+        seenInHandler.push({ key, payload });
+        return { approved: true };
+      });
+      const result = (globalThis as any).tailor.workflow.wait("approve", {
+        reason: "ok",
+        dropped: undefined,
+      });
+      expect(result).toEqual({ approved: true });
+      expect(seenInHandler).toEqual([{ key: "approve", payload: { reason: "ok" } }]);
+      expect(workflowMock.waitCalls).toEqual([{ key: "approve", payload: { reason: "ok" } }]);
+    });
+
+    test("mockWait throws when payload contains a class instance", () => {
+      expect(() => (globalThis as any).tailor.workflow.wait("approve", { at: new Date() })).toThrow(
+        /non-plain object/,
+      );
+    });
+
+    test("mockResolve wraps the callback so its return value crosses the JSON boundary", async () => {
+      let callbackReturn: unknown;
+      workflowMock.setResolveHandler(async (_executionId, _key, callback) => {
+        callbackReturn = await callback({ approved: true });
+      });
+      await (globalThis as any).tailor.workflow.resolve(
+        "exec-1",
+        "approval",
+        // Callback's return value is platform-serialized — `dropped: undefined`
+        // is stripped before reaching the handler.
+        () => ({ ok: true, dropped: undefined }),
+      );
+      expect(callbackReturn).toEqual({ ok: true });
+    });
+
+    test("mockResolve rejects when callback returns a class instance", async () => {
+      workflowMock.setResolveHandler(async (_executionId, _key, callback) => {
+        await callback({ approved: true });
+      });
+      await expect(
+        (globalThis as any).tailor.workflow.resolve("exec-1", "approval", () => ({
+          at: new Date(),
+        })),
+      ).rejects.toThrow(/non-plain object/);
     });
   });
 
