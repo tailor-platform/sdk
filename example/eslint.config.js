@@ -1,9 +1,9 @@
 import eslint from "@eslint/js";
-import tseslint from "typescript-eslint";
-import { defineConfig, globalIgnores } from "eslint/config";
 import { createTypeScriptImportResolver } from "eslint-import-resolver-typescript";
 import importPlugin from "eslint-plugin-import-x";
 import oxlint from "eslint-plugin-oxlint";
+import { defineConfig, globalIgnores } from "eslint/config";
+import tseslint from "typescript-eslint";
 
 export default defineConfig([
   globalIgnores([
@@ -42,26 +42,6 @@ export default defineConfig([
       ],
       "import-x/no-cycle": ["error", { maxDepth: Infinity }],
       "import-x/no-unresolved": "off",
-      "import-x/order": [
-        "error",
-        {
-          groups: ["builtin", "external", "internal", "parent", "sibling", "index", "type"],
-          pathGroups: [
-            {
-              pattern: "@tailor-platform/**",
-              group: "external",
-              position: "before",
-            },
-          ],
-          pathGroupsExcludedImportTypes: ["type"],
-          "newlines-between": "never",
-          alphabetize: {
-            order: "asc",
-            caseInsensitive: true,
-          },
-          distinctGroup: false,
-        },
-      ],
     },
   },
   // Disable type-checked linting for root config files.

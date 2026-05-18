@@ -1,3 +1,4 @@
+import { relative } from "node:path";
 /**
  * ESLint rule: require JSDoc on public API exports.
  *
@@ -6,7 +7,6 @@
  * accessors) are validated; type aliases and interfaces are excluded.
  */
 import ts from "typescript";
-import { relative } from "node:path";
 
 function getKind(symbol) {
   const f = symbol.flags;

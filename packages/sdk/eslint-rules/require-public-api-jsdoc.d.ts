@@ -1,5 +1,5 @@
-import type { CompilerOptions } from "typescript";
 import type { Rule } from "eslint";
+import type { CompilerOptions } from "typescript";
 
 interface Failure {
   name: string;

@@ -1,5 +1,6 @@
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import path from "node:path";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { setupTailordbMock, setupWorkflowMock, cleanupMocks } from "../../../shared/mocks.js";
 import {
   createWorkDirContext,
   expectFieldNames,
@@ -9,7 +10,6 @@ import {
   expectNonEmptyDescription,
   importPath,
 } from "../../../shared/test-helpers.js";
-import { setupTailordbMock, setupWorkflowMock, cleanupMocks } from "../../../shared/mocks.js";
 
 const { workDir, workDirReady } = createWorkDirContext(import.meta.dirname);
 

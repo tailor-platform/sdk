@@ -1,6 +1,6 @@
-import { OperatorService } from "@tailor-platform/tailor-proto/service_pb";
 import { createClient, type Interceptor } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-node";
+import { OperatorService } from "@tailor-platform/tailor-proto/service_pb";
 import { GraphQLClient } from "graphql-request";
 import { inject } from "vitest";
 

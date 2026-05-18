@@ -2,8 +2,8 @@
 
 import { fileURLToPath } from "node:url";
 import * as path from "pathe";
-import { arg, defineCommand, runMain } from "politty";
 import { readPackageJSON } from "pkg-types";
+import { arg, defineCommand, runMain } from "politty";
 import { z } from "zod";
 import { getApplicableCodemods, resolveCodemodScript } from "./registry";
 import { runCodemods } from "./runner";

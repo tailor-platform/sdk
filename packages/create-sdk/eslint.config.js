@@ -1,8 +1,8 @@
 import eslint from "@eslint/js";
-import { defineConfig, globalIgnores } from "eslint/config";
 import { createTypeScriptImportResolver } from "eslint-import-resolver-typescript";
 import importPlugin from "eslint-plugin-import-x";
 import oxlint from "eslint-plugin-oxlint";
+import { defineConfig, globalIgnores } from "eslint/config";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
@@ -43,14 +43,6 @@ export default defineConfig([
   {
     rules: {
       "import-x/no-unresolved": "off",
-      "import-x/order": [
-        "error",
-        {
-          alphabetize: {
-            order: "asc",
-          },
-        },
-      ],
     },
   },
   ...oxlint.buildFromOxlintConfigFile("./.oxlintrc.json"),
