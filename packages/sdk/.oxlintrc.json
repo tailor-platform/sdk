@@ -138,7 +138,8 @@
     "typescript/no-wrapper-object-types": "error",
     "typescript/prefer-as-const": "error",
     "typescript/prefer-namespace-keyword": "error",
-    "typescript/triple-slash-reference": "error"
+    "typescript/triple-slash-reference": "error",
+    "local/no-deprecated-type-matcher": "error"
   },
   "overrides": [
     {
@@ -369,7 +370,8 @@
               }
             ]
           }
-        ]
+        ],
+        "no-console": "error"
       }
     },
     {
@@ -461,17 +463,20 @@
         "src/cli/shared/prompt.ts"
       ],
       "rules": {
-        "no-restricted-imports": "off"
+        "no-restricted-imports": "off",
+        "no-console": "off"
       }
     },
     {
       "files": ["**/*.test.ts"],
       "rules": {
-        "no-restricted-imports": "off"
+        "no-restricted-imports": "off",
+        "no-console": "off"
       }
     }
   ],
   "options": {
     "typeAware": true
-  }
+  },
+  "jsPlugins": ["./oxlint-plugins/no-deprecated-type-matcher.js"]
 }
