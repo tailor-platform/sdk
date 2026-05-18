@@ -95,8 +95,49 @@ export default {
         schema: [],
       },
       create(context) {
-        function check(node) {
-          const block = jsdocBlockBefore(context.sourceCode, node);
+        // Find the nearest enclosing node that the JSDoc block could be
+        // attached to. For `function foo() {}` that's the function itself;
+        // for `export const foo = () => {}` it's the VariableDeclaration (or
+        // the wrapping ExportNamedDeclaration); for `class C { m() {} }`
+        // it's the MethodDefinition; for `{ m() {} }` it's the Property.
+        function jsdocCarrier(node, ancestors) {
+          let target = node;
+          // Walk outward through wrappers that carry the JSDoc above them.
+          for (let i = ancestors.length - 1; i >= 0; i--) {
+            const parent = ancestors[i];
+            if (parent.type === "VariableDeclarator" && parent.init === target) {
+              target = parent;
+              continue;
+            }
+            if (parent.type === "VariableDeclaration" && parent.declarations.includes(target)) {
+              target = parent;
+              continue;
+            }
+            if (parent.type === "ExportNamedDeclaration" && parent.declaration === target) {
+              target = parent;
+              continue;
+            }
+            if (parent.type === "MethodDefinition" && parent.value === target) {
+              target = parent;
+              continue;
+            }
+            if (parent.type === "Property" && parent.value === target) {
+              target = parent;
+              continue;
+            }
+            if (parent.type === "PropertyDefinition" && parent.value === target) {
+              target = parent;
+              continue;
+            }
+            break;
+          }
+          return target;
+        }
+
+        function checkFunction(node) {
+          const ancestors = context.sourceCode.getAncestors(node);
+          const carrier = jsdocCarrier(node, ancestors);
+          const block = jsdocBlockBefore(context.sourceCode, carrier);
           if (!block) return;
           const documented = new Set(paramNamesFromJsdoc(block));
           const params = functionParamNames(node);
@@ -113,8 +154,11 @@ export default {
             }
           }
         }
+
         return {
-          FunctionDeclaration: check,
+          FunctionDeclaration: checkFunction,
+          FunctionExpression: checkFunction,
+          ArrowFunctionExpression: checkFunction,
         };
       },
     },

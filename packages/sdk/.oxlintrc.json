@@ -368,6 +368,12 @@
                 "name": "@inquirer/core",
                 "message": "Use 'prompt' from '@/cli/shared/prompt' instead of @inquirer/core directly."
               }
+            ],
+            "patterns": [
+              {
+                "group": ["**/configure/**", "@/configure/**"],
+                "message": "Cli module should not import from configure module. Please use parser module as an intermediary."
+              }
             ]
           }
         ],

@@ -280,6 +280,10 @@ interface PackageReport {
   oxlintOnlyRules: Map<string, RuleSummary>;
   severityMismatches: Map<string, { eslint: Severity; oxlint: Severity; files: string[] }>;
   perFile: PerFileDiff[];
+  // Snapshot of every rule that resolves to a non-off severity in any sampled
+  // file. Used post-ESLint-removal to detect rules silently disappearing on
+  // oxlint upgrades.
+  oxlintActiveRules: Set<string>;
 }
 
 function diffPackage(pkg: Pkg): PackageReport {
@@ -292,12 +296,26 @@ function diffPackage(pkg: Pkg): PackageReport {
     oxlintOnlyRules: new Map(),
     severityMismatches: new Map(),
     perFile: [],
+    oxlintActiveRules: new Set(),
   };
 
-  if (!pkg.eslintConfig || !existsSync(resolve(repoRoot, pkg.eslintConfig))) {
-    // ESLint is no longer configured — nothing to diff against. Report the
-    // package as covered (zero gap) so the script exit-codes cleanly post
-    // migration; the oxlint snapshot is still written via serialisableReport.
+  const eslintConfigured = !!pkg.eslintConfig && existsSync(resolve(repoRoot, pkg.eslintConfig));
+
+  // Always build the oxlint snapshot — this is what catches regressions after
+  // ESLint is gone.
+  if (oxlintCfg) {
+    for (const file of files) {
+      const fileRelToPkg = relative(pkg.dir, file);
+      const rules = resolveOxlintRulesForFile(pkg, oxlintCfg, fileRelToPkg);
+      for (const [rule, sev] of Object.entries(rules)) {
+        if (sev !== "off") report.oxlintActiveRules.add(normaliseRuleName(rule));
+      }
+    }
+  }
+
+  if (!eslintConfigured) {
+    // ESLint is no longer configured — skip the diff loop, the snapshot above
+    // is what subsequent runs compare against.
     return report;
   }
 
@@ -440,18 +458,19 @@ function serialisableReport(report: PackageReport) {
       oxlint: info.oxlint,
       files: info.files,
     })),
+    oxlintActiveRules: [...report.oxlintActiveRules].sort(),
   };
 }
 
 const args = process.argv.slice(2);
 const writeJson = args.find((a) => a.startsWith("--json="))?.slice("--json=".length);
 const onlyPackage = args.find((a) => a.startsWith("--pkg="))?.slice("--pkg=".length);
+const compareBaselinePath = args.find((a) => a.startsWith("--check="))?.slice("--check=".length);
 
 const reports: ReturnType<typeof serialisableReport>[] = [];
 let totalEslintOnly = 0;
 for (const pkg of packages) {
   if (onlyPackage && pkg.dir !== onlyPackage && pkg.name !== onlyPackage) continue;
-  if (!pkg.eslintConfig) continue;
   console.error(`\n# Diffing ${pkg.name} ...`);
   const report = diffPackage(pkg);
   printReport(report);
@@ -464,5 +483,38 @@ if (writeJson) {
   console.error(`\nWrote ${writeJson}`);
 }
 
+let regressed = 0;
+if (compareBaselinePath) {
+  const baselineRaw = readFileSync(resolve(repoRoot, compareBaselinePath), "utf8");
+  const baseline = JSON.parse(baselineRaw) as ReturnType<typeof serialisableReport>[];
+  console.log(`\n## oxlint rule snapshot vs ${compareBaselinePath}`);
+  for (const report of reports) {
+    const prior = baseline.find((b) => b.pkg === report.pkg);
+    if (!prior) {
+      console.log(`  - ${report.pkg}: no baseline entry, skipping`);
+      continue;
+    }
+    const priorRules = new Set(prior.oxlintActiveRules ?? []);
+    const dropped = [...priorRules].filter((r) => !report.oxlintActiveRules.includes(r));
+    const added = report.oxlintActiveRules.filter((r) => !priorRules.has(r));
+    if (dropped.length === 0 && added.length === 0) {
+      console.log(`  - ${report.pkg}: unchanged (${priorRules.size} rules)`);
+      continue;
+    }
+    regressed += dropped.length;
+    if (dropped.length > 0) {
+      console.log(`  - ${report.pkg}: ${dropped.length} rule(s) DROPPED`);
+      for (const r of dropped) console.log(`      - ${r}`);
+    }
+    if (added.length > 0) {
+      console.log(`  - ${report.pkg}: ${added.length} rule(s) added`);
+      for (const r of added) console.log(`      + ${r}`);
+    }
+  }
+}
+
 console.log(`\n=== TOTAL ESLint-only rule occurrences across packages: ${totalEslintOnly} ===`);
-process.exit(totalEslintOnly > 0 ? 1 : 0);
+if (compareBaselinePath) {
+  console.log(`=== TOTAL oxlint rules dropped vs baseline: ${regressed} ===`);
+}
+process.exit(totalEslintOnly > 0 || regressed > 0 ? 1 : 0);
