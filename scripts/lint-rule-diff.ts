@@ -56,7 +56,7 @@ console.error(
 function oxlintHasRule(normalised: string): boolean {
   if (OXLINT_REGISTRY.rules.has(normalised)) return true;
   // Try the short name (e.g. `typescript/no-explicit-any` → `no-explicit-any`).
-  const short = normalised.includes("/") ? normalised.split("/").slice(-1)[0] : normalised;
+  const short = normalised.includes("/") ? (normalised.split("/").pop() ?? normalised) : normalised;
   return OXLINT_REGISTRY.rules.has(short);
 }
 
@@ -220,6 +220,32 @@ interface OxlintConfig {
   overrides?: { files: string[]; rules?: Record<string, unknown> }[];
 }
 
+// oxlint's native plugins use these namespaces. Anything else is a custom JS
+// plugin rule (e.g. `local/*`) that `oxlint --print-config` strips from its
+// output and we have to layer back in from the raw .oxlintrc.json.
+const OXLINT_NATIVE_NAMESPACES = new Set([
+  "typescript",
+  "import",
+  "jsdoc",
+  "unicorn",
+  "react",
+  "jest",
+  "vitest",
+  "promise",
+  "node",
+  "nextjs",
+  "vue",
+  "react-perf",
+  "jsx-a11y",
+  "oxc",
+]);
+
+function isLocalRule(name: string): boolean {
+  const slash = name.indexOf("/");
+  if (slash === -1) return false;
+  return !OXLINT_NATIVE_NAMESPACES.has(name.slice(0, slash));
+}
+
 function loadOxlintConfig(pkg: Pkg): OxlintConfig | null {
   if (!pkg.oxlintrc) return null;
   // `oxlint --print-config` resolves `categories` to concrete rule names —
@@ -248,30 +274,6 @@ function loadOxlintConfig(pkg: Pkg): OxlintConfig | null {
   if (!resolved && !raw) return null;
   if (!resolved) return raw;
   if (!raw) return resolved;
-
-  function isLocalRule(name: string): boolean {
-    // oxlint's native plugins use `typescript/`, `import/`, `jsdoc/`,
-    // `unicorn/`, `react/`, etc. Anything else is a custom JS plugin rule.
-    const nativeNamespaces = new Set([
-      "typescript",
-      "import",
-      "jsdoc",
-      "unicorn",
-      "react",
-      "jest",
-      "vitest",
-      "promise",
-      "node",
-      "nextjs",
-      "vue",
-      "react-perf",
-      "jsx-a11y",
-      "oxc",
-    ]);
-    const slash = name.indexOf("/");
-    if (slash === -1) return false;
-    return !nativeNamespaces.has(name.slice(0, slash));
-  }
 
   resolved.rules = { ...(resolved.rules ?? {}) };
   for (const [k, v] of Object.entries(raw.rules ?? {})) {
@@ -456,10 +458,6 @@ function diffPackage(pkg: Pkg): PackageReport {
   return report;
 }
 
-function pad(s: string, n: number): string {
-  return s.length >= n ? s : s + " ".repeat(n - s.length);
-}
-
 function printReport(report: PackageReport): void {
   const ESL = [...report.eslintOnlyRules.values()].sort((a, b) => a.rule.localeCompare(b.rule));
   const OXL = [...report.oxlintOnlyRules.values()].sort((a, b) => a.rule.localeCompare(b.rule));
@@ -478,12 +476,12 @@ function printReport(report: PackageReport): void {
     console.log(
       `     · ${gapMissingInOxlint.length} rules are NOT in oxlint registry (need workaround)`,
     );
-    console.log(`  ${pad("rule", 50)} ${pad("oxlint?", 8)} ${pad("files", 6)}  sample`);
+    console.log(`  ${"rule".padEnd(50)} ${"oxlint?".padEnd(8)} ${"files".padEnd(6)}  sample`);
     for (const r of [...gapMissingInOxlint, ...gapNotEnabled]) {
       const sample = r.inEslintFiles[0];
       const status = oxlintHasRule(r.normalised) ? "exists" : "MISSING";
       console.log(
-        `  ${pad(r.rule, 50)} ${pad(status, 8)} ${pad(String(r.inEslintFiles.length), 6)}  ${sample}`,
+        `  ${r.rule.padEnd(50)} ${status.padEnd(8)} ${String(r.inEslintFiles.length).padEnd(6)}  ${sample}`,
       );
     }
   }

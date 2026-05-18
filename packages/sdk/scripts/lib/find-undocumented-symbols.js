@@ -1,10 +1,11 @@
 import { relative } from "node:path";
 /**
- * ESLint rule: require JSDoc on public API exports.
+ * Require JSDoc on public API exports.
  *
- * Applied to entry point files via the `files` property in eslint.config.js.
- * Only value-level symbols (functions, classes, enums, variables, methods,
- * accessors) are validated; type aliases and interfaces are excluded.
+ * Driven by `packages/sdk/scripts/check-public-api-jsdoc.ts`, which walks
+ * the entry points declared in `package.json#exports`. Only value-level
+ * symbols (functions, classes, enums, variables, methods, accessors) are
+ * validated; type aliases and interfaces are excluded.
  */
 import ts from "typescript";
 
