@@ -136,6 +136,12 @@ export const STATE_KEY = "__tailorMockState";
 // the environment itself is active.
 export const RUNTIME_FLAG_KEY = "__tailorRuntimeActive";
 
+// globalThis key consumed by `createWorkflowJob().trigger()` when the body is
+// invoked locally (outside the platform runtime). The configure module reads
+// this directly via globalThis to avoid a runtime dependency on vitest/mock,
+// preserving the configure → vitest module boundary.
+export const WORKFLOW_ENV_GLOBAL_KEY = "__tailorWorkflowTestEnv";
+
 function getState(): MockState {
   const g = globalThis as Record<string, unknown>;
   if (!g[STATE_KEY]) {
@@ -355,6 +361,19 @@ export const workflowMock = {
   }) as SetWaitHandler,
 
   /**
+   * Set the `env` value passed to job bodies when `.trigger()` is invoked locally.
+   *
+   * `createWorkflowJob().trigger()` runs the body in-process during tests (in production,
+   * the bundler rewrites it to `tailor.workflow.triggerJobFunction`). This helper provides
+   * the `env` argument that the body receives via its `WorkflowJobContext`. Reset by
+   * `workflowMock.reset()`.
+   * @param env - Env object to pass to job bodies invoked via `.trigger()`
+   */
+  setEnv(env: Record<string, unknown>): void {
+    (globalThis as Record<string, unknown>)[WORKFLOW_ENV_GLOBAL_KEY] = env;
+  },
+
+  /**
    * Configure how `tailor.workflow.resolve` runs the user-supplied callback. The handler
    * receives `(executionId, key, callback)` — invoke `callback(payload)` to drive
    * resolve→wait wiring in tests. Default: callback is not invoked (records the call only).
@@ -402,6 +421,7 @@ export const workflowMock = {
     state.waitHandler = null;
     state.resolveHandler = null;
     state.workflowCalls.length = 0;
+    delete (globalThis as Record<string, unknown>)[WORKFLOW_ENV_GLOBAL_KEY];
   },
 };
 
@@ -1182,4 +1202,5 @@ export function cleanupMocks(global: typeof globalThis): void {
   delete g.TailorDBFileError;
   delete g[STATE_KEY];
   delete g[RUNTIME_FLAG_KEY];
+  delete g[WORKFLOW_ENV_GLOBAL_KEY];
 }

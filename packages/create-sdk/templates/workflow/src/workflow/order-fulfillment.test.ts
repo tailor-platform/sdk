@@ -1,4 +1,3 @@
-import { WORKFLOW_TEST_ENV_KEY } from "@tailor-platform/sdk/test";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import workflow, {
   fulfillOrder,
@@ -9,7 +8,6 @@ import workflow, {
 
 describe("order fulfillment workflow", () => {
   afterEach(() => {
-    vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
 
@@ -115,8 +113,6 @@ describe("order fulfillment workflow", () => {
 
   describe("integration tests with .trigger()", () => {
     test("workflow.mainJob.trigger() executes all jobs", async () => {
-      vi.stubEnv(WORKFLOW_TEST_ENV_KEY, JSON.stringify({}));
-
       const result = await workflow.mainJob.trigger({
         orderId: "order-3",
         amount: 300,

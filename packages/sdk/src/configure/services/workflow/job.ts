@@ -56,9 +56,20 @@ export interface WorkflowJob<Name extends string = string, Input = undefined, Ou
   body: (input: Input, context: WorkflowJobContext) => Output | Promise<Output>;
 }
 
+// globalThis key consumed by `.trigger()` when the body is invoked locally.
+// The matching writer is `workflowMock.setEnv()` in `@tailor-platform/sdk/vitest`.
+// Tests outside the `tailor-runtime` Vitest environment may assign this key
+// directly. Keep the literal in sync with `WORKFLOW_ENV_GLOBAL_KEY` in
+// `src/vitest/mock.ts` — the configure module avoids the cross-module import
+// to preserve the module boundary.
+const WORKFLOW_ENV_GLOBAL_KEY = "__tailorWorkflowTestEnv";
+
 /**
- * Environment variable key for workflow testing.
- * Contains JSON-serialized TailorEnv object.
+ * Environment variable key historically consumed by `createWorkflowJob().trigger()`
+ * to inject the `env` value passed to job bodies during local execution.
+ * @deprecated Use `workflowMock.setEnv()` from `@tailor-platform/sdk/vitest`.
+ * Retained for backwards compatibility — `.trigger()` still falls back to this env
+ * var when `workflowMock.setEnv()` has not been called.
  */
 export const WORKFLOW_TEST_ENV_KEY = "TAILOR_TEST_WORKFLOW_ENV";
 
@@ -108,7 +119,16 @@ export const createWorkflowJob = <const Name extends string, I = undefined, O = 
     {
       name: config.name,
       trigger: async (args?: unknown) => {
-        const env: TailorEnv = JSON.parse(process.env[WORKFLOW_TEST_ENV_KEY] || "{}");
+        // `workflowMock.setEnv()` takes priority. Fall back to the deprecated
+        // `TAILOR_TEST_WORKFLOW_ENV` env var when the global key is unset so
+        // existing tests using `vi.stubEnv(WORKFLOW_TEST_ENV_KEY, ...)` keep
+        // working.
+        const fromGlobal = (globalThis as Record<string, unknown>)[WORKFLOW_ENV_GLOBAL_KEY];
+        const env = (
+          fromGlobal !== undefined
+            ? fromGlobal
+            : JSON.parse(process.env[WORKFLOW_TEST_ENV_KEY] || "{}")
+        ) as TailorEnv;
         return await body(args as I, { env, invoker: null });
       },
       body,

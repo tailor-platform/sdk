@@ -157,6 +157,32 @@ describe("mock", () => {
 
       expect(workflowMock.triggeredJobs).toHaveLength(0);
     });
+
+    test("setEnv exposes env to job bodies via .trigger()", async () => {
+      const { createWorkflowJob } = await import("../../configure/services/workflow/job");
+      const captureEnv = createWorkflowJob({
+        name: "capture-env",
+        body: (_input: undefined, ctx) => ctx.env,
+      });
+
+      workflowMock.setEnv({ STAGE: "test", REGION: "asia" });
+      const env = await captureEnv.trigger();
+
+      expect(env).toEqual({ STAGE: "test", REGION: "asia" });
+    });
+
+    test("reset clears env back to {}", async () => {
+      const { createWorkflowJob } = await import("../../configure/services/workflow/job");
+      const captureEnv = createWorkflowJob({
+        name: "capture-env-reset",
+        body: (_input: undefined, ctx) => ctx.env,
+      });
+
+      workflowMock.setEnv({ STAGE: "test" });
+      workflowMock.reset();
+
+      expect(await captureEnv.trigger()).toEqual({});
+    });
   });
 
   describe("error classes", () => {
