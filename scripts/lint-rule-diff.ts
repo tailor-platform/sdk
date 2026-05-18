@@ -222,21 +222,86 @@ interface OxlintConfig {
 
 function loadOxlintConfig(pkg: Pkg): OxlintConfig | null {
   if (!pkg.oxlintrc) return null;
-  // Use `oxlint --print-config` so that `categories` are resolved to concrete
-  // rule names. This is the only way the script can know that
-  // `categories.correctness = "error"` enables ~218 rules.
+  // `oxlint --print-config` resolves `categories` to concrete rule names —
+  // the only way to know that `categories.correctness = "error"` enables
+  // ~218 rules. But JS plugin rules (anything under `jsPlugins` / the
+  // `local/*` namespace) are stripped from that output, so we layer the raw
+  // `.oxlintrc.json`'s `rules` and `overrides` for namespaces that
+  // `--print-config` does not understand.
+  let resolved: OxlintConfig | null = null;
   try {
     const out = execFileSync(
       "pnpm",
       ["--silent", "--filter", pkg.pnpmFilter, "exec", "oxlint", "--print-config"],
       { cwd: repoRoot, encoding: "utf8", maxBuffer: 32 * 1024 * 1024 },
     );
-    return JSON.parse(out) as OxlintConfig;
+    resolved = JSON.parse(out) as OxlintConfig;
   } catch {
-    const path = resolve(repoRoot, pkg.oxlintrc);
-    if (!existsSync(path)) return null;
-    return JSON.parse(readFileSync(path, "utf8")) as OxlintConfig;
+    // fall through to raw-config fallback below
   }
+
+  const rawPath = resolve(repoRoot, pkg.oxlintrc);
+  const raw = existsSync(rawPath)
+    ? (JSON.parse(readFileSync(rawPath, "utf8")) as OxlintConfig)
+    : null;
+
+  if (!resolved && !raw) return null;
+  if (!resolved) return raw;
+  if (!raw) return resolved;
+
+  function isLocalRule(name: string): boolean {
+    // oxlint's native plugins use `typescript/`, `import/`, `jsdoc/`,
+    // `unicorn/`, `react/`, etc. Anything else is a custom JS plugin rule.
+    const nativeNamespaces = new Set([
+      "typescript",
+      "import",
+      "jsdoc",
+      "unicorn",
+      "react",
+      "jest",
+      "vitest",
+      "promise",
+      "node",
+      "nextjs",
+      "vue",
+      "react-perf",
+      "jsx-a11y",
+      "oxc",
+    ]);
+    const slash = name.indexOf("/");
+    if (slash === -1) return false;
+    return !nativeNamespaces.has(name.slice(0, slash));
+  }
+
+  resolved.rules = { ...(resolved.rules ?? {}) };
+  for (const [k, v] of Object.entries(raw.rules ?? {})) {
+    if (isLocalRule(k)) resolved.rules[k] = v;
+  }
+  // Match raw overrides by stringified `files`.
+  const overrideKey = (o: { files: string[] }) => JSON.stringify(o.files);
+  const byFiles = new Map<string, { files: string[]; rules?: Record<string, unknown> }>();
+  for (const o of resolved.overrides ?? []) byFiles.set(overrideKey(o), o);
+  for (const o of raw.overrides ?? []) {
+    const key = overrideKey(o);
+    const target = byFiles.get(key);
+    if (!target) {
+      // Override exists in raw but not in resolved (shouldn't happen);
+      // append as-is filtered to local rules.
+      const filtered: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(o.rules ?? {})) {
+        if (isLocalRule(k)) filtered[k] = v;
+      }
+      if (Object.keys(filtered).length > 0) {
+        (resolved.overrides ??= []).push({ files: o.files, rules: filtered });
+      }
+      continue;
+    }
+    target.rules = { ...(target.rules ?? {}) };
+    for (const [k, v] of Object.entries(o.rules ?? {})) {
+      if (isLocalRule(k)) target.rules[k] = v;
+    }
+  }
+  return resolved;
 }
 
 function resolveOxlintRulesForFile(pkg: Pkg, cfg: OxlintConfig, fileRelToPkg: string): FileRuleMap {

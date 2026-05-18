@@ -30,6 +30,8 @@
       "jsdoc/require-returns",
       "jsdoc/require-returns-description",
       "jsdoc/require-yields",
+      "local/no-deprecated-type-matcher",
+      "local/require-param-strict",
       "no-array-constructor",
       "no-async-promise-executor",
       "no-case-declarations",
