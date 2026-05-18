@@ -38,40 +38,40 @@ export interface TriggerWorkflowOptions {
  */
 export interface TailorWorkflowAPI {
   triggerWorkflow(
-    workflow_name: string,
+    workflowName: string,
     args?: any,
     options?: TriggerWorkflowOptions,
   ): Promise<string>;
-  triggerJobFunction(job_name: string, args?: any): any;
+  triggerJobFunction(jobName: string, args?: any): any;
   wait(key: string, payload?: any): any;
   resolve(executionId: string, key: string, callback: (waitPayload: any) => any): Promise<void>;
 }
 
 /**
  * Triggers a workflow and returns its execution ID.
- * @param workflow_name - Workflow name as defined in tailor.config
+ * @param workflowName - Workflow name as defined in tailor.config
  * @param args - Arguments forwarded to the workflow's main job
  * @param options - Optional trigger options (e.g. `authInvoker`)
  * @returns The execution ID of the triggered workflow
  */
 export function triggerWorkflow(
-  workflow_name: string,
+  workflowName: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   args?: any,
   options?: TriggerWorkflowOptions,
 ): Promise<string> {
-  return runtime.tailor.workflow.triggerWorkflow(workflow_name, args, options);
+  return runtime.tailor.workflow.triggerWorkflow(workflowName, args, options);
 }
 
 /**
  * Triggers a job function and returns its result.
- * @param job_name - Job name as defined in the workflow
+ * @param jobName - Job name as defined in the workflow
  * @param args - Arguments forwarded to the job
  * @returns The job's return value
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function triggerJobFunction(job_name: string, args?: any): any {
-  return runtime.tailor.workflow.triggerJobFunction(job_name, args);
+export function triggerJobFunction(jobName: string, args?: any): any {
+  return runtime.tailor.workflow.triggerJobFunction(jobName, args);
 }
 
 /**

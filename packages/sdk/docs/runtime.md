@@ -68,73 +68,17 @@ Or register the entry in `tsconfig.json`:
 }
 ```
 
-## API Reference
+## Namespaces
 
-### `iconv`
+The runtime entry re-exports the following namespaces. Detailed signatures, parameters, and return types live in the JSDoc next to each export — hover the symbol in your IDE or browse the source.
 
-Character encoding conversion. The return type narrows to `string` for `"UTF8"` / `"UTF-8"` targets and `Uint8Array` otherwise.
-
-| Function        | Description                                                |
-| --------------- | ---------------------------------------------------------- |
-| `convert`       | Convert a string or buffer between encodings               |
-| `convertBuffer` | Convert bytes between encodings                            |
-| `decode`        | Decode bytes to a UTF-8 string                             |
-| `encode`        | Encode a UTF-8 string into the given target encoding       |
-| `encodings`     | List supported encoding names                              |
-| `Iconv` (class) | Stateful converter for repeated conversions (`node-iconv`) |
-
-### `secretmanager`
-
-| Function     | Returns                                       |
-| ------------ | --------------------------------------------- |
-| `getSecret`  | `Promise<string \| undefined>`                |
-| `getSecrets` | `Promise<Partial<Record<T[number], string>>>` |
-
-Pass the `names` argument as a `const` tuple to narrow the result keys: `getSecrets("v", ["A", "B"] as const)`.
-
-### `authconnection`
-
-| Function             | Returns                 |
-| -------------------- | ----------------------- |
-| `getConnectionToken` | Provider-specific token |
-
-### `idp`
-
-`new idp.Client({ namespace })` exposes the IdP user APIs:
-
-- `users(options?)`, `user(userId)`, `userByName(name)`
-- `createUser(input)`, `updateUser(input)`, `deleteUser(userId)`
-- `sendPasswordResetEmail({ userId, redirectUri })`
-
-### `workflow`
-
-| Function             | Description                                    |
-| -------------------- | ---------------------------------------------- |
-| `triggerWorkflow`    | Trigger a workflow and return its execution ID |
-| `triggerJobFunction` | Trigger a job and return its result            |
-| `wait`               | Suspend a job at a wait point                  |
-| `resolve`            | Resolve a wait point on a running execution    |
-
-### `context`
-
-| Function     | Returns                                |
-| ------------ | -------------------------------------- |
-| `getInvoker` | `Invoker \| null` (anonymous = `null`) |
-
-### `file`
-
-`tailordb.file` BLOB API.
-
-| Function             | Description                                        |
-| -------------------- | -------------------------------------------------- |
-| `upload`             | Upload bytes for a record's file field             |
-| `download`           | Download a file (≤ 10 MB)                          |
-| `downloadAsBase64`   | Download a file as a Base64 string (≤ 10 MB)       |
-| `delete`             | Delete a file                                      |
-| `getMetadata`        | Fetch file metadata only                           |
-| `openDownloadStream` | Open an async iterator for files larger than 10 MB |
-
-For files larger than 10 MB, `download` and `downloadAsBase64` throw `TailorDBFileError` with code `FILE_TOO_LARGE`; switch to `openDownloadStream` for those.
+- `iconv` — character encoding conversion (`convert`, `convertBuffer`, `decode`, `encode`, `encodings`, `Iconv`)
+- `secretmanager` — secret-vault access (`getSecret`, `getSecrets`)
+- `authconnection` — OAuth-style connection tokens (`getConnectionToken`)
+- `idp` — IdP user management (`new Client({ namespace })`)
+- `workflow` — workflow & job control (`triggerWorkflow`, `triggerJobFunction`, `wait`, `resolve`)
+- `context` — execution context (`getInvoker`)
+- `file` — `tailordb.file` BLOB API (`upload`, `download`, `downloadAsBase64`, `delete`, `getMetadata`, `openDownloadStream`)
 
 ## Testing
 

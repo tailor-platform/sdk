@@ -117,7 +117,7 @@ describe("@tailor-platform/sdk/runtime/file", () => {
     expect(fileMock.calls[0]?.method).toBe("openDownloadStream");
   });
 
-  test("TailorDBFileError type alias resolves to globalThis class", () => {
+  test("TailorDBFileError structurally matches globalThis class", () => {
     const TailorDBFileError = (
       globalThis as unknown as {
         TailorDBFileError: new (
@@ -129,7 +129,8 @@ describe("@tailor-platform/sdk/runtime/file", () => {
     const err = new TailorDBFileError("operation failed", "OPERATION_FAILED");
     expect(err.name).toBe("TailorDBFileError");
     expect(err.code).toBe("OPERATION_FAILED");
-    // Type-level: file.TailorDBFileError is the global class
+    // Type-level: file.TailorDBFileError is a structural interface that the
+    // global class instances satisfy (not a direct alias of the class itself).
     const _typed: file.TailorDBFileError = err as file.TailorDBFileError;
     expect(_typed).toBe(err);
   });
