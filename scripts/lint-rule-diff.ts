@@ -241,6 +241,14 @@ function isLocalRule(name: string): boolean {
   return !OXLINT_NATIVE_NAMESPACES.has(name.slice(0, slash));
 }
 
+function pickLocalRules(rules: Record<string, unknown> | undefined): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(rules ?? {}).filter(([k]) => isLocalRule(k)));
+}
+
+function indexByNormalisedRule(rules: FileRuleMap): Map<string, Severity> {
+  return new Map(Object.entries(rules).map(([r, s]) => [normaliseRuleName(r), s]));
+}
+
 function loadOxlintConfig(pkg: Pkg): OxlintConfig | null {
   if (!pkg.oxlintrc) return null;
   // `oxlint --print-config` resolves `categories` to concrete rule names —
@@ -270,33 +278,23 @@ function loadOxlintConfig(pkg: Pkg): OxlintConfig | null {
   if (!resolved) return raw;
   if (!raw) return resolved;
 
-  resolved.rules = { ...(resolved.rules ?? {}) };
-  for (const [k, v] of Object.entries(raw.rules ?? {})) {
-    if (isLocalRule(k)) resolved.rules[k] = v;
-  }
+  resolved.rules = { ...(resolved.rules ?? {}), ...pickLocalRules(raw.rules) };
   // Match raw overrides by stringified `files`.
   const overrideKey = (o: { files: string[] }) => JSON.stringify(o.files);
   const byFiles = new Map<string, { files: string[]; rules?: Record<string, unknown> }>();
   for (const o of resolved.overrides ?? []) byFiles.set(overrideKey(o), o);
   for (const o of raw.overrides ?? []) {
-    const key = overrideKey(o);
-    const target = byFiles.get(key);
+    const localRules = pickLocalRules(o.rules);
+    const target = byFiles.get(overrideKey(o));
     if (!target) {
       // Override exists in raw but not in resolved (shouldn't happen);
       // append as-is filtered to local rules.
-      const filtered: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(o.rules ?? {})) {
-        if (isLocalRule(k)) filtered[k] = v;
-      }
-      if (Object.keys(filtered).length > 0) {
-        (resolved.overrides ??= []).push({ files: o.files, rules: filtered });
+      if (Object.keys(localRules).length > 0) {
+        (resolved.overrides ??= []).push({ files: o.files, rules: localRules });
       }
       continue;
     }
-    target.rules = { ...(target.rules ?? {}) };
-    for (const [k, v] of Object.entries(o.rules ?? {})) {
-      if (isLocalRule(k)) target.rules[k] = v;
-    }
+    target.rules = { ...(target.rules ?? {}), ...localRules };
   }
   return resolved;
 }
@@ -416,15 +414,9 @@ function diffPackage(pkg: Pkg): PackageReport {
       ? resolveOxlintRulesForFile(compiledOxlint, fileRelToPkg)
       : {};
 
-    // Index oxlint rules by normalised name.
-    const oxlintNorm = new Map<string, Severity>();
-    for (const [r, s] of Object.entries(oxlintRules)) {
-      oxlintNorm.set(normaliseRuleName(r), s);
-    }
-    const eslintNorm = new Map<string, Severity>();
-    for (const [r, s] of Object.entries(eslintRules)) {
-      eslintNorm.set(normaliseRuleName(r), s);
-    }
+    // Index by normalised rule name so eslint vs oxlint can be compared apples-to-apples.
+    const oxlintNorm = indexByNormalisedRule(oxlintRules);
+    const eslintNorm = indexByNormalisedRule(eslintRules);
 
     const diff: PerFileDiff = {
       file,
