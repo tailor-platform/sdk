@@ -6,10 +6,11 @@
 //   pnpm exec tsx scripts/lint-rule-diff.ts --pkg=packages/sdk
 //   pnpm exec tsx scripts/lint-rule-diff.ts --json=scripts/lint-rule-diff.baseline.json
 //
-// Exit code is non-zero when any "ESLint-only" rule occurrences remain — used
-// during the oxlint migration to drive the gap to zero, and to detect regressions
-// after ESLint is removed (snapshot the JSON output and compare on each oxlint
-// dependency bump).
+// Now that ESLint is gone, packages without an `eslint.config.js` are reported
+// as "ESLint not configured" and the gap is treated as zero — the script still
+// records the oxlint snapshot so dependency upgrades can be audited against
+// the committed baseline. The exit code is non-zero only when a package that
+// still has ESLint configured leaves some rules uncovered by oxlint.
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
@@ -292,6 +293,13 @@ function diffPackage(pkg: Pkg): PackageReport {
     severityMismatches: new Map(),
     perFile: [],
   };
+
+  if (!pkg.eslintConfig || !existsSync(resolve(repoRoot, pkg.eslintConfig))) {
+    // ESLint is no longer configured — nothing to diff against. Report the
+    // package as covered (zero gap) so the script exit-codes cleanly post
+    // migration; the oxlint snapshot is still written via serialisableReport.
+    return report;
+  }
 
   for (const file of files) {
     let eslintRules: FileRuleMap | null;
