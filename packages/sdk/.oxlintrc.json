@@ -99,7 +99,6 @@
     "jsdoc/empty-tags": "warn",
     "jsdoc/implements-on-classes": "warn",
     "jsdoc/no-defaults": "warn",
-    "jsdoc/require-param": "off",
     "jsdoc/require-param-description": "warn",
     "jsdoc/require-param-name": "warn",
     "jsdoc/require-property": "warn",
@@ -139,7 +138,8 @@
     "typescript/prefer-as-const": "error",
     "typescript/prefer-namespace-keyword": "error",
     "typescript/triple-slash-reference": "error",
-    "local/no-deprecated-type-matcher": "error"
+    "local/no-deprecated-type-matcher": "error",
+    "local/require-param-strict": "error"
   },
   "overrides": [
     {
@@ -478,5 +478,5 @@
   "options": {
     "typeAware": true
   },
-  "jsPlugins": ["./oxlint-plugins/no-deprecated-type-matcher.js"]
+  "jsPlugins": ["./oxlint-plugins/index.js"]
 }

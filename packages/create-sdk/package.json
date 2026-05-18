@@ -19,8 +19,8 @@
   "type": "module",
   "scripts": {
     "build": "tsdown",
-    "lint": "oxlint .",
-    "lint:fix": "oxlint . --fix",
+    "lint": "oxlint --type-aware .",
+    "lint:fix": "oxlint --type-aware . --fix",
     "typecheck": "tsc --noEmit",
     "prepublish": "node scripts/prepare-templates.js && pnpm run build",
     "publint": "publint --strict"
