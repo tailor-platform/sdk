@@ -14,4 +14,4 @@ test("workflow.mainJob.trigger() executes all jobs", async () => {
 });
 ```
 
-The legacy `WORKFLOW_TEST_ENV_KEY` (`TAILOR_TEST_WORKFLOW_ENV`) env-var path remains supported as a fallback; the export is now marked `@deprecated`. `workflowMock.setEnv()` takes priority when both are set.
+The previous env-var-based pattern is now deprecated. A non-breaking fallback is retained, but `workflowMock.setEnv()` takes priority when both are set.
