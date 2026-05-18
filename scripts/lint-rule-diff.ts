@@ -1,0 +1,460 @@
+#!/usr/bin/env -S pnpm exec tsx
+// Lint-rule diff: shows which rules ESLint enforces today that oxlint does not.
+//
+// Usage:
+//   pnpm exec tsx scripts/lint-rule-diff.ts
+//   pnpm exec tsx scripts/lint-rule-diff.ts --pkg=packages/sdk
+//   pnpm exec tsx scripts/lint-rule-diff.ts --json=scripts/lint-rule-diff.baseline.json
+//
+// Exit code is non-zero when any "ESLint-only" rule occurrences remain — used
+// during the oxlint migration to drive the gap to zero, and to detect regressions
+// after ESLint is removed (snapshot the JSON output and compare on each oxlint
+// dependency bump).
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import picomatch from "picomatch";
+
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+function loadOxlintRegisteredRules(): { rules: Set<string>; version: string } {
+  const out = execFileSync("pnpm", ["--silent", "exec", "oxlint", "--rules"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    maxBuffer: 32 * 1024 * 1024,
+  });
+  const rules = new Set<string>();
+  for (const line of out.split("\n")) {
+    const m = line.match(/^\|\s+([\w/-]+)\s+\|\s+(\w+)\s+\|/);
+    if (!m) continue;
+    const name = m[1];
+    const source = m[2];
+    // Skip the header row.
+    if (name === "Rule" || name === "name") continue;
+    // oxlint outputs rule short names. Most are unqualified (e.g. `no-cycle`
+    // from import plugin). For grouping, register both short and prefixed.
+    rules.add(name);
+    if (source === "typescript" || source === "import" || source === "jsdoc") {
+      rules.add(`${source}/${name}`);
+    }
+  }
+  const versionLine = execFileSync("pnpm", ["--silent", "exec", "oxlint", "--version"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+  });
+  const version = versionLine.match(/Version:\s*([\d.]+)/)?.[1] ?? "unknown";
+  return { rules, version };
+}
+
+const OXLINT_REGISTRY = loadOxlintRegisteredRules();
+console.error(
+  `oxlint version: ${OXLINT_REGISTRY.version}, registered rules: ${OXLINT_REGISTRY.rules.size}`,
+);
+
+function oxlintHasRule(normalised: string): boolean {
+  if (OXLINT_REGISTRY.rules.has(normalised)) return true;
+  // Try the short name (e.g. `typescript/no-explicit-any` → `no-explicit-any`).
+  const short = normalised.includes("/") ? normalised.split("/").slice(-1)[0] : normalised;
+  return OXLINT_REGISTRY.rules.has(short);
+}
+
+interface Pkg {
+  name: string;
+  dir: string;
+  pnpmFilter: string;
+  oxlintrc: string | null;
+  eslintConfig: string | null;
+}
+
+const packages: Pkg[] = [
+  {
+    name: "@tailor-platform/sdk",
+    dir: "packages/sdk",
+    pnpmFilter: "@tailor-platform/sdk",
+    oxlintrc: "packages/sdk/.oxlintrc.json",
+    eslintConfig: "packages/sdk/eslint.config.js",
+  },
+  {
+    name: "@tailor-platform/create-sdk",
+    dir: "packages/create-sdk",
+    pnpmFilter: "@tailor-platform/create-sdk",
+    oxlintrc: "packages/create-sdk/.oxlintrc.json",
+    eslintConfig: "packages/create-sdk/eslint.config.js",
+  },
+  {
+    name: "@tailor-platform/sdk-codemod",
+    dir: "packages/sdk-codemod",
+    pnpmFilter: "@tailor-platform/sdk-codemod",
+    oxlintrc: "packages/sdk-codemod/.oxlintrc.json",
+    eslintConfig: "packages/sdk-codemod/eslint.config.js",
+  },
+  {
+    name: "example",
+    dir: "example",
+    pnpmFilter: "example",
+    oxlintrc: "example/.oxlintrc.json",
+    eslintConfig: "example/eslint.config.js",
+  },
+];
+
+type Severity = "off" | "warn" | "error";
+
+function normaliseEslintSeverity(value: unknown): Severity {
+  const sev = Array.isArray(value) ? value[0] : value;
+  if (sev === 0 || sev === "off") return "off";
+  if (sev === 1 || sev === "warn") return "warn";
+  return "error";
+}
+
+function normaliseOxlintSeverity(value: unknown): Severity {
+  const sev = Array.isArray(value) ? value[0] : value;
+  if (sev === "off" || sev === "allow" || sev === 0) return "off";
+  if (sev === "warn" || sev === 1) return "warn";
+  return "error";
+}
+
+const RULE_NAMESPACE_MAP: Record<string, string> = {
+  "@typescript-eslint/": "typescript/",
+  "import-x/": "import/",
+};
+
+// Rules whose TS-extended variant maps back to the base ESLint rule in oxlint
+// (e.g. `@typescript-eslint/no-restricted-imports` is just an extension of the
+// base rule with `allowTypeImports`; oxlint exposes only the base name).
+const TS_TO_BASE_RULES = new Set([
+  "no-restricted-imports",
+  "no-unused-vars",
+  "no-array-constructor",
+  "no-empty-function",
+  "no-unused-expressions",
+  "no-shadow",
+  "no-loop-func",
+  "no-magic-numbers",
+  "default-param-last",
+]);
+
+function normaliseRuleName(rule: string): string {
+  if (rule.startsWith("@typescript-eslint/")) {
+    const base = rule.slice("@typescript-eslint/".length);
+    if (TS_TO_BASE_RULES.has(base)) return base;
+    return `typescript/${base}`;
+  }
+  for (const [from, to] of Object.entries(RULE_NAMESPACE_MAP)) {
+    if (rule.startsWith(from)) return to + rule.slice(from.length);
+  }
+  return rule;
+}
+
+function listFiles(pkg: Pkg): string[] {
+  const out = execFileSync(
+    "git",
+    [
+      "ls-files",
+      `${pkg.dir}/**/*.ts`,
+      `${pkg.dir}/**/*.tsx`,
+      `${pkg.dir}/**/*.mts`,
+      `${pkg.dir}/**/*.cts`,
+      `${pkg.dir}/**/*.js`,
+      `${pkg.dir}/**/*.mjs`,
+    ],
+    { cwd: repoRoot, encoding: "utf8" },
+  );
+  return out
+    .split("\n")
+    .filter((f) => f.length > 0)
+    .filter((f) => !/(^|\/)dist\//.test(f))
+    .filter((f) => !/(^|\/)node_modules\//.test(f))
+    .filter((f) => !/(^|\/)\.tailor-sdk\//.test(f))
+    .filter((f) => !/(^|\/)generated(-perf)?\//.test(f))
+    .filter((f) => !/(^|\/)templates\//.test(f))
+    .filter((f) => !/__test_fixtures__\/dist\//.test(f));
+}
+
+function sampleFiles(files: string[]): string[] {
+  // Cluster by parent directory + presence of `.test.` in basename.
+  // Pick one representative per cluster so every override scope is covered.
+  const buckets = new Map<string, string>();
+  for (const f of files) {
+    const dir = f.slice(0, f.lastIndexOf("/"));
+    const isTest = /\.(test|spec)\.[mc]?[tj]sx?$/.test(f);
+    const isJs = /\.[mc]?js$/.test(f);
+    const key = `${dir}|${isTest ? "test" : "src"}|${isJs ? "js" : "ts"}`;
+    if (!buckets.has(key)) buckets.set(key, f);
+  }
+  return [...buckets.values()];
+}
+
+interface FileRuleMap {
+  [rule: string]: Severity;
+}
+
+function runEslintPrintConfig(pkg: Pkg, relPath: string): FileRuleMap | null {
+  const out = execFileSync(
+    "pnpm",
+    [
+      "--silent",
+      "--filter",
+      pkg.pnpmFilter,
+      "exec",
+      "eslint",
+      "--print-config",
+      relative(pkg.dir, resolve(repoRoot, relPath)),
+    ],
+    { cwd: repoRoot, encoding: "utf8", maxBuffer: 32 * 1024 * 1024 },
+  );
+  // ESLint emits the literal string "undefined" on stdout when the file is
+  // matched by globalIgnores. Skip these silently.
+  if (out.trim() === "undefined") return null;
+  const json = JSON.parse(out) as { rules?: Record<string, unknown> };
+  const map: FileRuleMap = {};
+  for (const [name, value] of Object.entries(json.rules ?? {})) {
+    map[name] = normaliseEslintSeverity(value);
+  }
+  return map;
+}
+
+interface OxlintConfig {
+  rules?: Record<string, unknown>;
+  overrides?: { files: string[]; rules?: Record<string, unknown> }[];
+}
+
+function loadOxlintConfig(pkg: Pkg): OxlintConfig | null {
+  if (!pkg.oxlintrc) return null;
+  // Use `oxlint --print-config` so that `categories` are resolved to concrete
+  // rule names. This is the only way the script can know that
+  // `categories.correctness = "error"` enables ~218 rules.
+  try {
+    const out = execFileSync(
+      "pnpm",
+      ["--silent", "--filter", pkg.pnpmFilter, "exec", "oxlint", "--print-config"],
+      { cwd: repoRoot, encoding: "utf8", maxBuffer: 32 * 1024 * 1024 },
+    );
+    return JSON.parse(out) as OxlintConfig;
+  } catch {
+    const path = resolve(repoRoot, pkg.oxlintrc);
+    if (!existsSync(path)) return null;
+    return JSON.parse(readFileSync(path, "utf8")) as OxlintConfig;
+  }
+}
+
+function resolveOxlintRulesForFile(pkg: Pkg, cfg: OxlintConfig, fileRelToPkg: string): FileRuleMap {
+  const map: FileRuleMap = {};
+  for (const [name, value] of Object.entries(cfg.rules ?? {})) {
+    map[name] = normaliseOxlintSeverity(value);
+  }
+  for (const override of cfg.overrides ?? []) {
+    const matchers = override.files.map((g) => picomatch(g, { dot: true, contains: true }));
+    const matched = matchers.some((m) => m(fileRelToPkg));
+    if (!matched) continue;
+    for (const [name, value] of Object.entries(override.rules ?? {})) {
+      map[name] = normaliseOxlintSeverity(value);
+    }
+  }
+  return map;
+}
+
+interface PerFileDiff {
+  file: string;
+  eslintOnly: { rule: string; severity: Severity }[];
+  oxlintOnly: { rule: string; severity: Severity }[];
+  severityMismatch: {
+    rule: string;
+    eslint: Severity;
+    oxlint: Severity;
+  }[];
+}
+
+interface RuleSummary {
+  rule: string;
+  normalised: string;
+  inEslintFiles: string[];
+  inOxlintFiles: string[];
+}
+
+interface PackageReport {
+  pkg: string;
+  filesSampled: number;
+  eslintOnlyRules: Map<string, RuleSummary>;
+  oxlintOnlyRules: Map<string, RuleSummary>;
+  severityMismatches: Map<string, { eslint: Severity; oxlint: Severity; files: string[] }>;
+  perFile: PerFileDiff[];
+}
+
+function diffPackage(pkg: Pkg): PackageReport {
+  const oxlintCfg = loadOxlintConfig(pkg);
+  const files = sampleFiles(listFiles(pkg));
+  const report: PackageReport = {
+    pkg: pkg.name,
+    filesSampled: files.length,
+    eslintOnlyRules: new Map(),
+    oxlintOnlyRules: new Map(),
+    severityMismatches: new Map(),
+    perFile: [],
+  };
+
+  for (const file of files) {
+    let eslintRules: FileRuleMap | null;
+    try {
+      eslintRules = runEslintPrintConfig(pkg, file);
+    } catch (err) {
+      // ESLint may refuse to lint some files (e.g. ignored by globalIgnores).
+      const msg = err instanceof Error ? err.message : String(err);
+      if (/ignored|matches an ignore pattern/i.test(msg)) continue;
+      throw err;
+    }
+    if (!eslintRules) continue;
+
+    const fileRelToPkg = relative(pkg.dir, file);
+    const oxlintRules = oxlintCfg ? resolveOxlintRulesForFile(pkg, oxlintCfg, fileRelToPkg) : {};
+
+    // Index oxlint rules by normalised name.
+    const oxlintNorm = new Map<string, Severity>();
+    for (const [r, s] of Object.entries(oxlintRules)) {
+      oxlintNorm.set(normaliseRuleName(r), s);
+    }
+    const eslintNorm = new Map<string, Severity>();
+    for (const [r, s] of Object.entries(eslintRules)) {
+      eslintNorm.set(normaliseRuleName(r), s);
+    }
+
+    const diff: PerFileDiff = {
+      file,
+      eslintOnly: [],
+      oxlintOnly: [],
+      severityMismatch: [],
+    };
+
+    for (const [rule, eslintSev] of eslintNorm) {
+      if (eslintSev === "off") continue;
+      const oxlintSev = oxlintNorm.get(rule) ?? "off";
+      if (oxlintSev === "off") {
+        diff.eslintOnly.push({ rule, severity: eslintSev });
+        let summary = report.eslintOnlyRules.get(rule);
+        if (!summary) {
+          summary = { rule, normalised: rule, inEslintFiles: [], inOxlintFiles: [] };
+          report.eslintOnlyRules.set(rule, summary);
+        }
+        summary.inEslintFiles.push(file);
+      } else if (oxlintSev !== eslintSev) {
+        diff.severityMismatch.push({ rule, eslint: eslintSev, oxlint: oxlintSev });
+        let s = report.severityMismatches.get(rule);
+        if (!s) {
+          s = { eslint: eslintSev, oxlint: oxlintSev, files: [] };
+          report.severityMismatches.set(rule, s);
+        }
+        s.files.push(file);
+      }
+    }
+    for (const [rule, oxlintSev] of oxlintNorm) {
+      if (oxlintSev === "off") continue;
+      const eslintSev = eslintNorm.get(rule) ?? "off";
+      if (eslintSev === "off") {
+        diff.oxlintOnly.push({ rule, severity: oxlintSev });
+        let summary = report.oxlintOnlyRules.get(rule);
+        if (!summary) {
+          summary = { rule, normalised: rule, inEslintFiles: [], inOxlintFiles: [] };
+          report.oxlintOnlyRules.set(rule, summary);
+        }
+        summary.inOxlintFiles.push(file);
+      }
+    }
+    report.perFile.push(diff);
+  }
+
+  return report;
+}
+
+function pad(s: string, n: number): string {
+  return s.length >= n ? s : s + " ".repeat(n - s.length);
+}
+
+function printReport(report: PackageReport): void {
+  const ESL = [...report.eslintOnlyRules.values()].sort((a, b) => a.rule.localeCompare(b.rule));
+  const OXL = [...report.oxlintOnlyRules.values()].sort((a, b) => a.rule.localeCompare(b.rule));
+  const MM = [...report.severityMismatches.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+
+  console.log(`\n# ${report.pkg}  (sampled ${report.filesSampled} files)`);
+  console.log(`  ESLint-only rules: ${ESL.length}`);
+  console.log(`  oxlint-only rules: ${OXL.length}`);
+  console.log(`  severity mismatches: ${MM.length}`);
+
+  if (ESL.length > 0) {
+    const gapMissingInOxlint = ESL.filter((r) => !oxlintHasRule(r.normalised));
+    const gapNotEnabled = ESL.filter((r) => oxlintHasRule(r.normalised));
+    console.log(`\n  ## ESLint-only — coverage gap (${ESL.length})`);
+    console.log(`     · ${gapNotEnabled.length} rules exist in oxlint but are not enabled`);
+    console.log(
+      `     · ${gapMissingInOxlint.length} rules are NOT in oxlint registry (need workaround)`,
+    );
+    console.log(`  ${pad("rule", 50)} ${pad("oxlint?", 8)} ${pad("files", 6)}  sample`);
+    for (const r of [...gapMissingInOxlint, ...gapNotEnabled]) {
+      const sample = r.inEslintFiles[0];
+      const status = oxlintHasRule(r.normalised) ? "exists" : "MISSING";
+      console.log(
+        `  ${pad(r.rule, 50)} ${pad(status, 8)} ${pad(String(r.inEslintFiles.length), 6)}  ${sample}`,
+      );
+    }
+  }
+  if (OXL.length > 0) {
+    console.log(`\n  ## oxlint-only (enforced by oxlint, off in ESLint)`);
+    for (const r of OXL) {
+      console.log(`  - ${r.rule}  [${r.inOxlintFiles.length} file(s)]`);
+    }
+  }
+  if (MM.length > 0) {
+    console.log(`\n  ## severity mismatches (oxlint vs eslint)`);
+    for (const [rule, info] of MM) {
+      console.log(
+        `  - ${rule}: eslint=${info.eslint} oxlint=${info.oxlint}  [${info.files.length} file(s)]`,
+      );
+    }
+  }
+}
+
+function serialisableReport(report: PackageReport) {
+  return {
+    pkg: report.pkg,
+    filesSampled: report.filesSampled,
+    eslintOnly: [...report.eslintOnlyRules.values()].map((r) => ({
+      rule: r.rule,
+      normalised: r.normalised,
+      oxlintHasRule: oxlintHasRule(r.normalised),
+      files: r.inEslintFiles,
+    })),
+    oxlintOnly: [...report.oxlintOnlyRules.values()].map((r) => ({
+      rule: r.rule,
+      files: r.inOxlintFiles,
+    })),
+    severityMismatch: [...report.severityMismatches.entries()].map(([rule, info]) => ({
+      rule,
+      eslint: info.eslint,
+      oxlint: info.oxlint,
+      files: info.files,
+    })),
+  };
+}
+
+const args = process.argv.slice(2);
+const writeJson = args.find((a) => a.startsWith("--json="))?.slice("--json=".length);
+const onlyPackage = args.find((a) => a.startsWith("--pkg="))?.slice("--pkg=".length);
+
+const reports: ReturnType<typeof serialisableReport>[] = [];
+let totalEslintOnly = 0;
+for (const pkg of packages) {
+  if (onlyPackage && pkg.dir !== onlyPackage && pkg.name !== onlyPackage) continue;
+  if (!pkg.eslintConfig) continue;
+  console.error(`\n# Diffing ${pkg.name} ...`);
+  const report = diffPackage(pkg);
+  printReport(report);
+  reports.push(serialisableReport(report));
+  totalEslintOnly += report.eslintOnlyRules.size;
+}
+
+if (writeJson) {
+  writeFileSync(resolve(repoRoot, writeJson), JSON.stringify(reports, null, 2) + "\n");
+  console.error(`\nWrote ${writeJson}`);
+}
+
+console.log(`\n=== TOTAL ESLint-only rule occurrences across packages: ${totalEslintOnly} ===`);
+process.exit(totalEslintOnly > 0 ? 1 : 0);
