@@ -39,7 +39,7 @@ The SDK enforces strict module boundaries to maintain a clean architecture:
 
 2. **Parser Module** (`src/parser/**/*.ts`):
    - ❌ Cannot import from `cli` module
-   - ❌ Cannot import from `configure` module (exception: `parser/service/tailordb/runtime.ts`)
+   - ❌ Cannot import from `configure` module
    - ✅ Can import from `@/types/` (shared type layer)
 
 3. **CLI Module** (`src/cli/**/*.ts`):
