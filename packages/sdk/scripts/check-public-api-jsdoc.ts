@@ -10,7 +10,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
-import { findUndocumentedSymbols } from "../eslint-rules/require-public-api-jsdoc.js";
+import { findUndocumentedSymbols } from "./lib/find-undocumented-symbols.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const sdkRoot = resolve(here, "..");

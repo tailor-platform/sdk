@@ -2,7 +2,7 @@
 // `*.toMatchTypeOf()` calls in test files. Loaded by oxlint as a JS plugin
 // (alpha). See packages/sdk/.oxlintrc.json `jsPlugins`.
 
-/** @type {import('eslint').ESLint.Plugin} */
+// eslint-plugin-compatible shape (oxlint JS plugins follow the same protocol).
 export default {
   meta: { name: "local" },
   rules: {

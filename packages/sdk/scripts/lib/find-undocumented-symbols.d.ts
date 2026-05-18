@@ -1,4 +1,3 @@
-import type { Rule } from "eslint";
 import type { CompilerOptions } from "typescript";
 
 interface Failure {
@@ -12,5 +11,3 @@ export function findUndocumentedSymbols(
   tsCompilerOptions: CompilerOptions,
   baseDir: string,
 ): Failure[];
-
-export const rule: Rule.RuleModule;

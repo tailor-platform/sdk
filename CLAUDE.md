@@ -100,5 +100,5 @@ See [docs/](docs/README.md) for developer and contributor documentation.
 
 ## Environment
 
-- Linting runs oxlint first, then ESLint
+- Linting is oxlint-only (`oxlint --type-aware .` for packages/sdk, `oxlint .` elsewhere). Run `pnpm exec tsx scripts/lint-rule-diff.ts` to detect regressions after upgrading oxlint.
 - Lefthook runs pre-commit checks (lint, format, typecheck) and post-commit signature verification

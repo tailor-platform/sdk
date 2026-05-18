@@ -19,8 +19,8 @@
     "seed:truncate": "tailor-sdk tailordb truncate -a",
     "seed": "node ./seed/exec.mjs",
     "analyze:bundle": "tsx tests/scripts/analyze_minified_size.ts",
-    "lint": "oxlint . && eslint --cache .",
-    "lint:fix": "oxlint --fix . && eslint --cache . --fix --quiet",
+    "lint": "oxlint .",
+    "lint:fix": "oxlint . --fix",
     "typecheck": "pnpm generate && tsc --noEmit",
     "typecheck:go": "tsgo"
   },
@@ -34,7 +34,6 @@
     "@connectrpc/connect-node": "2.1.1",
     "@types/node": "24.12.3",
     "@typescript/native-preview": "7.0.0-dev.20260503.1",
-    "eslint-plugin-oxlint": "1.61.0",
     "graphql": "16.13.2",
     "graphql-request": "7.4.0",
     "multiline-ts": "4.0.1",

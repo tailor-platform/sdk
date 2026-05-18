@@ -54,12 +54,12 @@
     },
     "lint": {
       "dependsOn": ["build"],
-      "outputs": [".eslintcache"],
+      "outputs": [],
       "cache": true
     },
     "lint:fix": {
       "dependsOn": ["build"],
-      "outputs": [".eslintcache"],
+      "outputs": [],
       "cache": true
     },
     "format": {
