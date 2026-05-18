@@ -11,7 +11,7 @@ function jsdocBlockBefore(sourceCode, node) {
 }
 
 function paramNamesFromJsdoc(block) {
-  const names = [];
+  const names = new Set();
   for (const line of block.value.split("\n")) {
     const head = line.match(/^\s*\*?\s*@param\s+/);
     if (!head) continue;
@@ -32,18 +32,50 @@ function paramNamesFromJsdoc(block) {
       rest = rest.slice(i).replace(/^\s+/, "");
     }
     const nameMatch = rest.match(/^\[?([\w$.]+)(?:=[^\]]*)?\]?/);
-    if (nameMatch) names.push(nameMatch[1]);
+    if (!nameMatch) continue;
+    // Record both the full dotted form (`obj.id`) and the leaf identifier
+    // (`id`) so the lookup matches either documentation style.
+    const full = nameMatch[1];
+    names.add(full);
+    const leaf = full.includes(".") ? full.split(".").pop() : full;
+    if (leaf) names.add(leaf);
   }
   return names;
 }
 
-function functionParamNames(node) {
-  return node.params.map((p) => {
-    if (p.type === "Identifier") return p.name;
-    if (p.type === "RestElement" && p.argument.type === "Identifier") return p.argument.name;
-    if (p.type === "AssignmentPattern" && p.left.type === "Identifier") return p.left.name;
-    return null;
-  });
+// Returns one [{ astNode, names: string[] }] entry per function parameter.
+// `names` is the set of identifier names that must be documented in JSDoc:
+// the parameter itself for plain identifiers, the destructured leaves for
+// object/array patterns (matching the repo JSDoc convention of one
+// `@param obj.prop` per leaf).
+function functionParamSlots(node) {
+  function collect(target) {
+    if (target.type === "Identifier") return [target.name];
+    if (target.type === "RestElement") return collect(target.argument);
+    if (target.type === "AssignmentPattern") return collect(target.left);
+    if (target.type === "ObjectPattern") {
+      const names = [];
+      for (const prop of target.properties) {
+        if (prop.type === "RestElement") {
+          names.push(...collect(prop.argument));
+        } else if (prop.value && prop.value.type !== "Identifier") {
+          names.push(...collect(prop.value));
+        } else if (prop.key && prop.key.type === "Identifier") {
+          names.push(prop.key.name);
+        }
+      }
+      return names;
+    }
+    if (target.type === "ArrayPattern") {
+      const names = [];
+      for (const el of target.elements) {
+        if (el) names.push(...collect(el));
+      }
+      return names;
+    }
+    return [];
+  }
+  return node.params.map((p) => ({ astNode: p, names: collect(p) }));
 }
 
 export default {
@@ -117,6 +149,10 @@ export default {
               target = parent;
               continue;
             }
+            if (parent.type === "ExportDefaultDeclaration" && parent.declaration === target) {
+              target = parent;
+              continue;
+            }
             if (parent.type === "MethodDefinition" && parent.value === target) {
               target = parent;
               continue;
@@ -139,16 +175,17 @@ export default {
           const carrier = jsdocCarrier(node, ancestors);
           const block = jsdocBlockBefore(context.sourceCode, carrier);
           if (!block) return;
-          const documented = new Set(paramNamesFromJsdoc(block));
-          const params = functionParamNames(node);
-          for (let i = 0; i < params.length; i++) {
-            const name = params[i];
-            if (name == null) continue;
-            if (!documented.has(name)) {
+          const documented = paramNamesFromJsdoc(block);
+          for (const slot of functionParamSlots(node)) {
+            // A slot with no extractable names (e.g. a TypeScript-only
+            // `this:` parameter) is treated as documented.
+            if (slot.names.length === 0) continue;
+            const missing = slot.names.find((n) => !documented.has(n));
+            if (missing) {
               context.report({
-                node: node.params[i],
+                node: slot.astNode,
                 messageId: "missing",
-                data: { name },
+                data: { name: missing },
               });
               return;
             }
