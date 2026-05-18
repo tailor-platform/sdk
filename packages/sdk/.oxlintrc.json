@@ -5,13 +5,30 @@
     "correctness": "off"
   },
   "env": {
-    "builtin": true,
-    "es2018": true
+    "builtin": true
   },
-  "ignorePatterns": ["dist/", "src/types/*.generated.ts"],
+  "settings": {
+    "import-x/resolver-next": [
+      {
+        "interfaceVersion": 3,
+        "name": "eslint-import-resolver-typescript"
+      }
+    ]
+  },
+  "ignorePatterns": [
+    "dist/",
+    "src/types/*.generated.ts",
+    "e2e/fixtures/",
+    ".tailor-sdk/",
+    "tailor.d.ts",
+    "plugin-defined.d.ts",
+    "**/__test_fixtures__/dist/",
+    "**/__test_fixtures__/*-compat-out/"
+  ],
   "rules": {
     "constructor-super": "error",
     "for-direction": "error",
+    "getter-return": "error",
     "no-async-promise-executor": "error",
     "no-case-declarations": "error",
     "no-class-assign": "error",
@@ -40,6 +57,7 @@
     "no-invalid-regexp": "error",
     "no-irregular-whitespace": "error",
     "no-loss-of-precision": "error",
+    "no-misleading-character-class": "error",
     "no-new-native-nonconstructor": "error",
     "no-nonoctal-decimal-escape": "error",
     "no-obj-calls": "error",
@@ -51,7 +69,9 @@
     "no-shadow-restricted-names": "error",
     "no-sparse-arrays": "error",
     "no-this-before-super": "error",
+    "no-unassigned-vars": "error",
     "no-unexpected-multiline": "error",
+    "no-unreachable": "error",
     "no-unsafe-finally": "error",
     "no-unsafe-negation": "error",
     "no-unsafe-optional-chaining": "off",
@@ -62,41 +82,12 @@
     "no-useless-catch": "error",
     "no-useless-escape": "error",
     "no-with": "error",
+    "preserve-caught-error": "error",
     "require-yield": "error",
     "use-isnan": "error",
     "valid-typeof": "error",
-    "@typescript-eslint/ban-ts-comment": [
-      "error",
-      {
-        "ts-ignore": "allow-with-description",
-        "ts-expect-error": "allow-with-description",
-        "ts-nocheck": "ban",
-        "ts-check": "ban"
-      }
-    ],
     "no-array-constructor": "error",
-    "@typescript-eslint/no-duplicate-enum-values": "error",
-    "@typescript-eslint/no-empty-object-type": "error",
-    "@typescript-eslint/no-explicit-any": "error",
-    "@typescript-eslint/no-extra-non-null-assertion": "error",
-    "@typescript-eslint/no-misused-new": "error",
-    "@typescript-eslint/no-namespace": "error",
-    "@typescript-eslint/no-non-null-asserted-optional-chain": "error",
-    "@typescript-eslint/no-require-imports": "error",
-    "@typescript-eslint/no-this-alias": "error",
-    "@typescript-eslint/no-unnecessary-type-constraint": "error",
-    "@typescript-eslint/no-unsafe-declaration-merging": "error",
-    "@typescript-eslint/no-unsafe-function-type": "error",
     "no-unused-expressions": "error",
-    "@typescript-eslint/no-wrapper-object-types": "error",
-    "@typescript-eslint/prefer-as-const": "error",
-    "@typescript-eslint/prefer-namespace-keyword": "error",
-    "@typescript-eslint/triple-slash-reference": "error",
-    "import/namespace": "error",
-    "import/default": "error",
-    "import/no-named-as-default": "warn",
-    "import/no-named-as-default-member": "warn",
-    "import/no-duplicates": "warn",
     "jsdoc/check-access": "warn",
     "jsdoc/check-property-names": "warn",
     "jsdoc/check-tag-names": [
@@ -108,6 +99,7 @@
     "jsdoc/empty-tags": "warn",
     "jsdoc/implements-on-classes": "warn",
     "jsdoc/no-defaults": "warn",
+    "jsdoc/require-param": "off",
     "jsdoc/require-param-description": "warn",
     "jsdoc/require-param-name": "warn",
     "jsdoc/require-property": "warn",
@@ -116,13 +108,44 @@
     "jsdoc/require-property-type": "warn",
     "jsdoc/require-returns": "error",
     "jsdoc/require-returns-description": "warn",
-    "jsdoc/require-yields": "warn"
+    "jsdoc/require-yields": "warn",
+    "import/namespace": "error",
+    "import/default": "error",
+    "import/no-named-as-default": "warn",
+    "import/no-named-as-default-member": "warn",
+    "import/no-duplicates": "warn",
+    "typescript/ban-ts-comment": [
+      "error",
+      {
+        "ts-ignore": "allow-with-description",
+        "ts-expect-error": "allow-with-description",
+        "ts-nocheck": "ban",
+        "ts-check": "ban"
+      }
+    ],
+    "typescript/no-duplicate-enum-values": "error",
+    "typescript/no-empty-object-type": "error",
+    "typescript/no-explicit-any": "error",
+    "typescript/no-extra-non-null-assertion": "error",
+    "typescript/no-misused-new": "error",
+    "typescript/no-namespace": "error",
+    "typescript/no-non-null-asserted-optional-chain": "error",
+    "typescript/no-require-imports": "error",
+    "typescript/no-this-alias": "error",
+    "typescript/no-unnecessary-type-constraint": "error",
+    "typescript/no-unsafe-declaration-merging": "error",
+    "typescript/no-unsafe-function-type": "error",
+    "typescript/no-wrapper-object-types": "error",
+    "typescript/prefer-as-const": "error",
+    "typescript/prefer-namespace-keyword": "error",
+    "typescript/triple-slash-reference": "error"
   },
   "overrides": [
     {
       "files": ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"],
       "rules": {
         "constructor-super": "off",
+        "getter-return": "off",
         "no-class-assign": "off",
         "no-const-assign": "off",
         "no-dupe-class-members": "off",
@@ -134,9 +157,11 @@
         "no-redeclare": "off",
         "no-setter-return": "off",
         "no-this-before-super": "off",
+        "no-unreachable": "off",
         "no-unsafe-negation": "off",
         "no-var": "error",
         "no-with": "off",
+        "prefer-const": "error",
         "prefer-rest-params": "error",
         "prefer-spread": "error"
       }
@@ -144,20 +169,87 @@
     {
       "files": ["src/**/*.ts", "tsdown.config.ts", "vitest.config.ts"],
       "rules": {
-        "@typescript-eslint/consistent-type-imports": [
-          "error",
-          {
-            "prefer": "type-imports",
-            "fixStyle": "inline-type-imports"
-          }
-        ],
-        "@typescript-eslint/no-explicit-any": "error",
-        "import/no-cycle": "error",
         "no-unused-vars": [
           "error",
           {
             "argsIgnorePattern": "^_",
             "varsIgnorePattern": "^_"
+          }
+        ],
+        "import/no-cycle": "error",
+        "typescript/consistent-type-imports": [
+          "error",
+          {
+            "prefer": "type-imports",
+            "fixStyle": "inline-type-imports"
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/types/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/configure/**", "@/configure/**"],
+                "message": "Types module should not import from configure module."
+              },
+              {
+                "group": ["**/cli/**", "@/cli/**"],
+                "message": "Types module should not import from cli module."
+              },
+              {
+                "group": ["**/parser/**", "@/parser/**"],
+                "message": "Types module should not import from parser module."
+              },
+              {
+                "group": ["**/plugin/**", "@/plugin/**"],
+                "message": "Types module should not import from plugin module."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/configure/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/cli/**", "@/cli/**"],
+                "message": "Configure module should not import from cli module."
+              },
+              {
+                "group": ["**/parser/**", "@/parser/**"],
+                "message": "Configure module should not import from parser module. Use @/types/ instead."
+              },
+              {
+                "group": ["**/plugin/**", "@/plugin/**"],
+                "message": "Configure module should not import from plugin module."
+              },
+              {
+                "group": [
+                  "**/utils/**",
+                  "@/utils/**",
+                  "!**/utils/brand",
+                  "!@/utils/brand",
+                  "!**/utils/test/**",
+                  "!@/utils/test/**"
+                ],
+                "message": "Configure module can only import `brand` or `test/*` from utils module."
+              },
+              {
+                "group": ["zod"],
+                "allowTypeImports": true,
+                "message": "Configure module can import only types from zod module."
+              }
+            ]
           }
         ]
       }
@@ -183,9 +275,19 @@
       }
     },
     {
-      "files": ["src/parser/**/*.test.ts"],
+      "files": ["src/plugin/builtin/**/*.ts"],
       "rules": {
-        "no-restricted-imports": "off"
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/cli/**", "@/cli/**"],
+                "message": "Plugin builtin module should not import from cli module."
+              }
+            ]
+          }
+        ]
       }
     },
     {
@@ -213,74 +315,16 @@
       }
     },
     {
-      "files": ["src/plugin/builtin/**/*.ts"],
-      "rules": {
-        "no-restricted-imports": [
-          "error",
-          {
-            "patterns": [
-              {
-                "group": ["**/cli/**", "@/cli/**"],
-                "message": "Plugin builtin module should not import from cli module."
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "files": ["src/plugin/manager.ts"],
-      "rules": {
-        "no-restricted-imports": [
-          "error",
-          {
-            "patterns": [
-              {
-                "group": ["**/cli/**", "@/cli/**"],
-                "message": "Plugin module should not import from cli module."
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "files": ["src/plugin/**/*.test.ts", "src/plugin/builtin/**/*.test.ts"],
-      "rules": {
-        "no-restricted-imports": "off"
-      }
-    },
-    {
       "files": ["src/parser/**/types.ts"],
       "rules": {
-        "no-restricted-imports": "off"
-      }
-    },
-    {
-      "files": ["src/configure/**/*.ts"],
-      "rules": {
         "no-restricted-imports": [
           "error",
           {
             "patterns": [
               {
-                "group": ["**/parser/**", "@/parser/**"],
-                "message": "Configure module should not import from parser module. Use @/types/ instead."
-              },
-              {
-                "group": ["**/plugin/**", "@/plugin/**"],
-                "message": "Configure module should not import from plugin module."
-              },
-              {
-                "group": [
-                  "**/utils/**",
-                  "@/utils/**",
-                  "!**/utils/brand",
-                  "!@/utils/brand",
-                  "!**/utils/test/**",
-                  "!@/utils/test/**"
-                ],
-                "message": "Configure module can only import `brand` or `test/*` from utils module."
+                "group": ["**"],
+                "allowTypeImports": true,
+                "message": "types.ts can import only types."
               }
             ]
           }
@@ -323,21 +367,90 @@
                 "name": "@inquirer/core",
                 "message": "Use 'prompt' from '@/cli/shared/prompt' instead of @inquirer/core directly."
               }
-            ],
-            "patterns": [
-              {
-                "group": ["**/configure/**", "@/configure/**"],
-                "message": "Cli module should not import from configure module. Please use parser module as an intermediary."
-              }
             ]
           }
         ]
       }
     },
     {
-      "files": ["src/cli/**/*.test.ts"],
+      "files": ["**/*.js", "**/*.mjs"],
       "rules": {
-        "no-restricted-imports": "off"
+        "typescript/await-thenable": "off",
+        "typescript/consistent-return": "off",
+        "typescript/consistent-type-exports": "off",
+        "typescript/dot-notation": "off",
+        "typescript/no-array-delete": "off",
+        "typescript/no-base-to-string": "off",
+        "typescript/no-confusing-void-expression": "off",
+        "typescript/no-deprecated": "off",
+        "typescript/no-duplicate-type-constituents": "off",
+        "typescript/no-floating-promises": "off",
+        "typescript/no-for-in-array": "off",
+        "typescript/no-implied-eval": "off",
+        "typescript/no-meaningless-void-operator": "off",
+        "typescript/no-misused-promises": "off",
+        "typescript/no-misused-spread": "off",
+        "typescript/no-mixed-enums": "off",
+        "typescript/no-redundant-type-constituents": "off",
+        "typescript/no-unnecessary-boolean-literal-compare": "off",
+        "typescript/no-unnecessary-qualifier": "off",
+        "typescript/no-unnecessary-template-expression": "off",
+        "typescript/no-unnecessary-type-arguments": "off",
+        "typescript/no-unnecessary-type-assertion": "off",
+        "typescript/no-unnecessary-type-conversion": "off",
+        "typescript/no-unnecessary-type-parameters": "off",
+        "typescript/no-unsafe-argument": "off",
+        "typescript/no-unsafe-assignment": "off",
+        "typescript/no-unsafe-call": "off",
+        "typescript/no-unsafe-enum-comparison": "off",
+        "typescript/no-unsafe-member-access": "off",
+        "typescript/no-unsafe-return": "off",
+        "typescript/no-unsafe-type-assertion": "off",
+        "typescript/no-unsafe-unary-minus": "off",
+        "typescript/no-useless-default-assignment": "off",
+        "typescript/non-nullable-type-assertion-style": "off",
+        "typescript/only-throw-error": "off",
+        "typescript/prefer-find": "off",
+        "typescript/prefer-includes": "off",
+        "typescript/prefer-nullish-coalescing": "off",
+        "typescript/prefer-promise-reject-errors": "off",
+        "typescript/prefer-readonly": "off",
+        "typescript/prefer-readonly-parameter-types": "off",
+        "typescript/prefer-reduce-type-parameter": "off",
+        "typescript/prefer-regexp-exec": "off",
+        "typescript/prefer-return-this-type": "off",
+        "typescript/prefer-string-starts-ends-with": "off",
+        "typescript/promise-function-async": "off",
+        "typescript/related-getter-setter-pairs": "off",
+        "typescript/require-array-sort-compare": "off",
+        "typescript/require-await": "off",
+        "typescript/restrict-plus-operands": "off",
+        "typescript/restrict-template-expressions": "off",
+        "typescript/return-await": "off",
+        "typescript/strict-boolean-expressions": "off",
+        "typescript/strict-void-return": "off",
+        "typescript/switch-exhaustiveness-check": "off",
+        "typescript/unbound-method": "off",
+        "typescript/use-unknown-in-catch-callback-variable": "off"
+      },
+      "env": {
+        "node": true
+      }
+    },
+    {
+      "files": ["src/plugin/manager.ts", "src/plugin/builtin/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/cli/**", "@/cli/**"],
+                "message": "Plugin module should not import from cli module."
+              }
+            ]
+          }
+        ]
       }
     },
     {
@@ -352,10 +465,13 @@
       }
     },
     {
-      "files": ["**/*.js", "**/*.mjs"],
-      "env": {
-        "node": true
+      "files": ["**/*.test.ts"],
+      "rules": {
+        "no-restricted-imports": "off"
       }
     }
-  ]
+  ],
+  "options": {
+    "typeAware": true
+  }
 }
