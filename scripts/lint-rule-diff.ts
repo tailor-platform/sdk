@@ -147,6 +147,9 @@ function normaliseRuleName(rule: string): string {
   return rule;
 }
 
+const EXCLUDED_DIR_PATTERN =
+  /(^|\/)(dist|node_modules|\.tailor-sdk|generated|generated-perf|templates)\/|__test_fixtures__\/dist\//;
+
 function listFiles(pkg: Pkg): string[] {
   const out = execFileSync(
     "git",
@@ -161,15 +164,7 @@ function listFiles(pkg: Pkg): string[] {
     ],
     { cwd: repoRoot, encoding: "utf8" },
   );
-  return out
-    .split("\n")
-    .filter((f) => f.length > 0)
-    .filter((f) => !/(^|\/)dist\//.test(f))
-    .filter((f) => !/(^|\/)node_modules\//.test(f))
-    .filter((f) => !/(^|\/)\.tailor-sdk\//.test(f))
-    .filter((f) => !/(^|\/)generated(-perf)?\//.test(f))
-    .filter((f) => !/(^|\/)templates\//.test(f))
-    .filter((f) => !/__test_fixtures__\/dist\//.test(f));
+  return out.split("\n").filter((f) => f.length > 0 && !EXCLUDED_DIR_PATTERN.test(f));
 }
 
 function sampleFiles(files: string[]): string[] {
@@ -306,18 +301,35 @@ function loadOxlintConfig(pkg: Pkg): OxlintConfig | null {
   return resolved;
 }
 
-function resolveOxlintRulesForFile(pkg: Pkg, cfg: OxlintConfig, fileRelToPkg: string): FileRuleMap {
-  const map: FileRuleMap = {};
+interface CompiledOxlintConfig {
+  baseRules: FileRuleMap;
+  overrides: { match: (file: string) => boolean; rules: FileRuleMap }[];
+}
+
+function compileOxlintConfig(cfg: OxlintConfig): CompiledOxlintConfig {
+  const baseRules: FileRuleMap = {};
   for (const [name, value] of Object.entries(cfg.rules ?? {})) {
-    map[name] = normaliseOxlintSeverity(value);
+    baseRules[name] = normaliseOxlintSeverity(value);
   }
-  for (const override of cfg.overrides ?? []) {
+  const overrides = (cfg.overrides ?? []).map((override) => {
     const matchers = override.files.map((g) => picomatch(g, { dot: true, contains: true }));
-    const matched = matchers.some((m) => m(fileRelToPkg));
-    if (!matched) continue;
+    const rules: FileRuleMap = {};
     for (const [name, value] of Object.entries(override.rules ?? {})) {
-      map[name] = normaliseOxlintSeverity(value);
+      rules[name] = normaliseOxlintSeverity(value);
     }
+    return { match: (file: string) => matchers.some((m) => m(file)), rules };
+  });
+  return { baseRules, overrides };
+}
+
+function resolveOxlintRulesForFile(
+  compiled: CompiledOxlintConfig,
+  fileRelToPkg: string,
+): FileRuleMap {
+  const map: FileRuleMap = { ...compiled.baseRules };
+  for (const override of compiled.overrides) {
+    if (!override.match(fileRelToPkg)) continue;
+    Object.assign(map, override.rules);
   }
   return map;
 }
@@ -355,6 +367,7 @@ interface PackageReport {
 
 function diffPackage(pkg: Pkg): PackageReport {
   const oxlintCfg = loadOxlintConfig(pkg);
+  const compiledOxlint = oxlintCfg ? compileOxlintConfig(oxlintCfg) : null;
   const files = sampleFiles(listFiles(pkg));
   const report: PackageReport = {
     pkg: pkg.name,
@@ -370,10 +383,10 @@ function diffPackage(pkg: Pkg): PackageReport {
 
   // Always build the oxlint snapshot — this is what catches regressions after
   // ESLint is gone.
-  if (oxlintCfg) {
+  if (compiledOxlint) {
     for (const file of files) {
       const fileRelToPkg = relative(pkg.dir, file);
-      const rules = resolveOxlintRulesForFile(pkg, oxlintCfg, fileRelToPkg);
+      const rules = resolveOxlintRulesForFile(compiledOxlint, fileRelToPkg);
       for (const [rule, sev] of Object.entries(rules)) {
         if (sev !== "off") report.oxlintActiveRules.add(normaliseRuleName(rule));
       }
@@ -399,7 +412,9 @@ function diffPackage(pkg: Pkg): PackageReport {
     if (!eslintRules) continue;
 
     const fileRelToPkg = relative(pkg.dir, file);
-    const oxlintRules = oxlintCfg ? resolveOxlintRulesForFile(pkg, oxlintCfg, fileRelToPkg) : {};
+    const oxlintRules = compiledOxlint
+      ? resolveOxlintRulesForFile(compiledOxlint, fileRelToPkg)
+      : {};
 
     // Index oxlint rules by normalised name.
     const oxlintNorm = new Map<string, Severity>();
@@ -469,19 +484,18 @@ function printReport(report: PackageReport): void {
   console.log(`  severity mismatches: ${MM.length}`);
 
   if (ESL.length > 0) {
-    const gapMissingInOxlint = ESL.filter((r) => !oxlintHasRule(r.normalised));
-    const gapNotEnabled = ESL.filter((r) => oxlintHasRule(r.normalised));
+    // Partition once: missing-from-registry first (more urgent), then unenabled.
+    const annotated = ESL.map((r) => ({ ...r, exists: oxlintHasRule(r.normalised) }));
+    const missingCount = annotated.filter((r) => !r.exists).length;
     console.log(`\n  ## ESLint-only — coverage gap (${ESL.length})`);
-    console.log(`     · ${gapNotEnabled.length} rules exist in oxlint but are not enabled`);
-    console.log(
-      `     · ${gapMissingInOxlint.length} rules are NOT in oxlint registry (need workaround)`,
-    );
+    console.log(`     · ${ESL.length - missingCount} rules exist in oxlint but are not enabled`);
+    console.log(`     · ${missingCount} rules are NOT in oxlint registry (need workaround)`);
     console.log(`  ${"rule".padEnd(50)} ${"oxlint?".padEnd(8)} ${"files".padEnd(6)}  sample`);
-    for (const r of [...gapMissingInOxlint, ...gapNotEnabled]) {
-      const sample = r.inEslintFiles[0];
-      const status = oxlintHasRule(r.normalised) ? "exists" : "MISSING";
+    annotated.sort((a, b) => Number(a.exists) - Number(b.exists));
+    for (const r of annotated) {
+      const status = r.exists ? "exists" : "MISSING";
       console.log(
-        `  ${r.rule.padEnd(50)} ${status.padEnd(8)} ${String(r.inEslintFiles.length).padEnd(6)}  ${sample}`,
+        `  ${r.rule.padEnd(50)} ${status.padEnd(8)} ${String(r.inEslintFiles.length).padEnd(6)}  ${r.inEslintFiles[0]}`,
       );
     }
   }

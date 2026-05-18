@@ -134,38 +134,18 @@ export default {
         // it's the MethodDefinition; for `{ m() {} }` it's the Property.
         function jsdocCarrier(node, ancestors) {
           let target = node;
-          // Walk outward through wrappers that carry the JSDoc above them.
           for (let i = ancestors.length - 1; i >= 0; i--) {
             const parent = ancestors[i];
-            if (parent.type === "VariableDeclarator" && parent.init === target) {
-              target = parent;
-              continue;
-            }
-            if (parent.type === "VariableDeclaration" && parent.declarations.includes(target)) {
-              target = parent;
-              continue;
-            }
-            if (parent.type === "ExportNamedDeclaration" && parent.declaration === target) {
-              target = parent;
-              continue;
-            }
-            if (parent.type === "ExportDefaultDeclaration" && parent.declaration === target) {
-              target = parent;
-              continue;
-            }
-            if (parent.type === "MethodDefinition" && parent.value === target) {
-              target = parent;
-              continue;
-            }
-            if (parent.type === "Property" && parent.value === target) {
-              target = parent;
-              continue;
-            }
-            if (parent.type === "PropertyDefinition" && parent.value === target) {
-              target = parent;
-              continue;
-            }
-            break;
+            const wraps =
+              (parent.type === "VariableDeclarator" && parent.init === target) ||
+              (parent.type === "VariableDeclaration" && parent.declarations.includes(target)) ||
+              (parent.type === "ExportNamedDeclaration" && parent.declaration === target) ||
+              (parent.type === "ExportDefaultDeclaration" && parent.declaration === target) ||
+              (parent.type === "MethodDefinition" && parent.value === target) ||
+              (parent.type === "Property" && parent.value === target) ||
+              (parent.type === "PropertyDefinition" && parent.value === target);
+            if (!wraps) break;
+            target = parent;
           }
           return target;
         }
