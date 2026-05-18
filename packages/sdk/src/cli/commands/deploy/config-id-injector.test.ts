@@ -142,6 +142,27 @@ export default defineConfig(config);
     await expect(ensureConfigId(filePath)).rejects.toThrow(/inline object literal/);
   });
 
+  test("injects id into an empty defineConfig object without producing invalid syntax", async () => {
+    const filePath = await writeConfig(
+      `import { defineConfig } from "@tailor-platform/sdk";
+
+export default defineConfig({});
+`,
+    );
+
+    const result = await ensureConfigId(filePath);
+    expect(result).not.toBeNull();
+    expect(result?.injected).toBe(true);
+
+    const updated = await fs.promises.readFile(filePath, "utf-8");
+    // The injected id must remain on a line that is not commented out by `//`.
+    const idLine = updated.split("\n").find((line) => line.includes(`id: "${result?.id}"`));
+    expect(idLine).toBeDefined();
+    expect(idLine?.trimStart().startsWith("//")).toBe(false);
+    // The closing `})` must still be present and not consumed by the line comment.
+    expect(updated).toContain("})");
+  });
+
   test("inserts id at the top while preserving formatting", async () => {
     const filePath = await writeConfig(
       `import { defineConfig } from "@tailor-platform/sdk";

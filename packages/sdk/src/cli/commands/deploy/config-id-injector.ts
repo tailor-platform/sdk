@@ -130,8 +130,13 @@ function insertIdProperty(source: string, configObj: ObjectExpression, id: strin
     const insertion = `${idComment}\n${indent}${idLiteral},\n${indent}`;
     return source.slice(0, firstProp.start) + insertion + source.slice(firstProp.start);
   }
-  // Empty object: insert just inside the braces
+  // Empty object: insert on its own lines so the `//` comment does not
+  // bleed into the closing `}` / `)`. Derive indent from the line that
+  // contains the opening brace.
   const openBracePos = configObj.start + 1;
-  const insertion = ` ${idComment} ${idLiteral} `;
+  const braceLineStart = source.lastIndexOf("\n", configObj.start) + 1;
+  const baseIndent = source.slice(braceLineStart).match(/^[\t ]*/)?.[0] ?? "";
+  const innerIndent = `${baseIndent}  `;
+  const insertion = `\n${innerIndent}${idComment}\n${innerIndent}${idLiteral},\n${baseIndent}`;
   return source.slice(0, openBracePos) + insertion + source.slice(openBracePos);
 }
