@@ -517,6 +517,43 @@ describe("V1 to V2 migration", () => {
   });
 });
 
+describe.skipIf(process.platform === "win32")("writePlatformConfig file permissions", () => {
+  it("writes the config file with mode 0600 and its directory with mode 0700", () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {},
+      current_user: null,
+    });
+
+    const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
+    const fileMode = fs.statSync(configPath).mode & 0o777;
+    const dirMode = fs.statSync(path.dirname(configPath)).mode & 0o777;
+
+    expect(fileMode).toBe(0o600);
+    expect(dirMode).toBe(0o700);
+  });
+
+  it("tightens permissions when overwriting a config file that was world-readable", () => {
+    const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
+    fs.mkdirSync(path.dirname(configPath), { recursive: true });
+    fs.writeFileSync(configPath, "stale: true", { mode: 0o644 });
+    fs.chmodSync(configPath, 0o644);
+
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {},
+      current_user: null,
+    });
+
+    const fileMode = fs.statSync(configPath).mode & 0o777;
+    expect(fileMode).toBe(0o600);
+  });
+});
+
 afterAll(() => {
   fs.rmSync(xdgTempDir, { recursive: true, force: true });
 });
