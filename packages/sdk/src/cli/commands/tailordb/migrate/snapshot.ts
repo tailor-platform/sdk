@@ -3,6 +3,7 @@
  */
 
 import * as fs from "node:fs";
+import * as inflection from "inflection";
 import * as path from "pathe";
 import {
   type MigrationDiff,
@@ -70,10 +71,21 @@ function normalizeSnapshotField(field: SnapshotFieldConfig): void {
 }
 
 /**
- * Normalize every field in a snapshot type in place.
- * @param {SnapshotType} type - Snapshot type to normalize
+ * Normalize a snapshot type in place to the canonical comparison shape.
+ * Currently fills:
+ *   - `pluralForm` via inflection when missing (legacy snapshots written
+ *     before `pluralForm` became required may omit it)
+ *   - per-field `scale` defaults via {@link normalizeSnapshotField}
+ *
+ * Idempotent — safe to call multiple times on the same input.
+ * @param {TailorDBSnapshotType} type - Snapshot type to normalize
  */
-function normalizeSnapshotTypeFields(type: SnapshotType): void {
+function normalizeSnapshotType(type: TailorDBSnapshotType): void {
+  // `pluralForm` is typed as required by TailorDBSnapshotType, but JSON.parse'd legacy
+  // snapshots may have it undefined at runtime — backfill from inflection.
+  if (!(type as { pluralForm?: string }).pluralForm) {
+    type.pluralForm = inflection.pluralize(type.name);
+  }
   for (const field of Object.values(type.fields)) {
     normalizeSnapshotField(field);
   }
@@ -168,14 +180,27 @@ export interface SnapshotRelationship {
 // ============================================================================
 
 /**
- * Permission operand types
+ * Field-reference operand in a permission condition. Always an object with
+ * exactly one of `user` / `record` / `newRecord` / `oldRecord` keys.
  */
-export type SnapshotPermissionOperand =
+export type SnapshotFieldRefOperand =
   | { user: string }
   | { record: string }
   | { newRecord: string }
-  | { oldRecord: string }
-  | unknown; // ValueOperand (primitives, arrays)
+  | { oldRecord: string };
+
+/**
+ * Literal value operand (right-hand side of a permission condition). Matches
+ * the SDK-level value operand surface — primitives and their arrays — as
+ * defined in the Zod parser schema (RecordPermissionOperandSchema /
+ * GqlPermissionOperandSchema in parser/service/tailordb/schema.ts).
+ */
+export type SnapshotValueOperand = string | boolean | string[] | boolean[];
+
+/**
+ * Permission operand union. Either a field-ref object or a literal value.
+ */
+export type SnapshotPermissionOperand = SnapshotFieldRefOperand | SnapshotValueOperand;
 
 /**
  * Permission operators
@@ -190,6 +215,17 @@ export type SnapshotPermissionCondition = readonly [
   SnapshotPermissionOperator,
   SnapshotPermissionOperand,
 ];
+
+/**
+ * Type guard: is the operand a field-reference (object) operand?
+ * @param {SnapshotPermissionOperand} operand - Operand to test
+ * @returns {boolean} True if operand is a field-ref (not a value operand)
+ */
+export function isSnapshotFieldRefOperand(
+  operand: SnapshotPermissionOperand,
+): operand is SnapshotFieldRefOperand {
+  return typeof operand === "object" && operand !== null && !Array.isArray(operand);
+}
 
 /**
  * Action permission policy
@@ -238,11 +274,14 @@ export interface SnapshotGqlPermissionPolicy {
 export type SnapshotGqlPermission = readonly SnapshotGqlPermissionPolicy[];
 
 /**
- * Type definition in schema snapshot
+ * Type definition in schema snapshot.
+ * `pluralForm` is always materialized — either set by the SDK user, derived
+ * via inflection at snapshot construction, or backfilled when loading legacy
+ * snapshots in `loadSnapshot`.
  */
-export interface SnapshotType {
+export interface TailorDBSnapshotType {
   name: string;
-  pluralForm?: string;
+  pluralForm: string;
   description?: string;
   fields: Record<string, SnapshotFieldConfig>;
   settings?: {
@@ -275,7 +314,7 @@ export interface SchemaSnapshot {
   version: typeof SCHEMA_SNAPSHOT_VERSION;
   namespace: string;
   createdAt: string;
-  types: Record<string, SnapshotType>;
+  types: Record<string, TailorDBSnapshotType>;
 }
 
 /**
@@ -445,6 +484,7 @@ function createSnapshotFieldConfig(field: ParsedField): SnapshotFieldConfig {
     }
   }
 
+  normalizeSnapshotField(config);
   return config;
 }
 
@@ -516,27 +556,28 @@ function createSnapshotFieldConfigFromOperatorConfig(
     }
   }
 
+  normalizeSnapshotField(config);
   return config;
 }
 
 /**
  * Create a snapshot type from a parsed type
  * @param {TailorDBType} type - Parsed TailorDB type definition
- * @returns {SnapshotType} Snapshot type configuration
+ * @returns {TailorDBSnapshotType} Snapshot type configuration
  */
-export function createSnapshotType(type: TailorDBType): SnapshotType {
+export function createSnapshotType(type: TailorDBType): TailorDBSnapshotType {
   const fields: Record<string, SnapshotFieldConfig> = {};
 
   for (const [fieldName, field] of Object.entries(type.fields)) {
     fields[fieldName] = createSnapshotFieldConfig(field);
   }
 
-  const snapshotType: SnapshotType = {
+  const snapshotType: TailorDBSnapshotType = {
     name: type.name,
+    pluralForm: type.pluralForm || inflection.pluralize(type.name),
     fields,
   };
 
-  if (type.pluralForm) snapshotType.pluralForm = type.pluralForm;
   if (type.description) snapshotType.description = type.description;
   if (type.settings) {
     snapshotType.settings = {};
@@ -631,7 +672,6 @@ export function createSnapshotType(type: TailorDBType): SnapshotType {
     }
   }
 
-  normalizeSnapshotTypeFields(snapshotType);
   return snapshotType;
 }
 
@@ -660,7 +700,7 @@ export function createSnapshotFromLocalTypes(
   types: Record<string, TailorDBType>,
   namespace: string,
 ): SchemaSnapshot {
-  const snapshotTypes: Record<string, SnapshotType> = {};
+  const snapshotTypes: Record<string, TailorDBSnapshotType> = {};
 
   for (const [typeName, type] of Object.entries(types)) {
     snapshotTypes[typeName] = createSnapshotType(type);
@@ -686,10 +726,8 @@ export function createSnapshotFromLocalTypes(
 export function loadSnapshot(filePath: string): SchemaSnapshot {
   const content = fs.readFileSync(filePath, "utf-8");
   const snapshot = JSON.parse(content) as SchemaSnapshot;
-  // Older snapshots may omit scale on decimal fields. Normalize on load so all
-  // downstream comparisons can read field.scale directly without special cases.
   for (const type of Object.values(snapshot.types)) {
-    normalizeSnapshotTypeFields(type);
+    normalizeSnapshotType(type);
   }
   return snapshot;
 }
@@ -781,7 +819,7 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
   for (const change of diff.changes) {
     switch (change.kind) {
       case "type_added":
-        types[change.typeName] = change.after as SnapshotType;
+        types[change.typeName] = change.after as TailorDBSnapshotType;
         break;
       case "type_removed":
         delete types[change.typeName];
@@ -1203,8 +1241,8 @@ function addChange(
 function compareTypeFields(
   ctx: DiffContext,
   typeName: string,
-  prevType: SnapshotType,
-  currType: SnapshotType,
+  prevType: TailorDBSnapshotType,
+  currType: TailorDBSnapshotType,
 ): void {
   const prevFieldNames = new Set(Object.keys(prevType.fields));
   const currFieldNames = new Set(Object.keys(currType.fields));
@@ -1514,6 +1552,13 @@ function comparePermissions(
  * @returns {MigrationDiff} Migration diff between snapshots
  */
 export function compareSnapshots(previous: SchemaSnapshot, current: SchemaSnapshot): MigrationDiff {
+  // Defense-in-depth: factory functions (`createSnapshotType`, `loadSnapshot`,
+  // `convertRemoteFieldsToSnapshot`) are expected to produce normalized
+  // snapshots, but a caller assembling a SchemaSnapshot literal would otherwise
+  // produce silent false drift (e.g. decimal scale 6 vs unset). Idempotent.
+  for (const type of Object.values(previous.types)) normalizeSnapshotType(type);
+  for (const type of Object.values(current.types)) normalizeSnapshotType(type);
+
   const ctx: DiffContext = { changes: [], breakingChanges: [] };
 
   const previousTypeNames = new Set(Object.keys(previous.types));
@@ -1596,17 +1641,19 @@ export function compareSnapshots(previous: SchemaSnapshot, current: SchemaSnapsh
 }
 
 /**
- * Compare a snapshot against canonical SnapshotType-shaped local types.
- * Callers must pre-convert TailorDBService.types to SnapshotType via
- * `createSnapshotType` so that all comparisons read the same normalized shape.
+ * Compare a snapshot against canonical TailorDBSnapshotType-shaped local types.
+ * Callers are expected to pre-convert TailorDBService.types to TailorDBSnapshotType via
+ * `createSnapshotType`. As a safety net, `compareSnapshots` re-runs idempotent
+ * normalization on both sides, so a caller that forgets will still get correct
+ * comparisons (no silent false drift).
  * @param {SchemaSnapshot} snapshot - Schema snapshot to compare against
- * @param {Record<string, SnapshotType>} localTypes - Local snapshot-shaped types
+ * @param {Record<string, TailorDBSnapshotType>} localTypes - Local snapshot-shaped types
  * @param {string} namespace - Namespace for comparison
  * @returns {MigrationDiff} Migration diff
  */
 export function compareLocalTypesWithSnapshot(
   snapshot: SchemaSnapshot,
-  localTypes: Record<string, SnapshotType>,
+  localTypes: Record<string, TailorDBSnapshotType>,
   namespace: string,
 ): MigrationDiff {
   const currentSnapshot: SchemaSnapshot = {
@@ -1982,6 +2029,9 @@ export function compareRemoteWithSnapshot(
   remoteTypes: ProtoTailorDBType[],
   snapshot: SchemaSnapshot,
 ): SchemaDrift[] {
+  // Defense-in-depth normalize — matches `compareSnapshots`. Idempotent.
+  for (const type of Object.values(snapshot.types)) normalizeSnapshotType(type);
+
   const drifts: SchemaDrift[] = [];
 
   // Build maps for easy lookup

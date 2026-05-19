@@ -220,6 +220,7 @@ describe("snapshot", () => {
         types: {
           NewType: {
             name: "NewType",
+            pluralForm: "NewTypes",
             fields: { id: { type: "uuid", required: true } },
           },
         },
@@ -239,6 +240,7 @@ describe("snapshot", () => {
         types: {
           OldType: {
             name: "OldType",
+            pluralForm: "OldTypes",
             fields: { id: { type: "uuid", required: true } },
           },
         },
@@ -258,6 +260,7 @@ describe("snapshot", () => {
         types: {
           User: {
             name: "User",
+            pluralForm: "Users",
             fields: { id: { type: "uuid", required: true } },
           },
         },
@@ -267,6 +270,7 @@ describe("snapshot", () => {
         types: {
           User: {
             name: "User",
+            pluralForm: "Users",
             fields: {
               id: { type: "uuid", required: true },
               email: { type: "string", required: false },
@@ -288,6 +292,7 @@ describe("snapshot", () => {
         types: {
           User: {
             name: "User",
+            pluralForm: "Users",
             fields: { id: { type: "uuid", required: true } },
           },
         },
@@ -297,6 +302,7 @@ describe("snapshot", () => {
         types: {
           User: {
             name: "User",
+            pluralForm: "Users",
             fields: {
               id: { type: "uuid", required: true },
               requiredField: { type: "string", required: true },
@@ -317,6 +323,7 @@ describe("snapshot", () => {
         types: {
           User: {
             name: "User",
+            pluralForm: "Users",
             fields: {
               id: { type: "uuid", required: true },
               name: { type: "string", required: true },
@@ -329,6 +336,7 @@ describe("snapshot", () => {
         types: {
           User: {
             name: "User",
+            pluralForm: "Users",
             fields: { id: { type: "uuid", required: true } },
           },
         },
@@ -347,6 +355,7 @@ describe("snapshot", () => {
         types: {
           User: {
             name: "User",
+            pluralForm: "Users",
             fields: {
               id: { type: "uuid", required: true },
               age: { type: "string", required: false },
@@ -359,6 +368,7 @@ describe("snapshot", () => {
         types: {
           User: {
             name: "User",
+            pluralForm: "Users",
             fields: {
               id: { type: "uuid", required: true },
               age: { type: "number", required: false },
@@ -374,34 +384,34 @@ describe("snapshot", () => {
       expect(diff.breakingChanges[0].reason).toContain("Field type changed");
     });
 
-    it("treats decimal fields with the same normalized scale as equivalent", () => {
-      // Both sides are produced through createSnapshotType / loadSnapshot in
-      // production, which fills in the platform default scale for decimals.
-      // The comparison contract expects pre-normalized inputs.
+    it("normalizes decimal scale at compare entry so missing scale matches platform default", () => {
+      // Reproduces the production scenario where one snapshot was loaded from
+      // an older file that omitted `scale` and the other was produced by
+      // `createSnapshotType` (which materializes the platform default of 6).
+      // compareSnapshots normalizes both inputs at the entry, so the diff must
+      // come out empty even though the literal shapes differ.
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
         types: {
           Order: {
             name: "Order",
+            pluralForm: "Orders",
             fields: {
               id: { type: "uuid", required: true },
-              amount: { type: "decimal", required: true, scale: 6 },
+              amount: { type: "decimal", required: true },
             },
           },
         },
       };
-      const current: SchemaSnapshot = {
-        ...createEmptySnapshot(),
-        types: {
-          Order: {
-            name: "Order",
-            fields: {
-              id: { type: "uuid", required: true },
-              amount: { type: "decimal", required: true, scale: 6 },
-            },
-          },
+      const current = createSnapshotFromLocalTypes(
+        {
+          Order: createMockType("Order", {
+            id: { name: "id", config: { type: "uuid", required: true } },
+            amount: { name: "amount", config: { type: "decimal", required: true } },
+          }),
         },
-      };
+        namespace,
+      );
 
       const diff = compareSnapshots(previous, current);
 
@@ -415,6 +425,7 @@ describe("snapshot", () => {
         types: {
           User: {
             name: "User",
+            pluralForm: "Users",
             fields: {
               id: { type: "uuid", required: true },
               email: { type: "string", required: false },
@@ -427,6 +438,7 @@ describe("snapshot", () => {
         types: {
           User: {
             name: "User",
+            pluralForm: "Users",
             fields: {
               id: { type: "uuid", required: true },
               email: { type: "string", required: true },
@@ -447,6 +459,7 @@ describe("snapshot", () => {
         types: {
           Post: {
             name: "Post",
+            pluralForm: "Posts",
             fields: {
               id: { type: "uuid", required: true },
               tags: { type: "string", required: false, array: true },
@@ -459,6 +472,7 @@ describe("snapshot", () => {
         types: {
           Post: {
             name: "Post",
+            pluralForm: "Posts",
             fields: {
               id: { type: "uuid", required: true },
               tags: { type: "string", required: false, array: false },
@@ -479,6 +493,7 @@ describe("snapshot", () => {
         types: {
           User: {
             name: "User",
+            pluralForm: "Users",
             fields: {
               id: { type: "uuid", required: true },
               email: { type: "string", required: true, unique: false },
@@ -491,6 +506,7 @@ describe("snapshot", () => {
         types: {
           User: {
             name: "User",
+            pluralForm: "Users",
             fields: {
               id: { type: "uuid", required: true },
               email: { type: "string", required: true, unique: true },
@@ -511,6 +527,7 @@ describe("snapshot", () => {
         types: {
           Task: {
             name: "Task",
+            pluralForm: "Tasks",
             fields: {
               id: { type: "uuid", required: true },
               status: {
@@ -532,6 +549,7 @@ describe("snapshot", () => {
         types: {
           Task: {
             name: "Task",
+            pluralForm: "Tasks",
             fields: {
               id: { type: "uuid", required: true },
               status: {
@@ -557,6 +575,7 @@ describe("snapshot", () => {
         types: {
           Task: {
             name: "Task",
+            pluralForm: "Tasks",
             fields: {
               id: { type: "uuid", required: true },
               status: {
@@ -573,6 +592,7 @@ describe("snapshot", () => {
         types: {
           Task: {
             name: "Task",
+            pluralForm: "Tasks",
             fields: {
               id: { type: "uuid", required: true },
               status: {
@@ -598,6 +618,7 @@ describe("snapshot", () => {
         types: {
           Task: {
             name: "Task",
+            pluralForm: "Tasks",
             fields: {
               id: { type: "uuid", required: true },
               status: {
@@ -614,6 +635,7 @@ describe("snapshot", () => {
         types: {
           Task: {
             name: "Task",
+            pluralForm: "Tasks",
             fields: {
               id: { type: "uuid", required: true },
               status: {
@@ -640,6 +662,7 @@ describe("snapshot", () => {
         types: {
           User: {
             name: "User",
+            pluralForm: "Users",
             fields: { id: { type: "uuid", required: true } },
           },
         },
@@ -656,10 +679,12 @@ describe("snapshot", () => {
         types: {
           User: {
             name: "User",
+            pluralForm: "Users",
             fields: { id: { type: "uuid", required: true } },
           },
           Post: {
             name: "Post",
+            pluralForm: "Posts",
             fields: {
               id: { type: "uuid", required: true },
               authorId: { type: "uuid", required: true },
@@ -673,6 +698,7 @@ describe("snapshot", () => {
         types: {
           User: {
             name: "User",
+            pluralForm: "Users",
             fields: { id: { type: "uuid", required: true } },
             backwardRelationships: {
               posts: {
@@ -686,6 +712,7 @@ describe("snapshot", () => {
           },
           Post: {
             name: "Post",
+            pluralForm: "Posts",
             fields: {
               id: { type: "uuid", required: true },
               authorId: { type: "uuid", required: true },
@@ -729,6 +756,7 @@ describe("snapshot", () => {
         types: {
           User: {
             name: "User",
+            pluralForm: "Users",
             fields: { id: { type: "uuid", required: true } },
           },
         },
@@ -913,6 +941,7 @@ describe("snapshot", () => {
         types: {
           User: {
             name: "User",
+            pluralForm: "Users",
             fields: { id: { type: "uuid", required: true } },
           },
         },
@@ -1002,6 +1031,7 @@ describe("snapshot", () => {
         types: {
           User: {
             name: "User",
+            pluralForm: "Users",
             fields: {
               id: { type: "uuid", required: true },
               name: { type: "string", required: true },
@@ -1028,6 +1058,7 @@ describe("snapshot", () => {
         types: {
           User: {
             name: "User",
+            pluralForm: "Users",
             fields: { id: { type: "uuid", required: true } },
           },
         },
@@ -1067,6 +1098,7 @@ describe("snapshot", () => {
         types: {
           User: {
             name: "User",
+            pluralForm: "Users",
             fields: { id: { type: "uuid", required: true } },
           },
         },
@@ -1125,6 +1157,7 @@ describe("snapshot", () => {
         types: {
           User: {
             name: "User",
+            pluralForm: "Users",
             fields: { id: { type: "uuid", required: true } },
           },
         },
@@ -1140,6 +1173,7 @@ describe("snapshot", () => {
             typeName: "Post",
             after: {
               name: "Post",
+              pluralForm: "Posts",
               fields: {
                 id: { type: "uuid", required: true },
                 title: { type: "string", required: true },
@@ -1170,10 +1204,12 @@ describe("snapshot", () => {
         types: {
           User: {
             name: "User",
+            pluralForm: "Users",
             fields: { id: { type: "uuid", required: true } },
           },
           OldType: {
             name: "OldType",
+            pluralForm: "OldTypes",
             fields: { id: { type: "uuid", required: true } },
           },
         },
@@ -1189,6 +1225,7 @@ describe("snapshot", () => {
             typeName: "OldType",
             before: {
               name: "OldType",
+              pluralForm: "OldTypes",
               fields: { id: { type: "uuid", required: true } },
             },
           },
@@ -1220,10 +1257,12 @@ describe("snapshot", () => {
         types: {
           User: {
             name: "User",
+            pluralForm: "Users",
             fields: { id: { type: "uuid", required: true } },
           },
           Post: {
             name: "Post",
+            pluralForm: "Posts",
             fields: {
               id: { type: "uuid", required: true },
               authorId: { type: "uuid", required: true },
@@ -1519,6 +1558,7 @@ describe("snapshot", () => {
         types: {
           User: {
             name: "User",
+            pluralForm: "Users",
             fields: {
               id: { type: "uuid", required: true },
               name: { type: "string", required: true },
@@ -1546,10 +1586,12 @@ describe("snapshot", () => {
         types: {
           User: {
             name: "User",
+            pluralForm: "Users",
             fields: { id: { type: "uuid", required: true } },
           },
           Post: {
             name: "Post",
+            pluralForm: "Posts",
             fields: { id: { type: "uuid", required: true } },
           },
         },
@@ -1575,6 +1617,7 @@ describe("snapshot", () => {
         types: {
           User: {
             name: "User",
+            pluralForm: "Users",
             fields: { id: { type: "uuid", required: true } },
           },
         },
@@ -1603,6 +1646,7 @@ describe("snapshot", () => {
         types: {
           User: {
             name: "User",
+            pluralForm: "Users",
             fields: {
               id: { type: "uuid", required: true },
               email: { type: "string", required: false },
@@ -1631,6 +1675,7 @@ describe("snapshot", () => {
         types: {
           User: {
             name: "User",
+            pluralForm: "Users",
             fields: {
               id: { type: "uuid", required: true },
             },
@@ -1659,6 +1704,7 @@ describe("snapshot", () => {
         types: {
           User: {
             name: "User",
+            pluralForm: "Users",
             fields: {
               id: { type: "uuid", required: true },
               age: { type: "number", required: false },
@@ -1689,6 +1735,7 @@ describe("snapshot", () => {
         types: {
           User: {
             name: "User",
+            pluralForm: "Users",
             fields: {
               id: { type: "uuid", required: true },
               name: { type: "string", required: false },
@@ -1718,6 +1765,7 @@ describe("snapshot", () => {
         types: {
           User: {
             name: "User",
+            pluralForm: "Users",
             fields: {
               id: { type: "uuid", required: true },
               tags: { type: "string", required: false, array: true },
@@ -1747,6 +1795,7 @@ describe("snapshot", () => {
         types: {
           Task: {
             name: "Task",
+            pluralForm: "Tasks",
             fields: {
               id: { type: "uuid", required: true },
               status: {
@@ -1776,23 +1825,32 @@ describe("snapshot", () => {
       expect(drifts[0].details).toContain("allowedValues");
     });
 
-    it("treats decimal field with normalized platform-default scale as equivalent (no drift)", () => {
-      // Snapshots loaded through loadSnapshot have scale normalized to the
-      // platform default (6) for decimal fields without an explicit scale.
-      const snapshot: SchemaSnapshot = {
-        version: SCHEMA_SNAPSHOT_VERSION,
-        namespace,
-        createdAt: new Date().toISOString(),
-        types: {
-          Order: {
-            name: "Order",
-            fields: {
-              id: { type: "uuid", required: true },
-              amount: { type: "decimal", required: true, scale: 6 },
+    it("normalizes decimal scale at compare entry so missing scale matches remote default", () => {
+      // The snapshot is written from disk without an explicit scale (legacy /
+      // user-authored form). compareRemoteWithSnapshot normalizes the snapshot
+      // at entry so it becomes equivalent to a remote that has materialized
+      // the platform-default scale of 6.
+      const snapshotPath = path.join(testDir, "decimal-default", SCHEMA_FILE_NAME);
+      fs.mkdirSync(path.dirname(snapshotPath), { recursive: true });
+      fs.writeFileSync(
+        snapshotPath,
+        JSON.stringify({
+          version: SCHEMA_SNAPSHOT_VERSION,
+          namespace,
+          createdAt: new Date().toISOString(),
+          types: {
+            Order: {
+              name: "Order",
+              pluralForm: "Orders",
+              fields: {
+                id: { type: "uuid", required: true },
+                amount: { type: "decimal", required: true },
+              },
             },
           },
-        },
-      };
+        }),
+      );
+      const snapshot = loadSnapshot(snapshotPath);
 
       const remoteTypes = [
         createMockRemoteType("Order", {
@@ -1813,6 +1871,7 @@ describe("snapshot", () => {
         types: {
           Order: {
             name: "Order",
+            pluralForm: "Orders",
             fields: {
               id: { type: "uuid", required: true },
               amount: { type: "decimal", required: true, scale: 6 },
@@ -1842,6 +1901,7 @@ describe("snapshot", () => {
         types: {
           User: {
             name: "User",
+            pluralForm: "Users",
             fields: { id: { type: "uuid", required: true } },
           },
         },

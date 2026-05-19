@@ -206,7 +206,7 @@ export {
   getMigrationDirPath,
   getMigrationFilePath,
   type SchemaSnapshot,
-  type SnapshotType,
+  type TailorDBSnapshotType,
   type SnapshotFieldConfig,
   type MigrationInfo,
 } from "./commands/tailordb/migrate/snapshot";

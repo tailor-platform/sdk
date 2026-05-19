@@ -54,8 +54,9 @@ import {
   compareRemoteWithSnapshot,
   formatSchemaDrifts,
   createSnapshotType,
+  isSnapshotFieldRefOperand,
   type SnapshotFieldConfig,
-  type SnapshotType,
+  type TailorDBSnapshotType,
   type SnapshotRecordPermission,
   type SnapshotActionPermission,
   type SnapshotPermissionCondition,
@@ -244,7 +245,7 @@ function formatRemoteVerificationResults(results: RemoteSchemaVerificationResult
  * Validate migration files and detect pending migrations
  * @param {OperatorClient} client - Operator client instance
  * @param {string} workspaceId - Workspace ID
- * @param {ReadonlyMap<string, Record<string, SnapshotType>>} typesByNamespace - Types by namespace
+ * @param {ReadonlyMap<string, Record<string, TailorDBSnapshotType>>} typesByNamespace - Types by namespace
  * @param {LoadedConfig} config - Loaded application config (includes path)
  * @param {boolean} noSchemaCheck - Whether to skip schema diff check
  * @returns {Promise<PendingMigration[]>} List of pending migrations
@@ -252,7 +253,7 @@ function formatRemoteVerificationResults(results: RemoteSchemaVerificationResult
 async function validateAndDetectMigrations(
   client: OperatorClient,
   workspaceId: string,
-  typesByNamespace: ReadonlyMap<string, Record<string, SnapshotType>>,
+  typesByNamespace: ReadonlyMap<string, Record<string, TailorDBSnapshotType>>,
   config: LoadedConfig,
   noSchemaCheck: boolean,
 ): Promise<PendingMigration[]> {
@@ -392,7 +393,7 @@ export async function applyTailorDB(
   if (phase === "create-update") {
     // Validate and detect migrations
     // Build types by namespace map (snapshot-shaped, the canonical deploy form)
-    const typesByNamespace = new Map<string, Record<string, SnapshotType>>();
+    const typesByNamespace = new Map<string, Record<string, TailorDBSnapshotType>>();
     for (const tailordb of migrationContext.tailorDBInputs) {
       typesByNamespace.set(tailordb.namespace, tailordb.types);
     }
@@ -979,7 +980,7 @@ async function executeSingleMigrationPostPhase(
 type TailorDBDeployInput = {
   namespace: string;
   config: TailorDBServiceConfig;
-  types: Record<string, SnapshotType>;
+  types: Record<string, TailorDBSnapshotType>;
 };
 
 /**
@@ -988,7 +989,7 @@ type TailorDBDeployInput = {
  * @returns The canonical snapshot-shaped deploy input for downstream plan/apply phases.
  */
 function toTailorDBDeployInput(service: TailorDBService): TailorDBDeployInput {
-  const types: Record<string, SnapshotType> = {};
+  const types: Record<string, TailorDBSnapshotType> = {};
   for (const [typeName, type] of Object.entries(service.types)) {
     types[typeName] = createSnapshotType(type);
   }
@@ -1308,7 +1309,7 @@ async function planTypes(
   tailordbs: ReadonlyArray<TailorDBDeployInput>,
   executors: ReadonlyArray<Executor>,
   deletedServices: ReadonlyArray<string>,
-  filteredTypesByNamespace?: Map<string, Record<string, SnapshotType>>,
+  filteredTypesByNamespace?: Map<string, Record<string, TailorDBSnapshotType>>,
   forceApplyAll = false,
 ) {
   const changeSet = createChangeSet<CreateType, UpdateType, DeleteType>("TailorDB types");
@@ -1558,22 +1559,18 @@ function isNumericLikeValue(value: string | number | bigint): boolean {
 // This will need refactoring later.
 /**
  * Generate a TailorDB type manifest from snapshot-shaped type
- * @param {SnapshotType} type - Snapshot-shaped TailorDB type
+ * @param {TailorDBSnapshotType} type - Snapshot-shaped TailorDB type
  * @param {ReadonlySet<string>} executorUsedTypes - Set of types used by executors
  * @param {GqlOperations} [namespaceGqlOperations] - Default gqlOperations for the namespace (already normalized)
  * @returns {MessageInitShape<typeof TailorDBTypeSchema>} Type manifest
  */
 function generateTailorDBTypeManifest(
-  type: SnapshotType,
+  type: TailorDBSnapshotType,
   executorUsedTypes: ReadonlySet<string>,
   namespaceGqlOperations?: GqlOperations,
 ): MessageInitShape<typeof TailorDBTypeSchema> {
-  // pluralForm is always populated by the parser when building from configure,
-  // but stored snapshots (e.g. replayed by a future sync command) may omit it.
-  // Fall back to inflection so this path stays robust either way.
-  const rawPluralForm = type.pluralForm ?? inflection.pluralize(type.name);
-  // This ensures that explicitly provided pluralForm like "PurchaseOrderList" becomes "purchaseOrderList"
-  const pluralForm = inflection.camelize(rawPluralForm, true);
+  // Ensures that explicitly provided pluralForm like "PurchaseOrderList" becomes "purchaseOrderList".
+  const pluralForm = inflection.camelize(type.pluralForm, true);
 
   const defaultSettings: {
     aggregation: boolean;
@@ -1903,43 +1900,25 @@ function protoCondition(
 function protoOperand(
   operand: SnapshotPermissionOperand,
 ): MessageInitShape<typeof TailorDBType_Permission_OperandSchema> {
-  if (typeof operand === "object" && operand !== null && !Array.isArray(operand)) {
-    if ("user" in operand && typeof operand.user === "string") {
-      return {
-        kind: {
-          case: "userField",
-          value: operand.user,
-        },
-      };
-    } else if ("record" in operand && typeof operand.record === "string") {
-      return {
-        kind: {
-          case: "recordField",
-          value: operand.record,
-        },
-      };
-    } else if ("newRecord" in operand && typeof operand.newRecord === "string") {
-      return {
-        kind: {
-          case: "newRecordField",
-          value: operand.newRecord,
-        },
-      };
-    } else if ("oldRecord" in operand && typeof operand.oldRecord === "string") {
-      return {
-        kind: {
-          case: "oldRecordField",
-          value: operand.oldRecord,
-        },
-      };
+  if (isSnapshotFieldRefOperand(operand)) {
+    if ("user" in operand) {
+      return { kind: { case: "userField", value: operand.user } };
     }
+    if ("record" in operand) {
+      return { kind: { case: "recordField", value: operand.record } };
+    }
+    if ("newRecord" in operand) {
+      return { kind: { case: "newRecordField", value: operand.newRecord } };
+    }
+    if ("oldRecord" in operand) {
+      return { kind: { case: "oldRecordField", value: operand.oldRecord } };
+    }
+    operand satisfies never;
+    throw new Error(`Unknown field-ref operand shape: ${JSON.stringify(operand)}`);
   }
 
   return {
-    kind: {
-      case: "value",
-      value: fromJson(ValueSchema, operand as Parameters<typeof fromJson>[1]),
-    },
+    kind: { case: "value", value: fromJson(ValueSchema, operand) },
   };
 }
 
@@ -2181,22 +2160,18 @@ function protoGqlCondition(
 function protoGqlOperand(
   operand: SnapshotPermissionOperand,
 ): MessageInitShape<typeof TailorDBGQLPermission_OperandSchema> {
-  if (typeof operand === "object" && operand !== null && !Array.isArray(operand)) {
-    if ("user" in operand && typeof operand.user === "string") {
-      return {
-        kind: {
-          case: "userField",
-          value: operand.user,
-        },
-      };
+  if (isSnapshotFieldRefOperand(operand)) {
+    if ("user" in operand) {
+      return { kind: { case: "userField", value: operand.user } };
     }
+    throw new Error(
+      `Unsupported field-ref operand in GQL permission: ${JSON.stringify(operand)} ` +
+        `— GQL permissions only support { user } field references`,
+    );
   }
 
   return {
-    kind: {
-      case: "value",
-      value: fromJson(ValueSchema, operand as Parameters<typeof fromJson>[1]),
-    },
+    kind: { case: "value", value: fromJson(ValueSchema, operand) },
   };
 }
 
@@ -2213,12 +2188,12 @@ interface MigrationCheckResult {
 
 /**
  * Check if there are schema differences between migration snapshots and local definitions
- * @param {ReadonlyMap<string, Record<string, SnapshotType>>} typesByNamespace - Snapshot-shaped local types by namespace
+ * @param {ReadonlyMap<string, Record<string, TailorDBSnapshotType>>} typesByNamespace - Snapshot-shaped local types by namespace
  * @param {NamespaceWithMigrations[]} namespacesWithMigrations - Namespaces with migrations config
  * @returns {Promise<MigrationCheckResult[]>} Results for each namespace
  */
 async function checkMigrationDiffs(
-  typesByNamespace: ReadonlyMap<string, Record<string, SnapshotType>>,
+  typesByNamespace: ReadonlyMap<string, Record<string, TailorDBSnapshotType>>,
   namespacesWithMigrations: NamespaceWithMigrations[],
 ): Promise<MigrationCheckResult[]> {
   const results: MigrationCheckResult[] = [];
