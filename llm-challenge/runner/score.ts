@@ -1,6 +1,5 @@
 import { problemKey } from "../shared/helpers";
 import type { ProblemMeta } from "../shared/helpers";
-import type { SolveResult } from "./solve";
 import type { TestDetail, StageInput } from "./verify";
 
 export type FailureCategory =
@@ -10,7 +9,6 @@ export type FailureCategory =
   | "generate_error"
   | "logic_error"
   | "api_misuse"
-  | "infra_failure"
   | "runner_error";
 
 export type StageResult = {
@@ -26,12 +24,6 @@ export type StageResult = {
   testDetails?: TestDetail[];
 };
 
-export type ScaffoldChange = {
-  file: string;
-  original: string;
-  modified: string;
-};
-
 export type ProblemResult = {
   problemId: string;
   problemName: string;
@@ -40,14 +32,7 @@ export type ProblemResult = {
   stages: StageResult[];
   totalScore: number;
   maxScore: number;
-  firstAttemptScore?: number;
-  firstAttemptStages?: StageResult[];
-  adjustedScore?: number;
-  solveResult?: SolveResult;
-  retryCount?: number;
-  retrySolveResults?: SolveResult[];
   totalDurationMs?: number;
-  scaffoldChanges?: ScaffoldChange[];
 };
 
 export type SuccessRate = { passed: number; total: number; rate: number };
@@ -59,38 +44,24 @@ type FailurePattern = {
   suggestedDocFix: string;
 };
 
-type RetryAnalysis = {
-  selfCorrectedCategories: Partial<Record<FailureCategory, number>>;
-  persistentCategories: Partial<Record<FailureCategory, number>>;
-};
-
 type Analytics = {
   failureDistribution: Partial<Record<FailureCategory, number>>;
   categorySuccessRates: Record<string, SuccessRate>;
   difficultySuccessRates: Record<string, SuccessRate>;
   stagePassRates: Record<string, SuccessRate>;
   commonFailurePatterns: FailurePattern[];
-  retryAnalysis?: RetryAnalysis;
 };
 
 export type ChallengeReport = {
   timestamp: string;
-  model?: string;
   sdkVersion?: string;
   results: ProblemResult[];
   totalScore: number;
   maxScore: number;
   percentage: number;
-  adjustedScore: number;
-  adjustedPercentage: number;
   weightedScore: number;
   weightedMaxScore: number;
   weightedPercentage: number;
-  totalCostUsd: number;
-  scorePerDollar?: number;
-  avgCostPerPoint?: number;
-  infraFailureCount: number;
-  validPercentage: number;
   totalDurationMs: number;
   analytics: Analytics;
 };
@@ -109,7 +80,6 @@ const failureDocSuggestions: Record<string, Record<FailureCategory, string>> = {
     generate_error: "Improve code generation error messages with fix suggestions",
     logic_error: "Add more configuration pattern examples",
     api_misuse: "Improve SDK API validation messages with expected format hints",
-    infra_failure: "Infrastructure failure - not an SDK issue",
     runner_error: "Runner error - investigate runner bug or problem setup",
   },
   typecheck: {
@@ -119,7 +89,6 @@ const failureDocSuggestions: Record<string, Record<FailureCategory, string>> = {
     generate_error: "Ensure generated types include all required fields",
     logic_error: "Add type usage patterns for complex SDK APIs",
     api_misuse: "Add type-level validation with better error messages",
-    infra_failure: "Infrastructure failure - not an SDK issue",
     runner_error: "Runner error - investigate runner bug or problem setup",
   },
   tests: {
@@ -129,7 +98,6 @@ const failureDocSuggestions: Record<string, Record<FailureCategory, string>> = {
     generate_error: "Improve generated code correctness",
     logic_error: "Add more logic examples (resolver body, executor handler, workflow jobs)",
     api_misuse: "Add API usage examples with edge cases and error handling",
-    infra_failure: "Infrastructure failure - not an SDK issue",
     runner_error: "Runner error - investigate runner bug or problem setup",
   },
 };
@@ -144,12 +112,9 @@ function classifyFailure(
   stage: "generate" | "typecheck" | "tests",
   output: string,
 ): FailureCategory | undefined {
-  // Skipped stages (due to earlier stage failure) should not be classified
   if (/^Skipped\b/.test(output)) {
     return undefined;
   }
-  // Check import errors before generic TS code matching so that TS2307
-  // ("Cannot find module") is classified as import_error, not type_error.
   if (/Cannot find module|does not provide an export/.test(output)) {
     return "import_error";
   }
@@ -176,7 +141,6 @@ export function calculateScore(meta: ProblemMeta, stages: StageInput[]): StageRe
     const maxScore = meta.scoring[s.stage];
     const category = s.passed ? undefined : classifyFailure(s.stage, s.output);
 
-    // Partial scoring for stages with test counts (generate and tests stages)
     if (s.testsTotal != null && s.testsTotal > 0) {
       const testsPassed = s.testsPassed ?? 0;
       const score =
@@ -195,10 +159,6 @@ export function calculateScore(meta: ProblemMeta, stages: StageInput[]): StageRe
   });
 }
 
-/**
- * Compute success rates grouped by a key function.
- * Each item is counted once; items where predicate returns true are counted as passed.
- */
 export function computeSuccessRates<T>(
   items: T[],
   keyFn: (item: T) => string,
@@ -220,7 +180,6 @@ export function computeSuccessRates<T>(
 }
 
 function computeAnalytics(results: ProblemResult[]): Analytics {
-  // Failure distribution
   const failureDistribution: Partial<Record<FailureCategory, number>> = {};
   for (const r of results) {
     for (const s of r.stages) {
@@ -234,7 +193,6 @@ function computeAnalytics(results: ProblemResult[]): Analytics {
   const categorySuccessRates = computeSuccessRates(results, (r) => r.category, isPerfectScore);
   const difficultySuccessRates = computeSuccessRates(results, (r) => r.difficulty, isPerfectScore);
 
-  // Stage pass rates (exclude skipped stages from totals)
   const stageItems: { stage: string; passed: boolean }[] = [];
   for (const r of results) {
     for (const s of r.stages) {
@@ -249,7 +207,6 @@ function computeAnalytics(results: ProblemResult[]): Analytics {
     (s) => s.passed,
   );
 
-  // Common failure patterns: same FailureCategory+stage appears 2+ times in same problem category
   const patternCounts: Record<string, { count: number; problems: string[]; stage: string }> = {};
   for (const r of results) {
     for (const s of r.stages) {
@@ -277,95 +234,22 @@ function computeAnalytics(results: ProblemResult[]): Analytics {
     }
   }
 
-  // Retry analysis
-  let retryAnalysis: RetryAnalysis | undefined;
-  const hasRetries = results.some((r) => r.retrySolveResults && r.retrySolveResults.length > 0);
-  if (hasRetries) {
-    const selfCorrected: Partial<Record<FailureCategory, number>> = {};
-    const persistent: Partial<Record<FailureCategory, number>> = {};
-
-    for (const r of results) {
-      if (!r.retrySolveResults || r.retrySolveResults.length === 0) {
-        continue;
-      }
-      // Skip infra-only retries: when retryCount is 0 or firstAttemptStages is absent,
-      // all retries were infra failures and should not affect retry analytics
-      if ((r.retryCount ?? 0) === 0 || !r.firstAttemptStages) {
-        continue;
-      }
-      const failedCategories = (stages: StageResult[]): Set<FailureCategory> =>
-        new Set(stages.filter((s) => !s.passed && s.category).map((s) => s.category!));
-      const preRetryCategories = failedCategories(r.firstAttemptStages ?? r.stages);
-      const postRetryCategories = failedCategories(r.stages);
-      for (const cat of preRetryCategories) {
-        if (postRetryCategories.has(cat)) {
-          persistent[cat] = (persistent[cat] ?? 0) + 1;
-        } else {
-          selfCorrected[cat] = (selfCorrected[cat] ?? 0) + 1;
-        }
-      }
-    }
-
-    retryAnalysis = { selfCorrectedCategories: selfCorrected, persistentCategories: persistent };
-  }
-
   return {
     failureDistribution,
     categorySuccessRates,
     difficultySuccessRates,
     stagePassRates,
     commonFailurePatterns,
-    retryAnalysis,
   };
-}
-
-export function isInfraFailure(result: ProblemResult): boolean {
-  return result.stages.length > 0 && result.stages.every((s) => s.category === "infra_failure");
-}
-
-function computeProblemCost(result: ProblemResult): number {
-  let cost = result.solveResult?.costUsd ?? 0;
-  if (result.retrySolveResults) {
-    cost += result.retrySolveResults.reduce((s, rs) => s + rs.costUsd, 0);
-  }
-  return cost;
-}
-
-/**
- * Compute adjusted score with retry penalty.
- * Formula: base_score * (1 - 0.1 * retry_count), max 30% reduction.
- */
-export function computeAdjustedScore(result: ProblemResult): number {
-  const retryCount = result.retryCount ?? 0;
-  if (retryCount === 0) {
-    return result.totalScore;
-  }
-  const penalty = Math.min(0.1 * retryCount, 0.3);
-  return Math.round(result.totalScore * (1 - penalty));
 }
 
 export function createReport(
   results: ProblemResult[],
-  metadata?: { model?: string; sdkVersion?: string; elapsedMs?: number },
+  metadata?: { sdkVersion?: string; elapsedMs?: number },
 ): ChallengeReport {
-  const infraFailureCount = results.filter(isInfraFailure).length;
-  const validResults = results.filter((r) => !isInfraFailure(r));
-
   const totalScore = results.reduce((sum, r) => sum + r.totalScore, 0);
   const maxScore = results.reduce((sum, r) => sum + r.maxScore, 0);
 
-  // Adjusted score with retry penalty
-  const adjustedScore = results.reduce((sum, r) => sum + (r.adjustedScore ?? r.totalScore), 0);
-
-  // Exclude infra failures from cost calculation
-  const totalCostUsd = validResults.reduce((sum, r) => sum + computeProblemCost(r), 0);
-
-  // Valid-only scoring (excluding infra failures)
-  const validScore = validResults.reduce((sum, r) => sum + r.totalScore, 0);
-  const validMaxScore = validResults.reduce((sum, r) => sum + r.maxScore, 0);
-  const validPercentage = validMaxScore > 0 ? Math.round((validScore / validMaxScore) * 100) : 0;
-
-  // Weighted scoring
   let weightedScore = 0;
   let weightedMaxScore = 0;
   for (const r of results) {
@@ -374,45 +258,29 @@ export function createReport(
     weightedMaxScore += r.maxScore * weight;
   }
 
-  // Cost efficiency (based on valid results only)
-  const scorePerDollar = totalCostUsd > 0 ? validScore / totalCostUsd : undefined;
-  const avgCostPerPoint =
-    totalCostUsd > 0 && validScore > 0 ? totalCostUsd / validScore : undefined;
-
-  // Total duration: prefer wall-clock elapsed time (accurate for parallel runs)
   const totalDurationMs =
     metadata?.elapsedMs ?? results.reduce((sum, r) => sum + (r.totalDurationMs ?? 0), 0);
 
-  const analytics = computeAnalytics(validResults);
+  const analytics = computeAnalytics(results);
 
   return {
     timestamp: new Date().toISOString(),
-    model: metadata?.model,
     sdkVersion: metadata?.sdkVersion,
     results,
     totalScore,
     maxScore,
     percentage: maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0,
-    adjustedScore,
-    adjustedPercentage: maxScore > 0 ? Math.round((adjustedScore / maxScore) * 100) : 0,
     weightedScore: Math.round(weightedScore * 10) / 10,
     weightedMaxScore: Math.round(weightedMaxScore * 10) / 10,
     weightedPercentage:
       weightedMaxScore > 0 ? Math.round((weightedScore / weightedMaxScore) * 100) : 0,
-    totalCostUsd,
-    scorePerDollar,
-    avgCostPerPoint,
-    infraFailureCount,
-    validPercentage,
     totalDurationMs,
     analytics,
   };
 }
 
 export function formatReportTable(report: ChallengeReport): string {
-  const hasCost = report.results.some((r) => r.solveResult !== undefined);
-  const hasRetries = report.results.some((r) => (r.retryCount ?? 0) > 0);
-  const width = hasCost ? 102 : 90;
+  const width = 90;
 
   const lines: string[] = [];
   lines.push("=".repeat(width));
@@ -420,97 +288,53 @@ export function formatReportTable(report: ChallengeReport): string {
   lines.push("=".repeat(width));
   lines.push("");
 
-  let header =
+  const header =
     "Problem".padEnd(30) + "Difficulty".padEnd(12) + "Score".padEnd(15) + "Status".padEnd(10);
-  if (hasRetries) {
-    header += "1st".padEnd(8);
-  }
-  if (hasCost) {
-    header += "Cost";
-  }
   lines.push(header);
   lines.push("-".repeat(width));
 
   for (const r of report.results) {
-    const infraFailed = isInfraFailure(r);
     const nameRaw = problemKey(r.problemId, r.problemName);
-    const name = (nameRaw.length > 29 ? `${nameRaw.slice(0, 28)}\u2026` : nameRaw).padEnd(30);
+    const name = (nameRaw.length > 29 ? `${nameRaw.slice(0, 28)}…` : nameRaw).padEnd(30);
     const diff = r.difficulty.padEnd(12);
-    const score = (infraFailed ? "-" : `${r.totalScore}/${r.maxScore}`).padEnd(15);
+    const score = `${r.totalScore}/${r.maxScore}`.padEnd(15);
     let statusLabel = "PARTIAL";
-    if (infraFailed) {
-      statusLabel = "INFRA";
-    } else if (r.totalScore === r.maxScore) {
+    if (r.totalScore === r.maxScore) {
       statusLabel = "PASS";
+    } else if (r.totalScore === 0) {
+      statusLabel = "FAIL";
     }
     const status = statusLabel.padEnd(10);
-    let line = `${name}${diff}${score}${status}`;
-    if (hasRetries) {
-      const firstAttempt =
-        !infraFailed && r.firstAttemptScore != null ? `${r.firstAttemptScore}` : "";
-      line += firstAttempt.padEnd(8);
-    }
-    if (hasCost && r.solveResult && !infraFailed) {
-      line += `$${computeProblemCost(r).toFixed(4)}`;
-    }
-    lines.push(line);
+    lines.push(`${name}${diff}${score}${status}`);
 
-    if (!infraFailed) {
-      for (const s of r.stages) {
-        const stageName = `  ${s.stage}`.padEnd(30);
-        const stageScore = `${s.score}/${s.maxScore}`.padEnd(15);
-        let stageStatus = "FAIL";
-        if (s.passed) {
-          stageStatus = "ok";
-        } else if (s.score > 0) {
-          stageStatus = "PARTIAL";
-        }
-        const categoryLabel = s.category ? ` [${s.category}]` : "";
-        const testCountLabel =
-          s.testsTotal != null ? ` (${s.testsPassed ?? 0}/${s.testsTotal} tests)` : "";
-        const durationLabel = s.durationMs != null ? ` ${(s.durationMs / 1000).toFixed(1)}s` : "";
-        lines.push(
-          `${stageName}${"".padEnd(12)}${stageScore}${stageStatus}${categoryLabel}${testCountLabel}${durationLabel}`,
-        );
+    for (const s of r.stages) {
+      const stageName = `  ${s.stage}`.padEnd(30);
+      const stageScore = `${s.score}/${s.maxScore}`.padEnd(15);
+      let stageStatus = "FAIL";
+      if (s.passed) {
+        stageStatus = "ok";
+      } else if (s.score > 0) {
+        stageStatus = "PARTIAL";
       }
+      const categoryLabel = s.category ? ` [${s.category}]` : "";
+      const testCountLabel =
+        s.testsTotal != null ? ` (${s.testsPassed ?? 0}/${s.testsTotal} tests)` : "";
+      const durationLabel = s.durationMs != null ? ` ${(s.durationMs / 1000).toFixed(1)}s` : "";
+      lines.push(
+        `${stageName}${"".padEnd(12)}${stageScore}${stageStatus}${categoryLabel}${testCountLabel}${durationLabel}`,
+      );
     }
   }
 
   lines.push("-".repeat(width));
-  let totalLine = `${"Total".padEnd(30)}${"".padEnd(12)}${`${report.totalScore}/${report.maxScore}`.padEnd(15)}${`${report.percentage}%`.padEnd(10)}`;
-  if (hasCost) {
-    totalLine += `$${report.totalCostUsd.toFixed(4)}`;
-  }
-  lines.push(totalLine);
+  lines.push(
+    `${"Total".padEnd(30)}${"".padEnd(12)}${`${report.totalScore}/${report.maxScore}`.padEnd(15)}${`${report.percentage}%`.padEnd(10)}`,
+  );
 
-  // Adjusted score (with retry penalty)
-  if (hasRetries && report.adjustedScore !== report.totalScore) {
-    lines.push(
-      `${"Adjusted (retry penalty)".padEnd(30)}${"".padEnd(12)}${`${report.adjustedScore}/${report.maxScore}`.padEnd(15)}${`${report.adjustedPercentage}%`}`,
-    );
-  }
-
-  // Weighted score
   lines.push(
     `${"Weighted".padEnd(30)}${"".padEnd(12)}${`${report.weightedScore}/${report.weightedMaxScore}`.padEnd(15)}${`${report.weightedPercentage}%`}`,
   );
 
-  // Valid score (excluding infra failures)
-  if (report.infraFailureCount > 0) {
-    lines.push(
-      `${"Valid (excl. infra)".padEnd(30)}${"".padEnd(12)}${`${report.results.length - report.infraFailureCount}/${report.results.length} problems`.padEnd(15)}${`${report.validPercentage}%`}`,
-    );
-  }
-
-  // Cost efficiency
-  if (report.scorePerDollar != null) {
-    lines.push("");
-    lines.push(
-      `Cost efficiency: ${report.scorePerDollar.toFixed(1)} pts/$  |  $${report.avgCostPerPoint?.toFixed(4)}/pt`,
-    );
-  }
-
-  // Total duration
   if (report.totalDurationMs > 0) {
     const totalSecs = report.totalDurationMs / 1000;
     const mins = Math.floor(totalSecs / 60);
@@ -518,30 +342,7 @@ export function formatReportTable(report: ChallengeReport): string {
     lines.push(`Total duration: ${mins}m ${secs}s`);
   }
 
-  // Infra failure summary
-  if (report.infraFailureCount > 0) {
-    lines.push("");
-    lines.push(
-      `⚠ ${report.infraFailureCount} problem(s) skipped due to infrastructure failures (auth/network/rate-limit)`,
-    );
-  }
-
-  // Scaffold modification warnings
-  const scaffoldModified = report.results.filter(
-    (r) => r.scaffoldChanges && r.scaffoldChanges.length > 0,
-  );
-  if (scaffoldModified.length > 0) {
-    lines.push("");
-    lines.push("WARNING: Scaffold files modified during solve (restored before verify):");
-    for (const r of scaffoldModified) {
-      const files = r.scaffoldChanges!.map((c) => c.file).join(", ");
-      lines.push(`  ${problemKey(r.problemId, r.problemName)}: ${files}`);
-    }
-  }
-
-  // All problems passed warning
-  const validResults = report.results.filter((r) => !isInfraFailure(r));
-  if (validResults.length > 0 && validResults.every((r) => r.totalScore === r.maxScore)) {
+  if (report.results.length > 0 && report.results.every((r) => r.totalScore === r.maxScore)) {
     lines.push("");
     lines.push(
       "WARNING: All problems passed — consider increasing difficulty or adding harder problems",
@@ -550,7 +351,6 @@ export function formatReportTable(report: ChallengeReport): string {
 
   lines.push("=".repeat(width));
 
-  // Analytics summary
   const { analytics } = report;
 
   function appendRateSection(title: string, rates: Record<string, SuccessRate>): void {
@@ -569,7 +369,6 @@ export function formatReportTable(report: ChallengeReport): string {
   appendRateSection("Difficulty Success Rates:", analytics.difficultySuccessRates);
   appendRateSection("Stage Pass Rates:", analytics.stagePassRates);
 
-  // Common failure patterns
   if (analytics.commonFailurePatterns.length > 0) {
     lines.push("");
     lines.push("Common Failure Patterns:");

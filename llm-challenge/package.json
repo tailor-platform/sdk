@@ -7,7 +7,6 @@
   "scripts": {
     "challenge": "tsx runner/run.ts",
     "challenge:verify-solution": "tsx runner/run.ts --all --use-solution",
-    "challenge:solve": "tsx runner/run.ts --all --solve",
     "challenge:analyze": "tsx runner/analyze.ts",
     "test:runner": "vitest run --config vitest.runner.config.ts",
     "typecheck": "tsc --noEmit",

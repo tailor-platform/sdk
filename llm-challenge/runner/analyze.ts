@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { problemKey, requireArg } from "../shared/helpers";
-import { computeSuccessRates, isInfraFailure } from "./score";
+import { computeSuccessRates } from "./score";
 import type { ChallengeReport, FailureCategory, SuccessRate } from "./score";
 
 const challengeRoot = path.resolve(import.meta.dirname, "..");
@@ -99,8 +99,7 @@ function computeRatesFromReport(
   if (cached) {
     return cached;
   }
-  const validResults = report.results.filter((r) => !isInfraFailure(r));
-  return computeSuccessRates(validResults, groupKeyFn, (r) => r.totalScore === r.maxScore);
+  return computeSuccessRates(report.results, groupKeyFn, (r) => r.totalScore === r.maxScore);
 }
 
 function computeCategoryRates(report: ChallengeReport): SuccessRateMap {
@@ -143,22 +142,15 @@ function showComparison(before: ChallengeReport, after: ChallengeReport): void {
   console.log("Report Comparison");
   console.log("=".repeat(width));
   console.log("");
-  console.log(
-    `  Before: ${formatTimestamp(before.timestamp)}${before.model ? ` (${before.model})` : ""}`,
-  );
-  console.log(
-    `  After:  ${formatTimestamp(after.timestamp)}${after.model ? ` (${after.model})` : ""}`,
-  );
+  console.log(`  Before: ${formatTimestamp(before.timestamp)}`);
+  console.log(`  After:  ${formatTimestamp(after.timestamp)}`);
   console.log("");
 
-  // Build lookup maps
   const beforeMap = new Map(before.results.map((r) => [problemKey(r.problemId, r.problemName), r]));
   const afterMap = new Map(after.results.map((r) => [problemKey(r.problemId, r.problemName), r]));
 
-  // Collect all problem keys in order
   const allKeys = [...new Set([...beforeMap.keys(), ...afterMap.keys()])].sort();
 
-  // Per-problem comparison table
   const header =
     "Problem".padEnd(30) + "Before".padEnd(12) + "After".padEnd(12) + "Delta".padEnd(8) + "Notes";
   console.log(header);
@@ -181,7 +173,6 @@ function showComparison(before: ChallengeReport, after: ChallengeReport): void {
       deltaStr = "removed";
     }
 
-    // Failure category change
     const bCat = b ? getFailureCategory(b) : undefined;
     const aCat = a ? getFailureCategory(a) : undefined;
     let notes = "";
@@ -202,23 +193,10 @@ function showComparison(before: ChallengeReport, after: ChallengeReport): void {
 
   console.log("-".repeat(width));
 
-  // Total
   const totalDelta = (after.totalScore ?? 0) - (before.totalScore ?? 0);
   console.log(
     `${"Total".padEnd(30)}${`${before.totalScore}/${before.maxScore}`.padEnd(12)}${`${after.totalScore}/${after.maxScore}`.padEnd(12)}${formatDelta(totalDelta).padEnd(8)}${before.percentage}% -> ${after.percentage}%`,
   );
-
-  // Adjusted score comparison (if retries were used)
-  if (before.adjustedScore != null || after.adjustedScore != null) {
-    const adjBefore = before.adjustedScore ?? before.totalScore;
-    const adjAfter = after.adjustedScore ?? after.totalScore;
-    const adjDelta = adjAfter - adjBefore;
-    const adjPctBefore = before.adjustedPercentage ?? before.percentage;
-    const adjPctAfter = after.adjustedPercentage ?? after.percentage;
-    console.log(
-      `${"Adjusted".padEnd(30)}${`${adjBefore}/${before.maxScore}`.padEnd(12)}${`${adjAfter}/${after.maxScore}`.padEnd(12)}${formatDelta(adjDelta).padEnd(8)}${adjPctBefore}% -> ${adjPctAfter}%`,
-    );
-  }
 
   console.log("");
 
@@ -233,7 +211,6 @@ function showComparison(before: ChallengeReport, after: ChallengeReport): void {
     computeDifficultyRates(after),
   );
 
-  // Failure distribution changes (if analytics available)
   if (before.analytics?.failureDistribution || after.analytics?.failureDistribution) {
     const bDist = before.analytics?.failureDistribution ?? {};
     const aDist = after.analytics?.failureDistribution ?? {};
@@ -261,39 +238,21 @@ function showTrend(reports: ChallengeReport[]): void {
   console.log("=".repeat(width));
   console.log("");
 
-  // Header
-  const hasAdjusted = reports.some(
-    (r) => r.adjustedScore != null && r.adjustedScore !== r.totalScore,
-  );
-  let header = "Timestamp".padEnd(22) + "Model".padEnd(12) + "Score".padEnd(15) + "Pct".padEnd(8);
-  if (hasAdjusted) {
-    header += "Adj%".padEnd(8);
-  }
-  header += "Cost".padEnd(12) + "Pts/$";
+  const header = "Timestamp".padEnd(22) + "SDK".padEnd(14) + "Score".padEnd(15) + "Pct";
   console.log(header);
   console.log("-".repeat(width));
 
   for (const r of reports) {
     const ts = formatTimestamp(r.timestamp);
-    const model = (r.model ?? "-").slice(0, 11).padEnd(12);
+    const sdk = (r.sdkVersion ?? "-").slice(0, 13).padEnd(14);
     const score = `${r.totalScore}/${r.maxScore}`.padEnd(15);
-    const pct = `${r.percentage}%`.padEnd(8);
-    let line = `${ts}  ${model}${score}${pct}`;
-    if (hasAdjusted) {
-      const adjPct = r.adjustedPercentage != null ? `${r.adjustedPercentage}%` : "-";
-      line += adjPct.padEnd(8);
-    }
-    const cost = r.totalCostUsd > 0 ? `$${r.totalCostUsd.toFixed(4)}` : "-";
-    line += cost.padEnd(12);
-    const ptsPerDollar = r.scorePerDollar != null ? `${r.scorePerDollar.toFixed(1)}` : "-";
-    line += ptsPerDollar;
-    console.log(line);
+    const pct = `${r.percentage}%`;
+    console.log(`${ts}  ${sdk}${score}${pct}`);
   }
 
   console.log("-".repeat(width));
   console.log("");
 
-  // Per-problem trend
   const problemKeySet = new Set<string>();
   for (const r of reports) {
     for (const p of r.results) {
@@ -341,7 +300,6 @@ function main(): void {
     return;
   }
 
-  // Default: compare latest 2 reports
   const reports = loadReports();
   if (reports.length < 2) {
     console.error("Need at least 2 reports for comparison. Use --trend for single report view.");
