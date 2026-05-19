@@ -143,7 +143,6 @@ export function defineAuth<
   MachineUserOnlyAuthInput<MachineUserNames, MachineUserAttributes, ConnectionNames>,
   MachineUserNames
 >;
-/* @__NO_SIDE_EFFECTS__ */
 export function defineAuth<
   const Name extends string,
   const User extends TailorDBInstance,
@@ -176,5 +175,19 @@ export function defineAuth<
     getConnectionToken<C extends string>(connectionName: C): Promise<AuthConnectionTokenResult>;
   };
 
+  validateAuthConfig(result);
+
   return result as typeof result & AuthDefinitionBrand;
+}
+
+function validateAuthConfig(config: {
+  userProfile?: unknown;
+  machineUserAttributes?: unknown;
+}): void {
+  const hasUserProfile = config.userProfile !== undefined;
+  const hasMachineUserAttributes = config.machineUserAttributes !== undefined;
+
+  if (hasUserProfile && hasMachineUserAttributes) {
+    throw new Error("Provide either userProfile or machineUserAttributes, not both.");
+  }
 }
