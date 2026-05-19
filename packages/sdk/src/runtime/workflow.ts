@@ -32,80 +32,80 @@ export interface TriggerWorkflowOptions {
 /**
  * Platform API surface for `tailor.workflow`. Describes the shape the platform
  * runtime injects on `globalThis.tailor.workflow`.
- * @internal
+ *
+ * Each method below is also re-exported as a top-level named export from this
+ * module so callers can either `import * as workflow from
+ * "@tailor-platform/sdk/runtime/workflow"` or pick individual methods.
  */
 export interface TailorWorkflowAPI {
+  /**
+   * Triggers a workflow and returns its execution ID.
+   * @param workflowName - Workflow name as defined in tailor.config
+   * @param args - Arguments forwarded to the workflow's main job
+   * @param options - Optional trigger options (e.g. `authInvoker`)
+   * @returns The execution ID of the triggered workflow
+   */
   triggerWorkflow(
     workflowName: string,
     args?: any,
     options?: TriggerWorkflowOptions,
   ): Promise<string>;
+
+  /**
+   * Triggers a job function and returns its result.
+   * @param jobName - Job name as defined in the workflow
+   * @param args - Arguments forwarded to the job
+   * @returns The job's return value
+   */
   triggerJobFunction(jobName: string, args?: any): any;
+
+  /**
+   * Suspends the current workflow execution and waits for an external signal to resume.
+   * @param key - Wait point key
+   * @param payload - Optional payload to record with the wait point
+   * @returns The payload supplied by the corresponding `resolve` call
+   */
   wait(key: string, payload?: any): any;
+
+  /**
+   * Resolves a waiting workflow execution, causing it to resume.
+   * @param executionId - The execution to resume
+   * @param key - Wait point key to resolve
+   * @param callback - Callback receiving the wait payload; its return value is forwarded to `wait`
+   * @returns A promise that resolves once the resolve has been recorded
+   */
   resolve(executionId: string, key: string, callback: (waitPayload: any) => any): Promise<void>;
 }
 
+const api = (): TailorWorkflowAPI =>
+  (globalThis as { tailor: { workflow: TailorWorkflowAPI } }).tailor.workflow;
+
 /**
- * Triggers a workflow and returns its execution ID.
- * @param workflowName - Workflow name as defined in tailor.config
- * @param args - Arguments forwarded to the workflow's main job
- * @param options - Optional trigger options (e.g. `authInvoker`)
+ * See {@link TailorWorkflowAPI.triggerWorkflow}.
+ * @param args - Forwarded to {@link TailorWorkflowAPI.triggerWorkflow}
  * @returns The execution ID of the triggered workflow
  */
-export function triggerWorkflow(
-  workflowName: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  args?: any,
-  options?: TriggerWorkflowOptions,
-): Promise<string> {
-  return (
-    globalThis as { tailor: { workflow: TailorWorkflowAPI } }
-  ).tailor.workflow.triggerWorkflow(workflowName, args, options);
-}
+export const triggerWorkflow: TailorWorkflowAPI["triggerWorkflow"] = (...args) =>
+  api().triggerWorkflow(...args);
 
 /**
- * Triggers a job function and returns its result.
- * @param jobName - Job name as defined in the workflow
- * @param args - Arguments forwarded to the job
+ * See {@link TailorWorkflowAPI.triggerJobFunction}.
+ * @param args - Forwarded to {@link TailorWorkflowAPI.triggerJobFunction}
  * @returns The job's return value
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function triggerJobFunction(jobName: string, args?: any): any {
-  return (
-    globalThis as { tailor: { workflow: TailorWorkflowAPI } }
-  ).tailor.workflow.triggerJobFunction(jobName, args);
-}
+export const triggerJobFunction: TailorWorkflowAPI["triggerJobFunction"] = (...args) =>
+  api().triggerJobFunction(...args);
 
 /**
- * Suspends the current workflow execution and waits for an external signal to resume.
- * @param key - Wait point key
- * @param payload - Optional payload to record with the wait point
+ * See {@link TailorWorkflowAPI.wait}.
+ * @param args - Forwarded to {@link TailorWorkflowAPI.wait}
  * @returns The payload supplied by the corresponding `resolve` call
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function wait(key: string, payload?: any): any {
-  return (globalThis as { tailor: { workflow: TailorWorkflowAPI } }).tailor.workflow.wait(
-    key,
-    payload,
-  );
-}
+export const wait: TailorWorkflowAPI["wait"] = (...args) => api().wait(...args);
 
 /**
- * Resolves a waiting workflow execution, causing it to resume.
- * @param executionId - The execution to resume
- * @param key - Wait point key to resolve
- * @param callback - Callback receiving the wait payload; its return value is forwarded to `wait`
+ * See {@link TailorWorkflowAPI.resolve}.
+ * @param args - Forwarded to {@link TailorWorkflowAPI.resolve}
  * @returns A promise that resolves once the resolve has been recorded
  */
-export function resolve(
-  executionId: string,
-  key: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  callback: (waitPayload: any) => any,
-): Promise<void> {
-  return (globalThis as { tailor: { workflow: TailorWorkflowAPI } }).tailor.workflow.resolve(
-    executionId,
-    key,
-    callback,
-  );
-}
+export const resolve: TailorWorkflowAPI["resolve"] = (...args) => api().resolve(...args);

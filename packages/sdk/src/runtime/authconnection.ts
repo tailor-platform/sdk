@@ -15,20 +15,27 @@
 /**
  * Platform API surface for `tailor.authconnection`. Describes the shape the
  * platform runtime injects on `globalThis.tailor.authconnection`.
- * @internal
+ *
+ * Each method below is also re-exported as a top-level named export from this
+ * module so callers can either `import * as authconnection from
+ * "@tailor-platform/sdk/runtime/authconnection"` or pick individual methods.
  */
 export interface TailorAuthconnectionAPI {
+  /**
+   * Returns the access token for the given auth connection.
+   * @param connectionName - Auth connection name as defined in tailor.config
+   * @returns Token payload (provider-specific shape)
+   */
   getConnectionToken(connectionName: string): Promise<any>;
 }
 
+const api = (): TailorAuthconnectionAPI =>
+  (globalThis as { tailor: { authconnection: TailorAuthconnectionAPI } }).tailor.authconnection;
+
 /**
- * Returns the access token for the given auth connection.
- * @param connectionName - Auth connection name as defined in tailor.config
+ * See {@link TailorAuthconnectionAPI.getConnectionToken}.
+ * @param args - Forwarded to {@link TailorAuthconnectionAPI.getConnectionToken}
  * @returns Token payload (provider-specific shape)
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function getConnectionToken(connectionName: string): Promise<any> {
-  return (
-    globalThis as { tailor: { authconnection: TailorAuthconnectionAPI } }
-  ).tailor.authconnection.getConnectionToken(connectionName);
-}
+export const getConnectionToken: TailorAuthconnectionAPI["getConnectionToken"] = (...args) =>
+  api().getConnectionToken(...args);

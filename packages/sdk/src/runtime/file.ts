@@ -106,9 +106,23 @@ export interface TailorDBFileError extends Error {
 /**
  * Platform API surface for `tailordb.file`. Describes the shape the platform
  * runtime injects on `globalThis.tailordb.file`.
- * @internal
+ *
+ * Each method below is also re-exported as a top-level named export from this
+ * module (e.g. `upload`, `download`, `deleteFile`) so callers can either
+ * `import * as file from "@tailor-platform/sdk/runtime/file"` or pick
+ * individual methods.
  */
 export interface TailorDBFileAPI {
+  /**
+   * Upload a file to TailorDB.
+   * @param namespace - TailorDB namespace
+   * @param typeName - TailorDB type name
+   * @param fieldName - File field name on the type
+   * @param recordId - Record ID owning the field
+   * @param data - File contents
+   * @param options - Upload options (e.g. `contentType`)
+   * @returns Upload response containing the file metadata
+   */
   upload(
     namespace: string,
     typeName: string,
@@ -118,6 +132,17 @@ export interface TailorDBFileAPI {
     options?: FileUploadOptions,
   ): Promise<FileUploadResponse>;
 
+  /**
+   * Download a file from TailorDB.
+   *
+   * Throws `TailorDBFileError` with code `FILE_TOO_LARGE` when the file
+   * exceeds 10MB — use {@link openDownloadStream} for large files.
+   * @param namespace - TailorDB namespace
+   * @param typeName - TailorDB type name
+   * @param fieldName - File field name on the type
+   * @param recordId - Record ID owning the field
+   * @returns Bytes and metadata for the file
+   */
   download(
     namespace: string,
     typeName: string,
@@ -125,6 +150,17 @@ export interface TailorDBFileAPI {
     recordId: string,
   ): Promise<FileDownloadResponse>;
 
+  /**
+   * Download a file from TailorDB as a Base64-encoded string.
+   *
+   * Throws `TailorDBFileError` with code `FILE_TOO_LARGE` when the file
+   * exceeds 10MB — use {@link openDownloadStream} for large files.
+   * @param namespace - TailorDB namespace
+   * @param typeName - TailorDB type name
+   * @param fieldName - File field name on the type
+   * @param recordId - Record ID owning the field
+   * @returns Base64-encoded contents and metadata for the file
+   */
   downloadAsBase64(
     namespace: string,
     typeName: string,
@@ -132,8 +168,25 @@ export interface TailorDBFileAPI {
     recordId: string,
   ): Promise<FileDownloadAsBase64Response>;
 
+  /**
+   * Delete a file from TailorDB. Exported as `deleteFile` (and aliased as
+   * `delete`) so it can be used both with named and namespace imports.
+   * @param namespace - TailorDB namespace
+   * @param typeName - TailorDB type name
+   * @param fieldName - File field name on the type
+   * @param recordId - Record ID owning the field
+   * @returns Resolves once the file has been deleted
+   */
   delete(namespace: string, typeName: string, fieldName: string, recordId: string): Promise<void>;
 
+  /**
+   * Get file metadata from TailorDB.
+   * @param namespace - TailorDB namespace
+   * @param typeName - TailorDB type name
+   * @param fieldName - File field name on the type
+   * @param recordId - Record ID owning the field
+   * @returns Metadata for the stored file
+   */
   getMetadata(
     namespace: string,
     typeName: string,
@@ -141,6 +194,14 @@ export interface TailorDBFileAPI {
     recordId: string,
   ): Promise<FileMetadata>;
 
+  /**
+   * Open a download stream for large files.
+   * @param namespace - TailorDB namespace
+   * @param typeName - TailorDB type name
+   * @param fieldName - File field name on the type
+   * @param recordId - Record ID owning the field
+   * @returns Async iterator yielding file chunks; call `close()` to release resources
+   */
   openDownloadStream(
     namespace: string,
     typeName: string,
@@ -149,148 +210,51 @@ export interface TailorDBFileAPI {
   ): Promise<FileStreamIterator>;
 }
 
+const api = (): TailorDBFileAPI =>
+  (globalThis as { tailordb: { file: TailorDBFileAPI } }).tailordb.file;
+
 /**
- * Upload a file to TailorDB.
- * @param namespace - TailorDB namespace
- * @param typeName - TailorDB type name
- * @param fieldName - File field name on the type
- * @param recordId - Record ID owning the field
- * @param data - File contents
- * @param options - Upload options (e.g. `contentType`)
+ * See {@link TailorDBFileAPI.upload}.
+ * @param args - Forwarded to {@link TailorDBFileAPI.upload}
  * @returns Upload response containing the file metadata
  */
-export function upload(
-  namespace: string,
-  typeName: string,
-  fieldName: string,
-  recordId: string,
-  data: string | ArrayBuffer | Uint8Array | number[],
-  options?: FileUploadOptions,
-): Promise<FileUploadResponse> {
-  return (globalThis as { tailordb: { file: TailorDBFileAPI } }).tailordb.file.upload(
-    namespace,
-    typeName,
-    fieldName,
-    recordId,
-    data,
-    options,
-  );
-}
+export const upload: TailorDBFileAPI["upload"] = (...args) => api().upload(...args);
 
 /**
- * Download a file from TailorDB.
- *
- * Throws `TailorDBFileError` with code `FILE_TOO_LARGE` when the file
- * exceeds 10MB — use {@link openDownloadStream} for large files.
- * @param namespace - TailorDB namespace
- * @param typeName - TailorDB type name
- * @param fieldName - File field name on the type
- * @param recordId - Record ID owning the field
+ * See {@link TailorDBFileAPI.download}.
+ * @param args - Forwarded to {@link TailorDBFileAPI.download}
  * @returns Bytes and metadata for the file
  */
-export function download(
-  namespace: string,
-  typeName: string,
-  fieldName: string,
-  recordId: string,
-): Promise<FileDownloadResponse> {
-  return (globalThis as { tailordb: { file: TailorDBFileAPI } }).tailordb.file.download(
-    namespace,
-    typeName,
-    fieldName,
-    recordId,
-  );
-}
+export const download: TailorDBFileAPI["download"] = (...args) => api().download(...args);
 
 /**
- * Download a file from TailorDB as a Base64-encoded string.
- *
- * Throws `TailorDBFileError` with code `FILE_TOO_LARGE` when the file
- * exceeds 10MB — use {@link openDownloadStream} for large files.
- * @param namespace - TailorDB namespace
- * @param typeName - TailorDB type name
- * @param fieldName - File field name on the type
- * @param recordId - Record ID owning the field
+ * See {@link TailorDBFileAPI.downloadAsBase64}.
+ * @param args - Forwarded to {@link TailorDBFileAPI.downloadAsBase64}
  * @returns Base64-encoded contents and metadata for the file
  */
-export function downloadAsBase64(
-  namespace: string,
-  typeName: string,
-  fieldName: string,
-  recordId: string,
-): Promise<FileDownloadAsBase64Response> {
-  return (globalThis as { tailordb: { file: TailorDBFileAPI } }).tailordb.file.downloadAsBase64(
-    namespace,
-    typeName,
-    fieldName,
-    recordId,
-  );
-}
+export const downloadAsBase64: TailorDBFileAPI["downloadAsBase64"] = (...args) =>
+  api().downloadAsBase64(...args);
 
 /**
- * Delete a file from TailorDB.
- * @param namespace - TailorDB namespace
- * @param typeName - TailorDB type name
- * @param fieldName - File field name on the type
- * @param recordId - Record ID owning the field
+ * See {@link TailorDBFileAPI.delete}.
+ * @param args - Forwarded to {@link TailorDBFileAPI.delete}
  * @returns Resolves once the file has been deleted
  */
-export function deleteFile(
-  namespace: string,
-  typeName: string,
-  fieldName: string,
-  recordId: string,
-): Promise<void> {
-  return (globalThis as { tailordb: { file: TailorDBFileAPI } }).tailordb.file.delete(
-    namespace,
-    typeName,
-    fieldName,
-    recordId,
-  );
-}
+export const deleteFile: TailorDBFileAPI["delete"] = (...args) => api().delete(...args);
 
 /**
- * Get file metadata from TailorDB.
- * @param namespace - TailorDB namespace
- * @param typeName - TailorDB type name
- * @param fieldName - File field name on the type
- * @param recordId - Record ID owning the field
+ * See {@link TailorDBFileAPI.getMetadata}.
+ * @param args - Forwarded to {@link TailorDBFileAPI.getMetadata}
  * @returns Metadata for the stored file
  */
-export function getMetadata(
-  namespace: string,
-  typeName: string,
-  fieldName: string,
-  recordId: string,
-): Promise<FileMetadata> {
-  return (globalThis as { tailordb: { file: TailorDBFileAPI } }).tailordb.file.getMetadata(
-    namespace,
-    typeName,
-    fieldName,
-    recordId,
-  );
-}
+export const getMetadata: TailorDBFileAPI["getMetadata"] = (...args) => api().getMetadata(...args);
 
 /**
- * Open a download stream for large files.
- * @param namespace - TailorDB namespace
- * @param typeName - TailorDB type name
- * @param fieldName - File field name on the type
- * @param recordId - Record ID owning the field
+ * See {@link TailorDBFileAPI.openDownloadStream}.
+ * @param args - Forwarded to {@link TailorDBFileAPI.openDownloadStream}
  * @returns Async iterator yielding file chunks; call `close()` to release resources
  */
-export function openDownloadStream(
-  namespace: string,
-  typeName: string,
-  fieldName: string,
-  recordId: string,
-): Promise<FileStreamIterator> {
-  return (globalThis as { tailordb: { file: TailorDBFileAPI } }).tailordb.file.openDownloadStream(
-    namespace,
-    typeName,
-    fieldName,
-    recordId,
-  );
-}
+export const openDownloadStream: TailorDBFileAPI["openDownloadStream"] = (...args) =>
+  api().openDownloadStream(...args);
 
 export { deleteFile as delete };
