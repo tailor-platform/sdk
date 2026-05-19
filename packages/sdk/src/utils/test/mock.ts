@@ -1,5 +1,6 @@
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
+import type { ContextInvoker } from "@/runtime/context";
 import type { TailorInvoker } from "@/types/user";
 
 type MainFunction = (args: Record<string, unknown>) => unknown | Promise<unknown>;
@@ -34,7 +35,7 @@ interface TailordbGlobal {
       ) => Promise<void>;
     };
     context: {
-      getInvoker: () => Tailor.context.Invoker | null;
+      getInvoker: () => ContextInvoker | null;
     };
   };
 }
@@ -136,7 +137,7 @@ export function setupWorkflowMock(handler: JobHandler): {
  * @param invoker - The `TailorInvoker` value to return, or `null` for anonymous.
  */
 export function setupInvokerMock(invoker: TailorInvoker): void {
-  const raw: Tailor.context.Invoker | null = invoker
+  const raw: ContextInvoker | null = invoker
     ? {
         id: invoker.id,
         type: invoker.type,
