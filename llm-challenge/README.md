@@ -1,6 +1,6 @@
 # LLM Challenge
 
-A benchmark for measuring how AI-friendly `@tailor-platform/sdk` is. A local OSS coding agent (opencode + Ollama) solves small implementation problems against the SDK — when it fails, the failure signals that the SDK lacks discoverability, not that the agent is incapable.
+A benchmark for measuring how AI-friendly `@tailor-platform/sdk` is. The OpenAI codex CLI (running on a ChatGPT subscription) solves small implementation problems against the SDK — when it fails, the failure signals that the SDK lacks discoverability, not that the agent is incapable.
 
 ## Improvement Philosophy
 
@@ -17,7 +17,7 @@ This iteration of the harness is built around three ideas:
 2. **Behaviour trace** — every agent run streams `tool_use` events to `trace.jsonl` so we measure what the agent actually did, not just whether it succeeded.
 3. **Profile diff + iteration variance** — comparing types-only vs full-package pass rates across N≥3 iterations is the primary docs-vs-types-gap detector.
 
-Inference runs entirely on the developer's machine via Ollama, so there are no cloud API costs and no per-credential rate limits. Reproducibility is anchored to `temperature=0.2` plus `seed=<iteration index>` baked into the per-iteration `opencode.json`, so re-running the same `(problem, iteration)` pair is deterministic up to whatever non-determinism the Ollama runtime itself introduces.
+Inference runs against `api.openai.com` through the codex CLI, authenticated with a ChatGPT subscription. The codex process itself executes inside an ephemeral Podman container — the host filesystem is unreachable except for the work tree and a read-only mount of `~/.codex/auth.json`, so global agent instructions, skills, and dotfiles cannot leak into the prompt. Reproducibility relies on the model's own sampling stability rather than on explicit seeds: gpt-5 reasoning models accept neither a useful seed nor an adjustable temperature, so we sample `N=5` iterations per `(problem, effort)` pair and report the variance directly.
 
 ## Problems
 
@@ -48,26 +48,13 @@ See [`.agent/tmp/2026-05-13-micro-problem-inventory.md`](../.agent/tmp/2026-05-1
 pnpm -C packages/sdk build
 ```
 
-Solve mode requires three pieces of local infrastructure:
+Solve mode requires two pieces of local infrastructure:
 
 - **Podman** — solve mode runs each problem inside an ephemeral container that isolates the work tree.
-  On macOS: `podman machine start`. The runner image (`llm-challenge-runner`) auto-builds on first use.
-- **Ollama** — the inference server runs on the host (Metal-accelerated on Apple Silicon); the in-container `opencode` reaches it via `host.containers.internal:11434`.
+  On macOS: `podman machine start`. The runner image (`llm-challenge-runner`) auto-builds on first use and bakes in the `@openai/codex` CLI.
+- **A codex login on the host** — run `codex login` once. This writes `~/.codex/auth.json` (or `$CODEX_HOME/auth.json` when set); the runner bind-mounts that single file read-only into the container so codex can authenticate. Nothing else from your home directory is mounted, so global `AGENTS.md`, skills, or other dotfiles are invisible to the agent. A ChatGPT subscription with codex CLI entitlement is required.
 
-  ```bash
-  brew install ollama
-  ollama pull qwen3:8b
-  OLLAMA_FLASH_ATTENTION=1 OLLAMA_KV_CACHE_TYPE=q8_0 \
-    OLLAMA_NUM_PARALLEL=1 OLLAMA_CONTEXT_LENGTH=16384 ollama serve
-  ```
-
-  `OLLAMA_CONTEXT_LENGTH` must be raised above the 2k default for opencode's tool-calling path. `16384` is safe on an 18 GB Mac with the default `qwen3:8b` (≈5.2 GB resident) and leaves comfortable headroom for the Podman VM. On a 24 GB+ host, `32768` is also safe and gives long tool chains more room.
-
-  `OLLAMA_FLASH_ATTENTION=1` and `OLLAMA_KV_CACHE_TYPE=q8_0` shave further memory off the KV cache at no observable quality cost. `OLLAMA_NUM_PARALLEL=1` keeps memory predictable; raising it multiplies host RAM by N without speeding up our serialised solve loop.
-
-- **Default model** — `qwen3:8b` (≈5.2 GB on disk). General-purpose Qwen 3 with native tool-calling that works through opencode + Ollama, fits comfortably on an 18 GB Mac. Override with `--model <ollama-id>` to A/B against a different OSS model; the value is passed through to opencode as `ollama/<model-id>`. Heavier alternatives (`gpt-oss:20b`, `qwen3-coder:30b`) are viable on hosts with more RAM at the cost of throughput. Note: `qwen2.5-coder:7b` advertises tool support but does NOT emit native tool calls through opencode (verified with a 0/37 full-bench run) — avoid it.
-
-There are no cloud credentials to manage and no per-credential rate limits to budget against. The only enforcement is the per-problem wall-clock cap (`--max-seconds`, default `3600`).
+The harness pins the model to `gpt-5.5` (see `core/solver/codex.ts`). Tune the reasoning budget with `--effort <minimal|low|medium|high|xhigh>` (default `xhigh`). The per-problem wall-clock cap (`--max-seconds`, default `3600`) is the only other axis of enforcement.
 
 ## Commands
 
@@ -94,17 +81,15 @@ pnpm challenge:analyze --trend --context-profile types-only
 
 **Flags accepted by `--solve`:**
 
-- `--model <ollama-id>` — Ollama model id passed to opencode as `ollama/<id>`. Default: `qwen3:8b`.
-- `--max-seconds <n>` — per-problem wall-clock cap in seconds (default `3600`). Replaces the legacy `--max-budget` flag; local inference has no per-run dollar cost so wall clock is the only enforcement axis.
+- `--effort <minimal|low|medium|high|xhigh>` — codex reasoning effort, forwarded as `-c model_reasoning_effort=<effort>`. Default: `xhigh`. Use lower values when smoke-testing changes to the harness itself; the affordance signal lives at the upper end.
+- `--max-seconds <n>` — per-problem wall-clock cap in seconds (default `3600`). Replaces the legacy `--max-budget` flag.
 - `--context-profile <types-only|full-package>` — what slice of the SDK is exposed inside the work tree. `types-only` is the API-design baseline; `full-package` ships the whole tarball.
-- `--concurrency <n>` — parallel problems (default `1`). A single host-side Ollama daemon serialises requests anyway, so raising this only helps when the host has spare GPU/CPU headroom for multiple in-flight solves at once.
-- `--iterations <n>` — repeat each `(problem, model, profile)` task N times for variance bounds (default: `5` in solve mode, `1` in verify mode). When N > 1 the report's `results[].iterations` block carries pass rate and median±stdev for the behavioural metrics.
+- `--concurrency <n>` — parallel problems (default `1`). The ChatGPT subscription enforces a per-user rate budget, so raising this above 1 is only useful when running against a higher tier or an independent account.
+- `--iterations <n>` — repeat each `(problem, effort, profile)` task N times for variance bounds (default: `5` in solve mode, `1` in verify mode). When N > 1 the report's `results[].iterations` block carries pass rate and median±stdev for the behavioural metrics.
 - `--no-early-stop` — disable the agreement-based early termination of the iteration loop. Only active when the run uses the legacy `--iterations 3` cadence; the N=5 default samples every iteration directly.
 - `--no-auto-extend` — suppress the flaky-middle-band auto-extension. Only active under `--iterations 3`.
 - `--sdk-branch <ref>` — pack the SDK from a git ref instead of the current working tree. Spawns a detached `git worktree`, builds the SDK there, and `pnpm pack`s the result. Requires `--solve`.
 - `--clean` — remove work directories after the run.
-
-A full run at the defaults (`--iterations 5`, `--max-seconds 3600`, `--context-profile types-only`) takes roughly **3–6 hours** end-to-end on an Apple Silicon Mac with the default `qwen3:8b` — about 2–3× faster than the previous `gpt-oss:20b` default. Heavier models trade throughput for pass-rate; budget accordingly.
 
 ## How Verification Works
 
@@ -122,7 +107,7 @@ There is no separate "API check" stage and no partial credit at the problem leve
 
 ## Behaviour Trace
 
-When `--solve` runs, opencode is invoked with `--format json` and every `tool_use` / `tool_result` / `turn_summary` event is normalised into `trace.jsonl` under the per-attempt artifact directory (see [`core/trace.ts`](core/trace.ts)). opencode's lowercase tool names (`read`, `write`, `bash`, …) are mapped onto the Claude-convention names (`Read`, `Write`, `Bash`, …) so downstream metric counters keep working unchanged.
+When `--solve` runs, codex is invoked with `exec --json` and every `item.completed` / `turn.completed` / `error` event is normalised into `trace.jsonl` under the per-attempt artifact directory (see [`core/trace.ts`](core/trace.ts)). Codex's lower-snake item types (`command_execution`, `file_change`, …) are mapped onto Pascal-case tool names (`Bash`, `Edit`, `WebSearch`, …) so downstream metric counters keep working unchanged.
 
 [`core/metrics.ts`](core/metrics.ts) aggregates the trace into a small vector per problem:
 
@@ -172,7 +157,7 @@ pnpm challenge:analyze --diff path/to/baseline.json path/to/candidate.json [--js
 
 As a working manual interpretation example, an acceptable improvement is one where `passRate` rises and the per-problem `metricsStdev.turns` stays below `median × 0.3` — i.e., the change is large relative to inter-iteration noise. **This threshold is a guideline for manual review; it is not enforced by the harness.**
 
-Forward flags (`--all`, `--problem <id>`, `--model`, `--context-profile`, `--concurrency`, `--max-seconds`, `--clean`) are passed through to both child runs by `pnpm challenge:experiment` after stripping the reserved flags it owns (`--solve`, `--iterations`, `--sdk-branch`, `--problems`). When `--problems <ids>` is set, the driver expands it into multiple `--problem <id>` arguments on both child invocations.
+Forward flags (`--all`, `--problem <id>`, `--effort`, `--context-profile`, `--concurrency`, `--max-seconds`, `--clean`) are passed through to both child runs by `pnpm challenge:experiment` after stripping the reserved flags it owns (`--solve`, `--iterations`, `--sdk-branch`, `--problems`). When `--problems <ids>` is set, the driver expands it into multiple `--problem <id>` arguments on both child invocations.
 
 ## Problem Structure
 
@@ -240,7 +225,7 @@ Caveats:
 
 - Pre-build the SDK once (`pnpm -C packages/sdk build`) before launching parallel runs; concurrent builds race.
 - The container image (`llm-challenge-runner`) auto-builds on first use — kick off one solve and let it finish that build, then fan out, or pre-build manually.
-- The host Ollama daemon serialises generations internally; running N parallel solves divides effective throughput by N rather than multiplying it. Useful when the configs differ (e.g. `types-only` vs `full-package`) so the parallel work is genuinely independent.
+- The ChatGPT subscription serialises requests through a per-user rate budget; running N parallel solves divides effective throughput by N rather than multiplying it. Useful when the configs differ (e.g. `types-only` vs `full-package`) so the parallel work is genuinely independent.
 
 After parallel runs finish, use `pnpm challenge:analyze --groups` to list per-config groups and `--trend --context-profile <profile>` to inspect a single config's history.
 
@@ -264,7 +249,7 @@ pnpm challenge:analyze --profile-diff
 pnpm challenge:analyze --diff path/to/baseline.json path/to/candidate.json [--json]
 
 # Time-series trend within a specific group.
-pnpm challenge:analyze --trend --model qwen3:8b --context-profile types-only
+pnpm challenge:analyze --trend --model codex-gpt-5.5-xhigh --context-profile types-only
 
 # List every (model, context-profile) group with its latest pass rate.
 pnpm challenge:analyze --groups

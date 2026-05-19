@@ -1,30 +1,34 @@
 import { describe, expect, it } from "vitest";
-import { CONTAINER_WORK_DIR, buildContainerRunArgs, getContainerfileContent } from "./container";
+import {
+  CONTAINER_CODEX_AUTH,
+  CONTAINER_CODEX_HOME,
+  CONTAINER_WORK_DIR,
+  buildContainerRunArgs,
+  getContainerfileContent,
+} from "./container";
 
 describe("getContainerfileContent", () => {
-  it("returns a valid Containerfile installing opencode", () => {
+  it("installs the codex CLI as the only agent binary", () => {
     const content = getContainerfileContent();
     expect(content).toContain("FROM node:22-slim");
-    expect(content).toContain("opencode-ai");
+    expect(content).toContain("@openai/codex");
     expect(content).toContain("pnpm");
     expect(content).toContain("ca-certificates");
   });
 
-  it("does not install the retired Claude Code or Codex CLIs", () => {
+  it("does not install the retired opencode or claude-code agents", () => {
     const content = getContainerfileContent();
+    expect(content).not.toContain("opencode");
     expect(content).not.toContain("claude-code");
-    expect(content).not.toContain("@openai/codex");
-    // The verbatim word "codex" should also not appear (avoids a "codex" mkdir
-    // command resurfacing as part of legacy cleanup).
-    expect(content).not.toContain(".codex");
+    expect(content).not.toContain("ollama");
   });
 
-  it("pre-creates the opencode config + state dirs as the node user", () => {
+  it("pre-creates CODEX_HOME owned by the node user", () => {
     const content = getContainerfileContent();
-    // Both XDG dirs must be writable by the runtime user; otherwise opencode's
-    // first-run sqlite migration fails inside the container.
-    expect(content).toContain("/home/node/.config/opencode");
-    expect(content).toContain("/home/node/.local/share/opencode");
+    // The host's read-only auth.json bind-mounts into this dir; codex itself
+    // still needs the parent to be writable for transient session state.
+    expect(content).toContain("/home/node/.codex");
+    expect(content).toContain("chown -R node:node /home/node/.codex");
   });
 
   it("runs as non-root user", () => {
@@ -34,23 +38,26 @@ describe("getContainerfileContent", () => {
 });
 
 describe("buildContainerRunArgs", () => {
-  it("mounts host workDir to fixed container path", () => {
-    const args = buildContainerRunArgs(["run", "--format", "json"], {
+  const authPath = "/Users/dqn/.codex/auth.json";
+
+  it("mounts the host workDir RW at the fixed container path", () => {
+    const args = buildContainerRunArgs(["exec", "--json"], {
       workDir: "/var/folders/sn/abc123/T/sdk-ws-xyz",
+      codexAuthPath: authPath,
     });
 
-    const volumeIdx = args.indexOf("--volume");
-    expect(volumeIdx).toBeGreaterThan(-1);
-    expect(args[volumeIdx + 1]).toBe(`/var/folders/sn/abc123/T/sdk-ws-xyz:${CONTAINER_WORK_DIR}:Z`);
+    const volumes = args.filter((_, i) => i > 0 && args[i - 1] === "--volume");
+    expect(volumes).toContain(`/var/folders/sn/abc123/T/sdk-ws-xyz:${CONTAINER_WORK_DIR}:Z`);
 
     const workdirIdx = args.indexOf("--workdir");
     expect(workdirIdx).toBeGreaterThan(-1);
     expect(args[workdirIdx + 1]).toBe(CONTAINER_WORK_DIR);
   });
 
-  it("invokes opencode (not 'oss') as the in-container executable", () => {
-    const args = buildContainerRunArgs(["run", "--format", "json"], {
-      workDir: "/tmp/sdk-ws-oss",
+  it("invokes codex (not opencode) as the in-container executable", () => {
+    const args = buildContainerRunArgs(["exec", "--json"], {
+      workDir: "/tmp/sdk-ws-codex",
+      codexAuthPath: authPath,
     });
 
     expect(args).toContain("run");
@@ -58,59 +65,55 @@ describe("buildContainerRunArgs", () => {
 
     const imageIdx = args.indexOf("llm-challenge-runner");
     expect(imageIdx).toBeGreaterThan(0);
-    // First positional after the image is the in-container executable. opencode
-    // has no `oss` sub-command, so this is load-bearing.
-    expect(args[imageIdx + 1]).toBe("opencode");
-    expect(args[imageIdx + 2]).toBe("run");
+    expect(args[imageIdx + 1]).toBe("codex");
+    expect(args[imageIdx + 2]).toBe("exec");
   });
 
-  it("omits volume mount when workDir is not provided", () => {
-    const args = buildContainerRunArgs(["run"]);
-
-    expect(args).not.toContain("--workdir");
-    expect(
-      args
-        .filter((_, i) => i > 0 && args[i - 1] === "--volume")
-        .every((v) => !v.includes(CONTAINER_WORK_DIR)),
-    ).toBe(true);
+  it("attaches stdin so codex can read the prompt via `-`", () => {
+    const args = buildContainerRunArgs(["exec", "--json"], {
+      workDir: "/tmp/sdk-ws-codex",
+      codexAuthPath: authPath,
+    });
+    expect(args).toContain("-i");
   });
 
-  it("adds host-loopback so the container can reach the host's Ollama daemon", () => {
-    const args = buildContainerRunArgs(["run", "--format", "json"], {
-      workDir: "/tmp/sdk-ws-oss",
+  it("mounts the host's ~/.codex/auth.json read-only into CODEX_HOME", () => {
+    const args = buildContainerRunArgs(["exec", "--json"], {
+      workDir: "/tmp/sdk-ws-codex",
+      codexAuthPath: authPath,
     });
 
-    // Host-loopback is what lets the container reach the host's `ollama serve`
-    // via http://host.containers.internal:11434 — verified in the Phase 2
-    // smoke test.
-    const hostIdx = args.indexOf("--add-host");
-    expect(hostIdx).toBeGreaterThan(-1);
-    expect(args[hostIdx + 1]).toBe("host.containers.internal:host-gateway");
-  });
-
-  it("mounts no cloud credentials and no agent auth files", () => {
-    const args = buildContainerRunArgs(["run"], {
-      workDir: "/tmp/sdk-ws-oss",
-    });
-
-    expect(args).not.toContain("CLAUDE_CODE_OAUTH_TOKEN");
-    expect(args).not.toContain("OPENAI_API_KEY");
     const volumes = args.filter((_, i) => i > 0 && args[i - 1] === "--volume");
+    const authMount = volumes.find((v) => v.includes(CONTAINER_CODEX_AUTH));
+    expect(authMount).toBe(`${authPath}:${CONTAINER_CODEX_AUTH}:ro,Z`);
+
+    const envIdx = args.indexOf("--env");
+    expect(envIdx).toBeGreaterThan(-1);
+    expect(args[envIdx + 1]).toBe(`CODEX_HOME=${CONTAINER_CODEX_HOME}`);
+  });
+
+  it("does not poke holes in the network for legacy ollama / host services", () => {
+    const args = buildContainerRunArgs(["exec", "--json"], {
+      workDir: "/tmp/sdk-ws-codex",
+      codexAuthPath: authPath,
+    });
+    expect(args).not.toContain("--add-host");
+    expect(JSON.stringify(args)).not.toContain("host.containers.internal");
+    expect(JSON.stringify(args)).not.toContain("ollama");
+  });
+
+  it("does not leak unrelated host paths (no $HOME, no /etc, no skills)", () => {
+    const args = buildContainerRunArgs(["exec", "--json"], {
+      workDir: "/tmp/sdk-ws-codex",
+      codexAuthPath: authPath,
+    });
+    const volumes = args.filter((_, i) => i > 0 && args[i - 1] === "--volume");
+    // The only mounts we expect are workDir and the codex auth file.
+    expect(volumes).toHaveLength(2);
     for (const v of volumes) {
-      expect(v).not.toContain(".codex/auth.json");
       expect(v).not.toContain(".claude");
+      expect(v).not.toContain("AGENTS.md");
+      expect(v).not.toMatch(/skills\b/);
     }
-  });
-
-  it("mounts the opencode.json read-only when opencodeConfigPath is provided", () => {
-    const args = buildContainerRunArgs(["run", "--format", "json"], {
-      workDir: "/tmp/sdk-ws-oss",
-      opencodeConfigPath: "/var/folders/x/T/llm-oss-cfg-abc/opencode.json",
-    });
-    const volumes = args.filter((_, i) => i > 0 && args[i - 1] === "--volume");
-    const configMount = volumes.find((v) => v.includes("/.config/opencode/opencode.json"));
-    expect(configMount).toBe(
-      "/var/folders/x/T/llm-oss-cfg-abc/opencode.json:/home/node/.config/opencode/opencode.json:ro,Z",
-    );
   });
 });

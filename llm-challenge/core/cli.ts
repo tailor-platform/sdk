@@ -42,10 +42,11 @@ import {
   formatReportTable,
   isInfraFailure,
 } from "./report";
-import { formatSolveModelLabel, normalizeModel } from "./solve-model";
+import { formatSolveModelLabel } from "./solve-model";
 import { checkAuthStatus, solveProblem } from "./solve";
 import type { SolveResult } from "./solve";
 import { checkPodmanAvailability } from "./solver/container";
+import { type CodexEffort, isCodexEffort } from "./solver/types";
 import { verifyProblem } from "./verify";
 
 const execAsync = promisify(exec);
@@ -147,12 +148,13 @@ type ParsedArgs = {
   implDir?: string;
   useSolution: boolean;
   solve: boolean;
-  model?: string;
+  /** Codex reasoning effort. Defaults to `xhigh`. */
+  effort: CodexEffort;
   clean: boolean;
   concurrency: number;
   contextProfile: ContextProfile;
   /**
-   * Number of repeat solve attempts per (problem, agent, model, profile).
+   * Number of repeat solve attempts per (problem, effort, profile).
    * Defaults to 1 (single-run, backwards compatible). When > 1 the runner
    * loops the same task N times and aggregates variance into the new
    * `iterations` field of `ProblemResult`.
@@ -193,9 +195,10 @@ type ParsedArgs = {
    */
   resume?: string;
   /**
-   * Per-problem wall-clock cap in seconds. The solver kills the opencode
+   * Per-problem wall-clock cap in seconds. The solver kills the codex
    * subprocess if it has not finished by this deadline. Replaces the removed
-   * `--max-budget` flag (cost is no longer tracked under the OSS adapter).
+   * `--max-budget` flag — per-run cost is tracked through `usage` rather
+   * than enforced by a dollar cap.
    * Defaults to 3600 (1 hour).
    */
   maxSeconds: number;
@@ -208,11 +211,12 @@ function parseArgs(): ParsedArgs {
   let implDir: string | undefined;
   let useSolution = false;
   let solve = false;
-  let model: string | undefined;
+  let effort: CodexEffort | undefined;
   let clean = false;
-  // Default concurrency is 1: a single Ollama daemon on the host serialises
-  // requests anyway, and per-problem solves saturate one process group already.
-  // Override via `--concurrency <n>` when the host has spare capacity.
+  // Default concurrency is 1: the ChatGPT subscription has a single-user
+  // rate limit budget, and per-problem solves already saturate one codex
+  // process. Override via `--concurrency <n>` when running on a higher tier
+  // or against an independent account.
   let concurrency = 1;
   let contextProfile: ContextProfile = "full-package";
   let iterations: number | undefined;
@@ -242,10 +246,18 @@ function parseArgs(): ParsedArgs {
       case "--solve":
         solve = true;
         break;
-      case "--model":
-        model = requireArg(args, i, "--model");
+      case "--effort": {
+        const value = requireArg(args, i, "--effort");
+        if (!isCodexEffort(value)) {
+          console.error(
+            `Error: --effort must be one of "minimal", "low", "medium", "high", "xhigh" (received: ${value})`,
+          );
+          process.exit(1);
+        }
+        effort = value;
         i++;
         break;
+      }
       case "--clean":
         clean = true;
         break;
@@ -294,12 +306,12 @@ function parseArgs(): ParsedArgs {
     console.error("Error: --concurrency must be a positive integer");
     process.exit(1);
   }
-  // --iterations: default to 5 in solve mode (decision #13 in the OSS
-  // migration plan — quality-first sampling means we run N=5 directly rather
-  // than relying on the legacy N=3 + auto-extend cadence). Verify modes keep
-  // N=1 for backward compat. Note: shouldEarlyStop / shouldAutoExtend remain
-  // gated on `iterations === 3` so they only kick in when a caller explicitly
-  // opts back into the legacy 3-cadence with `--iterations 3`.
+  // --iterations: default to 5 in solve mode (quality-first sampling means
+  // we run N=5 directly rather than relying on the legacy N=3 + auto-extend
+  // cadence). Verify modes keep N=1 for backward compat. Note:
+  // shouldEarlyStop / shouldAutoExtend remain gated on `iterations === 3` so
+  // they only kick in when a caller explicitly opts back into the legacy
+  // 3-cadence with `--iterations 3`.
   const iterationsExplicit = iterations !== undefined;
   if (iterations === undefined) {
     iterations = solve ? 5 : 1;
@@ -319,7 +331,7 @@ function parseArgs(): ParsedArgs {
     implDir,
     useSolution,
     solve,
-    model: model ?? "qwen3:8b",
+    effort: effort ?? "xhigh",
     clean,
     concurrency: Math.trunc(concurrency),
     contextProfile,
@@ -724,7 +736,7 @@ async function runProblem(
   problemName: string,
   options: {
     implDir?: string;
-    solve?: { model?: string; seed?: number; maxSeconds?: number };
+    solve?: { effort: CodexEffort; maxSeconds?: number };
     clean: boolean;
     verbose: boolean;
     tarballPath?: string;
@@ -762,7 +774,6 @@ async function runProblem(
 
   let solveResult: SolveResult | undefined;
   let metrics: TraceMetrics | undefined;
-  const normalizedModel = options.solve ? normalizeModel(options.solve.model) : undefined;
   // Behaviour trace lives at <workDir>/.trace.jsonl during solve, then moves
   // to <artifactDir>/trace.jsonl after persistSolveAttemptArtifact creates
   // the attempt directory. Writing under workDir keeps the trace alive
@@ -770,15 +781,14 @@ async function runProblem(
   const traceWorkPath = options.solve ? path.join(workDir, ".trace.jsonl") : undefined;
   if (options.solve) {
     if (options.verbose) {
-      console.log(`  Solving with opencode (OSS) (model: ${options.solve.model ?? "default"})...`);
+      console.log(`  Solving with codex (effort: ${options.solve.effort})...`);
     }
     solveResult = await solveProblem({
       workDir,
       problemDir,
       meta,
-      ...(normalizedModel !== undefined ? { model: normalizedModel } : {}),
+      effort: options.solve.effort,
       contextProfile: options.contextProfile,
-      ...(options.solve.seed !== undefined ? { seed: options.solve.seed } : {}),
       ...(traceWorkPath ? { tracePath: traceWorkPath } : {}),
       ...(options.solve.maxSeconds !== undefined ? { maxSeconds: options.solve.maxSeconds } : {}),
     });
@@ -1286,17 +1296,17 @@ export function shouldEarlyStop(options: ShouldEarlyStopOptions): boolean {
   return passedCount === 1 || passedCount === 3;
 }
 
-async function ensureAuthenticated(targetModel?: string): Promise<void> {
-  console.log("Checking Ollama daemon...");
-  const authCheck = await checkAuthStatus({ model: targetModel });
+async function ensureAuthenticated(): Promise<void> {
+  console.log("Checking codex auth...");
+  const authCheck = await checkAuthStatus();
   if (!authCheck.ok) {
-    console.error(`Ollama readiness check failed: ${authCheck.error}`);
+    console.error(`codex auth check failed: ${authCheck.error}`);
     console.error(
-      "Hint: brew install ollama && ollama pull qwen3:8b && OLLAMA_FLASH_ATTENTION=1 OLLAMA_KV_CACHE_TYPE=q8_0 OLLAMA_NUM_PARALLEL=1 OLLAMA_CONTEXT_LENGTH=16384 ollama serve",
+      'Hint: run "codex login" once on the host. The resulting ~/.codex/auth.json is mounted read-only into the runner container; nothing else from the host filesystem is visible to the agent.',
     );
     process.exit(1);
   }
-  console.log("Ollama: ok");
+  console.log("codex auth: ok");
 }
 
 function writeReport(
@@ -1349,7 +1359,7 @@ async function main(): Promise<void> {
     implDir,
     useSolution,
     solve,
-    model,
+    effort,
     clean,
     concurrency,
     contextProfile,
@@ -1367,15 +1377,15 @@ async function main(): Promise<void> {
     console.error("  tsx core/cli.ts --problem 001 --impl ./path/to/impl");
     console.error("  tsx core/cli.ts --problem 001 --use-solution");
     console.error(
-      "  tsx core/cli.ts --problem 001 [--problem 002 ...] --solve [--model qwen3:8b] [--context-profile types-only] [--iterations 5] [--max-seconds 3600] [--no-auto-extend] [--no-early-stop] [--sdk-branch <ref>] [--resume <runId>]",
+      "  tsx core/cli.ts --problem 001 [--problem 002 ...] --solve [--effort xhigh] [--context-profile types-only] [--iterations 5] [--max-seconds 3600] [--no-auto-extend] [--no-early-stop] [--sdk-branch <ref>] [--resume <runId>]",
     );
     console.error("  tsx core/cli.ts --all --use-solution [--clean] [--concurrency <n>]");
     console.error(
-      "  tsx core/cli.ts --all --solve [--model qwen3:8b] [--clean] [--concurrency <n>] [--context-profile types-only] [--iterations 5] [--max-seconds 3600] [--no-auto-extend] [--no-early-stop] [--sdk-branch <ref>] [--resume <runId>]",
+      "  tsx core/cli.ts --all --solve [--effort xhigh] [--clean] [--concurrency <n>] [--context-profile types-only] [--iterations 5] [--max-seconds 3600] [--no-auto-extend] [--no-early-stop] [--sdk-branch <ref>] [--resume <runId>]",
     );
     console.error("  tsx core/cli.ts --all --impl-dir ./path/to/all-outputs");
     console.error(
-      "\nNote: --solve requires Podman and a host-side Ollama daemon. On macOS, run 'podman machine start' and 'ollama serve' first.",
+      "\nNote: --solve requires Podman and a one-time `codex login` (writes ~/.codex/auth.json). On macOS, run 'podman machine start' once before the first solve.",
     );
     process.exit(1);
   }
@@ -1398,7 +1408,7 @@ async function main(): Promise<void> {
 
   const resultsDir = path.join(challengeRoot, "results");
   const verbose = concurrency === 1;
-  const solveModelLabel = solve ? formatSolveModelLabel(model) : undefined;
+  const solveModelLabel = solve ? formatSolveModelLabel(effort) : undefined;
 
   if (solve) {
     const podmanStatus = checkPodmanAvailability();
@@ -1409,7 +1419,7 @@ async function main(): Promise<void> {
   }
 
   if (solve) {
-    await ensureAuthenticated(normalizeModel(model));
+    await ensureAuthenticated();
   }
 
   let tarballPath: string | undefined;
@@ -1526,7 +1536,7 @@ async function main(): Promise<void> {
   async function runProblemWithIterations(task: ProblemTask): Promise<ProblemResult> {
     const baseOptions = {
       implDir: task.implDir,
-      solve: solve ? { model, maxSeconds } : undefined,
+      solve: solve ? { effort, maxSeconds } : undefined,
       clean,
       verbose,
       tarballPath,
@@ -1544,7 +1554,6 @@ async function main(): Promise<void> {
       }
       const result = await runProblem(task.problemName, {
         ...baseOptions,
-        solve: baseOptions.solve ? { ...baseOptions.solve, seed: 0 } : undefined,
         runArtifactRoot,
       });
       appendCheckpoint(checkpointFile, {
@@ -1571,7 +1580,6 @@ async function main(): Promise<void> {
       const iterRoot = runArtifactRoot ? path.join(runArtifactRoot, `iter-${i}`) : undefined;
       const result = await runProblem(task.problemName, {
         ...baseOptions,
-        solve: baseOptions.solve ? { ...baseOptions.solve, seed: i } : undefined,
         ...(iterRoot ? { runArtifactRoot: iterRoot } : {}),
       });
       appendCheckpoint(checkpointFile, {

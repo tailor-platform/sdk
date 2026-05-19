@@ -1,29 +1,30 @@
 /**
  * Patterns indicative of infrastructure failures the solver should treat as
  * "skip-and-continue" rather than real verification failures. Tuned for the
- * OSS path (opencode-in-container + host Ollama):
+ * codex CLI path (codex-in-container + OpenAI API):
  *
- * - `ECONNREFUSED` / `ECONNRESET` / `ETIMEDOUT` / `socket hang up` — Ollama
- *   not running, crashed, or unreachable from inside the container.
- * - `model.*not found` / `pull model manifest` — requested model is not
- *   downloaded on the host.
- * - `failed to load model` / `out of memory` / `CUDA error` — Ollama runtime
- *   failures during inference (typically OOM or GPU-side errors).
- * - `podman` / `OCI runtime` / `image.*not found` — container engine startup
- *   failures.
+ * - `401 Unauthorized` / `Authentication failed` / `codex login` — the auth
+ *   file mounted from the host is missing, expired, or the subscription is
+ *   no longer entitled.
+ * - `429 Too Many Requests` / `rate limit` — ChatGPT subscription throttling.
+ * - `ECONNREFUSED` / `ECONNRESET` / `ETIMEDOUT` / `socket hang up` /
+ *   `network error` — transient network failure between the container and the
+ *   OpenAI API.
+ * - `OCI runtime` / `podman .* error` / `image .* not found` — Podman engine
+ *   startup failures (image missing, machine not running).
  */
 export const infraFailurePatterns = [
+  /401 Unauthorized/,
+  /Authentication failed/i,
+  /codex login/i,
+  /429 Too Many Requests/,
+  /rate limit/i,
   /ECONNREFUSED/,
   /ECONNRESET/,
   /ETIMEDOUT/,
   /socket hang up/i,
-  /model .* not found/i,
-  /no such model/i,
-  /pull model manifest/i,
-  /failed to load model/i,
-  /out of memory/i,
-  /CUDA error/i,
-  /OCI runtime/i,
+  /network error/i,
+  /OCI runtime/,
   /podman .* error/i,
   /image .* not found/i,
 ];

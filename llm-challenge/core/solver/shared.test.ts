@@ -3,15 +3,19 @@ import { detectInfraFailure } from "./shared";
 
 describe("detectInfraFailure", () => {
   it.each([
-    ["fetch failed: connect ECONNREFUSED 11434"],
-    ["socket hang up while reading response"],
-    ["ETIMEDOUT contacting ollama"],
-    ["model gpt-oss:20b not found, try pulling it first"],
-    ["Error: no such model 'qwen3-coder:30b'"],
-    ["pull model manifest: not authorized"],
-    ["failed to load model from disk"],
-    ["llama runner process out of memory"],
-    ["CUDA error: device-side assert triggered"],
+    // Codex / OpenAI API failures
+    ["401 Unauthorized: invalid_api_key"],
+    ["Authentication failed: please run codex login"],
+    ["Please run `codex login` to refresh your session"],
+    ["429 Too Many Requests"],
+    ["rate limit exceeded for organization"],
+    // Network transients between container and api.openai.com
+    ["fetch failed: connect ECONNREFUSED api.openai.com:443"],
+    ["ECONNRESET while reading response"],
+    ["ETIMEDOUT contacting api.openai.com"],
+    ["socket hang up"],
+    ["network error: DNS resolution failed"],
+    // Podman engine failures
     ["OCI runtime error: exec failed"],
     ["podman machine error: VM is not running"],
     ["image llm-challenge-runner not found"],

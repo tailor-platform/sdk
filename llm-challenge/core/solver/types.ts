@@ -22,12 +22,12 @@ export type SolveUsage = {
   inputTokens?: number;
   outputTokens?: number;
   /**
-   * Tokens read from the Anthropic prompt cache. High values indicate the
+   * Tokens served from the model's prompt cache. High values indicate the
    * agent re-reads the same context across turns; relevant for context-bloat
    * diagnosis.
    */
   cacheReadTokens?: number;
-  /** Number of agent turns (rough proxy for tool-call count when stream-json is unavailable). */
+  /** Number of agent turns (rough proxy for tool-call count). */
   numTurns?: number;
 };
 
@@ -42,22 +42,28 @@ export type SolveResult = {
   usage?: SolveUsage;
 };
 
-export type SolveAgent = "oss";
+export type SolveAgent = "codex";
+
+/**
+ * Reasoning effort levels accepted by `codex exec -c model_reasoning_effort=…`.
+ * Only `gpt-5` family models accept `xhigh`; the harness currently hardcodes
+ * `gpt-5.5`, which does, so all five values are valid.
+ */
+export const codexEffortValues = ["minimal", "low", "medium", "high", "xhigh"] as const;
+export type CodexEffort = (typeof codexEffortValues)[number];
+
+export function isCodexEffort(value: string): value is CodexEffort {
+  return (codexEffortValues as readonly string[]).includes(value);
+}
 
 export type SolveRunOptions = {
   prompt: string;
   workDir: string;
-  model?: string;
-  /**
-   * Per-iteration sampling seed. Forwarded to Ollama via the per-run
-   * `opencode.json`.
-   */
-  seed?: number;
+  /** Reasoning effort forwarded to codex via `-c model_reasoning_effort=<effort>`. */
+  effort: CodexEffort;
   /**
    * Optional path where the adapter should append a JSONL behaviour trace
-   * (one `TraceEvent` per line; see `core/trace.ts`). Adapters that cannot
-   * emit a structured stream (or whose output format change would break
-   * compatibility) should silently ignore this option.
+   * (one `TraceEvent` per line; see `core/trace.ts`).
    */
   tracePath?: string;
   /**
@@ -75,5 +81,5 @@ export type AuthCheckResult = {
 
 export type SolveAdapter = {
   run: (options: SolveRunOptions) => Promise<SolveResult>;
-  checkAuth: (model?: string) => Promise<AuthCheckResult>;
+  checkAuth: () => Promise<AuthCheckResult>;
 };

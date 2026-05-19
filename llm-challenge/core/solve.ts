@@ -4,14 +4,14 @@ import { getSdkVersion } from "../shared/helpers";
 import type { ContextProfile } from "./context-profile";
 import { buildContextProfileInstructions } from "./context-profile";
 import type { ProblemMeta } from "./cli";
-import { createOpencodeAdapter } from "./solver/opencode";
-import type { AuthCheckResult, SolveAgent, SolveResult } from "./solver/types";
+import { createCodexAdapter } from "./solver/codex";
+import type { AuthCheckResult, CodexEffort, SolveAgent, SolveResult } from "./solver/types";
 
 const challengeRoot = path.resolve(import.meta.dirname, "..");
 
 export type { SolveAgent, SolveResult };
 
-const opencodeAdapter = createOpencodeAdapter();
+const codexAdapter = createCodexAdapter();
 
 function listFilesRecursive(dir: string, base: string = dir): string[] {
   const files: string[] = [];
@@ -181,31 +181,28 @@ export function solveProblem(options: {
   workDir: string;
   problemDir: string;
   meta: ProblemMeta;
-  model?: string;
+  effort: CodexEffort;
   contextProfile: ContextProfile;
-  /** Per-iteration sampling seed forwarded to Ollama via opencode.json. */
-  seed?: number;
   /** Optional JSONL path for behaviour trace. */
   tracePath?: string;
   /** Per-problem wall-clock cap in seconds. */
   maxSeconds?: number;
 }): Promise<SolveResult> {
-  const { workDir, problemDir, meta, model, contextProfile, seed, tracePath, maxSeconds } = options;
+  const { workDir, problemDir, meta, effort, contextProfile, tracePath, maxSeconds } = options;
   const prompt = buildPrompt(problemDir, meta, workDir, contextProfile);
-  return opencodeAdapter.run({
+  return codexAdapter.run({
     prompt,
     workDir,
-    ...(model !== undefined ? { model } : {}),
-    ...(seed !== undefined ? { seed } : {}),
+    effort,
     ...(tracePath !== undefined ? { tracePath } : {}),
     ...(maxSeconds !== undefined ? { maxSeconds } : {}),
   });
 }
 
 /**
- * Verify the OSS solver pre-requisites (host's Ollama daemon reachable) before
- * starting a full solve run.
+ * Verify the codex solver pre-requisites (host's `~/.codex/auth.json` is
+ * readable) before starting a full solve run.
  */
-export function checkAuthStatus(options: { model?: string }): Promise<AuthCheckResult> {
-  return opencodeAdapter.checkAuth(options.model);
+export function checkAuthStatus(): Promise<AuthCheckResult> {
+  return codexAdapter.checkAuth();
 }
