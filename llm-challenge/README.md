@@ -11,6 +11,8 @@ When an AI fails a challenge problem, the correct response is to **improve the S
 - Enriching `CLAUDE.md` patterns and type references
 - Making APIs more discoverable through better type signatures
 
+A passing verify run is not the only signal. The trace tool (see below) reports false starts (repeated `Write` to the same file in a single session). High false-start counts indicate the SDK is hard to use even when the final output works.
+
 SDK improvement proposals based on benchmark results are tracked in [`.claude/IMPROVEMENTS.md`](../.claude/IMPROVEMENTS.md).
 
 ## Problems
@@ -31,40 +33,65 @@ Build the SDK before running challenges:
 pnpm -C packages/sdk build
 ```
 
+## Workflow
+
+The runner does not invoke an AI agent. Solving is manual or delegated to a sub-agent; the runner only prepares workspaces, scores implementations, and extracts session traces.
+
+```bash
+# 1. Prepare a clean workspace and prompt for one problem
+pnpm challenge --problem 001 --prepare
+# → prints: workDir, .prompt.md path, and a `cd <workDir> && claude` hint
+
+# 2. Solve manually (`cd <workDir> && claude`) or via a sub-agent with cwd=<workDir>
+
+# 3. Extract trace from the Claude Code session JSONL (manual solve only)
+pnpm challenge:trace --workdir <workDir>
+# → results/trace-<label>-<ts>.json
+
+# 4. Grade the implementation
+pnpm challenge --problem 001 --impl <workDir>
+# → results/report-<ts>.json
+```
+
 ## Commands
 
 ```bash
-# Verify all problems using reference solutions
+# Verify all problems using reference solutions (CI sanity check)
 pnpm challenge:verify-solution
 
-# Run runner unit tests (adapter/parser logic)
-pnpm test:runner
+# Prepare a workspace for a single problem
+pnpm challenge --problem 001 --prepare
 
-# Solve all problems using Claude Code (default)
-pnpm challenge:solve [--agent claude] [--model sonnet] [--max-budget 5.00]
-
-# Solve all problems using Codex
-pnpm challenge:solve --agent codex [--model gpt-5-codex]
-
-# Solve with retry on failure
-pnpm challenge:solve --retry 2 [--agent claude|codex] [--model sonnet] [--max-budget 5.00]
-
-# Run a single problem
+# Run a single problem against a reference solution
 pnpm challenge --problem 001 --use-solution
-pnpm challenge --problem 001 --impl ./path/to/impl
-pnpm challenge --problem 001 --solve [--agent claude|codex]
 
-# Run all problems with external implementations
+# Run a single problem against an implementation directory
+pnpm challenge --problem 001 --impl ./path/to/impl
+
+# Run all problems against external implementations
 pnpm challenge --all --impl-dir ./path/to/outputs
+
+# Extract a Claude Code session trace (false-start metrics)
+pnpm challenge:trace --workdir <dir> [--session <uuid>] [--problem <id>] [--out <path>]
+
+# Compare or trend reports under results/
+pnpm challenge:analyze
+pnpm challenge:analyze --baseline results/report-<ts>.json
+pnpm challenge:analyze --trend
+
+# Run runner unit tests (parser logic for trace.ts and friends)
+pnpm test:runner
 ```
 
-**Flags:**
+**Flags (`challenge`):**
 
-- `--agent <claude|codex>` — Solver agent to use (default: `claude`)
-- `--model <name>` — Model name to use (`claude`: default `sonnet`, `codex`: default CLI model)
-- `--max-budget <usd>` — Spending cap per problem in USD (default: `5.00`, must be positive)
-- `--retry <n>` — Number of retry attempts on failure (default: `0`, must be non-negative). On failure, error output is fed back to the AI for correction.
-- `--concurrency <n>` — Number of problems to run in parallel (default: CPU count, must be positive)
+- `--problem <id>` — Run a single problem
+- `--all` — Run every problem
+- `--prepare` — Create an isolated workDir + install dependencies + write `.prompt.md`, then exit (no scoring)
+- `--use-solution` — Use the problem's reference solution as the implementation
+- `--impl <dir>` — Use the given directory as the implementation for a single problem
+- `--impl-dir <dir>` — With `--all`, look up implementations by problem name under this directory
+- `--concurrency <n>` — Number of problems to run in parallel (default: CPU count)
 - `--clean` — Remove work directories after execution
 
 ## How Verification Works
@@ -118,27 +145,13 @@ When a stage fails, the output is automatically classified into a failure catego
 
 Skipped stages (due to earlier stage failure) are not classified.
 
-### Retry Mode
-
-When using `--retry N`, failed problems are automatically retried:
-
-1. Initial solve attempt runs normally
-2. If verification fails, error output from failed stages (with `[STAGE: ...]` labels) is sent back to the AI
-3. The AI receives a prompt like: "Your previous implementation produced the following error: ... Fix the issues."
-4. Re-verification runs after each retry
-5. Stops on success or after N retries
-
-A retry penalty is applied: `adjusted_score = base_score * (1 - 0.1 * retry_count)`, with a maximum 30% reduction.
-
-Cost from all attempts (initial + retries) is tracked in the report.
-
 ### Report Metadata
 
 JSON reports include metadata for comparison tracking:
 
-- `model` — Claude model used (when solving)
 - `sdkVersion` — SDK package version
 - `timestamp` — When the run was executed
+- `elapsedMs` — Wall time for the run
 
 Results are printed as a summary table and saved as JSON to `results/`.
 
@@ -149,7 +162,24 @@ Reports include analytics for identifying SDK improvement areas:
 - **Failure distribution** — Count of each failure category
 - **Category/difficulty/stage success rates** — Pass rates by grouping
 - **Common failure patterns** — Recurring failure category + stage combinations with suggested documentation fixes
-- **Retry analysis** — Which failure categories are self-correctable vs persistent
+
+## Trace Output
+
+`pnpm challenge:trace --workdir <dir>` parses `~/.claude/projects/<encoded>/<session>.jsonl` and writes `results/trace-<label>-<ts>.json` containing:
+
+| Field                     | Description                                                            |
+| ------------------------- | ---------------------------------------------------------------------- |
+| `durationMs`              | Session wall time (first → last event)                                 |
+| `files[]`                 | Per-file `Write` history; non-final successful writes are false starts |
+| `files[].writes[]`        | `{ts, toolUseId, contentLength, isFalseStart, diffSummary?}`           |
+| `files[].falseStartCount` | Count of false starts for that file                                    |
+| `falseStartTotal`         | Sum across all files                                                   |
+| `edits[]`                 | `Edit` / `MultiEdit` invocations                                       |
+| `bashCommands[]`          | `Bash` invocations with command + description                          |
+| `readPaths[]`             | `Read` invocations                                                     |
+| `assistantTextLength`     | Total characters of assistant text output                              |
+
+Errored `Write` calls (`is_error: true` in `tool_result`) are dropped before false-start counting. Trace works for the manual solve path (where `claude` writes a JSONL session under `~/.claude/projects/`); delegated sub-agent runs do not produce a session file.
 
 ## Problem Structure
 
