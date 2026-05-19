@@ -37,91 +37,56 @@ export function nestedMessage(field: DescField): DescMessage | undefined {
   return undefined;
 }
 
-export interface InputFieldChild {
-  /** Field name in camelCase (matches what JSON request bodies use). */
-  name: string;
-  /** True when the field is a message (or list/map of messages) — can be drilled into with a dot. */
-  isMessage: boolean;
+export interface FieldCompletionCandidate {
+  value: string;
+  description: string;
 }
 
 /**
- * Enumerates the immediate child fields under `containerPath` for the input
- * message of `methodName`. Used to drive dot-by-dot completion of `--field`.
+ * Pre-enumerates every `--field` completion candidate for `methodName`,
+ * walking the input message tree to produce a flat list that the shell can
+ * prefix-filter at TAB time. Used by the `expand` completion variant so no
+ * Node process is spawned per keystroke.
  *
- * `containerPath` is the dot-separated path from the input message root to the
- * container whose children should be listed (empty array means the input
- * message itself).
+ * For each leaf field, emits `key=` (key completion). Enum leaves additionally
+ * emit `key=ENUM_VALUE` per value, bool leaves emit `key=true` and
+ * `key=false`. For nested messages, emits `key.` (drill-down) and recurses.
+ *
+ * Returns an empty array when `methodName` is unknown so the `expand`
+ * generator stays exception-free at script-generation time.
  * @param methodName - Name of the unary RPC whose input message is being walked
- * @param containerPath - Segments traversed before reaching the container to list
- * @returns Immediate children, or an empty array when the method is unknown,
- *   the path traverses a non-message field, or a recursive cycle is hit
+ * @returns Flat list of `{ value, description }` candidates
  */
-export function listInputFieldChildren(
-  methodName: string,
-  containerPath: string[],
-): InputFieldChild[] {
+export function enumerateAllFieldCompletions(methodName: string): FieldCompletionCandidate[] {
   const method = getMethodDescriptor(methodName);
   if (!method) return [];
 
-  let message: DescMessage = method.input;
-  const visited = new Set<DescMessage>([message]);
-  for (const segment of containerPath) {
-    const field = message.fields.find((f) => f.localName === segment);
-    if (!field) return [];
-    const next = nestedMessage(field);
-    if (!next || visited.has(next)) return [];
-    visited.add(next);
-    message = next;
+  const candidates: FieldCompletionCandidate[] = [];
+  const visited = new Set<DescMessage>();
+
+  function walk(message: DescMessage, prefix: string): void {
+    visited.add(message);
+    for (const field of message.fields) {
+      const fullKey = prefix + field.localName;
+      const nested = nestedMessage(field);
+      if (nested) {
+        candidates.push({ value: `${fullKey}.`, description: `${fullKey} (message)` });
+        if (!visited.has(nested)) walk(nested, `${fullKey}.`);
+        continue;
+      }
+      candidates.push({ value: `${fullKey}=`, description: `Set ${fullKey}` });
+      if (field.fieldKind === "enum") {
+        for (const v of field.enum.values) {
+          candidates.push({ value: `${fullKey}=${v.name}`, description: v.name });
+        }
+      } else if (field.fieldKind === "scalar" && field.scalar === ScalarType.BOOL) {
+        candidates.push({ value: `${fullKey}=true`, description: "true" });
+        candidates.push({ value: `${fullKey}=false`, description: "false" });
+      }
+    }
+    visited.delete(message);
   }
 
-  return message.fields.map((field) => ({
-    name: field.localName,
-    isMessage: nestedMessage(field) !== undefined,
-  }));
-}
-
-export type InputFieldType =
-  | { kind: "enum"; values: string[] }
-  | { kind: "bool" }
-  | { kind: "scalar" }
-  | { kind: "message" };
-
-/**
- * Resolves the type of the leaf field reached by walking `path` from the input
- * message of `methodName`. Used to drive value-side completion of `--field`.
- *
- * Returns `undefined` when the path is empty, the method is unknown, the path
- * traverses a non-message field, or the leaf field doesn't exist. List and map
- * fields collapse to `"message"` — value assignment via `key=value` doesn't
- * apply, so callers should suppress completion.
- * @param methodName - Name of the unary RPC whose input message is being walked
- * @param path - Dotted segments from the input root to the leaf field
- * @returns The leaf field's type, or undefined when the path is unresolvable
- */
-export function getInputFieldType(methodName: string, path: string[]): InputFieldType | undefined {
-  if (path.length === 0) return undefined;
-  const method = getMethodDescriptor(methodName);
-  if (!method) return undefined;
-
-  let message: DescMessage = method.input;
-  const visited = new Set<DescMessage>([message]);
-  for (let i = 0; i < path.length - 1; i++) {
-    const field = message.fields.find((f) => f.localName === path[i]);
-    if (!field) return undefined;
-    const next = nestedMessage(field);
-    if (!next || visited.has(next)) return undefined;
-    visited.add(next);
-    message = next;
-  }
-
-  const leaf = message.fields.find((f) => f.localName === path[path.length - 1]);
-  if (!leaf) return undefined;
-
-  if (leaf.fieldKind === "enum") {
-    return { kind: "enum", values: leaf.enum.values.map((v) => v.name) };
-  }
-  if (leaf.fieldKind === "scalar") {
-    return leaf.scalar === ScalarType.BOOL ? { kind: "bool" } : { kind: "scalar" };
-  }
-  return { kind: "message" };
+  walk(method.input, "");
+  return candidates;
 }

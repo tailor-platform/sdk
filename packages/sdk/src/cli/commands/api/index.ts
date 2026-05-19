@@ -9,10 +9,9 @@ import { apiCall } from "./api-call";
 import { inspectCommand } from "./inspect";
 import { listCommand } from "./list";
 import {
+  enumerateAllFieldCompletions,
   extractMethodName,
-  getInputFieldType,
   getMethodDescriptor,
-  listInputFieldChildren,
   listMethodNames,
 } from "./proto-reflect";
 import type { LoadedConfig } from "@/cli/shared/config-loader";
@@ -167,60 +166,10 @@ Use \`--field key=value\` (repeatable) to set request body fields without writin
           "Set a body field as `key=value` (repeatable; dotted keys nest). Overrides --body.",
         completion: {
           custom: {
-            resolve: ({ parsedArgs, previousValues, currentWord }) => {
-              const endpoint =
-                typeof parsedArgs.endpoint === "string" ? parsedArgs.endpoint : undefined;
-              if (!endpoint) return { candidates: [] };
-
-              const methodName = extractMethodName(endpoint);
-              const eq = currentWord.indexOf("=");
-              if (eq >= 0) {
-                // Value-side completion: shell filters candidates by the full
-                // `currentWord` prefix, so each candidate must keep the
-                // `key=` head intact.
-                const keyPart = currentWord.slice(0, eq);
-                const fieldType = getInputFieldType(methodName, keyPart.split("."));
-                if (!fieldType) return { candidates: [] };
-                if (fieldType.kind === "enum") {
-                  return {
-                    candidates: fieldType.values.map((v) => ({
-                      value: `${keyPart}=${v}`,
-                      description: v,
-                    })),
-                  };
-                }
-                if (fieldType.kind === "bool") {
-                  return {
-                    candidates: ["true", "false"].map((v) => ({
-                      value: `${keyPart}=${v}`,
-                      description: v,
-                    })),
-                  };
-                }
-                return { candidates: [] };
-              }
-
-              const lastDot = currentWord.lastIndexOf(".");
-              const containerPrefix = lastDot >= 0 ? currentWord.slice(0, lastDot + 1) : "";
-              const containerPath = containerPrefix ? containerPrefix.slice(0, -1).split(".") : [];
-
-              const usedKeys = new Set<string>();
-              for (const v of previousValues) {
-                const eqIdx = v.indexOf("=");
-                if (eqIdx > 0) usedKeys.add(v.slice(0, eqIdx));
-              }
-
-              const children = listInputFieldChildren(methodName, containerPath);
-              const candidates = children
-                .map((c) => {
-                  const fullKey = containerPrefix + c.name;
-                  return c.isMessage
-                    ? { value: `${fullKey}.`, description: `${fullKey} (message)` }
-                    : { value: `${fullKey}=`, description: `Set ${fullKey}` };
-                })
-                .filter((c) => !usedKeys.has(c.value.replace(/[=.]$/, "")));
-
-              return { candidates };
+            expand: {
+              dependsOn: ["endpoint"],
+              enumerate: ({ endpoint }) =>
+                enumerateAllFieldCompletions(extractMethodName(endpoint ?? "")),
             },
           },
         },

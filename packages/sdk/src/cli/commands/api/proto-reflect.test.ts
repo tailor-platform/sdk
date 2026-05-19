@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { getMethodDescriptor, listMethodNames } from "./proto-reflect";
+import {
+  enumerateAllFieldCompletions,
+  getMethodDescriptor,
+  listMethodNames,
+} from "./proto-reflect";
 
 describe("listMethodNames", () => {
   test("returns sorted method names including known unary methods", () => {
@@ -31,5 +35,38 @@ describe("getMethodDescriptor", () => {
 
   test("returns undefined for unknown method", () => {
     expect(getMethodDescriptor("NotARealMethod")).toBeUndefined();
+  });
+});
+
+describe("enumerateAllFieldCompletions", () => {
+  test("emits `key=` for each scalar leaf", () => {
+    const values = enumerateAllFieldCompletions("GetFunctionExecution").map((c) => c.value);
+    expect(values).toContain("workspaceId=");
+    expect(values).toContain("executionId=");
+  });
+
+  test("emits enum values inline alongside the key for enum leaves", () => {
+    const values = enumerateAllFieldCompletions("ListWorkspaces").map((c) => c.value);
+    expect(values).toContain("pageDirection=");
+    expect(values).toContain("pageDirection=PAGE_DIRECTION_UNSPECIFIED");
+    expect(values).toContain("pageDirection=PAGE_DIRECTION_ASC");
+    expect(values).toContain("pageDirection=PAGE_DIRECTION_DESC");
+  });
+
+  test("emits true/false inline for bool leaves", () => {
+    const values = enumerateAllFieldCompletions("CreateWorkspace").map((c) => c.value);
+    expect(values).toContain("deleteProtection=");
+    expect(values).toContain("deleteProtection=true");
+    expect(values).toContain("deleteProtection=false");
+  });
+
+  test("emits `key.` drill-down and recurses into nested messages", () => {
+    const values = enumerateAllFieldCompletions("CreateTailorDBType").map((c) => c.value);
+    expect(values).toContain("tailordbType.");
+    expect(values).toContain("tailordbType.name=");
+  });
+
+  test("returns an empty list for unknown methods", () => {
+    expect(enumerateAllFieldCompletions("NotARealMethod")).toEqual([]);
   });
 });

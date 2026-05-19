@@ -1,5 +1,7 @@
+import { generateCompletion } from "politty";
 import {
   CompletionDirective,
+  extractCompletionData,
   generateCandidates,
   parseCompletionContext,
 } from "politty/completion";
@@ -128,77 +130,77 @@ describe("shell completion", () => {
     });
   });
 
-  describe("api --field dynamic completion", () => {
-    it("returns top-level fields from the endpoint's proto schema", async () => {
-      const ctx = parseCompletionContext(["api", "GetFunctionExecution", "-f", ""], mainCommand);
-      const result = await generateCandidates(ctx, { shell: "bash" });
+  describe("api --field expand completion", () => {
+    // `--field` uses politty's `expand` variant: candidates are pre-enumerated
+    // at script-generation time keyed by the `endpoint` positional. The
+    // dynamic `generateCandidates` path returns no candidates for expand —
+    // candidates live in the resolved `valueCompletion.table` instead, and
+    // shells dispatch via a case lookup at TAB time.
+    function getFieldExpandTable(): {
+      dependsOn: readonly string[];
+      table: readonly {
+        key: readonly string[];
+        candidates: readonly { value: string; description?: string }[];
+      }[];
+    } {
+      const data = extractCompletionData(mainCommand, "tailor-sdk");
+      const apiCmd = data.command.subcommands.find((s) => s.name === "api");
+      if (!apiCmd) throw new Error("api subcommand missing");
+      const fieldOpt = apiCmd.options.find((o) => o.name === "field");
+      if (!fieldOpt) throw new Error("--field option missing");
+      const vc = fieldOpt.valueCompletion;
+      if (!vc || vc.type !== "expand") {
+        throw new Error(`expected expand completion, got ${vc?.type}`);
+      }
+      return { dependsOn: vc.dependsOn, table: vc.table };
+    }
 
-      const values = result.candidates.map((c) => c.value);
+    function candidatesFor(endpoint: string): readonly { value: string; description?: string }[] {
+      const { table } = getFieldExpandTable();
+      const row = table.find((r) => r.key[0] === endpoint);
+      if (!row) throw new Error(`no expand row for ${endpoint}`);
+      return row.candidates;
+    }
+
+    it("depends on the endpoint positional", () => {
+      const { dependsOn } = getFieldExpandTable();
+      expect(dependsOn).toEqual(["endpoint"]);
+    });
+
+    it("enumerates top-level fields for the endpoint's proto schema", () => {
+      const values = candidatesFor("GetFunctionExecution").map((c) => c.value);
       expect(values).toContain("workspaceId=");
       expect(values).toContain("executionId=");
     });
 
-    it("dedupes keys that were already supplied via previous --field flags", async () => {
-      const ctx = parseCompletionContext(
-        ["api", "GetFunctionExecution", "-f", "executionId=exec-1", "-f", ""],
-        mainCommand,
-      );
-      const result = await generateCandidates(ctx, { shell: "bash" });
-
-      const values = result.candidates.map((c) => c.value);
-      expect(values).not.toContain("executionId=");
-      expect(values).toContain("workspaceId=");
-    });
-
-    it("returns an empty list when no endpoint has been typed", async () => {
-      const ctx = parseCompletionContext(["api", "-f", ""], mainCommand);
-      const result = await generateCandidates(ctx, { shell: "bash" });
-
-      expect(result.candidates).toEqual([]);
-    });
-
-    it("completes enum values for enum-typed fields", async () => {
-      const ctx = parseCompletionContext(
-        ["api", "ListWorkspaces", "-f", "pageDirection="],
-        mainCommand,
-      );
-      const result = await generateCandidates(ctx, { shell: "bash" });
-
-      const values = result.candidates.map((c) => c.value);
+    it("enumerates enum values inline alongside the key", () => {
+      const values = candidatesFor("ListWorkspaces").map((c) => c.value);
+      expect(values).toContain("pageDirection=");
       expect(values).toContain("pageDirection=PAGE_DIRECTION_UNSPECIFIED");
       expect(values).toContain("pageDirection=PAGE_DIRECTION_ASC");
       expect(values).toContain("pageDirection=PAGE_DIRECTION_DESC");
     });
 
-    it("completes true/false for bool-typed fields", async () => {
-      const ctx = parseCompletionContext(
-        ["api", "CreateWorkspace", "-f", "deleteProtection="],
-        mainCommand,
-      );
-      const result = await generateCandidates(ctx, { shell: "bash" });
-
-      const values = result.candidates.map((c) => c.value);
-      expect(values).toEqual(["deleteProtection=true", "deleteProtection=false"]);
+    it("enumerates true/false inline for bool-typed fields", () => {
+      const values = candidatesFor("CreateWorkspace").map((c) => c.value);
+      expect(values).toContain("deleteProtection=");
+      expect(values).toContain("deleteProtection=true");
+      expect(values).toContain("deleteProtection=false");
     });
 
-    it("returns an empty list for free-form scalar values", async () => {
-      const ctx = parseCompletionContext(
-        ["api", "GetFunctionExecution", "-f", "executionId="],
-        mainCommand,
-      );
-      const result = await generateCandidates(ctx, { shell: "bash" });
-
-      expect(result.candidates).toEqual([]);
-    });
-
-    it("returns an empty list for unknown field keys", async () => {
-      const ctx = parseCompletionContext(
-        ["api", "GetFunctionExecution", "-f", "nope="],
-        mainCommand,
-      );
-      const result = await generateCandidates(ctx, { shell: "bash" });
-
-      expect(result.candidates).toEqual([]);
+    it("bakes the expand table and dedup tracker into the generated shell script", () => {
+      // The whole point of `expand` is that candidates are inlined into the
+      // static script — no Node process is spawned per TAB. politty's shell
+      // generator additionally populates `_used_field_keys` from already-typed
+      // `key=value` args so the same key isn't offered twice when --field is
+      // repeated. Confirm both are wired up in the zsh script.
+      const { script } = generateCompletion(mainCommand, {
+        shell: "zsh",
+        programName: "tailor-sdk",
+      });
+      expect(script).toMatch(/__tailor_sdk_expand_[a-z_]+__field=/);
+      expect(script).toContain("GetFunctionExecution");
+      expect(script).toContain("_used_field_keys");
     });
   });
 });
