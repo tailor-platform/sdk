@@ -1,0 +1,14 @@
+{
+  "name": "my-monorepo-pkg",
+  "dependencies": {
+    "@tailor-platform/function-types": "0.8.5",
+    "@tailor-platform/sdk": "1.48.0"
+  },
+  "devDependencies": {
+    "@tailor-platform/function-types": "0.8.5",
+    "typescript": "5.9.2"
+  },
+  "peerDependencies": {
+    "@tailor-platform/function-types": "*"
+  }
+}

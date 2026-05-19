@@ -1,0 +1,7 @@
+name: "@tailor-platform/drop-function-types-dep"
+version: "1.0.0"
+description: "Drop the `@tailor-platform/function-types` dependency and tsconfig types entry; its declarations are now vendored inside `@tailor-platform/sdk`."
+engine: jssg
+language: text
+since: "1.0.0"
+until: "2.0.0"
