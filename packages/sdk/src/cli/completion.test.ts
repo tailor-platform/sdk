@@ -18,9 +18,9 @@ vi.mock("politty", async (importOriginal) => ({
 
 describe("shell completion", () => {
   describe("subcommand completion", () => {
-    it("completes root subcommands", () => {
+    it("completes root subcommands", async () => {
       const ctx = parseCompletionContext([""], mainCommand);
-      const result = generateCandidates(ctx);
+      const result = await generateCandidates(ctx, { shell: "bash" });
 
       const values = result.candidates.map((c) => c.value);
       expect(values).toContain("deploy");
@@ -30,9 +30,9 @@ describe("shell completion", () => {
       expect(values).toContain("completion");
     });
 
-    it("completes nested subcommands for tailordb", () => {
+    it("completes nested subcommands for tailordb", async () => {
       const ctx = parseCompletionContext(["tailordb", ""], mainCommand);
-      const result = generateCandidates(ctx);
+      const result = await generateCandidates(ctx, { shell: "bash" });
 
       const values = result.candidates.map((c) => c.value);
       expect(values).toContain("erd");
@@ -42,9 +42,9 @@ describe("shell completion", () => {
   });
 
   describe("option name completion", () => {
-    it("completes option names for deploy command", () => {
+    it("completes option names for deploy command", async () => {
       const ctx = parseCompletionContext(["deploy", "--"], mainCommand);
-      const result = generateCandidates(ctx);
+      const result = await generateCandidates(ctx, { shell: "bash" });
 
       const values = result.candidates.map((c) => c.value);
       expect(values).toContain("--config");
@@ -53,9 +53,9 @@ describe("shell completion", () => {
       expect(values).toContain("--yes");
     });
 
-    it("completes option names for workspace create command", () => {
+    it("completes option names for workspace create command", async () => {
       const ctx = parseCompletionContext(["workspace", "create", "--"], mainCommand);
-      const result = generateCandidates(ctx);
+      const result = await generateCandidates(ctx, { shell: "bash" });
 
       const values = result.candidates.map((c) => c.value);
       expect(values).toContain("--name");
@@ -65,9 +65,9 @@ describe("shell completion", () => {
   });
 
   describe("file completion", () => {
-    it("triggers file completion with extension filter for --config", () => {
+    it("triggers file completion with extension filter for --config", async () => {
       const ctx = parseCompletionContext(["deploy", "--config", ""], mainCommand);
-      const result = generateCandidates(ctx);
+      const result = await generateCandidates(ctx, { shell: "bash" });
 
       // With extensions set, politty uses @ext: metadata instead of FileCompletion directive
       expect(result.fileExtensions).toEqual(["ts"]);
@@ -78,53 +78,93 @@ describe("shell completion", () => {
   });
 
   describe("directory completion", () => {
-    it("triggers directory completion for staticwebsite deploy --dir", () => {
+    it("triggers directory completion for staticwebsite deploy --dir", async () => {
       const ctx = parseCompletionContext(["staticwebsite", "deploy", "--dir", ""], mainCommand);
-      const result = generateCandidates(ctx);
+      const result = await generateCandidates(ctx, { shell: "bash" });
 
       expect(result.directive & CompletionDirective.DirectoryCompletion).toBeTruthy();
     });
 
-    it("triggers directory completion for tailordb erd export --output", () => {
+    it("triggers directory completion for tailordb erd export --output", async () => {
       const ctx = parseCompletionContext(
         ["tailordb", "erd", "export", "--output", ""],
         mainCommand,
       );
-      const result = generateCandidates(ctx);
+      const result = await generateCandidates(ctx, { shell: "bash" });
 
       expect(result.directive & CompletionDirective.DirectoryCompletion).toBeTruthy();
     });
   });
 
   describe("no file completion", () => {
-    it("suppresses file completion for --workspace-id", () => {
+    it("suppresses file completion for --workspace-id", async () => {
       const ctx = parseCompletionContext(["deploy", "--workspace-id", ""], mainCommand);
-      const result = generateCandidates(ctx);
+      const result = await generateCandidates(ctx, { shell: "bash" });
 
       expect(result.directive & CompletionDirective.NoFileCompletion).toBeTruthy();
     });
 
-    it("suppresses file completion for --profile", () => {
+    it("suppresses file completion for --profile", async () => {
       const ctx = parseCompletionContext(["deploy", "--profile", ""], mainCommand);
-      const result = generateCandidates(ctx);
+      const result = await generateCandidates(ctx, { shell: "bash" });
 
       expect(result.directive & CompletionDirective.NoFileCompletion).toBeTruthy();
     });
   });
 
   describe("enum completion", () => {
-    it("completes role values for workspace user invite", () => {
+    it("completes role values for workspace user invite", async () => {
       const ctx = parseCompletionContext(
         ["workspace", "user", "invite", "--role", ""],
         mainCommand,
       );
-      const result = generateCandidates(ctx);
+      const result = await generateCandidates(ctx, { shell: "bash" });
 
       const values = result.candidates.map((c) => c.value);
       expect(values).toContain("admin");
       expect(values).toContain("editor");
       expect(values).toContain("viewer");
       expect(result.directive & CompletionDirective.NoFileCompletion).toBeTruthy();
+    });
+  });
+
+  describe("api --field dynamic completion", () => {
+    it("returns top-level fields from the endpoint's proto schema", async () => {
+      const ctx = parseCompletionContext(["api", "GetFunctionExecution", "-f", ""], mainCommand);
+      const result = await generateCandidates(ctx, { shell: "bash" });
+
+      const values = result.candidates.map((c) => c.value);
+      expect(values).toContain("workspaceId=");
+      expect(values).toContain("executionId=");
+    });
+
+    it("dedupes keys that were already supplied via previous --field flags", async () => {
+      const ctx = parseCompletionContext(
+        ["api", "GetFunctionExecution", "-f", "executionId=exec-1", "-f", ""],
+        mainCommand,
+      );
+      const result = await generateCandidates(ctx, { shell: "bash" });
+
+      const values = result.candidates.map((c) => c.value);
+      expect(values).not.toContain("executionId=");
+      expect(values).toContain("workspaceId=");
+    });
+
+    it("returns an empty list when no endpoint has been typed", async () => {
+      const ctx = parseCompletionContext(["api", "-f", ""], mainCommand);
+      const result = await generateCandidates(ctx, { shell: "bash" });
+
+      expect(result.candidates).toEqual([]);
+    });
+
+    it("returns an empty list once the user has typed past the `=`", async () => {
+      const ctx = parseCompletionContext(
+        ["api", "GetFunctionExecution", "-f", "executionId=ex"],
+        mainCommand,
+      );
+      const result = await generateCandidates(ctx, { shell: "bash" });
+
+      expect(result.candidates).toEqual([]);
     });
   });
 });

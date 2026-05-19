@@ -238,4 +238,95 @@ describe("api command body auto-injection", () => {
       expect(loadWorkspaceId).not.toHaveBeenCalled();
     });
   });
+
+  describe("--field option", () => {
+    test("should set a flat field into the body", async () => {
+      vi.mocked(loadWorkspaceId).mockResolvedValue("ws-1");
+
+      await runCommand(apiCommand, ["GetFunctionExecution", "-f", "executionId=exec-1"]);
+
+      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+      const body = JSON.parse(options.body as string);
+      expect(body.executionId).toBe("exec-1");
+      expect(body.workspaceId).toBe("ws-1");
+    });
+
+    test("should set nested fields via dotted keys", async () => {
+      await runCommand(apiCommand, [
+        "GetFunctionExecution",
+        "-f",
+        "a.b.c=hello",
+        "-f",
+        "a.b.d=world",
+      ]);
+
+      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+      const body = JSON.parse(options.body as string);
+      expect(body.a).toEqual({ b: { c: "hello", d: "world" } });
+    });
+
+    test("should let --field override matching keys in --body", async () => {
+      await runCommand(apiCommand, [
+        "GetFunctionExecution",
+        "-b",
+        '{"executionId":"from-body"}',
+        "-f",
+        "executionId=from-field",
+      ]);
+
+      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+      const body = JSON.parse(options.body as string);
+      expect(body.executionId).toBe("from-field");
+    });
+
+    test("should destructively overwrite a non-object body value with a nested --field", async () => {
+      await runCommand(apiCommand, ["GetFunctionExecution", "-b", '{"a":"str"}', "-f", "a.b=baz"]);
+
+      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+      const body = JSON.parse(options.body as string);
+      expect(body.a).toEqual({ b: "baz" });
+    });
+
+    test("should skip workspaceId auto-injection when supplied via --field", async () => {
+      await runCommand(apiCommand, [
+        "GetFunctionExecution",
+        "-f",
+        "workspaceId=ws-x",
+        "-f",
+        "executionId=exec-1",
+      ]);
+
+      expect(loadWorkspaceId).not.toHaveBeenCalled();
+      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+      const body = JSON.parse(options.body as string);
+      expect(body.workspaceId).toBe("ws-x");
+    });
+
+    test("should error when --field is combined with a non-object --body", async () => {
+      const result = await runCommand(apiCommand, [
+        "GetFunctionExecution",
+        "-b",
+        '"just-a-string"',
+        "-f",
+        "executionId=exec-1",
+      ]);
+
+      expect(result.success).toBe(false);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    test("should reject malformed --field values", async () => {
+      const result = await runCommand(apiCommand, ["GetFunctionExecution", "-f", "no-equals"]);
+
+      expect(result.success).toBe(false);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    test("should reject empty dotted segments in --field key", async () => {
+      const result = await runCommand(apiCommand, ["GetFunctionExecution", "-f", "a..b=x"]);
+
+      expect(result.success).toBe(false);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
 });
