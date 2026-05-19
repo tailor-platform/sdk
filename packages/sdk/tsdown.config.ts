@@ -59,7 +59,8 @@ export default defineConfig({
   banner: {
     dts: '/// <reference types="@tailor-platform/function-types" />',
   },
-  external: ["vite", "vitest"], // peer dependencies: prevent bundling, resolve at runtime
+  // peer dependencies: prevent bundling, resolve at runtime
+  deps: { neverBundle: ["vite", "vitest"] },
   sourcemap: true,
   plugins,
 });
