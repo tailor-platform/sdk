@@ -6,6 +6,14 @@
  * responses and assert on recorded calls via the exported mock objects.
  */
 
+import type { TailorEnv } from "../types/env";
+
+// Re-declared (not imported) because mock.ts is loaded by the tailor-runtime
+// Vitest environment in nested configs that do not resolve `@/` aliases.
+// `mock.test.ts` asserts this matches `WORKFLOW_ENV_GLOBAL_KEY` exported from
+// `configure/services/workflow/job.ts` so the two declarations cannot drift.
+export const WORKFLOW_ENV_GLOBAL_KEY = "__tailorWorkflowTestEnv";
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -135,12 +143,6 @@ export const STATE_KEY = "__tailorMockState";
 // project that happens to import the mocks). Use this flag to detect whether
 // the environment itself is active.
 export const RUNTIME_FLAG_KEY = "__tailorRuntimeActive";
-
-// globalThis key consumed by `createWorkflowJob().trigger()` when the body is
-// invoked locally (outside the platform runtime). The configure module reads
-// this directly via globalThis to avoid a runtime dependency on vitest/mock,
-// preserving the configure → vitest module boundary.
-export const WORKFLOW_ENV_GLOBAL_KEY = "__tailorWorkflowTestEnv";
 
 function getState(): MockState {
   const g = globalThis as Record<string, unknown>;
@@ -369,7 +371,7 @@ export const workflowMock = {
    * `workflowMock.reset()`.
    * @param env - Env object to pass to job bodies invoked via `.trigger()`
    */
-  setEnv(env: Record<string, unknown>): void {
+  setEnv(env: TailorEnv): void {
     (globalThis as Record<string, unknown>)[WORKFLOW_ENV_GLOBAL_KEY] = env;
   },
 

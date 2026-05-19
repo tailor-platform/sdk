@@ -4,6 +4,15 @@ import type { JsonCompatible } from "@/types/helpers";
 import type { TailorInvoker } from "@/types/user";
 
 /**
+ * Well-known `globalThis` key consumed by `createWorkflowJob().trigger()` when
+ * the body is invoked locally. Written by `workflowMock.setEnv()` from
+ * `@tailor-platform/sdk/vitest`. Re-exported by `src/vitest/mock.ts` so both
+ * the writer (mock) and reader (this file) share a single source of truth.
+ * @internal
+ */
+export const WORKFLOW_ENV_GLOBAL_KEY = "__tailorWorkflowTestEnv";
+
+/**
  * Context object passed as the second argument to workflow job body functions.
  */
 export type WorkflowJobContext = {
@@ -55,14 +64,6 @@ export interface WorkflowJob<Name extends string = string, Input = undefined, Ou
     : (input: Input) => Promise<Awaited<Output>>;
   body: (input: Input, context: WorkflowJobContext) => Output | Promise<Output>;
 }
-
-// globalThis key consumed by `.trigger()` when the body is invoked locally.
-// The matching writer is `workflowMock.setEnv()` in `@tailor-platform/sdk/vitest`.
-// Tests outside the `tailor-runtime` Vitest environment may assign this key
-// directly. Keep the literal in sync with `WORKFLOW_ENV_GLOBAL_KEY` in
-// `src/vitest/mock.ts` — the configure module avoids the cross-module import
-// to preserve the module boundary.
-const WORKFLOW_ENV_GLOBAL_KEY = "__tailorWorkflowTestEnv";
 
 /**
  * Environment variable key historically consumed by `createWorkflowJob().trigger()`
@@ -122,11 +123,13 @@ export const createWorkflowJob = <const Name extends string, I = undefined, O = 
         // `workflowMock.setEnv()` takes priority. Fall back to the deprecated
         // `TAILOR_TEST_WORKFLOW_ENV` env var when the global key is unset so
         // existing tests using `vi.stubEnv(WORKFLOW_TEST_ENV_KEY, ...)` keep
-        // working.
+        // working. Shallow-copy the global env so job bodies cannot mutate
+        // the source object across triggers, matching the env-var path which
+        // returns a fresh object from `JSON.parse` each call.
         const fromGlobal = (globalThis as Record<string, unknown>)[WORKFLOW_ENV_GLOBAL_KEY];
         const env = (
           fromGlobal !== undefined
-            ? fromGlobal
+            ? { ...(fromGlobal as Record<string, unknown>) }
             : JSON.parse(process.env[WORKFLOW_TEST_ENV_KEY] || "{}")
         ) as TailorEnv;
         return await body(args as I, { env, invoker: null });
