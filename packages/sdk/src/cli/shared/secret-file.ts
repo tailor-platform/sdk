@@ -5,6 +5,24 @@ const DIR_MODE = 0o700;
 const FILE_MODE = 0o600;
 
 /**
+ * Best-effort chmod that only fires when the current mode differs from the
+ * target. No-op on Windows (where POSIX mode bits are advisory and ACLs
+ * govern access) and on missing paths / permission errors.
+ * @param target - Path to chmod
+ * @param mode - Desired POSIX mode bits
+ */
+function chmodIfDifferent(target: string, mode: number): void {
+  if (process.platform === "win32") return;
+  try {
+    if ((fs.statSync(target).mode & 0o777) !== mode) {
+      fs.chmodSync(target, mode);
+    }
+  } catch {
+    // Missing path or permission error — best-effort.
+  }
+}
+
+/**
  * Write a file that may contain secrets with restrictive permissions.
  * Creates the parent directory with 0o700 and the file with 0o600 on POSIX
  * systems so other users on the host cannot read access tokens, refresh
@@ -17,13 +35,7 @@ const FILE_MODE = 0o600;
 export function writeSecretFile(filePath: string, content: string | Buffer): void {
   ensureSecretDir(path.dirname(filePath));
   fs.writeFileSync(filePath, content, { mode: FILE_MODE });
-  if (process.platform !== "win32") {
-    try {
-      fs.chmodSync(filePath, FILE_MODE);
-    } catch {
-      // Best-effort: ignore filesystems that don't support chmod.
-    }
-  }
+  chmodIfDifferent(filePath, FILE_MODE);
 }
 
 /**
@@ -35,29 +47,7 @@ export function writeSecretFile(filePath: string, content: string | Buffer): voi
  */
 export function ensureSecretDir(dir: string): void {
   fs.mkdirSync(dir, { recursive: true, mode: DIR_MODE });
-  if (process.platform !== "win32") {
-    try {
-      fs.chmodSync(dir, DIR_MODE);
-    } catch {
-      // Best-effort: ignore EPERM on directories we don't own.
-    }
-  }
-}
-
-/**
- * Best-effort chmod that only fires when the current mode differs from the
- * target. Silently ignores missing paths and permission errors.
- * @param target - Path to chmod
- * @param mode - Desired POSIX mode bits
- */
-function chmodIfDifferent(target: string, mode: number): void {
-  try {
-    if ((fs.statSync(target).mode & 0o777) !== mode) {
-      fs.chmodSync(target, mode);
-    }
-  } catch {
-    // Missing path or permission error — best-effort.
-  }
+  chmodIfDifferent(dir, DIR_MODE);
 }
 
 /**
@@ -69,7 +59,6 @@ function chmodIfDifferent(target: string, mode: number): void {
  * @param filePath - Absolute path that should be 0o600 and live under a 0o700 directory
  */
 export function tightenSecretFilePermissions(filePath: string): void {
-  if (process.platform === "win32") return;
   chmodIfDifferent(filePath, FILE_MODE);
   chmodIfDifferent(path.dirname(filePath), DIR_MODE);
 }
