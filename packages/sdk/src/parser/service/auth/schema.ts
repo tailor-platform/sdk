@@ -256,21 +256,18 @@ const AuthConfigBaseSchema = z.object({
   publishSessionEvents: z.boolean().optional().describe("Enable publishing session events"),
 });
 
-export const AuthConfigSchema = z
-  .union([
-    AuthConfigBaseSchema.extend({
-      userProfile: z.undefined().optional(),
-      machineUserAttributes: z.undefined().optional(),
-    }),
-    z.xor([
-      AuthConfigBaseSchema.extend({
-        userProfile: UserProfileSchema,
-        machineUserAttributes: z.undefined().optional(),
-      }),
-      AuthConfigBaseSchema.extend({
-        userProfile: z.undefined().optional(),
-        machineUserAttributes: z.record(z.string(), TailorFieldSchema),
-      }),
-    ]),
-  ])
+export const AuthConfigSchema = AuthConfigBaseSchema.extend({
+  userProfile: UserProfileSchema.optional().describe("User profile configuration"),
+  machineUserAttributes: z
+    .record(z.string(), TailorFieldSchema)
+    .optional()
+    .describe("Machine user attribute fields (mutually exclusive with userProfile)"),
+})
+  .refine(
+    (config) => !(config.userProfile !== undefined && config.machineUserAttributes !== undefined),
+    {
+      error: "Specify either `userProfile` or `machineUserAttributes`, not both.",
+      path: ["machineUserAttributes"],
+    },
+  )
   .brand("AuthConfig");
