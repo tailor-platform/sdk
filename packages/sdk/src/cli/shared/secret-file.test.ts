@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { ensureSecretDir, writeSecretFile } from "./secret-file";
+import { ensureSecretDir, tightenSecretFilePermissions, writeSecretFile } from "./secret-file";
 
 const isWindows = process.platform === "win32";
 
@@ -94,5 +94,55 @@ describe("ensureSecretDir", () => {
     const dir = path.join(tempDir, "ok");
     ensureSecretDir(dir);
     expect(() => ensureSecretDir(dir)).not.toThrow();
+  });
+});
+
+describe("tightenSecretFilePermissions", () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailor-tighten-"));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it.skipIf(isWindows)("tightens a world-readable file to 0600", () => {
+    const target = path.join(tempDir, "config.yaml");
+    fs.writeFileSync(target, "x", { mode: 0o644 });
+    fs.chmodSync(target, 0o644);
+
+    tightenSecretFilePermissions(target);
+
+    expect(fs.statSync(target).mode & 0o777).toBe(0o600);
+  });
+
+  it.skipIf(isWindows)("tightens the parent directory to 0700", () => {
+    const dir = path.join(tempDir, "loose");
+    fs.mkdirSync(dir, { mode: 0o755 });
+    fs.chmodSync(dir, 0o755);
+    const target = path.join(dir, "config.yaml");
+    fs.writeFileSync(target, "x");
+
+    tightenSecretFilePermissions(target);
+
+    expect(fs.statSync(dir).mode & 0o777).toBe(0o700);
+  });
+
+  it("does not throw when the file is missing", () => {
+    expect(() =>
+      tightenSecretFilePermissions(path.join(tempDir, "does-not-exist.yaml")),
+    ).not.toThrow();
+  });
+
+  it.skipIf(isWindows)("is a no-op when the modes already match", () => {
+    const target = path.join(tempDir, "ok", "config.yaml");
+    fs.mkdirSync(path.dirname(target), { mode: 0o700 });
+    fs.writeFileSync(target, "x", { mode: 0o600 });
+    fs.chmodSync(target, 0o600);
+
+    expect(() => tightenSecretFilePermissions(target)).not.toThrow();
+    expect(fs.statSync(target).mode & 0o777).toBe(0o600);
   });
 });

@@ -10,7 +10,7 @@ import ml from "@/utils/multiline";
 import { initOAuth2Client } from "./client";
 import { logger } from "./logger";
 import { readPackageJson } from "./package-json";
-import { writeSecretFile } from "./secret-file";
+import { tightenSecretFilePermissions, writeSecretFile } from "./secret-file";
 import {
   isKeyringAvailable,
   loadKeyringTokens,
@@ -140,6 +140,11 @@ export async function readPlatformConfig(): Promise<PfConfig> {
   }
 
   const rawConfig = parseYAML(fs.readFileSync(configPath, "utf-8"));
+
+  // Legacy installs may have left the config world-readable (umask default
+  // 0o644). Tighten it here so users who only run read-only commands still
+  // get the secret-file permissions applied without waiting for a write.
+  tightenSecretFilePermissions(configPath);
 
   // Check for unsupported future versions
   const version =

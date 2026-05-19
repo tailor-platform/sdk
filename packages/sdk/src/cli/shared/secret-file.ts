@@ -43,3 +43,30 @@ export function ensureSecretDir(dir: string): void {
     }
   }
 }
+
+/**
+ * Tighten an existing file and its parent directory to secret-file modes
+ * (0o600 / 0o700) if they are looser. Used by read paths that may not
+ * trigger a subsequent write, so that legacy world-readable files are
+ * still secured the next time the CLI runs. Silent no-op on Windows and
+ * on missing files / permission errors.
+ * @param filePath - Absolute path that should be 0o600 and live under a 0o700 directory
+ */
+export function tightenSecretFilePermissions(filePath: string): void {
+  if (process.platform === "win32") return;
+  try {
+    if ((fs.statSync(filePath).mode & 0o777) !== FILE_MODE) {
+      fs.chmodSync(filePath, FILE_MODE);
+    }
+  } catch {
+    // Missing file or permission error — best-effort.
+  }
+  const dir = path.dirname(filePath);
+  try {
+    if ((fs.statSync(dir).mode & 0o777) !== DIR_MODE) {
+      fs.chmodSync(dir, DIR_MODE);
+    }
+  } catch {
+    // Best-effort: ignore EPERM on directories we don't own.
+  }
+}
