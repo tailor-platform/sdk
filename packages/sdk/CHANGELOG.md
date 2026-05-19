@@ -1,5 +1,17 @@
 # @tailor-platform/sdk
 
+## 1.47.1
+
+### Patch Changes
+
+- [#1176](https://github.com/tailor-platform/sdk/pull/1176) [`5abed20`](https://github.com/tailor-platform/sdk/commit/5abed20dff48e24f23675989143e33c8afb23845) Thanks [@toiroakr](https://github.com/toiroakr)! - Declare `undici` as a direct dependency. The SDK CLI imports `getGlobalDispatcher` from `undici`, but the package was previously available only through accidental hoisting of a transitive dependency. Strict node_modules layouts (e.g. pnpm 11 with stricter hoisting) would fail to resolve the import; declaring it directly fixes that.
+
+- [#1172](https://github.com/tailor-platform/sdk/pull/1172) [`7f37a07`](https://github.com/tailor-platform/sdk/commit/7f37a076a281fdca03d2301e1dba95668b2f7222) Thanks [@toiroakr](https://github.com/toiroakr)! - Widen `TailorEnv` fallback to `Record<string, string | number | boolean>` so it matches the values the type generator emits (string literal / number / boolean). Previously the fallback was `Record<string, string>`, which rejected number and boolean env values until `tailor.d.ts` was generated.
+
+- [#1161](https://github.com/tailor-platform/sdk/pull/1161) [`3e835c5`](https://github.com/tailor-platform/sdk/commit/3e835c55e27fbfedff94a169d1c2fb3c4f50e0a3) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update rolldown
+
+- [#1165](https://github.com/tailor-platform/sdk/pull/1165) [`f4ff7bd`](https://github.com/tailor-platform/sdk/commit/f4ff7bd5318be0a1142a557c76a17896d9df193a) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix a type/runtime mismatch where calling `workflowJob.trigger()` without `await` returned a raw value at runtime even though the static type is `Promise<Awaited<Output>>`. The bundler now wraps `.trigger()` in an async IIFE (`(async () => tailor.workflow.triggerJobFunction("...", args))()`), so the returned value is always a `Promise` (including for `.then()` chains), synchronous throws from the platform surface as Promise rejections, and the platform's synchronous suspend semantics are preserved (the call site runs to completion before subsequent statements).
+
 ## 1.47.0
 
 ### Minor Changes
