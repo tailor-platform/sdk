@@ -10,9 +10,6 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Setup takumi-guard
-      uses: flatt-security/setup-takumi-guard-npm@9a5d797c2085b6326d3a2985c08e3a114b9b88c1 # v1
-
     - uses: pnpm/action-setup@8912a9102ac27614460f54aedde9e1e7f9aec20d # v6.0.5
       name: Install pnpm
       with:
@@ -20,17 +17,12 @@ runs:
         run_install: false
 
     - name: Install Node.js
-      run: pnpm runtime set node ${{ inputs.node-version }} -g
-      shell: bash
+      uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      with:
+        node-version: ${{ inputs.node-version }}
 
     - name: Install dependencies
       run: pnpm install
-      shell: bash
-
-    # takumi-guard adds registry=https://npm.flatt.tech/ to .npmrc;
-    # restore it so downstream steps don't see uncommitted changes.
-    - name: Restore .npmrc
-      run: git checkout -- .npmrc
       shell: bash
 
     # Build SDK so that the bin entry points to a real dist file
@@ -38,7 +30,13 @@ runs:
       run: pnpm exec turbo run build --filter @tailor-platform/sdk
       shell: bash
 
-    # Recreate .bin links after build
-    - name: Re-install to create bin links
-      run: pnpm install --frozen-lockfile
+    # Re-link the SDK's bin entry after build. pnpm 11 treats a same-lockfile
+    # re-install as a no-op, so a second `pnpm install` no longer regenerates
+    # bin links. `pnpm rebuild --pending` relinks the newly-built target
+    # without re-running every dependency's lifecycle scripts; a bare
+    # `pnpm rebuild` would re-invoke esbuild/lefthook postinstalls, and on
+    # Windows runners those child shells cannot find `node` on PATH and the
+    # step fails.
+    - name: Re-link SDK bin entry after build
+      run: pnpm rebuild --pending
       shell: bash

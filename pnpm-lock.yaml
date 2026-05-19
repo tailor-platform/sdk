@@ -142,7 +142,7 @@ importers:
         version: 1.61.0(oxlint-tsgolint@0.22.1)
       tsdown:
         specifier: 0.22.0
-        version: 0.22.0(@typescript/native-preview@7.0.0-dev.20260503.1)(oxc-resolver@11.19.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0))(publint@0.3.20)(tsx@4.21.0)(typescript@5.9.3)(unrun@0.2.37)
+        version: 0.22.0(@typescript/native-preview@7.0.0-dev.20260503.1)(oxc-resolver@11.19.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0))(publint@0.3.20)(tsx@4.21.0)(typescript@5.9.3)
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -617,6 +617,9 @@ importers:
       type-fest:
         specifier: 5.6.0
         version: 5.6.0
+      undici:
+        specifier: 6.25.0
+        version: 6.25.0
       vite:
         specifier: ^6.0.0 || ^7.0.0 || ^8.0.0
         version: 8.0.10(@types/node@24.12.3)(esbuild@0.27.4)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.8.2)
@@ -662,7 +665,7 @@ importers:
         version: 0.11.1
       tsdown:
         specifier: 0.22.0
-        version: 0.22.0(@typescript/native-preview@7.0.0-dev.20260503.1)(oxc-resolver@11.19.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0))(publint@0.3.20)(tsx@4.21.0)(typescript@5.9.3)(unrun@0.2.37)
+        version: 0.22.0(@typescript/native-preview@7.0.0-dev.20260503.1)(oxc-resolver@11.19.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0))(publint@0.3.20)(tsx@4.21.0)(typescript@5.9.3)
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -717,7 +720,7 @@ importers:
         version: 1.61.0(oxlint-tsgolint@0.22.1)
       tsdown:
         specifier: 0.22.0
-        version: 0.22.0(@typescript/native-preview@7.0.0-dev.20260503.1)(oxc-resolver@11.19.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0))(publint@0.3.20)(tsx@4.21.0)(typescript@5.9.3)(unrun@0.2.37)
+        version: 0.22.0(@typescript/native-preview@7.0.0-dev.20260503.1)(oxc-resolver@11.19.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0))(publint@0.3.20)(tsx@4.21.0)(typescript@5.9.3)
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -5112,6 +5115,10 @@ packages:
     resolution: {integrity: sha512-VfQPToRA5FZs/qJxLIinmU59u0r7LXqoJkCzinq3ckNJp3vKEh7jTWN589YQ5+aoAC/TGRLyJLCPKcLQbM8r9g==}
     engines: {node: '>=18.17'}
 
+  undici@6.25.0:
+    resolution: {integrity: sha512-ZgpWDC5gmNiuY9CnLVXEH8rl50xhRCuLNA97fAUnKi8RRuV4E6KG31pDTsLVUKnohJE0I3XDrTeEydAXRw47xg==}
+    engines: {node: '>=18.17'}
+
   undici@7.25.0:
     resolution: {integrity: sha512-xXnp4kTyor2Zq+J1FfPI6Eq3ew5h6Vl0F/8d9XU5zZQf1tX9s2Su1/3PiMmUANFULpmksxkClamIZcaUqryHsQ==}
     engines: {node: '>=20.18.1'}
@@ -5130,16 +5137,6 @@ packages:
   universalify@2.0.1:
     resolution: {integrity: sha512-gptHNQghINnc/vTGIk0SOFGFNXw7JVrlRUtConJRlvaw6DuX0wO5Jeko9sWrMBhh+PsYAZ7oXAiOnf/UKogyiw==}
     engines: {node: '>= 10.0.0'}
-
-  unrun@0.2.37:
-    resolution: {integrity: sha512-AA7vDuYsgeSYVzJMm16UKA+aXFKhy7nFqW9z5l7q44K4ppFWZAMqYS58ePRZbugMLPH0fwwMzD5A8nP0avxwZQ==}
-    engines: {node: '>=20.19.0'}
-    hasBin: true
-    peerDependencies:
-      synckit: ^0.11.11
-    peerDependenciesMeta:
-      synckit:
-        optional: true
 
   update-check@1.5.4:
     resolution: {integrity: sha512-5YHsflzHP4t1G+8WGPlvKbJEbAJGCgw+Em+dGR1KmBUbr1J36SJBqlHLjR7oob7sco5hWHGQVcr9B2poIVDDTQ==}
@@ -9280,7 +9277,7 @@ snapshots:
       minimist: 1.2.8
       strip-bom: 3.0.0
 
-  tsdown@0.22.0(@typescript/native-preview@7.0.0-dev.20260503.1)(oxc-resolver@11.19.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0))(publint@0.3.20)(tsx@4.21.0)(typescript@5.9.3)(unrun@0.2.37):
+  tsdown@0.22.0(@typescript/native-preview@7.0.0-dev.20260503.1)(oxc-resolver@11.19.1(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0))(publint@0.3.20)(tsx@4.21.0)(typescript@5.9.3):
     dependencies:
       ansis: 4.2.0
       cac: 7.0.0
@@ -9301,7 +9298,6 @@ snapshots:
       publint: 0.3.20
       tsx: 4.21.0
       typescript: 5.9.3
-      unrun: 0.2.37
     transitivePeerDependencies:
       - '@ts-macro/tsc'
       - '@typescript/native-preview'
@@ -9368,6 +9364,8 @@ snapshots:
 
   undici@6.23.0: {}
 
+  undici@6.25.0: {}
+
   undici@7.25.0: {}
 
   unicorn-magic@0.3.0: {}
@@ -9377,11 +9375,6 @@ snapshots:
   universalify@0.1.2: {}
 
   universalify@2.0.1: {}
-
-  unrun@0.2.37:
-    dependencies:
-      rolldown: 1.0.0-rc.17
-    optional: true
 
   update-check@1.5.4:
     dependencies:
