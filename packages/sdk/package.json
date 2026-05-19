@@ -22,7 +22,7 @@
   ],
   "type": "module",
   "sideEffects": [
-    "./dist/cli/*.mjs",
+    "./dist/cli/**/*.mjs",
     "./dist/vitest/setup.mjs"
   ],
   "main": "./dist/configure/index.mjs",
