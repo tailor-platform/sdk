@@ -16,14 +16,16 @@
  * exposes typed wrappers that cover the same surface without relying on globals.
  *
  * The value declarations (`var tailor` / `var tailordb`) are typed via the
- * `TailorRuntime` / `TailordbRuntime` aggregates in `./internal`, which in turn
- * compose the per-service `TailorXxxAPI` types declared alongside each wrapper.
- * Namespaces `Tailor` / `Tailordb` are kept as type-only views so callers can
- * still write `Tailor.idp.User` or `Tailor.context.Invoker` in type position.
+ * `TailorRuntime` / `TailordbRuntime` aggregates re-exported from `.`, which in
+ * turn compose the per-service `TailorXxxAPI` types declared alongside each
+ * wrapper. Namespaces `Tailor` / `Tailordb` are kept as type-only views so
+ * callers can still write `Tailor.idp.User` or `Tailor.context.Invoker` in
+ * type position.
  */
 
 /* eslint-disable @typescript-eslint/no-namespace */
 
+import type { TailordbCommandType, TailordbQueryResult, TailordbRuntime, TailorRuntime } from ".";
 import type { ContextInvoker } from "./context";
 import type { TailorDBFileErrorCode } from "./file";
 import type {
@@ -36,12 +38,6 @@ import type {
   User as IdpUser,
   UserQuery as IdpUserQuery,
 } from "./idp";
-import type {
-  TailordbCommandType,
-  TailordbQueryResult,
-  TailordbRuntime,
-  TailorRuntime,
-} from "./internal";
 import type {
   AuthInvoker as WorkflowAuthInvoker,
   TriggerWorkflowOptions as WorkflowTriggerWorkflowOptions,
