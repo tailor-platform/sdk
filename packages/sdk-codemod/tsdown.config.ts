@@ -27,8 +27,6 @@ export default defineConfig([
         "codemods/v2/auth-invoker-unwrap/scripts/transform.ts",
       "v2/tailordb-namespace/scripts/transform":
         "codemods/v2/tailordb-namespace/scripts/transform.ts",
-      "v2/drop-function-types-dep/scripts/transform":
-        "codemods/v2/drop-function-types-dep/scripts/transform.ts",
     },
     format: ["esm"],
     target: "node18",

@@ -94,8 +94,4 @@ describe("codemod transforms", () => {
   it("v2/tailordb-namespace transforms correctly", async () => {
     await runFixtureCases("v2/tailordb-namespace");
   });
-
-  it("v2/drop-function-types-dep transforms correctly", async () => {
-    await runFixtureCases("v2/drop-function-types-dep");
-  });
 });

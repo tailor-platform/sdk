@@ -87,17 +87,6 @@ const allCodemods: CodemodPackage[] = [
     scriptPath: "v2/tailordb-namespace/scripts/transform.js",
     legacyPatterns: ["Tailordb."],
   },
-  {
-    id: "v2/drop-function-types-dep",
-    name: "Drop @tailor-platform/function-types dependency",
-    description:
-      "Remove `@tailor-platform/function-types` from package.json (`dependencies` / `devDependencies` / `peerDependencies` / `optionalDependencies`) and from `tsconfig.json` `compilerOptions.types`. Its declarations are now vendored inside `@tailor-platform/sdk` and activated automatically.",
-    since: "1.0.0",
-    until: "2.0.0",
-    scriptPath: "v2/drop-function-types-dep/scripts/transform.js",
-    filePatterns: ["**/package.json", "**/tsconfig*.json"],
-    legacyPatterns: ["@tailor-platform/function-types"],
-  },
 ];
 
 /**

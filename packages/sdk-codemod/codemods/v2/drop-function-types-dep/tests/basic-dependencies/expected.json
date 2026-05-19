@@ -1,8 +1,0 @@
-{
-  "name": "my-app",
-  "version": "0.1.0",
-  "dependencies": {
-    "@tailor-platform/sdk": "1.48.0",
-    "kysely": "0.28.0"
-  }
-}

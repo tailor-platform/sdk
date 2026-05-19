@@ -1,7 +1,0 @@
-{
-  "compilerOptions": {
-    "types": [
-      "@tailor-platform/function-types"
-    ]
-  }
-}

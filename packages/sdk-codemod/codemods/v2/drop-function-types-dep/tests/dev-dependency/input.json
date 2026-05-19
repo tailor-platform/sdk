@@ -1,6 +1,0 @@
-{
-  "name": "my-lib",
-  "devDependencies": {
-    "@tailor-platform/function-types": "0.8.5"
-  }
-}

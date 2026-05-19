@@ -1,9 +1,0 @@
-{
-  "name": "my-monorepo-pkg",
-  "dependencies": {
-    "@tailor-platform/sdk": "1.48.0"
-  },
-  "devDependencies": {
-    "typescript": "5.9.2"
-  }
-}
