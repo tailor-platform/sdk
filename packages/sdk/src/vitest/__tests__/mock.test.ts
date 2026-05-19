@@ -217,6 +217,24 @@ describe("mock", () => {
       expect(await captureEnv.trigger()).toEqual({ STAGE: "from-env-var" });
     });
 
+    test("falls back to env var when globalThis key holds a non-object", async () => {
+      const { createWorkflowJob, WORKFLOW_TEST_ENV_KEY } =
+        await import("../../configure/services/workflow/job");
+      const captureEnv = createWorkflowJob({
+        name: "capture-env-non-object",
+        body: (_input: undefined, ctx) => ctx.env,
+      });
+
+      try {
+        (globalThis as Record<string, unknown>)[WORKFLOW_ENV_GLOBAL_KEY] = "not-an-object";
+        vi.stubEnv(WORKFLOW_TEST_ENV_KEY, JSON.stringify({ STAGE: "from-env-var" }));
+
+        expect(await captureEnv.trigger()).toEqual({ STAGE: "from-env-var" });
+      } finally {
+        delete (globalThis as Record<string, unknown>)[WORKFLOW_ENV_GLOBAL_KEY];
+      }
+    });
+
     test("WORKFLOW_ENV_GLOBAL_KEY is the same constant in mock.ts and job.ts", () => {
       // The constant is declared in both files because mock.ts must remain
       // import-free of `@/` aliases (it's loaded by nested Vitest configs that

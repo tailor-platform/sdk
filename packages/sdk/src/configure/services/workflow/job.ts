@@ -6,8 +6,11 @@ import type { TailorInvoker } from "@/types/user";
 /**
  * Well-known `globalThis` key consumed by `createWorkflowJob().trigger()` when
  * the body is invoked locally. Written by `workflowMock.setEnv()` from
- * `@tailor-platform/sdk/vitest`. Re-exported by `src/vitest/mock.ts` so both
- * the writer (mock) and reader (this file) share a single source of truth.
+ * `@tailor-platform/sdk/vitest`. The same literal is re-declared (not imported)
+ * in `src/vitest/mock.ts` because that file is loaded by the `tailor-runtime`
+ * Vitest environment in nested configs that do not resolve `@/` aliases. The
+ * drift-guard test in `src/vitest/__tests__/mock.test.ts` asserts both copies
+ * stay identical.
  * @internal
  */
 export const WORKFLOW_ENV_GLOBAL_KEY = "__tailorWorkflowTestEnv";
@@ -121,14 +124,15 @@ export const createWorkflowJob = <const Name extends string, I = undefined, O = 
       name: config.name,
       trigger: async (args?: unknown) => {
         // `workflowMock.setEnv()` takes priority. Fall back to the deprecated
-        // `TAILOR_TEST_WORKFLOW_ENV` env var when the global key is unset so
-        // existing tests using `vi.stubEnv(WORKFLOW_TEST_ENV_KEY, ...)` keep
-        // working. Shallow-copy the global env so job bodies cannot mutate
-        // the source object across triggers, matching the env-var path which
-        // returns a fresh object from `JSON.parse` each call.
+        // `TAILOR_TEST_WORKFLOW_ENV` env var when the global key is unset (or
+        // set to a non-plain-object) so existing tests using
+        // `vi.stubEnv(WORKFLOW_TEST_ENV_KEY, ...)` keep working. Shallow-copy
+        // the global env so job bodies cannot mutate the source object across
+        // triggers, matching the env-var path which returns a fresh object
+        // from `JSON.parse` each call.
         const fromGlobal = (globalThis as Record<string, unknown>)[WORKFLOW_ENV_GLOBAL_KEY];
         const env = (
-          fromGlobal !== undefined
+          typeof fromGlobal === "object" && fromGlobal !== null
             ? { ...(fromGlobal as Record<string, unknown>) }
             : JSON.parse(process.env[WORKFLOW_TEST_ENV_KEY] || "{}")
         ) as TailorEnv;
