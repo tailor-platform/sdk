@@ -1,0 +1,7 @@
+name: "@tailor-platform/test-run-arg-input"
+version: "1.0.0"
+description: "Remove the deprecated {input: ...} wrapper from `function test-run --arg` JSON"
+engine: jssg
+language: text
+since: "1.0.0"
+until: "2.0.0"

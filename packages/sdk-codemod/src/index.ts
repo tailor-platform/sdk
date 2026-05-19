@@ -88,4 +88,4 @@ const main = defineCommand({
   },
 });
 
-runMain(main, { version: packageJson.version });
+void runMain(main, { version: packageJson.version });

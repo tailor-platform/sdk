@@ -1,0 +1,9 @@
+{
+  "name": "my-app",
+  "version": "1.0.0",
+  "scripts": {
+    "report:tail": "tailor-sdk crashreport list",
+    "report:send": "tailor-sdk crashreport send --file ./latest.crash.log",
+    "build": "tsc"
+  }
+}

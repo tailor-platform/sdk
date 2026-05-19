@@ -1,0 +1,10 @@
+name: Tail crash reports
+on: workflow_dispatch
+jobs:
+  tail:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pnpm install
+      - run: pnpm exec tailor-sdk crashreport list
+      - run: pnpm exec tailor-sdk crashreport send --file latest.crash.log
