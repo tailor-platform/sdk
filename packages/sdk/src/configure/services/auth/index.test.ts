@@ -154,6 +154,38 @@ describe("defineAuth", () => {
     });
   });
 
+  it("rejects configs that include both userProfile and machineUserAttributes", () => {
+    expect(() => {
+      // @ts-ignore - @see https://github.com/microsoft/TypeScript/issues/63051
+      defineAuth("exclusive-attributes", {
+        // @ts-ignore - userProfile and machineUserAttributes are mutually exclusive; provide exactly one.
+        userProfile: {
+          type: db.type("User", {
+            email: db.string().unique(),
+            role: db.string(),
+          }),
+          usernameField: "email",
+          attributes: {
+            email: true,
+            role: true,
+          },
+        },
+        machineUserAttributes: {
+          role: t.string(),
+          email: t.string(),
+        },
+        machineUsers: {
+          admin: {
+            attributes: {
+              role: "ADMIN",
+              email: "admin@example.com",
+            },
+          },
+        },
+      });
+    }).toThrow();
+  });
+
   describe("name literal type inference", () => {
     it("infers name as literal type", () => {
       const authConfig = defineAuth("my-auth-service", {
