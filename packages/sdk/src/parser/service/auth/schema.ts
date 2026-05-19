@@ -256,18 +256,36 @@ const AuthConfigBaseSchema = z.object({
   publishSessionEvents: z.boolean().optional().describe("Enable publishing session events"),
 });
 
-export const AuthConfigSchema = AuthConfigBaseSchema.extend({
-  userProfile: UserProfileSchema.optional().describe("User profile configuration"),
-  machineUserAttributes: z
-    .record(z.string(), TailorFieldSchema)
-    .optional()
-    .describe("Machine user attribute fields (mutually exclusive with userProfile)"),
-})
-  .refine(
-    (config) => !(config.userProfile !== undefined && config.machineUserAttributes !== undefined),
+export const AuthConfigSchema = z
+  .xor(
+    [
+      AuthConfigBaseSchema.extend({
+        userProfile: UserProfileSchema.optional().describe("User profile configuration"),
+        machineUserAttributes: z.undefined().optional(),
+      }),
+      AuthConfigBaseSchema.extend({
+        userProfile: z.undefined().optional(),
+        machineUserAttributes: z
+          .record(z.string(), TailorFieldSchema)
+          .describe("Machine user attribute fields"),
+      }),
+    ],
     {
-      error: "Specify either `userProfile` or `machineUserAttributes`, not both.",
-      path: ["machineUserAttributes"],
+      error: (iss) => {
+        if (iss.code !== "invalid_union") return undefined;
+        if (iss.errors.length < 2) return undefined;
+        const isOnlyMutexViolation = iss.errors.every((variantErrors) =>
+          variantErrors.every(
+            (e) =>
+              e.path.length === 1 &&
+              (e.path[0] === "userProfile" || e.path[0] === "machineUserAttributes"),
+          ),
+        );
+        if (isOnlyMutexViolation) {
+          return "Specify either `userProfile` or `machineUserAttributes`, not both.";
+        }
+        return undefined;
+      },
     },
   )
   .brand("AuthConfig");

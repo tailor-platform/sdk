@@ -359,6 +359,8 @@ describe("AuthConfigSchema userProfile/machineUserAttributes validation", () => 
       },
     };
 
-    expect(() => AuthConfigSchema.parse(config)).toThrow();
+    expect(() => AuthConfigSchema.parse(config)).toThrow(
+      /Specify either `userProfile` or `machineUserAttributes`, not both/,
+    );
   });
 });

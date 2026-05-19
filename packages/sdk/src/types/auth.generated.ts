@@ -286,188 +286,172 @@ export type TenantProvider = {
 };
 export type TenantProviderInput = TenantProvider;
 
-export type AuthConfigInput = {
-  /** Auth service name */
-  name: string;
-  /** Auth hooks */
-  hooks?:
-    | {
-        beforeLogin?:
-          | {
-              handler: Function;
-              invoker: string;
-            }
-          | undefined;
-      }
-    | undefined;
-  /** Machine user definitions */
-  machineUsers?:
-    | {
-        [x: string]: {
-          attributes?:
-            | {
-                [x: string]: unknown;
-              }
-            | undefined;
-          attributeList?: string[] | undefined;
-        };
-      }
-    | undefined;
-  /** OAuth2 client definitions */
-  oauth2Clients?:
-    | {
-        [x: string]: {
-          redirectURIs: (
-            | `https://${string}`
-            | `http://${string}`
-            | `${string}:url`
-            | `${string}:url/${string}`
-          )[];
-          description?: string | undefined;
-          grantTypes?: ("authorization_code" | "refresh_token")[] | undefined;
-          clientType?: "confidential" | "public" | "browser" | undefined;
-          accessTokenLifetimeSeconds?: number | undefined;
-          refreshTokenLifetimeSeconds?: number | undefined;
-          requireDpop?: boolean | undefined;
-        };
-      }
-    | undefined;
-  /** Identity provider configuration */
-  idProvider?:
-    | {
-        /** Auth service name */
-        name: string;
-        kind: "SAML";
-        enableSignRequest?: boolean | undefined;
-        metadataURL?: string | undefined;
-        rawMetadata?: string | undefined;
-        defaultRedirectURL?: string | undefined;
-      }
-    | {
-        /** Auth service name */
-        name: string;
-        kind: "OIDC";
-        clientID: string;
-        clientSecret: {
-          vaultName: string;
-          secretKey: string;
-        };
-        providerURL: string;
-        issuerURL?: string | undefined;
-        usernameClaim?: string | undefined;
-      }
-    | {
-        /** Auth service name */
-        name: string;
-        kind: "IDToken";
-        providerURL: string;
-        clientID: string;
-        issuerURL?: string | undefined;
-        usernameClaim?: string | undefined;
-      }
-    | {
-        /** Auth service name */
-        name: string;
-        kind: "BuiltInIdP";
-        namespace: string;
-        clientName: string;
-      }
-    | undefined;
-  /** SCIM provisioning configuration */
-  scim?:
-    | {
-        machineUserName: string;
-        authorization: {
-          type: "oauth2" | "bearer";
-          bearerSecret?:
-            | {
-                vaultName: string;
-                secretKey: string;
-              }
-            | undefined;
-        };
-        resources: {
-          /** Auth service name */
-          name: string;
-          tailorDBNamespace: string;
-          tailorDBType: string;
-          coreSchema: {
-            /** Auth service name */
-            name: string;
-            attributes: {
-              type: "string" | "number" | "boolean" | "datetime" | "complex";
-              /** Auth service name */
-              name: string;
+export type AuthConfigInput =
+  | {
+      name: string;
+      hooks?:
+        | {
+            beforeLogin?:
+              | {
+                  handler: Function;
+                  invoker: string;
+                }
+              | undefined;
+          }
+        | undefined;
+      machineUsers?:
+        | {
+            [x: string]: {
+              attributes?:
+                | {
+                    [x: string]: unknown;
+                  }
+                | undefined;
+              attributeList?: string[] | undefined;
+            };
+          }
+        | undefined;
+      oauth2Clients?:
+        | {
+            [x: string]: {
+              redirectURIs: (
+                | `https://${string}`
+                | `http://${string}`
+                | `${string}:url`
+                | `${string}:url/${string}`
+              )[];
               description?: string | undefined;
-              mutability?: "readOnly" | "readWrite" | "writeOnly" | undefined;
-              required?: boolean | undefined;
-              multiValued?: boolean | undefined;
-              uniqueness?: "none" | "server" | "global" | undefined;
-              canonicalValues?: string[] | null | undefined;
-              subAttributes?: any[] | null | undefined;
+              grantTypes?: ("authorization_code" | "refresh_token")[] | undefined;
+              clientType?: "confidential" | "public" | "browser" | undefined;
+              accessTokenLifetimeSeconds?: number | undefined;
+              refreshTokenLifetimeSeconds?: number | undefined;
+              requireDpop?: boolean | undefined;
+            };
+          }
+        | undefined;
+      idProvider?:
+        | {
+            name: string;
+            kind: "SAML";
+            enableSignRequest?: boolean | undefined;
+            metadataURL?: string | undefined;
+            rawMetadata?: string | undefined;
+            defaultRedirectURL?: string | undefined;
+          }
+        | {
+            name: string;
+            kind: "OIDC";
+            clientID: string;
+            clientSecret: {
+              vaultName: string;
+              secretKey: string;
+            };
+            providerURL: string;
+            issuerURL?: string | undefined;
+            usernameClaim?: string | undefined;
+          }
+        | {
+            name: string;
+            kind: "IDToken";
+            providerURL: string;
+            clientID: string;
+            issuerURL?: string | undefined;
+            usernameClaim?: string | undefined;
+          }
+        | {
+            name: string;
+            kind: "BuiltInIdP";
+            namespace: string;
+            clientName: string;
+          }
+        | undefined;
+      scim?:
+        | {
+            machineUserName: string;
+            authorization: {
+              type: "oauth2" | "bearer";
+              bearerSecret?:
+                | {
+                    vaultName: string;
+                    secretKey: string;
+                  }
+                | undefined;
+            };
+            resources: {
+              name: string;
+              tailorDBNamespace: string;
+              tailorDBType: string;
+              coreSchema: {
+                name: string;
+                attributes: {
+                  type: "string" | "number" | "boolean" | "datetime" | "complex";
+                  name: string;
+                  description?: string | undefined;
+                  mutability?: "readOnly" | "readWrite" | "writeOnly" | undefined;
+                  required?: boolean | undefined;
+                  multiValued?: boolean | undefined;
+                  uniqueness?: "none" | "server" | "global" | undefined;
+                  canonicalValues?: string[] | null | undefined;
+                  subAttributes?: any[] | null | undefined;
+                }[];
+              };
+              attributeMapping: {
+                tailorDBField: string;
+                scimPath: string;
+              }[];
             }[];
-          };
-          attributeMapping: {
-            tailorDBField: string;
-            scimPath: string;
-          }[];
-        }[];
-      }
-    | undefined;
-  /** Multi-tenant provider configuration */
-  tenantProvider?:
-    | {
-        namespace: string;
-        type: string;
-        signatureField: string;
-      }
-    | undefined;
-  /** Auth connection definitions for external OAuth2 providers */
-  connections?:
-    | {
-        [x: string]: {
-          type: "oauth2";
-          providerUrl: string;
-          issuerUrl: string;
-          clientId: string;
-          clientSecret: string;
-          authUrl?: string | undefined;
-          tokenUrl?: string | undefined;
-        };
-      }
-    | undefined;
-  /** Enable publishing session events */
-  publishSessionEvents?: boolean | undefined;
-  /** User profile configuration */
-  userProfile?:
-    | {
-        type: {
-          /** Auth service name */
-          name: string;
-          fields: any;
-          metadata: any;
-          /** Auth hooks */
-          hooks: any;
-          validate: any;
-          features: any;
-          indexes: any;
-          files: any;
-          permission: any;
-          gqlPermission: any;
-          _output: any;
-        };
-        usernameField: string;
-        attributes?:
-          | {
-              [x: string]: true;
-            }
-          | undefined;
-        attributeList?: string[] | undefined;
-      }
-    | undefined;
-  /** Machine user attribute fields (mutually exclusive with userProfile) */
-  machineUserAttributes?:
-    | {
+          }
+        | undefined;
+      tenantProvider?:
+        | {
+            namespace: string;
+            type: string;
+            signatureField: string;
+          }
+        | undefined;
+      connections?:
+        | {
+            [x: string]: {
+              type: "oauth2";
+              providerUrl: string;
+              issuerUrl: string;
+              clientId: string;
+              clientSecret: string;
+              authUrl?: string | undefined;
+              tokenUrl?: string | undefined;
+            };
+          }
+        | undefined;
+      publishSessionEvents?: boolean | undefined;
+      userProfile?:
+        | {
+            type: {
+              name: string;
+              fields: any;
+              metadata: any;
+              hooks: any;
+              validate: any;
+              features: any;
+              indexes: any;
+              files: any;
+              permission: any;
+              gqlPermission: any;
+              _output: any;
+            };
+            usernameField: string;
+            attributes?:
+              | {
+                  [x: string]: true;
+                }
+              | undefined;
+            attributeList?: string[] | undefined;
+          }
+        | undefined;
+      machineUserAttributes?: undefined;
+    }
+  | {
+      name: string;
+      machineUserAttributes: {
         [x: string]: {
           type:
             | "string"
@@ -491,7 +475,6 @@ export type AuthConfigInput = {
                   description?: string | undefined;
                 }[]
               | undefined;
-            /** Auth hooks */
             hooks?:
               | {
                   create?: Function | undefined;
@@ -502,202 +485,320 @@ export type AuthConfigInput = {
           };
           fields: any;
         };
-      }
-    | undefined;
-};
+      };
+      hooks?:
+        | {
+            beforeLogin?:
+              | {
+                  handler: Function;
+                  invoker: string;
+                }
+              | undefined;
+          }
+        | undefined;
+      machineUsers?:
+        | {
+            [x: string]: {
+              attributes?:
+                | {
+                    [x: string]: unknown;
+                  }
+                | undefined;
+              attributeList?: string[] | undefined;
+            };
+          }
+        | undefined;
+      oauth2Clients?:
+        | {
+            [x: string]: {
+              redirectURIs: (
+                | `https://${string}`
+                | `http://${string}`
+                | `${string}:url`
+                | `${string}:url/${string}`
+              )[];
+              description?: string | undefined;
+              grantTypes?: ("authorization_code" | "refresh_token")[] | undefined;
+              clientType?: "confidential" | "public" | "browser" | undefined;
+              accessTokenLifetimeSeconds?: number | undefined;
+              refreshTokenLifetimeSeconds?: number | undefined;
+              requireDpop?: boolean | undefined;
+            };
+          }
+        | undefined;
+      idProvider?:
+        | {
+            name: string;
+            kind: "SAML";
+            enableSignRequest?: boolean | undefined;
+            metadataURL?: string | undefined;
+            rawMetadata?: string | undefined;
+            defaultRedirectURL?: string | undefined;
+          }
+        | {
+            name: string;
+            kind: "OIDC";
+            clientID: string;
+            clientSecret: {
+              vaultName: string;
+              secretKey: string;
+            };
+            providerURL: string;
+            issuerURL?: string | undefined;
+            usernameClaim?: string | undefined;
+          }
+        | {
+            name: string;
+            kind: "IDToken";
+            providerURL: string;
+            clientID: string;
+            issuerURL?: string | undefined;
+            usernameClaim?: string | undefined;
+          }
+        | {
+            name: string;
+            kind: "BuiltInIdP";
+            namespace: string;
+            clientName: string;
+          }
+        | undefined;
+      scim?:
+        | {
+            machineUserName: string;
+            authorization: {
+              type: "oauth2" | "bearer";
+              bearerSecret?:
+                | {
+                    vaultName: string;
+                    secretKey: string;
+                  }
+                | undefined;
+            };
+            resources: {
+              name: string;
+              tailorDBNamespace: string;
+              tailorDBType: string;
+              coreSchema: {
+                name: string;
+                attributes: {
+                  type: "string" | "number" | "boolean" | "datetime" | "complex";
+                  name: string;
+                  description?: string | undefined;
+                  mutability?: "readOnly" | "readWrite" | "writeOnly" | undefined;
+                  required?: boolean | undefined;
+                  multiValued?: boolean | undefined;
+                  uniqueness?: "none" | "server" | "global" | undefined;
+                  canonicalValues?: string[] | null | undefined;
+                  subAttributes?: any[] | null | undefined;
+                }[];
+              };
+              attributeMapping: {
+                tailorDBField: string;
+                scimPath: string;
+              }[];
+            }[];
+          }
+        | undefined;
+      tenantProvider?:
+        | {
+            namespace: string;
+            type: string;
+            signatureField: string;
+          }
+        | undefined;
+      connections?:
+        | {
+            [x: string]: {
+              type: "oauth2";
+              providerUrl: string;
+              issuerUrl: string;
+              clientId: string;
+              clientSecret: string;
+              authUrl?: string | undefined;
+              tokenUrl?: string | undefined;
+            };
+          }
+        | undefined;
+      publishSessionEvents?: boolean | undefined;
+      userProfile?: undefined;
+    };
 
-export type AuthConfig = {
-  /** Auth service name */
-  name: string;
-  /** Auth hooks */
-  hooks?:
-    | {
-        beforeLogin?:
-          | {
-              handler: Function;
-              invoker: string;
-            }
-          | undefined;
-      }
-    | undefined;
-  /** Machine user definitions */
-  machineUsers?:
-    | {
-        [x: string]: {
-          attributes?:
-            | {
-                [x: string]: string | boolean | string[] | boolean[];
-              }
-            | undefined;
-          attributeList?: string[] | undefined;
-        };
-      }
-    | undefined;
-  /** OAuth2 client definitions */
-  oauth2Clients?:
-    | {
-        [x: string]: {
-          grantTypes: ("authorization_code" | "refresh_token")[];
-          redirectURIs: (
-            | `https://${string}`
-            | `http://${string}`
-            | `${string}:url`
-            | `${string}:url/${string}`
-          )[];
-          accessTokenLifetimeSeconds:
-            | {
-                seconds: bigint;
-                nanos: number;
-              }
-            | undefined;
-          refreshTokenLifetimeSeconds:
-            | {
-                seconds: bigint;
-                nanos: number;
-              }
-            | undefined;
-          description?: string | undefined;
-          clientType?: "confidential" | "public" | "browser" | undefined;
-          requireDpop?: boolean | undefined;
-        };
-      }
-    | undefined;
-  /** Identity provider configuration */
-  idProvider?:
-    | {
-        /** Auth service name */
-        name: string;
-        kind: "SAML";
-        enableSignRequest: boolean;
-        metadataURL?: string | undefined;
-        rawMetadata?: string | undefined;
-        defaultRedirectURL?: string | undefined;
-      }
-    | {
-        /** Auth service name */
-        name: string;
-        kind: "OIDC";
-        clientID: string;
-        clientSecret: {
-          vaultName: string;
-          secretKey: string;
-        };
-        providerURL: string;
-        issuerURL?: string | undefined;
-        usernameClaim?: string | undefined;
-      }
-    | {
-        /** Auth service name */
-        name: string;
-        kind: "IDToken";
-        providerURL: string;
-        clientID: string;
-        issuerURL?: string | undefined;
-        usernameClaim?: string | undefined;
-      }
-    | {
-        /** Auth service name */
-        name: string;
-        kind: "BuiltInIdP";
-        namespace: string;
-        clientName: string;
-      }
-    | undefined;
-  /** SCIM provisioning configuration */
-  scim?:
-    | {
-        machineUserName: string;
-        authorization: {
-          type: "oauth2" | "bearer";
-          bearerSecret?:
-            | {
-                vaultName: string;
-                secretKey: string;
-              }
-            | undefined;
-        };
-        resources: {
-          /** Auth service name */
-          name: string;
-          tailorDBNamespace: string;
-          tailorDBType: string;
-          coreSchema: {
-            /** Auth service name */
-            name: string;
-            attributes: {
-              type: "string" | "number" | "boolean" | "datetime" | "complex";
-              /** Auth service name */
-              name: string;
+export type AuthConfig =
+  | {
+      name: string;
+      hooks?:
+        | {
+            beforeLogin?:
+              | {
+                  handler: Function;
+                  invoker: string;
+                }
+              | undefined;
+          }
+        | undefined;
+      machineUsers?:
+        | {
+            [x: string]: {
+              attributes?:
+                | {
+                    [x: string]: string | boolean | string[] | boolean[];
+                  }
+                | undefined;
+              attributeList?: string[] | undefined;
+            };
+          }
+        | undefined;
+      oauth2Clients?:
+        | {
+            [x: string]: {
+              grantTypes: ("authorization_code" | "refresh_token")[];
+              redirectURIs: (
+                | `https://${string}`
+                | `http://${string}`
+                | `${string}:url`
+                | `${string}:url/${string}`
+              )[];
+              accessTokenLifetimeSeconds:
+                | {
+                    seconds: bigint;
+                    nanos: number;
+                  }
+                | undefined;
+              refreshTokenLifetimeSeconds:
+                | {
+                    seconds: bigint;
+                    nanos: number;
+                  }
+                | undefined;
               description?: string | undefined;
-              mutability?: "readOnly" | "readWrite" | "writeOnly" | undefined;
-              required?: boolean | undefined;
-              multiValued?: boolean | undefined;
-              uniqueness?: "none" | "server" | "global" | undefined;
-              canonicalValues?: string[] | null | undefined;
-              subAttributes?: any[] | null | undefined;
+              clientType?: "confidential" | "public" | "browser" | undefined;
+              requireDpop?: boolean | undefined;
+            };
+          }
+        | undefined;
+      idProvider?:
+        | {
+            name: string;
+            kind: "SAML";
+            enableSignRequest: boolean;
+            metadataURL?: string | undefined;
+            rawMetadata?: string | undefined;
+            defaultRedirectURL?: string | undefined;
+          }
+        | {
+            name: string;
+            kind: "OIDC";
+            clientID: string;
+            clientSecret: {
+              vaultName: string;
+              secretKey: string;
+            };
+            providerURL: string;
+            issuerURL?: string | undefined;
+            usernameClaim?: string | undefined;
+          }
+        | {
+            name: string;
+            kind: "IDToken";
+            providerURL: string;
+            clientID: string;
+            issuerURL?: string | undefined;
+            usernameClaim?: string | undefined;
+          }
+        | {
+            name: string;
+            kind: "BuiltInIdP";
+            namespace: string;
+            clientName: string;
+          }
+        | undefined;
+      scim?:
+        | {
+            machineUserName: string;
+            authorization: {
+              type: "oauth2" | "bearer";
+              bearerSecret?:
+                | {
+                    vaultName: string;
+                    secretKey: string;
+                  }
+                | undefined;
+            };
+            resources: {
+              name: string;
+              tailorDBNamespace: string;
+              tailorDBType: string;
+              coreSchema: {
+                name: string;
+                attributes: {
+                  type: "string" | "number" | "boolean" | "datetime" | "complex";
+                  name: string;
+                  description?: string | undefined;
+                  mutability?: "readOnly" | "readWrite" | "writeOnly" | undefined;
+                  required?: boolean | undefined;
+                  multiValued?: boolean | undefined;
+                  uniqueness?: "none" | "server" | "global" | undefined;
+                  canonicalValues?: string[] | null | undefined;
+                  subAttributes?: any[] | null | undefined;
+                }[];
+              };
+              attributeMapping: {
+                tailorDBField: string;
+                scimPath: string;
+              }[];
             }[];
-          };
-          attributeMapping: {
-            tailorDBField: string;
-            scimPath: string;
-          }[];
-        }[];
-      }
-    | undefined;
-  /** Multi-tenant provider configuration */
-  tenantProvider?:
-    | {
-        namespace: string;
-        type: string;
-        signatureField: string;
-      }
-    | undefined;
-  /** Auth connection definitions for external OAuth2 providers */
-  connections?:
-    | {
-        [x: string]: {
-          type: "oauth2";
-          providerUrl: string;
-          issuerUrl: string;
-          clientId: string;
-          clientSecret: string;
-          authUrl?: string | undefined;
-          tokenUrl?: string | undefined;
-        };
-      }
-    | undefined;
-  /** Enable publishing session events */
-  publishSessionEvents?: boolean | undefined;
-  /** User profile configuration */
-  userProfile?:
-    | {
-        type: {
-          /** Auth service name */
-          name: string;
-          fields: any;
-          metadata: any;
-          /** Auth hooks */
-          hooks: any;
-          validate: any;
-          features: any;
-          indexes: any;
-          files: any;
-          permission: any;
-          gqlPermission: any;
-          _output: any;
-        };
-        usernameField: string;
-        attributes?:
-          | {
-              [x: string]: true;
-            }
-          | undefined;
-        attributeList?: string[] | undefined;
-      }
-    | undefined;
-  /** Machine user attribute fields (mutually exclusive with userProfile) */
-  machineUserAttributes?:
-    | {
+          }
+        | undefined;
+      tenantProvider?:
+        | {
+            namespace: string;
+            type: string;
+            signatureField: string;
+          }
+        | undefined;
+      connections?:
+        | {
+            [x: string]: {
+              type: "oauth2";
+              providerUrl: string;
+              issuerUrl: string;
+              clientId: string;
+              clientSecret: string;
+              authUrl?: string | undefined;
+              tokenUrl?: string | undefined;
+            };
+          }
+        | undefined;
+      publishSessionEvents?: boolean | undefined;
+      userProfile?:
+        | {
+            type: {
+              name: string;
+              fields: any;
+              metadata: any;
+              hooks: any;
+              validate: any;
+              features: any;
+              indexes: any;
+              files: any;
+              permission: any;
+              gqlPermission: any;
+              _output: any;
+            };
+            usernameField: string;
+            attributes?:
+              | {
+                  [x: string]: true;
+                }
+              | undefined;
+            attributeList?: string[] | undefined;
+          }
+        | undefined;
+      machineUserAttributes?: undefined;
+    }
+  | {
+      name: string;
+      machineUserAttributes: {
         [x: string]: {
           type:
             | "string"
@@ -721,7 +822,6 @@ export type AuthConfig = {
                   description?: string | undefined;
                 }[]
               | undefined;
-            /** Auth hooks */
             hooks?:
               | {
                   create?: Function | undefined;
@@ -732,6 +832,150 @@ export type AuthConfig = {
           };
           fields: any;
         };
-      }
-    | undefined;
-};
+      };
+      hooks?:
+        | {
+            beforeLogin?:
+              | {
+                  handler: Function;
+                  invoker: string;
+                }
+              | undefined;
+          }
+        | undefined;
+      machineUsers?:
+        | {
+            [x: string]: {
+              attributes?:
+                | {
+                    [x: string]: string | boolean | string[] | boolean[];
+                  }
+                | undefined;
+              attributeList?: string[] | undefined;
+            };
+          }
+        | undefined;
+      oauth2Clients?:
+        | {
+            [x: string]: {
+              grantTypes: ("authorization_code" | "refresh_token")[];
+              redirectURIs: (
+                | `https://${string}`
+                | `http://${string}`
+                | `${string}:url`
+                | `${string}:url/${string}`
+              )[];
+              accessTokenLifetimeSeconds:
+                | {
+                    seconds: bigint;
+                    nanos: number;
+                  }
+                | undefined;
+              refreshTokenLifetimeSeconds:
+                | {
+                    seconds: bigint;
+                    nanos: number;
+                  }
+                | undefined;
+              description?: string | undefined;
+              clientType?: "confidential" | "public" | "browser" | undefined;
+              requireDpop?: boolean | undefined;
+            };
+          }
+        | undefined;
+      idProvider?:
+        | {
+            name: string;
+            kind: "SAML";
+            enableSignRequest: boolean;
+            metadataURL?: string | undefined;
+            rawMetadata?: string | undefined;
+            defaultRedirectURL?: string | undefined;
+          }
+        | {
+            name: string;
+            kind: "OIDC";
+            clientID: string;
+            clientSecret: {
+              vaultName: string;
+              secretKey: string;
+            };
+            providerURL: string;
+            issuerURL?: string | undefined;
+            usernameClaim?: string | undefined;
+          }
+        | {
+            name: string;
+            kind: "IDToken";
+            providerURL: string;
+            clientID: string;
+            issuerURL?: string | undefined;
+            usernameClaim?: string | undefined;
+          }
+        | {
+            name: string;
+            kind: "BuiltInIdP";
+            namespace: string;
+            clientName: string;
+          }
+        | undefined;
+      scim?:
+        | {
+            machineUserName: string;
+            authorization: {
+              type: "oauth2" | "bearer";
+              bearerSecret?:
+                | {
+                    vaultName: string;
+                    secretKey: string;
+                  }
+                | undefined;
+            };
+            resources: {
+              name: string;
+              tailorDBNamespace: string;
+              tailorDBType: string;
+              coreSchema: {
+                name: string;
+                attributes: {
+                  type: "string" | "number" | "boolean" | "datetime" | "complex";
+                  name: string;
+                  description?: string | undefined;
+                  mutability?: "readOnly" | "readWrite" | "writeOnly" | undefined;
+                  required?: boolean | undefined;
+                  multiValued?: boolean | undefined;
+                  uniqueness?: "none" | "server" | "global" | undefined;
+                  canonicalValues?: string[] | null | undefined;
+                  subAttributes?: any[] | null | undefined;
+                }[];
+              };
+              attributeMapping: {
+                tailorDBField: string;
+                scimPath: string;
+              }[];
+            }[];
+          }
+        | undefined;
+      tenantProvider?:
+        | {
+            namespace: string;
+            type: string;
+            signatureField: string;
+          }
+        | undefined;
+      connections?:
+        | {
+            [x: string]: {
+              type: "oauth2";
+              providerUrl: string;
+              issuerUrl: string;
+              clientId: string;
+              clientSecret: string;
+              authUrl?: string | undefined;
+              tokenUrl?: string | undefined;
+            };
+          }
+        | undefined;
+      publishSessionEvents?: boolean | undefined;
+      userProfile?: undefined;
+    };
