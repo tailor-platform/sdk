@@ -45,6 +45,22 @@ export function ensureSecretDir(dir: string): void {
 }
 
 /**
+ * Best-effort chmod that only fires when the current mode differs from the
+ * target. Silently ignores missing paths and permission errors.
+ * @param target - Path to chmod
+ * @param mode - Desired POSIX mode bits
+ */
+function chmodIfDifferent(target: string, mode: number): void {
+  try {
+    if ((fs.statSync(target).mode & 0o777) !== mode) {
+      fs.chmodSync(target, mode);
+    }
+  } catch {
+    // Missing path or permission error — best-effort.
+  }
+}
+
+/**
  * Tighten an existing file and its parent directory to secret-file modes
  * (0o600 / 0o700) if they are looser. Used by read paths that may not
  * trigger a subsequent write, so that legacy world-readable files are
@@ -54,19 +70,6 @@ export function ensureSecretDir(dir: string): void {
  */
 export function tightenSecretFilePermissions(filePath: string): void {
   if (process.platform === "win32") return;
-  try {
-    if ((fs.statSync(filePath).mode & 0o777) !== FILE_MODE) {
-      fs.chmodSync(filePath, FILE_MODE);
-    }
-  } catch {
-    // Missing file or permission error — best-effort.
-  }
-  const dir = path.dirname(filePath);
-  try {
-    if ((fs.statSync(dir).mode & 0o777) !== DIR_MODE) {
-      fs.chmodSync(dir, DIR_MODE);
-    }
-  } catch {
-    // Best-effort: ignore EPERM on directories we don't own.
-  }
+  chmodIfDifferent(filePath, FILE_MODE);
+  chmodIfDifferent(path.dirname(filePath), DIR_MODE);
 }
