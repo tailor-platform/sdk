@@ -124,12 +124,16 @@ export const createWorkflowJob = <const Name extends string, I = undefined, O = 
       name: config.name,
       trigger: async (args?: unknown) => {
         // `workflowMock.setEnv()` takes priority. Fall back to the deprecated
-        // `TAILOR_TEST_WORKFLOW_ENV` env var when the global key is unset (or
-        // set to a non-plain-object) so existing tests using
-        // `vi.stubEnv(WORKFLOW_TEST_ENV_KEY, ...)` keep working. Shallow-copy
-        // the global env so job bodies cannot mutate the source object across
-        // triggers, matching the env-var path which returns a fresh object
-        // from `JSON.parse` each call.
+        // `TAILOR_TEST_WORKFLOW_ENV` env var when the global key is unset, null,
+        // or a non-object primitive (string / number / boolean / symbol) so
+        // existing tests using `vi.stubEnv(WORKFLOW_TEST_ENV_KEY, ...)` keep
+        // working. Any object value (plain objects, arrays, class instances,
+        // etc.) is shallow-copied and used as-is; the type system constrains
+        // `setEnv()` callers to `TailorEnv`, so non-plain-object cases only
+        // arise from direct `globalThis` misuse. Shallow-copy so job bodies
+        // cannot mutate the source object across triggers, matching the
+        // env-var path which returns a fresh object from `JSON.parse` each
+        // call.
         const fromGlobal = (globalThis as Record<string, unknown>)[WORKFLOW_ENV_GLOBAL_KEY];
         const env = (
           typeof fromGlobal === "object" && fromGlobal !== null
