@@ -1,0 +1,7 @@
+name: "@tailor-platform/auth-invoker-unwrap"
+version: "1.0.0"
+description: 'Replace `auth.invoker("name")` with the bare string `"name"` and drop the no-longer-needed `auth` import'
+engine: jssg
+language: typescript
+since: "1.0.0"
+until: "2.0.0"
