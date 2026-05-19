@@ -5,10 +5,10 @@ import { CodeGeneratorSchema, BaseGeneratorConfigSchema } from "@/parser/generat
 import { PluginConfigSchema } from "@/parser/plugin-config";
 import { builtinPlugins } from "@/plugin/builtin/registry";
 import { loadConfigPath } from "./context";
+import { installCliTailordbStub } from "./mock";
 import type { AppConfig } from "@/types/app-config";
 import type { Plugin } from "@/types/plugin";
 import type { z } from "zod";
-import "./mock";
 
 /**
  * Loaded configuration with resolved path
@@ -28,6 +28,7 @@ export type Generator = z.output<typeof GeneratorConfigSchema>;
 export async function loadConfig(
   configPath?: string,
 ): Promise<{ config: LoadedConfig; generators: Generator[]; plugins: Plugin[] }> {
+  installCliTailordbStub();
   const foundPath = loadConfigPath(configPath);
   if (!foundPath) {
     throw new Error(
