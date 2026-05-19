@@ -18,9 +18,15 @@ export interface RegisteredWorkflow {
 const JOB_REGISTRY_KEY: unique symbol = Symbol.for("tailor-platform/sdk:job-registry");
 const WORKFLOW_REGISTRY_KEY: unique symbol = Symbol.for("tailor-platform/sdk:workflow-registry");
 
+type PlatformWorkflow = {
+  triggerWorkflow: (name: string, args?: unknown, options?: unknown) => Promise<string>;
+  triggerJobFunction: (name: string, args?: unknown) => unknown;
+};
+
 type GlobalWithRegistry = typeof globalThis & {
   [JOB_REGISTRY_KEY]?: Map<string, RegisteredJobBody>;
   [WORKFLOW_REGISTRY_KEY]?: Map<string, RegisteredWorkflow>;
+  tailor?: { workflow?: PlatformWorkflow };
 };
 
 function jobs(): Map<string, RegisteredJobBody> {
@@ -83,4 +89,20 @@ export function registerWorkflow(name: string, mainJobName: string): void {
  */
 export function getRegisteredWorkflow(name: string): RegisteredWorkflow | undefined {
   return workflows().get(name);
+}
+
+/**
+ * Return the `globalThis.tailor.workflow` shim used by `.trigger()` calls.
+ * Production builds install it natively; tests install it via the
+ * `tailor-runtime` vitest environment.
+ * @returns The platform-injected workflow shim
+ */
+export function getPlatformWorkflow(): PlatformWorkflow {
+  const workflow = (globalThis as GlobalWithRegistry).tailor?.workflow;
+  if (!workflow) {
+    throw new Error(
+      "tailor.workflow is not available. Use the tailor-runtime environment from @tailor-platform/sdk/vitest in tests.",
+    );
+  }
+  return workflow;
 }

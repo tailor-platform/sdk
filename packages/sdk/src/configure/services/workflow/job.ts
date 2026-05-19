@@ -1,5 +1,5 @@
 import { brandValue } from "@/utils/brand";
-import { registerJob, type RegisteredJobBody } from "./registry";
+import { getPlatformWorkflow, registerJob, type RegisteredJobBody } from "./registry";
 import type { TailorEnv } from "@/types/env";
 import type { JsonCompatible } from "@/types/helpers";
 import type { TailorInvoker } from "@/types/user";
@@ -66,23 +66,6 @@ export const WORKFLOW_TEST_ENV_KEY = "TAILOR_TEST_WORKFLOW_ENV";
 interface CreateWorkflowJobConfig<Name extends string, I, O> {
   readonly name: Name;
   readonly body: JobBody<I, O>;
-}
-
-function getPlatformWorkflow() {
-  const platform = globalThis as {
-    tailor?: {
-      workflow?: {
-        triggerJobFunction: (name: string, args?: unknown) => unknown;
-      };
-    };
-  };
-  const workflow = platform.tailor?.workflow;
-  if (!workflow) {
-    throw new Error(
-      "tailor.workflow is not available. Use the tailor-runtime environment from @tailor-platform/sdk/vitest in tests.",
-    );
-  }
-  return workflow;
 }
 
 /**

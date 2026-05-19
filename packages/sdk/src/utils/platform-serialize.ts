@@ -22,6 +22,16 @@ export function platformSerialize<T>(value: T): T {
   // JSON.parse would throw on it.
   if (value === undefined) return undefined as T;
 
+  // Root-level function/symbol would make JSON.stringify return undefined,
+  // which we report below as a generic error. Catch them here so the message
+  // is specific (mirrors the per-property messages produced by the replacer).
+  if (typeof value === "function") {
+    throw new TypeError("platformSerialize: function is not JSON-serializable at <root>");
+  }
+  if (typeof value === "symbol") {
+    throw new TypeError("platformSerialize: Symbol is not JSON-serializable at <root>");
+  }
+
   const serialized = JSON.stringify(value, function (key, val) {
     if (typeof val === "number" && !Number.isFinite(val)) {
       throw new TypeError(
@@ -47,11 +57,7 @@ export function platformSerialize<T>(value: T): T {
     return val;
   });
 
-  // `JSON.stringify` returns undefined when the root value is a function/symbol.
-  if (serialized === undefined) {
-    throw new TypeError("platformSerialize: value at <root> is not JSON-serializable");
-  }
-  return JSON.parse(serialized) as T;
+  return JSON.parse(serialized as string) as T;
 }
 
 function formatPath(key: string): string {

@@ -1,35 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { brandValue } from "@/utils/brand";
-import { registerWorkflow } from "./registry";
+import { getPlatformWorkflow, registerWorkflow } from "./registry";
 import type { WorkflowJob } from "./job";
 import type { AuthInvoker } from "../auth";
 import type { MachineUserName } from "@/configure/types/machine-user";
 import type { ConcurrencyPolicy, RetryPolicy } from "@/types/workflow.generated";
-
-type TriggerWorkflowOptions = {
-  authInvoker?: AuthInvoker<string> | MachineUserName;
-};
-
-function getPlatformWorkflow() {
-  const platform = globalThis as {
-    tailor?: {
-      workflow?: {
-        triggerWorkflow: (
-          name: string,
-          args?: unknown,
-          options?: TriggerWorkflowOptions,
-        ) => Promise<string>;
-      };
-    };
-  };
-  const workflow = platform.tailor?.workflow;
-  if (!workflow) {
-    throw new Error(
-      "tailor.workflow is not available. Use the tailor-runtime environment from @tailor-platform/sdk/vitest in tests.",
-    );
-  }
-  return workflow;
-}
 
 export type { ConcurrencyPolicy, RetryPolicy };
 

@@ -71,5 +71,17 @@ describe("platformSerialize", () => {
     it("throws when the root value is a class instance", () => {
       expect(() => platformSerialize(new Error("boom"))).toThrow(/Error instance/);
     });
+
+    it("throws with a specific message when the root value is a function", () => {
+      expect(() => platformSerialize(() => 1)).toThrow(
+        /function is not JSON-serializable at <root>/,
+      );
+    });
+
+    it("throws with a specific message when the root value is a symbol", () => {
+      expect(() => platformSerialize(Symbol("x"))).toThrow(
+        /Symbol is not JSON-serializable at <root>/,
+      );
+    });
   });
 });

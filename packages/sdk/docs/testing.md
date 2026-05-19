@@ -107,7 +107,7 @@ test("content-based mock", async () => {
 
 ### Workflow Mock
 
-The environment auto-injects `tailor.workflow.triggerJobFunction`. Use `workflowMock` to configure job responses:
+The environment auto-injects `tailor.workflow.triggerJobFunction`. Use `workflowMock` to configure job responses. When no handler/result is configured for a job, the mock falls back to running the body registered by `createWorkflowJob`, so dependent jobs execute their real implementations by default — see [Running a full workflow locally](#running-a-full-workflow-locally) for that flow.
 
 ```typescript
 import { workflowMock } from "@tailor-platform/sdk/vitest";
