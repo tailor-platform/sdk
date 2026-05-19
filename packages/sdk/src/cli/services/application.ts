@@ -15,6 +15,7 @@ import { getDistDir } from "@/cli/shared/dist-dir";
 import { resolveInlineSourcemap } from "@/cli/shared/inline-sourcemap";
 import { logger } from "@/cli/shared/logger";
 import { buildTriggerContext } from "@/cli/shared/trigger-context";
+import { AuthConfigSchema } from "@/parser/service/auth";
 import { IdPSchema } from "@/parser/service/idp";
 import { SecretsSchema } from "@/parser/service/secrets";
 import { StaticWebsiteSchema } from "@/parser/service/staticwebsite";
@@ -174,7 +175,11 @@ function defineAuth(
 
   let authService: AuthService | undefined;
   if (!("external" in config)) {
-    authService = createAuthService(config, tailorDBServices, externalTailorDBNamespaces);
+    const parsedConfig = {
+      ...config,
+      ...AuthConfigSchema.parse(config),
+    } as typeof config;
+    authService = createAuthService(parsedConfig, tailorDBServices, externalTailorDBNamespaces);
   }
   subgraphs.push({ Type: "auth", Name: config.name });
 
