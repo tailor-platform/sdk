@@ -24,22 +24,16 @@ When AI fails a challenge, **improve the SDK** (JSDoc, error messages, types, CL
 - ALWAYS build the SDK before running: `pnpm -C packages/sdk build`
 - ALWAYS run `pnpm install` at repo root before benchmarks (stale workspace deps break the verify pipeline)
 
-### Solve Mode (Podman + Ollama)
+### Solve Mode (Podman + codex CLI)
 
-Solve runs `opencode` inside a Podman container; inference is served by a host-side Ollama daemon that the container reaches via `host.containers.internal:11434`.
+Solve runs the OpenAI `codex` CLI inside an ephemeral Podman container. Inference hits `api.openai.com` directly; the container only mounts the work tree and a read-only copy of `~/.codex/auth.json`, so host dotfiles (global `AGENTS.md`, skills, etc.) cannot leak into the prompt.
 
-- **Podman required**: `podman machine start` on macOS. Container image auto-builds on first run (`llm-challenge-runner`).
-- **Ollama required** (host-side):
-  ```bash
-  brew install ollama
-  ollama pull qwen3:8b
-  OLLAMA_FLASH_ATTENTION=1 OLLAMA_KV_CACHE_TYPE=q8_0 \
-    OLLAMA_NUM_PARALLEL=1 OLLAMA_CONTEXT_LENGTH=16384 ollama serve
-  ```
-  `OLLAMA_CONTEXT_LENGTH` must be raised above the 2k default for opencode's tool-calling path; `16384` is safe on an 18 GB Mac with `qwen3:8b` (≈5.2 GB resident). 24 GB+ hosts can use `32768` for longer tool chains. The harness's `checkAuthStatus` probes `http://localhost:11434/api/tags` before launching a run and emits the same hint if the daemon is unreachable.
-- **No cloud credentials** — local inference, so no API spend and no rate limits. The only enforcement axis is `--max-seconds` (default `3600` per problem).
-- **Default model**: `qwen3:8b`. Override with `--model <ollama-id>`; the value is passed through as `ollama/<id>`. Heavier alternatives (`gpt-oss:20b`, `qwen3-coder:30b`) are viable on hosts with more RAM at the cost of throughput. Known bad: `qwen2.5-coder:7b` — advertises tools capability but does not emit native tool calls through opencode (0/37 full-bench).
-- **Reproducibility**: each iteration writes a per-run `opencode.json` carrying `temperature=0.2` and `seed=<iteration index>` under `provider.ollama.options`. Re-running the same `(problem, iteration)` pair is deterministic up to whatever non-determinism the Ollama runtime itself introduces.
+- **Podman required**: `podman machine start` on macOS. Container image (`llm-challenge-runner`) auto-builds on first run and bakes in the `@openai/codex` CLI.
+- **codex login on the host**: run `codex login` once. This writes `~/.codex/auth.json` (or `$CODEX_HOME/auth.json` when set); the runner bind-mounts that single file read-only into the container. A **ChatGPT subscription** with codex CLI entitlement is required — there is no API-key path in this harness.
+- **Model is pinned** to `gpt-5.5` in `core/solver/codex.ts`. Varying the model is an experiment-level decision; do not parameterise it from the CLI. There is no `--model` flag.
+- **Reasoning budget**: `--effort <minimal|low|medium|high|xhigh>` (default `xhigh`), forwarded as `-c model_reasoning_effort=<effort>`. The affordance signal lives at the upper end; use lower values only for smoke-testing harness changes.
+- **Enforcement axes**: `--max-seconds` (default `3600` per problem) is the only wall-clock cap. The ChatGPT subscription's per-user rate budget applies on top.
+- **Reproducibility**: `gpt-5` reasoning models accept neither a useful seed nor an adjustable temperature, so determinism is not pursued at the request level. Instead the harness samples `N=5` iterations per `(problem, effort, profile)` task and reports the variance directly (`--iterations`, default `5` in solve mode and `1` in verify mode).
 
 ## Problem Conventions
 
@@ -130,6 +124,6 @@ Caveats:
 
 - Pre-build the SDK once before launching parallel runs; concurrent builds race
 - Let the container image build finish on a single solve before fanning out
-- The host Ollama daemon serialises generations internally; N parallel solves divide effective throughput by N rather than multiplying it. Useful when the configs differ (e.g. `types-only` vs `full-package`) so the parallel work is genuinely independent.
+- The ChatGPT subscription serialises requests through a per-user rate budget; N parallel solves divide effective throughput by N rather than multiplying it. Useful when the configs differ (e.g. `types-only` vs `full-package`) so the parallel work is genuinely independent.
 
 After parallel runs finish, use `pnpm -C llm-challenge challenge:analyze --groups` to list per-config groups and `--trend --context-profile <profile>` to inspect a single config's history.
