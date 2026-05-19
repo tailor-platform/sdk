@@ -235,7 +235,7 @@ export function downloadAsBase64(
  * @param recordId - Record ID owning the field
  * @returns Resolves once the file has been deleted
  */
-function deleteFile(
+export function deleteFile(
   namespace: string,
   typeName: string,
   fieldName: string,
