@@ -71,16 +71,16 @@ tailor-sdk workspace create [options]
 
 **Options**
 
-| Option                                | Alias | Description                                                                                                       | Required | Default | Env                               |
-| ------------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------- | -------- | ------- | --------------------------------- |
-| `--name <NAME>`                       | `-n`  | Workspace name                                                                                                    | Yes      | -       | -                                 |
-| `--region <REGION>`                   | `-r`  | Workspace region (us-west, asia-northeast)                                                                        | Yes      | -       | -                                 |
-| `--delete-protection`                 | `-d`  | Enable delete protection                                                                                          | No       | `false` | -                                 |
-| `--organization-id <ORGANIZATION_ID>` | `-o`  | Organization ID to workspace associate with                                                                       | No       | -       | `TAILOR_PLATFORM_ORGANIZATION_ID` |
-| `--folder-id <FOLDER_ID>`             | `-f`  | Folder ID to workspace associate with                                                                             | No       | -       | `TAILOR_PLATFORM_FOLDER_ID`       |
-| `--profile-name <PROFILE_NAME>`       | `-p`  | Profile name to create                                                                                            | No       | -       | -                                 |
-| `--profile-user <PROFILE_USER>`       | -     | User email for the profile (defaults to current user)                                                             | No       | -       | -                                 |
-| `--readonly`                          | -     | Create the profile as read-only (requires --profile-name). Blocks all write commands while the profile is active. | No       | `false` | -                                 |
+| Option                                | Alias | Description                                                                                                 | Required | Default   | Env                               |
+| ------------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------- | -------- | --------- | --------------------------------- |
+| `--name <NAME>`                       | `-n`  | Workspace name                                                                                              | Yes      | -         | -                                 |
+| `--region <REGION>`                   | `-r`  | Workspace region (us-west, asia-northeast)                                                                  | Yes      | -         | -                                 |
+| `--delete-protection`                 | `-d`  | Enable delete protection                                                                                    | No       | `false`   | -                                 |
+| `--organization-id <ORGANIZATION_ID>` | `-o`  | Organization ID to workspace associate with                                                                 | No       | -         | `TAILOR_PLATFORM_ORGANIZATION_ID` |
+| `--folder-id <FOLDER_ID>`             | `-f`  | Folder ID to workspace associate with                                                                       | No       | -         | `TAILOR_PLATFORM_FOLDER_ID`       |
+| `--profile-name <PROFILE_NAME>`       | `-p`  | Profile name to create                                                                                      | No       | -         | -                                 |
+| `--profile-user <PROFILE_USER>`       | -     | User email for the profile (defaults to current user)                                                       | No       | -         | -                                 |
+| `--permission <PERMISSION>`           | -     | Profile permission (requires --profile-name). 'read' blocks all write commands while the profile is active. | No       | `"write"` | -                                 |
 
 <!-- politty:command:workspace create:options:end -->
 
@@ -241,11 +241,11 @@ tailor-sdk profile create [options] <name>
 
 **Options**
 
-| Option                          | Alias | Description                                                   | Required | Default |
-| ------------------------------- | ----- | ------------------------------------------------------------- | -------- | ------- |
-| `--user <USER>`                 | `-u`  | User email                                                    | Yes      | -       |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                  | Yes      | -       |
-| `--readonly`                    | -     | Create as a read-only profile that blocks all write commands. | No       | `false` |
+| Option                          | Alias | Description                                                                       | Required | Default   |
+| ------------------------------- | ----- | --------------------------------------------------------------------------------- | -------- | --------- |
+| `--user <USER>`                 | `-u`  | User email                                                                        | Yes      | -         |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                      | Yes      | -         |
+| `--permission <PERMISSION>`     | -     | Profile permission. 'read' blocks all write commands while the profile is active. | No       | `"write"` |
 
 <!-- politty:command:profile create:options:end -->
 
@@ -320,11 +320,11 @@ tailor-sdk profile update [options] <name>
 
 **Options**
 
-| Option                          | Alias | Description                                            | Required | Default |
-| ------------------------------- | ----- | ------------------------------------------------------ | -------- | ------- |
-| `--user <USER>`                 | `-u`  | New user email                                         | No       | -       |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | New workspace ID                                       | No       | -       |
-| `--readonly`                    | -     | Toggle read-only mode. Pass --no-readonly to clear it. | No       | -       |
+| Option                          | Alias | Description                                                                          | Required | Default |
+| ------------------------------- | ----- | ------------------------------------------------------------------------------------ | -------- | ------- |
+| `--user <USER>`                 | `-u`  | New user email                                                                       | No       | -       |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | New workspace ID                                                                     | No       | -       |
+| `--permission <PERMISSION>`     | -     | Profile permission. 'read' blocks all write commands; 'write' lifts the restriction. | No       | -       |
 
 <!-- politty:command:profile update:options:end -->
 

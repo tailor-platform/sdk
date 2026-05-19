@@ -46,7 +46,7 @@ afterAll(() => {
   fs.rmSync(xdgTempDir, { recursive: true, force: true });
 });
 
-describe("profile update --readonly", () => {
+describe("profile update --permission", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     resetKeyringState();
@@ -75,22 +75,22 @@ describe("profile update --readonly", () => {
     if (fs.existsSync(configPath)) fs.rmSync(configPath);
   });
 
-  it("sets readonly: true on disk and skips remote validation when only --readonly is passed", async () => {
-    await runCommand(updateCommand, ["rw", "--readonly"]);
+  it("sets readonly: true on disk and skips remote validation when only --permission read is passed", async () => {
+    await runCommand(updateCommand, ["rw", "--permission", "read"]);
 
     const config = await readPlatformConfig();
     expect(config.profiles.rw?.readonly).toBe(true);
 
     // Key behavioral guarantee: no token / workspace lookup happens for a
-    // pure readonly toggle. Otherwise users could not lift readonly when
+    // pure permission toggle. Otherwise users could not lift readonly when
     // their saved token has expired or the workspace has been removed.
     expect(vi.mocked(fetchLatestToken)).not.toHaveBeenCalled();
     expect(vi.mocked(initOperatorClient)).not.toHaveBeenCalled();
     expect(vi.mocked(fetchAll)).not.toHaveBeenCalled();
   });
 
-  it("clears readonly when --no-readonly is passed and skips remote validation", async () => {
-    await runCommand(updateCommand, ["ro", "--no-readonly"]);
+  it("clears readonly when --permission write is passed and skips remote validation", async () => {
+    await runCommand(updateCommand, ["ro", "--permission", "write"]);
 
     const config = await readPlatformConfig();
     // We don't store readonly: false; the field should be absent.
@@ -100,7 +100,7 @@ describe("profile update --readonly", () => {
     expect(vi.mocked(initOperatorClient)).not.toHaveBeenCalled();
   });
 
-  it("performs remote validation when --user is also passed (readonly does not bypass it)", async () => {
+  it("performs remote validation when --user is also passed (permission does not bypass it)", async () => {
     vi.mocked(fetchLatestToken).mockResolvedValue("mock-token");
     vi.mocked(fetchAll).mockResolvedValue([{ id: validUUID }]);
     vi.mocked(initOperatorClient).mockResolvedValue({
@@ -117,7 +117,7 @@ describe("profile update --readonly", () => {
       current_user: null,
     });
 
-    await runCommand(updateCommand, ["rw", "--user", "new@example.com", "--readonly"]);
+    await runCommand(updateCommand, ["rw", "--user", "new@example.com", "--permission", "read"]);
 
     expect(vi.mocked(fetchLatestToken)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(fetchLatestToken)).toHaveBeenCalledWith(expect.anything(), "new@example.com");

@@ -102,9 +102,9 @@ export const createCommand = defineAppCommand({
       "profile-user": arg(z.string().optional(), {
         description: "User email for the profile (defaults to current user)",
       }),
-      readonly: arg(z.boolean().default(false), {
+      permission: arg(z.enum(["write", "read"]).default("write"), {
         description:
-          "Create the profile as read-only (requires --profile-name). Blocks all write commands while the profile is active.",
+          "Profile permission (requires --profile-name). 'read' blocks all write commands while the profile is active.",
       }),
     })
     .strict(),
@@ -144,14 +144,14 @@ export const createCommand = defineAppCommand({
       config.profiles[profileName] = {
         user: profileUser,
         workspace_id: workspace.id,
-        ...(args.readonly ? { readonly: true } : {}),
+        ...(args.permission === "read" ? { readonly: true } : {}),
       };
       writePlatformConfig(config);
       profileInfo = {
         name: profileName,
         user: profileUser,
         workspaceId: workspace.id,
-        readonly: args.readonly,
+        permission: args.permission,
       };
 
       if (!args.json) {

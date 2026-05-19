@@ -69,7 +69,7 @@ afterAll(() => {
   fs.rmSync(xdgTempDir, { recursive: true, force: true });
 });
 
-describe("workspace create --readonly", () => {
+describe("workspace create --permission", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     resetKeyringState();
@@ -90,7 +90,7 @@ describe("workspace create --readonly", () => {
     if (fs.existsSync(configPath)) fs.rmSync(configPath);
   });
 
-  it("persists readonly: true when --readonly is combined with --profile-name", async () => {
+  it("persists readonly: true when --permission read is combined with --profile-name", async () => {
     await runCommand(createCommand, [
       "--name",
       "test-ws",
@@ -100,14 +100,15 @@ describe("workspace create --readonly", () => {
       "bootstrap",
       "--profile-user",
       "u@example.com",
-      "--readonly",
+      "--permission",
+      "read",
     ]);
 
     const config = await readPlatformConfig();
     expect(config.profiles.bootstrap?.readonly).toBe(true);
   });
 
-  it("omits the readonly key when --profile-name is given without --readonly", async () => {
+  it("omits the readonly key when --profile-name is given without --permission read", async () => {
     await runCommand(createCommand, [
       "--name",
       "test-ws",
@@ -126,11 +127,18 @@ describe("workspace create --readonly", () => {
     expect(config.profiles.bootstrap?.readonly).toBeUndefined();
   });
 
-  it("creates no profile when --readonly is passed without --profile-name", async () => {
+  it("creates no profile when --permission read is passed without --profile-name", async () => {
     // Matches the existing --profile-user behavior: profile-only flags are
     // silently inert when --profile-name is absent. We don't store the flag
     // anywhere because no profile was created to attach it to.
-    await runCommand(createCommand, ["--name", "test-ws", "--region", "us-west", "--readonly"]);
+    await runCommand(createCommand, [
+      "--name",
+      "test-ws",
+      "--region",
+      "us-west",
+      "--permission",
+      "read",
+    ]);
 
     const config = await readPlatformConfig();
     expect(Object.keys(config.profiles)).toHaveLength(0);

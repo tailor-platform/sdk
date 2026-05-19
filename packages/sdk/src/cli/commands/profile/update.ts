@@ -23,8 +23,9 @@ export const updateCommand = defineAppCommand({
         alias: "w",
         description: "New workspace ID",
       }),
-      readonly: arg(z.boolean().optional(), {
-        description: "Toggle read-only mode. Pass --no-readonly to clear it.",
+      permission: arg(z.enum(["write", "read"]).optional(), {
+        description:
+          "Profile permission. 'read' blocks all write commands; 'write' lifts the restriction.",
       }),
     })
     .strict(),
@@ -37,7 +38,7 @@ export const updateCommand = defineAppCommand({
     }
 
     // Check if at least one property is provided
-    if (!args.user && !args["workspace-id"] && args.readonly === undefined) {
+    if (!args.user && !args["workspace-id"] && args.permission === undefined) {
       throw new Error("Please provide at least one property to update.");
     }
 
@@ -48,7 +49,7 @@ export const updateCommand = defineAppCommand({
     const newWorkspaceId = args["workspace-id"] || oldWorkspaceId;
 
     // Skip remote validation when neither user nor workspace is changing.
-    // This keeps `profile update <name> --readonly` / `--no-readonly` working
+    // This keeps `profile update <name> --permission write|read` working
     // offline and when the saved token is expired or the workspace has been
     // removed, important so a user can always lift their own readonly flag.
     if (args.user !== undefined || args["workspace-id"] !== undefined) {
@@ -73,9 +74,9 @@ export const updateCommand = defineAppCommand({
     // Update properties
     profile.user = newUser;
     profile.workspace_id = newWorkspaceId;
-    if (args.readonly === true) {
+    if (args.permission === "read") {
       profile.readonly = true;
-    } else if (args.readonly === false) {
+    } else if (args.permission === "write") {
       delete profile.readonly;
     }
     writePlatformConfig(config);
@@ -88,7 +89,7 @@ export const updateCommand = defineAppCommand({
       name: args.name,
       user: newUser,
       workspaceId: newWorkspaceId,
-      readonly: profile.readonly === true,
+      permission: profile.readonly === true ? "read" : "write",
     };
     logger.out(profileInfo);
   },
