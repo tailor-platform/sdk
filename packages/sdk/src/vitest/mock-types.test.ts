@@ -36,7 +36,7 @@ describe("mock types match @tailor-platform/sdk/runtime/globals", () => {
 
   describe("tailor.context", () => {
     test("getInvoker returns Invoker | null", () => {
-      expectTypeOf(tailor.context.getInvoker()).toEqualTypeOf<Tailor.context.Invoker | null>();
+      expectTypeOf(tailor.context.getInvoker()).toEqualTypeOf<tailor.context.Invoker | null>();
     });
   });
 });

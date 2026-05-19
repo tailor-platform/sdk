@@ -18,9 +18,9 @@
  * The value declarations (`var tailor` / `var tailordb`) are typed via the
  * `TailorRuntime` / `TailordbRuntime` aggregates re-exported from `.`, which in
  * turn compose the per-service `TailorXxxAPI` types declared alongside each
- * wrapper. Namespaces `Tailor` / `Tailordb` are kept as type-only views so
- * callers can still write `Tailor.idp.User` or `Tailor.context.Invoker` in
- * type position.
+ * wrapper. Type-only `namespace tailor` / `namespace tailordb` declarations
+ * are merged with those vars so callers can write `tailor.idp.User` or
+ * `tailor.context.Invoker` in type position as well.
  */
 
 /* eslint-disable @typescript-eslint/no-namespace */
@@ -44,7 +44,7 @@ import type {
 } from "./workflow";
 
 declare global {
-  namespace Tailordb {
+  namespace tailordb {
     type QueryResult<T> = TailordbQueryResult<T>;
     type CommandType = TailordbCommandType;
   }
@@ -52,7 +52,7 @@ declare global {
   // eslint-disable-next-line no-var
   var tailordb: TailordbRuntime;
 
-  namespace Tailor {
+  namespace tailor {
     namespace idp {
       type ClientConfig = IdpClientConfig;
       type User = IdpUser;
