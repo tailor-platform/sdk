@@ -157,9 +157,43 @@ describe("shell completion", () => {
       expect(result.candidates).toEqual([]);
     });
 
-    it("returns an empty list once the user has typed past the `=`", async () => {
+    it("completes enum values for enum-typed fields", async () => {
       const ctx = parseCompletionContext(
-        ["api", "GetFunctionExecution", "-f", "executionId=ex"],
+        ["api", "ListWorkspaces", "-f", "pageDirection="],
+        mainCommand,
+      );
+      const result = await generateCandidates(ctx, { shell: "bash" });
+
+      const values = result.candidates.map((c) => c.value);
+      expect(values).toContain("pageDirection=PAGE_DIRECTION_UNSPECIFIED");
+      expect(values).toContain("pageDirection=PAGE_DIRECTION_ASC");
+      expect(values).toContain("pageDirection=PAGE_DIRECTION_DESC");
+    });
+
+    it("completes true/false for bool-typed fields", async () => {
+      const ctx = parseCompletionContext(
+        ["api", "CreateWorkspace", "-f", "deleteProtection="],
+        mainCommand,
+      );
+      const result = await generateCandidates(ctx, { shell: "bash" });
+
+      const values = result.candidates.map((c) => c.value);
+      expect(values).toEqual(["deleteProtection=true", "deleteProtection=false"]);
+    });
+
+    it("returns an empty list for free-form scalar values", async () => {
+      const ctx = parseCompletionContext(
+        ["api", "GetFunctionExecution", "-f", "executionId="],
+        mainCommand,
+      );
+      const result = await generateCandidates(ctx, { shell: "bash" });
+
+      expect(result.candidates).toEqual([]);
+    });
+
+    it("returns an empty list for unknown field keys", async () => {
+      const ctx = parseCompletionContext(
+        ["api", "GetFunctionExecution", "-f", "nope="],
         mainCommand,
       );
       const result = await generateCandidates(ctx, { shell: "bash" });

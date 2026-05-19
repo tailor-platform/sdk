@@ -10,6 +10,7 @@ import { inspectCommand } from "./inspect";
 import { listCommand } from "./list";
 import {
   extractMethodName,
+  getInputFieldType,
   getMethodDescriptor,
   listInputFieldChildren,
   listMethodNames,
@@ -171,9 +172,33 @@ Use \`--field key=value\` (repeatable) to set request body fields without writin
                 typeof parsedArgs.endpoint === "string" ? parsedArgs.endpoint : undefined;
               if (!endpoint) return { candidates: [] };
 
-              // Past the first `=` we'd be completing the value, which is
-              // free-form text — nothing meaningful to suggest.
-              if (currentWord.includes("=")) return { candidates: [] };
+              const methodName = extractMethodName(endpoint);
+              const eq = currentWord.indexOf("=");
+              if (eq >= 0) {
+                // Value-side completion: shell filters candidates by the full
+                // `currentWord` prefix, so each candidate must keep the
+                // `key=` head intact.
+                const keyPart = currentWord.slice(0, eq);
+                const fieldType = getInputFieldType(methodName, keyPart.split("."));
+                if (!fieldType) return { candidates: [] };
+                if (fieldType.kind === "enum") {
+                  return {
+                    candidates: fieldType.values.map((v) => ({
+                      value: `${keyPart}=${v}`,
+                      description: v,
+                    })),
+                  };
+                }
+                if (fieldType.kind === "bool") {
+                  return {
+                    candidates: ["true", "false"].map((v) => ({
+                      value: `${keyPart}=${v}`,
+                      description: v,
+                    })),
+                  };
+                }
+                return { candidates: [] };
+              }
 
               const lastDot = currentWord.lastIndexOf(".");
               const containerPrefix = lastDot >= 0 ? currentWord.slice(0, lastDot + 1) : "";
@@ -181,11 +206,11 @@ Use \`--field key=value\` (repeatable) to set request body fields without writin
 
               const usedKeys = new Set<string>();
               for (const v of previousValues) {
-                const eq = v.indexOf("=");
-                if (eq > 0) usedKeys.add(v.slice(0, eq));
+                const eqIdx = v.indexOf("=");
+                if (eqIdx > 0) usedKeys.add(v.slice(0, eqIdx));
               }
 
-              const children = listInputFieldChildren(extractMethodName(endpoint), containerPath);
+              const children = listInputFieldChildren(methodName, containerPath);
               const candidates = children
                 .map((c) => {
                   const fullKey = containerPrefix + c.name;
