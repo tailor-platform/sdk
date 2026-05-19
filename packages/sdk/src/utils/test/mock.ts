@@ -34,7 +34,7 @@ interface TailordbGlobal {
       ) => Promise<void>;
     };
     context: {
-      getInvoker: () => tailor.context.Invoker | null;
+      getInvoker: () => Tailor.context.Invoker | null;
     };
   };
 }
@@ -136,7 +136,7 @@ export function setupWorkflowMock(handler: JobHandler): {
  * @param invoker - The `TailorInvoker` value to return, or `null` for anonymous.
  */
 export function setupInvokerMock(invoker: TailorInvoker): void {
-  const raw: tailor.context.Invoker | null = invoker
+  const raw: Tailor.context.Invoker | null = invoker
     ? {
         id: invoker.id,
         type: invoker.type,

@@ -26,8 +26,8 @@ describe("@tailor-platform/sdk/runtime/globals activates ambient globals", () =>
     >();
   });
 
-  test("tailor.context.Invoker is exposed as a namespace type", () => {
-    expectTypeOf<tailor.context.Invoker | null>().not.toBeAny();
+  test("Tailor.context.Invoker is exposed as a namespace type", () => {
+    expectTypeOf<Tailor.context.Invoker | null>().not.toBeAny();
   });
 
   test("tailordb.file.upload is declared as a function", () => {

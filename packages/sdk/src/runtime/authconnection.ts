@@ -12,8 +12,6 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { runtime } from "./internal";
-
 /**
  * Platform API surface for `tailor.authconnection`. Describes the shape the
  * platform runtime injects on `globalThis.tailor.authconnection`.
@@ -30,5 +28,7 @@ export interface TailorAuthconnectionAPI {
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function getConnectionToken(connectionName: string): Promise<any> {
-  return runtime.tailor.authconnection.getConnectionToken(connectionName);
+  return (
+    globalThis as { tailor: { authconnection: TailorAuthconnectionAPI } }
+  ).tailor.authconnection.getConnectionToken(connectionName);
 }

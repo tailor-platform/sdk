@@ -11,8 +11,6 @@
  * const { users } = await client.users({ first: 10 });
  */
 
-import { runtime } from "./internal";
-
 /** Configuration object for {@link Client}. */
 export interface ClientConfig {
   namespace: string;
@@ -128,7 +126,7 @@ export class Client {
   #impl: IdpClientInstance;
 
   constructor(config: ClientConfig) {
-    this.#impl = new runtime.tailor.idp.Client(config);
+    this.#impl = new (globalThis as { tailor: { idp: TailorIdpAPI } }).tailor.idp.Client(config);
   }
 
   /**

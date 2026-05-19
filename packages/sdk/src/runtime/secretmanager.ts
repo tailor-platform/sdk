@@ -12,8 +12,6 @@
  * const all = await secretmanager.getSecrets("my-vault", ["A", "B"] as const);
  */
 
-import { runtime } from "./internal";
-
 /**
  * Platform API surface for `tailor.secretmanager`. Describes the shape the
  * platform runtime injects on `globalThis.tailor.secretmanager`.
@@ -37,7 +35,9 @@ export function getSecrets<const T extends readonly string[]>(
   vault: string,
   names: T,
 ): Promise<Partial<Record<T[number], string>>> {
-  return runtime.tailor.secretmanager.getSecrets(vault, names);
+  return (
+    globalThis as { tailor: { secretmanager: TailorSecretmanagerAPI } }
+  ).tailor.secretmanager.getSecrets(vault, names);
 }
 
 /**
@@ -47,5 +47,7 @@ export function getSecrets<const T extends readonly string[]>(
  * @returns The secret value, or `undefined` if not present
  */
 export function getSecret(vault: string, name: string): Promise<string | undefined> {
-  return runtime.tailor.secretmanager.getSecret(vault, name);
+  return (
+    globalThis as { tailor: { secretmanager: TailorSecretmanagerAPI } }
+  ).tailor.secretmanager.getSecret(vault, name);
 }

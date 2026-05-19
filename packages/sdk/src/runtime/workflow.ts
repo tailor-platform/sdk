@@ -12,8 +12,6 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { runtime } from "./internal";
-
 /**
  * Specifies the machine user that should be used to execute the workflow.
  * This allows workflows to run with specific authentication context.
@@ -60,7 +58,9 @@ export function triggerWorkflow(
   args?: any,
   options?: TriggerWorkflowOptions,
 ): Promise<string> {
-  return runtime.tailor.workflow.triggerWorkflow(workflowName, args, options);
+  return (
+    globalThis as { tailor: { workflow: TailorWorkflowAPI } }
+  ).tailor.workflow.triggerWorkflow(workflowName, args, options);
 }
 
 /**
@@ -71,7 +71,9 @@ export function triggerWorkflow(
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function triggerJobFunction(jobName: string, args?: any): any {
-  return runtime.tailor.workflow.triggerJobFunction(jobName, args);
+  return (
+    globalThis as { tailor: { workflow: TailorWorkflowAPI } }
+  ).tailor.workflow.triggerJobFunction(jobName, args);
 }
 
 /**
@@ -82,7 +84,10 @@ export function triggerJobFunction(jobName: string, args?: any): any {
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function wait(key: string, payload?: any): any {
-  return runtime.tailor.workflow.wait(key, payload);
+  return (globalThis as { tailor: { workflow: TailorWorkflowAPI } }).tailor.workflow.wait(
+    key,
+    payload,
+  );
 }
 
 /**
@@ -98,5 +103,9 @@ export function resolve(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   callback: (waitPayload: any) => any,
 ): Promise<void> {
-  return runtime.tailor.workflow.resolve(executionId, key, callback);
+  return (globalThis as { tailor: { workflow: TailorWorkflowAPI } }).tailor.workflow.resolve(
+    executionId,
+    key,
+    callback,
+  );
 }

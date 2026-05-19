@@ -17,8 +17,6 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { runtime } from "./internal";
-
 /** Instance methods exposed by `tailor.iconv.Iconv`. */
 export interface IconvInstance {
   convert(input: string | Uint8Array | ArrayBuffer): string | Uint8Array;
@@ -67,7 +65,11 @@ export function convert<T extends string>(
   fromEncoding: string,
   toEncoding: T,
 ): T extends "UTF8" | "UTF-8" ? string : Uint8Array {
-  return runtime.tailor.iconv.convert(str, fromEncoding, toEncoding);
+  return (globalThis as { tailor: { iconv: TailorIconvAPI } }).tailor.iconv.convert(
+    str,
+    fromEncoding,
+    toEncoding,
+  );
 }
 
 /**
@@ -82,7 +84,11 @@ export function convertBuffer<T extends string>(
   fromEncoding: string,
   toEncoding: T,
 ): T extends "UTF8" | "UTF-8" ? string : Uint8Array {
-  return runtime.tailor.iconv.convertBuffer(buffer, fromEncoding, toEncoding);
+  return (globalThis as { tailor: { iconv: TailorIconvAPI } }).tailor.iconv.convertBuffer(
+    buffer,
+    fromEncoding,
+    toEncoding,
+  );
 }
 
 /**
@@ -92,7 +98,10 @@ export function convertBuffer<T extends string>(
  * @returns Decoded UTF-8 string
  */
 export function decode(buffer: Uint8Array | ArrayBuffer, encoding: string): string {
-  return runtime.tailor.iconv.decode(buffer, encoding);
+  return (globalThis as { tailor: { iconv: TailorIconvAPI } }).tailor.iconv.decode(
+    buffer,
+    encoding,
+  );
 }
 
 /**
@@ -105,7 +114,7 @@ export function encode<T extends string>(
   str: string,
   encoding: T,
 ): T extends "UTF8" | "UTF-8" ? string : Uint8Array {
-  return runtime.tailor.iconv.encode(str, encoding);
+  return (globalThis as { tailor: { iconv: TailorIconvAPI } }).tailor.iconv.encode(str, encoding);
 }
 
 /**
@@ -113,7 +122,7 @@ export function encode<T extends string>(
  * @returns Array of encoding names supported by the platform iconv runtime
  */
 export function encodings(): string[] {
-  return runtime.tailor.iconv.encodings();
+  return (globalThis as { tailor: { iconv: TailorIconvAPI } }).tailor.iconv.encodings();
 }
 
 /**
@@ -124,7 +133,10 @@ export class Iconv {
   private impl: IconvInstance;
 
   constructor(fromEncoding: string, toEncoding: string) {
-    this.impl = new runtime.tailor.iconv.Iconv(fromEncoding, toEncoding);
+    this.impl = new (globalThis as { tailor: { iconv: TailorIconvAPI } }).tailor.iconv.Iconv(
+      fromEncoding,
+      toEncoding,
+    );
   }
 
   /**

@@ -2,7 +2,7 @@ import { afterEach, describe, it, expect, expectTypeOf } from "vitest";
 import { setupWaitPointMock, setupWorkflowMock } from "@/utils/test/mock";
 import { defineWaitPoint, defineWaitPoints } from "./wait-point";
 
-const TailorGlobal = globalThis as { tailor?: { workflow?: Record<string, unknown> } };
+const TailorGlobal = globalThis as { tailor?: unknown };
 
 describe("defineWaitPoints", () => {
   afterEach(() => {

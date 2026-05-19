@@ -12,8 +12,6 @@
  * }
  */
 
-import { runtime } from "./internal";
-
 /**
  * Information about the invoker of the current function execution.
  *
@@ -66,7 +64,7 @@ export interface TailorContextAPI {
  * @returns Invoker details, or `null` when the call is anonymous
  */
 export function getInvoker(): Invoker | null {
-  const raw = runtime.tailor.context.getInvoker();
+  const raw = (globalThis as { tailor: { context: TailorContextAPI } }).tailor.context.getInvoker();
   if (!raw) return null;
   return {
     id: raw.id,
