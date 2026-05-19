@@ -7,14 +7,6 @@
   "env": {
     "builtin": true
   },
-  "settings": {
-    "import-x/resolver-next": [
-      {
-        "interfaceVersion": 3,
-        "name": "eslint-import-resolver-typescript"
-      }
-    ]
-  },
   "ignorePatterns": [
     "dist/",
     "src/types/*.generated.ts",

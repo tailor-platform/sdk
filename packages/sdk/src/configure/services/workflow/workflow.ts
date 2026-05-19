@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+/* oxlint-disable typescript/no-explicit-any */
 import { brandValue } from "@/utils/brand";
 import type { AuthInvoker } from "../auth";
 import type { WorkflowJob } from "./job";
