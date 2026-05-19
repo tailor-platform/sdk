@@ -21,6 +21,7 @@
     "example/tests/fixtures/",
     "example/seed/",
     "packages/tailor-proto/",
+    "packages/sdk-codemod/codemods/**/tests/",
     "generated/"
   ]
 }

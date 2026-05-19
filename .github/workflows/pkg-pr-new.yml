@@ -110,11 +110,16 @@ jobs:
       - name: Install deps
         uses: ./.github/actions/install-deps
 
+      # `prepare-templates.js` rewrites template manifests but leaves the
+      # lockfile untouched; pnpm 11's default `verifyDepsBeforeRun: install`
+      # would then auto-install the pkg.pr.new tarball before the build and
+      # hang the job. The build itself only needs create-sdk's own deps.
       - name: Build create-sdk with pkg.pr.new SDK
+        env:
+          TAILOR_SDK_VERSION: ${{ needs.publish-sdk.outputs.sdk_url }}
         run: |
-          export TAILOR_SDK_VERSION="${{ needs.publish-sdk.outputs.sdk_url }}"
           node packages/create-sdk/scripts/prepare-templates.js
-          pnpm --filter @tailor-platform/create-sdk build
+          pnpm --config.verify-deps-before-run=false --filter @tailor-platform/create-sdk build
 
       - name: Publish create-sdk to pkg.pr.new
         id: publish

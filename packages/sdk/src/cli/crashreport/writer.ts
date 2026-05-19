@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
+import { ensureSecretDir, writeSecretFile } from "@/cli/shared/secret-file";
 import type { CrashReport } from "./report";
 
 const MAX_CRASH_FILES = 10;
@@ -87,13 +88,13 @@ function cleanupOldFiles(dir: string): void {
  */
 export function writeCrashReport(report: CrashReport, dir: string): string | undefined {
   try {
-    fs.mkdirSync(dir, { recursive: true });
+    ensureSecretDir(dir);
 
     const filename = generateFilename(report);
     const filePath = path.join(dir, filename);
     const content = formatCrashReport(report);
 
-    fs.writeFileSync(filePath, content, "utf-8");
+    writeSecretFile(filePath, content);
     cleanupOldFiles(dir);
 
     return filePath;

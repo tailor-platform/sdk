@@ -4,4 +4,4 @@
 export interface Env {}
 
 /** Represents environment variables in the Tailor platform. */
-export type TailorEnv = keyof Env extends never ? Record<string, string> : Env;
+export type TailorEnv = keyof Env extends never ? Record<string, string | number | boolean> : Env;
