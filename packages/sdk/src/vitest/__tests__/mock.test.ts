@@ -12,7 +12,7 @@ import {
   cleanupMocks,
   STATE_KEY,
   RUNTIME_FLAG_KEY,
-} from "./mock";
+} from "../mock";
 
 describe("mock", () => {
   beforeEach(() => {

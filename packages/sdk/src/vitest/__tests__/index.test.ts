@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { isAbsolute } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { tailorRuntime } from "./index";
+import { tailorRuntime } from "../index";
 
 describe("tailorRuntime", () => {
   const ENV_VAR = "__TAILOR_RUNTIME_CONFIG";
