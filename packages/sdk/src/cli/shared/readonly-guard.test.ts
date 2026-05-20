@@ -42,9 +42,9 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   "authconnection/index.ts",
   "authconnection/list.ts",
   // Crash report (local file ops + reporting endpoint, not workspace state)
-  "crash-report/index.ts",
-  "crash-report/list.ts",
-  "crash-report/send.ts",
+  "crashreport/index.ts",
+  "crashreport/list.ts",
+  "crashreport/send.ts",
   // Executor (read-only). `executor/trigger.ts` calls the production
   // `TriggerExecutor` RPC with the operator token (it creates a platform-side
   // job record), so it stays guarded.
