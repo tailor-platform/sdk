@@ -64,11 +64,6 @@ vi.mock("@/cli/commands/tailordb/migrate/config", () => ({
   ]),
 }));
 
-// Per-migration schema snapshots that `executeSingleMigration{Pre,Post}Phase`
-// derive via `reconstructSnapshotFromMigrations(migrationsDir, migration.number)`.
-//
-// Migration 1 captures the state AFTER #1 (adds `permissions`, still has `roles`).
-// Migration 5 captures the state AFTER #5 (removes `roles`).
 const snapshotFixtures = vi.hoisted(() => {
   const buildUser = (
     fields: Record<string, { type: string; required: boolean; array?: boolean }>,
@@ -144,18 +139,6 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
     } as unknown as OperatorClient;
   }
 
-  /**
-   * Construct a minimal plan result with:
-   *   - changeSet.type.updates contains User with FINAL schema (no `roles`, has `permissions`)
-   *   - No type creates / deletes / services / gql permissions
-   *
-   * The pending migrations we inject via mock are:
-   *   - migration 1: adds User.permissions field (affects User)
-   *   - migration 5: removes User.roles field (affects User)
-   *
-   * Both `requiresMigrationScript: false` for simplicity; the prePhase request itself is what we assert on.
-   * @returns Mock `PlanResults["tailorDB"]` used by `applyTailorDB`.
-   */
   function createMockPlanResult() {
     const mockService = {
       namespace: "test-ns",
@@ -163,7 +146,6 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
       types: {},
     } as unknown as TailorDBService;
 
-    // The FINAL User schema (= post-all-migrations) — DOES NOT contain `roles`
     const finalUserTypeRequest = {
       workspaceId: "test-workspace",
       namespaceName: "test-ns",
@@ -174,7 +156,6 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
             { name: "id", type: "uuid", required: true },
             { name: "name", type: "string", required: true },
             { name: "permissions", type: "string", required: false, array: true },
-            // NOTE: no `roles` field — already removed in the local source-of-truth
           ],
         },
       },
@@ -231,14 +212,6 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
     } as any;
   }
 
-  /**
-   * Build a pending migration with the given number and a single `field_added` change.
-   * affectedTypes = { typeName } per the migration's diff.changes.
-   * @param number - Migration number used for path generation
-   * @param typeName - The TailorDB type affected by the migration
-   * @param fieldName - The field added in this migration
-   * @returns A mock pending migration that adds `fieldName` to `typeName`.
-   */
   function mkAddFieldMigration(
     number: number,
     typeName: string,
@@ -270,13 +243,6 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
     } as any;
   }
 
-  /**
-   * Build a pending migration with the given number and a single `field_removed` change.
-   * @param number - Migration number used for path generation
-   * @param typeName - The TailorDB type affected by the migration
-   * @param fieldName - The field removed in this migration
-   * @returns A mock pending migration that removes `fieldName` from `typeName`.
-   */
   function mkRemoveFieldMigration(
     number: number,
     typeName: string,
@@ -316,9 +282,6 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
     const client = createMockClient();
     const planResult = createMockPlanResult();
 
-    // #1 adds User.permissions, #5 removes User.roles. The request sent
-    // during #1's prePhase MUST still contain `roles`, because #5's removal
-    // belongs to #5's postPhase.
     vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
       mkAddFieldMigration(1, "User", "permissions"),
       mkRemoveFieldMigration(5, "User", "roles"),
@@ -329,22 +292,17 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
     const updateCalls = vi.mocked(client.updateTailorDBType).mock.calls;
     expect(updateCalls.length).toBeGreaterThanOrEqual(1);
 
-    // First call corresponds to migration #1 prePhase (User is in affectedTypes for #1)
     const firstCall = updateCalls[0];
     expect(firstCall).toBeDefined();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sentSchema = (firstCall![0] as any)?.tailordbType?.schema;
     expect(sentSchema).toBeDefined();
 
-    // `generateTailorDBTypeManifest` produces `fields` as a Record keyed by
-    // field name (id is implicit and excluded), so inspect Object.keys.
+    // `fields` is a Record keyed by field name (id is implicit and excluded).
     const fieldNames = Object.keys(sentSchema.fields ?? {});
 
-    // Sanity: the new field from #1 must be present
     expect(fieldNames).toContain("permissions");
     expect(fieldNames).toContain("name");
-
-    // `roles` must still exist at #1's prePhase: its removal is owned by #5's postPhase.
     expect(fieldNames).toContain("roles");
   });
 
@@ -352,16 +310,12 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
     const client = createMockClient();
     const planResult = createMockPlanResult();
 
-    // Single migration that does NOT affect User
     vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
       mkAddFieldMigration(1, "SomeOtherType", "foo"),
     ]);
 
     await applyTailorDB(client, planResult, "create-update");
 
-    // User is in changeSet.type.updates, but the only migration affects
-    // SomeOtherType (which isn't even in the changeSet). updateTailorDBType
-    // should NOT have been called for User.
     const updateCalls = vi.mocked(client.updateTailorDBType).mock.calls;
     const userUpdates = updateCalls.filter(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

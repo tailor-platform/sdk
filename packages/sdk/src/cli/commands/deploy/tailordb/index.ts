@@ -776,24 +776,12 @@ const migrationSnapshotCache = {
 };
 
 /**
- * Build the per-migration TailorDBType manifest from migration N's snapshot.
- *
- * The deploy pipeline's `changeSet` is computed against the FINAL local schema
- * (= post-all-migrations), so its requests carry the FINAL shape. During each
- * pending migration's pre/post phase we must instead send the intermediate shape
- * reconstructed up to that migration (initial baseline + diffs through N), so
- * that later migrations' data scripts can still see fields that LATER
- * migrations remove.
- *
- * Returns undefined when the snapshot has no matching type (e.g., the type is
- * removed by this migration). Callers must not send a request for such a type
- * during pre/post phases; deletions are handled separately in the post phase.
+ * Build the TailorDBType manifest for `typeName` from migration N's snapshot.
  * @param migration - The pending migration whose snapshot to consult
  * @param typeName - The type name to look up in the snapshot
  * @param tailorDBInputs - Deploy inputs, used to resolve namespace gqlOperations
  * @param executorUsedTypes - Types used by executors (drives publishRecordEvents default)
- * @returns The TailorDBType manifest for migration N's snapshot of `typeName`,
- *   or undefined if the type is not present in that snapshot.
+ * @returns The manifest, or undefined if `typeName` is not in that snapshot.
  */
 function buildSnapshotTypeManifest(
   migration: PendingMigration,
@@ -829,13 +817,7 @@ async function executeSingleMigrationPrePhase(
   const affectedTypes = getAffectedTypeNames(migration);
   const createdBeforeMigration = new Set(processedTypes.created);
 
-  // Types - create/update only types affected by this migration.
-  // For each affected type, build the request from migration N's own snapshot so
-  // that future migrations' removals don't leak into this migration's prePhase.
-  // Types deleted by this migration won't appear in snapshot[N] and are handled
-  // in the post phase, so we skip them here.
   await Promise.all([
-    // Create types that are affected by this migration and haven't been created yet
     ...changeSet.type.creates
       .filter((create) => {
         const typeName = create.request.tailordbType?.name;
