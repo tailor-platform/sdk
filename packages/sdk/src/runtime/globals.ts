@@ -25,7 +25,13 @@
 
 /* eslint-disable @typescript-eslint/no-namespace */
 
-import type { TailordbCommandType, TailordbQueryResult, TailordbRuntime, TailorRuntime } from ".";
+import type {
+  TailordbClientInstance,
+  TailordbCommandType,
+  TailordbQueryResult,
+  TailordbRuntime,
+  TailorRuntime,
+} from ".";
 import type { ContextInvoker } from "./context";
 import type { TailorDBFileErrorCode } from "./file";
 import type {
@@ -47,6 +53,7 @@ declare global {
   namespace tailordb {
     type QueryResult<T> = TailordbQueryResult<T>;
     type CommandType = TailordbCommandType;
+    type Client = TailordbClientInstance;
   }
 
   // eslint-disable-next-line no-var
