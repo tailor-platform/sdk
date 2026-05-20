@@ -13,7 +13,7 @@ import {
   enumerateAllFieldCompletions,
   extractMethodName,
   getMethodDescriptor,
-  listMethodNames,
+  listMethodChoices,
   resolveLeafField,
 } from "./proto-reflect";
 import type { LoadedConfig } from "@/cli/shared/config-loader";
@@ -215,7 +215,7 @@ Use \`--field key=value\` (repeatable) to set request body fields without writin
         positional: true,
         description:
           "API endpoint to call (e.g., 'GetApplication' or 'tailor.v1.OperatorService/GetApplication').",
-        completion: { custom: { choices: listMethodNames() } },
+        completion: { custom: { choices: listMethodChoices() } },
       }),
     })
     .strict(),

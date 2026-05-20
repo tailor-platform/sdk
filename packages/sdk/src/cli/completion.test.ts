@@ -173,6 +173,19 @@ describe("shell completion", () => {
       expect(values).toContain("executionId=");
     });
 
+    it("keys the expand table for the fully-qualified endpoint form too", () => {
+      // `api` accepts both `GetApplication` and
+      // `tailor.v1.OperatorService/GetApplication`. politty's expand keys the
+      // static table by the literal `endpoint` value, so a row keyed by the
+      // bare name does not match when the user types the FQ form. Both forms
+      // must be present.
+      const values = candidatesFor("tailor.v1.OperatorService/GetFunctionExecution").map(
+        (c) => c.value,
+      );
+      expect(values).toContain("workspaceId=");
+      expect(values).toContain("executionId=");
+    });
+
     it("enumerates enum values inline alongside the key", () => {
       const values = candidatesFor("ListWorkspaces").map((c) => c.value);
       expect(values).toContain("pageDirection=");

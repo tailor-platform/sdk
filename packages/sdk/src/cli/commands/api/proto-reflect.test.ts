@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import {
   enumerateAllFieldCompletions,
   getMethodDescriptor,
+  listMethodChoices,
   listMethodNames,
   resolveLeafField,
 } from "./proto-reflect";
@@ -25,6 +26,16 @@ describe("listMethodNames", () => {
     expect(names).not.toContain("UpdateFunctionRegistry"); // client_streaming
     expect(names).not.toContain("UploadFile"); // client_streaming
     expect(names).not.toContain("DownloadFunctionRegistryScript"); // server_streaming
+  });
+});
+
+describe("listMethodChoices", () => {
+  test("includes both bare and fully-qualified method names", () => {
+    const choices = listMethodChoices();
+    expect(choices).toContain("GetApplication");
+    expect(choices).toContain("tailor.v1.OperatorService/GetApplication");
+    const sorted = [...choices].sort();
+    expect(choices).toEqual(sorted);
   });
 });
 

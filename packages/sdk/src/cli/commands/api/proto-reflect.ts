@@ -15,6 +15,21 @@ export function listMethodNames(): string[] {
     .sort();
 }
 
+/**
+ * Returns every accepted form of the `endpoint` positional — bare method name
+ * and fully-qualified `service/Method`. politty's expand completion keys its
+ * static table by the literal endpoint string, so both forms must appear in
+ * `choices` or the user typing the fully-qualified name gets no `--field`
+ * completion candidates back at TAB time.
+ * @returns Sorted list of accepted endpoint values
+ */
+export function listMethodChoices(): string[] {
+  const methods = unaryMethods();
+  const bare = methods.map((m) => m.name);
+  const fq = methods.map((m) => `${OperatorService.typeName}/${m.name}`);
+  return [...bare, ...fq].sort();
+}
+
 export function getMethodDescriptor(methodName: string): DescMethodUnary | undefined {
   return unaryMethods().find((m) => m.name === methodName);
 }
