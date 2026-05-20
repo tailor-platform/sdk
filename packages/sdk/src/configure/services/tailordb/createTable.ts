@@ -250,8 +250,8 @@ type CreateTableOptions<
   plugins?: PluginAttachment[];
   /**
    * Record-level create/update hooks. Each callback receives `{ data, user }`
-   * (the entire record as a partial) and must return a complete record.
-   * Use `{ ...data, field: newValue }` to satisfy required fields.
+   * (the entire record snapshot) and returns an object with only the fields
+   * to override; omitted fields keep their incoming values.
    */
   hooks?: RecordHook<InferFieldsOutput<Fields>>;
   /**

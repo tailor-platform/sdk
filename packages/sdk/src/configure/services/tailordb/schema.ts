@@ -210,8 +210,8 @@ export interface TailorDBType<
 
   /**
    * Add record-level create/update hooks. Each callback receives `{ data, user }`
-   * and must return a complete record. Spread the incoming data
-   * (`{ ...data, field: newValue }`) to satisfy required fields.
+   * and returns an object containing only the fields to override on the record.
+   * Unchanged fields can be omitted; their incoming values are preserved.
    */
   hooks(hooks: RecordHook<InferFieldsOutput<Fields>>): TailorDBType<Fields, User>;
 

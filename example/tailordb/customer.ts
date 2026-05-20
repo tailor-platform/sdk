@@ -16,12 +16,10 @@ export const customer = db
   })
   .hooks({
     create: ({ data }) => ({
-      ...data,
       fullAddress: `${data.postalCode} ${data.address ?? ""} ${data.city ?? ""}`,
       createdAt: new Date(),
     }),
     update: ({ data }) => ({
-      ...data,
       fullAddress: `${data.postalCode} ${data.address ?? ""} ${data.city ?? ""}`,
       updatedAt: new Date(),
     }),

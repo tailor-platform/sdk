@@ -1,7 +1,7 @@
 {
   "version": 1,
   "namespace": "tailordb",
-  "createdAt": "2026-05-20T21:48:54.972Z",
+  "createdAt": "2026-05-20T22:15:30.455Z",
   "changes": [
     {
       "kind": "field_modified",
@@ -41,6 +41,59 @@
         "type": "datetime",
         "required": false,
         "description": "Record last update timestamp"
+      }
+    },
+    {
+      "kind": "type_modified",
+      "typeName": "Customer",
+      "reason": "record-level hooks changed, record-level validators changed",
+      "before": {
+        "hooks": {
+          "create": {
+            "expr": "(({data})=>({...data,fullAddress:`${data.postalCode} ${data.address??\"\"} ${data.city??\"\"}`,createdAt:new Date}))({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+          },
+          "update": {
+            "expr": "(({data})=>({...data,fullAddress:`${data.postalCode} ${data.address??\"\"} ${data.city??\"\"}`,updatedAt:new Date}))({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+          }
+        },
+        "validate": [
+          {
+            "script": {
+              "expr": "(({data})=>data.name.length>5)({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            },
+            "errorMessage": "Name must be longer than 5 characters"
+          },
+          {
+            "script": {
+              "expr": "(({data})=>data.city?data.city.length>1&&data.city.length<100:true)({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            },
+            "errorMessage": "failed by `({data})=>data.city?data.city.length>1&&data.city.length<100:true`"
+          }
+        ]
+      },
+      "after": {
+        "hooks": {
+          "create": {
+            "expr": "(({data})=>({fullAddress:`${data.postalCode} ${data.address??\"\"} ${data.city??\"\"}`,createdAt:new Date}))({ data: _input, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+          },
+          "update": {
+            "expr": "(({data})=>({fullAddress:`${data.postalCode} ${data.address??\"\"} ${data.city??\"\"}`,updatedAt:new Date}))({ data: _input, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+          }
+        },
+        "validate": [
+          {
+            "script": {
+              "expr": "(({data})=>data.name.length>5)({ data: _input, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            },
+            "errorMessage": "Name must be longer than 5 characters"
+          },
+          {
+            "script": {
+              "expr": "(({data})=>data.city?data.city.length>1&&data.city.length<100:true)({ data: _input, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+            },
+            "errorMessage": "failed by `({data})=>data.city?data.city.length>1&&data.city.length<100:true`"
+          }
+        ]
       }
     }
   ],

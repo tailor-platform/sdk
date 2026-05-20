@@ -34,7 +34,7 @@ export const unauthenticatedTailorUser = {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
   return (data: unknown) => {
-    let result = Object.entries(type.fields).reduce(
+    const result = Object.entries(type.fields).reduce(
       (hooked, [key, value]) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const field = value as TailorField<any, any, any>;
@@ -76,17 +76,16 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
       {} as Record<string, unknown>,
     );
 
-    // Apply record-level hooks (e.g., computed fields like fullAddress)
+    // Apply record-level hooks (e.g., computed fields like fullAddress).
+    // Hooks return only the fields to override; merge them onto the existing result.
     const recordHook = type.metadata?.hooks?.create;
     if (recordHook) {
-      result = recordHook({ data: result, user: unauthenticatedTailorUser }) as Record<
+      const overrides = recordHook({ data: result, user: unauthenticatedTailorUser }) as Record<
         string,
         unknown
       >;
-      for (const [key, val] of Object.entries(result)) {
-        if (val instanceof Date) {
-          result[key] = val.toISOString();
-        }
+      for (const [key, val] of Object.entries(overrides)) {
+        result[key] = val instanceof Date ? val.toISOString() : val;
       }
     }
 

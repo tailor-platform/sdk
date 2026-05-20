@@ -6,7 +6,7 @@ import type { TailorUser } from "@/types/user";
 
 /**
  * Record-level hook function arguments.
- * `data` is the full record snapshot at hook time; spread it to satisfy required fields.
+ * `data` is the full record snapshot at hook time.
  */
 type RecordHookFnArgs<TData> = {
   readonly data: Readonly<TData>;
@@ -15,14 +15,15 @@ type RecordHookFnArgs<TData> = {
 
 /**
  * Record-level hook function.
- * Receives the entire record `data` and must return a complete record to persist.
- * Spread the incoming data (`{ ...data, field: newValue }`) to satisfy required fields.
+ * Receives the entire record `data` and must return an object containing
+ * only the fields to override on the record. Unchanged fields can be omitted.
  */
-type RecordHookFn<TData> = (args: RecordHookFnArgs<TData>) => TData;
+type RecordHookFn<TData> = (args: RecordHookFnArgs<TData>) => Partial<TData>;
 
 /**
  * Record-level hooks for create/update operations.
- * Each callback receives `{ data, user }` and must return a full record matching the type shape.
+ * Each callback receives `{ data, user }` and returns an object with only the
+ * fields to override; omitted fields keep their incoming values.
  */
 export type RecordHook<TData> = {
   create?: RecordHookFn<TData>;

@@ -19,10 +19,28 @@ import type {
 
 type ScriptFunction = (...args: unknown[]) => unknown;
 
+/**
+ * `record-hooks` and `record-validate` are type-level callbacks. Per the
+ * platform contract their script receives `_input` (the record map) and
+ * `user`; field-level scripts also receive `_value` and use `_data` as the
+ * record map.
+ */
+type ScriptKind = "hooks" | "validate" | "record-hooks" | "record-validate";
+
 type ScriptTarget = {
   fn: ScriptFunction;
-  kind: "hooks" | "validate";
+  kind: ScriptKind;
 };
+
+function isRecordKind(kind: ScriptKind): boolean {
+  return kind === "record-hooks" || kind === "record-validate";
+}
+
+function scriptInvocationArgs(kind: ScriptKind): string {
+  return isRecordKind(kind)
+    ? `{ data: _input, user: ${tailorUserMap} }`
+    : `{ value: _value, data: _data, user: ${tailorUserMap} }`;
+}
 
 /** Binding found in the source file: either an import or a top-level declaration */
 export type SourceBinding = {
@@ -92,21 +110,21 @@ function collectScriptTargets(type: TailorDBTypeSchemaOutput): ScriptTarget[] {
   // Collect record-level hooks
   const recordCreateHook = toScriptFunction(type.metadata.hooks?.create);
   if (recordCreateHook) {
-    targets.push({ fn: recordCreateHook, kind: "hooks" });
+    targets.push({ fn: recordCreateHook, kind: "record-hooks" });
   }
   const recordUpdateHook = toScriptFunction(type.metadata.hooks?.update);
   if (recordUpdateHook) {
-    targets.push({ fn: recordUpdateHook, kind: "hooks" });
+    targets.push({ fn: recordUpdateHook, kind: "record-hooks" });
   }
 
   // Collect record-level validators
   for (const validateInput of type.metadata.validate ?? []) {
     if (typeof validateInput === "function") {
       const validateFn = toScriptFunction(validateInput);
-      if (validateFn) targets.push({ fn: validateFn, kind: "validate" });
+      if (validateFn) targets.push({ fn: validateFn, kind: "record-validate" });
     } else {
       const validateFn = toScriptFunction(validateInput[0]);
-      if (validateFn) targets.push({ fn: validateFn, kind: "validate" });
+      if (validateFn) targets.push({ fn: validateFn, kind: "record-validate" });
     }
   }
 
@@ -406,13 +424,13 @@ export function resolveNeededBindings(
   };
 }
 
-function buildPrecompiledExpr(bundleCode: string): string {
+function buildPrecompiledExpr(bundleCode: string, kind: ScriptKind): string {
   return (
     "(() => {\n" +
     "  const module = { exports: {} };\n" +
     "  const exports = module.exports;\n" +
     `${bundleCode}\n` +
-    `  return module.exports.main({ value: _value, data: _data, user: ${tailorUserMap} });\n` +
+    `  return module.exports.main(${scriptInvocationArgs(kind)});\n` +
     "})()"
   );
 }
@@ -451,7 +469,7 @@ export function buildMinimalEntryFromResolved(
 
 async function bundleScriptTarget(args: {
   fn: ScriptFunction;
-  kind: "hooks" | "validate";
+  kind: ScriptKind;
   sourceFilePath: string;
   sourceBindings: Map<string, SourceBinding>;
   tempDir: string;
@@ -460,7 +478,7 @@ async function bundleScriptTarget(args: {
 }): Promise<string> {
   const { fn, kind, sourceFilePath, sourceBindings, tempDir, targetIndex, tsconfig } = args;
   const fnSource = stringifyFunction(fn);
-  const inlineExpr = `(${fnSource})({ value: _value, data: _data, user: ${tailorUserMap} })`;
+  const inlineExpr = `(${fnSource})(${scriptInvocationArgs(kind)})`;
 
   // Check if the function has free variables that need bundling
   const freeVars = findUndefinedReferences(`const __fn = ${fnSource};`);
@@ -507,7 +525,7 @@ async function bundleScriptTarget(args: {
   } as rolldown.BuildOptions);
 
   const bundledCode = buildResult.output[0].code;
-  return buildPrecompiledExpr(bundledCode);
+  return buildPrecompiledExpr(bundledCode, kind);
 }
 
 /**

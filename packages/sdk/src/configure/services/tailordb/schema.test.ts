@@ -829,13 +829,13 @@ describe("TailorDBType record-level hooks modifier tests", () => {
     });
   });
 
-  it("hooks must return a complete record (spread required)", () => {
+  it("hooks may return only the fields to override", () => {
     db.type("Test", {
       name: db.string(),
       score: db.int(),
     }).hooks({
-      // @ts-expect-error missing required fields from the returned record
       create: () => ({ name: "created" }),
+      update: ({ data }) => ({ score: data.score + 1 }),
     });
   });
 
