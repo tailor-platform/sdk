@@ -177,6 +177,22 @@ describe("truncate command", () => {
         'Namespace "nonexistent" not found in config. Available namespaces: tailordb, anotherdb',
       );
     });
+
+    test("rejects external namespaces with a dedicated error", async () => {
+      const { loadConfig } = await import("@/cli/shared/config-loader");
+      vi.mocked(loadConfig).mockResolvedValueOnce({
+        config: {
+          db: {
+            owned: { files: ["./owned/*.ts"] },
+            "shared-db": { external: true },
+          },
+        },
+      } as unknown as Awaited<ReturnType<typeof loadConfig>>);
+
+      await expect(truncate({ namespace: "shared-db" })).rejects.toThrow(
+        'Namespace "shared-db" is declared as external in this app\'s config and cannot be truncated from here. Run truncate from the app that owns it.',
+      );
+    });
   });
 
   describe("truncate with type names", () => {
