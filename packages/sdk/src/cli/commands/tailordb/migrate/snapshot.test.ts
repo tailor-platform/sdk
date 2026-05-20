@@ -250,6 +250,14 @@ describe("snapshot", () => {
       expect(diff.changes[0].kind).toBe("type_removed");
       expect(diff.hasBreakingChanges).toBe(false);
       expect(diff.requiresMigrationScript).toBe(false);
+      expect(diff.hasWarnings).toBe(true);
+      expect(diff.warnings).toEqual([
+        {
+          typeName: "OldType",
+          reason:
+            "Type removed (all records of this type will be dropped in the post-migration phase)",
+        },
+      ]);
     });
 
     it("detects field addition (optional - non-breaking)", () => {
@@ -339,6 +347,14 @@ describe("snapshot", () => {
       expect(diff.changes[0].kind).toBe("field_removed");
       expect(diff.hasBreakingChanges).toBe(false);
       expect(diff.requiresMigrationScript).toBe(false);
+      expect(diff.hasWarnings).toBe(true);
+      expect(diff.warnings).toEqual([
+        {
+          typeName: "User",
+          fieldName: "name",
+          reason: "Field removed (existing data will be dropped in the post-migration phase)",
+        },
+      ]);
     });
 
     it("detects field type change (breaking change)", () => {

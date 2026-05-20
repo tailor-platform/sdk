@@ -1,14 +1,18 @@
 /**
- * Pre-migration schema computation
+ * Pre-migration field config adjustments
  *
  * The Pre-phase sends a "relaxed" version of the target schema so that
- * `migrate.ts` scripts can still operate on the previous shape of the data:
+ * `migrate.ts` scripts can still operate on the previous shape of the data.
+ * This module handles the field-level adjustments:
  *
- * - `field_removed`/`type_removed`: re-insert the removed field/type so
- *   migrate.ts can read it (the physical drop happens in Post-phase).
+ * - `field_removed`: re-insert the removed field so migrate.ts can read it
+ *   (the physical drop happens in Post-phase).
  * - `field_added` with `required: true`: relax to `required: false`.
  * - `field_modified` optional→required, unique constraint added, enum
  *   value removed: keep the looser side until Post-phase.
+ *
+ * Type-level deletions (`type_removed`) are handled by the deploy flow,
+ * which retains the type until Post-phase rather than via this module.
  *
  * Post-phase then sends the final schema, after migrate.ts has had a chance
  * to fix up data.

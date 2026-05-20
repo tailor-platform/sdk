@@ -682,11 +682,14 @@ export function loadDiff(filePath: string): MigrationDiff {
   const content = fs.readFileSync(filePath, "utf-8");
   const parsed = JSON.parse(content) as MigrationDiff;
   // Backfill fields introduced after the initial diff.json schema so that older
-  // migrations on disk remain readable without manual edits.
+  // migrations on disk remain readable without manual edits. hasWarnings is
+  // derived from the warnings array to stay consistent even if a hand-edited
+  // diff.json sets one side without the other.
+  const warnings = parsed.warnings ?? [];
   return {
     ...parsed,
-    warnings: parsed.warnings ?? [],
-    hasWarnings: parsed.hasWarnings ?? false,
+    warnings,
+    hasWarnings: warnings.length > 0,
   };
 }
 
