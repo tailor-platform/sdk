@@ -1,12 +1,13 @@
+import { relative } from "node:path";
 /**
- * ESLint rule: require JSDoc on public API exports.
+ * Require JSDoc on public API exports.
  *
- * Applied to entry point files via the `files` property in eslint.config.js.
- * Only value-level symbols (functions, classes, enums, variables, methods,
- * accessors) are validated; type aliases and interfaces are excluded.
+ * Driven by `packages/sdk/scripts/check-public-api-jsdoc.ts`, which walks
+ * the entry points declared in `package.json#exports`. Only value-level
+ * symbols (functions, classes, enums, variables, methods, accessors) are
+ * validated; type aliases and interfaces are excluded.
  */
 import ts from "typescript";
-import { relative } from "node:path";
 
 function getKind(symbol) {
   const f = symbol.flags;
@@ -121,72 +122,3 @@ export function findUndocumentedSymbols(entryPoints, tsCompilerOptions, baseDir)
 
   return failures;
 }
-
-/** @type {import('eslint').Rule.RuleModule} */
-export const rule = {
-  meta: {
-    type: "suggestion",
-    docs: {
-      description: "Require JSDoc on public API exports derived from package.json#exports",
-    },
-    messages: {
-      missingJsdoc: "Public API {{kind}} '{{name}}' must have JSDoc documentation.",
-    },
-    schema: [],
-  },
-  create(context) {
-    const parserServices = context.sourceCode.parserServices;
-    if (!parserServices?.program) return {};
-    const checker = parserServices.program.getTypeChecker();
-
-    // Collect export AST nodes for precise error reporting locations
-    const exportNodeMap = new Map();
-    const starExportNodes = [];
-
-    return {
-      ExportNamedDeclaration(node) {
-        if (node.exportKind === "type") return;
-        if (node.declaration) {
-          if (node.declaration.type === "VariableDeclaration") {
-            for (const decl of node.declaration.declarations) {
-              if (decl.id.type === "Identifier") {
-                exportNodeMap.set(decl.id.name, decl.id);
-              }
-            }
-          } else if (node.declaration.id) {
-            exportNodeMap.set(node.declaration.id.name, node.declaration.id);
-          }
-        }
-        if (node.specifiers) {
-          for (const spec of node.specifiers) {
-            if (spec.exportKind === "type") continue;
-            exportNodeMap.set(spec.exported.name, spec);
-          }
-        }
-      },
-      ExportAllDeclaration(node) {
-        if (node.exportKind === "type") return;
-        starExportNodes.push(node);
-      },
-      ExportDefaultDeclaration(node) {
-        exportNodeMap.set("default", node);
-      },
-      "Program:exit"() {
-        const sf = parserServices.program.getSourceFile(context.filename);
-        if (!sf) return;
-        const mod = checker.getSymbolAtLocation(sf);
-        if (!mod) return;
-
-        walkUndocumentedExports(checker, mod, (name, kind) => {
-          const reportNode = exportNodeMap.get(name.split(".")[0]) || starExportNodes[0];
-          if (!reportNode) return;
-          context.report({
-            node: reportNode,
-            messageId: "missingJsdoc",
-            data: { name, kind },
-          });
-        });
-      },
-    };
-  },
-};

@@ -1,7 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+/* oxlint-disable typescript/no-explicit-any */
 import { brandValue } from "@/utils/brand";
-import type { WorkflowJob } from "./job";
 import type { AuthInvoker } from "../auth";
+import type { WorkflowJob } from "./job";
 import type { MachineUserName } from "@/configure/types/machine-user";
 import type { ConcurrencyPolicy, RetryPolicy } from "@/types/workflow.generated";
 

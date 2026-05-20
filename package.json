@@ -26,13 +26,8 @@
   "devDependencies": {
     "@changesets/changelog-github": "0.6.0",
     "@changesets/cli": "2.31.0",
-    "@eslint/js": "10.0.1",
     "@tailor-platform/sdk": "workspace:^",
     "@types/node": "24.12.3",
-    "eslint": "10.3.0",
-    "eslint-import-resolver-typescript": "4.4.4",
-    "eslint-plugin-import-x": "4.16.2",
-    "globals": "17.5.0",
     "knip": "6.12.2",
     "lefthook": "2.1.6",
     "oxfmt": "0.46.0",
@@ -40,8 +35,7 @@
     "publint": "0.3.20",
     "tsx": "4.21.0",
     "turbo": "2.9.12",
-    "typescript": "5.9.3",
-    "typescript-eslint": "8.59.2"
+    "typescript": "5.9.3"
   },
   "engines": {
     "node": ">= 22.14.0"
