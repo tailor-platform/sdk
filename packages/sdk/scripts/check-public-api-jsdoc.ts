@@ -6,7 +6,7 @@
 // src/ is the entry point this check walks. We replicate ESLint's
 // require-public-api-jsdoc rule logic standalone so it does not depend on the
 // linter at all.
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
@@ -25,11 +25,29 @@ const pkg = JSON.parse(readFileSync(resolve(sdkRoot, "package.json"), "utf8")) a
 
 function entryPoints(): string[] {
   const points: string[] = [];
-  for (const value of Object.values(pkg.exports)) {
-    if (typeof value === "object" && value && "types" in value && typeof value.types === "string") {
-      const src = value.types.replace(/^\.\/dist\//, "src/").replace(/\.d\.mts$/, ".ts");
-      points.push(resolve(sdkRoot, src));
+  for (const [key, value] of Object.entries(pkg.exports)) {
+    if (
+      typeof value !== "object" ||
+      !value ||
+      !("types" in value) ||
+      typeof value.types !== "string"
+    ) {
+      continue;
     }
+    const types = value.types;
+    if (!/^\.\/dist\/.+\.d\.mts$/.test(types)) {
+      throw new Error(
+        `package.json exports[${JSON.stringify(key)}].types does not match expected ./dist/*.d.mts pattern: ${types}`,
+      );
+    }
+    const src = types.replace(/^\.\/dist\//, "src/").replace(/\.d\.mts$/, ".ts");
+    const abs = resolve(sdkRoot, src);
+    if (!existsSync(abs)) {
+      throw new Error(
+        `Derived source entry point for exports[${JSON.stringify(key)}] does not exist: ${abs} (from types: ${types})`,
+      );
+    }
+    points.push(abs);
   }
   return points;
 }

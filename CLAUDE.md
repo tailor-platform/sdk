@@ -100,5 +100,5 @@ See [docs/](docs/README.md) for developer and contributor documentation.
 
 ## Environment
 
-- Linting is oxlint-only (`oxlint --type-aware .` everywhere). After upgrading oxlint, run `pnpm exec tsx scripts/lint-rule-diff.ts --check=scripts/lint-rule-diff.baseline.json` — it exits non-zero if any previously-active rule disappears, and `--json=scripts/lint-rule-diff.baseline.json` refreshes the committed snapshot once the change has been reviewed.
+- Linting is oxlint-only (`oxlint --type-aware .` everywhere).
 - Lefthook runs pre-commit checks (lint, format, typecheck) and post-commit signature verification
