@@ -216,7 +216,7 @@ export const truncateCommand = defineAppCommand({
       }),
       all: arg(z.boolean().default(false), {
         alias: "a",
-        description: "Truncate all tables in all namespaces",
+        description: "Truncate all tables in all owned namespaces (excludes external namespaces)",
       }),
       namespace: arg(z.string().optional(), {
         alias: "n",
