@@ -176,7 +176,7 @@ export function generateTailorDBTypeManifestFromSnapshot(
  * @param {SnapshotFieldConfig} config - Snapshot field config
  * @returns {MessageInitShape<typeof TailorDBType_FieldConfigSchema>} Proto field config
  */
-function convertFieldConfigToProto(
+export function convertFieldConfigToProto(
   config: SnapshotFieldConfig,
 ): MessageInitShape<typeof TailorDBType_FieldConfigSchema> {
   const fieldEntry: MessageInitShape<typeof TailorDBType_FieldConfigSchema> = {

@@ -178,25 +178,25 @@ export async function main(trx: Transaction): Promise<void> {
 
 ## Supported Schema Changes
 
-| Change Type                    | Breaking? | Migration Script? | Notes                                                                                 |
-| ------------------------------ | --------- | ----------------- | ------------------------------------------------------------------------------------- |
-| Add optional field             | No        | No                | Schema change only                                                                    |
-| Add required field             | Yes       | Yes               | Script populates default values                                                       |
-| Remove field                   | No        | No                | Schema change only — data is preserved server-side                                    |
-| Change optional → required     | Yes       | Yes               | Script sets defaults for null values                                                  |
-| Change required → optional     | No        | No                | Schema change only                                                                    |
-| Add index                      | No        | No                | Schema change only                                                                    |
-| Remove index                   | No        | No                | Schema change only                                                                    |
-| Add unique constraint          | Yes       | Yes               | Script must resolve duplicate values                                                  |
-| Remove unique constraint       | No        | No                | Schema change only                                                                    |
-| Add enum value                 | No        | No                | Schema change only                                                                    |
-| Remove enum value              | Yes       | Yes               | Script migrates records with removed values                                           |
-| Add type                       | No        | No                | Schema change only                                                                    |
-| Remove type                    | No        | No                | Schema change only — data is preserved server-side                                    |
-| Change foreign key target type | Yes       | Yes               | Script updates references to the new target                                           |
-| Change field type              | -         | -                 | **Not supported** — see [3-step migration](#3-step-migration-for-unsupported-changes) |
-| Change array → single value    | -         | -                 | **Not supported** — see [3-step migration](#3-step-migration-for-unsupported-changes) |
-| Change single value → array    | -         | -                 | **Not supported** — see [3-step migration](#3-step-migration-for-unsupported-changes) |
+| Change Type                    | Breaking? | Migration Script? | Notes                                                                                                                 |
+| ------------------------------ | --------- | ----------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Add optional field             | No        | No                | Schema change only                                                                                                    |
+| Add required field             | Yes       | Yes               | Script populates default values                                                                                       |
+| Remove field                   | No        | No                | Schema change only — the field stays readable from `migrate.ts` during Pre-migration and is dropped in Post-migration |
+| Change optional → required     | Yes       | Yes               | Script sets defaults for null values                                                                                  |
+| Change required → optional     | No        | No                | Schema change only                                                                                                    |
+| Add index                      | No        | No                | Schema change only                                                                                                    |
+| Remove index                   | No        | No                | Schema change only                                                                                                    |
+| Add unique constraint          | Yes       | Yes               | Script must resolve duplicate values                                                                                  |
+| Remove unique constraint       | No        | No                | Schema change only                                                                                                    |
+| Add enum value                 | No        | No                | Schema change only                                                                                                    |
+| Remove enum value              | Yes       | Yes               | Script migrates records with removed values                                                                           |
+| Add type                       | No        | No                | Schema change only                                                                                                    |
+| Remove type                    | No        | No                | Schema change only — the type stays readable from `migrate.ts` during Pre-migration and is dropped in Post-migration  |
+| Change foreign key target type | Yes       | Yes               | Script updates references to the new target                                                                           |
+| Change field type              | -         | -                 | **Not supported** — see [3-step migration](#3-step-migration-for-unsupported-changes)                                 |
+| Change array → single value    | -         | -                 | **Not supported** — see [3-step migration](#3-step-migration-for-unsupported-changes)                                 |
+| Change single value → array    | -         | -                 | **Not supported** — see [3-step migration](#3-step-migration-for-unsupported-changes)                                 |
 
 ### 3-step migration for unsupported changes
 
@@ -216,11 +216,11 @@ When you run `tailor-sdk deploy`, the SDK detects pending migrations (anything p
 
 For each pending migration:
 
-1. **Pre-migration**: Type changes that would be breaking are applied in a relaxed form first. Newly-required fields are added as optional; fields whose `optional → required` transition is breaking are temporarily kept optional. Non-breaking changes that are part of the same migration are also applied here.
+1. **Pre-migration**: Type changes that would be breaking are applied in a relaxed form first. Newly-required fields are added as optional; fields whose `optional → required` transition is breaking are temporarily kept optional. Fields that are being removed in this migration are temporarily kept on the type so that `migrate.ts` can still read them (for example, to `innerJoin` through a foreign key that is about to be dropped). Non-breaking changes that are part of the same migration are also applied here.
 2. **Script execution**: If `diff.requiresMigrationScript` is true, `migrate.ts` is bundled and sent to the platform via the script execution API. It runs as the configured machine user inside a transaction.
-3. **Post-migration**: Required constraints are enforced; field/type deletions are applied; the `sdk-migration` label is bumped to this migration's number.
+3. **Post-migration**: Required constraints are enforced; field and type deletions are applied (the columns/tables are physically dropped here); the `sdk-migration` label is bumped to this migration's number.
 
-This split is what allows existing rows to be backfilled before the database starts rejecting nulls.
+This split is what allows existing rows to be backfilled before the database starts rejecting nulls, and what lets `migrate.ts` traverse foreign-key fields that the same migration removes.
 
 ### Schema verification
 

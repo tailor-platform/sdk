@@ -53,7 +53,9 @@ import {
   formatMigrationNumber,
   compareRemoteWithSnapshot,
   formatSchemaDrifts,
+  type SnapshotFieldConfig,
 } from "@/cli/commands/tailordb/migrate/snapshot";
+import { convertFieldConfigToProto } from "@/cli/commands/tailordb/migrate/snapshot-manifest";
 import { type TailorDBService } from "@/cli/services/tailordb/service";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { logger } from "@/cli/shared/logger";
@@ -611,11 +613,22 @@ interface FieldConfig {
  * @param fields - Field configs to adjust
  * @param typeChanges - Breaking changes for a type
  */
-function applyPreMigrationFieldAdjustments(
+export function applyPreMigrationFieldAdjustments(
   fields: Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>>,
   typeChanges: Map<string, DiffChange>,
 ): void {
   for (const [fieldName, change] of typeChanges) {
+    // field_removed: re-insert the field with its pre-migration config so that
+    // migration scripts can still read it (e.g. JOIN through a soon-to-be-dropped FK).
+    // The physical drop happens in Post-phase, which sends the final schema.
+    if (change.kind === "field_removed") {
+      const before = change.before as SnapshotFieldConfig | undefined;
+      if (before) {
+        fields[fieldName] = convertFieldConfigToProto(before);
+      }
+      continue;
+    }
+
     const field = fields[fieldName];
     if (!field) continue;
 

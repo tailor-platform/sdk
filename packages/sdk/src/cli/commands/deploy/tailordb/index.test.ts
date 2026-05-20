@@ -1,13 +1,22 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { sdkNameLabelKey } from "../label";
-import { applyTailorDB, formatTailorDBResourceChangeEntries, planTailorDB } from ".";
+import {
+  applyPreMigrationFieldAdjustments,
+  applyTailorDB,
+  formatTailorDBResourceChangeEntries,
+  planTailorDB,
+} from ".";
 import type { PlanContext } from "../deploy";
+import type { DiffChange } from "@/cli/commands/tailordb/migrate/diff-calculator";
+import type { SnapshotFieldConfig } from "@/cli/commands/tailordb/migrate/snapshot";
 import type { Application } from "@/cli/services/application";
 import type { ExecutorService } from "@/cli/services/executor/service";
 import type { TailorDBService } from "@/cli/services/tailordb/service";
 import type { OperatorClient } from "@/cli/shared/client";
 import type { LoadedConfig } from "@/cli/shared/config-loader";
 import type { TailorDBType } from "@/types/tailordb";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type { TailorDBType_FieldConfigSchema } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
 
 // Mock label.ts
 vi.mock("../label", async (importOriginal) => {
@@ -818,5 +827,77 @@ describe("applyTailorDB phase separation", () => {
     expect(client.deleteTailorDBType).toHaveBeenCalledTimes(1);
     // Services should NOT be deleted in create-update phase
     expect(client.deleteTailorDBService).not.toHaveBeenCalled();
+  });
+});
+
+describe("applyPreMigrationFieldAdjustments", () => {
+  type ProtoField = MessageInitShape<typeof TailorDBType_FieldConfigSchema>;
+
+  test("re-inserts removed field so migrate.ts can still read it", () => {
+    // Simulate the new schema produced by planTailorDB: the removed field
+    // has already been stripped from `fields`.
+    const fields: Record<string, ProtoField> = {
+      name: { type: "string", required: true },
+    };
+
+    const removedFieldBefore: SnapshotFieldConfig = {
+      type: "uuid",
+      required: true,
+      foreignKey: true,
+      foreignKeyType: "OldParent",
+    };
+    const typeChanges = new Map<string, DiffChange>([
+      [
+        "oldParentId",
+        {
+          kind: "field_removed",
+          typeName: "Child",
+          fieldName: "oldParentId",
+          before: removedFieldBefore,
+        },
+      ],
+    ]);
+
+    applyPreMigrationFieldAdjustments(fields, typeChanges);
+
+    expect(fields.oldParentId).toBeDefined();
+    expect(fields.oldParentId?.type).toBe("uuid");
+    expect(fields.oldParentId?.foreignKey).toBe(true);
+    expect(fields.oldParentId?.foreignKeyType).toBe("OldParent");
+    expect(fields.oldParentId?.required).toBe(true);
+    // Untouched fields are preserved.
+    expect(fields.name?.type).toBe("string");
+  });
+
+  test("relaxes newly-added required field to optional", () => {
+    const fields: Record<string, ProtoField> = {
+      newField: { type: "string", required: true },
+    };
+    const typeChanges = new Map<string, DiffChange>([
+      [
+        "newField",
+        {
+          kind: "field_added",
+          typeName: "T",
+          fieldName: "newField",
+          after: { type: "string", required: true },
+        },
+      ],
+    ]);
+
+    applyPreMigrationFieldAdjustments(fields, typeChanges);
+
+    expect(fields.newField?.required).toBe(false);
+  });
+
+  test("does not modify fields that are not in typeChanges", () => {
+    const fields: Record<string, ProtoField> = {
+      keep: { type: "string", required: true },
+    };
+    const typeChanges = new Map<string, DiffChange>();
+
+    applyPreMigrationFieldAdjustments(fields, typeChanges);
+
+    expect(fields.keep?.required).toBe(true);
   });
 });
