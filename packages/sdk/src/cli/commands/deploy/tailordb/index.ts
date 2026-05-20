@@ -55,8 +55,6 @@ import {
   formatSchemaDrifts,
   createSnapshotType,
   isSnapshotFieldRefOperand,
-  loadSnapshot,
-  getMigrationFilePath,
   type SchemaSnapshot,
   type SnapshotFieldConfig,
   type TailorDBSnapshotType,
@@ -747,9 +745,10 @@ const processedTypes = {
 /**
  * Snapshot cache for per-migration schema lookups during a single apply run.
  *
- * Each migration directory ships a `schema.json` representing the full schema state
- * AFTER that migration. The cache lets the pre/post phases load these on demand
- * without re-reading the filesystem for every type.
+ * Only the initial baseline `0000/schema.json` is stored on disk; later migrations
+ * ship `diff.json` only. To get the schema state AFTER migration N we replay the
+ * initial snapshot through all diffs up to N via `reconstructSnapshotFromMigrations`.
+ * Results are memoized per (namespace, migration number) for the apply run.
  */
 const migrationSnapshotCache = {
   cache: new Map<string, SchemaSnapshot>(),
@@ -760,12 +759,16 @@ const migrationSnapshotCache = {
     const key = `${migration.namespace}/${migration.number}`;
     let snapshot = this.cache.get(key);
     if (!snapshot) {
-      const snapshotPath = getMigrationFilePath(
+      const reconstructed = reconstructSnapshotFromMigrations(
         migration.migrationsDir,
         migration.number,
-        "schema",
       );
-      snapshot = loadSnapshot(snapshotPath);
+      if (!reconstructed) {
+        throw new Error(
+          `Cannot reconstruct snapshot for ${migration.namespace} migration ${migration.number}: no migrations found in ${migration.migrationsDir}`,
+        );
+      }
+      snapshot = reconstructed;
       this.cache.set(key, snapshot);
     }
     return snapshot;
@@ -778,8 +781,9 @@ const migrationSnapshotCache = {
  * The deploy pipeline's `changeSet` is computed against the FINAL local schema
  * (= post-all-migrations), so its requests carry the FINAL shape. During each
  * pending migration's pre/post phase we must instead send the intermediate shape
- * captured by that migration's own `schema.json`, so that later migrations'
- * data scripts can still see fields that LATER migrations remove.
+ * reconstructed up to that migration (initial baseline + diffs through N), so
+ * that later migrations' data scripts can still see fields that LATER
+ * migrations remove.
  *
  * Returns undefined when the snapshot has no matching type (e.g., the type is
  * removed by this migration). Callers must not send a request for such a type

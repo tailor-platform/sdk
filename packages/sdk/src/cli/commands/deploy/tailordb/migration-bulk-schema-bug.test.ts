@@ -86,7 +86,7 @@ vi.mock("@/cli/commands/tailordb/migrate/config", () => ({
 }));
 
 // Per-migration schema snapshots that `executeSingleMigration{Pre,Post}Phase`
-// loads via `loadSnapshot(getMigrationFilePath(..., N, "schema"))`.
+// derive via `reconstructSnapshotFromMigrations(migrationsDir, migration.number)`.
 //
 // Migration 1 captures the state AFTER #1 (adds `permissions`, still has `roles`).
 // Migration 5 captures the state AFTER #5 (removes `roles`).
@@ -111,19 +111,27 @@ const snapshotFixtures = vi.hoisted(() => {
     permissions: { type: "string", required: false, array: true },
   });
 
+  const baseSnapshot =
+    (typesByMigration: Record<number, unknown>) => (migrationsDir: string, maxVersion?: number) => {
+      void migrationsDir;
+      const number = maxVersion ?? 0;
+      const types = typesByMigration[number];
+      if (!types) {
+        throw new Error(`No snapshot fixture configured for migration number: ${number}`);
+      }
+      return {
+        version: 1 as const,
+        namespace: "test-ns",
+        createdAt: new Date().toISOString(),
+        types,
+      };
+    };
+
   return {
-    "/test/migrations/0001/schema.json": {
-      version: 1 as const,
-      namespace: "test-ns",
-      createdAt: new Date().toISOString(),
-      types: { User: userAfterMigration1 },
-    },
-    "/test/migrations/0005/schema.json": {
-      version: 1 as const,
-      namespace: "test-ns",
-      createdAt: new Date().toISOString(),
-      types: { User: userAfterMigration5 },
-    },
+    reconstructSnapshotFromMigrations: baseSnapshot({
+      1: { User: userAfterMigration1 },
+      5: { User: userAfterMigration5 },
+    }),
   };
 });
 
@@ -134,13 +142,7 @@ vi.mock("@/cli/commands/tailordb/migrate/snapshot", async (importOriginal) => {
   return {
     ...original,
     assertValidMigrationFiles: vi.fn(),
-    loadSnapshot: vi.fn((filePath: string) => {
-      const fixture = (snapshotFixtures as Record<string, unknown>)[filePath];
-      if (!fixture) {
-        throw new Error(`No snapshot fixture configured for path: ${filePath}`);
-      }
-      return fixture;
-    }),
+    reconstructSnapshotFromMigrations: vi.fn(snapshotFixtures.reconstructSnapshotFromMigrations),
   };
 });
 
