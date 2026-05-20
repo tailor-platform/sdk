@@ -44,7 +44,6 @@ import {
   formatReportTable,
   isInfraFailure,
 } from "./report";
-import { formatSolveModelLabel } from "./solve-model";
 import { checkAuthStatus, solveProblem } from "./solve";
 import type { SolveResult } from "./solve";
 import { checkPodmanAvailability } from "./solver/container";
@@ -58,82 +57,36 @@ const challengeRoot = path.resolve(import.meta.dirname, "..");
 /**
  * Per-problem metadata read from `problems/<id>/meta.json`.
  *
- * Slim schema for the new core: no scoring weights, no apiCheck, no failure
- * categories. Pass/fail is binary per stage. `split` is preserved on the wire
- * for forward compatibility but is currently unused.
- *
- * Phase 2 micro-problems use a narrower schema (only `id`, `title`,
- * `designNote`, `sdkSurface`, `contextProfiles`, `hint`); legacy fields are
- * optional so the same loader handles both eras.
+ * `hint` is author-only — `PromptSafeMeta` (`solve.ts`) omits it from any
+ * value that reaches the agent prompt.
  */
 export type ProblemMeta = {
   id: string;
-  name?: string;
-  /** Phase 2 micro-problems: human-readable title. */
   title?: string;
-  /**
-   * Phase 2 micro-problems: free-form note from the problem author describing
-   * the affordance gap the problem is designed to exercise. Not read by the
-   * runner; preserved as documentation of authorial intent.
-   */
+  /** Free-form author note about the affordance gap the problem targets. */
   designNote?: string;
-  /** Phase 2 micro-problems: SDK surface area the problem targets. */
   sdkSurface?: string;
-  /**
-   * Author-only memo describing the affordance gap. The leading underscore
-   * and the `Omit<…, "_hintAuthorOnly">` constraint on `buildPrompt`
-   * (`solve.ts`) together prevent this field from being included in any
-   * prompt sent to the agent. Updating problems must keep this field out of
-   * `problem.md` text — that surface IS visible to the agent.
-   */
-  _hintAuthorOnly?: string;
-  difficulty?: "easy" | "medium" | "hard";
-  category?: string;
-  split?: string;
+  hint?: string;
   contextProfiles?: ContextProfile[];
   /**
-   * Optional list of older problem IDs that referred to the same logical
-   * task before a rename. Report aggregation can unify history across
-   * renames by following this chain. Off by default — analyze pass through
-   * `--unify-aliases` to opt in.
+   * Older problem IDs that referred to the same logical task before a
+   * rename. Report aggregation follows the chain when `--unify-aliases` is
+   * passed.
    */
   aliases?: string[];
-  files?: {
-    implement: string[];
-    scaffold: string[];
-  };
-  /**
-   * Optional extra CLI commands to run after `tailor-sdk generate` but
-   * before `tsc --noEmit`. Each entry runs in the workDir as a binary
-   * pass/fail stage; failure short-circuits subsequent stages. Targets
-   * problems that exercise CLI subcommands beyond `generate` (e.g.
-   * `tailor-sdk tailordb dump`, `tailor-sdk auth ...`).
-   */
-  verifyCommands?: string[];
 };
 
 function loadMeta(problemDir: string): ProblemMeta {
   const metaPath = path.join(problemDir, "meta.json");
   const content = fs.readFileSync(metaPath, "utf-8");
-  const raw = JSON.parse(content) as ProblemMeta & { hint?: string };
-  // Backwards compat: legacy `hint` field on meta.json is read as
-  // `_hintAuthorOnly` so old problems continue to load. The TS type drops
-  // `hint`, so downstream consumers cannot accidentally route it into a
-  // prompt. New problems should write `_hintAuthorOnly` directly.
-  if (raw.hint !== undefined && raw._hintAuthorOnly === undefined) {
-    raw._hintAuthorOnly = raw.hint;
-  }
-  delete raw.hint;
-  return raw;
+  return JSON.parse(content) as ProblemMeta;
 }
 
 /**
- * Derive a fallback `name` (everything after the `<id>-` prefix) from the
- * directory name. Used for Phase 2 micro-problems whose `meta.json` drops the
- * `name` field; `problemKey` and artifact paths still need a non-empty label.
+ * Derive the slug portion of a problem dir name (everything after `<id>-`).
+ * Used as the human-readable label in artifact paths and report tables.
  */
 export function deriveProblemName(meta: ProblemMeta, dirName: string): string {
-  if (meta.name) return meta.name;
   const prefix = `${meta.id}-`;
   return dirName.startsWith(prefix) ? dirName.slice(prefix.length) : dirName;
 }
@@ -157,31 +110,11 @@ type ParsedArgs = {
   contextProfile: ContextProfile;
   /**
    * Number of repeat solve attempts per (problem, effort, profile).
-   * Defaults to 1 (single-run, backwards compatible). When > 1 the runner
-   * loops the same task N times and aggregates variance into the new
-   * `iterations` field of `ProblemResult`.
+   * Number of iterations to run per (problem, effort, profile). Defaults to
+   * 5 in solve mode and 1 in verify mode. Every iteration runs unconditionally
+   * — there is no early-stop or auto-extend.
    */
   iterations: number;
-  /**
-   * True iff the user passed `--iterations` explicitly. When true the runner
-   * never auto-extends — the explicit value is honoured verbatim. When false
-   * (default), flaky middle-band results (passedCount in [1, count-1]) get an
-   * extra 2 iterations to disambiguate variance.
-   */
-  iterationsExplicit: boolean;
-  /**
-   * True when `--no-auto-extend` was passed. Suppresses the flaky-middle-band
-   * auto-extension even when iterations are at the default. Primarily a test
-   * affordance.
-   */
-  noAutoExtend: boolean;
-  /**
-   * True when `--no-early-stop` was passed. Suppresses the agreement-based
-   * early termination of the iteration loop, forcing every iteration to run.
-   * Useful for tests that need deterministic iteration counts or for variance
-   * audits where the full N samples are required.
-   */
-  noEarlyStop: boolean;
   /**
    * Optional git ref to `git worktree add` and `pnpm pack` instead of the
    * current working tree. Enables A/B benchmarking of SDK candidate branches
@@ -230,8 +163,6 @@ function parseArgs(): ParsedArgs {
   let concurrency = 1;
   let contextProfile: ContextProfile = "full-package";
   let iterations: number | undefined;
-  let noAutoExtend = false;
-  let noEarlyStop = false;
   let sdkBranch: string | undefined;
   let resume: string | undefined;
   let maxSeconds = 3600;
@@ -292,12 +223,6 @@ function parseArgs(): ParsedArgs {
         iterations = Number(requireArg(args, i, "--iterations"));
         i++;
         break;
-      case "--no-auto-extend":
-        noAutoExtend = true;
-        break;
-      case "--no-early-stop":
-        noEarlyStop = true;
-        break;
       case "--sdk-branch":
         sdkBranch = requireArg(args, i, "--sdk-branch");
         i++;
@@ -320,13 +245,7 @@ function parseArgs(): ParsedArgs {
     console.error("Error: --concurrency must be a positive integer");
     process.exit(1);
   }
-  // --iterations: default to 5 in solve mode (quality-first sampling means
-  // we run N=5 directly rather than relying on the legacy N=3 + auto-extend
-  // cadence). Verify modes keep N=1 for backward compat. Note:
-  // shouldEarlyStop / shouldAutoExtend remain gated on `iterations === 3` so
-  // they only kick in when a caller explicitly opts back into the legacy
-  // 3-cadence with `--iterations 3`.
-  const iterationsExplicit = iterations !== undefined;
+  // --iterations: default to 5 in solve mode, 1 in verify modes.
   if (iterations === undefined) {
     iterations = solve ? 5 : 1;
   }
@@ -350,9 +269,6 @@ function parseArgs(): ParsedArgs {
     concurrency: Math.trunc(concurrency),
     contextProfile,
     iterations,
-    iterationsExplicit,
-    noAutoExtend,
-    noEarlyStop,
     ...(sdkBranch ? { sdkBranch } : {}),
     ...(resume ? { resume } : {}),
     maxSeconds,
@@ -763,11 +679,10 @@ async function runProblem(
   const problemDir = path.join(challengeRoot, "problems", problemName);
   const meta = loadMeta(problemDir);
   const resolvedName = deriveProblemName(meta, problemName);
-  const resolvedDifficulty = meta.difficulty ?? "easy";
-  const resolvedCategory = meta.category ?? meta.sdkSurface ?? "micro";
+  const resolvedSurface = meta.sdkSurface ?? "micro";
 
   if (options.verbose) {
-    console.log(`\n--- Running problem: ${problemName} (${resolvedDifficulty}) ---`);
+    console.log(`\n--- Running problem: ${problemName} (${resolvedSurface}) ---`);
   }
 
   const isSolveMode = !!options.solve;
@@ -884,9 +799,7 @@ async function runProblem(
     return {
       problemId: meta.id,
       problemName: resolvedName,
-      difficulty: resolvedDifficulty,
-      category: resolvedCategory,
-      ...(meta.split !== undefined ? { split: meta.split } : {}),
+      sdkSurface: resolvedSurface,
       contextProfile: options.contextProfile,
       stages,
       passed: false,
@@ -906,7 +819,7 @@ async function runProblem(
   }
 
   // Run verification stages.
-  const rawStages = await verifyProblem(workDir, problemDir, meta, challengeRoot);
+  const rawStages = await verifyProblem(workDir, problemDir, challengeRoot);
   const stages = finalizeStages(rawStages);
   const passed = stages.every((s) => s.passed);
 
@@ -925,9 +838,7 @@ async function runProblem(
   return {
     problemId: meta.id,
     problemName: resolvedName,
-    difficulty: resolvedDifficulty,
-    category: resolvedCategory,
-    ...(meta.split !== undefined ? { split: meta.split } : {}),
+    sdkSurface: resolvedSurface,
     contextProfile: options.contextProfile,
     stages,
     passed,
@@ -1234,83 +1145,6 @@ export function emitFailVsSolutionDiff(
   }
 }
 
-/**
- * Decide whether to run additional iterations after the configured `iterations`
- * count has been exhausted. Returns true only for the high-variance middle band
- * (1 ≤ passedCount ≤ iterations-1) under the default iteration count when the
- * user neither pinned `--iterations` nor passed `--no-auto-extend`. Extracted
- * for unit testing the trigger conditions.
- */
-export type ShouldAutoExtendOptions = {
-  perIteration: ProblemResult[];
-  iterations: number;
-  iterationsExplicit: boolean;
-  noAutoExtend: boolean;
-};
-
-export function shouldAutoExtend(options: ShouldAutoExtendOptions): boolean {
-  const { perIteration, iterations, iterationsExplicit, noAutoExtend } = options;
-  if (noAutoExtend) return false;
-  if (iterationsExplicit) return false;
-  // Only auto-extend at the default 3-iteration cadence — explicit higher
-  // values already over-sample, and lower values would auto-extend to >N which
-  // changes semantics in surprising ways.
-  if (iterations !== 3) return false;
-  if (perIteration.length !== iterations) return false;
-  const passedCount = perIteration.filter((r) => r.passed).length;
-  // 0/3 and 3/3 are zero-variance: more iterations cannot improve the signal.
-  // 1/3 and 2/3 are the flaky middle band where two more iterations cheaply
-  // disambiguate "frequently flaky" from "rarely flaky".
-  return passedCount >= 1 && passedCount <= iterations - 1;
-}
-
-/**
- * Decide whether to stop the iteration loop early because the observed
- * sequence has already settled. Symmetric counterpart to
- * {@link shouldAutoExtend}; both gate on the same `iterations === 3`
- * default-cadence assumption and respect `iterationsExplicit` /
- * `noEarlyStop`.
- *
- * Two phases:
- * - `main`: applied inside the primary 0..iterations loop. Stops at n=2 when
- *   both observed iterations agree (0/2 or 2/2) — the 3rd iteration would
- *   only confirm what's already a unanimous outcome.
- * - `auto-extend`: applied during the +2 extension after the main loop hits a
- *   flaky 1/3 or 2/3. Stops at n=4 when the 4th iteration confirms the
- *   majority (3/4 or 1/4) — the 5th iteration cannot flip the majority.
- *   When the 4th iteration produces an even split (2/4) the loop continues
- *   so the 5th iteration breaks the tie.
- *
- * Extracted for unit testing the trigger conditions.
- */
-export type ShouldEarlyStopOptions = {
-  perIteration: ProblemResult[];
-  iterations: number;
-  iterationsExplicit: boolean;
-  noEarlyStop: boolean;
-  phase: "main" | "auto-extend";
-};
-
-export function shouldEarlyStop(options: ShouldEarlyStopOptions): boolean {
-  const { perIteration, iterations, iterationsExplicit, noEarlyStop, phase } = options;
-  if (noEarlyStop) return false;
-  if (iterationsExplicit) return false;
-  if (iterations !== 3) return false;
-  const passedCount = perIteration.filter((r) => r.passed).length;
-  if (phase === "main") {
-    // Need exactly 2 observations: n=1 is too thin a sample to short-circuit,
-    // n>=3 means the main loop has already finished its assigned iterations.
-    if (perIteration.length !== 2) return false;
-    return passedCount === 0 || passedCount === 2;
-  }
-  // auto-extend phase: the main loop produced 3 results in [1, 2] passed, then
-  // we added one extra (n=4). Stop when the 4th iteration confirms the
-  // majority of the original 3 (cumulative 3/4 or 1/4); continue at 2/4 so
-  // the 5th iteration can break the tie.
-  if (perIteration.length !== 4) return false;
-  return passedCount === 1 || passedCount === 3;
-}
-
 async function ensureAuthenticated(): Promise<void> {
   console.log("Checking codex auth...");
   const authCheck = await checkAuthStatus();
@@ -1393,9 +1227,6 @@ async function main(): Promise<void> {
     concurrency,
     contextProfile,
     iterations,
-    iterationsExplicit,
-    noAutoExtend,
-    noEarlyStop,
     sdkBranch,
     resume: resumeRunId,
     maxSeconds,
@@ -1407,13 +1238,13 @@ async function main(): Promise<void> {
     console.error("  tsx core/cli.ts --problem 001 --impl ./path/to/impl");
     console.error("  tsx core/cli.ts --problem 001 --use-solution");
     console.error(
-      "  tsx core/cli.ts --problem 001 [--problem 002 ...] --solve [--effort xhigh] [--context-profile types-only] [--iterations 5] [--max-seconds 3600] [--no-auto-extend] [--no-early-stop] [--sdk-branch <ref>] [--resume <runId>] [--include-archived]",
+      "  tsx core/cli.ts --problem 001 [--problem 002 ...] --solve [--effort xhigh] [--context-profile types-only] [--iterations 5] [--max-seconds 3600] [--sdk-branch <ref>] [--resume <runId>] [--include-archived]",
     );
     console.error(
       "  tsx core/cli.ts --all --use-solution [--clean] [--concurrency <n>] [--include-archived]",
     );
     console.error(
-      "  tsx core/cli.ts --all --solve [--effort xhigh] [--clean] [--concurrency <n>] [--context-profile types-only] [--iterations 5] [--max-seconds 3600] [--no-auto-extend] [--no-early-stop] [--sdk-branch <ref>] [--resume <runId>] [--include-archived]",
+      "  tsx core/cli.ts --all --solve [--effort xhigh] [--clean] [--concurrency <n>] [--context-profile types-only] [--iterations 5] [--max-seconds 3600] [--sdk-branch <ref>] [--resume <runId>] [--include-archived]",
     );
     console.error("  tsx core/cli.ts --all --impl-dir ./path/to/all-outputs");
     console.error(
@@ -1440,7 +1271,9 @@ async function main(): Promise<void> {
 
   const resultsDir = path.join(challengeRoot, "results");
   const verbose = concurrency === 1;
-  const solveModelLabel = solve ? formatSolveModelLabel(effort) : undefined;
+  // codex is pinned to gpt-5.5 (see core/solver/codex.ts), so the directory
+  // key only varies by reasoning effort.
+  const solveModelLabel = solve ? `codex-gpt-5.5-${effort}` : undefined;
 
   if (solve) {
     const podmanStatus = checkPodmanAvailability();
@@ -1624,62 +1457,6 @@ async function main(): Promise<void> {
     };
     for (let i = 0; i < iterations; i++) {
       await runOneIteration(i);
-      // Agreement-based early stop: when the first two iterations of the
-      // default N=3 cadence agree (0/2 or 2/2), the 3rd iteration only
-      // confirms a unanimous outcome. Skipping it reclaims ~25% of solve
-      // cost on stable_pass / stable_fail problems without changing the
-      // passRate the report ultimately records.
-      if (
-        shouldEarlyStop({
-          perIteration,
-          iterations,
-          iterationsExplicit,
-          noEarlyStop,
-          phase: "main",
-        })
-      ) {
-        if (verbose) {
-          console.log(
-            `  early-stop: ${perIteration.filter((r) => r.passed).length}/${perIteration.length} → skipping remaining iteration(s)`,
-          );
-        }
-        break;
-      }
-    }
-
-    // Flaky middle-band auto-extend: with the default N=3, a 1/3 or 2/3 outcome
-    // is the high-signal but high-noise zone. Run two more iterations to reach
-    // an N=5 sample so the passRate signal stabilises. Skip when the user set
-    // `--iterations` explicitly or passed `--no-auto-extend`.
-    if (shouldAutoExtend({ perIteration, iterations, iterationsExplicit, noAutoExtend })) {
-      const extra = 2;
-      if (verbose) {
-        console.log(
-          `  auto-extend: ${perIteration.filter((r) => r.passed).length}/${iterations} → running ${extra} more iteration(s)`,
-        );
-      }
-      for (let i = iterations; i < iterations + extra; i++) {
-        await runOneIteration(i);
-        // Mid-extension early stop: once n=4 confirms the original majority
-        // (cumulative 3/4 or 1/4), the 5th iteration cannot flip the
-        // majority. A 2/4 split keeps running so iteration 5 breaks the tie.
-        if (
-          shouldEarlyStop({
-            perIteration,
-            iterations,
-            iterationsExplicit,
-            noEarlyStop,
-            phase: "auto-extend",
-          })
-        ) {
-          if (verbose) {
-            console.log(
-              `  early-stop (auto-extend): ${perIteration.filter((r) => r.passed).length}/${perIteration.length} → skipping remaining iteration(s)`,
-            );
-          }
-          break;
-        }
-      }
     }
 
     // When the problem is partially passing (flaky), capture the file-system
@@ -1754,9 +1531,7 @@ async function main(): Promise<void> {
           results.push({
             problemId: meta.id,
             problemName: deriveProblemName(meta, task.problemName),
-            difficulty: meta.difficulty ?? "easy",
-            category: meta.category ?? meta.sdkSurface ?? "micro",
-            ...(meta.split !== undefined ? { split: meta.split } : {}),
+            sdkSurface: meta.sdkSurface ?? "micro",
             contextProfile,
             stages,
             passed: false,

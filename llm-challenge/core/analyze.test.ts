@@ -85,8 +85,7 @@ function makeResult(
   return {
     problemId,
     problemName: problemId,
-    difficulty: "easy",
-    category: "micro",
+    sdkSurface: "micro",
     stages: [{ stage: "tests", passed, output: passed ? "ok" : "fail" }],
     passed,
     ...extra,
@@ -509,8 +508,7 @@ describe("resolveActiveProfilePair", () => {
       results: Array.from({ length: 25 }, (_, i) => ({
         problemId: `m${String(i + 1).padStart(2, "0")}`,
         problemName: `m${String(i + 1).padStart(2, "0")}`,
-        difficulty: "easy",
-        category: "micro",
+        sdkSurface: "micro",
         stages: [],
         passed: true,
       })),
@@ -520,8 +518,7 @@ describe("resolveActiveProfilePair", () => {
         {
           problemId: "m18",
           problemName: "m18",
-          difficulty: "easy",
-          category: "micro",
+          sdkSurface: "micro",
           stages: [],
           passed: true,
         },

@@ -4,5 +4,5 @@
   "designNote": "missing_action_verb",
   "sdkSurface": "workflow",
   "contextProfiles": ["types-only", "full-package"],
-  "_hintAuthorOnly": "wait point は workflow と一緒に default export しない"
+  "hint": "wait point は workflow と一緒に default export しない"
 }

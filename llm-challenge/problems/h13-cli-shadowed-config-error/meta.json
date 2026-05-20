@@ -4,5 +4,5 @@
   "designNote": "error_message_opaque",
   "sdkSurface": "cli",
   "contextProfiles": ["types-only", "full-package"],
-  "_hintAuthorOnly": "loadConfig は default export を要求する。`export const config = ...` ではなく `export default ...` に直す"
+  "hint": "loadConfig は default export を要求する。`export const config = ...` ではなく `export default ...` に直す"
 }

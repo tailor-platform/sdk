@@ -61,14 +61,7 @@ export type IterationAggregate = {
 export type ProblemResult = {
   problemId: string;
   problemName: string;
-  difficulty: string;
-  category: string;
-  /**
-   * Split label inherited from meta.json. Kept on the wire for forward
-   * compatibility with the future micro-problem split rollout (Phase 2+),
-   * but currently unused by analytics.
-   */
-  split?: string;
+  sdkSurface: string;
   contextProfile?: string;
   stages: StageResult[];
   /**
@@ -219,7 +212,7 @@ function stdev(values: number[]): number {
  * Reduce N per-iteration `ProblemResult`s (same problem run N times) into a
  * single aggregate result. Caller is responsible for ensuring the inputs all
  * refer to the same `problemId`. The first iteration's metadata (stages,
- * difficulty, etc.) is preserved for table rendering; the multi-iteration
+ * sdkSurface, etc.) is preserved for table rendering; the multi-iteration
  * payload lives under the new `iterations` field.
  */
 export const ITERATION_METRIC_KEYS = ["turns", "readSdkDts", "readDocs", "bashRetries"] as const;
@@ -467,7 +460,7 @@ export function formatReportTable(report: ChallengeReport): string {
   lines.push("=".repeat(width));
   lines.push("");
 
-  const header = "Problem".padEnd(36) + "Difficulty".padEnd(12) + "Status".padEnd(12);
+  const header = "Problem".padEnd(36) + "Surface".padEnd(12) + "Status".padEnd(12);
   lines.push(header);
   lines.push("-".repeat(width));
 
@@ -475,7 +468,7 @@ export function formatReportTable(report: ChallengeReport): string {
     const infraFailed = isInfraFailure(r);
     const nameRaw = problemKey(r.problemId, r.problemName);
     const name = (nameRaw.length > 35 ? `${nameRaw.slice(0, 34)}…` : nameRaw).padEnd(36);
-    const diff = r.difficulty.padEnd(12);
+    const surface = r.sdkSurface.padEnd(12);
     let statusLabel = "FAIL";
     if (infraFailed) {
       statusLabel = "INFRA";
@@ -483,7 +476,7 @@ export function formatReportTable(report: ChallengeReport): string {
       statusLabel = "PASS";
     }
     const status = statusLabel.padEnd(12);
-    const line = `${name}${diff}${status}`;
+    const line = `${name}${surface}${status}`;
     lines.push(line);
 
     if (!infraFailed) {
@@ -576,9 +569,7 @@ export function formatReportTable(report: ChallengeReport): string {
   const validResults = report.results.filter((r) => !isInfraFailure(r));
   if (validResults.length > 0 && validResults.every(isPassed)) {
     lines.push("");
-    lines.push(
-      "WARNING: All problems passed -- consider increasing difficulty or adding harder problems",
-    );
+    lines.push("WARNING: All problems passed -- consider adding harder problems");
   }
 
   lines.push("=".repeat(width));

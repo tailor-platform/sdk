@@ -4,5 +4,5 @@
   "designNote": "missing_namespace",
   "sdkSurface": "executor-non-record-trigger",
   "contextProfiles": ["types-only", "full-package"],
-  "_hintAuthorOnly": "trigger は resolver instance を取る (string ではない)"
+  "hint": "trigger は resolver instance を取る (string ではない)"
 }

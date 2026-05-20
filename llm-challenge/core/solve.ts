@@ -64,10 +64,9 @@ function buildSystemPrompt(mode: "implement" | "fix" | "hybrid"): string {
 }
 
 /**
- * Derive the `implement` / `scaffold` file lists for Phase 2 micro-problems
- * that omit `meta.files`. Implementation files come from the solution tree;
- * scaffold files are the names that already exist in the work tree before the
- * solver runs. Falls back to empty lists if `solution/` is absent.
+ * Derive the `implement` / `scaffold` file lists from the reference solution.
+ * Implementation files come from the solution tree; scaffold files are the
+ * names that already exist in the work tree before the solver runs.
  */
 function deriveFilesFromSolution(
   problemDir: string,
@@ -83,11 +82,9 @@ function deriveFilesFromSolution(
   return { implement, scaffold };
 }
 
-// Compile-time guard: any prompt-building function takes a meta payload with
-// `_hintAuthorOnly` stripped, so a stray `meta._hintAuthorOnly` reference in
-// prompt construction is a type error. The runtime SKILL.md rule is reinforced
-// by this static check.
-export type PromptSafeMeta = Omit<ProblemMeta, "_hintAuthorOnly">;
+// Strips `hint` from any meta payload that reaches the prompt; a stray
+// `meta.hint` reference in prompt construction is a type error.
+export type PromptSafeMeta = Omit<ProblemMeta, "hint">;
 
 function buildPromptSections(
   problemDir: string,
@@ -102,7 +99,7 @@ function buildPromptSections(
 } {
   const problemMd = fs.readFileSync(path.join(problemDir, "problem.md"), "utf-8");
   const existingFiles = listFilesRecursive(workDir);
-  const files = meta.files ?? deriveFilesFromSolution(problemDir, workDir);
+  const files = deriveFilesFromSolution(problemDir, workDir);
   const scaffoldSet = new Set(files.scaffold);
   const filesToFix = files.implement.filter((f) => scaffoldSet.has(f));
   const filesToCreate = files.implement.filter((f) => !scaffoldSet.has(f));

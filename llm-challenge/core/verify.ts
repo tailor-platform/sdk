@@ -3,8 +3,6 @@ import { exec } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
-import type { ProblemMeta } from "./cli";
-
 const execAsync = promisify(exec);
 
 function filterNpmWarnings(output: string): string {
@@ -21,7 +19,7 @@ export type TestDetail = {
   failureMessage?: string;
 };
 
-export type ChallengeStage = "generate" | "verify-commands" | "typecheck" | "tests";
+export type ChallengeStage = "generate" | "typecheck" | "tests";
 
 export type StageInput = {
   stage: ChallengeStage;
@@ -157,14 +155,13 @@ function earlyReturn(generateStage: StageInput, skipReason: string): StageInput[
 
 /**
  * Run the three verification stages on a work directory.
- * Returns early only if generate fails; typecheck failure does not skip tests.
+ * Each stage short-circuits the next: generate → typecheck → tests.
  *
  * Binary pass/fail per stage — no partial credit.
  */
 export async function verifyProblem(
   workDir: string,
   problemDir: string,
-  meta: ProblemMeta,
   challengeRoot: string,
 ): Promise<StageInput[]> {
   // Stage 1: generate
@@ -185,23 +182,6 @@ export async function verifyProblem(
       "generate failed",
     );
   }
-  // Verify all required implementation files exist even when generate succeeds.
-  // This catches submissions that delete or rename required target files.
-  // Phase 2 micro-problems omit `meta.files`; rely on the test stage to detect
-  // missing output instead.
-  const required = meta.files?.implement ?? [];
-  const missingFiles = required.filter((f) => !fs.existsSync(path.join(workDir, f)));
-  if (missingFiles.length > 0) {
-    return earlyReturn(
-      {
-        stage: "generate",
-        passed: false,
-        output: `Generate succeeded but required files missing: ${missingFiles.join(", ")}`,
-        durationMs: generateResult.durationMs,
-      },
-      "missing files",
-    );
-  }
 
   const generateStage: StageInput = {
     stage: "generate",
@@ -209,34 +189,6 @@ export async function verifyProblem(
     output: generateResult.output,
     durationMs: generateResult.durationMs,
   };
-
-  // Optional Stage 1.5: extra CLI commands declared by meta.verifyCommands.
-  // Aggregated into a single `verify-commands` stage so the binary pass/fail
-  // surface is unchanged. First failure surfaces its output verbatim and
-  // short-circuits remaining commands; tests and typecheck still run so
-  // operators see what other stages would have said.
-  let verifyCommandsStage: StageInput | undefined;
-  const extraCommands = meta.verifyCommands ?? [];
-  if (extraCommands.length > 0) {
-    let combinedOutput = "";
-    let allPassed = true;
-    let totalMs = 0;
-    for (const command of extraCommands) {
-      const r = await runCommand(command, workDir);
-      combinedOutput += `$ ${command}\n${r.output}\n`;
-      totalMs += r.durationMs;
-      if (!r.success) {
-        allPassed = false;
-        break;
-      }
-    }
-    verifyCommandsStage = {
-      stage: "verify-commands",
-      passed: allPassed,
-      output: combinedOutput,
-      durationMs: totalMs,
-    };
-  }
 
   // Stage 2: typecheck
   const typecheckResult = await runCommand("npx tsc --noEmit", workDir);
@@ -246,8 +198,15 @@ export async function verifyProblem(
     output: typecheckResult.output,
     durationMs: typecheckResult.durationMs,
   };
+  if (!typecheckResult.success) {
+    return [
+      generateStage,
+      typecheckStage,
+      { stage: "tests", passed: false, output: "Skipped (typecheck failed)" },
+    ];
+  }
 
-  // Stage 3: tests (run even if typecheck failed)
+  // Stage 3: tests
   // In solve mode workDir is a per-run tmpdir; export it so the test helper's
   // createWorkDirContext() reads the freshly-solved tree instead of a stale
   // problems/<id>/work left over from earlier runs.
@@ -277,8 +236,5 @@ export async function verifyProblem(
     testStage.passed = parsed.total > 0 && parsed.passed === parsed.total;
   }
 
-  const stages: StageInput[] = [generateStage];
-  if (verifyCommandsStage) stages.push(verifyCommandsStage);
-  stages.push(typecheckStage, testStage);
-  return stages;
+  return [generateStage, typecheckStage, testStage];
 }

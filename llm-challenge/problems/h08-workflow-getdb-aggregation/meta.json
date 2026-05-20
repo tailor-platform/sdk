@@ -4,5 +4,5 @@
   "designNote": "implicit_assumption",
   "sdkSurface": "workflow",
   "contextProfiles": ["types-only", "full-package"],
-  "_hintAuthorOnly": "kyselyTypePlugin を tailor.config.ts に配線してから generated/tailordb から getDB を import する"
+  "hint": "kyselyTypePlugin を tailor.config.ts に配線してから generated/tailordb から getDB を import する"
 }

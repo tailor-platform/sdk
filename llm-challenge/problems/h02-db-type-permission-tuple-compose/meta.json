@@ -4,5 +4,5 @@
   "designNote": "type_too_strict",
   "sdkSurface": "db-type",
   "contextProfiles": ["types-only", "full-package"],
-  "_hintAuthorOnly": "conditions は tuple の配列。update では record ではなく newRecord/oldRecord を使う"
+  "hint": "conditions は tuple の配列。update では record ではなく newRecord/oldRecord を使う"
 }

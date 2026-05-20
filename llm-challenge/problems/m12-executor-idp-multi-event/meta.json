@@ -4,5 +4,5 @@
   "designNote": "consolidation_candidate",
   "sdkSurface": "executor-non-record-trigger",
   "contextProfiles": ["types-only", "full-package"],
-  "_hintAuthorOnly": "record と同じ統合パターンが idp/auth にも存在"
+  "hint": "record と同じ統合パターンが idp/auth にも存在"
 }

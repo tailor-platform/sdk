@@ -10,27 +10,30 @@ describe("buildPrompt", () => {
   function makeFixture(opts: {
     problem: string;
     scaffoldFiles: Record<string, string>;
-    scaffold: string[];
     implement: string[];
   }): { problemDir: string; workDir: string; meta: Parameters<typeof buildPrompt>[1] } {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "llm-buildprompt-"));
     tmpDirs.push(root);
     const problemDir = path.join(root, "problem");
     const workDir = path.join(root, "work");
+    const solutionDir = path.join(problemDir, "solution");
     fs.mkdirSync(problemDir, { recursive: true });
     fs.mkdirSync(workDir, { recursive: true });
+    fs.mkdirSync(solutionDir, { recursive: true });
     fs.writeFileSync(path.join(problemDir, "problem.md"), opts.problem);
     for (const [rel, body] of Object.entries(opts.scaffoldFiles)) {
       const full = path.join(workDir, rel);
       fs.mkdirSync(path.dirname(full), { recursive: true });
       fs.writeFileSync(full, body);
     }
+    for (const rel of opts.implement) {
+      const full = path.join(solutionDir, rel);
+      fs.mkdirSync(path.dirname(full), { recursive: true });
+      fs.writeFileSync(full, "// solution\n");
+    }
     const meta = {
       id: "999",
-      name: "fixture",
-      difficulty: "easy",
-      category: "api-design",
-      files: { implement: opts.implement, scaffold: opts.scaffold },
+      sdkSurface: "api-design",
     } as Parameters<typeof buildPrompt>[1];
     return { problemDir, workDir, meta };
   }
@@ -45,7 +48,6 @@ describe("buildPrompt", () => {
     const { problemDir, workDir, meta } = makeFixture({
       problem: "Build the thing.",
       scaffoldFiles: { "package.json": "{}\n" },
-      scaffold: [],
       implement: ["resolvers/a.ts"],
     });
 
@@ -70,7 +72,6 @@ describe("buildPrompt", () => {
     const { problemDir, workDir, meta } = makeFixture({
       problem: "Fix the broken resolver.",
       scaffoldFiles: { "resolvers/a.ts": "// broken\n" },
-      scaffold: ["resolvers/a.ts"],
       implement: ["resolvers/a.ts"],
     });
 
@@ -93,7 +94,6 @@ describe("buildPrompt", () => {
     const { problemDir, workDir, meta } = makeFixture({
       problem: "Fix one resolver and add another.",
       scaffoldFiles: { "resolvers/a.ts": "// broken\n" },
-      scaffold: ["resolvers/a.ts"],
       implement: ["resolvers/a.ts", "resolvers/b.ts"],
     });
 

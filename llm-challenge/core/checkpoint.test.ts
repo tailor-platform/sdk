@@ -15,8 +15,7 @@ import type { ProblemResult } from "./report";
 const makeResult = (problemId: string, passed: boolean, infra = false): ProblemResult => ({
   problemId,
   problemName: problemId,
-  difficulty: "easy",
-  category: "micro",
+  sdkSurface: "micro",
   contextProfile: "full-package",
   stages: [],
   passed,

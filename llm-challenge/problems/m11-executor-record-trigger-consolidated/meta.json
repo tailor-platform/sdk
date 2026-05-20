@@ -4,5 +4,5 @@
   "designNote": "consolidation_candidate",
   "sdkSurface": "executor-record-trigger",
   "contextProfiles": ["types-only", "full-package"],
-  "_hintAuthorOnly": "2 つの recordCreatedTrigger/recordUpdatedTrigger を書かない"
+  "hint": "2 つの recordCreatedTrigger/recordUpdatedTrigger を書かない"
 }

@@ -50,8 +50,7 @@ function makeProblem(
   return {
     problemId: id,
     problemName: id,
-    difficulty: "easy",
-    category: "micro",
+    sdkSurface: "micro",
     stages: [],
     passed: options.passed ?? true,
     contextProfile: "types-only",

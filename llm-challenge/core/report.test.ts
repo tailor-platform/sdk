@@ -37,8 +37,7 @@ function makeProblemResult(overrides: Partial<ProblemResult> = {}): ProblemResul
   return {
     problemId: "999",
     problemName: "fixture",
-    difficulty: "easy",
-    category: "api-design",
+    sdkSurface: "api-design",
     stages: [],
     passed: false,
     ...overrides,
@@ -680,8 +679,7 @@ describe("formatReportTable (iterations)", () => {
     const result: ProblemResult = {
       problemId: "m01",
       problemName: "fixture",
-      difficulty: "easy",
-      category: "micro",
+      sdkSurface: "micro",
       stages: [passing],
       passed: true,
       iterations: {
@@ -727,8 +725,7 @@ describe("formatReportTable (iterations)", () => {
       {
         problemId: "m01",
         problemName: "fixture",
-        difficulty: "easy",
-        category: "micro",
+        sdkSurface: "micro",
         stages: [passing],
         passed: true,
       },

@@ -17,7 +17,7 @@ Read `llm-challenge/README.md` for the full command surface and report shape.
 
 ## Core Rule
 
-When AI fails a challenge, **improve the SDK** (JSDoc, error messages, types, CLAUDE.md) — NEVER add hints to `problem.md`. The `_hintAuthorOnly` field on `meta.json` is an author-only memo and MUST NOT be referenced from `core/solve.ts`; the `PromptSafeMeta = Omit<ProblemMeta, "_hintAuthorOnly">` constraint on `buildPrompt()` enforces this at compile time.
+When AI fails a challenge, **improve the SDK** (JSDoc, error messages, types, CLAUDE.md) — NEVER add hints to `problem.md`. The `hint` field on `meta.json` is an author-only memo; `PromptSafeMeta = Omit<ProblemMeta, "hint">` on `buildPrompt()` keeps it out of the agent's prompt.
 
 ## Prerequisites
 
@@ -48,7 +48,7 @@ Structure: `problems/<id>-<slug>/` with `meta.json`, `problem.md`, `scaffold/`, 
   "designNote": "implicit_assumption",
   "sdkSurface": "db-field",
   "contextProfiles": ["types-only", "full-package"],
-  "_hintAuthorOnly": "db.string() is required by default; chain .unique()."
+  "hint": "db.string() is required by default; chain .unique()."
 }
 ```
 
@@ -56,9 +56,8 @@ Structure: `problems/<id>-<slug>/` with `meta.json`, `problem.md`, `scaffold/`, 
 - `designNote`: free-form author note about the affordance gap the problem exercises. Documentation only; the runner does not read it.
 - `sdkSurface`: closed enum — `db-field`, `db-type`, `resolver`, `executor-record-trigger`, `executor-non-record-trigger`, `executor`, `workflow`, `config`, `plugin`, `auth-idp`, `cli-runtime`.
 - `contextProfiles`: subset of `["types-only", "full-package"]`.
-- `_hintAuthorOnly`: optional one-line author memo. NEVER read by the runner — kept in `meta.json` purely as documentation of authorial intent. The leading underscore signals "do not surface" to both future authors and the type system (`PromptSafeMeta` omits it). Legacy `hint` field is read as a fallback so older problems still load.
+- `hint`: optional one-line author memo. NEVER read by the runner. `PromptSafeMeta` (`solve.ts`) structurally omits it from anything that reaches the agent prompt.
 - `aliases`: optional list of older problem IDs that were renamed to this one. Off-default for trend/diff aggregation; pass `--unify-aliases` to follow.
-- `verifyCommands`: optional shell commands to run after `tailor-sdk generate` but before `tsc --noEmit`, exposed as a `verify-commands` stage. Use to evaluate CLI subcommand operation (e.g. `node packages/sdk/dist/cli/index.mjs tailordb migration generate --dry-run`). Binary pass/fail per command; first failure short-circuits remaining commands but typecheck/tests still run.
 
 **problem.md rules**:
 

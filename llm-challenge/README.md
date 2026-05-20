@@ -86,15 +86,13 @@ pnpm challenge:analyze --trend --context-profile types-only
 - `--context-profile <types-only|full-package>` — what slice of the SDK is exposed inside the work tree. `types-only` is the API-design baseline; `full-package` ships the whole tarball.
 - `--concurrency <n>` — parallel problems (default `1`). The ChatGPT subscription enforces a per-user rate budget, so raising this above 1 is only useful when running against a higher tier or an independent account.
 - `--iterations <n>` — repeat each `(problem, effort, profile)` task N times for variance bounds (default: `5` in solve mode, `1` in verify mode). When N > 1 the report's `results[].iterations` block carries pass rate and median±stdev for the behavioural metrics.
-- `--no-early-stop` — disable the agreement-based early termination of the iteration loop. Only active when the run uses the legacy `--iterations 3` cadence; the N=5 default samples every iteration directly.
-- `--no-auto-extend` — suppress the flaky-middle-band auto-extension. Only active under `--iterations 3`.
 - `--sdk-branch <ref>` — pack the SDK from a git ref instead of the current working tree. Spawns a detached `git worktree`, builds the SDK there, and `pnpm pack`s the result. Requires `--solve`.
 - `--clean` — remove work directories after the run.
 - `--include-archived` — include problems under `problems/archived/` in the run. Off by default; use when re-evaluating a graduated problem after an SDK change.
 
 ## How Verification Works
 
-Each problem runs through a three-stage pipeline. If a stage fails, later stages still execute so the report shows independent signal per stage.
+Each problem runs through a three-stage pipeline. A failing stage short-circuits the next: `generate` failure skips typecheck and tests; `typecheck` failure skips tests.
 
 | Stage         | What it does                                            |
 | ------------- | ------------------------------------------------------- |
@@ -117,6 +115,7 @@ When `--solve` runs, codex is invoked with `exec --json` and every `item.complet
 - `readSdkDts` — `Read` hits on `node_modules/@tailor-platform/sdk/**/*.d.ts`.
 - `readDocs` — `Read` hits on `docs/` or `README*`.
 - `bashRetries` — `Bash` invocations of `tsc` / `vitest` / `tailor-sdk generate` / `pnpm test` (loop detector).
+- `canonicalImportRatio` — fraction of `@tailor-platform/*` imports in the final work tree that use the canonical sub-path. Computed by [`core/metrics-canonicalness.ts`](core/metrics-canonicalness.ts) by scanning all `.ts`/`.tsx` files. Counts paths under `@tailor-platform/sdk/` (excluding `dist/`/`src/` internal reaches) as canonical, and flags invented peer packages (e.g. `@tailor-platform/kysely-types`) or deep-path leaks as non-canonical. `1.0` means every SDK import goes through the public surface; lower values surface hallucinated paths.
 
 Aggregated min/median/max/mean across the run land in `analytics.metricsSummary` of the report.
 
@@ -156,8 +155,6 @@ Run the diff alone against two existing reports (no new solves):
 pnpm challenge:analyze --diff path/to/baseline.json path/to/candidate.json [--json]
 ```
 
-As a working manual interpretation example, an acceptable improvement is one where `passRate` rises and the per-problem `metricsStdev.turns` stays below `median × 0.3` — i.e., the change is large relative to inter-iteration noise. **This threshold is a guideline for manual review; it is not enforced by the harness.**
-
 Forward flags (`--all`, `--problem <id>`, `--effort`, `--context-profile`, `--concurrency`, `--max-seconds`, `--clean`) are passed through to both child runs by `pnpm challenge:experiment` after stripping the reserved flags it owns (`--solve`, `--iterations`, `--sdk-branch`, `--problems`). When `--problems <ids>` is set, the driver expands it into multiple `--problem <id>` arguments on both child invocations.
 
 ## Problem Structure
@@ -184,11 +181,11 @@ problems/
   "designNote": "implicit_assumption",
   "sdkSurface": "db-field",
   "contextProfiles": ["types-only", "full-package"],
-  "_hintAuthorOnly": "db.string() is required by default; chain .unique()."
+  "hint": "db.string() is required by default; chain .unique()."
 }
 ```
 
-`designNote` is a free-form author note about the affordance gap the problem exercises; it is documentation only and is not read by the runner. `_hintAuthorOnly` is enforced by the `PromptSafeMeta = Omit<ProblemMeta, "_hintAuthorOnly">` type constraint on `buildPrompt()` — the field cannot leak into the prompt the agent sees.
+`designNote` is a free-form author note about the affordance gap the problem exercises; it is documentation only and is not read by the runner. `hint` is author-only — the `PromptSafeMeta = Omit<ProblemMeta, "hint">` type constraint on `buildPrompt()` keeps it out of the agent's prompt.
 
 Scaffold resolution is a four-layer overlay (later layers shadow earlier ones at file granularity):
 

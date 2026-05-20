@@ -4,5 +4,5 @@
   "designNote": "implicit_assumption",
   "sdkSurface": "db-type",
   "contextProfiles": ["types-only", "full-package"],
-  "_hintAuthorOnly": "update hook の value は T | null。null を受けたら fallback を返す"
+  "hint": "update hook の value は T | null。null を受けたら fallback を返す"
 }

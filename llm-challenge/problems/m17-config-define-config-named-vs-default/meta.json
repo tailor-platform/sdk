@@ -4,5 +4,5 @@
   "designNote": "naming_bias",
   "sdkSurface": "config",
   "contextProfiles": ["types-only", "full-package"],
-  "_hintAuthorOnly": "plain object はだめ、defineConfig(...) でラップ"
+  "hint": "plain object はだめ、defineConfig(...) でラップ"
 }

@@ -5,7 +5,6 @@ import { problemKey, requireArg, sanitizeForFilename } from "../shared/helpers";
 import { READ_TARGET_CLASSES, type ReadTargetClass } from "./metrics";
 import { ITERATION_METRIC_KEYS, type IterationMetricKey } from "./report";
 import type { ChallengeReport, ProblemResult } from "./report";
-import { parseSolveModelLabel } from "./solve-model";
 
 const challengeRoot = path.resolve(import.meta.dirname, "..");
 
@@ -87,9 +86,8 @@ function getGroupKey(report: ChallengeReport): GroupKey {
       contextProfile: report.contextProfile || "unknown",
     };
   }
-  const { model } = parseSolveModelLabel(report.model);
   return {
-    model,
+    model: report.model ?? "",
     contextProfile: report.contextProfile || "unknown",
   };
 }
@@ -798,10 +796,7 @@ export function resolveActiveProfilePair(reports: ChallengeReport[]): ProfilePai
 function deriveReportPath(report: ChallengeReport): string {
   const profile = report.contextProfile ?? "unknown";
   const baseLabel = report.model ?? "solution-verify";
-  // Mirror cli.ts:getRunResultsDir, which sanitizeForFilename's the model
-  // label (the `oss:` prefix written by formatSolveModelLabel becomes
-  // `oss-` after `:`-to-`-` replacement). Keeping the two paths in sync
-  // here lets profile-diff resolve its A/B sources correctly.
+  // Mirror cli.ts:getRunResultsDir so profile-diff resolves to the same path.
   const dir = sanitizeForFilename(`${baseLabel}-${profile}`);
   const version = report.sdkVersion ?? "unknown";
   const ts = report.timestamp.replace(/:/g, "-").slice(0, 19);

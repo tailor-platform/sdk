@@ -11,8 +11,6 @@ import {
   emitIterDiff,
   filterExcludedFromDiff,
   packSdkFromRef,
-  shouldAutoExtend,
-  shouldEarlyStop,
 } from "./cli";
 import type { ProblemResult, StageResult } from "./report";
 
@@ -87,11 +85,7 @@ describe("applyScaffoldLayers", () => {
 });
 
 describe("deriveProblemName", () => {
-  it("returns meta.name when present", () => {
-    expect(deriveProblemName({ id: "m01", name: "explicit" }, "m01-something")).toBe("explicit");
-  });
-
-  it("strips the `<id>-` prefix from the directory name when meta.name is missing", () => {
+  it("strips the `<id>-` prefix from the directory name", () => {
     expect(deriveProblemName({ id: "m01" }, "m01-db-field-unique-required")).toBe(
       "db-field-unique-required",
     );
@@ -173,8 +167,7 @@ describe("emitIterDiff", () => {
     const result: ProblemResult = {
       problemId: "m05-db-type-hooks-create",
       problemName: "db-type-hooks-create",
-      difficulty: "easy",
-      category: "micro",
+      sdkSurface: "micro",
       stages: [{ stage: "tests", passed, output: passed ? "ok" : "fail" }],
       passed,
       artifacts: { directory: artifactDir },
@@ -276,8 +269,7 @@ describe("emitIterDiff", () => {
     const passingNoWork: ProblemResult = {
       problemId: "m05",
       problemName: "m05",
-      difficulty: "easy",
-      category: "micro",
+      sdkSurface: "micro",
       stages: [{ stage: "tests", passed: true, output: "ok" }],
       passed: true,
       artifacts: { directory: path.join(tempDir, "iter-nowork") },
@@ -389,8 +381,7 @@ describe("emitFailVsSolutionDiff", () => {
     return {
       problemId: "m24-cli-retry-loop-detection",
       problemName: "cli-retry-loop-detection",
-      difficulty: "hard",
-      category: "micro",
+      sdkSurface: "micro",
       stages: [{ stage: "tests", passed, output: passed ? "ok" : "fail" }],
       passed,
       artifacts: { directory: artifactDir },
@@ -583,8 +574,7 @@ describe("emitFailVsSolutionDiff", () => {
     const iter: ProblemResult = {
       problemId: "m05-db-type-hooks-create",
       problemName: "db-type-hooks-create",
-      difficulty: "easy",
-      category: "micro",
+      sdkSurface: "micro",
       stages: [{ stage: "tests", passed: false, output: "fail" }],
       passed: false,
       artifacts: { directory: iterDir },
@@ -657,265 +647,6 @@ describe("emitFailVsSolutionDiff", () => {
     for (const name of after) {
       expect(before.has(name)).toBe(true);
     }
-  });
-});
-
-// T4: auto-extend only fires under the default 3-iteration cadence for the
-// flaky middle band, and only when the user did not pin --iterations or pass
-// --no-auto-extend. The matrix below covers every passedByIteration shape and
-// every flag combination so future regressions are caught at the trigger level.
-describe("shouldAutoExtend", () => {
-  function fakeIter(passed: boolean): ProblemResult {
-    return {
-      problemId: "m05",
-      problemName: "fixture",
-      difficulty: "easy",
-      category: "micro",
-      stages: [{ stage: "tests", passed, output: passed ? "ok" : "fail" }],
-      passed,
-    };
-  }
-  const make = (passedFlags: boolean[]): ProblemResult[] => passedFlags.map(fakeIter);
-
-  it("returns false for the zero-variance cases 0/3 and 3/3", () => {
-    expect(
-      shouldAutoExtend({
-        perIteration: make([false, false, false]),
-        iterations: 3,
-        iterationsExplicit: false,
-        noAutoExtend: false,
-      }),
-    ).toBe(false);
-    expect(
-      shouldAutoExtend({
-        perIteration: make([true, true, true]),
-        iterations: 3,
-        iterationsExplicit: false,
-        noAutoExtend: false,
-      }),
-    ).toBe(false);
-  });
-
-  it("returns true for the flaky middle band 1/3 and 2/3", () => {
-    expect(
-      shouldAutoExtend({
-        perIteration: make([true, false, false]),
-        iterations: 3,
-        iterationsExplicit: false,
-        noAutoExtend: false,
-      }),
-    ).toBe(true);
-    expect(
-      shouldAutoExtend({
-        perIteration: make([true, true, false]),
-        iterations: 3,
-        iterationsExplicit: false,
-        noAutoExtend: false,
-      }),
-    ).toBe(true);
-  });
-
-  it("returns false when --iterations was set explicitly even for a flaky outcome", () => {
-    expect(
-      shouldAutoExtend({
-        perIteration: make([true, false, false]),
-        iterations: 3,
-        iterationsExplicit: true,
-        noAutoExtend: false,
-      }),
-    ).toBe(false);
-  });
-
-  it("returns false when --no-auto-extend is set even for a flaky outcome", () => {
-    expect(
-      shouldAutoExtend({
-        perIteration: make([true, true, false]),
-        iterations: 3,
-        iterationsExplicit: false,
-        noAutoExtend: true,
-      }),
-    ).toBe(false);
-  });
-
-  it("returns false when iterations is not the default 3 (e.g. 5)", () => {
-    // Even though 2/5 is technically a middle-band ratio, auto-extend is
-    // scoped to the default 3 to avoid surprise N=7 runs.
-    expect(
-      shouldAutoExtend({
-        perIteration: make([true, true, false, false, false]),
-        iterations: 5,
-        iterationsExplicit: false,
-        noAutoExtend: false,
-      }),
-    ).toBe(false);
-  });
-});
-
-// Symmetric counterpart to shouldAutoExtend. Two phases:
-//  - main: stop at n=2 when both iterations agree (the 3rd would be redundant)
-//  - auto-extend: stop at n=4 when the 4th confirms majority (3/4 or 1/4);
-//    a 2/4 split keeps the 5th iteration to break the tie.
-describe("shouldEarlyStop", () => {
-  function fakeIter(passed: boolean): ProblemResult {
-    return {
-      problemId: "m05",
-      problemName: "fixture",
-      difficulty: "easy",
-      category: "micro",
-      stages: [{ stage: "tests", passed, output: passed ? "ok" : "fail" }],
-      passed,
-    };
-  }
-  const make = (passedFlags: boolean[]): ProblemResult[] => passedFlags.map(fakeIter);
-
-  describe("main phase", () => {
-    it("returns true when the first two iterations both pass", () => {
-      expect(
-        shouldEarlyStop({
-          perIteration: make([true, true]),
-          iterations: 3,
-          iterationsExplicit: false,
-          noEarlyStop: false,
-          phase: "main",
-        }),
-      ).toBe(true);
-    });
-
-    it("returns true when the first two iterations both fail", () => {
-      expect(
-        shouldEarlyStop({
-          perIteration: make([false, false]),
-          iterations: 3,
-          iterationsExplicit: false,
-          noEarlyStop: false,
-          phase: "main",
-        }),
-      ).toBe(true);
-    });
-
-    it("returns false when the first two iterations disagree", () => {
-      expect(
-        shouldEarlyStop({
-          perIteration: make([true, false]),
-          iterations: 3,
-          iterationsExplicit: false,
-          noEarlyStop: false,
-          phase: "main",
-        }),
-      ).toBe(false);
-    });
-
-    it("returns false at n=1 (sample too thin to short-circuit)", () => {
-      expect(
-        shouldEarlyStop({
-          perIteration: make([true]),
-          iterations: 3,
-          iterationsExplicit: false,
-          noEarlyStop: false,
-          phase: "main",
-        }),
-      ).toBe(false);
-    });
-
-    it("returns false at n=3 (main loop already exhausted)", () => {
-      expect(
-        shouldEarlyStop({
-          perIteration: make([true, true, true]),
-          iterations: 3,
-          iterationsExplicit: false,
-          noEarlyStop: false,
-          phase: "main",
-        }),
-      ).toBe(false);
-    });
-  });
-
-  describe("auto-extend phase", () => {
-    it("returns true at n=4 with cumulative 3/4 (original 2/3 confirmed by pass)", () => {
-      expect(
-        shouldEarlyStop({
-          perIteration: make([true, true, false, true]),
-          iterations: 3,
-          iterationsExplicit: false,
-          noEarlyStop: false,
-          phase: "auto-extend",
-        }),
-      ).toBe(true);
-    });
-
-    it("returns true at n=4 with cumulative 1/4 (original 1/3 confirmed by fail)", () => {
-      expect(
-        shouldEarlyStop({
-          perIteration: make([true, false, false, false]),
-          iterations: 3,
-          iterationsExplicit: false,
-          noEarlyStop: false,
-          phase: "auto-extend",
-        }),
-      ).toBe(true);
-    });
-
-    it("returns false at n=4 with cumulative 2/4 (split — keep iteration 5)", () => {
-      expect(
-        shouldEarlyStop({
-          perIteration: make([true, true, false, false]),
-          iterations: 3,
-          iterationsExplicit: false,
-          noEarlyStop: false,
-          phase: "auto-extend",
-        }),
-      ).toBe(false);
-    });
-
-    it("returns false at n=3 (extension hasn't produced a sample yet)", () => {
-      expect(
-        shouldEarlyStop({
-          perIteration: make([true, true, false]),
-          iterations: 3,
-          iterationsExplicit: false,
-          noEarlyStop: false,
-          phase: "auto-extend",
-        }),
-      ).toBe(false);
-    });
-  });
-
-  describe("flag guards", () => {
-    it("returns false when --iterations was set explicitly", () => {
-      expect(
-        shouldEarlyStop({
-          perIteration: make([true, true]),
-          iterations: 3,
-          iterationsExplicit: true,
-          noEarlyStop: false,
-          phase: "main",
-        }),
-      ).toBe(false);
-    });
-
-    it("returns false when --no-early-stop is set", () => {
-      expect(
-        shouldEarlyStop({
-          perIteration: make([true, true]),
-          iterations: 3,
-          iterationsExplicit: false,
-          noEarlyStop: true,
-          phase: "main",
-        }),
-      ).toBe(false);
-    });
-
-    it("returns false when iterations is not the default 3 (e.g. 5)", () => {
-      expect(
-        shouldEarlyStop({
-          perIteration: make([true, true]),
-          iterations: 5,
-          iterationsExplicit: false,
-          noEarlyStop: false,
-          phase: "main",
-        }),
-      ).toBe(false);
-    });
   });
 });
 
