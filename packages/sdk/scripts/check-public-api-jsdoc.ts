@@ -41,6 +41,12 @@ if (parsed.error) {
   process.exit(1);
 }
 const config = ts.parseJsonConfigFileContent(parsed.config, ts.sys, sdkRoot);
+if (config.errors.length > 0) {
+  for (const err of config.errors) {
+    console.error(ts.flattenDiagnosticMessageText(err.messageText, "\n"));
+  }
+  process.exit(1);
+}
 const failures = findUndocumentedSymbols(entryPoints(), config.options, sdkRoot);
 
 if (failures.length === 0) {

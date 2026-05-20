@@ -2,9 +2,6 @@
   {
     "pkg": "@tailor-platform/sdk",
     "filesSampled": 158,
-    "eslintOnly": [],
-    "oxlintOnly": [],
-    "severityMismatch": [],
     "oxlintActiveRules": [
       "constructor-super",
       "for-direction",
@@ -125,9 +122,6 @@
   {
     "pkg": "@tailor-platform/create-sdk",
     "filesSampled": 2,
-    "eslintOnly": [],
-    "oxlintOnly": [],
-    "severityMismatch": [],
     "oxlintActiveRules": [
       "constructor-super",
       "for-direction",
@@ -274,10 +268,7 @@
   },
   {
     "pkg": "@tailor-platform/sdk-codemod",
-    "filesSampled": 4,
-    "eslintOnly": [],
-    "oxlintOnly": [],
-    "severityMismatch": [],
+    "filesSampled": 40,
     "oxlintActiveRules": [
       "for-direction",
       "no-array-constructor",
@@ -372,9 +363,6 @@
   {
     "pkg": "example",
     "filesSampled": 26,
-    "eslintOnly": [],
-    "oxlintOnly": [],
-    "severityMismatch": [],
     "oxlintActiveRules": [
       "constructor-super",
       "for-direction",
