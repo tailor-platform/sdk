@@ -12,7 +12,16 @@ const KyselyTypeConfigSchema = z.tuple([
 
 const SeedConfigSchema = z.tuple([
   z.literal("@tailor-platform/seed"),
-  z.object({ distPath: z.string(), machineUserName: z.string().optional() }),
+  z.object({
+    distPath: z.string(),
+    machineUserName: z.string().optional(),
+    disableIdpUserSync: z
+      .object({
+        userToIdp: z.boolean().optional(),
+        idpToUser: z.boolean().optional(),
+      })
+      .optional(),
+  }),
 ]);
 
 const EnumConstantsConfigSchema = z.tuple([

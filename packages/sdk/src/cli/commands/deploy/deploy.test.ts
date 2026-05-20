@@ -107,6 +107,7 @@ function emptyResults(): PlanResults {
       unmanaged: [],
       resourceOwners: new Set<string>(),
       appName: "my-app",
+      appId: undefined,
     },
     secretManager: {
       vaultChangeSet: createChangeSet("Vaults"),

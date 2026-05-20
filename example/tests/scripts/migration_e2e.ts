@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { create } from "@bufbuild/protobuf";
 import {
   bundleMigrationScript,
   bundleSeedScript,
@@ -12,7 +13,6 @@ import {
   show,
 } from "@tailor-platform/sdk/cli";
 import { AuthInvokerSchema } from "@tailor-platform/tailor-proto/auth_resource_pb";
-import { create } from "@bufbuild/protobuf";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const exampleDir = path.resolve(scriptDir, "..", "..");

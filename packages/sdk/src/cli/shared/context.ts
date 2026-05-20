@@ -10,6 +10,7 @@ import ml from "@/utils/multiline";
 import { initOAuth2Client } from "./client";
 import { logger } from "./logger";
 import { readPackageJson } from "./package-json";
+import { tightenSecretFilePermissions, writeSecretFile } from "./secret-file";
 import {
   isKeyringAvailable,
   loadKeyringTokens,
@@ -140,6 +141,11 @@ export async function readPlatformConfig(): Promise<PfConfig> {
 
   const rawConfig = parseYAML(fs.readFileSync(configPath, "utf-8"));
 
+  // Legacy installs may have left the config world-readable (umask default
+  // 0o644). Tighten it here so users who only run read-only commands still
+  // get the secret-file permissions applied without waiting for a write.
+  tightenSecretFilePermissions(configPath);
+
   // Check for unsupported future versions
   const version =
     rawConfig != null && typeof rawConfig === "object" && "version" in rawConfig
@@ -210,14 +216,17 @@ function toV1ForDisk(config: PfConfig): PfConfigV1 {
  * Write Tailor Platform CLI configuration to disk.
  * By default, V2 configs are converted to V1 for backward compatibility.
  * Set TAILOR_USE_KEYRING to write V2 format (required for keyring storage).
+ *
+ * The config file may contain access/refresh tokens when the OS keyring is
+ * unavailable, so it is written via {@link writeSecretFile} so other users
+ * on the host cannot read it.
  * @param config - Platform configuration to write
  */
 export function writePlatformConfig(config: PfConfig | PfConfigV1) {
   const configPath = platformConfigPath();
-  fs.mkdirSync(path.dirname(configPath), { recursive: true });
   const diskConfig =
     config.version === 2 && !process.env.TAILOR_USE_KEYRING ? toV1ForDisk(config) : config;
-  fs.writeFileSync(configPath, stringifyYAML(diskConfig));
+  writeSecretFile(configPath, stringifyYAML(diskConfig));
 }
 
 const tcContextConfigSchema = z.object({
