@@ -549,6 +549,27 @@ function rewriteWorkspaceRefs(workDir: string, tarballPath?: string): void {
     }
   }
   fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + "\n");
+
+  // workDir is bind-mounted into a linux container at solve time, but
+  // `pnpm install` runs on the host. Without `supportedArchitectures`, pnpm
+  // only fetches the host's optional native bindings (e.g. `@rolldown/binding-
+  // darwin-arm64`), so the solver hits "Cannot find native binding" inside the
+  // container and burns 6–8 bash calls chasing `@rolldown` / `@oxc-parser` /
+  // `@esbuild` linux bindings via npm. pnpm only honors this setting from
+  // `pnpm-workspace.yaml`, so declare a single-package workspace here and drop
+  // `--ignore-workspace` at install time (the temp workDir lives outside the
+  // SDK monorepo, so there's no parent workspace to inherit from).
+  fs.writeFileSync(
+    path.join(workDir, "pnpm-workspace.yaml"),
+    [
+      'packages:\n  - "."\n',
+      "supportedArchitectures:",
+      "  os: [current, linux]",
+      "  cpu: [current, arm64, x64]",
+      "  libc: [current, glibc]",
+      "",
+    ].join("\n"),
+  );
 }
 
 async function installDependencies(
@@ -561,10 +582,10 @@ async function installDependencies(
     console.log("  Installing dependencies...");
   }
   rewriteWorkspaceRefs(workDir, tarballPath);
-  await execAsync("pnpm install --no-lockfile --ignore-workspace", {
+  await execAsync("pnpm install --no-lockfile", {
     cwd: workDir,
     encoding: "utf-8",
-    timeout: 120_000,
+    timeout: 180_000,
   });
   if (contextProfile) {
     applyContextProfile(workDir, contextProfile);
