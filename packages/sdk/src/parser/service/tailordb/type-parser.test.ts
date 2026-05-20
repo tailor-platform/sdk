@@ -534,4 +534,41 @@ describe("parseTypes", () => {
       expect(result.User.backwardRelationships).toEqual({});
     });
   });
+
+  describe("record-level hooks and field-level auto-generated hooks", () => {
+    it("strips auto-generated timestamp hooks when the type has record-level hooks", () => {
+      const withRecordHooks = db
+        .type(["Hooked", "AllHooked"], {
+          name: db.string(),
+          ...db.fields.timestamps(),
+        })
+        .hooks({
+          create: ({ data }) => ({ ...data, createdAt: new Date() }),
+          update: ({ data }) => ({ ...data, updatedAt: new Date() }),
+        });
+
+      const result = parseTypes(toSchemaOutputs({ Hooked: withRecordHooks }), "test-namespace");
+
+      expect(result.Hooked.hooks).toBeDefined();
+      expect(result.Hooked.fields.createdAt.config.hooks).toBeUndefined();
+      expect(result.Hooked.fields.updatedAt.config.hooks).toBeUndefined();
+    });
+
+    it("keeps auto-generated timestamp hooks when the type has no record-level hooks", () => {
+      const withoutRecordHooks = db.type(["Plain", "AllPlain"], {
+        name: db.string(),
+        ...db.fields.timestamps(),
+      });
+
+      const result = parseTypes(toSchemaOutputs({ Plain: withoutRecordHooks }), "test-namespace");
+
+      expect(result.Plain.hooks).toBeUndefined();
+      expect(result.Plain.fields.createdAt.config.hooks?.create).toEqual({
+        expr: "new Date()",
+      });
+      expect(result.Plain.fields.updatedAt.config.hooks?.update).toEqual({
+        expr: "new Date()",
+      });
+    });
+  });
 });

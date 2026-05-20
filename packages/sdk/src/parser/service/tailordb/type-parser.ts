@@ -64,12 +64,14 @@ function parseTailorDBType(
   const fields: Record<string, ParsedField> = {};
   const forwardRelationships: Record<string, ParsedRelationship> = {};
 
+  const hasRecordHooks = Boolean(metadata.hooks?.create || metadata.hooks?.update);
+
   for (const [fieldName, fieldDef] of Object.entries(type.fields) as [
     string,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- TailorDBField requires generic type parameters
     TailorDBField<any, any>,
   ][]) {
-    let fieldConfig = parseFieldConfig(fieldDef);
+    let fieldConfig = parseFieldConfig(fieldDef, { skipAutoHooks: hasRecordHooks });
     const rawRelation = fieldConfig.rawRelation;
     const context = { typeName: type.name, fieldName, allTypeNames };
 

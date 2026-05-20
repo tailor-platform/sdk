@@ -81,9 +81,13 @@ function extractFieldMetadata(type: TailorDBType): {
   const indexes: IndexDefinition[] = [];
   const foreignKeys: ForeignKeyDefinition[] = [];
 
+  // Record-level hooks populate generated fields (e.g. createdAt/updatedAt)
+  // for types where the SDK no longer emits field-level auto hooks.
+  const hasRecordHook = Boolean(type.hooks?.create || type.hooks?.update);
+
   // Find fields with hooks.create or serial
   for (const [fieldName, field] of Object.entries(type.fields)) {
-    if (field.config.hooks?.create) {
+    if (field.config.hooks?.create || (hasRecordHook && field.config.generated)) {
       optionalFields.push(fieldName);
     }
     // Serial fields are auto-generated, so they should be optional in seed data

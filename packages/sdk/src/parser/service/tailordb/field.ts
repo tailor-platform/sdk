@@ -49,14 +49,25 @@ export const convertHookToExpr = (fn: (...args: never[]) => unknown): string => 
   return `(${normalized})({ value: _value, data: _data, user: ${tailorUserMap} })`;
 };
 
+export type ParseFieldConfigOptions = {
+  /**
+   * When the owning type has record-level hooks (sent as `type_hook`), skip
+   * the field-level hooks the SDK auto-generates for `db.fields.timestamps()`
+   * fields. The platform rejects schemas that define both at the same time.
+   */
+  skipAutoHooks?: boolean;
+};
+
 /**
  * Parse TailorDBField into OperatorFieldConfig.
  * This transforms user-defined functions into script expressions.
  * @param field - TailorDB field definition
+ * @param options - Parse options
  * @returns Parsed operator field configuration
  */
 export function parseFieldConfig(
   field: TailorDBTypeSchemaOutput["fields"][string],
+  options?: ParseFieldConfigOptions,
 ): OperatorFieldConfig {
   const metadata = field.metadata as DBFieldMetadata;
   const fieldType = field.type;
@@ -72,7 +83,7 @@ export function parseFieldConfig(
       ? {
           fields: Object.entries(nestedFields).reduce(
             (acc, [key, nestedField]) => {
-              acc[key] = parseFieldConfig(nestedField);
+              acc[key] = parseFieldConfig(nestedField, options);
               return acc;
             },
             {} as Record<string, OperatorFieldConfig>,
@@ -107,7 +118,7 @@ export function parseFieldConfig(
               }
             : undefined,
         }
-      : metadata.generated && fieldType === "datetime"
+      : !options?.skipAutoHooks && metadata.generated && fieldType === "datetime"
         ? {
             // Auto-generate timestamp hooks for fields created by db.fields.timestamps().
             // Required datetime (createdAt) gets a create hook;
