@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 import { existsSync } from "node:fs";
+import { register } from "node:module";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { register } from "node:module";
 import { findUpSync } from "find-up-simple";
 
 const __dirname = import.meta.dirname;

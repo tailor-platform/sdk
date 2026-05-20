@@ -100,9 +100,10 @@ interface CreateWorkflowJobConfig<Name extends string, I, O> {
  *   },
  * });
  */
-export const createWorkflowJob = <const Name extends string, I = undefined, O = undefined>(
+/* @__NO_SIDE_EFFECTS__ */
+export function createWorkflowJob<const Name extends string, I = undefined, O = undefined>(
   config: CreateWorkflowJobConfig<Name, I, O>,
-): WorkflowJob<Name, I, Awaited<O>> => {
+): WorkflowJob<Name, I, Awaited<O>> {
   const body = config.body as (input: I, context: WorkflowJobContext) => O | Promise<O>;
   return brandValue(
     {
@@ -115,4 +116,4 @@ export const createWorkflowJob = <const Name extends string, I = undefined, O = 
     } as WorkflowJob<Name, I, Awaited<O>>,
     "workflow-job",
   );
-};
+}

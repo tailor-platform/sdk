@@ -1,5 +1,22 @@
 # @tailor-platform/sdk-codemod
 
+## 0.2.0
+
+### Minor Changes
+
+- [#1104](https://github.com/tailor-platform/sdk/pull/1104) [`3c1571c`](https://github.com/tailor-platform/sdk/commit/3c1571cd76d125854b8379dfb8edcb58c2f517a4) Thanks [@dqn](https://github.com/dqn)! - Add three v2 codemods that the upgrade runner can apply when migrating across the 1.x → 2.x boundary:
+
+  - `v2/test-run-arg-input` strips the deprecated `{ "input": ... }` wrapper from `tailor-sdk function test-run --arg` JSON inside `package.json` scripts, shell scripts, and Markdown code blocks.
+  - `v2/sdk-skills-shim` rewrites `tailor-sdk-skills` invocations to `tailor-sdk skills install` across `package.json`, shell, YAML, and Markdown files.
+  - `v2/principal-unify` renames `TailorUser` / `TailorActor` / `TailorInvoker` to the unified `TailorPrincipal`, drops `unauthenticatedTailorUser` (replacing standalone value references with `null`; member-access forms are left as-is so the resulting type error points authors at sites that need manual review), and renames `user` to `caller` inside `createResolver` body parameters and member accesses.
+  - `v2/apply-to-deploy` rewrites `tailor-sdk apply` invocations in `package.json` scripts, shell scripts, CI YAML, and Markdown to the v2-recommended `tailor-sdk deploy` alias. Optional `@version` pins (`tailor-sdk@latest`, `tailor-sdk@1.45.2`) are preserved.
+  - `v2/cli-rename` rewrites `tailor-sdk crash-report` invocations to the v2 single-word `tailor-sdk crashreport` form across `package.json` scripts, shell scripts, CI YAML, and Markdown. Optional `@version` pins are preserved.
+  - `v2/auth-invoker-unwrap` replaces `auth.invoker("name")` calls with the bare `"name"` string literal and drops the `auth` import when it has no other reference. Calls whose argument is not a literal string (`auth.invoker(variable)`, template literals) are left untouched so the author can decide.
+
+### Patch Changes
+
+- [#1181](https://github.com/tailor-platform/sdk/pull/1181) [`3da6be2`](https://github.com/tailor-platform/sdk/commit/3da6be28a9df97b7633ada4923564d3c18afbf49) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @ast-grep/napi to v0.42.2
+
 ## 0.1.5
 
 ### Patch Changes

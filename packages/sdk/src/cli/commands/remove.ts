@@ -71,8 +71,21 @@ async function execRemove(
   const pipeline = await planPipeline(ctx);
   const app = await planApplication(ctx);
   const executor = await planExecutor(ctx);
-  const workflow = await planWorkflow(client, workspaceId, application.name, {}, {});
-  const functionRegistry = await planFunctionRegistry(client, workspaceId, application.name, []);
+  const workflow = await planWorkflow(
+    client,
+    workspaceId,
+    application.name,
+    application.id,
+    {},
+    {},
+  );
+  const functionRegistry = await planFunctionRegistry(
+    client,
+    workspaceId,
+    application.name,
+    application.id,
+    [],
+  );
   const secretManager = await planSecretManager(ctx);
 
   // Print planned deletions (same order as apply dry-run)
