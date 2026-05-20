@@ -9,6 +9,8 @@ minimumReleaseAgeExclude:
   - "@toiroakr/lines-db"
   - politty
   - zinfer
+  # Renovate security update: turbo@2.9.14
+  - turbo@2.9.14
 
 blockExoticSubdeps: true
 trustPolicy: no-downgrade

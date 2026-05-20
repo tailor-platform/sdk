@@ -44,6 +44,7 @@ export function defineSecretManager<const T extends SecretsInputNullish>(
   config: T,
   options: { ignoreNullishValues: true },
 ): DefinedSecrets<T>;
+/* @__NO_SIDE_EFFECTS__ */
 export function defineSecretManager<const T extends SecretsInputNullish>(
   config: T,
   options?: { ignoreNullishValues?: boolean },

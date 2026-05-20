@@ -785,9 +785,9 @@ export function createGenerationManager(params: {
 export async function generate(options?: GenerateOptions) {
   return withSpan("generate", async (rootSpan) => {
     // Load and validate options
-    const { config, generators, plugins } = await withSpan("generate.loadConfig", async () =>
-      loadConfig(options?.configPath),
-    );
+    const { config, generators, plugins } = await withSpan("generate.loadConfig", async () => {
+      return loadConfig(options?.configPath);
+    });
     const watch = options?.watch ?? false;
 
     rootSpan.setAttribute("generate.watch", watch);

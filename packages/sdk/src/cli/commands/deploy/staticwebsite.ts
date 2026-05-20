@@ -8,7 +8,13 @@ import {
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
-import { buildMetaRequest, hasMatchingSdkVersion, sdkNameLabelKey, type WithLabel } from "./label";
+import {
+  buildMetaRequest,
+  hasMatchingSdkVersion,
+  isOwnedByApp,
+  sdkNameLabelKey,
+  type WithLabel,
+} from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/deploy";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
@@ -154,7 +160,11 @@ export async function planStaticWebsite(context: PlanContext) {
     const config = websiteService;
     const name = websiteService.name;
     const existing = existingWebsites[name];
-    const metaRequest = await buildMetaRequest(trn(workspaceId, name), application.name);
+    const metaRequest = await buildMetaRequest({
+      trn: trn(workspaceId, name),
+      appName: application.name,
+      appId: application.id,
+    });
     const desired = normalizeComparableStaticWebsite(config);
     const request = {
       workspaceId,
@@ -166,22 +176,24 @@ export async function planStaticWebsite(context: PlanContext) {
     };
 
     if (existing) {
-      const isManagedByApp = existing.label === application.name;
-      if (!existing.label) {
-        unmanaged.push({
-          resourceType: "StaticWebsite",
-          resourceName: name,
-        });
-      } else if (existing.label !== application.name) {
-        conflicts.push({
-          resourceType: "StaticWebsite",
-          resourceName: name,
-          currentOwner: existing.label,
-        });
+      const owned = isOwnedByApp(existing.allLabels, application.name, application.id);
+      if (!owned) {
+        if (!existing.label) {
+          unmanaged.push({
+            resourceType: "StaticWebsite",
+            resourceName: name,
+          });
+        } else {
+          conflicts.push({
+            resourceType: "StaticWebsite",
+            resourceName: name,
+            currentOwner: existing.label,
+          });
+        }
       }
 
       if (
-        isManagedByApp &&
+        owned &&
         hasMatchingSdkVersion(existing.allLabels, metaRequest.labels) &&
         areStaticWebsitesEqual(existing.resource as ProtoStaticWebsite, desired)
       ) {
@@ -203,12 +215,13 @@ export async function planStaticWebsite(context: PlanContext) {
     }
   }
   Object.entries(existingWebsites).forEach(([name]) => {
-    const label = existingWebsites[name]?.label;
-    if (label && label !== application.name) {
+    const entry = existingWebsites[name];
+    const label = entry?.label;
+    const owned = isOwnedByApp(entry?.allLabels, application.name, application.id);
+    if (label && !owned) {
       resourceOwners.add(label);
     }
-    // Only delete websites managed by this application
-    if (label === application.name) {
+    if (owned) {
       changeSet.deletes.push({
         name,
         request: {

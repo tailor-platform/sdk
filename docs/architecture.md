@@ -22,11 +22,11 @@ src/
 └── plugin/      Plugin system (manager + built-in plugins)
 ```
 
-These modules have strict import boundaries enforced by ESLint. See [`packages/sdk/eslint.config.js`](../packages/sdk/eslint.config.js) for the full rules.
+These modules have strict import boundaries enforced by oxlint. See [`packages/sdk/.oxlintrc.json`](../packages/sdk/.oxlintrc.json) for the full rules.
 
 The essential constraint: **configure cannot depend on parser/cli at runtime**, because configure code is bundled into user output (resolvers, executors, workflows). Any runtime dependency pulled into configure inflates user bundle sizes.
 
-The configure module's import boundaries enforced by ESLint:
+The configure module's import boundaries enforced by oxlint:
 
 1. **Cannot import from `cli/`** — CLI is deployment tooling, not user runtime
 2. **Cannot import from `parser/`** (use `@/types/` instead) — prevents Zod from leaking into user bundles
