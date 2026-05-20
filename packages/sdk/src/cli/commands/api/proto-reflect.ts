@@ -123,13 +123,18 @@ export function enumerateAllFieldCompletions(methodName: string): FieldCompletio
       // wrong shape (e.g. `subgraphs.name=x` → `{subgraphs:{name:"x"}}` when
       // the proto expects a repeated message).
       if (field.fieldKind === "list" || field.fieldKind === "map") continue;
-      if (field.fieldKind === "message" && isUnrepresentableWellKnownType(field.message)) continue;
       const fullKey = prefix + field.localName;
-      if (field.fieldKind === "message" && !isWellKnownType(field.message)) {
-        const nested = field.message;
-        candidates.push({ value: `${fullKey}.`, description: `${fullKey} (message)` });
-        if (!visited.has(nested)) walk(nested, `${fullKey}.`);
-        continue;
+      if (field.fieldKind === "message") {
+        if (isUnrepresentableWellKnownType(field.message)) continue;
+        if (!isWellKnownType(field.message)) {
+          const nested = field.message;
+          candidates.push({ value: `${fullKey}.`, description: `${fullKey} (message)` });
+          if (!visited.has(nested)) walk(nested, `${fullKey}.`);
+          continue;
+        }
+        // Representable well-known types (Timestamp, Duration, FieldMask, …)
+        // fall through to a single `key=` leaf since proto JSON serializes
+        // them as a scalar string.
       }
       candidates.push({ value: `${fullKey}=`, description: `Set ${fullKey}` });
       if (field.fieldKind === "enum") {
@@ -158,10 +163,9 @@ export function enumerateAllFieldCompletions(methodName: string): FieldCompletio
  * @returns The leaf field descriptor, or undefined when the path doesn't resolve
  */
 export function resolveLeafField(input: DescMessage, path: string[]): DescField | undefined {
-  let message: DescMessage | undefined = input;
+  let message = input;
   for (let i = 0; i < path.length; i++) {
-    if (!message) return undefined;
-    const field: DescField | undefined = message.fields.find((f) => f.localName === path[i]);
+    const field = message.fields.find((f) => f.localName === path[i]);
     if (!field) return undefined;
     if (i === path.length - 1) {
       // Refuse to resolve a leaf inside an unrepresentable well-known type —

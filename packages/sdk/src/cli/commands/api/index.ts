@@ -112,45 +112,38 @@ interface ParsedField {
 // untrusted dotted key mutate the runtime prototype instead of the body.
 const FORBIDDEN_SEGMENTS = new Set(["__proto__", "constructor", "prototype"]);
 
-const fieldArg = z
-  .string()
-  .superRefine((val, ctx) => {
-    const eq = val.indexOf("=");
-    if (eq < 0) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: `Invalid field format: '${val}'. Expected format: 'key=value' or 'a.b.c=value'`,
-      });
-      return;
-    }
-    const key = val.slice(0, eq);
-    if (key.length === 0) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Field key cannot be empty" });
-      return;
-    }
-    const segments = key.split(".");
-    if (segments.some((seg) => seg.length === 0)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: `Invalid field key: '${key}'. Dotted segments cannot be empty`,
-      });
-      return;
-    }
-    const forbidden = segments.find((seg) => FORBIDDEN_SEGMENTS.has(seg));
-    if (forbidden) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: `Invalid field key: '${key}'. Segment '${forbidden}' is not allowed.`,
-      });
-    }
-  })
-  .transform((val): ParsedField => {
-    const eq = val.indexOf("=");
-    return {
-      path: val.slice(0, eq).split("."),
-      value: val.slice(eq + 1),
-    };
-  });
+const fieldArg = z.string().transform((val, ctx): ParsedField => {
+  const eq = val.indexOf("=");
+  if (eq < 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `Invalid field format: '${val}'. Expected format: 'key=value' or 'a.b.c=value'`,
+    });
+    return z.NEVER;
+  }
+  const key = val.slice(0, eq);
+  if (key.length === 0) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Field key cannot be empty" });
+    return z.NEVER;
+  }
+  const segments = key.split(".");
+  if (segments.some((seg) => seg.length === 0)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `Invalid field key: '${key}'. Dotted segments cannot be empty`,
+    });
+    return z.NEVER;
+  }
+  const forbidden = segments.find((seg) => FORBIDDEN_SEGMENTS.has(seg));
+  if (forbidden) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `Invalid field key: '${key}'. Segment '${forbidden}' is not allowed.`,
+    });
+    return z.NEVER;
+  }
+  return { path: segments, value: val.slice(eq + 1) };
+});
 
 export const apiCommand = defineAppCommand({
   name: "api",
