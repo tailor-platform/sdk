@@ -68,9 +68,8 @@ Structure: `problems/<id>-<slug>/` with `meta.json`, `problem.md`, `scaffold/`, 
 
 ## Writing Tests
 
-- Read existing tests in `problems/m*/tests/` for patterns
-- Helpers: `shared/test-helpers.ts` (`createWorkDirContext`, `importPath`, `expectFieldType`, etc.)
-- Mocks: `shared/mocks.ts` (`setupTailordbMock`, `setupWorkflowMock`, `setupWaitPointMock`)
+- Read existing tests in `problems/{m,h}*/tests/` for patterns
+- Helpers: `shared/test-helpers.ts` (`createWorkDirContext`, `importPath`, `expectFieldType`, `expectFunctionOperation`, `expectNonEmptyDescription`, `stripComments`)
 - ALWAYS use `describe.skipIf(!workDirReady)` guard so missing work dirs degrade to skipped, not crashed
 
 ## Creating a New Problem
@@ -84,18 +83,20 @@ Structure: `problems/<id>-<slug>/` with `meta.json`, `problem.md`, `scaffold/`, 
 
 ## Problem Lifecycle
 
-To prevent the ceiling-effect that comes from keeping uniformly-passing problems in active rotation, problems graduate through three states:
+To prevent the ceiling-effect that comes from keeping uniformly-passing problems in active rotation, problems graduate through two states:
 
 - **active** — `problems/<id>/` (default). Included in every `challenge:solve` run.
-- **archived** — `problems/archived/<id>/`. Excluded from `challenge:solve` (the loader skips this subtree) but still picked up by `challenge:analyze --include-archived` so historical trend lines stay continuous.
+- **archived** — `problems/archived/<id>/`. Excluded from `challenge:solve` by default. Re-included by `challenge:solve --include-archived` (re-run) and by `challenge:analyze --include-archived` (history). Trend lines stitch across the boundary because alias / archived metadata is still read.
 
-**Graduation rule.** Move a problem into `archived/` once it shows **5 consecutive runs** with `passRate = 1.0` AND `metricsStdev.turns / metricsMedian.turns < 0.1` on the **types-only** profile (the stricter one). At that point the SDK affordance is well-enough surfaced that further evaluation cost on this problem is wasteful. The decision is reversible: move the directory back if a later SDK regression flips the outcome.
+**Automatic graduation.** Solve completion runs `graduateProblems()` (`core/graduation.ts`). For every problem in the just-finished run the runner walks the 5 most recent reports in the same `(model, types-only)` group (including the new one) and moves `problems/<id>` → `problems/archived/<id>` when:
 
-**Bookkeeping.** When moving:
+- the run's `contextProfile === "types-only"` (the stricter profile drives the rule), AND
+- every one of the 5 reports contains the problem with `passRate === 1.0` (uses `iterations.passRate` when present, else the binary `passed` field), AND
+- the **latest** report's `iterations.metricsStdev.turns / iterations.metricsMedian.turns < 0.1` (variance gate on the just-finished N=5 run; degenerate `median.turns === 0` resets the streak).
 
-1. `mv llm-challenge/problems/<id> llm-challenge/problems/archived/<id>`
-2. Add a line under "## Archived" in the problem's `problem.md` (if present) noting the run that graduated it.
-3. If a renamed successor exists, add `<id>` to that successor's `meta.json` `aliases` list so `--unify-aliases` can stitch the history.
+Graduation is automatic, but reversible: drop the problem back into `problems/<id>` to bring it into active rotation again. To re-run an archived problem ad-hoc without un-archiving it, pass `--include-archived` to `challenge:solve` (with `--all` or `--problem <id>` / `--problem archived/<dir>`).
+
+If a renamed successor exists for an archived problem, add the archived ID to the successor's `meta.json` `aliases` list so `--unify-aliases` can stitch the history.
 
 ## SDK Improvement Cycle
 

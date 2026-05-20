@@ -30,6 +30,7 @@ import {
   filterSdkTarballForProfile,
   isContextProfile,
 } from "./context-profile";
+import { graduateProblems } from "./graduation";
 import { type TraceMetrics, computeLocStats, computeTraceMetrics } from "./metrics";
 import { computeCanonicalnessStats } from "./metrics-canonicalness";
 import {
@@ -203,6 +204,14 @@ type ParsedArgs = {
    * Defaults to 3600 (1 hour).
    */
   maxSeconds: number;
+  /**
+   * When true, include problems under `problems/archived/` in the run.
+   * Archived problems are excluded from `--all` by default — they have
+   * already graduated past the affordance threshold and re-running them
+   * wastes budget. Useful for ad-hoc re-evaluation when an SDK change might
+   * affect a previously-stable problem.
+   */
+  includeArchived: boolean;
 };
 
 function parseArgs(): ParsedArgs {
@@ -226,6 +235,7 @@ function parseArgs(): ParsedArgs {
   let sdkBranch: string | undefined;
   let resume: string | undefined;
   let maxSeconds = 3600;
+  let includeArchived = false;
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
@@ -300,6 +310,9 @@ function parseArgs(): ParsedArgs {
         maxSeconds = Number(requireArg(args, i, "--max-seconds"));
         i++;
         break;
+      case "--include-archived":
+        includeArchived = true;
+        break;
     }
   }
 
@@ -343,6 +356,7 @@ function parseArgs(): ParsedArgs {
     ...(sdkBranch ? { sdkBranch } : {}),
     ...(resume ? { resume } : {}),
     maxSeconds,
+    includeArchived,
   };
 }
 
@@ -1327,13 +1341,27 @@ function writeReport(
   console.log(`\nResults written to: ${jsonPath}`);
 }
 
-function findProblem(id: string): string {
-  const problems = listProblems(challengeRoot);
-  const exact = problems.find((p) => p === id);
+/**
+ * Resolve a user-supplied problem id against the pre-loaded `problems` list.
+ *
+ * Accepts:
+ * - exact path: `m01-foo-bar` or `archived/m01-foo-bar`
+ * - basename match: `m01-foo-bar` matches an archived entry recorded as
+ *   `archived/m01-foo-bar`
+ * - prefix-dash: `m01` → `m01-foo-bar` (or its archived form)
+ *
+ * The lookup is symmetric across the active / archived subtrees so callers
+ * that pass `--include-archived` can refer to graduated problems by either
+ * their bare slug or the explicit `archived/<slug>` form.
+ */
+function findProblem(id: string, problems: string[]): string {
+  const exact = problems.find((p) => p === id || path.basename(p) === id);
   if (exact) {
     return exact;
   }
-  const prefixDash = problems.filter((p) => p.startsWith(`${id}-`));
+  const prefixDash = problems.filter(
+    (p) => p.startsWith(`${id}-`) || path.basename(p).startsWith(`${id}-`),
+  );
   if (prefixDash.length === 1) {
     return prefixDash[0]!;
   }
@@ -1341,7 +1369,7 @@ function findProblem(id: string): string {
     console.error(`Ambiguous problem ID "${id}" matches: ${prefixDash.join(", ")}`);
     process.exit(1);
   }
-  const prefix = problems.filter((p) => p.startsWith(id));
+  const prefix = problems.filter((p) => p.startsWith(id) || path.basename(p).startsWith(id));
   if (prefix.length === 1) {
     return prefix[0]!;
   }
@@ -1371,6 +1399,7 @@ async function main(): Promise<void> {
     sdkBranch,
     resume: resumeRunId,
     maxSeconds,
+    includeArchived,
   } = parseArgs();
 
   if (problemIds.length === 0 && !all) {
@@ -1378,11 +1407,13 @@ async function main(): Promise<void> {
     console.error("  tsx core/cli.ts --problem 001 --impl ./path/to/impl");
     console.error("  tsx core/cli.ts --problem 001 --use-solution");
     console.error(
-      "  tsx core/cli.ts --problem 001 [--problem 002 ...] --solve [--effort xhigh] [--context-profile types-only] [--iterations 5] [--max-seconds 3600] [--no-auto-extend] [--no-early-stop] [--sdk-branch <ref>] [--resume <runId>]",
+      "  tsx core/cli.ts --problem 001 [--problem 002 ...] --solve [--effort xhigh] [--context-profile types-only] [--iterations 5] [--max-seconds 3600] [--no-auto-extend] [--no-early-stop] [--sdk-branch <ref>] [--resume <runId>] [--include-archived]",
     );
-    console.error("  tsx core/cli.ts --all --use-solution [--clean] [--concurrency <n>]");
     console.error(
-      "  tsx core/cli.ts --all --solve [--effort xhigh] [--clean] [--concurrency <n>] [--context-profile types-only] [--iterations 5] [--max-seconds 3600] [--no-auto-extend] [--no-early-stop] [--sdk-branch <ref>] [--resume <runId>]",
+      "  tsx core/cli.ts --all --use-solution [--clean] [--concurrency <n>] [--include-archived]",
+    );
+    console.error(
+      "  tsx core/cli.ts --all --solve [--effort xhigh] [--clean] [--concurrency <n>] [--context-profile types-only] [--iterations 5] [--max-seconds 3600] [--no-auto-extend] [--no-early-stop] [--sdk-branch <ref>] [--resume <runId>] [--include-archived]",
     );
     console.error("  tsx core/cli.ts --all --impl-dir ./path/to/all-outputs");
     console.error(
@@ -1454,7 +1485,8 @@ async function main(): Promise<void> {
     }
   }
 
-  const problems = all ? listProblems(challengeRoot) : problemIds.map((id) => findProblem(id));
+  const knownProblems = listProblems(challengeRoot, { includeArchived });
+  const problems = all ? knownProblems : problemIds.map((id) => findProblem(id, knownProblems));
 
   if (all) {
     console.log(`Running ${problems.length} problem(s) (concurrency: ${concurrency})...`);
@@ -1748,6 +1780,24 @@ async function main(): Promise<void> {
   });
 
   writeReport(resultsDir, report, modelLabelRaw, sdkVersion, runId);
+
+  // Auto-graduate: when this run is a solver run on the types-only profile
+  // (the stricter signal) and not an A/B candidate, move any problem that
+  // hits 5 consecutive passRate=1.0 with stable turns variance into
+  // `problems/archived/`. Concurrent runs racing on the same problem are
+  // safe: the second mv finds the destination present and no-ops.
+  if (solve && contextProfile === "types-only" && !sdkBranch) {
+    const groupResultsDir = getRunResultsDir(resultsDir, modelLabelRaw);
+    const outcome = graduateProblems({
+      runResultsDir: groupResultsDir,
+      challengeRoot,
+      latestReport: report,
+    });
+    for (const dirName of outcome.graduated) {
+      console.log(`Graduated to archived/: ${dirName} (5 consecutive passRate=1.0 on types-only)`);
+    }
+  }
+
   // Once the final report exists, the checkpoint is redundant. Best-effort
   // delete so the runResultsDir does not accumulate dead JSONL files. A
   // future resume into the same runId would now see no checkpoint and

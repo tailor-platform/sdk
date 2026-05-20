@@ -39,7 +39,7 @@ Coverage by SDK surface:
 | idp + auth                    | 1     | m21         |
 | CLI / runtime                 | 4     | m22-m25     |
 
-See [`.agent/tmp/2026-05-13-micro-problem-inventory.md`](../.agent/tmp/2026-05-13-micro-problem-inventory.md) for the full design matrix mapping each problem to its `designNote`.
+A second tier of harder problems lives under `problems/h<NN>-…` and exercises composed affordances (multi-trigger executors, workflow + plugin + tailordb, etc.). Each `meta.json` carries a free-form `designNote` describing the affordance gap the problem is meant to exercise.
 
 ## Prerequisites
 
@@ -90,6 +90,7 @@ pnpm challenge:analyze --trend --context-profile types-only
 - `--no-auto-extend` — suppress the flaky-middle-band auto-extension. Only active under `--iterations 3`.
 - `--sdk-branch <ref>` — pack the SDK from a git ref instead of the current working tree. Spawns a detached `git worktree`, builds the SDK there, and `pnpm pack`s the result. Requires `--solve`.
 - `--clean` — remove work directories after the run.
+- `--include-archived` — include problems under `problems/archived/` in the run. Off by default; use when re-evaluating a graduated problem after an SDK change.
 
 ## How Verification Works
 
@@ -195,6 +196,10 @@ Scaffold resolution is a four-layer overlay (later layers shadow earlier ones at
 2. `problems/_shared/scaffold/` — shared micro-problem layer.
 3. `problems/<id>/scaffold/` — per-problem overrides.
 4. The implementation directory (`--use-solution`, `--impl`, or the agent's work tree for `--solve`).
+
+### Archived problems
+
+Problems that hit **5 consecutive `passRate=1.0`** runs with low turns variance (`metricsStdev.turns / metricsMedian.turns < 0.1`) on the **types-only** profile are auto-moved to `problems/archived/<id>/` at the end of the qualifying solve. They are skipped by `--all` by default. The move is reversible: drop the directory back into `problems/<id>/` to re-activate it. To re-run an archived problem without un-archiving, pass `--include-archived` (`challenge:solve` or `challenge:analyze`).
 
 ## Solve Artifacts
 
