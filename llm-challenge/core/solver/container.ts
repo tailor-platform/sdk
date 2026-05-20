@@ -131,6 +131,10 @@ export function buildContainerRunArgs(
 
   args.push("--volume", `${options.codexAuthPath}:${CONTAINER_CODEX_AUTH}:ro,Z`);
   args.push("--env", `CODEX_HOME=${CONTAINER_CODEX_HOME}`);
+  // Mark the shell as non-interactive so pnpm/corepack skip TTY-only prompts
+  // (e.g. confirmModulesPurge) instead of aborting with
+  // ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY when the solver re-runs install.
+  args.push("--env", "CI=true");
 
   args.push(IMAGE_NAME);
   args.push("codex", ...cliArgs);

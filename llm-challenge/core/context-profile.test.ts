@@ -1,8 +1,13 @@
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { applyContextProfile, buildContextProfileInstructions } from "./context-profile";
+import {
+  applyContextProfile,
+  buildContextProfileInstructions,
+  filterSdkTarballForProfile,
+} from "./context-profile";
 
 const tmpDirs: string[] = [];
 
@@ -86,6 +91,66 @@ describe("applyContextProfile", () => {
     expect(fs.existsSync(path.join(externalSdkDir, "CHANGELOG.md"))).toBe(true);
     expect(fs.existsSync(path.join(externalSdkDir, "docs", "configuration.md"))).toBe(true);
     expect(fs.existsSync(path.join(externalSdkDir, "skills", "tailor-sdk", "SKILL.md"))).toBe(true);
+  });
+});
+
+function makeSdkTarball(): string {
+  const stagingDir = fs.mkdtempSync(path.join(os.tmpdir(), "llm-tarball-src-"));
+  tmpDirs.push(stagingDir);
+  const pkgDir = path.join(stagingDir, "package");
+  fs.mkdirSync(path.join(pkgDir, "docs"), { recursive: true });
+  fs.mkdirSync(path.join(pkgDir, "skills", "tailor-sdk"), { recursive: true });
+  fs.mkdirSync(path.join(pkgDir, "dist"), { recursive: true });
+  fs.writeFileSync(path.join(pkgDir, "package.json"), '{"name":"@tailor-platform/sdk"}');
+  fs.writeFileSync(path.join(pkgDir, "README.md"), "# SDK\n");
+  fs.writeFileSync(path.join(pkgDir, "CHANGELOG.md"), "# Changelog\n");
+  fs.writeFileSync(path.join(pkgDir, "docs", "configuration.md"), "# Config\n");
+  fs.writeFileSync(path.join(pkgDir, "skills", "tailor-sdk", "SKILL.md"), "# Skill\n");
+  fs.writeFileSync(path.join(pkgDir, "dist", "index.mjs"), "export const x = 1;\n");
+
+  const tarballHost = fs.mkdtempSync(path.join(os.tmpdir(), "llm-tarball-out-"));
+  tmpDirs.push(tarballHost);
+  const tarballPath = path.join(tarballHost, "sdk.tgz");
+  execFileSync("tar", ["-czf", tarballPath, "-C", stagingDir, "package"], { stdio: "pipe" });
+  return tarballPath;
+}
+
+function listTarballEntries(tarballPath: string): string[] {
+  const out = execFileSync("tar", ["-tzf", tarballPath], { encoding: "utf-8" });
+  return out
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+describe("filterSdkTarballForProfile", () => {
+  it("strips README/CHANGELOG/docs/skills from a types-only tarball but keeps dist", () => {
+    const tarballPath = makeSdkTarball();
+
+    filterSdkTarballForProfile(tarballPath, "types-only");
+
+    const entries = listTarballEntries(tarballPath);
+    expect(entries.some((e) => e.endsWith("package/dist/index.mjs"))).toBe(true);
+    expect(entries.some((e) => e.endsWith("package/package.json"))).toBe(true);
+    expect(entries.some((e) => e.includes("package/README.md"))).toBe(false);
+    expect(entries.some((e) => e.includes("package/CHANGELOG.md"))).toBe(false);
+    expect(entries.some((e) => e.includes("package/docs/"))).toBe(false);
+    expect(entries.some((e) => e.includes("package/skills/"))).toBe(false);
+  });
+
+  it("leaves a full-package tarball untouched", () => {
+    const tarballPath = makeSdkTarball();
+    const before = listTarballEntries(tarballPath).sort();
+
+    filterSdkTarballForProfile(tarballPath, "full-package");
+
+    const after = listTarballEntries(tarballPath).sort();
+    expect(after).toEqual(before);
+  });
+
+  it("is a no-op when the tarball is missing", () => {
+    const missing = path.join(os.tmpdir(), `llm-missing-${Date.now()}.tgz`);
+    expect(() => filterSdkTarballForProfile(missing, "types-only")).not.toThrow();
   });
 });
 

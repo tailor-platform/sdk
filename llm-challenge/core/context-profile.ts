@@ -1,4 +1,6 @@
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 export type ContextProfile = "types-only" | "full-package";
@@ -45,6 +47,32 @@ export function applyContextProfile(workDir: string, profile: ContextProfile): v
   }
   for (const entry of entries) {
     fs.rmSync(path.join(sdkDir, entry), { recursive: true, force: true });
+  }
+}
+
+/**
+ * Rewrite the SDK tarball at `tarballPath` so its content matches the context
+ * profile: types-only strips README/CHANGELOG/docs/skills before re-packing.
+ *
+ * Necessary because the harness leaves `.sdk/sdk.tgz` in the workspace so the
+ * `package.json` `file:` reference stays consistent if the solver re-runs
+ * `pnpm install`. Without filtering, re-install would silently restore docs.
+ */
+export function filterSdkTarballForProfile(tarballPath: string, profile: ContextProfile): void {
+  const entries = removableEntriesByProfile[profile];
+  if (entries.length === 0 || !fs.existsSync(tarballPath)) {
+    return;
+  }
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "llm-sdk-filter-"));
+  try {
+    execFileSync("tar", ["-xzf", tarballPath, "-C", tmpDir], { stdio: "pipe" });
+    const pkgDir = path.join(tmpDir, "package");
+    for (const entry of entries) {
+      fs.rmSync(path.join(pkgDir, entry), { recursive: true, force: true });
+    }
+    execFileSync("tar", ["-czf", tarballPath, "-C", tmpDir, "package"], { stdio: "pipe" });
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 }
 

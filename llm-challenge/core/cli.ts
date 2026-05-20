@@ -27,6 +27,7 @@ import {
   type ContextProfile,
   applyContextProfile,
   contextProfileValues,
+  filterSdkTarballForProfile,
   isContextProfile,
 } from "./context-profile";
 import { type TraceMetrics, computeLocStats, computeTraceMetrics } from "./metrics";
@@ -637,11 +638,11 @@ async function installDependencies(
   });
   if (contextProfile) {
     applyContextProfile(workDir, contextProfile);
-  }
-  // For filtered profiles drop the source tarball so solvers cannot reinstall
-  // the unfiltered SDK. Only `full-package` keeps the tarball.
-  if (tarballPath && contextProfile && contextProfile !== "full-package") {
-    fs.rmSync(path.join(workDir, ".sdk"), { recursive: true, force: true });
+    // Rewrite the in-workspace tarball so a solver `pnpm install` re-resolves
+    // the same filtered shape instead of restoring the unfiltered package.
+    if (tarballPath) {
+      filterSdkTarballForProfile(path.join(workDir, ".sdk", "sdk.tgz"), contextProfile);
+    }
   }
 }
 

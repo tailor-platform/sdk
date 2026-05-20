@@ -87,9 +87,18 @@ describe("buildContainerRunArgs", () => {
     const authMount = volumes.find((v) => v.includes(CONTAINER_CODEX_AUTH));
     expect(authMount).toBe(`${authPath}:${CONTAINER_CODEX_AUTH}:ro,Z`);
 
-    const envIdx = args.indexOf("--env");
-    expect(envIdx).toBeGreaterThan(-1);
-    expect(args[envIdx + 1]).toBe(`CODEX_HOME=${CONTAINER_CODEX_HOME}`);
+    const envValues = args.filter((_, i) => i > 0 && args[i - 1] === "--env");
+    expect(envValues).toContain(`CODEX_HOME=${CONTAINER_CODEX_HOME}`);
+  });
+
+  it("sets CI=true so solver `pnpm install` re-runs do not block on TTY-only prompts", () => {
+    const args = buildContainerRunArgs(["exec", "--json"], {
+      workDir: "/tmp/sdk-ws-codex",
+      codexAuthPath: authPath,
+    });
+
+    const envValues = args.filter((_, i) => i > 0 && args[i - 1] === "--env");
+    expect(envValues).toContain("CI=true");
   });
 
   it("does not poke holes in the network for legacy ollama / host services", () => {
