@@ -67,9 +67,15 @@ export function enumerateAllFieldCompletions(methodName: string): FieldCompletio
   function walk(message: DescMessage, prefix: string): void {
     visited.add(message);
     for (const field of message.fields) {
+      // `--field` uses `key=value` with dotted keys building nested objects;
+      // it has no syntax for arrays or maps. Skip list/map fields so we don't
+      // tab-complete a path that `setNestedPath` would silently turn into the
+      // wrong shape (e.g. `subgraphs.name=x` → `{subgraphs:{name:"x"}}` when
+      // the proto expects a repeated message).
+      if (field.fieldKind === "list" || field.fieldKind === "map") continue;
       const fullKey = prefix + field.localName;
-      const nested = nestedMessage(field);
-      if (nested) {
+      if (field.fieldKind === "message") {
+        const nested = field.message;
         candidates.push({ value: `${fullKey}.`, description: `${fullKey} (message)` });
         if (!visited.has(nested)) walk(nested, `${fullKey}.`);
         continue;
@@ -89,4 +95,26 @@ export function enumerateAllFieldCompletions(methodName: string): FieldCompletio
 
   walk(method.input, "");
   return candidates;
+}
+
+/**
+ * Resolves the leaf `DescField` at a dotted `--field` path within an input
+ * message tree. Returns undefined when any segment is missing or when a
+ * non-leaf segment isn't a singular message — callers fall back to treating
+ * the value as a string in that case.
+ * @param input - The RPC input message descriptor
+ * @param path - Dot-split path segments to follow (e.g. ["application", "name"])
+ * @returns The leaf field descriptor, or undefined when the path doesn't resolve
+ */
+export function resolveLeafField(input: DescMessage, path: string[]): DescField | undefined {
+  let message: DescMessage | undefined = input;
+  for (let i = 0; i < path.length; i++) {
+    if (!message) return undefined;
+    const field: DescField | undefined = message.fields.find((f) => f.localName === path[i]);
+    if (!field) return undefined;
+    if (i === path.length - 1) return field;
+    if (field.fieldKind !== "message") return undefined;
+    message = field.message;
+  }
+  return undefined;
 }

@@ -1,3 +1,4 @@
+import { ScalarType } from "@bufbuild/protobuf";
 import { arg } from "politty";
 import { z } from "zod";
 import { configArg, workspaceArgs } from "@/cli/shared/args";
@@ -13,8 +14,10 @@ import {
   extractMethodName,
   getMethodDescriptor,
   listMethodNames,
+  resolveLeafField,
 } from "./proto-reflect";
 import type { LoadedConfig } from "@/cli/shared/config-loader";
+import type { DescField } from "@bufbuild/protobuf";
 
 export { apiCall, type ApiCallOptions, type ApiCallResult } from "./api-call";
 
@@ -64,9 +67,9 @@ function parseBodyAsObject(body: string): Record<string, unknown> | undefined {
  * needed. `--field` takes precedence over `--body`, so collisions overwrite.
  * @param obj - The body object to mutate
  * @param path - Dot-split path segments (e.g. ["application", "name"])
- * @param value - String value to assign at the leaf
+ * @param value - Value to assign at the leaf
  */
-function setNestedPath(obj: Record<string, unknown>, path: string[], value: string): void {
+function setNestedPath(obj: Record<string, unknown>, path: string[], value: unknown): void {
   let cursor: Record<string, unknown> = obj;
   for (let i = 0; i < path.length - 1; i++) {
     const key = path[i];
@@ -77,6 +80,26 @@ function setNestedPath(obj: Record<string, unknown>, path: string[], value: stri
     cursor = cursor[key] as Record<string, unknown>;
   }
   cursor[path[path.length - 1]] = value;
+}
+
+/**
+ * Coerces a raw `--field` string value to match the leaf proto type so the
+ * JSON body sends a properly typed value. Today we only coerce bool — the
+ * completion candidates explicitly suggest `=true`/`=false`, so sending the
+ * literal string "true" would be a visible mismatch. Other scalars are left
+ * as strings: proto JSON accepts string forms for ints/floats/int64/etc.,
+ * and we'd rather pass through what the user typed than silently coerce.
+ * @param field - The resolved leaf field descriptor, or undefined when the path didn't resolve
+ * @param raw - The raw string value after `=`
+ * @returns The value to write into the body object
+ */
+function coerceFieldValue(field: DescField | undefined, raw: string): unknown {
+  if (field && field.fieldKind === "scalar" && field.scalar === ScalarType.BOOL) {
+    if (raw === "true") return true;
+    if (raw === "false") return false;
+    throw new Error(`Invalid value for bool field: '${raw}'. Expected 'true' or 'false'.`);
+  }
+  return raw;
 }
 
 interface ParsedField {
@@ -194,7 +217,8 @@ Use \`--field key=value\` (repeatable) to set request body fields without writin
         throw new Error("--field requires --body to be a JSON object (or omitted).");
       }
       for (const f of args.field) {
-        setNestedPath(parsedBody, f.path, f.value);
+        const leaf = method ? resolveLeafField(method.input, f.path) : undefined;
+        setNestedPath(parsedBody, f.path, coerceFieldValue(leaf, f.value));
       }
       mutated = true;
     }

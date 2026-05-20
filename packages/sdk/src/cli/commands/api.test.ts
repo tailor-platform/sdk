@@ -328,5 +328,48 @@ describe("api command body auto-injection", () => {
       expect(result.success).toBe(false);
       expect(fetchMock).not.toHaveBeenCalled();
     });
+
+    test("should coerce true/false to booleans for bool-typed fields", async () => {
+      vi.mocked(loadWorkspaceId).mockResolvedValue("ws-1");
+
+      await runCommand(apiCommand, [
+        "CreateWorkspace",
+        "-f",
+        "name=ws",
+        "-f",
+        "deleteProtection=true",
+      ]);
+
+      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+      const body = JSON.parse(options.body as string);
+      expect(body.deleteProtection).toBe(true);
+      expect(typeof body.deleteProtection).toBe("boolean");
+    });
+
+    test("should reject non-boolean values for bool-typed fields", async () => {
+      vi.mocked(loadWorkspaceId).mockResolvedValue("ws-1");
+
+      const result = await runCommand(apiCommand, [
+        "CreateWorkspace",
+        "-f",
+        "name=ws",
+        "-f",
+        "deleteProtection=yes",
+      ]);
+
+      expect(result.success).toBe(false);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    test("should leave string scalars unchanged", async () => {
+      vi.mocked(loadWorkspaceId).mockResolvedValue("ws-1");
+
+      await runCommand(apiCommand, ["GetFunctionExecution", "-f", "executionId=exec-1"]);
+
+      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+      const body = JSON.parse(options.body as string);
+      expect(body.executionId).toBe("exec-1");
+      expect(typeof body.executionId).toBe("string");
+    });
   });
 });
