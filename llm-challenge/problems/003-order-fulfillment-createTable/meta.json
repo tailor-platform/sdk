@@ -1,0 +1,17 @@
+{
+  "id": "003",
+  "name": "order-fulfillment-createTable",
+  "difficulty": "medium",
+  "category": "tailordb",
+  "scoring": { "generate": 20, "typecheck": 20, "tests": 60 },
+  "files": {
+    "implement": [
+      "tailordb/customer.ts",
+      "tailordb/order.ts",
+      "tailordb/orderItem.ts",
+      "tailordb/shipment.ts",
+      "tailor.config.ts"
+    ],
+    "scaffold": ["tailor.config.ts"]
+  }
+}
