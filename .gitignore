@@ -48,6 +48,7 @@ tailor.d.ts
 !.claude/skills/llm-challenge/
 !.claude/skills/docs-check/
 !.claude/skills/tailor-sdk
+!.claude/skills/e2e-setup/
 CLAUDE.local.md
 
 # LLM Challenge
