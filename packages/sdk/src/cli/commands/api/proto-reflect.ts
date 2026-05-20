@@ -53,7 +53,7 @@ export function nestedMessage(field: DescField): DescMessage | undefined {
 }
 
 /**
- * `google.protobuf.*` well-known types serialize as scalars in proto JSON
+ * Most `google.protobuf.*` well-known types serialize as scalars in proto JSON
  * (Timestamp/Duration → RFC3339/duration string, FieldMask → comma-joined
  * string, *Value wrappers → underlying primitive, etc.), so we must not let
  * `--field` drill into their internal fields. Treating them as leaves keeps
@@ -63,6 +63,28 @@ export function nestedMessage(field: DescField): DescMessage | undefined {
  */
 function isWellKnownType(message: DescMessage): boolean {
   return message.typeName.startsWith("google.protobuf.");
+}
+
+// Well-known types whose proto JSON shape is an object/array/null/arbitrary
+// value — they cannot be expressed by a single `--field key=value` string.
+// Drill-down would build the wrong shape, and a flat `key=foo` would send
+// "foo" where the server expects e.g. an object; we skip them entirely from
+// completion and from leaf resolution.
+const UNREPRESENTABLE_WELL_KNOWN_TYPES = new Set([
+  "google.protobuf.Struct",
+  "google.protobuf.Value",
+  "google.protobuf.ListValue",
+  "google.protobuf.NullValue",
+  "google.protobuf.Any",
+  "google.protobuf.Empty",
+]);
+
+/**
+ * @param message - The proto message descriptor to inspect
+ * @returns True when the message is a well-known type that `--field` cannot represent
+ */
+function isUnrepresentableWellKnownType(message: DescMessage): boolean {
+  return UNREPRESENTABLE_WELL_KNOWN_TYPES.has(message.typeName);
 }
 
 export interface FieldCompletionCandidate {
@@ -101,6 +123,7 @@ export function enumerateAllFieldCompletions(methodName: string): FieldCompletio
       // wrong shape (e.g. `subgraphs.name=x` → `{subgraphs:{name:"x"}}` when
       // the proto expects a repeated message).
       if (field.fieldKind === "list" || field.fieldKind === "map") continue;
+      if (field.fieldKind === "message" && isUnrepresentableWellKnownType(field.message)) continue;
       const fullKey = prefix + field.localName;
       if (field.fieldKind === "message" && !isWellKnownType(field.message)) {
         const nested = field.message;
@@ -140,7 +163,15 @@ export function resolveLeafField(input: DescMessage, path: string[]): DescField 
     if (!message) return undefined;
     const field: DescField | undefined = message.fields.find((f) => f.localName === path[i]);
     if (!field) return undefined;
-    if (i === path.length - 1) return field;
+    if (i === path.length - 1) {
+      // Refuse to resolve a leaf inside an unrepresentable well-known type —
+      // even if the user typed `payload=...` for a Struct field manually,
+      // we don't want to claim a scalar shape we can't actually coerce.
+      if (field.fieldKind === "message" && isUnrepresentableWellKnownType(field.message)) {
+        return undefined;
+      }
+      return field;
+    }
     // Mirror enumerateAllFieldCompletions: don't drill into list/map fields
     // or well-known types — `--field` cannot represent their internal shape.
     if (field.fieldKind !== "message") return undefined;

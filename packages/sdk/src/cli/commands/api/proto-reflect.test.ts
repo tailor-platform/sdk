@@ -101,6 +101,16 @@ describe("enumerateAllFieldCompletions", () => {
     expect(values).not.toContain("updateMask.");
     expect(values.some((v) => v.startsWith("updateMask."))).toBe(false);
   });
+
+  test("omits google.protobuf.Struct and other unrepresentable well-known types", () => {
+    // TriggerExecutor.payload is google.protobuf.Struct. proto JSON requires
+    // an object value there, so neither `payload=` (sends a string) nor
+    // `payload.…` (wrong shape) is correct. Don't offer the field at all.
+    const values = enumerateAllFieldCompletions("TriggerExecutor").map((c) => c.value);
+    expect(values).not.toContain("payload=");
+    expect(values).not.toContain("payload.");
+    expect(values.some((v) => v === "payload=" || v.startsWith("payload."))).toBe(false);
+  });
 });
 
 describe("resolveLeafField", () => {
