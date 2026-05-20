@@ -59,6 +59,7 @@ interface WorkflowDefinition<Job extends WorkflowJob<any, any, any>> {
  *   mainJob: processData,
  * });
  */
+/* @__NO_SIDE_EFFECTS__ */
 export function createWorkflow<Job extends WorkflowJob<any, any, any>>(
   config: WorkflowDefinition<Job>,
 ): Workflow<Job> {

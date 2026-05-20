@@ -21,6 +21,10 @@
     "skills"
   ],
   "type": "module",
+  "sideEffects": [
+    "./dist/cli/**/*.mjs",
+    "./dist/vitest/setup.mjs"
+  ],
   "main": "./dist/configure/index.mjs",
   "types": "./dist/configure/index.d.mts",
   "exports": {

@@ -16,6 +16,7 @@ export type {
  * @param config - IdP configuration
  * @returns Defined IdP service
  */
+/* @__NO_SIDE_EFFECTS__ */
 export function defineIdp<const TClients extends string[]>(
   name: string,
   config: Omit<IdPInput, "name" | "clients" | "permission"> & {
