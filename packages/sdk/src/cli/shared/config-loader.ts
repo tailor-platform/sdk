@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
+import { AppConfigSchema } from "@/parser/app-config/schema";
 import { CodeGeneratorSchema, BaseGeneratorConfigSchema } from "@/parser/generator-config/schema";
 import { PluginConfigSchema } from "@/parser/plugin-config";
 import { builtinPlugins } from "@/plugin/builtin/registry";
@@ -43,6 +44,14 @@ export async function loadConfig(
   const configModule = await import(pathToFileURL(resolvedPath).href);
   if (!configModule || !configModule.default) {
     throw new Error("Invalid Tailor config module: default export not found");
+  }
+
+  const validated = AppConfigSchema.safeParse(configModule.default);
+  if (!validated.success) {
+    const issues = validated.error.issues
+      .map((i) => `  - ${i.path.join(".") || "(root)"}: ${i.message}`)
+      .join("\n");
+    throw new Error(`Invalid Tailor config in ${resolvedPath}:\n${issues}`);
   }
 
   // Collect all generator exports (generators, generators2, etc.)
