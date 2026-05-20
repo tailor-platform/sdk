@@ -81,7 +81,7 @@ export function getContainerfileContent(): string {
   return [
     "FROM node:22-slim",
     "RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*",
-    `RUN corepack enable && corepack prepare ${pnpmSpec} --activate`,
+    "RUN corepack enable",
     "RUN npm install -g @openai/codex",
     // Pre-create the writable CODEX_HOME slot before switching to non-root user.
     // The host's auth.json is bind-mounted read-only at runtime; codex itself
@@ -89,6 +89,11 @@ export function getContainerfileContent(): string {
     // hierarchy, so the parent must be writable by `node`.
     "RUN mkdir -p /home/node/.codex && chown -R node:node /home/node/.codex",
     "USER node",
+    // `corepack prepare` populates the invoking user's cache
+    // (~/.cache/node/corepack/). Running it as root above would leave node's
+    // cache empty, forcing corepack to re-download pnpm on the agent's first
+    // `pnpm <cmd>` invocation -- ~10 s of wasted wall clock per solve.
+    `RUN corepack prepare ${pnpmSpec} --activate`,
     "",
   ].join("\n");
 }
