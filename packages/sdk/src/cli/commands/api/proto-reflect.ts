@@ -24,10 +24,9 @@ export function listMethodNames(): string[] {
  * @returns Sorted list of accepted endpoint values
  */
 export function listMethodChoices(): string[] {
-  const methods = unaryMethods();
-  const bare = methods.map((m) => m.name);
-  const fq = methods.map((m) => `${OperatorService.typeName}/${m.name}`);
-  return [...bare, ...fq].sort();
+  return unaryMethods()
+    .flatMap((m) => [m.name, `${OperatorService.typeName}/${m.name}`])
+    .sort();
 }
 
 export function getMethodDescriptor(methodName: string): DescMethodUnary | undefined {
