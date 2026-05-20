@@ -1,11 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
+import { applyPreMigrationFieldAdjustments } from "@/cli/commands/tailordb/migrate/pre-migration-schema";
 import { sdkNameLabelKey } from "../label";
-import {
-  applyPreMigrationFieldAdjustments,
-  applyTailorDB,
-  formatTailorDBResourceChangeEntries,
-  planTailorDB,
-} from ".";
+import { applyTailorDB, formatTailorDBResourceChangeEntries, planTailorDB } from ".";
 import type { PlanContext } from "../deploy";
 import type { DiffChange } from "@/cli/commands/tailordb/migrate/diff-calculator";
 import type { SnapshotFieldConfig } from "@/cli/commands/tailordb/migrate/snapshot";

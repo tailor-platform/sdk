@@ -21,6 +21,8 @@ function createDiff(
     changes,
     hasBreakingChanges: breakingChanges.length > 0,
     breakingChanges,
+    hasWarnings: false,
+    warnings: [],
     requiresMigrationScript: breakingChanges.length > 0,
   };
 }

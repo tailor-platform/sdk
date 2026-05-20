@@ -122,12 +122,15 @@ export async function detectPendingMigrations(
         continue;
       }
 
-      // Load the diff to check if migration script is required
+      // Load the diff to inspect breaking/warning classification
       const diff = loadDiff(diffPath);
 
-      // Check for migration script (only required for breaking changes)
+      // The migration script is executed when migrate.ts exists on disk.
+      // Breaking changes still hard-require a script; warnings (e.g. field_removed)
+      // may optionally have one added via `tailordb migration script <num>`.
       const scriptPath = getMigrationFilePath(migrationsDir, file.number, "migrate");
-      if (diff.requiresMigrationScript && !fs.existsSync(scriptPath)) {
+      const hasScript = fs.existsSync(scriptPath);
+      if (diff.requiresMigrationScript && !hasScript) {
         logger.warn(
           `Migration ${namespace}/${file.number} requires a script but migrate.ts not found`,
         );
@@ -136,7 +139,8 @@ export async function detectPendingMigrations(
 
       pendingMigrations.push({
         number: file.number,
-        scriptPath, // May not exist for non-breaking changes
+        scriptPath,
+        hasScript,
         diffPath,
         namespace,
         migrationsDir,
@@ -241,8 +245,9 @@ export async function executeMigrations(
   context: MigrationContext,
   migrations: PendingMigration[],
 ): Promise<void> {
-  // Filter migrations that require script execution
-  const migrationsWithScripts = migrations.filter((m) => m.diff.requiresMigrationScript);
+  // Run migrate.ts whenever the file exists on disk. Required for breaking changes,
+  // optional for warning-tier changes (e.g. field_removed).
+  const migrationsWithScripts = migrations.filter((m) => m.hasScript);
 
   if (migrationsWithScripts.length === 0) {
     return;

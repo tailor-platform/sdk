@@ -113,6 +113,24 @@ A typical change cycle:
    ```
    The pre-migration phase relaxes the new field to optional, the script runs and populates values, then the post-migration phase enforces `required: true`.
 
+### Warnings and optional migration scripts
+
+Some non-breaking changes can still cause data loss — most notably removing a field (`field_removed`) or removing a type (`type_removed`). `migration generate` reports these as **warnings**:
+
+```
+Warning: data loss possible:
+
+  - User.legacyParentId: Field removed (existing data will be dropped in the post-migration phase)
+```
+
+No `migrate.ts` is generated automatically because the schema change itself is non-breaking, but the existing data is dropped during the post-migration phase. If you need to preserve or transform that data first (for example, copy a column into another table before it disappears), add a script with:
+
+```bash
+tailor-sdk tailordb migration script 0002
+```
+
+This writes `migrations/0002/migrate.ts` and `migrations/0002/db.ts` next to the existing `diff.json`. The removed field stays readable inside `migrate.ts` because the pre-migration phase keeps it on the type until the script finishes (see [Per-migration phases](#per-migration-phases)). The next `tailor-sdk deploy` runs the script automatically — `migrate.ts` is executed whenever the file exists on disk, regardless of whether the diff itself required it.
+
 ## Configuration
 
 ```typescript

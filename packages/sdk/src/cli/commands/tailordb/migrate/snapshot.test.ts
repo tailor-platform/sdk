@@ -764,6 +764,8 @@ describe("snapshot", () => {
         changes: [],
         hasBreakingChanges: false,
         breakingChanges: [],
+        hasWarnings: false,
+        warnings: [],
         requiresMigrationScript: false,
       };
 
@@ -793,6 +795,8 @@ describe("snapshot", () => {
         changes: [],
         hasBreakingChanges: false,
         breakingChanges: [],
+        hasWarnings: false,
+        warnings: [],
         requiresMigrationScript: false,
       };
 
@@ -853,6 +857,8 @@ describe("snapshot", () => {
         changes: [],
         hasBreakingChanges: false,
         breakingChanges: [],
+        hasWarnings: false,
+        warnings: [],
         requiresMigrationScript: false,
       };
 
@@ -885,6 +891,8 @@ describe("snapshot", () => {
         changes: [],
         hasBreakingChanges: false,
         breakingChanges: [],
+        hasWarnings: false,
+        warnings: [],
         requiresMigrationScript: false,
       };
 
@@ -933,6 +941,8 @@ describe("snapshot", () => {
         changes: [{ kind: "type_added", typeName: "NewType" }],
         hasBreakingChanges: false,
         breakingChanges: [],
+        hasWarnings: false,
+        warnings: [],
         requiresMigrationScript: false,
       };
 
@@ -976,6 +986,8 @@ describe("snapshot", () => {
         changes: [],
         hasBreakingChanges: false,
         breakingChanges: [],
+        hasWarnings: false,
+        warnings: [],
         requiresMigrationScript: false,
       };
 
@@ -1043,6 +1055,8 @@ describe("snapshot", () => {
         ],
         hasBreakingChanges: false,
         breakingChanges: [],
+        hasWarnings: false,
+        warnings: [],
         requiresMigrationScript: false,
       };
 
@@ -1082,6 +1096,8 @@ describe("snapshot", () => {
         ],
         hasBreakingChanges: false,
         breakingChanges: [],
+        hasWarnings: false,
+        warnings: [],
         requiresMigrationScript: false,
       };
 
@@ -1099,6 +1115,8 @@ describe("snapshot", () => {
         ],
         hasBreakingChanges: false,
         breakingChanges: [],
+        hasWarnings: false,
+        warnings: [],
         requiresMigrationScript: false,
       };
 
@@ -1145,6 +1163,8 @@ describe("snapshot", () => {
         ],
         hasBreakingChanges: false,
         breakingChanges: [],
+        hasWarnings: false,
+        warnings: [],
         requiresMigrationScript: false,
       };
 
@@ -1191,6 +1211,8 @@ describe("snapshot", () => {
         ],
         hasBreakingChanges: false,
         breakingChanges: [],
+        hasWarnings: false,
+        warnings: [],
         requiresMigrationScript: false,
       };
 
@@ -1261,6 +1283,8 @@ describe("snapshot", () => {
         ],
         hasBreakingChanges: false,
         breakingChanges: [],
+        hasWarnings: false,
+        warnings: [],
         requiresMigrationScript: false,
       };
 
@@ -1321,6 +1345,8 @@ describe("snapshot", () => {
         changes: [],
         hasBreakingChanges: false,
         breakingChanges: [],
+        hasWarnings: false,
+        warnings: [],
         requiresMigrationScript: false,
       };
 
@@ -1340,6 +1366,8 @@ describe("snapshot", () => {
         changes: [],
         hasBreakingChanges: false,
         breakingChanges: [],
+        hasWarnings: false,
+        warnings: [],
         requiresMigrationScript: false,
       };
       writeDiffToDir(testDir, 1, diff);
@@ -1368,6 +1396,8 @@ describe("snapshot", () => {
         changes: [],
         hasBreakingChanges: false,
         breakingChanges: [],
+        hasWarnings: false,
+        warnings: [],
         requiresMigrationScript: false,
       };
 
@@ -1447,6 +1477,8 @@ describe("snapshot", () => {
         changes: [],
         hasBreakingChanges: false,
         breakingChanges: [],
+        hasWarnings: false,
+        warnings: [],
         requiresMigrationScript: false,
       };
       // Missing 0000/schema.json

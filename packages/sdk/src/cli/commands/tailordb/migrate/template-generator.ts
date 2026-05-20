@@ -150,7 +150,7 @@ export async function generateDiffFiles(
  * @param {MigrationDiff} diff - Migration diff
  * @returns {string} Migration script content
  */
-function generateMigrationScript(diff: MigrationDiff): string {
+export function generateMigrationScript(diff: MigrationDiff): string {
   const updates: string[] = [];
 
   for (const change of diff.changes) {
