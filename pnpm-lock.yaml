@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  politty: https://pkg.pr.new/politty@353?v=20260522
+  politty: https://pkg.pr.new/politty@353?v=20260521d
 
 importers:
 
@@ -152,8 +152,8 @@ importers:
         specifier: 2.3.1
         version: 2.3.1
       politty:
-        specifier: https://pkg.pr.new/politty@353?v=20260522
-        version: https://pkg.pr.new/politty@353?v=20260522(@clack/prompts@1.3.0)(@inquirer/prompts@8.4.2(@types/node@24.12.3))(zod@4.3.6)
+        specifier: https://pkg.pr.new/politty@353?v=20260521d
+        version: https://pkg.pr.new/politty@353?v=20260521d(@clack/prompts@1.3.0)(@inquirer/prompts@8.4.2(@types/node@24.12.3))(zod@4.3.6)
       zod:
         specifier: 4.3.6
         version: 4.3.6
@@ -624,8 +624,8 @@ importers:
         specifier: 2.3.1
         version: 2.3.1
       politty:
-        specifier: https://pkg.pr.new/politty@353?v=20260522
-        version: https://pkg.pr.new/politty@353?v=20260522(@clack/prompts@1.3.0)(@inquirer/prompts@8.4.2(@types/node@24.12.3))(zod@4.3.6)
+        specifier: https://pkg.pr.new/politty@353?v=20260521d
+        version: https://pkg.pr.new/politty@353?v=20260521d(@clack/prompts@1.3.0)(@inquirer/prompts@8.4.2(@types/node@24.12.3))(zod@4.3.6)
       rolldown:
         specifier: 1.0.0
         version: 1.0.0
@@ -748,8 +748,8 @@ importers:
         specifier: 2.3.1
         version: 2.3.1
       politty:
-        specifier: https://pkg.pr.new/politty@353?v=20260522
-        version: https://pkg.pr.new/politty@353?v=20260522(@clack/prompts@1.3.0)(@inquirer/prompts@8.4.2(@types/node@24.12.3))(zod@4.3.6)
+        specifier: https://pkg.pr.new/politty@353?v=20260521d
+        version: https://pkg.pr.new/politty@353?v=20260521d(@clack/prompts@1.3.0)(@inquirer/prompts@8.4.2(@types/node@24.12.3))(zod@4.3.6)
       semver:
         specifier: 7.7.4
         version: 7.7.4
@@ -4782,8 +4782,8 @@ packages:
     resolution: {integrity: sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA==}
     engines: {node: '>=4'}
 
-  politty@https://pkg.pr.new/politty@353?v=20260522:
-    resolution: {integrity: sha512-reEiULrjioJSupOk5/frF8ESlv/tJZHvG0KB3H3512M8I2vUiqAWeu+X/JjHdQxTNWdbbWOG0hNmx/CpeejZMA==, tarball: https://pkg.pr.new/politty@353?v=20260522}
+  politty@https://pkg.pr.new/politty@353?v=20260521d:
+    resolution: {integrity: sha512-s8IeSkbHGdJhy8Qr3VOUSc2A/ugeP1/IS5O/HxpRRvip2dPan/sv2Yb90B98E0t/0i4ua4ygHK/Q//q5HzZylg==, tarball: https://pkg.pr.new/politty@353?v=20260521d}
     version: 0.4.15
     engines: {node: '>=18'}
     peerDependencies:
@@ -9203,7 +9203,7 @@ snapshots:
 
   pluralize@8.0.0: {}
 
-  politty@https://pkg.pr.new/politty@353?v=20260522(@clack/prompts@1.3.0)(@inquirer/prompts@8.4.2(@types/node@24.12.3))(zod@4.3.6):
+  politty@https://pkg.pr.new/politty@353?v=20260521d(@clack/prompts@1.3.0)(@inquirer/prompts@8.4.2(@types/node@24.12.3))(zod@4.3.6):
     dependencies:
       string-width: 8.2.0
       zod: 4.3.6
