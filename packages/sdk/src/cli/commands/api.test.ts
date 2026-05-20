@@ -371,5 +371,24 @@ describe("api command body auto-injection", () => {
       expect(body.executionId).toBe("exec-1");
       expect(typeof body.executionId).toBe("string");
     });
+
+    test("should reject prototype-pollution segments in --field key", async () => {
+      // Without this guard, `cursor[key]` would resolve `__proto__` against
+      // Object.prototype, letting the assignment mutate the global prototype
+      // instead of the body.
+      const polluted: { polluted?: unknown } = {};
+      const before = polluted.polluted;
+
+      const result = await runCommand(apiCommand, [
+        "GetFunctionExecution",
+        "-f",
+        "__proto__.polluted=yes",
+      ]);
+
+      expect(result.success).toBe(false);
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(polluted.polluted).toBe(before);
+      expect(({} as { polluted?: unknown }).polluted).toBeUndefined();
+    });
   });
 });

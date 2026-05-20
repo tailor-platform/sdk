@@ -37,6 +37,19 @@ export function nestedMessage(field: DescField): DescMessage | undefined {
   return undefined;
 }
 
+/**
+ * `google.protobuf.*` well-known types serialize as scalars in proto JSON
+ * (Timestamp/Duration → RFC3339/duration string, FieldMask → comma-joined
+ * string, *Value wrappers → underlying primitive, etc.), so we must not let
+ * `--field` drill into their internal fields. Treating them as leaves keeps
+ * the completion and the body shape consistent with what the server expects.
+ * @param message - The proto message descriptor to inspect
+ * @returns True when the message is a well-known type
+ */
+function isWellKnownType(message: DescMessage): boolean {
+  return message.typeName.startsWith("google.protobuf.");
+}
+
 export interface FieldCompletionCandidate {
   value: string;
   description: string;
@@ -74,7 +87,7 @@ export function enumerateAllFieldCompletions(methodName: string): FieldCompletio
       // the proto expects a repeated message).
       if (field.fieldKind === "list" || field.fieldKind === "map") continue;
       const fullKey = prefix + field.localName;
-      if (field.fieldKind === "message") {
+      if (field.fieldKind === "message" && !isWellKnownType(field.message)) {
         const nested = field.message;
         candidates.push({ value: `${fullKey}.`, description: `${fullKey} (message)` });
         if (!visited.has(nested)) walk(nested, `${fullKey}.`);
@@ -113,7 +126,10 @@ export function resolveLeafField(input: DescMessage, path: string[]): DescField 
     const field: DescField | undefined = message.fields.find((f) => f.localName === path[i]);
     if (!field) return undefined;
     if (i === path.length - 1) return field;
+    // Mirror enumerateAllFieldCompletions: don't drill into list/map fields
+    // or well-known types — `--field` cannot represent their internal shape.
     if (field.fieldKind !== "message") return undefined;
+    if (isWellKnownType(field.message)) return undefined;
     message = field.message;
   }
   return undefined;

@@ -80,6 +80,16 @@ describe("enumerateAllFieldCompletions", () => {
     expect(values).not.toContain("subgraphs.");
     expect(values.some((v) => v.startsWith("subgraphs."))).toBe(false);
   });
+
+  test("treats google.protobuf well-known types as leaves, not nested objects", () => {
+    // UpdateWorkspace has `updateMask` (google.protobuf.FieldMask). proto JSON
+    // serializes it as a string ("field1,field2"), so drilling into its
+    // internal `paths` repeated field would build a body the server rejects.
+    const values = enumerateAllFieldCompletions("UpdateWorkspace").map((c) => c.value);
+    expect(values).toContain("updateMask=");
+    expect(values).not.toContain("updateMask.");
+    expect(values.some((v) => v.startsWith("updateMask."))).toBe(false);
+  });
 });
 
 describe("resolveLeafField", () => {
