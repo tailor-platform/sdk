@@ -638,8 +638,10 @@ async function executeSingleMigrationPrePhase(
   changeSet: TailorDBChangeSet,
   migration: PendingMigration,
 ): Promise<void> {
-  // Build breaking changes map for this single migration
-  const breakingChanges = buildPreMigrationChangesMap([migration]);
+  // Build pre-migration changes map for this single migration. Includes both
+  // breaking changes (required-add, unique-add, enum value removal) and the
+  // warning-tier field_removed, since the Pre-phase relaxes both.
+  const preMigrationChanges = buildPreMigrationChangesMap([migration]);
   const affectedTypes = getAffectedTypeNames(migration);
   const createdBeforeMigration = new Set(processedTypes.created);
 
@@ -655,7 +657,7 @@ async function executeSingleMigrationPrePhase(
         const typeName = create.request.tailordbType?.name;
         if (typeName) processedTypes.created.add(typeName);
 
-        const typeChanges = typeName ? breakingChanges.get(typeName) : undefined;
+        const typeChanges = typeName ? preMigrationChanges.get(typeName) : undefined;
 
         if (!typeChanges || typeChanges.size === 0) {
           return client.createTailorDBType(create.request);
@@ -679,7 +681,7 @@ async function executeSingleMigrationPrePhase(
         const typeName = create.request.tailordbType?.name;
         if (typeName) processedTypes.updated.add(typeName);
 
-        const typeChanges = typeName ? breakingChanges.get(typeName) : undefined;
+        const typeChanges = typeName ? preMigrationChanges.get(typeName) : undefined;
 
         if (!typeChanges || typeChanges.size === 0) {
           return client.updateTailorDBType({
@@ -710,7 +712,7 @@ async function executeSingleMigrationPrePhase(
         const typeName = update.request.tailordbType?.name;
         if (typeName) processedTypes.updated.add(typeName);
 
-        const typeChanges = typeName ? breakingChanges.get(typeName) : undefined;
+        const typeChanges = typeName ? preMigrationChanges.get(typeName) : undefined;
 
         if (!typeChanges || typeChanges.size === 0) {
           return client.updateTailorDBType(update.request);
@@ -792,8 +794,9 @@ async function executeSingleMigrationPostPhase(
   changeSet: TailorDBChangeSet,
   migration: PendingMigration,
 ): Promise<void> {
-  // Build breaking changes map for this single migration
-  const breakingChanges = buildPreMigrationChangesMap([migration]);
+  // Re-use the pre-migration changes map to know which types were touched in
+  // this migration (so we send the post-phase final-schema update for them).
+  const preMigrationChanges = buildPreMigrationChangesMap([migration]);
   const affectedTypes = getAffectedTypeNames(migration);
   const deletedTypeNames = getDeletedTypeNames(migration);
 
@@ -801,11 +804,11 @@ async function executeSingleMigrationPostPhase(
   // Pre-migration used cloned requests, so the original changeSet still has correct values
   try {
     await Promise.all([
-      // For newly created types that had breaking changes in this migration, send update with final values
+      // For newly created types that had pre-migration adjustments in this migration, send update with final values
       ...changeSet.type.creates
         .filter((create) => {
           const typeName = create.request.tailordbType?.name;
-          return typeName && affectedTypes.has(typeName) && breakingChanges.has(typeName);
+          return typeName && affectedTypes.has(typeName) && preMigrationChanges.has(typeName);
         })
         .map((create) =>
           client.updateTailorDBType({
@@ -818,7 +821,7 @@ async function executeSingleMigrationPostPhase(
       ...changeSet.type.updates
         .filter((update) => {
           const typeName = update.request.tailordbType?.name;
-          return typeName && affectedTypes.has(typeName) && breakingChanges.has(typeName);
+          return typeName && affectedTypes.has(typeName) && preMigrationChanges.has(typeName);
         })
         .map((update) => client.updateTailorDBType(update.request)),
     ]);

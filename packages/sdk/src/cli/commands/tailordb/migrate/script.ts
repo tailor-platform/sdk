@@ -42,16 +42,18 @@ export interface ScriptOptions {
 async function script(options: ScriptOptions): Promise<void> {
   logBetaWarning("tailordb migration");
 
+  // Accept either the canonical 4-digit form ("0001") or a bare non-negative
+  // integer ("1"). Reject anything containing non-digit characters so that
+  // inputs like "1abc" don't silently parse to migration 1.
   let migrationNumber: number;
   if (isValidMigrationNumber(options.number)) {
     migrationNumber = parseInt(options.number, 10);
-  } else {
+  } else if (/^\d+$/.test(options.number)) {
     migrationNumber = parseInt(options.number, 10);
-    if (isNaN(migrationNumber) || migrationNumber < 0) {
-      throw new Error(
-        `Invalid migration number format: ${options.number}. Expected 4-digit format (e.g., 0001) or integer (e.g., 1).`,
-      );
-    }
+  } else {
+    throw new Error(
+      `Invalid migration number format: ${options.number}. Expected 4-digit format (e.g., 0001) or integer (e.g., 1).`,
+    );
   }
 
   if (migrationNumber === INITIAL_SCHEMA_NUMBER) {
