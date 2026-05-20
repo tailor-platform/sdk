@@ -2,100 +2,17 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-export type ChallengeStage = "generate" | "apiCheck" | "typecheck" | "tests";
-
-export type ContextProfile = "types-only" | "docs-only" | "tailor-sdk-skill" | "full-package";
-
-export type ApiCheckPattern = {
-  name: string;
-  pattern: string;
-  message?: string;
-  files?: string[];
-  /**
-   * What text the pattern is applied to.
-   * - `"code"` (default): comments and string/template bodies are blanked, import/export
-   *   module specifiers are preserved. Use this for API-shape patterns to avoid false
-   *   positives from comments and string contents.
-   * - `"raw"`: the original source is matched verbatim. Use this when the pattern targets
-   *   string-valued config (e.g. legacy package names passed to `defineGenerators`).
-   */
-  searchScope?: "code" | "raw";
-};
-
-/**
- * Per-file required identifiers. AST-precise check that complements the
- * regex-based `requiredPatterns`: while a pattern matches a shape (e.g.
- * `db.type(...).hooks(...)`), `requiredSymbols` asserts that a specific name
- * appears in a specific file. Inspired by Anthropic's "what agents omit"
- * principle in writing-tools-for-agents — surfaces missing symbols as a
- * first-class signal rather than letting them hide behind a downstream
- * typecheck or test failure.
- *
- * Keys are workDir-relative file paths from `files.implement`; values are
- * identifier names that must appear as a reference (any Identifier AST node)
- * in that file.
- */
-export type RequiredSymbolsConfig = Record<string, string[]>;
-
-export type ApiCheckConfig = {
-  checkUnknownSdkImports?: boolean;
-  requiredSdkImports?: string[];
-  forbiddenSdkImports?: string[];
-  requiredPatterns?: ApiCheckPattern[];
-  forbiddenPatterns?: ApiCheckPattern[];
-  requiredSymbols?: RequiredSymbolsConfig;
-};
-
-/**
- * Held-out split for overfit detection. Adapted from Anthropic's
- * "writing-tools-for-agents" methodology: optimize against `train`, verify
- * against `holdout`. `regression` is for problems that already pass and exist
- * to guard against regressions when API changes land. Defaults to `train` when
- * omitted so the existing problem set keeps current semantics.
- */
-export type ProblemSplit = "train" | "holdout" | "regression";
-
-export type ProblemMeta = {
-  id: string;
-  name: string;
-  difficulty: "easy" | "medium" | "hard";
-  category: string;
-  split?: ProblemSplit;
-  contextProfiles?: ContextProfile[];
-  scoring: {
-    generate: number;
-    apiCheck?: number;
-    typecheck: number;
-    tests: number;
-  };
-  files: {
-    implement: string[];
-    scaffold: string[];
-  };
-  apiCheck?: ApiCheckConfig;
-};
-
-export function getProblemSplit(meta: ProblemMeta): ProblemSplit {
-  return meta.split ?? "train";
-}
-
-export function loadMeta(problemDir: string): ProblemMeta {
-  const metaPath = path.join(problemDir, "meta.json");
-  const content = fs.readFileSync(metaPath, "utf-8");
-  return JSON.parse(content) as ProblemMeta;
-}
-
 /**
  * List all problem directories sorted by ID.
  *
- * Accepts legacy three-digit IDs (`001-foo`), Phase 2 micro-problem IDs
- * (`m01-foo`), and Phase 2.5 harder-tier IDs (`h01-foo`). Directories beginning
- * with `_` (e.g. `_shared`) are excluded — they hold cross-problem assets, not
- * runnable problems. The `archived/` sub-directory is also excluded by
- * default: graduated problems (5 consecutive passRate=1.0) live there and
- * are skipped by `challenge:solve`. Pass `{ includeArchived: true }` to
- * re-include them — useful for `challenge:analyze --include-archived` so
- * trend lines remain continuous past a graduation.
+ * Accepts Phase 2 micro-problem IDs (`m01-foo`) and Phase 2.5 harder-tier IDs
+ * (`h01-foo`). Directories beginning with `_` (e.g. `_shared`) are excluded —
+ * they hold cross-problem assets, not runnable problems. The `archived/`
+ * sub-directory is also excluded by default: graduated problems (5 consecutive
+ * passRate=1.0) live there and are skipped by `challenge:solve`. Pass
+ * `{ includeArchived: true }` to re-include them — useful for
+ * `challenge:analyze --include-archived` and explicit `--include-archived`
+ * solve invocations.
  */
 export function listProblems(
   baseDir: string,
@@ -105,7 +22,7 @@ export function listProblems(
   if (!fs.existsSync(problemsDir)) {
     return [];
   }
-  const idRegex = /^(\d{3}|m\d+|h\d+)-/;
+  const idRegex = /^(m\d+|h\d+)-/;
   const active = fs
     .readdirSync(problemsDir, { withFileTypes: true })
     .filter((d) => d.isDirectory() && !d.name.startsWith("_") && idRegex.test(d.name))
@@ -122,9 +39,6 @@ export function listProblems(
   return [...active, ...archived].sort();
 }
 
-/**
- * Copy directory recursively.
- */
 export function copyDir(src: string, dest: string): void {
   fs.mkdirSync(dest, { recursive: true });
   const entries = fs.readdirSync(src, { withFileTypes: true });
@@ -149,7 +63,7 @@ export function importPath(filePath: string): Promise<Record<string, any>> {
 }
 
 /**
- * Build a problem key string from ID and name, used consistently across runner files.
+ * Build a problem key string from ID and name.
  *
  * Phase 2 micro-problem IDs (e.g. `m01-db-field-unique-required`) already
  * include the slug, so when `problemName` repeats the slug portion we collapse

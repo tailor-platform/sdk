@@ -28,26 +28,6 @@ export function createWorkDirContext(testDirname: string): WorkDirContext {
 }
 
 /**
- * Assert that createdAt and updatedAt fields are datetime type.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic model shape from importPath
-export function expectTimestamps(model: Record<string, any>): void {
-  expect(model.fields.createdAt.type).toBe("datetime");
-  expect(model.fields.updatedAt.type).toBe("datetime");
-}
-
-/**
- * Assert that a model contains all specified field names.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic model shape from importPath
-export function expectFieldNames(model: Record<string, any>, fieldNames: string[]): void {
-  const actual = Object.keys(model.fields);
-  for (const name of fieldNames) {
-    expect(actual).toContain(name);
-  }
-}
-
-/**
  * Assert field type and optionally required/unique metadata.
  */
 export function expectFieldType(
@@ -62,25 +42,6 @@ export function expectFieldType(
   }
   if (metadata?.unique !== undefined) {
     expect(field.metadata.unique).toBe(metadata.unique);
-  }
-}
-
-/**
- * Assert that an enum field has the expected allowed values.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic field shape from importPath
-export function expectEnumValues(field: Record<string, any>, values: string[]): void {
-  expect(field.type).toBe("enum");
-  const actual = field.metadata.allowedValues.map((v: { value: string }) => v.value);
-  expect(actual).toEqual(values);
-}
-
-/**
- * Assert that all specified file paths exist.
- */
-export function expectFilesExist(filePaths: string[]): void {
-  for (const filePath of filePaths) {
-    expect(fs.existsSync(filePath), `expected ${filePath} to exist`).toBe(true);
   }
 }
 
