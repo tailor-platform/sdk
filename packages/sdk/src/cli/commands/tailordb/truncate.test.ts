@@ -115,6 +115,47 @@ describe("truncate command", () => {
         namespaceName: "anotherdb",
       });
     });
+
+    test("excludes external namespaces", async () => {
+      const { loadConfig } = await import("@/cli/shared/config-loader");
+      const { initOperatorClient } = await import("@/cli/shared/client");
+      vi.mocked(loadConfig).mockResolvedValueOnce({
+        config: {
+          db: {
+            owned: { files: ["./owned/*.ts"] },
+            "shared-db": { external: true },
+          },
+        },
+      } as unknown as Awaited<ReturnType<typeof loadConfig>>);
+      const client = await initOperatorClient("mock-token");
+
+      await truncate({ all: true });
+
+      expect(client.truncateTailorDBTypes).toHaveBeenCalledTimes(1);
+      expect(client.truncateTailorDBTypes).toHaveBeenCalledWith({
+        workspaceId: "mock-workspace-id",
+        namespaceName: "owned",
+      });
+    });
+
+    test("warns and returns when only external namespaces exist", async () => {
+      const { loadConfig } = await import("@/cli/shared/config-loader");
+      const { initOperatorClient } = await import("@/cli/shared/client");
+      const { logger } = await import("@/cli/shared/logger");
+      vi.mocked(loadConfig).mockResolvedValueOnce({
+        config: {
+          db: {
+            "shared-db": { external: true },
+          },
+        },
+      } as unknown as Awaited<ReturnType<typeof loadConfig>>);
+      const client = await initOperatorClient("mock-token");
+
+      await truncate({ all: true });
+
+      expect(client.truncateTailorDBTypes).not.toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalledWith("No namespaces found in config file.");
+    });
   });
 
   describe("truncate with --namespace flag", () => {

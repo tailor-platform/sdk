@@ -26,4 +26,15 @@ describe("extractAllNamespaces", () => {
 
     expect(extractAllNamespaces(config)).toEqual(["tailordb", "analytics"]);
   });
+
+  test("excludes external namespaces", () => {
+    const config = createConfig({
+      db: {
+        owned: { files: ["./owned/*.ts"] },
+        "shared-db": { external: true },
+      },
+    });
+
+    expect(extractAllNamespaces(config)).toEqual(["owned"]);
+  });
 });
