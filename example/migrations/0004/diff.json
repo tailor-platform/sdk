@@ -1,19 +1,22 @@
 {
   "version": 1,
   "namespace": "tailordb",
-  "createdAt": "2026-04-15T04:08:49.948Z",
+  "createdAt": "2026-05-20T19:18:42.305Z",
   "changes": [
     {
-      "kind": "field_modified",
+      "kind": "type_modified",
       "typeName": "Customer",
-      "fieldName": "name",
-      "before": {
-        "type": "string",
-        "required": true
-      },
+      "reason": "record-level hooks changed, record-level validators changed",
+      "before": {},
       "after": {
-        "type": "string",
-        "required": true,
+        "hooks": {
+          "create": {
+            "expr": "(({data})=>({...data,fullAddress:`${data.postalCode} ${data.address??\"\"} ${data.city??\"\"}`,createdAt:new Date}))({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+          },
+          "update": {
+            "expr": "(({data})=>({...data,fullAddress:`${data.postalCode} ${data.address??\"\"} ${data.city??\"\"}`,updatedAt:new Date}))({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+          }
+        },
         "validate": [
           {
             "script": {
