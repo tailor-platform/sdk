@@ -84,6 +84,7 @@ export function createExecutor<
   O extends Operation<Args> | { kind: "workflow"; workflow: Workflow },
 >(config: Executor<Trigger<Args>, O>): Executor<Trigger<Args>, O>;
 
+/* @__NO_SIDE_EFFECTS__ */
 export function createExecutor<
   T extends Trigger<unknown>,
   O extends Operation<TriggerArgs<T>> | { kind: "workflow"; workflow: Workflow },

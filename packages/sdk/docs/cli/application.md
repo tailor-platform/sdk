@@ -136,6 +136,10 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 <!-- politty:command:deploy:global-options-link:end -->
 
+**Config File Modification:**
+
+On first run, `deploy` automatically injects a stable `id: "<uuid>"` field into your `defineConfig({...})` call in `tailor.config.ts`. This UUID is used to track your application across renames so the SDK can recognize ownership across renames. Commit the generated id to version control. See [Configuration](../configuration.md#application-settings) for details.
+
 **Migration Handling:**
 
 When migrations are configured (`db.tailordb.migration` in config), the `deploy` command automatically:

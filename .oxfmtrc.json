@@ -1,5 +1,11 @@
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "sortImports": {
+    "groups": ["builtin", "external", "internal", "parent", "sibling", "index", "type"],
+    "newlinesBetween": false,
+    "ignoreCase": true,
+    "order": "asc"
+  },
   "ignorePatterns": [
     "**/CHANGELOG.md",
     "node_modules/",
@@ -15,7 +21,6 @@
     "yarn-error.log*",
     "pnpm-debug.log*",
     "lerna-debug.log*",
-    ".eslintcache",
     "coverage/",
     ".tailor-sdk",
     "example/tests/fixtures/",

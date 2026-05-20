@@ -1,7 +1,5 @@
-/* eslint-disable import-x/order -- contradictory results between macOS and Linux, see https://github.com/import-js/eslint-plugin-import/issues/1849 */
-import { format } from "date-fns";
 import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
-/* eslint-enable import-x/order */
+import { format } from "date-fns";
 
 export const fetchDetails = createWorkflowJob({
   name: "fetch-details",

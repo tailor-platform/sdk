@@ -9,6 +9,8 @@ const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const outDir = process.env.TAILOR_SDK_OUTPUT_DIR ?? path.join(__dirname, "dist");
 
 export default defineConfig({
+  // SDK-managed app id — do not edit, except when copying this config to a separate app.
+  id: "47eb65f3-2de9-4279-883f-2db54815ae8a",
   name: "test-app",
   inlineSourcemap: false,
   env: {

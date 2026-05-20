@@ -83,6 +83,7 @@ type ResolverReturn<
  *   }),
  * });
  */
+/* @__NO_SIDE_EFFECTS__ */
 export function createResolver<
   Input extends Record<string, TailorAnyField> | undefined = undefined,
   Output extends TailorAnyField | Record<string, TailorAnyField> = TailorAnyField,
