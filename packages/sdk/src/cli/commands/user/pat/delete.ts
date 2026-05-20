@@ -1,10 +1,10 @@
-import ml from "multiline-ts";
 import { arg } from "politty";
 import { z } from "zod";
 import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { fetchLatestToken, readPlatformConfig } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
+import ml from "@/utils/multiline";
 
 export const deleteCommand = defineAppCommand({
   name: "delete",

@@ -1,18 +1,27 @@
+import { tailorRuntime } from "@tailor-platform/sdk/vitest";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  plugins: [tailorRuntime()],
   test: {
     watch: false,
     outputFile: { json: "tests/results.json" },
+    // Disable inline sourcemaps during tests to keep bundled output stable
+    // for size and fixture comparisons.
+    env: {
+      TAILOR_ENABLE_INLINE_SOURCEMAP: "false",
+    },
     projects: [
       {
+        extends: true,
         test: {
           name: { label: "generator", color: "blue" },
-          environment: "node",
+          environment: "tailor-runtime",
           include: ["tests/**/*.{test,spec}.ts"],
         },
       },
       {
+        extends: true,
         test: {
           name: { label: "e2e", color: "green" },
           environment: "node",

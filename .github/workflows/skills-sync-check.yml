@@ -1,0 +1,72 @@
+name: Skills Sync
+
+on:
+  pull_request:
+    paths:
+      - "packages/sdk/skills/**"
+      - ".github/workflows/skills-sync-check.yml"
+  push:
+    branches: [main]
+    paths:
+      - "packages/sdk/skills/**"
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Sync skills to root
+        run: |
+          # Copy public skills from packages/sdk/skills/ to skills/
+          # This enables distribution via `gh skill` and `npx skills`
+
+          for skill_dir in packages/sdk/skills/*/; do
+            skill_name=$(basename "$skill_dir")
+            mkdir -p "skills/$skill_name"
+            cp -r "$skill_dir"* "skills/$skill_name/"
+            echo "✓ Synced $skill_name"
+          done
+
+      - name: Upgrade gh CLI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh --version
+          # Upgrade to latest gh CLI (v2.90.0+ required for gh skill)
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install gh -y
+          gh --version
+
+      - name: Validate skills
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh skill publish --dry-run
+
+      - name: Get changed files
+        id: changes
+        run: |
+          # Include both modified and untracked files
+          files=$(git status --porcelain | awk '{print $2}' | tr '\n' ' ')
+          echo "files=${files}" >> "$GITHUB_OUTPUT"
+
+      - name: Commit changes
+        if: steps.changes.outputs.files != ''
+        uses: suzuki-shunsuke/commit-action@06e3b49d4706498d325d29bd85adc82ecf2f5d8f # v1.0.0
+        with:
+          app_id: ${{ secrets.TAILOR_GITHUB_APP_ID }}
+          app_private_key: ${{ secrets.TAILOR_GITHUB_APP_PRIVATE_KEY }}
+          commit_message: "chore: sync skills"
+          files: ${{ steps.changes.outputs.files }}

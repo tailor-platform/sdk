@@ -23,26 +23,42 @@ jobs:
       - name: Install Deps
         uses: ./.github/actions/install-deps
 
-      - name: Get github access token to create release PR
+      - name: Get github access token for release PR / publish
         id: get_access_token
-        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.TAILOR_GITHUB_APP_ID }}
           private-key: ${{ secrets.TAILOR_GITHUB_APP_PRIVATE_KEY }}
           permission-contents: write
           permission-pull-requests: write
 
-      - name: Setup npm registry for publishing
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
-        with:
-          registry-url: "https://registry.npmjs.org"
+      # pnpm v11's `runtime set node` no longer bundles npm, so PATH falls back
+      # to the runner's system npm (10.8.2). Install npm 11+ into pnpm's global
+      # prefix; pnpm/action-setup puts that prefix ahead of the system one.
+      - name: Ensure npm 11+ for OIDC trusted publishing
+        run: pnpm add -g npm@latest
+        shell: bash
 
-      - name: Create Release PR
+      - name: Create Release PR or Publish
         id: changesets
-        uses: changesets/action@6a0a831ff30acef54f2c6aa1cbbc1096b066edaf # v1.7.0
+        uses: changesets/action@63a615b9cd06ba9a3e6d13796c7fbcb080a60a0b # v1.8.0
         with:
           commitMode: "github-api"
           publish: "pnpm changeset publish"
           createGithubReleases: true
         env:
           GITHUB_TOKEN: ${{ steps.get_access_token.outputs.token }}
+
+      - name: Notify Slack on failure
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_SDK_WEBHOOK_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          COMMIT_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          jq -n \
+            --arg run "$RUN_URL" \
+            --arg sha "$COMMIT_SHA" \
+            '{text: ":rotating_light: Release workflow <\($run)|failed in \($sha[0:7])>"}' \
+            | curl -fsS -X POST -H 'Content-Type: application/json' --data @- "$SLACK_WEBHOOK_URL"

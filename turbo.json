@@ -27,13 +27,23 @@
       "dependsOn": ["build"],
       "cache": false
     },
-    "apply": {
+    "deploy": {
       "dependsOn": ["build"],
       "cache": false
     },
     "check": {
-      "dependsOn": ["format", "lint:fix", "typecheck:go", "knip", "publint"],
+      "dependsOn": [
+        "format",
+        "lint:fix",
+        "typecheck:go",
+        "knip",
+        "publint",
+        "check:public-api-jsdoc"
+      ],
       "cache": false
+    },
+    "check:public-api-jsdoc": {
+      "cache": true
     },
     "knip": {
       "cache": true
@@ -44,12 +54,12 @@
     },
     "lint": {
       "dependsOn": ["build"],
-      "outputs": [".eslintcache"],
+      "outputs": [],
       "cache": true
     },
     "lint:fix": {
       "dependsOn": ["build"],
-      "outputs": [".eslintcache"],
+      "outputs": [],
       "cache": true
     },
     "format": {

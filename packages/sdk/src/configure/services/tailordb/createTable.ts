@@ -8,13 +8,13 @@ import {
   createTailorDBType,
 } from "./schema";
 import type { TailorTypeGqlPermission, TailorTypePermission } from "./permission";
-import type { RecordHook, SerialConfig, IndexDef, TypeFeatures } from "./types";
-import type { InferredAttributeMap } from "@/configure/types";
-import type { InferFieldsOutput, output } from "@/configure/types/helpers";
-import type { TailorFieldType, TailorToTs } from "@/configure/types/types";
-import type { RecordValidators } from "@/configure/types/validation";
+import type { RecordHook, TypeFeatures } from "./types";
+import type { TailorFieldType, TailorToTs } from "@/types/field-types";
+import type { InferFieldsOutput, output } from "@/types/helpers";
 import type { PluginAttachment } from "@/types/plugin";
-import type { RelationType } from "@/types/tailordb";
+import type { IndexDef, RelationType, SerialConfig } from "@/types/tailordb";
+import type { InferredAttributeMap } from "@/types/user";
+import type { RecordValidators } from "@/types/validation";
 
 type CommonFieldOptions = {
   optional?: boolean;

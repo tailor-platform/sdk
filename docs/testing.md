@@ -23,7 +23,7 @@ pnpm test -t "pattern"         # Pattern match
 
 E2E tests require a deployed workspace. The `globalSetup` provisions a workspace before tests run.
 
-Located in `packages/sdk/e2e/`. CI runs these in the `apply.yml` workflow on Linux and Windows (PowerShell + CMD).
+Located in `packages/sdk/e2e/`. CI runs these in the `deploy.yml` workflow on Linux and Windows (PowerShell + CMD).
 
 ## Conventions
 
@@ -35,7 +35,7 @@ Located in `packages/sdk/e2e/`. CI runs these in the `apply.yml` workflow on Lin
 - `toMatchObjectType` — Structural match
 - `toExtend` — Subtype check
 
-This is enforced by ESLint (see `eslint.config.js`).
+This is enforced by oxlint's local plugin (see `packages/sdk/oxlint-plugins/index.js` and `.oxlintrc.json`).
 
 ## Documentation Tests
 

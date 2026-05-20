@@ -1,4 +1,5 @@
 import { parseSync } from "oxc-parser";
+import * as path from "pathe";
 import { describe, expect, it } from "vitest";
 import { findAllJobs, detectTriggerCalls, buildJobNameMap } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
@@ -462,9 +463,8 @@ const mainJob = createWorkflowJob({
         allJobsMap,
       );
 
-      // trigger call is transformed
       expect(result).toContain(
-        'tailor.workflow.triggerJobFunction("fetch-data", { id: input.id })',
+        '(async () => tailor.workflow.triggerJobFunction("fetch-data", { id: input.id }))()',
       );
       // fetchData declaration is removed (const fetchData = ...)
       expect(result).not.toContain("const fetchData");
@@ -509,7 +509,9 @@ const mainJob = createWorkflowJob({
       // mainJob body is preserved
       expect(result).toContain('result: "main"');
       // trigger is transformed (job name appears in triggerJobFunction call)
-      expect(result).toContain('tailor.workflow.triggerJobFunction("heavy-job", undefined)');
+      expect(result).toContain(
+        '(async () => tailor.workflow.triggerJobFunction("heavy-job", undefined))()',
+      );
     });
 
     it("removes declarations of multiple other jobs", () => {
@@ -556,8 +558,12 @@ const mainJob = createWorkflowJob({
       // heavy code is removed (part of job1/job2 body)
       expect(result).not.toContain("heavy code");
       // triggers are transformed (job names appear in triggerJobFunction calls)
-      expect(result).toContain('tailor.workflow.triggerJobFunction("job-one", undefined)');
-      expect(result).toContain('tailor.workflow.triggerJobFunction("job-two", undefined)');
+      expect(result).toContain(
+        '(async () => tailor.workflow.triggerJobFunction("job-one", undefined))()',
+      );
+      expect(result).toContain(
+        '(async () => tailor.workflow.triggerJobFunction("job-two", undefined))()',
+      );
     });
 
     it("does not modify jobs without trigger calls", () => {
@@ -635,6 +641,35 @@ export default workflow;
 
       // workflow identifier default export should be removed
       expect(result).not.toContain("export default");
+    });
+
+    it("preserves default export in dependency files where target job does not exist", () => {
+      // This simulates the scenario where the bundler transforms a dependency
+      // file (e.g. simple.ts imported by caller.ts via default import).
+      // The target job "caller-job" does not exist in this file, so the
+      // default export must be preserved for the importing file to resolve it.
+      const source = `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+
+export const step1 = createWorkflowJob({
+  name: "step1",
+  body: (args: { input: number }) => {
+    return { result: args.input + 1 };
+  },
+});
+
+export default createWorkflow({
+  name: "simple-workflow",
+  mainJob: step1,
+});
+`;
+      // "caller-job" is the target job being bundled, but it does NOT exist
+      // in this file. This file is a dependency imported by the caller.
+      const result = transformWorkflowSource(source, "caller-job");
+
+      // The default export must be preserved so that the importing file
+      // can resolve `import simpleWorkflow from "./simple"`
+      expect(result).toContain("export default");
     });
   });
 });
@@ -970,8 +1005,8 @@ async function processOrder(orderId: string) {
     });
   });
 
-  describe("await removal for job triggers", () => {
-    it("removes await keyword when transforming job.trigger() calls", () => {
+  describe("async IIFE wrapping for job triggers", () => {
+    it("wraps job.trigger() in an async IIFE and preserves await", () => {
       const source = `
 const customer = await fetchCustomer.trigger({ customerId: "123" });
 console.log(customer);
@@ -981,15 +1016,12 @@ console.log(customer);
 
       const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
-      // Should NOT have await before triggerJobFunction since it's synchronous
-      expect(result).not.toContain("await tailor.workflow.triggerJobFunction");
-      // Should have the function call without await
       expect(result).toContain(
-        'const customer = tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" })',
+        'const customer = await (async () => tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" }))()',
       );
     });
 
-    it("removes await keyword for multiple job.trigger() calls", () => {
+    it("wraps multiple job.trigger() calls in an async IIFE", () => {
       const source = `
 const customer = await fetchCustomer.trigger({ customerId: "123" });
 const notification = await sendNotification.trigger({ message: "Hello" });
@@ -1002,14 +1034,13 @@ const notification = await sendNotification.trigger({ message: "Hello" });
 
       const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
-      // Should NOT have await
-      expect(result).not.toContain("await tailor.workflow.triggerJobFunction");
-      // Both calls should be transformed
-      expect(result).toContain('tailor.workflow.triggerJobFunction("fetch-customer"');
-      expect(result).toContain('tailor.workflow.triggerJobFunction("send-notification"');
+      expect(result).toContain('(async () => tailor.workflow.triggerJobFunction("fetch-customer"');
+      expect(result).toContain(
+        '(async () => tailor.workflow.triggerJobFunction("send-notification"',
+      );
     });
 
-    it("does not remove await for workflow.trigger() calls (async)", () => {
+    it("does not wrap workflow.trigger() calls (already async)", () => {
       const source = `
 const executionId = await orderWorkflow.trigger({ orderId: "123" }, { authInvoker });
 `;
@@ -1018,25 +1049,384 @@ const executionId = await orderWorkflow.trigger({ orderId: "123" }, { authInvoke
 
       const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
-      // Workflow trigger is async, so await should remain (not removed)
-      // The transformation replaces only the call expression, not the await
       expect(result).toContain('await tailor.workflow.triggerWorkflow("order-processing"');
+      expect(result).not.toContain("(async () => tailor.workflow.triggerWorkflow");
     });
 
-    it("handles job.trigger() without await correctly", () => {
+    it("wraps job.trigger() without await so it still returns a Promise", () => {
       const source = `
-const customer = fetchCustomer.trigger({ customerId: "123" });
+const customerPromise = fetchCustomer.trigger({ customerId: "123" });
 `;
       const workflowNameMap = new Map<string, string>();
       const jobNameMap = new Map([["fetchCustomer", "fetch-customer"]]);
 
       const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
-      // Should transform normally without adding await
       expect(result).toContain(
-        'const customer = tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" })',
+        'const customerPromise = (async () => tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" }))()',
       );
-      expect(result).not.toContain("await");
+      expect(result).not.toMatch(/\bawait\b/);
+    });
+
+    it("wraps job.trigger() inside Promise.all array elements", () => {
+      const source = `
+const [customer, notification] = await Promise.all([
+  fetchCustomer.trigger({ customerId: "123" }),
+  sendNotification.trigger({ message: "Hello" }),
+]);
+`;
+      const workflowNameMap = new Map<string, string>();
+      const jobNameMap = new Map([
+        ["fetchCustomer", "fetch-customer"],
+        ["sendNotification", "send-notification"],
+      ]);
+
+      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
+
+      expect(result).toContain(
+        '(async () => tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" }))()',
+      );
+      expect(result).toContain(
+        '(async () => tailor.workflow.triggerJobFunction("send-notification", { message: "Hello" }))()',
+      );
+      expect(result).toContain("await Promise.all([");
+    });
+
+    it("wraps job.trigger() before .then() chains", () => {
+      const source = `
+fetchCustomer.trigger({ customerId: "123" }).then((customer) => {
+  console.log(customer);
+});
+`;
+      const workflowNameMap = new Map<string, string>();
+      const jobNameMap = new Map([["fetchCustomer", "fetch-customer"]]);
+
+      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
+
+      expect(result).toContain(
+        '(async () => tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" }))().then(',
+      );
+    });
+
+    it("wraps job.trigger() nested inside an unknown .trigger() argument", () => {
+      const source = `
+unknown.trigger(fetchCustomer.trigger({ customerId: "123" }));
+`;
+      const workflowNameMap = new Map<string, string>();
+      const jobNameMap = new Map([["fetchCustomer", "fetch-customer"]]);
+
+      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
+
+      expect(result).toContain(
+        '(async () => tailor.workflow.triggerJobFunction("fetch-customer", { customerId: "123" }))()',
+      );
+      expect(result).toContain("unknown.trigger(");
+    });
+  });
+
+  describe("dead default import removal", () => {
+    it("removes default import when all references are transformed workflow triggers", () => {
+      const source = `
+import simpleWorkflow from "./simple";
+
+export const job = createWorkflowJob({
+  name: "my-job",
+  body: async () => {
+    const result = await simpleWorkflow.trigger(
+      { input: 0 },
+      { authInvoker: "admin" }
+    );
+    return result;
+  },
+});
+`;
+      const workflowNameMap = new Map<string, string>();
+      const jobNameMap = new Map<string, string>();
+      const workflowFileMap = new Map([["src/workflows/simple", "simple-workflow"]]);
+
+      const result = transformFunctionTriggers(
+        source,
+        workflowNameMap,
+        jobNameMap,
+        workflowFileMap,
+        "src/workflows/trigger-test.ts",
+      );
+
+      expect(result).not.toContain('import simpleWorkflow from "./simple"');
+      expect(result).toContain('tailor.workflow.triggerWorkflow("simple-workflow"');
+    });
+
+    it("removes default import when multiple trigger calls are all transformed", () => {
+      const source = `
+import simpleWorkflow from "./simple";
+
+export const job = createWorkflowJob({
+  name: "my-job",
+  body: async () => {
+    await simpleWorkflow.trigger({ input: 1 }, { authInvoker: "admin" });
+    await simpleWorkflow.trigger({ input: 2 }, { authInvoker: "admin" });
+  },
+});
+`;
+      const workflowNameMap = new Map<string, string>();
+      const jobNameMap = new Map<string, string>();
+      const workflowFileMap = new Map([["src/workflows/simple", "simple-workflow"]]);
+
+      const result = transformFunctionTriggers(
+        source,
+        workflowNameMap,
+        jobNameMap,
+        workflowFileMap,
+        "src/workflows/trigger-test.ts",
+      );
+
+      expect(result).not.toContain('import simpleWorkflow from "./simple"');
+    });
+
+    it("does not remove default import when non-trigger references remain", () => {
+      const source = `
+import simpleWorkflow from "./simple";
+
+console.log(simpleWorkflow);
+
+export const job = createWorkflowJob({
+  name: "my-job",
+  body: async () => {
+    await simpleWorkflow.trigger({ input: 0 }, { authInvoker: "admin" });
+  },
+});
+`;
+      const workflowNameMap = new Map<string, string>();
+      const jobNameMap = new Map<string, string>();
+      const workflowFileMap = new Map([["src/workflows/simple", "simple-workflow"]]);
+
+      const result = transformFunctionTriggers(
+        source,
+        workflowNameMap,
+        jobNameMap,
+        workflowFileMap,
+        "src/workflows/trigger-test.ts",
+      );
+
+      expect(result).toContain('import simpleWorkflow from "./simple"');
+    });
+
+    it("does not remove import when trigger call is not transformed (wrong arg count)", () => {
+      const source = `
+import simpleWorkflow from "./simple";
+
+export const job = createWorkflowJob({
+  name: "my-job",
+  body: async () => {
+    await simpleWorkflow.trigger({ input: 0 });
+  },
+});
+`;
+      const workflowNameMap = new Map<string, string>();
+      const jobNameMap = new Map<string, string>();
+      const workflowFileMap = new Map([["src/workflows/simple", "simple-workflow"]]);
+
+      const result = transformFunctionTriggers(
+        source,
+        workflowNameMap,
+        jobNameMap,
+        workflowFileMap,
+        "src/workflows/trigger-test.ts",
+      );
+
+      expect(result).toContain('import simpleWorkflow from "./simple"');
+    });
+
+    it("removes multiple dead default imports from different workflow files", () => {
+      const source = `
+import workflowA from "./workflow-a";
+import workflowB from "./workflow-b";
+
+export const job = createWorkflowJob({
+  name: "my-job",
+  body: async () => {
+    await workflowA.trigger({ input: 1 }, { authInvoker: "admin" });
+    await workflowB.trigger({ input: 2 }, { authInvoker: "admin" });
+  },
+});
+`;
+      const workflowNameMap = new Map<string, string>();
+      const jobNameMap = new Map<string, string>();
+      const workflowFileMap = new Map([
+        ["src/workflows/workflow-a", "workflow-a"],
+        ["src/workflows/workflow-b", "workflow-b"],
+      ]);
+
+      const result = transformFunctionTriggers(
+        source,
+        workflowNameMap,
+        jobNameMap,
+        workflowFileMap,
+        "src/workflows/trigger-test.ts",
+      );
+
+      expect(result).not.toContain('import workflowA from "./workflow-a"');
+      expect(result).not.toContain('import workflowB from "./workflow-b"');
+      expect(result).toContain('tailor.workflow.triggerWorkflow("workflow-a"');
+      expect(result).toContain('tailor.workflow.triggerWorkflow("workflow-b"');
+    });
+
+    it("removes only default specifier from mixed import, preserving named specifiers", () => {
+      const source = `
+import simpleWorkflow, { someHelper } from "./simple";
+
+export const job = createWorkflowJob({
+  name: "my-job",
+  body: async () => {
+    someHelper();
+    await simpleWorkflow.trigger({ input: 0 }, { authInvoker: "admin" });
+  },
+});
+`;
+      const workflowNameMap = new Map<string, string>();
+      const jobNameMap = new Map<string, string>();
+      const workflowFileMap = new Map([["src/workflows/simple", "simple-workflow"]]);
+
+      const result = transformFunctionTriggers(
+        source,
+        workflowNameMap,
+        jobNameMap,
+        workflowFileMap,
+        "src/workflows/trigger-test.ts",
+      );
+
+      // Default specifier removed, named import preserved
+      expect(result).not.toContain("import simpleWorkflow");
+      expect(result).toContain('import { someHelper } from "./simple"');
+      expect(result).toContain('tailor.workflow.triggerWorkflow("simple-workflow"');
+    });
+
+    it("removes default import even when the name is shadowed in a function parameter", () => {
+      const source = `
+import simpleWorkflow from "./simple";
+
+export const job = createWorkflowJob({
+  name: "my-job",
+  body: async () => {
+    await simpleWorkflow.trigger({ input: 0 }, { authInvoker: "admin" });
+    function helper(simpleWorkflow) {
+      console.log(simpleWorkflow);
+    }
+  },
+});
+`;
+      const workflowNameMap = new Map<string, string>();
+      const jobNameMap = new Map<string, string>();
+      const workflowFileMap = new Map([["src/workflows/simple", "simple-workflow"]]);
+
+      const result = transformFunctionTriggers(
+        source,
+        workflowNameMap,
+        jobNameMap,
+        workflowFileMap,
+        "src/workflows/trigger-test.ts",
+      );
+
+      expect(result).not.toContain('import simpleWorkflow from "./simple"');
+      expect(result).toContain('tailor.workflow.triggerWorkflow("simple-workflow"');
+    });
+
+    it("removes default import even when the name appears as an object property key", () => {
+      const source = `
+import simpleWorkflow from "./simple";
+
+export const job = createWorkflowJob({
+  name: "my-job",
+  body: async () => {
+    await simpleWorkflow.trigger({ input: 0 }, { authInvoker: "admin" });
+    const config = { simpleWorkflow: "some-value" };
+    return config;
+  },
+});
+`;
+      const workflowNameMap = new Map<string, string>();
+      const jobNameMap = new Map<string, string>();
+      const workflowFileMap = new Map([["src/workflows/simple", "simple-workflow"]]);
+
+      const result = transformFunctionTriggers(
+        source,
+        workflowNameMap,
+        jobNameMap,
+        workflowFileMap,
+        "src/workflows/trigger-test.ts",
+      );
+
+      expect(result).not.toContain('import simpleWorkflow from "./simple"');
+    });
+
+    it("removes default import that is completely unused (refCount 0)", () => {
+      const source = `
+import simpleWorkflow from "./simple";
+
+export const job = createWorkflowJob({
+  name: "my-job",
+  body: async () => {
+    return "no workflow reference at all";
+  },
+});
+`;
+      const workflowNameMap = new Map<string, string>();
+      const jobNameMap = new Map<string, string>();
+      const workflowFileMap = new Map([["src/workflows/simple", "simple-workflow"]]);
+
+      const result = transformFunctionTriggers(
+        source,
+        workflowNameMap,
+        jobNameMap,
+        workflowFileMap,
+        "src/workflows/trigger-test.ts",
+      );
+
+      expect(result).not.toContain('import simpleWorkflow from "./simple"');
+    });
+
+    it("does not affect same-file job triggers", () => {
+      const source = `
+const result = await fetchCustomer.trigger({ customerId: "123" });
+`;
+      const workflowNameMap = new Map<string, string>();
+      const jobNameMap = new Map([["fetchCustomer", "fetch-customer"]]);
+
+      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
+
+      expect(result).toContain('tailor.workflow.triggerJobFunction("fetch-customer"');
+    });
+
+    it("resolves default imports with absolute paths in workflowFileMap", () => {
+      const source = `
+import simpleWorkflow from "./simple";
+
+export const job = createWorkflowJob({
+  name: "my-job",
+  body: async () => {
+    const result = await simpleWorkflow.trigger(
+      { input: 0 },
+      { authInvoker: "admin" }
+    );
+    return result;
+  },
+});
+`;
+      const workflowNameMap = new Map<string, string>();
+      const jobNameMap = new Map<string, string>();
+      const baseDir = path.resolve("/tmp/test-project/workflows");
+      const workflowFileMap = new Map([[path.join(baseDir, "simple"), "simple-workflow"]]);
+
+      const result = transformFunctionTriggers(
+        source,
+        workflowNameMap,
+        jobNameMap,
+        workflowFileMap,
+        path.join(baseDir, "caller.ts"),
+      );
+
+      expect(result).toContain('tailor.workflow.triggerWorkflow("simple-workflow"');
+      expect(result).not.toContain('import simpleWorkflow from "./simple"');
     });
   });
 });

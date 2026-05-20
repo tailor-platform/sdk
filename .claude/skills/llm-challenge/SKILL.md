@@ -4,6 +4,8 @@ description: >
   Manage the LLM Challenge benchmark: run benchmarks, create/modify problems,
   analyze results, and improve SDK based on failures.
   Use when user mentions "llm-challenge", "challenge", "benchmark", or "lc".
+metadata:
+  internal: true
 ---
 
 # LLM Challenge

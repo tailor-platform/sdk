@@ -12,16 +12,24 @@ import {
   FilterSchema,
   PageDirection,
 } from "@tailor-proto/tailor/v1/resource_pb";
-import ora from "ora";
 import { arg } from "politty";
 import { z } from "zod";
-import { durationArg, parseDuration, positiveIntArg, workspaceArgs } from "@/cli/shared/args";
-import { fetchAll, initOperatorClient } from "@/cli/shared/client";
+import {
+  durationArg,
+  nonNegativeIntArg,
+  type Order,
+  pagedLogArgs,
+  parseDuration,
+  toPageDirection,
+  workspaceArgs,
+} from "@/cli/shared/args";
+import { fetchAll, fetchPaged, initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { formatKeyValueTable } from "@/cli/shared/format";
 import { functionExecutionStatusToString } from "@/cli/shared/function-execution";
 import { logger, styles } from "@/cli/shared/logger";
+import { spinner } from "@/cli/shared/spinner";
 import { getWorkflowExecution } from "../workflow/executions";
 import { waitForExecution } from "../workflow/start";
 import {
@@ -48,6 +56,7 @@ type ExecutorLike = {
 export type ListExecutorJobsTypedOptions<E extends ExecutorLike = ExecutorLike> = {
   executor: E;
   status?: string;
+  order?: Order;
   limit?: number;
   workspaceId?: string;
   profile?: string;
@@ -76,6 +85,7 @@ export type WatchExecutorJobTypedOptions<E extends ExecutorLike = ExecutorLike> 
 export interface ListExecutorJobsOptions {
   executorName: string;
   status?: string;
+  order?: Order;
   limit?: number;
   workspaceId?: string;
   profile?: string;
@@ -131,6 +141,11 @@ function formatTime(date: Date): string {
 
 /**
  * List executor jobs for a given executor.
+ *
+ * Returns at most `options.limit` items. When `limit` is omitted or 0 the
+ * function pages through every job. The CLI caps this at 50 by default
+ * via `pagedLogArgs`; programmatic callers that want the same cap should
+ * pass `limit: 50` explicitly.
  * @param options - Options for listing executor jobs
  * @returns List of executor job information
  */
@@ -172,14 +187,23 @@ export async function listExecutorJobs<E extends ExecutorLike>(
 
   const filter = filters.length > 0 ? create(FilterSchema, { and: filters }) : undefined;
 
+  const pageDirection = toPageDirection(options.order ?? "desc");
+
   try {
-    const { jobs } = await client.listExecutorJobs({
-      workspaceId,
-      executorName,
-      pageSize: options.limit,
-      pageDirection: PageDirection.DESC,
-      filter,
-    });
+    const jobs = await fetchPaged(
+      async (pageToken, pageSize) => {
+        const { jobs, nextPageToken } = await client.listExecutorJobs({
+          workspaceId,
+          executorName,
+          pageToken,
+          pageSize,
+          pageDirection,
+          filter,
+        });
+        return [jobs, nextPageToken];
+      },
+      { limit: options.limit },
+    );
 
     return jobs.map(toExecutorJobListInfo);
   } catch (error) {
@@ -285,7 +309,7 @@ export async function watchExecutorJob<E extends ExecutorLike>(
   });
 
   const interval = options.interval ?? 3000;
-  const spinner = ora().start("Waiting for executor job to complete...");
+  const sp = spinner().start("Waiting for executor job to complete...");
 
   try {
     // Get executor details to determine target type
@@ -319,7 +343,7 @@ export async function watchExecutorJob<E extends ExecutorLike>(
         break;
       }
 
-      spinner.text = `Waiting for executor job... (${formatTime(new Date())})`;
+      sp.text = `Waiting for executor job... (${formatTime(new Date())})`;
       await setTimeout(interval);
     }
 
@@ -327,9 +351,9 @@ export async function watchExecutorJob<E extends ExecutorLike>(
     const coloredStatus = colorizeExecutorJobStatus(jobInfo.status);
 
     if (job.status === ExecutorJobStatus.SUCCESS) {
-      spinner.succeed(`Executor job completed: ${coloredStatus}`);
+      sp.succeed(`Executor job completed: ${coloredStatus}`);
     } else {
-      spinner.fail(`Executor job completed: ${coloredStatus}`);
+      sp.fail(`Executor job completed: ${coloredStatus}`);
     }
 
     // Get attempts to find operationReference
@@ -358,7 +382,7 @@ export async function watchExecutorJob<E extends ExecutorLike>(
       switch (targetType) {
         case ExecutorTargetType.WORKFLOW: {
           // Wait for workflow execution with progress display
-          spinner.stop();
+          sp.stop();
 
           try {
             // Use waitForExecution with progress display (same as workflow start)
@@ -414,7 +438,7 @@ export async function watchExecutorJob<E extends ExecutorLike>(
         case ExecutorTargetType.JOB_FUNCTION:
           {
             // Wait for function execution
-            spinner.start(`Waiting for function execution ${operationReference}...`);
+            sp.start(`Waiting for function execution ${operationReference}...`);
 
             try {
               while (true) {
@@ -431,9 +455,9 @@ export async function watchExecutorJob<E extends ExecutorLike>(
                   const statusStr = functionExecutionStatusToString(execution.status);
                   const coloredFnStatus = colorizeFunctionExecutionStatus(statusStr);
                   if (execution.status === FunctionExecution_Status.SUCCESS) {
-                    spinner.succeed(`Function execution completed: ${coloredFnStatus}`);
+                    sp.succeed(`Function execution completed: ${coloredFnStatus}`);
                   } else {
-                    spinner.fail(`Function execution completed: ${coloredFnStatus}`);
+                    sp.fail(`Function execution completed: ${coloredFnStatus}`);
                   }
                   return {
                     job: jobDetail,
@@ -444,11 +468,11 @@ export async function watchExecutorJob<E extends ExecutorLike>(
                   };
                 }
 
-                spinner.text = `Waiting for function execution... (${formatTime(new Date())})`;
+                sp.text = `Waiting for function execution... (${formatTime(new Date())})`;
                 await setTimeout(interval);
               }
             } catch (error) {
-              spinner.warn(
+              sp.warn(
                 `Could not track function execution: ${error instanceof Error ? error.message : error}`,
               );
               return {
@@ -467,7 +491,7 @@ export async function watchExecutorJob<E extends ExecutorLike>(
 
     return { job: jobDetail, targetType: targetTypeStr };
   } finally {
-    spinner.stop();
+    sp.stop();
   }
 }
 
@@ -527,11 +551,11 @@ export const jobsCommand = defineAppCommand({
   args: z
     .object({
       ...workspaceArgs,
-      executorName: arg(z.string(), {
+      "executor-name": arg(z.string(), {
         positional: true,
         description: "Executor name",
       }),
-      jobId: arg(z.string().optional(), {
+      "job-id": arg(z.string().optional(), {
         positional: true,
         description: "Job ID (if provided, shows job details)",
       }),
@@ -552,12 +576,13 @@ export const jobsCommand = defineAppCommand({
         alias: "i",
         description: "Polling interval when using --wait (e.g., '3s', '500ms', '1m')",
       }),
+      ...pagedLogArgs,
+      limit: arg(nonNegativeIntArg.default(50), {
+        description: "Maximum number of jobs to list (0: unlimited, default: 50) (list mode only)",
+      }),
       logs: arg(z.boolean().default(false), {
         alias: "l",
         description: "Display function execution logs after completion (requires --wait)",
-      }),
-      limit: arg(positiveIntArg.optional(), {
-        description: "Maximum number of jobs to list (default: 50, max: 1000) (list mode only)",
       }),
     })
     .strict(),
@@ -645,6 +670,7 @@ export const jobsCommand = defineAppCommand({
       const jobs = await listExecutorJobs({
         executorName: args.executorName,
         status: args.status,
+        order: args.order,
         limit: args.limit,
         workspaceId: args["workspace-id"],
         profile: args.profile,

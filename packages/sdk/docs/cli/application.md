@@ -89,29 +89,31 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 <!-- politty:command:generate:global-options-link:end -->
 
-<!-- politty:command:apply:heading:start -->
+<!-- politty:command:deploy:heading:start -->
 
-## apply
+## deploy
 
-<!-- politty:command:apply:heading:end -->
+<!-- politty:command:deploy:heading:end -->
 
-<!-- politty:command:apply:description:start -->
+<!-- politty:command:deploy:description:start -->
 
-Apply Tailor configuration to deploy your application.
+Deploy your application by applying the Tailor configuration.
 
-<!-- politty:command:apply:description:end -->
+**Aliases:** `apply`
 
-<!-- politty:command:apply:usage:start -->
+<!-- politty:command:deploy:description:end -->
+
+<!-- politty:command:deploy:usage:start -->
 
 **Usage**
 
 ```
-tailor-sdk apply [options]
+tailor-sdk deploy [options]
 ```
 
-<!-- politty:command:apply:usage:end -->
+<!-- politty:command:deploy:usage:end -->
 
-<!-- politty:command:apply:options:start -->
+<!-- politty:command:deploy:options:start -->
 
 **Options**
 
@@ -126,17 +128,21 @@ tailor-sdk apply [options]
 | `--no-cache`                    | -     | Disable bundle caching for this run                | No       | -                    | -                                 |
 | `--clean-cache`                 | -     | Clean the bundle cache before building             | No       | -                    | -                                 |
 
-<!-- politty:command:apply:options:end -->
+<!-- politty:command:deploy:options:end -->
 
-<!-- politty:command:apply:global-options-link:start -->
+<!-- politty:command:deploy:global-options-link:start -->
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
-<!-- politty:command:apply:global-options-link:end -->
+<!-- politty:command:deploy:global-options-link:end -->
+
+**Config File Modification:**
+
+On first run, `deploy` automatically injects a stable `id: "<uuid>"` field into your `defineConfig({...})` call in `tailor.config.ts`. This UUID is used to track your application across renames so the SDK can recognize ownership across renames. Commit the generated id to version control. See [Configuration](../configuration.md#application-settings) for details.
 
 **Migration Handling:**
 
-When migrations are configured (`db.tailordb.migration` in config), the `apply` command automatically:
+When migrations are configured (`db.tailordb.migration` in config), the `deploy` command automatically:
 
 1. Detects pending migration scripts that haven't been executed
 2. Applies schema changes in a safe order (pre-migration → script execution → post-migration)
@@ -147,18 +153,18 @@ See [TailorDB Commands](./tailordb.md#automatic-migration-execution) for details
 
 **Schema Check:**
 
-By default, `apply` performs two verification steps:
+By default, `deploy` performs two verification steps:
 
 1. **Local schema check**: Verifies that local schema changes match the migration files. This ensures migrations are properly generated before deployment.
 2. **Remote schema check**: Verifies that the remote schema matches the expected state based on migration history. This detects schema drift caused by manual changes or other developers.
 
-If remote schema drift is detected, the apply will fail with an error showing the differences. This helps prevent applying migrations to an inconsistent state.
+If remote schema drift is detected, the deploy will fail with an error showing the differences. This helps prevent applying migrations to an inconsistent state.
 
 Use `--no-schema-check` to skip both verifications (not recommended for production).
 
 **Plan Output:**
 
-Before applying changes, `apply` shows a preview of the planned resource changes.
+Before applying changes, `deploy` shows a preview of the planned resource changes.
 
 - `+` means the resource will be created
 - `~` means the resource will be updated
@@ -311,7 +317,7 @@ Call Tailor Platform API endpoints directly.
 **Usage**
 
 ```
-tailor-sdk api [options] <endpoint>
+tailor-sdk api [options] [command] <endpoint>
 ```
 
 <!-- politty:command:api:usage:end -->
@@ -320,9 +326,9 @@ tailor-sdk api [options] <endpoint>
 
 **Arguments**
 
-| Argument   | Description                                                                                 | Required |
-| ---------- | ------------------------------------------------------------------------------------------- | -------- |
-| `endpoint` | API endpoint to call (e.g., 'GetApplication' or 'tailor.v1.OperatorService/GetApplication') | Yes      |
+| Argument   | Description                                                                                  | Required |
+| ---------- | -------------------------------------------------------------------------------------------- | -------- |
+| `endpoint` | API endpoint to call (e.g., 'GetApplication' or 'tailor.v1.OperatorService/GetApplication'). | Yes      |
 
 <!-- politty:command:api:arguments:end -->
 
@@ -330,11 +336,12 @@ tailor-sdk api [options] <endpoint>
 
 **Options**
 
-| Option                          | Alias | Description          | Required | Default | Env                            |
-| ------------------------------- | ----- | -------------------- | -------- | ------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID         | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile    | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
-| `--body <BODY>`                 | `-b`  | Request body as JSON | No       | `"{}"`  | -                              |
+| Option                          | Alias | Description             | Required | Default              | Env                               |
+| ------------------------------- | ----- | ----------------------- | -------- | -------------------- | --------------------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID            | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile       | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
+| `--config <CONFIG>`             | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| `--body <BODY>`                 | `-b`  | Request body as JSON.   | No       | `"{}"`               | -                                 |
 
 <!-- politty:command:api:options:end -->
 
@@ -343,3 +350,143 @@ tailor-sdk api [options] <endpoint>
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 <!-- politty:command:api:global-options-link:end -->
+
+<!-- politty:command:api:examples:start -->
+
+**Examples**
+
+**Call an endpoint; workspaceId is auto-injected.**
+
+```bash
+$ tailor-sdk api GetApplication -b '{"applicationName":"app-1"}'
+```
+
+**List all invocable OperatorService methods.**
+
+```bash
+$ tailor-sdk api list
+```
+
+**Show the input message tree for an endpoint.**
+
+```bash
+$ tailor-sdk api inspect GetApplication
+```
+
+<!-- politty:command:api:examples:end -->
+
+<!-- politty:command:api:notes:start -->
+
+**Notes**
+
+Use `tailor-sdk api list` to enumerate invocable methods and `tailor-sdk api inspect <endpoint>` to print an endpoint's input message tree (combine with `--json` for machine-readable output).
+
+The request body is inferred from the proto definition of the target endpoint, and commonly required fields are auto-injected so they can be omitted from `--body`:
+
+- `workspaceId` — resolved from `-w` / `TAILOR_PLATFORM_WORKSPACE_ID` / the selected profile.
+- `namespaceName` — resolved from `tailor.config.ts` based on the endpoint's service:
+  - Auth / Tenant / UserProfile endpoints use `auth.name`.
+  - IdP / TailorDB / Pipeline endpoints use the sole configured namespace when exactly one is defined.
+
+Values already present in `--body` are never overridden. If a value cannot be resolved (e.g. no config found), injection is silently skipped and the server-side validation error takes precedence.
+
+<!-- politty:command:api:notes:end -->
+<!-- politty:command:api inspect:heading:start -->
+
+### api inspect
+
+<!-- politty:command:api inspect:heading:end -->
+
+<!-- politty:command:api inspect:description:start -->
+
+Print the input message tree of an OperatorService endpoint.
+
+<!-- politty:command:api inspect:description:end -->
+
+<!-- politty:command:api inspect:usage:start -->
+
+**Usage**
+
+```
+tailor-sdk api inspect <endpoint>
+```
+
+<!-- politty:command:api inspect:usage:end -->
+
+<!-- politty:command:api inspect:arguments:start -->
+
+**Arguments**
+
+| Argument   | Description                                                                                     | Required |
+| ---------- | ----------------------------------------------------------------------------------------------- | -------- |
+| `endpoint` | API endpoint to inspect (e.g., 'GetApplication' or 'tailor.v1.OperatorService/GetApplication'). | Yes      |
+
+<!-- politty:command:api inspect:arguments:end -->
+
+<!-- politty:command:api inspect:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:api inspect:global-options-link:end -->
+
+<!-- politty:command:api inspect:examples:start -->
+
+**Examples**
+
+**Show fields of GetApplicationRequest.**
+
+```bash
+$ tailor-sdk api inspect GetApplication
+```
+
+**Inspect a deeply nested input with `(oneof config)` annotations.**
+
+```bash
+$ tailor-sdk api inspect CreateExecutorExecutor
+```
+
+<!-- politty:command:api inspect:examples:end -->
+
+<!-- politty:command:api inspect:notes:start -->
+
+**Notes**
+
+Combine with the global `--json` flag for a machine-readable descriptor. Recursive type references and `oneof` membership are annotated. Use `tailor-sdk api list` to discover endpoint names.
+
+<!-- politty:command:api inspect:notes:end -->
+
+<!-- politty:command:api list:heading:start -->
+
+### api list
+
+<!-- politty:command:api list:heading:end -->
+
+<!-- politty:command:api list:description:start -->
+
+List all invocable OperatorService methods.
+
+<!-- politty:command:api list:description:end -->
+
+<!-- politty:command:api list:usage:start -->
+
+**Usage**
+
+```
+tailor-sdk api list
+```
+
+<!-- politty:command:api list:usage:end -->
+
+<!-- politty:command:api list:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:api list:global-options-link:end -->
+
+<!-- politty:command:api list:notes:start -->
+
+**Notes**
+
+Only unary RPCs are listed; streaming methods are excluded because `tailor-sdk api run` issues a single JSON POST and reads one JSON response.
+
+<!-- politty:command:api list:notes:end -->

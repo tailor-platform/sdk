@@ -130,6 +130,16 @@ Fire when IdP users are created, updated, or deleted:
 idpUserCreatedTrigger();
 ```
 
+When the project defines multiple IdPs, pass `idp` to target a specific one. The name is type-narrowed via the generated `IdpName` type:
+
+```typescript
+idpUserCreatedTrigger({ idp: "my-idp" });
+```
+
+Omitting `idp` is allowed only when the project has exactly one IdP; otherwise `apply` fails with an error listing the configured IdPs.
+
+These triggers require the IdP to publish user lifecycle events. The SDK enables `publishUserEvents` automatically during `apply` on each IdP that is targeted by an `idpUser` trigger; set the value explicitly on `defineIdp()` to override. See [IdP service - publishUserEvents](./idp.md#publishuserevents).
+
 ### Auth Access Token Triggers
 
 Fire on auth access token lifecycle events:
@@ -178,6 +188,12 @@ export default createExecutor({
 idpUserTrigger({ events: ["created", "deleted"] });
 ```
 
+In multi-IdP projects, add `idp` to target a specific IdP:
+
+```typescript
+idpUserTrigger({ events: ["created", "deleted"], idp: "my-idp" });
+```
+
 #### `authAccessTokenTrigger()`
 
 ```typescript
@@ -202,6 +218,8 @@ createExecutor({
   },
 });
 ```
+
+`function` and `jobFunction` `body` args include an `invoker` field: the principal running this function, overridden by `authInvoker` when set; `null` for anonymous calls. Other operation kinds (`graphql`, `webhook`, `workflow`) do not pass `invoker` into their callbacks.
 
 ### Job Function Operation
 

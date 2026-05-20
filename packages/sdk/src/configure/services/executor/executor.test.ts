@@ -16,6 +16,7 @@ import {
 import { scheduleTrigger } from "./trigger/schedule";
 import { incomingWebhookTrigger } from "./trigger/webhook";
 import type { Operation } from "./operation";
+import type { TailorInvoker } from "@/types/user";
 
 describe("createExecutor", () => {
   test("can disable executor", () => {
@@ -85,7 +86,7 @@ describe("createExecutor", () => {
       operation: {
         kind: "function",
         body: (args) => {
-          expectTypeOf(args).toEqualTypeOf<Args>();
+          expectTypeOf(args).toEqualTypeOf<Args & { invoker?: TailorInvoker }>();
         },
       },
     });
@@ -941,6 +942,12 @@ describe("idpUserTrigger (multi-event)", () => {
     const trigger = idpUserTrigger({ events: ["created", "deleted"] });
     expect(trigger.kind).toBe("idpUser");
     expect(trigger.events).toEqual(["idp.user.created", "idp.user.deleted"]);
+    expect(trigger.idp).toBeUndefined();
+  });
+
+  test("can specify an idp namespace", () => {
+    const trigger = idpUserTrigger({ events: ["created"], idp: "my-idp" });
+    expect(trigger.idp).toBe("my-idp");
   });
 
   test("args have kind discriminant", () => {
@@ -1057,6 +1064,19 @@ describe("functionTarget", () => {
       ]
     >();
   });
+
+  test("body args include invoker", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          expectTypeOf(args.invoker).toEqualTypeOf<TailorInvoker | undefined>();
+        },
+      },
+    });
+  });
 });
 
 describe("gqlTarget", () => {
@@ -1120,6 +1140,21 @@ describe("gqlTarget", () => {
           return {
             id: args.body.id,
           };
+        },
+      },
+    });
+  });
+
+  test("variables args do not include invoker", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "graphql",
+        query: "query { __typename }",
+        variables: (args) => {
+          expectTypeOf(args).not.toHaveProperty("invoker");
+          return {};
         },
       },
     });
@@ -1213,6 +1248,24 @@ describe("webhookTarget", () => {
         headers: {
           "Content-Type": "application/json",
           Authorization: { vault: "my-vault", key: "my-secret" },
+        },
+      },
+    });
+  });
+
+  test("url/requestBody args do not include invoker", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "webhook",
+        url: (args) => {
+          expectTypeOf(args).not.toHaveProperty("invoker");
+          return "https://example.com";
+        },
+        requestBody: (args) => {
+          expectTypeOf(args).not.toHaveProperty("invoker");
+          return {};
         },
       },
     });
@@ -1341,6 +1394,21 @@ describe("workflowTarget", () => {
       operation: {
         kind: "workflow",
         workflow: noInputWorkflow,
+      },
+    });
+  });
+
+  test("args function args do not include invoker", () => {
+    createExecutor({
+      name: "test",
+      trigger: incomingWebhookTrigger(),
+      operation: {
+        kind: "workflow",
+        workflow: testWorkflow,
+        args: (args) => {
+          expectTypeOf(args).not.toHaveProperty("invoker");
+          return { orderId: "test-id" };
+        },
       },
     });
   });

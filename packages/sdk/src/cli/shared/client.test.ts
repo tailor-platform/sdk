@@ -1,11 +1,16 @@
+import { Code, ConnectError } from "@connectrpc/connect";
 import { afterEach, describe, test, expect, vi } from "vitest";
 import {
   createTransport,
   fetchAll,
+  fetchPaged,
   formatRequestParams,
   MAX_PAGE_SIZE,
   parseMethodName,
+  resolveStaticWebsiteUrls,
+  type OperatorClient,
 } from "./client";
+import { logger } from "./logger";
 
 vi.mock("@connectrpc/connect-node", () => ({
   createConnectTransport: vi.fn(() => ({ type: "node-transport" })),
@@ -35,6 +40,68 @@ describe("fetchAll", () => {
     await fetchAll(fn);
 
     expect(fn).toHaveBeenCalledWith("", MAX_PAGE_SIZE);
+  });
+});
+
+describe("fetchPaged", () => {
+  test("returns every page when limit is undefined", async () => {
+    const fn = vi
+      .fn()
+      .mockResolvedValueOnce([["a", "b"], "next"])
+      .mockResolvedValueOnce([["c"], ""]);
+
+    const items = await fetchPaged(fn);
+
+    expect(items).toEqual(["a", "b", "c"]);
+    expect(fn).toHaveBeenNthCalledWith(1, "", MAX_PAGE_SIZE);
+    expect(fn).toHaveBeenNthCalledWith(2, "next", MAX_PAGE_SIZE);
+  });
+
+  test("treats limit 0 as unlimited", async () => {
+    const fn = vi
+      .fn()
+      .mockResolvedValueOnce([["a", "b"], "next"])
+      .mockResolvedValueOnce([["c"], ""]);
+
+    const items = await fetchPaged(fn, { limit: 0 });
+
+    expect(items).toEqual(["a", "b", "c"]);
+    expect(fn).toHaveBeenNthCalledWith(1, "", MAX_PAGE_SIZE);
+  });
+
+  test("stops fetching once limit is reached and slices overflow", async () => {
+    const fn = vi
+      .fn()
+      .mockResolvedValueOnce([["a", "b", "c", "d"], "next"])
+      .mockResolvedValueOnce([["e"], ""]);
+
+    const items = await fetchPaged(fn, { limit: 3 });
+
+    expect(items).toEqual(["a", "b", "c"]);
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect(fn).toHaveBeenCalledWith("", 3);
+  });
+
+  test("requests smaller pages as it approaches the limit", async () => {
+    const fn = vi
+      .fn()
+      .mockResolvedValueOnce([new Array(MAX_PAGE_SIZE).fill("x"), "next"])
+      .mockResolvedValueOnce([["y", "y", "y"], ""]);
+
+    const items = await fetchPaged(fn, { limit: MAX_PAGE_SIZE + 5 });
+
+    expect(items).toHaveLength(MAX_PAGE_SIZE + 3);
+    expect(fn).toHaveBeenNthCalledWith(1, "", MAX_PAGE_SIZE);
+    expect(fn).toHaveBeenNthCalledWith(2, "next", 5);
+  });
+
+  test("exits when the server returns no next page token", async () => {
+    const fn = vi.fn().mockResolvedValue([["only"], ""]);
+
+    const items = await fetchPaged(fn, { limit: 100 });
+
+    expect(items).toEqual(["only"]);
+    expect(fn).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -179,5 +246,98 @@ describe("formatRequestParams", () => {
     };
     const result = formatRequestParams(protoWithBigInt);
     expect(result).toContain('"seconds": "86400"');
+  });
+});
+
+describe("resolveStaticWebsiteUrls", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function makeClient(
+    impl: (name: string) => Promise<{ staticwebsite?: { url?: string } }>,
+  ): OperatorClient {
+    return {
+      getStaticWebsite: vi.fn(({ name }: { name: string }) => impl(name)),
+    } as unknown as OperatorClient;
+  }
+
+  test("resolves :url patterns to fetched URLs", async () => {
+    const client = makeClient(async () => ({ staticwebsite: { url: "https://site.example.com" } }));
+
+    const resolved = await resolveStaticWebsiteUrls(
+      client,
+      "ws-1",
+      ["my-site:url", "my-site:url/callback", "https://literal.example.com"],
+      "CORS",
+    );
+
+    expect(resolved).toEqual([
+      "https://site.example.com",
+      "https://site.example.com/callback",
+      "https://literal.example.com",
+    ]);
+  });
+
+  test("warns and drops entry when site is missing and not expected locally", async () => {
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const client = makeClient(async () => {
+      throw new ConnectError("not found", Code.NotFound);
+    });
+
+    const resolved = await resolveStaticWebsiteUrls(client, "ws-1", ["unknown:url"], "CORS");
+
+    expect(resolved).toEqual([]);
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Static website "unknown" not found for CORS configuration. Excluding from CORS.',
+    );
+  });
+
+  test("suppresses warning and keeps original pattern when site is expected locally", async () => {
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const client = makeClient(async () => {
+      throw new ConnectError("not found", Code.NotFound);
+    });
+
+    const resolved = await resolveStaticWebsiteUrls(
+      client,
+      "ws-1",
+      ["my-site:url", "my-site:url/callback"],
+      "CORS",
+      { expectedLocalNames: new Set(["my-site"]) },
+    );
+
+    expect(resolved).toEqual(["my-site:url", "my-site:url/callback"]);
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  test("still warns when URL is not assigned yet, even when site is expected locally", async () => {
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const client = makeClient(async () => ({ staticwebsite: { url: "" } }));
+
+    const resolved = await resolveStaticWebsiteUrls(client, "ws-1", ["my-site:url"], "CORS", {
+      expectedLocalNames: new Set(["my-site"]),
+    });
+
+    expect(resolved).toEqual([]);
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Static website "my-site" has no URL assigned yet. Excluding from CORS.',
+    );
+  });
+
+  test("does not suppress non-NotFound errors even when site is expected locally", async () => {
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const client = makeClient(async () => {
+      throw new ConnectError("service unavailable", Code.Unavailable);
+    });
+
+    const resolved = await resolveStaticWebsiteUrls(client, "ws-1", ["my-site:url"], "CORS", {
+      expectedLocalNames: new Set(["my-site"]),
+    });
+
+    expect(resolved).toEqual([]);
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Static website "my-site" not found for CORS configuration. Excluding from CORS.',
+    );
   });
 });

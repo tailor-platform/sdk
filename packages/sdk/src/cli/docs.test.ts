@@ -36,13 +36,19 @@ const files: Record<string, FileConfig> = {
     title: "Application Commands",
     description:
       "Commands for managing Tailor Platform applications (work with `tailor.config.ts`).",
-    commands: ["init", "generate", "apply", "remove", "show", "open", "api"],
+    commands: ["init", "generate", "deploy", "remove", "show", "open", "api"],
     render: defaultRender,
   },
   "docs/cli/tailordb.md": {
     title: "TailorDB Commands",
     description: "Commands for managing TailorDB tables, data, and schema migrations.",
     commands: ["tailordb"],
+    render: defaultRender,
+  },
+  "docs/cli/query.md": {
+    title: "Query Commands",
+    description: "Run ad-hoc SQL/GraphQL queries or enter the interactive REPL.",
+    commands: ["query"],
     render: defaultRender,
   },
   "docs/cli/user.md": {
@@ -77,7 +83,7 @@ const files: Record<string, FileConfig> = {
   },
   "docs/cli/function.md": {
     title: "Function Commands",
-    description: "Commands for viewing function execution logs.",
+    description: "Commands for managing function registries and viewing function execution logs.",
     commands: ["function"],
     render: defaultRender,
   },
@@ -99,16 +105,28 @@ const files: Record<string, FileConfig> = {
     commands: ["staticwebsite"],
     render: defaultRender,
   },
-  "docs/cli/crash-report.md": {
+  "docs/cli/crashreport.md": {
     title: "Crash Report Commands",
     description: "Commands for managing crash reports.",
-    commands: ["crash-report"],
+    commands: ["crashreport"],
     render: defaultRender,
   },
   "docs/cli/setup.md": {
     title: "Setup Commands",
     description: "Commands for setting up project infrastructure.",
     commands: ["setup"],
+    render: defaultRender,
+  },
+  "docs/cli/upgrade.md": {
+    title: "Upgrade Commands",
+    description: "Commands for upgrading SDK versions with automated code migration.",
+    commands: ["upgrade"],
+    render: defaultRender,
+  },
+  "docs/cli/skills.md": {
+    title: "Skills Commands",
+    description: "Commands for installing Tailor SDK agent skills.",
+    commands: ["skills"],
     render: defaultRender,
   },
   "docs/cli/completion.md": {

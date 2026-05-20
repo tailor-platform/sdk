@@ -50,6 +50,16 @@ tailor-sdk generate --watch
 
 Watches for file changes and regenerates automatically.
 
+## Environment Variables
+
+### `TAILOR_PLATFORM_SDK_DTS_PATH`
+
+Customize the output path of the generated `tailor.d.ts` type definition file. By default, `tailor.d.ts` is written next to `tailor.config.ts`.
+
+```bash
+TAILOR_PLATFORM_SDK_DTS_PATH=src/types/tailor.d.ts tailor-sdk generate
+```
+
 ## Generator Types
 
 - [Builtin Generators](./builtin.md) - Ready-to-use generators included with the SDK

@@ -1,10 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import {
-  DEFAULT_SKILLS_SOURCE,
-  SKILL_NAME,
-  buildSkillsAddArgs,
-  runSkillsInstaller,
-} from "./skills-installer";
+import { SKILL_NAME, buildSkillsAddArgs, runSkillsInstaller } from "./skills-installer";
+
+const TEST_SOURCE = "/fake/sdk/skills";
 
 interface MockChildProcess {
   on(event: "close", listener: (code: number | null) => void): MockChildProcess;
@@ -41,18 +38,30 @@ const createMockChildProcess = () => {
 };
 
 describe("skills-installer", () => {
-  it("builds skills add arguments with default source", () => {
-    expect(buildSkillsAddArgs([])).toEqual([
+  it("builds skills add arguments with the provided source and --copy", () => {
+    expect(buildSkillsAddArgs({ source: TEST_SOURCE })).toEqual([
       "skills",
       "add",
-      DEFAULT_SKILLS_SOURCE,
+      TEST_SOURCE,
       "--skill",
       SKILL_NAME,
+      "--copy",
     ]);
   });
 
-  it("appends user arguments after fixed skill options", () => {
-    expect(buildSkillsAddArgs(["-a", "codex", "-y"]).slice(-3)).toEqual(["-a", "codex", "-y"]);
+  it("prefers TAILOR_SDK_SKILLS_SOURCE env var over the passed source", () => {
+    vi.stubEnv("TAILOR_SDK_SKILLS_SOURCE", "/override/skills");
+    try {
+      expect(buildSkillsAddArgs({ source: TEST_SOURCE })[2]).toBe("/override/skills");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("appends --agent and --yes when provided", () => {
+    expect(
+      buildSkillsAddArgs({ source: TEST_SOURCE, agent: "codex", yes: true }).slice(-3),
+    ).toEqual(["--agent", "codex", "--yes"]);
   });
 
   it("runs npx with generated arguments and returns exit code", async () => {
@@ -60,13 +69,14 @@ describe("skills-installer", () => {
     const spawnFn = vi.fn(() => mock.process);
 
     const promise = runSkillsInstaller({
-      additionalArgs: ["-a", "codex"],
+      source: TEST_SOURCE,
+      agent: "codex",
       spawnFn,
     });
 
     expect(spawnFn).toHaveBeenCalledWith(
       expect.stringMatching(/^npx(\\.cmd)?$/),
-      ["skills", "add", DEFAULT_SKILLS_SOURCE, "--skill", SKILL_NAME, "-a", "codex"],
+      ["skills", "add", TEST_SOURCE, "--skill", SKILL_NAME, "--copy", "--agent", "codex"],
       { stdio: "inherit" },
     );
 
@@ -77,7 +87,7 @@ describe("skills-installer", () => {
   it("returns 1 when child process exits without status code", async () => {
     const mock = createMockChildProcess();
     const spawnFn = vi.fn(() => mock.process);
-    const promise = runSkillsInstaller({ spawnFn });
+    const promise = runSkillsInstaller({ source: TEST_SOURCE, spawnFn });
 
     mock.emitClose(null);
     await expect(promise).resolves.toBe(1);
@@ -86,7 +96,7 @@ describe("skills-installer", () => {
   it("rejects when npx execution fails", async () => {
     const mock = createMockChildProcess();
     const spawnFn = vi.fn(() => mock.process);
-    const promise = runSkillsInstaller({ spawnFn });
+    const promise = runSkillsInstaller({ source: TEST_SOURCE, spawnFn });
 
     mock.emitError(new Error("spawn failed"));
     await expect(promise).rejects.toThrow("spawn failed");

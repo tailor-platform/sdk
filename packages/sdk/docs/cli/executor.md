@@ -70,10 +70,12 @@ tailor-sdk executor list [options]
 
 **Options**
 
-| Option                          | Alias | Description       | Required | Default | Env                            |
-| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| Option                          | Alias | Description                                              | Required | Default  | Env                            |
+| ------------------------------- | ----- | -------------------------------------------------------- | -------- | -------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                             | No       | -        | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                        | No       | -        | `TAILOR_PLATFORM_PROFILE`      |
+| `--order <ORDER>`               | -     | Sort order (asc or desc)                                 | No       | `"desc"` | -                              |
+| `--limit <LIMIT>`               | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -        | -                              |
 
 <!-- politty:command:executor list:options:end -->
 
@@ -149,7 +151,7 @@ List or get executor jobs.
 **Usage**
 
 ```
-tailor-sdk executor jobs [options] <executorName> [jobId]
+tailor-sdk executor jobs [options] <executor-name> [job-id]
 ```
 
 <!-- politty:command:executor jobs:usage:end -->
@@ -158,10 +160,10 @@ tailor-sdk executor jobs [options] <executorName> [jobId]
 
 **Arguments**
 
-| Argument       | Description                             | Required |
-| -------------- | --------------------------------------- | -------- |
-| `executorName` | Executor name                           | Yes      |
-| `jobId`        | Job ID (if provided, shows job details) | No       |
+| Argument        | Description                             | Required |
+| --------------- | --------------------------------------- | -------- |
+| `executor-name` | Executor name                           | Yes      |
+| `job-id`        | Job ID (if provided, shows job details) | No       |
 
 <!-- politty:command:executor jobs:arguments:end -->
 
@@ -169,16 +171,17 @@ tailor-sdk executor jobs [options] <executorName> [jobId]
 
 **Options**
 
-| Option                          | Alias | Description                                                                                           | Required | Default | Env                            |
-| ------------------------------- | ----- | ----------------------------------------------------------------------------------------------------- | -------- | ------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                          | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                     | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
-| `--status <STATUS>`             | `-s`  | Filter by status (PENDING, RUNNING, SUCCESS, FAILED, CANCELED) (list mode only)                       | No       | -       | -                              |
-| `--attempts`                    | -     | Show job attempts (only with job ID) (detail mode only)                                               | No       | `false` | -                              |
-| `--wait`                        | `-W`  | Wait for job completion and downstream execution (workflow/function) if applicable (detail mode only) | No       | `false` | -                              |
-| `--interval <INTERVAL>`         | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m')                                        | No       | `"3s"`  | -                              |
-| `--logs`                        | `-l`  | Display function execution logs after completion (requires --wait)                                    | No       | `false` | -                              |
-| `--limit <LIMIT>`               | -     | Maximum number of jobs to list (default: 50, max: 1000) (list mode only)                              | No       | -       | -                              |
+| Option                          | Alias | Description                                                                                           | Required | Default  | Env                            |
+| ------------------------------- | ----- | ----------------------------------------------------------------------------------------------------- | -------- | -------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                          | No       | -        | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                     | No       | -        | `TAILOR_PLATFORM_PROFILE`      |
+| `--status <STATUS>`             | `-s`  | Filter by status (PENDING, RUNNING, SUCCESS, FAILED, CANCELED) (list mode only)                       | No       | -        | -                              |
+| `--attempts`                    | -     | Show job attempts (only with job ID) (detail mode only)                                               | No       | `false`  | -                              |
+| `--wait`                        | `-W`  | Wait for job completion and downstream execution (workflow/function) if applicable (detail mode only) | No       | `false`  | -                              |
+| `--interval <INTERVAL>`         | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m')                                        | No       | `"3s"`   | -                              |
+| `--order <ORDER>`               | -     | Sort order (asc or desc)                                                                              | No       | `"desc"` | -                              |
+| `--limit <LIMIT>`               | -     | Maximum number of jobs to list (0: unlimited, default: 50) (list mode only)                           | No       | `50`     | -                              |
+| `--logs`                        | `-l`  | Display function execution logs after completion (requires --wait)                                    | No       | `false`  | -                              |
 
 <!-- politty:command:executor jobs:options:end -->
 
@@ -253,7 +256,7 @@ Trigger an executor manually.
 **Usage**
 
 ```
-tailor-sdk executor trigger [options] <executorName>
+tailor-sdk executor trigger [options] <executor-name>
 ```
 
 <!-- politty:command:executor trigger:usage:end -->
@@ -262,9 +265,9 @@ tailor-sdk executor trigger [options] <executorName>
 
 **Arguments**
 
-| Argument       | Description   | Required |
-| -------------- | ------------- | -------- |
-| `executorName` | Executor name | Yes      |
+| Argument        | Description   | Required |
+| --------------- | ------------- | -------- |
+| `executor-name` | Executor name | Yes      |
 
 <!-- politty:command:executor trigger:arguments:end -->
 
@@ -411,10 +414,12 @@ tailor-sdk executor webhook list [options]
 
 **Options**
 
-| Option                          | Alias | Description       | Required | Default | Env                            |
-| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| Option                          | Alias | Description                                              | Required | Default  | Env                            |
+| ------------------------------- | ----- | -------------------------------------------------------- | -------- | -------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                             | No       | -        | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                        | No       | -        | `TAILOR_PLATFORM_PROFILE`      |
+| `--order <ORDER>`               | -     | Sort order (asc or desc)                                 | No       | `"desc"` | -                              |
+| `--limit <LIMIT>`               | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -        | -                              |
 
 <!-- politty:command:executor webhook list:options:end -->
 

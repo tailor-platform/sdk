@@ -8,7 +8,7 @@ import { isSdkBranded } from "@/utils/brand";
 import { precompileTailorDBTypeScripts } from "./hooks-validate-bundler";
 import type { PluginManager } from "@/plugin/manager";
 import type { PluginAttachment } from "@/types/plugin";
-import type { TypeSourceInfo, TailorAnyDBType, TailorDBType } from "@/types/tailordb";
+import type { TypeSourceInfo, TailorDBType } from "@/types/tailordb";
 import type {
   TailorDBServiceConfig,
   TailorDBTypeRaw as TailorDBTypeSchemaOutput,
@@ -68,63 +68,44 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
    * @param sourceFilePath - The file path where the type was loaded from
    */
   const processPluginsForType = async (
-    rawType: TailorAnyDBType,
+    rawType: TailorDBTypeSchemaOutput,
     attachments: PluginAttachment[],
     sourceFilePath: string,
   ): Promise<void> => {
     if (!pluginManager) return;
 
-    let currentType: TailorAnyDBType = rawType;
+    const { extendedType, generatedTypes, events } = await pluginManager.processAttachmentsForType({
+      rawType,
+      attachments,
+      namespace,
+    });
 
-    for (const attachment of attachments) {
-      const result = await pluginManager.processAttachment({
-        type: currentType,
-        typeConfig: attachment.config,
+    if (extendedType) {
+      rawTypes[sourceFilePath][rawType.name] = extendedType;
+    }
+    for (const gen of generatedTypes) {
+      // Plugin-generated types don't have a source file.
+      // Generators that need to import these types should generate their own type files.
+      rawTypes[sourceFilePath][gen.typeName] = gen.type;
+      typeSourceInfo[gen.typeName] = {
+        exportName: gen.typeName,
+        pluginId: gen.pluginId,
+        pluginImportPath: gen.pluginImportPath,
+        originalFilePath: sourceFilePath,
+        originalExportName: typeSourceInfo[rawType.name]?.exportName || rawType.name,
+        generatedTypeKind: gen.kind,
+        pluginConfig: gen.pluginConfig,
         namespace,
-        pluginId: attachment.pluginId,
-      });
-
-      if (!result.success) {
-        logger.error(result.error);
-        throw new Error(result.error);
-      }
-
-      const output = result.output;
-
-      // Extend the original type with new fields (if any)
-      const extendFields = output.extends?.fields;
-      if (extendFields && Object.keys(extendFields).length > 0) {
-        const extendedType = pluginManager.extendType({
-          originalType: currentType,
-          extendFields,
-          pluginId: attachment.pluginId,
-        });
-        rawTypes[sourceFilePath][currentType.name] = extendedType as TailorDBTypeSchemaOutput;
-        currentType = extendedType;
+      };
+    }
+    for (const ev of events) {
+      if (ev.kind === "extended") {
         logger.log(
-          `  Extended: ${styles.success(currentType.name)} with ${styles.highlight(Object.keys(extendFields).length.toString())} fields by plugin ${styles.info(attachment.pluginId)}`,
+          `  Extended: ${styles.success(ev.typeName)} with ${styles.highlight(ev.fieldCount.toString())} fields by plugin ${styles.info(ev.pluginId)}`,
         );
-      }
-
-      // Add generated types to rawTypes
-      const plugin = pluginManager.getPlugin(attachment.pluginId);
-      for (const [kind, generatedType] of Object.entries(output.types ?? {})) {
-        rawTypes[sourceFilePath][generatedType.name] = generatedType as TailorDBTypeSchemaOutput;
-        // Plugin-generated types don't have a source file.
-        // Generators that need to import these types should generate their own type files.
-        typeSourceInfo[generatedType.name] = {
-          exportName: generatedType.name,
-          pluginId: attachment.pluginId,
-          pluginImportPath: pluginManager.getPluginImportPath(attachment.pluginId) ?? "",
-          originalFilePath: sourceFilePath,
-          originalExportName: typeSourceInfo[rawType.name]?.exportName || rawType.name,
-          generatedTypeKind: kind,
-          pluginConfig: plugin?.pluginConfig,
-          namespace,
-        };
-
+      } else {
         logger.log(
-          `  Generated: ${styles.success(generatedType.name)} by plugin ${styles.info(attachment.pluginId)}`,
+          `  Generated: ${styles.success(ev.typeName)} by plugin ${styles.info(ev.pluginId)}`,
         );
       }
     }

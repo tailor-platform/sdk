@@ -88,7 +88,7 @@ export function parseFieldConfig(
       return {
         script: {
           expr:
-            getPrecompiledScriptExpr(fn) ??
+            getPrecompiledScriptExpr(fn as (...args: never[]) => unknown) ??
             `(${fn.toString().trim()})({ value: _value, data: _data, user: ${tailorUserMap} })`,
         },
         errorMessage: message,
@@ -98,12 +98,12 @@ export function parseFieldConfig(
       ? {
           create: metadata.hooks.create
             ? {
-                expr: convertHookToExpr(metadata.hooks.create),
+                expr: convertHookToExpr(metadata.hooks.create as (...args: never[]) => unknown),
               }
             : undefined,
           update: metadata.hooks.update
             ? {
-                expr: convertHookToExpr(metadata.hooks.update),
+                expr: convertHookToExpr(metadata.hooks.update as (...args: never[]) => unknown),
               }
             : undefined,
         }

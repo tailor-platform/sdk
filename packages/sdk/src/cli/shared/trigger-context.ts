@@ -30,7 +30,7 @@ export interface TriggerContext {
  * @param filePath - File path to normalize
  * @returns Normalized absolute path without extension
  */
-function normalizeFilePath(filePath: string): string {
+export function normalizeFilePath(filePath: string): string {
   const absolutePath = path.resolve(filePath);
   const ext = path.extname(absolutePath);
   return absolutePath.slice(0, -ext.length);
@@ -52,7 +52,12 @@ export async function buildTriggerContext(
   const workflowFileMap = new Map<string, string>();
 
   if (!workflowConfig) {
-    return { workflowNameMap, jobNameMap, workflowFileMap, authNamespace };
+    return {
+      workflowNameMap,
+      jobNameMap,
+      workflowFileMap,
+      authNamespace,
+    };
   }
 
   const workflowFiles = loadFilesWithIgnores(workflowConfig);
@@ -92,7 +97,12 @@ export async function buildTriggerContext(
     }
   }
 
-  return { workflowNameMap, jobNameMap, workflowFileMap, authNamespace };
+  return {
+    workflowNameMap,
+    jobNameMap,
+    workflowFileMap,
+    authNamespace,
+  };
 }
 
 function sortedMapToJson(m: Map<string, string>): string {
@@ -133,7 +143,7 @@ export function createTriggerTransformPlugin(
     transform: {
       filter: {
         id: {
-          include: [/\.ts$/, /\.js$/],
+          include: [/\.(ts|mts|cts|js|mjs|cjs)$/],
         },
       },
       handler(code, id) {

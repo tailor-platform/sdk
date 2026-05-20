@@ -15,8 +15,8 @@ describe("controlplane", async () => {
       const { workflows } = await client.listWorkflows({ workspaceId });
       const ownedWorkflows = await filterByMetadataWithName(client, workflows, workflowTrn);
 
-      // There are 2 workflows defined in example/workflows
-      expect(ownedWorkflows.length).toBe(2);
+      // There are 3 workflows defined in example/workflows
+      expect(ownedWorkflows.length).toBe(3);
 
       // Verify order-processing workflow
       const orderProcessing = ownedWorkflows.find((w) => w.name === "order-processing");
@@ -29,6 +29,15 @@ describe("controlplane", async () => {
       expect(Object.keys(orderProcessing?.jobFunctions ?? {})).toContain("process-order");
       expect(Object.keys(orderProcessing?.jobFunctions ?? {})).toContain("fetch-customer");
       expect(Object.keys(orderProcessing?.jobFunctions ?? {})).toContain("send-notification");
+
+      // Verify approval-workflow
+      const approvalWorkflow = ownedWorkflows.find((w) => w.name === "approval-workflow");
+      expect(approvalWorkflow).toBeDefined();
+      expect(approvalWorkflow).toMatchObject({
+        name: "approval-workflow",
+        mainJobFunctionName: "process-with-approval",
+      });
+      expect(Object.keys(approvalWorkflow?.jobFunctions ?? {})).toContain("process-with-approval");
 
       // Verify sample-workflow
       const sampleWorkflow = ownedWorkflows.find((w) => w.name === "sample-workflow");
@@ -54,13 +63,16 @@ describe("controlplane", async () => {
       const jobNames = jobFunctions.map((j) => j.name);
       const ownedJobNames = await filterUniqueNamesByMetadata(client, jobNames, jobFunctionTrn);
 
-      // There are exactly 6 job functions used by the 2 workflows
-      expect(ownedJobNames).toHaveLength(6);
+      // There are exactly 7 job functions used by the 3 workflows
+      expect(ownedJobNames).toHaveLength(7);
 
       // Jobs from order-processing workflow
       expect(ownedJobNames).toContain("process-order");
       expect(ownedJobNames).toContain("fetch-customer");
       expect(ownedJobNames).toContain("send-notification");
+
+      // Job from approval-workflow
+      expect(ownedJobNames).toContain("process-with-approval");
 
       // Jobs from sample-workflow
       expect(ownedJobNames).toContain("validate-order");
@@ -94,8 +106,8 @@ describe("controlplane", async () => {
 
       const workflowJobFunctions = functions.filter((f) => f.name.startsWith("workflow--"));
 
-      // There are 6 workflow job functions
-      expect(workflowJobFunctions).toHaveLength(6);
+      // There are 7 workflow job functions
+      expect(workflowJobFunctions).toHaveLength(7);
 
       // Verify specific job functions exist with non-empty content hashes
       const processOrder = workflowJobFunctions.find((f) => f.name === "workflow--process-order");

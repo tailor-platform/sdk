@@ -1,5 +1,5 @@
-import ml from "multiline-ts";
 import * as path from "pathe";
+import ml from "@/utils/multiline";
 import {
   processIdpUser,
   generateIdpUserSchemaFile,
@@ -19,10 +19,47 @@ import type { GeneratorResult, TailorDBReadyContext } from "@/types/plugin-gener
 /** Unique identifier for the seed generator plugin. */
 export const SeedGeneratorID = "@tailor-platform/seed";
 
+type DisableIdpUserSyncDirections = {
+  /**
+   * Skip emitting the foreign key from `<userProfile>.<usernameField>` to
+   * `_User.name`. Defaults to `false` (FK emitted).
+   *
+   * Set to `true` to seed pre-registration states such as
+   * invited-but-not-registered users.
+   */
+  userToIdp?: boolean;
+  /**
+   * Skip emitting the foreign key from `_User.name` to
+   * `<userProfile>.<usernameField>`. Defaults to `false` (FK emitted).
+   *
+   * Set to `true` to seed `_User` rows that do not yet have a corresponding
+   * userProfile row.
+   */
+  idpToUser?: boolean;
+};
+
 type SeedPluginOptions = {
   distPath: string;
   machineUserName?: string;
+  /**
+   * Disable individual `_User <-> userProfile` foreign keys emitted into
+   * the generated seed schema. Both directions are emitted by default.
+   *
+   * Set a direction to `true` to relax it — for example to seed invited
+   * users that do not yet have an IdP credential.
+   */
+  disableIdpUserSync?: DisableIdpUserSyncDirections;
 };
+
+function resolveIdpUserSyncFKs(option: SeedPluginOptions["disableIdpUserSync"]): {
+  emitUserToIdpFK: boolean;
+  emitIdpToUserFK: boolean;
+} {
+  return {
+    emitUserToIdpFK: !(option?.userToIdp ?? false),
+    emitIdpToUserFK: !(option?.idpToUser ?? false),
+  };
+}
 
 type NamespaceConfig = {
   namespace: string;
@@ -735,6 +772,7 @@ ${namespaceSelfRefEntries}
  * @param options - Plugin options
  * @param options.distPath - Output directory path for generated seed files
  * @param options.machineUserName - Default machine user name for authentication
+ * @param options.disableIdpUserSync - Skip emitting individual `_User <-> userProfile` foreign keys. Both directions are emitted by default; set a direction to `true` to relax that side.
  * @returns Plugin instance with onTailorDBReady hook
  */
 export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPluginOptions> {
@@ -750,6 +788,7 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
       // Process IdP user early so we can add reverse FK to the user profile type
       const idpUser = ctx.auth ? (processIdpUser(ctx.auth) ?? null) : null;
       const hasIdpUser = idpUser !== null;
+      const idpUserSyncFKs = resolveIdpUserSyncFKs(ctx.pluginConfig.disableIdpUserSync);
 
       for (const ns of ctx.tailordb) {
         const types: string[] = [];
@@ -761,8 +800,12 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
           const typeInfo = processSeedTypeInfo(type, ns.namespace);
           const linesDb = processLinesDb(type, source);
 
-          // Add reverse FK from userProfile type to _User
-          if (idpUser && typeName === idpUser.schema.userTypeName) {
+          // Add reverse FK from userProfile type to _User (opt-out via disableIdpUserSync.userToIdp: true)
+          if (
+            idpUserSyncFKs.emitUserToIdpFK &&
+            idpUser &&
+            typeName === idpUser.schema.userTypeName
+          ) {
             linesDb.foreignKeys.push({
               column: idpUser.schema.usernameField,
               references: {
@@ -850,13 +893,14 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
           skipIfExists: true,
         });
 
-        // Generate schema file with foreign key
+        // Generate schema file with foreign key (opt-out via disableIdpUserSync.idpToUser: true)
         files.push({
           path: path.join(ctx.pluginConfig.distPath, "data", `${idpUser.name}.schema.ts`),
-          content: generateIdpUserSchemaFile(
-            idpUser.schema.usernameField,
-            idpUser.schema.userTypeName,
-          ),
+          content: generateIdpUserSchemaFile({
+            usernameField: idpUser.schema.usernameField,
+            userTypeName: idpUser.schema.userTypeName,
+            includeUserProfileFK: idpUserSyncFKs.emitIdpToUserFK,
+          }),
         });
       }
 

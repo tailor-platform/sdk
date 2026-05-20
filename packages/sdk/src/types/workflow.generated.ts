@@ -22,6 +22,12 @@ export type RetryPolicy = {
 };
 export type RetryPolicyInput = RetryPolicy;
 
+export type ConcurrencyPolicy = {
+  /** Maximum number of concurrent executions (1-1000) */
+  maxConcurrentExecutions: number;
+};
+export type ConcurrencyPolicyInput = ConcurrencyPolicy;
+
 export type Workflow = {
   /** Workflow name */
   name: string;
@@ -39,6 +45,12 @@ export type Workflow = {
         initialBackoff: `${number}ms` | `${number}s` | `${number}m`;
         maxBackoff: `${number}ms` | `${number}s` | `${number}m`;
         backoffMultiplier: number;
+      }
+    | undefined;
+  /** Concurrency policy for the workflow */
+  concurrencyPolicy?:
+    | {
+        maxConcurrentExecutions: number;
       }
     | undefined;
 };

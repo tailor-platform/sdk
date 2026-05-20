@@ -57,6 +57,42 @@ body: async (input, { env }) => {
 };
 ```
 
+### Raw SQL
+
+For queries that the Kysely query builder can't express, use the `sql` tag re-exported from `@tailor-platform/sdk/kysely`. Plain value substitutions (`${...}`) are sent as bound parameters, so user-supplied values are parameterized safely. SQL fragments produced by Kysely helpers (for example `sql.raw(...)`, identifiers, refs) are inlined into the generated SQL string by design — do not pass untrusted input through those.
+
+```typescript
+import { sql } from "@tailor-platform/sdk/kysely";
+import { getDB } from "./generated/tailordb";
+
+createResolver({
+  name: "supplierCountByState",
+  operation: "query",
+  input: { country: t.string() },
+  output: t.object({
+    rows: t.array(t.object({ state: t.string(), count: t.int() })),
+  }),
+  body: async ({ input }) => {
+    const db = getDB("tailordb");
+    const { rows } = await sql<{ state: string; count: number }>`
+      SELECT state, COUNT(*) AS count
+        FROM "Supplier"
+       WHERE country = ${input.country}
+    GROUP BY state
+    `.execute(db);
+    return { rows };
+  },
+});
+```
+
+The same `sql` tag works inside `db.transaction().execute(async (trx) => ...)` by passing `trx` to `.execute()`:
+
+```typescript
+await db.transaction().execute(async (trx) => {
+  await sql`UPDATE "Supplier" SET state = ${state} WHERE id = ${id}`.execute(trx);
+});
+```
+
 ## @tailor-platform/enum-constants
 
 Extracts enum constants from TailorDB type definitions.
@@ -147,10 +183,41 @@ Generates seed data configuration files for database initialization.
 ["@tailor-platform/seed", { distPath: "./seed", machineUserName: "admin" }];
 ```
 
-| Option            | Type     | Description                                              |
-| ----------------- | -------- | -------------------------------------------------------- |
-| `distPath`        | `string` | Output directory path (required)                         |
-| `machineUserName` | `string` | Default machine user name (can be overridden at runtime) |
+| Option               | Type                                           | Description                                                                                                                                                       |
+| -------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `distPath`           | `string`                                       | Output directory path (required)                                                                                                                                  |
+| `machineUserName`    | `string`                                       | Default machine user name (can be overridden at runtime)                                                                                                          |
+| `disableIdpUserSync` | `{ userToIdp?: boolean; idpToUser?: boolean }` | Skip emitting individual `_User <-> userProfile` foreign keys. Both directions are emitted by default. See [IdP user synchronization](#idp-user-synchronization). |
+
+### IdP user synchronization
+
+When `auth.userProfile` is configured, the seed plugin treats the userProfile
+type (e.g. `User`) and the IdP-managed `_User` table as a pair. By default it
+emits foreign keys in both directions so that `validate` rejects any row in
+either table that does not have a matching counterpart:
+
+| Direction   | Foreign key                                    | Catches                                        |
+| ----------- | ---------------------------------------------- | ---------------------------------------------- |
+| `idpToUser` | `_User.name` → `<userProfile>.<usernameField>` | Creating an IdP credential with no profile row |
+| `userToIdp` | `<userProfile>.<usernameField>` → `_User.name` | Creating a profile row with no IdP credential  |
+
+Neither direction is enforced by the runtime. In production it is normal for
+one side to exist without the other — for example a userProfile row exists
+the moment a user is invited, but the corresponding `_User` row appears only
+after the user finishes signing up. To seed such states, set the relevant
+direction in `disableIdpUserSync` to `true`:
+
+```typescript
+// Allow seeding invited-but-not-registered userProfile rows.
+// Still rejects _User rows without a matching userProfile row.
+["@tailor-platform/seed", { distPath: "./seed", disableIdpUserSync: { userToIdp: true } }];
+
+// Allow seeding _User rows whose userProfile does not exist yet.
+// Still rejects userProfile rows without a matching _User row.
+["@tailor-platform/seed", { distPath: "./seed", disableIdpUserSync: { idpToUser: true } }];
+```
+
+Omitted directions default to `false` (FK emitted).
 
 ### Output
 

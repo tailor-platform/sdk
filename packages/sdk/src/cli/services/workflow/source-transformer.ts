@@ -126,6 +126,15 @@ export function transformWorkflowSource(
   // Find all jobs using AST detection
   const detectedJobs = findAllJobs(program, source);
 
+  // Defense-in-depth: the bundler already gates this function behind an
+  // isJobSourceFile check, so dependency files should not reach here.
+  // Guard anyway so that external callers don't accidentally strip exports
+  // from files that don't contain the target job.
+  const targetJobExistsInFile = detectedJobs.some((j) => j.name === targetJobName);
+  if (!targetJobExistsInFile) {
+    return source;
+  }
+
   // Build job name map from detected jobs if not provided
   const jobNameMap = allJobsMap ?? buildJobNameMap(detectedJobs);
 
@@ -205,22 +214,17 @@ export function transformWorkflowSource(
   }
 
   // Step 4: Transform .trigger() calls to tailor.workflow.triggerJobFunction()
-  // Only transform trigger calls that are NOT inside ranges being removed
-  // Also remove await keyword since triggerJobFunction is synchronous
   for (const call of triggerCalls) {
-    // Skip trigger calls inside removed job declarations
     if (isInsideRemovedRange(call.callRange.start)) {
       continue;
     }
 
     const jobName = jobNameMap.get(call.identifierName);
     if (jobName) {
-      // Transform to tailor.workflow.triggerJobFunction
-      // triggerJobFunction is synchronous, so we use fullRange to remove await if present
-      const transformedCall = `tailor.workflow.triggerJobFunction("${jobName}", ${call.argsText || "undefined"})`;
+      const transformedCall = `(async () => tailor.workflow.triggerJobFunction("${jobName}", ${call.argsText || "undefined"}))()`;
       replacements.push({
-        start: call.fullRange.start,
-        end: call.fullRange.end,
+        start: call.callRange.start,
+        end: call.callRange.end,
         text: transformedCall,
       });
     }

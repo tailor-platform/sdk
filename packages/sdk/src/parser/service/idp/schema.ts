@@ -256,6 +256,7 @@ export const IdPSchema = z
     name: z.string().describe("IdP service name"),
     authorization: z
       .union([z.literal("insecure"), z.literal("loggedIn"), z.object({ cel: z.string() })])
+      .optional()
       .describe("Authorization mode for IdP API access"),
     clients: z.array(z.string()).describe("OAuth2 client names that can use this IdP"),
     lang: IdPLangSchema.optional().describe("UI language for IdP pages"),

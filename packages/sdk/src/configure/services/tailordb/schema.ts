@@ -4,58 +4,30 @@ import {
   type AllowedValuesOutput,
   mapAllowedValues,
 } from "@/configure/types/field";
-import { type TailorField } from "@/configure/types/type";
-import {
-  type FieldOptions,
-  type FieldOutput,
-  type TailorFieldType,
-  type TailorToTs,
-} from "@/configure/types/types";
 import { brandValue } from "@/utils/brand";
-import { type TailorTypeGqlPermission, type TailorTypePermission } from "./permission";
-import {
-  type DBFieldMetadata,
-  type DefinedDBFieldMetadata,
-  type RecordHook,
-  type SerialConfig,
-  type IndexDef,
-  type TypeFeatures,
-  type ExcludeNestedDBFields,
-} from "./types";
-import type { InferredAttributeMap, TailorUser } from "@/configure/types";
-import type { Prettify, output, InferFieldsOutput } from "@/configure/types/helpers";
-import type { RecordValidateInput, RecordValidators } from "@/configure/types/validation";
+import type { TailorTypeGqlPermission, TailorTypePermission } from "./permission";
+import type { ExcludeNestedDBFields, RecordHook, TypeFeatures } from "./types";
+import type { FieldOptions, FieldOutput, TailorFieldType, TailorToTs } from "@/types/field-types";
+import type { output, InferFieldsOutput, Prettify } from "@/types/helpers";
 import type { PluginAttachment, PluginConfigs } from "@/types/plugin";
-import type { TailorDBTypeMetadata, RawRelationConfig, RelationType } from "@/types/tailordb";
+import type {
+  TailorDBField as TailorDBFieldBase,
+  TailorDBType as TailorDBTypeBase,
+} from "@/types/tailor-db-field";
+import type { TailorField as TailorFieldMinimal } from "@/types/tailor-field";
+import type {
+  DBFieldMetadata,
+  DefinedDBFieldMetadata,
+  SerialConfig,
+  IndexDef,
+  TailorDBTypeMetadata,
+  RawRelationConfig,
+  RelationType,
+} from "@/types/tailordb";
 import type { RawPermissions } from "@/types/tailordb.generated";
+import type { InferredAttributeMap, TailorUser } from "@/types/user";
+import type { RecordValidateInput, RecordValidators } from "@/types/validation";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
-
-interface RelationConfig<S extends RelationType, T extends TailorDBType> {
-  type: S;
-  toward: {
-    type: T;
-    as?: string;
-    key?: keyof T["fields"] & string;
-  };
-  backward?: string;
-}
-
-// Special config variant for self-referencing relations
-type RelationSelfConfig = {
-  type: RelationType;
-  toward: {
-    type: "self";
-    as?: string;
-    key?: string;
-  };
-  backward?: string;
-};
-
-function isRelationSelfConfig(
-  config: RelationConfig<RelationType, TailorDBType> | RelationSelfConfig,
-): config is RelationSelfConfig {
-  return config.toward.type === "self";
-}
 
 /**
  * Distinguishes a single `[fn, message]` tuple from an array of record validators.
@@ -75,51 +47,32 @@ export type TailorAnyDBField = TailorDBField<any, any>;
 // oxlint-disable-next-line no-explicit-any
 export type TailorAnyDBType = TailorDBType<any, any>;
 
-const regex = {
-  uuid: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
-  date: /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/,
-  time: /^(?<hour>\d{2}):(?<minute>\d{2})$/,
-  datetime:
-    /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(.(?<millisec>\d{3}))?Z$/,
-  decimal: /^-?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/,
-} as const;
-
-type FieldParseArgs = {
-  value: unknown;
-  data: unknown;
-  user: TailorUser;
-};
-
-type FieldValidateValueArgs<T extends TailorFieldType> = {
-  value: TailorToTs[T];
-  data: unknown;
-  user: TailorUser;
-  pathArray: string[];
-};
-
-type FieldParseInternalArgs = {
-  // Runtime input is unknown/untyped; we validate and narrow it inside the parser.
-  // oxlint-disable-next-line no-explicit-any
-  value: any;
-  data: unknown;
-  user: TailorUser;
-  pathArray: string[];
-};
-
 /**
- * TailorDBField interface representing a database field with extended metadata.
- * Extends TailorField with database-specific features like relations and indexes.
+ * Full TailorDBField interface with builder methods.
+ * Extends the minimal structural interface from types/ with fluent API methods.
  *
  * NOTE: Field-level `hooks` and `validate` have been removed from the public API.
  * Configure them at the record level via `db.type(...).hooks(...) / .validate(...)`
  * or via the third `options` argument of `createTable`.
  */
-export interface TailorDBField<Defined extends DefinedDBFieldMetadata, Output> extends Omit<
-  TailorField<Defined, Output, DBFieldMetadata, Defined["type"]>,
-  "description" | "fields"
-> {
-  /** Nested fields for object-like DB types */
+export interface TailorDBField<
+  Defined extends DefinedDBFieldMetadata = DefinedDBFieldMetadata,
+  // oxlint-disable-next-line no-explicit-any
+  Output = any,
+> extends Omit<TailorDBFieldBase<Defined, Output>, "fields"> {
   readonly fields: Record<string, TailorAnyDBField>;
+  _metadata: DBFieldMetadata;
+
+  /**
+   * Parse and validate a value against this field's validation rules
+   */
+  parse(args: FieldParseArgs): StandardSchemaV1.Result<Output>;
+
+  /**
+   * Internal parse method that tracks field path for nested validation
+   * @private
+   */
+  _parseInternal(args: FieldParseInternalArgs): StandardSchemaV1.Result<Output>;
 
   /**
    * Field-level `validate` has been removed from the public TailorDB API.
@@ -134,27 +87,18 @@ export interface TailorDBField<Defined extends DefinedDBFieldMetadata, Output> e
    */
   typeName(this: never, typeName: string): never;
 
-  /** Returns a shallow copy of the raw relation config if set */
-  readonly rawRelation: Readonly<RawRelationConfig> | undefined;
-
   /**
    * Set a description for the field
-   * @param description - The description text
-   * @returns The field with updated metadata
    */
   description<CurrentDefined extends Defined>(
     this: CurrentDefined extends { description: unknown }
       ? never
-      : TailorDBField<CurrentDefined, Output>,
+      : TailorFieldMinimal<CurrentDefined, Output>,
     description: string,
   ): TailorDBField<Prettify<CurrentDefined & { description: true }>, Output>;
 
   /**
    * Define a relation to another type.
-   * Relation types: "n-1" (many-to-one), "1-1" (one-to-one), "keyOnly" (key only).
-   * Aliases "manyToOne", "oneToOne", and "N-1" are also accepted.
-   * @example db.uuid().relation({ type: "n-1", toward: { type: otherModel } })
-   * @example db.uuid().relation({ type: "1-1", toward: { type: profile } })
    */
   relation<S extends RelationType, T extends TailorAnyDBType, CurrentDefined extends Defined>(
     this: CurrentDefined extends { relation: unknown }
@@ -240,8 +184,6 @@ export interface TailorDBField<Defined extends DefinedDBFieldMetadata, Output> e
 
   /**
    * Clone the field with optional overrides for field options
-   * @param options - Optional field options to override
-   * @returns A new TailorDBField instance with the same configuration
    */
   clone<const NewOpt extends FieldOptions>(
     options?: NewOpt,
@@ -254,6 +196,140 @@ export interface TailorDBField<Defined extends DefinedDBFieldMetadata, Output> e
     FieldOutput<TailorToTs[Defined["type"]], NewOpt>
   >;
 }
+
+/**
+ * Full TailorDBType interface with builder methods.
+ * Extends the minimal structural interface from types/ with fluent API methods.
+ */
+export interface TailorDBType<
+  // oxlint-disable-next-line no-explicit-any
+  Fields extends Record<string, TailorAnyDBField> = any,
+  User extends object = InferredAttributeMap,
+> extends TailorDBTypeBase<Fields, User> {
+  _description?: string;
+
+  /**
+   * Add record-level create/update hooks. Each callback receives `{ data, user }`
+   * and must return a complete record. Spread the incoming data
+   * (`{ ...data, field: newValue }`) to satisfy required fields.
+   */
+  hooks(hooks: RecordHook<InferFieldsOutput<Fields>>): TailorDBType<Fields, User>;
+
+  /**
+   * Add record-level validators. Each callback receives `{ data, user }` and must
+   * return `true` for a valid record. Use the tuple form `[fn, message]` for
+   * diagnosable error messages.
+   */
+  validate(validators: RecordValidators<InferFieldsOutput<Fields>>): TailorDBType<Fields, User>;
+
+  features(features: Omit<TypeFeatures, "pluralForm">): TailorDBType<Fields, User>;
+  indexes(...indexes: IndexDef<TailorDBType<Fields, User>>[]): TailorDBType<Fields, User>;
+  files<const F extends string>(
+    files: Record<F, string> & Partial<Record<keyof output<TailorDBType<Fields, User>>, never>>,
+  ): TailorDBType<Fields, User>;
+  permission<
+    U extends object = User,
+    P extends TailorTypePermission<U, output<TailorDBType<Fields, User>>> = TailorTypePermission<
+      U,
+      output<TailorDBType<Fields, User>>
+    >,
+  >(
+    permission: P,
+  ): TailorDBType<Fields, U>;
+  gqlPermission<
+    U extends object = User,
+    P extends TailorTypeGqlPermission<U> = TailorTypeGqlPermission<U>,
+  >(
+    permission: P,
+  ): TailorDBType<Fields, U>;
+  description(description: string): TailorDBType<Fields, User>;
+  pickFields<K extends keyof Fields>(keys: K[]): Pick<Fields, K>;
+  pickFields<K extends keyof Fields, const Opt extends FieldOptions>(
+    keys: K[],
+    options: Opt,
+  ): {
+    [P in K]: Fields[P] extends TailorDBField<infer D, infer _O>
+      ? TailorDBField<
+          Omit<D, "array"> & {
+            array: Opt extends { array: true } ? true : D["array"];
+          },
+          FieldOutput<TailorToTs[D["type"]], Opt>
+        >
+      : never;
+  };
+  omitFields<K extends keyof Fields>(keys: K[]): Omit<Fields, K>;
+
+  /** Plugin attachments for this type */
+  readonly plugins: PluginAttachment[];
+
+  plugin<P extends keyof PluginConfigs<keyof Fields & string>>(config: {
+    [K in P]: PluginConfigs<keyof Fields & string>[K];
+  }): TailorDBType<Fields, User>;
+}
+
+export type TailorDBInstance<
+  // oxlint-disable-next-line no-explicit-any
+  Fields extends Record<string, TailorAnyDBField> = any,
+  User extends object = InferredAttributeMap,
+> = TailorDBType<Fields, User>;
+
+interface RelationConfig<S extends RelationType, T extends TailorDBType> {
+  type: S;
+  toward: {
+    type: T;
+    as?: string;
+    key?: keyof T["fields"] & string;
+  };
+  backward?: string;
+}
+
+// Special config variant for self-referencing relations
+type RelationSelfConfig = {
+  type: RelationType;
+  toward: {
+    type: "self";
+    as?: string;
+    key?: string;
+  };
+  backward?: string;
+};
+
+function isRelationSelfConfig(
+  config: RelationConfig<RelationType, TailorDBType> | RelationSelfConfig,
+): config is RelationSelfConfig {
+  return config.toward.type === "self";
+}
+
+const regex = {
+  uuid: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+  date: /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/,
+  time: /^(?<hour>\d{2}):(?<minute>\d{2})$/,
+  datetime:
+    /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(.(?<millisec>\d{3}))?Z$/,
+  decimal: /^-?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/,
+} as const;
+
+type FieldParseArgs = {
+  value: unknown;
+  data: unknown;
+  user: TailorUser;
+};
+
+type FieldValidateValueArgs<T extends TailorFieldType> = {
+  value: TailorToTs[T];
+  data: unknown;
+  user: TailorUser;
+  pathArray: string[];
+};
+
+type FieldParseInternalArgs = {
+  // Runtime input is unknown/untyped; we validate and narrow it inside the parser.
+  // oxlint-disable-next-line no-explicit-any
+  value: any;
+  data: unknown;
+  user: TailorUser;
+  pathArray: string[];
+};
 
 /**
  * Creates a new TailorDBField instance.
@@ -507,7 +583,7 @@ export function createTailorDBField<
 
   const field: FieldType = {
     type,
-    fields: fields ?? {},
+    fields: (fields ?? {}) as Record<string, TailorAnyDBField>,
     _defined: undefined as unknown as {
       type: T;
       array: TOptions extends { array: true } ? true : false;
@@ -791,151 +867,6 @@ function object<
 }
 
 /**
- * TailorDBType interface representing a database type definition with fields, permissions, and settings.
- */
-export interface TailorDBType<
-  // Default kept loose to avoid forcing callers to supply generics.
-  // oxlint-disable-next-line no-explicit-any
-  Fields extends Record<string, TailorAnyDBField> = any,
-  User extends object = InferredAttributeMap,
-> {
-  readonly name: string;
-  readonly fields: Fields;
-  readonly _output: InferFieldsOutput<Fields>;
-  _description?: string;
-
-  /** Returns metadata for the type */
-  readonly metadata: TailorDBTypeMetadata;
-
-  /**
-   * Add record-level create/update hooks. Each callback receives `{ data, user }`
-   * (the entire record as a partial) and must return a complete record.
-   * Spread the incoming data (`{ ...data, field: newValue }`) to satisfy required fields.
-   * @example
-   * db.type("Order", {
-   *   total: db.float(),
-   *   tax: db.float(),
-   *   ...db.fields.timestamps(),
-   * }).hooks({
-   *   create: ({ data }) => ({ ...data, tax: (data.total ?? 0) * 0.1 }),
-   *   update: ({ data }) => ({ ...data, tax: (data.total ?? 0) * 0.1 }),
-   * })
-   */
-  hooks(hooks: RecordHook<InferFieldsOutput<Fields>>): TailorDBType<Fields, User>;
-
-  /**
-   * Add record-level validators. Each callback receives `{ data, user }` and must
-   * return `true` for a valid record. Use the tuple form `[fn, message]` for
-   * diagnosable error messages.
-   * @example
-   * db.type("User", { email: db.string() }).validate([
-   *   ({ data }) => data.email.includes("@"),
-   *   "Email must contain @",
-   * ])
-   */
-  validate(validators: RecordValidators<InferFieldsOutput<Fields>>): TailorDBType<Fields, User>;
-
-  /**
-   * Configure type features
-   */
-  features(features: Omit<TypeFeatures, "pluralForm">): TailorDBType<Fields, User>;
-
-  /**
-   * Define composite indexes
-   */
-  indexes(...indexes: IndexDef<TailorDBType<Fields, User>>[]): TailorDBType<Fields, User>;
-
-  /**
-   * Define file fields
-   */
-  files<const F extends string>(
-    files: Record<F, string> & Partial<Record<keyof output<TailorDBType<Fields, User>>, never>>,
-  ): TailorDBType<Fields, User>;
-
-  /**
-   * Set record-level permissions for create, read, update, and delete operations.
-   * Prefer object format with explicit `conditions` and `permit` for readability.
-   * For update operations, use `newRecord` and `oldRecord` operands.
-   * @example
-   * .permission({
-   *   create: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
-   *   read: [{ conditions: [[{ record: "isPublic" }, "=", true]], permit: true }],
-   *   update: [{ conditions: [[{ newRecord: "ownerId" }, "=", { user: "id" }]], permit: true }],
-   *   delete: [{ conditions: [[{ record: "ownerId" }, "=", { user: "id" }]], permit: true }],
-   * })
-   */
-  permission<
-    U extends object = User,
-    P extends TailorTypePermission<U, output<TailorDBType<Fields, User>>> = TailorTypePermission<
-      U,
-      output<TailorDBType<Fields, User>>
-    >,
-  >(
-    permission: P,
-  ): TailorDBType<Fields, U>;
-
-  /**
-   * Set GraphQL-level permissions controlling access to GraphQL operations.
-   * @example
-   * .gqlPermission([
-   *   {
-   *     conditions: [[{ user: "_loggedIn" }, "=", true]],
-   *     actions: "all",
-   *     permit: true,
-   *   },
-   * ])
-   */
-  gqlPermission<
-    U extends object = User,
-    P extends TailorTypeGqlPermission<U> = TailorTypeGqlPermission<U>,
-  >(
-    permission: P,
-  ): TailorDBType<Fields, U>;
-
-  /**
-   * Set type description
-   */
-  description(description: string): TailorDBType<Fields, User>;
-
-  /**
-   * Pick specific fields from the type
-   */
-  pickFields<K extends keyof Fields>(keys: K[]): Pick<Fields, K>;
-  pickFields<K extends keyof Fields, const Opt extends FieldOptions>(
-    keys: K[],
-    options: Opt,
-  ): {
-    [P in K]: Fields[P] extends TailorDBField<infer D, infer _O>
-      ? TailorDBField<
-          Omit<D, "array"> & {
-            array: Opt extends { array: true } ? true : D["array"];
-          },
-          FieldOutput<TailorToTs[D["type"]], Opt>
-        >
-      : never;
-  };
-
-  /**
-   * Omit specific fields from the type
-   */
-  omitFields<K extends keyof Fields>(keys: K[]): Omit<Fields, K>;
-
-  /**
-   * Plugin attachments for this type
-   */
-  readonly plugins: PluginAttachment[];
-
-  /**
-   * Attach a plugin to this type
-   * @param config - Plugin configuration in the format { pluginId: config }
-   * @returns The type with the plugin attached
-   */
-  plugin<P extends keyof PluginConfigs<keyof Fields & string>>(config: {
-    [K in P]: PluginConfigs<keyof Fields & string>[K];
-  }): TailorDBType<Fields, User>;
-}
-
-/**
  * Creates a new TailorDBType instance.
  * @param name - Type name
  * @param fields - Field definitions
@@ -1101,13 +1032,6 @@ export function createTailorDBType<
 
   return brandValue(dbType, "tailordb-type");
 }
-
-export type TailorDBInstance<
-  // Default kept loose for convenience; callers still get fully inferred types from `db.type()`.
-  // oxlint-disable-next-line no-explicit-any
-  Fields extends Record<string, TailorAnyDBField> = any,
-  User extends object = InferredAttributeMap,
-> = TailorDBType<Fields, User>;
 
 const idField = uuid();
 type idField = typeof idField;

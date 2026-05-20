@@ -1,8 +1,8 @@
 import { type AllowedValues, type AllowedValuesOutput } from "@/configure/types/field";
 import { type TailorAnyField, type TailorField, createTailorField } from "@/configure/types/type";
-import type { InferFieldsOutput } from "@/configure/types/helpers";
-import type { TailorFieldType, TailorToTs, FieldOptions } from "@/configure/types/types";
-import type { FieldValidateInput, ValidateConfig } from "@/configure/types/validation";
+import type { FieldOptions, TailorFieldType, TailorToTs } from "@/types/field-types";
+import type { InferFieldsOutput } from "@/types/helpers";
+import type { FieldValidateInput, ValidateConfig } from "@/types/validation";
 
 type CommonFieldOptions = {
   optional?: boolean;

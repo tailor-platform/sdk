@@ -11,13 +11,13 @@ import {
   resolveResolverField,
 } from "./descriptor";
 import type { AuthInvoker } from "@/configure/services/auth";
-import type { TailorAnyField, TailorUser } from "@/configure/types";
-import type { TailorEnv } from "@/configure/types/env";
-import type { InferFieldsOutput, output } from "@/configure/types/helpers";
 import type { MachineUserName } from "@/configure/types/machine-user";
-import type { TailorField } from "@/configure/types/type";
-import type { TailorFieldType } from "@/configure/types/types";
+import type { TailorAnyField, TailorField } from "@/configure/types/type";
+import type { TailorEnv } from "@/types/env";
+import type { TailorFieldType } from "@/types/field-types";
+import type { InferFieldsOutput, output } from "@/types/helpers";
 import type { ResolverInput } from "@/types/resolver.generated";
+import type { TailorInvoker, TailorUser } from "@/types/user";
 
 type ResolvedInput<Input> =
   Input extends Record<string, ResolverFieldEntry> ? ResolvedResolverFieldMap<Input> : undefined;
@@ -27,6 +27,7 @@ type Context<Input> = {
     ? InferFieldsOutput<ResolvedResolverFieldMap<Input>>
     : never;
   user: TailorUser;
+  invoker?: TailorInvoker;
   env: TailorEnv;
 };
 
@@ -78,7 +79,7 @@ type ResolverReturn<Input, Output> = Omit<
  * Create a resolver definition for the Tailor SDK.
  *
  * The `body` function receives a context with `input` (typed from `config.input`),
- * `user` (TailorUser with id, type, workspaceId, attributes, attributeList), and `env` (TailorEnv).
+ * `user`, `invoker` (reflects `authInvoker` delegation), and `env`.
  * The return value of `body` must match the `output` type.
  *
  * `input` and `output` fields accept either fluent API fields (e.g. `t.string()`)
@@ -121,6 +122,7 @@ type ResolverReturn<Input, Output> = Omit<
  *   output: { kind: "int", description: "Sum" },
  * });
  */
+/* @__NO_SIDE_EFFECTS__ */
 export function createResolver<
   Input extends Record<string, ResolverFieldEntry> | undefined = undefined,
   Output extends TailorAnyField | ResolverFieldDescriptor | Record<string, ResolverFieldEntry> =

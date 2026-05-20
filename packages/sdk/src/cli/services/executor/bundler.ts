@@ -1,5 +1,4 @@
 import * as fs from "node:fs";
-import ml from "multiline-ts";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
@@ -8,11 +7,13 @@ import { loadFilesWithIgnores, type FileLoadConfig } from "@/cli/services/file-l
 import { removeStaleEntryFiles } from "@/cli/services/stale-cleanup";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { logger, styles } from "@/cli/shared/logger";
+import { INVOKER_EXPR } from "@/cli/shared/runtime-exprs";
 import {
   createTriggerTransformPlugin,
   serializeTriggerContext,
   type TriggerContext,
 } from "@/cli/shared/trigger-context";
+import ml from "@/utils/multiline";
 import { loadExecutor } from "./loader";
 
 interface ExecutorInfo {
@@ -151,7 +152,10 @@ async function bundleSingleExecutor(
       const entryContent = ml /* js */ `
         import _internalExecutor from "${absoluteSourcePath}";
 
-        const __executor_function = _internalExecutor.operation.body;
+        const __executor_function = async (args) => {
+          const invoker = ${INVOKER_EXPR};
+          return _internalExecutor.operation.body({ ...args, invoker });
+        };
 
         export { __executor_function as main };
       `;

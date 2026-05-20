@@ -69,10 +69,12 @@ tailor-sdk workflow list [options]
 
 **Options**
 
-| Option                          | Alias | Description       | Required | Default | Env                            |
-| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| Option                          | Alias | Description                                              | Required | Default  | Env                            |
+| ------------------------------- | ----- | -------------------------------------------------------- | -------- | -------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                             | No       | -        | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                        | No       | -        | `TAILOR_PLATFORM_PROFILE`      |
+| `--order <ORDER>`               | -     | Sort order (asc or desc)                                 | No       | `"desc"` | -                              |
+| `--limit <LIMIT>`               | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -        | -                              |
 
 <!-- politty:command:workflow list:options:end -->
 
@@ -200,7 +202,7 @@ List or get workflow executions.
 **Usage**
 
 ```
-tailor-sdk workflow executions [options] [executionId]
+tailor-sdk workflow executions [options] [execution-id]
 ```
 
 <!-- politty:command:workflow executions:usage:end -->
@@ -209,9 +211,9 @@ tailor-sdk workflow executions [options] [executionId]
 
 **Arguments**
 
-| Argument      | Description                               | Required |
-| ------------- | ----------------------------------------- | -------- |
-| `executionId` | Execution ID (if provided, shows details) | No       |
+| Argument       | Description                               | Required |
+| -------------- | ----------------------------------------- | -------- |
+| `execution-id` | Execution ID (if provided, shows details) | No       |
 
 <!-- politty:command:workflow executions:arguments:end -->
 
@@ -219,15 +221,17 @@ tailor-sdk workflow executions [options] [executionId]
 
 **Options**
 
-| Option                            | Alias | Description                                                    | Required | Default | Env                            |
-| --------------------------------- | ----- | -------------------------------------------------------------- | -------- | ------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>`   | `-w`  | Workspace ID                                                   | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`             | `-p`  | Workspace profile                                              | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
-| `--workflow-name <WORKFLOW_NAME>` | `-n`  | Filter by workflow name (list mode only)                       | No       | -       | -                              |
-| `--status <STATUS>`               | `-s`  | Filter by status (list mode only)                              | No       | -       | -                              |
-| `--wait`                          | `-W`  | Wait for execution to complete                                 | No       | `false` | -                              |
-| `--interval <INTERVAL>`           | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m') | No       | `"3s"`  | -                              |
-| `--logs`                          | -     | Display job execution logs (detail mode only)                  | No       | `false` | -                              |
+| Option                            | Alias | Description                                                    | Required | Default  | Env                            |
+| --------------------------------- | ----- | -------------------------------------------------------------- | -------- | -------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>`   | `-w`  | Workspace ID                                                   | No       | -        | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`             | `-p`  | Workspace profile                                              | No       | -        | `TAILOR_PLATFORM_PROFILE`      |
+| `--order <ORDER>`                 | -     | Sort order (asc or desc)                                       | No       | `"desc"` | -                              |
+| `--limit <LIMIT>`                 | `-l`  | Maximum number of items to return (0: unlimited)               | No       | `50`     | -                              |
+| `--workflow-name <WORKFLOW_NAME>` | `-n`  | Filter by workflow name (list mode only)                       | No       | -        | -                              |
+| `--status <STATUS>`               | `-s`  | Filter by status (list mode only)                              | No       | -        | -                              |
+| `--wait`                          | `-W`  | Wait for execution to complete                                 | No       | `false`  | -                              |
+| `--interval <INTERVAL>`           | `-i`  | Polling interval when using --wait (e.g., '3s', '500ms', '1m') | No       | `"3s"`   | -                              |
+| `--logs`                          | -     | Display job execution logs (detail mode only)                  | No       | `false`  | -                              |
 
 <!-- politty:command:workflow executions:options:end -->
 
@@ -253,7 +257,7 @@ Resume a failed or pending workflow execution.
 **Usage**
 
 ```
-tailor-sdk workflow resume [options] <executionId>
+tailor-sdk workflow resume [options] <execution-id>
 ```
 
 <!-- politty:command:workflow resume:usage:end -->
@@ -262,9 +266,9 @@ tailor-sdk workflow resume [options] <executionId>
 
 **Arguments**
 
-| Argument      | Description         | Required |
-| ------------- | ------------------- | -------- |
-| `executionId` | Failed execution ID | Yes      |
+| Argument       | Description         | Required |
+| -------------- | ------------------- | -------- |
+| `execution-id` | Failed execution ID | Yes      |
 
 <!-- politty:command:workflow resume:arguments:end -->
 

@@ -1,6 +1,6 @@
 # Function Commands
 
-Commands for viewing function execution logs.
+Commands for managing function registries and viewing function execution logs.
 
 <!-- politty:command:function:heading:start -->
 
@@ -30,6 +30,8 @@ tailor-sdk function [command]
 
 | Command                                   | Description                                                     |
 | ----------------------------------------- | --------------------------------------------------------------- |
+| [`function get`](#function-get)           | Get a function registry by name                                 |
+| [`function list`](#function-list)         | List function registries in a workspace                         |
 | [`function logs`](#function-logs)         | List or get function execution logs.                            |
 | [`function test-run`](#function-test-run) | Run a function on the Tailor Platform server without deploying. |
 
@@ -40,6 +42,86 @@ tailor-sdk function [command]
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 <!-- politty:command:function:global-options-link:end -->
+<!-- politty:command:function get:heading:start -->
+
+### function get
+
+<!-- politty:command:function get:heading:end -->
+
+<!-- politty:command:function get:description:start -->
+
+Get a function registry by name
+
+<!-- politty:command:function get:description:end -->
+
+<!-- politty:command:function get:usage:start -->
+
+**Usage**
+
+```
+tailor-sdk function get [options]
+```
+
+<!-- politty:command:function get:usage:end -->
+
+<!-- politty:command:function get:options:start -->
+
+**Options**
+
+| Option                          | Alias | Description       | Required | Default | Env                            |
+| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| `--name <NAME>`                 | `-n`  | Function name     | Yes      | -       | -                              |
+
+<!-- politty:command:function get:options:end -->
+
+<!-- politty:command:function get:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:function get:global-options-link:end -->
+<!-- politty:command:function list:heading:start -->
+
+### function list
+
+<!-- politty:command:function list:heading:end -->
+
+<!-- politty:command:function list:description:start -->
+
+List function registries in a workspace
+
+<!-- politty:command:function list:description:end -->
+
+<!-- politty:command:function list:usage:start -->
+
+**Usage**
+
+```
+tailor-sdk function list [options]
+```
+
+<!-- politty:command:function list:usage:end -->
+
+<!-- politty:command:function list:options:start -->
+
+**Options**
+
+| Option                          | Alias | Description                                              | Required | Default  | Env                            |
+| ------------------------------- | ----- | -------------------------------------------------------- | -------- | -------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                             | No       | -        | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                        | No       | -        | `TAILOR_PLATFORM_PROFILE`      |
+| `--order <ORDER>`               | -     | Sort order (asc or desc)                                 | No       | `"desc"` | -                              |
+| `--limit <LIMIT>`               | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -        | -                              |
+
+<!-- politty:command:function list:options:end -->
+
+<!-- politty:command:function list:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:function list:global-options-link:end -->
+
 <!-- politty:command:function logs:heading:start -->
 
 ### function logs
@@ -57,7 +139,7 @@ List or get function execution logs.
 **Usage**
 
 ```
-tailor-sdk function logs [options] [executionId]
+tailor-sdk function logs [options] [execution-id]
 ```
 
 <!-- politty:command:function logs:usage:end -->
@@ -66,9 +148,9 @@ tailor-sdk function logs [options] [executionId]
 
 **Arguments**
 
-| Argument      | Description                                         | Required |
-| ------------- | --------------------------------------------------- | -------- |
-| `executionId` | Execution ID (if provided, shows details with logs) | No       |
+| Argument       | Description                                         | Required |
+| -------------- | --------------------------------------------------- | -------- |
+| `execution-id` | Execution ID (if provided, shows details with logs) | No       |
 
 <!-- politty:command:function logs:arguments:end -->
 
@@ -76,10 +158,12 @@ tailor-sdk function logs [options] [executionId]
 
 **Options**
 
-| Option                          | Alias | Description       | Required | Default | Env                            |
-| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| Option                          | Alias | Description                                      | Required | Default  | Env                            |
+| ------------------------------- | ----- | ------------------------------------------------ | -------- | -------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                     | No       | -        | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                | No       | -        | `TAILOR_PLATFORM_PROFILE`      |
+| `--order <ORDER>`               | -     | Sort order (asc or desc)                         | No       | `"desc"` | -                              |
+| `--limit <LIMIT>`               | `-l`  | Maximum number of items to return (0: unlimited) | No       | `50`     | -                              |
 
 <!-- politty:command:function logs:options:end -->
 
@@ -89,19 +173,45 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 <!-- politty:command:function logs:global-options-link:end -->
 
-**Usage Examples:**
+<!-- politty:command:function logs:examples:start -->
+
+**Examples**
+
+**List all function execution logs**
 
 ```bash
-# List all function execution logs
-tailor-sdk function logs
-
-# Get execution details with logs
-tailor-sdk function logs <execution-id>
-
-# Output as JSON
-tailor-sdk function logs --json
-tailor-sdk function logs <execution-id> --json
+$ tailor-sdk function logs
 ```
+
+**Get execution details with logs**
+
+```bash
+$ tailor-sdk function logs <execution-id>
+```
+
+**Output as JSON**
+
+```bash
+$ tailor-sdk function logs --json
+```
+
+**Get execution details as JSON**
+
+```bash
+$ tailor-sdk function logs <execution-id> --json
+```
+
+<!-- politty:command:function logs:examples:end -->
+
+<!-- politty:command:function logs:notes:start -->
+
+**Notes**
+
+When viewing a specific execution that failed, the command displays error details with the stack trace mapped back to original source files via the inline sourcemap (clickable file links and code snippets, matching `function test-run` output).
+
+The download is pinned to the bundle that actually ran using the execution's content hash, so stack traces stay accurate across redeploys when the server retains old bundles. The command falls back to a plain-text error display when the pinned bundle cannot be retrieved, or when the execution was recorded before content hashes started being tracked and the function was redeployed after it ran.
+
+<!-- politty:command:function logs:notes:end -->
 
 <!-- politty:command:function test-run:heading:start -->
 

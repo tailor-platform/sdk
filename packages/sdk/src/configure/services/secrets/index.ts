@@ -1,5 +1,5 @@
-declare const secretsDefinitionBrand: unique symbol;
-type SecretsDefinitionBrand = { readonly [secretsDefinitionBrand]: true };
+import type { SecretsDefinitionBrand } from "@/types/secrets-config";
+export type { SecretsConfig } from "@/types/secrets-config";
 
 type SecretsVaultInput = Record<string, string>;
 type SecretsVaultInputNullish = Record<string, string | undefined | null>;
@@ -23,9 +23,6 @@ type DefinedSecrets<T extends SecretsInputNullish> = {
   ): Promise<(string | undefined)[]>;
 } & SecretsDefinitionBrand;
 
-/** Type accepted by `AppConfig.secrets`. Only values returned by `defineSecretManager()` satisfy this. */
-export type SecretsConfig = Omit<ReturnType<typeof defineSecretManager>, "get" | "getAll">;
-
 /**
  * Define secrets configuration for the Tailor SDK.
  * Each key is a vault name, and its value is a record of secret name to secret value.
@@ -47,6 +44,7 @@ export function defineSecretManager<const T extends SecretsInputNullish>(
   config: T,
   options: { ignoreNullishValues: true },
 ): DefinedSecrets<T>;
+/* @__NO_SIDE_EFFECTS__ */
 export function defineSecretManager<const T extends SecretsInputNullish>(
   config: T,
   options?: { ignoreNullishValues?: boolean },

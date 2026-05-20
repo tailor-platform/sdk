@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `pnpm exec turbo run test` - Run all tests
 - `pnpm exec turbo run check` - Run format, lint:fix, typecheck:go, and knip in sequence
 - `pnpm exec turbo run generate` - Run code generation
-- `pnpm exec turbo run apply` - Deploy to the Tailor Platform
+- `pnpm exec turbo run deploy` - Deploy to the Tailor Platform
 
 ### Package-specific (in packages/sdk)
 
@@ -40,7 +40,7 @@ Refer to `example/` for working implementations of all patterns (config, models,
 
 Key files:
 
-- `example/tailor.config.ts` - Configuration with defineConfig, defineAuth, defineIdp, defineStaticWebSite, defineGenerators
+- `example/tailor.config.ts` - Configuration with defineConfig, defineAuth, defineIdp, defineStaticWebSite, definePlugins
 - `example/tailordb/*.ts` - Model definitions with `db.type()` or `createTable`
 - `example/resolvers/*.ts` - Resolver implementations with `createResolver`
 - `example/executors/*.ts` - Executor implementations with `createExecutor`
@@ -53,15 +53,17 @@ Key files:
 - `createWorkflow()` result **must** be default exported
 - All jobs **must** be named exports (including mainJob and triggered jobs)
 - Job names must be unique across the entire project
-- `.trigger()` returns a `Promise` — always use `await` to get the result
-- On the server, the calling job suspends until the triggered job completes (synchronous execution), but the TypeScript API is `Promise`-based
+- `.trigger()` returns a `Promise<Awaited<Output>>` — typically `await` it to read the value
+- `defineWaitPoints(define => ({ key: define<P, R>() }))` creates typed wait/resolve points
+- Wait/resolve methods runtime-delegate to `tailor.workflow.wait/resolve` on the platform; use `workflowMock.setWaitHandler` / `workflowMock.setResolveHandler` from `@tailor-platform/sdk/vitest` (with the `tailor-runtime` environment) to mock in tests — see [testing.md](packages/sdk/docs/testing.md#jobs-that-wait-on-approval)
+- Use `wps.key.wait()` for namespaced access, or `export const { key } = defineWaitPoints(...)` for destructured 2-level access
 
 ### Executors
 
 Available triggers beyond record CRUD (`recordCreatedTrigger`, `recordUpdatedTrigger`, `recordDeletedTrigger`):
 
 - `resolverExecutedTrigger` - Resolver execution
-- `idpUserCreatedTrigger` / `idpUserUpdatedTrigger` / `idpUserDeletedTrigger` - IdP user events
+- `idpUserCreatedTrigger` / `idpUserUpdatedTrigger` / `idpUserDeletedTrigger` - IdP user events. Pass `{ idp: "my-idp" }` to target a specific IdP when the project defines multiple IdPs
 - `authAccessTokenIssuedTrigger` / `authAccessTokenRefreshedTrigger` / `authAccessTokenRevokedTrigger` - Auth token events
 - `scheduleTrigger` - CRON schedule
 - `incomingWebhookTrigger` - Webhook
@@ -69,18 +71,17 @@ Available triggers beyond record CRUD (`recordCreatedTrigger`, `recordUpdatedTri
 Multi-event trigger variants handle multiple events in one executor:
 
 - `recordTrigger({ type, events: ["created", "updated"] })` - Multiple record events
-- `idpUserTrigger({ events: ["created", "deleted"] })` - Multiple IdP user events
+- `idpUserTrigger({ events: ["created", "deleted"] })` - Multiple IdP user events. Add `idp: "my-idp"` to target a specific IdP in multi-IdP projects
 - `authAccessTokenTrigger({ events: ["issued", "revoked"] })` - Multiple auth token events
 
 Args include `event` (short name like `"created"`) and `rawEvent` (full event type like `"tailordb.type_record.created"`) for runtime type narrowing.
 
-### Generators
+### Plugins
 
-`defineGenerators()` takes tuples as rest arguments (see `example/tailor.config.ts`). The `@tailor-platform/kysely-type` generator (built into the SDK) is required for `getDB()` in resolvers/executors/workflows.
+`definePlugins()` takes plugin instances as rest arguments (see `example/tailor.config.ts`). The `kyselyTypePlugin` from `@tailor-platform/sdk/plugin/kysely-type` is required for `getDB()` in resolvers/executors/workflows. `defineGenerators()` is deprecated — use `definePlugins()` instead.
 
 ### Configuration
 
-- `definePlugins()` is available for reusable type/resolver/executor generation
 - Static website `.url` property is resolved at deployment time — use it in CORS and redirect URIs
 
 ## Developer Guides
@@ -99,5 +100,5 @@ See [docs/](docs/README.md) for developer and contributor documentation.
 
 ## Environment
 
-- Linting runs oxlint first, then ESLint
+- Linting is oxlint-only (`oxlint --type-aware .` everywhere).
 - Lefthook runs pre-commit checks (lint, format, typecheck) and post-commit signature verification

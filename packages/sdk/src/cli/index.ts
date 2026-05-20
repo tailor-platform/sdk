@@ -4,9 +4,9 @@ import { defineCommand, runMain } from "politty";
 import { withCompletionCommand } from "politty/completion";
 import { z } from "zod";
 import { apiCommand } from "./commands/api";
-import { applyCommand } from "./commands/apply";
 import { authconnectionCommand } from "./commands/authconnection";
-import { crashReportCommand } from "./commands/crash-report";
+import { crashReportCommand } from "./commands/crashreport";
+import { deployCommand } from "./commands/deploy";
 import { executorCommand } from "./commands/executor";
 import { functionCommand } from "./commands/function";
 import { generateCommand } from "./commands/generate";
@@ -22,12 +22,14 @@ import { removeCommand } from "./commands/remove";
 import { secretCommand } from "./commands/secret";
 import { setupCommand } from "./commands/setup";
 import { showCommand } from "./commands/show";
+import { skillsCommand } from "./commands/skills";
 import { staticwebsiteCommand } from "./commands/staticwebsite";
 import { tailordbCommand } from "./commands/tailordb";
+import { upgradeCommand } from "./commands/upgrade";
 import { userCommand } from "./commands/user";
 import { workflowCommand } from "./commands/workflow";
 import { workspaceCommand } from "./commands/workspace";
-import { initCrashReporting } from "./crash-report";
+import { initCrashReporting } from "./crashreport";
 import { queryCommand } from "./query";
 import { commonArgs, isVerbose } from "./shared/args";
 import { isCLIError } from "./shared/errors";
@@ -58,9 +60,9 @@ export const mainCommand = withCompletionCommand(
       packageJson.description || "Tailor CLI for managing Tailor Platform SDK applications",
     subCommands: {
       api: apiCommand,
-      apply: applyCommand,
       authconnection: authconnectionCommand,
-      "crash-report": crashReportCommand,
+      crashreport: crashReportCommand,
+      deploy: deployCommand,
       executor: executorCommand,
       function: functionCommand,
       generate: generateCommand,
@@ -77,8 +79,10 @@ export const mainCommand = withCompletionCommand(
       secret: secretCommand,
       setup: setupCommand,
       show: showCommand,
+      skills: skillsCommand,
       staticwebsite: staticwebsiteCommand,
       tailordb: tailordbCommand,
+      upgrade: upgradeCommand,
       user: userCommand,
       workflow: workflowCommand,
       workspace: workspaceCommand,
@@ -116,7 +120,7 @@ runMain(mainCommand, {
         (!(error instanceof Error) || error instanceof TypeError || error instanceof RangeError);
       if (shouldReport) {
         // Lazy import to match shutdownTelemetry pattern and keep cleanup handler lightweight.
-        const { reportCrash } = await import("@/cli/crash-report");
+        const { reportCrash } = await import("@/cli/crashreport");
         await reportCrash(error, "handledError");
       }
     }

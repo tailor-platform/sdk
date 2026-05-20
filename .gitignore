@@ -35,6 +35,7 @@ coverage/
 **/.tailor-sdk/**
 .turbo
 tailor.d.ts
+!packages/create-sdk/templates/*/tailor.d.ts
 
 .mcp.json
 
@@ -46,6 +47,8 @@ tailor.d.ts
 .claude/skills/*
 !.claude/skills/llm-challenge/
 !.claude/skills/docs-check/
+!.claude/skills/tailor-sdk
+!.claude/skills/e2e-setup/
 CLAUDE.local.md
 
 # LLM Challenge

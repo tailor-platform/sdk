@@ -5,7 +5,7 @@ import { beforeAll, describe, expect, test } from "vitest";
 import { generate } from "@/cli/commands/generate/service";
 
 describe("defineGenerators and definePlugins produce identical output", () => {
-  const fixtureDir = path.resolve(__dirname, "../cli/commands/apply/__test_fixtures__");
+  const fixtureDir = path.resolve(__dirname, "../cli/commands/deploy/__test_fixtures__");
   const generatorsDir = path.join(fixtureDir, "generators-compat-out");
   const pluginsDir = path.join(fixtureDir, "plugins-compat-out");
 

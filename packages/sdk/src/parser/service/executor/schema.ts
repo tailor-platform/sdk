@@ -52,6 +52,12 @@ export const IdpUserTriggerSchema = z.object({
     .min(1)
     .transform((arr) => [...new Set(arr)])
     .describe("IdP user event types to trigger on"),
+  idp: z
+    .string()
+    .optional()
+    .describe(
+      "IdP namespace name to subscribe to. If omitted, the project's only IdP is used; throws when multiple IdPs exist.",
+    ),
 });
 
 export const AuthAccessTokenTriggerSchema = z.object({

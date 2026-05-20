@@ -1,5 +1,4 @@
 import * as fs from "node:fs";
-import ml from "multiline-ts";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
@@ -8,11 +7,13 @@ import { type FileLoadConfig, loadFilesWithIgnores } from "@/cli/services/file-l
 import { removeStaleEntryFiles } from "@/cli/services/stale-cleanup";
 import { getDistDir } from "@/cli/shared/dist-dir";
 import { logger, styles } from "@/cli/shared/logger";
+import { INVOKER_EXPR } from "@/cli/shared/runtime-exprs";
 import {
   createTriggerTransformPlugin,
   serializeTriggerContext,
   type TriggerContext,
 } from "@/cli/shared/trigger-context";
+import ml from "@/utils/multiline";
 import { loadResolver } from "./loader";
 
 interface ResolverInfo {
@@ -134,6 +135,7 @@ async function bundleSingleResolver(
         import { t } from "@tailor-platform/sdk";
 
         const $tailor_resolver_body = async (context) => {
+          const invoker = ${INVOKER_EXPR};
           if (_internalResolver.input) {
             const result = t.object(_internalResolver.input).parse({
               value: context.input,
@@ -149,7 +151,7 @@ async function bundleSingleResolver(
             }
           }
 
-          return _internalResolver.body(context);
+          return _internalResolver.body({ ...context, invoker });
         };
 
         export { $tailor_resolver_body as main };

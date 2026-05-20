@@ -2,6 +2,7 @@ import { formatWithOptions, type InspectOptions } from "node:util";
 import chalk from "chalk";
 import { formatDistanceToNowStrict } from "date-fns";
 import { getBorderCharacters, table } from "table";
+import { parseBoolean } from "./parse-boolean";
 
 /**
  * Error thrown when a prompt is attempted in a CI environment
@@ -198,7 +199,7 @@ export const logger = {
   },
 
   debug(message: string): void {
-    if (process.env.DEBUG === "true") {
+    if (parseBoolean(process.env.DEBUG) === true) {
       writeLog("log", styles.dim(message), { mode: "plain" });
     }
   },

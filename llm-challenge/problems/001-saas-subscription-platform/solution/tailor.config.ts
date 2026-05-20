@@ -12,8 +12,14 @@ const dashboard = defineStaticWebSite("dashboard", {
 });
 
 const idp = defineIdp("saas-idp", {
-  authorization: "loggedIn",
   clients: ["default-idp-client"],
+  permission: {
+    create: [{ conditions: [[{ user: "plan" }, "=", "ENTERPRISE"]], permit: true }],
+    read: [{ conditions: [[{ user: "plan" }, "=", "ENTERPRISE"]], permit: true }],
+    update: [{ conditions: [[{ user: "plan" }, "=", "ENTERPRISE"]], permit: true }],
+    delete: [{ conditions: [[{ user: "plan" }, "=", "ENTERPRISE"]], permit: true }],
+    sendPasswordResetEmail: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+  },
   userAuthPolicy: {
     useNonEmailIdentifier: false,
     allowSelfPasswordReset: true,

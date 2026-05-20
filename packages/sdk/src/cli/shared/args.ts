@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import { parseEnv } from "node:util";
+import { PageDirection } from "@tailor-proto/tailor/v1/resource_pb";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
@@ -56,6 +57,31 @@ export function parseDuration(duration: string): number {
  * Transforms the string to a number
  */
 export const positiveIntArg = z.coerce.number().int().positive();
+
+/**
+ * Schema for non-negative integer validation (from string input).
+ * Accepts 0 (used for `--limit 0` to disable the limit).
+ */
+export const nonNegativeIntArg = z.coerce.number().int().nonnegative();
+
+/**
+ * Schema for sort order (`asc` or `desc`).
+ */
+export const orderArg = z.enum(["asc", "desc"]);
+
+export type Order = z.infer<typeof orderArg>;
+
+/**
+ * Translate a CLI `--order` value into the proto `PageDirection` enum.
+ * Returns `undefined` when the user did not specify an order so that
+ * callers can omit the field and fall back to the server default.
+ * @param order - Order string from CLI args (`"asc"` | `"desc"` | undefined)
+ * @returns PageDirection, or undefined when `order` is undefined
+ */
+export function toPageDirection(order: Order | undefined): PageDirection | undefined {
+  if (order === undefined) return undefined;
+  return order === "asc" ? PageDirection.ASC : PageDirection.DESC;
+}
 
 // ============================================================================
 // Env File Helpers
@@ -202,6 +228,41 @@ export const organizationArgs = {
     description: "Organization ID",
     env: "TAILOR_PLATFORM_ORGANIZATION_ID",
     completion: { type: "none" },
+  }),
+} satisfies ArgsShape;
+
+/**
+ * Arguments for list commands that accept `--order` / `--limit`. Sort
+ * order defaults to `desc` (newest first) because most callers want the
+ * latest items; pass `--order asc` to opt in to ascending order. The
+ * limit is unbounded by default so existing invocations keep returning
+ * every item; pass `--limit N` to cap the result size.
+ * @param defaultOrder - Default value for `--order` (defaults to `"desc"`)
+ * @returns Argument shape suitable for spreading into a command schema
+ */
+export const paginationArgs = (defaultOrder: Order = "desc") =>
+  ({
+    order: arg(orderArg.default(defaultOrder), {
+      description: "Sort order (asc or desc)",
+    }),
+    limit: arg(nonNegativeIntArg.optional(), {
+      alias: "l",
+      description: "Maximum number of items to return (0 or omit: unlimited)",
+    }),
+  }) satisfies ArgsShape;
+
+/**
+ * Arguments for time-series log list commands. Defaults to newest-first
+ * (`desc`) and a 50-item cap so that listing stays responsive on busy
+ * workspaces. Pass `--limit 0` to disable the cap and fetch all entries.
+ */
+export const pagedLogArgs = {
+  order: arg(orderArg.default("desc"), {
+    description: "Sort order (asc or desc)",
+  }),
+  limit: arg(nonNegativeIntArg.default(50), {
+    alias: "l",
+    description: "Maximum number of items to return (0: unlimited)",
   }),
 } satisfies ArgsShape;
 

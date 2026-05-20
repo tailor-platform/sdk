@@ -1,8 +1,7 @@
-import { ExecutorTriggerType } from "@tailor-proto/tailor/v1/executor_resource_pb";
 import { defineCommand, runCommand } from "politty";
 import { z } from "zod";
-import { workspaceArgs } from "@/cli/shared/args";
-import { fetchAll, initOperatorClient, platformBaseUrl } from "@/cli/shared/client";
+import { type Order, paginationArgs, toPageDirection, workspaceArgs } from "@/cli/shared/args";
+import { fetchPaged, initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger, styles } from "@/cli/shared/logger";
@@ -16,16 +15,8 @@ export interface WebhookExecutorInfo {
 export interface ListWebhookExecutorsOptions {
   workspaceId?: string;
   profile?: string;
-}
-
-/**
- * Build the webhook URL for an executor.
- * @param workspaceId - Workspace ID
- * @param executorName - Executor name
- * @returns Webhook URL
- */
-function buildWebhookUrl(workspaceId: string, executorName: string): string {
-  return `${platformBaseUrl}/webhook/v1/${workspaceId}/executor/${executorName}`;
+  order?: Order;
+  limit?: number;
 }
 
 /**
@@ -46,24 +37,24 @@ export async function listWebhookExecutors(
     profile: options?.profile,
   });
 
-  const executors = await fetchAll(async (pageToken, maxPageSize) => {
-    const { executors, nextPageToken } = await client.listExecutorExecutors({
-      workspaceId,
-      pageToken,
-      pageSize: maxPageSize,
-    });
-    return [executors, nextPageToken];
-  });
-
-  // Filter only incoming webhook triggers
-  const webhookExecutors = executors.filter(
-    (e) => e.triggerType === ExecutorTriggerType.INCOMING_WEBHOOK,
+  const pageDirection = toPageDirection(options?.order);
+  const webhooks = await fetchPaged(
+    async (pageToken, pageSize) => {
+      const { webhooks, nextPageToken } = await client.listExecutorIncomingWebhooks({
+        workspaceId,
+        pageToken,
+        pageSize,
+        pageDirection,
+      });
+      return [webhooks, nextPageToken];
+    },
+    { limit: options?.limit },
   );
 
-  return webhookExecutors.map((e) => ({
-    name: e.name,
-    webhookUrl: buildWebhookUrl(workspaceId, e.name),
-    disabled: e.disabled,
+  return webhooks.map((w) => ({
+    name: w.executorName,
+    webhookUrl: w.url,
+    disabled: w.disabled,
   }));
 }
 
@@ -73,12 +64,15 @@ const listWebhookCommand = defineAppCommand({
   args: z
     .object({
       ...workspaceArgs,
+      ...paginationArgs(),
     })
     .strict(),
   run: async (args) => {
     const executors = await listWebhookExecutors({
       workspaceId: args["workspace-id"],
       profile: args.profile,
+      order: args.order,
+      limit: args.limit,
     });
 
     if (executors.length === 0) {

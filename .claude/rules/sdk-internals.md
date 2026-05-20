@@ -3,6 +3,7 @@ paths:
   - "packages/sdk/src/configure/**/*.ts"
   - "packages/sdk/src/parser/**/*.ts"
   - "packages/sdk/src/cli/**/*.ts"
+  - "packages/sdk/src/types/**/*.ts"
 ---
 
 # SDK Internals
@@ -38,7 +39,7 @@ The SDK enforces strict module boundaries to maintain a clean architecture:
 
 2. **Parser Module** (`src/parser/**/*.ts`):
    - ❌ Cannot import from `cli` module
-   - ❌ Cannot import from `configure` module (exception: `parser/service/tailordb/runtime.ts`)
+   - ❌ Cannot import from `configure` module
    - ✅ Can import from `@/types/` (shared type layer)
 
 3. **CLI Module** (`src/cli/**/*.ts`):
@@ -47,6 +48,10 @@ The SDK enforces strict module boundaries to maintain a clean architecture:
 4. **Parser Types Files** (`src/parser/**/types.ts`):
    - ✅ Can only import types (all imports must be type-only)
    - Should only re-export from `@/types/` (backward compatibility shims)
+
+5. **Types Module** (`src/types/**/*.ts`):
+   - ❌ Cannot import from `configure`, `cli`, `parser`, `plugin` modules
+   - ✅ Can import from `@/types/` (self-referencing) and external packages
 
 **Type Import Rules:**
 

@@ -29,7 +29,7 @@ import { type AuthConfig } from "@/types/auth";
 import { type IdPConfig } from "@/types/idp";
 import { type TailorDBServiceInput } from "@/types/tailordb";
 import type { BundleCache } from "@/cli/cache/bundle-cache";
-import type { BundledScripts } from "@/cli/commands/apply/function-registry";
+import type { BundledScripts } from "@/cli/commands/deploy/function-registry";
 import type { PluginManager } from "@/plugin/manager";
 import type { IdP } from "@/types/idp.generated";
 import type { StaticWebsite, StaticWebsiteInput } from "@/types/staticwebsite.generated";
@@ -41,6 +41,7 @@ export type SecretVault = {
 
 export type Application = {
   readonly name: string;
+  readonly id: string | undefined;
   readonly config: AppConfig;
   readonly subgraphs: ReadonlyArray<{ Type: string; Name: string }>;
   readonly tailorDBServices: ReadonlyArray<TailorDBService>;
@@ -296,6 +297,7 @@ function buildApplication(params: {
 }): Application {
   const application: Application = {
     name: params.config.name,
+    id: params.config.id,
     config: params.config,
     subgraphs: [
       ...params.tailordbResult.subgraphs,

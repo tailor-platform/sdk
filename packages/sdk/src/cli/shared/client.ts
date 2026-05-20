@@ -267,6 +267,48 @@ export async function fetchAll<T>(
   return items;
 }
 
+interface FetchPagedOptions {
+  /** Maximum number of items to return. 0 or undefined means unlimited. */
+  limit?: number;
+}
+
+/**
+ * Fetch paginated resources with an optional upper bound on the number of
+ * items returned. When `limit` is 0 or undefined the function behaves
+ * like `fetchAll` and returns every page. When `limit` is positive the
+ * function stops once enough items are collected, requesting smaller
+ * pages as it approaches the boundary.
+ * @template T
+ * @param fn - Page fetcher returning items and next page token
+ * @param options - Pagination options
+ * @returns Fetched items (length <= limit when limit > 0)
+ */
+export async function fetchPaged<T>(
+  fn: (pageToken: string, pageSize: number) => Promise<[T[], string]>,
+  options?: FetchPagedOptions,
+): Promise<T[]> {
+  const limit = options?.limit;
+  const unbounded = limit === undefined || limit === 0;
+  const items: T[] = [];
+  let pageToken = "";
+
+  while (true) {
+    const pageSize = unbounded ? MAX_PAGE_SIZE : Math.min(limit - items.length, MAX_PAGE_SIZE);
+    if (!unbounded && pageSize <= 0) break;
+
+    const [batch, nextPageToken] = await fn(pageToken, pageSize);
+    items.push(...batch);
+    if (!unbounded && items.length >= limit) break;
+    if (!nextPageToken) break;
+    pageToken = nextPageToken;
+  }
+
+  if (!unbounded && items.length > limit) {
+    return items.slice(0, limit);
+  }
+  return items;
+}
+
 /**
  * Fetch user info from the Tailor Platform userinfo endpoint.
  * @param accessToken - Access token for the current user
@@ -293,22 +335,47 @@ export async function fetchUserInfo(accessToken: string) {
 
 // Converting "name:url" patterns to actual Static Website URLs
 /**
+ * Options for `resolveStaticWebsiteUrls`.
+ */
+export type ResolveStaticWebsiteUrlsOptions = {
+  /**
+   * Names of static websites that are defined locally in the current
+   * configuration. When the platform-side lookup for a name in this set
+   * fails specifically with a `NotFound` error, the warning is suppressed
+   * and the original `name:url[/path]` pattern is returned unresolved
+   * instead of being dropped.
+   *
+   * Use this from plan-phase callers to avoid noisy warnings on the first
+   * deployment, where the static website will be created later in the same
+   * apply run. Other failure modes ("URL not yet assigned", transient RPC
+   * errors, permission errors) are intentionally not suppressed so that
+   * real platform problems still surface during planning.
+   */
+  expectedLocalNames?: ReadonlySet<string>;
+};
+
+/**
  * Resolve "name:url" patterns to actual Static Website URLs.
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
  * @param urls - URLs or name:url patterns
  * @param context - Logging context (e.g., "CORS", "OAuth2 redirect URIs")
- * @returns Resolved URLs
+ * @param options - Optional behavior overrides
+ * @returns Resolved URLs (or the original pattern for entries marked as
+ *   expected-but-not-yet-deployed via `options.expectedLocalNames`)
  */
 export async function resolveStaticWebsiteUrls(
   client: OperatorClient,
   workspaceId: string,
   urls: string[] | undefined,
   context: string, // for logging context (e.g., "CORS", "OAuth2 redirect URIs")
+  options: ResolveStaticWebsiteUrlsOptions = {},
 ): Promise<string[]> {
   if (!urls) {
     return [];
   }
+
+  const { expectedLocalNames } = options;
 
   const results = await Promise.all(
     urls.map(async (url) => {
@@ -327,13 +394,16 @@ export async function resolveStaticWebsiteUrls(
 
           if (response.staticwebsite?.url) {
             return [response.staticwebsite.url + pathSuffix];
-          } else {
-            logger.warn(
-              `Static website "${siteName}" has no URL assigned yet. Excluding from ${context}.`,
-            );
-            return [];
           }
-        } catch {
+          logger.warn(
+            `Static website "${siteName}" has no URL assigned yet. Excluding from ${context}.`,
+          );
+          return [];
+        } catch (error) {
+          const isNotFound = error instanceof ConnectError && error.code === Code.NotFound;
+          if (isNotFound && expectedLocalNames?.has(siteName)) {
+            return [url];
+          }
           logger.warn(
             `Static website "${siteName}" not found for ${context} configuration. Excluding from ${context}.`,
           );

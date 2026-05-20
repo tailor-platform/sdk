@@ -14,13 +14,11 @@ export {
   type TailorTypeGqlPermission,
   type PermissionCondition,
 } from "./permission";
+export type { RecordHook, TypeFeatures } from "./types";
+export type { TailorDBServiceConfig } from "@/types/tailordb.generated";
 export type {
   DBFieldMetadata,
-  Hook,
-  RecordHook,
   GqlOperationsConfig,
   TailorDBMigrationConfig,
-  TailorDBServiceConfig,
   TailorDBServiceInput,
-  TypeFeatures,
-} from "./types";
+} from "@/types/tailordb";

@@ -19,6 +19,8 @@ For service-specific documentation, see:
 import { defineConfig } from "@tailor-platform/sdk";
 
 export default defineConfig({
+  // SDK-managed app id — do not edit, except when copying this config to a separate app.
+  // id: "<uuid>" — written here automatically on first run
   name: "my-app",
   cors: ["https://example.com"],
   allowedIpAddresses: ["192.168.1.0/24"],
@@ -27,6 +29,8 @@ export default defineConfig({
 ```
 
 **Name**: Set the application name.
+
+**Id (auto-managed)**: A stable identifier used to recognize resources managed by the SDK across renames. On first `deploy`, the SDK injects an `id: "<uuid>"` field into your `defineConfig({...})` call and commits it to `tailor.config.ts`. Keep it under version control; do not edit it by hand. Delete it only if you want the SDK to assign a new id on the next `deploy` — typically when `tailor.config.ts` was copied from another project and the new application should not share the original's id. Auto-injection requires `defineConfig({...})` to be called with an inline object literal: if the argument is a separate variable (e.g. `defineConfig(config)`), or if `tailor.config.ts` is a wrapper that re-exports `defineConfig` from another file, the SDK cannot inject — add the `id` field manually to the file that contains the actual `defineConfig({...})` object literal.
 
 **CORS**: Specify CORS settings as an array. You can also include Static Website URL references (e.g. `website.url`) in this array; see [Static Website](./services/staticwebsite.md).
 
@@ -218,17 +222,19 @@ export default defineConfig({
 
 **ignores**: Glob patterns to exclude files. Optional.
 
-### Generators
+### Plugins
 
-Configure code generators using `defineGenerators()`. Generators must be exported as a named export.
+Configure plugins using `definePlugins()`. Plugins must be exported as a named export.
 
 ```typescript
-import { defineGenerators } from "@tailor-platform/sdk";
+import { definePlugins } from "@tailor-platform/sdk";
+import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
+import { enumConstantsPlugin } from "@tailor-platform/sdk/plugin/enum-constants";
 
-export const generators = defineGenerators(
-  ["@tailor-platform/kysely-type", { distPath: "./generated/tailordb.ts" }],
-  ["@tailor-platform/enum-constants", { distPath: "./generated/enums.ts" }],
+export const plugins = definePlugins(
+  kyselyTypePlugin({ distPath: "./generated/tailordb.ts" }),
+  enumConstantsPlugin({ distPath: "./generated/enums.ts" }),
 );
 ```
 
-See [Generators](./generator/index.md) for full documentation.
+See [Generators](./generator/index.md) for legacy `defineGenerators()` documentation.

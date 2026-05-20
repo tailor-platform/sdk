@@ -3,18 +3,23 @@ import {
   Condition_Operator,
   ConditionSchema,
   FilterSchema,
-  PageDirection,
 } from "@tailor-proto/tailor/v1/resource_pb";
 import { WorkflowExecution_Status } from "@tailor-proto/tailor/v1/workflow_resource_pb";
-import ora from "ora";
 import { arg } from "politty";
 import { z } from "zod";
-import { parseDuration, workspaceArgs } from "@/cli/shared/args";
-import { fetchAll, initOperatorClient } from "@/cli/shared/client";
+import {
+  type Order,
+  pagedLogArgs,
+  parseDuration,
+  toPageDirection,
+  workspaceArgs,
+} from "@/cli/shared/args";
+import { fetchPaged, initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { formatKeyValueTable } from "@/cli/shared/format";
 import { styles, logger } from "@/cli/shared/logger";
+import { spinner } from "@/cli/shared/spinner";
 import { waitArgs } from "./args";
 import { isWorkflowExecutionTerminalStatus } from "./status";
 import {
@@ -34,6 +39,8 @@ export type ListWorkflowExecutionsTypedOptions<W extends WorkflowLike = Workflow
   status?: string;
   workspaceId?: string;
   profile?: string;
+  order?: Order;
+  limit?: number;
 };
 
 /**
@@ -44,6 +51,8 @@ export interface ListWorkflowExecutionsOptions {
   profile?: string;
   workflowName?: string;
   status?: string;
+  order?: Order;
+  limit?: number;
 }
 
 export interface GetWorkflowExecutionOptions {
@@ -114,6 +123,11 @@ function parseStatus(status: string): WorkflowExecution_Status {
 
 /**
  * List workflow executions with optional filters.
+ *
+ * Returns at most `options.limit` items. When `limit` is omitted or 0 the
+ * function pages through every execution. The CLI caps this at 50 by
+ * default via `pagedLogArgs`; programmatic callers that want the same
+ * cap should pass `limit: 50` explicitly.
  * @param options - Workflow execution listing options
  * @returns List of workflow executions
  */
@@ -168,17 +182,21 @@ export async function listWorkflowExecutions<W extends WorkflowLike>(
         })
       : undefined;
 
-  const executions = await fetchAll(async (pageToken, maxPageSize) => {
-    const { executions, nextPageToken } = await client.listWorkflowExecutions({
-      workspaceId,
-      workflowName: workflowName ?? "",
-      pageToken,
-      pageSize: maxPageSize,
-      pageDirection: PageDirection.DESC,
-      filter,
-    });
-    return [executions, nextPageToken];
-  });
+  const pageDirection = toPageDirection(options?.order ?? "desc");
+  const executions = await fetchPaged(
+    async (pageToken, pageSize) => {
+      const { executions, nextPageToken } = await client.listWorkflowExecutions({
+        workspaceId,
+        workflowName: workflowName ?? "",
+        pageToken,
+        pageSize,
+        pageDirection,
+        filter,
+      });
+      return [executions, nextPageToken];
+    },
+    { limit: options?.limit },
+  );
 
   return executions.map(toWorkflowExecutionInfo);
 }
@@ -297,12 +315,12 @@ async function waitWithSpinner(
   interval: number,
   json: boolean,
 ): Promise<WorkflowExecutionDetailInfo> {
-  const spinner = !json ? ora().start("Waiting for workflow to complete...") : null;
+  const sp = !json ? spinner().start("Waiting for workflow to complete...") : null;
 
   const updateInterval = setInterval(() => {
-    if (spinner) {
+    if (sp) {
       const now = formatTime(new Date());
-      spinner.text = `Waiting for workflow to complete... (${now})`;
+      sp.text = `Waiting for workflow to complete... (${now})`;
     }
   }, interval);
 
@@ -312,14 +330,14 @@ async function waitWithSpinner(
       WorkflowExecution_Status[result.status as keyof typeof WorkflowExecution_Status],
     );
     if (result.status === "SUCCESS") {
-      spinner?.succeed(`Completed: ${coloredStatus}`);
+      sp?.succeed(`Completed: ${coloredStatus}`);
     } else {
-      spinner?.fail(`Completed: ${coloredStatus}`);
+      sp?.fail(`Completed: ${coloredStatus}`);
     }
     return result;
   } finally {
     clearInterval(updateInterval);
-    spinner?.stop();
+    sp?.stop();
   }
 }
 
@@ -378,7 +396,8 @@ export const executionsCommand = defineAppCommand({
   args: z
     .object({
       ...workspaceArgs,
-      executionId: arg(z.string().optional(), {
+      ...pagedLogArgs,
+      "execution-id": arg(z.string().optional(), {
         positional: true,
         description: "Execution ID (if provided, shows details)",
       }),
@@ -433,6 +452,8 @@ export const executionsCommand = defineAppCommand({
         profile: args.profile,
         workflowName: args["workflow-name"],
         status: args.status,
+        order: args.order,
+        limit: args.limit,
       });
       logger.out(executions);
     }

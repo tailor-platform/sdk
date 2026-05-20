@@ -1,9 +1,6 @@
+import type { StaticWebsiteDefinitionBrand } from "@/types/staticwebsite-config";
 import type { StaticWebsiteInput } from "@/types/staticwebsite.generated";
-
-declare const staticWebsiteDefinitionBrand: unique symbol;
-type StaticWebsiteDefinitionBrand = {
-  readonly [staticWebsiteDefinitionBrand]: true;
-};
+export type { StaticWebsiteConfig } from "@/types/staticwebsite-config";
 
 /**
  * Define a static website configuration for the Tailor SDK.
@@ -11,6 +8,7 @@ type StaticWebsiteDefinitionBrand = {
  * @param config - Static website configuration
  * @returns Defined static website
  */
+/* @__NO_SIDE_EFFECTS__ */
 export function defineStaticWebSite(name: string, config: Omit<StaticWebsiteInput, "name">) {
   const result = {
     ...config,
@@ -22,5 +20,3 @@ export function defineStaticWebSite(name: string, config: Omit<StaticWebsiteInpu
 
   return result as typeof result & StaticWebsiteDefinitionBrand;
 }
-
-export type StaticWebsiteConfig = Omit<ReturnType<typeof defineStaticWebSite>, "url">;

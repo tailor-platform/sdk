@@ -2,7 +2,7 @@ import { describe, it, expectTypeOf, expect } from "vitest";
 import { createTable, timestampFields } from "./createTable";
 import { unsafeAllowAllGqlPermission } from "./permission";
 import { db } from "./schema";
-import type { output } from "@/configure/types/helpers";
+import type { output } from "@/types/helpers";
 
 describe("createTable basic field type tests", () => {
   it("string field outputs string type correctly", () => {

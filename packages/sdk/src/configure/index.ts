@@ -1,6 +1,6 @@
 /// <reference types="@tailor-platform/function-types" />
 import { t as _t } from "@/configure/types";
-import type * as helperTypes from "@/configure/types/helpers";
+import type * as helperTypes from "@/types/helpers";
 
 type TailorOutput<T> = helperTypes.output<T>;
 
@@ -9,23 +9,24 @@ export type output<T> = TailorOutput<T>;
 
 /** TailorDB field type builders. */
 // eslint-disable-next-line import-x/export
-export const t = { ..._t };
+export const t = _t;
 // eslint-disable-next-line @typescript-eslint/no-namespace, import-x/export
 export namespace t {
   export type output<T> = TailorOutput<T>;
   export type infer<T> = TailorOutput<T>;
 }
 
+export { type TailorField } from "@/configure/types/type";
 export {
-  type TailorField,
   type TailorUser,
+  type TailorInvoker,
   unauthenticatedTailorUser,
   type AttributeMap,
   type AttributeList,
-  type Env,
-  type MachineUserNameRegistry,
-  type MachineUserName,
-} from "@/configure/types";
+} from "@/types/user";
+export { type Env } from "@/types/env";
+export { type MachineUserNameRegistry, type MachineUserName } from "@/configure/types/machine-user";
+export { type IdpNameRegistry, type IdpName } from "@/configure/types/idp-name";
 
 export * from "@/configure/services";
 

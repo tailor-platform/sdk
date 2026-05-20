@@ -30,9 +30,20 @@ describe("listExecutorJobs API types", () => {
     acceptsOptions({
       executor: myExecutor,
       status: "RUNNING",
+      order: "asc",
       limit: 10,
       workspaceId: "ws-1",
       profile: "dev",
+    });
+  });
+
+  it("rejects invalid order values", () => {
+    const acceptsOptions = (_options: ListExecutorJobsTypedOptions): void => {};
+
+    acceptsOptions({
+      executor: { name: "any-executor" },
+      // @ts-expect-error - only "asc" and "desc" are valid
+      order: "oldest",
     });
   });
 
@@ -62,6 +73,12 @@ describe("listExecutorJobs API types", () => {
 
     acceptsDeprecatedOptions({
       executorName: "legacy-executor",
+    });
+
+    acceptsDeprecatedOptions({
+      executorName: "legacy-executor",
+      order: "desc",
+      limit: 25,
     });
 
     acceptsDeprecatedOptions({

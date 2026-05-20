@@ -44,4 +44,7 @@ export default createWorkflow({
     maxBackoff: "30s",
     backoffMultiplier: 2,
   },
+  concurrencyPolicy: {
+    maxConcurrentExecutions: 5,
+  },
 });
