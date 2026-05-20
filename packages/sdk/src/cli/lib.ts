@@ -3,9 +3,8 @@ import { isNativeTypeScriptRuntime } from "./shared/runtime";
 
 // Register tsx to handle TypeScript files when using CLI API programmatically.
 // Bun and Deno handle TypeScript natively, so registration is skipped.
-// tsx's own register() picks `module.registerHooks` on Node ≥ 24.11.1 / 25.1
-// / 26 (avoiding the DEP0205 deprecation) and falls back to `module.register`
-// on older runtimes.
+// tsx's own register() picks `module.registerHooks` on Node ≥ 24.11.1 / 25.1 / 26
+// (avoiding the DEP0205 deprecation) and falls back to `module.register` on older runtimes.
 if (!isNativeTypeScriptRuntime()) {
   const { register } = await import("tsx/esm/api");
   register();
