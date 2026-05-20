@@ -230,6 +230,11 @@ export interface SnapshotType {
     record?: SnapshotRecordPermission;
     gql?: SnapshotGqlPermission;
   };
+  hooks?: {
+    create?: SnapshotHook;
+    update?: SnapshotHook;
+  };
+  validate?: SnapshotValidation[];
 }
 
 /**
@@ -597,6 +602,20 @@ function createSnapshotType(type: TailorDBType): SnapshotType {
     }
   }
 
+  if (type.hooks) {
+    const hooks: { create?: SnapshotHook; update?: SnapshotHook } = {};
+    if (type.hooks.create) hooks.create = { expr: type.hooks.create.expr };
+    if (type.hooks.update) hooks.update = { expr: type.hooks.update.expr };
+    if (hooks.create || hooks.update) snapshotType.hooks = hooks;
+  }
+
+  if (type.validate && type.validate.length > 0) {
+    snapshotType.validate = type.validate.map((v) => ({
+      script: { expr: v.script.expr },
+      errorMessage: v.errorMessage,
+    }));
+  }
+
   return snapshotType;
 }
 
@@ -750,12 +769,21 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
           const after = change.after as {
             indexes?: Record<string, SnapshotIndexConfig>;
             files?: Record<string, string>;
+            hooks?: SnapshotType["hooks"];
+            validate?: SnapshotType["validate"];
           };
-          types[change.typeName] = {
-            ...types[change.typeName],
-            ...(after.indexes !== undefined && { indexes: after.indexes }),
-            ...(after.files !== undefined && { files: after.files }),
-          };
+          const next = { ...types[change.typeName] };
+          if (after.indexes !== undefined) next.indexes = after.indexes;
+          if (after.files !== undefined) next.files = after.files;
+          if ("hooks" in after) {
+            if (after.hooks === undefined) delete next.hooks;
+            else next.hooks = after.hooks;
+          }
+          if ("validate" in after) {
+            if (after.validate === undefined) delete next.validate;
+            else next.validate = after.validate;
+          }
+          types[change.typeName] = next;
         }
         break;
       case "field_added":
@@ -1227,6 +1255,62 @@ function compareTypeFields(
 }
 
 /**
+ * Detect changes in record-level hooks/validate and emit a `type_modified`
+ * change carrying the new values for re-apply.
+ * @param ctx
+ * @param typeName
+ * @param prevType
+ * @param currType
+ */
+function compareTypeHooksValidate(
+  ctx: DiffContext,
+  typeName: string,
+  prevType: SnapshotType,
+  currType: SnapshotType,
+): void {
+  const hooksChanged = !areHooksEqual(prevType.hooks, currType.hooks);
+  const validateChanged = !areValidationsEqual(prevType.validate, currType.validate);
+  if (!hooksChanged && !validateChanged) return;
+
+  const reasons: string[] = [];
+  if (hooksChanged) reasons.push("record-level hooks changed");
+  if (validateChanged) reasons.push("record-level validators changed");
+
+  ctx.changes.push({
+    kind: "type_modified",
+    typeName,
+    reason: reasons.join(", "),
+    before: {
+      ...(prevType.hooks !== undefined && { hooks: prevType.hooks }),
+      ...(prevType.validate !== undefined && { validate: prevType.validate }),
+    },
+    after: {
+      // Always include the keys so applyDiffToSnapshot can clear values that
+      // were removed; `undefined` signals removal.
+      hooks: currType.hooks,
+      validate: currType.validate,
+    },
+  });
+}
+
+function areHooksEqual(a: SnapshotType["hooks"], b: SnapshotType["hooks"]): boolean {
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  return a.create?.expr === b.create?.expr && a.update?.expr === b.update?.expr;
+}
+
+function areValidationsEqual(a: SnapshotType["validate"], b: SnapshotType["validate"]): boolean {
+  const left = a ?? [];
+  const right = b ?? [];
+  if (left.length !== right.length) return false;
+  for (let i = 0; i < left.length; i++) {
+    if (left[i].errorMessage !== right[i].errorMessage) return false;
+    if (left[i].script.expr !== right[i].script.expr) return false;
+  }
+  return true;
+}
+
+/**
  * Compare type-level indexes
  * @param {DiffContext} ctx - Diff context
  * @param {string} typeName - Type name
@@ -1541,6 +1625,9 @@ export function compareSnapshots(previous: SchemaSnapshot, current: SchemaSnapsh
       prevType.permissions?.gql,
       currType.permissions?.gql,
     );
+
+    // Compare record-level hooks / validate
+    compareTypeHooksValidate(ctx, typeName, prevType, currType);
   }
 
   return {

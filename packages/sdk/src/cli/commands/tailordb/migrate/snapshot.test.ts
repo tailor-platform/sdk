@@ -680,6 +680,87 @@ describe("snapshot", () => {
       expect(forwardChange?.relationshipType).toBe("forward");
       expect(backwardChange?.relationshipType).toBe("backward");
     });
+
+    it("detects record-level hook addition", () => {
+      const previous: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          Order: {
+            name: "Order",
+            fields: { id: { type: "uuid", required: true } },
+          },
+        },
+      };
+      const current: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          Order: {
+            name: "Order",
+            fields: { id: { type: "uuid", required: true } },
+            hooks: {
+              create: { expr: "({data}) => ({ ...data, createdAt: new Date() })" },
+            },
+          },
+        },
+      };
+
+      const diff = compareSnapshots(previous, current);
+
+      expect(diff.changes).toHaveLength(1);
+      expect(diff.changes[0].kind).toBe("type_modified");
+      expect(diff.changes[0].typeName).toBe("Order");
+      expect(diff.changes[0].reason).toContain("record-level hooks changed");
+    });
+
+    it("detects record-level validator change", () => {
+      const previous: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          Order: {
+            name: "Order",
+            fields: { id: { type: "uuid", required: true } },
+            validate: [{ script: { expr: "data.quantity > 0" }, errorMessage: "quantity > 0" }],
+          },
+        },
+      };
+      const current: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          Order: {
+            name: "Order",
+            fields: { id: { type: "uuid", required: true } },
+            validate: [
+              { script: { expr: "data.quantity > 0" }, errorMessage: "quantity > 0" },
+              { script: { expr: "data.name.length > 0" }, errorMessage: "name required" },
+            ],
+          },
+        },
+      };
+
+      const diff = compareSnapshots(previous, current);
+
+      expect(diff.changes).toHaveLength(1);
+      expect(diff.changes[0].kind).toBe("type_modified");
+      expect(diff.changes[0].reason).toContain("record-level validators changed");
+    });
+
+    it("does not detect change when record-level hooks/validate are identical", () => {
+      const snapshot: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          Order: {
+            name: "Order",
+            fields: { id: { type: "uuid", required: true } },
+            hooks: { create: { expr: "createExpr" }, update: { expr: "updateExpr" } },
+            validate: [{ script: { expr: "validExpr" }, errorMessage: "msg" }],
+          },
+        },
+      };
+
+      const diff = compareSnapshots(snapshot, snapshot);
+
+      expect(diff.changes).toHaveLength(0);
+    });
   });
 
   // ==========================================================================

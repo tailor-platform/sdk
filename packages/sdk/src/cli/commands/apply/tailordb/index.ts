@@ -31,6 +31,8 @@ import {
   type TailorDBType_PermissionSchema,
   TailorDBType_PermitAction,
   type TailorDBType_RelationshipConfigSchema,
+  type TailorDBType_TypeHookSchema,
+  type TailorDBType_TypeValidateSchema,
   type TailorDBTypeSchema,
 } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
 import * as inflection from "inflection";
@@ -1687,15 +1689,8 @@ function generateTailorDBTypeManifest(
     ? protoPermission(type.permissions.record)
     : defaultPermission;
 
-  // TODO(record-level-hooks): emit record-level hooks (`type.hooks`) and
-  // validators (`type.validate`) here once the platform protobuf surface for
-  // TailorDBType supports them. Today only field-level hooks/validators are
-  // mapped via `toProtoFieldHooks` / `toProtoFieldValidate`, so the
-  // record-level callbacks collected by the configure layer are silently
-  // dropped during apply. Wiring requires (1) new fields on
-  // `TailorDBTypeSchema`/`TailorDBType_SchemaSchema`, (2) the
-  // `hooks-validate-bundler` populating record-level precompiled expressions,
-  // and (3) the parser schema round-tripping those values.
+  const typeHook = toProtoTypeHook(type);
+  const typeValidate = toProtoTypeValidate(type);
 
   return {
     name: type.name,
@@ -1709,7 +1704,40 @@ function generateTailorDBTypeManifest(
       indexes,
       files,
       permission,
+      ...(typeHook && { typeHook }),
+      ...(typeValidate && { typeValidate }),
     },
+  };
+}
+
+function toProtoTypeHook(
+  type: TailorDBType,
+): MessageInitShape<typeof TailorDBType_TypeHookSchema> | undefined {
+  if (!type.hooks) return undefined;
+  const create = type.hooks.create ? { expr: type.hooks.create.expr || "" } : undefined;
+  const update = type.hooks.update ? { expr: type.hooks.update.expr || "" } : undefined;
+  if (!create && !update) return undefined;
+  return {
+    ...(create && { create }),
+    ...(update && { update }),
+  };
+}
+
+function toProtoTypeValidate(
+  type: TailorDBType,
+): MessageInitShape<typeof TailorDBType_TypeValidateSchema> | undefined {
+  const validators = type.validate;
+  if (!validators || validators.length === 0) return undefined;
+  // The platform exposes a single create/update Script per type, so concatenate
+  // all SDK-side record validators into one script that returns false if any
+  // individual predicate fails. Each predicate emits its own message via the
+  // wrapping conditional.
+  const exprs = validators.map((v) => v.script.expr || "true");
+  const combined = exprs.map((expr) => `(${expr})`).join(" && ");
+  const script = { expr: combined };
+  return {
+    create: script,
+    update: script,
   };
 }
 

@@ -92,7 +92,7 @@ export interface OperatorValidateConfig {
   errorMessage: string;
 }
 
-interface OperatorFieldHook {
+export interface OperatorFieldHook {
   create?: Script;
   update?: Script;
 }
@@ -209,16 +209,10 @@ export interface TailorDBTypeMetadata {
       unique?: boolean;
     }
   >;
-  /**
-   * Record-level create/update hooks.
-   * TODO(platform): end-to-end wiring depends on protobuf support for record-level hooks.
-   */
+  /** Record-level create/update hooks emitted to the platform as `type_hook`. */
   // oxlint-disable-next-line no-explicit-any
   hooks?: RecordHook<any>;
-  /**
-   * Record-level validators.
-   * TODO(platform): end-to-end wiring depends on protobuf support for record-level validators.
-   */
+  /** Record-level validators emitted to the platform as `type_validate`. */
   // oxlint-disable-next-line no-explicit-any
   validate?: RecordValidateInput<any>[];
 }
@@ -255,4 +249,8 @@ export interface TailorDBType {
   permissions: Permissions;
   indexes?: TailorDBTypeMetadata["indexes"];
   files?: TailorDBTypeMetadata["files"];
+  /** Record-level create/update hooks compiled to CEL expressions. */
+  hooks?: OperatorFieldHook;
+  /** Record-level validators compiled to CEL expressions. */
+  validate?: OperatorValidateConfig[];
 }

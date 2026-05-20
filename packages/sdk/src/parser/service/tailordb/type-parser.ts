@@ -1,6 +1,6 @@
 import * as inflection from "inflection";
 import { isPluginGeneratedType } from "@/types/tailordb";
-import { parseFieldConfig, tailorUserMap } from "./field";
+import { convertHookToExpr, parseFieldConfig, tailorUserMap } from "./field";
 import { getPrecompiledScriptExpr } from "./hooks-validate-precompiled-expr";
 import { parsePermissions } from "./permission";
 import {
@@ -15,6 +15,7 @@ import type {
   ParsedField,
   ParsedRelationship,
   TailorDBType,
+  OperatorFieldHook,
   OperatorValidateConfig,
 } from "@/types/tailordb";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "@/types/tailordb.generated";
@@ -122,18 +123,11 @@ function parseTailorDBType(
     fields[fieldName] = parsedField;
   }
 
-  // Distribute record-level validators to the first non-id field so they are
-  // sent to the platform via the existing field-level validate pipeline.
-  // The platform only supports per-field validators in protobuf, and the
-  // auto-generated `id` field does not evaluate validators, so we skip it.
-  if (metadata.validate && metadata.validate.length > 0) {
-    const recordValidate = convertRecordValidators(metadata.validate);
-    const targetFieldName = Object.keys(fields).find((name) => name !== "id");
-    if (targetFieldName) {
-      const targetField = fields[targetFieldName];
-      targetField.config.validate = [...(targetField.config.validate || []), ...recordValidate];
-    }
-  }
+  const recordHooks = convertRecordHooks(metadata.hooks);
+  const recordValidate =
+    metadata.validate && metadata.validate.length > 0
+      ? convertRecordValidators(metadata.validate)
+      : undefined;
 
   return {
     name: type.name,
@@ -146,7 +140,29 @@ function parseTailorDBType(
     permissions: parsePermissions(metadata.permissions || {}),
     indexes: metadata.indexes,
     files: metadata.files,
+    ...(recordHooks && { hooks: recordHooks }),
+    ...(recordValidate && { validate: recordValidate }),
   };
+}
+
+/**
+ * Convert record-level hooks to OperatorFieldHook with Script expressions.
+ * The platform invokes these on create/update at the type level.
+ * @param hooks - Record-level hook definitions
+ * @returns Operator-form hooks ready for the apply pipeline, or undefined when empty
+ */
+function convertRecordHooks(
+  hooks: NonNullable<TailorDBTypeSchemaOutput["metadata"]>["hooks"],
+): OperatorFieldHook | undefined {
+  if (!hooks) return undefined;
+  const create = hooks.create
+    ? { expr: convertHookToExpr(hooks.create as (...args: never[]) => unknown) }
+    : undefined;
+  const update = hooks.update
+    ? { expr: convertHookToExpr(hooks.update as (...args: never[]) => unknown) }
+    : undefined;
+  if (!create && !update) return undefined;
+  return { create, update };
 }
 
 /**
