@@ -55,6 +55,9 @@ import {
   formatSchemaDrifts,
   createSnapshotType,
   isSnapshotFieldRefOperand,
+  loadSnapshot,
+  getMigrationFilePath,
+  type SchemaSnapshot,
   type SnapshotFieldConfig,
   type TailorDBSnapshotType,
   type SnapshotRecordPermission,
@@ -91,7 +94,6 @@ import type {
   RemoteSchemaVerificationResult,
 } from "@/cli/commands/tailordb/migrate/types";
 import type { LoadedConfig } from "@/cli/shared/config-loader";
-import type { Executor } from "@/types/executor.generated";
 import type { EnumValue } from "@/types/field-types";
 import type { GqlOperations, TailorDBServiceConfig } from "@/types/tailordb.generated";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
@@ -414,6 +416,7 @@ export async function applyTailorDB(
       // Reset tracking state for this migration run
       processedTypes.reset();
       deletedResources.reset();
+      migrationSnapshotCache.reset();
 
       // Step 1: Create/update services once at the beginning (services don't need per-migration handling)
       await executeServicesCreation(client, changeSet);
@@ -436,7 +439,13 @@ export async function applyTailorDB(
 
       for (const migration of pendingMigrations) {
         // Pre-migration phase: Create/update types with breaking fields as optional
-        await executeSingleMigrationPrePhase(client, changeSet, migration);
+        await executeSingleMigrationPrePhase(
+          client,
+          changeSet,
+          migration,
+          migrationContext.tailorDBInputs,
+          migrationContext.executorUsedTypes,
+        );
 
         // Script execution (only if this migration requires a script)
         if (migration.diff.requiresMigrationScript && migrationCtx) {
@@ -444,7 +453,13 @@ export async function applyTailorDB(
         }
 
         // Post-migration phase: Apply final types (required: true) and deletions
-        await executeSingleMigrationPostPhase(client, changeSet, migration);
+        await executeSingleMigrationPostPhase(
+          client,
+          changeSet,
+          migration,
+          migrationContext.tailorDBInputs,
+          migrationContext.executorUsedTypes,
+        );
 
         // Update migration label only after all phases complete successfully
         await updateMigrationLabel(
@@ -730,23 +745,91 @@ const processedTypes = {
 };
 
 /**
+ * Snapshot cache for per-migration schema lookups during a single apply run.
+ *
+ * Each migration directory ships a `schema.json` representing the full schema state
+ * AFTER that migration. The cache lets the pre/post phases load these on demand
+ * without re-reading the filesystem for every type.
+ */
+const migrationSnapshotCache = {
+  cache: new Map<string, SchemaSnapshot>(),
+  reset() {
+    this.cache.clear();
+  },
+  load(migration: PendingMigration): SchemaSnapshot {
+    const key = `${migration.namespace}/${migration.number}`;
+    let snapshot = this.cache.get(key);
+    if (!snapshot) {
+      const snapshotPath = getMigrationFilePath(
+        migration.migrationsDir,
+        migration.number,
+        "schema",
+      );
+      snapshot = loadSnapshot(snapshotPath);
+      this.cache.set(key, snapshot);
+    }
+    return snapshot;
+  },
+};
+
+/**
+ * Build the per-migration TailorDBType manifest from migration N's snapshot.
+ *
+ * The deploy pipeline's `changeSet` is computed against the FINAL local schema
+ * (= post-all-migrations), so its requests carry the FINAL shape. During each
+ * pending migration's pre/post phase we must instead send the intermediate shape
+ * captured by that migration's own `schema.json`, so that later migrations'
+ * data scripts can still see fields that LATER migrations remove.
+ *
+ * Returns undefined when the snapshot has no matching type (e.g., the type is
+ * removed by this migration). Callers must not send a request for such a type
+ * during pre/post phases; deletions are handled separately in the post phase.
+ * @param migration - The pending migration whose snapshot to consult
+ * @param typeName - The type name to look up in the snapshot
+ * @param tailorDBInputs - Deploy inputs, used to resolve namespace gqlOperations
+ * @param executorUsedTypes - Types used by executors (drives publishRecordEvents default)
+ * @returns The TailorDBType manifest for migration N's snapshot of `typeName`,
+ *   or undefined if the type is not present in that snapshot.
+ */
+function buildSnapshotTypeManifest(
+  migration: PendingMigration,
+  typeName: string,
+  tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
+  executorUsedTypes: ReadonlySet<string>,
+): MessageInitShape<typeof TailorDBTypeSchema> | undefined {
+  const snapshot = migrationSnapshotCache.load(migration);
+  const snapshotType = snapshot.types[typeName];
+  if (!snapshotType) return undefined;
+  const input = tailorDBInputs.find((i) => i.namespace === migration.namespace);
+  return generateTailorDBTypeManifest(snapshotType, executorUsedTypes, input?.config.gqlOperations);
+}
+
+/**
  * Execute pre-migration phase for a single migration
  * @param {OperatorClient} client - Operator client instance
  * @param {TailorDBChangeSet} changeSet - TailorDB change set
  * @param {PendingMigration} migration - Single pending migration
+ * @param tailorDBInputs - Deploy inputs, used to resolve namespace gqlOperations for the snapshot
+ * @param executorUsedTypes - Types used by executors (drives publishRecordEvents default)
  * @returns {Promise<void>} Promise that resolves when pre-migration phase completes
  */
 async function executeSingleMigrationPrePhase(
   client: OperatorClient,
   changeSet: TailorDBChangeSet,
   migration: PendingMigration,
+  tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
+  executorUsedTypes: ReadonlySet<string>,
 ): Promise<void> {
   // Build breaking changes map for this single migration
   const breakingChanges = buildBreakingChangesMap([migration]);
   const affectedTypes = getAffectedTypeNames(migration);
   const createdBeforeMigration = new Set(processedTypes.created);
 
-  // Types - create/update only types affected by this migration
+  // Types - create/update only types affected by this migration.
+  // For each affected type, build the request from migration N's own snapshot so
+  // that future migrations' removals don't leak into this migration's prePhase.
+  // Types deleted by this migration won't appear in snapshot[N] and are handled
+  // in the post phase, so we skip them here.
   await Promise.all([
     // Create types that are affected by this migration and haven't been created yet
     ...changeSet.type.creates
@@ -756,17 +839,17 @@ async function executeSingleMigrationPrePhase(
       })
       .map((create) => {
         const typeName = create.request.tailordbType?.name;
+        const snapshotType = typeName
+          ? buildSnapshotTypeManifest(migration, typeName, tailorDBInputs, executorUsedTypes)
+          : undefined;
+        if (!snapshotType) return undefined;
         if (typeName) processedTypes.created.add(typeName);
 
-        const typeChanges = typeName ? breakingChanges.get(typeName) : undefined;
-
-        if (!typeChanges || typeChanges.size === 0) {
-          return client.createTailorDBType(create.request);
-        }
-
-        // Clone request to avoid modifying the original changeSet
         const clonedRequest = structuredClone(create.request);
-        if (clonedRequest.tailordbType?.schema?.fields) {
+        clonedRequest.tailordbType = snapshotType;
+
+        const typeChanges = typeName ? breakingChanges.get(typeName) : undefined;
+        if (typeChanges && typeChanges.size > 0 && clonedRequest.tailordbType?.schema?.fields) {
           applyPreMigrationFieldAdjustments(clonedRequest.tailordbType.schema.fields, typeChanges);
         }
 
@@ -780,27 +863,22 @@ async function executeSingleMigrationPrePhase(
       })
       .map((create) => {
         const typeName = create.request.tailordbType?.name;
+        const snapshotType = typeName
+          ? buildSnapshotTypeManifest(migration, typeName, tailorDBInputs, executorUsedTypes)
+          : undefined;
+        if (!snapshotType) return undefined;
         if (typeName) processedTypes.updated.add(typeName);
 
+        const clonedTypeRequest = structuredClone(snapshotType);
         const typeChanges = typeName ? breakingChanges.get(typeName) : undefined;
-
-        if (!typeChanges || typeChanges.size === 0) {
-          return client.updateTailorDBType({
-            workspaceId: create.request.workspaceId,
-            namespaceName: create.request.namespaceName,
-            tailordbType: create.request.tailordbType,
-          });
-        }
-
-        const clonedRequest = structuredClone(create.request);
-        if (clonedRequest.tailordbType?.schema?.fields) {
-          applyPreMigrationFieldAdjustments(clonedRequest.tailordbType.schema.fields, typeChanges);
+        if (typeChanges && typeChanges.size > 0 && clonedTypeRequest.schema?.fields) {
+          applyPreMigrationFieldAdjustments(clonedTypeRequest.schema.fields, typeChanges);
         }
 
         return client.updateTailorDBType({
           workspaceId: create.request.workspaceId,
           namespaceName: create.request.namespaceName,
-          tailordbType: clonedRequest.tailordbType,
+          tailordbType: clonedTypeRequest,
         });
       }),
     // Update types that are affected by this migration
@@ -811,17 +889,17 @@ async function executeSingleMigrationPrePhase(
       })
       .map((update) => {
         const typeName = update.request.tailordbType?.name;
+        const snapshotType = typeName
+          ? buildSnapshotTypeManifest(migration, typeName, tailorDBInputs, executorUsedTypes)
+          : undefined;
+        if (!snapshotType) return undefined;
         if (typeName) processedTypes.updated.add(typeName);
 
-        const typeChanges = typeName ? breakingChanges.get(typeName) : undefined;
-
-        if (!typeChanges || typeChanges.size === 0) {
-          return client.updateTailorDBType(update.request);
-        }
-
-        // Clone request to avoid modifying the original changeSet
         const clonedRequest = structuredClone(update.request);
-        if (clonedRequest.tailordbType?.schema?.fields) {
+        clonedRequest.tailordbType = snapshotType;
+
+        const typeChanges = typeName ? breakingChanges.get(typeName) : undefined;
+        if (typeChanges && typeChanges.size > 0 && clonedRequest.tailordbType?.schema?.fields) {
           applyPreMigrationFieldAdjustments(clonedRequest.tailordbType.schema.fields, typeChanges);
         }
 
@@ -888,42 +966,64 @@ const deletedResources = {
  * @param {OperatorClient} client - Operator client instance
  * @param {TailorDBChangeSet} changeSet - TailorDB change set
  * @param {PendingMigration} migration - Single pending migration
+ * @param tailorDBInputs - Deploy inputs, used to resolve namespace gqlOperations for the snapshot
+ * @param executorUsedTypes - Types used by executors (drives publishRecordEvents default)
  * @returns {Promise<void>} Promise that resolves when post-migration phase completes
  */
 async function executeSingleMigrationPostPhase(
   client: OperatorClient,
   changeSet: TailorDBChangeSet,
   migration: PendingMigration,
+  tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
+  executorUsedTypes: ReadonlySet<string>,
 ): Promise<void> {
   // Build breaking changes map for this single migration
   const breakingChanges = buildBreakingChangesMap([migration]);
   const affectedTypes = getAffectedTypeNames(migration);
   const deletedTypeNames = getDeletedTypeNames(migration);
 
-  // Types - apply final schema values for types affected by this migration
-  // Pre-migration used cloned requests, so the original changeSet still has correct values
+  // Types - apply schema as of migration N (= snapshot[N]) with all breaking
+  // changes enforced. The prePhase sent the same schema with breaking fields
+  // relaxed; here we send it again without relaxation so required/unique/etc.
+  // take effect after the data script has reconciled records.
   try {
     await Promise.all([
-      // For newly created types that had breaking changes in this migration, send update with final values
+      // For newly created types that had breaking changes in this migration, send update with snapshot[N] values
       ...changeSet.type.creates
         .filter((create) => {
           const typeName = create.request.tailordbType?.name;
           return typeName && affectedTypes.has(typeName) && breakingChanges.has(typeName);
         })
-        .map((create) =>
-          client.updateTailorDBType({
+        .map((create) => {
+          const typeName = create.request.tailordbType?.name;
+          const snapshotType = typeName
+            ? buildSnapshotTypeManifest(migration, typeName, tailorDBInputs, executorUsedTypes)
+            : undefined;
+          if (!snapshotType) return undefined;
+          return client.updateTailorDBType({
             workspaceId: create.request.workspaceId,
             namespaceName: create.request.namespaceName,
-            tailordbType: create.request.tailordbType,
-          }),
-        ),
-      // For updated types affected by this migration, send update with final values
+            tailordbType: snapshotType,
+          });
+        }),
+      // For updated types affected by this migration, send update with snapshot[N] values
       ...changeSet.type.updates
         .filter((update) => {
           const typeName = update.request.tailordbType?.name;
           return typeName && affectedTypes.has(typeName) && breakingChanges.has(typeName);
         })
-        .map((update) => client.updateTailorDBType(update.request)),
+        .map((update) => {
+          const typeName = update.request.tailordbType?.name;
+          const snapshotType = typeName
+            ? buildSnapshotTypeManifest(migration, typeName, tailorDBInputs, executorUsedTypes)
+            : undefined;
+          if (!snapshotType) return undefined;
+          return client.updateTailorDBType({
+            workspaceId: update.request.workspaceId,
+            namespaceName: update.request.namespaceName,
+            tailordbType: snapshotType,
+          });
+        }),
     ]);
   } catch (error) {
     handleOptionalToRequiredError(error, [
@@ -1021,6 +1121,12 @@ export async function planTailorDB(context: PlanContext) {
   const executors = forRemoval
     ? []
     : Object.values((await application.executorService?.loadExecutors()) ?? {});
+  const executorUsedTypes = new Set<string>();
+  for (const executor of executors) {
+    if (executor.trigger.kind === "tailordb") {
+      executorUsedTypes.add(executor.trigger.typeName);
+    }
+  }
 
   const {
     changeSet: serviceChangeSet,
@@ -1030,7 +1136,15 @@ export async function planTailorDB(context: PlanContext) {
   } = await planServices(client, workspaceId, application.name, application.id, tailordbs);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
   const [typeChangeSet, gqlPermissionChangeSet] = await Promise.all([
-    planTypes(client, workspaceId, tailordbs, executors, deletedServices, undefined, forceApplyAll),
+    planTypes(
+      client,
+      workspaceId,
+      tailordbs,
+      executorUsedTypes,
+      deletedServices,
+      undefined,
+      forceApplyAll,
+    ),
     planGqlPermissions(client, workspaceId, tailordbs, deletedServices, forceApplyAll),
   ]);
 
@@ -1047,6 +1161,7 @@ export async function planTailorDB(context: PlanContext) {
       workspaceId,
       application,
       tailorDBInputs: tailordbs,
+      executorUsedTypes,
       config,
       noSchemaCheck: noSchemaCheck ?? false,
     },
@@ -1314,7 +1429,7 @@ async function planTypes(
   client: OperatorClient,
   workspaceId: string,
   tailordbs: ReadonlyArray<TailorDBDeployInput>,
-  executors: ReadonlyArray<Executor>,
+  executorUsedTypes: ReadonlySet<string>,
   deletedServices: ReadonlyArray<string>,
   filteredTypesByNamespace?: Map<string, Record<string, TailorDBSnapshotType>>,
   forceApplyAll = false,
@@ -1339,13 +1454,6 @@ async function planTypes(
       }
     });
   };
-
-  const executorUsedTypes = new Set<string>();
-  for (const executor of executors) {
-    if (executor.trigger.kind === "tailordb") {
-      executorUsedTypes.add(executor.trigger.typeName);
-    }
-  }
 
   // Validate that types used by executors don't have publishEvents explicitly set to false
   for (const tailordb of tailordbs) {

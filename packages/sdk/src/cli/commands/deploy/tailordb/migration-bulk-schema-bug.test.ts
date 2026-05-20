@@ -30,6 +30,7 @@
 
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { applyTailorDB } from "./index";
+import type { PendingMigration } from "@/cli/commands/tailordb/migrate/types";
 import type { Application } from "@/cli/services/application";
 import type { TailorDBService } from "@/cli/services/tailordb/service";
 import type { OperatorClient } from "@/cli/shared/client";
@@ -84,13 +85,62 @@ vi.mock("@/cli/commands/tailordb/migrate/config", () => ({
   ]),
 }));
 
+// Per-migration schema snapshots that `executeSingleMigration{Pre,Post}Phase`
+// loads via `loadSnapshot(getMigrationFilePath(..., N, "schema"))`.
+//
+// Migration 1 captures the state AFTER #1 (adds `permissions`, still has `roles`).
+// Migration 5 captures the state AFTER #5 (removes `roles`).
+const snapshotFixtures = vi.hoisted(() => {
+  const buildUser = (
+    fields: Record<string, { type: string; required: boolean; array?: boolean }>,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ): any => ({
+    name: "User",
+    pluralForm: "users",
+    fields,
+  });
+
+  const userAfterMigration1 = buildUser({
+    name: { type: "string", required: true },
+    permissions: { type: "string", required: false, array: true },
+    roles: { type: "string", required: true, array: true },
+  });
+
+  const userAfterMigration5 = buildUser({
+    name: { type: "string", required: true },
+    permissions: { type: "string", required: false, array: true },
+  });
+
+  return {
+    "/test/migrations/0001/schema.json": {
+      version: 1 as const,
+      namespace: "test-ns",
+      createdAt: new Date().toISOString(),
+      types: { User: userAfterMigration1 },
+    },
+    "/test/migrations/0005/schema.json": {
+      version: 1 as const,
+      namespace: "test-ns",
+      createdAt: new Date().toISOString(),
+      types: { User: userAfterMigration5 },
+    },
+  };
+});
+
 vi.mock("@/cli/commands/tailordb/migrate/snapshot", async (importOriginal) => {
-  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
   const original =
+    // eslint-disable-next-line @typescript-eslint/consistent-type-imports
     (await importOriginal()) as typeof import("@/cli/commands/tailordb/migrate/snapshot");
   return {
     ...original,
     assertValidMigrationFiles: vi.fn(),
+    loadSnapshot: vi.fn((filePath: string) => {
+      const fixture = (snapshotFixtures as Record<string, unknown>)[filePath];
+      if (!fixture) {
+        throw new Error(`No snapshot fixture configured for path: ${filePath}`);
+      }
+      return fixture;
+    }),
   };
 });
 
@@ -123,6 +173,7 @@ describe("bug repro: bulk schema deploy in per-migration prePhase", () => {
    *   - migration 5: removes User.roles field (affects User)
    *
    * Both `requiresMigrationScript: false` for simplicity. The bug is in prePhase, not script.
+   * @returns Mock `PlanResults["tailorDB"]` used by `applyTailorDB`.
    */
   function createMockPlanResult() {
     const mockService = {
@@ -190,6 +241,8 @@ describe("bug repro: bulk schema deploy in per-migration prePhase", () => {
           tailorDBServices: [mockService],
           authService: undefined,
         } as unknown as Application,
+        tailorDBInputs: [],
+        executorUsedTypes: new Set<string>(),
         config: mockConfig,
         noSchemaCheck: true,
       },
@@ -200,12 +253,16 @@ describe("bug repro: bulk schema deploy in per-migration prePhase", () => {
   /**
    * Build a pending migration with the given number and a single `field_added` change.
    * affectedTypes = { typeName } per the migration's diff.changes.
+   * @param number - Migration number used for path generation
+   * @param typeName - The TailorDB type affected by the migration
+   * @param fieldName - The field added in this migration
+   * @returns A mock pending migration that adds `fieldName` to `typeName`.
    */
   function mkAddFieldMigration(
     number: number,
     typeName: string,
     fieldName: string,
-  ): import("@/cli/commands/tailordb/migrate/types").PendingMigration {
+  ): PendingMigration {
     return {
       number,
       scriptPath: `/test/migrations/${String(number).padStart(4, "0")}/migrate.ts`,
@@ -232,11 +289,18 @@ describe("bug repro: bulk schema deploy in per-migration prePhase", () => {
     } as any;
   }
 
+  /**
+   * Build a pending migration with the given number and a single `field_removed` change.
+   * @param number - Migration number used for path generation
+   * @param typeName - The TailorDB type affected by the migration
+   * @param fieldName - The field removed in this migration
+   * @returns A mock pending migration that removes `fieldName` from `typeName`.
+   */
   function mkRemoveFieldMigration(
     number: number,
     typeName: string,
     fieldName: string,
-  ): import("@/cli/commands/tailordb/migrate/types").PendingMigration {
+  ): PendingMigration {
     return {
       number,
       scriptPath: `/test/migrations/${String(number).padStart(4, "0")}/migrate.ts`,
@@ -304,14 +368,12 @@ describe("bug repro: bulk schema deploy in per-migration prePhase", () => {
     const sentSchema = (firstCall![0] as any)?.tailordbType?.schema;
     expect(sentSchema).toBeDefined();
 
-    const fieldNames: string[] = sentSchema.fields.map(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (f: any) => f.name,
-    );
+    // `generateTailorDBTypeManifest` produces `fields` as a Record keyed by
+    // field name (id is implicit and excluded), so inspect Object.keys.
+    const fieldNames = Object.keys(sentSchema.fields ?? {});
 
     // Sanity: the new field from #1 must be present
     expect(fieldNames).toContain("permissions");
-    expect(fieldNames).toContain("id");
     expect(fieldNames).toContain("name");
 
     // Spec assertion: `roles` must still exist at #1 prePhase time, because
