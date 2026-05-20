@@ -1,0 +1,14 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "ignoreExportsUsedInFile": true,
+  "entry": [
+    "core/cli.ts",
+    "core/analyze.ts",
+    "core/experiment.ts",
+    "core/*.test.ts",
+    "problems/*/tests/**/*.test.ts"
+  ],
+  "project": ["core/**/*.ts", "shared/**/*.ts"],
+  "ignoreDependencies": ["@tailor-platform/sdk"],
+  "ignoreBinaries": ["tsgo", "knip"]
+}

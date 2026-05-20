@@ -12,7 +12,8 @@
     "challenge:experiment": "tsx core/experiment.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "typecheck:go": "tsgo"
+    "typecheck:go": "tsgo",
+    "knip": "knip"
   },
   "dependencies": {
     "@tailor-platform/sdk": "workspace:^"
