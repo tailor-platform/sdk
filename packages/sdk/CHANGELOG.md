@@ -1,5 +1,162 @@
 # @tailor-platform/sdk
 
+## 1.48.0
+
+### Minor Changes
+
+- [#1118](https://github.com/tailor-platform/sdk/pull/1118) [`5ef8e01`](https://github.com/tailor-platform/sdk/commit/5ef8e01fbcee428d77925662006fd2cc7f64a522) Thanks [@toiroakr](https://github.com/toiroakr)! - Detect app renames via a stable, auto-injected `id` field in `tailor.config.ts`.
+
+  The SDK now writes a generated `id: "<uuid>"` field into the
+  `defineConfig({...})` call on first `deploy`, and stamps every managed
+  resource with an `sdk-app-id` metadata label. Subsequent deploys identify
+  ownership by the stable id rather than by the app name, so renaming the
+  app (or any of its resources) cleanly removes the old resources before
+  creating the new ones. The id is a plain UUID; the SDK adds the
+  label-compatible `app-` prefix internally at the metadata boundary.
+
+  Deleting the `id` field regenerates a new UUID on the next `deploy` —
+  typically done after copying `tailor.config.ts` from another project so
+  the new application does not share the original's id. Existing
+  resources keep their data and are re-tagged in place; `deploy` shows a
+  dedicated confirmation prompt for this case ("Application id was
+  regenerated for ..."), separate from the rename/transfer confirmation.
+
+  If your `tailor.config.ts` is a wrapper that re-exports `defineConfig` from
+  another file, the SDK skips id injection on the wrapper — add the `id`
+  field manually to the file that contains the actual `defineConfig({...})`
+  call. Existing deployments without the id continue to work and migrate
+  transparently on the next `deploy` run.
+
+- [#1156](https://github.com/tailor-platform/sdk/pull/1156) [`4311e05`](https://github.com/tailor-platform/sdk/commit/4311e05d59f2e4b92d312b2a0e991f69553c741c) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `disableIdpUserSync` option to `seedPlugin` for opting out of the
+  `_User <-> userProfile` foreign keys emitted into the generated seed schema.
+
+  The seed plugin emits two foreign keys when `auth.userProfile` is configured
+  so that `validate` rejects rows on either side that lack a matching
+  counterpart:
+
+  - `_User.name → <userProfile>.<usernameField>` (`idpToUser`)
+  - `<userProfile>.<usernameField> → _User.name` (`userToIdp`)
+
+  Both are emitted by default, matching the previous behavior. Neither
+  direction is enforced by the runtime, so it can be useful to relax one when
+  seeding asymmetric production-like states such as
+  invited-but-not-registered users.
+
+  ```ts
+  // Allow seeding invited userProfile rows without a _User row
+  seedPlugin({
+    distPath: "./seed",
+    disableIdpUserSync: { userToIdp: true },
+  }),
+
+  // Allow seeding _User rows whose userProfile row does not exist yet
+  seedPlugin({
+    distPath: "./seed",
+    disableIdpUserSync: { idpToUser: true },
+  }),
+  ```
+
+### Patch Changes
+
+- [#1189](https://github.com/tailor-platform/sdk/pull/1189) [`7bcd9c1`](https://github.com/tailor-platform/sdk/commit/7bcd9c14eaed52df95b4a6523804a8a971797473) Thanks [@toiroakr](https://github.com/toiroakr)! - Improve tree-shaking of `@tailor-platform/sdk` so applications that only import a subset of the public API ship less unused code:
+
+  - Add a selective `sideEffects` allow-list to `package.json`: only `dist/cli/*.mjs` and `dist/vitest/setup.mjs` retain side effects, the rest of `dist/` is marked side-effect-free so bundlers can drop modules whose only imports are unused.
+  - Replace the top-level `export const t = { ..._t }` spread in `configure/index.ts` with a direct alias, eliminating a side-effecting object construction that prevented elimination of unused field builders.
+  - Annotate configure-layer factories (`defineConfig`, `defineAuth`, `defineIdp`, `defineStaticWebSite`, `definePlugins`, `createResolver`, `createExecutor`, `createWorkflow`, `createWorkflowJob`, etc.) with `@__NO_SIDE_EFFECTS__` so calls whose return values are unused can be eliminated.
+
+  No public API surface changes.
+
+- [#1180](https://github.com/tailor-platform/sdk/pull/1180) [`3411070`](https://github.com/tailor-platform/sdk/commit/34110703daa5cafa40958f5b9dc6f21df5e201fb) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @inquirer
+
+- [#1191](https://github.com/tailor-platform/sdk/pull/1191) [`a20354d`](https://github.com/tailor-platform/sdk/commit/a20354d47211e1955acd9086c4d25228ee2873de) Thanks [@dqn](https://github.com/dqn)! - **Security**: Harden permissions of the CLI config file (`~/.config/tailor-platform/config.yaml`) and local crash reports to `0o600`, with their parent directory at `0o700`. Previously these files inherited the user's `umask` (typically `0o644`), so on multi-user hosts or shared CI volumes other accounts could read access/refresh tokens stored in the config when the OS keyring is unavailable, as well as crash payloads.
+
+  **Action recommended**: If you have used the CLI on a multi-user host or in a shared CI environment, upgrade and run any `tailor-sdk` command once to auto-tighten existing files, or manually:
+
+  ```sh
+  chmod 700 ~/.config/tailor-platform
+  chmod 600 ~/.config/tailor-platform/config.yaml
+  ```
+
+  POSIX-only; on Windows the mode bits are best-effort and ACLs continue to govern access.
+
+## 1.47.1
+
+### Patch Changes
+
+- [#1176](https://github.com/tailor-platform/sdk/pull/1176) [`5abed20`](https://github.com/tailor-platform/sdk/commit/5abed20dff48e24f23675989143e33c8afb23845) Thanks [@toiroakr](https://github.com/toiroakr)! - Declare `undici` as a direct dependency. The SDK CLI imports `getGlobalDispatcher` from `undici`, but the package was previously available only through accidental hoisting of a transitive dependency. Strict node_modules layouts (e.g. pnpm 11 with stricter hoisting) would fail to resolve the import; declaring it directly fixes that.
+
+- [#1172](https://github.com/tailor-platform/sdk/pull/1172) [`7f37a07`](https://github.com/tailor-platform/sdk/commit/7f37a076a281fdca03d2301e1dba95668b2f7222) Thanks [@toiroakr](https://github.com/toiroakr)! - Widen `TailorEnv` fallback to `Record<string, string | number | boolean>` so it matches the values the type generator emits (string literal / number / boolean). Previously the fallback was `Record<string, string>`, which rejected number and boolean env values until `tailor.d.ts` was generated.
+
+- [#1161](https://github.com/tailor-platform/sdk/pull/1161) [`3e835c5`](https://github.com/tailor-platform/sdk/commit/3e835c55e27fbfedff94a169d1c2fb3c4f50e0a3) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update rolldown
+
+- [#1165](https://github.com/tailor-platform/sdk/pull/1165) [`f4ff7bd`](https://github.com/tailor-platform/sdk/commit/f4ff7bd5318be0a1142a557c76a17896d9df193a) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix a type/runtime mismatch where calling `workflowJob.trigger()` without `await` returned a raw value at runtime even though the static type is `Promise<Awaited<Output>>`. The bundler now wraps `.trigger()` in an async IIFE (`(async () => tailor.workflow.triggerJobFunction("...", args))()`), so the returned value is always a `Promise` (including for `.then()` chains), synchronous throws from the platform surface as Promise rejections, and the platform's synchronous suspend semantics are preserved (the call site runs to completion before subsequent statements).
+
+## 1.47.0
+
+### Minor Changes
+
+- [#1115](https://github.com/tailor-platform/sdk/pull/1115) [`8dd619e`](https://github.com/tailor-platform/sdk/commit/8dd619e9c58f4662b117bbd968ecf9528d688fe4) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `@tailor-platform/sdk/vitest` (beta) — a Vitest plugin and environment that emulates the Tailor Platform function runtime locally. Catches `node:*` imports and Node.js globals usage that would fail at deploy time, and provides mock control objects (`tailordbMock`, `workflowMock`, `secretmanagerMock`, `authconnectionMock`, `idpMock`, `fileMock`, `iconvMock`) for all platform APIs with response configuration and call recording.
+
+  Revamp `packages/sdk/docs/testing.md` into a 2-layer model (Unit Tests / E2E Tests). The previous structure split Unit, Bundled, and Workflow tests across overlapping sections and contained broken vitest imports and references to a non-existent `--template testing`. The new docs cover testing resolvers (simple, with TailorDB mocks, with DI, and with wait points) and workflow jobs (simple, with `triggerJobFunction` mocks, with wait-point mocks, and full-workflow integration), all anchored on the actual `resolver` and `workflow` templates.
+
+  Mark `createImportMain` and `setupInvokerMock` from `@tailor-platform/sdk/test` as `@deprecated`. `createImportMain` is an SDK-internal helper for verifying bundled output; applications should test their TypeScript source directly (unit) and verify deployed behavior via E2E. `setupInvokerMock` is superseded by the `tailor-runtime` Vitest environment, where bundled tests can drive the invoker via `vi.spyOn(globalThis.tailor.context, "getInvoker").mockReturnValue(...)` and unit tests can pass `invoker` directly to `.body()`. Both exports remain in place for now to avoid a breaking change and will be removed in a future release.
+
+  Remove the broken `tests/bundled.test.ts` from the `resolver` and `workflow` templates along with the related `bundled` vitest project and `test:bundled` / `test:bundled:prepare` scripts. These tests were not exercised by CI and had drifted out of sync with the SDK, producing failures on a fresh scaffold.
+
+  Fix a broken anchor in `docs/services/workflow.md` that pointed at the removed `#testing-wait-points` heading; it now links to `../testing.md#jobs-that-wait-on-approval` to match the new testing docs structure.
+
+### Patch Changes
+
+- [#1155](https://github.com/tailor-platform/sdk/pull/1155) [`fd70f8c`](https://github.com/tailor-platform/sdk/commit/fd70f8c75aa9a315eaf23ee25f36f43324b2eb54) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix false-positive remote schema drift on `decimal` fields without an explicit
+  `scale`. The platform stores decimal fields with a default scale of 6, but the
+  snapshot generated by `tailor-sdk tailordb migration generate --init` did not
+  record this default, so `tailor-sdk deploy` (formerly `apply`) reported drift as
+  `scale: remote=6, expected=undefined` and blocked the deploy.
+
+  Migration drift detection now treats an unset `scale` on a `decimal` field as
+  equivalent to the platform default (6). No regeneration of existing snapshots
+  is required; users no longer need `--no-schema-check` to work around this case.
+
+- [#1164](https://github.com/tailor-platform/sdk/pull/1164) [`b1e8f5a`](https://github.com/tailor-platform/sdk/commit/b1e8f5a7e971527ff04cdb5867cacda2415e01bf) Thanks [@toiroakr](https://github.com/toiroakr)! - Eliminate the parser-layer exception that allowed `parser/service/tailordb/runtime.ts` to re-export runtime helpers from the configure module. Plugin attachment processing for a TailorDB type now lives in `PluginManager.processAttachmentsForType` and returns plain data (extended type, generated types, render events), so the cli layer applies state and renders progress without depending on `TailorAnyDBType`. Internal refactor with no public API change.
+
+- [#1134](https://github.com/tailor-platform/sdk/pull/1134) [`02e12f6`](https://github.com/tailor-platform/sdk/commit/02e12f6b4a0a5986bc925defcac44717ae293c88) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @opentelemetry
+
+- [#1135](https://github.com/tailor-platform/sdk/pull/1135) [`8f53196`](https://github.com/tailor-platform/sdk/commit/8f53196bd66e4ecba702074399979d577e289a07) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @clack/prompts to v1.3.0
+
+- [#1137](https://github.com/tailor-platform/sdk/pull/1137) [`aef3653`](https://github.com/tailor-platform/sdk/commit/aef365380900c65420237cb47f75ff56f31c939a) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @napi-rs/keyring to v1.3.0
+
+- [#1047](https://github.com/tailor-platform/sdk/pull/1047) [`aa6ec4a`](https://github.com/tailor-platform/sdk/commit/aa6ec4a562b771526ffb553aa03f7061ed483504) Thanks [@toiroakr](https://github.com/toiroakr)! - chore(setup github): bump bundled `tailor-platform/actions` ref to v1.1.0 and let Renovate keep it up to date going forward.
+
+## 1.46.0
+
+### Minor Changes
+
+- [#1144](https://github.com/tailor-platform/sdk/pull/1144) [`ade6a39`](https://github.com/tailor-platform/sdk/commit/ade6a39dd46a5c48ca274718203628a30f0ba843) Thanks [@dqn](https://github.com/dqn)! - Rename the `apply` CLI command to `deploy`. `tailor-sdk deploy` is the canonical
+  command name; `tailor-sdk apply` continues to work as an alias for backward
+  compatibility on the command line.
+
+  The programmatic API exported from `@tailor-platform/sdk/cli` is also available
+  under the new name. `deploy` / `DeployOptions` are now the canonical exports,
+  while `apply` / `ApplyOptions` continue to be re-exported as aliases so existing
+  imports keep working:
+
+  - `import { apply } from "@tailor-platform/sdk/cli"` — still works (alias for `deploy`)
+  - `import type { ApplyOptions } from "@tailor-platform/sdk/cli"` — still works (alias for `DeployOptions`)
+
+  Migration is optional but recommended:
+
+  - `apply` → `deploy`
+  - `ApplyOptions` → `DeployOptions`
+
+- [#1145](https://github.com/tailor-platform/sdk/pull/1145) [`847284a`](https://github.com/tailor-platform/sdk/commit/847284ab50313bfffed03905173b3d868f7e7fce) Thanks [@dqn](https://github.com/dqn)! - Apply consistent CLI naming conventions:
+
+  - Rename the `crash-report` subcommand to `crashreport` to match the single-word convention used by other multi-word commands (`authconnection`, `staticwebsite`). The legacy `crash-report` name is preserved as a native alias and still works.
+  - Rename the positional arguments `executionId`, `executorName`, and `jobId` to their kebab-case form (`execution-id`, `executor-name`, `job-id`) on `function logs`, `workflow resume`, `workflow executions`, `executor jobs`, and `executor trigger`. Help output and generated docs now show the kebab-case form. Existing positional invocations are unaffected because positional arguments are referenced by position, not by name.
+
+### Patch Changes
+
+- [#1146](https://github.com/tailor-platform/sdk/pull/1146) [`a49a6ef`](https://github.com/tailor-platform/sdk/commit/a49a6efd62d0d374b3b73cf80bab897f8bcaa5d4) Thanks [@dqn](https://github.com/dqn)! - Stack traces shown by `tailor-sdk function logs <id>` now map back to original sources even after the deployed function has been updated. The `FunctionExecution.contentHash` reported by the server is used to download the exact bundle that ran, so source locations stay accurate across redeploys. Older servers that do not report `contentHash` keep using the existing `updatedAt` staleness fallback.
+
 ## 1.45.2
 
 ### Patch Changes

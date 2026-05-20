@@ -1,20 +1,20 @@
-import { afterEach, describe, expect, test } from "vitest";
-import { setupWaitPointMock, unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
+import { beforeEach, describe, expect, test } from "vitest";
+import { workflowMock } from "@tailor-platform/sdk/vitest";
+import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
 import resolver from "./resolveApproval";
 
-const TailorGlobal = globalThis as { tailor?: { workflow?: Record<string, unknown> } };
-
 describe("resolveApproval resolver", () => {
-  afterEach(() => {
-    delete TailorGlobal.tailor;
+  beforeEach(() => {
+    workflowMock.reset();
   });
 
   test("resolves approval with approved=true", async () => {
-    const { resolveCalls } = setupWaitPointMock({
-      onResolve: (_execId, _key, callback) => {
-        const result = callback({ message: "Please approve order order-1", orderId: "order-1" });
-        expect(result).toEqual({ approved: true });
-      },
+    workflowMock.setResolveHandler((_executionId, _key, callback) => {
+      const callbackResult = callback({
+        message: "Please approve order order-1",
+        orderId: "order-1",
+      });
+      expect(callbackResult).toEqual({ approved: true });
     });
 
     const result = await resolver.body({
@@ -24,16 +24,13 @@ describe("resolveApproval resolver", () => {
     });
 
     expect(result).toEqual({ resolved: true });
-    expect(resolveCalls).toHaveLength(1);
-    expect(resolveCalls[0]).toEqual({ executionId: "exec-1", key: "approval" });
+    expect(workflowMock.resolveCalls).toEqual([{ executionId: "exec-1", key: "approval" }]);
   });
 
   test("resolves approval with approved=false", async () => {
-    setupWaitPointMock({
-      onResolve: (_execId, _key, callback) => {
-        const result = callback({ message: "Please approve", orderId: "order-2" });
-        expect(result).toEqual({ approved: false });
-      },
+    workflowMock.setResolveHandler((_executionId, _key, callback) => {
+      const callbackResult = callback({ message: "Please approve", orderId: "order-2" });
+      expect(callbackResult).toEqual({ approved: false });
     });
 
     const result = await resolver.body({

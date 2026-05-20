@@ -106,9 +106,6 @@ import { sendNotification } from "./jobs/send-notification";
 export const mainJob = createWorkflowJob({
   name: "main-job",
   body: async (input: { customerId: string }) => {
-    // You can write `await` for type-safety in your source.
-    // During deployment bundling, job.trigger() calls are transformed to a synchronous
-    // runtime call and `await` is removed.
     const customer = await fetchCustomer.trigger({
       customerId: input.customerId,
     });
@@ -120,8 +117,6 @@ export const mainJob = createWorkflowJob({
   },
 });
 ```
-
-**Important:** On the Tailor runtime, job triggers are executed synchronously. This means `Promise.all([jobA.trigger(), jobB.trigger()])` will not run jobs in parallel.
 
 ### Deterministic Execution Requirement
 
@@ -308,7 +303,7 @@ export default createResolver({
 });
 ```
 
-Wait points can be imported and used in any file (workflow jobs, resolvers, executors). For local testing, see [Testing Wait Points](../testing.md#testing-wait-points).
+Wait points can be imported and used in any file (workflow jobs, resolvers, executors). For local testing, see [Jobs that wait on approval](../testing.md#jobs-that-wait-on-approval) in the testing guide.
 
 ## Retry Policy
 

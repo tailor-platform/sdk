@@ -5,7 +5,7 @@ import { withCompletionCommand } from "politty/completion";
 import { z } from "zod";
 import { apiCommand } from "./commands/api";
 import { authconnectionCommand } from "./commands/authconnection";
-import { crashReportCommand } from "./commands/crash-report";
+import { crashReportCommand } from "./commands/crashreport";
 import { deployCommand } from "./commands/deploy";
 import { executorCommand } from "./commands/executor";
 import { functionCommand } from "./commands/function";
@@ -29,7 +29,7 @@ import { upgradeCommand } from "./commands/upgrade";
 import { userCommand } from "./commands/user";
 import { workflowCommand } from "./commands/workflow";
 import { workspaceCommand } from "./commands/workspace";
-import { initCrashReporting } from "./crash-report";
+import { initCrashReporting } from "./crashreport";
 import { queryCommand } from "./query";
 import { commonArgs, isVerbose } from "./shared/args";
 import { isCLIError } from "./shared/errors";
@@ -61,7 +61,7 @@ export const mainCommand = withCompletionCommand(
     subCommands: {
       api: apiCommand,
       authconnection: authconnectionCommand,
-      "crash-report": crashReportCommand,
+      crashreport: crashReportCommand,
       deploy: deployCommand,
       executor: executorCommand,
       function: functionCommand,
@@ -120,7 +120,7 @@ runMain(mainCommand, {
         (!(error instanceof Error) || error instanceof TypeError || error instanceof RangeError);
       if (shouldReport) {
         // Lazy import to match shutdownTelemetry pattern and keep cleanup handler lightweight.
-        const { reportCrash } = await import("@/cli/crash-report");
+        const { reportCrash } = await import("@/cli/crashreport");
         await reportCrash(error, "handledError");
       }
     }

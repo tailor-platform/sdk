@@ -50,14 +50,17 @@ function getPlatformWorkflow() {
   };
   const workflow = platform.tailor?.workflow;
   if (!workflow) {
-    throw new Error("tailor.workflow is not available. Use setupWaitPointMock() in tests.");
+    throw new Error(
+      "tailor.workflow is not available. Use workflowMock from @tailor-platform/sdk/vitest in tests.",
+    );
   }
   return workflow;
 }
 
 /**
  * Create a WaitPointInstance that delegates to the platform runtime.
- * Use `setupWaitPointMock` to mock `globalThis.tailor.workflow.wait/resolve` in tests.
+ * Use `workflowMock` from `@tailor-platform/sdk/vitest` to mock
+ * `globalThis.tailor.workflow.wait/resolve` in tests.
  * @param initialKey - Initial key (can be updated via the returned setter)
  * @returns The instance and a setter to update the key after construction
  */
@@ -130,6 +133,7 @@ type DefineFn = <Payload = undefined, Result = undefined>() => WaitPointDef<Payl
  *
  * await approval.wait({ message: "Please approve" });
  */
+/* @__NO_SIDE_EFFECTS__ */
 export function defineWaitPoint<Payload = undefined, Result = undefined>(
   key: string,
 ): WaitPointDef<Payload, Result> {
@@ -159,6 +163,7 @@ export function defineWaitPoint<Payload = undefined, Result = undefined>(
  *
  * // For 2-level access, use destructured export with JSDoc attached to the export itself.
  */
+/* @__NO_SIDE_EFFECTS__ */
 // oxlint-disable-next-line no-explicit-any
 export function defineWaitPoints<T extends Record<string, WaitPointInstance<any, any>>>(
   builder: (define: DefineFn) => T,

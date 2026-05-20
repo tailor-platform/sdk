@@ -374,6 +374,38 @@ describe("snapshot", () => {
       expect(diff.breakingChanges[0].reason).toContain("Field type changed");
     });
 
+    it("treats decimal field with unset scale as equivalent to platform default", () => {
+      const previous: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          Order: {
+            name: "Order",
+            fields: {
+              id: { type: "uuid", required: true },
+              amount: { type: "decimal", required: true },
+            },
+          },
+        },
+      };
+      const current: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          Order: {
+            name: "Order",
+            fields: {
+              id: { type: "uuid", required: true },
+              amount: { type: "decimal", required: true, scale: 6 },
+            },
+          },
+        },
+      };
+
+      const diff = compareSnapshots(previous, current);
+
+      expect(diff.changes).toEqual([]);
+      expect(diff.hasBreakingChanges).toBe(false);
+    });
+
     it("detects required flag change (optional to required - breaking)", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
@@ -1449,6 +1481,7 @@ describe("snapshot", () => {
           foreignKey?: boolean;
           foreignKeyType?: string;
           allowedValues?: { value: string }[];
+          scale?: number;
         }
       >,
     ): ProtoTailorDBType {
@@ -1462,6 +1495,7 @@ describe("snapshot", () => {
           foreignKey: config.foreignKey ?? false,
           foreignKeyType: config.foreignKeyType,
           allowedValues: config.allowedValues ?? [],
+          ...(config.scale !== undefined && { scale: config.scale }),
         };
       }
 
@@ -1736,6 +1770,62 @@ describe("snapshot", () => {
       expect(drifts.length).toBe(1);
       expect(drifts[0].kind).toBe("field_mismatch");
       expect(drifts[0].details).toContain("allowedValues");
+    });
+
+    it("treats decimal field with unset scale as platform default (no drift)", () => {
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          Order: {
+            name: "Order",
+            fields: {
+              id: { type: "uuid", required: true },
+              amount: { type: "decimal", required: true },
+            },
+          },
+        },
+      };
+
+      const remoteTypes = [
+        createMockRemoteType("Order", {
+          id: { type: "uuid", required: true },
+          amount: { type: "decimal", required: true, scale: 6 },
+        }),
+      ];
+
+      const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
+      expect(drifts).toEqual([]);
+    });
+
+    it("detects drift when decimal scale actually differs from platform default", () => {
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          Order: {
+            name: "Order",
+            fields: {
+              id: { type: "uuid", required: true },
+              amount: { type: "decimal", required: true },
+            },
+          },
+        },
+      };
+
+      const remoteTypes = [
+        createMockRemoteType("Order", {
+          id: { type: "uuid", required: true },
+          amount: { type: "decimal", required: true, scale: 2 },
+        }),
+      ];
+
+      const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
+      expect(drifts.length).toBe(1);
+      expect(drifts[0].kind).toBe("field_mismatch");
+      expect(drifts[0].details).toContain("scale: remote=2, expected=6");
     });
 
     it("handles empty remote types list", () => {

@@ -2,7 +2,7 @@ name: Docs Implementation Consistency Check
 
 on:
   pull_request:
-    types: [ready_for_review, review_requested]
+    types: [ready_for_review, labeled]
     paths:
       - "packages/sdk/src/**"
       - "packages/sdk/docs/**"
@@ -16,15 +16,20 @@ permissions:
 
 jobs:
   docs-consistency:
+    if: >
+      github.event.action == 'ready_for_review'
+      || (github.event.action == 'labeled' && github.event.label.name == 'docs-check')
     runs-on: ubuntu-slim
     timeout-minutes: 10
+    env:
+      PR_NUMBER: ${{ github.event.number }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
 
       - name: Check docs-implementation consistency
-        uses: anthropics/claude-code-action@476e359e6203e73dad705c8b322e333fabbd7416 # v1.0.119
+        uses: anthropics/claude-code-action@1dc994ee7a008f0ecc866d9ac23ef036b7229f84 # v1.0.127
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
@@ -46,8 +51,8 @@ jobs:
             ### 1. Retrieve PR Changes
 
             ```bash
-            gh pr view ${{ github.event.number }} --json title,body,files
-            gh pr diff ${{ github.event.number }}
+            gh pr view ${{ env.PR_NUMBER }} --json title,body,files
+            gh pr diff ${{ env.PR_NUMBER }}
             ```
 
             ### 2. Classify Changes
@@ -88,7 +93,7 @@ jobs:
             Search for an existing comment and update it, or create a new one.
 
             ```bash
-            COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ github.event.number }}/comments \
+            COMMENT_ID=$(gh api repos/${{ github.repository }}/issues/${{ env.PR_NUMBER }}/comments \
               --jq '.[] | select(.body | contains("<!-- docs-consistency-check -->")) | .id' | head -n 1)
             ```
 
@@ -141,3 +146,9 @@ jobs:
           claude_args: |
             --model claude-sonnet-4-5-20250929
             --allowedTools "Bash(gh pr:*),Bash(gh api:*),Read,Glob,Grep"
+
+      - name: Remove trigger label
+        if: always() && github.event.action == 'labeled' && github.event.label.name == 'docs-check'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr edit "$PR_NUMBER" --repo "${{ github.repository }}" --remove-label docs-check

@@ -188,7 +188,7 @@ The \`--logs\` option displays logs from the downstream execution when available
   args: z
     .object({
       ...workspaceArgs,
-      executorName: arg(z.string(), {
+      "executor-name": arg(z.string(), {
         positional: true,
         description: "Executor name",
       }),

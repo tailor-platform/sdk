@@ -8,20 +8,16 @@
     "deploy:admin": "tailor-sdk deploy -c apps/admin/tailor.config.ts",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
-    "lint": "oxlint --type-aware . && eslint --cache .",
-    "lint:fix": "oxlint --type-aware --fix . && eslint --cache --fix .",
+    "lint": "oxlint --type-aware .",
+    "lint:fix": "oxlint --type-aware --fix .",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@eslint/js": "10.0.1",
     "@tailor-platform/sdk": "workspace:^",
-    "@types/node": "24.12.2",
-    "eslint": "10.3.0",
-    "eslint-plugin-oxlint": "1.61.0",
+    "@types/node": "24.12.3",
     "oxfmt": "0.46.0",
     "oxlint": "1.61.0",
     "oxlint-tsgolint": "0.22.1",
-    "typescript": "5.9.3",
-    "typescript-eslint": "8.59.1"
+    "typescript": "5.9.3"
   }
 }
