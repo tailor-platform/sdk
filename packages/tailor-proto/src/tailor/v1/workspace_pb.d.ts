@@ -5,7 +5,7 @@
 import type { GenEnum, GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
 import type { Folder, FolderAccess, FolderRole, Organization, OrganizationAccess, OrganizationRole, PlatformAccountPlan, Team, TeamMember, TeamRole, Workspace, WorkspacePlatformUser, WorkspacePlatformUserRole } from "./workspace_resource_pb";
-import type { FieldMask } from "@bufbuild/protobuf/wkt";
+import type { FieldMask, Timestamp } from "@bufbuild/protobuf/wkt";
 import type { PageDirection } from "./resource_pb";
 
 /**
@@ -1620,6 +1620,290 @@ export declare type GetOrganizationFolderAccessResponse = Message<"tailor.v1.Get
  * Use `create(GetOrganizationFolderAccessResponseSchema)` to create a new message.
  */
 export declare const GetOrganizationFolderAccessResponseSchema: GenMessage<GetOrganizationFolderAccessResponse>;
+
+/**
+ * @generated from message tailor.v1.OrganizationIPRestriction
+ */
+export declare type OrganizationIPRestriction = Message<"tailor.v1.OrganizationIPRestriction"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * @generated from field: repeated string allowed_ip_addresses = 2;
+   */
+  allowedIpAddresses: string[];
+
+  /**
+   * @generated from field: google.protobuf.Timestamp created_at = 3;
+   */
+  createdAt?: Timestamp;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp updated_at = 4;
+   */
+  updatedAt?: Timestamp;
+};
+
+/**
+ * Describes the message tailor.v1.OrganizationIPRestriction.
+ * Use `create(OrganizationIPRestrictionSchema)` to create a new message.
+ */
+export declare const OrganizationIPRestrictionSchema: GenMessage<OrganizationIPRestriction>;
+
+/**
+ * @generated from message tailor.v1.OrganizationFolderIPRestriction
+ */
+export declare type OrganizationFolderIPRestriction = Message<"tailor.v1.OrganizationFolderIPRestriction"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * @generated from field: string folder_id = 2;
+   */
+  folderId: string;
+
+  /**
+   * @generated from field: repeated string allowed_ip_addresses = 3;
+   */
+  allowedIpAddresses: string[];
+
+  /**
+   * @generated from field: google.protobuf.Timestamp created_at = 4;
+   */
+  createdAt?: Timestamp;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp updated_at = 5;
+   */
+  updatedAt?: Timestamp;
+};
+
+/**
+ * Describes the message tailor.v1.OrganizationFolderIPRestriction.
+ * Use `create(OrganizationFolderIPRestrictionSchema)` to create a new message.
+ */
+export declare const OrganizationFolderIPRestrictionSchema: GenMessage<OrganizationFolderIPRestriction>;
+
+/**
+ * @generated from message tailor.v1.UpsertOrganizationIPRestrictionRequest
+ */
+export declare type UpsertOrganizationIPRestrictionRequest = Message<"tailor.v1.UpsertOrganizationIPRestrictionRequest"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * Must contain at least one entry. To remove the restriction entirely, call
+   * DeleteOrganizationIPRestriction — an empty list here is rejected so that
+   * "rule exists" and "non-empty allowlist" stay equivalent and Get's NotFound
+   * contract is unambiguous.
+   *
+   * @generated from field: repeated string allowed_ip_addresses = 2;
+   */
+  allowedIpAddresses: string[];
+};
+
+/**
+ * Describes the message tailor.v1.UpsertOrganizationIPRestrictionRequest.
+ * Use `create(UpsertOrganizationIPRestrictionRequestSchema)` to create a new message.
+ */
+export declare const UpsertOrganizationIPRestrictionRequestSchema: GenMessage<UpsertOrganizationIPRestrictionRequest>;
+
+/**
+ * @generated from message tailor.v1.UpsertOrganizationIPRestrictionResponse
+ */
+export declare type UpsertOrganizationIPRestrictionResponse = Message<"tailor.v1.UpsertOrganizationIPRestrictionResponse"> & {
+  /**
+   * @generated from field: tailor.v1.OrganizationIPRestriction organization_ip_restriction = 1;
+   */
+  organizationIpRestriction?: OrganizationIPRestriction;
+};
+
+/**
+ * Describes the message tailor.v1.UpsertOrganizationIPRestrictionResponse.
+ * Use `create(UpsertOrganizationIPRestrictionResponseSchema)` to create a new message.
+ */
+export declare const UpsertOrganizationIPRestrictionResponseSchema: GenMessage<UpsertOrganizationIPRestrictionResponse>;
+
+/**
+ * @generated from message tailor.v1.GetOrganizationIPRestrictionRequest
+ */
+export declare type GetOrganizationIPRestrictionRequest = Message<"tailor.v1.GetOrganizationIPRestrictionRequest"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+};
+
+/**
+ * Describes the message tailor.v1.GetOrganizationIPRestrictionRequest.
+ * Use `create(GetOrganizationIPRestrictionRequestSchema)` to create a new message.
+ */
+export declare const GetOrganizationIPRestrictionRequestSchema: GenMessage<GetOrganizationIPRestrictionRequest>;
+
+/**
+ * @generated from message tailor.v1.GetOrganizationIPRestrictionResponse
+ */
+export declare type GetOrganizationIPRestrictionResponse = Message<"tailor.v1.GetOrganizationIPRestrictionResponse"> & {
+  /**
+   * @generated from field: tailor.v1.OrganizationIPRestriction organization_ip_restriction = 1;
+   */
+  organizationIpRestriction?: OrganizationIPRestriction;
+};
+
+/**
+ * Describes the message tailor.v1.GetOrganizationIPRestrictionResponse.
+ * Use `create(GetOrganizationIPRestrictionResponseSchema)` to create a new message.
+ */
+export declare const GetOrganizationIPRestrictionResponseSchema: GenMessage<GetOrganizationIPRestrictionResponse>;
+
+/**
+ * @generated from message tailor.v1.DeleteOrganizationIPRestrictionRequest
+ */
+export declare type DeleteOrganizationIPRestrictionRequest = Message<"tailor.v1.DeleteOrganizationIPRestrictionRequest"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+};
+
+/**
+ * Describes the message tailor.v1.DeleteOrganizationIPRestrictionRequest.
+ * Use `create(DeleteOrganizationIPRestrictionRequestSchema)` to create a new message.
+ */
+export declare const DeleteOrganizationIPRestrictionRequestSchema: GenMessage<DeleteOrganizationIPRestrictionRequest>;
+
+/**
+ * @generated from message tailor.v1.DeleteOrganizationIPRestrictionResponse
+ */
+export declare type DeleteOrganizationIPRestrictionResponse = Message<"tailor.v1.DeleteOrganizationIPRestrictionResponse"> & {
+};
+
+/**
+ * Describes the message tailor.v1.DeleteOrganizationIPRestrictionResponse.
+ * Use `create(DeleteOrganizationIPRestrictionResponseSchema)` to create a new message.
+ */
+export declare const DeleteOrganizationIPRestrictionResponseSchema: GenMessage<DeleteOrganizationIPRestrictionResponse>;
+
+/**
+ * @generated from message tailor.v1.UpsertOrganizationFolderIPRestrictionRequest
+ */
+export declare type UpsertOrganizationFolderIPRestrictionRequest = Message<"tailor.v1.UpsertOrganizationFolderIPRestrictionRequest"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * @generated from field: string folder_id = 2;
+   */
+  folderId: string;
+
+  /**
+   * Must contain at least one entry; see UpsertOrganizationIPRestrictionRequest
+   * for rationale. Use DeleteOrganizationFolderIPRestriction to clear the rule.
+   *
+   * @generated from field: repeated string allowed_ip_addresses = 3;
+   */
+  allowedIpAddresses: string[];
+};
+
+/**
+ * Describes the message tailor.v1.UpsertOrganizationFolderIPRestrictionRequest.
+ * Use `create(UpsertOrganizationFolderIPRestrictionRequestSchema)` to create a new message.
+ */
+export declare const UpsertOrganizationFolderIPRestrictionRequestSchema: GenMessage<UpsertOrganizationFolderIPRestrictionRequest>;
+
+/**
+ * @generated from message tailor.v1.UpsertOrganizationFolderIPRestrictionResponse
+ */
+export declare type UpsertOrganizationFolderIPRestrictionResponse = Message<"tailor.v1.UpsertOrganizationFolderIPRestrictionResponse"> & {
+  /**
+   * @generated from field: tailor.v1.OrganizationFolderIPRestriction organization_folder_ip_restriction = 1;
+   */
+  organizationFolderIpRestriction?: OrganizationFolderIPRestriction;
+};
+
+/**
+ * Describes the message tailor.v1.UpsertOrganizationFolderIPRestrictionResponse.
+ * Use `create(UpsertOrganizationFolderIPRestrictionResponseSchema)` to create a new message.
+ */
+export declare const UpsertOrganizationFolderIPRestrictionResponseSchema: GenMessage<UpsertOrganizationFolderIPRestrictionResponse>;
+
+/**
+ * @generated from message tailor.v1.GetOrganizationFolderIPRestrictionRequest
+ */
+export declare type GetOrganizationFolderIPRestrictionRequest = Message<"tailor.v1.GetOrganizationFolderIPRestrictionRequest"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * @generated from field: string folder_id = 2;
+   */
+  folderId: string;
+};
+
+/**
+ * Describes the message tailor.v1.GetOrganizationFolderIPRestrictionRequest.
+ * Use `create(GetOrganizationFolderIPRestrictionRequestSchema)` to create a new message.
+ */
+export declare const GetOrganizationFolderIPRestrictionRequestSchema: GenMessage<GetOrganizationFolderIPRestrictionRequest>;
+
+/**
+ * @generated from message tailor.v1.GetOrganizationFolderIPRestrictionResponse
+ */
+export declare type GetOrganizationFolderIPRestrictionResponse = Message<"tailor.v1.GetOrganizationFolderIPRestrictionResponse"> & {
+  /**
+   * @generated from field: tailor.v1.OrganizationFolderIPRestriction organization_folder_ip_restriction = 1;
+   */
+  organizationFolderIpRestriction?: OrganizationFolderIPRestriction;
+};
+
+/**
+ * Describes the message tailor.v1.GetOrganizationFolderIPRestrictionResponse.
+ * Use `create(GetOrganizationFolderIPRestrictionResponseSchema)` to create a new message.
+ */
+export declare const GetOrganizationFolderIPRestrictionResponseSchema: GenMessage<GetOrganizationFolderIPRestrictionResponse>;
+
+/**
+ * @generated from message tailor.v1.DeleteOrganizationFolderIPRestrictionRequest
+ */
+export declare type DeleteOrganizationFolderIPRestrictionRequest = Message<"tailor.v1.DeleteOrganizationFolderIPRestrictionRequest"> & {
+  /**
+   * @generated from field: string organization_id = 1;
+   */
+  organizationId: string;
+
+  /**
+   * @generated from field: string folder_id = 2;
+   */
+  folderId: string;
+};
+
+/**
+ * Describes the message tailor.v1.DeleteOrganizationFolderIPRestrictionRequest.
+ * Use `create(DeleteOrganizationFolderIPRestrictionRequestSchema)` to create a new message.
+ */
+export declare const DeleteOrganizationFolderIPRestrictionRequestSchema: GenMessage<DeleteOrganizationFolderIPRestrictionRequest>;
+
+/**
+ * @generated from message tailor.v1.DeleteOrganizationFolderIPRestrictionResponse
+ */
+export declare type DeleteOrganizationFolderIPRestrictionResponse = Message<"tailor.v1.DeleteOrganizationFolderIPRestrictionResponse"> & {
+};
+
+/**
+ * Describes the message tailor.v1.DeleteOrganizationFolderIPRestrictionResponse.
+ * Use `create(DeleteOrganizationFolderIPRestrictionResponseSchema)` to create a new message.
+ */
+export declare const DeleteOrganizationFolderIPRestrictionResponseSchema: GenMessage<DeleteOrganizationFolderIPRestrictionResponse>;
 
 /**
  * @generated from message tailor.v1.CreateOrganizationTeamRequest

@@ -2,15 +2,16 @@
 // @generated from file tailor/v1/staticwebsite_resource.proto (package tailor.v1, syntax proto3)
 /* eslint-disable */
 
-import { fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
+import { enumDesc, fileDesc, messageDesc, tsEnum } from "@bufbuild/protobuf/codegenv2";
 import { file_buf_validate_validate } from "../../buf/validate/validate_pb";
 import { file_google_api_field_behavior } from "../../google/api/field_behavior_pb";
+import { file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
 
 /**
  * Describes the file tailor/v1/staticwebsite_resource.proto.
  */
 export const file_tailor_v1_staticwebsite_resource = /*@__PURE__*/
-  fileDesc("CiZ0YWlsb3IvdjEvc3RhdGljd2Vic2l0ZV9yZXNvdXJjZS5wcm90bxIJdGFpbG9yLnYxIowBCg1TdGF0aWNXZWJzaXRlEjYKBG5hbWUYASABKAlCKLpIJXIjMiFeW2EtejAtOV1bYS16MC05LV17MSw2MX1bYS16MC05XSQSEwoLZGVzY3JpcHRpb24YAiABKAkSHAoUYWxsb3dlZF9pcF9hZGRyZXNzZXMYAyADKAkSEAoDdXJsGAQgASgJQgPgQQNiBnByb3RvMw", [file_buf_validate_validate, file_google_api_field_behavior]);
+  fileDesc("CiZ0YWlsb3IvdjEvc3RhdGljd2Vic2l0ZV9yZXNvdXJjZS5wcm90bxIJdGFpbG9yLnYxIowBCg1TdGF0aWNXZWJzaXRlEjYKBG5hbWUYASABKAlCKLpIJXIjMiFeW2EtejAtOV1bYS16MC05LV17MSw2MX1bYS16MC05XSQSEwoLZGVzY3JpcHRpb24YAiABKAkSHAoUYWxsb3dlZF9pcF9hZGRyZXNzZXMYAyADKAkSEAoDdXJsGAQgASgJQgPgQQMiogIKDEN1c3RvbURvbWFpbhIOCgZkb21haW4YASABKAkSMgoGc3RhdHVzGAIgASgOMh0udGFpbG9yLnYxLkN1c3RvbURvbWFpblN0YXR1c0ID4EEDEiEKFHRyYWZmaWNfY25hbWVfdGFyZ2V0GAMgASgJQgPgQQMSJQoYY2VydGlmaWNhdGVfY25hbWVfdGFyZ2V0GAQgASgJQgPgQQMSGgoNZXJyb3JfbWVzc2FnZRgFIAEoCUID4EEDEjMKCmNyZWF0ZWRfYXQYBiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wQgPgQQMSMwoKdXBkYXRlZF9hdBgHIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBCA+BBAyroAQoSQ3VzdG9tRG9tYWluU3RhdHVzEiQKIENVU1RPTV9ET01BSU5fU1RBVFVTX1VOU1BFQ0lGSUVEEAASIAocQ1VTVE9NX0RPTUFJTl9TVEFUVVNfUEVORElORxABEiIKHkNVU1RPTV9ET01BSU5fU1RBVFVTX1ZFUklGWUlORxACEiQKIENVU1RPTV9ET01BSU5fU1RBVFVTX0NFUlRfSVNTVUVEEAMSHwobQ1VTVE9NX0RPTUFJTl9TVEFUVVNfQUNUSVZFEAQSHwobQ1VTVE9NX0RPTUFJTl9TVEFUVVNfRkFJTEVEEAViBnByb3RvMw", [file_buf_validate_validate, file_google_api_field_behavior, file_google_protobuf_timestamp]);
 
 /**
  * Describes the message tailor.v1.StaticWebsite.
@@ -18,4 +19,23 @@ export const file_tailor_v1_staticwebsite_resource = /*@__PURE__*/
  */
 export const StaticWebsiteSchema = /*@__PURE__*/
   messageDesc(file_tailor_v1_staticwebsite_resource, 0);
+
+/**
+ * Describes the message tailor.v1.CustomDomain.
+ * Use `create(CustomDomainSchema)` to create a new message.
+ */
+export const CustomDomainSchema = /*@__PURE__*/
+  messageDesc(file_tailor_v1_staticwebsite_resource, 1);
+
+/**
+ * Describes the enum tailor.v1.CustomDomainStatus.
+ */
+export const CustomDomainStatusSchema = /*@__PURE__*/
+  enumDesc(file_tailor_v1_staticwebsite_resource, 0);
+
+/**
+ * @generated from enum tailor.v1.CustomDomainStatus
+ */
+export const CustomDomainStatus = /*@__PURE__*/
+  tsEnum(CustomDomainStatusSchema);
 
