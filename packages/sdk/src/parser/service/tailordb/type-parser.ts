@@ -1,6 +1,6 @@
 import * as inflection from "inflection";
 import { isPluginGeneratedType } from "@/types/tailordb";
-import { convertHookToExpr, parseFieldConfig, tailorUserMap } from "./field";
+import { parseFieldConfig, stringifyFunction, tailorUserMap } from "./field";
 import { getPrecompiledScriptExpr } from "./hooks-validate-precompiled-expr";
 import { parsePermissions } from "./permission";
 import {
@@ -148,6 +148,23 @@ function parseTailorDBType(
 }
 
 /**
+ * Convert a record-level hook function to a script expression.
+ * Per the platform contract, type-level scripts receive `_input` (record map)
+ * and `user`, not the field-level `_value` / `_data` bindings.
+ * @param fn - Record-level hook function
+ * @returns JavaScript expression that invokes the hook with the platform bindings
+ */
+function convertRecordHookToExpr(fn: (...args: never[]) => unknown): string {
+  const precompiledExpr = getPrecompiledScriptExpr(fn);
+  if (precompiledExpr) {
+    return precompiledExpr;
+  }
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+  const normalized = stringifyFunction(fn as unknown as Function);
+  return `(${normalized})({ data: _input, user: ${tailorUserMap} })`;
+}
+
+/**
  * Convert record-level hooks to OperatorFieldHook with Script expressions.
  * The platform invokes these on create/update at the type level.
  * @param hooks - Record-level hook definitions
@@ -158,10 +175,10 @@ function convertRecordHooks(
 ): OperatorFieldHook | undefined {
   if (!hooks) return undefined;
   const create = hooks.create
-    ? { expr: convertHookToExpr(hooks.create as (...args: never[]) => unknown) }
+    ? { expr: convertRecordHookToExpr(hooks.create as (...args: never[]) => unknown) }
     : undefined;
   const update = hooks.update
-    ? { expr: convertHookToExpr(hooks.update as (...args: never[]) => unknown) }
+    ? { expr: convertRecordHookToExpr(hooks.update as (...args: never[]) => unknown) }
     : undefined;
   if (!create && !update) return undefined;
   return { create, update };
@@ -169,8 +186,8 @@ function convertRecordHooks(
 
 /**
  * Convert record-level validators to OperatorValidateConfig[].
- * Record-level validators use { data, user } signature (no field-specific value).
- * The platform provides _data as the full record, so the same expression template works.
+ * Record-level validators receive the full record via `_input`, mirroring
+ * type-level hook bindings on the platform.
  * @param validators - Record-level validator definitions
  * @returns Parsed validate configs ready for the apply pipeline
  */
@@ -188,7 +205,7 @@ function convertRecordValidators(
       script: {
         expr:
           getPrecompiledScriptExpr(fnRef as (...args: never[]) => unknown) ??
-          `(${fnRef.toString().trim()})({ value: _value, data: _data, user: ${tailorUserMap} })`,
+          `(${fnRef.toString().trim()})({ data: _input, user: ${tailorUserMap} })`,
       },
       errorMessage: message,
     };
