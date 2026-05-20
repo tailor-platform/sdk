@@ -1,31 +1,10 @@
 /**
- * Reproduction test for SDK migration bulk-schema-deploy bug.
+ * Per-migration prePhase must submit the schema state as of that migration,
+ * not the FINAL (post-all-migrations) schema. Removals declared in migration
+ * M must not leak into the prePhase of any earlier migration N (N < M);
+ * deletions are owned by M's postPhase only.
  *
- * Bug:
- *   `executeSingleMigrationPrePhase` (in `./index.ts`) sends the FINAL schema
- *   (= `changeSet.type.updates[].request.tailordbType`) for any type that is
- *   "affected" by the current migration. Because `changeSet` is computed from
- *   local types (post-all-migrations), the FINAL schema already reflects
- *   removals/changes from LATER migrations.
- *
- *   This means: when an early migration's prePhase touches a type T, any field
- *   that LATER migrations remove from T is dropped during that early prePhase.
- *   If an intermediate migration's data script reads such a field, it fails at
- *   runtime with `field 'X' not found`.
- *
- * Per-migration phases (per docs `services/tailordb-migration.md` §"Per-migration phases"):
- *   - Pre-migration: "Type changes that would be breaking are applied in a relaxed form first.
- *                     Non-breaking changes that are part of the same migration are also applied here."
- *   - Script execution
- *   - Post-migration: "Required constraints are enforced; field/type deletions are applied"
- *
- * Expected behavior (per docs):
- *   Migration N's prePhase should only apply N's own changes. Removals from migration M>N
- *   should be deferred to migration M's postPhase.
- *
- * Actual behavior (this test verifies):
- *   Migration N's prePhase sends the FINAL schema for any affected type, so removals
- *   from later migrations are applied during N's prePhase.
+ * See `services/tailordb-migration.md` §"Per-migration phases".
  */
 
 import { describe, test, expect, vi, beforeEach } from "vitest";
@@ -150,7 +129,7 @@ import * as migrationModule from "./migration";
 
 const mockConfig = { path: "/test/tailor.config.ts" } as LoadedConfig;
 
-describe("bug repro: bulk schema deploy in per-migration prePhase", () => {
+describe("per-migration prePhase: schema is scoped to migration[N]", () => {
   function createMockClient() {
     return {
       createTailorDBService: vi.fn().mockResolvedValue({}),
@@ -174,7 +153,7 @@ describe("bug repro: bulk schema deploy in per-migration prePhase", () => {
    *   - migration 1: adds User.permissions field (affects User)
    *   - migration 5: removes User.roles field (affects User)
    *
-   * Both `requiresMigrationScript: false` for simplicity. The bug is in prePhase, not script.
+   * Both `requiresMigrationScript: false` for simplicity; the prePhase request itself is what we assert on.
    * @returns Mock `PlanResults["tailorDB"]` used by `applyTailorDB`.
    */
   function createMockPlanResult() {
@@ -337,22 +316,9 @@ describe("bug repro: bulk schema deploy in per-migration prePhase", () => {
     const client = createMockClient();
     const planResult = createMockPlanResult();
 
-    // Two pending migrations:
-    //   #1: adds User.permissions (affects User)
-    //   #5: removes User.roles (affects User)
-    //
-    // Per `services/tailordb-migration.md` §"Per-migration phases":
-    //   - Pre-migration: only the *current* migration's non-breaking changes are applied
-    //   - Post-migration: field/type deletions are applied
-    //
-    // Therefore, when migration #1's prePhase updates User, the request sent
-    // to the platform MUST still contain the `roles` field (because #5's
-    // removal belongs to #5's postPhase, not #1's prePhase).
-    //
-    // This test fails on the current implementation because
-    // `executeSingleMigrationPrePhase` sends `changeSet.type.updates[].request`
-    // verbatim — that request is built from the local source-of-truth types
-    // (post-all-migrations), so `roles` has already been dropped from it.
+    // #1 adds User.permissions, #5 removes User.roles. The request sent
+    // during #1's prePhase MUST still contain `roles`, because #5's removal
+    // belongs to #5's postPhase.
     vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
       mkAddFieldMigration(1, "User", "permissions"),
       mkRemoveFieldMigration(5, "User", "roles"),
@@ -378,8 +344,7 @@ describe("bug repro: bulk schema deploy in per-migration prePhase", () => {
     expect(fieldNames).toContain("permissions");
     expect(fieldNames).toContain("name");
 
-    // Spec assertion: `roles` must still exist at #1 prePhase time, because
-    // its removal is owned by migration #5's postPhase. (FAILS on current impl)
+    // `roles` must still exist at #1's prePhase: its removal is owned by #5's postPhase.
     expect(fieldNames).toContain("roles");
   });
 
