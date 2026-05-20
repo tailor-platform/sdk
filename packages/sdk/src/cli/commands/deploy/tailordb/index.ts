@@ -1735,12 +1735,11 @@ function toProtoTypeValidate(
 ): MessageInitShape<typeof TailorDBType_TypeValidateSchema> | undefined {
   const validators = type.validate;
   if (!validators || validators.length === 0) return undefined;
-  // The platform exposes a single create/update Script per type, so concatenate
-  // all SDK-side record validators into one script that returns false if any
-  // individual predicate fails. Each predicate emits its own message via the
-  // wrapping conditional.
-  const exprs = validators.map((v) => v.script.expr || "true");
-  const combined = exprs.map((expr) => `(${expr})`).join(" && ");
+  // Each parsed validator script already evaluates to a map (`{}` on success,
+  // `{ _record_<i>: msg }` on failure); merge them so all per-predicate
+  // messages reach the platform.
+  const exprs = validators.map((v) => v.script.expr || "({})");
+  const combined = `Object.assign({}, ${exprs.join(", ")})`;
   const script = { expr: combined };
   return {
     create: script,

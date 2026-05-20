@@ -186,26 +186,33 @@ function convertRecordHooks(
 
 /**
  * Convert record-level validators to OperatorValidateConfig[].
- * Record-level validators receive the full record via `_input`, mirroring
- * type-level hook bindings on the platform.
+ * The platform's type_validate script must return a map (`{ key: errorMessage }`
+ * on failure, `{}` on success). Each SDK-side boolean predicate is wrapped so
+ * the resulting expression contributes a `_record_<i>` entry only when the
+ * predicate fails. Per-predicate expressions are merged later when emitting
+ * the proto manifest so a single failing validator surfaces its message
+ * without masking the others.
  * @param validators - Record-level validator definitions
  * @returns Parsed validate configs ready for the apply pipeline
  */
 function convertRecordValidators(
   validators: NonNullable<TailorDBTypeSchemaOutput["metadata"]["validate"]>,
 ): OperatorValidateConfig[] {
-  return validators.map((v) => {
+  return validators.map((v, index) => {
     const { fn, message } =
       typeof v === "function"
         ? { fn: v, message: `failed by \`${v.toString().trim()}\`` }
         : { fn: v[0], message: v[1] as string };
     // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
     const fnRef = fn as Function;
+    const predicate =
+      getPrecompiledScriptExpr(fnRef as (...args: never[]) => unknown) ??
+      `(${fnRef.toString().trim()})({ data: _input, user: ${tailorUserMap} })`;
+    const key = `_record_${index}`;
+    const errorLiteral = JSON.stringify(message);
     return {
       script: {
-        expr:
-          getPrecompiledScriptExpr(fnRef as (...args: never[]) => unknown) ??
-          `(${fnRef.toString().trim()})({ data: _input, user: ${tailorUserMap} })`,
+        expr: `((${predicate}) ? {} : { ${JSON.stringify(key)}: ${errorLiteral} })`,
       },
       errorMessage: message,
     };

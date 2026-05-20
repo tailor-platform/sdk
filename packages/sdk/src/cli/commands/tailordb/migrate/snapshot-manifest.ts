@@ -199,8 +199,10 @@ function toProtoSnapshotTypeValidate(
   snapshotType: SnapshotType,
 ): MessageInitShape<typeof TailorDBType_TypeValidateSchema> | undefined {
   if (!snapshotType.validate || snapshotType.validate.length === 0) return undefined;
-  const exprs = snapshotType.validate.map((v) => v.script.expr || "true");
-  const combined = exprs.map((expr) => `(${expr})`).join(" && ");
+  // Each snapshot validator script already evaluates to a map; merge them so
+  // the resulting type_validate script returns a single combined object.
+  const exprs = snapshotType.validate.map((v) => v.script.expr || "({})");
+  const combined = `Object.assign({}, ${exprs.join(", ")})`;
   const script = { expr: combined };
   return {
     create: script,

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "namespace": "tailordb",
-  "createdAt": "2026-05-20T22:15:30.455Z",
+  "createdAt": "2026-05-20T22:42:11.842Z",
   "changes": [
     {
       "kind": "field_modified",
@@ -83,13 +83,13 @@
         "validate": [
           {
             "script": {
-              "expr": "(({data})=>data.name.length>5)({ data: _input, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+              "expr": "(((({data})=>data.name.length>5)({ data: _input, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })) ? {} : { \"_record_0\": \"Name must be longer than 5 characters\" })"
             },
             "errorMessage": "Name must be longer than 5 characters"
           },
           {
             "script": {
-              "expr": "(({data})=>data.city?data.city.length>1&&data.city.length<100:true)({ data: _input, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
+              "expr": "(((({data})=>data.city?data.city.length>1&&data.city.length<100:true)({ data: _input, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })) ? {} : { \"_record_1\": \"failed by `({data})=>data.city?data.city.length>1&&data.city.length<100:true`\" })"
             },
             "errorMessage": "failed by `({data})=>data.city?data.city.length>1&&data.city.length<100:true`"
           }
