@@ -4,15 +4,15 @@ import type { DescField, DescMessage, DescMethodUnary } from "@bufbuild/protobuf
 
 // `tailor-sdk api` issues a single JSON POST and reads one JSON response, so
 // only unary RPCs can be invoked. Streaming methods are filtered out of all
-// discovery surfaces (`api list`, `api inspect`).
-function unaryMethods(): DescMethodUnary[] {
-  return OperatorService.methods.filter((m): m is DescMethodUnary => m.methodKind === "unary");
-}
+// discovery surfaces (`api list`, `api inspect`). `OperatorService.methods`
+// is invariant at runtime, so we filter once and reuse — completion-script
+// generation walks every method and would otherwise re-filter per call.
+const UNARY_METHODS: DescMethodUnary[] = OperatorService.methods.filter(
+  (m): m is DescMethodUnary => m.methodKind === "unary",
+);
 
 export function listMethodNames(): string[] {
-  return unaryMethods()
-    .map((m) => m.name)
-    .sort();
+  return UNARY_METHODS.map((m) => m.name).sort();
 }
 
 /**
@@ -24,13 +24,11 @@ export function listMethodNames(): string[] {
  * @returns Sorted list of accepted endpoint values
  */
 export function listMethodChoices(): string[] {
-  return unaryMethods()
-    .flatMap((m) => [m.name, `${OperatorService.typeName}/${m.name}`])
-    .sort();
+  return UNARY_METHODS.flatMap((m) => [m.name, `${OperatorService.typeName}/${m.name}`]).sort();
 }
 
 export function getMethodDescriptor(methodName: string): DescMethodUnary | undefined {
-  return unaryMethods().find((m) => m.name === methodName);
+  return UNARY_METHODS.find((m) => m.name === methodName);
 }
 
 export function extractMethodName(endpoint: string): string {
