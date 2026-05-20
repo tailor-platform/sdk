@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "namespace": "tailordb",
+  "createdAt": "2026-05-20T20:58:48.481Z",
+  "changes": [
+    {
+      "kind": "field_modified",
+      "typeName": "Customer",
+      "fieldName": "createdAt",
+      "before": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp",
+        "hooks": {
+          "create": {
+            "expr": "new Date()"
+          }
+        }
+      },
+      "after": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp"
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "Customer",
+      "fieldName": "updatedAt",
+      "before": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp",
+        "hooks": {
+          "update": {
+            "expr": "new Date()"
+          }
+        }
+      },
+      "after": {
+        "type": "datetime",
+        "required": false,
+        "description": "Record last update timestamp"
+      }
+    }
+  ],
+  "hasBreakingChanges": false,
+  "breakingChanges": [],
+  "requiresMigrationScript": false
+}
