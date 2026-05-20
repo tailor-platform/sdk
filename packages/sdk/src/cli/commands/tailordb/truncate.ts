@@ -106,7 +106,7 @@ async function $truncate(options?: InternalTruncateOptions): Promise<void> {
     if (!options?.yes) {
       const namespaceList = namespaces.join(", ");
       const confirmation = await prompt.confirm({
-        message: `This will truncate ALL tables in the following namespaces: ${namespaceList}. Continue?`,
+        message: `This will truncate ALL tables in the following owned namespaces (external namespaces are excluded): ${namespaceList}. Continue?`,
         default: false,
       });
       if (!confirmation) {
@@ -118,7 +118,7 @@ async function $truncate(options?: InternalTruncateOptions): Promise<void> {
     for (const namespace of namespaces) {
       await truncateNamespace(workspaceId, namespace, client);
     }
-    logger.success("Truncated all tables in all namespaces");
+    logger.success("Truncated all tables in all owned namespaces");
     return;
   }
 
