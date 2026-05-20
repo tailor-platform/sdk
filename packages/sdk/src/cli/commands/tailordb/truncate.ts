@@ -3,7 +3,7 @@ import { z } from "zod";
 import { confirmationArgs, deploymentArgs } from "@/cli/shared/args";
 import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
-import { extractAllNamespaces } from "@/cli/shared/config";
+import { extractOwnedNamespaces } from "@/cli/shared/config";
 import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
@@ -94,7 +94,7 @@ async function $truncate(options?: InternalTruncateOptions): Promise<void> {
 
   // Validate config and get namespaces before confirmation
   const { config } = await loadConfig(options?.configPath);
-  const namespaces = extractAllNamespaces(config);
+  const namespaces = extractOwnedNamespaces(config);
 
   // Handle --all flag
   if (hasAll) {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { extractAllNamespaces } from "./config";
+import { extractAllNamespaces, extractOwnedNamespaces } from "./config";
 import { type LoadedConfig } from "./config-loader";
 
 function createConfig(overrides: Partial<LoadedConfig>): LoadedConfig {
@@ -27,6 +27,35 @@ describe("extractAllNamespaces", () => {
     expect(extractAllNamespaces(config)).toEqual(["tailordb", "analytics"]);
   });
 
+  test("includes external namespaces", () => {
+    const config = createConfig({
+      db: {
+        owned: { files: ["./owned/*.ts"] },
+        "shared-db": { external: true },
+      },
+    });
+
+    expect(extractAllNamespaces(config)).toEqual(["owned", "shared-db"]);
+  });
+});
+
+describe("extractOwnedNamespaces", () => {
+  test("returns empty array when db is not configured", () => {
+    const config = createConfig({});
+    expect(extractOwnedNamespaces(config)).toEqual([]);
+  });
+
+  test("extracts all owned db namespace names", () => {
+    const config = createConfig({
+      db: {
+        tailordb: { files: ["./tailordb/*.ts"] },
+        analytics: { files: ["./analytics/*.ts"] },
+      },
+    });
+
+    expect(extractOwnedNamespaces(config)).toEqual(["tailordb", "analytics"]);
+  });
+
   test("excludes external namespaces", () => {
     const config = createConfig({
       db: {
@@ -35,6 +64,6 @@ describe("extractAllNamespaces", () => {
       },
     });
 
-    expect(extractAllNamespaces(config)).toEqual(["owned"]);
+    expect(extractOwnedNamespaces(config)).toEqual(["owned"]);
   });
 });
