@@ -1,6 +1,26 @@
 import { execFileSync } from "node:child_process";
+import crypto from "node:crypto";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { getPinnedPackageManager } from "../../shared/helpers";
 
-const IMAGE_NAME = "llm-challenge-runner";
+const challengeRoot = path.resolve(import.meta.dirname, "..", "..");
+
+/**
+ * Image tag derived from the Containerfile content hash so that any edit to
+ * `getContainerfileContent()` (e.g. pnpm pin bumps) forces a rebuild on the
+ * next run without manual cleanup. The fallback `latest` tag stays alive for
+ * older clones that don't compute the hash, but it is never read directly.
+ */
+function getImageName(): string {
+  const hash = crypto
+    .createHash("sha256")
+    .update(getContainerfileContent())
+    .digest("hex")
+    .slice(0, 12);
+  return `llm-challenge-runner:${hash}`;
+}
 
 /**
  * Fixed working directory inside the container.
@@ -49,10 +69,19 @@ export function checkPodmanAvailability(): PodmanStatus {
 }
 
 export function getContainerfileContent(): string {
+  // Pin the container's pnpm to whatever the monorepo declares in its
+  // `packageManager` field. The host runs `pnpm install` with this exact
+  // version before mounting the workDir, and the workDir's package.json
+  // carries the same `packageManager` spec, so the agent's in-container
+  // `pnpm <cmd>` calls never (a) corepack-download a new "latest" mid-solve
+  // or (b) recreate `node_modules` because the recorded pnpm version differs
+  // from the one that produced it. Falls back to `latest` only when the
+  // monorepo somehow lacks a pinned spec (shouldn't happen).
+  const pnpmSpec = getPinnedPackageManager(challengeRoot) ?? "pnpm@latest";
   return [
     "FROM node:22-slim",
     "RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*",
-    "RUN corepack enable && corepack prepare pnpm@latest --activate",
+    `RUN corepack enable && corepack prepare ${pnpmSpec} --activate`,
     "RUN npm install -g @openai/codex",
     // Pre-create the writable CODEX_HOME slot before switching to non-root user.
     // The host's auth.json is bind-mounted read-only at runtime; codex itself
@@ -74,7 +103,7 @@ export function ensureImage(): Promise<void> {
   if (!imagePromise) {
     imagePromise = (async () => {
       try {
-        execFileSync("podman", ["image", "exists", IMAGE_NAME], {
+        execFileSync("podman", ["image", "exists", getImageName()], {
           stdio: "pipe",
           timeout: 10_000,
         });
@@ -85,11 +114,22 @@ export function ensureImage(): Promise<void> {
 
       console.log("Building container image (first run)...");
       const containerfile = getContainerfileContent();
-      execFileSync("podman", ["build", "-t", IMAGE_NAME, "-f", "-", "."], {
-        input: containerfile,
-        stdio: ["pipe", "inherit", "inherit"],
-        timeout: 300_000,
-      });
+      // Use an empty scratch directory as the build context. The Containerfile
+      // has no COPY/ADD instructions, but `podman build .` would tar up the
+      // caller's CWD (typically the SDK monorepo root) -- which contains
+      // symlinks like `node_modules/@tailor-platform/sdk -> ../packages/sdk`
+      // that podman refuses to follow out of the context root, aborting the
+      // build entirely.
+      const contextDir = fs.mkdtempSync(path.join(os.tmpdir(), "llm-challenge-build-"));
+      try {
+        execFileSync("podman", ["build", "-t", getImageName(), "-f", "-", contextDir], {
+          input: containerfile,
+          stdio: ["pipe", "inherit", "inherit"],
+          timeout: 300_000,
+        });
+      } finally {
+        fs.rmSync(contextDir, { recursive: true, force: true });
+      }
       console.log("Container image built successfully.");
     })().catch((err: unknown) => {
       // Clear cached promise so the next call retries the build
@@ -136,7 +176,7 @@ export function buildContainerRunArgs(
   // ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY when the solver re-runs install.
   args.push("--env", "CI=true");
 
-  args.push(IMAGE_NAME);
+  args.push(getImageName());
   args.push("codex", ...cliArgs);
 
   return args;

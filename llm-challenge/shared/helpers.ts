@@ -115,6 +115,26 @@ export function getSdkVersion(challengeRoot: string): string | undefined {
 }
 
 /**
+ * Read the host repository's pinned `packageManager` (e.g. `"pnpm@10.33.4"`)
+ * from the monorepo root `package.json`. Both the harness and the container
+ * pin to this exact spec so the agent's `pnpm <cmd>` calls inside the
+ * container do not (a) trigger a corepack re-download of a newer "latest" or
+ * (b) recreate `node_modules` because pnpm's metadata differs from the host
+ * install. Returns undefined if the field is missing.
+ */
+export function getPinnedPackageManager(challengeRoot: string): string | undefined {
+  try {
+    const rootPkgPath = path.join(challengeRoot, "..", "package.json");
+    const rootPkg = JSON.parse(fs.readFileSync(rootPkgPath, "utf-8")) as {
+      packageManager?: string;
+    };
+    return rootPkg.packageManager;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Replace filename-unsafe characters with dashes.
  */
 export function sanitizeForFilename(label: string): string {

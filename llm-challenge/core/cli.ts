@@ -8,6 +8,7 @@ import {
   copyDir,
   createTimestampId,
   formatDuration,
+  getPinnedPackageManager,
   getSdkVersion,
   listProblems,
   problemKey,
@@ -547,6 +548,17 @@ function rewriteWorkspaceRefs(workDir: string, tarballPath?: string): void {
         deps[key] = ref;
       }
     }
+  }
+  // Pin the workDir's pnpm to the same version the monorepo uses so the
+  // agent's in-container `pnpm <cmd>` invocations don't (a) trigger a corepack
+  // re-download of a newer "latest" or (b) recreate `node_modules` because the
+  // host-install metadata records a different pnpm version. Without this,
+  // every `pnpm tailor-sdk <cmd>` inside the container costs ~30–60 s and can
+  // SIGKILL mid-install, burning turns and retries (most visibly on h13, m20,
+  // m22 in the previous sweep).
+  const pinnedPm = getPinnedPackageManager(challengeRoot);
+  if (pinnedPm) {
+    pkg.packageManager = pinnedPm;
   }
   fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + "\n");
 

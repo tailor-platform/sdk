@@ -63,7 +63,7 @@ describe("buildContainerRunArgs", () => {
     expect(args).toContain("run");
     expect(args).toContain("--rm");
 
-    const imageIdx = args.indexOf("llm-challenge-runner");
+    const imageIdx = args.findIndex((a) => a.startsWith("llm-challenge-runner:"));
     expect(imageIdx).toBeGreaterThan(0);
     expect(args[imageIdx + 1]).toBe("codex");
     expect(args[imageIdx + 2]).toBe("exec");
