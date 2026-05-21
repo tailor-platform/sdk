@@ -9,6 +9,7 @@ import {
   type MigrationDiff,
   type DiffChange,
   type BreakingChangeInfo,
+  type WarningChangeInfo,
   SCHEMA_SNAPSHOT_VERSION,
 } from "./diff-calculator";
 import type { SchemaDrift } from "./types";
@@ -739,7 +740,17 @@ export function loadSnapshot(filePath: string): SchemaSnapshot {
  */
 export function loadDiff(filePath: string): MigrationDiff {
   const content = fs.readFileSync(filePath, "utf-8");
-  return JSON.parse(content) as MigrationDiff;
+  const parsed = JSON.parse(content) as MigrationDiff;
+  // Backfill fields introduced after the initial diff.json schema so that older
+  // migrations on disk remain readable without manual edits. hasWarnings is
+  // derived from the warnings array to stay consistent even if a hand-edited
+  // diff.json sets one side without the other.
+  const warnings = parsed.warnings ?? [];
+  return {
+    ...parsed,
+    warnings,
+    hasWarnings: warnings.length > 0,
+  };
 }
 
 /**
@@ -1215,11 +1226,12 @@ function isBreakingFieldChange(
 }
 
 /**
- * Context for collecting diff changes and breaking changes
+ * Context for collecting diff changes, breaking changes, and warnings
  */
 interface DiffContext {
   changes: DiffChange[];
   breakingChanges: BreakingChangeInfo[];
+  warnings: WarningChangeInfo[];
 }
 
 function addChange(
@@ -1230,11 +1242,23 @@ function addChange(
 ): void {
   ctx.changes.push(change);
 
-  if (change.fieldName) {
-    const breaking = isBreakingFieldChange(change.typeName, change.fieldName, oldField, newField);
-    if (breaking) {
-      ctx.breakingChanges.push(breaking);
-    }
+  if (!change.fieldName) return;
+
+  const breaking = isBreakingFieldChange(change.typeName, change.fieldName, oldField, newField);
+  if (breaking) {
+    ctx.breakingChanges.push(breaking);
+    return;
+  }
+
+  // Non-breaking removal still risks data loss: surface as a warning so users
+  // can decide whether to add a migration script (e.g. JOIN through a
+  // soon-to-be-dropped foreign key before it disappears).
+  if (change.kind === "field_removed") {
+    ctx.warnings.push({
+      typeName: change.typeName,
+      fieldName: change.fieldName,
+      reason: "Field removed (existing data will be dropped in the post-migration phase)",
+    });
   }
 }
 
@@ -1559,7 +1583,7 @@ export function compareSnapshots(previous: SchemaSnapshot, current: SchemaSnapsh
   for (const type of Object.values(previous.types)) normalizeSnapshotType(type);
   for (const type of Object.values(current.types)) normalizeSnapshotType(type);
 
-  const ctx: DiffContext = { changes: [], breakingChanges: [] };
+  const ctx: DiffContext = { changes: [], breakingChanges: [], warnings: [] };
 
   const previousTypeNames = new Set(Object.keys(previous.types));
   const currentTypeNames = new Set(Object.keys(current.types));
@@ -1582,6 +1606,11 @@ export function compareSnapshots(previous: SchemaSnapshot, current: SchemaSnapsh
         kind: "type_removed",
         typeName,
         before: previous.types[typeName],
+      });
+      ctx.warnings.push({
+        typeName,
+        reason:
+          "Type removed (all records of this type will be dropped in the post-migration phase)",
       });
     }
   }
@@ -1636,6 +1665,8 @@ export function compareSnapshots(previous: SchemaSnapshot, current: SchemaSnapsh
     changes: ctx.changes,
     hasBreakingChanges: ctx.breakingChanges.length > 0,
     breakingChanges: ctx.breakingChanges,
+    hasWarnings: ctx.warnings.length > 0,
+    warnings: ctx.warnings,
     requiresMigrationScript: ctx.breakingChanges.length > 0,
   };
 }

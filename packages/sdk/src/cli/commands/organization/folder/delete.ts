@@ -5,6 +5,7 @@ import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { prompt } from "@/cli/shared/prompt";
+import { assertWritable } from "@/cli/shared/readonly-guard";
 
 const deleteFolderOptionsSchema = z.object({
   organizationId: z.uuid({ message: "organization-id must be a valid UUID" }),
@@ -44,6 +45,7 @@ export const deleteCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
+    await assertWritable();
     const accessToken = await loadAccessToken();
     const client = await initOperatorClient(accessToken);
 

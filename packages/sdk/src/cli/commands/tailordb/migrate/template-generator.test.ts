@@ -137,6 +137,8 @@ describe("template-generator", () => {
         ],
         hasBreakingChanges: false,
         breakingChanges: [],
+        hasWarnings: false,
+        warnings: [],
         requiresMigrationScript: false,
       };
 
@@ -175,6 +177,8 @@ describe("template-generator", () => {
             reason: "Required field added",
           },
         ],
+        hasWarnings: false,
+        warnings: [],
         requiresMigrationScript: true,
       };
 
@@ -203,6 +207,8 @@ describe("template-generator", () => {
         changes: [],
         hasBreakingChanges: false,
         breakingChanges: [],
+        hasWarnings: false,
+        warnings: [],
         requiresMigrationScript: false,
       };
 
@@ -245,6 +251,8 @@ describe("template-generator", () => {
         ],
         hasBreakingChanges: false,
         breakingChanges: [],
+        hasWarnings: false,
+        warnings: [],
         requiresMigrationScript: false,
       };
 
@@ -293,6 +301,8 @@ describe("template-generator", () => {
             reason: "Unique constraint added to field",
           },
         ],
+        hasWarnings: false,
+        warnings: [],
         requiresMigrationScript: true,
       };
 
@@ -354,6 +364,8 @@ describe("template-generator", () => {
             reason: "Enum values removed: CANCELLED",
           },
         ],
+        hasWarnings: false,
+        warnings: [],
         requiresMigrationScript: true,
       };
 
@@ -375,6 +387,8 @@ describe("template-generator", () => {
         changes: [],
         hasBreakingChanges: false,
         breakingChanges: [],
+        hasWarnings: false,
+        warnings: [],
         requiresMigrationScript: false,
       };
 
@@ -408,6 +422,8 @@ describe("template-generator", () => {
             reason: "Required field added",
           },
         ],
+        hasWarnings: false,
+        warnings: [],
         requiresMigrationScript: true,
       };
 

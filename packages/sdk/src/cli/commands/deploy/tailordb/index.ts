@@ -44,8 +44,11 @@ import {
   formatMigrationDiff,
   formatDiffSummary,
   type MigrationDiff,
-  type DiffChange,
 } from "@/cli/commands/tailordb/migrate/diff-calculator";
+import {
+  applyPreMigrationFieldAdjustments,
+  buildPreMigrationChangesMap,
+} from "@/cli/commands/tailordb/migrate/pre-migration-schema";
 import {
   reconstructSnapshotFromMigrations,
   compareLocalTypesWithSnapshot,
@@ -54,6 +57,7 @@ import {
   compareRemoteWithSnapshot,
   formatSchemaDrifts,
   createSnapshotType,
+  getLatestMigrationNumber,
   isSnapshotFieldRefOperand,
   type SchemaSnapshot,
   type SnapshotFieldConfig,
@@ -92,7 +96,6 @@ import type {
   RemoteSchemaVerificationResult,
 } from "@/cli/commands/tailordb/migrate/types";
 import type { LoadedConfig } from "@/cli/shared/config-loader";
-import type { EnumValue } from "@/types/field-types";
 import type { GqlOperations, TailorDBServiceConfig } from "@/types/tailordb.generated";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
@@ -242,6 +245,11 @@ function formatRemoteVerificationResults(results: RemoteSchemaVerificationResult
 // Migration Validation
 // ============================================================================
 
+type ValidateAndDetectResult = {
+  pendingMigrations: PendingMigration[];
+  namespacesWithMigrations: NamespaceWithMigrations[];
+};
+
 /**
  * Validate migration files and detect pending migrations
  * @param {OperatorClient} client - Operator client instance
@@ -249,7 +257,7 @@ function formatRemoteVerificationResults(results: RemoteSchemaVerificationResult
  * @param {ReadonlyMap<string, Record<string, TailorDBSnapshotType>>} typesByNamespace - Types by namespace
  * @param {LoadedConfig} config - Loaded application config (includes path)
  * @param {boolean} noSchemaCheck - Whether to skip schema diff check
- * @returns {Promise<PendingMigration[]>} List of pending migrations
+ * @returns {Promise<ValidateAndDetectResult>} Pending migrations and namespaces that have migration directories configured
  */
 async function validateAndDetectMigrations(
   client: OperatorClient,
@@ -257,7 +265,7 @@ async function validateAndDetectMigrations(
   typesByNamespace: ReadonlyMap<string, Record<string, TailorDBSnapshotType>>,
   config: LoadedConfig,
   noSchemaCheck: boolean,
-): Promise<PendingMigration[]> {
+): Promise<ValidateAndDetectResult> {
   const configDir = path.dirname(config.path);
   const namespacesWithMigrations = getNamespacesWithMigrations(config, configDir);
   let pendingMigrations: PendingMigration[] = [];
@@ -318,9 +326,9 @@ async function validateAndDetectMigrations(
     if (pendingMigrations.length > 0) {
       logger.newline();
 
-      // Classify migrations by whether they require migration scripts
-      const withScripts = pendingMigrations.filter((m) => m.diff.requiresMigrationScript);
-      const withoutScripts = pendingMigrations.filter((m) => !m.diff.requiresMigrationScript);
+      // Classify migrations by whether a migrate.ts will run for them.
+      const withScripts = pendingMigrations.filter((m) => m.hasScript);
+      const withoutScripts = pendingMigrations.filter((m) => !m.hasScript);
 
       logger.info(`Applying ${pendingMigrations.length} migration(s):`);
       if (withoutScripts.length > 0) {
@@ -338,7 +346,42 @@ async function validateAndDetectMigrations(
     }
   }
 
-  return pendingMigrations;
+  return { pendingMigrations, namespacesWithMigrations };
+}
+
+/**
+ * Reconcile the on-remote migration label with the working tree's latest
+ * migration number for each namespace.
+ *
+ * Used after a `--no-schema-check` apply: that flag skips the local/remote
+ * snapshot drift checks, but if it also leaves the label untouched the remote
+ * label can drift past the working tree's latest migration (e.g. when
+ * checking out an older revision and re-deploying). A subsequent run would
+ * then reconstruct the expected snapshot at a label that no longer exists in
+ * the working tree, triggering a false drift error.
+ *
+ * Always force `label = working_tree_max` regardless of the previous label so
+ * the invariant `label <= working_tree_max` is preserved.
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ * @param namespacesWithMigrations - Namespaces that have migration directories configured
+ */
+async function reconcileMigrationLabels(
+  client: OperatorClient,
+  workspaceId: string,
+  namespacesWithMigrations: NamespaceWithMigrations[],
+): Promise<void> {
+  for (const { namespace, migrationsDir } of namespacesWithMigrations) {
+    const targetVersion = getLatestMigrationNumber(migrationsDir);
+    const currentVersion = await getRemoteMigrationNumber(client, workspaceId, namespace);
+    await updateMigrationLabel(client, workspaceId, namespace, targetVersion);
+    if (currentVersion !== targetVersion) {
+      const from = currentVersion === null ? "<unset>" : formatMigrationNumber(currentVersion);
+      logger.info(
+        `Migration label for namespace ${namespace} reconciled: ${from} → ${formatMigrationNumber(targetVersion)}.`,
+      );
+    }
+  }
 }
 
 /**
@@ -399,7 +442,7 @@ export async function applyTailorDB(
       typesByNamespace.set(tailordb.namespace, tailordb.types);
     }
 
-    const pendingMigrations = await validateAndDetectMigrations(
+    const { pendingMigrations, namespacesWithMigrations } = await validateAndDetectMigrations(
       client,
       migrationContext.workspaceId,
       typesByNamespace,
@@ -419,9 +462,7 @@ export async function applyTailorDB(
       // Step 1: Create/update services once at the beginning (services don't need per-migration handling)
       await executeServicesCreation(client, changeSet);
 
-      const migrationsRequiringScripts = pendingMigrations.filter(
-        (m) => m.diff.requiresMigrationScript,
-      );
+      const migrationsRequiringScripts = pendingMigrations.filter((m) => m.hasScript);
 
       // Step 2: Build migration context for script execution (if any migrations require scripts)
       const migrationCtx =
@@ -445,8 +486,8 @@ export async function applyTailorDB(
           migrationContext.executorUsedTypes,
         );
 
-        // Script execution (only if this migration requires a script)
-        if (migration.diff.requiresMigrationScript && migrationCtx) {
+        // Script execution (only if migrate.ts exists for this migration)
+        if (migration.hasScript && migrationCtx) {
           await executeMigrations(migrationCtx, [migration]);
         }
 
@@ -530,6 +571,19 @@ export async function applyTailorDB(
         changeSet.type.deletes.map((del) => client.deleteTailorDBType(del.request)),
       );
     }
+
+    // When schema checks are skipped, force-reconcile the migration label so
+    // that the invariant `label <= working_tree_max` always holds. Without
+    // this, a `--no-schema-check` deploy from an older revision can leave a
+    // stale label that breaks the next snapshot reconstruction (see
+    // verifyRemoteSchema).
+    if (migrationContext.noSchemaCheck && namespacesWithMigrations.length > 0) {
+      await reconcileMigrationLabels(
+        client,
+        migrationContext.workspaceId,
+        namespacesWithMigrations,
+      );
+    }
   } else if (phase === "delete-resources") {
     // Delete GQL permissions first, then types
     await Promise.all(
@@ -568,111 +622,6 @@ function handleOptionalToRequiredError(error: unknown, messages: string[]): neve
     }
   }
   throw error;
-}
-
-// ============================================================================
-// Pre-Migration Support
-// ============================================================================
-
-/**
- * Map of breaking changes: typeName -> fieldName -> change kind
- */
-type BreakingChangesMap = Map<string, Map<string, DiffChange>>;
-
-/**
- * Build a map of breaking field changes from pending migrations
- * @param {PendingMigration[]} pendingMigrations - Pending migrations
- * @returns {BreakingChangesMap} Map of breaking changes
- */
-function buildBreakingChangesMap(pendingMigrations: PendingMigration[]): BreakingChangesMap {
-  const map: BreakingChangesMap = new Map();
-
-  for (const migration of pendingMigrations) {
-    for (const change of migration.diff.changes) {
-      // We care about field changes that affect required status
-      if (
-        change.kind === "field_added" ||
-        change.kind === "field_modified" ||
-        change.kind === "field_removed"
-      ) {
-        if (!change.fieldName) continue;
-
-        if (!map.has(change.typeName)) {
-          map.set(change.typeName, new Map());
-        }
-        map.get(change.typeName)!.set(change.fieldName, change);
-      }
-    }
-  }
-
-  return map;
-}
-
-/**
- * Field config type for breaking change detection
- */
-interface FieldConfig {
-  required?: boolean;
-  unique?: boolean;
-  allowedValues?: EnumValue[];
-}
-
-/**
- * Apply pre-migration schema adjustments to avoid breaking changes before scripts run.
- * @param fields - Field configs to adjust
- * @param typeChanges - Breaking changes for a type
- */
-function applyPreMigrationFieldAdjustments(
-  fields: Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>>,
-  typeChanges: Map<string, DiffChange>,
-): void {
-  for (const [fieldName, change] of typeChanges) {
-    const field = fields[fieldName];
-    if (!field) continue;
-
-    const before = change.before as FieldConfig | undefined;
-    const after = change.after as FieldConfig | undefined;
-
-    if (change.kind === "field_added" && after?.required) {
-      field.required = false;
-    }
-
-    if (change.kind !== "field_modified") {
-      continue;
-    }
-
-    // Optional to required
-    if (!before?.required && after?.required) {
-      field.required = false;
-    }
-
-    // Unique constraint added
-    if (!(before?.unique ?? false) && (after?.unique ?? false)) {
-      field.unique = false;
-    }
-
-    // Enum values removed: keep old values + add new values (union)
-    if (before?.allowedValues && after?.allowedValues) {
-      const afterValues = new Set(after.allowedValues.map((v) => v.value));
-      const removedValues = before.allowedValues.filter((v) => !afterValues.has(v.value));
-      if (removedValues.length > 0) {
-        // Create union of all values, preserving descriptions where available
-        const valueMap = new Map<string, string>();
-        for (const v of before.allowedValues) {
-          valueMap.set(v.value, v.description ?? "");
-        }
-        for (const v of after.allowedValues) {
-          if (!valueMap.has(v.value)) {
-            valueMap.set(v.value, v.description ?? "");
-          }
-        }
-        field.allowedValues = Array.from(valueMap.entries()).map(([value, description]) => ({
-          value,
-          description,
-        }));
-      }
-    }
-  }
 }
 
 // ============================================================================
@@ -812,8 +761,10 @@ async function executeSingleMigrationPrePhase(
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
   executorUsedTypes: ReadonlySet<string>,
 ): Promise<void> {
-  // Build breaking changes map for this single migration
-  const breakingChanges = buildBreakingChangesMap([migration]);
+  // Build pre-migration changes map for this single migration. Includes both
+  // breaking changes (required-add, unique-add, enum value removal) and the
+  // warning-tier field_removed, since the Pre-phase relaxes both.
+  const preMigrationChanges = buildPreMigrationChangesMap([migration]);
   const affectedTypes = getAffectedTypeNames(migration);
   const createdBeforeMigration = new Set(processedTypes.created);
 
@@ -834,7 +785,7 @@ async function executeSingleMigrationPrePhase(
         const clonedRequest = structuredClone(create.request);
         clonedRequest.tailordbType = snapshotType;
 
-        const typeChanges = typeName ? breakingChanges.get(typeName) : undefined;
+        const typeChanges = typeName ? preMigrationChanges.get(typeName) : undefined;
         if (typeChanges && typeChanges.size > 0 && clonedRequest.tailordbType?.schema?.fields) {
           applyPreMigrationFieldAdjustments(clonedRequest.tailordbType.schema.fields, typeChanges);
         }
@@ -856,7 +807,7 @@ async function executeSingleMigrationPrePhase(
         if (typeName) processedTypes.updated.add(typeName);
 
         const clonedTypeRequest = structuredClone(snapshotType);
-        const typeChanges = typeName ? breakingChanges.get(typeName) : undefined;
+        const typeChanges = typeName ? preMigrationChanges.get(typeName) : undefined;
         if (typeChanges && typeChanges.size > 0 && clonedTypeRequest.schema?.fields) {
           applyPreMigrationFieldAdjustments(clonedTypeRequest.schema.fields, typeChanges);
         }
@@ -884,7 +835,7 @@ async function executeSingleMigrationPrePhase(
         const clonedRequest = structuredClone(update.request);
         clonedRequest.tailordbType = snapshotType;
 
-        const typeChanges = typeName ? breakingChanges.get(typeName) : undefined;
+        const typeChanges = typeName ? preMigrationChanges.get(typeName) : undefined;
         if (typeChanges && typeChanges.size > 0 && clonedRequest.tailordbType?.schema?.fields) {
           applyPreMigrationFieldAdjustments(clonedRequest.tailordbType.schema.fields, typeChanges);
         }
@@ -963,8 +914,9 @@ async function executeSingleMigrationPostPhase(
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
   executorUsedTypes: ReadonlySet<string>,
 ): Promise<void> {
-  // Build breaking changes map for this single migration
-  const breakingChanges = buildBreakingChangesMap([migration]);
+  // Re-use the pre-migration changes map to know which types were touched in
+  // this migration (so we send the post-phase final-schema update for them).
+  const preMigrationChanges = buildPreMigrationChangesMap([migration]);
   const affectedTypes = getAffectedTypeNames(migration);
   const deletedTypeNames = getDeletedTypeNames(migration);
 
@@ -974,11 +926,11 @@ async function executeSingleMigrationPostPhase(
   // take effect after the data script has reconciled records.
   try {
     await Promise.all([
-      // For newly created types that had breaking changes in this migration, send update with snapshot[N] values
+      // For newly created types that had pre-migration adjustments in this migration, send update with snapshot[N] values
       ...changeSet.type.creates
         .filter((create) => {
           const typeName = create.request.tailordbType?.name;
-          return typeName && affectedTypes.has(typeName) && breakingChanges.has(typeName);
+          return typeName && affectedTypes.has(typeName) && preMigrationChanges.has(typeName);
         })
         .map((create) => {
           const typeName = create.request.tailordbType?.name;
@@ -996,7 +948,7 @@ async function executeSingleMigrationPostPhase(
       ...changeSet.type.updates
         .filter((update) => {
           const typeName = update.request.tailordbType?.name;
-          return typeName && affectedTypes.has(typeName) && breakingChanges.has(typeName);
+          return typeName && affectedTypes.has(typeName) && preMigrationChanges.has(typeName);
         })
         .map((update) => {
           const typeName = update.request.tailordbType?.name;

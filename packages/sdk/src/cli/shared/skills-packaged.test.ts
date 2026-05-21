@@ -4,7 +4,7 @@ import { resolve } from "pathe";
 import { describe, expect, it } from "vitest";
 
 const sdkRoot = resolve(import.meta.dirname, "..", "..", "..");
-const skillsRoot = resolve(sdkRoot, "skills");
+const skillsRoot = resolve(sdkRoot, "agent-skills");
 
 const NODE_MODULES_REF_PATTERN = /node_modules\/@tailor-platform\/sdk\/([^\s`)]+)/g;
 

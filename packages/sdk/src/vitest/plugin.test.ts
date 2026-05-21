@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { isAbsolute } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { createBlockPlugin, createEnvironmentPlugin } from "../plugin";
+import { createBlockPlugin, createEnvironmentPlugin } from "./plugin";
 
 type ImportNode = {
   type: "ImportDeclaration" | "ExportNamedDeclaration" | "ExportAllDeclaration";
