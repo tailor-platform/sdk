@@ -48,7 +48,9 @@ import {
 } from "@/cli/commands/tailordb/migrate/diff-calculator";
 import {
   applyPreMigrationFieldAdjustments,
+  applyPreMigrationRelationshipAdjustments,
   buildPreMigrationChangesMap,
+  buildPreMigrationRelationshipChangesMap,
 } from "@/cli/commands/tailordb/migrate/pre-migration-schema";
 import {
   reconstructSnapshotFromMigrations,
@@ -706,8 +708,43 @@ async function executeSingleMigrationPrePhase(
   // breaking changes (required-add, unique-add, enum value removal) and the
   // warning-tier field_removed, since the Pre-phase relaxes both.
   const preMigrationChanges = buildPreMigrationChangesMap([migration]);
+  const preMigrationRelationshipChanges = buildPreMigrationRelationshipChangesMap([migration]);
   const affectedTypes = getAffectedTypeNames(migration);
   const createdBeforeMigration = new Set(processedTypes.created);
+
+  // Build a cloned request whose schema has the Pre-phase relaxations applied.
+  // Returns the original request when nothing needs adjusting so identity
+  // checks on the changeset still work.
+  type AnyTailorDBRequest = {
+    tailordbType?: { name?: string; schema?: { fields?: object; relationships?: object } };
+  };
+  const adjustForPreMigration = <T extends AnyTailorDBRequest>(request: T): T => {
+    const typeName = request.tailordbType?.name;
+    const fieldChanges = typeName ? preMigrationChanges.get(typeName) : undefined;
+    const relChanges = typeName ? preMigrationRelationshipChanges.get(typeName) : undefined;
+    if ((!fieldChanges || fieldChanges.size === 0) && (!relChanges || relChanges.size === 0)) {
+      return request;
+    }
+    const cloned = structuredClone(request);
+    const schema = cloned.tailordbType?.schema;
+    if (schema && fieldChanges && fieldChanges.size > 0 && schema.fields) {
+      applyPreMigrationFieldAdjustments(
+        schema.fields as Parameters<typeof applyPreMigrationFieldAdjustments>[0],
+        fieldChanges,
+      );
+    }
+    if (schema && relChanges && relChanges.size > 0) {
+      // structuredClone preserves an empty `relationships` map even when the
+      // type had no original relationships, but defensive-init keeps the
+      // helper independent from that detail.
+      schema.relationships ??= {};
+      applyPreMigrationRelationshipAdjustments(
+        schema.relationships as Parameters<typeof applyPreMigrationRelationshipAdjustments>[0],
+        relChanges,
+      );
+    }
+    return cloned;
+  };
 
   // Types - create/update only types affected by this migration
   await Promise.all([
@@ -721,19 +758,7 @@ async function executeSingleMigrationPrePhase(
         const typeName = create.request.tailordbType?.name;
         if (typeName) processedTypes.created.add(typeName);
 
-        const typeChanges = typeName ? preMigrationChanges.get(typeName) : undefined;
-
-        if (!typeChanges || typeChanges.size === 0) {
-          return client.createTailorDBType(create.request);
-        }
-
-        // Clone request to avoid modifying the original changeSet
-        const clonedRequest = structuredClone(create.request);
-        if (clonedRequest.tailordbType?.schema?.fields) {
-          applyPreMigrationFieldAdjustments(clonedRequest.tailordbType.schema.fields, typeChanges);
-        }
-
-        return client.createTailorDBType(clonedRequest);
+        return client.createTailorDBType(adjustForPreMigration(create.request));
       }),
     // Update types already created in previous migrations (from create list)
     ...changeSet.type.creates
@@ -745,25 +770,12 @@ async function executeSingleMigrationPrePhase(
         const typeName = create.request.tailordbType?.name;
         if (typeName) processedTypes.updated.add(typeName);
 
-        const typeChanges = typeName ? preMigrationChanges.get(typeName) : undefined;
-
-        if (!typeChanges || typeChanges.size === 0) {
-          return client.updateTailorDBType({
-            workspaceId: create.request.workspaceId,
-            namespaceName: create.request.namespaceName,
-            tailordbType: create.request.tailordbType,
-          });
-        }
-
-        const clonedRequest = structuredClone(create.request);
-        if (clonedRequest.tailordbType?.schema?.fields) {
-          applyPreMigrationFieldAdjustments(clonedRequest.tailordbType.schema.fields, typeChanges);
-        }
+        const adjusted = adjustForPreMigration(create.request);
 
         return client.updateTailorDBType({
-          workspaceId: create.request.workspaceId,
-          namespaceName: create.request.namespaceName,
-          tailordbType: clonedRequest.tailordbType,
+          workspaceId: adjusted.workspaceId,
+          namespaceName: adjusted.namespaceName,
+          tailordbType: adjusted.tailordbType,
         });
       }),
     // Update types that are affected by this migration
@@ -776,19 +788,7 @@ async function executeSingleMigrationPrePhase(
         const typeName = update.request.tailordbType?.name;
         if (typeName) processedTypes.updated.add(typeName);
 
-        const typeChanges = typeName ? preMigrationChanges.get(typeName) : undefined;
-
-        if (!typeChanges || typeChanges.size === 0) {
-          return client.updateTailorDBType(update.request);
-        }
-
-        // Clone request to avoid modifying the original changeSet
-        const clonedRequest = structuredClone(update.request);
-        if (clonedRequest.tailordbType?.schema?.fields) {
-          applyPreMigrationFieldAdjustments(clonedRequest.tailordbType.schema.fields, typeChanges);
-        }
-
-        return client.updateTailorDBType(clonedRequest);
+        return client.updateTailorDBType(adjustForPreMigration(update.request));
       }),
   ]);
 

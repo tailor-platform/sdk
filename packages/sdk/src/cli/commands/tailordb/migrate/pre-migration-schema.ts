@@ -10,6 +10,10 @@
  * - `field_added` with `required: true`: relax to `required: false`.
  * - `field_modified` optional→required, unique constraint added, enum
  *   value removed: keep the looser side until Post-phase.
+ * - `relationship_removed`: re-insert the removed relationship so migrate.ts
+ *   can still resolve `innerJoin` through the relationship being dropped in
+ *   the same migration. The physical drop happens in Post-phase together
+ *   with the underlying FK field.
  *
  * Type-level deletions (`type_removed`) are handled by the deploy flow,
  * which retains the type until Post-phase rather than via this module.
@@ -20,11 +24,14 @@
 
 import { convertFieldConfigToProto } from "./snapshot-manifest";
 import type { DiffChange } from "./diff-calculator";
-import type { SnapshotFieldConfig } from "./snapshot";
+import type { SnapshotFieldConfig, SnapshotRelationship } from "./snapshot";
 import type { PendingMigration } from "./types";
 import type { EnumValue } from "@/types/field-types";
 import type { MessageInitShape } from "@bufbuild/protobuf";
-import type { TailorDBType_FieldConfigSchema } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
+import type {
+  TailorDBType_FieldConfigSchema,
+  TailorDBType_RelationshipConfigSchema,
+} from "@tailor-proto/tailor/v1/tailordb_resource_pb";
 
 /**
  * Diff change kinds that require pre-migration schema adjustments.
@@ -143,5 +150,73 @@ export function applyPreMigrationFieldAdjustments(
         }));
       }
     }
+  }
+}
+
+/**
+ * Map of pre-migration relationship changes: typeName -> relationshipName -> change.
+ *
+ * Only `relationship_removed` is tracked — the Pre-phase reinstates the
+ * removed relationship so that `migrate.ts` can resolve joins via it before
+ * the Post-phase performs the physical drop alongside the underlying FK field.
+ */
+export type PreMigrationRelationshipChangesMap = Map<string, Map<string, DiffChange>>;
+
+/**
+ * Build a map of relationship changes that require pre-migration adjustment.
+ * @param {PendingMigration[]} pendingMigrations - Pending migrations to scan
+ * @returns {PreMigrationRelationshipChangesMap} Map keyed by typeName/relationshipName
+ */
+export function buildPreMigrationRelationshipChangesMap(
+  pendingMigrations: PendingMigration[],
+): PreMigrationRelationshipChangesMap {
+  const map: PreMigrationRelationshipChangesMap = new Map();
+  for (const migration of pendingMigrations) {
+    for (const change of migration.diff.changes) {
+      if (change.kind !== "relationship_removed") continue;
+      if (!change.relationshipName) continue;
+      const perType = map.get(change.typeName) ?? new Map<string, DiffChange>();
+      perType.set(change.relationshipName, change);
+      map.set(change.typeName, perType);
+    }
+  }
+  return map;
+}
+
+/**
+ * Restore relationships that were removed in this migration so the Pre-phase
+ * schema still exposes them to `migrate.ts`. Mutates the supplied map in place.
+ * @param {Record<string, MessageInitShape<typeof TailorDBType_RelationshipConfigSchema>>} relationships - Relationship map to adjust (mutated in place)
+ * @param {Map<string, DiffChange>} typeChanges - Relationship changes for this type
+ */
+export function applyPreMigrationRelationshipAdjustments(
+  relationships: Record<string, MessageInitShape<typeof TailorDBType_RelationshipConfigSchema>>,
+  typeChanges: Map<string, DiffChange>,
+): void {
+  for (const [relationshipName, change] of typeChanges) {
+    if (change.kind !== "relationship_removed") continue;
+    const before = change.before as SnapshotRelationship | undefined;
+    if (!before) continue;
+
+    // Forward and backward relationships swap the `refField` / `srcField` roles
+    // in the proto. Mirror the mapping used by `toProtoTypeMessage` so that
+    // Pre-phase and steady-state messages agree.
+    const direction = change.relationshipType ?? "forward";
+    relationships[relationshipName] =
+      direction === "forward"
+        ? {
+            refType: before.targetType,
+            refField: before.sourceField,
+            srcField: before.targetField,
+            array: before.isArray,
+            description: before.description,
+          }
+        : {
+            refType: before.targetType,
+            refField: before.targetField,
+            srcField: before.sourceField,
+            array: before.isArray,
+            description: before.description,
+          };
   }
 }
