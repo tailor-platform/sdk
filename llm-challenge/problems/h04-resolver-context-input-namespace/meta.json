@@ -3,5 +3,13 @@
   "title": "Destructure input + user from the resolver body's single context arg",
   "designNote": "missing_namespace",
   "sdkSurface": "resolver",
-  "contextProfiles": ["code-only", "code-and-docs"]
+  "contextProfiles": ["code-only", "code-and-docs"],
+  "canonicalSymbols": ["createResolver"],
+  "biasAttractors": ["defineResolver", "resolver(", "defineQuery", "createQuery", "queryResolver"],
+  "expectedCallShapes": {
+    "createResolver": {
+      "positionalArity": 1,
+      "configKeys": ["name", "operation", "input", "output", "body"]
+    }
+  }
 }

@@ -3,5 +3,13 @@
   "title": "Return typed { success, error } results from a cancel resolver instead of throwing",
   "designNote": "param_confusion",
   "sdkSurface": "resolver",
-  "contextProfiles": ["code-only", "code-and-docs"]
+  "contextProfiles": ["code-only", "code-and-docs"],
+  "canonicalSymbols": ["createResolver"],
+  "biasAttractors": ["defineResolver", "resolver(", "defineMutation", "createMutation"],
+  "expectedCallShapes": {
+    "createResolver": {
+      "positionalArity": 1,
+      "configKeys": ["name", "operation", "input", "output", "body"]
+    }
+  }
 }

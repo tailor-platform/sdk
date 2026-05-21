@@ -16,6 +16,9 @@
       "positionalArity": 2,
       "configArgIndex": 1,
       "configKeys": ["idProvider"]
+    },
+    ".provider": {
+      "positionalArity": 2
     }
   }
 }

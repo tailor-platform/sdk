@@ -3,5 +3,24 @@
   "title": "Handle IdP user created+deleted events with a single idpUserTrigger({events})",
   "designNote": "consolidation_candidate",
   "sdkSurface": "executor-non-record-trigger",
-  "contextProfiles": ["code-only", "code-and-docs"]
+  "contextProfiles": ["code-only", "code-and-docs"],
+  "canonicalSymbols": ["createExecutor", "idpUserTrigger"],
+  "biasAttractors": [
+    "idpUserCreatedTrigger",
+    "idpUserDeletedTrigger",
+    "userTrigger",
+    "idpTrigger",
+    "accountTrigger",
+    "onIdpUser"
+  ],
+  "expectedCallShapes": {
+    "createExecutor": {
+      "positionalArity": 1,
+      "configKeys": ["name", "description", "trigger", "operation"]
+    },
+    "idpUserTrigger": {
+      "positionalArity": 1,
+      "configKeys": ["events"]
+    }
+  }
 }

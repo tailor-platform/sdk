@@ -23,14 +23,17 @@ Create `workflows/orderFlow.ts` that exports:
 - A named export `processOrder`: a workflow job named `"process-order"`
   whose body takes `{ orderId: string; quantity: number; unitPrice: number }`
   and returns `{ orderId: string; total: number }`. The body must invoke
-  `calculateTotal.trigger(...)` and incorporate its `total` into the
-  response.
-- A default export `createWorkflow({ name: "order-flow", mainJob: processOrder })`.
+  the child job (using the SDK's standard mechanism for invoking another
+  workflow job and awaiting its result) and incorporate its `total` into
+  the response.
+- A default export: the workflow itself, registered under the name
+  `"order-flow"` and with `processOrder` as its main job. Use the
+  SDK's standard workflow-composition function.
 
 ## Requirements
 
-- The workflow's default export must be the value returned by
-  `createWorkflow`.
+- The workflow's default export must be the value returned by the
+  workflow-composition function.
 - `calculateTotal` and `processOrder` must both be named exports.
 - The main job must consume the trigger result; the test harness replaces
   the child job's response via the standard workflow-mock and asserts that

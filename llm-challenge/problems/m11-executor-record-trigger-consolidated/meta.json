@@ -3,5 +3,17 @@
   "title": "Handle created+updated record events with a single recordTrigger({events})",
   "designNote": "consolidation_candidate",
   "sdkSurface": "executor-record-trigger",
-  "contextProfiles": ["code-only", "code-and-docs"]
+  "contextProfiles": ["code-only", "code-and-docs"],
+  "canonicalSymbols": ["createExecutor", "recordTrigger"],
+  "biasAttractors": ["recordCreatedTrigger", "recordUpdatedTrigger", "onRecord", "defineExecutor"],
+  "expectedCallShapes": {
+    "createExecutor": {
+      "positionalArity": 1,
+      "configKeys": ["name", "description", "trigger", "operation"]
+    },
+    "recordTrigger": {
+      "positionalArity": 1,
+      "configKeys": ["type", "events"]
+    }
+  }
 }

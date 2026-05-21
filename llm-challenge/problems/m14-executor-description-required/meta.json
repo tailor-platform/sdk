@@ -3,5 +3,17 @@
   "title": "Author an executor with a non-empty description",
   "designNote": "missing_action_verb",
   "sdkSurface": "executor",
-  "contextProfiles": ["code-only", "code-and-docs"]
+  "contextProfiles": ["code-only", "code-and-docs"],
+  "canonicalSymbols": ["createExecutor", "recordCreatedTrigger"],
+  "biasAttractors": ["defineExecutor", "executor("],
+  "expectedCallShapes": {
+    "createExecutor": {
+      "positionalArity": 1,
+      "configKeys": ["name", "description", "trigger", "operation"]
+    },
+    "recordCreatedTrigger": {
+      "positionalArity": 1,
+      "configKeys": ["type"]
+    }
+  }
 }

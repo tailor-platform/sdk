@@ -3,5 +3,28 @@
   "title": "Wire defineIdp's provider() factory into defineAuth.idProvider",
   "designNote": "missing_namespace",
   "sdkSurface": "auth-idp",
-  "contextProfiles": ["code-only", "code-and-docs"]
+  "contextProfiles": ["code-only", "code-and-docs"],
+  "canonicalSymbols": ["defineAuth", "defineIdp", ".provider"],
+  "biasAttractors": [
+    "defineIdProvider",
+    "defineProvider",
+    "identityProvider",
+    "idpProvider",
+    "useIdp"
+  ],
+  "expectedCallShapes": {
+    "defineIdp": {
+      "positionalArity": 2,
+      "configArgIndex": 1,
+      "configKeys": ["clients"]
+    },
+    "defineAuth": {
+      "positionalArity": 2,
+      "configArgIndex": 1,
+      "configKeys": ["idProvider"]
+    },
+    ".provider": {
+      "positionalArity": 2
+    }
+  }
 }

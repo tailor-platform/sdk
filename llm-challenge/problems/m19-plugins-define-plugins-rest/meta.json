@@ -3,5 +3,26 @@
   "title": "Register two SDK plugins via definePlugins(...) rest arguments",
   "designNote": "consolidation_candidate",
   "sdkSurface": "plugin",
-  "contextProfiles": ["code-only", "code-and-docs"]
+  "contextProfiles": ["code-only", "code-and-docs"],
+  "canonicalSymbols": ["definePlugins", "kyselyTypePlugin", "seedPlugin"],
+  "biasAttractors": [
+    "composePlugins",
+    "addPlugins",
+    "registerPlugin",
+    "defineGenerators",
+    "usePlugins"
+  ],
+  "expectedCallShapes": {
+    "definePlugins": {
+      "positionalArity": "rest"
+    },
+    "kyselyTypePlugin": {
+      "positionalArity": 1,
+      "configKeys": ["distPath"]
+    },
+    "seedPlugin": {
+      "positionalArity": 1,
+      "configKeys": ["distPath", "machineUserName"]
+    }
+  }
 }

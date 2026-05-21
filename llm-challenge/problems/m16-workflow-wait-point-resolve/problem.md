@@ -24,7 +24,9 @@ Create `workflows/approval.ts` that exports:
   `approval.wait({ message })` with the request id embedded in the message,
   and returns `{ requestId, status: "approved" | "rejected" }` based on the
   resolved value.
-- A default export `createWorkflow({ name: "approval-workflow", mainJob: processApproval })`.
+- A default export: the workflow itself, registered under the name
+  `"approval-workflow"` and with `processApproval` as its main job. Use
+  the SDK's standard workflow-composition function.
 
 ## Requirements
 

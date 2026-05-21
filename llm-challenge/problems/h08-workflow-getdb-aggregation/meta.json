@@ -16,6 +16,7 @@
     "addPlugins",
     "registerPlugin",
     "createJob",
+    "defineJob",
     "db.aggregate",
     "db.query"
   ],
