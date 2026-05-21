@@ -20,13 +20,11 @@ export const orderItem = db
   })
   .hooks({
     create: ({ data }) => ({
-      ...data,
       totalPrice: data.quantity * data.unitPrice,
       createdAt: new Date(),
       updatedAt: new Date(),
     }),
     update: ({ data }) => ({
-      ...data,
       totalPrice: data.quantity * data.unitPrice,
       updatedAt: new Date(),
     }),

@@ -12,14 +12,12 @@ export const adminNote = db
     ...db.fields.timestamps(),
   })
   .hooks({
-    create: ({ data, user }) => ({
-      ...data,
+    create: ({ user }) => ({
       authorId: user.id,
       createdAt: new Date(),
       updatedAt: new Date(),
     }),
-    update: ({ data }) => ({
-      ...data,
+    update: () => ({
       updatedAt: new Date(),
     }),
   })

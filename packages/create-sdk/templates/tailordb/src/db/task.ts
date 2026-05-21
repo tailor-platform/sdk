@@ -27,14 +27,12 @@ export const task = db
     ...db.fields.timestamps(),
   })
   .hooks({
-    create: ({ data }) => ({
-      ...data,
+    create: () => ({
       isArchived: false,
       createdAt: new Date(),
       updatedAt: new Date(),
     }),
-    update: ({ data }) => ({
-      ...data,
+    update: () => ({
       updatedAt: new Date(),
     }),
   })
