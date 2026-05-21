@@ -35,19 +35,53 @@ export const stringifyFunction = (fn: Function): string => {
 };
 
 /**
- * Convert a hook function to a script expression.
- * @param fn - Hook function
- * @returns JavaScript expression calling the hook
+ * Argument-map literals passed to script invocations. The key (e.g. `_data`,
+ * `_value`, `_input`) is the runtime binding the platform exposes at the
+ * relevant scope; the property name (e.g. `data`, `value`) is the SDK-side
+ * parameter name that callbacks destructure.
  */
-export const convertHookToExpr = (fn: (...args: never[]) => unknown): string => {
+const SCRIPT_ARG_MAPS = {
+  /** Field-level scope: `_value`, `_data`, and `user` are bound. */
+  field: `{ value: _value, data: _data, user: ${tailorUserMap} }`,
+  /** Record-level hook scope: each generated FieldHook binds the record to `_data`. */
+  recordHook: `{ data: _data, user: ${tailorUserMap} }`,
+  /** Record-level validate scope: type_validate binds the record to `_input`. */
+  recordValidate: `{ data: _input, user: ${tailorUserMap} }`,
+} as const;
+
+export type ScriptArgMap = keyof typeof SCRIPT_ARG_MAPS;
+
+/**
+ * Compile a user-supplied callback into a JavaScript expression that invokes
+ * it inside the platform script sandbox. Uses the bundled/precompiled body
+ * when available (so `import`s in the user file resolve) and otherwise falls
+ * back to stringifying the function — `stringifyFunction` rewrites method
+ * shorthand into a function expression so the result is always callable.
+ * @param fn - Callback to compile
+ * @param argMap - Argument-map kind appropriate for the binding context
+ * @returns JavaScript expression evaluating the callback at runtime
+ */
+export const compileScriptExpr = (
+  fn: (...args: never[]) => unknown,
+  argMap: ScriptArgMap = "field",
+): string => {
   const precompiledExpr = getPrecompiledScriptExpr(fn);
   if (precompiledExpr) {
     return precompiledExpr;
   }
   // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
   const normalized = stringifyFunction(fn as unknown as Function);
-  return `(${normalized})({ value: _value, data: _data, user: ${tailorUserMap} })`;
+  return `(${normalized})(${SCRIPT_ARG_MAPS[argMap]})`;
 };
+
+/**
+ * Convert a hook function to a field-level script expression.
+ * Thin alias for `compileScriptExpr(fn, "field")` retained for call-site clarity.
+ * @param fn - Hook function
+ * @returns JavaScript expression calling the hook
+ */
+export const convertHookToExpr = (fn: (...args: never[]) => unknown): string =>
+  compileScriptExpr(fn, "field");
 
 /**
  * Parse TailorDBField into OperatorFieldConfig.
@@ -87,9 +121,7 @@ export function parseFieldConfig(
 
       return {
         script: {
-          expr:
-            getPrecompiledScriptExpr(fn as (...args: never[]) => unknown) ??
-            `(${fn.toString().trim()})({ value: _value, data: _data, user: ${tailorUserMap} })`,
+          expr: compileScriptExpr(fn as (...args: never[]) => unknown, "field"),
         },
         errorMessage: message,
       };

@@ -277,7 +277,13 @@ function toProtoSnapshotFieldHooks(
 }
 
 /**
- * Process nested fields from snapshot format to proto format
+ * Process nested fields from snapshot format to proto format.
+ *
+ * Nested fields share the same `FieldConfig` shape as top-level fields but
+ * the platform ignores index/unique/foreignKey/vector for sub-fields, so we
+ * force them to `false` after delegating to the shared converter. The
+ * `foreignKeyType`/`foreignKeyField` strings are likewise scrubbed since
+ * they only make sense at the top level.
  * @param {Record<string, SnapshotFieldConfig>} fields - Nested fields
  * @returns {Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>>} Proto nested fields
  */
@@ -287,65 +293,31 @@ function processNestedFieldsFromSnapshot(
   const nestedFields: Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>> = {};
 
   for (const [fieldName, fieldConfig] of Object.entries(fields)) {
-    if (fieldConfig.type === "nested" && fieldConfig.fields) {
-      const deepNestedFields = processNestedFieldsFromSnapshot(fieldConfig.fields);
-      nestedFields[fieldName] = {
-        type: "nested",
-        allowedValues: fieldConfig.allowedValues?.map((v: SnapshotEnumValue) => ({ ...v })) ?? [],
-        description: fieldConfig.description || "",
-        validate: toProtoSnapshotFieldValidate(fieldConfig),
-        required: fieldConfig.required ?? true,
-        array: fieldConfig.array ?? false,
-        index: false,
-        unique: false,
-        foreignKey: false,
-        vector: false,
-        ...toProtoSnapshotFieldHooks(fieldConfig),
-        fields: deepNestedFields,
-        ...(fieldConfig.scale !== undefined && { scale: fieldConfig.scale }),
-      };
-    } else {
-      nestedFields[fieldName] = {
-        type: fieldConfig.type,
-        allowedValues:
-          fieldConfig.type === "enum"
-            ? (fieldConfig.allowedValues?.map((v: SnapshotEnumValue) => ({ ...v })) ?? [])
-            : [],
-        description: fieldConfig.description || "",
-        validate: toProtoSnapshotFieldValidate(fieldConfig),
-        required: fieldConfig.required ?? true,
-        array: fieldConfig.array ?? false,
-        index: false,
-        unique: false,
-        foreignKey: false,
-        vector: false,
-        ...toProtoSnapshotFieldHooks(fieldConfig),
-        ...(fieldConfig.serial && {
-          serial: {
-            start: BigInt(fieldConfig.serial.start),
-            ...(fieldConfig.serial.maxValue !== undefined && {
-              maxValue: BigInt(fieldConfig.serial.maxValue),
-            }),
-            ...(fieldConfig.serial.format && {
-              format: fieldConfig.serial.format,
-            }),
-          },
-        }),
-        ...(fieldConfig.scale !== undefined && { scale: fieldConfig.scale }),
-      };
-    }
+    const entry = convertFieldConfigToProto(fieldConfig);
+    entry.index = false;
+    entry.unique = false;
+    entry.foreignKey = false;
+    entry.vector = false;
+    entry.foreignKeyType = undefined;
+    entry.foreignKeyField = undefined;
+    nestedFields[fieldName] = entry;
   }
 
   return nestedFields;
 }
 
 /**
- * Convert a snapshot relationship to proto format
+ * Convert a snapshot relationship to proto format.
+ *
+ * Forward and backward relationships swap the `refField` / `srcField` roles —
+ * forward stores the source FK in `refField`, backward in `srcField`. Both
+ * the steady-state manifest and the Pre-phase relationship restoration share
+ * this mapping, so any change must update both call sites together.
  * @param {SnapshotRelationship} rel - Snapshot relationship
  * @param {"forward" | "backward"} direction - Relationship direction
  * @returns {MessageInitShape<typeof TailorDBType_RelationshipConfigSchema>} Proto relationship config
  */
-function convertRelationshipToProto(
+export function convertRelationshipToProto(
   rel: SnapshotRelationship,
   direction: "forward" | "backward",
 ): MessageInitShape<typeof TailorDBType_RelationshipConfigSchema> {

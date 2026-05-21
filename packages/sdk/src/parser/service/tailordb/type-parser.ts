@@ -1,7 +1,6 @@
 import * as inflection from "inflection";
 import { isPluginGeneratedType } from "@/types/tailordb";
-import { parseFieldConfig, stringifyFunction, tailorUserMap } from "./field";
-import { getPrecompiledScriptExpr } from "./hooks-validate-precompiled-expr";
+import { compileScriptExpr, parseFieldConfig, stringifyFunction } from "./field";
 import { parsePermissions } from "./permission";
 import { extractRecordHookOverrideKeys } from "./record-hook-keys";
 import {
@@ -155,12 +154,7 @@ function parseTailorDBType(
  * @returns JavaScript expression suitable for `FieldHook.create.expr` / `.update.expr`
  */
 function buildRecordHookFieldExpr(fn: (...args: never[]) => unknown, key: string): string {
-  const precompiledExpr = getPrecompiledScriptExpr(fn);
-  const invocation =
-    precompiledExpr ??
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
-    `(${stringifyFunction(fn as unknown as Function)})({ data: _data, user: ${tailorUserMap} })`;
-  return `(${invocation})[${JSON.stringify(key)}]`;
+  return `(${compileScriptExpr(fn, "recordHook")})[${JSON.stringify(key)}]`;
 }
 
 /**
@@ -243,11 +237,7 @@ function convertRecordValidators(
       typeof v === "function"
         ? { fn: v, message: `failed by \`${v.toString().trim()}\`` }
         : { fn: v[0], message: v[1] as string };
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
-    const fnRef = fn as Function;
-    const predicate =
-      getPrecompiledScriptExpr(fnRef as (...args: never[]) => unknown) ??
-      `(${fnRef.toString().trim()})({ data: _input, user: ${tailorUserMap} })`;
+    const predicate = compileScriptExpr(fn as (...args: never[]) => unknown, "recordValidate");
     const key = `_record_${index}`;
     const errorLiteral = JSON.stringify(message);
     return {

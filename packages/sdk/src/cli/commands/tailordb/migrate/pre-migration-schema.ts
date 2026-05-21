@@ -22,7 +22,7 @@
  * to fix up data.
  */
 
-import { convertFieldConfigToProto } from "./snapshot-manifest";
+import { convertFieldConfigToProto, convertRelationshipToProto } from "./snapshot-manifest";
 import type { DiffChange } from "./diff-calculator";
 import type { SnapshotFieldConfig, SnapshotRelationship } from "./snapshot";
 import type { PendingMigration } from "./types";
@@ -212,25 +212,9 @@ export function applyPreMigrationRelationshipAdjustments(
     const before = change.before as SnapshotRelationship | undefined;
     if (!before) continue;
 
-    // Forward and backward relationships swap the `refField` / `srcField` roles
-    // in the proto. Mirror the mapping used by `toProtoTypeMessage` so that
-    // Pre-phase and steady-state messages agree.
+    // Mirror the steady-state forward/backward field mapping so Pre-phase and
+    // steady-state messages agree.
     const direction = change.relationshipType ?? "forward";
-    relationships[relationshipName] =
-      direction === "forward"
-        ? {
-            refType: before.targetType,
-            refField: before.sourceField,
-            srcField: before.targetField,
-            array: before.isArray,
-            description: before.description,
-          }
-        : {
-            refType: before.targetType,
-            refField: before.targetField,
-            srcField: before.sourceField,
-            array: before.isArray,
-            description: before.description,
-          };
+    relationships[relationshipName] = convertRelationshipToProto(before, direction);
   }
 }
