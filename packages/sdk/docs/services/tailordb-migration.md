@@ -23,14 +23,14 @@ migrations/
 │   └── schema.json
 ├── 0001/                    # First change
 │   ├── diff.json            # Field-level diff from 0000
-│   ├── migrate.ts           # Data migration script (only if breaking)
+│   ├── migrate.ts           # Data migration script (auto-generated for breaking changes; can be added manually via `migration script`)
 │   └── db.ts                # Kysely types for the script (pre-migration shape)
 ├── 0002/
 │   └── diff.json            # No script — non-breaking changes only
 └── ...
 ```
 
-`0000` always contains a full snapshot. `0001` and onward contain a diff plus, for breaking changes, a script and its types. **Commit the entire `migrations/` directory to version control.**
+`0000` always contains a full snapshot. `0001` and onward contain a diff plus, optionally, a script and its types (auto-generated for breaking changes, or added manually via `tailordb migration script` for warning-tier changes). **Commit the entire `migrations/` directory to version control.**
 
 ## Initial Setup
 
@@ -157,12 +157,12 @@ export default defineConfig({
 
 ## Generated Files
 
-| File               | When generated                   | Description                                                                                               |
-| ------------------ | -------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `0000/schema.json` | First `migration generate`       | Full snapshot of all types in the namespace.                                                              |
-| `XXXX/diff.json`   | Every subsequent migration       | Field-level diff against the previous snapshot.                                                           |
-| `XXXX/migrate.ts`  | Only for breaking changes        | Data transformation script. The `main` export receives a Kysely `Transaction`.                            |
-| `XXXX/db.ts`       | Generated alongside `migrate.ts` | Kysely types reflecting the schema **before** this migration. Re-generated on every `migration generate`. |
+| File               | When generated                                                                                               | Description                                                                    |
+| ------------------ | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| `0000/schema.json` | First `migration generate`                                                                                   | Full snapshot of all types in the namespace.                                   |
+| `XXXX/diff.json`   | Every subsequent migration                                                                                   | Field-level diff against the previous snapshot.                                |
+| `XXXX/migrate.ts`  | Auto-generated for breaking changes; added manually via `tailordb migration script` for warning-tier changes | Data transformation script. The `main` export receives a Kysely `Transaction`. |
+| `XXXX/db.ts`       | Generated once when `migrate.ts` is created                                                                  | Kysely types reflecting the schema **before** this migration.                  |
 
 `db.ts` reflects the pre-migration schema because the script runs after the pre-migration phase has temporarily relaxed breaking constraints (e.g., a new `required` field is added as `optional` first), so the data being read still matches the previous shape.
 
