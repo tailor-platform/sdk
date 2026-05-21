@@ -1131,8 +1131,8 @@ export const db = {
      *   name: db.string(),
      *   ...db.fields.timestamps(),
      * }).hooks({
-     *   create: ({ data }) => ({ ...data, createdAt: new Date() }),
-     *   update: ({ data }) => ({ ...data, updatedAt: new Date() }),
+     *   create: () => ({ createdAt: new Date() }),
+     *   update: () => ({ updatedAt: new Date() }),
      * });
      */
     timestamps: () => {

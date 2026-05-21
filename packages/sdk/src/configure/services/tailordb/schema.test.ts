@@ -807,8 +807,8 @@ describe("TailorDBType record-level hooks modifier tests", () => {
         name: db.string(),
       })
       .hooks({
-        create: ({ data }) => ({ ...data, name: "created" }),
-        update: ({ data }) => ({ ...data, name: "updated" }),
+        create: () => ({ name: "created" }),
+        update: () => ({ name: "updated" }),
       });
     expectTypeOf<output<typeof _hookType>>().toEqualTypeOf<{
       id: string;
@@ -823,9 +823,9 @@ describe("TailorDBType record-level hooks modifier tests", () => {
     }).hooks({
       create: ({ data }) => {
         expectTypeOf(data).toEqualTypeOf<Readonly<{ id: string; name: string; score: number }>>();
-        return { ...data, score: data.score + 1 };
+        return { score: data.score + 1 };
       },
-      update: ({ data }) => ({ ...data, score: data.score + 1 }),
+      update: ({ data }) => ({ score: data.score + 1 }),
     });
   });
 
@@ -846,12 +846,10 @@ describe("TailorDBType record-level hooks modifier tests", () => {
   });
 
   it("hooks modifier stores hooks on type metadata", () => {
-    const createHook = ({ data }: { data: Readonly<{ id: string; name: string }> }) => ({
-      ...data,
+    const createHook = (_args: { data: Readonly<{ id: string; name: string }> }) => ({
       name: "c",
     });
-    const updateHook = ({ data }: { data: Readonly<{ id: string; name: string }> }) => ({
-      ...data,
+    const updateHook = (_args: { data: Readonly<{ id: string; name: string }> }) => ({
       name: "u",
     });
     const hookType = db
@@ -1556,7 +1554,7 @@ describe("TailorDBType record-level hooks/validate storage", () => {
     const sharedField = db.string();
 
     const typeA = db.type("TypeA", { name: sharedField }).hooks({
-      create: ({ data }) => ({ ...data, name: "A" }),
+      create: () => ({ name: "A" }),
     });
     const typeB = db.type("TypeB", { name: sharedField });
 

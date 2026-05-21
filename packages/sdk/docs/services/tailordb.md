@@ -10,7 +10,7 @@ TailorDB provides:
 - Automatic GraphQL API generation (CRUD operations)
 - Relations between types with automatic index and foreign key constraints
 - Permission system for access control
-- Field-level hooks and validations
+- Record-level hooks and validations
 
 For the official Tailor Platform documentation, see [TailorDB Guide](https://docs.tailor.tech/guides/tailordb/overview).
 
@@ -81,7 +81,7 @@ export type order = typeof order;
 - `descriptors` - Field descriptors as `{ fieldName: { kind, ...options } }`. You can also mix in `db.*()` fields
 - `options` - Optional type-level settings: `description`, `pluralForm`, `features`, `indexes`, `files`, `permission`, `gqlPermission`, `plugins`, `hooks`, `validate`
 
-Descriptor fields support the same field-level options as the fluent API: `optional`, `array`, `description`, `index`, `unique`, `serial`, `vector`, and `relation`. Field-level `hooks` and `validate` have been removed from the public API — configure them at the record level via the third `options` argument (`{ hooks, validate }`) or via `db.type(...).hooks(...).validate(...)`.
+Descriptor fields accept the same per-field options as the fluent API: `optional`, `array`, `description`, `index`, `unique`, `serial`, `vector`, `relation`, plus kind-specific options such as `scale` (decimal) and `values` (enum). Hooks and validators are no longer per-field — configure them at the record level via the third `options` argument (`{ hooks, validate }`) or via `db.type(...).hooks(...).validate(...)`.
 
 **`timestampFields()` helper:** Returns `createdAt` (datetime, set on create) and `updatedAt` (optional datetime, set on update) descriptors. Equivalent to `db.fields.timestamps()` for the fluent API.
 
@@ -302,28 +302,7 @@ type User {
 
 ### Hooks
 
-Add hooks to execute functions during data creation or update. Hooks receive three arguments:
-
-- `value`: User input if provided, otherwise existing value on update or null on create
-- `data`: Entire record data (for accessing other field values)
-- `user`: User performing the operation
-
-#### Field-level Hooks
-
-Set hooks directly on individual fields:
-
-```typescript
-db.string().hooks({
-  create: ({ user }) => user.id,
-  update: ({ value }) => value,
-});
-```
-
-**Note:** When setting hooks at the field level, the `data` argument type is `unknown` since the field doesn't know about other fields in the type. Use type-level hooks if you need to access other fields with type safety.
-
-#### Type-level Hooks
-
-Set hooks for multiple fields at once using `db.type().hooks()`:
+Attach record-level hooks with `.hooks({ create, update })` on `db.type(...)` or via the third `options` argument of `createTable`. Each hook receives the full record and returns an **object containing only the fields to override** — omitted fields keep their incoming values.
 
 ```typescript
 export const customer = db
@@ -333,60 +312,60 @@ export const customer = db
     fullName: db.string(),
   })
   .hooks({
-    fullName: {
-      create: ({ data }) => `${data.firstName} ${data.lastName}`,
-      update: ({ data }) => `${data.firstName} ${data.lastName}`,
-    },
+    create: ({ data, user }) => ({
+      fullName: `${data.firstName} ${data.lastName}`,
+    }),
+    update: ({ data, user }) => ({
+      fullName: `${data.firstName} ${data.lastName}`,
+    }),
   });
 ```
 
-**Important:** Field-level and type-level hooks cannot coexist on the same field. TypeScript will prevent this at compile time:
+Hook callback arguments:
+
+- `data`: the full incoming record (typed from the type definition)
+- `user`: the authenticated user performing the operation
+
+#### Override-only return shape
+
+The SDK statically extracts the set of overridden keys from the returned object literal at deploy time and emits a per-field hook for each one. Because the extraction is static, the return value must be a single object literal whose keys can be read without executing the function. The parser rejects the following shapes:
 
 ```typescript
-// Compile error - cannot set hooks on the same field twice
-export const user = db
-  .type("User", {
-    name: db.string().hooks({ create: ({ data }) => data.firstName }), // Field-level
-  })
-  .hooks({
-    name: { create: ({ data }) => data.lastName }, // Type-level - ERROR
-  });
+// ❌ Spread is not allowed — list overridden keys explicitly.
+create: ({ data }) => ({ ...data, fullName: data.firstName }),
 
-// OK - set hooks on different fields
-export const user = db
-  .type("User", {
-    firstName: db.string().hooks({ create: () => "John" }), // Field-level on firstName
-    lastName: db.string(),
-  })
-  .hooks({
-    lastName: { create: () => "Doe" }, // Type-level on lastName
-  });
+// ❌ Computed keys cannot be resolved statically.
+create: ({ data }) => ({ [computeKey()]: data.firstName }),
+
+// ❌ Branched / multiple returns produce ambiguous override sets.
+create: ({ data }) => {
+  if (data.firstName) return { fullName: data.firstName };
+  return { fullName: data.lastName };
+},
+
+// ❌ Getter / setter / method-shorthand properties are not supported.
+create: () => ({ get fullName() { return "x"; } }),
 ```
+
+Use a plain `({ key1: ..., key2: ... })` return — and `return` early outside the callback if you need branching logic that produces the override values.
+
+#### Re-evaluation per overridden key
+
+The returned object literal is expanded into one independent hook expression per key. Side-effecting calls such as `crypto.randomUUID()` or `new Date()` therefore evaluate **once per key**, not once per record:
+
+```typescript
+.hooks({
+  // `new Date()` runs twice — once for createdAt, once for updatedAt — and
+  // each call returns its own Date value.
+  create: () => ({ createdAt: new Date(), updatedAt: new Date() }),
+})
+```
+
+If you need a single shared value, compute it before the write at the call site.
 
 ### Validation
 
-Add validation rules to fields. Validators receive three arguments (executed after hooks):
-
-- `value`: Field value after hook transformation
-- `data`: Entire record data after hook transformations (for accessing other field values)
-- `user`: User performing the operation
-
-Validators return `true` for success, `false` for failure. Use array form `[validator, errorMessage]` for custom error messages.
-
-#### Field-level Validation
-
-Set validators directly on individual fields:
-
-```typescript
-db.string().validate(
-  ({ value }) => value.includes("@"),
-  [({ value }) => value.length >= 5, "Email must be at least 5 characters"],
-);
-```
-
-#### Type-level Validation
-
-Set validators for multiple fields at once using `db.type().validate()`:
+Attach record-level validators with `.validate(...)` on `db.type(...)` or via `options.validate` on `createTable`. Each validator receives the entire record and returns `true` for success or `false` for failure.
 
 ```typescript
 export const user = db
@@ -394,37 +373,20 @@ export const user = db
     name: db.string(),
     email: db.string(),
   })
-  .validate({
-    name: [({ value }) => value.length > 5, "Name must be longer than 5 characters"],
-    email: [
-      ({ value }) => value.includes("@"),
-      [({ value }) => value.length >= 5, "Email must be at least 5 characters"],
-    ],
-  });
+  .validate([
+    [({ data }) => data.name.length > 5, "Name must be longer than 5 characters"],
+    ({ data }) => data.email.includes("@"),
+    [({ data }) => data.email.length >= 5, "Email must be at least 5 characters"],
+  ]);
 ```
 
-**Important:** Field-level and type-level validation cannot coexist on the same field. TypeScript will prevent this at compile time:
+`.validate(...)` accepts any of:
 
-```typescript
-// Compile error - cannot set validation on the same field twice
-export const user = db
-  .type("User", {
-    name: db.string().validate(({ value }) => value.length > 0), // Field-level
-  })
-  .validate({
-    name: [({ value }) => value.length < 100, "Too long"], // Type-level - ERROR
-  });
+- a single function — `({ data }) => boolean`
+- a `[fn, errorMessage]` tuple for a custom message
+- an array combining either of the above
 
-// OK - set validation on different fields
-export const user = db
-  .type("User", {
-    name: db.string().validate(({ value }) => value.length > 0), // Field-level on name
-    email: db.string(),
-  })
-  .validate({
-    email: [({ value }) => value.includes("@"), "Invalid email"], // Type-level on email
-  });
-```
+Validators run after hooks have produced their overrides, so they see the post-hook record. They receive `{ data, user }` — there is no per-field `value` argument.
 
 ### Vector Search
 

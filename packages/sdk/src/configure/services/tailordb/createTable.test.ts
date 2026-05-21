@@ -1,4 +1,6 @@
 import { describe, it, expectTypeOf, expect } from "vitest";
+import { parseTypes } from "@/parser/service/tailordb";
+import { toSchemaOutputs } from "@/utils/test/internal";
 import { createTable, timestampFields } from "./createTable";
 import { unsafeAllowAllGqlPermission } from "./permission";
 import { db } from "./schema";
@@ -779,9 +781,9 @@ describe("createTable record-level hooks/validate options", () => {
             expectTypeOf(data).toEqualTypeOf<
               Readonly<{ id: string; name: string; score: number }>
             >();
-            return { ...data, score: data.score + 1 };
+            return { score: data.score + 1 };
           },
-          update: ({ data }) => ({ ...data, score: data.score + 1 }),
+          update: ({ data }) => ({ score: data.score + 1 }),
         },
       },
     );
@@ -827,5 +829,35 @@ describe("createTable record-level hooks/validate options", () => {
       },
     );
     expect(result.metadata.validate).toHaveLength(2);
+  });
+
+  it("record-level hooks expand into per-field FieldHook entries after parseTypes", () => {
+    const type = createTable(
+      "Order",
+      {
+        name: { kind: "string" },
+        score: { kind: "int" },
+        ...timestampFields(),
+      },
+      {
+        hooks: {
+          create: () => ({ score: 0, createdAt: new Date() }),
+          update: ({ data }) => ({ score: data.score + 1, updatedAt: new Date() }),
+        },
+      },
+    );
+
+    const types = parseTypes(toSchemaOutputs({ Order: type }), "test", {});
+    const parsed = types.Order;
+
+    expect(parsed.fields.score.config.hooks?.create?.expr).toContain("score");
+    expect(parsed.fields.score.config.hooks?.update?.expr).toContain("score");
+    expect(parsed.fields.createdAt.config.hooks?.create?.expr).toContain("createdAt");
+    expect(parsed.fields.createdAt.config.hooks?.update).toBeUndefined();
+    expect(parsed.fields.updatedAt.config.hooks?.update?.expr).toContain("updatedAt");
+    expect(parsed.fields.updatedAt.config.hooks?.create).toBeUndefined();
+    // Fields not present in any hook return literal must stay free of hooks.
+    expect(parsed.fields.name.config.hooks?.create).toBeUndefined();
+    expect(parsed.fields.name.config.hooks?.update).toBeUndefined();
   });
 });

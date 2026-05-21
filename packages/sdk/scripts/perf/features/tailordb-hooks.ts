@@ -12,8 +12,8 @@ export const type0 = db
     updatedAt: db.datetime({ optional: true }),
   })
   .hooks({
-    create: ({ data }) => ({ ...data, createdAt: new Date() }),
-    update: ({ data }) => ({ ...data, updatedAt: new Date() }),
+    create: () => ({ createdAt: new Date() }),
+    update: () => ({ updatedAt: new Date() }),
   });
 
 export const type1 = db
@@ -23,8 +23,8 @@ export const type1 = db
     updatedAt: db.datetime({ optional: true }),
   })
   .hooks({
-    create: ({ data }) => ({ ...data, createdAt: new Date() }),
-    update: ({ data }) => ({ ...data, updatedAt: new Date() }),
+    create: () => ({ createdAt: new Date() }),
+    update: () => ({ updatedAt: new Date() }),
   });
 
 export const type2 = db
@@ -34,8 +34,8 @@ export const type2 = db
     updatedAt: db.datetime({ optional: true }),
   })
   .hooks({
-    create: ({ data }) => ({ ...data, createdAt: new Date() }),
-    update: ({ data }) => ({ ...data, updatedAt: new Date() }),
+    create: () => ({ createdAt: new Date() }),
+    update: () => ({ updatedAt: new Date() }),
   });
 
 export const type3 = db
@@ -45,8 +45,8 @@ export const type3 = db
     updatedAt: db.datetime({ optional: true }),
   })
   .hooks({
-    create: ({ data }) => ({ ...data, createdAt: new Date() }),
-    update: ({ data }) => ({ ...data, updatedAt: new Date() }),
+    create: () => ({ createdAt: new Date() }),
+    update: () => ({ updatedAt: new Date() }),
   });
 
 export const type4 = db
@@ -56,8 +56,8 @@ export const type4 = db
     updatedAt: db.datetime({ optional: true }),
   })
   .hooks({
-    create: ({ data }) => ({ ...data, createdAt: new Date() }),
-    update: ({ data }) => ({ ...data, updatedAt: new Date() }),
+    create: () => ({ createdAt: new Date() }),
+    update: () => ({ updatedAt: new Date() }),
   });
 
 export const type5 = db
@@ -67,8 +67,8 @@ export const type5 = db
     updatedAt: db.datetime({ optional: true }),
   })
   .hooks({
-    create: ({ data }) => ({ ...data, createdAt: new Date() }),
-    update: ({ data }) => ({ ...data, updatedAt: new Date() }),
+    create: () => ({ createdAt: new Date() }),
+    update: () => ({ updatedAt: new Date() }),
   });
 
 export const type6 = db
@@ -78,8 +78,8 @@ export const type6 = db
     updatedAt: db.datetime({ optional: true }),
   })
   .hooks({
-    create: ({ data }) => ({ ...data, createdAt: new Date() }),
-    update: ({ data }) => ({ ...data, updatedAt: new Date() }),
+    create: () => ({ createdAt: new Date() }),
+    update: () => ({ updatedAt: new Date() }),
   });
 
 export const type7 = db
@@ -89,8 +89,8 @@ export const type7 = db
     updatedAt: db.datetime({ optional: true }),
   })
   .hooks({
-    create: ({ data }) => ({ ...data, createdAt: new Date() }),
-    update: ({ data }) => ({ ...data, updatedAt: new Date() }),
+    create: () => ({ createdAt: new Date() }),
+    update: () => ({ updatedAt: new Date() }),
   });
 
 export const type8 = db
@@ -100,8 +100,8 @@ export const type8 = db
     updatedAt: db.datetime({ optional: true }),
   })
   .hooks({
-    create: ({ data }) => ({ ...data, createdAt: new Date() }),
-    update: ({ data }) => ({ ...data, updatedAt: new Date() }),
+    create: () => ({ createdAt: new Date() }),
+    update: () => ({ updatedAt: new Date() }),
   });
 
 export const type9 = db
@@ -111,6 +111,6 @@ export const type9 = db
     updatedAt: db.datetime({ optional: true }),
   })
   .hooks({
-    create: ({ data }) => ({ ...data, createdAt: new Date() }),
-    update: ({ data }) => ({ ...data, updatedAt: new Date() }),
+    create: () => ({ createdAt: new Date() }),
+    update: () => ({ updatedAt: new Date() }),
   });

@@ -469,8 +469,8 @@ export function createTable<const D extends { id?: never } & Record<string, Fiel
  *   },
  *   {
  *     hooks: {
- *       create: ({ data }) => ({ ...data, createdAt: new Date() }),
- *       update: ({ data }) => ({ ...data, updatedAt: new Date() }),
+ *       create: () => ({ createdAt: new Date() }),
+ *       update: () => ({ updatedAt: new Date() }),
  *     },
  *   },
  * );
