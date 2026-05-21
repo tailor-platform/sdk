@@ -333,7 +333,7 @@ async function generateDiffFromSnapshot(
       `Data loss is possible for this migration but no script was generated. To add a custom migrate.ts, run:`,
     );
     logger.log(
-      `  ${styles.bold(`tailor-sdk tailordb migration script ${result.migrationNumber.toString().padStart(4, "0")}`)}`,
+      `  ${styles.bold(`tailor-sdk tailordb migration script ${result.migrationNumber.toString().padStart(4, "0")} --namespace ${diff.namespace}`)}`,
     );
   }
 }
