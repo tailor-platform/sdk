@@ -5,5 +5,17 @@
   "sdkSurface": "config",
   "contextProfiles": ["code-only", "code-and-docs", "bare-types"],
   "canonicalSymbols": ["defineIdp", "defineAuth", ".provider"],
-  "biasAttractors": ["defineIdProvider", "defineProvider", "selectIdp", "useIdp", "idpProvider"]
+  "biasAttractors": ["defineIdProvider", "defineProvider", "selectIdp", "useIdp", "idpProvider"],
+  "expectedCallShapes": {
+    "defineIdp": {
+      "positionalArity": 2,
+      "configArgIndex": 1,
+      "configKeys": ["clients"]
+    },
+    "defineAuth": {
+      "positionalArity": 2,
+      "configArgIndex": 1,
+      "configKeys": ["idProvider"]
+    }
+  }
 }

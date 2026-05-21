@@ -85,6 +85,36 @@ export type ProblemMeta = {
    * naming-bias miss rate alongside `canonicalSymbols`.
    */
   biasAttractors?: string[];
+  /**
+   * Expected call-site shape for each canonical symbol. Used by the
+   * `scripts/call-shape-audit.ts` walker that AST-parses each iteration's
+   * `work/**.ts` and grades how many calls to a canonical match the shape
+   * the SDK actually expects.
+   *
+   * Keys are symbol names matching `canonicalSymbols`. Method names start
+   * with a leading dot (e.g. `.trigger`); the audit currently skips those
+   * — only bare-identifier callees are graded.
+   */
+  expectedCallShapes?: Record<string, ExpectedCallShape>;
+};
+
+export type ExpectedCallShape = {
+  /**
+   * Expected number of positional arguments. Use `"rest"` for variadic
+   * factories like `definePlugins(p1, p2, ...)`.
+   */
+  positionalArity: number | "rest";
+  /**
+   * Index of the positional argument expected to be an object literal
+   * carrying configuration. Defaults to 0 when omitted.
+   */
+  configArgIndex?: number;
+  /**
+   * Required top-level keys on the config object literal. The audit
+   * reports each missing key per call. Extra keys are NOT flagged —
+   * SDK config objects usually have many optional fields.
+   */
+  configKeys?: string[];
 };
 
 function loadMeta(problemDir: string): ProblemMeta {

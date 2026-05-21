@@ -5,5 +5,15 @@
   "sdkSurface": "workflow",
   "contextProfiles": ["code-only", "code-and-docs", "bare-types"],
   "canonicalSymbols": ["createWorkflowJob", "createWorkflow", ".trigger"],
-  "biasAttractors": [".execute", ".run", ".invoke", ".call", "runJob", "executeJob"]
+  "biasAttractors": [".execute", ".run", ".invoke", ".call", "runJob", "executeJob"],
+  "expectedCallShapes": {
+    "createWorkflowJob": {
+      "positionalArity": 1,
+      "configKeys": ["name", "body"]
+    },
+    "createWorkflow": {
+      "positionalArity": 1,
+      "configKeys": ["name", "mainJob"]
+    }
+  }
 }

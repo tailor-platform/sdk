@@ -18,5 +18,25 @@
     "createJob",
     "db.aggregate",
     "db.query"
-  ]
+  ],
+  "expectedCallShapes": {
+    "createWorkflowJob": {
+      "positionalArity": 1,
+      "configKeys": ["name", "body"]
+    },
+    "createWorkflow": {
+      "positionalArity": 1,
+      "configKeys": ["name", "mainJob"]
+    },
+    "definePlugins": {
+      "positionalArity": "rest"
+    },
+    "kyselyTypePlugin": {
+      "positionalArity": 1,
+      "configKeys": ["distPath"]
+    },
+    "getDB": {
+      "positionalArity": 1
+    }
+  }
 }

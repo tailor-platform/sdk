@@ -12,5 +12,20 @@
     "configureRedirect",
     "getStaticWebsiteUrl",
     "siteUrl"
-  ]
+  ],
+  "expectedCallShapes": {
+    "defineStaticWebSite": {
+      "positionalArity": 2,
+      "configArgIndex": 1,
+      "configKeys": ["description"]
+    },
+    "defineAuth": {
+      "positionalArity": 2,
+      "configArgIndex": 1
+    },
+    "defineConfig": {
+      "positionalArity": 1,
+      "configKeys": ["name"]
+    }
+  }
 }

@@ -11,5 +11,19 @@
     "useTrigger",
     "addTrigger",
     "recordCreatedTrigger"
-  ]
+  ],
+  "expectedCallShapes": {
+    "createExecutor": {
+      "positionalArity": 1,
+      "configKeys": ["name", "trigger", "operation"]
+    },
+    "recordTrigger": {
+      "positionalArity": 1,
+      "configKeys": ["type", "events"]
+    },
+    "resolverExecutedTrigger": {
+      "positionalArity": 1,
+      "configKeys": ["resolver"]
+    }
+  }
 }
