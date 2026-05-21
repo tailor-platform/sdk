@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { SCHEMA_SNAPSHOT_VERSION, type DiffChange } from "./diff-calculator";
+import { SCHEMA_SNAPSHOT_VERSION, type DiffChange, type MigrationDiff } from "./diff-calculator";
 import {
   applyPreMigrationRelationshipAdjustments,
   buildPreMigrationRelationshipChangesMap,
 } from "./pre-migration-schema";
-import type { MigrationDiff } from "./diff-calculator";
 import type { PendingMigration } from "./types";
 
 function makeMigration(changes: DiffChange[]): PendingMigration {

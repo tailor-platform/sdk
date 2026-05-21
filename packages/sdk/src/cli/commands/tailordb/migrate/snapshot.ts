@@ -1364,10 +1364,10 @@ function compareTypeFields(
  * hooks materialize as per-field FieldHooks and surface via field_modified.
  * Stale hooks from old snapshots are therefore intentionally ignored here;
  * the wire format would discard them anyway.
- * @param ctx
- * @param typeName
- * @param prevType
- * @param currType
+ * @param ctx - Diff accumulation context
+ * @param typeName - Type being compared
+ * @param prevType - Previous-snapshot type
+ * @param currType - Current-snapshot type
  */
 function compareTypeHooksValidate(
   ctx: DiffContext,
