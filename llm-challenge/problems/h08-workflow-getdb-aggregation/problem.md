@@ -44,6 +44,9 @@ Two edits are required:
 - Aggregate via Kysely's `fn.sum("amount")` aliased as `total` and group by
   `accountId`. Cast `total` to `Number` before returning so the output is a
   plain number, not a string.
+- The job factory exported from `@tailor-platform/sdk` is named
+  `createWorkflowJob` exactly — shorter aliases such as `createJob` are not
+  exported.
 - Do not edit `tailordb/invoice.ts`.
 
 ## Reference
