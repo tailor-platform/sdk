@@ -294,7 +294,7 @@ describe("snapshot-manifest", () => {
     });
 
     it("never emits typeHook even when snapshot still carries a type-level hooks slot", () => {
-      // Old snapshots predating Case Y may have `SnapshotType.hooks` populated.
+      // Old snapshots predating Case Y may have `TailorDBSnapshotType.hooks` populated.
       // The wire format must drop them in favor of per-field hooks; this test
       // pins that behavior so we cannot accidentally reintroduce typeHook.
       const snapshotType = createTestSnapshotType("Stale", {

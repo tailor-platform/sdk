@@ -852,8 +852,8 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
           const after = change.after as {
             indexes?: Record<string, SnapshotIndexConfig>;
             files?: Record<string, string>;
-            hooks?: SnapshotType["hooks"];
-            validate?: SnapshotType["validate"];
+            hooks?: TailorDBSnapshotType["hooks"];
+            validate?: TailorDBSnapshotType["validate"];
           };
           const next = { ...types[change.typeName] };
           if (after.indexes !== undefined) next.indexes = after.indexes;
@@ -1366,8 +1366,8 @@ function compareTypeFields(
 function compareTypeHooksValidate(
   ctx: DiffContext,
   typeName: string,
-  prevType: SnapshotType,
-  currType: SnapshotType,
+  prevType: TailorDBSnapshotType,
+  currType: TailorDBSnapshotType,
 ): void {
   const validateChanged = !areValidationsEqual(prevType.validate, currType.validate);
   if (!validateChanged) return;
@@ -1385,7 +1385,10 @@ function compareTypeHooksValidate(
   });
 }
 
-function areValidationsEqual(a: SnapshotType["validate"], b: SnapshotType["validate"]): boolean {
+function areValidationsEqual(
+  a: TailorDBSnapshotType["validate"],
+  b: TailorDBSnapshotType["validate"],
+): boolean {
   const left = a ?? [];
   const right = b ?? [];
   if (left.length !== right.length) return false;

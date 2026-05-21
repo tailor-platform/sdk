@@ -175,7 +175,7 @@ export function generateTailorDBTypeManifestFromSnapshot(
 }
 
 function toProtoSnapshotTypeValidate(
-  snapshotType: SnapshotType,
+  snapshotType: TailorDBSnapshotType,
 ): MessageInitShape<typeof TailorDBType_TypeValidateSchema> | undefined {
   if (!snapshotType.validate || snapshotType.validate.length === 0) return undefined;
   // Each snapshot validator script already evaluates to a map; merge them so

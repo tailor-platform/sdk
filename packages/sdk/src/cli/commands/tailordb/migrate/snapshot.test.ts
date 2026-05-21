@@ -769,6 +769,7 @@ describe("snapshot", () => {
         types: {
           Order: {
             name: "Order",
+            pluralForm: "Orders",
             fields: { id: { type: "uuid", required: true } },
           },
         },
@@ -778,6 +779,7 @@ describe("snapshot", () => {
         types: {
           Order: {
             name: "Order",
+            pluralForm: "Orders",
             fields: { id: { type: "uuid", required: true } },
             hooks: {
               create: { expr: "({data}) => ({ ...data, createdAt: new Date() })" },
@@ -797,6 +799,7 @@ describe("snapshot", () => {
         types: {
           Order: {
             name: "Order",
+            pluralForm: "Orders",
             fields: { id: { type: "uuid", required: true } },
             validate: [{ script: { expr: "data.quantity > 0" }, errorMessage: "quantity > 0" }],
           },
@@ -807,6 +810,7 @@ describe("snapshot", () => {
         types: {
           Order: {
             name: "Order",
+            pluralForm: "Orders",
             fields: { id: { type: "uuid", required: true } },
             validate: [
               { script: { expr: "data.quantity > 0" }, errorMessage: "quantity > 0" },
@@ -829,6 +833,7 @@ describe("snapshot", () => {
         types: {
           Order: {
             name: "Order",
+            pluralForm: "Orders",
             fields: { id: { type: "uuid", required: true } },
             hooks: { create: { expr: "createExpr" }, update: { expr: "updateExpr" } },
             validate: [{ script: { expr: "validExpr" }, errorMessage: "msg" }],

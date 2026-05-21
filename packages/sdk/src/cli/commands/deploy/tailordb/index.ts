@@ -1695,7 +1695,7 @@ function generateTailorDBTypeManifest(
 }
 
 function toProtoTypeValidate(
-  type: TailorDBType,
+  type: TailorDBSnapshotType,
 ): MessageInitShape<typeof TailorDBType_TypeValidateSchema> | undefined {
   const validators = type.validate;
   if (!validators || validators.length === 0) return undefined;
