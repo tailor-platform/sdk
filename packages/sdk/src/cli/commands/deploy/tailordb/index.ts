@@ -860,7 +860,14 @@ async function executeSingleMigrationPostPhase(
 ): Promise<void> {
   // Re-use the pre-migration changes map to know which types were touched in
   // this migration (so we send the post-phase final-schema update for them).
+  // Relationship-only adjustments also need a Post-phase final update so the
+  // Pre-phase restoration of removed relationships does not leak through.
   const preMigrationChanges = buildPreMigrationChangesMap([migration]);
+  const preMigrationRelationshipChanges = buildPreMigrationRelationshipChangesMap([migration]);
+  const preMigrationTypes = new Set<string>([
+    ...preMigrationChanges.keys(),
+    ...preMigrationRelationshipChanges.keys(),
+  ]);
   const affectedTypes = getAffectedTypeNames(migration);
   const deletedTypeNames = getDeletedTypeNames(migration);
 
@@ -872,7 +879,7 @@ async function executeSingleMigrationPostPhase(
       ...changeSet.type.creates
         .filter((create) => {
           const typeName = create.request.tailordbType?.name;
-          return typeName && affectedTypes.has(typeName) && preMigrationChanges.has(typeName);
+          return typeName && affectedTypes.has(typeName) && preMigrationTypes.has(typeName);
         })
         .map((create) =>
           client.updateTailorDBType({
@@ -885,7 +892,7 @@ async function executeSingleMigrationPostPhase(
       ...changeSet.type.updates
         .filter((update) => {
           const typeName = update.request.tailordbType?.name;
-          return typeName && affectedTypes.has(typeName) && preMigrationChanges.has(typeName);
+          return typeName && affectedTypes.has(typeName) && preMigrationTypes.has(typeName);
         })
         .map((update) => client.updateTailorDBType(update.request)),
     ]);
@@ -1440,6 +1447,7 @@ function normalizeComparableTailorDBType(type: unknown) {
       indexes?: Record<string, unknown>;
       files?: Record<string, unknown>;
       permission?: Record<string, unknown>;
+      typeValidate?: Record<string, unknown>;
     };
   } | null;
   return normalizeTailorDBCompareValue(
@@ -1453,6 +1461,7 @@ function normalizeComparableTailorDBType(type: unknown) {
         indexes: normalized?.schema?.indexes ?? {},
         files: normalized?.schema?.files ?? {},
         permission: normalized?.schema?.permission ?? {},
+        typeValidate: normalized?.schema?.typeValidate ?? {},
       },
     },
     [],
