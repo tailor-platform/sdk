@@ -110,6 +110,22 @@ function toScriptFunction(value: unknown): ScriptFunction | undefined {
   return value as unknown as ScriptFunction;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+type ValidateInputEntry = Function | [Function, string];
+
+function pushValidateTargets(
+  validators: readonly ValidateInputEntry[] | undefined,
+  kind: ScriptKind,
+  targets: ScriptTarget[],
+): void {
+  if (!validators) return;
+  for (const validateInput of validators) {
+    const candidate = typeof validateInput === "function" ? validateInput : validateInput[0];
+    const fn = toScriptFunction(candidate);
+    if (fn) targets.push({ fn, kind });
+  }
+}
+
 function collectScriptTargets(type: TailorDBTypeSchemaOutput): ScriptTarget[] {
   const targets: ScriptTarget[] = [];
 
@@ -123,16 +139,7 @@ function collectScriptTargets(type: TailorDBTypeSchemaOutput): ScriptTarget[] {
     targets.push({ fn: recordUpdateHook, kind: "record-hooks" });
   }
 
-  // Collect record-level validators
-  for (const validateInput of type.metadata.validate ?? []) {
-    if (typeof validateInput === "function") {
-      const validateFn = toScriptFunction(validateInput);
-      if (validateFn) targets.push({ fn: validateFn, kind: "record-validate" });
-    } else {
-      const validateFn = toScriptFunction(validateInput[0]);
-      if (validateFn) targets.push({ fn: validateFn, kind: "record-validate" });
-    }
-  }
+  pushValidateTargets(type.metadata.validate, "record-validate", targets);
 
   const collectFieldTargets = (field: TailorDBTypeSchemaOutput["fields"][string]) => {
     const metadata = field.metadata;
@@ -146,15 +153,7 @@ function collectScriptTargets(type: TailorDBTypeSchemaOutput): ScriptTarget[] {
       targets.push({ fn: updateHook, kind: "hooks" });
     }
 
-    for (const validateInput of metadata.validate ?? []) {
-      if (typeof validateInput === "function") {
-        const validateFn = toScriptFunction(validateInput);
-        if (validateFn) targets.push({ fn: validateFn, kind: "validate" });
-      } else {
-        const validateFn = toScriptFunction(validateInput[0]);
-        if (validateFn) targets.push({ fn: validateFn, kind: "validate" });
-      }
-    }
+    pushValidateTargets(metadata.validate, "validate", targets);
 
     if (field.type === "nested" && field.fields) {
       for (const nestedField of Object.values(field.fields as TailorDBTypeSchemaOutput["fields"])) {
