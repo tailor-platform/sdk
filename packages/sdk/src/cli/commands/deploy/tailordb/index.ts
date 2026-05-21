@@ -45,8 +45,11 @@ import {
   formatMigrationDiff,
   formatDiffSummary,
   type MigrationDiff,
-  type DiffChange,
 } from "@/cli/commands/tailordb/migrate/diff-calculator";
+import {
+  applyPreMigrationFieldAdjustments,
+  buildPreMigrationChangesMap,
+} from "@/cli/commands/tailordb/migrate/pre-migration-schema";
 import {
   reconstructSnapshotFromMigrations,
   compareLocalTypesWithSnapshot,
@@ -54,6 +57,17 @@ import {
   formatMigrationNumber,
   compareRemoteWithSnapshot,
   formatSchemaDrifts,
+  createSnapshotType,
+  getLatestMigrationNumber,
+  isSnapshotFieldRefOperand,
+  type SnapshotFieldConfig,
+  type TailorDBSnapshotType,
+  type SnapshotRecordPermission,
+  type SnapshotActionPermission,
+  type SnapshotPermissionCondition,
+  type SnapshotPermissionOperand,
+  type SnapshotGqlPermission,
+  type SnapshotGqlPermissionPolicy,
 } from "@/cli/commands/tailordb/migrate/snapshot";
 import { type TailorDBService } from "@/cli/services/tailordb/service";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
@@ -83,17 +97,6 @@ import type {
 } from "@/cli/commands/tailordb/migrate/types";
 import type { LoadedConfig } from "@/cli/shared/config-loader";
 import type { Executor } from "@/types/executor.generated";
-import type { EnumValue } from "@/types/field-types";
-import type {
-  PermissionOperand,
-  StandardActionPermission,
-  StandardGqlPermissionPolicy,
-  StandardPermissionCondition,
-  StandardTailorTypeGqlPermission,
-  StandardTailorTypePermission,
-  OperatorFieldConfig,
-  TailorDBType,
-} from "@/types/tailordb";
 import type { GqlOperations, TailorDBServiceConfig } from "@/types/tailordb.generated";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
@@ -243,22 +246,27 @@ function formatRemoteVerificationResults(results: RemoteSchemaVerificationResult
 // Migration Validation
 // ============================================================================
 
+type ValidateAndDetectResult = {
+  pendingMigrations: PendingMigration[];
+  namespacesWithMigrations: NamespaceWithMigrations[];
+};
+
 /**
  * Validate migration files and detect pending migrations
  * @param {OperatorClient} client - Operator client instance
  * @param {string} workspaceId - Workspace ID
- * @param {ReadonlyMap<string, Record<string, TailorDBType>>} typesByNamespace - Types by namespace
+ * @param {ReadonlyMap<string, Record<string, TailorDBSnapshotType>>} typesByNamespace - Types by namespace
  * @param {LoadedConfig} config - Loaded application config (includes path)
  * @param {boolean} noSchemaCheck - Whether to skip schema diff check
- * @returns {Promise<PendingMigration[]>} List of pending migrations
+ * @returns {Promise<ValidateAndDetectResult>} Pending migrations and namespaces that have migration directories configured
  */
 async function validateAndDetectMigrations(
   client: OperatorClient,
   workspaceId: string,
-  typesByNamespace: ReadonlyMap<string, Record<string, TailorDBType>>,
+  typesByNamespace: ReadonlyMap<string, Record<string, TailorDBSnapshotType>>,
   config: LoadedConfig,
   noSchemaCheck: boolean,
-): Promise<PendingMigration[]> {
+): Promise<ValidateAndDetectResult> {
   const configDir = path.dirname(config.path);
   const namespacesWithMigrations = getNamespacesWithMigrations(config, configDir);
   let pendingMigrations: PendingMigration[] = [];
@@ -319,9 +327,9 @@ async function validateAndDetectMigrations(
     if (pendingMigrations.length > 0) {
       logger.newline();
 
-      // Classify migrations by whether they require migration scripts
-      const withScripts = pendingMigrations.filter((m) => m.diff.requiresMigrationScript);
-      const withoutScripts = pendingMigrations.filter((m) => !m.diff.requiresMigrationScript);
+      // Classify migrations by whether a migrate.ts will run for them.
+      const withScripts = pendingMigrations.filter((m) => m.hasScript);
+      const withoutScripts = pendingMigrations.filter((m) => !m.hasScript);
 
       logger.info(`Applying ${pendingMigrations.length} migration(s):`);
       if (withoutScripts.length > 0) {
@@ -339,7 +347,42 @@ async function validateAndDetectMigrations(
     }
   }
 
-  return pendingMigrations;
+  return { pendingMigrations, namespacesWithMigrations };
+}
+
+/**
+ * Reconcile the on-remote migration label with the working tree's latest
+ * migration number for each namespace.
+ *
+ * Used after a `--no-schema-check` apply: that flag skips the local/remote
+ * snapshot drift checks, but if it also leaves the label untouched the remote
+ * label can drift past the working tree's latest migration (e.g. when
+ * checking out an older revision and re-deploying). A subsequent run would
+ * then reconstruct the expected snapshot at a label that no longer exists in
+ * the working tree, triggering a false drift error.
+ *
+ * Always force `label = working_tree_max` regardless of the previous label so
+ * the invariant `label <= working_tree_max` is preserved.
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ * @param namespacesWithMigrations - Namespaces that have migration directories configured
+ */
+async function reconcileMigrationLabels(
+  client: OperatorClient,
+  workspaceId: string,
+  namespacesWithMigrations: NamespaceWithMigrations[],
+): Promise<void> {
+  for (const { namespace, migrationsDir } of namespacesWithMigrations) {
+    const targetVersion = getLatestMigrationNumber(migrationsDir);
+    const currentVersion = await getRemoteMigrationNumber(client, workspaceId, namespace);
+    await updateMigrationLabel(client, workspaceId, namespace, targetVersion);
+    if (currentVersion !== targetVersion) {
+      const from = currentVersion === null ? "<unset>" : formatMigrationNumber(currentVersion);
+      logger.info(
+        `Migration label for namespace ${namespace} reconciled: ${from} → ${formatMigrationNumber(targetVersion)}.`,
+      );
+    }
+  }
 }
 
 /**
@@ -394,16 +437,13 @@ export async function applyTailorDB(
 
   if (phase === "create-update") {
     // Validate and detect migrations
-    // Build types by namespace map
-    const typesByNamespace = new Map<string, Record<string, TailorDBType>>();
-    for (const tailordb of migrationContext.application.tailorDBServices) {
-      const types = tailordb.types;
-      if (types) {
-        typesByNamespace.set(tailordb.namespace, types);
-      }
+    // Build types by namespace map (snapshot-shaped, the canonical deploy form)
+    const typesByNamespace = new Map<string, Record<string, TailorDBSnapshotType>>();
+    for (const tailordb of migrationContext.tailorDBInputs) {
+      typesByNamespace.set(tailordb.namespace, tailordb.types);
     }
 
-    const pendingMigrations = await validateAndDetectMigrations(
+    const { pendingMigrations, namespacesWithMigrations } = await validateAndDetectMigrations(
       client,
       migrationContext.workspaceId,
       typesByNamespace,
@@ -422,9 +462,7 @@ export async function applyTailorDB(
       // Step 1: Create/update services once at the beginning (services don't need per-migration handling)
       await executeServicesCreation(client, changeSet);
 
-      const migrationsRequiringScripts = pendingMigrations.filter(
-        (m) => m.diff.requiresMigrationScript,
-      );
+      const migrationsRequiringScripts = pendingMigrations.filter((m) => m.hasScript);
 
       // Step 2: Build migration context for script execution (if any migrations require scripts)
       const migrationCtx =
@@ -442,8 +480,8 @@ export async function applyTailorDB(
         // Pre-migration phase: Create/update types with breaking fields as optional
         await executeSingleMigrationPrePhase(client, changeSet, migration);
 
-        // Script execution (only if this migration requires a script)
-        if (migration.diff.requiresMigrationScript && migrationCtx) {
+        // Script execution (only if migrate.ts exists for this migration)
+        if (migration.hasScript && migrationCtx) {
           await executeMigrations(migrationCtx, [migration]);
         }
 
@@ -521,6 +559,19 @@ export async function applyTailorDB(
         changeSet.type.deletes.map((del) => client.deleteTailorDBType(del.request)),
       );
     }
+
+    // When schema checks are skipped, force-reconcile the migration label so
+    // that the invariant `label <= working_tree_max` always holds. Without
+    // this, a `--no-schema-check` deploy from an older revision can leave a
+    // stale label that breaks the next snapshot reconstruction (see
+    // verifyRemoteSchema).
+    if (migrationContext.noSchemaCheck && namespacesWithMigrations.length > 0) {
+      await reconcileMigrationLabels(
+        client,
+        migrationContext.workspaceId,
+        namespacesWithMigrations,
+      );
+    }
   } else if (phase === "delete-resources") {
     // Delete GQL permissions first, then types
     await Promise.all(
@@ -559,111 +610,6 @@ function handleOptionalToRequiredError(error: unknown, messages: string[]): neve
     }
   }
   throw error;
-}
-
-// ============================================================================
-// Pre-Migration Support
-// ============================================================================
-
-/**
- * Map of breaking changes: typeName -> fieldName -> change kind
- */
-type BreakingChangesMap = Map<string, Map<string, DiffChange>>;
-
-/**
- * Build a map of breaking field changes from pending migrations
- * @param {PendingMigration[]} pendingMigrations - Pending migrations
- * @returns {BreakingChangesMap} Map of breaking changes
- */
-function buildBreakingChangesMap(pendingMigrations: PendingMigration[]): BreakingChangesMap {
-  const map: BreakingChangesMap = new Map();
-
-  for (const migration of pendingMigrations) {
-    for (const change of migration.diff.changes) {
-      // We care about field changes that affect required status
-      if (
-        change.kind === "field_added" ||
-        change.kind === "field_modified" ||
-        change.kind === "field_removed"
-      ) {
-        if (!change.fieldName) continue;
-
-        if (!map.has(change.typeName)) {
-          map.set(change.typeName, new Map());
-        }
-        map.get(change.typeName)!.set(change.fieldName, change);
-      }
-    }
-  }
-
-  return map;
-}
-
-/**
- * Field config type for breaking change detection
- */
-interface FieldConfig {
-  required?: boolean;
-  unique?: boolean;
-  allowedValues?: EnumValue[];
-}
-
-/**
- * Apply pre-migration schema adjustments to avoid breaking changes before scripts run.
- * @param fields - Field configs to adjust
- * @param typeChanges - Breaking changes for a type
- */
-function applyPreMigrationFieldAdjustments(
-  fields: Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>>,
-  typeChanges: Map<string, DiffChange>,
-): void {
-  for (const [fieldName, change] of typeChanges) {
-    const field = fields[fieldName];
-    if (!field) continue;
-
-    const before = change.before as FieldConfig | undefined;
-    const after = change.after as FieldConfig | undefined;
-
-    if (change.kind === "field_added" && after?.required) {
-      field.required = false;
-    }
-
-    if (change.kind !== "field_modified") {
-      continue;
-    }
-
-    // Optional to required
-    if (!before?.required && after?.required) {
-      field.required = false;
-    }
-
-    // Unique constraint added
-    if (!(before?.unique ?? false) && (after?.unique ?? false)) {
-      field.unique = false;
-    }
-
-    // Enum values removed: keep old values + add new values (union)
-    if (before?.allowedValues && after?.allowedValues) {
-      const afterValues = new Set(after.allowedValues.map((v) => v.value));
-      const removedValues = before.allowedValues.filter((v) => !afterValues.has(v.value));
-      if (removedValues.length > 0) {
-        // Create union of all values, preserving descriptions where available
-        const valueMap = new Map<string, string>();
-        for (const v of before.allowedValues) {
-          valueMap.set(v.value, v.description ?? "");
-        }
-        for (const v of after.allowedValues) {
-          if (!valueMap.has(v.value)) {
-            valueMap.set(v.value, v.description ?? "");
-          }
-        }
-        field.allowedValues = Array.from(valueMap.entries()).map(([value, description]) => ({
-          value,
-          description,
-        }));
-      }
-    }
-  }
 }
 
 // ============================================================================
@@ -745,8 +691,10 @@ async function executeSingleMigrationPrePhase(
   changeSet: TailorDBChangeSet,
   migration: PendingMigration,
 ): Promise<void> {
-  // Build breaking changes map for this single migration
-  const breakingChanges = buildBreakingChangesMap([migration]);
+  // Build pre-migration changes map for this single migration. Includes both
+  // breaking changes (required-add, unique-add, enum value removal) and the
+  // warning-tier field_removed, since the Pre-phase relaxes both.
+  const preMigrationChanges = buildPreMigrationChangesMap([migration]);
   const affectedTypes = getAffectedTypeNames(migration);
   const createdBeforeMigration = new Set(processedTypes.created);
 
@@ -762,7 +710,7 @@ async function executeSingleMigrationPrePhase(
         const typeName = create.request.tailordbType?.name;
         if (typeName) processedTypes.created.add(typeName);
 
-        const typeChanges = typeName ? breakingChanges.get(typeName) : undefined;
+        const typeChanges = typeName ? preMigrationChanges.get(typeName) : undefined;
 
         if (!typeChanges || typeChanges.size === 0) {
           return client.createTailorDBType(create.request);
@@ -786,7 +734,7 @@ async function executeSingleMigrationPrePhase(
         const typeName = create.request.tailordbType?.name;
         if (typeName) processedTypes.updated.add(typeName);
 
-        const typeChanges = typeName ? breakingChanges.get(typeName) : undefined;
+        const typeChanges = typeName ? preMigrationChanges.get(typeName) : undefined;
 
         if (!typeChanges || typeChanges.size === 0) {
           return client.updateTailorDBType({
@@ -817,7 +765,7 @@ async function executeSingleMigrationPrePhase(
         const typeName = update.request.tailordbType?.name;
         if (typeName) processedTypes.updated.add(typeName);
 
-        const typeChanges = typeName ? breakingChanges.get(typeName) : undefined;
+        const typeChanges = typeName ? preMigrationChanges.get(typeName) : undefined;
 
         if (!typeChanges || typeChanges.size === 0) {
           return client.updateTailorDBType(update.request);
@@ -899,8 +847,9 @@ async function executeSingleMigrationPostPhase(
   changeSet: TailorDBChangeSet,
   migration: PendingMigration,
 ): Promise<void> {
-  // Build breaking changes map for this single migration
-  const breakingChanges = buildBreakingChangesMap([migration]);
+  // Re-use the pre-migration changes map to know which types were touched in
+  // this migration (so we send the post-phase final-schema update for them).
+  const preMigrationChanges = buildPreMigrationChangesMap([migration]);
   const affectedTypes = getAffectedTypeNames(migration);
   const deletedTypeNames = getDeletedTypeNames(migration);
 
@@ -908,11 +857,11 @@ async function executeSingleMigrationPostPhase(
   // Pre-migration used cloned requests, so the original changeSet still has correct values
   try {
     await Promise.all([
-      // For newly created types that had breaking changes in this migration, send update with final values
+      // For newly created types that had pre-migration adjustments in this migration, send update with final values
       ...changeSet.type.creates
         .filter((create) => {
           const typeName = create.request.tailordbType?.name;
-          return typeName && affectedTypes.has(typeName) && breakingChanges.has(typeName);
+          return typeName && affectedTypes.has(typeName) && preMigrationChanges.has(typeName);
         })
         .map((create) =>
           client.updateTailorDBType({
@@ -925,7 +874,7 @@ async function executeSingleMigrationPostPhase(
       ...changeSet.type.updates
         .filter((update) => {
           const typeName = update.request.tailordbType?.name;
-          return typeName && affectedTypes.has(typeName) && breakingChanges.has(typeName);
+          return typeName && affectedTypes.has(typeName) && preMigrationChanges.has(typeName);
         })
         .map((update) => client.updateTailorDBType(update.request)),
     ]);
@@ -975,6 +924,36 @@ async function executeSingleMigrationPostPhase(
  * @param context - Planning context
  * @returns Planned changes
  */
+/**
+ * Canonical input shape consumed by every TailorDB plan/proto step.
+ * The deploy pipeline funnels `TailorDBService` through `createSnapshotType` so
+ * that comparison, manifest generation and migration drift checks all read the
+ * same snapshot-shaped data, keeping platform-side normalization (e.g. decimal
+ * scale) in one place.
+ */
+type TailorDBDeployInput = {
+  namespace: string;
+  config: TailorDBServiceConfig;
+  types: Record<string, TailorDBSnapshotType>;
+};
+
+/**
+ * Convert a runtime TailorDBService to the snapshot-shaped deploy input.
+ * @param service - Loaded TailorDB service (after `loadTypes()`)
+ * @returns The canonical snapshot-shaped deploy input for downstream plan/apply phases.
+ */
+function toTailorDBDeployInput(service: TailorDBService): TailorDBDeployInput {
+  const types: Record<string, TailorDBSnapshotType> = {};
+  for (const [typeName, type] of Object.entries(service.types)) {
+    types[typeName] = createSnapshotType(type);
+  }
+  return {
+    namespace: service.namespace,
+    config: service.config,
+    types,
+  };
+}
+
 export async function planTailorDB(context: PlanContext) {
   const {
     client,
@@ -985,11 +964,11 @@ export async function planTailorDB(context: PlanContext) {
     noSchemaCheck,
     forceApplyAll = false,
   } = context;
-  const tailordbs: TailorDBService[] = [];
+  const tailordbs: TailorDBDeployInput[] = [];
   if (!forRemoval) {
     for (const tailordb of application.tailorDBServices) {
       await tailordb.loadTypes();
-      tailordbs.push(tailordb);
+      tailordbs.push(toTailorDBDeployInput(tailordb));
     }
   }
   const executors = forRemoval
@@ -1020,6 +999,7 @@ export async function planTailorDB(context: PlanContext) {
     context: {
       workspaceId,
       application,
+      tailorDBInputs: tailordbs,
       config,
       noSchemaCheck: noSchemaCheck ?? false,
     },
@@ -1136,7 +1116,7 @@ function areTailorDBServicesEqual(
     namespace?: { name?: string };
     defaultTimezone?: string;
   },
-  desired: Readonly<TailorDBService>,
+  desired: Readonly<TailorDBDeployInput>,
 ): boolean {
   return areNormalizedEqual(
     normalizeComparableTailorDBService({
@@ -1155,7 +1135,7 @@ async function planServices(
   workspaceId: string,
   appName: string,
   appId: string | undefined,
-  tailordbs: ReadonlyArray<TailorDBService>,
+  tailordbs: ReadonlyArray<TailorDBDeployInput>,
 ) {
   const changeSet = createChangeSet<CreateService, UpdateService, DeleteService>(
     "TailorDB services",
@@ -1286,10 +1266,10 @@ type DeleteType = {
 async function planTypes(
   client: OperatorClient,
   workspaceId: string,
-  tailordbs: ReadonlyArray<TailorDBService>,
+  tailordbs: ReadonlyArray<TailorDBDeployInput>,
   executors: ReadonlyArray<Executor>,
   deletedServices: ReadonlyArray<string>,
-  filteredTypesByNamespace?: Map<string, Record<string, TailorDBType>>,
+  filteredTypesByNamespace?: Map<string, Record<string, TailorDBSnapshotType>>,
   forceApplyAll = false,
 ) {
   const changeSet = createChangeSet<CreateType, UpdateType, DeleteType>("TailorDB types");
@@ -1538,18 +1518,18 @@ function isNumericLikeValue(value: string | number | bigint): boolean {
 // TODO(remiposo): Copied the type-processor / aggregator processing almost as-is.
 // This will need refactoring later.
 /**
- * Generate a TailorDB type manifest from parsed type
- * @param {TailorDBType} type - Parsed TailorDB type
+ * Generate a TailorDB type manifest from snapshot-shaped type
+ * @param {TailorDBSnapshotType} type - Snapshot-shaped TailorDB type
  * @param {ReadonlySet<string>} executorUsedTypes - Set of types used by executors
  * @param {GqlOperations} [namespaceGqlOperations] - Default gqlOperations for the namespace (already normalized)
  * @returns {MessageInitShape<typeof TailorDBTypeSchema>} Type manifest
  */
 function generateTailorDBTypeManifest(
-  type: TailorDBType,
+  type: TailorDBSnapshotType,
   executorUsedTypes: ReadonlySet<string>,
   namespaceGqlOperations?: GqlOperations,
 ): MessageInitShape<typeof TailorDBTypeSchema> {
-  // This ensures that explicitly provided pluralForm like "PurchaseOrderList" becomes "purchaseOrderList"
+  // Ensures that explicitly provided pluralForm like "PurchaseOrderList" becomes "purchaseOrderList".
   const pluralForm = inflection.camelize(type.pluralForm, true);
 
   const defaultSettings: {
@@ -1601,7 +1581,7 @@ function generateTailorDBTypeManifest(
   Object.keys(type.fields)
     .filter((fieldName) => fieldName !== "id")
     .forEach((fieldName) => {
-      const fieldConfig = type.fields[fieldName].config;
+      const fieldConfig = type.fields[fieldName];
       const fieldType = fieldConfig.type;
       const fieldEntry: MessageInitShape<typeof TailorDBType_FieldConfigSchema> = {
         type: fieldType,
@@ -1614,7 +1594,7 @@ function generateTailorDBTypeManifest(
         foreignKey: fieldConfig.foreignKey || false,
         foreignKeyType: fieldConfig.foreignKeyType,
         foreignKeyField: fieldConfig.foreignKeyField,
-        required: fieldConfig.required !== false,
+        required: fieldConfig.required,
         vector: fieldConfig.vector || false,
         ...toProtoFieldHooks(fieldConfig),
         ...(fieldConfig.serial && {
@@ -1644,7 +1624,7 @@ function generateTailorDBTypeManifest(
     MessageInitShape<typeof TailorDBType_RelationshipConfigSchema>
   > = {};
 
-  for (const [relationName, rel] of Object.entries(type.forwardRelationships)) {
+  for (const [relationName, rel] of Object.entries(type.forwardRelationships ?? {})) {
     relationships[relationName] = {
       refType: rel.targetType,
       refField: rel.sourceField,
@@ -1654,7 +1634,7 @@ function generateTailorDBTypeManifest(
     };
   }
 
-  for (const [relationName, rel] of Object.entries(type.backwardRelationships)) {
+  for (const [relationName, rel] of Object.entries(type.backwardRelationships ?? {})) {
     relationships[relationName] = {
       refType: rel.targetType,
       refField: rel.targetField,
@@ -1691,7 +1671,7 @@ function generateTailorDBTypeManifest(
     update: [],
     delete: [],
   };
-  const permission = type.permissions.record
+  const permission = type.permissions?.record
     ? protoPermission(type.permissions.record)
     : defaultPermission;
 
@@ -1732,7 +1712,7 @@ function toProtoTypeValidate(
 }
 
 function toProtoFieldValidate(
-  fieldConfig: OperatorFieldConfig,
+  fieldConfig: SnapshotFieldConfig,
 ): MessageInitShape<typeof TailorDBType_FieldConfigSchema>["validate"] {
   return (fieldConfig.validate || []).map((val) => ({
     action: TailorDBType_PermitAction.DENY,
@@ -1746,7 +1726,7 @@ function toProtoFieldValidate(
 }
 
 function toProtoFieldHooks(
-  fieldConfig: OperatorFieldConfig,
+  fieldConfig: SnapshotFieldConfig,
 ): Pick<MessageInitShape<typeof TailorDBType_FieldConfigSchema>, "hooks"> | Record<never, never> {
   if (!fieldConfig.hooks) {
     return {};
@@ -1768,7 +1748,7 @@ function toProtoFieldHooks(
 }
 
 function processNestedFields(
-  fields: Record<string, OperatorFieldConfig>,
+  fields: Record<string, SnapshotFieldConfig>,
 ): Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>> {
   const nestedFields: Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>> = {};
 
@@ -1782,7 +1762,7 @@ function processNestedFields(
         allowedValues: nestedFieldConfig.allowedValues || [],
         description: nestedFieldConfig.description || "",
         validate: toProtoFieldValidate(nestedFieldConfig),
-        required: nestedFieldConfig.required ?? true,
+        required: nestedFieldConfig.required,
         array: nestedFieldConfig.array ?? false,
         index: false,
         unique: false,
@@ -1800,7 +1780,7 @@ function processNestedFields(
         allowedValues: nestedType === "enum" ? nestedFieldConfig.allowedValues || [] : [],
         description: nestedFieldConfig.description || "",
         validate: toProtoFieldValidate(nestedFieldConfig),
-        required: nestedFieldConfig.required ?? true,
+        required: nestedFieldConfig.required,
         array: nestedFieldConfig.array ?? false,
         index: false,
         unique: false,
@@ -1829,17 +1809,18 @@ function processNestedFields(
 }
 
 function protoPermission(
-  permission: StandardTailorTypePermission,
+  permission: SnapshotRecordPermission,
 ): MessageInitShape<typeof TailorDBType_PermissionSchema> {
-  const ret: MessageInitShape<typeof TailorDBType_PermissionSchema> = {};
-  for (const [key, policies] of Object.entries(permission)) {
-    ret[key as keyof StandardTailorTypePermission] = policies.map((policy) => protoPolicy(policy));
-  }
-  return ret;
+  return {
+    create: permission.create.map((policy) => protoPolicy(policy)),
+    read: permission.read.map((policy) => protoPolicy(policy)),
+    update: permission.update.map((policy) => protoPolicy(policy)),
+    delete: permission.delete.map((policy) => protoPolicy(policy)),
+  };
 }
 
 function protoPolicy(
-  policy: StandardActionPermission<"record">,
+  policy: SnapshotActionPermission,
 ): MessageInitShape<typeof TailorDBType_Permission_PolicySchema> {
   let permit: TailorDBType_Permission_Permit;
   switch (policy.permit) {
@@ -1860,7 +1841,7 @@ function protoPolicy(
 }
 
 function protoCondition(
-  condition: StandardPermissionCondition<"record">,
+  condition: SnapshotPermissionCondition,
 ): MessageInitShape<typeof TailorDBType_Permission_ConditionSchema> {
   const [left, operator, right] = condition;
 
@@ -1897,47 +1878,27 @@ function protoCondition(
 }
 
 function protoOperand(
-  operand: PermissionOperand,
+  operand: SnapshotPermissionOperand,
 ): MessageInitShape<typeof TailorDBType_Permission_OperandSchema> {
-  if (typeof operand === "object" && !Array.isArray(operand)) {
+  if (isSnapshotFieldRefOperand(operand)) {
     if ("user" in operand) {
-      return {
-        kind: {
-          case: "userField",
-          value: operand.user,
-        },
-      };
-    } else if ("record" in operand) {
-      return {
-        kind: {
-          case: "recordField",
-          value: operand.record,
-        },
-      };
-    } else if ("newRecord" in operand) {
-      return {
-        kind: {
-          case: "newRecordField",
-          value: operand.newRecord,
-        },
-      };
-    } else if ("oldRecord" in operand) {
-      return {
-        kind: {
-          case: "oldRecordField",
-          value: operand.oldRecord,
-        },
-      };
-    } else {
-      throw new Error(`Unknown operand: ${JSON.stringify(operand)}`);
+      return { kind: { case: "userField", value: operand.user } };
     }
+    if ("record" in operand) {
+      return { kind: { case: "recordField", value: operand.record } };
+    }
+    if ("newRecord" in operand) {
+      return { kind: { case: "newRecordField", value: operand.newRecord } };
+    }
+    if ("oldRecord" in operand) {
+      return { kind: { case: "oldRecordField", value: operand.oldRecord } };
+    }
+    operand satisfies never;
+    throw new Error(`Unknown field-ref operand shape: ${JSON.stringify(operand)}`);
   }
 
   return {
-    kind: {
-      case: "value",
-      value: fromJson(ValueSchema, operand),
-    },
+    kind: { case: "value", value: fromJson(ValueSchema, operand) },
   };
 }
 
@@ -1959,7 +1920,7 @@ type DeleteGqlPermission = {
 async function planGqlPermissions(
   client: OperatorClient,
   workspaceId: string,
-  tailordbs: ReadonlyArray<TailorDBService>,
+  tailordbs: ReadonlyArray<TailorDBDeployInput>,
   deletedServices: ReadonlyArray<string>,
   forceApplyAll = false,
 ) {
@@ -1995,7 +1956,7 @@ async function planGqlPermissions(
 
     const types = tailordb.types;
     for (const typeName of Object.keys(types)) {
-      const gqlPermission = types[typeName].permissions.gql;
+      const gqlPermission = types[typeName].permissions?.gql;
       if (!gqlPermission) {
         continue;
       }
@@ -2082,7 +2043,7 @@ function normalizeComparableGqlPermission(permission: unknown) {
 }
 
 function protoGqlPermission(
-  permission: StandardTailorTypeGqlPermission,
+  permission: SnapshotGqlPermission,
 ): MessageInitShape<typeof TailorDBGQLPermissionSchema> {
   return {
     policies: permission.map((policy) => protoGqlPolicy(policy)),
@@ -2090,7 +2051,7 @@ function protoGqlPermission(
 }
 
 function protoGqlPolicy(
-  policy: StandardGqlPermissionPolicy,
+  policy: SnapshotGqlPermissionPolicy,
 ): MessageInitShape<typeof TailorDBGQLPermission_PolicySchema> {
   const actions: TailorDBGQLPermission_Action[] = [];
   for (const action of policy.actions) {
@@ -2140,7 +2101,7 @@ function protoGqlPolicy(
 }
 
 function protoGqlCondition(
-  condition: StandardPermissionCondition<"gql">,
+  condition: SnapshotPermissionCondition,
 ): MessageInitShape<typeof TailorDBGQLPermission_ConditionSchema> {
   const [left, operator, right] = condition;
 
@@ -2177,24 +2138,20 @@ function protoGqlCondition(
 }
 
 function protoGqlOperand(
-  operand: PermissionOperand,
+  operand: SnapshotPermissionOperand,
 ): MessageInitShape<typeof TailorDBGQLPermission_OperandSchema> {
-  if (typeof operand === "object" && !Array.isArray(operand)) {
+  if (isSnapshotFieldRefOperand(operand)) {
     if ("user" in operand) {
-      return {
-        kind: {
-          case: "userField",
-          value: operand.user,
-        },
-      };
+      return { kind: { case: "userField", value: operand.user } };
     }
+    throw new Error(
+      `Unsupported field-ref operand in GQL permission: ${JSON.stringify(operand)} ` +
+        `— GQL permissions only support { user } field references`,
+    );
   }
 
   return {
-    kind: {
-      case: "value",
-      value: fromJson(ValueSchema, operand),
-    },
+    kind: { case: "value", value: fromJson(ValueSchema, operand) },
   };
 }
 
@@ -2211,12 +2168,12 @@ interface MigrationCheckResult {
 
 /**
  * Check if there are schema differences between migration snapshots and local definitions
- * @param {ReadonlyMap<string, Record<string, TailorDBType>>} typesByNamespace - Types by namespace
+ * @param {ReadonlyMap<string, Record<string, TailorDBSnapshotType>>} typesByNamespace - Snapshot-shaped local types by namespace
  * @param {NamespaceWithMigrations[]} namespacesWithMigrations - Namespaces with migrations config
  * @returns {Promise<MigrationCheckResult[]>} Results for each namespace
  */
 async function checkMigrationDiffs(
-  typesByNamespace: ReadonlyMap<string, Record<string, TailorDBType>>,
+  typesByNamespace: ReadonlyMap<string, Record<string, TailorDBSnapshotType>>,
   namespacesWithMigrations: NamespaceWithMigrations[],
 ): Promise<MigrationCheckResult[]> {
   const results: MigrationCheckResult[] = [];

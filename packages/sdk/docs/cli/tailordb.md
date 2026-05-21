@@ -154,6 +154,7 @@ tailor-sdk tailordb migration [command]
 | Command                                                       | Description                                                                                                               |
 | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | [`tailordb migration generate`](#tailordb-migration-generate) | Generate migration files by detecting schema differences between current local types and the previous migration snapshot. |
+| [`tailordb migration script`](#tailordb-migration-script)     | Add a migration script (migrate.ts) template to an existing migration directory.                                          |
 | [`tailordb migration set`](#tailordb-migration-set)           | Set migration checkpoint to a specific number.                                                                            |
 | [`tailordb migration status`](#tailordb-migration-status)     | Show the current migration status for TailorDB namespaces, including applied and pending migrations.                      |
 
@@ -204,6 +205,55 @@ tailor-sdk tailordb migration generate [options]
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 <!-- politty:command:tailordb migration generate:global-options-link:end -->
+<!-- politty:command:tailordb migration script:heading:start -->
+
+#### tailordb migration script
+
+<!-- politty:command:tailordb migration script:heading:end -->
+
+<!-- politty:command:tailordb migration script:description:start -->
+
+Add a migration script (migrate.ts) template to an existing migration directory.
+
+<!-- politty:command:tailordb migration script:description:end -->
+
+<!-- politty:command:tailordb migration script:usage:start -->
+
+**Usage**
+
+```
+tailor-sdk tailordb migration script [options] <number>
+```
+
+<!-- politty:command:tailordb migration script:usage:end -->
+
+<!-- politty:command:tailordb migration script:arguments:start -->
+
+**Arguments**
+
+| Argument | Description                                           | Required |
+| -------- | ----------------------------------------------------- | -------- |
+| `number` | Migration number to add a script to (e.g., 0001 or 1) | Yes      |
+
+<!-- politty:command:tailordb migration script:arguments:end -->
+
+<!-- politty:command:tailordb migration script:options:start -->
+
+**Options**
+
+| Option                    | Alias | Description                                                       | Required | Default              | Env                               |
+| ------------------------- | ----- | ----------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
+| `--config <CONFIG>`       | `-c`  | Path to SDK config file                                           | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| `--namespace <NAMESPACE>` | `-n`  | Target TailorDB namespace (required if multiple namespaces exist) | No       | -                    | -                                 |
+
+<!-- politty:command:tailordb migration script:options:end -->
+
+<!-- politty:command:tailordb migration script:global-options-link:start -->
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+<!-- politty:command:tailordb migration script:global-options-link:end -->
+
 <!-- politty:command:tailordb migration set:heading:start -->
 
 #### tailordb migration set

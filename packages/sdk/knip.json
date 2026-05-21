@@ -5,9 +5,11 @@
   "ignore": [
     "scripts/**",
     "e2e/fixtures/**",
+    "eslint-rules/__tests__/fixtures/**",
     "src/cli/commands/deploy/__test_fixtures__/**",
     "src/cli/commands/apply/__test_fixtures__/**-compat-out/**",
     "src/types/*.ts",
+    "src/vitest/integration/vitest.config.ts",
     "zinfer.config.ts"
   ],
   "ignoreDependencies": ["undici", "@liam-hq/cli", "serve", "vite"],

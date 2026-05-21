@@ -10,6 +10,7 @@ import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger, styles } from "@/cli/shared/logger";
 import { prompt } from "@/cli/shared/prompt";
+import { assertWritable } from "@/cli/shared/readonly-guard";
 import { getNamespacesWithMigrations } from "./config";
 import { formatMigrationNumber, isValidMigrationNumber } from "./snapshot";
 import { parseMigrationLabelNumber } from "./types";
@@ -167,6 +168,7 @@ export const setCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
+    await assertWritable({ profile: args.profile });
     await set({
       configPath: args.config,
       number: args.number,

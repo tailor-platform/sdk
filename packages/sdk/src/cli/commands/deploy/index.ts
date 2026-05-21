@@ -3,6 +3,7 @@ import { z } from "zod";
 import { deploy } from "@/cli/commands/deploy/deploy";
 import { confirmationArgs, deploymentArgs } from "@/cli/shared/args";
 import { defineAppCommand } from "@/cli/shared/command";
+import { assertWritable } from "@/cli/shared/readonly-guard";
 
 export const deployCommand = defineAppCommand({
   name: "deploy",
@@ -28,6 +29,7 @@ export const deployCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
+    await assertWritable({ profile: args.profile });
     const { initTelemetry } = await import("@/cli/telemetry");
     await initTelemetry();
     await deploy({

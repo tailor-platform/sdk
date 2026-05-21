@@ -24,11 +24,12 @@ import {
   type TailorDBTypeSchema,
 } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
 import * as inflection from "inflection";
+import { isSnapshotFieldRefOperand } from "./snapshot";
 import type {
   SchemaSnapshot,
   SnapshotEnumValue,
   SnapshotFieldConfig,
-  SnapshotType,
+  TailorDBSnapshotType,
   SnapshotRelationship,
   SnapshotRecordPermission,
   SnapshotActionPermission,
@@ -54,17 +55,15 @@ export interface GenerateManifestOptions {
 
 /**
  * Generate a TailorDB type manifest from a snapshot type
- * @param {SnapshotType} snapshotType - Snapshot type to generate manifest from
+ * @param {TailorDBSnapshotType} snapshotType - Snapshot type to generate manifest from
  * @param {GenerateManifestOptions} options - Generation options
  * @returns {MessageInitShape<typeof TailorDBTypeSchema>} Type manifest
  */
 export function generateTailorDBTypeManifestFromSnapshot(
-  snapshotType: SnapshotType,
+  snapshotType: TailorDBSnapshotType,
   options: GenerateManifestOptions = {},
 ): MessageInitShape<typeof TailorDBTypeSchema> {
-  const pluralForm = snapshotType.pluralForm
-    ? inflection.camelize(snapshotType.pluralForm, true)
-    : inflection.camelize(inflection.pluralize(snapshotType.name), true);
+  const pluralForm = inflection.camelize(snapshotType.pluralForm, true);
 
   // Build settings
   const defaultSettings: {
@@ -195,7 +194,7 @@ function toProtoSnapshotTypeValidate(
  * @param {SnapshotFieldConfig} config - Snapshot field config
  * @returns {MessageInitShape<typeof TailorDBType_FieldConfigSchema>} Proto field config
  */
-function convertFieldConfigToProto(
+export function convertFieldConfigToProto(
   config: SnapshotFieldConfig,
 ): MessageInitShape<typeof TailorDBType_FieldConfigSchema> {
   const fieldEntry: MessageInitShape<typeof TailorDBType_FieldConfigSchema> = {
@@ -474,50 +473,25 @@ function convertConditionToProto(
 function convertOperandToProto(
   operand: SnapshotPermissionOperand,
 ): MessageInitShape<typeof TailorDBType_Permission_OperandSchema> {
-  if (typeof operand === "object" && operand !== null && !Array.isArray(operand)) {
-    const obj = operand as Record<string, unknown>;
-    if ("user" in obj && typeof obj.user === "string") {
-      return {
-        kind: {
-          case: "userField",
-          value: obj.user,
-        },
-      };
+  if (isSnapshotFieldRefOperand(operand)) {
+    if ("user" in operand) {
+      return { kind: { case: "userField", value: operand.user } };
     }
-    if ("record" in obj && typeof obj.record === "string") {
-      return {
-        kind: {
-          case: "recordField",
-          value: obj.record,
-        },
-      };
+    if ("record" in operand) {
+      return { kind: { case: "recordField", value: operand.record } };
     }
-    if ("newRecord" in obj && typeof obj.newRecord === "string") {
-      return {
-        kind: {
-          case: "newRecordField",
-          value: obj.newRecord,
-        },
-      };
+    if ("newRecord" in operand) {
+      return { kind: { case: "newRecordField", value: operand.newRecord } };
     }
-    if ("oldRecord" in obj && typeof obj.oldRecord === "string") {
-      return {
-        kind: {
-          case: "oldRecordField",
-          value: obj.oldRecord,
-        },
-      };
+    if ("oldRecord" in operand) {
+      return { kind: { case: "oldRecordField", value: operand.oldRecord } };
     }
-    // Fall through to value handling for unknown objects
+    operand satisfies never;
+    throw new Error(`Unknown field-ref operand shape: ${JSON.stringify(operand)}`);
   }
 
-  // Value operand (primitive or array)
-  // Cast to JsonValue type for fromJson
   return {
-    kind: {
-      case: "value",
-      value: fromJson(ValueSchema, operand as Parameters<typeof fromJson>[1]),
-    },
+    kind: { case: "value", value: fromJson(ValueSchema, operand) },
   };
 }
 

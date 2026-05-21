@@ -5,6 +5,7 @@ import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
+import { assertWritable } from "@/cli/shared/readonly-guard";
 import { folderInfo, type FolderInfo } from "../transform";
 
 const createFolderOptionsSchema = z.object({
@@ -58,6 +59,7 @@ export const createCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
+    await assertWritable();
     const folder = await createFolder({
       organizationId: args["organization-id"],
       parentFolderId: args["parent-folder-id"],
