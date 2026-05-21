@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { describe, expect, it, beforeEach, afterAll } from "vitest";
 import {
+  applyDiffToSnapshot,
   createSnapshotFromLocalTypes,
   loadSnapshot,
   loadDiff,
@@ -825,6 +826,41 @@ describe("snapshot", () => {
       expect(diff.changes).toHaveLength(1);
       expect(diff.changes[0].kind).toBe("type_modified");
       expect(diff.changes[0].reason).toContain("record-level validators changed");
+    });
+
+    it("persists record-level validator removal across a JSON-stringified diff", () => {
+      // Regression: when validators are fully removed, currType.validate is
+      // undefined. If the diff encodes the removal as `validate: undefined`,
+      // JSON.stringify drops the property and applyDiffToSnapshot's
+      // `"validate" in after` check falls through, leaving stale validators
+      // in the reconstructed snapshot.
+      const previous: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          Order: {
+            name: "Order",
+            pluralForm: "Orders",
+            fields: { id: { type: "uuid", required: true } },
+            validate: [{ script: { expr: "data.quantity > 0" }, errorMessage: "quantity > 0" }],
+          },
+        },
+      };
+      const current: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          Order: {
+            name: "Order",
+            pluralForm: "Orders",
+            fields: { id: { type: "uuid", required: true } },
+          },
+        },
+      };
+
+      const diff = compareSnapshots(previous, current);
+      const persisted: MigrationDiff = JSON.parse(JSON.stringify(diff));
+      const applied = applyDiffToSnapshot(previous, persisted);
+
+      expect(applied.types.Order.validate).toBeUndefined();
     });
 
     it("does not detect change when record-level hooks/validate are identical", () => {

@@ -836,7 +836,7 @@ export function getNextMigrationNumber(migrationsDir: string): number {
  * @param {MigrationDiff} diff - Diff to apply
  * @returns {SchemaSnapshot} Resulting snapshot after applying diff
  */
-function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): SchemaSnapshot {
+export function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): SchemaSnapshot {
   const types = { ...snapshot.types };
 
   for (const change of diff.changes) {
@@ -863,8 +863,14 @@ function applyDiffToSnapshot(snapshot: SchemaSnapshot, diff: MigrationDiff): Sch
             else next.hooks = after.hooks;
           }
           if ("validate" in after) {
-            if (after.validate === undefined) delete next.validate;
-            else next.validate = after.validate;
+            // Empty array is the JSON-persistable sentinel for "validators
+            // removed" — JSON.stringify would drop a literal undefined here,
+            // so the diff writer encodes removal as `[]`.
+            if (after.validate === undefined || after.validate.length === 0) {
+              delete next.validate;
+            } else {
+              next.validate = after.validate;
+            }
           }
           types[change.typeName] = next;
         }
@@ -1380,7 +1386,9 @@ function compareTypeHooksValidate(
       ...(prevType.validate !== undefined && { validate: prevType.validate }),
     },
     after: {
-      validate: currType.validate,
+      // Encode "validators removed" as `[]` so the deletion survives a
+      // JSON.stringify round-trip when this diff is persisted to disk.
+      validate: currType.validate ?? [],
     },
   });
 }

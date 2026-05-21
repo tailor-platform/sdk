@@ -90,6 +90,17 @@ export function extractRecordHookOverrideKeys(fnSource: string): string[] {
 }
 
 function findSingleReturnExpression(body: Node[]): Node | null {
+  // Any return nested inside an `if`/loop/switch/try would be conditional, and
+  // we cannot infer a single static set of override keys from a branched
+  // function. Reject the whole shape upfront so the caller surfaces a clear
+  // error instead of silently materializing keys from the unconditional return
+  // alone.
+  for (const stmt of body) {
+    if (stmt.type !== "ReturnStatement" && containsReturnStatement(stmt)) {
+      return null;
+    }
+  }
+
   let found: Node | null = null;
   for (const stmt of body) {
     if (stmt.type === "ReturnStatement") {
@@ -98,4 +109,37 @@ function findSingleReturnExpression(body: Node[]): Node | null {
     }
   }
   return found;
+}
+
+function containsReturnStatement(node: Node): boolean {
+  // Nested functions have their own return semantics — do not descend into
+  // them when scanning for the outer function's returns.
+  if (
+    node.type === "ArrowFunctionExpression" ||
+    node.type === "FunctionExpression" ||
+    node.type === "FunctionDeclaration"
+  ) {
+    return false;
+  }
+
+  for (const key of Object.keys(node)) {
+    if (key === "type" || key === "start" || key === "end" || key === "loc") continue;
+    const value = (node as unknown as Record<string, unknown>)[key];
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        if (isNode(item) && (item.type === "ReturnStatement" || containsReturnStatement(item))) {
+          return true;
+        }
+      }
+    } else if (isNode(value)) {
+      if (value.type === "ReturnStatement" || containsReturnStatement(value)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function isNode(value: unknown): value is Node {
+  return typeof value === "object" && value !== null && "type" in value;
 }

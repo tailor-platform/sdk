@@ -621,5 +621,28 @@ describe("parseTypes", () => {
         /Record-level hook must return an object literal/,
       );
     });
+
+    it("throws when a record-level hook uses a branched early-return inside an if statement", () => {
+      // Regression: `if (...) return X; return Y;` was previously accepted because
+      // the key extractor only counted top-level ReturnStatements, silently
+      // dropping the keys from the nested branch.
+      const bad = db
+        .type(["Bad", "AllBad"], {
+          name: db.string(),
+          fullAddress: db.string(),
+        })
+        .hooks({
+          create: ({ data }) => {
+            if (data.name === "x") {
+              return { name: "y" };
+            }
+            return { fullAddress: "z" };
+          },
+        });
+
+      expect(() => parseTypes(toSchemaOutputs({ Bad: bad }), "test-namespace")).toThrow(
+        /Record-level hook must return a single object literal at the top level/,
+      );
+    });
   });
 });
