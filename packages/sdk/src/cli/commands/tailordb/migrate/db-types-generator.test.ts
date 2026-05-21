@@ -38,6 +38,7 @@ function createMockSnapshot(
     }
     snapshotTypes[typeName] = {
       name: typeName,
+      pluralForm: `${typeName}s`,
       fields,
     };
   }

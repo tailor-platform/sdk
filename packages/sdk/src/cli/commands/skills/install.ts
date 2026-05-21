@@ -7,9 +7,12 @@ import { runSkillsInstaller } from "@/cli/shared/skills-installer";
 
 // Resolve the SDK package root at runtime so the skills directory is found
 // regardless of how the file is bundled (tsdown inlines non-entry modules).
+// The directory is named `agent-skills` (not `skills`) to avoid `gh skill`'s
+// `**/skills/*/SKILL.md` recursive match that would otherwise pick up both
+// this bundled copy and the repo-root `skills/` and report a conflict.
 export async function resolveBundledSkillsDir(): Promise<string> {
   const pkgJsonPath = await resolvePackageJSON(import.meta.url);
-  return resolve(dirname(pkgJsonPath), "skills");
+  return resolve(dirname(pkgJsonPath), "agent-skills");
 }
 
 const DEFAULT_AGENT = "claude-code";

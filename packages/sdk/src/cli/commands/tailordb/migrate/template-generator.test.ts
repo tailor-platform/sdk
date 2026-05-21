@@ -46,6 +46,7 @@ describe("template-generator", () => {
       const snapshot = createTestSnapshot({
         User: {
           name: "User",
+          pluralForm: "Users",
           fields: {
             name: { type: "string", required: true },
             email: { type: "string", required: false },
@@ -114,6 +115,7 @@ describe("template-generator", () => {
     const previousSnapshot = createTestSnapshot({
       User: {
         name: "User",
+        pluralForm: "Users",
         fields: {
           name: { type: "string", required: true },
         },
@@ -227,6 +229,7 @@ describe("template-generator", () => {
       const snapshotWithOldField = createTestSnapshot({
         User: {
           name: "User",
+          pluralForm: "Users",
           fields: {
             name: { type: "string", required: true },
             oldField: { type: "string", required: false },
@@ -270,6 +273,7 @@ describe("template-generator", () => {
       const snapshotWithoutUnique = createTestSnapshot({
         User: {
           name: "User",
+          pluralForm: "Users",
           fields: {
             email: { type: "string", required: true, unique: false },
           },
@@ -315,6 +319,7 @@ describe("template-generator", () => {
       const snapshotWithAllEnumValues = createTestSnapshot({
         Task: {
           name: "Task",
+          pluralForm: "Tasks",
           fields: {
             status: {
               type: "enum",

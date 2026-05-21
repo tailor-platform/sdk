@@ -1,7 +1,0 @@
----
-"@tailor-platform/sdk": minor
----
-
-Add `--permission <write|read>` flag to `profile create`, `profile update`, and `workspace create` (when `--profile-name` is given) so editor users can use a viewer-style profile by default. Profiles created with `--permission read` block platform-state mutations driven by the operator's bearer token (`apply`, `remove`, `workspace create/delete/restore`, `secret create/update/delete`, `tailordb migrate set`, `tailordb truncate`, `tailordb erd deploy`, `executor trigger`, `staticwebsite deploy`, `authconnection authorize/revoke`, organization / folder / PAT / workspace-user mutations, and direct `api <endpoint>` calls) with a `PROFILE_READONLY` error. Application-data operations executed under a machine user (`query`, `workflow start/resume`, `function test-run`) are not gated because the machine user's own permissions already govern those mutations. Switch profile or run `profile update <name> --permission write` to lift the restriction. Profile management itself stays available so the flag can always be cleared. `profile update` skips remote user / workspace validation when only `--permission` is changing, so the flag can be cleared offline or with an expired token.
-
-The guard activates only when a profile is in scope: pass `--profile <name>` or set `TAILOR_PLATFORM_PROFILE`. `TAILOR_PLATFORM_TOKEN` and `--workspace-id` direct access bypass the guard by design; they are intended for machine-user / CI flows where the platform token already encodes the permitted scope.

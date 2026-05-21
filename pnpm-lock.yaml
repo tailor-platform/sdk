@@ -426,8 +426,8 @@ importers:
         specifier: 0.9.2
         version: 0.9.2(valibot@1.1.0(typescript@5.9.3))
       '@toiroakr/read-multiline':
-        specifier: 0.3.2
-        version: 0.3.2
+        specifier: 0.4.1
+        version: 0.4.1
       '@urql/core':
         specifier: 6.0.1
         version: 6.0.1(graphql@16.13.2)
@@ -2531,8 +2531,8 @@ packages:
       valibot:
         optional: true
 
-  '@toiroakr/read-multiline@0.3.2':
-    resolution: {integrity: sha512-6mU+J4l2v0SwHNkhppQ4ZK0w5nQiTFm/PjY8ILVyKnYOSgILVDz9aM7v6MJyF5v662h8y7Nc2/V40GeD8Wg9fA==}
+  '@toiroakr/read-multiline@0.4.1':
+    resolution: {integrity: sha512-uuNmzOCjn9nYgIGJe1Ztr3VXxQN5wlspFaCWtcW5qr5KZ3UluHiBvxfjKNplmP4zV25kFl1QkkaQEOoHOrjp8g==}
 
   '@ts-graphviz/adapter@2.0.6':
     resolution: {integrity: sha512-kJ10lIMSWMJkLkkCG5gt927SnGZcBuG0s0HHswGzcHTgvtUe7yk5/3zTEr0bafzsodsOq5Gi6FhQeV775nC35Q==}
@@ -2609,9 +2609,6 @@ packages:
 
   '@types/node@12.20.55':
     resolution: {integrity: sha512-J8xLz7q2OFulZ2cyGTLE1TbbZcjpno7FaN6zdJNrgAdrJ+DZzh/uFR6YrTb4C+nXakvud8Q4+rbhoIWlYQbUFQ==}
-
-  '@types/node@24.12.3':
-    resolution: {integrity: sha512-8oljBDGun9cIsZRJR6fkihn0TSXJI0UDOOhncYaERq6M0JMDoPLxyscwruJcb4GKS6dvK/d8xebYBg27h/duaQ==}
 
   '@types/node@24.12.4':
     resolution: {integrity: sha512-GUUEShf+PBCGW2KaXwcIt3Yk+e3pkKwWKb9GSyM9WQVE+ep2jzmHdGsHzu4wgcZy5fN9FBdVzjpBQsYlpfpgLA==}
@@ -6320,11 +6317,11 @@ snapshots:
     dependencies:
       '@standard-schema/spec': 1.1.0
       commander: 14.0.3
-      tsx: 4.21.0
+      tsx: 4.21.1
     optionalDependencies:
       valibot: 1.1.0(typescript@5.9.3)
 
-  '@toiroakr/read-multiline@0.3.2': {}
+  '@toiroakr/read-multiline@0.4.1': {}
 
   '@ts-graphviz/adapter@2.0.6':
     dependencies:
@@ -6387,15 +6384,11 @@ snapshots:
 
   '@types/madge@5.0.3':
     dependencies:
-      '@types/node': 24.12.3
+      '@types/node': 24.12.4
 
   '@types/mime-types@3.0.1': {}
 
   '@types/node@12.20.55': {}
-
-  '@types/node@24.12.3':
-    dependencies:
-      undici-types: 7.16.0
 
   '@types/node@24.12.4':
     dependencies:
@@ -7990,7 +7983,7 @@ snapshots:
       '@protobufjs/path': 1.1.2
       '@protobufjs/pool': 1.1.0
       '@protobufjs/utf8': 1.1.1
-      '@types/node': 24.12.3
+      '@types/node': 24.12.4
       long: 5.3.2
 
   publint@0.3.21:

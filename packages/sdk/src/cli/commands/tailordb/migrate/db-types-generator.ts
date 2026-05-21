@@ -10,7 +10,7 @@ import {
   getMigrationFilePath,
   type SchemaSnapshot,
   type SnapshotFieldConfig,
-  type SnapshotType,
+  type TailorDBSnapshotType,
 } from "./snapshot";
 import type { MigrationDiff } from "./diff-calculator";
 
@@ -203,12 +203,12 @@ function generateEmptyDbTypes(namespace: string): string {
 
 /**
  * Generate table type definition from a snapshot type
- * @param {SnapshotType} type - Snapshot type
+ * @param {TailorDBSnapshotType} type - Snapshot type
  * @param {BreakingChangeFieldInfo} breakingChangeFields - Breaking change field info
  * @returns {{ typeDef: string; usedTimestamp: boolean; usedColumnType: boolean }} Generated type and utility type usage
  */
 function generateTableType(
-  type: SnapshotType,
+  type: TailorDBSnapshotType,
   breakingChangeFields: BreakingChangeFieldInfo,
 ): {
   typeDef: string;

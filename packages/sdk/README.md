@@ -60,7 +60,7 @@ npx tailor-sdk skills install -a codex -y
 ```
 
 This uses the `skills` CLI under the hood, sourcing the skill from
-`node_modules/@tailor-platform/sdk/skills` so the skill version always matches
+`node_modules/@tailor-platform/sdk/agent-skills` so the skill version always matches
 the installed SDK version. Files are copied (not symlinked) so they survive
 `pnpm install` wiping `node_modules`.
 
