@@ -43,6 +43,24 @@ const PRE_MIGRATION_FIELD_KINDS = new Set<DiffChange["kind"]>([
 ]);
 
 /**
+ * Get the inner map for `key`, inserting an empty one if absent.
+ * @param outer - Outer map keyed by typeName
+ * @param key - Outer key (typeName)
+ * @returns The inner map (existing or newly created)
+ */
+function getOrCreateInnerMap(
+  outer: Map<string, Map<string, DiffChange>>,
+  key: string,
+): Map<string, DiffChange> {
+  let inner = outer.get(key);
+  if (!inner) {
+    inner = new Map<string, DiffChange>();
+    outer.set(key, inner);
+  }
+  return inner;
+}
+
+/**
  * Map of pre-migration field changes: typeName -> fieldName -> change.
  *
  * Includes both breaking changes (required-add, unique-add, enum value
@@ -65,12 +83,7 @@ export function buildPreMigrationChangesMap(
     for (const change of migration.diff.changes) {
       if (!PRE_MIGRATION_FIELD_KINDS.has(change.kind)) continue;
       if (!change.fieldName) continue;
-      let perType = map.get(change.typeName);
-      if (!perType) {
-        perType = new Map<string, DiffChange>();
-        map.set(change.typeName, perType);
-      }
-      perType.set(change.fieldName, change);
+      getOrCreateInnerMap(map, change.typeName).set(change.fieldName, change);
     }
   }
   return map;
@@ -178,12 +191,7 @@ export function buildPreMigrationRelationshipChangesMap(
     for (const change of migration.diff.changes) {
       if (change.kind !== "relationship_removed") continue;
       if (!change.relationshipName) continue;
-      let perType = map.get(change.typeName);
-      if (!perType) {
-        perType = new Map<string, DiffChange>();
-        map.set(change.typeName, perType);
-      }
-      perType.set(change.relationshipName, change);
+      getOrCreateInnerMap(map, change.typeName).set(change.relationshipName, change);
     }
   }
   return map;

@@ -39,6 +39,19 @@ function isRecordValidateConfig(value: readonly unknown[]): boolean {
   return value.length === 2 && typeof value[1] === "string" && typeof value[0] === "function";
 }
 
+/**
+ * Assert that a decimal `scale` is an integer in the supported range (0-12).
+ * Used by both the fluent `db.decimal()` factory and the `createTable` descriptor
+ * pipeline so both APIs reject malformed scales with the same error.
+ * @param scale - Candidate scale value
+ * @throws Error if the scale is not an integer between 0 and 12
+ */
+export function assertValidDecimalScale(scale: number): void {
+  if (!Number.isInteger(scale) || scale < 0 || scale > 12) {
+    throw new Error("scale must be an integer between 0 and 12");
+  }
+}
+
 // Helper alias: DB fields can be arbitrarily nested, so we intentionally keep this loose.
 // oxlint-disable-next-line no-explicit-any
 export type TailorAnyDBField = TailorDBField<any, any>;
@@ -793,9 +806,7 @@ interface DecimalFieldOptions extends FieldOptions {
  */
 function decimal<const Opt extends DecimalFieldOptions>(options?: Opt) {
   if (options?.scale !== undefined) {
-    if (!Number.isInteger(options.scale) || options.scale < 0 || options.scale > 12) {
-      throw new Error("scale must be an integer between 0 and 12");
-    }
+    assertValidDecimalScale(options.scale);
   }
   const field = createField("decimal", options);
   if (options?.scale !== undefined) {

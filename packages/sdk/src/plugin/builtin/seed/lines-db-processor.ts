@@ -127,6 +127,30 @@ function extractFieldMetadata(type: TailorDBType): {
 }
 
 /**
+ * Build the shared `defineSchema(createStandardSchema(...))` block.
+ *
+ * Every generated lines-db schema file ends with the same hook + schema export;
+ * extracting it keeps the per-source-kind branches focused on the differing
+ * import/binding lines.
+ *
+ * The returned string is plain (not dedented) so callers can splice it into
+ * outer `ml`-tagged templates at the placeholder position and have `ml`
+ * re-indent it consistently with the surrounding lines.
+ * @param exportName - The exported TailorDB type binding referenced by the schema
+ * @param schemaOptionsCode - Pre-rendered options object (foreign keys, indexes) or empty string
+ * @returns Code snippet to splice into the generated schema file
+ */
+function buildSchemaExportCode(exportName: string, schemaOptionsCode: string): string {
+  return [
+    `const hook = createTailorDBHook(${exportName});`,
+    ``,
+    `export const schema = defineSchema(`,
+    `  createStandardSchema(schemaType, hook, ${exportName}.metadata?.validate),${schemaOptionsCode}`,
+    `);`,
+  ].join("\n");
+}
+
+/**
  * Generate schema options code for lines-db
  * @param foreignKeys - Foreign key definitions
  * @param indexes - Index definitions
@@ -185,11 +209,7 @@ export function generateLinesDbSchemaFile(metadata: LinesDbMetadata, importPath:
 
     ${schemaTypeCode}
 
-    const hook = createTailorDBHook(${exportName});
-
-    export const schema = defineSchema(
-      createStandardSchema(schemaType, hook, ${exportName}.metadata?.validate),${schemaOptionsCode}
-    );
+    ${buildSchemaExportCode(exportName, schemaOptionsCode)}
 
     `;
 }
@@ -248,11 +268,7 @@ export function generateLinesDbSchemaFileWithPluginAPI(
 
     ${schemaTypeCode}
 
-    const hook = createTailorDBHook(${exportName});
-
-    export const schema = defineSchema(
-      createStandardSchema(schemaType, hook, ${exportName}.metadata?.validate),${schemaOptionsCode}
-    );
+    ${buildSchemaExportCode(exportName, schemaOptionsCode)}
 
     `;
   }
@@ -277,11 +293,7 @@ export function generateLinesDbSchemaFileWithPluginAPI(
 
     ${schemaTypeCode}
 
-    const hook = createTailorDBHook(${exportName});
-
-    export const schema = defineSchema(
-      createStandardSchema(schemaType, hook, ${exportName}.metadata?.validate),${schemaOptionsCode}
-    );
+    ${buildSchemaExportCode(exportName, schemaOptionsCode)}
 
     `;
 }

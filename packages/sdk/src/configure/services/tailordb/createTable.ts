@@ -4,6 +4,7 @@ import {
   type TailorAnyDBType,
   type TailorDBField,
   type TailorDBType,
+  assertValidDecimalScale,
   createTailorDBField,
   createTailorDBType,
 } from "./schema";
@@ -385,9 +386,7 @@ function buildField(descriptor: FieldDescriptor, path: string): TailorAnyDBField
   }
 
   if (descriptor.kind === "decimal" && descriptor.scale !== undefined) {
-    if (!Number.isInteger(descriptor.scale) || descriptor.scale < 0 || descriptor.scale > 12) {
-      throw new Error("scale must be an integer between 0 and 12");
-    }
+    assertValidDecimalScale(descriptor.scale);
     // oxlint-disable-next-line no-explicit-any -- decimal scale is set via internal metadata
     (field as any)._metadata.scale = descriptor.scale;
   }
