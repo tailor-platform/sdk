@@ -386,16 +386,16 @@ async function reconcileMigrationLabels(
 }
 
 /**
- * Build migration execution context for script-based migrations.
+ * Build migration execution context for migrations that have a migrate.ts on disk.
  * @param client - Operator client instance
  * @param migrationContext - Planned TailorDB context
- * @param migrationsRequiringScripts - Migrations that require scripts
+ * @param migrationsWithScripts - Migrations whose migrate.ts file is present
  * @returns Migration context for script execution
  */
 function buildMigrationContextForScripts(
   client: OperatorClient,
   migrationContext: Awaited<ReturnType<typeof planTailorDB>>["context"],
-  migrationsRequiringScripts: PendingMigration[],
+  migrationsWithScripts: PendingMigration[],
 ): MigrationContext {
   const authService = migrationContext.application.authService;
   if (!authService) {
@@ -403,7 +403,7 @@ function buildMigrationContextForScripts(
   }
 
   const dbConfigMap: Record<string, TailorDBServiceConfig | undefined> = {};
-  for (const migration of migrationsRequiringScripts) {
+  for (const migration of migrationsWithScripts) {
     if (!(migration.namespace in dbConfigMap)) {
       dbConfigMap[migration.namespace] = migrationContext.config.db?.[migration.namespace] as
         | TailorDBServiceConfig
@@ -462,17 +462,28 @@ export async function applyTailorDB(
       // Step 1: Create/update services once at the beginning (services don't need per-migration handling)
       await executeServicesCreation(client, changeSet);
 
-      const migrationsRequiringScripts = pendingMigrations.filter((m) => m.hasScript);
+      const migrationsWithScripts = pendingMigrations.filter((m) => m.hasScript);
 
       // Step 2: Build migration context for script execution (if any migrations require scripts)
       const migrationCtx =
-        migrationsRequiringScripts.length > 0
-          ? buildMigrationContextForScripts(client, migrationContext, migrationsRequiringScripts)
+        migrationsWithScripts.length > 0
+          ? buildMigrationContextForScripts(client, migrationContext, migrationsWithScripts)
           : undefined;
 
+      // Surface migrations whose diff does not require a script but where the
+      // user-authored migrate.ts will still run. Without this, a stray
+      // migrate.ts file silently re-applies on every deploy.
+      for (const migration of migrationsWithScripts) {
+        if (!migration.diff.requiresMigrationScript) {
+          logger.info(
+            `Migration ${formatMigrationNumber(migration.number)} (${migration.namespace}) will execute migrate.ts even though its diff does not require one.`,
+          );
+        }
+      }
+
       // Step 3: Execute each migration sequentially: pre -> script -> post
-      if (migrationsRequiringScripts.length > 0) {
-        logger.info(`Executing ${migrationsRequiringScripts.length} data migration(s)...`);
+      if (migrationsWithScripts.length > 0) {
+        logger.info(`Executing ${migrationsWithScripts.length} data migration(s)...`);
         logger.newline();
       }
 
@@ -497,7 +508,7 @@ export async function applyTailorDB(
         );
       }
 
-      if (migrationsRequiringScripts.length > 0) {
+      if (migrationsWithScripts.length > 0) {
         logger.newline();
         logger.success(`All data migrations completed successfully.`);
       }

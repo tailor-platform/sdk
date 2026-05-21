@@ -36,35 +36,45 @@ export interface ScriptOptions {
 }
 
 /**
+ * Parse a user-supplied migration number into the canonical integer form.
+ * Accepts either the 4-digit form ("0001") or a bare integer ("1"–"9999").
+ * Rejects leading-zero non-canonical forms ("00001"), non-digit input, and
+ * the initial schema number (0000) which cannot have a migration script.
+ * @param input - User-supplied migration number string
+ * @returns Parsed migration number in 1–9999
+ */
+export function parseMigrationNumber(input: string): number {
+  let migrationNumber: number;
+  if (isValidMigrationNumber(input)) {
+    migrationNumber = parseInt(input, 10);
+  } else if (/^[1-9]\d*$/.test(input)) {
+    migrationNumber = parseInt(input, 10);
+    if (migrationNumber > 9999) {
+      throw new Error(`Migration number ${input} is out of range. Expected 1-9999.`);
+    }
+  } else {
+    throw new Error(
+      `Invalid migration number format: ${input}. Expected 4-digit format (e.g., 0001) or integer 1-9999 (e.g., 1).`,
+    );
+  }
+
+  if (migrationNumber === INITIAL_SCHEMA_NUMBER) {
+    throw new Error(
+      `Migration ${input} is the initial schema snapshot and cannot have a migration script.`,
+    );
+  }
+
+  return migrationNumber;
+}
+
+/**
  * Add a migrate.ts template to an existing migration directory.
  * @param {ScriptOptions} options - Command options
  */
 async function script(options: ScriptOptions): Promise<void> {
   logBetaWarning("tailordb migration");
 
-  // Accept either the canonical 4-digit form ("0001") or a bare integer
-  // ("1"–"9999"). Reject inputs containing non-digit characters, integer
-  // forms with leading zeros ("00001"), and anything outside the
-  // 0000-9999 directory range that the migrations system supports.
-  let migrationNumber: number;
-  if (isValidMigrationNumber(options.number)) {
-    migrationNumber = parseInt(options.number, 10);
-  } else if (/^[1-9]\d*$/.test(options.number)) {
-    migrationNumber = parseInt(options.number, 10);
-    if (migrationNumber > 9999) {
-      throw new Error(`Migration number ${options.number} is out of range. Expected 1-9999.`);
-    }
-  } else {
-    throw new Error(
-      `Invalid migration number format: ${options.number}. Expected 4-digit format (e.g., 0001) or integer 1-9999 (e.g., 1).`,
-    );
-  }
-
-  if (migrationNumber === INITIAL_SCHEMA_NUMBER) {
-    throw new Error(
-      `Migration ${options.number} is the initial schema snapshot and cannot have a migration script.`,
-    );
-  }
+  const migrationNumber = parseMigrationNumber(options.number);
 
   const { config } = await loadConfig(options.configPath);
   const configDir = path.dirname(config.path);
@@ -89,6 +99,11 @@ async function script(options: ScriptOptions): Promise<void> {
   const migratePath = getMigrationFilePath(migrationsDir, migrationNumber, "migrate");
   if (fs.existsSync(migratePath)) {
     throw new Error(`Migration script already exists at ${migratePath}.`);
+  }
+
+  const dbTypesPath = getMigrationFilePath(migrationsDir, migrationNumber, "db");
+  if (fs.existsSync(dbTypesPath)) {
+    throw new Error(`Migration db types file already exists at ${dbTypesPath}.`);
   }
 
   const diff = loadDiff(diffPath);
