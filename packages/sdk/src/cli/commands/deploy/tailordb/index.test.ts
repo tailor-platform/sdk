@@ -772,6 +772,7 @@ describe("applyTailorDB phase separation", () => {
           name: "test-app",
           tailorDBServices: [mockTailorDBService],
         } as unknown as Application,
+        tailorDBInputs: [],
         config: mockConfig,
         noSchemaCheck: true, // Skip migration checks in unit tests
       },
@@ -907,6 +908,7 @@ describe("applyTailorDB migration label reconciliation (--no-schema-check)", () 
           name: "test-app",
           tailorDBServices: [mockTailorDBService],
         } as unknown as Application,
+        tailorDBInputs: [],
         config,
         noSchemaCheck: true,
       },
