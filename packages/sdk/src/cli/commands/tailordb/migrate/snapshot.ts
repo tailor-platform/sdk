@@ -1267,13 +1267,13 @@ function compareTypeFields(
 }
 
 /**
- * Detect changes in record-level validators and emit a `type_modified`
- * change carrying the new values for re-apply.
+ * Detect changes in record-level validators and emit a type_modified change
+ * carrying the new values for re-apply.
  *
- * Note: type-level `hooks` are no longer emitted by the parser — record-level
- * hooks materialize as per-field `FieldHook`s and surface via `field_modified`.
- * Stale `SnapshotType.hooks` from old snapshots is therefore intentionally
- * ignored here; the wire format would discard it anyway.
+ * Note: type-level hooks are no longer emitted by the parser. Record-level
+ * hooks materialize as per-field FieldHooks and surface via field_modified.
+ * Stale hooks from old snapshots are therefore intentionally ignored here;
+ * the wire format would discard them anyway.
  * @param ctx
  * @param typeName
  * @param prevType
