@@ -11,5 +11,5 @@ const schemaType = t.object({
 const hook = createTailorDBHook(customer);
 
 export const schema = defineSchema(
-  createStandardSchema(schemaType, hook),
+  createStandardSchema(schemaType, hook, customer.metadata?.validate),
 );

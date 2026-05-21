@@ -1,7 +1,7 @@
 import { t } from "@tailor-platform/sdk";
 import { defineSchema } from "@tailor-platform/sdk/seed";
 import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/test";
-import { product } from "../../tailordb/product";
+import { product } from "../../../../../tailordb/product";
 
 const schemaType = t.object({
   ...product.pickFields(["id","createdAt"], { optional: true }),

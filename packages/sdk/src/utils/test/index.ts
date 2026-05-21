@@ -3,6 +3,12 @@ import type { TailorDBType } from "@/configure/services/tailordb/schema";
 import type { TailorField } from "@/configure/types/type";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 
+// Matches the public shape of `TailorDBTypeMetadata["validate"]` — kept loose
+// here so generated seed code can forward `type.metadata?.validate` without
+// extra type assertions.
+// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+type LooseRecordValidator = Function | readonly [Function, string];
+
 export { WORKFLOW_TEST_ENV_KEY } from "@/configure/services/workflow/job";
 export {
   setupTailordbMock,
@@ -66,8 +72,6 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
           if (hooked[key] instanceof Date) {
             hooked[key] = hooked[key].toISOString();
           }
-        } else if (field.metadata.generated && field.type === "datetime") {
-          hooked[key] = new Date().toISOString();
         } else if (data && typeof data === "object") {
           hooked[key] = (data as Record<string, unknown>)[key];
         }
@@ -99,12 +103,17 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
  * @template T - The output type after validation
  * @param schemaType - TailorDB field schema for validation
  * @param hook - Hook function to transform data before validation
+ * @param recordValidators - Optional record-level validators (from
+ *   `type.metadata.validate`). Invoked after field-level validation passes so
+ *   seed/test data is rejected with the same predicate the platform applies
+ *   on the server.
  * @returns Schema object with ~standard section for defineSchema
  */
 export function createStandardSchema<T = Record<string, unknown>>(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   schemaType: TailorField<any, T>,
   hook: (data: unknown) => Partial<T>,
+  recordValidators?: readonly LooseRecordValidator[],
 ) {
   return {
     "~standard": {
@@ -120,8 +129,38 @@ export function createStandardSchema<T = Record<string, unknown>>(
         if (result.issues) {
           return result;
         }
+        if (recordValidators && recordValidators.length > 0) {
+          const issues = runRecordValidators(recordValidators, hooked as T);
+          if (issues.length > 0) {
+            return { issues };
+          }
+        }
         return { value: hooked as T };
       },
     },
   } as const satisfies StandardSchemaV1<T>;
+}
+
+function runRecordValidators<T>(
+  validators: readonly LooseRecordValidator[],
+  data: T,
+): StandardSchemaV1.Issue[] {
+  const issues: StandardSchemaV1.Issue[] = [];
+  type RecordValidatorFn = (args: { data: T; user: TailorUser }) => boolean;
+  for (let i = 0; i < validators.length; i++) {
+    const validator = validators[i];
+    const isConfig =
+      Array.isArray(validator) && validator.length === 2 && typeof validator[1] === "string";
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+    type FnTuple = readonly [Function, string];
+    const fn = // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+      (isConfig ? (validator as FnTuple)[0] : (validator as Function)) as RecordValidatorFn;
+    const message = isConfig
+      ? (validator as readonly [unknown, string])[1]
+      : `Record validator ${i} failed`;
+    if (!fn({ data, user: unauthenticatedTailorUser })) {
+      issues.push({ message });
+    }
+  }
+  return issues;
 }

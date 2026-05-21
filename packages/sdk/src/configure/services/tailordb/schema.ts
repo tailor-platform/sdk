@@ -212,6 +212,13 @@ export interface TailorDBType<
    * Add record-level create/update hooks. Each callback receives `{ data, user }`
    * and returns an object containing only the fields to override on the record.
    * Unchanged fields can be omitted; their incoming values are preserved.
+   *
+   * Note: until the platform supports true type-level hooks, each returned key
+   * is materialized as an independent field-level hook on the wire. The
+   * function body is therefore re-evaluated once per returned key, so the
+   * values must be pure with respect to the inputs — `crypto.randomUUID()`,
+   * `new Date()`, and other side-effecting calls produce a different result
+   * per field rather than a single shared value.
    */
   hooks(hooks: RecordHook<InferFieldsOutput<Fields>>): TailorDBType<Fields, User>;
 

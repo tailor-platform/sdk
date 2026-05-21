@@ -188,7 +188,7 @@ export function generateLinesDbSchemaFile(metadata: LinesDbMetadata, importPath:
     const hook = createTailorDBHook(${exportName});
 
     export const schema = defineSchema(
-      createStandardSchema(schemaType, hook),${schemaOptionsCode}
+      createStandardSchema(schemaType, hook, ${exportName}.metadata?.validate),${schemaOptionsCode}
     );
 
     `;
@@ -251,7 +251,7 @@ export function generateLinesDbSchemaFileWithPluginAPI(
     const hook = createTailorDBHook(${exportName});
 
     export const schema = defineSchema(
-      createStandardSchema(schemaType, hook),${schemaOptionsCode}
+      createStandardSchema(schemaType, hook, ${exportName}.metadata?.validate),${schemaOptionsCode}
     );
 
     `;
@@ -280,7 +280,7 @@ export function generateLinesDbSchemaFileWithPluginAPI(
     const hook = createTailorDBHook(${exportName});
 
     export const schema = defineSchema(
-      createStandardSchema(schemaType, hook),${schemaOptionsCode}
+      createStandardSchema(schemaType, hook, ${exportName}.metadata?.validate),${schemaOptionsCode}
     );
 
     `;

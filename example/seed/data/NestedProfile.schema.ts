@@ -11,5 +11,5 @@ const schemaType = t.object({
 const hook = createTailorDBHook(nestedProfile);
 
 export const schema = defineSchema(
-  createStandardSchema(schemaType, hook),
+  createStandardSchema(schemaType, hook, nestedProfile.metadata?.validate),
 );

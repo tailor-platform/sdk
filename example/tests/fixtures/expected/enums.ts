@@ -14,6 +14,13 @@ export const InvoiceStatus = {
 } as const;
 export type InvoiceStatus = (typeof InvoiceStatus)[keyof typeof InvoiceStatus];
 
+export const ProductCategory = {
+  "electronics": "electronics",
+  "clothing": "clothing",
+  "food": "food"
+} as const;
+export type ProductCategory = (typeof ProductCategory)[keyof typeof ProductCategory];
+
 export const PurchaseOrderAttachedFilesType = {
   "text": "text",
   "image": "image"

@@ -169,6 +169,18 @@ function buildRecordHookFieldExpr(fn: (...args: never[]) => unknown, key: string
  * exclusive at the wire level; emitting field-level hooks per override key
  * lets the platform mark each populated field as optional in the auto-generated
  * GraphQL input while preserving the record-level user API.
+ *
+ * **Caveat — single-execution semantics are not preserved.** The platform
+ * runs each emitted FieldHook independently, so a record-level hook that
+ * returns N keys is invoked N times at write time. Hooks must therefore be
+ * pure with respect to the returned values: `({ data }) => ({ a: data.x + 1,
+ * b: data.x * 2 })` is fine, but
+ * `({ data }) => { const id = crypto.randomUUID(); return { a: id, b: id }; }`
+ * produces two different ids for `a` and `b`. Until the platform supports
+ * true type-level hooks, side-effecting expressions (`crypto.randomUUID`,
+ * `new Date()`, `Math.random`, etc.) should be hoisted into individual
+ * field-level binding via the deprecated field API or computed by the caller
+ * before write.
  * @param fields - Parsed fields keyed by field name (mutated in place)
  * @param hooks - Record-level hook definitions, if any
  * @param typeName - Type name (used for error messages)

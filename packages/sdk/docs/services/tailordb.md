@@ -81,7 +81,7 @@ export type order = typeof order;
 - `descriptors` - Field descriptors as `{ fieldName: { kind, ...options } }`. You can also mix in `db.*()` fields
 - `options` - Optional type-level settings: `description`, `pluralForm`, `features`, `indexes`, `files`, `permission`, `gqlPermission`, `plugins`, `hooks`, `validate`
 
-Descriptor fields support all the same options as the fluent API: `optional`, `array`, `description`, `index`, `unique`, `hooks`, `validate`, `serial`, `vector`, and `relation`.
+Descriptor fields support the same field-level options as the fluent API: `optional`, `array`, `description`, `index`, `unique`, `serial`, `vector`, and `relation`. Field-level `hooks` and `validate` have been removed from the public API — configure them at the record level via the third `options` argument (`{ hooks, validate }`) or via `db.type(...).hooks(...).validate(...)`.
 
 **`timestampFields()` helper:** Returns `createdAt` (datetime, set on create) and `updatedAt` (optional datetime, set on update) descriptors. Equivalent to `db.fields.timestamps()` for the fluent API.
 
