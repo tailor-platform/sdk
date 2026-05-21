@@ -3,6 +3,6 @@
   "title": "Destructure input + user from the resolver body's single context arg",
   "designNote": "missing_namespace",
   "sdkSurface": "resolver",
-  "contextProfiles": ["types-only", "full-package"],
+  "contextProfiles": ["code-only", "code-and-docs"],
   "hint": "resolver body は (ctx) => ... の 1 引数で、input/user/env/invoker は ctx 配下の namespace"
 }

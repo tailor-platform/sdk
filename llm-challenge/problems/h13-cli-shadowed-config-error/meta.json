@@ -3,6 +3,6 @@
   "title": "Recover from a shadowed config export that hides defineConfig from the CLI",
   "designNote": "error_message_opaque",
   "sdkSurface": "cli",
-  "contextProfiles": ["types-only", "full-package"],
+  "contextProfiles": ["code-only", "code-and-docs"],
   "hint": "loadConfig は default export を要求する。`export const config = ...` ではなく `export default ...` に直す"
 }

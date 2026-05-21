@@ -3,6 +3,6 @@
   "title": "Fix the same archaic db.text() call across three sibling tailordb files in one pass",
   "designNote": "redundant_call_pattern",
   "sdkSurface": "cli",
-  "contextProfiles": ["types-only", "full-package"],
+  "contextProfiles": ["code-only", "code-and-docs"],
   "hint": "3 ファイルに同じ typo がある。grep で全箇所を発見 → 1 度に置換"
 }

@@ -3,6 +3,6 @@
   "title": "Enable Kysely type generation so a workflow can call getDB('tailordb')",
   "designNote": "implicit_assumption",
   "sdkSurface": "plugin",
-  "contextProfiles": ["types-only", "full-package"],
+  "contextProfiles": ["code-only", "code-and-docs"],
   "hint": "getDB は generated/tailordb.ts に依存する。tailor.config.ts で kyselyTypePlugin を有効化"
 }

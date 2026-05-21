@@ -3,6 +3,6 @@
   "title": "Replace two sibling occurrences of an undefined field builder in one pass",
   "designNote": "redundant_call_pattern",
   "sdkSurface": "cli-runtime",
-  "contextProfiles": ["types-only", "full-package"],
+  "contextProfiles": ["code-only", "code-and-docs"],
   "hint": "同じ間違いが 2 か所あるので一括置換。grep してから直す"
 }

@@ -109,7 +109,7 @@ type ParsedArgs = Filters & {
   trend: boolean;
   groups: boolean;
   /**
-   * When true, locate the most-recent types-only and full-package reports
+   * When true, locate the most-recent code-only and code-and-docs reports
    * for the active model group and emit the diff between them. Surfaces the
    * docs-vs-types-gap signal automatically.
    */
@@ -671,7 +671,7 @@ export function computeReportDiff(
 }
 
 /**
- * Resolve the active `types-only` vs `full-package` report pair for the
+ * Resolve the active `code-only` vs `code-and-docs` report pair for the
  * profile-diff mode. Implementation strategy:
  *
  * 1. Load every report and group by `model` (the contextProfile is
@@ -725,9 +725,9 @@ export function resolveActiveProfilePair(reports: ChallengeReport[]): ProfilePai
     const { model } = getGroupKey(r);
     const id = model;
     const profile = r.contextProfile;
-    if (profile !== "types-only" && profile !== "full-package") continue;
+    if (profile !== "code-only" && profile !== "code-and-docs") continue;
     const bucket = buckets.get(id) ?? {};
-    const slot = profile === "types-only" ? "typesOnly" : "fullPackage";
+    const slot = profile === "code-only" ? "typesOnly" : "fullPackage";
     if (isBetter(r, bucket[slot])) {
       bucket[slot] = r;
     }
@@ -736,13 +736,13 @@ export function resolveActiveProfilePair(reports: ChallengeReport[]): ProfilePai
   if (buckets.size === 0) {
     return {
       kind: "missing",
-      reason: "no reports with contextProfile types-only or full-package",
+      reason: "no reports with contextProfile code-only or code-and-docs",
     };
   }
   // Active group: bucket with the most-recent timestamp across either slot,
   // restricted to buckets where BOTH profiles are present. We deliberately
   // skip half-populated buckets (e.g. `solution:verify` runs that only emit
-  // full-package reports) so we never report "active group has X but missing
+  // code-and-docs reports) so we never report "active group has X but missing
   // Y" for a group whose intent isn't even cross-profile.
   const complete: { id: string; bucket: Bucket; latest: number }[] = [];
   for (const [id, bucket] of buckets) {
@@ -768,8 +768,8 @@ export function resolveActiveProfilePair(reports: ChallengeReport[]): ProfilePai
       }
     }
     const bucket = halfActive!.bucket;
-    const present = bucket.typesOnly ? "types-only" : "full-package";
-    const missing = bucket.typesOnly ? "full-package" : "types-only";
+    const present = bucket.typesOnly ? "code-only" : "code-and-docs";
+    const missing = bucket.typesOnly ? "code-and-docs" : "code-only";
     return {
       kind: "missing",
       reason: `active group has ${present} reports but no ${missing} reports`,
@@ -927,7 +927,7 @@ function showDiff(diff: DiffReport, json: boolean): void {
 }
 
 /**
- * Run the profile-diff path: types-only vs full-package for the active group.
+ * Run the profile-diff path: code-only vs code-and-docs for the active group.
  * Emits the diff via `showDiff`, or prints a single-line warning when one of
  * the two profiles has no reports yet.
  *
@@ -957,7 +957,7 @@ function runProfileDiff(
     const width = 110;
     console.log("");
     console.log("=".repeat(width));
-    console.log("Profile Diff (types-only -> full-package)");
+    console.log("Profile Diff (code-only -> code-and-docs)");
     console.log("=".repeat(width));
   }
   const diff = computeReportDiff(

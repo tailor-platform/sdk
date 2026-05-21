@@ -135,13 +135,13 @@ export function archiveProblemDir(challengeRoot: string, dirName: string): boole
 
 /**
  * Apply the graduation rule across every problem in `context.latestReport`.
- * Only solver runs on the `types-only` profile are eligible — the rule is
- * defined for the stricter profile, and verify / non-types-only runs do not
+ * Only solver runs on the `code-only` profile are eligible — the rule is
+ * defined for the stricter profile, and verify / non-code-only runs do not
  * carry the right signal.
  */
 export function graduateProblems(context: GraduationContext): GraduationOutcome {
   const report = context.latestReport;
-  if (report.contextProfile !== "types-only") return { graduated: [] };
+  if (report.contextProfile !== "code-only") return { graduated: [] };
   if (!report.model) return { graduated: [] };
   if (report.sdkBranch) return { graduated: [] };
 

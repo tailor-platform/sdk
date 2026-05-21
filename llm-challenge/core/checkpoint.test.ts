@@ -16,7 +16,7 @@ const makeResult = (problemId: string, passed: boolean, infra = false): ProblemR
   problemId,
   problemName: problemId,
   sdkSurface: "micro",
-  contextProfile: "full-package",
+  contextProfile: "code-and-docs",
   stages: [],
   passed,
   solveResult: {

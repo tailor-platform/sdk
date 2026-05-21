@@ -53,7 +53,7 @@ function makeProblem(
     sdkSurface: "micro",
     stages: [],
     passed: options.passed ?? true,
-    contextProfile: "types-only",
+    contextProfile: "code-only",
     ...(options.iterations ? { iterations: options.iterations } : {}),
   };
 }
@@ -65,7 +65,7 @@ function makeReport(
   return {
     timestamp: new Date().toISOString(),
     model: "codex-gpt-5.5-xhigh",
-    contextProfile: "types-only",
+    contextProfile: "code-only",
     results,
     problemsPassed: results.filter((r) => r.passed).length,
     problemsTotal: results.length,
@@ -165,7 +165,7 @@ describe("archiveProblemDir + loadRecentReports + graduateProblems", () => {
   beforeEach(() => {
     tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "llm-graduation-test-"));
     challengeRoot = path.join(tempRoot, "challenge");
-    runResultsDir = path.join(challengeRoot, "results", "model-types-only");
+    runResultsDir = path.join(challengeRoot, "results", "model-code-only");
     fs.mkdirSync(path.join(challengeRoot, "problems"), { recursive: true });
     fs.mkdirSync(runResultsDir, { recursive: true });
   });
@@ -221,19 +221,19 @@ describe("archiveProblemDir + loadRecentReports + graduateProblems", () => {
     expect(archiveProblemDir(challengeRoot, "m01-foo")).toBe(false);
   });
 
-  it("graduateProblems no-ops outside the types-only profile", () => {
+  it("graduateProblems no-ops outside the code-only profile", () => {
     writeProblem("m01-foo", { id: "m01-foo" });
     for (let i = 0; i < 5; i++) {
       writeHistoricalReport(
         `2026-05-${10 + i}T00-00-00`,
         makeReport([makeProblem("m01-foo", { iterations: makeIterations(1, 10, 0.4) })], {
-          contextProfile: "full-package",
+          contextProfile: "code-and-docs",
         }),
       );
     }
     const latest = makeReport(
       [makeProblem("m01-foo", { iterations: makeIterations(1, 10, 0.4) })],
-      { contextProfile: "full-package" },
+      { contextProfile: "code-and-docs" },
     );
     expect(
       graduateProblems({ runResultsDir, challengeRoot, latestReport: latest }).graduated,

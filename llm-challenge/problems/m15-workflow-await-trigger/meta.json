@@ -3,6 +3,6 @@
   "title": "Await a child job's .trigger() result inside a workflow",
   "designNote": "param_confusion",
   "sdkSurface": "workflow",
-  "contextProfiles": ["types-only", "full-package"],
+  "contextProfiles": ["code-only", "code-and-docs"],
   "hint": ".trigger() は Promise — await でアンラップする"
 }

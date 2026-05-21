@@ -3,5 +3,5 @@
   "title": "Define a composite [status, createdAt] index on the Order model",
   "designNote": "docs_only",
   "sdkSurface": "db-type",
-  "contextProfiles": ["types-only", "full-package"]
+  "contextProfiles": ["code-only", "code-and-docs"]
 }

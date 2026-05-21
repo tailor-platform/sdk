@@ -31,10 +31,10 @@ afterEach(() => {
 });
 
 describe("applyContextProfile", () => {
-  it("removes docs and skills for types-only tarball installs", () => {
+  it("removes docs and skills for code-only tarball installs", () => {
     const workDir = makeSdkPackage();
 
-    applyContextProfile(workDir, "types-only");
+    applyContextProfile(workDir, "code-only");
 
     const sdkDir = path.join(workDir, "node_modules", "@tailor-platform", "sdk");
     expect(fs.existsSync(path.join(sdkDir, "docs"))).toBe(false);
@@ -43,10 +43,10 @@ describe("applyContextProfile", () => {
     expect(fs.existsSync(path.join(sdkDir, "CHANGELOG.md"))).toBe(false);
   });
 
-  it("leaves the SDK package untouched for full-package", () => {
+  it("leaves the SDK package untouched for code-and-docs", () => {
     const workDir = makeSdkPackage();
 
-    applyContextProfile(workDir, "full-package");
+    applyContextProfile(workDir, "code-and-docs");
 
     const sdkDir = path.join(workDir, "node_modules", "@tailor-platform", "sdk");
     expect(fs.existsSync(path.join(sdkDir, "docs", "configuration.md"))).toBe(true);
@@ -60,7 +60,7 @@ describe("applyContextProfile", () => {
     const workDir = fs.mkdtempSync(path.join(os.tmpdir(), "llm-context-profile-empty-"));
     tmpDirs.push(workDir);
 
-    expect(() => applyContextProfile(workDir, "types-only")).not.toThrow();
+    expect(() => applyContextProfile(workDir, "code-only")).not.toThrow();
   });
 
   it("leaves the SDK intact when node_modules/.../sdk symlinks outside workDir", () => {
@@ -83,7 +83,7 @@ describe("applyContextProfile", () => {
     const symlinkedSdk = path.join(sdkParent, "sdk");
     fs.symlinkSync(externalSdkDir, symlinkedSdk, "dir");
 
-    applyContextProfile(workDir, "types-only");
+    applyContextProfile(workDir, "code-only");
 
     // Files behind the symlink (outside workDir) must remain intact: the
     // isLocalInstalledPackage guard returns false for non-descendant targets.
@@ -124,10 +124,10 @@ function listTarballEntries(tarballPath: string): string[] {
 }
 
 describe("filterSdkTarballForProfile", () => {
-  it("strips README/CHANGELOG/docs/skills from a types-only tarball but keeps dist", () => {
+  it("strips README/CHANGELOG/docs/skills from a code-only tarball but keeps dist", () => {
     const tarballPath = makeSdkTarball();
 
-    filterSdkTarballForProfile(tarballPath, "types-only");
+    filterSdkTarballForProfile(tarballPath, "code-only");
 
     const entries = listTarballEntries(tarballPath);
     expect(entries.some((e) => e.endsWith("package/dist/index.mjs"))).toBe(true);
@@ -138,11 +138,11 @@ describe("filterSdkTarballForProfile", () => {
     expect(entries.some((e) => e.includes("package/skills/"))).toBe(false);
   });
 
-  it("leaves a full-package tarball untouched", () => {
+  it("leaves a code-and-docs tarball untouched", () => {
     const tarballPath = makeSdkTarball();
     const before = listTarballEntries(tarballPath).sort();
 
-    filterSdkTarballForProfile(tarballPath, "full-package");
+    filterSdkTarballForProfile(tarballPath, "code-and-docs");
 
     const after = listTarballEntries(tarballPath).sort();
     expect(after).toEqual(before);
@@ -150,37 +150,37 @@ describe("filterSdkTarballForProfile", () => {
 
   it("is a no-op when the tarball is missing", () => {
     const missing = path.join(os.tmpdir(), `llm-missing-${Date.now()}.tgz`);
-    expect(() => filterSdkTarballForProfile(missing, "types-only")).not.toThrow();
+    expect(() => filterSdkTarballForProfile(missing, "code-only")).not.toThrow();
   });
 });
 
 describe("buildContextProfileInstructions", () => {
-  it("describes the types-only profile without referencing docs or skills", () => {
-    const instructions = buildContextProfileInstructions(makeSdkPackage(), "types-only");
+  it("describes the code-only profile without referencing docs or skills", () => {
+    const instructions = buildContextProfileInstructions(makeSdkPackage(), "code-only");
 
-    expect(instructions).toContain("types-only");
+    expect(instructions).toContain("code-only");
     expect(instructions).toContain("TypeScript package API");
   });
 
-  it("describes the full-package profile", () => {
-    const instructions = buildContextProfileInstructions(makeSdkPackage(), "full-package");
+  it("describes the code-and-docs profile", () => {
+    const instructions = buildContextProfileInstructions(makeSdkPackage(), "code-and-docs");
 
-    expect(instructions).toContain("full-package");
+    expect(instructions).toContain("code-and-docs");
   });
 
-  // Profile-swap guard: the types-only payload must not include the
-  // full-package opt-in phrasing, and vice versa. If the case bodies are
+  // Profile-swap guard: the code-only payload must not include the
+  // code-and-docs opt-in phrasing, and vice versa. If the case bodies are
   // swapped, both negative assertions fail loudly.
-  it("does not leak full-package opt-in phrasing into types-only", () => {
-    const instructions = buildContextProfileInstructions(makeSdkPackage(), "types-only");
+  it("does not leak code-and-docs opt-in phrasing into code-only", () => {
+    const instructions = buildContextProfileInstructions(makeSdkPackage(), "code-only");
 
     expect(instructions).not.toContain("You may inspect");
     expect(instructions).not.toContain("examples");
     expect(instructions).toContain("Do not rely on");
   });
 
-  it("invites README and docs inspection for full-package", () => {
-    const instructions = buildContextProfileInstructions(makeSdkPackage(), "full-package");
+  it("invites README and docs inspection for code-and-docs", () => {
+    const instructions = buildContextProfileInstructions(makeSdkPackage(), "code-and-docs");
 
     expect(instructions).toContain("README");
     expect(instructions).toContain("docs");

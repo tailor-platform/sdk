@@ -3,6 +3,6 @@
   "title": "Write a query resolver whose output is t.object({ ok: t.bool() })",
   "designNote": "naming_bias",
   "sdkSurface": "resolver",
-  "contextProfiles": ["types-only", "full-package"],
+  "contextProfiles": ["code-only", "code-and-docs"],
   "hint": "resolver の output は t.* で書く (db.* ではない)"
 }

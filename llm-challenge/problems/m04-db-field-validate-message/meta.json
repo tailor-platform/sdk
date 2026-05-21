@@ -3,6 +3,6 @@
   "title": "Attach a type-level validate rule with a custom error message",
   "designNote": "param_confusion",
   "sdkSurface": "db-field",
-  "contextProfiles": ["types-only", "full-package"],
+  "contextProfiles": ["code-only", "code-and-docs"],
   "hint": "validate は field chain ではなく db.type().validate()"
 }

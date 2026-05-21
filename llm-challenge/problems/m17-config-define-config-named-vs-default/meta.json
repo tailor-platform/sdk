@@ -3,6 +3,6 @@
   "title": "Default-export a tailor.config.ts wrapped in defineConfig()",
   "designNote": "naming_bias",
   "sdkSurface": "config",
-  "contextProfiles": ["types-only", "full-package"],
+  "contextProfiles": ["code-only", "code-and-docs"],
   "hint": "plain object はだめ、defineConfig(...) でラップ"
 }

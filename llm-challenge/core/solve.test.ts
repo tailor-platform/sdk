@@ -51,7 +51,7 @@ describe("buildPrompt", () => {
       implement: ["resolvers/a.ts"],
     });
 
-    const prompt = buildPrompt(problemDir, meta, workDir, "full-package");
+    const prompt = buildPrompt(problemDir, meta, workDir, "code-and-docs");
 
     // System block describes "create" mode.
     expect(prompt).toContain(
@@ -75,7 +75,7 @@ describe("buildPrompt", () => {
       implement: ["resolvers/a.ts"],
     });
 
-    const prompt = buildPrompt(problemDir, meta, workDir, "full-package");
+    const prompt = buildPrompt(problemDir, meta, workDir, "code-and-docs");
 
     // System block describes "fix" mode.
     expect(prompt).toContain(
@@ -97,7 +97,7 @@ describe("buildPrompt", () => {
       implement: ["resolvers/a.ts", "resolvers/b.ts"],
     });
 
-    const prompt = buildPrompt(problemDir, meta, workDir, "full-package");
+    const prompt = buildPrompt(problemDir, meta, workDir, "code-and-docs");
 
     // System block describes hybrid mode.
     expect(prompt).toContain(

@@ -3,6 +3,6 @@
   "title": "Fix an implicit any on the resolver context by completing the resolver schema",
   "designNote": "type_too_loose",
   "sdkSurface": "cli-runtime",
-  "contextProfiles": ["types-only", "full-package"],
+  "contextProfiles": ["code-only", "code-and-docs"],
   "hint": "input schema を埋めて createResolver の generic に ctx 型を推論させる"
 }

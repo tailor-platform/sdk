@@ -3,23 +3,23 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-export type ContextProfile = "types-only" | "full-package";
+export type ContextProfile = "code-only" | "code-and-docs";
 
 export const contextProfileValues = [
-  "types-only",
-  "full-package",
+  "code-only",
+  "code-and-docs",
 ] as const satisfies readonly ContextProfile[];
 
 export function isContextProfile(value: unknown): value is ContextProfile {
   return typeof value === "string" && (contextProfileValues as readonly string[]).includes(value);
 }
 
-// `types-only` strips README/CHANGELOG/docs/skills from the installed SDK so
+// `code-only` strips README/CHANGELOG/docs/skills from the installed SDK so
 // the agent must rely solely on the TypeScript surface.
-// `full-package` is unfiltered.
+// `code-and-docs` is unfiltered.
 const removableEntriesByProfile: Record<ContextProfile, readonly string[]> = {
-  "types-only": ["README.md", "CHANGELOG.md", "docs", "skills"],
-  "full-package": [],
+  "code-only": ["README.md", "CHANGELOG.md", "docs", "skills"],
+  "code-and-docs": [],
 };
 
 function getInstalledSdkDir(workDir: string): string {
@@ -52,7 +52,7 @@ export function applyContextProfile(workDir: string, profile: ContextProfile): v
 
 /**
  * Rewrite the SDK tarball at `tarballPath` so its content matches the context
- * profile: types-only strips README/CHANGELOG/docs/skills before re-packing.
+ * profile: code-only strips README/CHANGELOG/docs/skills before re-packing.
  *
  * Necessary because the harness leaves `.sdk/sdk.tgz` in the workspace so the
  * `package.json` `file:` reference stays consistent if the solver re-runs
@@ -78,15 +78,15 @@ export function filterSdkTarballForProfile(tarballPath: string, profile: Context
 
 export function buildContextProfileInstructions(_workDir: string, profile: ContextProfile): string {
   switch (profile) {
-    case "types-only":
+    case "code-only":
       return [
-        "Context profile: types-only.",
+        "Context profile: code-only.",
         "Evaluate the SDK from its TypeScript package API, declaration files, and JSDoc only.",
         "Do not rely on README, docs, skills, or external Tailor documentation.",
       ].join("\n");
-    case "full-package":
+    case "code-and-docs":
       return [
-        "Context profile: full-package.",
+        "Context profile: code-and-docs.",
         "You may inspect the installed SDK package, including README, docs, skills, types, and examples.",
       ].join("\n");
   }

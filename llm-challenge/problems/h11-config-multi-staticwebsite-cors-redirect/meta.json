@@ -3,6 +3,6 @@
   "title": "Wire CORS and OAuth2 redirect URIs across two static websites without cross-mixing origins",
   "designNote": "implicit_assumption",
   "sdkSurface": "config",
-  "contextProfiles": ["types-only", "full-package"],
+  "contextProfiles": ["code-only", "code-and-docs"],
   "hint": "site.url は `${name}:url` の placeholder。各 OAuth2 client の redirect は対応する site の url のみ"
 }

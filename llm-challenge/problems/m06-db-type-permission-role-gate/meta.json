@@ -3,6 +3,6 @@
   "title": "Gate read/create to logged-in users and update/delete to ADMIN role",
   "designNote": "type_too_strict",
   "sdkSurface": "db-type",
-  "contextProfiles": ["types-only", "full-package"],
+  "contextProfiles": ["code-only", "code-and-docs"],
   "hint": "permission の condition は tuple 型 [operand, operator, operand]"
 }

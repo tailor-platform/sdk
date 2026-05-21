@@ -162,7 +162,7 @@ function parseArgs(): ParsedArgs {
   // process. Override via `--concurrency <n>` when running on a higher tier
   // or against an independent account.
   let concurrency = 1;
-  let contextProfile: ContextProfile = "full-package";
+  let contextProfile: ContextProfile = "code-and-docs";
   let iterations: number | undefined;
   let sdkBranch: string | undefined;
   let resume: string | undefined;
@@ -1271,13 +1271,13 @@ async function main(): Promise<void> {
     console.error("  tsx core/cli.ts --problem 001 --impl ./path/to/impl");
     console.error("  tsx core/cli.ts --problem 001 --use-solution");
     console.error(
-      "  tsx core/cli.ts --problem 001 [--problem 002 ...] --solve [--effort xhigh] [--context-profile types-only] [--iterations 5] [--max-seconds 3600] [--sdk-branch <ref>] [--resume <runId>] [--include-archived]",
+      "  tsx core/cli.ts --problem 001 [--problem 002 ...] --solve [--effort xhigh] [--context-profile code-only] [--iterations 5] [--max-seconds 3600] [--sdk-branch <ref>] [--resume <runId>] [--include-archived]",
     );
     console.error(
       "  tsx core/cli.ts --all --use-solution [--clean] [--concurrency <n>] [--include-archived]",
     );
     console.error(
-      "  tsx core/cli.ts --all --solve [--effort xhigh] [--clean] [--concurrency <n>] [--context-profile types-only] [--iterations 5] [--max-seconds 3600] [--sdk-branch <ref>] [--resume <runId>] [--include-archived]",
+      "  tsx core/cli.ts --all --solve [--effort xhigh] [--clean] [--concurrency <n>] [--context-profile code-only] [--iterations 5] [--max-seconds 3600] [--sdk-branch <ref>] [--resume <runId>] [--include-archived]",
     );
     console.error("  tsx core/cli.ts --all --impl-dir ./path/to/all-outputs");
     console.error(
@@ -1589,12 +1589,12 @@ async function main(): Promise<void> {
 
   writeReport(resultsDir, report, modelLabelRaw, sdkVersion, runId);
 
-  // Auto-graduate: when this run is a solver run on the types-only profile
+  // Auto-graduate: when this run is a solver run on the code-only profile
   // (the stricter signal) and not an A/B candidate, move any problem that
   // hits 5 consecutive passRate=1.0 with stable turns variance into
   // `problems/archived/`. Concurrent runs racing on the same problem are
   // safe: the second mv finds the destination present and no-ops.
-  if (solve && contextProfile === "types-only" && !sdkBranch) {
+  if (solve && contextProfile === "code-only" && !sdkBranch) {
     const groupResultsDir = getRunResultsDir(resultsDir, modelLabelRaw);
     const outcome = graduateProblems({
       runResultsDir: groupResultsDir,
@@ -1602,7 +1602,7 @@ async function main(): Promise<void> {
       latestReport: report,
     });
     for (const dirName of outcome.graduated) {
-      console.log(`Graduated to archived/: ${dirName} (5 consecutive passRate=1.0 on types-only)`);
+      console.log(`Graduated to archived/: ${dirName} (5 consecutive passRate=1.0 on code-only)`);
     }
   }
 

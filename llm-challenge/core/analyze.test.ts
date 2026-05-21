@@ -206,8 +206,8 @@ describe("computeReportDiff", () => {
   });
 
   it("surfaces a warning when context profile differs between reports", () => {
-    const reportA = makeReport({ contextProfile: "types-only" });
-    const reportB = makeReport({ contextProfile: "full-package" });
+    const reportA = makeReport({ contextProfile: "code-only" });
+    const reportB = makeReport({ contextProfile: "code-and-docs" });
     const diff = computeReportDiff(reportA, reportB);
     expect(diff.warnings.some((w) => w.startsWith("contextProfile differs"))).toBe(true);
   });
@@ -319,7 +319,7 @@ describe("computeReportDiff", () => {
             passedCount: 3,
             passRate: 1,
             passedByIteration: [true, true, true],
-            // types-only: read sdk-docs once, no sdk-dts.
+            // code-only: read sdk-docs once, no sdk-dts.
             metricsMedian: mkIterMetrics({
               turns: 21,
               readSdkDts: 0,
@@ -342,7 +342,7 @@ describe("computeReportDiff", () => {
             passedCount: 1,
             passRate: 1 / 3,
             passedByIteration: [true, false, false],
-            // full-package: agent now reads sdk-docs and pokes around problem-files.
+            // code-and-docs: agent now reads sdk-docs and pokes around problem-files.
             metricsMedian: mkIterMetrics({
               turns: 10,
               readSdkDts: 0,
@@ -468,7 +468,7 @@ describe("computeReportDiff", () => {
 
 describe("resolveActiveProfilePair", () => {
   function makeProfileReport(
-    profile: "types-only" | "full-package",
+    profile: "code-only" | "code-and-docs",
     timestamp: string,
     overrides: Partial<ChallengeReport> = {},
   ): ChallengeReport {
@@ -489,9 +489,9 @@ describe("resolveActiveProfilePair", () => {
   }
 
   it("returns the latest report per profile within the most-recent complete group", () => {
-    const typesOnlyOld = makeProfileReport("types-only", "2026-05-13T06:00:00Z");
-    const typesOnlyNew = makeProfileReport("types-only", "2026-05-13T07:00:00Z");
-    const fullPackage = makeProfileReport("full-package", "2026-05-13T07:30:00Z");
+    const typesOnlyOld = makeProfileReport("code-only", "2026-05-13T06:00:00Z");
+    const typesOnlyNew = makeProfileReport("code-only", "2026-05-13T07:00:00Z");
+    const fullPackage = makeProfileReport("code-and-docs", "2026-05-13T07:30:00Z");
     const result = resolveActiveProfilePair([typesOnlyOld, typesOnlyNew, fullPackage]);
     expect(result.kind).toBe("ok");
     if (result.kind === "ok") {
@@ -504,7 +504,7 @@ describe("resolveActiveProfilePair", () => {
     // Single-problem reruns should not displace the full sweep that happened
     // earlier — the diff is more meaningful when both sides cover the same
     // problem set.
-    const fullSweep = makeProfileReport("full-package", "2026-05-13T07:30:00Z", {
+    const fullSweep = makeProfileReport("code-and-docs", "2026-05-13T07:30:00Z", {
       results: Array.from({ length: 25 }, (_, i) => ({
         problemId: `m${String(i + 1).padStart(2, "0")}`,
         problemName: `m${String(i + 1).padStart(2, "0")}`,
@@ -513,7 +513,7 @@ describe("resolveActiveProfilePair", () => {
         passed: true,
       })),
     });
-    const singleProblem = makeProfileReport("full-package", "2026-05-13T14:00:00Z", {
+    const singleProblem = makeProfileReport("code-and-docs", "2026-05-13T14:00:00Z", {
       results: [
         {
           problemId: "m18",
@@ -524,7 +524,7 @@ describe("resolveActiveProfilePair", () => {
         },
       ],
     });
-    const typesOnly = makeProfileReport("types-only", "2026-05-13T07:00:00Z");
+    const typesOnly = makeProfileReport("code-only", "2026-05-13T07:00:00Z");
     const result = resolveActiveProfilePair([fullSweep, singleProblem, typesOnly]);
     expect(result.kind).toBe("ok");
     if (result.kind === "ok") {
@@ -534,19 +534,19 @@ describe("resolveActiveProfilePair", () => {
   });
 
   it("returns missing when only one profile has reports for the active group", () => {
-    const typesOnly = makeProfileReport("types-only", "2026-05-13T06:00:00Z");
+    const typesOnly = makeProfileReport("code-only", "2026-05-13T06:00:00Z");
     const result = resolveActiveProfilePair([typesOnly]);
     expect(result.kind).toBe("missing");
     if (result.kind === "missing") {
-      expect(result.reason).toMatch(/full-package/);
+      expect(result.reason).toMatch(/code-and-docs/);
     }
   });
 
   it("excludes reports with sdkBranch set (those are A/B candidate runs)", () => {
-    const typesOnly = makeProfileReport("types-only", "2026-05-13T07:00:00Z");
-    const fullPackage = makeProfileReport("full-package", "2026-05-13T07:30:00Z");
+    const typesOnly = makeProfileReport("code-only", "2026-05-13T07:00:00Z");
+    const fullPackage = makeProfileReport("code-and-docs", "2026-05-13T07:30:00Z");
     // Newer report but with sdkBranch — should be filtered out.
-    const candidate = makeProfileReport("full-package", "2026-05-13T14:00:00Z", {
+    const candidate = makeProfileReport("code-and-docs", "2026-05-13T14:00:00Z", {
       sdkBranch: "feat/some-experiment",
     });
     const result = resolveActiveProfilePair([typesOnly, fullPackage, candidate]);

@@ -3,6 +3,6 @@
   "title": "Register two SDK plugins via definePlugins(...) rest arguments",
   "designNote": "consolidation_candidate",
   "sdkSurface": "plugin",
-  "contextProfiles": ["types-only", "full-package"],
+  "contextProfiles": ["code-only", "code-and-docs"],
   "hint": "definePlugins(a, b, c) は rest args。defineGenerators は deprecated"
 }

@@ -81,9 +81,9 @@ describe("createReport", () => {
       makeProblemResult({ problemId: "002", stages: [failing], passed: false }),
     ];
 
-    const report = createReport(results, { contextProfile: "types-only" });
+    const report = createReport(results, { contextProfile: "code-only" });
 
-    expect(report.contextProfile).toBe("types-only");
+    expect(report.contextProfile).toBe("code-only");
     expect(report.problemsPassed).toBe(1);
     expect(report.problemsTotal).toBe(2);
     expect(report.percentage).toBe(50);

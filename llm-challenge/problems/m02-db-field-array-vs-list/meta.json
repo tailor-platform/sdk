@@ -3,6 +3,6 @@
   "title": "Write an optional string array field using db.string options",
   "designNote": "naming_bias",
   "sdkSurface": "db-field",
-  "contextProfiles": ["types-only", "full-package"],
+  "contextProfiles": ["code-only", "code-and-docs"],
   "hint": ".array() ではなく option 渡し"
 }
