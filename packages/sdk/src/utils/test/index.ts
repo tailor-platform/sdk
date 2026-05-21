@@ -141,23 +141,26 @@ export function createStandardSchema<T = Record<string, unknown>>(
   } as const satisfies StandardSchemaV1<T>;
 }
 
+type RecordValidatorFn<T> = (args: { data: T; user: TailorUser }) => boolean;
+
+function isRecordValidatorTuple(
+  validator: LooseRecordValidator,
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+): validator is readonly [Function, string] {
+  return Array.isArray(validator) && validator.length === 2 && typeof validator[1] === "string";
+}
+
 function runRecordValidators<T>(
   validators: readonly LooseRecordValidator[],
   data: T,
 ): StandardSchemaV1.Issue[] {
   const issues: StandardSchemaV1.Issue[] = [];
-  type RecordValidatorFn = (args: { data: T; user: TailorUser }) => boolean;
   for (let i = 0; i < validators.length; i++) {
     const validator = validators[i];
-    const isConfig =
-      Array.isArray(validator) && validator.length === 2 && typeof validator[1] === "string";
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
-    type FnTuple = readonly [Function, string];
-    const fn = // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
-      (isConfig ? (validator as FnTuple)[0] : (validator as Function)) as RecordValidatorFn;
-    const message = isConfig
-      ? (validator as readonly [unknown, string])[1]
-      : `Record validator ${i} failed`;
+    const [rawFn, message] = isRecordValidatorTuple(validator)
+      ? [validator[0], validator[1]]
+      : [validator, `Record validator ${i} failed`];
+    const fn = rawFn as RecordValidatorFn<T>;
     if (!fn({ data, user: unauthenticatedTailorUser })) {
       issues.push({ message });
     }
