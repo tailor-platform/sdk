@@ -12,7 +12,7 @@ const configPath = resolve(integrationDir, "vitest.config.ts");
 // Run the nested `vitest run` from the SDK package root (not src/) so the
 // subprocess sees the package's `package.json` and `tsconfig.json` for
 // module resolution and TS transforms.
-const sdkDir = resolve(currentDir, "../../..");
+const sdkDir = resolve(currentDir, "../..");
 
 // Resolve the workspace's installed Vitest entry rather than relying on `npx`,
 // which may perform online package resolution and slow down / destabilize CI.

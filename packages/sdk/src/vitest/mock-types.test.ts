@@ -7,7 +7,7 @@
  * and are intentionally omitted because they would always pass.
  */
 import { afterAll, beforeAll, describe, expectTypeOf, test } from "vitest";
-import { injectMocks, cleanupMocks } from "../mock";
+import { injectMocks, cleanupMocks } from "./mock";
 
 beforeAll(() => injectMocks(globalThis));
 afterAll(() => cleanupMocks(globalThis));
