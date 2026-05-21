@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createTable } from "@/configure/services/tailordb/createTable";
 import { db } from "@/configure/services/tailordb/schema";
 import { toSchemaOutputs } from "@/utils/test/internal";
 import { parseTypes } from "./type-parser";
@@ -643,6 +644,147 @@ describe("parseTypes", () => {
       expect(() => parseTypes(toSchemaOutputs({ Bad: bad }), "test-namespace")).toThrow(
         /Record-level hook must return a single object literal at the top level/,
       );
+    });
+
+    it("distributes a record-level hook with 3+ override keys to each field", () => {
+      const multi = db
+        .type(["Multi", "AllMulti"], {
+          a: db.string(),
+          b: db.string(),
+          c: db.string(),
+          d: db.string(),
+        })
+        .hooks({
+          create: ({ data }) => ({ a: data.b, b: data.c, c: data.d }),
+        });
+
+      const result = parseTypes(toSchemaOutputs({ Multi: multi }), "test-namespace");
+
+      for (const key of ["a", "b", "c"] as const) {
+        const expr = result.Multi.fields[key].config.hooks?.create?.expr ?? "";
+        expect(expr).toContain(`"${key}"`);
+        expect(expr).toContain("({ data: _data, user:");
+      }
+      // `d` is not overridden, so it carries no hook.
+      expect(result.Multi.fields.d.config.hooks).toBeUndefined();
+    });
+
+    it("allows a record-level hook to override a relation field without breaking parsing", () => {
+      const user = db.type("RHRelUser", { name: db.string() });
+      const post = db
+        .type("RHRelPost", {
+          title: db.string(),
+          authorId: db.uuid().relation({
+            type: "n-1",
+            toward: { type: user },
+          }),
+        })
+        .hooks({
+          // Overriding the relation field itself — the hook must materialize on it
+          // while keeping the relation metadata intact.
+          create: ({ data }) => ({ authorId: data.title }),
+        });
+
+      const result = parseTypes(
+        toSchemaOutputs({ RHRelUser: user, RHRelPost: post }),
+        "test-namespace",
+      );
+
+      const authorIdConfig = result.RHRelPost.fields.authorId.config;
+      const expr = authorIdConfig.hooks?.create?.expr ?? "";
+      expect(expr).toContain('"authorId"');
+      // Relation metadata must still be derived correctly.
+      expect(authorIdConfig.foreignKey).toBe(true);
+      expect(authorIdConfig.foreignKeyType).toBe("RHRelUser");
+      expect(authorIdConfig.index).toBe(true);
+    });
+  });
+
+  describe("record-level validators wrap into OperatorValidateConfig[]", () => {
+    it("emits a default 'failed by ...' message for function-only validators", () => {
+      const t = db
+        .type("ValFnOnly", { name: db.string() })
+        .validate(({ data }) => data.name.length > 0);
+
+      const result = parseTypes(toSchemaOutputs({ ValFnOnly: t }), "test-namespace");
+      expect(result.ValFnOnly.validate).toHaveLength(1);
+      const [first] = result.ValFnOnly.validate ?? [];
+      expect(first?.errorMessage).toMatch(/^failed by `/);
+      // The wrapping turns the predicate into a `(pred) ? {} : { "_record_0": "<msg>" }` expression.
+      expect(first?.script.expr).toContain('"_record_0"');
+      expect(first?.script.expr).toContain("? {} :");
+    });
+
+    it("emits the explicit message for [fn, message] tuple validators", () => {
+      const t = db
+        .type("ValTuple", { name: db.string() })
+        .validate([({ data }) => data.name.length > 0, "Name required"]);
+
+      const result = parseTypes(toSchemaOutputs({ ValTuple: t }), "test-namespace");
+      const [first] = result.ValTuple.validate ?? [];
+      expect(first?.errorMessage).toBe("Name required");
+      expect(first?.script.expr).toContain('"Name required"');
+      expect(first?.script.expr).toContain('"_record_0"');
+    });
+
+    it("indexes mixed validator arrays as _record_<i> keys preserving order", () => {
+      const t = db
+        .type("ValMixed", { age: db.int() })
+        .validate([
+          ({ data }) => data.age >= 0,
+          [({ data }) => data.age < 200, "Age too high"],
+          ({ data }) => data.age !== 13,
+        ]);
+
+      const result = parseTypes(toSchemaOutputs({ ValMixed: t }), "test-namespace");
+      expect(result.ValMixed.validate).toHaveLength(3);
+      const [v0, v1, v2] = result.ValMixed.validate ?? [];
+      expect(v0?.script.expr).toContain('"_record_0"');
+      expect(v0?.errorMessage).toMatch(/^failed by `/);
+      expect(v1?.script.expr).toContain('"_record_1"');
+      expect(v1?.errorMessage).toBe("Age too high");
+      expect(v2?.script.expr).toContain('"_record_2"');
+      expect(v2?.errorMessage).toMatch(/^failed by `/);
+    });
+
+    it("does not emit a validate slot when no record-level validators are defined", () => {
+      const t = db.type("ValNone", { name: db.string() });
+      const result = parseTypes(toSchemaOutputs({ ValNone: t }), "test-namespace");
+      expect(result.ValNone.validate).toBeUndefined();
+    });
+  });
+
+  describe("createTable: hooks and validate coexist after parsing", () => {
+    it("emits field-level hooks (from record-level hook) and parsed validators together", () => {
+      const combo = createTable(
+        "Combo",
+        {
+          name: { kind: "string" },
+          fullAddress: { kind: "string" },
+        },
+        {
+          hooks: {
+            create: ({ data }) => ({ fullAddress: data.name }),
+          },
+          validate: [
+            ({ data }) => data.name.length > 0,
+            [({ data }) => data.fullAddress.length > 0, "fullAddress required"],
+          ],
+        },
+      );
+
+      const result = parseTypes(toSchemaOutputs({ Combo: combo }), "test-namespace");
+
+      // Record-level hook → field-level hook on the overridden key.
+      const hookExpr = result.Combo.fields.fullAddress.config.hooks?.create?.expr ?? "";
+      expect(hookExpr).toContain('"fullAddress"');
+      // Untouched fields stay hook-free.
+      expect(result.Combo.fields.name.config.hooks).toBeUndefined();
+
+      // Record-level validators are wrapped into OperatorValidateConfig[].
+      expect(result.Combo.validate).toHaveLength(2);
+      expect(result.Combo.validate?.[0]?.script.expr).toContain('"_record_0"');
+      expect(result.Combo.validate?.[1]?.errorMessage).toBe("fullAddress required");
     });
   });
 });

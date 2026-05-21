@@ -987,5 +987,234 @@ describe("createResolver", () => {
 
       expect(resolver.output.type).toBe("nested");
     });
+
+    describe("validate works across all validatable scalar kinds", () => {
+      test("string descriptor accepts a [fn, message] validate", () => {
+        const resolver = createResolver({
+          name: "vStr",
+          operation: "query",
+          input: {
+            name: {
+              kind: "string",
+              validate: [({ value }) => value.length > 0, "Name required"] as [
+                ({ value }: { value: string }) => boolean,
+                string,
+              ],
+            },
+          },
+          output: { kind: "bool" },
+          body: () => true,
+        });
+        const validate = resolver.input!.name.metadata.validate;
+        expect(validate).toBeDefined();
+        expect(validate!.length).toBe(1);
+      });
+
+      test("decimal descriptor accepts a validate function", () => {
+        const validate: ({ value }: { value: string }) => boolean = ({ value }) =>
+          Number(value) >= 0;
+        const resolver = createResolver({
+          name: "vDec",
+          operation: "query",
+          input: {
+            amount: {
+              kind: "decimal",
+              validate,
+            },
+          },
+          output: { kind: "bool" },
+          body: () => true,
+        });
+        expect(resolver.input!.amount.metadata.validate).toBeDefined();
+      });
+
+      test("date descriptor accepts a validate function", () => {
+        const validate: ({ value }: { value: string }) => boolean = ({ value }) =>
+          typeof value === "string";
+        const resolver = createResolver({
+          name: "vDate",
+          operation: "query",
+          input: {
+            day: {
+              kind: "date",
+              validate,
+            },
+          },
+          output: { kind: "bool" },
+          body: () => true,
+        });
+        expect(resolver.input!.day.metadata.validate).toBeDefined();
+      });
+
+      test("datetime descriptor accepts a validate function", () => {
+        const validate: ({ value }: { value: string | Date }) => boolean = ({ value }) =>
+          typeof value === "string" || value instanceof Date;
+        const resolver = createResolver({
+          name: "vDt",
+          operation: "query",
+          input: {
+            at: {
+              kind: "datetime",
+              validate,
+            },
+          },
+          output: { kind: "bool" },
+          body: () => true,
+        });
+        expect(resolver.input!.at.metadata.validate).toBeDefined();
+      });
+
+      test("enum descriptor accepts a [fn, message] validate", () => {
+        const validate: [({ value }: { value: string }) => boolean, string] = [
+          ({ value }) => value === "ADMIN" || value === "USER",
+          "Invalid role",
+        ];
+        const resolver = createResolver({
+          name: "vEnum",
+          operation: "query",
+          input: {
+            role: {
+              kind: "enum",
+              values: ["ADMIN", "USER"],
+              validate,
+            },
+          },
+          output: { kind: "bool" },
+          body: () => true,
+        });
+        expect(resolver.input!.role.metadata.validate).toBeDefined();
+      });
+
+      test("scalar descriptor accepts an array of validators", () => {
+        const resolver = createResolver({
+          name: "vMulti",
+          operation: "query",
+          input: {
+            age: {
+              kind: "int",
+              validate: [
+                [({ value }) => value >= 0, "Must be non-negative"],
+                [({ value }) => value < 200, "Too large"],
+              ] as [({ value }: { value: number }) => boolean, string][],
+            },
+          },
+          output: { kind: "bool" },
+          body: () => true,
+        });
+        const validate = resolver.input!.age.metadata.validate;
+        expect(validate).toBeDefined();
+        expect(validate!.length).toBe(2);
+      });
+    });
+
+    describe("ObjectDescriptor combinations", () => {
+      test("optional object descriptor resolves with required=false", () => {
+        const resolver = createResolver({
+          name: "objOptional",
+          operation: "query",
+          input: {
+            profile: {
+              kind: "object",
+              optional: true,
+              fields: {
+                name: { kind: "string" },
+              },
+            },
+          },
+          output: { kind: "bool" },
+          body: () => true,
+        });
+        expect(resolver.input!.profile.type).toBe("nested");
+        expect(resolver.input!.profile.metadata.required).toBe(false);
+      });
+
+      test("array object descriptor resolves with array=true", () => {
+        const resolver = createResolver({
+          name: "objArray",
+          operation: "query",
+          input: {
+            people: {
+              kind: "object",
+              array: true,
+              fields: {
+                name: { kind: "string" },
+              },
+            },
+          },
+          output: { kind: "int" },
+          body: ({ input }) => input.people.length,
+        });
+        expect(resolver.input!.people.type).toBe("nested");
+        expect(resolver.input!.people.metadata.array).toBe(true);
+      });
+
+      test("object descriptor with description sets metadata.description", () => {
+        const resolver = createResolver({
+          name: "objDesc",
+          operation: "query",
+          input: {
+            profile: {
+              kind: "object",
+              description: "User profile payload",
+              fields: {
+                name: { kind: "string" },
+              },
+            },
+          },
+          output: { kind: "bool" },
+          body: () => true,
+        });
+        expect(resolver.input!.profile.metadata.description).toBe("User profile payload");
+      });
+
+      test("object descriptor with typeName sets metadata.typeName", () => {
+        const resolver = createResolver({
+          name: "objTypeName",
+          operation: "query",
+          input: {
+            payload: {
+              kind: "object",
+              typeName: "ProfilePayload",
+              fields: {
+                name: { kind: "string" },
+              },
+            },
+          },
+          output: { kind: "bool" },
+          body: () => true,
+        });
+        expect(resolver.input!.payload.metadata.typeName).toBe("ProfilePayload");
+      });
+
+      test("optional + array + description + typeName combine correctly", () => {
+        const resolver = createResolver({
+          name: "objAll",
+          operation: "query",
+          input: {
+            items: {
+              kind: "object",
+              optional: true,
+              array: true,
+              description: "List of items",
+              typeName: "Item",
+              fields: {
+                id: { kind: "uuid" },
+                name: { kind: "string" },
+              },
+            },
+          },
+          output: { kind: "bool" },
+          body: () => true,
+        });
+        const items = resolver.input!.items;
+        expect(items.type).toBe("nested");
+        expect(items.metadata.array).toBe(true);
+        expect(items.metadata.required).toBe(false);
+        expect(items.metadata.description).toBe("List of items");
+        expect(items.metadata.typeName).toBe("Item");
+        expect(items.fields.id.type).toBe("uuid");
+        expect(items.fields.name.type).toBe("string");
+      });
+    });
   });
 });
