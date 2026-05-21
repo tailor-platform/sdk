@@ -37,7 +37,7 @@
     "zod": "4.3.6"
   },
   "devDependencies": {
-    "@types/node": "24.12.3",
+    "@types/node": "24.12.4",
     "@types/picomatch": "4.0.3",
     "@types/semver": "7.7.1",
     "oxlint": "1.61.0",

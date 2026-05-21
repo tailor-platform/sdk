@@ -7,6 +7,7 @@ import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger, styles } from "@/cli/shared/logger";
+import { assertWritable } from "@/cli/shared/readonly-guard";
 import { watchExecutorJob } from "./jobs";
 import { executorTriggerTypeToString } from "./status";
 import type { IncomingWebhookTrigger, ScheduleTriggerInput } from "@/types/executor.generated";
@@ -216,6 +217,7 @@ The \`--logs\` option displays logs from the downstream execution when available
     })
     .strict(),
   run: async (args) => {
+    await assertWritable({ profile: args.profile });
     // Validate trigger type before processing
     const accessToken = await loadAccessToken({
       useProfile: true,

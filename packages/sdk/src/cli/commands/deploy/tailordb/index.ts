@@ -54,6 +54,7 @@ import {
   compareRemoteWithSnapshot,
   formatSchemaDrifts,
   createSnapshotType,
+  getLatestMigrationNumber,
   isSnapshotFieldRefOperand,
   type SnapshotFieldConfig,
   type TailorDBSnapshotType,
@@ -242,6 +243,11 @@ function formatRemoteVerificationResults(results: RemoteSchemaVerificationResult
 // Migration Validation
 // ============================================================================
 
+type ValidateAndDetectResult = {
+  pendingMigrations: PendingMigration[];
+  namespacesWithMigrations: NamespaceWithMigrations[];
+};
+
 /**
  * Validate migration files and detect pending migrations
  * @param {OperatorClient} client - Operator client instance
@@ -249,7 +255,7 @@ function formatRemoteVerificationResults(results: RemoteSchemaVerificationResult
  * @param {ReadonlyMap<string, Record<string, TailorDBSnapshotType>>} typesByNamespace - Types by namespace
  * @param {LoadedConfig} config - Loaded application config (includes path)
  * @param {boolean} noSchemaCheck - Whether to skip schema diff check
- * @returns {Promise<PendingMigration[]>} List of pending migrations
+ * @returns {Promise<ValidateAndDetectResult>} Pending migrations and namespaces that have migration directories configured
  */
 async function validateAndDetectMigrations(
   client: OperatorClient,
@@ -257,7 +263,7 @@ async function validateAndDetectMigrations(
   typesByNamespace: ReadonlyMap<string, Record<string, TailorDBSnapshotType>>,
   config: LoadedConfig,
   noSchemaCheck: boolean,
-): Promise<PendingMigration[]> {
+): Promise<ValidateAndDetectResult> {
   const configDir = path.dirname(config.path);
   const namespacesWithMigrations = getNamespacesWithMigrations(config, configDir);
   let pendingMigrations: PendingMigration[] = [];
@@ -338,7 +344,42 @@ async function validateAndDetectMigrations(
     }
   }
 
-  return pendingMigrations;
+  return { pendingMigrations, namespacesWithMigrations };
+}
+
+/**
+ * Reconcile the on-remote migration label with the working tree's latest
+ * migration number for each namespace.
+ *
+ * Used after a `--no-schema-check` apply: that flag skips the local/remote
+ * snapshot drift checks, but if it also leaves the label untouched the remote
+ * label can drift past the working tree's latest migration (e.g. when
+ * checking out an older revision and re-deploying). A subsequent run would
+ * then reconstruct the expected snapshot at a label that no longer exists in
+ * the working tree, triggering a false drift error.
+ *
+ * Always force `label = working_tree_max` regardless of the previous label so
+ * the invariant `label <= working_tree_max` is preserved.
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ * @param namespacesWithMigrations - Namespaces that have migration directories configured
+ */
+async function reconcileMigrationLabels(
+  client: OperatorClient,
+  workspaceId: string,
+  namespacesWithMigrations: NamespaceWithMigrations[],
+): Promise<void> {
+  for (const { namespace, migrationsDir } of namespacesWithMigrations) {
+    const targetVersion = getLatestMigrationNumber(migrationsDir);
+    const currentVersion = await getRemoteMigrationNumber(client, workspaceId, namespace);
+    await updateMigrationLabel(client, workspaceId, namespace, targetVersion);
+    if (currentVersion !== targetVersion) {
+      const from = currentVersion === null ? "<unset>" : formatMigrationNumber(currentVersion);
+      logger.info(
+        `Migration label for namespace ${namespace} reconciled: ${from} → ${formatMigrationNumber(targetVersion)}.`,
+      );
+    }
+  }
 }
 
 /**
@@ -399,7 +440,7 @@ export async function applyTailorDB(
       typesByNamespace.set(tailordb.namespace, tailordb.types);
     }
 
-    const pendingMigrations = await validateAndDetectMigrations(
+    const { pendingMigrations, namespacesWithMigrations } = await validateAndDetectMigrations(
       client,
       migrationContext.workspaceId,
       typesByNamespace,
@@ -515,6 +556,19 @@ export async function applyTailorDB(
       );
       await Promise.all(
         changeSet.type.deletes.map((del) => client.deleteTailorDBType(del.request)),
+      );
+    }
+
+    // When schema checks are skipped, force-reconcile the migration label so
+    // that the invariant `label <= working_tree_max` always holds. Without
+    // this, a `--no-schema-check` deploy from an older revision can leave a
+    // stale label that breaks the next snapshot reconstruction (see
+    // verifyRemoteSchema).
+    if (migrationContext.noSchemaCheck && namespacesWithMigrations.length > 0) {
+      await reconcileMigrationLabels(
+        client,
+        migrationContext.workspaceId,
+        namespacesWithMigrations,
       );
     }
   } else if (phase === "delete-resources") {

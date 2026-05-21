@@ -8,6 +8,7 @@ import { loadConfig } from "@/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
 import { prompt } from "@/cli/shared/prompt";
+import { assertWritable } from "@/cli/shared/readonly-guard";
 import { resolveTypeNamespaces } from "@/cli/shared/tailordb-namespace";
 
 export interface TruncateOptions {
@@ -219,6 +220,7 @@ export const truncateCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
+    await assertWritable({ profile: args.profile });
     const types = args.types && args.types.length > 0 ? args.types : undefined;
     await $truncate({
       workspaceId: args["workspace-id"],
