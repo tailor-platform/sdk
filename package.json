@@ -27,7 +27,7 @@
     "@changesets/changelog-github": "0.7.0",
     "@changesets/cli": "2.31.0",
     "@tailor-platform/sdk": "workspace:^",
-    "@types/node": "24.12.3",
+    "@types/node": "24.12.4",
     "knip": "6.12.2",
     "lefthook": "2.1.6",
     "oxfmt": "0.46.0",

@@ -5,6 +5,7 @@ import { initOperatorClient } from "@/cli/shared/client";
 import { defineAppCommand } from "@/cli/shared/command";
 import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
 import { logger } from "@/cli/shared/logger";
+import { assertWritable } from "@/cli/shared/readonly-guard";
 import { stringToRole, validRoles } from "./transform";
 
 const inviteUserOptionsSchema = z.object({
@@ -68,6 +69,7 @@ export const inviteCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
+    await assertWritable({ profile: args.profile });
     await inviteUser({
       workspaceId: args["workspace-id"],
       profile: args.profile,

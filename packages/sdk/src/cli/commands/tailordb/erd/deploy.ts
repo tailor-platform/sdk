@@ -3,6 +3,7 @@ import { z } from "zod";
 import { deploymentArgs } from "@/cli/shared/args";
 import { defineAppCommand } from "@/cli/shared/command";
 import { logger } from "@/cli/shared/logger";
+import { assertWritable } from "@/cli/shared/readonly-guard";
 import { deployStaticWebsite, logSkippedFiles } from "../../staticwebsite/deploy";
 import { prepareErdBuilds } from "./export";
 import { initErdContext } from "./utils";
@@ -21,6 +22,7 @@ export const erdDeployCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
+    await assertWritable({ profile: args.profile });
     const { client, workspaceId, config } = await initErdContext(args);
     const buildResults = await prepareErdBuilds({
       client,
