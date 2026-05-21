@@ -37,12 +37,5 @@ describe("parseFieldConfig", () => {
 
       expect(config.hooks).toBeUndefined();
     });
-
-    it("skips auto-generated hooks when skipAutoHooks is true", () => {
-      const { createdAt, updatedAt } = db.fields.timestamps();
-
-      expect(parseFieldConfig(createdAt, { skipAutoHooks: true }).hooks).toBeUndefined();
-      expect(parseFieldConfig(updatedAt, { skipAutoHooks: true }).hooks).toBeUndefined();
-    });
   });
 });

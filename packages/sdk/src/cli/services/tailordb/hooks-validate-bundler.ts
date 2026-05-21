@@ -20,10 +20,15 @@ import type {
 type ScriptFunction = (...args: unknown[]) => unknown;
 
 /**
- * `record-hooks` and `record-validate` are type-level callbacks. Per the
- * platform contract their script receives `_input` (the record map) and
- * `user`; field-level scripts also receive `_value` and use `_data` as the
- * record map.
+ * `record-hooks` runs at the field-level binding context: each override key
+ * gets its own `FieldHook` whose script invokes the record-level function and
+ * indexes out the key. The platform binds the record map to `_data` at that
+ * level, so the script must reference `_data`, not the type-level `_input`.
+ *
+ * `record-validate` is still emitted as `type_validate` at the type level,
+ * where the platform binds the record map to `_input`.
+ *
+ * Field-level scripts (`hooks`, `validate`) additionally receive `_value`.
  */
 type ScriptKind = "hooks" | "validate" | "record-hooks" | "record-validate";
 
@@ -32,14 +37,15 @@ type ScriptTarget = {
   kind: ScriptKind;
 };
 
-function isRecordKind(kind: ScriptKind): boolean {
-  return kind === "record-hooks" || kind === "record-validate";
-}
-
 function scriptInvocationArgs(kind: ScriptKind): string {
-  return isRecordKind(kind)
-    ? `{ data: _input, user: ${tailorUserMap} }`
-    : `{ value: _value, data: _data, user: ${tailorUserMap} }`;
+  switch (kind) {
+    case "record-hooks":
+      return `{ data: _data, user: ${tailorUserMap} }`;
+    case "record-validate":
+      return `{ data: _input, user: ${tailorUserMap} }`;
+    default:
+      return `{ value: _value, data: _data, user: ${tailorUserMap} }`;
+  }
 }
 
 /** Binding found in the source file: either an import or a top-level declaration */

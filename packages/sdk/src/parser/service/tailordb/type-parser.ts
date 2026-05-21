@@ -3,6 +3,7 @@ import { isPluginGeneratedType } from "@/types/tailordb";
 import { parseFieldConfig, stringifyFunction, tailorUserMap } from "./field";
 import { getPrecompiledScriptExpr } from "./hooks-validate-precompiled-expr";
 import { parsePermissions } from "./permission";
+import { extractRecordHookOverrideKeys } from "./record-hook-keys";
 import {
   validateRelationConfig,
   processRelationMetadata,
@@ -15,7 +16,6 @@ import type {
   ParsedField,
   ParsedRelationship,
   TailorDBType,
-  OperatorFieldHook,
   OperatorValidateConfig,
 } from "@/types/tailordb";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "@/types/tailordb.generated";
@@ -64,14 +64,12 @@ function parseTailorDBType(
   const fields: Record<string, ParsedField> = {};
   const forwardRelationships: Record<string, ParsedRelationship> = {};
 
-  const hasRecordHooks = Boolean(metadata.hooks?.create || metadata.hooks?.update);
-
   for (const [fieldName, fieldDef] of Object.entries(type.fields) as [
     string,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- TailorDBField requires generic type parameters
     TailorDBField<any, any>,
   ][]) {
-    let fieldConfig = parseFieldConfig(fieldDef, { skipAutoHooks: hasRecordHooks });
+    let fieldConfig = parseFieldConfig(fieldDef);
     const rawRelation = fieldConfig.rawRelation;
     const context = { typeName: type.name, fieldName, allTypeNames };
 
@@ -125,7 +123,8 @@ function parseTailorDBType(
     fields[fieldName] = parsedField;
   }
 
-  const recordHooks = convertRecordHooks(metadata.hooks);
+  applyRecordHooksToFields(fields, metadata.hooks, type.name);
+
   const recordValidate =
     metadata.validate && metadata.validate.length > 0
       ? convertRecordValidators(metadata.validate)
@@ -142,46 +141,69 @@ function parseTailorDBType(
     permissions: parsePermissions(metadata.permissions || {}),
     indexes: metadata.indexes,
     files: metadata.files,
-    ...(recordHooks && { hooks: recordHooks }),
     ...(recordValidate && { validate: recordValidate }),
   };
 }
 
 /**
- * Convert a record-level hook function to a script expression.
- * Per the platform contract, type-level scripts receive `_input` (record map)
- * and `user`, not the field-level `_value` / `_data` bindings.
+ * Build a field-level script expression that invokes a record-level hook and
+ * indexes out the value for one override key. The record map is read from
+ * `_data` (the field-level binding); the script result becomes the new value
+ * for the owning field.
  * @param fn - Record-level hook function
- * @returns JavaScript expression that invokes the hook with the platform bindings
+ * @param key - Override key to index out
+ * @returns JavaScript expression suitable for `FieldHook.create.expr` / `.update.expr`
  */
-function convertRecordHookToExpr(fn: (...args: never[]) => unknown): string {
+function buildRecordHookFieldExpr(fn: (...args: never[]) => unknown, key: string): string {
   const precompiledExpr = getPrecompiledScriptExpr(fn);
-  if (precompiledExpr) {
-    return precompiledExpr;
-  }
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
-  const normalized = stringifyFunction(fn as unknown as Function);
-  return `(${normalized})({ data: _input, user: ${tailorUserMap} })`;
+  const invocation =
+    precompiledExpr ??
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+    `(${stringifyFunction(fn as unknown as Function)})({ data: _data, user: ${tailorUserMap} })`;
+  return `(${invocation})[${JSON.stringify(key)}]`;
 }
 
 /**
- * Convert record-level hooks to OperatorFieldHook with Script expressions.
- * The platform invokes these on create/update at the type level.
- * @param hooks - Record-level hook definitions
- * @returns Operator-form hooks ready for the apply pipeline, or undefined when empty
+ * Expand a record-level hook into per-field `hooks` entries on each overridden
+ * field. The platform's `type_hook` and field-level `hooks` are mutually
+ * exclusive at the wire level; emitting field-level hooks per override key
+ * lets the platform mark each populated field as optional in the auto-generated
+ * GraphQL input while preserving the record-level user API.
+ * @param fields - Parsed fields keyed by field name (mutated in place)
+ * @param hooks - Record-level hook definitions, if any
+ * @param typeName - Type name (used for error messages)
  */
-function convertRecordHooks(
+function applyRecordHooksToFields(
+  fields: Record<string, ParsedField>,
   hooks: NonNullable<TailorDBTypeSchemaOutput["metadata"]>["hooks"],
-): OperatorFieldHook | undefined {
-  if (!hooks) return undefined;
-  const create = hooks.create
-    ? { expr: convertRecordHookToExpr(hooks.create as (...args: never[]) => unknown) }
-    : undefined;
-  const update = hooks.update
-    ? { expr: convertRecordHookToExpr(hooks.update as (...args: never[]) => unknown) }
-    : undefined;
-  if (!create && !update) return undefined;
-  return { create, update };
+  typeName: string,
+): void {
+  if (!hooks) return;
+
+  const apply = (op: "create" | "update", fn: unknown): void => {
+    if (typeof fn !== "function") return;
+    const typedFn = fn as (...args: never[]) => unknown;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+    const fnSource = stringifyFunction(typedFn as unknown as Function);
+    const keys = extractRecordHookOverrideKeys(fnSource);
+    for (const key of keys) {
+      const field = fields[key];
+      if (!field) {
+        throw new Error(
+          `Record-level ${op} hook on type "${typeName}" overrides unknown field "${key}". ` +
+            "Override keys must match a field defined on the type.",
+        );
+      }
+      const expr = buildRecordHookFieldExpr(typedFn, key);
+      field.config.hooks = {
+        ...(field.config.hooks ?? {}),
+        [op]: { expr },
+      };
+    }
+  };
+
+  apply("create", hooks.create);
+  apply("update", hooks.update);
 }
 
 /**

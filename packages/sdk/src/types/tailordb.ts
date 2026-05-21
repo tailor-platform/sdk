@@ -255,7 +255,11 @@ export interface TailorDBTypeMetadata {
       unique?: boolean;
     }
   >;
-  /** Record-level create/update hooks emitted to the platform as `type_hook`. */
+  /**
+   * Record-level create/update hooks. Each returns an object listing the keys
+   * to override; the parser expands each override into a field-level `FieldHook`
+   * so the platform marks the affected fields as optional in GraphQL inputs.
+   */
   hooks?: {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
     create?: Function;
@@ -299,8 +303,6 @@ export interface TailorDBType {
   permissions: Permissions;
   indexes?: TailorDBTypeMetadata["indexes"];
   files?: TailorDBTypeMetadata["files"];
-  /** Record-level create/update hooks compiled to CEL expressions. */
-  hooks?: OperatorFieldHook;
   /** Record-level validators compiled to CEL expressions. */
   validate?: OperatorValidateConfig[];
 }

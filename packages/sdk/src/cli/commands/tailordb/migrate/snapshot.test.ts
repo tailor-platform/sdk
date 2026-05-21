@@ -713,7 +713,11 @@ describe("snapshot", () => {
       expect(backwardChange?.relationshipType).toBe("backward");
     });
 
-    it("detects record-level hook addition", () => {
+    it("ignores stale type-level hooks (record-level hooks materialize as field-level diffs)", () => {
+      // Pre-Case-Y snapshots could carry a type-level `hooks` slot. The wire
+      // format never reads it now, and field-level hook changes are caught by
+      // `field_modified` instead, so the comparator must not emit a spurious
+      // `type_modified` change just because the stale slot disappeared.
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
         types: {
@@ -738,10 +742,7 @@ describe("snapshot", () => {
 
       const diff = compareSnapshots(previous, current);
 
-      expect(diff.changes).toHaveLength(1);
-      expect(diff.changes[0].kind).toBe("type_modified");
-      expect(diff.changes[0].typeName).toBe("Order");
-      expect(diff.changes[0].reason).toContain("record-level hooks changed");
+      expect(diff.changes).toHaveLength(0);
     });
 
     it("detects record-level validator change", () => {

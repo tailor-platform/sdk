@@ -535,23 +535,44 @@ describe("parseTypes", () => {
     });
   });
 
-  describe("record-level hooks and field-level auto-generated hooks", () => {
-    it("strips auto-generated timestamp hooks when the type has record-level hooks", () => {
+  describe("record-level hooks materialize as field-level hooks per override key", () => {
+    it("emits a field-level hook for each overridden key and leaves untouched fields alone", () => {
       const withRecordHooks = db
         .type(["Hooked", "AllHooked"], {
           name: db.string(),
+          fullAddress: db.string(),
           ...db.fields.timestamps(),
         })
         .hooks({
-          create: ({ data }) => ({ ...data, createdAt: new Date() }),
-          update: ({ data }) => ({ ...data, updatedAt: new Date() }),
+          create: ({ data }) => ({ fullAddress: data.name, createdAt: new Date() }),
+          update: ({ data }) => ({ fullAddress: data.name, updatedAt: new Date() }),
         });
 
       const result = parseTypes(toSchemaOutputs({ Hooked: withRecordHooks }), "test-namespace");
 
-      expect(result.Hooked.hooks).toBeDefined();
-      expect(result.Hooked.fields.createdAt.config.hooks).toBeUndefined();
-      expect(result.Hooked.fields.updatedAt.config.hooks).toBeUndefined();
+      // No type-level hooks slot — the parsed TailorDBType only carries field-level hooks now.
+      expect((result.Hooked as unknown as { hooks?: unknown }).hooks).toBeUndefined();
+
+      // Overridden fields carry a field-level script that invokes the record-level
+      // hook and indexes out the key.
+      const createExpr = result.Hooked.fields.fullAddress.config.hooks?.create?.expr ?? "";
+      expect(createExpr).toContain('"fullAddress"');
+      expect(createExpr).toContain("({ data: _data, user:");
+
+      const updateExpr = result.Hooked.fields.fullAddress.config.hooks?.update?.expr ?? "";
+      expect(updateExpr).toContain('"fullAddress"');
+
+      // Record-level hook overrides the auto-generated timestamp hook for the same key.
+      const createdAtExpr = result.Hooked.fields.createdAt.config.hooks?.create?.expr ?? "";
+      expect(createdAtExpr).toContain('"createdAt"');
+      // updatedAt only appears in the update hook
+      expect(result.Hooked.fields.createdAt.config.hooks?.update).toBeUndefined();
+
+      const updatedAtExpr = result.Hooked.fields.updatedAt.config.hooks?.update?.expr ?? "";
+      expect(updatedAtExpr).toContain('"updatedAt"');
+
+      // Fields not in the override set keep no hook.
+      expect(result.Hooked.fields.name.config.hooks).toBeUndefined();
     });
 
     it("keeps auto-generated timestamp hooks when the type has no record-level hooks", () => {
@@ -562,13 +583,43 @@ describe("parseTypes", () => {
 
       const result = parseTypes(toSchemaOutputs({ Plain: withoutRecordHooks }), "test-namespace");
 
-      expect(result.Plain.hooks).toBeUndefined();
+      expect((result.Plain as unknown as { hooks?: unknown }).hooks).toBeUndefined();
       expect(result.Plain.fields.createdAt.config.hooks?.create).toEqual({
         expr: "new Date()",
       });
       expect(result.Plain.fields.updatedAt.config.hooks?.update).toEqual({
         expr: "new Date()",
       });
+    });
+
+    it("throws when a record-level hook overrides an unknown field", () => {
+      const bad = db
+        .type(["Bad", "AllBad"], {
+          name: db.string(),
+        })
+        .hooks({
+          // @ts-expect-error - intentionally overriding an unknown field to test runtime validation
+          create: () => ({ missingField: "x" }),
+        });
+
+      expect(() => parseTypes(toSchemaOutputs({ Bad: bad }), "test-namespace")).toThrow(
+        /overrides unknown field "missingField"/,
+      );
+    });
+
+    it("throws when a record-level hook return value is not a static object literal", () => {
+      // Branched return: not a single static object literal — the AST extractor must reject this.
+      const bad = db
+        .type(["Bad", "AllBad"], {
+          name: db.string(),
+        })
+        .hooks({
+          create: ({ data }) => (data.name === "x" ? { name: "y" } : { name: "z" }),
+        });
+
+      expect(() => parseTypes(toSchemaOutputs({ Bad: bad }), "test-namespace")).toThrow(
+        /Record-level hook must return an object literal/,
+      );
     });
   });
 });

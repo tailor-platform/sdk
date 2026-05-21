@@ -20,7 +20,6 @@ import {
   type TailorDBType_Permission_PolicySchema,
   type TailorDBType_PermissionSchema,
   type TailorDBType_RelationshipConfigSchema,
-  type TailorDBType_TypeHookSchema,
   type TailorDBType_TypeValidateSchema,
   type TailorDBTypeSchema,
 } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
@@ -157,7 +156,6 @@ export function generateTailorDBTypeManifestFromSnapshot(
     ? convertRecordPermissionToProto(snapshotType.permissions.record)
     : defaultPermission;
 
-  const typeHook = toProtoSnapshotTypeHook(snapshotType);
   const typeValidate = toProtoSnapshotTypeValidate(snapshotType);
 
   return {
@@ -172,26 +170,8 @@ export function generateTailorDBTypeManifestFromSnapshot(
       indexes,
       files,
       permission,
-      ...(typeHook && { typeHook }),
       ...(typeValidate && { typeValidate }),
     },
-  };
-}
-
-function toProtoSnapshotTypeHook(
-  snapshotType: SnapshotType,
-): MessageInitShape<typeof TailorDBType_TypeHookSchema> | undefined {
-  if (!snapshotType.hooks) return undefined;
-  const create = snapshotType.hooks.create
-    ? { expr: snapshotType.hooks.create.expr || "" }
-    : undefined;
-  const update = snapshotType.hooks.update
-    ? { expr: snapshotType.hooks.update.expr || "" }
-    : undefined;
-  if (!create && !update) return undefined;
-  return {
-    ...(create && { create }),
-    ...(update && { update }),
   };
 }
 

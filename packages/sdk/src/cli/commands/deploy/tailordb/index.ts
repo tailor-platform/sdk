@@ -31,7 +31,6 @@ import {
   type TailorDBType_PermissionSchema,
   TailorDBType_PermitAction,
   type TailorDBType_RelationshipConfigSchema,
-  type TailorDBType_TypeHookSchema,
   type TailorDBType_TypeValidateSchema,
   type TailorDBTypeSchema,
 } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
@@ -1696,7 +1695,6 @@ function generateTailorDBTypeManifest(
     ? protoPermission(type.permissions.record)
     : defaultPermission;
 
-  const typeHook = toProtoTypeHook(type);
   const typeValidate = toProtoTypeValidate(type);
 
   return {
@@ -1711,22 +1709,8 @@ function generateTailorDBTypeManifest(
       indexes,
       files,
       permission,
-      ...(typeHook && { typeHook }),
       ...(typeValidate && { typeValidate }),
     },
-  };
-}
-
-function toProtoTypeHook(
-  type: TailorDBType,
-): MessageInitShape<typeof TailorDBType_TypeHookSchema> | undefined {
-  if (!type.hooks) return undefined;
-  const create = type.hooks.create ? { expr: type.hooks.create.expr || "" } : undefined;
-  const update = type.hooks.update ? { expr: type.hooks.update.expr || "" } : undefined;
-  if (!create && !update) return undefined;
-  return {
-    ...(create && { create }),
-    ...(update && { update }),
   };
 }
 

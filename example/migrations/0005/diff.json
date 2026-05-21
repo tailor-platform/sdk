@@ -1,8 +1,29 @@
 {
   "version": 1,
   "namespace": "tailordb",
-  "createdAt": "2026-05-20T22:42:11.842Z",
+  "createdAt": "2026-05-21T07:52:25.913Z",
   "changes": [
+    {
+      "kind": "field_modified",
+      "typeName": "Customer",
+      "fieldName": "fullAddress",
+      "before": {
+        "type": "string",
+        "required": true
+      },
+      "after": {
+        "type": "string",
+        "required": true,
+        "hooks": {
+          "create": {
+            "expr": "((({data})=>({fullAddress:`${data.postalCode} ${data.address??\"\"} ${data.city??\"\"}`,createdAt:new Date}))({ data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } }))[\"fullAddress\"]"
+          },
+          "update": {
+            "expr": "((({data})=>({fullAddress:`${data.postalCode} ${data.address??\"\"} ${data.city??\"\"}`,updatedAt:new Date}))({ data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } }))[\"fullAddress\"]"
+          }
+        }
+      }
+    },
     {
       "kind": "field_modified",
       "typeName": "Customer",
@@ -20,7 +41,12 @@
       "after": {
         "type": "datetime",
         "required": true,
-        "description": "Record creation timestamp"
+        "description": "Record creation timestamp",
+        "hooks": {
+          "create": {
+            "expr": "((({data})=>({fullAddress:`${data.postalCode} ${data.address??\"\"} ${data.city??\"\"}`,createdAt:new Date}))({ data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } }))[\"createdAt\"]"
+          }
+        }
       }
     },
     {
@@ -40,22 +66,19 @@
       "after": {
         "type": "datetime",
         "required": false,
-        "description": "Record last update timestamp"
+        "description": "Record last update timestamp",
+        "hooks": {
+          "update": {
+            "expr": "((({data})=>({fullAddress:`${data.postalCode} ${data.address??\"\"} ${data.city??\"\"}`,updatedAt:new Date}))({ data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } }))[\"updatedAt\"]"
+          }
+        }
       }
     },
     {
       "kind": "type_modified",
       "typeName": "Customer",
-      "reason": "record-level hooks changed, record-level validators changed",
+      "reason": "record-level validators changed",
       "before": {
-        "hooks": {
-          "create": {
-            "expr": "(({data})=>({...data,fullAddress:`${data.postalCode} ${data.address??\"\"} ${data.city??\"\"}`,createdAt:new Date}))({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
-          },
-          "update": {
-            "expr": "(({data})=>({...data,fullAddress:`${data.postalCode} ${data.address??\"\"} ${data.city??\"\"}`,updatedAt:new Date}))({ value: _value, data: _data, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
-          }
-        },
         "validate": [
           {
             "script": {
@@ -72,14 +95,6 @@
         ]
       },
       "after": {
-        "hooks": {
-          "create": {
-            "expr": "(({data})=>({fullAddress:`${data.postalCode} ${data.address??\"\"} ${data.city??\"\"}`,createdAt:new Date}))({ data: _input, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
-          },
-          "update": {
-            "expr": "(({data})=>({fullAddress:`${data.postalCode} ${data.address??\"\"} ${data.city??\"\"}`,updatedAt:new Date}))({ data: _input, user: { id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes } })"
-          }
-        },
         "validate": [
           {
             "script": {

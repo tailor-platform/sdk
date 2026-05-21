@@ -621,13 +621,6 @@ function createSnapshotType(type: TailorDBType): SnapshotType {
     }
   }
 
-  if (type.hooks) {
-    const hooks: { create?: SnapshotHook; update?: SnapshotHook } = {};
-    if (type.hooks.create) hooks.create = { expr: type.hooks.create.expr };
-    if (type.hooks.update) hooks.update = { expr: type.hooks.update.expr };
-    if (hooks.create || hooks.update) snapshotType.hooks = hooks;
-  }
-
   if (type.validate && type.validate.length > 0) {
     snapshotType.validate = type.validate.map((v) => ({
       script: { expr: v.script.expr },
@@ -1274,8 +1267,13 @@ function compareTypeFields(
 }
 
 /**
- * Detect changes in record-level hooks/validate and emit a `type_modified`
+ * Detect changes in record-level validators and emit a `type_modified`
  * change carrying the new values for re-apply.
+ *
+ * Note: type-level `hooks` are no longer emitted by the parser — record-level
+ * hooks materialize as per-field `FieldHook`s and surface via `field_modified`.
+ * Stale `SnapshotType.hooks` from old snapshots is therefore intentionally
+ * ignored here; the wire format would discard it anyway.
  * @param ctx
  * @param typeName
  * @param prevType
@@ -1287,35 +1285,20 @@ function compareTypeHooksValidate(
   prevType: SnapshotType,
   currType: SnapshotType,
 ): void {
-  const hooksChanged = !areHooksEqual(prevType.hooks, currType.hooks);
   const validateChanged = !areValidationsEqual(prevType.validate, currType.validate);
-  if (!hooksChanged && !validateChanged) return;
-
-  const reasons: string[] = [];
-  if (hooksChanged) reasons.push("record-level hooks changed");
-  if (validateChanged) reasons.push("record-level validators changed");
+  if (!validateChanged) return;
 
   ctx.changes.push({
     kind: "type_modified",
     typeName,
-    reason: reasons.join(", "),
+    reason: "record-level validators changed",
     before: {
-      ...(prevType.hooks !== undefined && { hooks: prevType.hooks }),
       ...(prevType.validate !== undefined && { validate: prevType.validate }),
     },
     after: {
-      // Always include the keys so applyDiffToSnapshot can clear values that
-      // were removed; `undefined` signals removal.
-      hooks: currType.hooks,
       validate: currType.validate,
     },
   });
-}
-
-function areHooksEqual(a: SnapshotType["hooks"], b: SnapshotType["hooks"]): boolean {
-  if (!a && !b) return true;
-  if (!a || !b) return false;
-  return a.create?.expr === b.create?.expr && a.update?.expr === b.update?.expr;
 }
 
 function areValidationsEqual(a: SnapshotType["validate"], b: SnapshotType["validate"]): boolean {
