@@ -3,6 +3,5 @@
   "title": "Handle created+updated record events with a single recordTrigger({events})",
   "designNote": "consolidation_candidate",
   "sdkSurface": "executor-record-trigger",
-  "contextProfiles": ["code-only", "code-and-docs"],
-  "hint": "2 つの recordCreatedTrigger/recordUpdatedTrigger を書かない"
+  "contextProfiles": ["code-only", "code-and-docs"]
 }

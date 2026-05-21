@@ -3,6 +3,5 @@
   "title": "Compose two AND-ed conditions in a single update permission policy",
   "designNote": "type_too_strict",
   "sdkSurface": "db-type",
-  "contextProfiles": ["code-only", "code-and-docs"],
-  "hint": "conditions は tuple の配列。update では record ではなく newRecord/oldRecord を使う"
+  "contextProfiles": ["code-only", "code-and-docs"]
 }

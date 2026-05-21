@@ -3,6 +3,5 @@
   "title": "Handle nullable inputs in update hooks across multiple fields",
   "designNote": "implicit_assumption",
   "sdkSurface": "db-type",
-  "contextProfiles": ["code-only", "code-and-docs"],
-  "hint": "update hook の value は T | null。null を受けたら fallback を返す"
+  "contextProfiles": ["code-only", "code-and-docs"]
 }

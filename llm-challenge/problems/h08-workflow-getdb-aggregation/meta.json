@@ -3,6 +3,20 @@
   "title": "Aggregate TailorDB rows from a workflow job via the generated getDB helper",
   "designNote": "implicit_assumption",
   "sdkSurface": "workflow",
-  "contextProfiles": ["code-only", "code-and-docs"],
-  "hint": "kyselyTypePlugin を tailor.config.ts に配線してから generated/tailordb から getDB を import する"
+  "contextProfiles": ["code-only", "code-and-docs", "bare-types"],
+  "canonicalSymbols": [
+    "kyselyTypePlugin",
+    "definePlugins",
+    "getDB",
+    "createWorkflowJob",
+    "createWorkflow"
+  ],
+  "biasAttractors": [
+    "composePlugins",
+    "addPlugins",
+    "registerPlugin",
+    "createJob",
+    "db.aggregate",
+    "db.query"
+  ]
 }

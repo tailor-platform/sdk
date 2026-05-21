@@ -3,6 +3,13 @@
   "title": "Chain three workflow jobs that share TailorDB state through getDB",
   "designNote": "context_bloat",
   "sdkSurface": "workflow + plugin + tailordb",
-  "contextProfiles": ["code-only", "code-and-docs"],
-  "hint": "3 つの job + plugin + getDB を 1 ファイルに並べる。export 種別と await 漏れで詰みやすい"
+  "contextProfiles": ["code-only", "code-and-docs", "bare-types"],
+  "canonicalSymbols": [
+    "kyselyTypePlugin",
+    "definePlugins",
+    "getDB",
+    "createWorkflowJob",
+    "createWorkflow"
+  ],
+  "biasAttractors": ["composePlugins", "createJob", "chainJobs", "pipeline", "db.aggregate"]
 }

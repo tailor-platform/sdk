@@ -82,13 +82,9 @@ function deriveFilesFromSolution(
   return { implement, scaffold };
 }
 
-// Strips `hint` from any meta payload that reaches the prompt; a stray
-// `meta.hint` reference in prompt construction is a type error.
-export type PromptSafeMeta = Omit<ProblemMeta, "hint">;
-
 function buildPromptSections(
   problemDir: string,
-  meta: PromptSafeMeta,
+  meta: ProblemMeta,
   workDir: string,
 ): {
   problemMd: string;
@@ -124,7 +120,7 @@ function buildPromptSections(
 
 export function buildPrompt(
   problemDir: string,
-  meta: PromptSafeMeta,
+  meta: ProblemMeta,
   workDir: string,
   contextProfileName: ContextProfile,
 ): string {

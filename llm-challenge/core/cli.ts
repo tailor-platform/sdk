@@ -57,9 +57,6 @@ const challengeRoot = path.resolve(import.meta.dirname, "..");
 
 /**
  * Per-problem metadata read from `problems/<id>/meta.json`.
- *
- * `hint` is author-only — `PromptSafeMeta` (`solve.ts`) omits it from any
- * value that reaches the agent prompt.
  */
 export type ProblemMeta = {
   id: string;
@@ -67,7 +64,6 @@ export type ProblemMeta = {
   /** Free-form author note about the affordance gap the problem targets. */
   designNote?: string;
   sdkSurface?: string;
-  hint?: string;
   contextProfiles?: ContextProfile[];
   /**
    * Older problem IDs that referred to the same logical task before a
@@ -75,6 +71,20 @@ export type ProblemMeta = {
    * passed.
    */
   aliases?: string[];
+  /**
+   * SDK exports the correct solution must import or reference. Used by the
+   * first-hit metric (see `metrics-first-hit.ts`) to decide whether the
+   * agent's initial discovery query landed on the right concept. Method
+   * names like `trigger` or `provider` can be included as `.trigger` /
+   * `.provider` so a regex like `\.trigger\b` matches.
+   */
+  canonicalSymbols?: string[];
+  /**
+   * Plausible-but-wrong names the agent might grep for first (e.g. invented
+   * helpers, sibling concepts from other SDKs). Used to compute a
+   * naming-bias miss rate alongside `canonicalSymbols`.
+   */
+  biasAttractors?: string[];
 };
 
 function loadMeta(problemDir: string): ProblemMeta {

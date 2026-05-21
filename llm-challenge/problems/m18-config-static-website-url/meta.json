@@ -3,6 +3,13 @@
   "title": "Reuse a static website's deployment URL across CORS and OAuth2 redirect URIs",
   "designNote": "implicit_assumption",
   "sdkSurface": "config",
-  "contextProfiles": ["code-only", "code-and-docs"],
-  "hint": "defineStaticWebSite(...).url は deployment time に resolve される placeholder。string literal をハードコードせず、同じ .url を CORS と oauth2 redirect の両方に流す"
+  "contextProfiles": ["code-only", "code-and-docs", "bare-types"],
+  "canonicalSymbols": ["defineStaticWebSite", "defineAuth", "defineConfig"],
+  "biasAttractors": [
+    "defineStaticWebsite",
+    "defineCors",
+    "getStaticWebsiteUrl",
+    "siteUrl",
+    "configureRedirect"
+  ]
 }

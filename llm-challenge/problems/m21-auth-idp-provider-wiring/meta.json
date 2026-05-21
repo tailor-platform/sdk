@@ -3,6 +3,5 @@
   "title": "Wire defineIdp's provider() factory into defineAuth.idProvider",
   "designNote": "missing_namespace",
   "sdkSurface": "auth-idp",
-  "contextProfiles": ["code-only", "code-and-docs"],
-  "hint": "idp.provider(\"providerName\", \"clientName\") は method call。object 直渡しではない"
+  "contextProfiles": ["code-only", "code-and-docs"]
 }

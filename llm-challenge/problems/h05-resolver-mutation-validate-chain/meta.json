@@ -3,6 +3,5 @@
   "title": "Compose a resolver mutation that runs TailorDB field validators before reporting structured results",
   "designNote": "param_confusion",
   "sdkSurface": "resolver + db-type",
-  "contextProfiles": ["code-only", "code-and-docs"],
-  "hint": "resolver の input 型 (t.*) と db.type の validate ルール (field.parse) を二段で組み合わせる"
+  "contextProfiles": ["code-only", "code-and-docs"]
 }

@@ -3,6 +3,5 @@
   "title": "Add a required + unique string field to a TailorDB model",
   "designNote": "implicit_assumption",
   "sdkSurface": "db-field",
-  "contextProfiles": ["code-only", "code-and-docs"],
-  "hint": "db.string() chain で .unique() が生える"
+  "contextProfiles": ["code-only", "code-and-docs"]
 }

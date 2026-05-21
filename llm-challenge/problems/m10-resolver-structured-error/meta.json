@@ -3,6 +3,5 @@
   "title": "Return typed { success, error } results from a cancel resolver instead of throwing",
   "designNote": "param_confusion",
   "sdkSurface": "resolver",
-  "contextProfiles": ["code-only", "code-and-docs"],
-  "hint": "throw でなく { success: false, error: '...' } を返す"
+  "contextProfiles": ["code-only", "code-and-docs"]
 }

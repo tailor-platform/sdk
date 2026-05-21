@@ -4,6 +4,5 @@
   "designNote": "context_bloat",
   "sdkSurface": "cli-runtime",
   "contextProfiles": ["code-only", "code-and-docs"],
-  "aliases": ["m22-cli-error-stdout-buffering"],
-  "hint": "tailor.config.ts の db.tailordb.files glob を実ファイル拡張子と合わせる"
+  "aliases": ["m22-cli-error-stdout-buffering"]
 }

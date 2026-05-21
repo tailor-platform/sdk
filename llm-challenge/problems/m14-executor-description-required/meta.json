@@ -3,6 +3,5 @@
   "title": "Author an executor with a non-empty description",
   "designNote": "missing_action_verb",
   "sdkSurface": "executor",
-  "contextProfiles": ["code-only", "code-and-docs"],
-  "hint": "description は optional 型だが運用上必須"
+  "contextProfiles": ["code-only", "code-and-docs"]
 }

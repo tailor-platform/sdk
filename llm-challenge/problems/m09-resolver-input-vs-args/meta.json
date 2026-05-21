@@ -3,6 +3,5 @@
   "title": "Write a mutation resolver with a typed input that flows through body",
   "designNote": "missing_namespace",
   "sdkSurface": "resolver",
-  "contextProfiles": ["code-only", "code-and-docs"],
-  "hint": "input は object 形式の schema、body は context.input から受け取る"
+  "contextProfiles": ["code-only", "code-and-docs"]
 }
