@@ -1,7 +1,7 @@
 {
   "version": 1,
   "namespace": "tailordb",
-  "createdAt": "2026-05-21T07:52:25.913Z",
+  "createdAt": "2026-05-21T09:41:38.882Z",
   "changes": [
     {
       "kind": "field_modified",
@@ -114,5 +114,7 @@
   ],
   "hasBreakingChanges": false,
   "breakingChanges": [],
+  "hasWarnings": false,
+  "warnings": [],
   "requiresMigrationScript": false
 }
