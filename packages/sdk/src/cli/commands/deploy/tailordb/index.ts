@@ -44,8 +44,11 @@ import {
   formatMigrationDiff,
   formatDiffSummary,
   type MigrationDiff,
-  type DiffChange,
 } from "@/cli/commands/tailordb/migrate/diff-calculator";
+import {
+  applyPreMigrationFieldAdjustments,
+  buildPreMigrationChangesMap,
+} from "@/cli/commands/tailordb/migrate/pre-migration-schema";
 import {
   reconstructSnapshotFromMigrations,
   compareLocalTypesWithSnapshot,
@@ -93,7 +96,6 @@ import type {
 } from "@/cli/commands/tailordb/migrate/types";
 import type { LoadedConfig } from "@/cli/shared/config-loader";
 import type { Executor } from "@/types/executor.generated";
-import type { EnumValue } from "@/types/field-types";
 import type { GqlOperations, TailorDBServiceConfig } from "@/types/tailordb.generated";
 import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
 
@@ -324,9 +326,9 @@ async function validateAndDetectMigrations(
     if (pendingMigrations.length > 0) {
       logger.newline();
 
-      // Classify migrations by whether they require migration scripts
-      const withScripts = pendingMigrations.filter((m) => m.diff.requiresMigrationScript);
-      const withoutScripts = pendingMigrations.filter((m) => !m.diff.requiresMigrationScript);
+      // Classify migrations by whether a migrate.ts will run for them.
+      const withScripts = pendingMigrations.filter((m) => m.hasScript);
+      const withoutScripts = pendingMigrations.filter((m) => !m.hasScript);
 
       logger.info(`Applying ${pendingMigrations.length} migration(s):`);
       if (withoutScripts.length > 0) {
@@ -459,9 +461,7 @@ export async function applyTailorDB(
       // Step 1: Create/update services once at the beginning (services don't need per-migration handling)
       await executeServicesCreation(client, changeSet);
 
-      const migrationsRequiringScripts = pendingMigrations.filter(
-        (m) => m.diff.requiresMigrationScript,
-      );
+      const migrationsRequiringScripts = pendingMigrations.filter((m) => m.hasScript);
 
       // Step 2: Build migration context for script execution (if any migrations require scripts)
       const migrationCtx =
@@ -479,8 +479,8 @@ export async function applyTailorDB(
         // Pre-migration phase: Create/update types with breaking fields as optional
         await executeSingleMigrationPrePhase(client, changeSet, migration);
 
-        // Script execution (only if this migration requires a script)
-        if (migration.diff.requiresMigrationScript && migrationCtx) {
+        // Script execution (only if migrate.ts exists for this migration)
+        if (migration.hasScript && migrationCtx) {
           await executeMigrations(migrationCtx, [migration]);
         }
 
@@ -612,111 +612,6 @@ function handleOptionalToRequiredError(error: unknown, messages: string[]): neve
 }
 
 // ============================================================================
-// Pre-Migration Support
-// ============================================================================
-
-/**
- * Map of breaking changes: typeName -> fieldName -> change kind
- */
-type BreakingChangesMap = Map<string, Map<string, DiffChange>>;
-
-/**
- * Build a map of breaking field changes from pending migrations
- * @param {PendingMigration[]} pendingMigrations - Pending migrations
- * @returns {BreakingChangesMap} Map of breaking changes
- */
-function buildBreakingChangesMap(pendingMigrations: PendingMigration[]): BreakingChangesMap {
-  const map: BreakingChangesMap = new Map();
-
-  for (const migration of pendingMigrations) {
-    for (const change of migration.diff.changes) {
-      // We care about field changes that affect required status
-      if (
-        change.kind === "field_added" ||
-        change.kind === "field_modified" ||
-        change.kind === "field_removed"
-      ) {
-        if (!change.fieldName) continue;
-
-        if (!map.has(change.typeName)) {
-          map.set(change.typeName, new Map());
-        }
-        map.get(change.typeName)!.set(change.fieldName, change);
-      }
-    }
-  }
-
-  return map;
-}
-
-/**
- * Field config type for breaking change detection
- */
-interface FieldConfig {
-  required?: boolean;
-  unique?: boolean;
-  allowedValues?: EnumValue[];
-}
-
-/**
- * Apply pre-migration schema adjustments to avoid breaking changes before scripts run.
- * @param fields - Field configs to adjust
- * @param typeChanges - Breaking changes for a type
- */
-function applyPreMigrationFieldAdjustments(
-  fields: Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>>,
-  typeChanges: Map<string, DiffChange>,
-): void {
-  for (const [fieldName, change] of typeChanges) {
-    const field = fields[fieldName];
-    if (!field) continue;
-
-    const before = change.before as FieldConfig | undefined;
-    const after = change.after as FieldConfig | undefined;
-
-    if (change.kind === "field_added" && after?.required) {
-      field.required = false;
-    }
-
-    if (change.kind !== "field_modified") {
-      continue;
-    }
-
-    // Optional to required
-    if (!before?.required && after?.required) {
-      field.required = false;
-    }
-
-    // Unique constraint added
-    if (!(before?.unique ?? false) && (after?.unique ?? false)) {
-      field.unique = false;
-    }
-
-    // Enum values removed: keep old values + add new values (union)
-    if (before?.allowedValues && after?.allowedValues) {
-      const afterValues = new Set(after.allowedValues.map((v) => v.value));
-      const removedValues = before.allowedValues.filter((v) => !afterValues.has(v.value));
-      if (removedValues.length > 0) {
-        // Create union of all values, preserving descriptions where available
-        const valueMap = new Map<string, string>();
-        for (const v of before.allowedValues) {
-          valueMap.set(v.value, v.description ?? "");
-        }
-        for (const v of after.allowedValues) {
-          if (!valueMap.has(v.value)) {
-            valueMap.set(v.value, v.description ?? "");
-          }
-        }
-        field.allowedValues = Array.from(valueMap.entries()).map(([value, description]) => ({
-          value,
-          description,
-        }));
-      }
-    }
-  }
-}
-
-// ============================================================================
 // Migration Execution Helpers
 // ============================================================================
 
@@ -795,8 +690,10 @@ async function executeSingleMigrationPrePhase(
   changeSet: TailorDBChangeSet,
   migration: PendingMigration,
 ): Promise<void> {
-  // Build breaking changes map for this single migration
-  const breakingChanges = buildBreakingChangesMap([migration]);
+  // Build pre-migration changes map for this single migration. Includes both
+  // breaking changes (required-add, unique-add, enum value removal) and the
+  // warning-tier field_removed, since the Pre-phase relaxes both.
+  const preMigrationChanges = buildPreMigrationChangesMap([migration]);
   const affectedTypes = getAffectedTypeNames(migration);
   const createdBeforeMigration = new Set(processedTypes.created);
 
@@ -812,7 +709,7 @@ async function executeSingleMigrationPrePhase(
         const typeName = create.request.tailordbType?.name;
         if (typeName) processedTypes.created.add(typeName);
 
-        const typeChanges = typeName ? breakingChanges.get(typeName) : undefined;
+        const typeChanges = typeName ? preMigrationChanges.get(typeName) : undefined;
 
         if (!typeChanges || typeChanges.size === 0) {
           return client.createTailorDBType(create.request);
@@ -836,7 +733,7 @@ async function executeSingleMigrationPrePhase(
         const typeName = create.request.tailordbType?.name;
         if (typeName) processedTypes.updated.add(typeName);
 
-        const typeChanges = typeName ? breakingChanges.get(typeName) : undefined;
+        const typeChanges = typeName ? preMigrationChanges.get(typeName) : undefined;
 
         if (!typeChanges || typeChanges.size === 0) {
           return client.updateTailorDBType({
@@ -867,7 +764,7 @@ async function executeSingleMigrationPrePhase(
         const typeName = update.request.tailordbType?.name;
         if (typeName) processedTypes.updated.add(typeName);
 
-        const typeChanges = typeName ? breakingChanges.get(typeName) : undefined;
+        const typeChanges = typeName ? preMigrationChanges.get(typeName) : undefined;
 
         if (!typeChanges || typeChanges.size === 0) {
           return client.updateTailorDBType(update.request);
@@ -949,8 +846,9 @@ async function executeSingleMigrationPostPhase(
   changeSet: TailorDBChangeSet,
   migration: PendingMigration,
 ): Promise<void> {
-  // Build breaking changes map for this single migration
-  const breakingChanges = buildBreakingChangesMap([migration]);
+  // Re-use the pre-migration changes map to know which types were touched in
+  // this migration (so we send the post-phase final-schema update for them).
+  const preMigrationChanges = buildPreMigrationChangesMap([migration]);
   const affectedTypes = getAffectedTypeNames(migration);
   const deletedTypeNames = getDeletedTypeNames(migration);
 
@@ -958,11 +856,11 @@ async function executeSingleMigrationPostPhase(
   // Pre-migration used cloned requests, so the original changeSet still has correct values
   try {
     await Promise.all([
-      // For newly created types that had breaking changes in this migration, send update with final values
+      // For newly created types that had pre-migration adjustments in this migration, send update with final values
       ...changeSet.type.creates
         .filter((create) => {
           const typeName = create.request.tailordbType?.name;
-          return typeName && affectedTypes.has(typeName) && breakingChanges.has(typeName);
+          return typeName && affectedTypes.has(typeName) && preMigrationChanges.has(typeName);
         })
         .map((create) =>
           client.updateTailorDBType({
@@ -975,7 +873,7 @@ async function executeSingleMigrationPostPhase(
       ...changeSet.type.updates
         .filter((update) => {
           const typeName = update.request.tailordbType?.name;
-          return typeName && affectedTypes.has(typeName) && breakingChanges.has(typeName);
+          return typeName && affectedTypes.has(typeName) && preMigrationChanges.has(typeName);
         })
         .map((update) => client.updateTailorDBType(update.request)),
     ]);

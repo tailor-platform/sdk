@@ -62,6 +62,8 @@ function createMockDiff(
     changes,
     hasBreakingChanges: options.hasBreakingChanges ?? false,
     breakingChanges: [],
+    hasWarnings: false,
+    warnings: [],
     requiresMigrationScript: options.requiresMigrationScript ?? false,
   };
 }
