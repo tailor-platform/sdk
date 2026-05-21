@@ -295,10 +295,15 @@ function buildField(descriptor: FieldDescriptor): TailorAnyDBField {
     ...(descriptor.optional === true && { optional: true as const }),
     ...(descriptor.array === true && { array: true as const }),
   };
-  const values = descriptor.kind === "enum" ? descriptor.values : undefined;
-  if (descriptor.kind === "enum" && (!Array.isArray(values) || values.length === 0)) {
-    throw new Error('Enum field descriptor requires a non-empty "values" array');
+
+  let values: AllowedValues | undefined;
+  if (descriptor.kind === "enum") {
+    if (!Array.isArray(descriptor.values) || descriptor.values.length === 0) {
+      throw new Error('Enum field descriptor requires a non-empty "values" array');
+    }
+    values = descriptor.values;
   }
+
   const nestedFields =
     descriptor.kind === "object" ? resolveFieldMap(descriptor.fields) : undefined;
 
@@ -325,11 +330,11 @@ function buildField(descriptor: FieldDescriptor): TailorAnyDBField {
     return field;
   }
 
+  const isArray = descriptor.array === true;
+  const relation = descriptor.kind === "uuid" ? descriptor.relation : undefined;
+
   // When a relation is present, the relation handler dictates index/unique flags.
-  if (
-    descriptor.array !== true &&
-    !(descriptor.kind === "uuid" && descriptor.relation !== undefined)
-  ) {
+  if (!isArray && !relation) {
     if (descriptor.unique === true) {
       field = field.unique();
     } else if (descriptor.index === true) {
@@ -337,7 +342,7 @@ function buildField(descriptor: FieldDescriptor): TailorAnyDBField {
     }
   }
 
-  if (descriptor.kind === "string" && descriptor.vector === true && descriptor.array !== true) {
+  if (!isArray && descriptor.kind === "string" && descriptor.vector === true) {
     field = field.vector();
   }
 
@@ -350,18 +355,18 @@ function buildField(descriptor: FieldDescriptor): TailorAnyDBField {
   }
 
   if (
+    !isArray &&
     (descriptor.kind === "string" || descriptor.kind === "int") &&
-    descriptor.serial !== undefined &&
-    descriptor.array !== true
+    descriptor.serial !== undefined
   ) {
     field = field.serial(descriptor.serial);
   }
 
-  if (descriptor.kind === "uuid" && descriptor.relation !== undefined) {
+  if (relation) {
     // oxlint-disable-next-line no-explicit-any -- relation() is only present on uuid field interface
-    field = (field as any).relation(descriptor.relation);
-    if (descriptor.array !== true) {
-      const relType = descriptor.relation.type;
+    field = (field as any).relation(relation);
+    if (!isArray) {
+      const relType = relation.type;
       if (relType === "oneToOne" || relType === "1-1") {
         field = field.unique();
       } else {
@@ -394,7 +399,10 @@ type AllFields<D extends Record<string, FieldEntry>> = { id: IdField } & Resolve
  * });
  * export type user = typeof user;
  */
-// Overload 1: FieldDescriptor-only (provides full contextual typing for inline hooks)
+// Overload 1: FieldDescriptor-only. Narrows the entry constraint so TS infers
+// descriptor literals against `FieldDescriptor` rather than the wider
+// `FieldEntry` union, which is needed for `options.permission`/`options.hooks`
+// callbacks to receive precisely-typed `data` for descriptor-only types.
 export function createTable<const D extends { id?: never } & Record<string, FieldDescriptor>>(
   name: string | [string, string],
   descriptors: [D] extends [ValidatedDescriptors<D>] ? D : ValidatedDescriptors<D>,
