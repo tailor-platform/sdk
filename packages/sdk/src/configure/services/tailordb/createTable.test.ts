@@ -159,6 +159,22 @@ describe("createTable enum tests", () => {
       { value: "inactive", description: "" },
     ]);
   });
+
+  it("enum values support {value, description} entries", () => {
+    const result = createTable("Test", {
+      status: {
+        kind: "enum",
+        values: [
+          { value: "active", description: "Active record" },
+          { value: "inactive", description: "Archived record" },
+        ],
+      },
+    });
+    expect(result.fields.status.metadata.allowedValues).toEqual([
+      { value: "active", description: "Active record" },
+      { value: "inactive", description: "Archived record" },
+    ]);
+  });
 });
 
 describe("createTable runtime metadata tests", () => {
@@ -280,6 +296,35 @@ describe("createTable relation tests", () => {
       },
     });
     expect(result.fields.parentId.rawRelation).toBeDefined();
+  });
+
+  it("relation.toward.as is preserved on the rawRelation", () => {
+    const User = createTable("User", { name: { kind: "string" } });
+    const result = createTable("Test", {
+      userId: {
+        kind: "uuid",
+        relation: {
+          type: "n-1",
+          toward: { type: User, as: "owner" },
+        },
+      },
+    });
+    expect(result.fields.userId.rawRelation?.toward.as).toBe("owner");
+  });
+
+  it("relation.backward is preserved on the rawRelation", () => {
+    const User = createTable("User", { name: { kind: "string" } });
+    const result = createTable("Test", {
+      userId: {
+        kind: "uuid",
+        relation: {
+          type: "n-1",
+          toward: { type: User },
+          backward: "tests",
+        },
+      },
+    });
+    expect(result.fields.userId.rawRelation?.backward).toBe("tests");
   });
 });
 
@@ -737,6 +782,12 @@ describe("createTable type-level options", () => {
   it("pluralForm via tuple overload sets settings.pluralForm", () => {
     const result = createTable(["Person", "People"], { name: { kind: "string" } });
     expect(result.metadata.settings).toEqual({ pluralForm: "People" });
+  });
+
+  it("rejects pluralForm specified in both the name tuple and options", () => {
+    expect(() =>
+      createTable(["Person", "People"], { name: { kind: "string" } }, { pluralForm: "Folks" }),
+    ).toThrow(/pluralForm is specified twice/);
   });
 
   it("type-level description sets metadata.description", () => {

@@ -898,6 +898,44 @@ describe("createResolver", () => {
       expect(resolver.input!.age.metadata.validate!.length).toBe(1);
     });
 
+    test("descriptor validate accepts an array of bare predicates", () => {
+      const resolver = createResolver({
+        name: "validateBareArray",
+        operation: "query",
+        input: {
+          age: {
+            kind: "int",
+            validate: [
+              ({ value }: { value: number }) => value >= 0,
+              ({ value }: { value: number }) => value <= 150,
+            ],
+          },
+        },
+        output: { kind: "bool" },
+        body: () => true,
+      });
+      expect(resolver.input!.age.metadata.validate).toHaveLength(2);
+    });
+
+    test("descriptor validate accepts an array of [fn, message] tuples", () => {
+      const resolver = createResolver({
+        name: "validateTupleArray",
+        operation: "query",
+        input: {
+          age: {
+            kind: "int",
+            validate: [
+              [({ value }: { value: number }) => value >= 0, "Must be non-negative"],
+              [({ value }: { value: number }) => value <= 150, "Must be at most 150"],
+            ],
+          },
+        },
+        output: { kind: "bool" },
+        body: () => true,
+      });
+      expect(resolver.input!.age.metadata.validate).toHaveLength(2);
+    });
+
     test("decimal descriptor outputs string type", () => {
       createResolver({
         name: "decimalDesc",

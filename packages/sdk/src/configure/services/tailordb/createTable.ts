@@ -411,6 +411,11 @@ export function createTable<const D extends { id?: never } & Record<string, Fiel
   descriptors: [D] extends [ValidatedDescriptors<D>] ? D : ValidatedDescriptors<D>,
   options?: CreateTableOptions<keyof AllFields<D> & string, AllFields<D>>,
 ): TailorDBType<AllFields<D>> {
+  if (Array.isArray(name) && options?.pluralForm !== undefined) {
+    throw new Error(
+      `createTable("${name[0]}"): pluralForm is specified twice (once via the name tuple "${name[1]}" and once via options.pluralForm "${options.pluralForm}"). Pick one.`,
+    );
+  }
   const [typeName, pluralForm] = Array.isArray(name) ? name : [name, options?.pluralForm];
   const fields = {
     id: idField.clone(),
