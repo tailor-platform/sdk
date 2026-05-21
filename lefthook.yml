@@ -25,6 +25,8 @@ pre-commit:
         - "example/seed/**"
         - "packages/tailor-proto/**"
         - "packages/sdk-codemod/codemods/**/tests/**"
+        - "packages/create-sdk/templates/*/src/generated/**"
+        - "packages/create-sdk/templates/*/src/seed/**"
       run: pnpm oxfmt --check {staged_files}
 
     checks:

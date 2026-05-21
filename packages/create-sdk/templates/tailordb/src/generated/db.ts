@@ -44,7 +44,7 @@ export interface Namespace {
       dueDate: Timestamp | null;
       assigneeId: string | null;
       categoryId: string | null;
-      isArchived: boolean;
+      isArchived: Generated<boolean>;
       createdAt: Generated<Timestamp>;
       updatedAt: Generated<Timestamp | null>;
     }
