@@ -745,6 +745,73 @@ describe("createTable unknown descriptor kind", () => {
   });
 });
 
+describe("createTable unknown descriptor options", () => {
+  // TS structural typing silently accepts extra keys on inferred descriptors
+  // (no excess-property check fires once D is inferred from the literal),
+  // so these unknown keys must be rejected at runtime to prevent silently
+  // ignored hooks/validate/typos.
+  it("rejects field-level validate", () => {
+    expect(() =>
+      createTable("Test", {
+        name: {
+          kind: "string",
+          validate: () => true,
+        } as { kind: "string"; validate: () => boolean },
+      }),
+    ).toThrow(/Field "name" \(kind "string"\): unknown option\(s\) "validate"/);
+  });
+
+  it("rejects field-level hooks", () => {
+    expect(() =>
+      createTable("Test", {
+        name: {
+          kind: "string",
+          hooks: { create: () => "x" },
+        } as { kind: "string"; hooks: { create: () => string } },
+      }),
+    ).toThrow(/Field "name" \(kind "string"\): unknown option\(s\) "hooks"/);
+  });
+
+  it("rejects typos in option keys", () => {
+    expect(() =>
+      createTable("Test", {
+        name: {
+          kind: "string",
+          uniqe: true,
+        } as { kind: "string"; uniqe: boolean },
+      }),
+    ).toThrow(/Field "name" \(kind "string"\): unknown option\(s\) "uniqe"/);
+  });
+
+  it("rejects unique/index on object descriptors", () => {
+    expect(() =>
+      createTable("Test", {
+        meta: {
+          kind: "object",
+          fields: { foo: { kind: "string" } },
+          unique: true,
+        } as { kind: "object"; fields: { foo: { kind: "string" } }; unique: boolean },
+      }),
+    ).toThrow(/Field "meta" \(kind "object"\): unknown option\(s\) "unique"/);
+  });
+
+  it("reports the nested path when the offending key is inside an object descriptor", () => {
+    expect(() =>
+      createTable("Test", {
+        meta: {
+          kind: "object",
+          fields: {
+            inner: {
+              kind: "string",
+              validate: () => true,
+            } as { kind: "string"; validate: () => boolean },
+          },
+        },
+      }),
+    ).toThrow(/Field "meta\.inner" \(kind "string"\): unknown option\(s\) "validate"/);
+  });
+});
+
 describe("createTable mixed fluent and descriptor fields", () => {
   it("accepts both db.field() and descriptor in the same type", () => {
     const result = createTable("Test", {

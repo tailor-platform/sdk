@@ -138,7 +138,7 @@ export function createResolver<
     }>,
 ): ResolverReturn<Input, Output> {
   const resolvedInput = config.input
-    ? resolveResolverFieldMap(config.input as Record<string, ResolverFieldEntry>)
+    ? resolveResolverFieldMap(config.input as Record<string, ResolverFieldEntry>, "input")
     : undefined;
   const normalizedOutput = resolveOutput(config.output);
 
@@ -165,14 +165,17 @@ function resolveOutput(
   output: TailorAnyField | ResolverFieldDescriptor | Record<string, ResolverFieldEntry>,
 ): TailorAnyField {
   if (isResolverFieldDescriptor(output)) {
-    return resolveResolverField(output);
+    return resolveResolverField(output, "output");
   }
 
   if (isTailorField(output)) {
     return output;
   }
 
-  const resolvedFields = resolveResolverFieldMap(output as Record<string, ResolverFieldEntry>);
+  const resolvedFields = resolveResolverFieldMap(
+    output as Record<string, ResolverFieldEntry>,
+    "output",
+  );
   return t.object(resolvedFields);
 }
 

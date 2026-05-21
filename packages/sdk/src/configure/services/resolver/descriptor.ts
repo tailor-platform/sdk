@@ -128,7 +128,37 @@ function isValidateConfig(v: unknown): v is ValidateConfig<unknown> {
   return Array.isArray(v) && v.length === 2 && typeof v[1] === "string";
 }
 
-export function resolveResolverField(entry: ResolverFieldEntry): TailorAnyField {
+const COMMON_RESOLVER_KEYS = ["kind", "optional", "array", "description"] as const;
+const SIMPLE_RESOLVER_KEYS = [...COMMON_RESOLVER_KEYS, "validate"] as const;
+
+// Allowed keys per resolver descriptor kind. Used to reject unsupported options
+// (typos, legacy options) that TS structural typing would otherwise silently accept.
+const KIND_ALLOWED_KEYS: Record<keyof KindToFieldType, readonly string[]> = {
+  string: SIMPLE_RESOLVER_KEYS,
+  int: SIMPLE_RESOLVER_KEYS,
+  float: SIMPLE_RESOLVER_KEYS,
+  bool: SIMPLE_RESOLVER_KEYS,
+  uuid: SIMPLE_RESOLVER_KEYS,
+  decimal: SIMPLE_RESOLVER_KEYS,
+  date: SIMPLE_RESOLVER_KEYS,
+  datetime: SIMPLE_RESOLVER_KEYS,
+  time: SIMPLE_RESOLVER_KEYS,
+  enum: [...SIMPLE_RESOLVER_KEYS, "values", "typeName"],
+  object: [...COMMON_RESOLVER_KEYS, "fields", "typeName"],
+};
+
+function assertResolverDescriptorKeys(descriptor: ResolverFieldDescriptor, path: string): void {
+  const allowed = KIND_ALLOWED_KEYS[descriptor.kind];
+  const unknown = Object.keys(descriptor).filter((k) => !allowed.includes(k));
+  if (unknown.length === 0) return;
+  throw new Error(
+    `Resolver field "${path}" (kind "${descriptor.kind}"): unknown option(s) ${unknown
+      .map((k) => `"${k}"`)
+      .join(", ")}. Allowed: ${allowed.join(", ")}`,
+  );
+}
+
+export function resolveResolverField(entry: ResolverFieldEntry, path: string): TailorAnyField {
   if (isPassthroughField(entry)) {
     const cast = entry as { type?: unknown; metadata?: unknown };
     if (typeof cast.type !== "string" || typeof cast.metadata !== "object" || !cast.metadata) {
@@ -138,11 +168,12 @@ export function resolveResolverField(entry: ResolverFieldEntry): TailorAnyField 
     }
     return entry;
   }
-  return buildResolverField(entry);
+  return buildResolverField(entry, path);
 }
 
 export function resolveResolverFieldMap(
   entries: Record<string, ResolverFieldEntry>,
+  pathPrefix = "",
 ): Record<string, TailorAnyField> {
   let hasDescriptor = false;
   const resolved: Record<string, TailorAnyField> = {};
@@ -150,17 +181,18 @@ export function resolveResolverFieldMap(
     // `"kind" in entry` cheaply distinguishes descriptors from passthrough fields
     // without re-running the full kind-validity check inside `resolveResolverField`.
     if ("kind" in entry) hasDescriptor = true;
-    resolved[key] = resolveResolverField(entry);
+    resolved[key] = resolveResolverField(entry, pathPrefix ? `${pathPrefix}.${key}` : key);
   }
   return hasDescriptor ? resolved : (entries as Record<string, TailorAnyField>);
 }
 
-function buildResolverField(descriptor: ResolverFieldDescriptor): TailorAnyField {
+function buildResolverField(descriptor: ResolverFieldDescriptor, path: string): TailorAnyField {
   if (!(descriptor.kind in kindToFieldType)) {
     throw new Error(
       `Unknown resolver field descriptor kind: "${String((descriptor as { kind: unknown }).kind)}"`,
     );
   }
+  assertResolverDescriptorKeys(descriptor, path);
   const fieldType = kindToFieldType[descriptor.kind];
   const options: FieldOptions = {
     ...(descriptor.optional === true && { optional: true as const }),
@@ -176,7 +208,7 @@ function buildResolverField(descriptor: ResolverFieldDescriptor): TailorAnyField
   }
 
   const nestedFields =
-    descriptor.kind === "object" ? resolveResolverFieldMap(descriptor.fields) : undefined;
+    descriptor.kind === "object" ? resolveResolverFieldMap(descriptor.fields, path) : undefined;
 
   let field: TailorAnyField = createTailorField(fieldType, options, nestedFields, values);
 

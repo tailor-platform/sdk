@@ -1012,6 +1012,44 @@ describe("createResolver", () => {
       ).toThrow("Expected a field descriptor");
     });
 
+    // TS structural typing silently accepts extra keys on inferred descriptors,
+    // so unknown keys (typos, legacy options) must be rejected at runtime.
+    test("rejects unknown descriptor option keys", () => {
+      expect(() =>
+        createResolver({
+          name: "unknownOption",
+          operation: "query",
+          input: {
+            name: {
+              kind: "string",
+              optinal: true,
+            } as { kind: "string"; optinal: boolean },
+          },
+          output: { kind: "bool" },
+          body: () => true,
+        }),
+      ).toThrow(/Resolver field "input\.name" \(kind "string"\): unknown option\(s\) "optinal"/);
+    });
+
+    test("rejects unknown keys inside nested object descriptor", () => {
+      expect(() =>
+        createResolver({
+          name: "unknownNested",
+          operation: "query",
+          output: {
+            kind: "object",
+            fields: {
+              inner: {
+                kind: "string",
+                hooks: { create: () => "x" },
+              } as { kind: "string"; hooks: { create: () => string } },
+            },
+          },
+          body: () => ({ inner: "x" }),
+        }),
+      ).toThrow(/Resolver field "output\.inner" \(kind "string"\): unknown option\(s\) "hooks"/);
+    });
+
     test("record output with a field named 'kind' is not confused with a descriptor", () => {
       const resolver = createResolver({
         name: "withKindField",

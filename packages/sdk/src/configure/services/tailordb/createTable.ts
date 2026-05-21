@@ -267,7 +267,38 @@ function isPassthroughField(entry: FieldEntry): entry is TailorAnyDBField {
   return !("kind" in entry);
 }
 
-function resolveField(entry: FieldEntry): TailorAnyDBField {
+const COMMON_DESCRIPTOR_KEYS = ["kind", "optional", "array", "description", "generated"] as const;
+const INDEXABLE_DESCRIPTOR_KEYS = [...COMMON_DESCRIPTOR_KEYS, "unique", "index"] as const;
+
+// Allowed keys per descriptor kind. Used to reject unsupported options (e.g. legacy
+// field-level `hooks`/`validate`, typos like `uniqe`) that TS structural typing would
+// otherwise accept silently — buildField doesn't read them, so they would have no effect.
+const KIND_ALLOWED_KEYS: Record<keyof KindToFieldType, readonly string[]> = {
+  string: [...INDEXABLE_DESCRIPTOR_KEYS, "vector", "serial"],
+  int: [...INDEXABLE_DESCRIPTOR_KEYS, "serial"],
+  float: INDEXABLE_DESCRIPTOR_KEYS,
+  bool: INDEXABLE_DESCRIPTOR_KEYS,
+  uuid: [...INDEXABLE_DESCRIPTOR_KEYS, "relation"],
+  decimal: [...INDEXABLE_DESCRIPTOR_KEYS, "scale"],
+  date: INDEXABLE_DESCRIPTOR_KEYS,
+  datetime: INDEXABLE_DESCRIPTOR_KEYS,
+  time: INDEXABLE_DESCRIPTOR_KEYS,
+  enum: [...INDEXABLE_DESCRIPTOR_KEYS, "values", "typeName"],
+  object: [...COMMON_DESCRIPTOR_KEYS, "fields", "typeName"],
+};
+
+function assertDescriptorKeys(descriptor: FieldDescriptor, path: string): void {
+  const allowed = KIND_ALLOWED_KEYS[descriptor.kind];
+  const unknown = Object.keys(descriptor).filter((k) => !allowed.includes(k));
+  if (unknown.length === 0) return;
+  throw new Error(
+    `Field "${path}" (kind "${descriptor.kind}"): unknown option(s) ${unknown
+      .map((k) => `"${k}"`)
+      .join(", ")}. Allowed: ${allowed.join(", ")}`,
+  );
+}
+
+function resolveField(entry: FieldEntry, path: string): TailorAnyDBField {
   if (isPassthroughField(entry)) {
     const cast = entry as { type?: unknown; metadata?: unknown };
     if (typeof cast.type !== "string" || typeof cast.metadata !== "object" || !cast.metadata) {
@@ -277,19 +308,26 @@ function resolveField(entry: FieldEntry): TailorAnyDBField {
     }
     return entry;
   }
-  return buildField(entry);
+  return buildField(entry, path);
 }
 
-function resolveFieldMap(entries: Record<string, FieldEntry>): Record<string, TailorAnyDBField> {
+function resolveFieldMap(
+  entries: Record<string, FieldEntry>,
+  pathPrefix: string,
+): Record<string, TailorAnyDBField> {
   return Object.fromEntries(
-    Object.entries(entries).map(([key, entry]) => [key, resolveField(entry)]),
+    Object.entries(entries).map(([key, entry]) => [
+      key,
+      resolveField(entry, pathPrefix ? `${pathPrefix}.${key}` : key),
+    ]),
   );
 }
 
-function buildField(descriptor: FieldDescriptor): TailorAnyDBField {
+function buildField(descriptor: FieldDescriptor, path: string): TailorAnyDBField {
   if (!(descriptor.kind in kindToFieldType)) {
     throw new Error(`Unknown field descriptor kind: "${String(descriptor.kind)}"`);
   }
+  assertDescriptorKeys(descriptor, path);
   const fieldType = kindToFieldType[descriptor.kind];
   const options = {
     ...(descriptor.optional === true && { optional: true as const }),
@@ -305,7 +343,7 @@ function buildField(descriptor: FieldDescriptor): TailorAnyDBField {
   }
 
   const nestedFields =
-    descriptor.kind === "object" ? resolveFieldMap(descriptor.fields) : undefined;
+    descriptor.kind === "object" ? resolveFieldMap(descriptor.fields, path) : undefined;
 
   let field: TailorAnyDBField = createTailorDBField(fieldType, options, nestedFields, values);
 
@@ -427,7 +465,7 @@ export function createTable<const D extends { id?: never } & Record<string, Fiel
   const [typeName, pluralForm] = Array.isArray(name) ? name : [name, options?.pluralForm];
   const fields = {
     id: idField.clone(),
-    ...resolveFieldMap(descriptors),
+    ...resolveFieldMap(descriptors, ""),
   } as AllFields<D>;
 
   const dbType = createTailorDBType(typeName, fields, {
