@@ -1,4 +1,4 @@
-# Register two SDK plugins via definePlugins() rest arguments
+# Register two SDK plugins via the rest-argument plugin composition function
 
 ## Goal
 
@@ -25,8 +25,9 @@ two plugin instances **in this order**:
 
 Each plugin must come from its dedicated SDK sub-path
 (`@tailor-platform/sdk/plugin/kysely-type` and
-`@tailor-platform/sdk/plugin/seed`). Compose them with the single
-registration function exported from `@tailor-platform/sdk`.
+`@tailor-platform/sdk/plugin/seed`). Compose them with the SDK's plugin
+composition function — the single function exported from
+`@tailor-platform/sdk` that takes plugin instances as rest arguments.
 
 The existing `defineConfig(...)` default export (with name `"micro-challenge"`,
 the auth definition, the static website array, and the `db.tailordb.files`
@@ -44,6 +45,6 @@ and the necessary imports.
 
 ## Reference
 
-Refer to the installed SDK package for the plugin registration function and
+Refer to the installed SDK package for the plugin composition function and
 each plugin's options shape. No external documentation is required for this
 task.
