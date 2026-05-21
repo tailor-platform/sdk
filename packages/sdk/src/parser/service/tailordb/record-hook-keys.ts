@@ -74,6 +74,18 @@ export function extractRecordHookOverrideKeys(fnSource: string): string[] {
           `  hook: ${fnSource}`,
       );
     }
+    if (prop.kind !== "init") {
+      throw new Error(
+        `Record-level hook return literal cannot use a ${prop.kind === "get" ? "getter" : "setter"} property; use \`key: value\` form.\n` +
+          `  hook: ${fnSource}`,
+      );
+    }
+    if (prop.method) {
+      throw new Error(
+        "Record-level hook return literal cannot use a method shorthand (`key() { ... }`); use `key: value` form.\n" +
+          `  hook: ${fnSource}`,
+      );
+    }
     const key = prop.key;
     if (key.type === "Identifier") {
       keys.push(key.name);

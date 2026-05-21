@@ -78,5 +78,20 @@ describe("extractRecordHookOverrideKeys", () => {
       const source = `() => ({ 0: "x" })`;
       expect(() => extractRecordHookOverrideKeys(source)).toThrow(/unsupported key type/);
     });
+
+    it("throws on a getter property in the return literal", () => {
+      const source = `() => ({ get name() { return "x"; } })`;
+      expect(() => extractRecordHookOverrideKeys(source)).toThrow(/getter property/);
+    });
+
+    it("throws on a setter property in the return literal", () => {
+      const source = `() => ({ set name(v) { /* noop */ } })`;
+      expect(() => extractRecordHookOverrideKeys(source)).toThrow(/setter property/);
+    });
+
+    it("throws on a method-shorthand property in the return literal", () => {
+      const source = `() => ({ name() { return "x"; } })`;
+      expect(() => extractRecordHookOverrideKeys(source)).toThrow(/method shorthand/);
+    });
   });
 });
