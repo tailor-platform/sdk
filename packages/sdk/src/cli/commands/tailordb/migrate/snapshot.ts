@@ -1395,8 +1395,8 @@ function compareTypeHooksValidate(
 
 /**
  * Build the combined `type_validate` script expression for a snapshot type.
- * Mirrors `toProtoTypeValidate` in deploy/tailordb so both wire format and
- * remote drift comparisons agree on the canonical local expression.
+ * Used by `toProtoSnapshotTypeValidate` (manifest emission) and the remote
+ * drift comparison so both agree on the canonical local expression.
  * @param validators - The snapshot type's `validate` array (or undefined)
  * @returns The combined expr string, or null if no validators
  */

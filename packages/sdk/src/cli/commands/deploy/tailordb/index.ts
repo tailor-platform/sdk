@@ -31,7 +31,6 @@ import {
   type TailorDBType_PermissionSchema,
   TailorDBType_PermitAction,
   type TailorDBType_RelationshipConfigSchema,
-  type TailorDBType_TypeValidateSchema,
   type TailorDBTypeSchema,
 } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
 import * as inflection from "inflection";
@@ -57,7 +56,6 @@ import {
   compareLocalTypesWithSnapshot,
   assertValidMigrationFiles,
   formatMigrationNumber,
-  buildCombinedTypeValidateExpr,
   compareRemoteWithSnapshot,
   formatSchemaDrifts,
   createSnapshotType,
@@ -72,6 +70,7 @@ import {
   type SnapshotGqlPermission,
   type SnapshotGqlPermissionPolicy,
 } from "@/cli/commands/tailordb/migrate/snapshot";
+import { toProtoSnapshotTypeValidate } from "@/cli/commands/tailordb/migrate/snapshot-manifest";
 import { type TailorDBService } from "@/cli/services/tailordb/service";
 import { fetchAll, type OperatorClient } from "@/cli/shared/client";
 import { logger } from "@/cli/shared/logger";
@@ -1696,7 +1695,7 @@ function generateTailorDBTypeManifest(
     ? protoPermission(type.permissions.record)
     : defaultPermission;
 
-  const typeValidate = toProtoTypeValidate(type);
+  const typeValidate = toProtoSnapshotTypeValidate(type);
 
   return {
     name: type.name,
@@ -1712,18 +1711,6 @@ function generateTailorDBTypeManifest(
       permission,
       ...(typeValidate && { typeValidate }),
     },
-  };
-}
-
-function toProtoTypeValidate(
-  type: TailorDBSnapshotType,
-): MessageInitShape<typeof TailorDBType_TypeValidateSchema> | undefined {
-  const combined = buildCombinedTypeValidateExpr(type.validate);
-  if (combined === null) return undefined;
-  const script = { expr: combined };
-  return {
-    create: script,
-    update: script,
   };
 }
 

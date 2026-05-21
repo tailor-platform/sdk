@@ -174,7 +174,14 @@ export function generateTailorDBTypeManifestFromSnapshot(
   };
 }
 
-function toProtoSnapshotTypeValidate(
+/**
+ * Convert a snapshot type's record-level validators into a proto
+ * `type_validate` message. Returns undefined when there are no validators so
+ * the caller can omit the field entirely.
+ * @param snapshotType - Snapshot type containing optional `validate`
+ * @returns Proto type_validate message or undefined
+ */
+export function toProtoSnapshotTypeValidate(
   snapshotType: TailorDBSnapshotType,
 ): MessageInitShape<typeof TailorDBType_TypeValidateSchema> | undefined {
   const combined = buildCombinedTypeValidateExpr(snapshotType.validate);

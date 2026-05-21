@@ -65,9 +65,12 @@ export function buildPreMigrationChangesMap(
     for (const change of migration.diff.changes) {
       if (!PRE_MIGRATION_FIELD_KINDS.has(change.kind)) continue;
       if (!change.fieldName) continue;
-      const perType = map.get(change.typeName) ?? new Map<string, DiffChange>();
+      let perType = map.get(change.typeName);
+      if (!perType) {
+        perType = new Map<string, DiffChange>();
+        map.set(change.typeName, perType);
+      }
       perType.set(change.fieldName, change);
-      map.set(change.typeName, perType);
     }
   }
   return map;
@@ -175,9 +178,12 @@ export function buildPreMigrationRelationshipChangesMap(
     for (const change of migration.diff.changes) {
       if (change.kind !== "relationship_removed") continue;
       if (!change.relationshipName) continue;
-      const perType = map.get(change.typeName) ?? new Map<string, DiffChange>();
+      let perType = map.get(change.typeName);
+      if (!perType) {
+        perType = new Map<string, DiffChange>();
+        map.set(change.typeName, perType);
+      }
       perType.set(change.relationshipName, change);
-      map.set(change.typeName, perType);
     }
   }
   return map;
