@@ -1023,7 +1023,7 @@ describe("createResolver", () => {
             name: {
               kind: "string",
               optinal: true,
-            } as { kind: "string"; optinal: boolean },
+            },
           },
           output: { kind: "bool" },
           body: () => true,
@@ -1042,7 +1042,7 @@ describe("createResolver", () => {
               inner: {
                 kind: "string",
                 hooks: { create: () => "x" },
-              } as { kind: "string"; hooks: { create: () => string } },
+              },
             },
           },
           body: () => ({ inner: "x" }),

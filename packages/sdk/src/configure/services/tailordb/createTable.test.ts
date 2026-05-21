@@ -756,7 +756,7 @@ describe("createTable unknown descriptor options", () => {
         name: {
           kind: "string",
           validate: () => true,
-        } as { kind: "string"; validate: () => boolean },
+        },
       }),
     ).toThrow(/Field "name" \(kind "string"\): unknown option\(s\) "validate"/);
   });
@@ -767,7 +767,7 @@ describe("createTable unknown descriptor options", () => {
         name: {
           kind: "string",
           hooks: { create: () => "x" },
-        } as { kind: "string"; hooks: { create: () => string } },
+        },
       }),
     ).toThrow(/Field "name" \(kind "string"\): unknown option\(s\) "hooks"/);
   });
@@ -778,7 +778,7 @@ describe("createTable unknown descriptor options", () => {
         name: {
           kind: "string",
           uniqe: true,
-        } as { kind: "string"; uniqe: boolean },
+        },
       }),
     ).toThrow(/Field "name" \(kind "string"\): unknown option\(s\) "uniqe"/);
   });
@@ -790,7 +790,7 @@ describe("createTable unknown descriptor options", () => {
           kind: "object",
           fields: { foo: { kind: "string" } },
           unique: true,
-        } as { kind: "object"; fields: { foo: { kind: "string" } }; unique: boolean },
+        },
       }),
     ).toThrow(/Field "meta" \(kind "object"\): unknown option\(s\) "unique"/);
   });
@@ -804,7 +804,7 @@ describe("createTable unknown descriptor options", () => {
             inner: {
               kind: "string",
               validate: () => true,
-            } as { kind: "string"; validate: () => boolean },
+            },
           },
         },
       }),
