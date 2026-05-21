@@ -472,6 +472,33 @@ describe("loadAccessToken", () => {
   });
 });
 
+describe("profile readonly field", () => {
+  beforeEach(() => {
+    resetKeyringState();
+  });
+
+  it("round-trips readonly: true through write/read", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        ro: {
+          user: "u@example.com",
+          workspace_id: "12345678-1234-4abc-8def-123456789012",
+          readonly: true,
+        },
+        rw: { user: "u@example.com", workspace_id: "12345678-1234-4abc-8def-123456789012" },
+      },
+      current_user: null,
+    });
+    const { readPlatformConfig } = await import("./context");
+    const config = await readPlatformConfig();
+    expect(config.profiles.ro?.readonly).toBe(true);
+    expect(config.profiles.rw?.readonly).toBeUndefined();
+  });
+});
+
 describe("V1 to V2 migration", () => {
   const futureDate = new Date(Date.now() + 3600 * 1000).toISOString();
 

@@ -1,5 +1,21 @@
 # @tailor-platform/sdk
 
+## 1.49.0
+
+### Minor Changes
+
+- [#1147](https://github.com/tailor-platform/sdk/pull/1147) [`f0de80a`](https://github.com/tailor-platform/sdk/commit/f0de80ac83a3e76bcb65be7957cb3d7bd1f80ec1) Thanks [@dqn](https://github.com/dqn)! - Add `--permission <write|read>` flag to `profile create`, `profile update`, and `workspace create` (when `--profile-name` is given) so editor users can use a viewer-style profile by default. Profiles created with `--permission read` block platform-state mutations driven by the operator's bearer token (`apply`, `remove`, `workspace create/delete/restore`, `secret create/update/delete`, `tailordb migrate set`, `tailordb truncate`, `tailordb erd deploy`, `executor trigger`, `staticwebsite deploy`, `authconnection authorize/revoke`, organization / folder / PAT / workspace-user mutations, and direct `api <endpoint>` calls) with a `PROFILE_READONLY` error. Application-data operations executed under a machine user (`query`, `workflow start/resume`, `function test-run`) are not gated because the machine user's own permissions already govern those mutations. Switch profile or run `profile update <name> --permission write` to lift the restriction. Profile management itself stays available so the flag can always be cleared. `profile update` skips remote user / workspace validation when only `--permission` is changing, so the flag can be cleared offline or with an expired token.
+
+  The guard activates only when a profile is in scope: pass `--profile <name>` or set `TAILOR_PLATFORM_PROFILE`. `TAILOR_PLATFORM_TOKEN` and `--workspace-id` direct access bypass the guard by design; they are intended for machine-user / CI flows where the platform token already encodes the permitted scope.
+
+### Patch Changes
+
+- [#1204](https://github.com/tailor-platform/sdk/pull/1204) [`6b1bbcb`](https://github.com/tailor-platform/sdk/commit/6b1bbcbe843340a912a3c75c2ecdb03c5697f967) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency rolldown to v1.0.1
+
+- [#1196](https://github.com/tailor-platform/sdk/pull/1196) [`c9b7d1e`](https://github.com/tailor-platform/sdk/commit/c9b7d1eae8a3cccf70191bd8c228cd11db6ed060) Thanks [@dqn](https://github.com/dqn)! - Eliminate the Node.js `DEP0205` `DeprecationWarning` (`` `module.register()` is deprecated. Use `module.registerHooks()` instead. ``) printed by every `tailor-sdk` CLI invocation on Node v26. The CLI now registers `tsx` through its own programmatic API (`tsx/esm/api`) instead of calling `node:module`'s `register("tsx", …)` directly, which on tsx 4.21.1+ routes through `module.registerHooks()` on Node ≥ 24.11.1 / 25.1 / 26 and falls back to `module.register()` on older runtimes. Bumps the bundled `tsx` from 4.21.0 to 4.21.1.
+
+- [#1179](https://github.com/tailor-platform/sdk/pull/1179) [`f72ffe1`](https://github.com/tailor-platform/sdk/commit/f72ffe1aed824eb9af5e7520529c3ebde029b5a6) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `tailor-sdk deploy --no-schema-check` to reconcile the TailorDB migration label to the working tree's latest migration number when it completes. Previously, running `deploy --no-schema-check` from a revision whose working tree is older than the remote left the remote migration label stale; the next `deploy` then reconstructed a snapshot at a label that no longer existed in the working tree and aborted with a false "Remote schema drift detected" error.
+
 ## 1.48.0
 
 ### Minor Changes
