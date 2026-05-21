@@ -149,7 +149,15 @@ function generateFieldType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
     usedUtilityTypes.Serial = true;
     finalType = `Serial<${finalType}>`;
   }
-  if (fieldConfig.generated || fieldConfig.hooks?.create) {
+  // `generated` alone is only honored server-side for datetime fields (the
+  // parser synthesizes `new Date()` create/update hooks via metadata.generated).
+  // For non-datetime kinds the deploy manifest never sends `generated`, so the
+  // platform still requires the value — wrapping in Generated<T> would let
+  // inserts omit a required column and fail at runtime.
+  const hasInsertGenerator =
+    fieldConfig.hooks?.create !== undefined ||
+    (fieldConfig.generated === true && fieldConfig.type === "datetime");
+  if (hasInsertGenerator) {
     finalType = `Generated<${finalType}>`;
   }
 

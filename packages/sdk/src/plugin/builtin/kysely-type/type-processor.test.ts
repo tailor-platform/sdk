@@ -297,6 +297,20 @@ describe("Kysely TypeProcessor", () => {
       expect(result.typeDef).toContain("id: Generated<string>;");
     });
 
+    it("does not wrap non-datetime generated fields in Generated<T>", async () => {
+      // The deploy manifest does not send `generated` to the platform for
+      // non-datetime kinds, so the server still requires the value. Wrapping
+      // in Generated<T> here would let inserts omit a required column.
+      const stringField = db.string();
+      stringField._metadata.generated = true;
+      const type = db.type("User", { code: stringField });
+
+      const result = await processKyselyType(parseTailorDBType(toSchemaOutput(type)));
+
+      expect(result.typeDef).toContain("code: string;");
+      expect(result.typeDef).not.toContain("code: Generated<");
+    });
+
     it("should correctly track used utility types - basic types only", async () => {
       const type = db.type("User", {
         name: db.string(),
